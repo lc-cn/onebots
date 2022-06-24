@@ -1,0 +1,41 @@
+{
+  "name": "@lc-cn/ts-dev-template",
+  "version": "1.0.0",
+  "description": "ts开发环境配置",
+  "main": "lib/index.js",
+  "scripts": {
+    "start": "node .",
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/index.ts",
+    "pub": "npm publish --access public",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/ts-dev-template.git"
+  },
+  "keywords": [
+    "ts",
+    "dev",
+    "template"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lc-cn/ts-dev-template/issues"
+  },
+  "homepage": "https://github.com/lc-cn/ts-dev-template#readme",
+  "devDependencies": {
+    "@types/node": "latest",
+    "ts-node-dev": "latest",
+    "tsc-alias": "latest",
+    "tsconfig-paths": "latest",
+    "typescript": "latest"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts",
+    "/lib/**/LICENSE"
+  ],
+  "dependencies": {}
+}
