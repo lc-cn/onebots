@@ -1,0 +1,10 @@
+# 目录
+1. [服务](/docs/server)
+   1. [配置](/docs/server/config.md)
+2. [oneBot](/docs/oneBot)
+   1. [V11](/docs/oneBot/V11)
+      1. [配置](/docs/oneBot/V11/config.md)
+      2. [action](/docs/oneBot/V11/action.md)
+   3. [V12](/docs/oneBot/V12)
+       1. [配置](/docs/oneBot/V12/config.md)
+       2. [action](/docs/oneBot/V12/action.md)
