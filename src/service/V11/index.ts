@@ -193,7 +193,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
      */
     protected _webSocketHandler(ws: WebSocket) {
         ws.on("message", async (msg) => {
-            this.app.getLogger('OneBot').debug("OneBot - 收到ws消息：" + msg)
+            this.logger.debug(" 收到ws消息：" + msg)
             var data
             try {
                 data = JSON.parse(String(msg)) as V11.Protocol
@@ -249,10 +249,10 @@ export class V11 extends EventEmitter implements OneBot.Base{
             headers.Authorization = "Bearer " + this.config.access_token
         const ws = new WebSocket(url, {headers})
         ws.on("error", (err) => {
-            this.app.getLogger('OneBot').error(err.message)
+            this.logger.error(err.message)
         })
         ws.on("open", () => {
-            this.app.getLogger('OneBot').info(`OneBot - 反向ws(${url})连接成功。`)
+            this.logger.info(`反向ws(${url})连接成功。`)
             this.wsr.add(ws)
             this._webSocketHandler(ws)
         })
@@ -260,7 +260,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
             this.wsr.delete(ws)
             if (timestmap < this.timestamp)
                 return
-            this.app.getLogger('OneBot').warn(`OneBot - 反向ws(${url})被关闭，关闭码${code}，将在${this.config.reconnect_interval}毫秒后尝试重连。`)
+            this.logger.warn(`反向ws(${url})被关闭，关闭码${code}，将在${this.config.reconnect_interval}毫秒后尝试重连。`)
             setTimeout(() => {
                 if (timestmap < this.timestamp)
                     return
