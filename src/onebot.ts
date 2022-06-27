@@ -1,77 +1,71 @@
 import {EventEmitter} from 'events'
-import {Logger} from "log4js";
 import {App} from "./server/app";
-import {deepMerge, pick} from "./utils";
-import {LogLevel} from "./types";
+import {deepMerge, omit} from "./utils";
 import {join} from "path";
-import {WebSocketServer,WebSocket} from "ws";
 import {Client} from "oicq";
-import {Service} from "./api";
-import {util} from "oicq/lib/core/protobuf/protobuf.min";
-import key2Re = util.key2Re;
-export class OneBot extends EventEmitter{
-    public config:OneBot.Config
-    logger:Logger
-    client:Client
-    wss?:WebSocketServer
-    wsr:Set<WebSocket>=new Set<WebSocket>()
-    public service:Service<11 | 12>
-    constructor(public app:App,public readonly uin:number,config:OneBot.Config={}){
-        super()
-        this.config=deepMerge(pick(app.config,['heartbeat','http','http_reverse','ws','ws_reverse','log_level','version']),config)
-        this.logger=app.getLogger(uin)
-        this.logger.level=this.config.log_level
-        this.client=new Client(this.uin,{platform:5,log_level:this.config.log_level,data_dir:join(process.cwd(),'data')})
-        this.service=new Service(this.client,this.config.version)
-        const temp=this.service.apply('getLoginInfo')
-    }
-    start(){
-        this.config.http && this.startHttp(this.config.http)
-        for(const httpReverseConfig of this.config.http_reverse){
-            this.startHttpReverse(httpReverseConfig)
-        }
-        this.config.ws && this.startWs(this.config.ws)
-        for(const wsReverseConfig of this.config.ws_reverse){
-            this.startWsReverse(wsReverseConfig)
-        }
-    }
-    private startHttp(config:boolean|OneBot.AuthInfo){
-        this.app.router.all(`/${this.uin}/:method`,async (ctx,next)=>{
+import {V11} from "./service/V11";
+import {V12} from "./service/V12";
+import {MayBeArray} from "./types";
 
+export class NotFoundError extends Error{
+    message='不支持的API'
+}
+export class OneBot<V extends OneBot.Version> extends EventEmitter{
+    public config:OneBotConfig[]
+    status:OneBotStatus
+    public client:Client
+    instances:(V11|V12)[]
+    constructor(public app:App,public readonly uin:number,config:MayBeArray<OneBotConfig>){
+        super()
+        if(!Array.isArray(config))config=new Array(config)
+        this.config=(config as OneBotConfig[]).map(c=>{
+            switch (c.version){
+                case 'V11':
+                    return deepMerge(V11.defaultConfig as OneBotConfig,c)
+                case 'V12':
+                    return deepMerge(V12.defaultConfig as OneBotConfig,c)
+                default:
+                    throw new Error('不支持的oneBot版本：'+c.version)
+            }
+        })
+        this.client=new Client(uin,{platform:5,data_dir:join(process.cwd(),'data')})
+        this.instances=this.config.map(c=>{
+            switch (c.version) {
+                case 'V11':
+                    return new V11(this.app,this.client,omit(c,['version']))
+                case 'V12':
+                    return new V12(this.app,this.client,omit(c,['version']))
+                default:
+                    throw new Error('不支持的oneBot版本：'+c.version)
+            }
         })
     }
-    private startWs(config:boolean|OneBot.AuthInfo){
-        this.wss=this.app.router.ws(`/${this.uin}`,this.app.httpServer)
+    start(){
+        this.instances.forEach(instance=>{
+            instance.start(this.instances.length>1?'/'+instance.version:undefined)
+        })
     }
-    private startHttpReverse(config:OneBot.WebHookConfig){
-
-    }
-    private startWsReverse(config:OneBot.WsReverseConfig){
-
+    stop(){
+        this.instances.forEach(instance=>{
+            instance.stop()
+        })
     }
 }
+export enum OneBotStatus{
+    Good,
+    Bad
+}
+export type OneBotConfig=OneBot.Config<OneBot.Version>
 export namespace OneBot{
-    export interface AuthInfo{
-        access_token?:string
-    }
-    type LinkBase={
-        host:string
-        port:number
-    }|{
-        url:string
-    }
-    export type WebHookConfig = LinkBase & Partial<AuthInfo>
-    export type WsReverseConfig=WebHookConfig & {
-        reconnect_interval:number
-    }
-    export interface Config{
-        heartbeat?:boolean|number
-        version?:Service.Version
-        password?:string
-        log_level?:LogLevel
-        http?:boolean|AuthInfo
-        http_reverse?:WebHookConfig[]
-        ws?:boolean|(AuthInfo & Pick<WsReverseConfig, 'reconnect_interval'>)
-        ws_reverse?:WsReverseConfig[]
+    export type Version='V11'|'V12'
+    export type Config<V extends Version='V11'>=({
+        version?:V
+    } & (V extends 'V11'?V11.Config:V12.Config))
+    export interface Base{
+        start(path?:string):any
+        stop():any
+        dispatch(...args:any[]):any
+        apply(...args:any[]):any
     }
 }
+export const BOOLS = ["no_cache", "auto_escape", "as_long", "enable", "reject_add_request", "is_dismiss", "approve", "block"]

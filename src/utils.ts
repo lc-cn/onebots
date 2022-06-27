@@ -60,3 +60,27 @@ export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
     }
     return result
 }
+export interface Class{
+    new(...args:any[]):any
+}
+export function Mixin(base:Class,...classes:Class[]){
+    classes.forEach(ctr => {
+        Object.getOwnPropertyNames(ctr.prototype).forEach(name => {
+            base.prototype[name] = ctr.prototype[name];
+        });
+    });
+    return base
+}
+export function toHump(action: string) {
+    return action.replace(/_[\w]/g, (s)=>{
+        return s[1].toUpperCase()
+    })
+}
+export function toLine(name:string) {
+    return name.replace(/([A-Z])/g,"_$1").toLowerCase();
+}
+export function toBool(v: any) {
+    if (v === "0" || v === "false")
+        v = false
+    return Boolean(v)
+}

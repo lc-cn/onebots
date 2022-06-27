@@ -4,10 +4,11 @@ import {join} from 'path'
 import {createServer,Server} from "http";
 import yaml from 'js-yaml'
 import KoaBodyParser from "koa-bodyparser";
-import {OneBot} from "@/onebot";
+import {OneBot} from "../onebot";
 import {deepMerge,deepClone} from "@/utils";
 import {Router} from "./router";
 import {readFileSync} from "fs";
+import {LogLevel} from "@/types";
 export interface KoaOptions{
     env?: string
     keys?: string[]
@@ -17,12 +18,12 @@ export interface KoaOptions{
     maxIpsCount?: number
 }
 export class App extends Koa{
-    public config:App.Config
+    public config:App.Config<any>
     readonly httpServer:Server
     public logger:Logger
-    bots:OneBot[]=[]
+    bots:OneBot<any>[]=[]
     public router:Router
-    constructor(config:App.Config={}) {
+    constructor(config:App.Config<any>={}) {
         super(config);
         this.config=deepMerge(deepClone(App.defaultConfig),config)
         this.logger=getLogger('[oicq-oneBot]')
@@ -34,8 +35,10 @@ export class App extends Koa{
         this.httpServer=createServer(this.callback())
         this.createOneBots()
     }
-    getLogger(uin:number){
-        return getLogger(`[oicq-oneBot:${uin}]`)
+    getLogger(uin:number|string){
+        const logger= getLogger(`[oicq-oneBot:${uin}]`)
+        logger.level=this.config.log_level
+        return logger
     }
     private createOneBots(){
         for(const [uin,config] of Object.entries(this.config.bots)){
@@ -53,32 +56,26 @@ export class App extends Koa{
         this.logger.mark(`server listen at http://0.0.0.0:${this.config.port}/${this.config.path?this.config.path:''}`)
     }
 }
-export function createApp(config:App.Config|string='config.yaml'){
+export function createApp<V extends OneBot.Version>(config:App.Config<V>|string='config.yaml'){
     if(typeof config==='string'){
-        config=yaml.load(readFileSync(join(process.cwd(),config), 'utf8')) as App.Config
+        config=yaml.load(readFileSync(join(process.cwd(),config), 'utf8')) as App.Config<any>
     }
     return new App(config)
 }
-export function defineConfig(config:App.Config){
+export function defineConfig<V extends OneBot.Version>(config:App.Config<V>){
     return config
 }
 export namespace App{
-    export interface Config extends OneBot.Config,KoaOptions{
+    // @ts-ignore
+    export interface Config<V extends OneBot.Version> extends OneBot.Config<V>,KoaOptions{
         port?:number
         path?:string
         bots?:Record<`${number}`, OneBot.Config>
+        log_level?:LogLevel
     }
-    export const defaultConfig:Config={
+    export const defaultConfig:Config<any>={
         port:6727,
         log_level:'info',
-        version:11,
         bots:{},
-        heartbeat:3,
-        http:true,
-        http_reverse:[],
-        ws:{
-            reconnect_interval:3
-        },
-        ws_reverse:[]
     }
 }
