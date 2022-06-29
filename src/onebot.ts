@@ -32,23 +32,37 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
         this.instances=this.config.map(c=>{
             switch (c.version) {
                 case 'V11':
-                    return new V11(this.app,this.client,omit(c,['version']))
+                    return new V11(this.app,this.client,omit(c,['version','password']))
                 case 'V12':
-                    return new V12(this.app,this.client,omit(c,['version']))
+                    return new V12(this.app,this.client,omit(c,['version','password']))
                 default:
                     throw new Error('不支持的oneBot版本：'+c.version)
             }
         })
     }
     start(){
+        this.client.on('system',this.dispatch.bind(this))
+        this.client.on('notice',this.dispatch.bind(this))
+        this.client.on('request',this.dispatch.bind(this))
+        this.client.on('message',this.dispatch.bind(this))
         this.instances.forEach(instance=>{
             instance.start(this.instances.length>1?'/'+instance.version:undefined)
         })
+        this.client.login()
     }
     stop(){
         this.instances.forEach(instance=>{
             instance.stop()
         })
+        this.client.off('system',this.dispatch.bind(this))
+        this.client.off('notice',this.dispatch.bind(this))
+        this.client.off('request',this.dispatch.bind(this))
+        this.client.off('message',this.dispatch.bind(this))
+    }
+    dispatch(data){
+        for(const instance of this.instances){
+            instance.dispatch(data)
+        }
     }
 }
 export enum OneBotStatus{
@@ -60,6 +74,7 @@ export namespace OneBot{
     export type Version='V11'|'V12'
     export type Config<V extends Version='V11'>=({
         version?:V
+        password?:string
     } & (V extends 'V11'?V11.Config:V12.Config))
     export interface Base{
         start(path?:string):any

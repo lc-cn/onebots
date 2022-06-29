@@ -11,19 +11,6 @@ export class CommonAction{
             nickname:this.client.nickname
         }
     }
-
-    /**
-     * 发送消息
-     * @param user_id {number} 用户id 和群id二选一
-     * @param group_id {number} 群id 和用户id二选一
-     * @param message {import('oicq').Sendable} 发送的消息
-     */
-    sendMsg(this:OneBot<'V11'>,user_id:number,message:Sendable)
-    sendMsg(this:OneBot<'V11'>,group_id:number,message:Sendable){
-        if(this.client.gl.get(group_id))return this.client.pickGroup(group_id).sendMsg(message)
-        return this.client.pickFriend(group_id).sendMsg(message)
-    }
-
     /**
      * 撤回消息
      * @param message_id {string} 消息id
@@ -97,5 +84,8 @@ export class CommonAction{
             online:this.client.status=OnlineStatus.Online,
             good:this.status===OneBotStatus.Good
         }
+    }
+    login(this:OneBot<'V11'>,password?:string){
+        return this.client.login(password)
     }
 }

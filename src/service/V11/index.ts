@@ -112,21 +112,32 @@ export class V11 extends EventEmitter implements OneBot.Base{
             this.logger.error(err.message)
         })
         this.wss.on("connection", (ws, req) => {
+            this.logger.info(`ws客户端(${req.headers.origin})已连接`)
             ws.on("error", (err) => {
-                this.logger.error(err.message)
+                this.logger.error(`ws客户端(${req.headers.origin})报错：${err.message}`)
             })
             ws.on("close", (code, reason) => {
-                this.logger.warn(`正向ws连接关闭，关闭码${code}，关闭理由：` + reason)
+                this.logger.warn(`ws客户端(${req.headers.origin})连接关闭，关闭码${code}，关闭理由：` + reason)
             })
             if (this.config.access_token) {
                 const url = new URL(req.url as string, "http://127.0.0.1")
                 const token = url.searchParams.get('access_token')
                 if (token)
-                    req.headers["authorization"] = token
+                    req.headers["authorization"] = `Bearer ${token}`
                 if (!req.headers["authorization"] || req.headers["authorization"] !== `Bearer ${this.config.access_token}`)
                     return ws.close(1002, "wrong access token")
             }
             this._webSocketHandler(ws)
+        })
+        this.on('dispatch',(serialized)=>{
+            for (const ws of this.wss.clients) {
+                ws.send(serialized, (err) => {
+                    if (err)
+                        this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
+                    else
+                        this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
+                })
+            }
         })
     }
     private startWsReverse(url:string){
@@ -140,8 +151,8 @@ export class V11 extends EventEmitter implements OneBot.Base{
     stop() {
         throw new Error("Method not implemented.");
     }
-    dispatch(...args: any[]) {
-        throw new Error("Method not implemented.");
+    dispatch(data:any) {
+        this.emit('dispatch',JSON.stringify(data))
     }
     private async _httpRequestHandler(ctx:Context){
 
@@ -270,35 +281,6 @@ export class V11 extends EventEmitter implements OneBot.Base{
         return ws
     }
 
-    protected _dispatch(unserialized: any) {
-        const serialized = JSON.stringify(unserialized)
-        for (const ws of this.wsr) {
-            ws.send(serialized)
-        }
-        if (this.wss) {
-            for (const ws of this.wss.clients) {
-                ws.send(serialized, (err) => {
-                    if (err)
-                        this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
-                    else
-                        this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
-                })
-            }
-        }
-        if (!(this.config.http_reverse?.length > 0))
-            return
-        for (let config of this.config.http_reverse) {
-            if(typeof config==='string'){
-                config={
-                    url:config,
-                    secret:this.config.secret,
-                    access_token:this.config.access_token
-                }
-            }
-            const protocol = config.url.startsWith("https") ? https : http
-
-        }
-    }
     /**
      * 快速操作
      */
@@ -337,6 +319,17 @@ export class V11 extends EventEmitter implements OneBot.Base{
         let is_queue = action.includes("_rate_limited")
         if (is_queue)
             action = action.replace("_rate_limited", "")
+        if(action==='send_msg'){
+            if (["private", "group", "discuss"].includes(params.message_type)) {
+                action = "send_" + params.message_type + "_msg"
+            } else if (params.user_id)
+                action = "send_private_msg"
+            else if (params.group_id)
+                action = "send_group_msg"
+            else if (params.discuss_id)
+                action = "send_discuss_msg"
+            else throw new Error('required message_type or input (user_id/group_id)')
+        }
         const method = toHump(action) as keyof Action
         if(Reflect.has(this.action,method)){
             const ARGS=String(Reflect.get(this.action,method)).match(/\(.*\)/)?.[0]
@@ -368,7 +361,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
                 try{
                     ret = this.action[method].apply(this,args)
                 }catch (e){
-                    ret=V11.error(e.message)
+                    return JSON.stringify(V11.error(e.message))
                 }
                 if (ret instanceof Promise) {
                     if (is_async) {

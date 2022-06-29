@@ -1,3 +1,4 @@
-bots:
+accounts:
   210723495:
     - version: V11
+      access_token: ll233

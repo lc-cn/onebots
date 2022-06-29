@@ -21,7 +21,7 @@ export class App extends Koa{
     public config:App.Config<any>
     readonly httpServer:Server
     public logger:Logger
-    bots:OneBot<any>[]=[]
+    accounts:OneBot<any>[]=[]
     public router:Router
     constructor(config:App.Config<any>={}) {
         super(config);
@@ -41,15 +41,15 @@ export class App extends Koa{
         return logger
     }
     private createOneBots(){
-        for(const [uin,config] of Object.entries(this.config.bots)){
+        for(const [uin,config] of Object.entries(this.config.accounts)){
             this.createOneBot(Number(uin),config)
         }
     }
     public createOneBot(uin:number,config:OneBot.Config){
-        this.bots.push(new OneBot(this,uin,config))
+        this.accounts.push(new OneBot(this,uin,config))
     }
     start(){
-        for(const bot of this.bots){
+        for(const bot of this.accounts){
             bot.start()
         }
         this.httpServer.listen(this.config.port)
@@ -70,12 +70,12 @@ export namespace App{
     export interface Config<V extends OneBot.Version> extends OneBot.Config<V>,KoaOptions{
         port?:number
         path?:string
-        bots?:Record<`${number}`, OneBot.Config>
+        accounts?:Record<`${number}`, OneBot.Config>
         log_level?:LogLevel
     }
     export const defaultConfig:Config<any>={
         port:6727,
         log_level:'info',
-        bots:{},
+        accounts:{},
     }
 }
