@@ -18,12 +18,12 @@ export interface KoaOptions{
     maxIpsCount?: number
 }
 export class App extends Koa{
-    public config:App.Config<any>
+    public config:App.Config
     readonly httpServer:Server
     public logger:Logger
-    accounts:OneBot<any>[]=[]
+    oneBots:OneBot<any>[]=[]
     public router:Router
-    constructor(config:App.Config<any>={}) {
+    constructor(config:App.Config={}) {
         super(config);
         this.config=deepMerge(deepClone(App.defaultConfig),config)
         this.logger=getLogger('[oicq-oneBot]')
@@ -45,35 +45,35 @@ export class App extends Koa{
             this.createOneBot(Number(uin),config)
         }
     }
-    public createOneBot(uin:number,config:OneBot.Config){
-        this.accounts.push(new OneBot(this,uin,config))
+    public createOneBot(uin:number,config:OneBot.Config<OneBot.Version>){
+        this.oneBots.push(new OneBot(this,uin,config))
     }
     start(){
-        for(const bot of this.accounts){
-            bot.start()
+        for(const oneBot of this.oneBots){
+            oneBot.start()
         }
         this.httpServer.listen(this.config.port)
         this.logger.mark(`server listen at http://0.0.0.0:${this.config.port}/${this.config.path?this.config.path:''}`)
     }
 }
-export function createApp<V extends OneBot.Version>(config:App.Config<V>|string='config.yaml'){
+export function createApp<V extends OneBot.Version>(config:App.Config|string='config.yaml'){
     if(typeof config==='string'){
-        config=yaml.load(readFileSync(join(process.cwd(),config), 'utf8')) as App.Config<any>
+        config=yaml.load(readFileSync(join(process.cwd(),config), 'utf8')) as App.Config
     }
     return new App(config)
 }
-export function defineConfig<V extends OneBot.Version>(config:App.Config<V>){
+export function defineConfig(config:App.Config){
     return config
 }
 export namespace App{
     // @ts-ignore
-    export interface Config<V extends OneBot.Version> extends OneBot.Config<V>,KoaOptions{
+    export interface Config extends OneBot.Config<OneBot.Version>,KoaOptions{
         port?:number
         path?:string
-        accounts?:Record<`${number}`, OneBot.Config>
+        accounts?:Record<`${number}`, OneBot.Config<OneBot.Version>>
         log_level?:LogLevel
     }
-    export const defaultConfig:Config<any>={
+    export const defaultConfig:Config={
         port:6727,
         log_level:'info',
         accounts:{},
