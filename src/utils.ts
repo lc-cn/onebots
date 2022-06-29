@@ -1,5 +1,7 @@
 // 合并对象/数组
-export function deepMerge<T extends any>(base:T,...from:T[]):T{
+import * as crypto from "crypto";
+
+export function deepMerge<T extends any>(base:T, ...from:T[]):T{
     if(from.length===0){
         return base
     }
@@ -83,4 +85,8 @@ export function toBool(v: any) {
     if (v === "0" || v === "false")
         v = false
     return Boolean(v)
+}
+export function uuid() {
+    let hex = crypto.randomBytes(16).toString("hex")
+    return hex.substr(0, 8) + "-" + hex.substr(8, 4) + "-" + hex.substr(12, 4) + "-" + hex.substr(16, 4) + "-" + hex.substr(20)
 }

@@ -35,8 +35,8 @@ export class App extends Koa{
         this.httpServer=createServer(this.callback())
         this.createOneBots()
     }
-    getLogger(uin:number|string){
-        const logger= getLogger(`[oicq-oneBot:${uin}]`)
+    getLogger(uin:number|string,version=''){
+        const logger= getLogger(`[oicq-oneBot${version}:${uin}]`)
         logger.level=this.config.log_level
         return logger
     }

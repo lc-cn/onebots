@@ -8,7 +8,7 @@ import {Dispose} from "@/types";
 import {Context} from "koa";
 import {URL} from "url";
 import {toBool, toHump, toLine} from "@/utils";
-import {fromCqcode, fromSegment} from "oicq2-cq-enable";
+import {fromCqcode, fromSegment, toCqcode, toSegment} from "oicq2-cq-enable";
 import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
@@ -19,6 +19,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
     action:Action
     public version='V11'
     protected timestamp = Date.now()
+    protected heartbeat?: NodeJS.Timeout
     private path:string
     disposes:Dispose[]
     protected _queue: Array<{
@@ -32,7 +33,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
     constructor(public app:App,public client:Client,public config:V11.Config) {
         super()
         this.action=new Action()
-        this.logger=this.app.getLogger(this.client.uin)
+        this.logger=this.app.getLogger(this.client.uin,this.version)
     }
 
     start(path?:string) {
@@ -47,6 +48,12 @@ export class V11 extends EventEmitter implements OneBot.Base{
                     access_token:this.config.access_token,
                     secret:this.config.secret
                 }
+            }else {
+                config={
+                    access_token:this.config.access_token,
+                    secret:this.config.secret,
+                    ...config
+                }
             }
             this.startHttpReverse(config)
         })
@@ -54,6 +61,17 @@ export class V11 extends EventEmitter implements OneBot.Base{
             this.startWsReverse(config)
         })
 
+        if (this.config.heartbeat) {
+            this.heartbeat = setInterval(() => {
+                this.dispatch({
+                    self_id: this.client.uin,
+                    time: Math.floor(Date.now() / 1000),
+                    post_type: "meta_event",
+                    meta_event_type: "heartbeat",
+                    interval: this.config.heartbeat*1000,
+                })
+            }, this.config.heartbeat*1000)
+        }
     }
     private startHttp(){
         this.app.router.all(new RegExp(`^${this.path}/(.*)$`), this._httpRequestHandler.bind(this))
@@ -120,7 +138,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
                 this.logger.warn(`ws客户端(${req.headers.origin})连接关闭，关闭码${code}，关闭理由：` + reason)
             })
             if (this.config.access_token) {
-                const url = new URL(req.url as string, "http://127.0.0.1")
+                const url = new URL(req.url, "http://127.0.0.1")
                 const token = url.searchParams.get('access_token')
                 if (token)
                     req.headers["authorization"] = `Bearer ${token}`
@@ -152,6 +170,13 @@ export class V11 extends EventEmitter implements OneBot.Base{
         throw new Error("Method not implemented.");
     }
     dispatch(data:any) {
+        if(!data.post_type)data.post_type='system'
+        if(data.post_type==='system'){
+
+        }
+        if(data.message && data.post_type==='message'){
+            data.message=this.config.post_message_format==='array'? toSegment(data.message):toCqcode(data)
+        }
         this.emit('dispatch',JSON.stringify(data))
     }
     private async _httpRequestHandler(ctx:Context){
@@ -271,12 +296,12 @@ export class V11 extends EventEmitter implements OneBot.Base{
             this.wsr.delete(ws)
             if (timestmap < this.timestamp)
                 return
-            this.logger.warn(`反向ws(${url})被关闭，关闭码${code}，将在${this.config.reconnect_interval}毫秒后尝试重连。`)
+            this.logger.warn(`反向ws(${url})被关闭，关闭码${code}，将在${this.config.reconnect_interval}秒后尝试重连。`)
             setTimeout(() => {
                 if (timestmap < this.timestamp)
                     return
                 this._createWsr(url)
-            }, this.config.reconnect_interval)
+            }, this.config.reconnect_interval*1000)
         })
         return ws
     }
@@ -394,7 +419,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
             const {method, args} = task as typeof V11.prototype._queue[0]
             this.action[method].apply(this,args)
             await new Promise((resolve) => {
-                setTimeout(resolve, this.config.rate_limit_interval)
+                setTimeout(resolve, this.config.rate_limit_interval*1000)
             })
             this.queue_running = false
         }
@@ -424,11 +449,12 @@ export namespace V11{
         }
     }
     export const defaultConfig:Config={
-        heartbeat:2,
+        heartbeat:3,
         access_token:'',
         post_timeout:15,
         secret:'',
         rate_limit_interval:4,
+        post_message_format:'string',
         reconnect_interval:3,
         use_http:true,
         enable_cors:true,
@@ -455,6 +481,7 @@ export namespace V11{
         post_timeout?:number
         enable_cors?:boolean
         rate_limit_interval?:number
+        post_message_format?:'string'|'array'
         heartbeat?:number
         secret?:string
         reconnect_interval?:number
