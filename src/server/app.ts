@@ -1,4 +1,5 @@
 import Koa from 'koa'
+import {existsSync, writeFileSync} from "fs";
 import {Logger,getLogger} from "log4js";
 import {join} from 'path'
 import {createServer,Server} from "http";
@@ -58,6 +59,11 @@ export class App extends Koa{
 }
 export function createApp<V extends OneBot.Version>(config:App.Config|string='config.yaml'){
     if(typeof config==='string'){
+        if(!existsSync(join(process.cwd(),config))){
+            writeFileSync(join(process.cwd(),config),yaml.dump(App.defaultConfig))
+            console.log('未找到对应配置文件，已自动生成默认配置文件，请修改配置文件后重新启动')
+            process.exit()
+        }
         config=yaml.load(readFileSync(join(process.cwd(),config), 'utf8')) as App.Config
     }
     return new App(config)
@@ -67,7 +73,7 @@ export function defineConfig(config:App.Config){
 }
 export namespace App{
     // @ts-ignore
-    export interface Config extends OneBot.Config<OneBot.Version>,KoaOptions{
+    export interface Config extends KoaOptions{
         port?:number
         path?:string
         accounts?:Record<`${number}`, OneBot.Config<OneBot.Version>>
