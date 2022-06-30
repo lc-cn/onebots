@@ -1,11 +1,11 @@
-import {OnlineStatus, Sendable} from "oicq";
-import {OneBot} from "@/onebot";
+import {OnlineStatus} from "oicq";
 import {OneBotStatus} from "@/onebot";
+import {V11} from "@/service/V11";
 export class CommonAction{
     /**
      * 获取登录信息
      */
-    getLoginInfo(this:OneBot<'V11'>){
+    getLoginInfo(this:V11){
         return {
             user_id:this.client.uin,
             nickname:this.client.nickname
@@ -15,7 +15,7 @@ export class CommonAction{
      * 撤回消息
      * @param message_id {string} 消息id
      */
-    deleteMsg(this:OneBot<'V11'>,message_id:string){
+    deleteMsg(this:V11,message_id:string){
         return this.client.deleteMsg(message_id)
     }
 
@@ -23,7 +23,7 @@ export class CommonAction{
      * 获取消息
      * @param message_id {string} 消息id
      */
-    getMsg(this:OneBot<'V11'>,message_id:string){
+    getMsg(this:V11,message_id:string){
         return this.client.getMsg(message_id)
     }
 
@@ -31,7 +31,7 @@ export class CommonAction{
      * 获取合并消息
      * @param id {string} 合并id
      */
-    getForwardMsg(this:OneBot<'V11'>,id:string){
+    getForwardMsg(this:V11,id:string){
         return this.client.getForwardMsg(id)
     }
 
@@ -39,14 +39,14 @@ export class CommonAction{
      * 获取 Cookies
      * @param domain {string} 域名
      */
-    getCookies(this:OneBot<'V11'>,domain:string){
+    getCookies(this:V11,domain:string){
         return this.client.cookies[domain]
     }
 
     /**
      * 获取 CSRF Token
      */
-    getCsrfToken(this:OneBot<'V11'>){
+    getCsrfToken(this:V11){
         return this.client.getCsrfToken()
     }
 
@@ -54,7 +54,7 @@ export class CommonAction{
      * 获取 QQ 相关接口凭证
      * @param domain
      */
-    getCredentials(this:OneBot<'V11'>,domain:string){
+    getCredentials(this:V11,domain:string){
         return {
             cookies:this.client.cookies[domain],
             csrf_token:this.client.getCsrfToken()
@@ -64,7 +64,7 @@ export class CommonAction{
     /**
      * 获取版本信息
      */
-    getVersion(this:OneBot<'V11'>){
+    getVersion(this:V11){
         return {
             app_name:'oicq',
             app_version:'2.x',
@@ -76,16 +76,16 @@ export class CommonAction{
      * 重启OneBot实现
      * @param delay {number} 要延迟的毫秒数
      */
-    setRestart(this:OneBot<'V11'>,delay:number){
+    setRestart(this:V11,delay:number){
         return this.emit('restart',delay)
     }
-    getStatus(this:OneBot<'V11'>){
+    getStatus(this:V11){
         return {
             online:this.client.status=OnlineStatus.Online,
-            good:this.status===OneBotStatus.Good
+            good:this.oneBot.status===OneBotStatus.Good
         }
     }
-    login(this:OneBot<'V11'>,password?:string){
+    login(this:V11,password?:string){
         return this.client.login(password)
     }
 }

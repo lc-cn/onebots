@@ -12,7 +12,6 @@ import {fromCqcode, fromSegment, toCqcode, toSegment} from "oicq2-cq-enable";
 import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
-import {App} from "@/server/app";
 import {EventEmitter} from "events";
 
 export class V11 extends EventEmitter implements OneBot.Base{
@@ -30,10 +29,10 @@ export class V11 extends EventEmitter implements OneBot.Base{
     logger:Logger
     wss?:WebSocketServer
     wsr:Set<WebSocket>=new Set<WebSocket>()
-    constructor(public app:App,public client:Client,public config:V11.Config) {
+    constructor(public oneBot:OneBot<'V11'>,public client:Client,public config:V11.Config) {
         super()
         this.action=new Action()
-        this.logger=this.app.getLogger(this.client.uin,this.version)
+        this.logger=this.oneBot.app.getLogger(this.client.uin,this.version)
     }
 
     start(path?:string) {
@@ -74,8 +73,8 @@ export class V11 extends EventEmitter implements OneBot.Base{
         }
     }
     private startHttp(){
-        this.app.router.all(new RegExp(`^${this.path}/(.*)$`), this._httpRequestHandler.bind(this))
-        this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.app.config.port}${this.path}`)
+        this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), this._httpRequestHandler.bind(this))
+        this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
     }
     private startHttpReverse(config:Config.HttpReverseConfig){
         this.on('dispatch',(unserialized:any)=>{
@@ -124,8 +123,8 @@ export class V11 extends EventEmitter implements OneBot.Base{
     }
     private startWs(){
 
-        this.wss = this.app.router.ws(this.path, this.app.httpServer)
-        this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.app.config.port}${this.path}`)
+        this.wss = this.oneBot.app.router.ws(this.path, this.oneBot.app.httpServer)
+        this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
         this.wss.on("error", (err) => {
             this.logger.error(err.message)
         })

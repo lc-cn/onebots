@@ -1,7 +1,7 @@
 import {Client} from "oicq";
+import {join} from 'path'
 import {Config} from './config'
 import {OneBot,BOOLS,NotFoundError} from "@/onebot";
-import {App} from "@/server/app";
 import {Action} from "./action";
 import {EventEmitter} from "events";
 import {Logger} from "log4js";
@@ -12,21 +12,29 @@ import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
 import {fromCqcode, fromSegment} from "oicq2-cq-enable";
 import {toLine,toHump,toBool,uuid} from "@/utils";
+import Payload = V12.Payload;
+import {Db} from "@/db";
 
 export class V12 extends EventEmitter implements OneBot.Base{
     public version='V12'
     action:Action
     protected timestamp = Date.now()
+    protected heartbeat?: NodeJS.Timeout
     logger:Logger
     private path:string
     wss?:WebSocketServer
     wsr:Set<WebSocket>=new Set<WebSocket>()
-    constructor(public app:App,public client:Client,public config:V12.Config) {
+    private db:Db
+    constructor(public oneBot:OneBot<'V12'>,public client:Client,public config:V12.Config) {
         super()
+        this.db=new Db(join(process.cwd(),'data',this.client.uin+'.json'))
+        if(!this.history) this.db.set('eventBuffer',[])
         this.action=new Action()
-        this.logger=this.app.getLogger(this.client.uin,this.version)
+        this.logger=this.oneBot.app.getLogger(this.client.uin,this.version)
     }
-
+    get history():Payload<keyof Action>[]{
+        return this.db.get('eventBuffer')
+    }
     start(path?:string) {
         this.path=`/${this.client.uin}`
         if(path)this.path+=path
@@ -34,6 +42,8 @@ export class V12 extends EventEmitter implements OneBot.Base{
             const config:V12.HttpConfig= typeof this.config.use_http==='boolean'?{}:this.config.use_http||{}
             this.startHttp({
                 access_token:this.config.access_token,
+                event_enabled:true,
+                event_buffer_size:50,
                 ...config
             })
         }
@@ -72,10 +82,30 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
             this.startWsReverse(config)
         })
+
+        if (this.config.heartbeat) {
+            this.heartbeat = setInterval(() => {
+                this.dispatch({
+                    self_id: this.client.uin,
+                    time: Math.floor(Date.now() / 1000),
+                    type: "meta",
+                    detail_type: "heartbeat",
+                    interval: this.config.heartbeat*1000,
+                    status:this.action.getStatus.apply(this)
+                })
+            }, this.config.heartbeat*1000)
+        }
     }
     private startHttp(config:V12.HttpConfig){
-        this.app.router.all(new RegExp(`^${this.path}/(.*)$`), (ctx)=>this._httpRequestHandler(ctx,config))
-        this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.app.config.port}${this.path}`)
+        this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), (ctx)=>this._httpRequestHandler(ctx,config))
+        this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
+        this.on('dispatch',(payload:Payload<keyof Action>)=>{
+            if(!['message','notice','request'].includes(payload.type)) return
+            if(config.event_enabled){
+                this.history.push(payload)
+                if(config.event_buffer_size!==0 && this.history.length>config.event_buffer_size) this.history.shift()
+            }
+        })
     }
     private startWebhook(config:V12.WebhookConfig){
         this.on('dispatch',(unserialized:any)=>{
@@ -119,8 +149,8 @@ export class V12 extends EventEmitter implements OneBot.Base{
         })
     }
     private startWs(config:V12.WsConfig){
-        this.wss = this.app.router.ws(this.path, this.app.httpServer)
-        this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.app.config.port}${this.path}`)
+        this.wss = this.oneBot.app.router.ws(this.path, this.oneBot.app.httpServer)
+        this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
         this.wss.on("error", (err) => {
             this.logger.error(err.message)
         })
@@ -142,7 +172,8 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
             this._webSocketHandler(ws)
         })
-        this.on('dispatch',(serialized)=>{
+        this.on('dispatch',(unserialized)=>{
+            const serialized=JSON.stringify(unserialized)
             for (const ws of this.wss.clients) {
                 ws.send(serialized, (err) => {
                     if (err)
@@ -200,6 +231,16 @@ export class V12 extends EventEmitter implements OneBot.Base{
             detail_type:data.message_type||data.notice_type||data.request_type||data.system_type,
             ...data,
         } as V12.Payload<T>
+        if(payload.type==='notice'){
+            switch (payload.detail_type){
+                case 'friend':
+                    payload.detail_type+=payload.sub_type
+                    break;
+                case 'group':
+                    if(['increase','decrease'].includes(payload.sub_type))payload.detail_type='group_member_'+payload.sub_type
+                    else if(payload.sub_type==='recall') payload.detail_type='group_message_delete'
+            }
+        }
         this.emit('dispatch',payload)
     }
     async apply(req){
@@ -209,15 +250,17 @@ export class V12 extends EventEmitter implements OneBot.Base{
         if (is_async)
             action = action.replace("_async", "")
         if(action==='send_msg'){
-            if (["private", "group", "discuss"].includes(params.message_type)) {
-                action = "send_" + params.message_type + "_msg"
+            if (["private", "group", "discuss",'channel'].includes(params.detail_type)) {
+                action = "send_" + params.detail_type + "_msg"
             } else if (params.user_id)
                 action = "send_private_msg"
             else if (params.group_id)
                 action = "send_group_msg"
             else if (params.discuss_id)
                 action = "send_discuss_msg"
-            else throw new Error('required message_type or input (user_id/group_id)')
+            else if(params.channel_id&&params.guild_id)
+                action= "send_guild_msg"
+            else throw new Error('required detail_type or input (user_id/group_id/(guild_id and channel_id))')
         }
         const method = toHump(action) as keyof Action
         if(Reflect.has(this.action,method)){
@@ -387,9 +430,9 @@ export class V12 extends EventEmitter implements OneBot.Base{
                     this._quickOperate(event, res)
                     ret = JSON.stringify({
                         retcode: 0,
-                        status: "async",
+                        status: "ok",
                         data: null,
-                        error: null,
+                        message: null,
                         echo: data.echo
                     })
                 } else {
@@ -416,8 +459,8 @@ export class V12 extends EventEmitter implements OneBot.Base{
                 }))
             }
         })
-        ws.send(JSON.stringify(V12.genMetaEvent(this.client.uin, "connect")))
-        ws.send(JSON.stringify(V12.genMetaEvent(this.client.uin, "enable")))
+        this.dispatch(V12.genMetaEvent(this.client.uin, "connect"))
+        this.dispatch(V12.genMetaEvent(this.client.uin, "enable"))
     }
 
 }
@@ -446,6 +489,7 @@ export namespace V12{
         retcode:0|10001|10002|10003|10004|10005|10006|10007
         data:T
         message:string
+        echo?:string
     }
     export const defaultConfig:Config={
         heartbeat:3,
@@ -471,30 +515,32 @@ export namespace V12{
     export interface Protocol {
         action: string,
         params: any
-        echo?: any
+        echo?: string
     }
-    export function success<T extends any>(data:T,retcode:Result<T>['retcode']=0):Result<T>{
+    export function success<T extends any>(data:T,retcode:Result<T>['retcode']=0,echo?:string):Result<T>{
         return {
             retcode,
             status:retcode===0?'ok':'failed',
             data,
-            message:''
+            message:'',
+            echo
         }
     }
-    export function error(message:string,retcode:Result<null>['retcode']=10001):Result<null>{
+    export function error(message:string,retcode:Result<null>['retcode']=10001,echo?:string):Result<null>{
         return {
             retcode,
             status:'failed',
             data:null,
-            message
+            message,
+            echo
         }
     }
     export function genMetaEvent(uin: number, type: string) {
         return {
             self_id: uin,
             time: Math.floor(Date.now() / 1000),
-            post_type: "meta_event",
-            meta_event_type: "lifecycle",
+            type: "meta",
+            detail_type: "lifecycle",
             sub_type: type,
         }
     }

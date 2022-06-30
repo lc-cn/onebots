@@ -68,6 +68,7 @@ export interface Class{
 export function Mixin(base:Class,...classes:Class[]){
     classes.forEach(ctr => {
         Object.getOwnPropertyNames(ctr.prototype).forEach(name => {
+            if(name==='constructor') return
             base.prototype[name] = ctr.prototype[name];
         });
     });
@@ -89,4 +90,11 @@ export function toBool(v: any) {
 export function uuid() {
     let hex = crypto.randomBytes(16).toString("hex")
     return hex.substr(0, 8) + "-" + hex.substr(8, 4) + "-" + hex.substr(12, 4) + "-" + hex.substr(16, 4) + "-" + hex.substr(20)
+}
+
+export function getProperties(obj){
+    if(obj.__proto__ === null){ //说明该对象已经是最顶层的对象
+        return [];
+    }
+    return Object.getOwnPropertyNames(obj).concat(getProperties(obj.__proto__));
 }
