@@ -36,7 +36,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
     }
 
     start(path?:string) {
-        this.path=`/${this.client.uin}`
+        this.path=`/V11/${this.client.uin}`
         if(path)this.path+=path
         if(this.config.use_http) this.startHttp()
         if(this.config.use_ws) this.startWs()

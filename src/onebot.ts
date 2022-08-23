@@ -13,22 +13,25 @@ export class NotFoundError extends Error{
 export class OneBot<V extends OneBot.Version> extends EventEmitter{
     public config:OneBotConfig[]
     status:OneBotStatus
+    protected password:string
     public client:Client
     instances:(V11|V12)[]
     constructor(public app:App,public readonly uin:number,config:MayBeArray<OneBotConfig>){
         super()
         if(!Array.isArray(config))config=new Array(config)
         this.config=(config as OneBotConfig[]).map(c=>{
+            if(c.password)this.password=c.password
+            if(!c.version)c.version='V11'
             switch (c.version){
                 case 'V11':
-                    return deepMerge(V11.defaultConfig as OneBotConfig,c)
+                    return deepMerge(this.app.config.general.V11 as OneBotConfig,c)
                 case 'V12':
-                    return deepMerge(V12.defaultConfig as OneBotConfig,c)
+                    return deepMerge(this.app.config.general.V12 as OneBotConfig,c)
                 default:
                     throw new Error('不支持的oneBot版本：'+c.version)
             }
         })
-        this.client=new Client(uin,{platform:5,data_dir:join(process.cwd(),'data')})
+        this.client=new Client(uin,{platform:this.app.config.platform,data_dir:join(App.configDir,'data')})
         this.instances=this.config.map(c=>{
             switch (c.version) {
                 case 'V11':
@@ -48,7 +51,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
         this.instances.forEach(instance=>{
             instance.start(this.instances.length>1?'/'+instance.version:undefined)
         })
-        this.client.login()
+        this.client.login(this.password)
     }
     stop(){
         this.instances.forEach(instance=>{

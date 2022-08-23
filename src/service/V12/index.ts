@@ -36,7 +36,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
         return this.db.get('eventBuffer')
     }
     start(path?:string) {
-        this.path=`/${this.client.uin}`
+        this.path=`/${this.version}/${this.client.uin}`
         if(path)this.path+=path
         if(this.config.use_http) {
             const config:V12.HttpConfig= typeof this.config.use_http==='boolean'?{}:this.config.use_http||{}
