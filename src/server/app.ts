@@ -1,6 +1,6 @@
 import Koa from 'koa'
 import * as os from 'os'
-import {copyFileSync, existsSync, mkdirSync} from "fs";
+import {copyFileSync, existsSync, mkdirSync, writeFileSync} from "fs";
 import {Logger,getLogger} from "log4js";
 import {join,resolve} from 'path'
 import {createServer,Server} from "http";
@@ -25,6 +25,7 @@ export interface KoaOptions{
 export class App extends Koa{
     public config:App.Config
     readonly httpServer:Server
+    isStarted:boolean=false
     public logger:Logger
     static configDir=join(os.homedir(),'.oicq-onebot')
     static configPath=join(this.configDir,'config.yaml')
@@ -62,14 +63,62 @@ export class App extends Koa{
             this.createOneBot(uin,config)
         }
     }
+    public addAccount(uin:number|`${number}`,config:MayBeArray<OneBot.Config<OneBot.Version>>){
+        if(typeof uin!=="number")uin=Number(uin)
+        if(Number.isNaN(uin)) throw new Error('无效的账号')
+        if(this.oneBots.find(oneBot=>oneBot.uin===uin)) throw new Error('账户已存在')
+        const oneBot=this.createOneBot(uin,config)
+        if(this.isStarted)oneBot.start()
+        this.config[uin]=config
+        writeFileSync(App.configPath,yaml.dump(this.config))
+    }
+    public updateAccount(uin:number|`${number}`,config:MayBeArray<OneBot.Config<OneBot.Version>>){
+        if(typeof uin!=="number")uin=Number(uin)
+        if(Number.isNaN(uin)) throw new Error('无效的账号')
+        const oneBot=this.oneBots.find(oneBot=>oneBot.uin===uin)
+        if(!oneBot) throw new Error('账户不存在')
+        oneBot.stop()
+        delete this.config[uin]
+        writeFileSync(App.configPath,yaml.dump(this.config))
+    }
+    public removeAccount(uin:number|`${number}`){
+        if(typeof uin!=="number")uin=Number(uin)
+        if(Number.isNaN(uin)) throw new Error('无效的账号')
+        const oneBot=this.oneBots.find(oneBot=>oneBot.uin===uin)
+        if(!oneBot) throw new Error('账户不存在')
+        oneBot.stop()
+        delete this.config[uin]
+        writeFileSync(App.configPath,yaml.dump(this.config))
+    }
     public createOneBot(uin:number,config:MayBeArray<OneBot.Config<OneBot.Version>>){
-        this.oneBots.push(new OneBot(this,uin,config))
+        const oneBot=new OneBot(this,uin,config)
+        this.oneBots.push(oneBot)
+        return oneBot
     }
     start(){
         for(const oneBot of this.oneBots){
             oneBot.start()
         }
         this.httpServer.listen(this.config.port)
+        this.router.post('/add',(ctx,next)=>{
+            const {uin,...config}=ctx.request.body
+            try{
+                this.addAccount(uin,config)
+                ctx.body=`添加成功`
+            }catch (e){
+                ctx.body=e
+            }
+        })
+        this.router.get('/remove',(ctx,next)=>{
+            const {uin}=ctx.request.query
+            try{
+                this.removeAccount(Number(uin))
+                ctx.body=`移除成功`
+            }catch (e){
+                ctx.body=e
+            }
+        })
+        this.isStarted=true
         this.logger.mark(`server listen at http://0.0.0.0:${this.config.port}/${this.config.path?this.config.path:''}`)
     }
 }

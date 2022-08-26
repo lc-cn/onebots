@@ -1,6 +1,6 @@
 {
   "name": "@oicq/onebot",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "基于oicq的oneBot实现",
   "main": "lib/index.js",
   "bin": {

@@ -14,6 +14,7 @@ import {fromCqcode, fromSegment} from "oicq2-cq-enable";
 import {toLine,toHump,toBool,uuid} from "@/utils";
 import Payload = V12.Payload;
 import {Db} from "@/db";
+import {App} from "@/server/app";
 
 export class V12 extends EventEmitter implements OneBot.Base{
     public version='V12'
@@ -27,7 +28,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
     private db:Db
     constructor(public oneBot:OneBot<'V12'>,public client:Client,public config:V12.Config) {
         super()
-        this.db=new Db(join(process.cwd(),'data',this.client.uin+'.json'))
+        this.db=new Db(join(App.configDir,'data',this.client.uin+'.json'))
         if(!this.history) this.db.set('eventBuffer',[])
         this.action=new Action()
         this.logger=this.oneBot.app.getLogger(this.client.uin,this.version)

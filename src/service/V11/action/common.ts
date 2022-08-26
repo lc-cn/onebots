@@ -88,4 +88,13 @@ export class CommonAction{
     login(this:V11,password?:string){
         return this.client.login(password)
     }
+    submitSlider(this:V11,ticket:string){
+        return this.client.submitSlider(ticket)
+    }
+    submitSmsCode(this:V11,code:string){
+        return this.client.submitSmsCode(code)
+    }
+    sendSmsCode(this:V11){
+        return this.client.sendSmsCode()
+    }
 }
