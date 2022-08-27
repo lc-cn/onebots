@@ -7,6 +7,7 @@ import {createServer,Server} from "http";
 import yaml from 'js-yaml'
 import KoaBodyParser from "koa-bodyparser";
 import {OneBot} from "@/onebot";
+const mime = require('mime-types');
 import {deepMerge,deepClone} from "@/utils";
 import {Router} from "./router";
 import {readFileSync} from "fs";
@@ -67,6 +68,7 @@ export class App extends Koa{
         if(Number.isNaN(uin)) throw new Error('无效的账号')
         if(this.oneBots.find(oneBot=>oneBot.uin===uin)) throw new Error('账户已存在')
         this.config[uin]=config
+        this.createOneBot(uin,config)
         writeFileSync(App.configPath,yaml.dump(this.config))
     }
     public updateAccount(uin:number|`${number}`,config:MayBeArray<OneBot.Config<OneBot.Version>>){
@@ -108,6 +110,23 @@ export class App extends Koa{
                     urls:bot.config.map(c=>`/${c.version}/${bot.uin}`)
                 }
             })
+        })
+        this.router.get('/qrcode',(ctx)=>{
+            const {uin}=ctx.query
+            const uinUrl=join(App.configDir,'data',uin as string)
+            if(!existsSync(uinUrl)){
+                return ctx.res.writeHead(400).end('未登录')
+            }
+            const qrcodePath=join(App.configDir,'data',uin as string,'qrcode.png')
+            let file = null;
+            try {
+                file =readFileSync(qrcodePath); //读取文件
+            } catch (error) {
+                return ctx.res.writeHead(404).end(error.message)
+            }
+            let mimeType = mime.lookup(qrcodePath); //读取图片文件类型
+            ctx.set('content-type', mimeType); //设置返回类型
+            ctx.body = file; //返回图片
         })
         this.router.get('/detail',(ctx)=>{
             let {uin}=ctx.request.query

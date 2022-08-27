@@ -86,7 +86,51 @@ export class CommonAction{
         }
     }
     login(this:V11,password?:string){
-        return this.client.login(password)
+        const _this=this
+        return new Promise(async resolve=>{
+            const timer=setTimeout(()=>{
+                resolve('登录超时')
+            },5000)
+            function receiveQrcode(event){
+                _this.client.off('system.login.device',receiveDevice)
+                _this.client.off('system.login.slider',receiveSlider)
+                _this.client.off('system.online',closeListen)
+                clearTimeout(timer)
+                resolve(event)
+            }
+            function receiveDevice(event){
+                _this.client.off('system.login.qrcode',receiveQrcode)
+                _this.client.off('system.login.slider',receiveSlider)
+                _this.client.off('system.online',closeListen)
+                clearTimeout(timer)
+                resolve(event)
+            }
+            function receiveError(event){
+                clearTimeout(timer)
+                resolve(event)
+            }
+            function receiveSlider(event){
+                _this.client.off('system.login.qrcode',receiveQrcode)
+                _this.client.off('system.login.device',receiveDevice)
+                _this.client.off('system.online',closeListen)
+                clearTimeout(timer)
+                resolve(event)
+            }
+            function closeListen(){
+                _this.client.off('system.login.slider',receiveSlider)
+                _this.client.off('system.login.qrcode',receiveQrcode)
+                _this.client.off('system.login.device',receiveDevice)
+                clearTimeout(timer)
+                resolve('登录成功')
+            }
+            this.client.once('system.login.qrcode',receiveQrcode)
+            this.client.once('system.login.device',receiveDevice)
+            this.client.once('system.login.slider',receiveSlider)
+            this.client.once('system.login.error',receiveError)
+            this.client.once('system.online',closeListen)
+            await this.client.login(password).catch(()=>resolve('登录失败'))
+
+        })
     }
     submitSlider(this:V11,ticket:string){
         return this.client.submitSlider(ticket)
