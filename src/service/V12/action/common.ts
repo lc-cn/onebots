@@ -29,7 +29,7 @@ export class CommonAction{
             if(!this.history.length && timout!==0) {
                 return setTimeout(()=>resolve(this.action.getLatestEvents.apply(this,[limit,timout])),timout*1000)
             }
-            return resolve(this.history.filter((_,i)=>limit===0?true:i<limit))
+            return resolve(this.history.reverse().filter((_,i)=>limit===0?true:i<limit))
         })
     }
     getVersion(this:V12){
