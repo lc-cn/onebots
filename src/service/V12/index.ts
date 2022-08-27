@@ -37,7 +37,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
         return this.db.get('eventBuffer')
     }
     start(path?:string) {
-        this.path=`/${this.version}/${this.client.uin}`
+        this.path=`/${this.client.uin}`
         if(path)this.path+=path
         if(this.config.use_http) {
             const config:V12.HttpConfig= typeof this.config.use_http==='boolean'?{}:this.config.use_http||{}
@@ -101,7 +101,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
         this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), (ctx)=>this._httpRequestHandler(ctx,config))
         this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
         this.on('dispatch',(payload:Payload<keyof Action>)=>{
-            if(!['message','notice','request'].includes(payload.type)) return
+            if(!['message','notice','request','system'].includes(payload.type)) return
             if(config.event_enabled){
                 this.history.push(payload)
                 if(config.event_buffer_size!==0 && this.history.length>config.event_buffer_size) this.history.shift()
@@ -194,7 +194,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
         })
     }
     stop() {
-        throw new Error("Method not implemented.");
+        return this.client.logout()
     }
     dispatch<T extends Record<string, any>>(data:T= {} as any) {
         if(!data)data={} as any

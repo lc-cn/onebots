@@ -43,6 +43,16 @@ node ./index.js
 npm install -g @oicq/onebot
 oicq-onebot
 ```
+# 使用接口管理oneBot
+
+| url     | method | params           | desc |
+|:--------| :--- |:-----------------| :--- |
+| /list   | GET |                  | 获取当前运行的机器人列表 |
+| /detail | GET | uin              | 获取指定机器人配置 |
+| /add    | POST | {uin,...config}  | 添加机器人 config 为机器人配置 |
+| /edit | POST | {uin,...config}  | 修改机器人配置 config 为机器人配置 |
+| /remove | get | uin | 移除机器人 |
+
 # 鸣谢
 1. [takayama-lily/oicq](https://github.com/takayama-lily/oicq) 底层服务支持
 2. [takayama-lili/onebot](https://github.com/takayama-lily/node-onebot) oicq的oneBot原先版本

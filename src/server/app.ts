@@ -25,7 +25,6 @@ export interface KoaOptions{
 export class App extends Koa{
     public config:App.Config
     readonly httpServer:Server
-    isStarted:boolean=false
     public logger:Logger
     static configDir=join(os.homedir(),'.oicq-onebot')
     static configPath=join(this.configDir,'config.yaml')
@@ -67,8 +66,6 @@ export class App extends Koa{
         if(typeof uin!=="number")uin=Number(uin)
         if(Number.isNaN(uin)) throw new Error('无效的账号')
         if(this.oneBots.find(oneBot=>oneBot.uin===uin)) throw new Error('账户已存在')
-        const oneBot=this.createOneBot(uin,config)
-        if(this.isStarted)oneBot.start()
         this.config[uin]=config
         writeFileSync(App.configPath,yaml.dump(this.config))
     }
@@ -76,18 +73,21 @@ export class App extends Koa{
         if(typeof uin!=="number")uin=Number(uin)
         if(Number.isNaN(uin)) throw new Error('无效的账号')
         const oneBot=this.oneBots.find(oneBot=>oneBot.uin===uin)
-        if(!oneBot) throw new Error('账户不存在')
-        oneBot.stop()
-        delete this.config[uin]
-        writeFileSync(App.configPath,yaml.dump(this.config))
+        if(!oneBot) return this.addAccount(uin,config)
+        const newConfig=deepMerge(this.config[uin],config)
+        this.removeAccount(uin)
+        this.addAccount(uin,newConfig)
     }
     public removeAccount(uin:number|`${number}`){
         if(typeof uin!=="number")uin=Number(uin)
         if(Number.isNaN(uin)) throw new Error('无效的账号')
-        const oneBot=this.oneBots.find(oneBot=>oneBot.uin===uin)
-        if(!oneBot) throw new Error('账户不存在')
+        const currentIdx=this.oneBots.findIndex(oneBot=>oneBot.uin===uin)
+
+        if(currentIdx<0) throw new Error('账户不存在')
+        const oneBot=this.oneBots[currentIdx]
         oneBot.stop()
         delete this.config[uin]
+        this.oneBots.splice(currentIdx,1)
         writeFileSync(App.configPath,yaml.dump(this.config))
     }
     public createOneBot(uin:number,config:MayBeArray<OneBot.Config<OneBot.Version>>){
@@ -100,13 +100,40 @@ export class App extends Koa{
             oneBot.start()
         }
         this.httpServer.listen(this.config.port)
+        this.router.get('/list',(ctx)=>{
+            ctx.body=this.oneBots.map(bot=>{
+                return {
+                    uin:bot.uin,
+                    config:bot.config,
+                    urls:bot.config.map(c=>`/${c.version}/${bot.uin}`)
+                }
+            })
+        })
+        this.router.get('/detail',(ctx)=>{
+            let {uin}=ctx.request.query
+            const oneBot=this.oneBots.find(bot=>bot.uin===Number(uin))
+            ctx.body={
+                uin,
+                config:oneBot.config,
+                urls:oneBot.config.map(c=>`/${uin}/${c.version}`)
+            }
+        })
         this.router.post('/add',(ctx,next)=>{
-            const {uin,...config}=ctx.request.body
+            const {uin,config}=ctx.request.body
             try{
                 this.addAccount(uin,config)
                 ctx.body=`添加成功`
             }catch (e){
-                ctx.body=e
+                ctx.body=e.message
+            }
+        })
+        this.router.get('/edit',(ctx,next)=>{
+            const {uin,config}=ctx.request.body
+            try{
+                this.updateAccount(Number(uin),config)
+                ctx.body=`修改成功`
+            }catch (e){
+                ctx.body=e.message
             }
         })
         this.router.get('/remove',(ctx,next)=>{
@@ -115,10 +142,10 @@ export class App extends Koa{
                 this.removeAccount(Number(uin))
                 ctx.body=`移除成功`
             }catch (e){
-                ctx.body=e
+                console.log(e)
+                ctx.body=e.message
             }
         })
-        this.isStarted=true
         this.logger.mark(`server listen at http://0.0.0.0:${this.config.port}/${this.config.path?this.config.path:''}`)
     }
 }

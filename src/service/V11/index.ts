@@ -36,7 +36,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
     }
 
     start(path?:string) {
-        this.path=`/V11/${this.client.uin}`
+        this.path=`/${this.client.uin}`
         if(path)this.path+=path
         if(this.config.use_http) this.startHttp()
         if(this.config.use_ws) this.startWs()
@@ -166,7 +166,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
         })
     }
     stop() {
-        throw new Error("Method not implemented.");
+        this.client.logout()
     }
     dispatch(data:any) {
         if(!data.post_type)data.post_type='system'
