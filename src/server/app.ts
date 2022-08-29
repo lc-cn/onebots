@@ -138,7 +138,7 @@ export class App extends Koa{
             }
         })
         this.router.post('/add',(ctx,next)=>{
-            const {uin,config}=ctx.request.body
+            const {uin,...config}=ctx.request.body
             try{
                 this.addAccount(uin,config)
                 ctx.body=`添加成功`
@@ -147,7 +147,7 @@ export class App extends Koa{
             }
         })
         this.router.get('/edit',(ctx,next)=>{
-            const {uin,config}=ctx.request.body
+            const {uin,...config}=ctx.request.body
             try{
                 this.updateAccount(Number(uin),config)
                 ctx.body=`修改成功`
