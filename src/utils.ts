@@ -15,11 +15,14 @@ export function deepMerge<T extends any>(base:T, ...from:T[]):T{
         for(const key in item){
             if(base.hasOwnProperty(key)){
                 if(typeof base[key]==='object'){
+                    // @ts-ignore
                     base[key]=deepMerge(base[key],item[key])
                 }else{
+                    // @ts-ignore
                     base[key]=item[key]
                 }
             }else{
+                // @ts-ignore
                 base[key]=item[key]
             }
         }
