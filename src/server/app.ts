@@ -14,7 +14,7 @@ import {readFileSync} from "fs";
 import {V11} from "@/service/V11";
 import {V12} from "@/service/V12";
 import {LogLevel, MayBeArray} from "@/types";
-import {Platform} from "oicq";
+import {Platform} from "icqq";
 export interface KoaOptions{
     env?: string
     keys?: string[]
@@ -27,14 +27,14 @@ export class App extends Koa{
     public config:App.Config
     readonly httpServer:Server
     public logger:Logger
-    static configDir=join(os.homedir(),'.oicq-onebot')
+    static configDir=join(os.homedir(),'.onebots')
     static configPath=join(this.configDir,'config.yaml')
     oneBots:OneBot<any>[]=[]
     public router:Router
     constructor(config:App.Config={}) {
         super(config);
         this.config=deepMerge(deepClone(App.defaultConfig),config)
-        this.logger=getLogger('[oicq-oneBot]')
+        this.logger=getLogger('[icqq-oneBot]')
         this.logger.level=this.config.log_level
         this.router=new Router({prefix:config.path})
         this.use(KoaBodyParser())
@@ -44,7 +44,7 @@ export class App extends Koa{
         this.createOneBots()
     }
     getLogger(uin:number|string,version=''){
-        const logger= getLogger(`[oicq-oneBot${version}:${uin}]`)
+        const logger= getLogger(`[icqq-oneBot${version}:${uin}]`)
         logger.level=this.config.log_level
         return logger
     }
@@ -68,8 +68,9 @@ export class App extends Koa{
         if(Number.isNaN(uin)) throw new Error('无效的账号')
         if(this.oneBots.find(oneBot=>oneBot.uin===uin)) throw new Error('账户已存在')
         this.config[uin]=config
-        this.createOneBot(uin,config)
-        writeFileSync(App.configPath,yaml.dump(this.config))
+        const oneBot=this.createOneBot(uin,config)
+        oneBot.startListen()
+        writeFileSync(App.configPath,yaml.dump(deepClone(this.config)))
     }
     public updateAccount(uin:number|`${number}`,config:MayBeArray<OneBot.Config<OneBot.Version>>){
         if(typeof uin!=="number")uin=Number(uin)

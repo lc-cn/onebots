@@ -1,5 +1,5 @@
 import {V12} from '@/service/V12'
-import {OnlineStatus} from "oicq";
+import {OnlineStatus} from "icqq";
 import {OneBotStatus} from "@/onebot";
 import {getProperties,toLine} from '@/utils'
 import {Action} from "./";
@@ -35,7 +35,7 @@ export class CommonAction{
     }
     getVersion(this:V12){
         return {
-            impl:'oicq_onebot',
+            impl:'icqq_onebot',
             platform:'qq',
             version:'0.0.1',
             onebot_version:'12'

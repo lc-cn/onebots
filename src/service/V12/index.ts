@@ -1,4 +1,4 @@
-import {Client} from "oicq";
+import {Client} from "icqq";
 import {join} from 'path'
 import {Config} from './config'
 import {OneBot,BOOLS,NotFoundError} from "@/onebot";
@@ -10,7 +10,7 @@ import {URL} from "url";
 import http from "http";
 import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
-import {fromCqcode, fromSegment} from "oicq2-cq-enable";
+import {fromCqcode, fromSegment} from "icqq-cq-enable";
 import {toLine,toHump,toBool,uuid} from "@/utils";
 import Payload = V12.Payload;
 import {Db} from "@/db";
@@ -225,7 +225,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
         }
         const payload:V12.Payload<T>={
             id:uuid(),
-            impl:'oicq_onebot',
+            impl:'icqq_onebot',
             platform:'qq',
             self_id:`${this.client.uin}`,
             type:data.post_type|| 'meta',
@@ -505,7 +505,7 @@ export namespace V12{
     }
     export type Payload<T extends any>={
         id:string
-        impl:'oicq_onebot'
+        impl:'icqq_onebot'
         platform:'qq'
         self_id:`${number}`
         time:number

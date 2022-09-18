@@ -1,4 +1,4 @@
-import {OnlineStatus} from "oicq";
+import {OnlineStatus} from "icqq";
 import {OneBotStatus} from "@/onebot";
 import {V11} from "@/service/V11";
 export class CommonAction{
@@ -66,7 +66,7 @@ export class CommonAction{
      */
     getVersion(this:V11){
         return {
-            app_name:'oicq',
+            app_name:'icqq',
             app_version:'2.x',
             protocol_version:'v11'
         }
@@ -89,45 +89,21 @@ export class CommonAction{
         const _this=this
         return new Promise(async resolve=>{
             const timer=setTimeout(()=>{
-                resolve('登录超时')
+                receiveResult('登录超时')
             },5000)
-            function receiveQrcode(event){
-                _this.client.off('system.login.device',receiveDevice)
-                _this.client.off('system.login.slider',receiveSlider)
-                _this.client.off('system.online',closeListen)
+            function receiveResult(event){
+                _this.client.off('system.login.qrcode',receiveResult)
+                _this.client.off('system.login.device',receiveResult)
+                _this.client.off('system.login.slider',receiveResult)
+                _this.client.off('system.login.error',receiveResult)
                 clearTimeout(timer)
                 resolve(event)
             }
-            function receiveDevice(event){
-                _this.client.off('system.login.qrcode',receiveQrcode)
-                _this.client.off('system.login.slider',receiveSlider)
-                _this.client.off('system.online',closeListen)
-                clearTimeout(timer)
-                resolve(event)
-            }
-            function receiveError(event){
-                clearTimeout(timer)
-                resolve(event)
-            }
-            function receiveSlider(event){
-                _this.client.off('system.login.qrcode',receiveQrcode)
-                _this.client.off('system.login.device',receiveDevice)
-                _this.client.off('system.online',closeListen)
-                clearTimeout(timer)
-                resolve(event)
-            }
-            function closeListen(){
-                _this.client.off('system.login.slider',receiveSlider)
-                _this.client.off('system.login.qrcode',receiveQrcode)
-                _this.client.off('system.login.device',receiveDevice)
-                clearTimeout(timer)
-                resolve('登录成功')
-            }
-            this.client.once('system.login.qrcode',receiveQrcode)
-            this.client.once('system.login.device',receiveDevice)
-            this.client.once('system.login.slider',receiveSlider)
-            this.client.once('system.login.error',receiveError)
-            this.client.once('system.online',closeListen)
+            this.client.on('system.login.qrcode',receiveResult)
+            this.client.on('system.login.device',receiveResult)
+            this.client.on('system.login.slider',receiveResult)
+            this.client.on('system.login.error',receiveResult)
+            this.client.on('system.online',receiveResult)
             await this.client.login(password).catch(()=>resolve('登录失败'))
 
         })

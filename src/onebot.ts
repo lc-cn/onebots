@@ -2,7 +2,7 @@ import {EventEmitter} from 'events'
 import {App} from "./server/app";
 import {deepMerge, omit} from "./utils";
 import {join} from "path";
-import {Client} from "oicq";
+import {Client} from "icqq";
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
@@ -44,6 +44,10 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
         })
     }
     start(){
+        this.startListen()
+        this.client.login(this.password)
+    }
+    startListen(){
         this.client.on('system',this.dispatch.bind(this))
         this.client.on('notice',this.dispatch.bind(this))
         this.client.on('request',this.dispatch.bind(this))
@@ -51,7 +55,6 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
         this.instances.forEach(instance=>{
             instance.start(this.instances.length>1?'/'+instance.version:undefined)
         })
-        this.client.login(this.password)
     }
     stop(){
         this.instances.forEach(instance=>{

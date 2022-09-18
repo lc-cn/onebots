@@ -1,5 +1,5 @@
 import {V12} from "../index";
-import {Sendable} from "oicq";
+import {Sendable} from "icqq";
 
 export class FriendAction{
     getUserInfo(this:V12,user_id:number){

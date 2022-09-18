@@ -1,10 +1,10 @@
 {
-  "name": "@oicq/onebot",
-  "version": "1.1.6",
-  "description": "基于oicq的oneBot实现",
+  "name": "onebots",
+  "version": "0.0.1",
+  "description": "基于icqq的多例oneBot实现",
   "main": "lib/index.js",
   "bin": {
-    "oicq-onebot": "./lib/bin.js"
+    "onebots": "./lib/bin.js"
   },
   "scripts": {
     "start": "node .",
@@ -15,19 +15,19 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/liucl-cn/oicq-onebot.git"
+    "url": "git+https://github.com/liucl-cn/onebots.git"
   },
   "keywords": [
     "onebot",
-    "oicq",
+    "icqq",
     "cq-http"
   ],
   "author": "凉菜",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/liucl-cn/oicq-onebot/issues"
+    "url": "https://github.com/liucl-cn/onebots/issues"
   },
-  "homepage": "https://github.com/liucl-cn/oicq-onebot#readme",
+  "homepage": "https://github.com/liucl-cn/onebots#readme",
   "devDependencies": {
     "@types/koa": "^2.13.4",
     "@types/koa__router": "^8.0.11",
@@ -47,12 +47,12 @@
   ],
   "dependencies": {
     "@koa/router": "^10.1.1",
+    "icqq": "^0.0.1",
+    "icqq-cq-enable": "^1.0.0",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "koa-bodyparser": "^4.3.0",
     "log4js": "^6.5.2",
-    "oicq": "^2.3.1",
-    "oicq2-cq-enable": "^1.0.6",
     "ws": "^8.8.0"
   }
 }

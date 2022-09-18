@@ -1,11 +1,11 @@
 import {OneBot} from "@/onebot";
-import {Sendable} from "oicq";
+import {Sendable} from "icqq";
 
 export class FriendAction{
     /**
      * 发送私聊消息
      * @param user_id {number} 用户id
-     * @param message {import('oicq').Sendable} 发送的消息
+     * @param message {import('icqq').Sendable} 发送的消息
      */
     sendPrivateMsg(this:OneBot<'V11'>,user_id:number,message:Sendable){
         return this.client.sendPrivateMsg(user_id,message)

@@ -1,4 +1,4 @@
-import {Client} from "oicq";
+import {Client} from "icqq";
 import {Config} from "./config";
 import {Action} from "./action";
 import {OneBot} from "@/onebot";
@@ -8,7 +8,7 @@ import {Dispose} from "@/types";
 import {Context} from "koa";
 import {URL} from "url";
 import {toBool, toHump, toLine} from "@/utils";
-import {fromCqcode, fromSegment, toCqcode, toSegment} from "oicq2-cq-enable";
+import {fromCqcode, fromSegment, toCqcode, toSegment} from "icqq-cq-enable";
 import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
