@@ -18,7 +18,7 @@
 ```shell
 npm init -y
 ```
-2. 安装@icqq/oneBot
+2. 安装onebots
 ```shell
 npm install onebots
 ```
