@@ -228,7 +228,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
      */
     protected _webSocketHandler(ws: WebSocket) {
         ws.on("message", async (msg) => {
-            this.logger.debug(" 收到ws消息：" + msg)
+            this.logger.info(" 收到ws消息：" + msg)
             var data
             try {
                 data = JSON.parse(String(msg)) as V11.Protocol

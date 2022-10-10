@@ -8,7 +8,7 @@ import yaml from 'js-yaml'
 import KoaBodyParser from "koa-bodyparser";
 import {OneBot} from "@/onebot";
 const mime = require('mime-types');
-import {deepMerge,deepClone} from "@/utils";
+import {deepMerge, deepClone, protectedFields} from "@/utils";
 import {Router} from "./router";
 import {readFileSync} from "fs";
 import {V11} from "@/service/V11";
@@ -107,7 +107,7 @@ export class App extends Koa{
             ctx.body=this.oneBots.map(bot=>{
                 return {
                     uin:bot.uin,
-                    config:bot.config,
+                    config:bot.config.map(c=>protectedFields(c,'password',"access_token")),
                     urls:bot.config.map(c=>`/${c.version}/${bot.uin}`)
                 }
             })
@@ -134,7 +134,7 @@ export class App extends Koa{
             const oneBot=this.oneBots.find(bot=>bot.uin===Number(uin))
             ctx.body={
                 uin,
-                config:oneBot.config,
+                config:oneBot.config.map(c=>protectedFields(c,'password',"access_token")),
                 urls:oneBot.config.map(c=>`/${uin}/${c.version}`)
             }
         })
@@ -169,7 +169,7 @@ export class App extends Koa{
         this.logger.mark(`server listen at http://0.0.0.0:${this.config.port}/${this.config.path?this.config.path:''}`)
     }
 }
-export function createApp<V extends OneBot.Version>(config:App.Config|string='config.yaml'){
+export function createApp(config:App.Config|string='config.yaml'){
     if(typeof config==='string'){
         if(!existsSync(App.configDir)){
             mkdirSync(App.configDir)

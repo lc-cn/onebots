@@ -1,6 +1,5 @@
-// 合并对象/数组
 import * as crypto from "crypto";
-
+// 合并对象/数组
 export function deepMerge<T extends any>(base:T, ...from:T[]):T{
     if(from.length===0){
         return base
@@ -94,7 +93,12 @@ export function uuid() {
     let hex = crypto.randomBytes(16).toString("hex")
     return hex.substr(0, 8) + "-" + hex.substr(8, 4) + "-" + hex.substr(12, 4) + "-" + hex.substr(16, 4) + "-" + hex.substr(20)
 }
-
+export function protectedFields<T>(source:T,...keys:(keyof T)[]):T{
+    if(!source || typeof source!=='object') throw new Error('source must is object')
+    return Object.fromEntries(Object.entries(source).map(([key,value])=>{
+        return [key,keys.includes(key as keyof T)?value.split('').map(c=>'*').join(''):value]
+    })) as T
+}
 export function getProperties(obj){
     if(obj.__proto__ === null){ //说明该对象已经是最顶层的对象
         return [];
