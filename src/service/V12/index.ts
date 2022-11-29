@@ -18,7 +18,7 @@ import {App} from "@/server/app";
 
 export class V12 extends EventEmitter implements OneBot.Base{
     public version='V12'
-    action:Action
+    public action:Action
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
     logger:Logger

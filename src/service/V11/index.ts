@@ -15,7 +15,7 @@ import https from "https";
 import {EventEmitter} from "events";
 
 export class V11 extends EventEmitter implements OneBot.Base{
-    action:Action
+    public action:Action
     public version='V11'
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout

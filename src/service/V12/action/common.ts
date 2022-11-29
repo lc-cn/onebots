@@ -35,22 +35,24 @@ export class CommonAction{
     }
     getVersion(this:V12){
         return {
-            impl:'icqq_onebot',
+            impl:'onebots',
             platform:'qq',
-            version:'0.0.1',
+            version:'0.0.5',
             onebot_version:'12'
         }
     }
-    submitSlider(this:V11,ticket:string){
-        return this.client.submitSlider(ticket)
+    async submitSlider(this:V12,ticket:string){
+        await this.client.submitSlider(ticket)
+        return this.action.login.apply(this,[])
     }
-    submitSmsCode(this:V11,code:string){
-        return this.client.submitSmsCode(code)
+    async submitSmsCode(this:V12,code:string){
+        await this.client.submitSmsCode(code)
+        return this.action.login.apply(this,[])
     }
-    sendSmsCode(this:V11){
+    sendSmsCode(this:V12){
         return this.client.sendSmsCode()
     }
-    login(this:V11,password?:string){
+    login(this:V12,password?:string){
         const _this=this
         return new Promise(async resolve=>{
             const timer=setTimeout(()=>{

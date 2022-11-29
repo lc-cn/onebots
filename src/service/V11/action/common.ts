@@ -108,11 +108,13 @@ export class CommonAction{
 
         })
     }
-    submitSlider(this:V11,ticket:string){
-        return this.client.submitSlider(ticket)
+    async submitSlider(this:V11,ticket:string){
+        this.client.submitSlider(ticket)
+        return this.action.login.apply(this,[])
     }
-    submitSmsCode(this:V11,code:string){
-        return this.client.submitSmsCode(code)
+    async submitSmsCode(this:V11,code:string){
+        await this.client.submitSmsCode(code)
+        return this.action.login.apply(this,[])
     }
     sendSmsCode(this:V11){
         return this.client.sendSmsCode()
