@@ -15,7 +15,7 @@ import {toBool, toHump, toLine, uuid} from "@/utils";
 import {Db} from "@/db";
 import {App} from "@/server/app";
 import Payload = V12.Payload;
-import {unlinkSync} from "fs";
+import {rmSync} from "fs";
 
 export class V12 extends EventEmitter implements OneBot.Base{
     public version='V12'
@@ -194,11 +194,13 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    async stop() {
+    async stop(force?:boolean) {
         if(this.client.status===OnlineStatus.Online){
             await this.client.logout()
         }
-        unlinkSync(this.client.dir)
+        if(force){
+            rmSync(this.client.dir,{force:true,recursive:true})
+        }
     }
     dispatch<T extends Record<string, any>>(data:T= {} as any) {
         if(!data)data={} as any

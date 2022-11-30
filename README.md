@@ -49,14 +49,14 @@ onebots
 ```
 # 使用接口管理oneBot
 
-| url     | method | params           | desc                  |
-|:--------| :--- |:-----------------|:----------------------|
-| /list   | GET |                  | 获取当前运行的机器人列表          |
-| /detail | GET | uin              | 获取指定机器人配置             |
-| /qrcode | GET | uin              | 获取指定机器人登录二维码          |
-| /add    | POST | {uin,...config}  | 添加机器人 config 为机器人配置   |
-| /edit   | POST | {uin,...config}  | 修改机器人配置 config 为机器人配置 |
-| /remove | get | uin | 移除机器人                 |
+| url     | method | params          | desc                           |
+|:--------| :--- |:----------------|:-------------------------------|
+| /list   | GET |                 | 获取当前运行的机器人列表                   |
+| /detail | GET | uin             | 获取指定机器人配置                      |
+| /qrcode | GET | uin             | 获取指定机器人登录二维码                   |
+| /add    | POST | {uin,...config} | 添加机器人 config 为机器人配置            |
+| /edit   | POST | {uin,...config} | 修改机器人配置 config 为机器人配置          |
+| /remove | get | uin,force       | 移除机器人,force为true时，将删除机器人data目录 |
 
 # 鸣谢
 1. [takayama-lily/oicq](https://github.com/takayama-lily/oicq) 底层服务支持

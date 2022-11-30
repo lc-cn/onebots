@@ -57,9 +57,9 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
             instance.start(this.instances.length>1?'/'+instance.version:undefined)
         }
     }
-    async stop(){
+    async stop(force?:boolean){
         for(const instance of this.instances){
-            await instance.stop()
+            await instance.stop(force)
         }
         this.client.off('system',this.dispatch.bind(this))
         this.client.off('notice',this.dispatch.bind(this))

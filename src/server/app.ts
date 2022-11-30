@@ -81,14 +81,14 @@ export class App extends Koa{
         this.removeAccount(uin)
         this.addAccount(uin,newConfig)
     }
-    public removeAccount(uin:number|`${number}`){
+    public removeAccount(uin:number|`${number}`,force?:boolean){
         if(typeof uin!=="number")uin=Number(uin)
         if(Number.isNaN(uin)) throw new Error('无效的账号')
         const currentIdx=this.oneBots.findIndex(oneBot=>oneBot.uin===uin)
 
         if(currentIdx<0) throw new Error('账户不存在')
         const oneBot=this.oneBots[currentIdx]
-        oneBot.stop()
+        oneBot.stop(force)
         delete this.config[uin]
         this.oneBots.splice(currentIdx,1)
         writeFileSync(App.configPath,yaml.dump(this.config))
@@ -157,9 +157,9 @@ export class App extends Koa{
             }
         })
         this.router.get('/remove',(ctx,next)=>{
-            const {uin}=ctx.request.query
+            const {uin,force}=ctx.request.query
             try{
-                this.removeAccount(Number(uin))
+                this.removeAccount(Number(uin),Boolean(force))
                 ctx.body=`移除成功`
             }catch (e){
                 console.log(e)

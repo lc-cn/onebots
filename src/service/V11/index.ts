@@ -13,7 +13,7 @@ import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
 import {EventEmitter} from "events";
-import {unlinkSync} from "fs";
+import {rmSync, unlinkSync} from "fs";
 
 export class V11 extends EventEmitter implements OneBot.Base{
     public action:Action
@@ -166,11 +166,13 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    async stop() {
+    async stop(force?:boolean) {
         if(this.client.status===OnlineStatus.Online){
             await this.client.logout()
         }
-        unlinkSync(this.client.dir)
+        if(force){
+            rmSync(this.client.dir,{force:true,recursive:true})
+        }
     }
     dispatch(data:any) {
         if(!data.post_type)data.post_type='system'
