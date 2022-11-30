@@ -1,7 +1,7 @@
 {
   "name": "onebots",
-  "version": "0.0.6",
-  "description": "基于icqq的多例oneBot实现",
+  "version": "0.0.9",
+  "description": "基于oicq的多例oneBot实现",
   "main": "lib/index.js",
   "bin": {
     "onebots": "./lib/bin.js"
@@ -19,7 +19,7 @@
   },
   "keywords": [
     "onebot",
-    "icqq",
+    "oicq",
     "cq-http"
   ],
   "author": "凉菜",
@@ -47,12 +47,12 @@
   ],
   "dependencies": {
     "@koa/router": "^10.1.1",
-    "icqq": "^0.0.1",
-    "icqq-cq-enable": "^1.0.0",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "koa-bodyparser": "^4.3.0",
     "log4js": "^6.5.2",
+    "oicq": "^2.3.1",
+    "oicq2-cq-enable": "^1.0.6",
     "ws": "^8.8.0"
   }
 }

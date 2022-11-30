@@ -14,7 +14,7 @@ import {readFileSync} from "fs";
 import {V11} from "@/service/V11";
 import {V12} from "@/service/V12";
 import {LogLevel, MayBeArray} from "@/types";
-import {Platform} from "icqq";
+import {Platform} from "oicq";
 export interface KoaOptions{
     env?: string
     keys?: string[]
@@ -34,7 +34,7 @@ export class App extends Koa{
     constructor(config:App.Config={}) {
         super(config);
         this.config=deepMerge(deepClone(App.defaultConfig),config)
-        this.logger=getLogger('[icqq-oneBot]')
+        this.logger=getLogger('[oicq-oneBot]')
         this.logger.level=this.config.log_level
         this.router=new Router({prefix:config.path})
         this.use(KoaBodyParser())
@@ -44,7 +44,7 @@ export class App extends Koa{
         this.createOneBots()
     }
     getLogger(uin:number|string,version=''){
-        const logger= getLogger(`[icqq-oneBot${version}:${uin}]`)
+        const logger= getLogger(`[oicq-oneBot${version}:${uin}]`)
         logger.level=this.config.log_level
         return logger
     }

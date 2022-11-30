@@ -1,7 +1,7 @@
-import {Client} from "icqq";
+import {Client, OnlineStatus} from "oicq";
 import {join} from 'path'
 import {Config} from './config'
-import {OneBot,BOOLS,NotFoundError} from "@/onebot";
+import {BOOLS, NotFoundError, OneBot} from "@/onebot";
 import {Action} from "./action";
 import {EventEmitter} from "events";
 import {Logger} from "log4js";
@@ -10,11 +10,12 @@ import {URL} from "url";
 import http from "http";
 import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
-import {fromCqcode, fromSegment} from "icqq-cq-enable";
-import {toLine,toHump,toBool,uuid} from "@/utils";
-import Payload = V12.Payload;
+import {fromCqcode, fromSegment} from "oicq2-cq-enable";
+import {toBool, toHump, toLine, uuid} from "@/utils";
 import {Db} from "@/db";
 import {App} from "@/server/app";
+import Payload = V12.Payload;
+import {unlinkSync} from "fs";
 
 export class V12 extends EventEmitter implements OneBot.Base{
     public version='V12'
@@ -193,8 +194,11 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    stop() {
-        return this.client.logout()
+    async stop() {
+        if(this.client.status===OnlineStatus.Online){
+            await this.client.logout()
+        }
+        unlinkSync(this.client.dir)
     }
     dispatch<T extends Record<string, any>>(data:T= {} as any) {
         if(!data)data={} as any
@@ -225,7 +229,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
         }
         const payload:V12.Payload<T>={
             id:uuid(),
-            impl:'icqq_onebot',
+            impl:'oicq_onebot',
             platform:'qq',
             self_id:`${this.client.uin}`,
             type:data.post_type|| 'meta',
@@ -505,7 +509,7 @@ export namespace V12{
     }
     export type Payload<T extends any>={
         id:string
-        impl:'icqq_onebot'
+        impl:'oicq_onebot'
         platform:'qq'
         self_id:`${number}`
         time:number

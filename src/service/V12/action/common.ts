@@ -1,5 +1,5 @@
 import {V12} from '@/service/V12'
-import {OnlineStatus} from "icqq";
+import {OnlineStatus} from "oicq";
 import {OneBotStatus} from "@/onebot";
 import {getProperties,toLine} from '@/utils'
 import {Action} from "./";
@@ -41,61 +41,51 @@ export class CommonAction{
             onebot_version:'12'
         }
     }
-    async submitSlider(this:V12,ticket:string){
-        await this.client.submitSlider(ticket)
-        return this.action.login.apply(this,[])
+    callLogin(this:V11,func:string,...args:any[]){
+        return new Promise(async resolve=>{
+            const receiveResult=(event)=>{
+                this.client.off('system.login.qrcode',receiveResult)
+                this.client.off('system.login.device',receiveResult)
+                this.client.off('system.login.slider',receiveResult)
+                this.client.off('system.login.error',receiveResult)
+                resolve(event)
+            }
+            this.client.on('system.login.qrcode',receiveResult)
+            this.client.on('system.login.device',receiveResult)
+            this.client.on('system.login.slider',receiveResult)
+            this.client.on('system.login.error',receiveResult)
+            this.client.once('system.online',receiveResult)
+            try{
+                await this.client[func](...args)
+            }catch (reason){
+                receiveResult(reason)
+            }
+        })
     }
-    async submitSmsCode(this:V12,code:string){
-        await this.client.submitSmsCode(code)
-        return this.action.login.apply(this,[])
+    async submitSlider(this:V11,ticket:string){
+        return this.action.callLogin.apply(this,['submitSlider',ticket])
+    }
+    login(this:V11,password?:string){
+        return this.action.callLogin.apply(this,['login',password])
+    }
+    async submitSmsCode(this:V11,code:string){
+        return this.action.callLogin.apply(this,['submitSmsCode',code])
     }
     sendSmsCode(this:V12){
-        return this.client.sendSmsCode()
-    }
-    login(this:V12,password?:string){
-        const _this=this
-        return new Promise(async resolve=>{
-            const timer=setTimeout(()=>{
-                resolve('登录超时')
-            },5000)
-            function receiveQrcode(event){
-                _this.client.off('system.login.device',receiveDevice)
-                _this.client.off('system.login.slider',receiveSlider)
-                _this.client.off('system.online',closeListen)
-                clearTimeout(timer)
-                resolve(event)
+        return new Promise<any>(resolve=>{
+            const receiveResult=(e)=>{
+                const callback=(data)=>{
+                    this.client.off('internal.verbose',receiveResult)
+                    this.client.off('system.login.error',receiveResult)
+                    resolve(data)
+                }
+                if((typeof e==='string' && e.includes('已发送')) || typeof e!=='string'){
+                    callback(e)
+                }
             }
-            function receiveDevice(event){
-                _this.client.off('system.login.qrcode',receiveQrcode)
-                _this.client.off('system.login.slider',receiveSlider)
-                _this.client.off('system.online',closeListen)
-                clearTimeout(timer)
-                resolve(event)
-            }
-            function receiveError(event){
-                clearTimeout(timer)
-                resolve(event)
-            }
-            function receiveSlider(event){
-                _this.client.off('system.login.qrcode',receiveQrcode)
-                _this.client.off('system.login.device',receiveDevice)
-                _this.client.off('system.online',closeListen)
-                clearTimeout(timer)
-                resolve(event)
-            }
-            function closeListen(){
-                _this.client.off('system.login.slider',receiveSlider)
-                _this.client.off('system.login.qrcode',receiveQrcode)
-                _this.client.off('system.login.device',receiveDevice)
-                clearTimeout(timer)
-                resolve('登录成功')
-            }
-            this.client.once('system.login.qrcode',receiveQrcode)
-            this.client.once('system.login.device',receiveDevice)
-            this.client.once('system.login.slider',receiveSlider)
-            this.client.once('system.login.error',receiveError)
-            this.client.once('system.online',closeListen)
-            await this.client.login(password).catch(()=>resolve('登录失败'))
+            this.client.on('internal.verbose',receiveResult)
+            this.client.on('system.login.error',receiveResult)
+            this.client.sendSmsCode()
         })
     }
     getSupportedActions(this:V12){

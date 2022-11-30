@@ -1,8 +1,9 @@
+import 'oicq2-cq-enable'
 import {EventEmitter} from 'events'
 import {App} from "./server/app";
 import {deepMerge, omit} from "./utils";
 import {join} from "path";
-import {Client} from "icqq";
+import {Client} from "oicq";
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
@@ -43,23 +44,23 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
             }
         })
     }
-    start(){
+    async start(){
         this.startListen()
-        this.client.login(this.password)
+        await this.client.login(this.password)
     }
     startListen(){
         this.client.on('system',this.dispatch.bind(this))
         this.client.on('notice',this.dispatch.bind(this))
         this.client.on('request',this.dispatch.bind(this))
         this.client.on('message',this.dispatch.bind(this))
-        this.instances.forEach(instance=>{
+        for(const instance of this.instances){
             instance.start(this.instances.length>1?'/'+instance.version:undefined)
-        })
+        }
     }
-    stop(){
-        this.instances.forEach(instance=>{
-            instance.stop()
-        })
+    async stop(){
+        for(const instance of this.instances){
+            await instance.stop()
+        }
         this.client.off('system',this.dispatch.bind(this))
         this.client.off('notice',this.dispatch.bind(this))
         this.client.off('request',this.dispatch.bind(this))

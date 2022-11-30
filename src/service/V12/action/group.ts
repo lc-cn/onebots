@@ -1,12 +1,12 @@
 import {V12} from "../index";
-import {Sendable} from "icqq";
+import {Sendable} from "oicq";
 
 export class GroupAction{
 
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {import('icqq').Sendable} 消息
+     * @param message {import('oicq').Sendable} 消息
      */
     sendGroupMsg(this:V12,group_id:number,message:Sendable){
         return this.client.sendGroupMsg(group_id,message)

@@ -1,10 +1,10 @@
-import {Sendable} from "icqq";
+import {Sendable} from "oicq";
 import {V11} from "@/service/V11";
 export class GroupAction{
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {import('icqq').Sendable} 消息
+     * @param message {import('oicq').Sendable} 消息
      */
     sendGroupMsg(this:V11,group_id:number,message:Sendable){
         return this.client.sendGroupMsg(group_id,message)

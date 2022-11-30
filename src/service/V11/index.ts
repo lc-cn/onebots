@@ -1,4 +1,4 @@
-import {Client} from "icqq";
+import {Client, OnlineStatus} from "oicq";
 import {Config} from "./config";
 import {Action} from "./action";
 import {OneBot} from "@/onebot";
@@ -8,11 +8,12 @@ import {Dispose} from "@/types";
 import {Context} from "koa";
 import {URL} from "url";
 import {toBool, toHump, toLine} from "@/utils";
-import {fromCqcode, fromSegment, toCqcode, toSegment} from "icqq-cq-enable";
+import {fromCqcode, fromSegment, toCqcode, toSegment} from "oicq2-cq-enable";
 import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
 import {EventEmitter} from "events";
+import {unlinkSync} from "fs";
 
 export class V11 extends EventEmitter implements OneBot.Base{
     public action:Action
@@ -165,8 +166,11 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    stop() {
-        this.client.logout()
+    async stop() {
+        if(this.client.status===OnlineStatus.Online){
+            await this.client.logout()
+        }
+        unlinkSync(this.client.dir)
     }
     dispatch(data:any) {
         if(!data.post_type)data.post_type='system'

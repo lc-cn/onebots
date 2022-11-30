@@ -1,4 +1,4 @@
-import {OnlineStatus} from "icqq";
+import {OnlineStatus} from "oicq";
 import {OneBotStatus} from "@/onebot";
 import {V11} from "@/service/V11";
 export class CommonAction{
@@ -66,7 +66,7 @@ export class CommonAction{
      */
     getVersion(this:V11){
         return {
-            app_name:'icqq',
+            app_name:'oicq',
             app_version:'2.x',
             protocol_version:'v11'
         }
@@ -85,38 +85,51 @@ export class CommonAction{
             good:this.oneBot.status===OneBotStatus.Good
         }
     }
-    login(this:V11,password?:string){
-        const _this=this
+    callLogin(this:V11,func:string,...args:any[]){
         return new Promise(async resolve=>{
-            const timer=setTimeout(()=>{
-                receiveResult('登录超时')
-            },5000)
-            function receiveResult(event){
-                _this.client.off('system.login.qrcode',receiveResult)
-                _this.client.off('system.login.device',receiveResult)
-                _this.client.off('system.login.slider',receiveResult)
-                _this.client.off('system.login.error',receiveResult)
-                clearTimeout(timer)
+            const receiveResult=(event)=>{
+                this.client.off('system.login.qrcode',receiveResult)
+                this.client.off('system.login.device',receiveResult)
+                this.client.off('system.login.slider',receiveResult)
+                this.client.off('system.login.error',receiveResult)
                 resolve(event)
             }
             this.client.on('system.login.qrcode',receiveResult)
             this.client.on('system.login.device',receiveResult)
             this.client.on('system.login.slider',receiveResult)
             this.client.on('system.login.error',receiveResult)
-            this.client.on('system.online',receiveResult)
-            await this.client.login(password).catch(()=>resolve('登录失败'))
-
+            this.client.once('system.online',receiveResult)
+            try{
+                await this.client[func](...args)
+            }catch (reason){
+                receiveResult(reason)
+            }
         })
     }
     async submitSlider(this:V11,ticket:string){
-        this.client.submitSlider(ticket)
-        return this.action.login.apply(this,[])
+        return this.action.callLogin.apply(this,['submitSlider',ticket])
+    }
+    login(this:V11,password?:string){
+        return this.action.callLogin.apply(this,['login',password])
     }
     async submitSmsCode(this:V11,code:string){
-        await this.client.submitSmsCode(code)
-        return this.action.login.apply(this,[])
+        return this.action.callLogin.apply(this,['submitSmsCode',code])
     }
     sendSmsCode(this:V11){
-        return this.client.sendSmsCode()
+        return new Promise<any>(resolve=>{
+            const receiveResult=(e)=>{
+                const callback=(data)=>{
+                    this.client.off('internal.verbose',receiveResult)
+                    this.client.off('system.login.error',receiveResult)
+                    resolve(data)
+                }
+                if((typeof e==='string' && e.includes('已发送')) || typeof e!=='string'){
+                    callback(e)
+                }
+            }
+            this.client.on('internal.verbose',receiveResult)
+            this.client.on('system.login.error',receiveResult)
+            this.client.sendSmsCode()
+        })
     }
 }
