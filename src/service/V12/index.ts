@@ -196,7 +196,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
     }
     async stop(force?:boolean) {
         if(this.client.status===OnlineStatus.Online){
-            await this.client.logout()
+            await this.client.terminate()
         }
         if(force){
             rmSync(this.client.dir,{force:true,recursive:true})

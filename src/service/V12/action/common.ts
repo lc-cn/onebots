@@ -41,7 +41,7 @@ export class CommonAction{
             onebot_version:'12'
         }
     }
-    callLogin(this:V11,func:string,...args:any[]){
+    callLogin(this:V12,func:string,...args:any[]){
         return new Promise(async resolve=>{
             const receiveResult=(event)=>{
                 this.client.off('system.login.qrcode',receiveResult)
@@ -62,13 +62,10 @@ export class CommonAction{
             }
         })
     }
-    async submitSlider(this:V11,ticket:string){
+    async submitSlider(this:V12,ticket:string){
         return this.action.callLogin.apply(this,['submitSlider',ticket])
     }
-    login(this:V11,password?:string){
-        return this.action.callLogin.apply(this,['login',password])
-    }
-    async submitSmsCode(this:V11,code:string){
+    async submitSmsCode(this:V12,code:string){
         return this.action.callLogin.apply(this,['submitSmsCode',code])
     }
     sendSmsCode(this:V12){
@@ -86,6 +83,19 @@ export class CommonAction{
             this.client.on('internal.verbose',receiveResult)
             this.client.on('system.login.error',receiveResult)
             this.client.sendSmsCode()
+        })
+    }
+    login(this:V12,password?:string){
+        return this.action.callLogin.apply(this,['login',password])
+    }
+    logout(this:V12,keepalive?:boolean){
+        return new Promise(async resolve => {
+            const receiveResult=(e)=>{
+                this.client.off('system.offline',receiveResult)
+                resolve(e)
+            }
+            this.client.on('system.offline',receiveResult)
+            await this.client.logout(keepalive)
         })
     }
     getSupportedActions(this:V12){

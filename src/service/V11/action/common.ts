@@ -1,6 +1,7 @@
 import {OnlineStatus} from "oicq";
 import {OneBotStatus} from "@/onebot";
 import {V11} from "@/service/V11";
+import {V12} from "@/service/V12";
 export class CommonAction{
     /**
      * 获取登录信息
@@ -109,9 +110,6 @@ export class CommonAction{
     async submitSlider(this:V11,ticket:string){
         return this.action.callLogin.apply(this,['submitSlider',ticket])
     }
-    login(this:V11,password?:string){
-        return this.action.callLogin.apply(this,['login',password])
-    }
     async submitSmsCode(this:V11,code:string){
         return this.action.callLogin.apply(this,['submitSmsCode',code])
     }
@@ -130,6 +128,19 @@ export class CommonAction{
             this.client.on('internal.verbose',receiveResult)
             this.client.on('system.login.error',receiveResult)
             this.client.sendSmsCode()
+        })
+    }
+    login(this:V11,password?:string){
+        return this.action.callLogin.apply(this,['login',password])
+    }
+    logout(this:V11,keepalive?:boolean){
+        return new Promise(async resolve => {
+            const receiveResult=(e)=>{
+                this.client.off('system.offline',receiveResult)
+                resolve(e)
+            }
+            this.client.on('system.offline',receiveResult)
+            await this.client.logout(keepalive)
         })
     }
 }
