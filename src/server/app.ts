@@ -147,7 +147,7 @@ export class App extends Koa{
                 ctx.body=e.message
             }
         })
-        this.router.get('/edit',(ctx,next)=>{
+        this.router.post('/edit',(ctx,next)=>{
             const {uin,...config}=ctx.request.body
             try{
                 this.updateAccount(Number(uin),config)

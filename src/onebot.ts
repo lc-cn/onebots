@@ -7,7 +7,6 @@ import {Client} from "oicq";
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
-
 export class NotFoundError extends Error{
     message='不支持的API'
 }

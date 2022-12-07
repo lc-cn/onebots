@@ -130,12 +130,12 @@ export class V11 extends EventEmitter implements OneBot.Base{
             this.logger.error(err.message)
         })
         this.wss.on("connection", (ws, req) => {
-            this.logger.info(`ws客户端(${req.headers.origin})已连接`)
+            this.logger.info(`ws客户端(${req.url})已连接`)
             ws.on("error", (err) => {
-                this.logger.error(`ws客户端(${req.headers.origin})报错：${err.message}`)
+                this.logger.error(`ws客户端(${req.url})报错：${err.message}`)
             })
             ws.on("close", (code, reason) => {
-                this.logger.warn(`ws客户端(${req.headers.origin})连接关闭，关闭码${code}，关闭理由：` + reason)
+                this.logger.warn(`ws客户端(${req.url})连接关闭，关闭码${code}，关闭理由：` + reason)
             })
             if (this.config.access_token) {
                 const url = new URL(req.url, "http://127.0.0.1")
