@@ -1,7 +1,7 @@
 import {Client, OnlineStatus} from "oicq";
 import {Config} from "./config";
 import {Action} from "./action";
-import {OneBot} from "@/onebot";
+import {OneBot, OneBotStatus} from "@/onebot";
 import {Logger} from "log4js";
 import {WebSocket, WebSocketServer} from "ws";
 import {Dispose} from "@/types";
@@ -65,6 +65,10 @@ export class V11 extends EventEmitter implements OneBot.Base{
             this.heartbeat = setInterval(() => {
                 this.dispatch({
                     self_id: this.client.uin,
+                    status:{
+                        online:this.client.status===OnlineStatus.Online,
+                        good:this.oneBot.status===OneBotStatus.Good
+                    },
                     time: Math.floor(Date.now() / 1000),
                     post_type: "meta_event",
                     meta_event_type: "heartbeat",
@@ -160,9 +164,14 @@ export class V11 extends EventEmitter implements OneBot.Base{
     }
     private startWsReverse(url:string){
         const ws=this._createWsr(url)
-        this.on('dispatch',(unserialized)=>{
+        this.on('dispatch',(serialized)=>{
             if(this.wsr.has(ws)){
-                ws.send(JSON.stringify(unserialized))
+                ws.send(serialized,(err) => {
+                    if (err)
+                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
+                    else
+                        this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
+                })
             }
         })
     }
@@ -182,6 +191,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
         if(data.message && data.post_type==='message'){
             data.message=this.config.post_message_format==='array'? toSegment(data.message):toCqcode(data)
         }
+        data.time= Math.floor(Date.now() / 1000)
         this.emit('dispatch',JSON.stringify(data))
     }
     private async _httpRequestHandler(ctx:Context){
@@ -386,7 +396,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
             if (is_queue) {
                 this._queue.push({method, args})
                 this._runQueue()
-                result = V11.success(null,0,true)
+                result = V11.ok(null,0,true)
             } else {
                 try{
                     ret = this.action[method].apply(this,args)
@@ -395,12 +405,12 @@ export class V11 extends EventEmitter implements OneBot.Base{
                 }
                 if (ret instanceof Promise) {
                     if (is_async) {
-                        result = V11.success(null,0,true)
+                        result = V11.ok(null,0,true)
                     } else {
-                        result = V11.success(await ret,0,false)
+                        result = V11.ok(await ret,0,false)
                     }
                 } else {
-                    result = V11.success(await ret,0,false)
+                    result = V11.ok(await ret,0,false)
                 }
             }
             if (result.data instanceof Map)
@@ -433,14 +443,14 @@ export class V11 extends EventEmitter implements OneBot.Base{
 export namespace V11{
     export interface Result<T extends any>{
         retcode: number,
-        status: "success"|'async'|'error',
+        status: "ok"|'async'|'error',
         data: T,
         error: string
     }
-    export function success<T extends any>(data:T,retcode=0,pending?:boolean):Result<T>{
+    export function ok<T extends any>(data:T,retcode=0,pending?:boolean):Result<T>{
         return {
             retcode,
-            status:pending?'async':'success',
+            status:pending?'async':'ok',
             data,
             error:null
         }

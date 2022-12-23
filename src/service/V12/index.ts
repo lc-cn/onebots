@@ -437,7 +437,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
                     this._quickOperate(event, res)
                     ret = JSON.stringify({
                         retcode: 0,
-                        status: "ok",
+                        status: "success",
                         data: null,
                         message: null,
                         echo: data.echo
@@ -492,7 +492,7 @@ export namespace V12{
         url:string
     }
     export interface Result<T extends any>{
-        status:'ok'|'failed'
+        status:'success'|'failed'
         retcode:0|10001|10002|10003|10004|10005|10006|10007
         data:T
         message:string
@@ -527,7 +527,7 @@ export namespace V12{
     export function success<T extends any>(data:T,retcode:Result<T>['retcode']=0,echo?:string):Result<T>{
         return {
             retcode,
-            status:retcode===0?'ok':'failed',
+            status:retcode===0?'success':'failed',
             data,
             message:'',
             echo

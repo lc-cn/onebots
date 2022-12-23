@@ -82,7 +82,7 @@ export class CommonAction{
     }
     getStatus(this:V11){
         return {
-            online:this.client.status=OnlineStatus.Online,
+            online:this.client.status===OnlineStatus.Online,
             good:this.oneBot.status===OneBotStatus.Good
         }
     }
