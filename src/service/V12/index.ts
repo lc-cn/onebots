@@ -87,14 +87,9 @@ export class V12 extends EventEmitter implements OneBot.Base{
 
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
-                this.dispatch({
-                    self_id: this.client.uin,
-                    time: Math.floor(Date.now() / 1000),
-                    type: "meta",
-                    detail_type: "heartbeat",
-                    interval: this.config.heartbeat*1000,
-                    status:this.action.getStatus.apply(this)
-                })
+                this.dispatch(V12.genMetaEvent(this.client.uin,'heartbeat',{
+                    interval:new Date().getTime()+this.config.heartbeat*1000
+                }))
             }, this.config.heartbeat*1000)
         }
     }
@@ -233,7 +228,10 @@ export class V12 extends EventEmitter implements OneBot.Base{
             id:uuid(),
             impl:'oicq_onebot',
             platform:'qq',
-            self_id:`${this.client.uin}`,
+            self:{
+                platform:'qq',
+                user_id:`${this.client.uin}`
+            },
             type:data.post_type|| 'meta',
             detail_type:data.message_type||data.notice_type||data.request_type||data.system_type,
             ...data,
@@ -467,8 +465,8 @@ export class V12 extends EventEmitter implements OneBot.Base{
                 }))
             }
         })
-        this.dispatch(V12.genMetaEvent(this.client.uin, "connect"))
-        this.dispatch(V12.genMetaEvent(this.client.uin, "enable"))
+        this.dispatch(V12.genMetaEvent(this.client.uin, "connect",this.action.getVersion.apply(this)))
+        this.dispatch(V12.genMetaEvent(this.client.uin, "status_update",this.action.getStatus.apply(this)))
     }
 
 }
@@ -493,7 +491,7 @@ export namespace V12{
         url:string
     }
     export interface Result<T extends any>{
-        status:'success'|'failed'
+        status:'ok'|'failed'
         retcode:0|10001|10002|10003|10004|10005|10006|10007
         data:T
         message:string
@@ -514,7 +512,10 @@ export namespace V12{
         id:string
         impl:'oicq_onebot'
         platform:'qq'
-        self_id:`${number}`
+        self:{
+            platform:'qq',
+            user_id:`${number}`
+        }
         time:number
         type:'meta'|'message'|'notice'|'request'
         detail_type:string
@@ -525,10 +526,24 @@ export namespace V12{
         params: any
         echo?: string
     }
+    export type MetaEventMap={
+        connect:{
+            detail_type:'connect'
+            version:ReturnType<Action['getVersion']>
+        },
+        heartbeat:{
+            detail_type:'heartbeat'
+            interval:number
+        },
+        status_update:{
+            detail_type:'status_update',
+            status:ReturnType<Action['getStatus']>
+        }
+    }
     export function success<T extends any>(data:T,retcode:Result<T>['retcode']=0,echo?:string):Result<T>{
         return {
             retcode,
-            status:retcode===0?'success':'failed',
+            status:retcode===0?'ok':'failed',
             data,
             message:'',
             echo
@@ -543,13 +558,14 @@ export namespace V12{
             echo
         }
     }
-    export function genMetaEvent(uin: number, type: string) {
+    export function genMetaEvent<K extends keyof MetaEventMap>(uin: number, type: K,data:Omit<MetaEventMap[K], 'detail_type'>) {
         return {
             self_id: uin,
             time: Math.floor(Date.now() / 1000),
             type: "meta",
-            detail_type: "lifecycle",
-            sub_type: type,
+            detail_type: type,
+            sub_type: '',
+            ...data
         }
     }
 }

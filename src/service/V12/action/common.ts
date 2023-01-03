@@ -24,7 +24,7 @@ export class CommonAction{
             good:this.oneBot.status===OneBotStatus.Good
         }
     }
-    getLatestEvents(this:V12,limit=0,timout=0):Promise<V12.Payload<keyof Action>[]>{
+    getLatestEvents(this:V12,limit:number=0,timout:number=0):Promise<V12.Payload<keyof Action>[]>{
         return new Promise(resolve => {
             if(!this.history.length && timout!==0) {
                 return setTimeout(()=>resolve(this.action.getLatestEvents.apply(this,[limit,timout])),timout*1000)
@@ -36,7 +36,7 @@ export class CommonAction{
         return {
             impl:'onebots',
             platform:'qq',
-            version:'0.0.5',
+            version:'0.0.15',
             onebot_version:'12'
         }
     }
