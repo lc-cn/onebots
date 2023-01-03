@@ -229,7 +229,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }
         } else if (ctx.method === "POST") {
             try {
-                const params = {...ctx.query, ...ctx.request.body}
+                const params = {...(ctx.request.query||{}), ...(ctx.request.body as object ||{})}
                 const ret = await this.apply({action, params})
                 ctx.res.writeHead(200).end(ret)
             } catch (e) {

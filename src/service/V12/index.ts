@@ -352,7 +352,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
         } else if (ctx.method === "POST") {
             try {
-                const params = {...ctx.query, ...ctx.request.body}
+                const params = {...(ctx.request.query||{}), ...(ctx.request.body as object ||{})}
                 const ret = await this.apply({action, params})
                 ctx.res.writeHead(200).end(ret)
             } catch (e) {
@@ -396,7 +396,8 @@ export class V12 extends EventEmitter implements OneBot.Base{
         const headers: http.OutgoingHttpHeaders = {
             "X-Self-ID": String(this.client.uin),
             "X-Client-Role": "Universal",
-            "User-Agent": "OneBot",
+            "User-Agent": "OneBot/12 (qq) node-Onebots/0.0.15",
+            "Sec-WebSocket-Protocol":"12.onebots.v0.0.15"
         }
         if (config.access_token)
             headers.Authorization = "Bearer " + config.access_token
