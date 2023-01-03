@@ -15,7 +15,8 @@ export class CommonAction{
     getSelfInfo(this:V12){
         return {
             user_id:this.client.uin,
-            nickname:this.client.nickname
+            nickname:this.client.nickname,
+            user_displayname:''
         }
     }
     getStatus(this:V12){
