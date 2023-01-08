@@ -18,34 +18,55 @@
 </div>
 
 # 使用示例
-1. 新建一个node项目
+## 全局安装
+### 1 安装依赖
+```shell
+npm install -g onebots
+```
+### 2 初始化配置文件
+(1) 配置文件存到(用户目录/.onebots/config.yaml)
+```shell
+onebots
+```
+(2) 配置文件存到(当前目录/config.yaml)
+```shell
+onebots -c config.yaml
+```
+二选一即可
+### 3 更改配置文件后，启动项目
+
+(1) 使用全局配置文件(用户目录/.onebots/config.yaml)
+```shell
+onebots
+```
+(2) 使用指定配置文件(当前目录/config.yaml)
+```shell
+onebots -c config.yaml
+```
+# 2 在NodeJS项目中启动
+## 1 初始化node项目
 ```shell
 npm init -y
 ```
-2. 安装onebots
+## 2. 安装onebots
 ```shell
 npm install onebots
 ```
-3. 在项目跟目录添加配置文件config.yaml
+## 3. 在项目跟目录添加配置文件config.yaml
 ```yaml
 port: 6727 # 项目onebots监听的端口(默认：6727)
 1472258369: # 你的机器人账户
   version: V11 # oneBot版本（V11 或 V12）
 ```
-4. 新建入口文件`index.js`并输入一下内容
+## 4. 新建入口文件`index.js`并输入一下内容
 ```javascript
 const {createApp}=require('onebots')
-createApp()
+createApp('config.yaml')
 .start()
 ```
-5. 启动项目
+## 5. 启动项目
 ```shell
 node ./index.js
-```
-# 使用命令行启动
-```shell
-npm install -g onebots
-onebots
 ```
 # 使用接口管理oneBot
 

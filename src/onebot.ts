@@ -45,6 +45,52 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
     }
     async start(){
         this.startListen()
+        const disposeArr=[]
+        const clean=()=>{
+            while (disposeArr.length){
+                disposeArr.shift()()
+            }
+        }
+        this.client.on('system.login.qrcode',function qrcodeHelper(){
+            console.log('扫码后回车继续')
+            process.stdin.once('data',()=>{
+                this.login()
+            })
+            disposeArr.push(()=>{
+                this.off('system.login.qrcode',qrcodeHelper)
+            })
+        })
+        this.client.on('system.login.device',function deviceHelper(){
+            console.log('请输入密保手机接收的验证码')
+            this.sendSmsCode()
+            process.stdin.once('data',(e)=>{
+                this.submitSmsCode(e.toString().trim())
+            })
+            disposeArr.push(()=>{
+                this.off('system.login.device',deviceHelper)
+            })
+        })
+        this.client.on('system.login.error',function errorHandler(e){
+            if(e.message.includes('密码错误')){
+                process.stdin.once('data',(e)=>{
+                    this.login(e.toString().trim())
+                })
+            }else{
+                process.exit()
+            }
+            this.off('system.login.error',errorHandler)
+        })
+        this.client.on('system.login.slider',function sliderHelper(e){
+            console.log('滑块验证地址：'+e.url)
+            console.log('请输入滑块验证返回的ticket')
+            process.stdin.once('data',(e)=>{
+                this.submitSlider(e.toString().trim())
+            })
+            disposeArr.push(()=>{
+                this.off('system.login.slider',sliderHelper)
+            })
+        })
+        this.client.on('system.online',clean)
         await this.client.login(this.password)
     }
     startListen(){

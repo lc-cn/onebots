@@ -2,7 +2,6 @@ import Koa from 'koa'
 import * as os from 'os'
 import {copyFileSync, existsSync, mkdirSync, writeFileSync} from "fs";
 import {Logger,getLogger} from "log4js";
-import {join,resolve} from 'path'
 import {createServer,Server} from "http";
 import yaml from 'js-yaml'
 import KoaBodyParser from "koa-bodyparser";
@@ -15,6 +14,7 @@ import {V11} from "@/service/V11";
 import {V12} from "@/service/V12";
 import {LogLevel, MayBeArray} from "@/types";
 import {Platform} from "oicq";
+import * as path from "path";
 export interface KoaOptions{
     env?: string
     keys?: string[]
@@ -27,8 +27,8 @@ export class App extends Koa{
     public config:App.Config
     readonly httpServer:Server
     public logger:Logger
-    static configDir=join(os.homedir(),'.onebots')
-    static configPath=join(this.configDir,'config.yaml')
+    static configDir=path.join(os.homedir(),'.onebots')
+    static configPath=path.join(this.configDir,'config.yaml')
     oneBots:OneBot<any>[]=[]
     public router:Router
     constructor(config:App.Config={}) {
@@ -114,11 +114,11 @@ export class App extends Koa{
         })
         this.router.get('/qrcode',(ctx)=>{
             const {uin}=ctx.query
-            const uinUrl=join(App.configDir,'data',uin as string)
+            const uinUrl=path.join(App.configDir,'data',uin as string)
             if(!existsSync(uinUrl)){
                 return ctx.res.writeHead(400).end('未登录')
             }
-            const qrcodePath=join(App.configDir,'data',uin as string,'qrcode.png')
+            const qrcodePath=path.join(App.configDir,'data',uin as string,'qrcode.png')
             let file = null;
             try {
                 file =readFileSync(qrcodePath); //读取文件
@@ -171,12 +171,15 @@ export class App extends Koa{
 }
 export function createApp(config:App.Config|string='config.yaml'){
     if(typeof config==='string'){
+        config=path.resolve(process.cwd(),config)
+        App.configDir=path.dirname(config)
+        App.configPath=config
         if(!existsSync(App.configDir)){
             mkdirSync(App.configDir)
         }
-        App.configPath=join(App.configDir,config)
+        App.configPath=path.resolve(App.configDir,config)
         if(!existsSync(App.configPath)){
-            copyFileSync(resolve(__dirname,'../config.sample.yaml'),App.configPath)
+            copyFileSync(path.resolve(__dirname,'../config.sample.yaml'),App.configPath)
             console.log('未找到对应配置文件，已自动生成默认配置文件，请修改配置文件后重新启动')
             console.log(`配置文件在:  ${App.configPath}`)
             process.exit()

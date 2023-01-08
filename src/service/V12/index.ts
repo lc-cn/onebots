@@ -1,4 +1,4 @@
-import {Client, OnlineStatus} from "oicq";
+import {Client, EventMap, OnlineStatus} from "oicq";
 import {join} from 'path'
 import {Config} from './config'
 import {BOOLS, NotFoundError, OneBot} from "@/onebot";
@@ -88,6 +88,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
                 this.dispatch(V12.genMetaEvent(this.client.uin,'heartbeat',{
+                    detail_type: "heartbeat",
                     interval:new Date().getTime()+this.config.heartbeat*1000
                 }))
             }, this.config.heartbeat*1000)
@@ -197,45 +198,39 @@ export class V12 extends EventEmitter implements OneBot.Base{
             rmSync(this.client.dir,{force:true,recursive:true})
         }
     }
-    dispatch<T extends Record<string, any>>(data:T= {} as any) {
-        if(!data)data={} as any
-        if(!data.post_type){
-            // @ts-ignore
-            data.sub_type='online'
-            if(data.image){
-                // @ts-ignore
-                data.system_type='login'
-                // @ts-ignore
-                data.sub_type='qrcode'
+    dispatch(data:Record<string, any>) {
+        if(!data || typeof data!=="object") data={args:data||[]}
+        if(!data['post_type']){
+            data['sub_type']='online'
+            if(data['image']){
+                data['system_type']='login'
+                data['sub_type']='qrcode'
             }
-            else if(data.url){
-                // @ts-ignore
-                data.system_type='login'
-                // @ts-ignore
+            else if(data['url']){
+                data['system_type']='login'
                 data.sub_type='slider'
                 if(data.phone){
-                    // @ts-ignore
                     data.sub_type='device'
                 }
             }else if(data.message){
-                // @ts-ignore
                 data.system_type='login'
-                // @ts-ignore
                 data.sub_type='error'
             }
         }
-        const payload:V12.Payload<T>={
+        const payload:V12.Payload<any>={
             id:uuid(),
             impl:'oicq_onebot',
+            version:12,
             platform:'qq',
             self:{
                 platform:'qq',
                 user_id:`${this.client.uin}`
             },
             type:data.post_type|| 'meta',
+            alt_message:data.raw_message,
             detail_type:data.message_type||data.notice_type||data.request_type||data.system_type,
             ...data,
-        } as V12.Payload<T>
+        } as V12.Payload<any>
         if(payload.type==='notice'){
             switch (payload.detail_type){
                 case 'friend':
@@ -416,7 +411,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
             setTimeout(() => {
                 if (timestmap < this.timestamp)
                     return
-                this._createWsr(url,config)
+                this.startWsReverse(config)
             }, this.config.reconnect_interval*1000)
         })
         return ws
@@ -436,7 +431,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
                     this._quickOperate(event, res)
                     ret = JSON.stringify({
                         retcode: 0,
-                        status: "success",
+                        status: "ok",
                         data: null,
                         message: null,
                         echo: data.echo
@@ -511,6 +506,7 @@ export namespace V12{
     export type Payload<T extends any>={
         id:string
         impl:'oicq_onebot'
+        version:12
         platform:'qq'
         self:{
             platform:'qq',
@@ -558,11 +554,12 @@ export namespace V12{
             echo
         }
     }
-    export function genMetaEvent<K extends keyof MetaEventMap>(uin: number, type: K,data:Omit<MetaEventMap[K], 'detail_type'>) {
+    export function genMetaEvent<K extends keyof MetaEventMap>(uin: number, type: K,data:Omit<MetaEventMap[K], K>) {
         return {
             self_id: uin,
             time: Math.floor(Date.now() / 1000),
             type: "meta",
+            status:'ok',
             detail_type: type,
             sub_type: '',
             ...data

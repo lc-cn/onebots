@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "基于oicq的多例oneBot实现",
   "main": "lib/index.js",
   "bin": {
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node .",
     "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml",
     "pub": "npm publish --access public",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

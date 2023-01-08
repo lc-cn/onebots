@@ -21,8 +21,13 @@ export class CommonAction{
     }
     getStatus(this:V12){
         return {
-            online:this.client.status=OnlineStatus.Online,
-            good:this.oneBot.status===OneBotStatus.Good
+            good:this.oneBot.status===OneBotStatus.Good,
+            bots:[
+                {
+                    self:this.action.getSelfInfo.apply(this),
+                    online:this.client.status=OnlineStatus.Online,
+                }
+            ]
         }
     }
     getLatestEvents(this:V12,limit:number=0,timout:number=0):Promise<V12.Payload<keyof Action>[]>{
