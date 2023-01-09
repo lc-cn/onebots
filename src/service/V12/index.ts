@@ -1,4 +1,4 @@
-import {Client, EventMap, OnlineStatus} from "oicq";
+import {Client, EventMap, MessageElem, OnlineStatus, Sendable} from "oicq";
 import {join} from 'path'
 import {Config} from './config'
 import {BOOLS, NotFoundError, OneBot} from "@/onebot";
@@ -10,7 +10,6 @@ import {URL} from "url";
 import http from "http";
 import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
-import {fromCqcode, fromSegment} from "oicq2-cq-enable";
 import {toBool, toHump, toLine, uuid} from "@/utils";
 import {Db} from "@/db";
 import {App} from "@/server/app";
@@ -90,7 +89,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
 
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
-                this.dispatch(V12.genMetaEvent(this.client.uin, 'heartbeat', {
+                this.dispatch(V12.formatPayload(this.client.uin, 'heartbeat', {
                     detail_type: "heartbeat",
                     interval: new Date().getTime() + this.config.heartbeat * 1000
                 }))
@@ -212,25 +211,44 @@ export class V12 extends EventEmitter implements OneBot.Base {
             rmSync(this.client.dir, {force: true, recursive: true})
         }
     }
-
-    dispatch(data: Record<string, any>) {
-        if (!data || typeof data !== "object") data = {args: data || []}
-        if (!data['post_type']) {
-            data['sub_type'] = 'online'
-            if (data['image']) {
-                data['system_type'] = 'login'
-                data['sub_type'] = 'qrcode'
-            } else if (data['url']) {
-                data['system_type'] = 'login'
-                data.sub_type = 'slider'
+    format<E extends keyof V12.BotEventMap>(event:E,...args:[V12.BotEventMap[E]]){
+        const data:Record<string, any>=(typeof args[0])==='object'?args.shift()||{}:{} as any
+        data.type=data.post_type
+        if (!data.type) {
+            data.type='meta'
+            data.detail_type = 'online'
+            if (data.image) {
+                data.type = 'login'
+                data.detail_type = 'qrcode'
+            } else if (data.url) {
+                data.type = 'login'
+                data.detail_type = 'slider'
                 if (data.phone) {
-                    data.sub_type = 'device'
+                    data.detail_type = 'device'
                 }
             } else if (data.message) {
-                data.system_type = 'login'
-                data.sub_type = 'error'
+                data.type = 'login'
+                data.detial_type = 'error'
             }
         }
+        if (data.type === 'notice') {
+            switch (data.detail_type) {
+                case 'friend':
+                    data.detail_type += data.sub_type
+                    break;
+                case 'group':
+                    if (['increase', 'decrease'].includes(data.sub_type)) data.detail_type = 'group_member_' + data.sub_type
+                    else if (data.sub_type === 'recall') data.detail_type = 'group_message_delete'
+            }
+        }
+        if(data.type==='system') data.type='meta'
+        data.alt_message=data.raw_message
+        data.self=this.action.getSelfInfo.apply(this)
+        if(!data.detail_type) data.detail_type=data.message_type || data.notice_type || data.request_type || data.system_type
+        data.message=data.type==='message'?V12.toSegment(data.message):data.message
+        return V12.formatPayload(this.client.uin,event,data as any)
+    }
+    dispatch(data: Record<string, any>) {
         const payload: V12.Payload<any> = {
             id: uuid(),
             impl: 'oicq_onebot',
@@ -240,21 +258,8 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 platform: 'qq',
                 user_id: `${this.client.uin}`
             },
-            type: data.post_type || 'meta',
-            alt_message: data.raw_message,
-            detail_type: data.message_type || data.notice_type || data.request_type || data.system_type,
             ...data,
         } as V12.Payload<any>
-        if (payload.type === 'notice') {
-            switch (payload.detail_type) {
-                case 'friend':
-                    payload.detail_type += payload.sub_type
-                    break;
-                case 'group':
-                    if (['increase', 'decrease'].includes(payload.sub_type)) payload.detail_type = 'group_member_' + payload.sub_type
-                    else if (payload.sub_type === 'recall') payload.detail_type = 'group_message_delete'
-            }
-        }
         this.emit('dispatch', payload)
     }
 
@@ -264,7 +269,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         let is_async = action.includes("_async")
         if (is_async)
             action = action.replace("_async", "")
-        if (action === 'send_msg') {
+        if (action === 'send_message') {
             if (["private", "group", "discuss", 'channel'].includes(params.detail_type)) {
                 action = "send_" + params.detail_type + "_msg"
             } else if (params.user_id)
@@ -290,11 +295,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                     if (BOOLS.includes(k))
                         params[k] = toBool(params[k])
                     if (k === 'message') {
-                        if (typeof params[k] === 'string') {
-                            params[k] = fromCqcode(params[k])
-                        } else {
-                            params[k] = fromSegment(params[k])
-                        }
+                        params[k]=V12.fromSegment(params[k])
                     }
                     args.push(params[k])
                 }
@@ -478,13 +479,66 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 }))
             }
         })
-        this.dispatch(V12.genMetaEvent(this.client.uin, "connect", this.action.getVersion.apply(this)))
-        this.dispatch(V12.genMetaEvent(this.client.uin, "status_update", this.action.getStatus.apply(this)))
+        this.dispatch(V12.formatPayload(this.client.uin, "connect", this.action.getVersion.apply(this)))
+        this.dispatch(V12.formatPayload(this.client.uin, "status_update", this.action.getStatus.apply(this)))
     }
 
 }
 
 export namespace V12 {
+    export function fromSegment(msgList:SegmentElem|string|number|(SegmentElem|string|number)[]) {
+        msgList = [].concat(msgList);
+        return msgList.map((msg) => {
+            if(typeof msg !=='object') msg=String(msg)
+            if(typeof msg==='string'){
+                return {type: 'text',text:msg}
+            }
+            const { type, data, ...other } = msg;
+            return {
+                type: type.replace('mention','at').replace('at_all','at'),
+                ...other,
+                ...data
+            };
+        }) as MessageElem[]
+    }
+    export function toSegment(msgList:Sendable) {
+        msgList = [].concat(msgList);
+        return msgList.map((msg) => {
+            if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
+            let {type, ...other} = msg;
+            return {
+                type:type==='at'?other['qq']?'mention':"mention_all":type,
+                data: {
+                    ...other,
+                    user_id:other['qq']
+                }
+            }  as SegmentElem
+        })
+    }
+    export interface SegmentMap{
+        face:{id:number,text:string}
+        text:{text:string}
+        mention:{user_id:string}
+        mention_all:null
+        image:{file_id:string}
+        voice:{ file_id:string }
+        audio:{ file_id:string }
+        file:{ file_id:string}
+        location:{
+            latitude:number
+            longitude:number
+            title:string
+            content:string
+        }
+        reply:{
+            message_id:string
+            user_id:string
+        }
+    }
+    export type SegmentElem<K extends keyof SegmentMap=keyof SegmentMap>={
+        type:K
+        data:SegmentMap[K]
+    }
     export interface Config {
         heartbeat?: number
         access_token?: string
@@ -551,7 +605,8 @@ export namespace V12 {
         echo?: string
     }
 
-    export type MetaEventMap = {
+    export type BotEventMap = {
+        system:Record<string, any>
         connect: {
             detail_type: 'connect'
             version: ReturnType<Action['getVersion']>
@@ -564,8 +619,11 @@ export namespace V12 {
             detail_type: 'status_update',
             status: ReturnType<Action['getStatus']>
         }
+    } & TransformEventMap
+    export type TransformEventMap={
+        [P in keyof EventMap]:TransformEventParams<Parameters<EventMap[P]>>
     }
-
+    export type TransformEventParams<T extends any[]>=T extends [infer L,...infer R]?L extends object?L& {args:R}:{args:[L,...R]}:{args:T}
     export function success<T extends any>(data: T, retcode: Result<T>['retcode'] = 0, echo?: string): Result<T> {
         return {
             retcode,
@@ -586,15 +644,14 @@ export namespace V12 {
         }
     }
 
-    export function genMetaEvent<K extends keyof MetaEventMap>(uin: number, type: K, data: Omit<MetaEventMap[K], K>) {
-        return {
+    export function formatPayload<K extends keyof BotEventMap>(uin: number, type: K, data: Omit<BotEventMap[K], K>) {
+        const result={
             self_id: uin,
             time: Math.floor(Date.now() / 1000),
-            type: "meta",
-            status: 'ok',
             detail_type: type,
             sub_type: '',
             ...data
         }
+        return result
     }
 }

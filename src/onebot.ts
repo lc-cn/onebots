@@ -94,10 +94,10 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
         await this.client.login(this.password)
     }
     startListen(){
-        this.client.on('system',this.dispatch.bind(this))
-        this.client.on('notice',this.dispatch.bind(this))
-        this.client.on('request',this.dispatch.bind(this))
-        this.client.on('message',this.dispatch.bind(this))
+        this.client.on('system',this.dispatch.bind(this,'system'))
+        this.client.on('notice',this.dispatch.bind(this,'notice'))
+        this.client.on('request',this.dispatch.bind(this,'request'))
+        this.client.on('message',this.dispatch.bind(this,'message'))
         for(const instance of this.instances){
             instance.start(this.instances.length>1?'/'+instance.version:undefined)
         }
@@ -106,14 +106,12 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
         for(const instance of this.instances){
             await instance.stop(force)
         }
-        this.client.off('system',this.dispatch.bind(this))
-        this.client.off('notice',this.dispatch.bind(this))
-        this.client.off('request',this.dispatch.bind(this))
-        this.client.off('message',this.dispatch.bind(this))
+        this.client.removeAllListeners()
     }
-    dispatch(data){
+    dispatch(event,data){
         for(const instance of this.instances){
-            instance.dispatch(data)
+            const result=instance.format(event,data)
+            instance.dispatch(result)
         }
     }
 }

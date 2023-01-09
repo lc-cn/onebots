@@ -183,6 +183,9 @@ export class V11 extends EventEmitter implements OneBot.Base{
             rmSync(this.client.dir,{force:true,recursive:true})
         }
     }
+    format(_,data:any){
+        return data
+    }
     dispatch(data:any) {
         if(!data.post_type)data.post_type='system'
         if(data.post_type==='system'){

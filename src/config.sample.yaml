@@ -1,4 +1,5 @@
 port: 6727 # 监听端口
+log_level: info # 日志等级
 general: # 通用配置，在单个配置省略时的默认值
   V11: # oneBotV11的通用配置
     heartbeat: 3 # 心跳间隔 (秒)
@@ -23,7 +24,6 @@ general: # 通用配置，在单个配置省略时的默认值
     use_ws: true # 是否启用 websocket
     webhook: [] # http 上报地址
     ws_reverse: [] # 反向ws连接地址
-log_level: info # 日志等级
 # 每个账号的单独配置(用于覆盖通用配置)
 123456789:
   version: V11 # 使用的oneBot版本

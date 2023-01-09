@@ -15,6 +15,7 @@ export class CommonAction{
     getSelfInfo(this:V12){
         return {
             user_id:this.client.uin,
+            platform:'qq',
             nickname:this.client.nickname,
             user_displayname:''
         }
