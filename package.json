@@ -2,6 +2,9 @@
   "name": "onebots",
   "version": "0.0.22",
   "description": "基于oicq的多例oneBot实现",
+  "engines": {
+    "node": ">=16"
+  },
   "main": "lib/index.js",
   "bin": {
     "onebots": "./lib/bin.js"
