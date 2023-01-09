@@ -1,15 +1,30 @@
 import {V12} from "../index";
 import {Sendable} from "oicq";
+import {remove} from "@/utils";
 
 export class GroupAction{
-
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
      * @param message {import('oicq').Sendable} 消息
+     * @param message_id {string} 引用的消息ID
      */
-    sendGroupMsg(this:V12,group_id:number,message:Sendable){
-        return this.client.sendGroupMsg(group_id,message)
+    async sendGroupMsg(this:V12,group_id:number,message:V12.SegmentElem[],message_id?:string){
+        const forward =message.find(e=>e.type==='node') as V12.SegmentElem<'node'>
+        if(forward) remove(message,forward)
+        let quote=message.find(e=>e.type==='reply') as V12.SegmentElem<'reply'>
+        if(quote)  remove(message,quote)
+        const element=V12.fromSegment(message)
+        if(forward) element.unshift(await this.client.makeForwardMsg(forward.data.message.map(segment=>{
+            return {
+                message:V12.fromSegment([segment]),
+                user_id:forward.data.user_id,
+                nickname:forward.data.user_name,
+                time:forward.data.time
+            }
+        })))
+        if(quote && !message_id) message_id=quote.data.message_id
+        return await this.client.sendGroupMsg(group_id,element,message_id?await this.client.getMsg(message_id):undefined)
     }
 
     /**

@@ -1,13 +1,23 @@
 import {Sendable} from "oicq";
 import {V11} from "@/service/V11";
+import {fromSegment,fromCqcode} from "oicq2-cq-enable";
+import {SegmentElem} from "oicq2-cq-enable/lib/utils";
 export class GroupAction{
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
      * @param message {import('oicq').Sendable} 消息
+     * @param message_id {string} 引用的消息ID
      */
-    sendGroupMsg(this:V11,group_id:number,message:Sendable){
-        return this.client.sendGroupMsg(group_id,message)
+    async sendGroupMsg(this:V11,group_id:number,message:string|SegmentElem[],message_id?:string){
+        const element=typeof message==='string'?fromCqcode(message):fromSegment(message)
+        let quote,quoteIdx=element.findIndex(e=>e.type==='reply')
+        if(quoteIdx!==-1) {
+            quote=element[quoteIdx]
+            element.splice(quoteIdx,1)
+        }
+        if(quote && !message_id) message_id=quote.message_id
+        return await this.client.sendGroupMsg(group_id,element,message_id?await this.client.getMsg(message_id):undefined)
     }
 
     /**

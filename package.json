@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.0.18",
+  "version": "0.0.20",
   "description": "基于oicq的多例oneBot实现",
   "main": "lib/index.js",
   "bin": {

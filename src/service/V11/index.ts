@@ -391,6 +391,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
                         } else {
                             params[k] = fromSegment(params[k])
                         }
+                        params['message_id']=params[k].find(e=>e.type==='reply')?.message_id
                     }
                     args.push(params[k])
                 }

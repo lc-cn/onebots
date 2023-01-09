@@ -81,6 +81,10 @@ export function toHump(action: string) {
         return s[1].toUpperCase()
     })
 }
+export function remove<T>(list:T[],item:T){
+    const idx=list.indexOf(item)
+    if(idx!==-1) list.splice(idx,1)
+}
 export function toLine(name:string) {
     return name.replace(/([A-Z])/g,"_$1").toLowerCase();
 }

@@ -4,7 +4,7 @@ import {OneBotStatus} from "@/onebot";
 import {getProperties,toLine} from '@/utils'
 import {Action} from "./";
 export class CommonAction{
-    sendMsg(){}
+    sendMessage(){}
     /**
      * 撤回消息
      * @param message_id {string} 消息id

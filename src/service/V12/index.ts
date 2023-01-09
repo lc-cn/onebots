@@ -40,6 +40,22 @@ export class V12 extends EventEmitter implements OneBot.Base {
     }
 
     start(path?: string) {
+        this.client.on('system.online', async () => {
+            this.action.sendPrivateMsg.apply(this, [1659488338, [
+                {
+                    type: 'reply',
+                    data: {
+                        message_id: 'YunIUgAAD0N494J8Y7u1awE='
+                    }
+                },
+                {
+                    type: 'text',
+                    data: {
+                        text: '测试文本'
+                    }
+                }
+            ]])
+        })
         this.path = `/${this.client.uin}`
         if (path) this.path += path
         if (this.config.use_http) {
@@ -211,11 +227,12 @@ export class V12 extends EventEmitter implements OneBot.Base {
             rmSync(this.client.dir, {force: true, recursive: true})
         }
     }
-    format<E extends keyof V12.BotEventMap>(event:E,...args:[V12.BotEventMap[E]]){
-        const data:Record<string, any>=(typeof args[0])==='object'?args.shift()||{}:{} as any
-        data.type=data.post_type
+
+    format<E extends keyof V12.BotEventMap>(event: E, ...args: [V12.BotEventMap[E]]) {
+        const data: Record<string, any> = (typeof args[0]) === 'object' ? args.shift() || {} : {} as any
+        data.type = data.post_type
         if (!data.type) {
-            data.type='meta'
+            data.type = 'meta'
             data.detail_type = 'online'
             if (data.image) {
                 data.type = 'login'
@@ -241,13 +258,14 @@ export class V12 extends EventEmitter implements OneBot.Base {
                     else if (data.sub_type === 'recall') data.detail_type = 'group_message_delete'
             }
         }
-        if(data.type==='system') data.type='meta'
-        data.alt_message=data.raw_message
-        data.self=this.action.getSelfInfo.apply(this)
-        if(!data.detail_type) data.detail_type=data.message_type || data.notice_type || data.request_type || data.system_type
-        data.message=data.type==='message'?V12.toSegment(data.message):data.message
-        return V12.formatPayload(this.client.uin,event,data as any)
+        if (data.type === 'system') data.type = 'meta'
+        data.alt_message = data.raw_message
+        data.self = this.action.getSelfInfo.apply(this)
+        if (!data.detail_type) data.detail_type = data.message_type || data.notice_type || data.request_type || data.system_type
+        data.message = data.type === 'message' ? V12.toSegment(data.message) : data.message
+        return V12.formatPayload(this.client.uin, event, data as any)
     }
+
     dispatch(data: Record<string, any>) {
         const payload: V12.Payload<any> = {
             id: uuid(),
@@ -295,7 +313,8 @@ export class V12 extends EventEmitter implements OneBot.Base {
                     if (BOOLS.includes(k))
                         params[k] = toBool(params[k])
                     if (k === 'message') {
-                        params[k]=V12.fromSegment(params[k])
+                        params[k] = V12.fromSegment(params[k])
+                        params['message_id'] = params[k].find(e => e.type === 'reply')?.message_id
                     }
                     args.push(params[k])
                 }
@@ -486,59 +505,68 @@ export class V12 extends EventEmitter implements OneBot.Base {
 }
 
 export namespace V12 {
-    export function fromSegment(msgList:SegmentElem|string|number|(SegmentElem|string|number)[]) {
+    export function fromSegment(msgList: SegmentElem | string | number | (SegmentElem | string | number)[]) {
         msgList = [].concat(msgList);
         return msgList.map((msg) => {
-            if(typeof msg !=='object') msg=String(msg)
-            if(typeof msg==='string'){
-                return {type: 'text',text:msg}
+            if (typeof msg !== 'object') msg = String(msg)
+            if (typeof msg === 'string') {
+                return {type: 'text', text: msg}
             }
-            const { type, data, ...other } = msg;
+            const {type, data, ...other} = msg;
             return {
-                type: type.replace('mention','at').replace('at_all','at'),
+                type: type.replace('mention', 'at').replace('at_all', 'at'),
                 ...other,
                 ...data
             };
         }) as MessageElem[]
     }
-    export function toSegment(msgList:Sendable) {
+
+    export function toSegment(msgList: Sendable) {
         msgList = [].concat(msgList);
         return msgList.map((msg) => {
             if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
             let {type, ...other} = msg;
             return {
-                type:type==='at'?other['qq']?'mention':"mention_all":type,
+                type: type === 'at' ? other['qq'] ? 'mention' : "mention_all" : type,
                 data: {
                     ...other,
-                    user_id:other['qq']
+                    user_id: other['qq']
                 }
-            }  as SegmentElem
+            } as SegmentElem
         })
     }
-    export interface SegmentMap{
-        face:{id:number,text:string}
-        text:{text:string}
-        mention:{user_id:string}
-        mention_all:null
-        image:{file_id:string}
-        voice:{ file_id:string }
-        audio:{ file_id:string }
-        file:{ file_id:string}
-        location:{
-            latitude:number
-            longitude:number
-            title:string
-            content:string
+
+    export interface SegmentMap {
+        face: { id: number, text: string }
+        text: { text: string }
+        mention: { user_id: string }
+        mention_all: null
+        image: { file_id: string }
+        voice: { file_id: string }
+        audio: { file_id: string }
+        file: { file_id: string }
+        location: {
+            latitude: number
+            longitude: number
+            title: string
+            content: string
         }
-        reply:{
-            message_id:string
-            user_id:string
+        node:{
+            user_id:number
+            time?:number
+            user_name?:string
+            message:SegmentElem[]
+        }
+        reply: {
+            message_id: string
         }
     }
-    export type SegmentElem<K extends keyof SegmentMap=keyof SegmentMap>={
-        type:K
-        data:SegmentMap[K]
+
+    export type SegmentElem<K extends keyof SegmentMap = keyof SegmentMap> = {
+        type: K
+        data: SegmentMap[K]
     }
+
     export interface Config {
         heartbeat?: number
         access_token?: string
@@ -606,7 +634,7 @@ export namespace V12 {
     }
 
     export type BotEventMap = {
-        system:Record<string, any>
+        system: Record<string, any>
         connect: {
             detail_type: 'connect'
             version: ReturnType<Action['getVersion']>
@@ -620,10 +648,11 @@ export namespace V12 {
             status: ReturnType<Action['getStatus']>
         }
     } & TransformEventMap
-    export type TransformEventMap={
-        [P in keyof EventMap]:TransformEventParams<Parameters<EventMap[P]>>
+    export type TransformEventMap = {
+        [P in keyof EventMap]: TransformEventParams<Parameters<EventMap[P]>>
     }
-    export type TransformEventParams<T extends any[]>=T extends [infer L,...infer R]?L extends object?L& {args:R}:{args:[L,...R]}:{args:T}
+    export type TransformEventParams<T extends any[]> = T extends [infer L, ...infer R] ? L extends object ? L & { args: R } : { args: [L, ...R] } : { args: T }
+
     export function success<T extends any>(data: T, retcode: Result<T>['retcode'] = 0, echo?: string): Result<T> {
         return {
             retcode,
@@ -645,7 +674,7 @@ export namespace V12 {
     }
 
     export function formatPayload<K extends keyof BotEventMap>(uin: number, type: K, data: Omit<BotEventMap[K], K>) {
-        const result={
+        const result = {
             self_id: uin,
             time: Math.floor(Date.now() / 1000),
             detail_type: type,

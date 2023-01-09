@@ -4,6 +4,7 @@ import {App} from "./server/app";
 import {deepMerge, omit} from "./utils";
 import {join} from "path";
 import {Client} from "oicq";
+import {genDmMessageId,genGroupMessageId} from 'oicq/lib/message'
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
@@ -111,6 +112,22 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
     dispatch(event,data){
         for(const instance of this.instances){
             const result=instance.format(event,data)
+            if(data.source){
+                switch (data.message_type){
+                    case 'group':
+                        data.message.shift({
+                            type:'reply',
+                            message_id:genGroupMessageId(data.group_id,data.source.user_id,data.source.seq,data.source.rand,data.source.rand,data.source.time)
+                        })
+                        break;
+                    case 'private':
+                        data.message.shift({
+                            type:'reply',
+                            message_id:genDmMessageId(data.source.user_id,data.source.seq,data.source.rand,data.source.rand,data.source.time)
+                        })
+                        break;
+                }
+            }
             instance.dispatch(result)
         }
     }
