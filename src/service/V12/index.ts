@@ -40,22 +40,6 @@ export class V12 extends EventEmitter implements OneBot.Base {
     }
 
     start(path?: string) {
-        this.client.on('system.online', async () => {
-            this.action.sendPrivateMsg.apply(this, [1659488338, [
-                {
-                    type: 'reply',
-                    data: {
-                        message_id: 'YunIUgAAD0N494J8Y7u1awE='
-                    }
-                },
-                {
-                    type: 'text',
-                    data: {
-                        text: '测试文本'
-                    }
-                }
-            ]])
-        })
         this.path = `/${this.client.uin}`
         if (path) this.path += path
         if (this.config.use_http) {
