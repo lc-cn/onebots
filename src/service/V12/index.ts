@@ -17,68 +17,71 @@ import {App} from "@/server/app";
 import Payload = V12.Payload;
 import {rmSync} from "fs";
 
-export class V12 extends EventEmitter implements OneBot.Base{
-    public version='V12'
-    public action:Action
+export class V12 extends EventEmitter implements OneBot.Base {
+    public version = 'V12'
+    public action: Action
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
-    logger:Logger
-    private path:string
-    wss?:WebSocketServer
-    wsr:Set<WebSocket>=new Set<WebSocket>()
-    private db:Db
-    constructor(public oneBot:OneBot<'V12'>,public client:Client,public config:V12.Config) {
+    logger: Logger
+    private path: string
+    wss?: WebSocketServer
+    wsr: Set<WebSocket> = new Set<WebSocket>()
+    private db: Db
+
+    constructor(public oneBot: OneBot<'V12'>, public client: Client, public config: V12.Config) {
         super()
-        this.db=new Db(join(App.configDir,'data',this.client.uin+'.json'))
-        if(!this.history) this.db.set('eventBuffer',[])
-        this.action=new Action()
-        this.logger=this.oneBot.app.getLogger(this.client.uin,this.version)
+        this.db = new Db(join(App.configDir, 'data', this.client.uin + '.json'))
+        if (!this.history) this.db.set('eventBuffer', [])
+        this.action = new Action()
+        this.logger = this.oneBot.app.getLogger(this.client.uin, this.version)
     }
-    get history():Payload<keyof Action>[]{
+
+    get history(): Payload<keyof Action>[] {
         return this.db.get('eventBuffer')
     }
-    start(path?:string) {
-        this.path=`/${this.client.uin}`
-        if(path)this.path+=path
-        if(this.config.use_http) {
-            const config:V12.HttpConfig= typeof this.config.use_http==='boolean'?{}:this.config.use_http||{}
+
+    start(path?: string) {
+        this.path = `/${this.client.uin}`
+        if (path) this.path += path
+        if (this.config.use_http) {
+            const config: V12.HttpConfig = typeof this.config.use_http === 'boolean' ? {} : this.config.use_http || {}
             this.startHttp({
-                access_token:this.config.access_token,
-                event_enabled:true,
-                event_buffer_size:50,
+                access_token: this.config.access_token,
+                event_enabled: true,
+                event_buffer_size: 50,
                 ...config
             })
         }
-        if(this.config.use_ws) {
-            const config:V12.WsConfig=typeof this.config.use_ws==='boolean'?{}:this.config.use_ws||{}
+        if (this.config.use_ws) {
+            const config: V12.WsConfig = typeof this.config.use_ws === 'boolean' ? {} : this.config.use_ws || {}
             this.startWs({
-                access_token:this.config.access_token,
+                access_token: this.config.access_token,
                 ...config
             })
         }
-        this.config.webhook.forEach(config=>{
-            if(typeof config==='string'){
-                config={
-                    url:config,
-                    access_token:this.config.access_token,
+        this.config.webhook.forEach(config => {
+            if (typeof config === 'string') {
+                config = {
+                    url: config,
+                    access_token: this.config.access_token,
                 }
-            }else{
-                config={
-                    access_token:this.config.access_token,
+            } else {
+                config = {
+                    access_token: this.config.access_token,
                     ...config
                 }
             }
             this.startWebhook(config)
         })
-        this.config.ws_reverse.forEach(config=>{
-            if(typeof config==='string'){
-                config={
-                    url:config,
-                    access_token:this.config.access_token,
+        this.config.ws_reverse.forEach(config => {
+            if (typeof config === 'string') {
+                config = {
+                    url: config,
+                    access_token: this.config.access_token,
                 }
-            }else{
-                config={
-                    access_token:this.config.access_token,
+            } else {
+                config = {
+                    access_token: this.config.access_token,
                     ...config
                 }
             }
@@ -87,27 +90,29 @@ export class V12 extends EventEmitter implements OneBot.Base{
 
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
-                this.dispatch(V12.genMetaEvent(this.client.uin,'heartbeat',{
+                this.dispatch(V12.genMetaEvent(this.client.uin, 'heartbeat', {
                     detail_type: "heartbeat",
-                    interval:new Date().getTime()+this.config.heartbeat*1000
+                    interval: new Date().getTime() + this.config.heartbeat * 1000
                 }))
-            }, this.config.heartbeat*1000)
+            }, this.config.heartbeat * 1000)
         }
     }
-    private startHttp(config:V12.HttpConfig){
-        this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), (ctx)=>this._httpRequestHandler(ctx,config))
+
+    private startHttp(config: V12.HttpConfig) {
+        this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), (ctx) => this._httpRequestHandler(ctx, config))
         this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
-        this.on('dispatch',(payload:Payload<keyof Action>)=>{
-            if(!['message','notice','request','system'].includes(payload.type)) return
-            if(config.event_enabled){
+        this.on('dispatch', (payload: Payload<keyof Action>) => {
+            if (!['message', 'notice', 'request', 'system'].includes(payload.type)) return
+            if (config.event_enabled) {
                 this.history.push(payload)
-                if(config.event_buffer_size!==0 && this.history.length>config.event_buffer_size) this.history.shift()
+                if (config.event_buffer_size !== 0 && this.history.length > config.event_buffer_size) this.history.shift()
             }
         })
     }
-    private startWebhook(config:V12.WebhookConfig){
-        this.on('dispatch',(unserialized:any)=>{
-            const serialized=JSON.stringify(unserialized)
+
+    private startWebhook(config: V12.WebhookConfig) {
+        this.on('dispatch', (unserialized: any) => {
+            const serialized = JSON.stringify(unserialized)
             const options: http.RequestOptions = {
                 method: "POST",
                 timeout: this.config.request_timeout * 1000,
@@ -146,7 +151,8 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    private startWs(config:V12.WsConfig){
+
+    private startWs(config: V12.WsConfig) {
         this.wss = this.oneBot.app.router.ws(this.path, this.oneBot.app.httpServer)
         this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
         this.wss.on("error", (err) => {
@@ -170,8 +176,8 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
             this._webSocketHandler(ws)
         })
-        this.on('dispatch',(unserialized)=>{
-            const serialized=JSON.stringify(unserialized)
+        this.on('dispatch', (unserialized) => {
+            const serialized = JSON.stringify(unserialized)
             for (const ws of this.wss.clients) {
                 ws.send(serialized, (err) => {
                     if (err)
@@ -182,75 +188,84 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    private startWsReverse(config:V12.WsReverseConfig){
-        const ws=this._createWsr(config.url,config)
-        this.on('dispatch',(unserialized)=>{
-            if(this.wsr.has(ws)){
-                ws.send(JSON.stringify(unserialized))
+
+    private startWsReverse(config: V12.WsReverseConfig) {
+        const ws = this._createWsr(config.url, config)
+        this.on('dispatch', (unserialized) => {
+            const serialized = JSON.stringify(unserialized)
+            if (this.wsr.has(ws)) {
+                ws.send(serialized, (err) => {
+                    if (err)
+                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
+                    else
+                        this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
+                })
             }
         })
     }
-    async stop(force?:boolean) {
-        if(this.client.status===OnlineStatus.Online){
+
+    async stop(force?: boolean) {
+        if (this.client.status === OnlineStatus.Online) {
             await this.client.terminate()
         }
-        if(force){
-            rmSync(this.client.dir,{force:true,recursive:true})
+        if (force) {
+            rmSync(this.client.dir, {force: true, recursive: true})
         }
     }
-    dispatch(data:Record<string, any>) {
-        if(!data || typeof data!=="object") data={args:data||[]}
-        if(!data['post_type']){
-            data['sub_type']='online'
-            if(data['image']){
-                data['system_type']='login'
-                data['sub_type']='qrcode'
-            }
-            else if(data['url']){
-                data['system_type']='login'
-                data.sub_type='slider'
-                if(data.phone){
-                    data.sub_type='device'
+
+    dispatch(data: Record<string, any>) {
+        if (!data || typeof data !== "object") data = {args: data || []}
+        if (!data['post_type']) {
+            data['sub_type'] = 'online'
+            if (data['image']) {
+                data['system_type'] = 'login'
+                data['sub_type'] = 'qrcode'
+            } else if (data['url']) {
+                data['system_type'] = 'login'
+                data.sub_type = 'slider'
+                if (data.phone) {
+                    data.sub_type = 'device'
                 }
-            }else if(data.message){
-                data.system_type='login'
-                data.sub_type='error'
+            } else if (data.message) {
+                data.system_type = 'login'
+                data.sub_type = 'error'
             }
         }
-        const payload:V12.Payload<any>={
-            id:uuid(),
-            impl:'oicq_onebot',
-            version:12,
-            platform:'qq',
-            self:{
-                platform:'qq',
-                user_id:`${this.client.uin}`
+        const payload: V12.Payload<any> = {
+            id: uuid(),
+            impl: 'oicq_onebot',
+            version: 12,
+            platform: 'qq',
+            self: {
+                platform: 'qq',
+                user_id: `${this.client.uin}`
             },
-            type:data.post_type|| 'meta',
-            alt_message:data.raw_message,
-            detail_type:data.message_type||data.notice_type||data.request_type||data.system_type,
+            type: data.post_type || 'meta',
+            alt_message: data.raw_message,
+            detail_type: data.message_type || data.notice_type || data.request_type || data.system_type,
             ...data,
         } as V12.Payload<any>
-        if(payload.type==='notice'){
-            switch (payload.detail_type){
+        if (payload.type === 'notice') {
+            switch (payload.detail_type) {
                 case 'friend':
-                    payload.detail_type+=payload.sub_type
+                    payload.detail_type += payload.sub_type
                     break;
                 case 'group':
-                    if(['increase','decrease'].includes(payload.sub_type))payload.detail_type='group_member_'+payload.sub_type
-                    else if(payload.sub_type==='recall') payload.detail_type='group_message_delete'
+                    if (['increase', 'decrease'].includes(payload.sub_type)) payload.detail_type = 'group_member_' + payload.sub_type
+                    else if (payload.sub_type === 'recall') payload.detail_type = 'group_message_delete'
             }
         }
-        this.emit('dispatch',payload)
+        this.emit('dispatch', payload)
     }
-    async apply(req){
+
+    async apply(req) {
         let {action, params, echo} = req
-        action=toLine(action)
+        action = toLine(action)
         let is_async = action.includes("_async")
         if (is_async)
             action = action.replace("_async", "")
-        if(action==='send_msg'){
-            if (["private", "group", "discuss",'channel'].includes(params.detail_type)) {
+        if (action === 'send_msg') {
+            if (["private", "group", "discuss", 'channel'].includes(params.detail_type)) {
                 action = "send_" + params.detail_type + "_msg"
             } else if (params.user_id)
                 action = "send_private_msg"
@@ -258,17 +273,17 @@ export class V12 extends EventEmitter implements OneBot.Base{
                 action = "send_group_msg"
             else if (params.discuss_id)
                 action = "send_discuss_msg"
-            else if(params.channel_id&&params.guild_id)
-                action= "send_guild_msg"
+            else if (params.channel_id && params.guild_id)
+                action = "send_guild_msg"
             else throw new Error('required detail_type or input (user_id/group_id/(guild_id and channel_id))')
         }
         const method = toHump(action) as keyof Action
-        if(Reflect.has(this.action,method)){
-            const ARGS=String(Reflect.get(this.action,method)).match(/\(.*\)/)?.[0]
-                .replace("(","")
-                .replace(")","")
+        if (Reflect.has(this.action, method)) {
+            const ARGS = String(Reflect.get(this.action, method)).match(/\(.*\)/)?.[0]
+                .replace("(", "")
+                .replace(")", "")
                 .split(",")
-                .filter(Boolean).map(v=>v.replace(/=.+/, "").trim())
+                .filter(Boolean).map(v => v.replace(/=.+/, "").trim())
             const args = []
             for (let k of ARGS) {
                 if (Reflect.has(params, k)) {
@@ -285,19 +300,19 @@ export class V12 extends EventEmitter implements OneBot.Base{
                 }
             }
             let ret: any, result: any
-            try{
-                ret = this.action[method].apply(this,args)
-            }catch (e){
+            try {
+                ret = this.action[method].apply(this, args)
+            } catch (e) {
                 return JSON.stringify(V12.error(e.message))
             }
             if (ret instanceof Promise) {
                 if (is_async) {
-                    result = V12.success(null,0)
+                    result = V12.success(null, 0)
                 } else {
-                    result = V12.success(await ret,0)
+                    result = V12.success(await ret, 0)
                 }
             } else {
-                result = V12.success(await ret,0)
+                result = V12.success(await ret, 0)
             }
             if (result.data instanceof Map)
                 result.data = [...result.data.values()]
@@ -306,11 +321,11 @@ export class V12 extends EventEmitter implements OneBot.Base{
                 result.echo = echo
             }
             return JSON.stringify(result)
-        }else
+        } else
             throw new NotFoundError()
     }
 
-    private async _httpRequestHandler(ctx:Context,config:V12.HttpConfig){
+    private async _httpRequestHandler(ctx: Context, config: V12.HttpConfig) {
 
         if (ctx.method === 'OPTIONS') {
             return ctx.writeHead(200, {
@@ -320,15 +335,15 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }).end()
         }
         const url = new URL(ctx.url, `http://127.0.0.1`)
-        if (config.access_token){
+        if (config.access_token) {
             if (ctx.headers["authorization"]) {
-                if (ctx.headers["authorization"] !==`Bearer ${config.access_token}`)
+                if (ctx.headers["authorization"] !== `Bearer ${config.access_token}`)
                     return ctx.res.writeHead(403).end()
             } else {
                 const access_token = url.searchParams.get("access_token")
                 if (!access_token)
                     return ctx.res.writeHead(401).end()
-                else if (access_token!==this.config.access_token)
+                else if (access_token !== this.config.access_token)
                     return ctx.res.writeHead(403).end()
             }
         }
@@ -345,7 +360,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
             }
         } else if (ctx.method === "POST") {
             try {
-                const params = {...(ctx.request.query||{}), ...(ctx.request.body as object ||{})}
+                const params = {...(ctx.request.query || {}), ...(ctx.request.body as object || {})}
                 const ret = await this.apply({action, params})
                 ctx.res.writeHead(200).end(ret)
             } catch (e) {
@@ -355,6 +370,7 @@ export class V12 extends EventEmitter implements OneBot.Base{
             ctx.res.writeHead(405).end()
         }
     }
+
     /**
      * 快速操作
      */
@@ -381,16 +397,17 @@ export class V12 extends EventEmitter implements OneBot.Base{
             this.client[action](event.flag, res.approve, res.reason ? res.reason : "", !!res.block)
         }
     }
+
     /**
      * 创建反向ws
      */
-    protected _createWsr(url: string,config:V12.WsReverseConfig) {
+    protected _createWsr(url: string, config: V12.WsReverseConfig) {
         const timestmap = Date.now()
         const headers: http.OutgoingHttpHeaders = {
             "X-Self-ID": String(this.client.uin),
             "X-Client-Role": "Universal",
             "User-Agent": "OneBot/12 (qq) node-Onebots/0.0.15",
-            "Sec-WebSocket-Protocol":"12.onebots.v0.0.15"
+            "Sec-WebSocket-Protocol": "12.onebots.v0.0.15"
         }
         if (config.access_token)
             headers.Authorization = "Bearer " + config.access_token
@@ -412,10 +429,11 @@ export class V12 extends EventEmitter implements OneBot.Base{
                 if (timestmap < this.timestamp)
                     return
                 this.startWsReverse(config)
-            }, this.config.reconnect_interval*1000)
+            }, this.config.reconnect_interval * 1000)
         })
         return ws
     }
+
     /**
      * 处理ws消息
      */
@@ -460,106 +478,120 @@ export class V12 extends EventEmitter implements OneBot.Base{
                 }))
             }
         })
-        this.dispatch(V12.genMetaEvent(this.client.uin, "connect",this.action.getVersion.apply(this)))
-        this.dispatch(V12.genMetaEvent(this.client.uin, "status_update",this.action.getStatus.apply(this)))
+        this.dispatch(V12.genMetaEvent(this.client.uin, "connect", this.action.getVersion.apply(this)))
+        this.dispatch(V12.genMetaEvent(this.client.uin, "status_update", this.action.getStatus.apply(this)))
     }
 
 }
-export namespace V12{
-    export interface Config{
-        heartbeat?:number
-        access_token?:string
-        request_timeout?:number
-        reconnect_interval?:number
-        enable_cors?:boolean
-        use_http?:boolean|HttpConfig
-        webhook?:(string|WebhookConfig)[]
-        use_ws?:boolean|WsConfig
-        ws_reverse?:(string| WsReverseConfig)[]
+
+export namespace V12 {
+    export interface Config {
+        heartbeat?: number
+        access_token?: string
+        request_timeout?: number
+        reconnect_interval?: number
+        enable_cors?: boolean
+        use_http?: boolean | HttpConfig
+        webhook?: (string | WebhookConfig)[]
+        use_ws?: boolean | WsConfig
+        ws_reverse?: (string | WsReverseConfig)[]
     }
-    export interface HttpConfig extends Config.AuthInfo,Config.EventBufferConfig{}
-    export interface WebhookConfig extends Config.AuthInfo{
-        url:string
+
+    export interface HttpConfig extends Config.AuthInfo, Config.EventBufferConfig {
     }
-    export interface WsConfig extends Config.AuthInfo{}
-    export interface WsReverseConfig extends Config.AuthInfo{
-        url:string
+
+    export interface WebhookConfig extends Config.AuthInfo {
+        url: string
     }
-    export interface Result<T extends any>{
-        status:'ok'|'failed'
-        retcode:0|10001|10002|10003|10004|10005|10006|10007
-        data:T
-        message:string
-        echo?:string
+
+    export interface WsConfig extends Config.AuthInfo {
     }
-    export const defaultConfig:Config={
-        heartbeat:3,
-        access_token:'',
-        request_timeout:15,
-        reconnect_interval:3,
-        enable_cors:true,
-        use_http:true,
-        use_ws:true,
-        webhook:[],
-        ws_reverse:[]
+
+    export interface WsReverseConfig extends Config.AuthInfo {
+        url: string
     }
-    export type Payload<T extends any>={
-        id:string
-        impl:'oicq_onebot'
-        version:12
-        platform:'qq'
-        self:{
-            platform:'qq',
-            user_id:`${number}`
+
+    export interface Result<T extends any> {
+        status: 'ok' | 'failed'
+        retcode: 0 | 10001 | 10002 | 10003 | 10004 | 10005 | 10006 | 10007
+        data: T
+        message: string
+        echo?: string
+    }
+
+    export const defaultConfig: Config = {
+        heartbeat: 3,
+        access_token: '',
+        request_timeout: 15,
+        reconnect_interval: 3,
+        enable_cors: true,
+        use_http: true,
+        use_ws: true,
+        webhook: [],
+        ws_reverse: []
+    }
+    export type Payload<T extends any> = {
+        id: string
+        impl: 'oicq_onebot'
+        version: 12
+        platform: 'qq'
+        self: {
+            platform: 'qq',
+            user_id: `${number}`
         }
-        time:number
-        type:'meta'|'message'|'notice'|'request'
-        detail_type:string
-        sub_type:string
+        time: number
+        type: 'meta' | 'message' | 'notice' | 'request'
+        detail_type: string
+        sub_type: string
     } & T
+
     export interface Protocol {
         action: string,
         params: any
         echo?: string
     }
-    export type MetaEventMap={
-        connect:{
-            detail_type:'connect'
-            version:ReturnType<Action['getVersion']>
+
+    export type MetaEventMap = {
+        connect: {
+            detail_type: 'connect'
+            version: ReturnType<Action['getVersion']>
         },
-        heartbeat:{
-            detail_type:'heartbeat'
-            interval:number
+        heartbeat: {
+            detail_type: 'heartbeat'
+            interval: number
         },
-        status_update:{
-            detail_type:'status_update',
-            status:ReturnType<Action['getStatus']>
+        status_update: {
+            detail_type: 'status_update',
+            status: ReturnType<Action['getStatus']>
         }
     }
-    export function success<T extends any>(data:T,retcode:Result<T>['retcode']=0,echo?:string):Result<T>{
+
+    export function success<T extends any>(data: T, retcode: Result<T>['retcode'] = 0, echo?: string): Result<T> {
         return {
             retcode,
-            status:retcode===0?'ok':'failed',
+            status: retcode === 0 ? 'ok' : 'failed',
             data,
-            message:'',
+            message: '',
             echo
         }
     }
-    export function error(message:string,retcode:Result<null>['retcode']=10001,echo?:string):Result<null>{
+
+    export function error(message: string, retcode: Result<null>['retcode'] = 10001, echo?: string): Result<null> {
         return {
             retcode,
-            status:'failed',
-            data:null,
+            status: 'failed',
+            data: null,
             message,
             echo
         }
     }
-    export function genMetaEvent<K extends keyof MetaEventMap>(uin: number, type: K,data:Omit<MetaEventMap[K], K>) {
+
+    export function genMetaEvent<K extends keyof MetaEventMap>(uin: number, type: K, data: Omit<MetaEventMap[K], K>) {
         return {
             self_id: uin,
             time: Math.floor(Date.now() / 1000),
             type: "meta",
-            status:'ok',
+            status: 'ok',
             detail_type: type,
             sub_type: '',
             ...data
