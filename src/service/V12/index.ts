@@ -47,7 +47,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             this.startHttp({
                 access_token: this.config.access_token,
                 event_enabled: true,
-                event_buffer_size: 50,
+                event_buffer_size: 10,
                 ...config
             })
         }
@@ -101,7 +101,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), (ctx) => this._httpRequestHandler(ctx, config))
         this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
         this.on('dispatch', (payload: Payload<keyof Action>) => {
-            if (!['message', 'notice', 'request', 'system'].includes(payload.type)) return
+            if (!['message', 'notice', 'request', 'meta'].includes(payload.type)) return
             if (config.event_enabled) {
                 this.history.push(payload)
                 if (config.event_buffer_size !== 0 && this.history.length > config.event_buffer_size) this.history.shift()
@@ -110,28 +110,38 @@ export class V12 extends EventEmitter implements OneBot.Base {
     }
 
     private startWebhook(config: V12.WebhookConfig) {
+        const options: http.RequestOptions = {
+            method: "POST",
+            timeout: config.timeout||this.config.request_timeout,
+            headers: {
+                "Content-Type": "application/json",
+                "User-Agent": "OneBot/12 (qq) Node-onebots/0.0.15",
+                "X-OneBot-Version":12,
+                "X-Impl":"oicq_onebot",
+
+            },
+        }
+        if(config.access_token){
+            options.headers['Authorization']=`Bearer ${config.access_token}`
+        }
+        const protocol = config.url.startsWith("https") ? https : http
         this.on('dispatch', (unserialized: any) => {
-            const serialized = JSON.stringify(unserialized)
-            const options: http.RequestOptions = {
-                method: "POST",
-                timeout: this.config.request_timeout * 1000,
-                headers: {
-                    "Content-Type": "application/json",
-                    "Content-Length": Buffer.byteLength(serialized),
-                    "X-Self-ID": String(this.client.uin),
-                    "User-Agent": "OneBot",
-                },
-            }
-            const protocol = config.url.startsWith("https") ? https : http
             try {
-                protocol.request(config.url, options, (res) => {
+                const serialized = JSON.stringify(unserialized)
+                protocol.request(config.url, {
+                    ...options,
+                    headers:{
+                        ...options.headers,
+                        "Content-Length": Buffer.byteLength(serialized),
+                    }
+                }, (res) => {
                     if (res.statusCode !== 200)
-                        return this.logger.warn(`POST(${config.url})上报事件收到非200响应：` + res.statusCode)
+                        return this.logger.warn(`Webhook(${config.url})上报事件收到非200响应：` + res.statusCode)
                     let data = ""
                     res.setEncoding("utf-8")
                     res.on("data", (chunk) => data += chunk)
                     res.on("end", () => {
-                        this.logger.debug(`收到HTTP响应 ${res.statusCode} ：` + data)
+                        this.logger.debug(`收到Webhook响应 ${res.statusCode} ：` + data)
                         if (!data)
                             return
                         try {
@@ -141,16 +151,61 @@ export class V12 extends EventEmitter implements OneBot.Base {
                         }
                     })
                 }).on("error", (err) => {
-                    this.logger.error(`POST(${config.url})上报事件失败：` + err.message)
+                    this.logger.error(`Webhook(${config.url})上报事件失败：` + err.message)
                 }).end(serialized, () => {
-                    this.logger.debug(`POST(${config.url})上报事件成功: ` + serialized)
+                    this.logger.debug(`Webhook(${config.url})上报事件成功: ` + serialized)
                 })
             } catch (e) {
-                this.logger.error(`POST(${config.url})上报失败：` + e.message)
+                this.logger.error(`Webhook(${config.url})上报失败：` + e.message)
             }
         })
+        if(config.get_latest_actions){
+            const interval=(config.get_latest_actions && typeof config.get_latest_actions==='object') ?
+                config.get_latest_actions.interval*1000 :
+                1000*60
+            setInterval(()=>{
+                try {
+                    const actionPath=typeof config.get_latest_actions==='string' ?
+                        config.get_latest_actions:
+                        typeof config.get_latest_actions==='boolean'?
+                            'get_latest_actions':
+                            config.get_latest_actions.path||'/get_latest_actions'
+                    protocol.request(`${config.url}${actionPath}`, {
+                        ...options,
+                        method:'GET',
+                        headers:{
+                            ...options.headers,
+                        }
+                    }, (res) => {
+                        if (res.statusCode !== 200)
+                            return this.logger.warn(`Webhook(${config.url})获取动作队列收到非200响应：` + res.statusCode)
+                        let data = ""
+                        res.setEncoding("utf-8")
+                        res.on("data", (chunk) => data += chunk)
+                        res.on("end", () => {
+                            this.logger.info(`获取动作队列响应 ${res.statusCode} ：` + data)
+                            if (!data)
+                                return
+                            try {
+                                this.runActions(JSON.parse(data))
+                            } catch (e) {
+                                this.logger.error(`执行动作报错：` + e.message)
+                            }
+                        })
+                    }).on("error", (err) => {
+                        this.logger.error(`Webhook(${config.url})获取动作队列失败：` + err.message)
+                    }).end()
+                } catch (e) {
+                    this.logger.error(`Webhook(${config.url})获取动作队列失败：` + e.message)
+                }
+            },interval)
+        }
     }
-
+    private runActions(actions:any[]){
+        for(const action of actions){
+            this.apply(action)
+        }
+    }
     private startWs(config: V12.WsConfig) {
         this.wss = this.oneBot.app.router.ws(this.path, this.oneBot.app.httpServer)
         this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
@@ -168,10 +223,9 @@ export class V12 extends EventEmitter implements OneBot.Base {
             if (config.access_token) {
                 const url = new URL(req.url, "http://127.0.0.1")
                 const token = url.searchParams.get('access_token')
-                if (token)
-                    req.headers["authorization"] = `Bearer ${token}`
+                if (token) req.headers["authorization"] = `Bearer ${token}`
                 if (!req.headers["authorization"] || req.headers["authorization"] !== `Bearer ${config.access_token}`)
-                    return ws.close(1002, "wrong access token")
+                    return ws.close(401, "wrong access token")
             }
             this._webSocketHandler(ws)
         })
@@ -410,7 +464,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         const headers: http.OutgoingHttpHeaders = {
             "X-Self-ID": String(this.client.uin),
             "X-Client-Role": "Universal",
-            "User-Agent": "OneBot/12 (qq) node-Onebots/0.0.15",
+            "User-Agent": "OneBot/12 (qq) Node-onebots/0.0.15",
             "Sec-WebSocket-Protocol": "12.onebots.v0.0.15"
         }
         if (config.access_token)
@@ -568,6 +622,11 @@ export namespace V12 {
 
     export interface WebhookConfig extends Config.AuthInfo {
         url: string
+        timeout?:number
+        get_latest_actions?:boolean|string|{
+            path?:string
+            interval:number
+        }
     }
 
     export interface WsConfig extends Config.AuthInfo {
