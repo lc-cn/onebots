@@ -30,13 +30,16 @@ export class V12 extends EventEmitter implements OneBot.Base {
     constructor(public oneBot: OneBot<'V12'>, public client: Client, public config: V12.Config) {
         super()
         this.db = new Db(join(App.configDir, 'data', this.client.uin + '.json'))
-        if (!this.history) this.db.set('eventBuffer', [])
+        if (!this.history) this.history=[]
         this.action = new Action()
         this.logger = this.oneBot.app.getLogger(this.client.uin, this.version)
     }
 
     get history(): Payload<keyof Action>[] {
         return this.db.get('eventBuffer')
+    }
+    set history(value){
+        this.db.set('eventBuffer',value)
     }
 
     start(path?: string) {
@@ -469,7 +472,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         }
         if (config.access_token)
             headers.Authorization = "Bearer " + config.access_token
-        const ws = new WebSocket(url, {headers})
+        const ws = new WebSocket(url, '12.onebots.v0.0.15',{headers})
         ws.on("error", (err) => {
             this.logger.error(err.message)
         })
@@ -679,6 +682,7 @@ export namespace V12 {
     export type BotEventMap = {
         system: Record<string, any>
         connect: {
+            type
             detail_type: 'connect'
             version: ReturnType<Action['getVersion']>
         },
@@ -717,13 +721,13 @@ export namespace V12 {
     }
 
     export function formatPayload<K extends keyof BotEventMap>(uin: number, type: K, data: Omit<BotEventMap[K], K>) {
-        const result = {
+        return {
             self_id: uin,
             time: Math.floor(Date.now() / 1000),
             detail_type: type,
+            type:'meta',
             sub_type: '',
             ...data
         }
-        return result
     }
 }

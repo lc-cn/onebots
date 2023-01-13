@@ -1,5 +1,4 @@
 import {writeFileSync,readFileSync,existsSync} from "fs";
-import { writeFile } from 'fs/promises';
 import {EventEmitter} from "events";
 export class Db extends EventEmitter{
     private data:Record<string, any>={}
@@ -30,34 +29,22 @@ export class Db extends EventEmitter{
         }catch {
             throw new Error('不可达的位置:'+key.toString())
         }
-        return result&& typeof result==='object'?new Proxy(result,{
-            get(target: any, p: string | symbol): any {
-                return target[p]
+        return result && typeof result==='object' ? new Proxy(result,{
+            get(target: any, p: string | symbol,receiver:any): any {
+                return Reflect.get(target,p,receiver)
             },
             set(target: any, p: string | symbol, value: any, receiver: any): boolean {
-                const result=target[p]=value
-                _this.write()
-                return result
+                const res=Reflect.set(target,p,value,receiver)
+                _this.set(key,result)
+                return res
             }
         }):result
     }
     set(key:string,value:any,escape: boolean = true){
         const func=new Function('value',`return this.data.${key}=value`)
-        const _this=this
-        let result
-        result=escape?func.apply(this,[value]):this.data[key]=value
-        this.raw_data=JSON.stringify(this.data,null,2)
+        let result=escape?func.apply(this,[value]):this.data[key]=value
         this.write()
-        return result&& typeof result==='object'?new Proxy(result,{
-            get(target: any, p: string | symbol): any {
-                return target[p]
-            },
-            set(target: any, p: string | symbol, value: any, receiver: any): boolean {
-                const result=target[p]=value
-                _this.write()
-                return result
-            }
-        }):result
+        return result
     }
     has(key:string,escape:boolean=true):boolean{
         return escape?new Function(`return !!this.data.${key}`).apply(this):!!this.data[key]
@@ -67,11 +54,11 @@ export class Db extends EventEmitter{
         this.write()
         return result
     }
-    async write():Promise<void>{
+    write(){
         try {
-            const raw_data = JSON.stringify(this.data, null, 2);
+            const raw_data = JSON.stringify(this.data);
             if (raw_data !== this.raw_data) {
-                await writeFile(this.path, raw_data);
+                writeFileSync(this.path, raw_data);
                 this.raw_data = raw_data;
             }
         } catch (error) {
