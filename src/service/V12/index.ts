@@ -1,4 +1,4 @@
-import {Client, EventMap, MessageElem, OnlineStatus, Sendable} from "oicq";
+import {Client, EventMap, MessageElem, OnlineStatus, Sendable,segment} from "oicq";
 import {join} from 'path'
 import {Config} from './config'
 import {BOOLS, NotFoundError, OneBot} from "@/onebot";
@@ -264,6 +264,11 @@ export class V12 extends EventEmitter implements OneBot.Base {
         if (this.client.status === OnlineStatus.Online) {
             await this.client.terminate()
         }
+        this.wss.close()
+        for(const ws of this.wsr){
+            ws.close()
+        }
+
         if (force) {
             rmSync(this.client.dir, {force: true, recursive: true})
         }
@@ -332,7 +337,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             if (["private", "group", "discuss", 'channel'].includes(params.detail_type)) {
                 action = "send_" + params.detail_type + "_msg"
             } else if (params.user_id)
-                action = "send_private_msg"
+                action = "send_Private_Msg"
             else if (params.group_id)
                 action = "send_group_msg"
             else if (params.discuss_id)
@@ -551,15 +556,16 @@ export namespace V12 {
         return msgList.map((msg) => {
             if (typeof msg !== 'object') msg = String(msg)
             if (typeof msg === 'string') {
-                return {type: 'text', text: msg}
+                return {type: 'text', text: msg} as MessageElem
             }
             const {type, data, ...other} = msg;
+            if(type==='mention') data['qq']=Number(data['user_id'])
             return {
                 type: type.replace('mention', 'at').replace('at_all', 'at'),
                 ...other,
                 ...data
-            };
-        }) as MessageElem[]
+            } as MessageElem
+        })
     }
 
     export function toSegment(msgList: Sendable) {

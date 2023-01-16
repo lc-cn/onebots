@@ -34,7 +34,7 @@ export class App extends Koa{
     constructor(config:App.Config={}) {
         super(config);
         this.config=deepMerge(deepClone(App.defaultConfig),config)
-        this.logger=getLogger('[oicq-oneBot]')
+        this.logger=getLogger('[oicq-OneBot]')
         this.logger.level=this.config.log_level
         this.router=new Router({prefix:config.path})
         this.use(KoaBodyParser())
@@ -44,7 +44,7 @@ export class App extends Koa{
         this.createOneBots()
     }
     getLogger(uin:number|string,version=''){
-        const logger= getLogger(`[oicq-oneBot${version}:${uin}]`)
+        const logger= getLogger(`[oicq-OneBot${version}:${uin}]`)
         logger.level=this.config.log_level
         return logger
     }

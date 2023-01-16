@@ -38,7 +38,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
                 case 'V11':
                     return new V11(this,this.client,<V11.Config>omit(c, ['version', 'password']))
                 case 'V12':
-                    return new V12(this,this.client,omit(c,['version','password']))
+                    return new V12(this,this.client,<V12.Config>omit(c,['version','password']))
                 default:
                     throw new Error('不支持的oneBot版本：'+c.version)
             }

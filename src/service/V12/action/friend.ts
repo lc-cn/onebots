@@ -17,11 +17,13 @@ export class FriendAction{
      * @param message_id {string} 引用的消息ID
      */
     async sendPrivateMsg(this:V12,user_id:number,message:V12.SegmentElem[],message_id?:string){
+        console.log(111111,message)
         const forward =message.find(e=>e.type==='node') as V12.SegmentElem<'node'>
         if(forward) remove(message,forward)
         let quote=message.find(e=>e.type==='reply') as V12.SegmentElem<'reply'>
         if(quote)  remove(message,quote)
         const element=V12.fromSegment(message)
+        console.log(element,forward,quote)
         if(forward) element.unshift(await this.client.makeForwardMsg(forward.data.message.map(segment=>{
             return {
                 message:V12.fromSegment([segment]),

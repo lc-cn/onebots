@@ -1,10 +1,8 @@
 import {writeFileSync,readFileSync,existsSync} from "fs";
-import {EventEmitter} from "events";
-export class Db extends EventEmitter{
+export class Db{
     private data:Record<string, any>={}
     private raw_data:string='{}'
     constructor(private readonly path:string, force_create:boolean=true) {
-        super();
         if(!this.path.toLowerCase().endsWith('.json'))this.path=this.path+'.json'
         if(!existsSync(this.path) && force_create) {
             writeFileSync(this.path,this.raw_data)

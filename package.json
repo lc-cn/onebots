@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.0.26",
+  "version": "0.0.28",
   "description": "基于oicq的多例oneBot实现",
   "engines": {
     "node": ">=16"
