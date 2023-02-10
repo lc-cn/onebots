@@ -59,17 +59,17 @@ export class CommonAction{
     callLogin(this:V12,func:string,...args:any[]){
         return new Promise(async resolve=>{
             const receiveResult=(event)=>{
-                this.client.off('system.login.qrcode',receiveResult)
-                this.client.off('system.login.device',receiveResult)
-                this.client.off('system.login.slider',receiveResult)
-                this.client.off('system.login.error',receiveResult)
+                this.client.offTrap('system.login.qrcode',receiveResult)
+                this.client.offTrap('system.login.device',receiveResult)
+                this.client.offTrap('system.login.slider',receiveResult)
+                this.client.offTrap('system.login.error',receiveResult)
                 resolve(event)
             }
-            this.client.on('system.login.qrcode',receiveResult)
-            this.client.on('system.login.device',receiveResult)
-            this.client.on('system.login.slider',receiveResult)
-            this.client.on('system.login.error',receiveResult)
-            this.client.once('system.online',receiveResult)
+            this.client.trap('system.login.qrcode',receiveResult)
+            this.client.trap('system.login.device',receiveResult)
+            this.client.trap('system.login.slider',receiveResult)
+            this.client.trap('system.login.error',receiveResult)
+            this.client.trapOnce('system.online',receiveResult)
             try{
                 await this.client[func](...args)
             }catch (reason){
@@ -87,16 +87,16 @@ export class CommonAction{
         return new Promise<any>(resolve=>{
             const receiveResult=(e)=>{
                 const callback=(data)=>{
-                    this.client.off('internal.verbose',receiveResult)
-                    this.client.off('system.login.error',receiveResult)
+                    this.client.offTrap('internal.verbose',receiveResult)
+                    this.client.offTrap('system.login.error',receiveResult)
                     resolve(data)
                 }
                 if((typeof e==='string' && e.includes('已发送')) || typeof e!=='string'){
                     callback(e)
                 }
             }
-            this.client.on('internal.verbose',receiveResult)
-            this.client.on('system.login.error',receiveResult)
+            this.client.trap('internal.verbose',receiveResult)
+            this.client.trap('system.login.error',receiveResult)
             this.client.sendSmsCode()
         })
     }
@@ -106,7 +106,7 @@ export class CommonAction{
     logout(this:V12,keepalive?:boolean){
         return new Promise(async resolve => {
             const receiveResult=(e)=>{
-                this.client.off('system.offline',receiveResult)
+                this.client.offTrap('system.offline',receiveResult)
                 resolve(e)
             }
             this.client.on('system.offline',receiveResult)
