@@ -1,12 +1,11 @@
-import {Sendable} from "oicq";
 import {V11} from "@/service/V11";
-import {fromSegment,fromCqcode} from "oicq2-cq-enable";
-import {SegmentElem} from "oicq2-cq-enable/lib/utils";
+import {fromSegment,fromCqcode} from "icqq-cq-enable";
+import {SegmentElem} from "icqq-cq-enable/lib/utils";
 export class GroupAction{
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {import('oicq').Sendable} 消息
+     * @param message {import('icqq').Sendable} 消息
      * @param message_id {string} 引用的消息ID
      */
     async sendGroupMsg(this:V11,group_id:number,message:string|SegmentElem[],message_id?:string){

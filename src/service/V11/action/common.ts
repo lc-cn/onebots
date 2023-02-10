@@ -1,7 +1,6 @@
-import {OnlineStatus} from "oicq";
+import {OnlineStatus} from "icqq";
 import {OneBotStatus} from "@/onebot";
 import {V11} from "@/service/V11";
-import {V12} from "@/service/V12";
 export class CommonAction{
     /**
      * 获取登录信息
@@ -67,7 +66,7 @@ export class CommonAction{
      */
     getVersion(this:V11){
         return {
-            app_name:'oicq',
+            app_name:'icqq',
             app_version:'2.x',
             protocol_version:'v11'
         }

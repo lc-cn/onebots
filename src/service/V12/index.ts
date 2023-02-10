@@ -1,4 +1,4 @@
-import {Client, EventMap, MessageElem, OnlineStatus, Sendable,segment} from "oicq";
+import {Client, EventMap, MessageElem, OnlineStatus, Sendable} from "icqq";
 import {join} from 'path'
 import {Config} from './config'
 import {BOOLS, NotFoundError, OneBot} from "@/onebot";
@@ -10,7 +10,7 @@ import {URL} from "url";
 import http from "http";
 import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
-import {toBool, toHump, toLine, uuid} from "@/utils";
+import {toBool, toHump, toLine, transformObj, uuid} from "@/utils";
 import {Db} from "@/db";
 import {App} from "@/server/app";
 import Payload = V12.Payload;
@@ -120,7 +120,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 "Content-Type": "application/json",
                 "User-Agent": "OneBot/12 (qq) Node-onebots/0.0.15",
                 "X-OneBot-Version":12,
-                "X-Impl":"oicq_onebot",
+                "X-Impl":"icqq_onebot",
 
             },
         }
@@ -315,14 +315,17 @@ export class V12 extends EventEmitter implements OneBot.Base {
     dispatch(data: Record<string, any>) {
         const payload: V12.Payload<any> = {
             id: uuid(),
-            impl: 'oicq_onebot',
+            impl: 'icqq_onebot',
             version: 12,
             platform: 'qq',
             self: {
                 platform: 'qq',
                 user_id: `${this.client.uin}`
             },
-            ...data,
+            ...transformObj(data,(key,value)=>{
+                if(!['user_id','group_id','discuss_id','member_id','channel_id','guild_id'].includes(key)) return value
+                return value+''
+            }),
         } as V12.Payload<any>
         this.emit('dispatch', payload)
     }
@@ -666,7 +669,7 @@ export namespace V12 {
     }
     export type Payload<T extends any> = {
         id: string
-        impl: 'oicq_onebot'
+        impl: 'icqq_onebot'
         version: 12
         platform: 'qq'
         self: {

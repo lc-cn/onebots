@@ -1,14 +1,13 @@
 import {OneBot} from "@/onebot";
-import {Sendable} from "oicq";
 import {V11} from "@/service/V11";
-import {SegmentElem} from "oicq2-cq-enable/lib/utils";
-import {fromCqcode, fromSegment} from "oicq2-cq-enable";
+import {SegmentElem} from "icqq-cq-enable/lib/utils";
+import {fromCqcode, fromSegment} from "icqq-cq-enable";
 
 export class FriendAction{
     /**
      * 发送私聊消息
      * @param user_id {number} 用户id
-     * @param message {import('oicq').Sendable} 发送的消息
+     * @param message {import('icqq').Sendable} 发送的消息
      * @param message_id {string} 引用的消息ID
      */
     async sendPrivateMsg(this:V11,user_id:number,message:string|SegmentElem[],message_id?:string){

@@ -28,6 +28,14 @@ export function deepMerge<T extends any>(base:T, ...from:T[]):T{
     }
     return base
 }
+export function transformObj(obj,callback){
+    if(!obj) return obj
+    if(Array.isArray(obj)) return obj.map(item=>transformObj(item,callback))
+    if(typeof obj!=='object') return obj
+    return Object.fromEntries(Object.keys(obj).map(key=>{
+        return [key,callback(key,obj[key])]
+    }))
+}
 // 深拷贝
 export function deepClone<T extends any>(obj:T):T {
     if(typeof obj!=='object') return obj

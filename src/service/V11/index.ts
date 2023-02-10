@@ -1,4 +1,4 @@
-import {Client, OnlineStatus} from "oicq";
+import {Client, OnlineStatus} from "icqq";
 import {Config} from "./config";
 import {Action} from "./action";
 import {OneBot, OneBotStatus} from "@/onebot";
@@ -7,13 +7,13 @@ import {WebSocket, WebSocketServer} from "ws";
 import {Dispose} from "@/types";
 import {Context} from "koa";
 import {URL} from "url";
-import {toBool, toHump, toLine} from "@/utils";
-import {fromCqcode, fromSegment, toCqcode, toSegment} from "oicq2-cq-enable";
+import {toBool, toHump, toLine, transformObj} from "@/utils";
+import {fromCqcode, fromSegment, toCqcode, toSegment} from "icqq-cq-enable";
 import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
 import {EventEmitter} from "events";
-import {rmSync, unlinkSync} from "fs";
+import {rmSync} from "fs";
 
 export class V11 extends EventEmitter implements OneBot.Base{
     public action:Action
@@ -195,6 +195,10 @@ export class V11 extends EventEmitter implements OneBot.Base{
             data.message=this.config.post_message_format==='array'? toSegment(data.message):toCqcode(data)
         }
         data.time= Math.floor(Date.now() / 1000)
+        data=transformObj(data,(key,value)=>{
+            if(!['user_id','group_id','discuss_id','member_id','channel_id','guild_id'].includes(key)) return value
+            return value+''
+        })
         this.emit('dispatch',JSON.stringify(data))
     }
     private async _httpRequestHandler(ctx:Context){

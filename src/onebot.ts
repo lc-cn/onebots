@@ -1,10 +1,10 @@
-import 'oicq2-cq-enable'
+import 'icqq-cq-enable'
 import {EventEmitter} from 'events'
 import {App} from "./server/app";
 import {deepMerge, omit} from "./utils";
 import {join} from "path";
-import {Client} from "oicq";
-import {genDmMessageId,genGroupMessageId} from 'oicq/lib/message'
+import {Client} from "icqq";
+import {genDmMessageId,genGroupMessageId} from 'icqq/lib/message'
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
@@ -32,7 +32,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
                     throw new Error('不支持的oneBot版本：'+c.version)
             }
         })
-        this.client=new Client(uin,{platform:this.app.config.platform,data_dir:join(App.configDir,'data')})
+        this.client=new Client({platform:this.app.config.platform,data_dir:join(App.configDir,'data')})
         this.instances=this.config.map(c=>{
             switch (c.version) {
                 case 'V11':
@@ -52,7 +52,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
                 disposeArr.shift()()
             }
         }
-        this.client.on('system.login.qrcode',function qrcodeHelper(){
+        this.client.trap('system.login.qrcode',function qrcodeHelper(){
             console.log('扫码后回车继续')
             process.stdin.once('data',()=>{
                 this.login()
@@ -61,7 +61,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
                 this.off('system.login.qrcode',qrcodeHelper)
             })
         })
-        this.client.on('system.login.device',function deviceHelper(){
+        this.client.trap('system.login.device',function deviceHelper(){
             console.log('请输入密保手机接收的验证码')
             this.sendSmsCode()
             process.stdin.once('data',(e)=>{
@@ -71,7 +71,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
                 this.off('system.login.device',deviceHelper)
             })
         })
-        this.client.on('system.login.error',function errorHandler(e){
+        this.client.trap('system.login.error',function errorHandler(e){
             if(e.message.includes('密码错误')){
                 process.stdin.once('data',(e)=>{
                     this.login(e.toString().trim())
@@ -81,7 +81,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
             }
             this.off('system.login.error',errorHandler)
         })
-        this.client.on('system.login.slider',function sliderHelper(e){
+        this.client.trap('system.login.slider',function sliderHelper(e){
             console.log('滑块验证地址：'+e.url)
             console.log('请输入滑块验证返回的ticket')
             process.stdin.once('data',(e)=>{
@@ -91,14 +91,14 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
                 this.off('system.login.slider',sliderHelper)
             })
         })
-        this.client.on('system.online',clean)
-        await this.client.login(this.password)
+        this.client.trap('system.online',clean)
+        await this.client.login(this.uin,this.password)
     }
     startListen(){
-        this.client.on('system',this.dispatch.bind(this,'system'))
-        this.client.on('notice',this.dispatch.bind(this,'notice'))
-        this.client.on('request',this.dispatch.bind(this,'request'))
-        this.client.on('message',this.dispatch.bind(this,'message'))
+        this.client.trap('system',this.dispatch.bind(this,'system'))
+        this.client.trap('notice',this.dispatch.bind(this,'notice'))
+        this.client.trap('request',this.dispatch.bind(this,'request'))
+        this.client.trap('message',this.dispatch.bind(this,'message'))
         for(const instance of this.instances){
             instance.start(this.instances.length>1?'/'+instance.version:undefined)
         }
@@ -107,7 +107,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
         for(const instance of this.instances){
             await instance.stop(force)
         }
-        this.client.removeAllListeners()
+        this.client.logout(force)
     }
     dispatch(event,data){
         for(const instance of this.instances){
@@ -117,7 +117,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
                     case 'group':
                         data.message.shift({
                             type:'reply',
-                            message_id:genGroupMessageId(data.group_id,data.source.user_id,data.source.seq,data.source.rand,data.source.rand,data.source.time)
+                            message_id:genGroupMessageId(data.group_id,data.source.user_id,data.source.seq,data.source.rand,data.source.time)
                         })
                         break;
                     case 'private':

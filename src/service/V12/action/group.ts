@@ -1,12 +1,11 @@
 import {V12} from "../index";
-import {Sendable} from "oicq";
 import {remove} from "@/utils";
 
 export class GroupAction{
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {import('oicq').Sendable} 消息
+     * @param message {import('icqq').Sendable} 消息
      * @param message_id {string} 引用的消息ID
      */
     async sendGroupMsg(this:V12,group_id:number,message:V12.SegmentElem[],message_id?:string){

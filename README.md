@@ -1,5 +1,5 @@
 <div align="center">
-    <h1>基于oicq的oneBot实现</h1>
+    <h1>基于icqq的oneBot实现</h1>
     <p>
 
 [![dm](https://shields.io/npm/dm/onebots)](https://www.npmjs.com/package/onebots)
@@ -79,5 +79,5 @@ node ./index.js
 | /remove | get | uin,force       | 移除机器人,force为true时，将删除机器人data目录 |
 
 # 鸣谢
-1. [takayama-lily/oicq](https://github.com/takayama-lily/oicq) 底层服务支持
+1. [takayama-lily/icqq](https://github.com/takayama-lily/icqq) 底层服务支持
 2. [takayama-lily/onebot](https://github.com/takayama-lily/node-onebot) oneBots原先版本

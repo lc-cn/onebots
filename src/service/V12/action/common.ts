@@ -1,5 +1,5 @@
 import {V12} from '@/service/V12'
-import {OnlineStatus} from "oicq";
+import {OnlineStatus} from "icqq";
 import {OneBotStatus} from "@/onebot";
 import {getProperties,toLine} from '@/utils'
 import {Action} from "./";
