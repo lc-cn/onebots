@@ -7,7 +7,7 @@ export class CommonAction{
      */
     getLoginInfo(this:V11){
         return {
-            user_id:this.client.uin,
+            user_id:this.oneBot.uin,
             nickname:this.client.nickname
         }
     }

@@ -3,6 +3,7 @@ import {OnlineStatus} from "icqq";
 import {OneBotStatus} from "@/onebot";
 import {getProperties,toLine} from '@/utils'
 import {Action} from "./";
+import {V11} from "@/service/V11";
 export class CommonAction{
     sendMessage(){}
     /**
@@ -14,12 +15,20 @@ export class CommonAction{
     }
     getSelfInfo(this:V12){
         return {
-            user_id:this.client.uin,
+            user_id:this.oneBot.uin+'',
             platform:'qq',
             nickname:this.client.nickname,
             user_displayname:''
         }
     }
+    /**
+     * 获取 Cookies
+     * @param domain {string} 域名
+     */
+    getCookies(this:V11,domain:string){
+        return this.client.cookies[domain]
+    }
+
     getStatus(this:V12){
         return {
             good:this.oneBot.status===OneBotStatus.Good,
