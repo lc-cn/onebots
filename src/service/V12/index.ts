@@ -29,10 +29,10 @@ export class V12 extends EventEmitter implements OneBot.Base {
 
     constructor(public oneBot: OneBot<'V12'>, public client: Client, public config: V12.Config) {
         super()
-        this.db = new Db(join(App.configDir, 'data', this.client.uin + '.json'))
+        this.db = new Db(join(App.configDir, 'data', this.oneBot.uin + '.json'))
         if (!this.history) this.history=[]
         this.action = new Action()
-        this.logger = this.oneBot.app.getLogger(this.client.uin, this.version)
+        this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
     }
 
     get history(): Payload<keyof Action>[] {
@@ -43,7 +43,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
     }
 
     start(path?: string) {
-        this.path = `/${this.client.uin}`
+        this.path = `/${this.oneBot.uin}`
         if (path) this.path += path
         if (this.config.use_http) {
             const config: V12.HttpConfig = typeof this.config.use_http === 'boolean' ? {} : this.config.use_http || {}
@@ -92,7 +92,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
 
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
-                this.dispatch(V12.formatPayload(this.client.uin, 'heartbeat', {
+                this.dispatch(V12.formatPayload(this.oneBot.uin, 'heartbeat', {
                     detail_type: "heartbeat",
                     interval: new Date().getTime() + this.config.heartbeat * 1000
                 }))
@@ -309,7 +309,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         data.self = this.action.getSelfInfo.apply(this)
         if (!data.detail_type) data.detail_type = data.message_type || data.notice_type || data.request_type || data.system_type
         data.message = data.type === 'message' ? V12.toSegment(data.message) : data.message
-        return V12.formatPayload(this.client.uin, event, data as any)
+        return V12.formatPayload(this.oneBot.uin, event, data as any)
     }
 
     dispatch(data: Record<string, any>) {
@@ -320,7 +320,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             platform: 'qq',
             self: {
                 platform: 'qq',
-                user_id: `${this.client.uin}`
+                user_id: `${this.oneBot.uin}`
             },
             ...transformObj(data,(key,value)=>{
                 if(!['user_id','group_id','discuss_id','member_id','channel_id','guild_id'].includes(key)) return value
@@ -473,7 +473,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
     protected _createWsr(url: string, config: V12.WsReverseConfig) {
         const timestmap = Date.now()
         const headers: http.OutgoingHttpHeaders = {
-            "X-Self-ID": String(this.client.uin),
+            "X-Self-ID": String(this.oneBot.uin),
             "X-Client-Role": "Universal",
             "User-Agent": "OneBot/12 (qq) Node-onebots/0.0.15",
             "Sec-WebSocket-Protocol": "12.onebots.v0.0.15"
@@ -547,8 +547,8 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 }))
             }
         })
-        this.dispatch(V12.formatPayload(this.client.uin, "connect", this.action.getVersion.apply(this)))
-        this.dispatch(V12.formatPayload(this.client.uin, "status_update", this.action.getStatus.apply(this)))
+        this.dispatch(V12.formatPayload(this.oneBot.uin, "connect", this.action.getVersion.apply(this)))
+        this.dispatch(V12.formatPayload(this.oneBot.uin, "status_update", this.action.getStatus.apply(this)))
     }
 
 }
@@ -731,7 +731,7 @@ export namespace V12 {
 
     export function formatPayload<K extends keyof BotEventMap>(uin: number, type: K, data: Omit<BotEventMap[K], K>) {
         return {
-            self_id: uin,
+            self_id: uin+'',
             time: Math.floor(Date.now() / 1000),
             detail_type: type,
             type:'meta',

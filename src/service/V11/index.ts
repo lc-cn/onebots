@@ -33,11 +33,11 @@ export class V11 extends EventEmitter implements OneBot.Base{
     constructor(public oneBot:OneBot<'V11'>,public client:Client,public config:V11.Config) {
         super()
         this.action=new Action()
-        this.logger=this.oneBot.app.getLogger(this.client.uin,this.version)
+        this.logger=this.oneBot.app.getLogger(this.oneBot.uin,this.version)
     }
 
     start(path?:string) {
-        this.path=`/${this.client.uin}`
+        this.path=`/${this.oneBot.uin}`
         if(path)this.path+=path
         if(this.config.use_http) this.startHttp()
         if(this.config.use_ws) this.startWs()
@@ -64,7 +64,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
                 this.dispatch({
-                    self_id: this.client.uin,
+                    self_id: this.oneBot.uin+'',
                     status:{
                         online:this.client.status===OnlineStatus.Online,
                         good:this.oneBot.status===OneBotStatus.Good
@@ -90,7 +90,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
                 headers: {
                     "Content-Type": "application/json",
                     "Content-Length": Buffer.byteLength(serialized),
-                    "X-Self-ID": String(this.client.uin),
+                    "X-Self-ID": String(this.oneBot.uin),
                     "User-Agent": "OneBot",
                 },
             }
@@ -290,8 +290,8 @@ export class V11 extends EventEmitter implements OneBot.Base{
                 }))
             }
         })
-        ws.send(JSON.stringify(V11.genMetaEvent(this.client.uin, "connect")))
-        ws.send(JSON.stringify(V11.genMetaEvent(this.client.uin, "enable")))
+        ws.send(JSON.stringify(V11.genMetaEvent(this.oneBot.uin, "connect")))
+        ws.send(JSON.stringify(V11.genMetaEvent(this.oneBot.uin, "enable")))
     }
     /**
      * 创建反向ws
@@ -299,7 +299,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
     protected _createWsr(url: string) {
         const timestmap = Date.now()
         const headers: http.OutgoingHttpHeaders = {
-            "X-Self-ID": String(this.client.uin),
+            "X-Self-ID": String(this.oneBot.uin),
             "X-Client-Role": "Universal",
             "User-Agent": "OneBot",
         }
@@ -487,7 +487,7 @@ export namespace V11{
     }
     export function genMetaEvent(uin: number, type: string) {
         return {
-            self_id: uin,
+            self_id: uin+'',
             time: Math.floor(Date.now() / 1000),
             post_type: "meta_event",
             meta_event_type: "lifecycle",
