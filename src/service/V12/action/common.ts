@@ -25,7 +25,7 @@ export class CommonAction{
      * 获取 Cookies
      * @param domain {string} 域名
      */
-    getCookies(this:V11,domain:string){
+    getCookies(this:V11,domain:string):string{
         return this.client.cookies[domain]
     }
 
@@ -100,7 +100,7 @@ export class CommonAction{
             this.client.sendSmsCode()
         })
     }
-    login(this:V12,password?:string){
+    login(this:V12,password?:string):Promise<unknown>{
         return this.action.callLogin.apply(this,['login',password])
     }
     logout(this:V12,keepalive?:boolean){
@@ -113,7 +113,7 @@ export class CommonAction{
             await this.client.logout(keepalive)
         })
     }
-    getSupportedActions(this:V12){
+    getSupportedActions(this:V12):string[]{
         return [...new Set(getProperties(this.action))].filter(key=>{
             return key!=='constructor'
         }).map(toLine)
