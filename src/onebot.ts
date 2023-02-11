@@ -1,7 +1,7 @@
 import 'icqq-cq-enable'
 import {EventEmitter} from 'events'
 import {App} from "./server/app";
-import {deepMerge, omit} from "./utils";
+import {deepClone, deepMerge, omit} from "./utils";
 import {join} from "path";
 import {Client} from "icqq";
 import {genDmMessageId,genGroupMessageId} from 'icqq/lib/message'
@@ -19,15 +19,15 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter{
     instances:(V11|V12)[]
     constructor(public app:App,public readonly uin:number,config:MayBeArray<OneBotConfig>){
         super()
-        if(!Array.isArray(config))config=new Array(config)
-        this.config=(config as OneBotConfig[]).map(c=>{
+        config=[].concat(config)
+        this.config=config.map(c=>{
             if(c.password)this.password=c.password
             if(!c.version)c.version='V11'
             switch (c.version){
                 case 'V11':
-                    return deepMerge(this.app.config.general.V11 as OneBotConfig,c)
+                    return deepMerge(deepClone(this.app.config.general.V11),c)
                 case 'V12':
-                    return deepMerge(this.app.config.general.V12 as OneBotConfig,c)
+                    return deepMerge(deepClone(this.app.config.general.V12),c)
                 default:
                     throw new Error('不支持的oneBot版本：'+c.version)
             }

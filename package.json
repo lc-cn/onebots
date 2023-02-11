@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "基于icqq的多例oneBot实现",
   "engines": {
     "node": ">=16"
@@ -50,7 +50,7 @@
   ],
   "dependencies": {
     "@koa/router": "^10.1.1",
-    "icqq": "^0.0.13-6",
+    "icqq": "^0.0.13-7",
     "icqq-cq-enable": "^1.0.0",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",

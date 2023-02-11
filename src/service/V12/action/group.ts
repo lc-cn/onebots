@@ -37,6 +37,21 @@ export class GroupAction{
     }
 
     /**
+     * 设置群精华
+     * @param message_id
+     */
+    setEssenceMessage(this:V12,message_id:string){
+     return this.client.setEssenceMessage(message_id)
+    }
+
+    /**
+     * 移除群精华
+     * @param message_id
+     */
+    deleteEssenceMessage(this:V12,message_id:string){
+        return this.client.removeEssenceMessage(message_id)
+    }
+    /**
      * 群禁言指定人
      * @param group_id {number} 群id
      * @param user_id {number} 成员id

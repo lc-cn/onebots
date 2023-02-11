@@ -1,32 +1,32 @@
 import * as crypto from "crypto";
+const packageJson =require('../package.json')
+export const version=packageJson.version
 // 合并对象/数组
-export function deepMerge<T extends any>(base:T, ...from:T[]):T{
-    if(from.length===0){
-        return base
+export function deepMerge(base, ...from) {
+    if (base === null || base === undefined) base = from.shift()
+    if (from.length === 0) {
+        return base;
     }
-    if(typeof base!=='object'){
-        return base
+    if (typeof base !== 'object') {
+        return base;
     }
-    if(Array.isArray(base)){
-        return base.concat(...from) as T
+    if (Array.isArray(base)) {
+        return Array.from(new Set(base.concat(...from)));
     }
-    for (const item of from){
-        for(const key in item){
-            if(base.hasOwnProperty(key)){
-                if(typeof base[key]==='object'){
-                    // @ts-ignore
-                    base[key]=deepMerge(base[key],item[key])
-                }else{
-                    // @ts-ignore
-                    base[key]=item[key]
+    for (const item of from) {
+        for (const key in item) {
+            if (base.hasOwnProperty(key)) {
+                if (typeof base[key] === 'object') {
+                    base[key] = deepMerge(base[key], item[key]);
+                } else {
+                    base[key] = item[key];
                 }
-            }else{
-                // @ts-ignore
-                base[key]=item[key]
+            } else {
+                base[key] = item[key];
             }
         }
     }
-    return base
+    return base;
 }
 export function transformObj(obj,callback){
     if(!obj) return obj

@@ -1,4 +1,5 @@
 import {Client, EventMap, MessageElem, OnlineStatus, Sendable} from "icqq";
+import {version} from "@/utils";
 import {join} from 'path'
 import {Config} from './config'
 import {BOOLS, NotFoundError, OneBot} from "@/onebot";
@@ -118,7 +119,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             timeout: config.timeout||this.config.request_timeout,
             headers: {
                 "Content-Type": "application/json",
-                "User-Agent": "OneBot/12 (qq) Node-onebots/0.0.15",
+                "User-Agent": "OneBot/12 (qq) Node-onebots/"+version,
                 "X-OneBot-Version":12,
                 "X-Impl":"icqq_onebot",
 
@@ -475,12 +476,12 @@ export class V12 extends EventEmitter implements OneBot.Base {
         const headers: http.OutgoingHttpHeaders = {
             "X-Self-ID": String(this.oneBot.uin),
             "X-Client-Role": "Universal",
-            "User-Agent": "OneBot/12 (qq) Node-onebots/0.0.15",
-            "Sec-WebSocket-Protocol": "12.onebots.v0.0.15"
+            "User-Agent": "OneBot/12 (qq) Node-onebots/"+version,
+            "Sec-WebSocket-Protocol": "12.onebots.v"+version
         }
         if (config.access_token)
             headers.Authorization = "Bearer " + config.access_token
-        const ws = new WebSocket(url, '12.onebots.v0.0.15',{headers})
+        const ws = new WebSocket(url, '12.onebots.v'+version,{headers})
         ws.on("error", (err) => {
             this.logger.error(err.message)
         })
