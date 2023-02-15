@@ -102,6 +102,12 @@ export class App extends Koa{
         for(const oneBot of this.oneBots){
             oneBot.start()
         }
+        process.on('uncaughtException',(e)=>{
+            console.error('uncaughtException',e)
+        })
+        process.on('unhandledRejection',(e)=>{
+            console.error('unhandledRejection',e)
+        })
         this.httpServer.listen(this.config.port)
         this.router.get('/list',(ctx)=>{
             ctx.body=this.oneBots.map(bot=>{

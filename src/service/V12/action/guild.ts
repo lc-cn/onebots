@@ -1,6 +1,6 @@
 import {V12} from "@/service/V12";
 import SegmentElem = V12.SegmentElem;
-import {remove} from "@/utils";
+import {processMessage} from "@/service/V12/action/utils";
 
 
 export class GuildAction{
@@ -15,20 +15,8 @@ export class GuildAction{
         return this.client.getGuildMemberList(guild_id)
     }
     async sendGuildMsg(this:V12,guild_id:string,channel_id:string,message:SegmentElem[]){
-        const forward =message.find(e=>e.type==='node') as V12.SegmentElem<'node'>
-        if(forward) remove(message,forward)
-        let quote=message.find(e=>e.type==='reply') as V12.SegmentElem<'reply'>
-        if(quote)  remove(message,quote)
-        const element=V12.fromSegment(message)
-        // if(forward) element.unshift(await this.client.makeForwardMsg(forward.data.message.map(segment=>{
-        //     return {
-        //         message:V12.fromSegment([segment]),
-        //         user_id:forward.data.user_id,
-        //         nickname:forward.data.user_name,
-        //         time:forward.data.time
-        //     }
-        // })))
-        // if(quote && !message_id) message_id=quote.data.message_id
+        const {element}=await processMessage.apply(this.client,[message])
+        if(!element.length) return
         return await this.client.sendGuildMsg(guild_id,channel_id,element)
     }
 }

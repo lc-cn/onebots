@@ -364,7 +364,6 @@ export class V12 extends EventEmitter implements OneBot.Base {
                         params[k] = toBool(params[k])
                     if (k === 'message') {
                         params[k] = V12.fromSegment(params[k])
-                        params['message_id'] = params[k].find(e => e.type === 'reply')?.message_id
                     }
                     args.push(params[k])
                 }
@@ -555,6 +554,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
 }
 
 export namespace V12 {
+    const fileTypes:string[]=['image',"file",'record','video','flash']
     export function fromSegment(msgList: SegmentElem | string | number | (SegmentElem | string | number)[]) {
         msgList = [].concat(msgList);
         return msgList.map((msg) => {
@@ -562,8 +562,16 @@ export namespace V12 {
             if (typeof msg === 'string') {
                 return {type: 'text', text: msg} as MessageElem
             }
-            const {type, data, ...other} = msg;
+            const {type, data={}, ...other} = msg;
+            Object.assign(data,other)
+            if(type==='music' && !data['platform']) {
+                data['platform']=data['type']
+                delete data['type']
+            }
             if(type==='mention') data['qq']=Number(data['user_id'])
+            if(fileTypes.includes(type) && !data['file']){
+                data['file']=data['file_id']
+            }
             return {
                 type: type.replace('mention', 'at').replace('at_all', 'at'),
                 ...other,
@@ -577,6 +585,7 @@ export namespace V12 {
         return msgList.map((msg) => {
             if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
             let {type, ...other} = msg;
+            if(fileTypes.includes(type)) other['file_id']=other['file']
             return {
                 type: type === 'at' ? other['qq'] ? 'mention' : "mention_all" : type,
                 data: {
@@ -596,6 +605,13 @@ export namespace V12 {
         voice: { file_id: string }
         audio: { file_id: string }
         file: { file_id: string }
+        music: {
+            type:"163"|'qq'|'xm'|'custom',
+            id?:string,
+            url?:string,
+            audio?:string,
+            title?:string
+        }
         location: {
             latitude: number
             longitude: number
@@ -607,6 +623,12 @@ export namespace V12 {
             time?:number
             user_name?:string
             message:SegmentElem[]
+        }
+        share:{
+            url:string
+            title:string
+            content?:string
+            image?:string
         }
         reply: {
             message_id: string
