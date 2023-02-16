@@ -545,8 +545,15 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 }))
             }
         })
-        this.dispatch(V12.formatPayload(this.oneBot.uin, "connect", this.action.getVersion.apply(this)))
-        this.dispatch(V12.formatPayload(this.oneBot.uin, "status_update", this.action.getStatus.apply(this)))
+        this.dispatch(V12.formatPayload(this.oneBot.uin, "connect", {
+            detail_type: "connect",
+            type:'meta',
+            version:this.action.getVersion.apply(this)
+        }))
+        this.dispatch(V12.formatPayload(this.oneBot.uin, "status_update", {
+            detail_type:'status_update',
+            status:this.action.getStatus.apply(this)
+        }))
     }
 
 }
