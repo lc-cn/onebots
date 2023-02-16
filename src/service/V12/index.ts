@@ -615,6 +615,7 @@ export namespace V12 {
         voice: { file_id: string }
         audio: { file_id: string }
         file: { file_id: string }
+        forward: { nodes: SegmentElem<'node'>[] }
         music: {
             type: "163" | 'qq' | 'xm' | 'custom',
             id?: string,

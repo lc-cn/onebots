@@ -13,17 +13,19 @@ export async function processMusic(this: Client, target_type: 'group' | 'friend'
 }
 
 export async function processMessage(this: Client, message: V12.SegmentElem[], quote_id?: string) {
-    const forwardNodes = message.filter(e => e.type === 'node') as V12.SegmentElem<'node'>[]
-    if (forwardNodes.length) message = message.filter((segment: any) => !forwardNodes.includes(segment))
+    const forward = message.find(e => e.type === 'forward') as V12.SegmentElem<'forward'>
+    if (forward) remove(message,forward)
     let quote = message.find(e => e.type === 'reply') as V12.SegmentElem<'reply'>
     if (quote) remove(message, quote)
+    // 直接发node？不允许，你用forward作为载体吧
+    message=message.filter(n=>n.type!=='node')
     const element = V12.fromSegment(message)
-    if (forwardNodes) element.unshift(
+    if (forward) element.unshift(
         // 构造抓发消息
         await this.makeForwardMsg(
             await Promise.all(
                 // 处理转发消息段
-                forwardNodes.map(
+                forward.data.nodes.filter(n=>n.type==='node').map(
                     async (forwardNode) => {
                         return {
                             // 转发套转发处理
