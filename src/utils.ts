@@ -1,6 +1,8 @@
 import * as crypto from "crypto";
-const packageJson =require('../package.json')
-export const version=packageJson.version
+
+const packageJson = require('../package.json')
+export const version = packageJson.version
+
 // 合并对象/数组
 export function deepMerge(base, ...from) {
     if (base === null || base === undefined) base = from.shift()
@@ -28,21 +30,23 @@ export function deepMerge(base, ...from) {
     }
     return base;
 }
-export function transformObj(obj,callback){
-    if(!obj) return obj
-    if(Array.isArray(obj)) return obj.map(item=>transformObj(item,callback))
-    if(typeof obj!=='object') return obj
-    return Object.fromEntries(Object.keys(obj).map(key=>{
-        return [key,callback(key,obj[key])]
+
+export function transformObj(obj, callback) {
+    if (!obj) return obj
+    if (Array.isArray(obj)) return obj.map(item => transformObj(item, callback))
+    if (typeof obj !== 'object') return obj
+    return Object.fromEntries(Object.keys(obj).map(key => {
+        return [key, callback(key, obj[key])]
     }))
 }
+
 // 深拷贝
-export function deepClone<T extends any>(obj:T):T {
-    if(typeof obj!=='object') return obj
-    if(!obj) return obj
+export function deepClone<T extends any>(obj: T): T {
+    if (typeof obj !== 'object') return obj
+    if (!obj) return obj
     //判断拷贝的obj是对象还是数组
-    if(Array.isArray(obj)) return obj.map((item)=>deepClone(item)) as T
-    const objClone={} as T
+    if (Array.isArray(obj)) return obj.map((item) => deepClone(item)) as T
+    const objClone = {} as T
     for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
             if (obj[key] && typeof obj[key] === "object") {
@@ -56,7 +60,7 @@ export function deepClone<T extends any>(obj:T):T {
 }
 
 export function pick<T extends object, K extends keyof T>(source: T, keys?: Iterable<K>, forced?: boolean) {
-    if (!keys) return { ...source }
+    if (!keys) return {...source}
     const result = {} as Pick<T, K>
     for (const key of keys) {
         if (forced || key in source) result[key] = source[key]
@@ -65,54 +69,63 @@ export function pick<T extends object, K extends keyof T>(source: T, keys?: Iter
 }
 
 export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
-    if (!keys) return { ...source }
-    const result = { ...source } as Omit<T, K>
+    if (!keys) return {...source}
+    const result = {...source} as Omit<T, K>
     for (const key of keys) {
         Reflect.deleteProperty(result, key)
     }
     return result
 }
-export interface Class{
-    new(...args:any[]):any
+
+export interface Class {
+    new(...args: any[]): any
 }
-export function Mixin(base:Class,...classes:Class[]){
+
+export function Mixin(base: Class, ...classes: Class[]) {
     classes.forEach(ctr => {
         Object.getOwnPropertyNames(ctr.prototype).forEach(name => {
-            if(name==='constructor') return
+            if (name === 'constructor') return
             base.prototype[name] = ctr.prototype[name];
         });
     });
     return base
 }
+
 export function toHump(action: string) {
-    return action.replace(/_[\w]/g, (s)=>{
+    return action.replace(/_[\w]/g, (s) => {
         return s[1].toUpperCase()
     })
 }
-export function remove<T>(list:T[],item:T){
-    const idx=list.indexOf(item)
-    if(idx!==-1) list.splice(idx,1)
+
+export function remove<T>(list: T[], item: T) {
+    const idx = list.indexOf(item)
+    if (idx !== -1) list.splice(idx, 1)
 }
-export function toLine(name:string) {
-    return name.replace(/([A-Z])/g,"_$1").toLowerCase();
+
+export function toLine(name: string) {
+    return name.replace(/([A-Z])/g, "_$1").toLowerCase();
 }
+
 export function toBool(v: any) {
     if (v === "0" || v === "false")
         v = false
     return Boolean(v)
 }
+
 export function uuid() {
     let hex = crypto.randomBytes(16).toString("hex")
     return hex.substr(0, 8) + "-" + hex.substr(8, 4) + "-" + hex.substr(12, 4) + "-" + hex.substr(16, 4) + "-" + hex.substr(20)
 }
-export function protectedFields<T>(source:T,...keys:(keyof T)[]):T{
-    if(!source || typeof source!=='object') throw new Error('source must is object')
-    return Object.fromEntries(Object.entries(source).map(([key,value])=>{
-        return [key,keys.includes(key as keyof T)?value.split('').map(c=>'*').join(''):value]
+
+export function protectedFields<T>(source: T, ...keys: (keyof T)[]): T {
+    if (!source || typeof source !== 'object') throw new Error('source must is object')
+    return Object.fromEntries(Object.entries(source).map(([key, value]) => {
+        return [key, keys.includes(key as keyof T) ? value.split('').map(c => '*').join('') : value]
     })) as T
 }
-export function getProperties(obj){
-    if(obj.__proto__ === null){ //说明该对象已经是最顶层的对象
+
+export function getProperties(obj) {
+    if (obj.__proto__ === null) { //说明该对象已经是最顶层的对象
         return [];
     }
     return Object.getOwnPropertyNames(obj).concat(getProperties(obj.__proto__));

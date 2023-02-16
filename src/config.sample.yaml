@@ -12,8 +12,8 @@ general: # 通用配置，在单个配置省略时的默认值
     use_http: true # 是否使用 http
     enable_cors: true # 是否允许跨域
     use_ws: true # 是否使用websocket
-    http_reverse: [] # http上报地址
-    ws_reverse: [] # 反向ws连接地址
+    http_reverse: [ ] # http上报地址
+    ws_reverse: [ ] # 反向ws连接地址
   V12: # oneBotV12的通用配置
     heartbeat: 3 # 心跳间隔 (秒)
     access_token: '' # 访问api的token
@@ -22,8 +22,8 @@ general: # 通用配置，在单个配置省略时的默认值
     enable_cors: true # 是否允许跨域
     use_http: true # 是否启用http
     use_ws: true # 是否启用 websocket
-    webhook: [] # http 上报地址
-    ws_reverse: [] # 反向ws连接地址
+    webhook: [ ] # http 上报地址
+    ws_reverse: [ ] # 反向ws连接地址
 # 每个账号的单独配置(用于覆盖通用配置)
 123456789:
   version: V11 # 使用的oneBot版本

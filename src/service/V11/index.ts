@@ -15,75 +15,78 @@ import https from "https";
 import {EventEmitter} from "events";
 import {rmSync} from "fs";
 
-export class V11 extends EventEmitter implements OneBot.Base{
-    public action:Action
-    public version='V11'
+export class V11 extends EventEmitter implements OneBot.Base {
+    public action: Action
+    public version = 'V11'
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
-    private path:string
-    disposes:Dispose[]
+    private path: string
+    disposes: Dispose[]
     protected _queue: Array<{
         method: keyof Action,
         args: any[]
     }> = []
-    protected queue_running:boolean = false
-    logger:Logger
-    wss?:WebSocketServer
-    wsr:Set<WebSocket>=new Set<WebSocket>()
-    constructor(public oneBot:OneBot<'V11'>,public client:Client,public config:V11.Config) {
+    protected queue_running: boolean = false
+    logger: Logger
+    wss?: WebSocketServer
+    wsr: Set<WebSocket> = new Set<WebSocket>()
+
+    constructor(public oneBot: OneBot<'V11'>, public client: Client, public config: V11.Config) {
         super()
-        this.action=new Action()
-        this.logger=this.oneBot.app.getLogger(this.oneBot.uin,this.version)
+        this.action = new Action()
+        this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
     }
 
-    start(path?:string) {
-        this.path=`/${this.oneBot.uin}`
-        if(path)this.path+=path
-        if(this.config.use_http) this.startHttp()
-        if(this.config.use_ws) this.startWs()
-        this.config.http_reverse.forEach(config=>{
-            if(typeof config==='string'){
-                config={
-                    url:config,
-                    access_token:this.config.access_token,
-                    secret:this.config.secret
+    start(path?: string) {
+        this.path = `/${this.oneBot.uin}`
+        if (path) this.path += path
+        if (this.config.use_http) this.startHttp()
+        if (this.config.use_ws) this.startWs()
+        this.config.http_reverse.forEach(config => {
+            if (typeof config === 'string') {
+                config = {
+                    url: config,
+                    access_token: this.config.access_token,
+                    secret: this.config.secret
                 }
-            }else {
-                config={
-                    access_token:this.config.access_token,
-                    secret:this.config.secret,
+            } else {
+                config = {
+                    access_token: this.config.access_token,
+                    secret: this.config.secret,
                     ...config
                 }
             }
             this.startHttpReverse(config)
         })
-        this.config.ws_reverse.forEach(config=>{
+        this.config.ws_reverse.forEach(config => {
             this.startWsReverse(config)
         })
 
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
                 this.dispatch({
-                    self_id: this.oneBot.uin+'',
-                    status:{
-                        online:this.client.status===OnlineStatus.Online,
-                        good:this.oneBot.status===OneBotStatus.Good
+                    self_id: this.oneBot.uin + '',
+                    status: {
+                        online: this.client.status === OnlineStatus.Online,
+                        good: this.oneBot.status === OneBotStatus.Good
                     },
                     time: Math.floor(Date.now() / 1000),
                     post_type: "meta_event",
                     meta_event_type: "heartbeat",
-                    interval: this.config.heartbeat*1000,
+                    interval: this.config.heartbeat * 1000,
                 })
-            }, this.config.heartbeat*1000)
+            }, this.config.heartbeat * 1000)
         }
     }
-    private startHttp(){
+
+    private startHttp() {
         this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), this._httpRequestHandler.bind(this))
         this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
     }
-    private startHttpReverse(config:Config.HttpReverseConfig){
-        this.on('dispatch',(unserialized:any)=>{
-            const serialized=JSON.stringify(unserialized)
+
+    private startHttpReverse(config: Config.HttpReverseConfig) {
+        this.on('dispatch', (unserialized: any) => {
+            const serialized = JSON.stringify(unserialized)
             const options: http.RequestOptions = {
                 method: "POST",
                 timeout: this.config.post_timeout * 1000,
@@ -126,7 +129,8 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    private startWs(){
+
+    private startWs() {
 
         this.wss = this.oneBot.app.router.ws(this.path, this.oneBot.app.httpServer)
         this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
@@ -151,7 +155,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }
             this._webSocketHandler(ws)
         })
-        this.on('dispatch',(serialized)=>{
+        this.on('dispatch', (serialized) => {
             for (const ws of this.wss.clients) {
                 ws.send(serialized, (err) => {
                     if (err)
@@ -162,11 +166,12 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    private startWsReverse(url:string){
-        const ws=this._createWsr(url)
-        this.on('dispatch',(serialized)=>{
-            if(this.wsr.has(ws)){
-                ws.send(serialized,(err) => {
+
+    private startWsReverse(url: string) {
+        const ws = this._createWsr(url)
+        this.on('dispatch', (serialized) => {
+            if (this.wsr.has(ws)) {
+                ws.send(serialized, (err) => {
                     if (err)
                         this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
                     else
@@ -175,33 +180,37 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }
         })
     }
-    async stop(force?:boolean) {
-        if(this.client.status===OnlineStatus.Online){
+
+    async stop(force?: boolean) {
+        if (this.client.status === OnlineStatus.Online) {
             await this.client.terminate()
         }
-        if(force){
-            rmSync(this.client.dir,{force:true,recursive:true})
+        if (force) {
+            rmSync(this.client.dir, {force: true, recursive: true})
         }
     }
-    format(_,data:any){
+
+    format(_, data: any) {
         return data
     }
-    dispatch(data:any) {
-        if(!data.post_type)data.post_type='system'
-        if(data.post_type==='system'){
+
+    dispatch(data: any) {
+        if (!data.post_type) data.post_type = 'system'
+        if (data.post_type === 'system') {
 
         }
-        if(data.message && data.post_type==='message'){
-            data.message=this.config.post_message_format==='array'? toSegment(data.message):toCqcode(data)
+        if (data.message && data.post_type === 'message') {
+            data.message = this.config.post_message_format === 'array' ? toSegment(data.message) : toCqcode(data)
         }
-        data.time= Math.floor(Date.now() / 1000)
-        data=transformObj(data,(key,value)=>{
-            if(!['user_id','group_id','discuss_id','member_id','channel_id','guild_id'].includes(key)) return value
-            return value+''
+        data.time = Math.floor(Date.now() / 1000)
+        data = transformObj(data, (key, value) => {
+            if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
+            return value + ''
         })
-        this.emit('dispatch',JSON.stringify(data))
+        this.emit('dispatch', JSON.stringify(data))
     }
-    private async _httpRequestHandler(ctx:Context){
+
+    private async _httpRequestHandler(ctx: Context) {
 
         if (ctx.method === 'OPTIONS') {
             return ctx.writeHead(200, {
@@ -211,15 +220,15 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }).end()
         }
         const url = new URL(ctx.url, `http://127.0.0.1`)
-        if (this.config.access_token){
+        if (this.config.access_token) {
             if (ctx.headers["authorization"]) {
-                if (ctx.headers["authorization"] !==`Bearer ${this.config.access_token}`)
+                if (ctx.headers["authorization"] !== `Bearer ${this.config.access_token}`)
                     return ctx.res.writeHead(403).end()
             } else {
                 const access_token = url.searchParams.get("access_token")
                 if (!access_token)
                     return ctx.res.writeHead(401).end()
-                else if (access_token!==this.config.access_token)
+                else if (access_token !== this.config.access_token)
                     return ctx.res.writeHead(403).end()
             }
         }
@@ -236,7 +245,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
             }
         } else if (ctx.method === "POST") {
             try {
-                const params = {...(ctx.request.query||{}), ...(ctx.request.body as object ||{})}
+                const params = {...(ctx.request.query || {}), ...(ctx.request.body as object || {})}
                 const ret = await this.apply({action, params})
                 ctx.res.writeHead(200).end(ret)
             } catch (e) {
@@ -246,6 +255,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
             ctx.res.writeHead(405).end()
         }
     }
+
     /**
      * 处理ws消息
      */
@@ -293,6 +303,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
         ws.send(JSON.stringify(V11.genMetaEvent(this.oneBot.uin, "connect")))
         ws.send(JSON.stringify(V11.genMetaEvent(this.oneBot.uin, "enable")))
     }
+
     /**
      * 创建反向ws
      */
@@ -323,7 +334,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
                 if (timestmap < this.timestamp)
                     return
                 this._createWsr(url)
-            }, this.config.reconnect_interval*1000)
+            }, this.config.reconnect_interval * 1000)
         })
         return ws
     }
@@ -354,19 +365,20 @@ export class V11 extends EventEmitter implements OneBot.Base{
             this.client[action](event.flag, res.approve, res.reason ? res.reason : "", !!res.block)
         }
     }
+
     /**
      * 调用api
      */
     async apply(req: V11.Protocol) {
         let {action, params, echo} = req
-        action=toLine(action)
+        action = toLine(action)
         let is_async = action.includes("_async")
         if (is_async)
             action = action.replace("_async", "")
         let is_queue = action.includes("_rate_limited")
         if (is_queue)
             action = action.replace("_rate_limited", "")
-        if(action==='send_msg'){
+        if (action === 'send_msg') {
             if (["private", "group", "discuss"].includes(params.message_type)) {
                 action = "send_" + params.message_type + "_msg"
             } else if (params.user_id)
@@ -378,12 +390,12 @@ export class V11 extends EventEmitter implements OneBot.Base{
             else throw new Error('required message_type or input (user_id/group_id)')
         }
         const method = toHump(action) as keyof Action
-        if(Reflect.has(this.action,method)){
-            const ARGS=String(Reflect.get(this.action,method)).match(/\(.*\)/)?.[0]
-                .replace("(","")
-                .replace(")","")
+        if (Reflect.has(this.action, method)) {
+            const ARGS = String(Reflect.get(this.action, method)).match(/\(.*\)/)?.[0]
+                .replace("(", "")
+                .replace(")", "")
                 .split(",")
-                .filter(Boolean).map(v=>v.replace(/=.+/, "").trim())
+                .filter(Boolean).map(v => v.replace(/=.+/, "").trim())
             const args = []
             for (let k of ARGS) {
                 if (Reflect.has(params, k)) {
@@ -395,7 +407,7 @@ export class V11 extends EventEmitter implements OneBot.Base{
                         } else {
                             params[k] = fromSegment(params[k])
                         }
-                        params['message_id']=params[k].find(e=>e.type==='reply')?.message_id
+                        params['message_id'] = params[k].find(e => e.type === 'reply')?.message_id
                     }
                     args.push(params[k])
                 }
@@ -404,21 +416,21 @@ export class V11 extends EventEmitter implements OneBot.Base{
             if (is_queue) {
                 this._queue.push({method, args})
                 this._runQueue()
-                result = V11.ok(null,0,true)
+                result = V11.ok(null, 0, true)
             } else {
-                try{
-                    ret = this.action[method].apply(this,args)
-                }catch (e){
+                try {
+                    ret = this.action[method].apply(this, args)
+                } catch (e) {
                     return JSON.stringify(V11.error(e.message))
                 }
                 if (ret instanceof Promise) {
                     if (is_async) {
-                        result = V11.ok(null,0,true)
+                        result = V11.ok(null, 0, true)
                     } else {
-                        result = V11.ok(await ret,0,false)
+                        result = V11.ok(await ret, 0, false)
                     }
                 } else {
-                    result = V11.ok(await ret,0,false)
+                    result = V11.ok(await ret, 0, false)
                 }
             }
             if (result.data instanceof Map)
@@ -428,9 +440,10 @@ export class V11 extends EventEmitter implements OneBot.Base{
                 result.echo = echo
             }
             return JSON.stringify(result)
-        }else
+        } else
             throw new NotFoundError()
     }
+
     /**
      * 限速队列调用
      */
@@ -440,77 +453,84 @@ export class V11 extends EventEmitter implements OneBot.Base{
             this.queue_running = true
             const task = this._queue.shift()
             const {method, args} = task as typeof V11.prototype._queue[0]
-            this.action[method].apply(this,args)
+            this.action[method].apply(this, args)
             await new Promise((resolve) => {
-                setTimeout(resolve, this.config.rate_limit_interval*1000)
+                setTimeout(resolve, this.config.rate_limit_interval * 1000)
             })
             this.queue_running = false
         }
     }
 }
-export namespace V11{
-    export interface Result<T extends any>{
+
+export namespace V11 {
+    export interface Result<T extends any> {
         retcode: number,
-        status: "ok"|'async'|'error',
+        status: "ok" | 'async' | 'error',
         data: T,
         error: string
     }
-    export function ok<T extends any>(data:T,retcode=0,pending?:boolean):Result<T>{
+
+    export function ok<T extends any>(data: T, retcode = 0, pending?: boolean): Result<T> {
         return {
             retcode,
-            status:pending?'async':'ok',
+            status: pending ? 'async' : 'ok',
             data,
-            error:null
+            error: null
         }
     }
-    export function error(error:string,retcode=1):Result<any>{
+
+    export function error(error: string, retcode = 1): Result<any> {
         return {
             retcode,
-            status:'error',
-            data:null,
+            status: 'error',
+            data: null,
             error
         }
     }
-    export const defaultConfig:Config={
-        heartbeat:3,
-        access_token:'',
-        post_timeout:15,
-        secret:'',
-        rate_limit_interval:4,
-        post_message_format:'string',
-        reconnect_interval:3,
-        use_http:true,
-        enable_cors:true,
-        use_ws:true,
-        http_reverse:[],
-        ws_reverse:[]
+
+    export const defaultConfig: Config = {
+        heartbeat: 3,
+        access_token: '',
+        post_timeout: 15,
+        secret: '',
+        rate_limit_interval: 4,
+        post_message_format: 'string',
+        reconnect_interval: 3,
+        use_http: true,
+        enable_cors: true,
+        use_ws: true,
+        http_reverse: [],
+        ws_reverse: []
     }
+
     export function genMetaEvent(uin: number, type: string) {
         return {
-            self_id: uin+'',
+            self_id: uin + '',
             time: Math.floor(Date.now() / 1000),
             post_type: "meta_event",
             meta_event_type: "lifecycle",
             sub_type: type,
         }
     }
+
     export interface Protocol {
         action: string,
         params: any
         echo?: any
     }
-    export interface Config{
-        access_token?:string
-        post_timeout?:number
-        enable_cors?:boolean
-        rate_limit_interval?:number
-        post_message_format?:'string'|'array'
-        heartbeat?:number
-        secret?:string
-        reconnect_interval?:number
-        use_http?:boolean
-        use_ws?:boolean
-        http_reverse?:(string|Config.HttpReverseConfig)[]
-        ws_reverse?:string[]
+
+    export interface Config {
+        access_token?: string
+        post_timeout?: number
+        enable_cors?: boolean
+        rate_limit_interval?: number
+        post_message_format?: 'string' | 'array'
+        heartbeat?: number
+        secret?: string
+        reconnect_interval?: number
+        use_http?: boolean
+        use_ws?: boolean
+        http_reverse?: (string | Config.HttpReverseConfig)[]
+        ws_reverse?: string[]
     }
 }

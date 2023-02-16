@@ -1,21 +1,23 @@
 import {OnlineStatus} from "icqq";
 import {OneBotStatus} from "@/onebot";
 import {V11} from "@/service/V11";
-export class CommonAction{
+
+export class CommonAction {
     /**
      * 获取登录信息
      */
-    getLoginInfo(this:V11){
+    getLoginInfo(this: V11) {
         return {
-            user_id:this.oneBot.uin,
-            nickname:this.client.nickname
+            user_id: this.oneBot.uin,
+            nickname: this.client.nickname
         }
     }
+
     /**
      * 撤回消息
      * @param message_id {string} 消息id
      */
-    deleteMsg(this:V11,message_id:string){
+    deleteMsg(this: V11, message_id: string) {
         return this.client.deleteMsg(message_id)
     }
 
@@ -23,7 +25,7 @@ export class CommonAction{
      * 获取消息
      * @param message_id {string} 消息id
      */
-    getMsg(this:V11,message_id:string){
+    getMsg(this: V11, message_id: string) {
         return this.client.getMsg(message_id)
     }
 
@@ -31,7 +33,7 @@ export class CommonAction{
      * 获取合并消息
      * @param id {string} 合并id
      */
-    getForwardMsg(this:V11,id:string){
+    getForwardMsg(this: V11, id: string) {
         return this.client.getForwardMsg(id)
     }
 
@@ -39,14 +41,14 @@ export class CommonAction{
      * 获取 Cookies
      * @param domain {string} 域名
      */
-    getCookies(this:V11,domain:string){
+    getCookies(this: V11, domain: string) {
         return this.client.cookies[domain]
     }
 
     /**
      * 获取 CSRF Token
      */
-    getCsrfToken(this:V11){
+    getCsrfToken(this: V11) {
         return this.client.getCsrfToken()
     }
 
@@ -54,21 +56,21 @@ export class CommonAction{
      * 获取 QQ 相关接口凭证
      * @param domain
      */
-    getCredentials(this:V11,domain:string){
+    getCredentials(this: V11, domain: string) {
         return {
-            cookies:this.client.cookies[domain],
-            csrf_token:this.client.getCsrfToken()
+            cookies: this.client.cookies[domain],
+            csrf_token: this.client.getCsrfToken()
         }
     }
 
     /**
      * 获取版本信息
      */
-    getVersion(this:V11){
+    getVersion(this: V11) {
         return {
-            app_name:'icqq',
-            app_version:'2.x',
-            protocol_version:'v11'
+            app_name: 'icqq',
+            app_version: '2.x',
+            protocol_version: 'v11'
         }
     }
 
@@ -76,69 +78,76 @@ export class CommonAction{
      * 重启OneBot实现
      * @param delay {number} 要延迟的毫秒数
      */
-    setRestart(this:V11,delay:number){
-        return this.emit('restart',delay)
+    setRestart(this: V11, delay: number) {
+        return this.emit('restart', delay)
     }
-    getStatus(this:V11){
+
+    getStatus(this: V11) {
         return {
-            online:this.client.status===OnlineStatus.Online,
-            good:this.oneBot.status===OneBotStatus.Good
+            online: this.client.status === OnlineStatus.Online,
+            good: this.oneBot.status === OneBotStatus.Good
         }
     }
-    callLogin(this:V11,func:string,...args:any[]){
-        return new Promise(async resolve=>{
-            const receiveResult=(event)=>{
-                this.client.offTrap('system.login.qrcode',receiveResult)
-                this.client.offTrap('system.login.device',receiveResult)
-                this.client.offTrap('system.login.slider',receiveResult)
-                this.client.offTrap('system.login.error',receiveResult)
+
+    callLogin(this: V11, func: string, ...args: any[]) {
+        return new Promise(async resolve => {
+            const receiveResult = (event) => {
+                this.client.offTrap('system.login.qrcode', receiveResult)
+                this.client.offTrap('system.login.device', receiveResult)
+                this.client.offTrap('system.login.slider', receiveResult)
+                this.client.offTrap('system.login.error', receiveResult)
                 resolve(event)
             }
-            this.client.trap('system.login.qrcode',receiveResult)
-            this.client.trap('system.login.device',receiveResult)
-            this.client.trap('system.login.slider',receiveResult)
-            this.client.trap('system.login.error',receiveResult)
-            this.client.trapOnce('system.online',receiveResult)
-            try{
+            this.client.trap('system.login.qrcode', receiveResult)
+            this.client.trap('system.login.device', receiveResult)
+            this.client.trap('system.login.slider', receiveResult)
+            this.client.trap('system.login.error', receiveResult)
+            this.client.trapOnce('system.online', receiveResult)
+            try {
                 await this.client[func](...args)
-            }catch (reason){
+            } catch (reason) {
                 receiveResult(reason)
             }
         })
     }
-    async submitSlider(this:V11,ticket:string){
-        return this.action.callLogin.apply(this,['submitSlider',ticket])
+
+    async submitSlider(this: V11, ticket: string) {
+        return this.action.callLogin.apply(this, ['submitSlider', ticket])
     }
-    async submitSmsCode(this:V11,code:string){
-        return this.action.callLogin.apply(this,['submitSmsCode',code])
+
+    async submitSmsCode(this: V11, code: string) {
+        return this.action.callLogin.apply(this, ['submitSmsCode', code])
     }
-    sendSmsCode(this:V11){
-        return new Promise<any>(resolve=>{
-            const receiveResult=(e)=>{
-                const callback=(data)=>{
-                    this.client.offTrap('internal.verbose',receiveResult)
-                    this.client.offTrap('system.login.error',receiveResult)
+
+    sendSmsCode(this: V11) {
+        return new Promise<any>(resolve => {
+            const receiveResult = (e) => {
+                const callback = (data) => {
+                    this.client.offTrap('internal.verbose', receiveResult)
+                    this.client.offTrap('system.login.error', receiveResult)
                     resolve(data)
                 }
-                if((typeof e==='string' && e.includes('已发送')) || typeof e!=='string'){
+                if ((typeof e === 'string' && e.includes('已发送')) || typeof e !== 'string') {
                     callback(e)
                 }
             }
-            this.client.trap('internal.verbose',receiveResult)
-            this.client.trap('system.login.error',receiveResult)
+            this.client.trap('internal.verbose', receiveResult)
+            this.client.trap('system.login.error', receiveResult)
             this.client.sendSmsCode()
         })
     }
-    login(this:V11,password?:string){
-        return this.action.callLogin.apply(this,['login',password])
+
+    login(this: V11, password?: string) {
+        return this.action.callLogin.apply(this, ['login', password])
     }
-    logout(this:V11,keepalive?:boolean){
+
+    logout(this: V11, keepalive?: boolean) {
         return new Promise(async resolve => {
-            const receiveResult=(e)=>{
-                this.client.offTrap('system.offline',receiveResult)
+            const receiveResult = (e) => {
+                this.client.offTrap('system.offline', receiveResult)
                 resolve(e)
             }
-            this.client.trap('system.offline',receiveResult)
+            this.client.trap('system.offline', receiveResult)
             await this.client.logout(keepalive)
         })
     }

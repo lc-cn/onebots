@@ -31,7 +31,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
     constructor(public oneBot: OneBot<'V12'>, public client: Client, public config: V12.Config) {
         super()
         this.db = new Db(join(App.configDir, 'data', this.oneBot.uin + '.json'))
-        if (!this.history) this.history=[]
+        if (!this.history) this.history = []
         this.action = new Action()
         this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
     }
@@ -39,8 +39,9 @@ export class V12 extends EventEmitter implements OneBot.Base {
     get history(): Payload<keyof Action>[] {
         return this.db.get('eventBuffer')
     }
-    set history(value){
-        this.db.set('eventBuffer',value)
+
+    set history(value) {
+        this.db.set('eventBuffer', value)
     }
 
     start(path?: string) {
@@ -116,17 +117,17 @@ export class V12 extends EventEmitter implements OneBot.Base {
     private startWebhook(config: V12.WebhookConfig) {
         const options: http.RequestOptions = {
             method: "POST",
-            timeout: config.timeout||this.config.request_timeout,
+            timeout: config.timeout || this.config.request_timeout,
             headers: {
                 "Content-Type": "application/json",
-                "User-Agent": "OneBot/12 (qq) Node-onebots/"+version,
-                "X-OneBot-Version":12,
-                "X-Impl":"icqq_onebot",
+                "User-Agent": "OneBot/12 (qq) Node-onebots/" + version,
+                "X-OneBot-Version": 12,
+                "X-Impl": "icqq_onebot",
 
             },
         }
-        if(config.access_token){
-            options.headers['Authorization']=`Bearer ${config.access_token}`
+        if (config.access_token) {
+            options.headers['Authorization'] = `Bearer ${config.access_token}`
         }
         const protocol = config.url.startsWith("https") ? https : http
         this.on('dispatch', (unserialized: any) => {
@@ -134,7 +135,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 const serialized = JSON.stringify(unserialized)
                 protocol.request(config.url, {
                     ...options,
-                    headers:{
+                    headers: {
                         ...options.headers,
                         "Content-Length": Buffer.byteLength(serialized),
                     }
@@ -163,21 +164,21 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 this.logger.error(`Webhook(${config.url})上报失败：` + e.message)
             }
         })
-        if(config.get_latest_actions){
-            const interval=(config.get_latest_actions && typeof config.get_latest_actions==='object') ?
-                config.get_latest_actions.interval*1000 :
-                1000*60
-            setInterval(()=>{
+        if (config.get_latest_actions) {
+            const interval = (config.get_latest_actions && typeof config.get_latest_actions === 'object') ?
+                config.get_latest_actions.interval * 1000 :
+                1000 * 60
+            setInterval(() => {
                 try {
-                    const actionPath=typeof config.get_latest_actions==='string' ?
-                        config.get_latest_actions:
-                        typeof config.get_latest_actions==='boolean'?
-                            'get_latest_actions':
-                            config.get_latest_actions.path||'/get_latest_actions'
+                    const actionPath = typeof config.get_latest_actions === 'string' ?
+                        config.get_latest_actions :
+                        typeof config.get_latest_actions === 'boolean' ?
+                            'get_latest_actions' :
+                            config.get_latest_actions.path || '/get_latest_actions'
                     protocol.request(`${config.url}${actionPath}`, {
                         ...options,
-                        method:'GET',
-                        headers:{
+                        method: 'GET',
+                        headers: {
                             ...options.headers,
                         }
                     }, (res) => {
@@ -202,14 +203,16 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 } catch (e) {
                     this.logger.error(`Webhook(${config.url})获取动作队列失败：` + e.message)
                 }
-            },interval)
+            }, interval)
         }
     }
-    private runActions(actions:any[]){
-        for(const action of actions){
+
+    private runActions(actions: any[]) {
+        for (const action of actions) {
             this.apply(action)
         }
     }
+
     private startWs(config: V12.WsConfig) {
         this.wss = this.oneBot.app.router.ws(this.path, this.oneBot.app.httpServer)
         this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
@@ -266,7 +269,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             await this.client.terminate()
         }
         this.wss.close()
-        for(const ws of this.wsr){
+        for (const ws of this.wsr) {
             ws.close()
         }
 
@@ -323,9 +326,9 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 platform: 'qq',
                 user_id: `${this.oneBot.uin}`
             },
-            ...transformObj(data,(key,value)=>{
-                if(!['user_id','group_id','discuss_id','member_id','channel_id','guild_id'].includes(key)) return value
-                return value+''
+            ...transformObj(data, (key, value) => {
+                if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
+                return value + ''
             }),
         } as V12.Payload<any>
         this.emit('dispatch', payload)
@@ -447,7 +450,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                     return
                 const action = event.detail_type === "private" ? "sendPrivateMsg" : "sendGroupMsg"
                 const id = event.detail_type === "private" ? event.user_id : event.group_id
-                this.action[action].apply(this,[id,res.reply])
+                this.action[action].apply(this, [id, res.reply])
             }
             if (event.detail_type === "group") {
                 if (res.delete)
@@ -472,12 +475,12 @@ export class V12 extends EventEmitter implements OneBot.Base {
         const headers: http.OutgoingHttpHeaders = {
             "X-Self-ID": String(this.oneBot.uin),
             "X-Client-Role": "Universal",
-            "User-Agent": "OneBot/12 (qq) Node-onebots/"+version,
-            "Sec-WebSocket-Protocol": "12.onebots.v"+version
+            "User-Agent": "OneBot/12 (qq) Node-onebots/" + version,
+            "Sec-WebSocket-Protocol": "12.onebots.v" + version
         }
         if (config.access_token)
             headers.Authorization = "Bearer " + config.access_token
-        const ws = new WebSocket(url, '12.onebots.v'+version,{headers})
+        const ws = new WebSocket(url, '12.onebots.v' + version, {headers})
         ws.on("error", (err) => {
             this.logger.error(err.message)
         })
@@ -547,19 +550,20 @@ export class V12 extends EventEmitter implements OneBot.Base {
         })
         this.dispatch(V12.formatPayload(this.oneBot.uin, "connect", {
             detail_type: "connect",
-            type:'meta',
-            version:this.action.getVersion.apply(this)
+            type: 'meta',
+            version: this.action.getVersion.apply(this)
         }))
         this.dispatch(V12.formatPayload(this.oneBot.uin, "status_update", {
-            detail_type:'status_update',
-            status:this.action.getStatus.apply(this)
+            detail_type: 'status_update',
+            status: this.action.getStatus.apply(this)
         }))
     }
 
 }
 
 export namespace V12 {
-    const fileTypes:string[]=['image',"file",'record','video','flash']
+    const fileTypes: string[] = ['image', "file", 'record', 'video', 'flash']
+
     export function fromSegment(msgList: SegmentElem | string | number | (SegmentElem | string | number)[]) {
         msgList = [].concat(msgList);
         return msgList.map((msg) => {
@@ -567,15 +571,15 @@ export namespace V12 {
             if (typeof msg === 'string') {
                 return {type: 'text', text: msg} as MessageElem
             }
-            const {type, data={}, ...other} = msg;
-            Object.assign(data,other)
-            if(type==='music' && !data['platform']) {
-                data['platform']=data['type']
+            const {type, data = {}, ...other} = msg;
+            Object.assign(data, other)
+            if (type === 'music' && !data['platform']) {
+                data['platform'] = data['type']
                 delete data['type']
             }
-            if(type==='mention') data['qq']=Number(data['user_id'])
-            if(fileTypes.includes(type) && !data['file']){
-                data['file']=data['file_id']
+            if (type === 'mention') data['qq'] = Number(data['user_id'])
+            if (fileTypes.includes(type) && !data['file']) {
+                data['file'] = data['file_id']
                 delete data['file_id']
             }
             return {
@@ -591,7 +595,7 @@ export namespace V12 {
         return msgList.map((msg) => {
             if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
             let {type, ...other} = msg;
-            if(fileTypes.includes(type)) other['file_id']=other['file']
+            if (fileTypes.includes(type)) other['file_id'] = other['file']
             return {
                 type: type === 'at' ? other['qq'] ? 'mention' : "mention_all" : type,
                 data: {
@@ -603,7 +607,7 @@ export namespace V12 {
     }
 
     export interface SegmentMap {
-        face: { id: number, text: string }
+        face: { id: number, text?: string }
         text: { text: string }
         mention: { user_id: string }
         mention_all: null
@@ -612,29 +616,29 @@ export namespace V12 {
         audio: { file_id: string }
         file: { file_id: string }
         music: {
-            type:"163"|'qq'|'xm'|'custom',
-            id?:string,
-            url?:string,
-            audio?:string,
-            title?:string
+            type: "163" | 'qq' | 'xm' | 'custom',
+            id?: string,
+            url?: string,
+            audio?: string,
+            title?: string
         }
         location: {
             latitude: number
             longitude: number
+            title?: string
+            content?: string
+        }
+        node: {
+            user_id: string
+            time?: number
+            user_name?: string
+            message: SegmentElem[]
+        }
+        share: {
+            url: string
             title: string
-            content: string
-        }
-        node:{
-            user_id:number
-            time?:number
-            user_name?:string
-            message:SegmentElem[]
-        }
-        share:{
-            url:string
-            title:string
-            content?:string
-            image?:string
+            content?: string
+            image?: string
         }
         reply: {
             message_id: string
@@ -663,10 +667,10 @@ export namespace V12 {
 
     export interface WebhookConfig extends Config.AuthInfo {
         url: string
-        timeout?:number
-        get_latest_actions?:boolean|string|{
-            path?:string
-            interval:number
+        timeout?: number
+        get_latest_actions?: boolean | string | {
+            path?: string
+            interval: number
         }
     }
 
@@ -760,10 +764,10 @@ export namespace V12 {
 
     export function formatPayload<K extends keyof BotEventMap>(uin: number, type: K, data: Omit<BotEventMap[K], K>) {
         return {
-            self_id: uin+'',
+            self_id: uin + '',
             time: Math.floor(Date.now() / 1000),
             detail_type: type,
-            type:'meta',
+            type: 'meta',
             sub_type: '',
             ...data
         }

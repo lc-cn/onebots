@@ -49,6 +49,7 @@ export class CommonAction{
             return resolve(this.history.reverse().filter((_,i)=>limit===0?true:i<limit))
         })
     }
+
     getVersion(this:V12){
         return {
             impl:'onebots',
