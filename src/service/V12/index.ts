@@ -1,4 +1,4 @@
-import {Client, EventMap, MessageElem, OnlineStatus, Sendable} from "icqq";
+import {Client, EventMap, MessageElem, OnlineStatus,Sendable as IcqqCanSend} from "icqq";
 import {version} from "@/utils";
 import {join} from 'path'
 import {Config} from './config'
@@ -14,7 +14,6 @@ import {WebSocket, WebSocketServer} from "ws";
 import {toBool, toHump, toLine, transformObj, uuid} from "@/utils";
 import {Db} from "@/db";
 import {App} from "@/server/app";
-import Payload = V12.Payload;
 import {rmSync} from "fs";
 
 export class V12 extends EventEmitter implements OneBot.Base {
@@ -36,7 +35,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
     }
 
-    get history(): Payload<keyof Action>[] {
+    get history(): V12.Payload<keyof Action>[] {
         return this.db.get('eventBuffer')
     }
 
@@ -105,7 +104,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
     private startHttp(config: V12.HttpConfig) {
         this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), (ctx) => this._httpRequestHandler(ctx, config))
         this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
-        this.on('dispatch', (payload: Payload<keyof Action>) => {
+        this.on('dispatch', (payload: V12.Payload<keyof Action>) => {
             if (!['message', 'notice', 'request', 'meta'].includes(payload.type)) return
             if (config.event_enabled) {
                 this.history.push(payload)
@@ -563,15 +562,15 @@ export class V12 extends EventEmitter implements OneBot.Base {
 
 export namespace V12 {
     const fileTypes: string[] = ['image', "file", 'record', 'video', 'flash']
-
-    export function fromSegment(msgList: SegmentElem | string | number | (SegmentElem | string | number)[]) {
+    export type Sendable=string|SegmentElem|(string|SegmentElem)[]
+    export function fromSegment(msgList:Sendable[]) {
         msgList = [].concat(msgList);
         return msgList.map((msg) => {
             if (typeof msg !== 'object') msg = String(msg)
             if (typeof msg === 'string') {
                 return {type: 'text', text: msg} as MessageElem
             }
-            const {type, data = {}, ...other} = msg;
+            const {type, data = {}, ...other} = msg as SegmentElem;
             Object.assign(data, other)
             if (type === 'music' && !data['platform']) {
                 data['platform'] = data['type']
@@ -590,7 +589,7 @@ export namespace V12 {
         })
     }
 
-    export function toSegment(msgList: Sendable) {
+    export function toSegment(msgList: IcqqCanSend) {
         msgList = [].concat(msgList);
         return msgList.map((msg) => {
             if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem

@@ -1,5 +1,4 @@
 import {V12} from "../index";
-import {remove} from "@/utils";
 import {processMessage, processMusic} from "@/service/V12/action/utils";
 
 export class FriendAction {
@@ -14,10 +13,10 @@ export class FriendAction {
     /**
      * 发送私聊消息
      * @param user_id {number} 用户id
-     * @param message {import('icqq').Sendable} 发送的消息
+     * @param message {import('icqq/lib/service').Sendable} 消息
      * @param message_id {string} 引用的消息ID
      */
-    async sendPrivateMsg(this: V12, user_id: number, message: V12.SegmentElem[], message_id?: string) {
+    async sendPrivateMsg(this: V12, user_id: number, message: V12.Sendable, message_id?: string) {
         let {element, quote_id} = await processMessage.apply(this.client, [message, message_id])
         element = await processMusic.apply(this.client, ['friend', user_id, element])
         if (!element.length) return

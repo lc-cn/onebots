@@ -12,14 +12,18 @@ export async function processMusic(this: Client, target_type: 'group' | 'friend'
     return element
 }
 
-export async function processMessage(this: Client, message: V12.SegmentElem[], quote_id?: string) {
-    const forward = message.find(e => e.type === 'forward') as V12.SegmentElem<'forward'>
-    if (forward) remove(message,forward)
-    let quote = message.find(e => e.type === 'reply') as V12.SegmentElem<'reply'>
-    if (quote) remove(message, quote)
+export async function processMessage(this: Client, message: V12.Sendable, quote_id?: string) {
+    let segments:V12.SegmentElem[]=[].concat(message).map(m=>{
+        if(typeof m==='string') return {type:'text',data:{text:m}}
+        return m
+    })
+    const forward = segments.find(e => e.type === 'forward') as V12.SegmentElem<'forward'>
+    if (forward) remove(segments,forward)
+    let quote = segments.find(e => e.type === 'reply') as V12.SegmentElem<'reply'>
+    if (quote) remove(segments, quote)
     // 直接发node？不允许，你用forward作为载体吧
-    message=message.filter(n=>n.type!=='node')
-    const element = V12.fromSegment(message)
+    segments=segments.filter(n=>n.type!=='node')
+    const element = V12.fromSegment(segments)
     if (forward) element.unshift(
         // 构造抓发消息
         await this.makeForwardMsg(

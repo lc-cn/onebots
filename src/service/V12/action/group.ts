@@ -6,10 +6,10 @@ export class GroupAction {
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {import('icqq').Sendable} 消息
+     * @param message {import('icqq/lib/service').Sendable} 消息
      * @param message_id {string} 引用的消息ID
      */
-    async sendGroupMsg(this: V12, group_id: number, message: V12.SegmentElem[], message_id?: string) {
+    async sendGroupMsg(this: V12, group_id: number, message: V12.Sendable, message_id?: string) {
         let {element, quote_id} = await processMessage.apply(this.client, [message, message_id])
         element = await processMusic.apply(this.client, ['group', group_id, element])
         if (!element.length) return
