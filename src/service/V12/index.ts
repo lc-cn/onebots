@@ -362,9 +362,6 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 if (Reflect.has(params, k)) {
                     if (BOOLS.includes(k))
                         params[k] = toBool(params[k])
-                    if (k === 'message') {
-                        params[k] = V12.fromSegment(params[k])
-                    }
                     args.push(params[k])
                 }
             }
@@ -450,7 +447,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                     return
                 const action = event.detail_type === "private" ? "sendPrivateMsg" : "sendGroupMsg"
                 const id = event.detail_type === "private" ? event.user_id : event.group_id
-                this.client[action](id, res.reply, res.auto_escape)
+                this.action[action].apply(this,[id,res.reply])
             }
             if (event.detail_type === "group") {
                 if (res.delete)
@@ -534,6 +531,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                     message = "不支持的api"
                 } else {
                     code = 10003
+                    this.logger.debug(e)
                     message = "请求格式错误"
                 }
                 ws.send(JSON.stringify({
@@ -571,6 +569,7 @@ export namespace V12 {
             if(type==='mention') data['qq']=Number(data['user_id'])
             if(fileTypes.includes(type) && !data['file']){
                 data['file']=data['file_id']
+                delete data['file_id']
             }
             return {
                 type: type.replace('mention', 'at').replace('at_all', 'at'),
