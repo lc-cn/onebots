@@ -12,7 +12,7 @@ export async function processMusic(this: Client, target_type: 'group' | 'friend'
     return element
 }
 
-export async function processMessage(this: Client, message: V12.Sendable, quote_id?: string) {
+export async function processMessage(this: Client, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
     let segments:V12.SegmentElem[]=[].concat(message).map(m=>{
         if(typeof m==='string') return {type:'text',data:{text:m}}
         return m
@@ -21,8 +21,12 @@ export async function processMessage(this: Client, message: V12.Sendable, quote_
     if (forward) remove(segments,forward)
     let quote = segments.find(e => e.type === 'reply') as V12.SegmentElem<'reply'>
     if (quote) remove(segments, quote)
-    // 直接发node？不允许，你用forward作为载体吧
-    segments=segments.filter(n=>n.type!=='node')
+    segments=segments.filter(n=>[
+        'face','text','image',// 基础类
+        'rpx','dice','poke','mention','mention_all', // 功能类
+        'voice','file','audio',// 音视频类
+        'music','share','xml','json','location', // 分享类
+    ].includes(n.type))
     const element = V12.fromSegment(segments)
     if (forward) element.unshift(
         // 构造抓发消息
@@ -43,6 +47,5 @@ export async function processMessage(this: Client, message: V12.Sendable, quote_
             )
         )
     )
-    if (quote && !quote_id) quote_id = quote.data.message_id
-    return {element, quote_id} as { element: MessageElem[], quote_id?: string }
+    return {element, quote:quote||source} as { element: MessageElem[], quote:V12.SegmentElem<'reply'> }
 }

@@ -15,6 +15,7 @@ import {toBool, toHump, toLine, transformObj, uuid} from "@/utils";
 import {Db} from "@/db";
 import {App} from "@/server/app";
 import {rmSync} from "fs";
+import {genDmMessageId, genGroupMessageId} from "icqq/lib/message";
 
 export class V12 extends EventEmitter implements OneBot.Base {
     public version = 'V12'
@@ -312,6 +313,15 @@ export class V12 extends EventEmitter implements OneBot.Base {
         data.self = this.action.getSelfInfo.apply(this)
         if (!data.detail_type) data.detail_type = data.message_type || data.notice_type || data.request_type || data.system_type
         data.message = data.type === 'message' ? V12.toSegment(data.message) : data.message
+        if(data.source) data.quote={
+            type:'reply',
+            data:{
+                message_id:data.detail_type==='private'?
+                    genDmMessageId(data.source.user_id,data.source.seq,data.source.rand,data.source.time):
+                    genGroupMessageId(data.group_id,data.source.user_id,data.source.seq,data.source.rand,data.source.time),
+                user_id:data.source.user_id
+            }
+        }
         return V12.formatPayload(this.oneBot.uin, event, data as any)
     }
 
@@ -609,14 +619,15 @@ export namespace V12 {
         face: { id: number, text?: string }
         text: { text: string }
         mention: { user_id: string }
+        rps: { id?: string }
+        dice: { id?: string }
+        poke: { user_id: string }
         mention_all: null
         image: { file_id: string }
         voice: { file_id: string }
         audio: { file_id: string }
         file: { file_id: string }
-        forward: { nodes: SegmentElem<'node'>[] }
-        music: {
-            type: "163" | 'qq' | 'xm' | 'custom',
+        music: { type: "163" | 'qq' | 'xm' | 'custom',
             id?: string,
             url?: string,
             audio?: string,
@@ -628,12 +639,6 @@ export namespace V12 {
             title?: string
             content?: string
         }
-        node: {
-            user_id: string
-            time?: number
-            user_name?: string
-            message: SegmentElem[]
-        }
         share: {
             url: string
             title: string
@@ -643,6 +648,13 @@ export namespace V12 {
         reply: {
             message_id: string
         }
+        node: {
+            user_id: string
+            time?: number
+            user_name?: string
+            message: SegmentElem[]
+        }
+        forward: { nodes: SegmentElem<'node'>[] }
     }
 
     export type SegmentElem<K extends keyof SegmentMap = keyof SegmentMap> = {
