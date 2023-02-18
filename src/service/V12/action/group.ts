@@ -7,13 +7,13 @@ export class GroupAction {
      * 发送群聊消息
      * @param group_id {number} 群id
      * @param message {import('icqq/lib/service').Sendable} 消息
-     * @param quote {import('onebots/lib/service/v12').SegmentElem<'reply'>} 引用内容
+     * @param source {import('onebots/lib/service/v12').SegmentElem<'reply'>} 引用内容
      */
-    async sendGroupMsg(this: V12, group_id: number, message: V12.Sendable,quote?:V12.SegmentElem<'reply'>) {
-        let {element, quote_id} = await processMessage.apply(this.client, [message,quote])
+    async sendGroupMsg(this: V12, group_id: number, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
+        let {element, quote} = await processMessage.apply(this.client, [message,source])
         element = await processMusic.apply(this.client, ['group', group_id, element])
         if (!element.length) return
-        return await this.client.sendGroupMsg(group_id, element, quote_id ? await this.client.getMsg(quote_id) : undefined)
+        return await this.client.sendGroupMsg(group_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
     }
 
     /**

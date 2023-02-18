@@ -2,7 +2,7 @@ import {Client, MessageElem} from "icqq";
 import {V12} from "@/service/V12";
 import {remove} from "@/utils";
 
-export async function processMusic(this: Client, target_type: 'group' | 'friend', target_id: number, element) {
+export async function processMusic(this: Client, target_type: 'group' | 'friend', target_id: number, element:any[]) {
     const musicList = element.filter(e => e.type === 'music')
     element = element.filter(e => !musicList.includes(e))
     const target = target_type === 'group' ? this.pickGroup(target_id) : this.pickFriend(target_id)
@@ -25,6 +25,7 @@ export async function processMessage(this: Client, message: V12.Sendable,source?
         'face','text','image',// 基础类
         'rpx','dice','poke','mention','mention_all', // 功能类
         'voice','file','audio',// 音视频类
+        'forward','node',// 转发类
         'music','share','xml','json','location', // 分享类
     ].includes(n.type))
     const element = V12.fromSegment(segments)
@@ -37,7 +38,7 @@ export async function processMessage(this: Client, message: V12.Sendable,source?
                     async (forwardNode) => {
                         return {
                             // 转发套转发处理
-                            message: (await processMessage.apply(this, [V12.fromSegment(forwardNode.data.message)])).element,
+                            message: (await processMessage.apply(this, [forwardNode.data.message])).element,
                             user_id: Number(forwardNode.data.user_id),
                             nickname: forwardNode.data.user_name,
                             time: forwardNode.data.time
