@@ -12,29 +12,38 @@ export async function processMusic(this: Client, target_type: 'group' | 'friend'
     return element
 }
 
-export async function processMessage(this: Client, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
+export async function processMessage(this: Client, message: V12.Sendable,source?:V12.SegmentElem<'reply'>):Promise<{ element: MessageElem[],music?:V12.SegmentElem<'music'>,share?:V12.SegmentElem<'share'>, quote?:V12.SegmentElem<'reply'> }> {
     let segments:V12.SegmentElem[]=[].concat(message).map(m=>{
         if(typeof m==='string') return {type:'text',data:{text:m}}
         return m
     })
-    const forward = segments.find(e => e.type === 'forward') as V12.SegmentElem<'forward'>
-    if (forward) remove(segments,forward)
+    const music = segments.find(e => e.type === 'music') as V12.SegmentElem<'music'>
+    if(music) remove(segments,music)
+    if(segments.find(e => e.type === 'music')) throw new Error('一次只能发送一个音乐元素')
+    if(segments.length && music) throw new Error('音乐元素只能单独发送')
+    const share = segments.find(e => e.type === 'share') as V12.SegmentElem<'share'>
+    if(share) remove(segments,share)
+    if(segments.find(e => e.type === 'share')) throw new Error('一次只能发送一个分享元素')
+    if(segments.length && share) throw new Error('分享元素只能单独发送')
+    const forwardNodes = segments.filter(e => e.type === 'node') as V12.SegmentElem<'node'>[]
+    segments=segments.filter(s=>!forwardNodes.includes(s as any))
+    if(forwardNodes.length && segments.length) throw new Error('只能单独发送转发节点')
     let quote = segments.find(e => e.type === 'reply') as V12.SegmentElem<'reply'>
     if (quote) remove(segments, quote)
-    segments=segments.filter(n=>[
-        'face','text','image',// 基础类
-        'rpx','dice','poke','mention','mention_all', // 功能类
-        'voice','file','audio',// 音视频类
+    segments = segments.filter(n => [
+        'face', 'text', 'image',// 基础类
+        'rpx', 'dice', 'poke', 'mention', 'mention_all', // 功能类
+        'voice', 'file', 'record',// 音视频类
         'forward','node',// 转发类
-        'music','share','xml','json','location', // 分享类
+        'music', 'share', 'xml', 'json', 'location', // 分享类
     ].includes(n.type))
     const element = V12.fromSegment(segments)
-    if (forward) element.unshift(
+    if (forwardNodes.length) element.unshift(
         // 构造抓发消息
         await this.makeForwardMsg(
             await Promise.all(
                 // 处理转发消息段
-                forward.data.nodes.filter(n=>n.type==='node').map(
+                forwardNodes.map(
                     async (forwardNode) => {
                         return {
                             // 转发套转发处理
@@ -48,5 +57,5 @@ export async function processMessage(this: Client, message: V12.Sendable,source?
             )
         )
     )
-    return {element, quote:quote||source} as { element: MessageElem[], quote:V12.SegmentElem<'reply'> }
+    return {element, quote:quote||source,music,share}
 }
