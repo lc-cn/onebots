@@ -1,4 +1,4 @@
-import {Client, EventMap, MessageElem, OnlineStatus,Sendable as IcqqCanSend} from "icqq";
+import {Client, EventMap, MessageElem, OnlineStatus, Sendable as IcqqCanSend} from "icqq";
 import {version} from "@/utils";
 import {join} from 'path'
 import {Config} from './config'
@@ -122,7 +122,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 "Content-Type": "application/json",
                 "User-Agent": "OneBot/12 (qq) Node-onebots/" + version,
                 "X-OneBot-Version": 12,
-                "X-Impl": "icqq_onebot",
+                "X-Impl": "onebots",
 
             },
         }
@@ -313,13 +313,13 @@ export class V12 extends EventEmitter implements OneBot.Base {
         data.self = this.action.getSelfInfo.apply(this)
         if (!data.detail_type) data.detail_type = data.message_type || data.notice_type || data.request_type || data.system_type
         data.message = data.type === 'message' ? V12.toSegment(data.message) : data.message
-        if(data.source) data.quote={
-            type:'reply',
-            data:{
-                message_id:data.detail_type==='private'?
-                    genDmMessageId(data.source.user_id,data.source.seq,data.source.rand,data.source.time):
-                    genGroupMessageId(data.group_id,data.source.user_id,data.source.seq,data.source.rand,data.source.time),
-                user_id:data.source.user_id
+        if (data.source) data.quote = {
+            type: 'reply',
+            data: {
+                message_id: data.detail_type === 'private' ?
+                    genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time) :
+                    genGroupMessageId(data.group_id, data.source.user_id, data.source.seq, data.source.rand, data.source.time),
+                user_id: data.source.user_id
             }
         }
         return V12.formatPayload(this.oneBot.uin, event, data as any)
@@ -328,7 +328,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
     dispatch(data: Record<string, any>) {
         const payload: V12.Payload<any> = {
             id: uuid(),
-            impl: 'icqq_onebot',
+            impl: 'onebots',
             version: 12,
             platform: 'qq',
             self: {
@@ -572,8 +572,9 @@ export class V12 extends EventEmitter implements OneBot.Base {
 
 export namespace V12 {
     const fileTypes: string[] = ['image', "file", 'record', 'video', 'flash']
-    export type Sendable=string|SegmentElem|(string|SegmentElem)[]
-    export function fromSegment(msgList:Sendable[]) {
+    export type Sendable = string | SegmentElem | (string | SegmentElem)[]
+
+    export function fromSegment(msgList: Sendable[]) {
         msgList = [].concat(msgList);
         return msgList.map((msg) => {
             if (typeof msg !== 'object') msg = String(msg)
@@ -627,7 +628,8 @@ export namespace V12 {
         voice: { file_id: string }
         audio: { file_id: string }
         file: { file_id: string }
-        music: { type: "163" | 'qq' | 'xm' | 'custom',
+        music: {
+            type: "163" | 'qq' | 'xm' | 'custom',
             id?: string,
             url?: string,
             audio?: string,
@@ -714,7 +716,7 @@ export namespace V12 {
     }
     export type Payload<T extends any> = {
         id: string
-        impl: 'icqq_onebot'
+        impl: 'onebots'
         version: 12
         platform: 'qq'
         self: {
