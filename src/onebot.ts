@@ -81,6 +81,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     this.login(e.toString().trim())
                 })
             } else {
+                console.log(e.message)
                 process.exit()
             }
             this.off('system.login.error', errorHandler)
