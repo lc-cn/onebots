@@ -96,7 +96,8 @@ export class V12 extends EventEmitter implements OneBot.Base {
             this.heartbeat = setInterval(() => {
                 this.dispatch(V12.formatPayload(this.oneBot.uin, 'heartbeat', {
                     detail_type: "heartbeat",
-                    interval: new Date().getTime() + this.config.heartbeat * 1000
+                    interval: new Date().getTime() + this.config.heartbeat * 1000,
+                    status: this.action.getStatus.apply(this)
                 }))
             }, this.config.heartbeat * 1000)
         }
