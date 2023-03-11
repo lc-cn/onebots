@@ -130,7 +130,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     case 'private':
                         data.message.shift({
                             type: 'reply',
-                            message_id: genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.rand, data.source.time)
+                            message_id: genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time)
                         })
                         break;
                 }
