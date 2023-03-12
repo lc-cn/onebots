@@ -745,6 +745,7 @@ export namespace V12 {
         },
         heartbeat: {
             detail_type: 'heartbeat'
+            status:ReturnType<Action['getStatus']>
             interval: number
         },
         status_update: {
