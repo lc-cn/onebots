@@ -36,7 +36,7 @@ export class CommonAction{
             bots:[
                 {
                     self:this.action.getSelfInfo.apply(this),
-                    online:this.client.status=OnlineStatus.Online,
+                    online:this.client.status===OnlineStatus.Online,
                 }
             ]
         }
