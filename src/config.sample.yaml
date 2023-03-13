@@ -1,5 +1,6 @@
 port: 6727 # 监听端口
 log_level: info # 日志等级
+platform: 5 # 机器人客户端协议（1:Android 2:APad 3:Watch 4:IMac 5:IPad）
 general: # 通用配置，在单个配置省略时的默认值
   V11: # oneBotV11的通用配置
     heartbeat: 3 # 心跳间隔 (秒)

@@ -1,4 +1,4 @@
-import {Client, OnlineStatus} from "icqq";
+import {Client, OnlineStatus, Platform} from "icqq";
 import {Config} from "./config";
 import {Action} from "./action";
 import {OneBot, OneBotStatus} from "@/onebot";
