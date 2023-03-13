@@ -302,7 +302,8 @@ export class V12 extends EventEmitter implements OneBot.Base {
         if (data.type === 'notice') {
             switch (data.detail_type) {
                 case 'friend':
-                    data.detail_type += data.sub_type
+                    if (['increase', 'decrease'].includes(data.sub_type)) data.detail_type = 'friend_' + data.sub_type
+                    else if (data.sub_type === 'recall') data.detail_type = 'private_message_delete'
                     break;
                 case 'group':
                     if (['increase', 'decrease'].includes(data.sub_type)) data.detail_type = 'group_member_' + data.sub_type
