@@ -1,0 +1,37 @@
+name: Release and Publish
+on:
+  push:
+    branches:
+      - main
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/release-please-action@v3
+        id: release
+        with:
+          release-type: node
+          package-name: onebots
+      # Checkout
+      - uses: actions/checkout@v3
+        if: ${{ steps.release.outputs.release_created }}
+      # Setup node
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          registry-url: 'https://registry.npmjs.org'
+        if: ${{ steps.release.outputs.release_created }}
+      # Install dependencies
+      - run: npm install
+        if: ${{ steps.release.outputs.release_created }}
+      # Build output
+      - run: npm run build
+        if: ${{ steps.release.outputs.release_created }}
+      # Publish to npm
+      - run: npm run pub
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+        if: ${{ steps.release.outputs.release_created }}
