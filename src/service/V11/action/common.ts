@@ -92,10 +92,10 @@ export class CommonAction {
     callLogin(this: V11, func: string, ...args: any[]) {
         return new Promise(async resolve => {
             const receiveResult = (event) => {
-                this.client.offTrap('system.login.qrcode', receiveResult)
-                this.client.offTrap('system.login.device', receiveResult)
-                this.client.offTrap('system.login.slider', receiveResult)
-                this.client.offTrap('system.login.error', receiveResult)
+                this.client.offTrap('system.login.qrcode')
+                this.client.offTrap('system.login.device')
+                this.client.offTrap('system.login.slider')
+                this.client.offTrap('system.login.error')
                 resolve(event)
             }
             this.client.trap('system.login.qrcode', receiveResult)
@@ -123,8 +123,8 @@ export class CommonAction {
         return new Promise<any>(resolve => {
             const receiveResult = (e) => {
                 const callback = (data) => {
-                    this.client.offTrap('internal.verbose', receiveResult)
-                    this.client.offTrap('system.login.error', receiveResult)
+                    this.client.offTrap('internal.verbose')
+                    this.client.offTrap('system.login.error')
                     resolve(data)
                 }
                 if ((typeof e === 'string' && e.includes('已发送')) || typeof e !== 'string') {
@@ -144,7 +144,7 @@ export class CommonAction {
     logout(this: V11, keepalive?: boolean) {
         return new Promise(async resolve => {
             const receiveResult = (e) => {
-                this.client.offTrap('system.offline', receiveResult)
+                this.client.offTrap('system.offline')
                 resolve(e)
             }
             this.client.trap('system.offline', receiveResult)
