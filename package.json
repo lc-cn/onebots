@@ -48,9 +48,11 @@
     "/lib/*.yaml",
     "/**/LICENSE"
   ],
+  "peerDependencies": {
+    "icqq": "latest"
+  },
   "dependencies": {
     "@koa/router": "^10.1.1",
-    "icqq": "^0.0.37",
     "icqq-cq-enable": "^1.0.0",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
