@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/lc-cn/onebots/compare/v0.2.0...v0.2.1) (2023-04-04)
+
+
+### Bug Fixes
+
+* icqq改为peer dependency ([93fd41b](https://github.com/lc-cn/onebots/commit/93fd41b144237131dedecaefc28f246f4090bb62))
+
 ## [0.2.0](https://github.com/lc-cn/onebots/compare/v0.1.19...v0.2.0) (2023-04-03)
 
 
