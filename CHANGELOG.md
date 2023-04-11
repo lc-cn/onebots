@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/lc-cn/onebots/compare/v0.2.1...v0.2.2) (2023-04-11)
+
+
+### Bug Fixes
+
+* fix:  ([e3f3027](https://github.com/lc-cn/onebots/commit/e3f30272ba62b8fdff992d4638e2e000dbeee82b))
+
 ## [0.2.1](https://github.com/lc-cn/onebots/compare/v0.2.0...v0.2.1) (2023-04-04)
 
 
