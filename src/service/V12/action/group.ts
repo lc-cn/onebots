@@ -10,17 +10,11 @@ export class GroupAction {
      */
     async sendGroupMsg(this: V12, group_id: number, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
         let {element, quote,music,share} = await processMessage.apply(this.client, [message,source])
-        if (!element.length && (!music||!share)) throw new Error('发送消息不受支持')
-        if(music||share) {
-            const target=this.client.pickGroup(group_id)
-            if(music) await target.shareMusic(music.data.type,music.data.id)
-            if(share) await target.shareUrl(share.data)
-            return {
-                message_id:'',
-                message
-            }
+        if(music) await this.client.pickGroup(group_id).shareMusic(music.data.platform,music.data.id)
+        if(share) await this.client.pickGroup(group_id).shareUrl(music.data)
+        if(element.length) {
+            return await this.client.sendGroupMsg(group_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
         }
-        return await this.client.sendGroupMsg(group_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
     }
 
     /**

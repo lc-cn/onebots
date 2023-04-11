@@ -8,6 +8,7 @@ import {genDmMessageId, genGroupMessageId} from 'icqq/lib/message'
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
+import * as process from "process";
 
 export class NotFoundError extends Error {
     message = '不支持的API'
@@ -65,11 +66,23 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                 this.off('system.login.qrcode', qrcodeHelper)
             })
         })
-        this.client.trap('system.login.device', function deviceHelper() {
-            console.log('请输入密保手机接收的验证码')
+        this.client.trap('system.login.device', function deviceHelper(e) {
+            console.log('请选择验证方式：1.短信验证  2.url验证')
             this.sendSmsCode()
-            process.stdin.once('data', (e) => {
-                this.submitSmsCode(e.toString().trim())
+            process.stdin.once('data', (buf) => {
+                const input=e.toString().trim()
+                if(input==='1') {
+                    this.sendSmsCode()
+                    console.log('请输入短信验证码:')
+                    process.stdin.once('data',buf=>{
+                        this.submitSmsCode(buf.toString().trim())
+                    })
+                }else{
+                    console.log(`请前往：${e.url} 完成验证后回车继续`)
+                    process.stdin.once('data',buf=>{
+                        this.login()
+                    })
+                }
             })
             disposeArr.push(() => {
                 this.off('system.login.device', deviceHelper)
