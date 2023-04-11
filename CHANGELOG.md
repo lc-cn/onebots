@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/lc-cn/onebots/compare/v0.2.3...v0.2.4) (2023-04-11)
+
+
+### Bug Fixes
+
+* 修复合并转发失败、修复音乐发送失败 ([9aa2dea](https://github.com/lc-cn/onebots/commit/9aa2dea188d31a439465a060a7a0a1e407b170be))
+
 ## [0.2.3](https://github.com/lc-cn/onebots/compare/v0.2.2...v0.2.3) (2023-04-11)
 
 
