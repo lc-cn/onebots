@@ -1,6 +1,5 @@
 import {V12} from "../index";
-import {remove} from "@/utils";
-import {processMessage, processMusic} from "@/service/V12/action/utils";
+import {processMessage} from "@/service/V12/action/utils";
 
 export class GroupAction {
     /**
@@ -48,6 +47,13 @@ export class GroupAction {
      */
     deleteEssenceMessage(this: V12, message_id: string) {
         return this.client.removeEssenceMessage(message_id)
+    }
+    /**
+     * 群打卡
+     * @param group_id 群id
+     */
+    sendGroupSign(this: V12, group_id: number) {
+        return this.client.pickGroup(group_id).sign()
     }
 
     /**

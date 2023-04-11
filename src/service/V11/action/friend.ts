@@ -47,11 +47,11 @@ export class FriendAction {
     }
 
     /**
-     * 发送好友赞
+     * 为指定用户点赞
      * @param user_id {number} 用户id
      * @param times 点赞次数
      */
-    async sendLike(this: OneBot<'V11'>, user_id: number, times?: number) {
+    async sendUserLike(this: OneBot<'V11'>, user_id: number, times?: number) {
         return this.client.sendLike(user_id, times)
     }
 }

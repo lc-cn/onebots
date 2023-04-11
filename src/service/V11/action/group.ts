@@ -89,6 +89,28 @@ export class GroupAction {
     }
 
     /**
+     * 设置群精华
+     * @param message_id 消息id
+     */
+    setEssenceMessage(this: V11, message_id: string) {
+        return this.client.setEssenceMessage(message_id)
+    }
+    /**
+     * 群打卡
+     * @param group_id 群id
+     */
+    sendGroupSign(this: V11, group_id: number) {
+        return this.client.pickGroup(group_id).sign()
+    }
+
+    /**
+     * 移除群精华
+     * @param message_id
+     */
+    deleteEssenceMessage(this:V11, message_id: string) {
+        return this.client.removeEssenceMessage(message_id)
+    }
+    /**
      * 设置群名
      * @param group_id {number} 群id
      * @param name {string} 新群名

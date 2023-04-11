@@ -392,7 +392,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                     result = V12.success(await ret, 0)
                 }
             } else {
-                result = V12.success(await ret, 0)
+                result = V12.success(ret, 0)
             }
             if (result.data instanceof Map)
                 result.data = [...result.data.values()]

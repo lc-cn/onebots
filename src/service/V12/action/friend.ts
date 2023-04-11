@@ -1,5 +1,5 @@
 import {V12} from "../index";
-import {processMessage, processMusic} from "@/service/V12/action/utils";
+import {processMessage} from "@/service/V12/action/utils";
 
 export class FriendAction {
     getUserInfo(this: V12, user_id: number) {
@@ -29,5 +29,13 @@ export class FriendAction {
             }
         }
         return await this.client.sendPrivateMsg(user_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
+    }
+    /**
+     * 为指定用户点赞
+     * @param user_id {number} 用户id
+     * @param times 点赞次数
+     */
+    async sendUserLike(this: V12, user_id: number, times?: number) {
+        return this.client.sendLike(user_id, times)
     }
 }
