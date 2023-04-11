@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "基于icqq的多例oneBot实现",
   "engines": {
     "node": ">=16"
