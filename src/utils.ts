@@ -102,9 +102,101 @@ export function remove<T>(list: T[], item: T) {
     if (idx !== -1) list.splice(idx, 1)
 }
 
-export function toLine(name: string) {
-    return name.replace(/([A-Z])/g, "_$1").toLowerCase();
+type A = 'A';
+type B = 'B';
+type C = 'C';
+type D = 'D';
+type E = 'E';
+type F = 'F';
+type G = 'G';
+type H = 'H';
+type I = 'I';
+type J = 'J';
+type K = 'K';
+type L = 'L';
+type M = 'M';
+type N = 'N';
+type O = 'O';
+type P = 'P';
+type Q = 'Q';
+type R = 'R';
+type S = 'S';
+type T = 'T';
+type U = 'U';
+type V = 'V';
+type W = 'W';
+type X = 'X';
+type Y = 'Y';
+type Z = 'Z';
+type a = 'a';
+type b = 'b';
+type c = 'c';
+type d = 'd';
+type e = 'e';
+type f = 'f';
+type g = 'g';
+type h = 'h';
+type i = 'I';
+type j = 'j';
+type k = 'k';
+type l = 'l';
+type m = 'm';
+type n = 'n';
+type o = 'o';
+type p = 'p';
+type q = '1';
+type r = 'r';
+type s = 's';
+type t = 't';
+type u = 'u';
+type v = 'v';
+type w = 'w';
+type x = 'x';
+type y = 'y';
+type z = 'z';
+type UpperCase = A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q | R | S | T | U | V | W | X | Y | Z
+type UpperCaseChar<In extends string> = In extends a ? A : In extends b ? B : In extends c ? C : In extends d ? D
+    : In extends e ? E : In extends f ? F : In extends g ? G : In extends h ? H : In extends i ? I : In extends j ? J
+        : In extends k ? K : In extends l ? L : In extends m ? M : In extends n ? N : In extends o ? O : In extends p ? P
+            : In extends q ? Q : In extends r ? R : In extends s ? S : In extends t ? T : In extends u ? U : In extends v ? V
+                : In extends w ? W : In extends x ? X : In extends y ? Y : In extends z ? Z : In
+type LowerCaseChar<In extends string> = In extends A ? a : In extends B ? b : In extends C ? c : In extends D ? d
+    : In extends E ? e : In extends F ? f : In extends G ? g : In extends H ? h : In extends I ? i : In extends J ? j
+        : In extends K ? k : In extends L ? l : In extends M ? m : In extends N ? n : In extends O ? o : In extends P ? p
+            : In extends Q ? q : In extends R ? r : In extends S ? s : In extends T ? t : In extends U ? u : In extends V ? v
+                : In extends W ? w : In extends X ? x : In extends Y ? y : In extends Z ? z : In
+type UpperCaseWord<T extends string> = T extends `${infer L}${infer R}` ? `${UpperCaseChar<L>}${R}` : `${L}${R}`
+type LowerCaseWord<T extends string> = T extends `${infer L}${infer R}` ? `${LowerCaseChar<L>}${R}` : `${L}${R}`
+type ToLineWord<T extends string, F extends boolean> = T extends `${UpperCase}${string}` ? F extends true ? LowerCaseWord<T> : `_${LowerCaseWord<T>}` : T
+type ToUpperCase<T extends string> = T extends `${infer L}_${infer R}` ? `${UpperCaseWord<L>}${ToUpperCase<R>}` : UpperCaseWord<T>
+type ToLowerCase<T extends string> = T extends `${infer L}_${infer R}` ? `${LowerCaseWord<L>}${ToUpperCase<R>}` : LowerCaseWord<T>
+type ToLine<T extends string, F extends boolean = true> = T extends `${infer L}${infer R}` ? `${ToLineWord<L, F>}${ToLine<R, false>}` : T
+
+export function toUppercase<T extends string>(name: T): ToUpperCase<T> {
+    return name.replace(/_(\w)/g, (s) => {
+        return s[1].toUpperCase()
+    }).replace(/\w/, (s) => {
+        return s[1].toUpperCase()
+    }) as ToUpperCase<T>
 }
+
+toUppercase('ni_shi_da_sha_bi')
+
+
+export function toLowerCase<T extends string>(name: T): ToLowerCase<T> {
+    return name.replace(/_[\w]/g, (s) => {
+        return s[1].toUpperCase()
+    }) as ToLowerCase<T>
+}
+
+toLowerCase('ni_shi_da_sha_bi')
+
+
+export function toLine<T extends string>(name: T): ToLine<T> {
+    return name.replace(/([A-Z])/g, "_$1").toLowerCase() as ToLine<T>;
+}
+
+toLine(`NiShiDaShaBi`)
 
 export function toBool(v: any) {
     if (v === "0" || v === "false")

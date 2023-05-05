@@ -79,5 +79,5 @@ node ./index.js
 | /remove | get | uin,force       | 移除机器人,force为true时，将删除机器人data目录 |
 
 # 鸣谢
-1. [takayama-lily/icqq](https://github.com/takayama-lily/icqq) 底层服务支持
-2. [takayama-lily/onebot](https://github.com/takayama-lily/node-onebot) oneBots原先版本
+1. [icqqjs/icqq](https://github.com/icqqjs/icqq) 底层服务支持
+2. [takayama-lily/onebot](https://github.com/takayama-lily/node-onebot) oneBot V11 原先版本

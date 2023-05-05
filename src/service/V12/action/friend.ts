@@ -1,5 +1,5 @@
 import {V12} from "../index";
-import {processMessage} from "@/service/V12/action/utils";
+import {processMessage} from "@/service/V12/utils";
 
 export class FriendAction {
     getUserInfo(this: V12, user_id: number) {
@@ -18,8 +18,8 @@ export class FriendAction {
      */
     async sendPrivateMsg(this: V12, user_id: number, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
         let {element, quote,music,share} = await processMessage.apply(this.client, [message,source])
-        if(music) await this.client.pickUser(user_id).shareMusic(music.data.platform,music.data.id)
-        if(share) await this.client.pickUser(user_id).shareUrl(music.data)
+        if(music) await this.client.pickFriend(user_id).shareMusic(music.data.platform,music.data.id)
+        if(share) await this.client.pickFriend(user_id).shareUrl(music.data)
         if(element.length) {
             return await this.client.sendPrivateMsg(user_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
         }

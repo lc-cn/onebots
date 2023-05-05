@@ -1,5 +1,5 @@
 import {V12} from "../index";
-import {processMessage} from "@/service/V12/action/utils";
+import {processMessage} from "@/service/V12/utils";
 
 export class GroupAction {
     /**
@@ -144,7 +144,7 @@ export class GroupAction {
      * @param block {boolean} 拒绝时是否加入黑名单，(默认：false)
      */
     setGroupAddRequest(this: V12, flag: string, approve: boolean = true, reason: string = '', block: boolean = false) {
-        return this.client.setGroupAddRequest(flag, approve, reason, block)
+        return this.client.setGroupAddRequest(flag,approve,reason,block)
     }
 
     /**

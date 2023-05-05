@@ -361,7 +361,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
             }
         }
         if (event.post_type === "request" && "approve" in res) {
-            const action = event.request_type === "friend" ? "setFriendAddRequest" : "setGroupAddRequest"
+            const action:keyof Client= event.request_type === "friend" ? "setFriendAddRequest" : "setGroupAddRequest"
             this.client[action](event.flag, res.approve, res.reason ? res.reason : "", !!res.block)
         }
     }

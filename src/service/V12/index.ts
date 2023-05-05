@@ -208,7 +208,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         }
     }
 
-    private runActions(actions: any[]) {
+    private runActions(actions: V12.RequestAction[]) {
         for (const action of actions) {
             this.apply(action)
         }
@@ -345,7 +345,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         this.emit('dispatch', payload)
     }
 
-    async apply(req) {
+    async apply(req:V12.RequestAction) {
         let {action, params, echo} = req
         action = toLine(action)
         let is_async = action.includes("_async")
@@ -788,5 +788,10 @@ export namespace V12 {
             sub_type: '',
             ...data
         }
+    }
+    export type RequestAction={
+        action:string,
+        params:Record<string, any>
+        echo?:number
     }
 }

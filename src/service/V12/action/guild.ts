@@ -1,5 +1,5 @@
 import {V12} from "@/service/V12";
-import {processMessage} from "@/service/V12/action/utils";
+import {processMessage} from "@/service/V12/utils";
 
 export class GuildAction {
 

@@ -14,6 +14,9 @@
     "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
     "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml",
     "pub": "npm publish --access public",
+    "docs:dev": "vitepress dev docs --port 8989",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -40,7 +43,8 @@
     "ts-node-dev": "latest",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitepress": "^1.0.0-alpha.72"
   },
   "files": [
     "/lib/**/*.js",
@@ -50,7 +54,7 @@
   ],
   "dependencies": {
     "@koa/router": "^10.1.1",
-    "icqq": "^0.2.0",
+    "icqq": "^0.2.1",
     "icqq-cq-enable": "^1.0.0",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",

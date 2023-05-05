@@ -68,7 +68,6 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         })
         this.client.trap('system.login.device', function deviceHelper(e) {
             console.log('请选择验证方式：1.短信验证  2.url验证')
-            this.sendSmsCode()
             process.stdin.once('data', (buf) => {
                 const input=e.toString().trim()
                 if(input==='1') {
@@ -79,7 +78,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     })
                 }else{
                     console.log(`请前往：${e.url} 完成验证后回车继续`)
-                    process.stdin.once('data',buf=>{
+                    process.stdin.once('data',()=>{
                         this.login()
                     })
                 }
@@ -99,7 +98,6 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
             this.off('system.login.error', errorHandler)
         })
         this.client.trap('system.login.slider', function sliderHelper(e) {
-            console.log('滑块验证地址：' + e.url)
             console.log('请输入滑块验证返回的ticket')
             process.stdin.once('data', (e) => {
                 this.submitSlider(e.toString().trim())

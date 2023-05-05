@@ -1,8 +1,6 @@
 import {V11} from "@/service/V11";
-import {fromSegment, fromCqcode} from "icqq-cq-enable";
 import {SegmentElem} from "icqq-cq-enable/lib/utils";
-import {remove} from "@/utils";
-import {processMessage} from "@/service/V11/action/utils";
+import {processMessage} from "@/service/V11/utils";
 
 export class GroupAction {
     /**
@@ -12,7 +10,7 @@ export class GroupAction {
      * @param message_id {string} 引用的消息ID
      */
     async sendGroupMsg(this: V11, group_id: number, message: string | SegmentElem|SegmentElem[], message_id?: string) {
-        const msg=message?await this.client.getMsg(message_id):undefined
+        const msg=message_id?await this.client.getMsg(message_id):undefined
         const {element,quote,music,share}=await processMessage.apply(this.client,[message,msg])
         if(music) await this.client.pickGroup(group_id).shareMusic(music.data.platform,music.data.id)
         if(share) await this.client.pickGroup(group_id).shareUrl(music.data)
