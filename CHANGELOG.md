@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.5](https://github.com/lc-cn/onebots/compare/v0.2.4...v0.2.5) (2023-05-11)
+
+
+### Bug Fixes
+
+* update icqq version ([d935c43](https://github.com/lc-cn/onebots/commit/d935c43960a2bb161be94132592c0bdcffb76f01))
+* v11引用消息处理错误 ([5db77c5](https://github.com/lc-cn/onebots/commit/5db77c530fc539af0bd791c1eb7d75e849dd18b0))
+
 ## [0.2.4](https://github.com/lc-cn/onebots/compare/v0.2.3...v0.2.4) (2023-04-11)
 
 
