@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/lc-cn/onebots/compare/v0.2.5...v0.2.6) (2023-05-11)
+
+
+### Bug Fixes
+
+* 登录流程优化，避免同时登录多个账号报错，共用配置增加登录超时配置(timeout),单位：秒 ([dad5585](https://github.com/lc-cn/onebots/commit/dad5585c6cc24e7b234b41c4472cc3852576b4ac))
+
 ## [0.2.5](https://github.com/lc-cn/onebots/compare/v0.2.4...v0.2.5) (2023-05-11)
 
 
