@@ -110,16 +110,7 @@ export class App extends Koa {
         return oneBot
     }
 
-    start() {
-        for (const oneBot of this.oneBots) {
-            oneBot.start()
-        }
-        process.on('uncaughtException', (e) => {
-            console.error('uncaughtException', e)
-        })
-        process.on('unhandledRejection', (e) => {
-            console.error('unhandledRejection', e)
-        })
+    async start() {
         this.httpServer.listen(this.config.port)
         this.router.get('/list', (ctx) => {
             ctx.body = this.oneBots.map(bot => {
@@ -184,7 +175,17 @@ export class App extends Koa {
                 ctx.body = e.message
             }
         })
+        process.on('uncaughtException', (e) => {
+            console.error('uncaughtException', e)
+        })
+        process.on('unhandledRejection', (e) => {
+            console.error('unhandledRejection', e)
+        })
         this.logger.mark(`server listen at http://0.0.0.0:${this.config.port}/${this.config.path ? this.config.path : ''}`)
+        for (const oneBot of this.oneBots) {
+            const [isSuccess,reason]=await oneBot.start()
+            if(!isSuccess) this.logger.warn(`【${oneBot.uin}】： 登录失败,错误信息\n：`,reason)
+        }
     }
 }
 
@@ -216,6 +217,7 @@ export namespace App {
     export type Config = {
         port?: number
         path?: string
+        timeout?: number
         log_level?: LogLevel
         platform?: Platform
         general?: {
@@ -225,6 +227,7 @@ export namespace App {
     } & KoaOptions & Record<`${number}`, MayBeArray<OneBot.Config<OneBot.Version>>>
     export const defaultConfig: Config = {
         port: 6727,
+        timeout: 30,
         platform: 5,
         general: {
             V11: V11.defaultConfig,

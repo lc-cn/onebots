@@ -49,7 +49,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         })
     }
 
-    async start() {
+    start():Promise<[boolean,any]> {
         this.startListen()
         const disposeArr = []
         const clean = () => {
@@ -69,7 +69,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         this.client.trap('system.login.device', function deviceHelper(e) {
             console.log('请选择验证方式：1.短信验证  2.url验证')
             process.stdin.once('data', (buf) => {
-                const input=e.toString().trim()
+                const input=buf.toString().trim()
                 if(input==='1') {
                     this.sendSmsCode()
                     console.log('请输入短信验证码:')
@@ -107,7 +107,25 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
             })
         })
         this.client.trap('system.online', clean)
-        await this.client.login(this.uin, this.password)
+        return new Promise(async (resolve)=>{
+            const callback=(result)=>{
+                if(timer){
+                    clearTimeout(timer)
+                    timer=null
+                }
+                resolve(result)
+                while (disposes.length){
+                    const dispose=disposes.shift()
+                    dispose()
+                }
+            }
+            let timer=setTimeout(()=>{
+                callback([false,'登录超时'])
+            },this.app.config.timeout*1000)
+            await this.client.login(this.uin, this.password)
+            const disposes=[this.client.trapOnce('system.online',()=>{callback([true,null])}),
+            this.client.trapOnce('system.login.error',(e)=>callback([false,e.message]))]
+        })
     }
 
     startListen() {
