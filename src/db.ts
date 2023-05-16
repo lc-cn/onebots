@@ -1,79 +1,61 @@
-import {writeFileSync, readFileSync, existsSync} from "fs";
+import {readFileSync, writeFileSync, existsSync} from "fs";
+import {deleteValue, getValue, Keys, setValue, Value} from "@zhinjs/shared";
 
-export class Db {
-    private data: Record<string, any> = {}
-    private raw_data: string = '{}'
+export class Database<T extends object = object> {
+    private data: T = {} as any
 
-    constructor(private readonly path: string, force_create: boolean = true) {
+    constructor(private readonly path: string) {
         if (!this.path.toLowerCase().endsWith('.json')) this.path = this.path + '.json'
-        if (!existsSync(this.path) && force_create) {
-            writeFileSync(this.path, this.raw_data)
-        }
-        try {
-            const raw_data = readFileSync(this.path, 'utf8');
-            this.raw_data = raw_data || this.raw_data;
-            this.data = JSON.parse(this.raw_data) as Record<string | symbol, any>
-        } catch (error) {
-            const {message} = error as Error;
-            if (!message.includes('ENOENT: no such file or directory')) {
-                throw error;
-            }
+        if (!existsSync(this.path)) {
+            writeFileSync(this.path, "", "utf-8")
         }
     }
 
-    get(key: string, escape: boolean = true) {
-        const func = new Function(`return this.data.${key}`)
-        const _this = this
-        let result
+    sync(defaultValue: T) {
         try {
-            result = escape ? func.apply(this) : this.data[key]
+            this.data = JSON.parse(readFileSync(this.path, 'utf-8'))
         } catch {
-            throw new Error('不可达的位置:' + key.toString())
+            this.data = defaultValue
+            writeFileSync(this.path, JSON.stringify(defaultValue, null, 2), "utf-8")
         }
-        return result && typeof result === 'object' ? new Proxy(result, {
-            get(target: any, p: string | symbol, receiver: any): any {
-                return Reflect.get(target, p, receiver)
+    }
+
+    get<K extends Keys<T>>(key: K): Value<T, K> {
+        const value = getValue(this.data, key)
+        if (typeof value !== 'object') return value as Value<T, K>
+        const saveValue = () => {
+            this.set(key, value as Value<T, K>)
+        }
+        return new Proxy(value, {
+            set(target, k, v) {
+                const res = Reflect.set(target, k, v)
+                saveValue()
+                return res
             },
-            set(target: any, p: string | symbol, value: any, receiver: any): boolean {
-                const res = Reflect.set(target, p, value, receiver)
-                _this.set(key, result)
+            deleteProperty(target, p) {
+                const res = Reflect.deleteProperty(target, p)
+                saveValue()
+                return res
+            },
+            defineProperty(target, p, r) {
+                const res = Reflect.defineProperty(target, p, r)
+                saveValue()
                 return res
             }
-        }) : result
+        }) as Value<T, K>
     }
 
-    set(key: string, value: any, escape: boolean = true) {
-        const func = new Function('value', `return this.data.${key}=value`)
-        let result = escape ? func.apply(this, [value]) : this.data[key] = value
-        this.write()
-        return result
+    delete<K extends Keys<T>>(key: K) {
+        return deleteValue(this.data,key)
     }
 
-    has(key: string, escape: boolean = true): boolean {
-        return escape ? new Function(`return !!this.data.${key}`).apply(this) : !!this.data[key]
-    }
-
-    delete(key: string, escape: boolean = true): boolean {
-        const result: boolean = escape ? new Function(`return delete this.data.${key}`).apply(this) : delete this.data[key]
-        this.write()
-        return result
-    }
-
-    write() {
-        try {
-            const raw_data = JSON.stringify(this.data);
-            if (raw_data !== this.raw_data) {
-                writeFileSync(this.path, raw_data);
-                this.raw_data = raw_data;
-            }
-        } catch (error) {
-            this.data = JSON.parse(this.raw_data);
-            throw error;
-        }
+    set<K extends Keys<T>>(key: K, value: Value<T, K>) {
+        setValue(this.data, key, value)
+        return writeFileSync(this.path, JSON.stringify(this.data, null, 2), 'utf-8')
     }
 }
 
-export namespace Db {
+export namespace Database {
     export interface Config {
         path: string
         force?: boolean

@@ -11,7 +11,7 @@
   },
   "scripts": {
     "start": "node .",
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
     "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml",
     "pub": "npm publish --access public",
     "docs:dev": "vitepress dev docs --port 8989",
@@ -54,6 +54,7 @@
   ],
   "dependencies": {
     "@koa/router": "^10.1.1",
+    "@zhinjs/shared": "^0.0.9",
     "icqq": "^0.3.6",
     "icqq-cq-enable": "^1.0.0",
     "js-yaml": "^4.1.0",
