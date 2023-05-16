@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8](https://github.com/lc-cn/onebots/compare/v0.2.7...v0.2.8) (2023-05-16)
+
+
+### Bug Fixes
+
+* 打包失败 ([49b16b3](https://github.com/lc-cn/onebots/commit/49b16b3584eeabb447822be53d40d6a48fbbecaf))
+
 ## [0.2.7](https://github.com/lc-cn/onebots/compare/v0.2.6...v0.2.7) (2023-05-16)
 
 
