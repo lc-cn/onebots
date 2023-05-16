@@ -2,7 +2,7 @@ import {Client, MessageElem} from "icqq";
 import {V12} from "@/service/V12";
 import {remove} from "@/utils";
 
-export async function processMessage(this: Client, message: V12.Sendable,source?:V12.SegmentElem<'reply'>):Promise<{ element: MessageElem[],music?:V12.SegmentElem<'music'>,share?:V12.SegmentElem<'share'>, quote?:V12.SegmentElem<'reply'> }> {
+export async function processMessage(this: V12, message: V12.Sendable,source?:V12.SegmentElem<'reply'>):Promise<{ element: MessageElem[],music?:V12.SegmentElem<'music'>,share?:V12.SegmentElem<'share'>, quote?:V12.SegmentElem<'reply'> }> {
     let segments:V12.SegmentElem[]=[].concat(message).map(m=>{
         if(typeof m==='string') return {type:'text',data:{text:m}}
         return m
@@ -20,6 +20,13 @@ export async function processMessage(this: Client, message: V12.Sendable,source?
         'forward','node',// 转发类
         'music', 'share', 'xml', 'json', 'location', // 分享类
     ].includes(n.type))
+    segments.forEach(seg=>{
+        if(['image','video','audio'].includes(seg.type)){
+            const {file_id}=seg.data as V12.SegmentElem<'image'|'voice'|'audio'>['data']
+            const fileInfo=this.getFile(file_id)
+            if(fileInfo) seg.data['file_id']=fileInfo.url||fileInfo.path||`base64://${fileInfo.data}`
+        }
+    })
     const element = V12.fromSegment(segments)
     return {element, quote:quote||source,share,music}
 }

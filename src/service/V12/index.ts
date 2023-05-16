@@ -12,7 +12,7 @@ import http from "http";
 import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
 import {toBool, toHump, toLine, transformObj, uuid} from "@/utils";
-import {Db} from "@/db";
+import {Database} from "@/db";
 import {App} from "@/server/app";
 import {rmSync} from "fs";
 import {genDmMessageId, genGroupMessageId} from "icqq/lib/message";
@@ -26,12 +26,12 @@ export class V12 extends EventEmitter implements OneBot.Base {
     private path: string
     wss?: WebSocketServer
     wsr: Set<WebSocket> = new Set<WebSocket>()
-    private db: Db
+    private db: Database<{eventBuffer:V12.Payload<keyof Action>[],files:Record<string, V12.FileInfo>}>
 
     constructor(public oneBot: OneBot<'V12'>, public client: Client, public config: V12.Config) {
         super()
-        this.db = new Db(join(App.configDir, 'data', this.oneBot.uin + '.json'))
-        if (!this.history) this.history = []
+        this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
+        this.db.sync({eventBuffer:[],files:{}})
         this.action = new Action()
         this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
     }
@@ -39,8 +39,28 @@ export class V12 extends EventEmitter implements OneBot.Base {
     get history(): V12.Payload<keyof Action>[] {
         return this.db.get('eventBuffer')
     }
-
-    set history(value) {
+    getFile(file_id:string){
+        return this.db.get(`files.${file_id}`)
+    }
+    delFile(file_id:string){
+        const files=this.db.get(`files`)
+        return delete files[file_id]
+    }
+    saveFile(fileInfo:V12.FileInfo){
+        const file_id=uuid()
+        this.db.set(`files.${file_id}`,fileInfo)
+        return file_id
+    }
+    get files():({file_id:string} & V12.FileInfo)[]{
+        const files=this.db.get('files')
+        return Object.keys(files).map((file_id)=>{
+            return {
+                file_id,
+                ...files[file_id]
+            }
+        })
+    }
+    set history(value:any[]) {
         this.db.set('eventBuffer', value)
     }
 
@@ -793,5 +813,15 @@ export namespace V12 {
         action:string,
         params:Record<string, any>
         echo?:number
+    }
+    export type FileInfo={
+        type:'url'|'path'|'data'
+        name:string
+        url?:string
+        headers?:Record<string, any>
+        path?:string
+        data?:string
+        sha256?:string
+        total_size?:number
     }
 }

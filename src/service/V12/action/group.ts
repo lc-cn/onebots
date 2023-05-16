@@ -9,7 +9,7 @@ export class GroupAction {
      * @param source {import('onebots/lib/service/v12').SegmentElem<'reply'>} 引用内容
      */
     async sendGroupMsg(this: V12, group_id: number, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
-        let {element, quote,music,share} = await processMessage.apply(this.client, [message,source])
+        let {element, quote,music,share} = await processMessage.apply(this, [message,source])
         if(music) await this.client.pickGroup(group_id).shareMusic(music.data.platform,music.data.id)
         if(share) await this.client.pickGroup(group_id).shareUrl(music.data)
         if(element.length) {

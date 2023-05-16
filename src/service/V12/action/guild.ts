@@ -22,7 +22,7 @@ export class GuildAction {
      * @param message {import('icqq/lib/service').Sendable} 消息
      */
     async sendGuildMsg(this: V12, guild_id: string, channel_id: string, message: V12.Sendable) {
-        const {element} = await processMessage.apply(this.client, [message])
+        const {element} = await processMessage.apply(this, [message])
         if (!element.length) return
         return await this.client.sendGuildMsg(guild_id, channel_id, element)
     }

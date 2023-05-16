@@ -26,7 +26,7 @@ export class CommonAction{
      * 获取 Cookies
      * @param domain {string} 域名
      */
-    getCookies(this:V11,domain:string):string{
+    getCookies(this:V12,domain:string):string{
         return this.client.cookies[domain]
     }
 
@@ -119,5 +119,49 @@ export class CommonAction{
         return [...new Set(getProperties(this.action))].filter(key=>{
             return key!=='constructor'
         }).map(toLine)
+    }
+    uploadFile(this:V12,type:'url'|'path'|'data',name:string,url?:string,path?:string,data?:string,sha256?:string,headers?:Record<string, any>){
+        const fileInfo:V12.FileInfo={
+            name,
+            url,
+            type,
+            path,
+            data,
+            sha256,
+            headers
+        }
+        return this.saveFile(fileInfo)
+    }
+    uploadFileFragmented(this:V12,stage:'prepare'|'transfer'|'finish',name?:string,total_size?:number,file_id?:string,offset?:number,data?:string,sha256?:string){
+        switch (stage){
+            case "prepare":{
+                if(!name||!total_size) throw new Error('请输入name和total_size')
+                return this.saveFile({
+                    name,
+                    type:'data',
+                    total_size,
+                    data:Buffer.alloc(0).toString('base64')
+                })
+            }
+            case "transfer":{
+                if(!file_id||!offset||!data) throw new Error('请输入file_id、offset和data')
+                const fileInfo=this.getFile(file_id)
+                fileInfo.data=Buffer.concat([
+                    Buffer.from(fileInfo.data),
+                    Buffer.from(data)
+                ]).toString('base64')
+                return true
+            }
+            case "finish":{
+                if(!file_id||sha256) throw new Error('请输入file_id和sha256')
+                const fileInfo=this.getFile(file_id)
+                if (sha(Buffer.from(fileInfo.data)).toString('hex')===sha256) return file_id
+                this.delFile(file_id)
+                throw new Error('文件已被篡改')
+            }
+        }
+    }
+    getFile(this:V12,file_id:string){
+        return this.getFile(file_id)
     }
 }
