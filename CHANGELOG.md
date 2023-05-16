@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.7](https://github.com/lc-cn/onebots/compare/v0.2.6...v0.2.7) (2023-05-16)
+
+
+### Bug Fixes
+
+* 修复config.sample.yaml缺失问题 ([b6f720e](https://github.com/lc-cn/onebots/commit/b6f720e6c3dfd947d2b9d4e4d3630a0127c4f20d))
+
 ## [0.2.6](https://github.com/lc-cn/onebots/compare/v0.2.5...v0.2.6) (2023-05-11)
 
 
