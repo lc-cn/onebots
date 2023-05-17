@@ -4,7 +4,8 @@ import {version} from "@/utils";
 import {OneBotStatus} from "@/onebot";
 import {getProperties,toLine} from '@/utils'
 import {Action} from "./";
-import {V11} from "@/service/V11";
+import {createHash} from "crypto";
+const sha=(data)=>createHash("sha1").update(data).digest()
 export class CommonAction{
     sendMessage(){}
     /**
