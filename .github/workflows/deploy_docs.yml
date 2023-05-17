@@ -3,7 +3,7 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - main
+      - master
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -23,4 +23,3 @@ jobs:
         with:
           github_token: ${{ secrets.ACCESS_TOKEN }}
           publish_dir: docs/dist
-          cname: docs.zhin.icu
