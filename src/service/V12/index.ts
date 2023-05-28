@@ -375,7 +375,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             if (["private", "group", "discuss", 'channel'].includes(params.detail_type)) {
                 action = "send_" + params.detail_type + "_msg"
             } else if (params.user_id)
-                action = "send_Private_Msg"
+                action = "send_private_Msg"
             else if (params.group_id)
                 action = "send_group_msg"
             else if (params.discuss_id)
@@ -401,6 +401,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             }
             let ret: any, result: any
             try {
+                console.log(method,args)
                 ret = this.action[method].apply(this, args)
             } catch (e) {
                 return JSON.stringify(V12.error(e.message))
