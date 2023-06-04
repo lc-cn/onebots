@@ -271,10 +271,10 @@ export class V12 extends EventEmitter implements OneBot.Base {
     }
 
     private startWsReverse(config: V12.WsReverseConfig) {
-        const ws = this._createWsr(config.url, config)
+        this._createWsr(config.url, config)
         this.on('dispatch', (unserialized) => {
             const serialized = JSON.stringify(unserialized)
-            if (this.wsr.has(ws)) {
+            for (const ws of this.wsr) {
                 ws.send(serialized, (err) => {
                     if (err)
                         this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
@@ -532,7 +532,6 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 this.startWsReverse(config)
             }, this.config.reconnect_interval * 1000)
         })
-        return ws
     }
 
     /**
@@ -693,6 +692,7 @@ export namespace V12 {
         request_timeout?: number
         reconnect_interval?: number
         enable_cors?: boolean
+        enable_reissue?: boolean
         use_http?: boolean | HttpConfig
         webhook?: (string | WebhookConfig)[]
         use_ws?: boolean | WsConfig
@@ -732,6 +732,7 @@ export namespace V12 {
         request_timeout: 15,
         reconnect_interval: 3,
         enable_cors: true,
+        enable_reissue: false,
         use_http: true,
         use_ws: true,
         webhook: [],

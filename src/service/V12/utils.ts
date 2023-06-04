@@ -29,6 +29,5 @@ export async function processMessage(this: V12, message: V12.Sendable,source?:V1
         }
     })
     const element = V12.fromSegment(segments)
-    console.log(element)
     return {element, quote:quote||source,share,music}
 }

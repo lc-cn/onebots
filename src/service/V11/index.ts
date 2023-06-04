@@ -168,12 +168,13 @@ export class V11 extends EventEmitter implements OneBot.Base {
     }
 
     private startWsReverse(url: string) {
-        const ws = this._createWsr(url)
+        this._createWsr(url)
         this.on('dispatch', (serialized) => {
-            if (this.wsr.has(ws)) {
+            for(const ws of this.wsr){
                 ws.send(serialized, (err) => {
-                    if (err)
+                    if (err){
                         this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
+                    }
                     else
                         this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
                 })
@@ -336,7 +337,6 @@ export class V11 extends EventEmitter implements OneBot.Base {
                 this._createWsr(url)
             }, this.config.reconnect_interval * 1000)
         })
-        return ws
     }
 
     /**
@@ -498,6 +498,7 @@ export namespace V11 {
         reconnect_interval: 3,
         use_http: true,
         enable_cors: true,
+        enable_reissue: false,
         use_ws: true,
         http_reverse: [],
         ws_reverse: []
@@ -523,6 +524,7 @@ export namespace V11 {
         access_token?: string
         post_timeout?: number
         enable_cors?: boolean
+        enable_reissue?: boolean
         rate_limit_interval?: number
         post_message_format?: 'string' | 'array'
         heartbeat?: number
