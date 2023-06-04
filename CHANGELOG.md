@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/lc-cn/onebots/compare/v0.4.0...v0.4.1) (2023-06-04)
+
+
+### Bug Fixes
+
+* 断线重连bug ([90a7d0f](https://github.com/lc-cn/onebots/commit/90a7d0f551bf388610d38d1ae0b46d815d2295a6))
+
 ## [0.4.0](https://github.com/lc-cn/onebots/compare/v0.3.0...v0.4.0) (2023-05-17)
 
 
