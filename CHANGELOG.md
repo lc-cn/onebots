@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/lc-cn/onebots/compare/v0.4.2...v0.4.3) (2023-06-12)
+
+
+### Bug Fixes
+
+* v12 添加get_msg接口 ([77e5ff9](https://github.com/lc-cn/onebots/commit/77e5ff9a3846846a856981329aed72938106026a))
+
 ## [0.4.2](https://github.com/lc-cn/onebots/compare/v0.4.1...v0.4.2) (2023-06-12)
 
 
