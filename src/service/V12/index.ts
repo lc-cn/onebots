@@ -26,12 +26,12 @@ export class V12 extends EventEmitter implements OneBot.Base {
     private path: string
     wss?: WebSocketServer
     wsr: Set<WebSocket> = new Set<WebSocket>()
-    private db: Database<{eventBuffer:V12.Payload<keyof Action>[],files:Record<string, V12.FileInfo>}>
+    private db: Database<{ eventBuffer: V12.Payload<keyof Action>[], files: Record<string, V12.FileInfo> }>
 
     constructor(public oneBot: OneBot<'V12'>, public client: Client, public config: V12.Config) {
         super()
         this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
-        this.db.sync({eventBuffer:[],files:{}})
+        this.db.sync({eventBuffer: [], files: {}})
         this.action = new Action()
         this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
     }
@@ -39,28 +39,33 @@ export class V12 extends EventEmitter implements OneBot.Base {
     get history(): V12.Payload<keyof Action>[] {
         return this.db.get('eventBuffer')
     }
-    getFile(file_id:string){
+
+    getFile(file_id: string) {
         return this.db.get(`files.${file_id}`)
     }
-    delFile(file_id:string){
-        const files=this.db.get(`files`)
+
+    delFile(file_id: string) {
+        const files = this.db.get(`files`)
         return delete files[file_id]
     }
-    saveFile(fileInfo:V12.FileInfo){
-        const file_id=uuid()
-        this.db.set(`files.${file_id}`,fileInfo)
+
+    saveFile(fileInfo: V12.FileInfo) {
+        const file_id = uuid()
+        this.db.set(`files.${file_id}`, fileInfo)
         return file_id
     }
-    get files():({file_id:string} & V12.FileInfo)[]{
-        const files=this.db.get('files')
-        return Object.keys(files).map((file_id)=>{
+
+    get files(): ({ file_id: string } & V12.FileInfo)[] {
+        const files = this.db.get('files')
+        return Object.keys(files).map((file_id) => {
             return {
                 file_id,
                 ...files[file_id]
             }
         })
     }
-    set history(value:any[]) {
+
+    set history(value: any[]) {
         this.db.set('eventBuffer', value)
     }
 
@@ -335,14 +340,13 @@ export class V12 extends EventEmitter implements OneBot.Base {
         data.self = this.action.getSelfInfo.apply(this)
         if (!data.detail_type) data.detail_type = data.message_type || data.notice_type || data.request_type || data.system_type
         data.message = data.type === 'message' ? V12.toSegment(data.message) : data.message
-        if (data.source) data.quote = {
-            type: 'reply',
-            data: {
-                message_id: data.detail_type === 'private' ?
-                    genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time) :
-                    genGroupMessageId(data.group_id, data.source.user_id, data.source.seq, data.source.rand, data.source.time),
-                user_id: data.source.user_id
-            }
+        if (data.source) data.source = {
+            ...data.source,
+            message_id: data.detail_type === 'private' ?
+                genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time) :
+                genGroupMessageId(data.group_id, data.source.user_id, data.source.seq, data.source.rand, data.source.time),
+            user_id: data.source.user_id,
+            message: data.source.message,
         }
         return V12.formatPayload(this.oneBot.uin, event, data as any)
     }
@@ -365,7 +369,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         this.emit('dispatch', payload)
     }
 
-    async apply(req:V12.RequestAction) {
+    async apply(req: V12.RequestAction) {
         let {action, params, echo} = req
         action = toLine(action)
         let is_async = action.includes("_async")
@@ -401,7 +405,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             }
             let ret: any, result: any
             try {
-                console.log(method,args)
+                console.log(method, args)
                 ret = this.action[method].apply(this, args)
             } catch (e) {
                 return JSON.stringify(V12.error(e.message))
@@ -768,7 +772,7 @@ export namespace V12 {
         },
         heartbeat: {
             detail_type: 'heartbeat'
-            status:ReturnType<Action['getStatus']>
+            status: ReturnType<Action['getStatus']>
             interval: number
         },
         status_update: {
@@ -779,7 +783,9 @@ export namespace V12 {
     export type TransformEventMap = {
         [P in keyof EventMap]: TransformEventParams<Parameters<EventMap[P]>>
     }
-    export type TransformEventParams<T extends any[]> = T extends [infer L, ...infer R] ? L extends object ? L & { args: R } : { args: [L, ...R] } : { args: T }
+    export type TransformEventParams<T extends any[]> = T extends [infer L, ...infer R] ? L extends object ? L & {
+        args: R
+    } : { args: [L, ...R] } : { args: T }
 
     export function success<T extends any>(data: T, retcode: Result<T>['retcode'] = 0, echo?: string): Result<T> {
         return {
@@ -811,19 +817,20 @@ export namespace V12 {
             ...data
         }
     }
-    export type RequestAction={
-        action:string,
-        params:Record<string, any>
-        echo?:number
+
+    export type RequestAction = {
+        action: string,
+        params: Record<string, any>
+        echo?: number
     }
-    export type FileInfo={
-        type:'url'|'path'|'data'
-        name:string
-        url?:string
-        headers?:Record<string, any>
-        path?:string
-        data?:string
-        sha256?:string
-        total_size?:number
+    export type FileInfo = {
+        type: 'url' | 'path' | 'data'
+        name: string
+        url?: string
+        headers?: Record<string, any>
+        path?: string
+        data?: string
+        sha256?: string
+        total_size?: number
     }
 }
