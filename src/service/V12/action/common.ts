@@ -15,6 +15,18 @@ export class CommonAction{
     deleteMsg(this:V12,message_id:string){
         return this.client.deleteMsg(message_id)
     }
+
+    /**
+     * 获取消息详情
+     */F
+    async getMsg(this:V12,message_id:string){
+        const message=await this.client.getMsg(message_id)
+        if(!message) throw new Error('消息不存在')
+        return {
+            ...message,
+            message: V12.toSegment(message.message)
+        }
+    }
     getSelfInfo(this:V12){
         return {
             user_id:this.oneBot.uin+'',

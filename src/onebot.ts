@@ -3,7 +3,7 @@ import {EventEmitter} from 'events'
 import {App} from "./server/app";
 import {deepClone, deepMerge, omit} from "./utils";
 import {join} from "path";
-import {Client} from "icqq";
+import {Client, Platform} from "icqq";
 import {genDmMessageId, genGroupMessageId} from 'icqq/lib/message'
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
@@ -24,7 +24,9 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
     constructor(public app: App, public readonly uin: number, config: MayBeArray<OneBotConfig>) {
         super()
         config = [].concat(config)
+        let platform=this.app.config.platform
         this.config = config.map(c => {
+            if(c.platform) platform=c.platform
             if (c.password) this.password = c.password
             if (!c.version) c.version = 'V11'
             switch (c.version) {
@@ -36,7 +38,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     throw new Error('不支持的oneBot版本：' + c.version)
             }
         })
-        this.client = new Client({platform: this.app.config.platform, data_dir: join(App.configDir, 'data')})
+        this.client = new Client({platform, data_dir: join(App.configDir, 'data')})
         this.instances = this.config.map(c => {
             switch (c.version) {
                 case 'V11':
@@ -151,13 +153,13 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
             if (data.source) {
                 switch (data.message_type) {
                     case 'group':
-                        data.message.shift({
+                        data.message.unshift({
                             type: 'reply',
                             message_id: genGroupMessageId(data.group_id, data.source.user_id, data.source.seq, data.source.rand, data.source.time)
                         })
                         break;
                     case 'private':
-                        data.message.shift({
+                        data.message.unshift({
                             type: 'reply',
                             message_id: genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time)
                         })
@@ -179,6 +181,7 @@ export namespace OneBot {
     export type Version = 'V11' | 'V12'
     export type Config<V extends Version = 'V11'> = ({
         version?: V
+        platform?:Platform
         password?: string
     } & (V extends 'V11' ? V11.Config : V12.Config))
 

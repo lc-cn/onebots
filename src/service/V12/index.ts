@@ -570,7 +570,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 } else {
                     code = 10003
                     this.logger.debug(e)
-                    message = "请求格式错误"
+                    message = e?.message||"请求格式错误"
                 }
                 ws.send(JSON.stringify({
                     retcode: code,
