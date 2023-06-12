@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/lc-cn/onebots/compare/v0.4.1...v0.4.2) (2023-06-12)
+
+
+### Bug Fixes
+
+* 引用处理 ([52c048d](https://github.com/lc-cn/onebots/commit/52c048d6334552d7db744a914f15591cc4311043))
+
 ## [0.4.1](https://github.com/lc-cn/onebots/compare/v0.4.0...v0.4.1) (2023-06-04)
 
 
