@@ -814,7 +814,10 @@ export namespace V12 {
             detail_type: type,
             type: 'meta',
             sub_type: '',
-            ...data
+            ...data,
+            group:data['group']?.info,
+            frind:data['friend']?.info,
+            member:data['member']?.info,
         }
     }
 
