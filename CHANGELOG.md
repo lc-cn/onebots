@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4](https://github.com/lc-cn/onebots/compare/v0.4.3...v0.4.4) (2023-06-13)
+
+
+### Bug Fixes
+
+* 上报事件添加用户/群/群成员基本信息 ([1156c7f](https://github.com/lc-cn/onebots/commit/1156c7f54662a981312791f4b2218e2010db1f28))
+
 ## [0.4.3](https://github.com/lc-cn/onebots/compare/v0.4.2...v0.4.3) (2023-06-12)
 
 
