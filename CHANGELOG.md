@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/lc-cn/onebots/compare/v0.4.4...v0.4.5) (2023-06-16)
+
+
+### Bug Fixes
+
+* 依赖优化 ([efb521a](https://github.com/lc-cn/onebots/commit/efb521a5864877ed546af5ad0c74cabcc8116423))
+
 ## [0.4.4](https://github.com/lc-cn/onebots/compare/v0.4.3...v0.4.4) (2023-06-13)
 
 
