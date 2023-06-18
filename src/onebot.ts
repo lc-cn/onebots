@@ -25,6 +25,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         super()
         config = [].concat(config)
         let platform=this.app.config.platform
+        let sign_api_addr=this.app.config.sign_api_addr
         this.config = config.map(c => {
             if(c.platform) platform=c.platform
             if (c.password) this.password = c.password
@@ -38,7 +39,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     throw new Error('不支持的oneBot版本：' + c.version)
             }
         })
-        this.client = new Client({platform, data_dir: join(App.configDir, 'data')})
+        this.client = new Client({platform,sign_api_addr, data_dir: join(App.configDir, 'data')})
         this.instances = this.config.map(c => {
             switch (c.version) {
                 case 'V11':

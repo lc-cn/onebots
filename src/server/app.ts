@@ -219,6 +219,7 @@ export namespace App {
         path?: string
         timeout?: number
         log_level?: LogLevel
+        sign_api_addr?:string
         platform?: Platform
         general?: {
             V11?: V11.Config
