@@ -4,7 +4,7 @@ import {App} from "./server/app";
 import {deepClone, deepMerge, omit} from "./utils";
 import {join} from "path";
 import {Client, Platform} from "icqq";
-import {genDmMessageId, genGroupMessageId} from 'icqq/lib/message'
+import {genDmMessageId, genGroupMessageId} from 'icqq'
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
