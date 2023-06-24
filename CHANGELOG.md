@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.6](https://github.com/lc-cn/onebots/compare/v0.4.5...v0.4.6) (2023-06-21)
+
+
+### Bug Fixes
+
+* allow set icqq sign_api_addr ([ad8ad45](https://github.com/lc-cn/onebots/commit/ad8ad45d8214c6ccde9b4d490da8808c337b4db4))
+* update peer dep ([d878b87](https://github.com/lc-cn/onebots/commit/d878b87384e9a3d116d22beff7d42b1d20ea60c4))
+
 ## [0.4.5](https://github.com/lc-cn/onebots/compare/v0.4.4...v0.4.5) (2023-06-16)
 
 
