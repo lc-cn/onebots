@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.8](https://github.com/lc-cn/onebots/compare/v0.4.7...v0.4.8) (2023-07-01)
+
+
+### Bug Fixes
+
+* onebot 不支持发送mention和node ([b6751c0](https://github.com/lc-cn/onebots/commit/b6751c0a3e98bde311538120c5d92883fdff9fea))
+
+## [0.4.7](https://github.com/lc-cn/onebots/compare/v0.4.6...v0.4.7) (2023-06-24)
+
+
+### Bug Fixes
+
+* update peer dep ([7a8127c](https://github.com/lc-cn/onebots/commit/7a8127c9a41ce67e36817eb05843d51fc74ed6da))
+
 ## [0.4.6](https://github.com/lc-cn/onebots/compare/v0.4.5...v0.4.6) (2023-06-21)
 
 

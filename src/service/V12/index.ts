@@ -129,6 +129,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
     }
 
     private startHttp(config: V12.HttpConfig) {
+        this.oneBot.app.router.all(this.path,(ctx)=>this.httpRequestHandler(ctx,config))
         this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), (ctx) => this._httpRequestHandler(ctx, config))
         this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
         this.on('dispatch', (payload: V12.Payload<keyof Action>) => {
@@ -429,9 +430,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
         } else
             throw new NotFoundError()
     }
-
-    private async _httpRequestHandler(ctx: Context, config: V12.HttpConfig) {
-
+    private async httpAuth(ctx:Context,config:V12.HttpConfig){
         if (ctx.method === 'OPTIONS') {
             return ctx.writeHead(200, {
                 'Access-Control-Allow-Origin': '*',
@@ -455,6 +454,31 @@ export class V12 extends EventEmitter implements OneBot.Base {
         ctx.res.setHeader("Content-Type", "application/json; charset=utf-8")
         if (this.config.enable_cors)
             ctx.res.setHeader("Access-Control-Allow-Origin", "*")
+    }
+    private async httpRequestHandler(ctx:Context,config:V12.HttpConfig){
+        if(await this.httpAuth(ctx,config)) return
+        if (ctx.method === "GET") {
+            try {
+                const ret = await this.apply(ctx.query as unknown as V12.RequestAction)
+                ctx.res.writeHead(200).end(ret)
+            } catch (e) {
+                ctx.res.writeHead(500).end(e.message)
+            }
+        } else if (ctx.method === "POST") {
+            try {
+                const params = {...(ctx.request.query || {}), ...(ctx.request.body as object || {})}
+                const ret = await this.apply(params as unknown as V12.RequestAction)
+                ctx.res.writeHead(200).end(ret)
+            } catch (e) {
+                ctx.res.writeHead(500).end(e.message)
+            }
+        } else {
+            ctx.res.writeHead(405).end()
+        }
+    }
+    private async _httpRequestHandler(ctx: Context, config: V12.HttpConfig) {
+        if(await this.httpAuth(ctx,config)) return
+        const url = new URL(ctx.url, `http://127.0.0.1`)
         const action = url.pathname.replace(`${this.path}`, '').slice(1)
         if (ctx.method === "GET") {
             try {
