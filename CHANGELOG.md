@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.9](https://github.com/lc-cn/onebots/compare/v0.4.8...v0.4.9) (2023-07-06)
+
+
+### Bug Fixes
+
+* change icqq =&gt; peerDependencies ([9f9e2a0](https://github.com/lc-cn/onebots/commit/9f9e2a080e476deed27bf82e6734a4d8f6c108b8))
+
 ## [0.4.8](https://github.com/lc-cn/onebots/compare/v0.4.7...v0.4.8) (2023-07-01)
 
 
