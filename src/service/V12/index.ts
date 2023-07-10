@@ -557,7 +557,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
             setTimeout(() => {
                 if (timestmap < this.timestamp)
                     return
-                this.startWsReverse(config)
+                this._createWsr(url,config)
             }, this.config.reconnect_interval * 1000)
         })
     }
