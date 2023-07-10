@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.10](https://github.com/lc-cn/onebots/compare/v0.4.9...v0.4.10) (2023-07-10)
+
+
+### Bug Fixes
+
+* 反向重复上报bug ([7a04b62](https://github.com/lc-cn/onebots/commit/7a04b6263c9e8745b53aba9972bb149c8e9459de))
+
 ## [0.4.9](https://github.com/lc-cn/onebots/compare/v0.4.8...v0.4.9) (2023-07-06)
 
 
