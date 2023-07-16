@@ -17,57 +17,112 @@
 </div>
 
 # 使用示例
-## 全局安装
+## 全局安装(0.4.8以后不推荐)
 ### 1 安装依赖
 ```shell
 npm install -g onebots
+# 0.4.8以上版本需要安装icqq
+npm install -g icqq
 ```
 ### 2 初始化配置文件
-(1) 配置文件存到(用户目录/.onebots/config.yaml)
+在你想存放配置文件的目录执行如下命令
 ```shell
 onebots
 ```
-(2) 配置文件存到(当前目录/config.yaml)
-```shell
-onebots -c config.yaml
-```
-二选一即可
-### 3 更改配置文件后，启动项目
-
-(1) 使用全局配置文件(用户目录/.onebots/config.yaml)
-```shell
-onebots
-```
-(2) 使用指定配置文件(当前目录/config.yaml)
-```shell
-onebots -c config.yaml
-```
-# 2 在NodeJS项目中启动
+### 3 更改生成的默认配置文件成你想要的配置配置后再次运行上面的指令，启动项目
+## 局部安装
 ## 1 初始化node项目
 ```shell
 npm init -y
 ```
-## 2. 安装onebots
+## 2. 安装onebots和icqq
 ```shell
-npm install onebots
+npm install onebots icqq
 ```
-## 3. 在项目跟目录添加配置文件config.yaml
+## 3. 执行如下命令生成配置文件
+```shell
+npx onebots
+```
+## 4. 更改生成的默认配置文件成你想要的配置配置后再次运行上面的指令，启动项目
+# 默认配置文件
 ```yaml
-port: 6727 # 项目onebots监听的端口(默认：6727)
-1472258369: # 你的机器人账户
-  version: V11 # oneBot版本（V11 或 V12）
+port: 6727 # 监听端口
+log_level: info # 日志等级
+platform: 5 # 机器人客户端协议（1:Android 2:APad 3:Watch 4:IMac 5:IPad）
+timeout: 30 #登录超时时间(秒)
+general: # 通用配置，在单个配置省略时的默认值
+  V11: # oneBotV11的通用配置
+    heartbeat: 3 # 心跳间隔 (秒)
+    access_token: '' # 访问api的token
+    post_timeout: 15 # 上报超时时间，(秒)
+    secret: '' # 上报数据的sha1签名密钥
+    rate_limit_interval: 4 # ws心跳间隔(秒)
+    post_message_format: string # "string"或"array"
+    reconnect_interval: 3 # 重连间隔 (秒)
+    use_http: true # 是否使用 http
+    enable_cors: true # 是否允许跨域
+    use_ws: true # 是否使用websocket
+    http_reverse: [ ] # http上报地址
+    ws_reverse: [ ] # 反向ws连接地址
+  V12: # oneBotV12的通用配置
+    heartbeat: 3 # 心跳间隔 (秒)
+    access_token: '' # 访问api的token
+    request_timeout: 15 # 上报超时时间 (秒)
+    reconnect_interval: 3 # 重连间隔 (秒)
+    enable_cors: true # 是否允许跨域
+    use_http: true # 是否启用http
+    use_ws: true # 是否启用 websocket
+    webhook: [ ] # http 上报地址
+    ws_reverse: [ ] # 反向ws连接地址
+# 每个账号的单独配置(用于覆盖通用配置)
+123456789:
+  version: V11 # 使用的oneBot版本
+  password: abcedfghi # 账号密码，未配置则扫码登陆
+  # 。。。其他配置项参见上方对应oneBot版本的通用配置
+
 ```
-## 4. 新建入口文件`index.js`并输入一下内容
-```javascript
-const {createApp}=require('onebots')
-createApp('config.yaml')
-.start()
-```
-## 5. 启动项目
-```shell
-node ./index.js
-```
-# 使用接口管理oneBot
+# 配置解释
+## Config
+| 配置项  | 类型     | 默认值  | desc                                        |
+|:-----|:-------|:-----|:--------------------------------------------|
+| port | number | 6727 | 服务监听端口                                      |
+| logLevel| string | info | 日志级别                                        |
+| platform | number | 5    | 机器人平台,1:android 2:aPid 3:watch 4:mac 5:iPad |
+| sign_api_addr| string | -    | 签名API地址|
+| general | OneBotConfig | general | 通用配置|
+| [number] | OneBotConfig\|OneBotConfig[] | - | 机器人配置|
+## OneBotConfig
+| 配置项  | 类型     | 默认值  | desc                                        |
+|:-----|:-------|:-----|:--------------------------------------------|
+| V11| ConfigV11| configV11| V11配置|
+| V12| ConfigV12| configV12| V12配置|
+## ConfigV11
+| 配置项  | 类型       | 默认值 | desc       |
+|:-----|:---------|:----|:-----------|
+| heartbeat| number   | 3   | 心跳间隔 单位：秒  |
+| access_token| string   | -   | 访问令牌       |
+| secret| string   | -   | 签名密钥       |
+|rate_limit_interval| number   | 4   | 限速间隔 单位：秒  |
+| post_message_format| string   | string   | 消息格式化      |
+|reconnect_interval| number   | 3   | 重连间隔 单位：秒  |
+| use_http| boolean  | false   | 是否使用http协议 |
+| enable_cors| boolean  | false   | 是否允许跨域     |
+| use_ws| boolean  | false   | 是否使用ws协议   |
+|http_reverse_url| string[] | -   | http上报地址地址 |
+| ws_reverse_url| string[] | -   | 反向ws连接地址  |
+## ConfigV12
+| 配置项  | 类型       | 默认值 | desc        |
+|:-----|:---------|:----|:------------|
+| heartbeat| number   | 3   | 心跳间隔 单位：秒   |
+| access_token| string   | -   | 访问令牌        |
+| request_timeout| number   | 15  | 请求超时 单位：秒   |
+| reconnect_interval| number   | 3   | 重连间隔 单位：秒   |
+|enable_cors| boolean  | false   | 是否允许跨域      |
+|use_http| boolean  | false   | 是否使用http协议  |
+|use_ws| boolean  | false   | 是否使用ws协议    |
+|webhook_reverse_url| string[] | -   | webhook上报地址 |
+|ws_reverse_url| string[] | -   | 反向ws连接地址   |
+# 使用API管理oneBot
 
 | url     | method | params          | desc                           |
 |:--------| :--- |:----------------|:-------------------------------|
