@@ -26,12 +26,12 @@ export class V12 extends EventEmitter implements OneBot.Base {
     private path: string
     wss?: WebSocketServer
     wsr: Set<WebSocket> = new Set<WebSocket>()
-    private db: Database<{ eventBuffer: V12.Payload<keyof Action>[], files: Record<string, V12.FileInfo> }>
+    private db: Database<{ eventBuffer: V12.Payload<keyof Action>[],msgIdMap:Record<string, number>, files: Record<string, V12.FileInfo> }>
 
     constructor(public oneBot: OneBot<'V12'>, public client: Client, public config: V12.Config) {
         super()
         this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
-        this.db.sync({eventBuffer: [], files: {}})
+        this.db.sync({eventBuffer: [],msgIdMap:{}, files: {}})
         this.action = new Action()
         this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
     }
@@ -833,14 +833,15 @@ export namespace V12 {
 
     export function formatPayload<K extends keyof BotEventMap>(uin: number, type: K, data: Omit<BotEventMap[K], K>) {
         return {
-            self_id: uin + '',
+            self_id: uin+'',
             time: Math.floor(Date.now() / 1000),
             detail_type: type,
             type: 'meta',
             sub_type: '',
             ...data,
             group:data['group']?.info,
-            frind:data['friend']?.info,
+
+            friend:data['friend']?.info,
             member:data['member']?.info,
         }
     }

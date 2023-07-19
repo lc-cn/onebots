@@ -7,13 +7,17 @@ import {WebSocket, WebSocketServer} from "ws";
 import {Dispose} from "@/types";
 import {Context} from "koa";
 import {URL} from "url";
-import {toBool, toHump, toLine, transformObj} from "@/utils";
+import {toBool, toHump, toLine} from "@/utils";
 import {fromCqcode, fromSegment, toCqcode, toSegment} from "icqq-cq-enable";
 import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
 import {EventEmitter} from "events";
 import {rmSync} from "fs";
+import {Database} from "@/db";
+import {join} from "path";
+import {App} from "@/server/app";
+import {V12} from "@/service/V12";
 
 export class V11 extends EventEmitter implements OneBot.Base {
     public action: Action
@@ -21,6 +25,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
     private path: string
+    db: Database<{ eventBuffer: V12.Payload<keyof Action>[],KVMap:Record<number, string>, files: Record<string, V12.FileInfo> }>
     disposes: Dispose[]
     protected _queue: Array<{
         method: keyof Action,
@@ -34,6 +39,8 @@ export class V11 extends EventEmitter implements OneBot.Base {
     constructor(public oneBot: OneBot<'V11'>, public client: Client, public config: V11.Config) {
         super()
         this.action = new Action()
+        this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
+        this.db.sync({eventBuffer: [],KVMap:{}, files: {}})
         this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
     }
 
@@ -65,7 +72,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
                 this.dispatch({
-                    self_id: this.oneBot.uin + '',
+                    self_id: this.oneBot.uin,
                     status: {
                         online: this.client.status === OnlineStatus.Online,
                         good: this.oneBot.status === OneBotStatus.Good
@@ -203,11 +210,20 @@ export class V11 extends EventEmitter implements OneBot.Base {
         if (data.message && data.post_type === 'message') {
             data.message = this.config.post_message_format === 'array' ? toSegment(data.message) : toCqcode(data)
         }
+        if(data.message_id) {
+            this.db.set(`KVMap.${data.seq}`,data.message_id)
+            data.message_id = data.seq
+        }
+        if(data.font){
+            const fontNo=Buffer.from(data.font).readUInt32BE()
+            this.db.set(`KVMap.${data.fontNo}`,data.font)
+            data.font = fontNo
+        }
         data.time = Math.floor(Date.now() / 1000)
-        data = transformObj(data, (key, value) => {
-            if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
-            return value + ''
-        })
+        // data = transformObj(data, (key, value) => {
+        //     if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
+        //     return value + ''
+        // })
         this.emit('dispatch', JSON.stringify(data))
     }
 
@@ -506,7 +522,7 @@ export namespace V11 {
 
     export function genMetaEvent(uin: number, type: string) {
         return {
-            self_id: uin + '',
+            self_id: uin,
             time: Math.floor(Date.now() / 1000),
             post_type: "meta_event",
             meta_event_type: "lifecycle",
