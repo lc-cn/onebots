@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.11](https://github.com/lc-cn/onebots/compare/v0.4.10...v0.4.11) (2023-07-19)
+
+
+### Bug Fixes
+
+* OneBot v11数据类型错误(涉及字段：message_id、font、user_id、group_id、self_id、discuss_id) ([65d94ce](https://github.com/lc-cn/onebots/commit/65d94ce5ec598bc1d71a266485d00ad063f02c6a))
+
 ## [0.4.10](https://github.com/lc-cn/onebots/compare/v0.4.9...v0.4.10) (2023-07-10)
 
 
