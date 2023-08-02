@@ -50,6 +50,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     throw new Error('不支持的oneBot版本：' + c.version)
             }
         })
+        this.status = OneBotStatus.Good
     }
 
     start():Promise<[boolean,any]> {

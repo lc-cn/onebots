@@ -840,7 +840,6 @@ export namespace V12 {
             sub_type: '',
             ...data,
             group:data['group']?.info,
-
             friend:data['friend']?.info,
             member:data['member']?.info,
         }
