@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.12](https://github.com/lc-cn/onebots/compare/v0.4.11...v0.4.12) (2023-08-02)
+
+
+### Bug Fixes
+
+* update OneBot status ([eb05ed1](https://github.com/lc-cn/onebots/commit/eb05ed1d06eb06285449d0fff374a351ebc5ca6d))
+
 ## [0.4.11](https://github.com/lc-cn/onebots/compare/v0.4.10...v0.4.11) (2023-07-19)
 
 
