@@ -1,10 +1,10 @@
 import 'icqq-cq-enable'
 import {EventEmitter} from 'events'
 import {App} from "./server/app";
-import {deepClone, deepMerge, omit} from "./utils";
+import {deepClone, deepMerge} from "./utils";
 import {join} from "path";
-import {Client, Platform} from "icqq";
-import {genDmMessageId, genGroupMessageId} from 'icqq'
+import {Client} from "icqq";
+import {genDmMessageId, genGroupMessageId,Config as IcqqConfig} from 'icqq'
 import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
@@ -24,12 +24,14 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
     constructor(public app: App, public readonly uin: number, config: MayBeArray<OneBotConfig>) {
         super()
         config = [].concat(config)
-        let platform=this.app.config.platform
-        let sign_api_addr=this.app.config.sign_api_addr
+        const protocolConfig:IcqqConfig={
+            data_dir: join(App.configDir, 'data'),
+            ...this.app.config.general
+        }
         this.config = config.map(c => {
-            if(c.platform) platform=c.platform
-            if (c.password) this.password = c.password
             if (!c.version) c.version = 'V11'
+            if(!c.protocol) c.protocol={}
+            Object.assign(protocolConfig,c.protocol)
             switch (c.version) {
                 case 'V11':
                     return deepMerge(deepClone(this.app.config.general.V11), c)
@@ -39,13 +41,13 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     throw new Error('不支持的oneBot版本：' + c.version)
             }
         })
-        this.client = new Client({platform,sign_api_addr, data_dir: join(App.configDir, 'data')})
+        this.client = new Client(protocolConfig)
         this.instances = this.config.map(c => {
             switch (c.version) {
                 case 'V11':
-                    return new V11(this, this.client, <V11.Config>omit(c, ['version', 'password']))
+                    return new V11(this, this.client, <V11.Config>c)
                 case 'V12':
-                    return new V12(this, this.client, <V12.Config>omit(c, ['version', 'password']))
+                    return new V12(this, this.client, <V12.Config>c)
                 default:
                     throw new Error('不支持的oneBot版本：' + c.version)
             }
@@ -183,8 +185,7 @@ export namespace OneBot {
     export type Version = 'V11' | 'V12'
     export type Config<V extends Version = 'V11'> = ({
         version?: V
-        platform?:Platform
-        password?: string
+        protocol?:IcqqConfig
     } & (V extends 'V11' ? V11.Config : V12.Config))
 
     export interface Base {

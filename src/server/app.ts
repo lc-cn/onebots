@@ -4,6 +4,7 @@ import {copyFileSync, existsSync, mkdirSync, writeFileSync} from "fs";
 import {Logger, getLogger} from "log4js";
 import {createServer, Server} from "http";
 import yaml from 'js-yaml'
+import {Config as IcqqConfig} from "icqq";
 import KoaBodyParser from "koa-bodyparser";
 import {OneBot} from "@/onebot";
 
@@ -116,7 +117,7 @@ export class App extends Koa {
             ctx.body = this.oneBots.map(bot => {
                 return {
                     uin: bot.uin,
-                    config: bot.config.map(c => protectedFields(c, 'password', "access_token")),
+                    config: bot.config.map(c => protectedFields(c, 'protocol', "access_token")),
                     urls: bot.config.map(c => `/${c.version}/${bot.uin}`)
                 }
             })
@@ -143,7 +144,7 @@ export class App extends Koa {
             const oneBot = this.oneBots.find(bot => bot.uin === Number(uin))
             ctx.body = {
                 uin,
-                config: oneBot.config.map(c => protectedFields(c, 'password', "access_token")),
+                config: oneBot.config.map(c => protectedFields(c, 'protocol', "access_token")),
                 urls: oneBot.config.map(c => `/${uin}/${c.version}`)
             }
         })
@@ -219,20 +220,21 @@ export namespace App {
         path?: string
         timeout?: number
         log_level?: LogLevel
-        sign_api_addr?:string
-        platform?: Platform
         general?: {
             V11?: V11.Config
             V12?: V12.Config
+            protocol?: IcqqConfig
         }
     } & KoaOptions & Record<`${number}`, MayBeArray<OneBot.Config<OneBot.Version>>>
     export const defaultConfig: Config = {
         port: 6727,
         timeout: 30,
-        platform: 5,
         general: {
             V11: V11.defaultConfig,
-            V12: V12.defaultConfig
+            V12: V12.defaultConfig,
+            protocol:{
+                platform: 2
+            }
         },
         log_level: 'info',
     }

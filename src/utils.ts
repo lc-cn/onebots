@@ -117,9 +117,15 @@ export function uuid() {
 }
 
 export function protectedFields<T>(source: T, ...keys: (keyof T)[]): T {
+    const protocolValue=(value)=>{
+        if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, value]) => {
+            return [key, protocolValue(value)]
+        }))
+        return `${value}`.split('').map(()=>'*').join('')
+    }
     if (!source || typeof source !== 'object') throw new Error('source must is object')
     return Object.fromEntries(Object.entries(source).map(([key, value]) => {
-        return [key, keys.includes(key as keyof T) ? value.split('').map(c => '*').join('') : value]
+        return [key, keys.includes(key as keyof T) ? protocolValue(value) : value]
     })) as T
 }
 
