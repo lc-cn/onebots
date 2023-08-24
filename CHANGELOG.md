@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.13](https://github.com/lc-cn/onebots/compare/v0.4.12...v0.4.13) (2023-08-24)
+
+
+### Bug Fixes
+
+* 允许用户透传icqq配置 ([852b990](https://github.com/lc-cn/onebots/commit/852b9902598a8fb72698381cfd41432dd164812b))
+* 更新文档 ([15bb38c](https://github.com/lc-cn/onebots/commit/15bb38c276ab059f7639120223c246a61925923d))
+
 ## [0.4.12](https://github.com/lc-cn/onebots/compare/v0.4.11...v0.4.12) (2023-08-02)
 
 
