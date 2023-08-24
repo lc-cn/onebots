@@ -74,12 +74,20 @@ general: # 通用配置，在单个配置省略时的默认值
     use_ws: true # 是否启用 websocket
     webhook: [ ] # http 上报地址
     ws_reverse: [ ] # 反向ws连接地址
+  protocol:
+    platform: 2
+    sign_api_addr: '' #你的签名地址
+    password: '' # 账号密码，未配置则扫码登陆
+    # ...其他配置项参考icqq的Config配置
 # 每个账号的单独配置(用于覆盖通用配置)
 123456789:
   version: V11 # 使用的oneBot版本
-  password: abcedfghi # 账号密码，未配置则扫码登陆
-  # 。。。其他配置项参见上方对应oneBot版本的通用配置
-
+  # ...其他配置项参见上方对应oneBot版本的通用配置
+  protocol:
+    platform: 2
+    sign_api_addr: '' #你的签名地址
+    password: '' # 账号密码，未配置则扫码登陆
+    # ...其他配置项参考icqq的Config配置
 ```
 # 配置解释
 ## Config
@@ -87,8 +95,6 @@ general: # 通用配置，在单个配置省略时的默认值
 |:-----|:-------|:-----|:--------------------------------------------|
 | port | number | 6727 | 服务监听端口                                      |
 | logLevel| string | info | 日志级别                                        |
-| platform | number | 5    | 机器人平台,1:android 2:aPid 3:watch 4:mac 5:iPad |
-| sign_api_addr| string | -    | 签名API地址|
 | general | OneBotConfig | general | 通用配置|
 | [number] | OneBotConfig\|OneBotConfig[] | - | 机器人配置|
 ## OneBotConfig
