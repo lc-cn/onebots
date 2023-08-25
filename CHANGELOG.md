@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.14](https://github.com/lc-cn/onebots/compare/v0.4.13...v0.4.14) (2023-08-25)
+
+
+### Bug Fixes
+
+* update template ([85fe1f8](https://github.com/lc-cn/onebots/commit/85fe1f890d6ca06f4f63009c714967d9bbe64270))
+* 修正文档错误，修正general.protocol读取错误, ([b1fe112](https://github.com/lc-cn/onebots/commit/b1fe11297e6b42c57f84afd9082ea7cfd61a8e18))
+
 ## [0.4.13](https://github.com/lc-cn/onebots/compare/v0.4.12...v0.4.13) (2023-08-24)
 
 
