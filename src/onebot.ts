@@ -26,7 +26,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         config = [].concat(config)
         const protocolConfig:IcqqConfig={
             data_dir: join(App.configDir, 'data'),
-            ...this.app.config.general
+            ...this.app.config.general.protocol
         }
         this.config = config.map(c => {
             if (!c.version) c.version = 'V11'

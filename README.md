@@ -91,53 +91,54 @@ general: # 通用配置，在单个配置省略时的默认值
 ```
 # 配置解释
 ## Config
-| 配置项  | 类型     | 默认值  | desc                                        |
-|:-----|:-------|:-----|:--------------------------------------------|
-| port | number | 6727 | 服务监听端口                                      |
-| logLevel| string | info | 日志级别                                        |
-| general | OneBotConfig | general | 通用配置|
-| [number] | OneBotConfig\|OneBotConfig[] | - | 机器人配置|
+| 配置项      | 类型                           | 默认值     | desc   |
+|:---------|:-----------------------------|:--------|:-------|
+| port     | number                       | 6727    | 服务监听端口 |
+| logLevel | string                       | info    | 日志级别   |
+| general  | OneBotConfig                 | general | 通用配置   |
+| [number] | OneBotConfig\|OneBotConfig[] | -       | 机器人配置  |
 ## OneBotConfig
-| 配置项  | 类型     | 默认值  | desc                                        |
-|:-----|:-------|:-----|:--------------------------------------------|
-| V11| ConfigV11| configV11| V11配置|
-| V12| ConfigV12| configV12| V12配置|
+| 配置项      | 类型        | 默认值       | desc   |
+|:---------|:----------|:----------|:-------|
+| V11      | ConfigV11 | configV11 | V11配置  |
+| V12      | ConfigV12 | configV12 | V12配置  |
+| protocol | Config    | {}        | icqq配置 |
 ## ConfigV11
-| 配置项  | 类型       | 默认值 | desc       |
-|:-----|:---------|:----|:-----------|
-| heartbeat| number   | 3   | 心跳间隔 单位：秒  |
-| access_token| string   | -   | 访问令牌       |
-| secret| string   | -   | 签名密钥       |
-|rate_limit_interval| number   | 4   | 限速间隔 单位：秒  |
-| post_message_format| string   | string   | 消息格式化      |
-|reconnect_interval| number   | 3   | 重连间隔 单位：秒  |
-| use_http| boolean  | false   | 是否使用http协议 |
-| enable_cors| boolean  | false   | 是否允许跨域     |
-| use_ws| boolean  | false   | 是否使用ws协议   |
-|http_reverse_url| string[] | -   | http上报地址地址 |
-| ws_reverse_url| string[] | -   | 反向ws连接地址  |
+| 配置项                 | 类型       | 默认值    | desc       |
+|:--------------------|:---------|:-------|:-----------|
+| heartbeat           | number   | 3      | 心跳间隔 单位：秒  |
+| access_token        | string   | -      | 访问令牌       |
+| secret              | string   | -      | 签名密钥       |
+| rate_limit_interval | number   | 4      | 限速间隔 单位：秒  |
+| post_message_format | string   | string | 消息格式化      |
+| reconnect_interval  | number   | 3      | 重连间隔 单位：秒  |
+| use_http            | boolean  | false  | 是否使用http协议 |
+| enable_cors         | boolean  | false  | 是否允许跨域     |
+| use_ws              | boolean  | false  | 是否使用ws协议   |
+| http_reverse_url    | string[] | -      | http上报地址地址 |
+| ws_reverse_url      | string[] | -      | 反向ws连接地址   |
 ## ConfigV12
-| 配置项  | 类型       | 默认值 | desc        |
-|:-----|:---------|:----|:------------|
-| heartbeat| number   | 3   | 心跳间隔 单位：秒   |
-| access_token| string   | -   | 访问令牌        |
-| request_timeout| number   | 15  | 请求超时 单位：秒   |
-| reconnect_interval| number   | 3   | 重连间隔 单位：秒   |
-|enable_cors| boolean  | false   | 是否允许跨域      |
-|use_http| boolean  | false   | 是否使用http协议  |
-|use_ws| boolean  | false   | 是否使用ws协议    |
-|webhook_reverse_url| string[] | -   | webhook上报地址 |
-|ws_reverse_url| string[] | -   | 反向ws连接地址   |
+| 配置项                 | 类型       | 默认值   | desc        |
+|:--------------------|:---------|:------|:------------|
+| heartbeat           | number   | 3     | 心跳间隔 单位：秒   |
+| access_token        | string   | -     | 访问令牌        |
+| request_timeout     | number   | 15    | 请求超时 单位：秒   |
+| reconnect_interval  | number   | 3     | 重连间隔 单位：秒   |
+| enable_cors         | boolean  | false | 是否允许跨域      |
+| use_http            | boolean  | false | 是否使用http协议  |
+| use_ws              | boolean  | false | 是否使用ws协议    |
+| webhook_reverse_url | string[] | -     | webhook上报地址 |
+| ws_reverse_url      | string[] | -     | 反向ws连接地址    |
 # 使用API管理oneBot
 
 | url     | method | params          | desc                           |
-|:--------| :--- |:----------------|:-------------------------------|
-| /list   | GET |                 | 获取当前运行的机器人列表                   |
-| /detail | GET | uin             | 获取指定机器人配置                      |
-| /qrcode | GET | uin             | 获取指定机器人登录二维码                   |
-| /add    | POST | {uin,...config} | 添加机器人 config 为机器人配置            |
-| /edit   | POST | {uin,...config} | 修改机器人配置 config 为机器人配置          |
-| /remove | get | uin,force       | 移除机器人,force为true时，将删除机器人data目录 |
+|:--------|:-------|:----------------|:-------------------------------|
+| /list   | GET    |                 | 获取当前运行的机器人列表                   |
+| /detail | GET    | uin             | 获取指定机器人配置                      |
+| /qrcode | GET    | uin             | 获取指定机器人登录二维码                   |
+| /add    | POST   | {uin,...config} | 添加机器人 config 为机器人配置            |
+| /edit   | POST   | {uin,...config} | 修改机器人配置 config 为机器人配置          |
+| /remove | get    | uin,force       | 移除机器人,force为true时，将删除机器人data目录 |
 
 # 鸣谢
 1. [icqqjs/icqq](https://github.com/icqqjs/icqq) 底层服务支持
