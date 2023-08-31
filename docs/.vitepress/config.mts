@@ -3,7 +3,7 @@ import {defineConfig} from 'vitepress';
 export default defineConfig({
     title: 'OneBots',
     titleTemplate: ':title - OneBots',
-    base: './',
+    base: './onebots',
     head: [['meta', {name: 'theme-color', content: '#3c8772'}]],
     srcDir: './src',
     outDir: './dist',
