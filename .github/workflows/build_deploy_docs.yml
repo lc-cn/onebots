@@ -23,4 +23,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: docs/dist
-          cname: onebots-docs.liucl.dev
