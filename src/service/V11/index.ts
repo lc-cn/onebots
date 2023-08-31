@@ -397,6 +397,9 @@ export class V11 extends EventEmitter implements OneBot.Base {
      */
     async apply(req: V11.Protocol) {
         let {action, params, echo} = req
+        if(typeof params.message_id == 'number' || /^\d+$/.test(params.message_id)){
+            params.message_id = this.db.get(`KVMap.${params.message_id}`)
+        }
         action = toLine(action)
         let is_async = action.includes("_async")
         if (is_async)
@@ -463,6 +466,10 @@ export class V11 extends EventEmitter implements OneBot.Base {
                 result.data = [...result.data.values()]
             if (result.data?.message)
                 result.data.message = toSegment(result.data.message)
+            if (result.data?.message_id && result.data?.seq){
+                this.db.set(`KVMap.${result.data.seq}`,result.data.message_id )
+                result.data.message_id = result.data.seq
+            }
             if (echo) {
                 result.echo = echo
             }
