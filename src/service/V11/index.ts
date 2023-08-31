@@ -208,7 +208,17 @@ export class V11 extends EventEmitter implements OneBot.Base {
 
         }
         if (data.message && data.post_type === 'message') {
-            data.message = this.config.post_message_format === 'array' ? toSegment(data.message) : toCqcode(data)
+            if (this.config.post_message_format === 'array') {
+                data.message = toSegment(data.message) 
+            } else {
+                if (data.source) {
+                    this.db.set(`KVMap.${data.source.seq}`,data.message[0].id)
+                    data.message.shift()
+                    data.message = toCqcode(data).replace(/^(\[CQ:reply,id=)(.+?)\]/, `$1${data.source.seq}]`)
+                }else{
+                    data.message = toCqcode(data)
+                }
+            }
         }
         if(data.message_id) {
             this.db.set(`KVMap.${data.seq}`,data.message_id)
@@ -387,6 +397,9 @@ export class V11 extends EventEmitter implements OneBot.Base {
      */
     async apply(req: V11.Protocol) {
         let {action, params, echo} = req
+        if(typeof params.message_id == 'number' || /^\d+$/.test(params.message_id)){
+            params.message_id = this.db.get(`KVMap.${params.message_id}`)
+        }
         action = toLine(action)
         let is_async = action.includes("_async")
         if (is_async)
@@ -451,7 +464,12 @@ export class V11 extends EventEmitter implements OneBot.Base {
             }
             if (result.data instanceof Map)
                 result.data = [...result.data.values()]
-
+            if (result.data?.message)
+                result.data.message = toSegment(result.data.message)
+            if (result.data?.message_id && result.data?.seq){
+                this.db.set(`KVMap.${result.data.seq}`,result.data.message_id )
+                result.data.message_id = result.data.seq
+            }
             if (echo) {
                 result.echo = echo
             }
