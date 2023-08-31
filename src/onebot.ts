@@ -159,13 +159,13 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     case 'group':
                         data.message.unshift({
                             type: 'reply',
-                            message_id: genGroupMessageId(data.group_id, data.source.user_id, data.source.seq, data.source.rand, data.source.time)
+                            id: genGroupMessageId(data.group_id, data.source.user_id, data.source.seq, data.source.rand, data.source.time)
                         })
                         break;
                     case 'private':
                         data.message.unshift({
                             type: 'reply',
-                            message_id: genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time)
+                            id: genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time)
                         })
                         break;
                 }
