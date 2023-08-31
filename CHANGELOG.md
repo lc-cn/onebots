@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.15](https://github.com/lc-cn/onebots/compare/v0.4.14...v0.4.15) (2023-08-31)
+
+
+### Bug Fixes
+
+* change docs build actions ([a02c7ba](https://github.com/lc-cn/onebots/commit/a02c7ba5708b1bbe8da4fec99bbdb54b9790ef57))
+* cname ([0615258](https://github.com/lc-cn/onebots/commit/06152589c6a2ca4a9eedfc623a8290f639674958))
+* cname ([c4eb97b](https://github.com/lc-cn/onebots/commit/c4eb97b34a3cdd5e5984f141726c488f5402117f))
+* 增加扩展名 ([e1133d9](https://github.com/lc-cn/onebots/commit/e1133d9b80782ee96e0831b92f145f1755f0f1f4))
+* 更改docs config扩展名 ([0903afb](https://github.com/lc-cn/onebots/commit/0903afb79488271771ad0f95d40c340c1ceb3cf3))
+* 更改部署秘钥环境变量 ([e2c1771](https://github.com/lc-cn/onebots/commit/e2c1771e27b2c1f07068731218fc978ef24d14e1))
+
 ## [0.4.14](https://github.com/lc-cn/onebots/compare/v0.4.13...v0.4.14) (2023-08-25)
 
 
