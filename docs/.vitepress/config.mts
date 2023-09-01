@@ -45,7 +45,7 @@ export default defineConfig({
             {
                 text: require('../../package.json').version,
                 items: [
-                    {text: 'Changelog', link: 'https://github.com/lc-cn/onebots/blob/master/CHANGELOG.md'}
+                    {text: 'Changelog', link: 'https://github.com/icqqjs/onebots/blob/master/CHANGELOG.md'}
                 ]
             }],
         sidebar: {
@@ -71,13 +71,13 @@ export default defineConfig({
             ]
         },
         footer: {
-            message: 'Released under the <a href="https://github.com/lc-cn/onebots/blob/master/LICENSE">MIT License</a>.',
+            message: 'Released under the <a href="https://github.com/icqqjs/onebots/blob/master/LICENSE">MIT License</a>.',
             copyright: 'Copyright © 2022-2023 <a href="https://github.com/lc-cn">凉菜</a>'
         },
         editLink: {
-            pattern: 'https://github.com/lc-cn/onebots/edit/master/docs/src/:path', text: '修正文档',
+            pattern: 'https://github.com/icqqjs/onebots/edit/master/docs/src/:path', text: '修正文档',
         },
-        socialLinks: [{icon: 'github', link: 'https://github.com/lc-cn/onebots'}],
+        socialLinks: [{icon: 'github', link: 'https://github.com/icqqjs/onebots'}],
         lastUpdatedText: '上次更新时间',
         docFooter: {
             prev: '上一节', next: '下一节'

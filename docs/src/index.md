@@ -19,7 +19,7 @@ hero:
     link: /v12/index
   - theme: alt
     text: 仓库地址
-    link: https://github.com/lc-cn/onebots
+    link: https://github.com/icqqjs/onebots
 features:
 - title: OneBot(s) 全面
   details: 同时支持OneBot V11 和OneBot V12
