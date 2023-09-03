@@ -25,9 +25,15 @@ export class CommonAction {
      * 获取消息
      * @param message_id {string} 消息id
      */
-    getMsg(this: V11, message_id: number) {
-        const messageId=this.db.get(`KVMap.${message_id}`)
-        return this.client.getMsg(messageId as string)
+    getMsg(this: V11, message_id: string) {
+        return this.client.getMsg(message_id)
+    }
+
+    /**
+     * 发送赞
+     */
+    sendLike(this:V11,user_id:number,times?:number){
+        return this.client.sendLike(user_id, times)
     }
 
     /**

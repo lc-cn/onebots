@@ -1,5 +1,5 @@
 /src/test.ts
-/data/**/*
+/data
 config.yaml
 node_modules
 package-lock.json
