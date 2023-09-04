@@ -418,6 +418,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
                 action = "send_discuss_msg"
             else throw new Error('required message_type or input (user_id/group_id)')
         }
+        if (action === 'send_like') action = 'send_user_like'
         const method = toHump(action) as keyof Action
         if (Reflect.has(this.action, method)) {
             const ARGS = String(Reflect.get(this.action, method)).match(/\(.*\)/)?.[0]
@@ -432,8 +433,15 @@ export class V11 extends EventEmitter implements OneBot.Base {
                         params[k] = toBool(params[k])
                     if (k === 'message') {
                         if (typeof params[k] === 'string') {
+                            if (/[CQ:music,type=.+,id=.+]/.test(params[k])){
+                                params[k] = params[k].replace(',type=',',platform=')
+                            } 
                             params[k] = fromCqcode(params[k])
                         } else {
+                            if(params[k][0].type == 'music' && params[k][0]?.data?.type){
+                                params[k][0].data.platform = params[k][0].data.type
+                                delete params[k][0].data.type
+                            }
                             params[k] = fromSegment(params[k])
                         }
                         params['message_id'] = params[k].find(e => e.type === 'reply')?.message_id

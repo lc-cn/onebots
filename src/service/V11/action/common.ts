@@ -29,12 +29,6 @@ export class CommonAction {
         return this.client.getMsg(message_id)
     }
 
-    /**
-     * 发送赞
-     */
-    sendLike(this:V11,user_id:number,times?:number){
-        return this.client.sendLike(user_id, times)
-    }
 
     /**
      * 获取合并消息
