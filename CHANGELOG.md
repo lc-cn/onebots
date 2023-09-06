@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.16](https://github.com/icqqjs/onebots/compare/v0.4.15...v0.4.16) (2023-09-06)
+
+
+### Bug Fixes
+
+* 添加 npm badge ([e9639c8](https://github.com/icqqjs/onebots/commit/e9639c8db8a2bd5afbd12579e1c0fcdbc3bd1bdb))
+
 ## [0.4.15](https://github.com/icqqjs/onebots/compare/v0.4.14...v0.4.15) (2023-08-31)
 
 
