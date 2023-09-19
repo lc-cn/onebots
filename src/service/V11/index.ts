@@ -1,4 +1,4 @@
-import {Client, OnlineStatus} from "icqq";
+import {Client, OnlineStatus, EventMap} from "icqq";
 import {Config} from "./config";
 import {Action} from "./action";
 import {OneBot, OneBotStatus} from "@/onebot";
@@ -234,7 +234,62 @@ export class V11 extends EventEmitter implements OneBot.Base {
         //     if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
         //     return value + ''
         // })
-        this.emit('dispatch', JSON.stringify(data))
+        this.emit('dispatch', this._formatEvent(data))
+    }
+
+    private _formatEvent(data:Parameters<EventMap['message']|EventMap['notice']|EventMap['request']>[0]){
+        if (data.post_type === 'notice') {
+            // console.log(JSON.stringify(data))
+            const data1:any = {...data}
+            if (data.notice_type === 'group') {
+                delete data1.group
+                delete data1.member
+                switch (data.sub_type) {
+                    case 'decrease':
+                        data1.sub_type = data.operator_id === data.user_id ? 'leave' : data.user_id === this.client.uin? 'kick_me': 'kick'
+                        data1.notice_type = `${data.notice_type}_${data.sub_type}`
+                        break
+                    case 'increase':
+                        data1.notice_type = `${data.notice_type}_${data.sub_type}`
+                        data1.sub_type = 'approve' // todo 尚未实现
+                        data1.operator_id = data1.user_id // todo 尚未实现
+                        break
+                    case 'ban':
+                        data1.notice_type = `${data.notice_type}_${data.sub_type}`
+                        data1.subtype=data.duration?'ban':'lift_ban'
+                        break
+                    case 'recall':
+                        data1.notice_type = `${data.notice_type}_${data.sub_type}`
+                        delete data1.sub_type
+                        break
+                    case 'admin':
+                        data1.notice_type = `${data.notice_type}_${data.sub_type}`
+                        data1.sub_type = data.set?'set':'unset'
+                        break
+                    case 'poke':
+                        data1.notice_type = 'notify'
+                        data1.user_id = data.operator_id
+                        break
+                    default:
+                        break
+                }
+            } else {
+                delete data1.friend
+                switch (data.sub_type) {
+                    case 'increase':
+                        data1.notice_type = `friend_add`
+                        break;
+                    case 'recall':
+                        data1.notice_type = `friend_recall`
+                        break
+                    default:
+                        break;
+                }
+            }
+            return JSON.stringify(data1)
+        } else {
+            return JSON.stringify(data)
+        }
     }
 
     private async _httpRequestHandler(ctx: Context) {
