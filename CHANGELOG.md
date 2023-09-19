@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.17](https://github.com/icqqjs/onebots/compare/v0.4.16...v0.4.17) (2023-09-19)
+
+
+### Bug Fixes
+
+* 修复部分 notice 事件 ([19a44a6](https://github.com/icqqjs/onebots/commit/19a44a65a92f88a22df2637fe547f323e33e505b))
+* 添加 npm 链接 ([b62f351](https://github.com/icqqjs/onebots/commit/b62f3517edb7f1d1a66980e3fcab1e4e946a1171))
+
 ## [0.4.16](https://github.com/icqqjs/onebots/compare/v0.4.15...v0.4.16) (2023-09-06)
 
 
