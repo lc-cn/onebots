@@ -31,6 +31,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         this.config = config.map(c => {
             if (!c.version) c.version = 'V11'
             if(!c.protocol) c.protocol={}
+            if(c.password) this.password=c.password
             Object.assign(protocolConfig,c.protocol)
             switch (c.version) {
                 case 'V11':
@@ -185,6 +186,7 @@ export namespace OneBot {
     export type Version = 'V11' | 'V12'
     export type Config<V extends Version = 'V11'> = ({
         version?: V
+        password?: string
         protocol?:IcqqConfig
     } & (V extends 'V11' ? V11.Config : V12.Config))
 
