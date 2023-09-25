@@ -343,10 +343,11 @@ export class V11 extends EventEmitter implements OneBot.Base {
      */
     protected _webSocketHandler(ws: WebSocket) {
         ws.on("message", async (msg) => {
-            this.logger.info(" 收到ws消息：" + msg)
+            const msgStr = msg.toString()
+            this.logger.info(" 收到ws消息：", msgStr.length > 2e3? msgStr.slice(0,2e3) + ` ... ${msgStr.length - 2e3} more chars` : msgStr)
             var data
             try {
-                data = JSON.parse(String(msg)) as V11.Protocol
+                data = JSON.parse(msgStr) as V11.Protocol
                 let ret: string
                 if (data.action.startsWith(".handle_quick_operation")) {
                     const event = data.params.context, res = data.params.operation
