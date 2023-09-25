@@ -83,12 +83,12 @@ general: # 通用配置，在单个配置省略时的默认值
     # ...其他配置项参考icqq的Config配置
 # 每个账号的单独配置(用于覆盖通用配置)
 123456789:
+  password: '' # 账号密码，未配置则扫码登陆
   version: V11 # 使用的oneBot版本
   # ...其他配置项参见上方对应oneBot版本的通用配置
   protocol:
     platform: 2
     sign_api_addr: '' #你的签名地址
-    password: '' # 账号密码，未配置则扫码登陆
     # ...其他配置项参考icqq的Config配置
 ```
 # 配置解释
@@ -100,11 +100,12 @@ general: # 通用配置，在单个配置省略时的默认值
 | general  | OneBotConfig                 | general | 通用配置   |
 | [number] | OneBotConfig\|OneBotConfig[] | -       | 机器人配置  |
 ## OneBotConfig
-| 配置项      | 类型        | 默认值       | desc   |
-|:---------|:----------|:----------|:-------|
-| V11      | ConfigV11 | configV11 | V11配置  |
-| V12      | ConfigV12 | configV12 | V12配置  |
-| protocol | Config    | {}        | icqq配置 |
+| 配置项      | 类型        | 默认值       | desc               |
+|:---------|:----------|:----------|:-------------------|
+| password | string    | -         | 账号密码 未填写或填写为空则扫码登陆 |
+| V11      | ConfigV11 | configV11 | V11配置              |
+| V12      | ConfigV12 | configV12 | V12配置              |
+| protocol | Config    | {}        | icqq配置             |
 ## ConfigV11
 | 配置项                 | 类型       | 默认值    | desc       |
 |:--------------------|:---------|:-------|:-----------|
