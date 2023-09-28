@@ -31,6 +31,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         this.config = config.map(c => {
             if (!c.version) c.version = 'V11'
             if(!c.protocol) c.protocol={}
+            if(c.password) this.password=c.password
             Object.assign(protocolConfig,c.protocol)
             switch (c.version) {
                 case 'V11':
@@ -135,6 +136,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
     }
 
     startListen() {
+        this.client.on('system.online', this.system_online.bind(this, "system.online"))
         this.client.trap('system', this.dispatch.bind(this, 'system'))
         this.client.trap('notice', this.dispatch.bind(this, 'notice'))
         this.client.trap('request', this.dispatch.bind(this, 'request'))
@@ -151,20 +153,35 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         this.client.logout(force)
     }
 
-    dispatch(event, data) {
+    system_online(event, data){
         for (const instance of this.instances) {
+            instance.system_online(data)
+        }
+    }
+
+    async dispatch(event, data) {
+        let group_id = data["group_id"]
+        for (const instance of this.instances) {
+            if(group_id) {
+                // 群消息派发白名单
+                let lst = (instance.config as OneBotConfig).group_whitelist
+                if(lst && lst.length > 0 && !lst.includes(group_id))
+                    continue
+            }
             const result = instance.format(event, data)
-            if (data.source) {
+            if (data.source) { // 有 data.source 字段代表这是个回复
                 switch (data.message_type) {
                     case 'group':
                         data.message.unshift({
                             type: 'reply',
+                            seq: data.source.seq,
                             id: genGroupMessageId(data.group_id, data.source.user_id, data.source.seq, data.source.rand, data.source.time)
                         })
                         break;
                     case 'private':
                         data.message.unshift({
                             type: 'reply',
+                            seq: data.source.seq, 
                             id: genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time)
                         })
                         break;
@@ -185,6 +202,8 @@ export namespace OneBot {
     export type Version = 'V11' | 'V12'
     export type Config<V extends Version = 'V11'> = ({
         version?: V
+        password?: string
+        group_whitelist?: number[]
         protocol?:IcqqConfig
     } & (V extends 'V11' ? V11.Config : V12.Config))
 
@@ -193,6 +212,7 @@ export namespace OneBot {
 
         stop(): any
 
+        system_online(...args: any[]): any
         dispatch(...args: any[]): any
 
         apply(...args: any[]): any

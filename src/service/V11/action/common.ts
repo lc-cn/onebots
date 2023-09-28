@@ -1,4 +1,4 @@
-import {OnlineStatus} from "icqq";
+import {Message, OnlineStatus} from "icqq";
 import {OneBotStatus} from "@/onebot";
 import {V11} from "@/service/V11";
 
@@ -25,10 +25,15 @@ export class CommonAction {
      * 获取消息
      * @param message_id {string} 消息id
      */
-    getMsg(this: V11, message_id: string) {
-        return this.client.getMsg(message_id)
+    async getMsg(this: V11, message_id: number) {
+        if(message_id == 0) throw new Error('getMsg: message_id[0] is invalid')
+        let msg_entry = await this.db.getMsgById(message_id)
+        if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
+        let msg: Message = await this.client.getMsg(msg_entry.base64_id)
+        msg.message_id = String(message_id)  // nonebot v11 要求 message_id 是 number 类型
+        msg["real_id"] = msg.message_id      // nonebot 的reply类型会检测real_id是否存在，虽然它从未使用
+        return msg
     }
-
 
     /**
      * 获取合并消息
