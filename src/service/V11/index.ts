@@ -14,10 +14,11 @@ import http from "http";
 import https from "https";
 import {EventEmitter} from "events";
 import {rmSync} from "fs";
-import {Database} from "@/db";
+import {Database} from "./db_sqlite";
 import {join} from "path";
 import {App} from "@/server/app";
-import {V12} from "@/service/V12";
+import { MsgEntry } from "./db_entities";
+import { stringify } from "querystring";
 
 export class V11 extends EventEmitter implements OneBot.Base {
     public action: Action
@@ -25,7 +26,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
     private path: string
-    db: Database<{ eventBuffer: V12.Payload<keyof Action>[],KVMap:Record<number, string>, files: Record<string, V12.FileInfo> }>
+    db: Database
     disposes: Dispose[]
     protected _queue: Array<{
         method: keyof Action,
@@ -39,9 +40,8 @@ export class V11 extends EventEmitter implements OneBot.Base {
     constructor(public oneBot: OneBot<'V11'>, public client: Client, public config: V11.Config) {
         super()
         this.action = new Action()
-        this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
-        this.db.sync({eventBuffer: [],KVMap:{}, files: {}})
         this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
+        this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.db'), this.logger)
     }
 
     start(path?: string) {
@@ -202,31 +202,44 @@ export class V11 extends EventEmitter implements OneBot.Base {
         return data
     }
 
-    dispatch(data: any) {
-        if (!data.post_type) data.post_type = 'system'
-        if (data.post_type === 'system') {
+    system_online(data){
+        this.logger.info("【好友列表】")
+        this.client.fl.forEach(item => this.logger.info(`\t${item.nickname}(${item.user_id})`))
+        this.logger.info("【群列表】")
+        this.client.gl.forEach(item => this.logger.info(`\t${item.group_name}(${item.group_id})`))
+        this.logger.info('')
+    }
 
-        }
+    async dispatch(data: any) {
+        data.post_type = data.post_type || 'system'
         if (data.message && data.post_type === 'message') {
             if (this.config.post_message_format === 'array') {
-                data.message = toSegment(data.message) 
+                data.message = toSegment(data.message)
+                if (data.source) { // reply
+                    let msg0 = data.message[0]
+                    msg0.data['id'] = await this.getReplyMsgIdFromDB(data)
+                }
             } else {
                 if (data.source) {
-                    this.db.set(`KVMap.${data.source.seq}`,data.message[0].id)
                     data.message.shift()
+                    // segment 更好用, cq 一般只用来显示，就不存储真实id了, 有需求的自己去改
                     data.message = toCqcode(data).replace(/^(\[CQ:reply,id=)(.+?)\]/, `$1${data.source.seq}]`)
                 }else{
                     data.message = toCqcode(data)
                 }
             }
         }
+        
         if(data.message_id) {
-            this.db.set(`KVMap.${data.seq}`,data.message_id)
-            data.message_id = data.seq
+            data.message_id = await this.addMsgIntoDB(data)
+        }
+
+        if(data.post_type == 'notice' && String(data.notice_type).endsWith('_recall')) {
+            this.db.markMsgAsRecalled(data.base64_id)
         }
         if(data.font){
             const fontNo=Buffer.from(data.font).readUInt32BE()
-            this.db.set(`KVMap.${data.fontNo}`,data.font)
+            // this.db.set(`KVMap.${data.fontNo}`,data.font)
             data.font = fontNo
         }
         data.time = Math.floor(Date.now() / 1000)
@@ -290,6 +303,34 @@ export class V11 extends EventEmitter implements OneBot.Base {
         } else {
             return JSON.stringify(data)
         }
+    }
+
+    private async addMsgIntoDB(data: any): Promise<number> {
+        if (!data.sender || !('user_id' in data.sender)) { // eg. notice
+            return
+        }
+        let msg = new MsgEntry()
+        msg.base64_id = data.message_id
+        msg.seq = data.seq
+        msg.user_id = data.sender.user_id
+        msg.nickname = data.sender.nickname
+        if(data.message_type === 'group')
+        {
+            msg.group_id = data.group_id
+            msg.group_name = data["group_name"] || '' // 可能不存在(gocq默认不发)
+        } else {
+            msg.group_id = 0
+            msg.group_name = ''
+        }
+        msg.content = data.cqCode
+        
+        return await this.db.addOrUpdateMsg(msg)
+    }
+
+    private async getReplyMsgIdFromDB(data: any): Promise<number> {
+        let group_id = (data.message_type === 'group')? data.group_id : 0
+        let msg = await this.db.getMsgByParams(data.source.user_id, group_id, data.source.seq)
+        return msg ? msg.id : 0
     }
 
     private async _httpRequestHandler(ctx: Context) {
@@ -379,7 +420,9 @@ export class V11 extends EventEmitter implements OneBot.Base {
                     error: {
                         code, message
                     },
-                    echo: data?.echo
+                    echo: data?.echo,
+                    msg: e.message, // gocq 返回的消息里有这个字段且很多插件都在访问
+                    action: data.action
                 }))
             }
         })
@@ -454,7 +497,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
     async apply(req: V11.Protocol) {
         let {action, params, echo} = req
         if(typeof params.message_id == 'number' || /^\d+$/.test(params.message_id)){
-            params.message_id = this.db.get(`KVMap.${params.message_id}`)
+            params.message_id = (await this.db.getMsgById(params.message_id)).id // 调用api时把本地的数字id转为base64发给icqq
         }
         action = toLine(action)
         let is_async = action.includes("_async")
@@ -512,7 +555,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
                 result = V11.ok(null, 0, true)
             } else {
                 try {
-                    ret = this.action[method].apply(this, args)
+                    ret = await this.action[method].apply(this, args)
                 } catch (e) {
                     return JSON.stringify(V11.error(e.message))
                 }
@@ -530,10 +573,20 @@ export class V11 extends EventEmitter implements OneBot.Base {
                 result.data = [...result.data.values()]
             if (result.data?.message)
                 result.data.message = toSegment(result.data.message)
-            if (result.data?.message_id && result.data?.seq){
-                this.db.set(`KVMap.${result.data.seq}`,result.data.message_id )
-                result.data.message_id = result.data.seq
-            }
+            /**
+             * > send_msg 时返回的result也有 message_id 字段并且是base64格式，但由于base64与特定消息并不是一对一关系，因此转换成number类型的msgid并无意义
+             * 如需判断发送的消息和接收到的消息是否是同一个消息，请使用 group_id + seq 对比
+             * 
+             * > 但 get_msg 返回的是从数据库获取的message_id，因此是有效的
+             */
+            // if (result.data?.message_id && result.data?.seq) {
+            //     let message_id = result.data?.message_id
+            //     if(!(typeof message_id == 'number' || /^\d+$/.test(message_id))) {
+            //         // this.db.set(`KVMap.${result.data.seq}`,result.data.message_id )
+            //         result.data.message_id = result.data.seq
+            //     }
+                
+            // }
             if (echo) {
                 result.echo = echo
             }

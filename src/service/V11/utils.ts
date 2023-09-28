@@ -8,7 +8,12 @@ export async function processMessage(this: Client, message: string|SegmentElem|S
     let quote = elements.find(e => e.type === 'reply') as QuoteElem
     if (quote) remove(elements, quote)
     let music= elements.find(e=>e.type==='music') as MusicElem
-    if(music) remove(elements,music)
+    if(music) {
+        remove(elements,music)
+        if(String(music.platform) === 'custom') {
+            music.platform = music['subtype'] // gocq 的平台数据存储在 subtype 内，兼容 icqq 时要求前端必须发送 id 字段
+        }
+    }
     let share= elements.find(e=>e.type==='share') as ShareElem
     if(share) remove(elements,share)
     for(const element of elements){

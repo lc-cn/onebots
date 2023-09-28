@@ -1,5 +1,6 @@
 import Koa from 'koa'
 import * as os from 'os'
+import "reflect-metadata";
 import {copyFileSync, existsSync, mkdirSync, writeFileSync} from "fs";
 import {Logger, getLogger} from "log4js";
 import {createServer, Server} from "http";
