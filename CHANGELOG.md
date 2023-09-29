@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.19](https://github.com/icqqjs/onebots/compare/v0.4.18...v0.4.19) (2023-09-25)
+
+
+### Bug Fixes
+
+* 密码登录失败问题 ([526a161](https://github.com/icqqjs/onebots/commit/526a16169683efd3d3208189ce1b545c982c19ad))
+
+## [0.4.18](https://github.com/icqqjs/onebots/compare/v0.4.17...v0.4.18) (2023-09-25)
+
+
+### Bug Fixes
+
+* 处理幽灵依赖 ([4d2bd04](https://github.com/icqqjs/onebots/commit/4d2bd0494ea947dedede71c7d16a74206130abe5))
+
 ## [0.4.17](https://github.com/icqqjs/onebots/compare/v0.4.16...v0.4.17) (2023-09-19)
 
 
