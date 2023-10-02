@@ -1,6 +1,8 @@
 import {V11} from "@/service/V11";
 import {SegmentElem} from "icqq-cq-enable/lib/utils";
 import {processMessage} from "@/service/V11/utils";
+import { shareMusic } from "@/service/shareMusicCustom"
+import { MusicElem } from "icqq/lib/message";
 
 export class GroupAction {
     /**
@@ -12,7 +14,7 @@ export class GroupAction {
     async sendGroupMsg(this: V11, group_id: number, message: string | SegmentElem|SegmentElem[], message_id?: string) {
         const msg=message_id?await this.client.getMsg(message_id):undefined
         const {element,quote,music,share}=await processMessage.apply(this.client,[message,msg])
-        if(music) return await this.client.pickGroup(group_id).shareMusic(music.platform,music.id)
+        if(music) return await shareMusic.call(this.client.pickGroup(group_id), music as MusicElem)
         if(share) return await this.client.pickGroup(group_id).shareUrl(music.data)
         if(element.length) {
             return await this.client.sendGroupMsg(group_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
