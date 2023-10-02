@@ -30,7 +30,7 @@ export async function buildMusic(target: string | number, bu: string | 0 | 1, mu
 	const { appid, package_name, sign, getMusicInfo } = musicFactory[music.platform];
 	let style: 4 | 0 = 4
 	try {
-		let { singer=null, title=null, jumpUrl=null, musicUrl=null, preview=null } = music.id ? await getMusicInfo(music.id) : null
+		let { singer=null, title=null, jumpUrl=null, musicUrl=null, preview=null } = music.id ? await getMusicInfo(music.id) : {}
 		singer = music['content'] || music.singer || singer // 自定义参数优先级高于默认值(gocq的参数名与icqq有区别，做下兼容)
 		title = music.title || title
 		jumpUrl = music.jumpUrl || jumpUrl
