@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.20](https://github.com/icqqjs/onebots/compare/v0.4.19...v0.4.20) (2023-09-29)
+
+
+### Bug Fixes
+
+* bump version ([26cc3e6](https://github.com/icqqjs/onebots/commit/26cc3e618b056bc35abf6ab38ec88435eaf68219))
+
 ## [0.4.19](https://github.com/icqqjs/onebots/compare/v0.4.18...v0.4.19) (2023-09-25)
 
 

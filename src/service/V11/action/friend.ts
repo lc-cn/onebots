@@ -2,6 +2,8 @@ import {OneBot} from "@/onebot";
 import {V11} from "@/service/V11";
 import {SegmentElem} from "icqq-cq-enable/lib/utils";
 import {processMessage} from "@/service/V11/utils";
+import { shareMusic } from "@/service/shareMusicCustom"
+import { MusicElem } from "icqq/lib/message";
 
 export class FriendAction {
     /**
@@ -13,7 +15,7 @@ export class FriendAction {
     async sendPrivateMsg(this: V11, user_id: number, message: string | SegmentElem|SegmentElem[], message_id?: string) {
         const msg=message_id?await this.client.getMsg(message_id):undefined
         const {element,quote,music,share}=await processMessage.apply(this.client,[message,msg])
-        if(music) return await this.client.pickFriend(user_id).shareMusic(music.platform,music.id)
+        if(music) return await shareMusic.call(this.client.pickFriend(user_id), music as MusicElem)
         if(share) return await this.client.pickFriend(user_id).shareUrl(music.data)
         if(element.length) {
             return await this.client.sendPrivateMsg(user_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
