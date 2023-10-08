@@ -2,6 +2,7 @@ import {readFileSync, writeFileSync, existsSync} from "fs";
 import { MsgEntry } from "./db_entities"
 import { DataSource, Repository } from "typeorm";
 import { Logger } from "log4js";
+import { AsyncLock } from "@/types"
 
 export class Database {
     logger: Logger
@@ -13,10 +14,12 @@ export class Database {
     public msgHistoryPreserveDays: number = 14 // 历史消息默认存储2周
     public msgHistoryCheckInterval: number = 1 * 24 * 3600 * 1000 // 历史记录检查间隔
     msgRepo: Repository<MsgEntry>
+    dbLock: AsyncLock
 
     constructor(dbPath: string, logger: Logger){
         this.dbPath = dbPath
         this.logger = logger
+        this.dbLock = new AsyncLock()
         
         this.dataSource = new DataSource({
             type: "better-sqlite3",
@@ -49,16 +52,26 @@ export class Database {
      * @param msgData 
      */
     public async addOrUpdateMsg(msgData: MsgEntry): Promise<number> {
-        let msgDataExists = await this.getMsgByBase64Id(msgData.base64_id)
-        if(msgDataExists) {
-            msgData.id = msgDataExists.id
-            await this.msgRepo.update({id: msgData.id}, msgData)
-            return msgDataExists.id
+        await this.dbLock.lock()
+        try {
+            let msgDataExists = await this.getMsgByParams(msgData.user_id, msgData.group_id, msgData.seq)
+            if(msgDataExists) {
+                // send_msg() 返回值和同步的 message 消息哪个先来不确定，send_msg 返回值后来时不允许更新数据库
+                if(msgData.content.length == 0) {
+                    return
+                }
+                msgData.id = msgDataExists.id
+                await this.msgRepo.update({id: msgData.id}, msgData)
+                return msgDataExists.id
+            }
+    
+            msgData = await this.msgRepo.save(msgData)
+            this.logger.debug(`addMsg with id:${msgData.id}`)
+            return msgData.id
         }
-
-        msgData = await this.msgRepo.save(msgData)
-        this.logger.debug(`addMsg with id:${msgData.id}`)
-        return msgData.id
+        finally {
+            this.dbLock.unlock()
+        }
     }
 
     /**

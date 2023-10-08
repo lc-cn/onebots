@@ -231,7 +231,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
         }
         
         if(data.message_id) {
-            data.message_id = await this.addMsgIntoDB(data)
+            data.message_id = await this.addMsgToDB(data)
         }
 
         if(data.post_type == 'notice' && String(data.notice_type).endsWith('_recall')) {
@@ -305,7 +305,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
         }
     }
 
-    private async addMsgIntoDB(data: any): Promise<number> {
+    private async addMsgToDB(data: any): Promise<number> {
         if (!data.sender || !('user_id' in data.sender)) { // eg. notice
             return
         }
@@ -323,6 +323,26 @@ export class V11 extends EventEmitter implements OneBot.Base {
             msg.group_name = ''
         }
         msg.content = data.cqCode
+        
+        return await this.db.addOrUpdateMsg(msg)
+    }
+
+    /**
+     * 从 send_msg_xxx() 调用的返回值中提取消息存入数据库(可以让前端在没有收到同步的message数据前就有能力拿到消息对应的base64_id) 
+     * (也有可能来的比message慢，后来的话会被数据库忽略)
+     * @param user_id 发送者
+     * @param group_id 群号，私聊为0
+     * @param seq 消息序号
+     * @param base64_id icqq返回的base64格式的消息id
+     */
+    private async addMsgToDBFromSendMsgResult(user_id: number, group_id: number, seq: number, base64_id: string): Promise<number> {
+        let msg = new MsgEntry()
+        msg.base64_id = base64_id
+        msg.seq = seq
+        msg.user_id = user_id
+        msg.nickname = ''
+        msg.group_id = group_id
+        msg.content = ''
         
         return await this.db.addOrUpdateMsg(msg)
     }
@@ -573,20 +593,11 @@ export class V11 extends EventEmitter implements OneBot.Base {
                 result.data = [...result.data.values()]
             if (result.data?.message)
                 result.data.message = toSegment(result.data.message)
-            /**
-             * > send_msg 时返回的result也有 message_id 字段并且是base64格式，但由于base64与特定消息并不是一对一关系，因此转换成number类型的msgid并无意义
-             * 如需判断发送的消息和接收到的消息是否是同一个消息，请使用 group_id + seq 对比
-             * 
-             * > 但 get_msg 返回的是从数据库获取的message_id，因此是有效的
-             */
-            // if (result.data?.message_id && result.data?.seq) {
-            //     let message_id = result.data?.message_id
-            //     if(!(typeof message_id == 'number' || /^\d+$/.test(message_id))) {
-            //         // this.db.set(`KVMap.${result.data.seq}`,result.data.message_id )
-            //         result.data.message_id = result.data.seq
-            //     }
-                
-            // }
+
+            // send_msg_xxx 时提前把数据写入数据库(也有可能来的比message慢，后来的话会被数据库忽略)
+            if (result.status === 'ok' && params.user_id && result.data?.message_id && result.data?.seq) {
+                result.data.message_id = await this.addMsgToDBFromSendMsgResult(params.user_id, params.group_id || 0, result.data.seq, result.data.message_id)
+            }
             if (echo) {
                 result.echo = echo
             }
