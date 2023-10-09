@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.21](https://github.com/icqqjs/onebots/compare/v0.4.20...v0.4.21) (2023-10-09)
+
+
+### Bug Fixes
+
+* 修正自定义分享音乐未传id时报错的问题 ([b574168](https://github.com/icqqjs/onebots/commit/b57416868f5091abaa33eae940b1cb4a7c3769d0))
+
 ## [0.4.20](https://github.com/icqqjs/onebots/compare/v0.4.19...v0.4.20) (2023-09-29)
 
 
