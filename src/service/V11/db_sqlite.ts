@@ -58,7 +58,7 @@ export class Database {
             if(msgDataExists) {
                 // send_msg() 返回值和同步的 message 消息哪个先来不确定，send_msg 返回值后来时不允许更新数据库
                 if(msgData.content.length == 0) {
-                    return
+                    return msgDataExists.id
                 }
                 msgData.id = msgDataExists.id
                 await this.msgRepo.update({id: msgData.id}, msgData)
