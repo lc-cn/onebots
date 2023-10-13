@@ -12,15 +12,15 @@ import {fromCqcode, fromSegment, toCqcode, toSegment} from "icqq-cq-enable";
 import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
-import {EventEmitter} from "events";
 import {rmSync} from "fs";
 import {Database} from "./db_sqlite";
 import {join} from "path";
 import {App} from "@/server/app";
 import { MsgEntry } from "./db_entities";
-import { stringify } from "querystring";
+import {Dict} from "@zhinjs/shared";
+import {Service} from "@/service";
 
-export class V11 extends EventEmitter implements OneBot.Base {
+export class V11 extends Service<'V11'> implements OneBot.Base {
     public action: Action
     public version = 'V11'
     protected timestamp = Date.now()
@@ -36,9 +36,8 @@ export class V11 extends EventEmitter implements OneBot.Base {
     logger: Logger
     wss?: WebSocketServer
     wsr: Set<WebSocket> = new Set<WebSocket>()
-
-    constructor(public oneBot: OneBot<'V11'>, public client: Client, public config: V11.Config) {
-        super()
+    constructor(public oneBot: OneBot<'V11'>, public client: Client, config: OneBot.Config<'V11'>) {
+        super(config)
         this.action = new Action()
         this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
         this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.db'), this.logger)
@@ -229,7 +228,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
                 }
             }
         }
-        
+
         if(data.message_id) {
             data.message_id = await this.addMsgToDB(data)
         }
@@ -323,12 +322,12 @@ export class V11 extends EventEmitter implements OneBot.Base {
             msg.group_name = ''
         }
         msg.content = data.cqCode
-        
+
         return await this.db.addOrUpdateMsg(msg)
     }
 
     /**
-     * 从 send_msg_xxx() 调用的返回值中提取消息存入数据库(可以让前端在没有收到同步的message数据前就有能力拿到消息对应的base64_id) 
+     * 从 send_msg_xxx() 调用的返回值中提取消息存入数据库(可以让前端在没有收到同步的message数据前就有能力拿到消息对应的base64_id)
      * (也有可能来的比message慢，后来的话会被数据库忽略)
      * @param user_id 发送者
      * @param group_id 群号，私聊为0
@@ -344,7 +343,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
         msg.group_id = group_id
         msg.group_name = ''
         msg.content = ''
-        
+
         return await this.db.addOrUpdateMsg(msg)
     }
 
@@ -555,7 +554,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
                         if (typeof params[k] === 'string') {
                             if (/[CQ:music,type=.+,id=.+]/.test(params[k])){
                                 params[k] = params[k].replace(',type=',',platform=')
-                            } 
+                            }
                             params[k] = fromCqcode(params[k])
                         } else {
                             if(params[k][0].type == 'music' && params[k][0]?.data?.type){

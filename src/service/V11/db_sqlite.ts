@@ -1,4 +1,3 @@
-import {readFileSync, writeFileSync, existsSync} from "fs";
 import { MsgEntry } from "./db_entities"
 import { DataSource, Repository } from "typeorm";
 import { Logger } from "log4js";
@@ -20,9 +19,9 @@ export class Database {
         this.dbPath = dbPath
         this.logger = logger
         this.dbLock = new AsyncLock()
-        
+
         this.dataSource = new DataSource({
-            type: "better-sqlite3",
+            type: "sqlite",
             database: dbPath,
             entities: [MsgEntry],
         })
@@ -38,7 +37,7 @@ export class Database {
             this.logger.error(`sqlite [${this.dbPath}] open fail!`, err)
             return
         }
-        
+
         this.msgRepo = this.dataSource.getRepository(MsgEntry)
         this.logger.debug(`sqlite [${this.dbPath}] open success`)
 
@@ -49,7 +48,7 @@ export class Database {
 
     /**
      * 增加或更新一条消息到数据库
-     * @param msgData 
+     * @param msgData
      */
     public async addOrUpdateMsg(msgData: MsgEntry): Promise<number> {
         await this.dbLock.lock()
@@ -64,7 +63,7 @@ export class Database {
                 await this.msgRepo.update({id: msgData.id}, msgData)
                 return msgDataExists.id
             }
-    
+
             msgData = await this.msgRepo.save(msgData)
             this.logger.debug(`addMsg with id:${msgData.id}`)
             return msgData.id
@@ -76,8 +75,8 @@ export class Database {
 
     /**
      * 通过 icqq 的 base64 格式的 message_id 获取一个 MsgData 对象
-     * @param base64_id 
-     * @returns 
+     * @param base64_id
+     * @returns
      */
     public async getMsgByBase64Id(base64_id: string): Promise<MsgEntry | null> {
         let ret = await this.msgRepo.findOneBy({base64_id: base64_id})
@@ -86,8 +85,8 @@ export class Database {
 
     /**
      * 通过 number 类型的 id 自增主键获取一个 MsgData 对象
-     * @param id 
-     * @returns 
+     * @param id
+     * @returns
      */
     public async getMsgById(id: number): Promise<MsgEntry | null> {
         let ret = await this.msgRepo.findOneBy({id: id})
@@ -96,9 +95,9 @@ export class Database {
 
     /**
      * 通过参数从数据库中查找消息
-     * @param user_id 
-     * @param group_id 
-     * @param seq 
+     * @param user_id
+     * @param group_id
+     * @param seq
      */
     public async getMsgByParams(user_id: number, group_id: number, seq: number): Promise<MsgEntry | null> {
         let ret = await this.msgRepo.findOneBy({user_id: user_id, group_id: group_id, seq: seq})
@@ -107,8 +106,8 @@ export class Database {
 
     /**
      * 将一条消息标记为 recalled
-     * @param base64_id 
-     * @param id 
+     * @param base64_id
+     * @param id
      */
     public async markMsgAsRecalled(base64_id?: string, id?: number) {
         if(base64_id || id)

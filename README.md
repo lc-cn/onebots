@@ -63,6 +63,7 @@ general: # 通用配置，在单个配置省略时的默认值
     reconnect_interval: 3 # 重连间隔 (秒)
     use_http: true # 是否使用 http
     enable_cors: true # 是否允许跨域
+    filters: {} # 过滤器配置
     use_ws: true # 是否使用websocket
     http_reverse: [ ] # http上报地址
     ws_reverse: [ ] # 反向ws连接地址
@@ -74,6 +75,7 @@ general: # 通用配置，在单个配置省略时的默认值
     enable_cors: true # 是否允许跨域
     use_http: true # 是否启用http
     use_ws: true # 是否启用 websocket
+    filters: {} # 过滤器配置
     webhook: [ ] # http 上报地址
     ws_reverse: [ ] # 反向ws连接地址
   protocol:
@@ -119,6 +121,7 @@ general: # 通用配置，在单个配置省略时的默认值
 | reconnect_interval  | number   | 3      | 重连间隔 单位：秒  |
 | use_http            | boolean  | false  | 是否使用http协议 |
 | enable_cors         | boolean  | false  | 是否允许跨域     |
+| filters             | Filters  | {}     | 事件过滤器配置    |
 | use_ws              | boolean  | false  | 是否使用ws协议   |
 | http_reverse_url    | string[] | -      | http上报地址地址 |
 | ws_reverse_url      | string[] | -      | 反向ws连接地址   |
@@ -130,10 +133,51 @@ general: # 通用配置，在单个配置省略时的默认值
 | request_timeout     | number   | 15    | 请求超时 单位：秒   |
 | reconnect_interval  | number   | 3     | 重连间隔 单位：秒   |
 | enable_cors         | boolean  | false | 是否允许跨域      |
+| filters             | Filters  | {}     | 事件过滤器配置    |
 | use_http            | boolean  | false | 是否使用http协议  |
 | use_ws              | boolean  | false | 是否使用ws协议    |
 | webhook_reverse_url | string[] | -     | webhook上报地址 |
 | ws_reverse_url      | string[] | -     | 反向ws连接地址    |
+# 事件过滤器
+## 语法说明
+- `onebots` 的事件过滤器嘴歪成是一个JSON对象，其中的键是键如果是运算法，则值作为运算符的参数，如果不是运算符，则表示对事件数据对象相应 `key` 进行过滤。
+- 过滤规则中任何一个对象, 只有在它的所有项都匹配的情况下, 才会让事件通过（等价于一个 and 运算），如果值为一个数组，则表示事件对应 `key` 值需满足其中一个。
+- 可用运算符有：`$and` 、`$or` 、 `$not`
+## 示例
+### 1. 仅上报私聊事件
+```yaml
+filters:
+  message_type: private
+```
+### 2. 私聊或指定群聊
+```yaml
+filters:
+  $or:
+    message_type: private
+    group_id: 
+      - 123456789
+        987654321
+```
+### 3. 私聊事件且不是指定用户
+```yaml
+filters:
+  message_type: private
+  $not:
+    user_id:
+      - 123456789
+        987654321
+```
+### 4. 私聊事件(排除指定用户的事件)或指定群聊事件
+```yaml
+filters:
+  $or:
+    - message_type: private
+      $not:
+        user_id: 123456789
+    -  
+      message_type: group
+      group_id: 987654321
+```
 # 使用API管理oneBot
 
 | url     | method | params          | desc                           |
@@ -144,7 +188,6 @@ general: # 通用配置，在单个配置省略时的默认值
 | /add    | POST   | {uin,...config} | 添加机器人 config 为机器人配置            |
 | /edit   | POST   | {uin,...config} | 修改机器人配置 config 为机器人配置          |
 | /remove | get    | uin,force       | 移除机器人,force为true时，将删除机器人data目录 |
-
 # 鸣谢
 1. [icqqjs/icqq](https://github.com/icqqjs/icqq) 底层服务支持
 2. [takayama-lily/onebot](https://github.com/takayama-lily/node-onebot) oneBot V11 原先版本

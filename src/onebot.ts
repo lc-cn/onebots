@@ -9,6 +9,7 @@ import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {MayBeArray} from "./types";
 import * as process from "process";
+import {Service} from "@/service";
 
 export class NotFoundError extends Error {
     message = '不支持的API'
@@ -46,9 +47,9 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
         this.instances = this.config.map(c => {
             switch (c.version) {
                 case 'V11':
-                    return new V11(this, this.client, <V11.Config>c)
+                    return new V11(this, this.client, c as OneBot.Config<'V11'>)
                 case 'V12':
-                    return new V12(this, this.client, <V12.Config>c)
+                    return new V12(this, this.client, c as OneBot.Config<'V12'>)
                 default:
                     throw new Error('不支持的oneBot版本：' + c.version)
             }
@@ -181,7 +182,7 @@ export class OneBot<V extends OneBot.Version> extends EventEmitter {
                     case 'private':
                         data.message.unshift({
                             type: 'reply',
-                            seq: data.source.seq, 
+                            seq: data.source.seq,
                             id: genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time)
                         })
                         break;
@@ -199,11 +200,15 @@ export enum OneBotStatus {
 
 export type OneBotConfig = OneBot.Config<OneBot.Version>
 export namespace OneBot {
+    export type Filters = {
+
+    }
     export type Version = 'V11' | 'V12'
     export type Config<V extends Version = 'V11'> = ({
         version?: V
         password?: string
         group_whitelist?: number[]
+        filters?:Service.Filters
         protocol?:IcqqConfig
     } & (V extends 'V11' ? V11.Config : V12.Config))
 
