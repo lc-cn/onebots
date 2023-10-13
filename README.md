@@ -178,12 +178,28 @@ filters:
       message_type: group
       group_id: 987654321
 ```
-### 5. 用户年龄大于18岁
+### 5. 仅上报消息事件且用户年龄大于18岁
 ```yaml
 filters:
+  type: message
   sender:
     age:
       $gt: 18
+```
+### 6. 仅上报消息事件且消息内容以！开头的消息
+```yaml
+filters:
+  type: message
+  raw_message:
+    .regexp: '^！|\!'
+```
+### 7. 不上报消息内容包含`cnm`的消息
+```yaml
+filters:
+  $not:
+    type: message
+    raw_message:
+      $like: cnm
 ```
 # 使用API管理oneBot
 
