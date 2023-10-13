@@ -342,6 +342,7 @@ export class V11 extends EventEmitter implements OneBot.Base {
         msg.user_id = user_id
         msg.nickname = ''
         msg.group_id = group_id
+        msg.group_name = ''
         msg.content = ''
         
         return await this.db.addOrUpdateMsg(msg)
