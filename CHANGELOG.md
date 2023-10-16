@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.22](https://github.com/icqqjs/onebots/compare/v0.4.21...v0.4.22) (2023-10-16)
+
+
+### Bug Fixes
+
+* 事件过滤器更多用例 ([b6aee20](https://github.com/icqqjs/onebots/commit/b6aee205d898594a2a4a7b83f9a22594ee3b0c1d))
+* 事件过滤器错误修复 ([e4d895c](https://github.com/icqqjs/onebots/commit/e4d895cf5648c48c998c270f0d4dd2b8294abbbb))
+* 修复 onebot v11 撤回消息失败的bug ([499d219](https://github.com/icqqjs/onebots/commit/499d219cec2f7c08a4a7e45bb575b6e4e5f7b586))
+* 修正 onebot v11 消息存储漏掉字段的问题 ([6f5f051](https://github.com/icqqjs/onebots/commit/6f5f051cbd2ceb96e695bf7a36b664ea2ac91b36))
+* 更强壮的事件过滤器 ([b92372a](https://github.com/icqqjs/onebots/commit/b92372a0d22bd83a6392aa4af248841af1f650f3))
+* 更强壮的事件过滤器 ([7cde499](https://github.com/icqqjs/onebots/commit/7cde499bd029e153b135074df11a6e973ab05cd2))
+
 ## [0.4.21](https://github.com/icqqjs/onebots/compare/v0.4.20...v0.4.21) (2023-10-09)
 
 
