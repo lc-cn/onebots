@@ -14,10 +14,10 @@
     "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
     "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml",
     "pub": "npm publish --access public",
+    "test": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "docs:preview": "vitepress preview docs"
   },
   "repository": {
     "type": "git",
@@ -64,9 +64,9 @@
     "koa-bodyparser": "^4.3.0",
     "log4js": "^6.5.2",
     "mime-types": "^2.1.35",
-    "ws": "^8.8.0",
-    "better-sqlite3": "^8.6.0",
     "reflect-metadata": "^0.1.13",
-    "typeorm": "^0.3.17"
+    "sqlite3": "^5.1.6",
+    "typeorm": "^0.3.17",
+    "ws": "^8.8.0"
   }
 }

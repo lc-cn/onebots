@@ -16,8 +16,9 @@ import {Database} from "@/db";
 import {App} from "@/server/app";
 import {rmSync} from "fs";
 import {genDmMessageId, genGroupMessageId} from "icqq/lib/message";
+import {Service} from "@/service";
 
-export class V12 extends EventEmitter implements OneBot.Base {
+export class V12 extends Service<'V12'> implements OneBot.Base {
     public version = 'V12'
     public action: Action
     protected timestamp = Date.now()
@@ -28,8 +29,8 @@ export class V12 extends EventEmitter implements OneBot.Base {
     wsr: Set<WebSocket> = new Set<WebSocket>()
     private db: Database<{ eventBuffer: V12.Payload<keyof Action>[],msgIdMap:Record<string, number>, files: Record<string, V12.FileInfo> }>
 
-    constructor(public oneBot: OneBot<'V12'>, public client: Client, public config: V12.Config) {
-        super()
+    constructor(public oneBot: OneBot<'V12'>, public client: Client, config: OneBot.Config<'V12'>) {
+        super(config)
         this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
         this.db.sync({eventBuffer: [],msgIdMap:{}, files: {}})
         this.action = new Action()
@@ -371,6 +372,7 @@ export class V12 extends EventEmitter implements OneBot.Base {
                 return value + ''
             }),
         } as V12.Payload<any>
+        if(!this.filterFn(payload)) return
         this.emit('dispatch', payload)
     }
 
