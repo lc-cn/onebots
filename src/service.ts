@@ -4,9 +4,9 @@ import {Dict} from "@zhinjs/shared";
 export interface Service<V extends OneBot.Version>{
     filterFn(event:Dict):boolean
 }
-export abstract class Service<V extends OneBot.Version> extends EventEmitter{
+export class Service<V extends OneBot.Version> extends EventEmitter{
 
-    protected constructor(public config:OneBot.Config<V>) {
+    constructor(public config:OneBot.Config<V>) {
         super();
         this.filterFn=Service.createFilterFunction(config.filters||{})
     }
@@ -15,7 +15,7 @@ export namespace Service{
 
     type MaybeArray<T = any> = T | T[];
     type AttrFilter = {
-        [P in keyof Dict]?: MaybeArray<P> | boolean;
+        [P in keyof Dict]?: MaybeArray | boolean
     };
     export type Filters = AttrFilter | WithFilter | UnionFilter | ExcludeFilter;
     export type WithFilter = {
@@ -29,6 +29,21 @@ export namespace Service{
     };
 
     export function createFilterFunction(filters: Filters) {
+        const isLogicKey=(key: string) => {
+            return [
+                '$and',
+                '$or',
+                '$not',
+                '$nor',
+                '$regexp',
+                '$like',
+                '$gt',
+                '$gte',
+                '$lt',
+                '$lte',
+                '$between',
+            ].includes(key)
+        }
         const filterFn = (
             event: Dict,
             key: string,
@@ -54,12 +69,12 @@ export namespace Service{
                 return value;
             }
             if (typeof value !== "object") {
-                if(key==='$regex' && typeof value==='string') return new RegExp(value).test(event[key]);
-                if(key==='$like' && typeof value==='string') return event[key].includes(value);
-                if(key==='$gt' && typeof value==='number') return event[key]>value;
-                if(key==='$gte' && typeof value==='number') return event[key]>=value;
-                if(key==='$lt' && typeof value==='number') return event[key]<value;
-                if(key==='$lte' && typeof value==='number') return event[key]<=value;
+                if(key==='$regex' && typeof value==='string') return new RegExp(value).test(String(event));
+                if(key==='$like' && typeof value==='string') return String(event).includes(value);
+                if(key==='$gt' && typeof value==='number') return Number(event)>value;
+                if(key==='$gte' && typeof value==='number') return Number(event)>=value;
+                if(key==='$lt' && typeof value==='number') return Number(event)<value;
+                if(key==='$lte' && typeof value==='number') return Number(event)<=value;
                 return value === event[key];
             }
             if(key==='$between' &&
@@ -67,12 +82,12 @@ export namespace Service{
                 value.length === 2 &&
                 value.every((item) => typeof item === 'number')){
                 const [start,end]=value;
-                return event[key]>=start && event[key]<=end;
+                return event>=start && event<=end;
             }
             if(Array.isArray(value)){
                 return value.includes(event[key]);
             }
-            return createFilterFunction(value)(event);
+            return createFilterFunction(value)(isLogicKey(key)?event:event[key]);
         };
         return (event:Dict)=>{
             return Object.entries(filters).every(([key, value]) =>
