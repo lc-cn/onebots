@@ -9,7 +9,7 @@ export class CommonAction {
     getLoginInfo(this: V11) {
         return {
             user_id: this.oneBot.uin,
-            nickname: this.client.nickname
+            nickname: this.adapter.nickname
         }
     }
 
@@ -22,7 +22,7 @@ export class CommonAction {
         let msg_entry = await this.db.getMsgById(message_id)
         if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
 
-        return this.client.deleteMsg(msg_entry.base64_id)
+        return this.adapter.call('deleteMsg',[msg_entry.base64_id])
     }
 
     /**
@@ -34,7 +34,7 @@ export class CommonAction {
         let msg_entry = await this.db.getMsgById(message_id)
         if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
 
-        let msg: Message = await this.client.getMsg(msg_entry.base64_id)
+        let msg: Message = await this.adapter.call('getMsg',[msg_entry.base64_id])
         msg.message_id = String(message_id)  // nonebot v11 要求 message_id 是 number 类型
         msg["real_id"] = msg.message_id      // nonebot 的reply类型会检测real_id是否存在，虽然它从未使用
         return msg
@@ -45,7 +45,7 @@ export class CommonAction {
      * @param id {string} 合并id
      */
     getForwardMsg(this: V11, id: string) {
-        return this.client.getForwardMsg(id)
+        return this.adapter.call('getForwardMsg',[id])
     }
 
     /**
@@ -53,14 +53,14 @@ export class CommonAction {
      * @param domain {string} 域名
      */
     getCookies(this: V11, domain: string) {
-        return this.client.cookies[domain]
+        return this.adapter.call['getCookies']([domain])
     }
 
     /**
      * 获取 CSRF Token
      */
     getCsrfToken(this: V11) {
-        return this.client.getCsrfToken()
+        return this.adapter.call('getCsrfToken')
     }
 
     /**
@@ -69,8 +69,8 @@ export class CommonAction {
      */
     getCredentials(this: V11, domain: string) {
         return {
-            cookies: this.client.cookies[domain],
-            csrf_token: this.client.getCsrfToken()
+            cookies: this.adapter.call('getCookies',[domain]),
+            csrf_token: this.adapter.call('getCsrfToken')
         }
     }
 
@@ -95,71 +95,25 @@ export class CommonAction {
 
     getStatus(this: V11) {
         return {
-            online: this.client.status === OnlineStatus.Online,
+            online: this.adapter.status === OnlineStatus.Online,
             good: this.oneBot.status === OneBotStatus.Good
         }
     }
 
-    callLogin(this: V11, func: string, ...args: any[]) {
-        return new Promise(async resolve => {
-            const receiveResult = (event) => {
-                this.client.offTrap('system.login.qrcode')
-                this.client.offTrap('system.login.device')
-                this.client.offTrap('system.login.slider')
-                this.client.offTrap('system.login.error')
-                resolve(event)
-            }
-            this.client.trap('system.login.qrcode', receiveResult)
-            this.client.trap('system.login.device', receiveResult)
-            this.client.trap('system.login.slider', receiveResult)
-            this.client.trap('system.login.error', receiveResult)
-            this.client.trapOnce('system.online', receiveResult)
-            try {
-                await this.client[func](...args)
-            } catch (reason) {
-                receiveResult(reason)
-            }
-        })
-    }
 
     async submitSlider(this: V11, ticket: string) {
-        return this.action.callLogin.apply(this, ['submitSlider', ticket])
+        return this.adapter.call('callLogin',['submitSlider', ticket])
     }
 
     async submitSmsCode(this: V11, code: string) {
-        return this.action.callLogin.apply(this, ['submitSmsCode', code])
-    }
-
-    sendSmsCode(this: V11) {
-        return new Promise<any>(resolve => {
-            const receiveResult = (e) => {
-                const callback = (data) => {
-                    this.client.offTrap('internal.verbose')
-                    this.client.offTrap('system.login.error')
-                    resolve(data)
-                }
-                if ((typeof e === 'string' && e.includes('已发送')) || typeof e !== 'string') {
-                    callback(e)
-                }
-            }
-            this.client.trap('internal.verbose', receiveResult)
-            this.client.trap('system.login.error', receiveResult)
-            this.client.sendSmsCode()
-        })
+        return this.adapter.call('callLogin', ['submitSmsCode', code])
     }
 
     login(this: V11, password?: string) {
-        return this.action.callLogin.apply(this, ['login', password])
+        return this.adapter.call('callLogin', ['login', password])
     }
 
     logout(this: V11, keepalive?: boolean) {
-        return new Promise(async resolve => {
-            const receiveResult = (e) => {
-                this.client.offTrap('system.offline')
-                resolve(e)
-            }
-            this.client.trap('system.offline', receiveResult)
-            await this.client.logout(keepalive)
-        })
+        return this.adapter.call('logout', [keepalive])
     }
 }

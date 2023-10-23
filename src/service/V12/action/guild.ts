@@ -4,15 +4,15 @@ import {processMessage} from "@/service/V12/utils";
 export class GuildAction {
 
     getGuildList(this: V12) {
-        return this.client.getGuildList()
+        throw new Error('不支持的API')
     }
 
     getChannelList(this: V12, guild_id: string) {
-        return this.client.getChannelList(guild_id)
+        throw new Error('不支持的API')
     }
 
     getGuildMemberList(this: V12, guild_id: string) {
-        return this.client.getGuildMemberList(guild_id)
+        throw new Error('不支持的API')
     }
 
     /**
@@ -22,8 +22,6 @@ export class GuildAction {
      * @param message {import('icqq/lib/service').Sendable} 消息
      */
     async sendGuildMsg(this: V12, guild_id: string, channel_id: string, message: V12.Sendable) {
-        const {element} = await processMessage.apply(this, [message])
-        if (!element.length) return
-        return await this.client.sendGuildMsg(guild_id, channel_id, element)
+        throw new Error('不支持的API')
     }
 }

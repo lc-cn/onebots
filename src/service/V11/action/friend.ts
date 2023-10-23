@@ -1,9 +1,5 @@
 import {OneBot} from "@/onebot";
 import {V11} from "@/service/V11";
-import {SegmentElem} from "icqq-cq-enable/lib/utils";
-import {processMessage} from "@/service/V11/utils";
-import { shareMusic } from "@/service/shareMusicCustom"
-import { MusicElem } from "icqq/lib/message";
 
 export class FriendAction {
     /**
@@ -12,21 +8,15 @@ export class FriendAction {
      * @param message {import('icqq').Sendable} 发送的消息
      * @param message_id {string} 引用的消息ID
      */
-    async sendPrivateMsg(this: V11, user_id: number, message: string | SegmentElem|SegmentElem[], message_id?: string) {
-        const msg=message_id?await this.client.getMsg(message_id):undefined
-        const {element,quote,music,share}=await processMessage.apply(this.client,[message,msg])
-        if(music) return await shareMusic.call(this.client.pickFriend(user_id), music as MusicElem)
-        if(share) return await this.client.pickFriend(user_id).shareUrl(music.data)
-        if(element.length) {
-            return await this.client.sendPrivateMsg(user_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
-        }
+    async sendPrivateMsg(this: V11, user_id: number, message: string, message_id?: string) {
+       return this.adapter.call('sendPrivateMsg', [user_id, message, message_id])
     }
 
     /**
      * 获取好友列表
      */
     async getFriendList(this: OneBot<'V11'>) {
-        return [...(await this.client.getFriendList()).values()]
+        return this.adapter.call('getFriendList')
     }
 
     /**
@@ -36,7 +26,7 @@ export class FriendAction {
      * @param remark {string} 添加后的备注
      */
     async setFriendAddRequest(this: OneBot<'V11'>, flag: string, approve: boolean = true, remark: string = '') {
-        return await this.client.setFriendAddRequest(flag, approve, remark)
+        return this.adapter.call('setFriendAddRequest', [flag, approve, remark])
     }
 
     /**
@@ -44,7 +34,7 @@ export class FriendAction {
      * @param user_id {number} 用户id
      */
     async getStrangerInfo(this: OneBot<'V11'>, user_id: number) {
-        return await this.client.getStrangerInfo(user_id)
+        return this.adapter.call('getStrangerInfo', [user_id])
     }
 
     /**
@@ -53,6 +43,6 @@ export class FriendAction {
      * @param times 点赞次数
      */
     async sendUserLike(this: OneBot<'V11'>, user_id: number, times?: number) {
-        return this.client.sendLike(user_id, times)
+        return this.adapter.call('sendUserLike', [user_id, times])
     }
 }

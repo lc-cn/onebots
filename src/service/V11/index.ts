@@ -1,4 +1,3 @@
-import {Client, OnlineStatus, EventMap} from "icqq";
 import {Config} from "./config";
 import {Action} from "./action";
 import {OneBot, OneBotStatus} from "@/onebot";
@@ -8,17 +7,15 @@ import {Dispose} from "@/types";
 import {Context} from "koa";
 import {URL} from "url";
 import {toBool, toHump, toLine} from "@/utils";
-import {fromCqcode, fromSegment, toCqcode, toSegment} from "icqq-cq-enable";
 import {BOOLS, NotFoundError} from "@/onebot";
 import http from "http";
 import https from "https";
-import {rmSync} from "fs";
 import {Database} from "./db_sqlite";
 import {join} from "path";
 import {App} from "@/server/app";
 import { MsgEntry } from "./db_entities";
-import {Dict} from "@zhinjs/shared";
 import {Service} from "@/service";
+import {Dict} from "@zhinjs/shared";
 
 export class V11 extends Service<'V11'> implements OneBot.Base {
     public action: Action
@@ -36,16 +33,23 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     logger: Logger
     wss?: WebSocketServer
     wsr: Set<WebSocket> = new Set<WebSocket>()
-    constructor(public oneBot: OneBot<'V11'>, public client: Client, config: OneBot.Config<'V11'>) {
-        super(config)
+    constructor(public oneBot: OneBot<'V11'>, public config: OneBot.Config<'V11'>) {
+        super(oneBot.adapter,config)
         this.action = new Action()
-        this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
+        this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version)
         this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.db'), this.logger)
+        this.oneBot.on('online',async ()=>{
+            this.logger.info("【好友列表】")
+            const friendList=await this.oneBot.getFriendList('V11')
+            friendList.forEach((item) => this.logger.info(`\t${item.user_name}(${item.user_id})`))
+            this.logger.info("【群列表】")
+            const groupList=await this.oneBot.getGroupList('V11')
+            groupList.forEach(item => this.logger.info(`\t${item.group_name}(${item.group_id})`))
+            this.logger.info('')
+        })
     }
 
-    start(path?: string) {
-        this.path = `/${this.oneBot.uin}`
-        if (path) this.path += path
+    start() {
         if (this.config.use_http) this.startHttp()
         if (this.config.use_ws) this.startWs()
         this.config.http_reverse.forEach(config => {
@@ -73,7 +77,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                 this.dispatch({
                     self_id: this.oneBot.uin,
                     status: {
-                        online: this.client.status === OnlineStatus.Online,
+                        online: this.oneBot.isOnline,
                         good: this.oneBot.status === OneBotStatus.Good
                     },
                     time: Math.floor(Date.now() / 1000),
@@ -86,8 +90,9 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     }
 
     private startHttp() {
-        this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), this._httpRequestHandler.bind(this))
-        this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
+        const path=`/${this.oneBot.platform}/${this.oneBot.uin}/v11`
+        this.oneBot.app.router.all(new RegExp(`^${path}/(.*)$`), this._httpRequestHandler.bind(this))
+        this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${path}`)
     }
 
     private startHttpReverse(config: Config.HttpReverseConfig) {
@@ -189,11 +194,12 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     }
 
     async stop(force?: boolean) {
-        if (this.client.status === OnlineStatus.Online) {
-            await this.client.terminate()
+        for(const ws of this.wss.clients){
+            ws.close()
         }
-        if (force) {
-            rmSync(this.client.dir, {force: true, recursive: true})
+        this.wss.close()
+        for (const ws of this.wsr) {
+            ws.close()
         }
     }
 
@@ -201,19 +207,12 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
         return data
     }
 
-    system_online(data){
-        this.logger.info("【好友列表】")
-        this.client.fl.forEach(item => this.logger.info(`\t${item.nickname}(${item.user_id})`))
-        this.logger.info("【群列表】")
-        this.client.gl.forEach(item => this.logger.info(`\t${item.group_name}(${item.group_id})`))
-        this.logger.info('')
-    }
 
     async dispatch(data: any) {
         data.post_type = data.post_type || 'system'
         if (data.message && data.post_type === 'message') {
             if (this.config.post_message_format === 'array') {
-                data.message = toSegment(data.message)
+                data.message = this.adapter.toSegment(data.message,'V11')
                 if (data.source) { // reply
                     let msg0 = data.message[0]
                     msg0.data['id'] = await this.getReplyMsgIdFromDB(data)
@@ -222,9 +221,9 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                 if (data.source) {
                     data.message.shift()
                     // segment 更好用, cq 一般只用来显示，就不存储真实id了, 有需求的自己去改
-                    data.message = toCqcode(data).replace(/^(\[CQ:reply,id=)(.+?)\]/, `$1${data.source.seq}]`)
+                    data.message = this.adapter.toCqcode(data,'V11').replace(/^(\[CQ:reply,id=)(.+?)\]/, `$1${data.source.seq}]`)
                 }else{
-                    data.message = toCqcode(data)
+                    data.message = this.adapter.toCqcode(data,'V11')
                 }
             }
         }
@@ -249,7 +248,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
         this.emit('dispatch', this._formatEvent(data))
     }
 
-    private _formatEvent(data:Parameters<EventMap['message']|EventMap['notice']|EventMap['request']>[0]){
+    private _formatEvent(data:Dict){
         if (data.post_type === 'notice') {
             // console.log(JSON.stringify(data))
             const data1:any = {...data}
@@ -258,7 +257,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                 delete data1.member
                 switch (data.sub_type) {
                     case 'decrease':
-                        data1.sub_type = data.operator_id === data.user_id ? 'leave' : data.user_id === this.client.uin? 'kick_me': 'kick'
+                        data1.sub_type = data.operator_id === data.user_id ? 'leave' : data.user_id === this.oneBot.uin? 'kick_me': 'kick'
                         data1.notice_type = `${data.notice_type}_${data.sub_type}`
                         break
                     case 'increase':
@@ -494,20 +493,20 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                     return
                 const action = event.message_type === "private" ? "sendPrivateMsg" : "sendGroupMsg"
                 const id = event.message_type === "private" ? event.user_id : event.group_id
-                this.client[action](id, res.reply, res.auto_escape)
+                this.action[action].apply(this,[id, res.reply, res.auto_escape])
             }
             if (event.message_type === "group") {
                 if (res.delete)
-                    this.client.deleteMsg(event.message_id)
+                    this.adapter.call('deleteMsg',[event.message_id])
                 if (res.kick && !event.anonymous)
-                    this.client.setGroupKick(event.group_id, event.user_id, res.reject_add_request)
+                    this.adapter.call('setGroupKick',[event.group_id, event.user_id, res.reject_add_request])
                 if (res.ban)
-                    this.client.setGroupBan(event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800)
+                    this.adapter.call('setGroupBan',[event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800])
             }
         }
         if (event.post_type === "request" && "approve" in res) {
-            const action:keyof Client= event.request_type === "friend" ? "setFriendAddRequest" : "setGroupAddRequest"
-            this.client[action](event.flag, res.approve, res.reason ? res.reason : "", !!res.block)
+            const action= event.request_type === "friend" ? "setFriendAddRequest" : "setGroupAddRequest"
+            this.adapter.call(action,[event.flag, res.approve, res.reason ? res.reason : "", !!res.block])
         }
     }
 
@@ -555,13 +554,13 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                             if (/[CQ:music,type=.+,id=.+]/.test(params[k])){
                                 params[k] = params[k].replace(',type=',',platform=')
                             }
-                            params[k] = fromCqcode(params[k])
+                            params[k] = this.adapter.fromCqcode(params[k],'V11')
                         } else {
                             if(params[k][0].type == 'music' && params[k][0]?.data?.type){
                                 params[k][0].data.platform = params[k][0].data.type
                                 delete params[k][0].data.type
                             }
-                            params[k] = fromSegment(params[k])
+                            params[k] = this.adapter.fromSegment(params[k],'V11')
                         }
                         params['message_id'] = params[k].find(e => e.type === 'reply')?.message_id
                     }
@@ -592,7 +591,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             if (result.data instanceof Map)
                 result.data = [...result.data.values()]
             if (result.data?.message)
-                result.data.message = toSegment(result.data.message)
+                result.data.message = this.adapter.toSegment(result.data.message,'V11')
 
             // send_msg_xxx 时提前把数据写入数据库(也有可能来的比message慢，后来的话会被数据库忽略)
             if (result.status === 'ok' && params.user_id && result.data?.message_id && result.data?.seq) {
@@ -666,9 +665,9 @@ export namespace V11 {
         ws_reverse: []
     }
 
-    export function genMetaEvent(uin: number, type: string) {
+    export function genMetaEvent(uin: string, type: string) {
         return {
-            self_id: uin,
+            self_id: Number.isNaN(parseInt(uin))?uin:parseInt(uin),
             time: Math.floor(Date.now() / 1000),
             post_type: "meta_event",
             meta_event_type: "lifecycle",
@@ -696,5 +695,27 @@ export namespace V11 {
         use_ws?: boolean
         http_reverse?: (string | Config.HttpReverseConfig)[]
         ws_reverse?: string[]
+    }
+    export interface GroupInfo{
+        group_id:number
+        group_name:string
+    }
+    export interface UserInfo{
+        user_id:number
+        user_name:string
+    }
+    export interface GroupMemberInfo{
+        group_id:number
+        user_id:number
+        user_name:string
+    }
+    export interface Message{
+    }
+    export interface MessageElement{
+        type:string
+        data:Dict
+    }
+    export interface MessageRet{
+        message_id:number
     }
 }

@@ -1,10 +1,9 @@
-import {Client, EventMap, MessageElem, OnlineStatus, Sendable as IcqqCanSend} from "icqq";
+import { EventMap, MessageElem, OnlineStatus, Sendable as IcqqCanSend} from "icqq";
 import {version} from "@/utils";
 import {join} from 'path'
 import {Config} from './config'
 import {BOOLS, NotFoundError, OneBot} from "@/onebot";
 import {Action} from "./action";
-import {EventEmitter} from "events";
 import {Logger} from "log4js";
 import {Context} from "koa";
 import {URL} from "url";
@@ -13,10 +12,10 @@ import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
 import {toBool, toHump, toLine, transformObj, uuid} from "@/utils";
 import {Database} from "@/db";
-import {App} from "@/server/app";
-import {rmSync} from "fs";
 import {genDmMessageId, genGroupMessageId} from "icqq/lib/message";
 import {Service} from "@/service";
+import {App} from "@/server/app";
+import {Dict} from "@zhinjs/shared";
 
 export class V12 extends Service<'V12'> implements OneBot.Base {
     public version = 'V12'
@@ -29,12 +28,12 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
     wsr: Set<WebSocket> = new Set<WebSocket>()
     private db: Database<{ eventBuffer: V12.Payload<keyof Action>[],msgIdMap:Record<string, number>, files: Record<string, V12.FileInfo> }>
 
-    constructor(public oneBot: OneBot<'V12'>, public client: Client, config: OneBot.Config<'V12'>) {
-        super(config)
+    constructor(public oneBot: OneBot<'V12'>,  public config: OneBot.Config<'V12'>) {
+        super(oneBot.adapter,config)
         this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
         this.db.sync({eventBuffer: [],msgIdMap:{}, files: {}})
         this.action = new Action()
-        this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
+        this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version)
     }
 
     get history(): V12.Payload<keyof Action>[] {
@@ -293,16 +292,9 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
     }
 
     async stop(force?: boolean) {
-        if (this.client.status === OnlineStatus.Online) {
-            await this.client.terminate()
-        }
         this.wss.close()
         for (const ws of this.wsr) {
             ws.close()
-        }
-
-        if (force) {
-            rmSync(this.client.dir, {force: true, recursive: true})
         }
     }
 
@@ -520,16 +512,16 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             }
             if (event.detail_type === "group") {
                 if (res.delete)
-                    this.client.deleteMsg(event.message_id)
+                    this.adapter.call('deleteMsg',[event.message_id])
                 if (res.kick && !event.anonymous)
-                    this.client.setGroupKick(event.group_id, event.user_id, res.reject_add_request)
+                    this.adapter.call('setGroupKick',[event.group_id, event.user_id, res.reject_add_request])
                 if (res.ban)
-                    this.client.setGroupBan(event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800)
+                    this.adapter.call('setGroupBan',[event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800])
             }
         }
         if (event.type === "request" && "approve" in res) {
             const action = event.detail_type === "friend" ? "setFriendAddRequest" : "setGroupAddRequest"
-            this.client[action](event.flag, res.approve, res.reason ? res.reason : "", !!res.block)
+            this.adapter.call(action,[event.flag, res.approve, res.reason ? res.reason : "", !!res.block])
         }
     }
 
@@ -837,9 +829,9 @@ export namespace V12 {
         }
     }
 
-    export function formatPayload<K extends keyof BotEventMap>(uin: number, type: K, data: Omit<BotEventMap[K], K>) {
+    export function formatPayload<K extends keyof BotEventMap>(uin: string, type: K, data: Omit<BotEventMap[K], K>) {
         return {
-            self_id: uin+'',
+            self_id: uin,
             time: Math.floor(Date.now() / 1000),
             detail_type: type,
             type: 'meta',
@@ -865,5 +857,26 @@ export namespace V12 {
         data?: string
         sha256?: string
         total_size?: number
+    }
+    export interface GroupInfo{
+        group_id:string
+        group_name:string
+    }
+    export interface UserInfo{
+        user_id:string
+        user_name:string
+    }
+    export interface GroupMemberInfo{
+        group_id:string
+        user_id:string
+        user_name:string
+    }
+    export interface Message{
+    }
+    export interface MessageElement extends Dict{
+        type: string
+    }
+    export interface MessageRet{
+        message_id:string
     }
 }

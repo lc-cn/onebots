@@ -79,15 +79,15 @@ export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
 
 /**
  * 将驼峰命名替换为下划线分割命名
- * @param name 
- * @returns 
+ * @param name
+ * @returns
  * @todo 是否应该改名 ToUnderLine()？
  */
 export function toLine<T extends string>(name: T) {
     return name.replace(/([A-Z])/g, "_$1").toLowerCase()
 }
-export interface Class {
-    new(...args: any[]): any
+export interface Class<T=any> {
+    new(...args: any[]): T
 }
 
 export function Mixin(base: Class, ...classes: Class[]) {

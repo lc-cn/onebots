@@ -1,12 +1,13 @@
 import {EventEmitter} from "events";
 import {OneBot} from "@/onebot";
 import {Dict} from "@zhinjs/shared";
+import {Adapter} from "@/adapter";
 export interface Service<V extends OneBot.Version>{
     filterFn(event:Dict):boolean
 }
 export class Service<V extends OneBot.Version> extends EventEmitter{
 
-    constructor(public config:OneBot.Config<V>) {
+    constructor(public adapter:Adapter,public config:OneBot.Config) {
         super();
         this.filterFn=Service.createFilterFunction(config.filters||{})
     }
