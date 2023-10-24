@@ -1,18 +1,19 @@
 import {V12} from "@/service/V12";
 import {processMessage} from "@/service/V12/utils";
+import {OneBot} from "@/onebot";
 
 export class GuildAction {
 
     getGuildList(this: V12) {
-        throw new Error('不支持的API')
+        throw OneBot.UnsupportedMethodError
     }
 
     getChannelList(this: V12, guild_id: string) {
-        throw new Error('不支持的API')
+        throw OneBot.UnsupportedMethodError
     }
 
     getGuildMemberList(this: V12, guild_id: string) {
-        throw new Error('不支持的API')
+        throw OneBot.UnsupportedMethodError
     }
 
     /**
@@ -22,6 +23,6 @@ export class GuildAction {
      * @param message {import('icqq/lib/service').Sendable} 消息
      */
     async sendGuildMsg(this: V12, guild_id: string, channel_id: string, message: V12.Sendable) {
-        throw new Error('不支持的API')
+        throw OneBot.UnsupportedMethodError
     }
 }

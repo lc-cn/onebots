@@ -1,4 +1,4 @@
-import { EventMap, MessageElem, OnlineStatus, Sendable as IcqqCanSend} from "icqq";
+import { EventMap, MessageElem, Sendable as IcqqCanSend} from "icqq";
 import {version} from "@/utils";
 import {join} from 'path'
 import {Config} from './config'
@@ -18,12 +18,11 @@ import {App} from "@/server/app";
 import {Dict} from "@zhinjs/shared";
 
 export class V12 extends Service<'V12'> implements OneBot.Base {
-    public version = 'V12'
+    public version:OneBot.Version = 'V12'
     public action: Action
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
     logger: Logger
-    private path: string
     wss?: WebSocketServer
     wsr: Set<WebSocket> = new Set<WebSocket>()
     private db: Database<{ eventBuffer: V12.Payload<keyof Action>[],msgIdMap:Record<string, number>, files: Record<string, V12.FileInfo> }>
@@ -35,7 +34,6 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         this.action = new Action()
         this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version)
     }
-
     get history(): V12.Payload<keyof Action>[] {
         return this.db.get('eventBuffer')
     }
@@ -69,9 +67,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         this.db.set('eventBuffer', value)
     }
 
-    start(path?: string) {
-        this.path = `/${this.oneBot.uin}`
-        if (path) this.path += path
+    start() {
         if (this.config.use_http) {
             const config: V12.HttpConfig = typeof this.config.use_http === 'boolean' ? {} : this.config.use_http || {}
             this.startHttp({
@@ -512,16 +508,16 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             }
             if (event.detail_type === "group") {
                 if (res.delete)
-                    this.adapter.call('deleteMsg',[event.message_id])
+                    this.adapter.call(this.oneBot.uin,'V12','deleteMsg',[event.message_id])
                 if (res.kick && !event.anonymous)
-                    this.adapter.call('setGroupKick',[event.group_id, event.user_id, res.reject_add_request])
+                    this.adapter.call(this.oneBot.uin,'V12','setGroupKick',[event.group_id, event.user_id, res.reject_add_request])
                 if (res.ban)
-                    this.adapter.call('setGroupBan',[event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800])
+                    this.adapter.call(this.oneBot.uin,'V12','setGroupBan',[event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800])
             }
         }
         if (event.type === "request" && "approve" in res) {
             const action = event.detail_type === "friend" ? "setFriendAddRequest" : "setGroupAddRequest"
-            this.adapter.call(action,[event.flag, res.approve, res.reason ? res.reason : "", !!res.block])
+            this.adapter.call(this.oneBot.uin,'V12',action,[event.flag, res.approve, res.reason ? res.reason : "", !!res.block])
         }
     }
 
@@ -764,7 +760,7 @@ export namespace V12 {
         webhook: [],
         ws_reverse: []
     }
-    export type Payload<T extends any> = {
+    export type Payload<T = object> = {
         id: string
         impl: 'onebots'
         version: 12
@@ -778,6 +774,9 @@ export namespace V12 {
         detail_type: string
         sub_type: string
     } & T
+    export type SelfInfo={
+        nickname?:string
+    }
 
     export interface Protocol {
         action: string,
@@ -870,6 +869,9 @@ export namespace V12 {
         group_id:string
         user_id:string
         user_name:string
+    }
+    export interface Segment{
+
     }
     export interface Message{
     }

@@ -9,14 +9,14 @@ export class FriendAction {
      * @param message_id {string} 引用的消息ID
      */
     async sendPrivateMsg(this: V11, user_id: number, message: string, message_id?: string) {
-       return this.adapter.call('sendPrivateMsg', [user_id, message, message_id])
+       return this.adapter.call(this.oneBot.uin,'V11','sendPrivateMsg', [user_id, message, message_id])
     }
 
     /**
      * 获取好友列表
      */
-    async getFriendList(this: OneBot<'V11'>) {
-        return this.adapter.call('getFriendList')
+    async getFriendList(this: V11) {
+        return this.adapter.call(this.oneBot.uin,'V11','getFriendList')
     }
 
     /**
@@ -25,16 +25,16 @@ export class FriendAction {
      * @param approve {boolean} 是否同意
      * @param remark {string} 添加后的备注
      */
-    async setFriendAddRequest(this: OneBot<'V11'>, flag: string, approve: boolean = true, remark: string = '') {
-        return this.adapter.call('setFriendAddRequest', [flag, approve, remark])
+    async setFriendAddRequest(this: V11, flag: string, approve: boolean = true, remark: string = '') {
+        return this.adapter.call(this.oneBot.uin,'V11','setFriendAddRequest', [flag, approve, remark])
     }
 
     /**
      * 获取陌生人信息
      * @param user_id {number} 用户id
      */
-    async getStrangerInfo(this: OneBot<'V11'>, user_id: number) {
-        return this.adapter.call('getStrangerInfo', [user_id])
+    async getStrangerInfo(this: V11, user_id: number) {
+        return this.adapter.call(this.oneBot.uin,'V11','getStrangerInfo', [user_id])
     }
 
     /**
@@ -42,7 +42,7 @@ export class FriendAction {
      * @param user_id {number} 用户id
      * @param times 点赞次数
      */
-    async sendUserLike(this: OneBot<'V11'>, user_id: number, times?: number) {
-        return this.adapter.call('sendUserLike', [user_id, times])
+    async sendUserLike(this: V11, user_id: number, times?: number) {
+        return this.adapter.call(this.oneBot.uin,'V11','sendUserLike', [user_id, times])
     }
 }

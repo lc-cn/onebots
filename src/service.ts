@@ -6,7 +6,11 @@ export interface Service<V extends OneBot.Version>{
     filterFn(event:Dict):boolean
 }
 export class Service<V extends OneBot.Version> extends EventEmitter{
-
+    oneBot:OneBot;
+    version:OneBot.Version
+    protected get path(){
+        return `/${this.oneBot.platform}/${this.oneBot.uin}/${this.version}`
+    }
     constructor(public adapter:Adapter,public config:OneBot.Config) {
         super();
         this.filterFn=Service.createFilterFunction(config.filters||{})

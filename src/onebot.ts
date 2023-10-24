@@ -22,9 +22,6 @@ export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitte
     get platform(){
         return this.adapter.platform
     }
-    get isOnline(){
-        return this.adapter.getStatus(this.uin) === OneBotStatus.Online
-    }
     constructor(public adapter:Adapter, public readonly uin: string, version_configs: OneBot.Config[]) {
         super()
 
@@ -56,9 +53,7 @@ export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitte
         for(const instance of this.instances){
             instance.start()
         }
-        return await this.adapter.start()
     }
-
 
     async stop(force?: boolean) {
         for (const instance of this.instances) {
@@ -74,7 +69,7 @@ export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitte
 
     async dispatch(event, data) {
         for (const instance of this.instances) {
-            instance.dispatch(instance.format(event, this.adapter.payload(data)))
+            instance.dispatch(instance.format(event, this.adapter.formatEventPayload(instance.version,event,data)))
         }
     }
 }
@@ -82,6 +77,7 @@ export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitte
 export enum OneBotStatus {
     Good,
     Bad,
+    Online='online',
 }
 
 export namespace OneBot {
@@ -93,6 +89,11 @@ export namespace OneBot {
         version?: V
         filters?:Service.Filters
     } & (V extends 'V11' ? V11.Config:V12.Config)
+    export const UnsupportedMethodError = new Error('不支持的方法')
+    export const UnsupportedVersionError = new Error('不支持的oneBot版本')
+    export type Payload<V extends Version=Version> = V extends 'V11' ? V11.Payload:V12.Payload
+    export type Segment<V extends Version=Version> = V extends 'V11' ? V11.Segment:V12.Segment
+    export type SelfInfo<V extends Version=Version> = V extends 'V11' ? V11.SelfInfo:V12.SelfInfo
     export type GroupInfo<V extends Version>=V extends 'V11' ? V11.GroupInfo:V12.GroupInfo
     export type UserInfo<V extends Version>=V extends 'V11' ? V11.UserInfo:V12.UserInfo
     export type Message<V extends Version>=V extends 'V11' ? V11.Message:V12.Message

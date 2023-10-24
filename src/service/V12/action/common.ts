@@ -13,14 +13,14 @@ export class CommonAction{
      * @param message_id {string} 消息id
      */
     deleteMsg(this:V12,message_id:string){
-        return this.adapter.call('deleteMsg',[message_id])
+        return this.adapter.call(this.oneBot.uin,'V12','deleteMsg',[message_id])
     }
 
     /**
      * 获取消息详情
      */F
     async getMsg(this:V12,message_id:string){
-        const message=await this.adapter.call('getMsg',[message_id])
+        const message=await this.adapter.call(this.oneBot.uin,'V12','getMsg',[message_id])
         if(!message) throw new Error('消息不存在')
         return {
             ...message,
@@ -31,7 +31,7 @@ export class CommonAction{
         return {
             user_id:this.oneBot.uin+'',
             platform:'qq',
-            nickname:this.adapter.nickname,
+            nickname:this.adapter.getSelfInfo(this.oneBot.uin,'V12').nickname,
             user_displayname:''
         }
     }
@@ -40,7 +40,7 @@ export class CommonAction{
      * @param domain {string} 域名
      */
     async getCookies(this:V12,domain:string):Promise<string>{
-        return await this.adapter.call('getCookies',[domain])
+        return await this.adapter.call(this.oneBot.uin,'V12','getCookies',[domain])
     }
 
     getStatus(this:V12){
@@ -49,7 +49,7 @@ export class CommonAction{
             bots:[
                 {
                     self:this.action.getSelfInfo.apply(this),
-                    online:this.adapter.status===OnlineStatus.Online,
+                    online:this.oneBot.status===OneBotStatus.Online,
                 }
             ]
         }
@@ -72,13 +72,13 @@ export class CommonAction{
         }
     }
     async submitSlider(this:V12,ticket:string){
-        return this.adapter.call('callLogin',['submitSlider',ticket])
+        return this.adapter.call(this.oneBot.uin,'V12','callLogin',['submitSlider',ticket])
     }
     async submitSmsCode(this:V12,code:string){
         return this.action.callLogin.apply(this,['submitSmsCode',code])
     }
     login(this:V12,password?:string):Promise<unknown>{
-        return this.adapter.call('callLogin',['login',password])
+        return this.adapter.call(this.oneBot.uin,'V12','callLogin',['login',password])
     }
     getSupportedActions(this:V12):string[]{
         return [...new Set(getProperties(this.action))].filter(key=>{

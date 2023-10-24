@@ -114,7 +114,6 @@ export class App extends Koa {
         const platform = config.platform
         const AdapterClass = App.ADAPTERS.get(platform)
         if (!AdapterClass) throw new Error(`未安装适配器(${platform})`)
-        console.log(platform,App.ADAPTERS,AdapterClass)
         const adapter = new AdapterClass(this, platform, config)
         this.adapters.set(config.platform, adapter)
         return adapter
@@ -122,11 +121,6 @@ export class App extends Koa {
 
     async start() {
         this.httpServer.listen(this.config.port)
-        this.on('adapter.start', (platform) => {
-            this.router.get(`${platform}/:version/:uin`, (ctx) => {
-                const {uin, version} = ctx.params
-            })
-        })
         this.router.get('/list', (ctx) => {
             ctx.body = this.oneBots.map(bot => {
                 return {
@@ -277,10 +271,10 @@ export namespace App {
 
     export function loadAdapter<T extends string>(platform: string) {
         const maybeNames = [
-            path.join(__dirname, '../adapters', platform),
-            `@onebots/adapter-${platform}`,
-            `onebots-adapter-${platform}`,
-            platform
+            path.join(__dirname, '../adapters', platform), // 内置的
+            `@onebots/adapter-${platform}`, // 我写的
+            `onebots-adapter-${platform}`, // 别人按照规范写的
+            platform // 别人写的
         ]
         type AdapterClass = Class<Adapter<T>>
         let adapter: AdapterClass = null
@@ -288,8 +282,7 @@ export namespace App {
             try {
                 adapter = require(adapterName)?.default
                 break
-            } catch {
-            }
+            } catch {}
         }
         if (!adapter) throw new Error(`找不到对应的适配器：${platform}`)
         return adapter

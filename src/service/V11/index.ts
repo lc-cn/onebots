@@ -19,10 +19,9 @@ import {Dict} from "@zhinjs/shared";
 
 export class V11 extends Service<'V11'> implements OneBot.Base {
     public action: Action
-    public version = 'V11'
+    public version:OneBot.Version = 'V11'
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
-    private path: string
     db: Database
     disposes: Dispose[]
     protected _queue: Array<{
@@ -77,7 +76,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                 this.dispatch({
                     self_id: this.oneBot.uin,
                     status: {
-                        online: this.oneBot.isOnline,
+                        online: this.adapter.getSelfInfo(this.oneBot.uin,'V11').status === OneBotStatus.Online,
                         good: this.oneBot.status === OneBotStatus.Good
                     },
                     time: Math.floor(Date.now() / 1000),
@@ -90,9 +89,8 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     }
 
     private startHttp() {
-        const path=`/${this.oneBot.platform}/${this.oneBot.uin}/v11`
-        this.oneBot.app.router.all(new RegExp(`^${path}/(.*)$`), this._httpRequestHandler.bind(this))
-        this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${path}`)
+        this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), this._httpRequestHandler.bind(this))
+        this.logger.mark(`开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
     }
 
     private startHttpReverse(config: Config.HttpReverseConfig) {
@@ -142,7 +140,6 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     }
 
     private startWs() {
-
         this.wss = this.oneBot.app.router.ws(this.path, this.oneBot.app.httpServer)
         this.logger.mark(`开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`)
         this.wss.on("error", (err) => {
@@ -212,7 +209,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
         data.post_type = data.post_type || 'system'
         if (data.message && data.post_type === 'message') {
             if (this.config.post_message_format === 'array') {
-                data.message = this.adapter.toSegment(data.message,'V11')
+                data.message = this.adapter.toSegment('V11',data.message)
                 if (data.source) { // reply
                     let msg0 = data.message[0]
                     msg0.data['id'] = await this.getReplyMsgIdFromDB(data)
@@ -221,9 +218,9 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                 if (data.source) {
                     data.message.shift()
                     // segment 更好用, cq 一般只用来显示，就不存储真实id了, 有需求的自己去改
-                    data.message = this.adapter.toCqcode(data,'V11').replace(/^(\[CQ:reply,id=)(.+?)\]/, `$1${data.source.seq}]`)
+                    data.message = this.adapter.toCqcode('V11',data).replace(/^(\[CQ:reply,id=)(.+?)\]/, `$1${data.source.seq}]`)
                 }else{
-                    data.message = this.adapter.toCqcode(data,'V11')
+                    data.message = this.adapter.toCqcode("V11",data)
                 }
             }
         }
@@ -497,16 +494,16 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             }
             if (event.message_type === "group") {
                 if (res.delete)
-                    this.adapter.call('deleteMsg',[event.message_id])
+                    this.adapter.deleteMessage(this.oneBot.uin,'V11',[event.message_id])
                 if (res.kick && !event.anonymous)
-                    this.adapter.call('setGroupKick',[event.group_id, event.user_id, res.reject_add_request])
+                    this.adapter.call(this.oneBot.uin,'V11','setGroupKick',[event.group_id, event.user_id, res.reject_add_request])
                 if (res.ban)
-                    this.adapter.call('setGroupBan',[event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800])
+                    this.adapter.call(this.oneBot.uin,'V11','setGroupBan',[event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800])
             }
         }
         if (event.post_type === "request" && "approve" in res) {
             const action= event.request_type === "friend" ? "setFriendAddRequest" : "setGroupAddRequest"
-            this.adapter.call(action,[event.flag, res.approve, res.reason ? res.reason : "", !!res.block])
+            this.adapter.call(this.oneBot.uin,'V11',action,[event.flag, res.approve, res.reason ? res.reason : "", !!res.block])
         }
     }
 
@@ -591,7 +588,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             if (result.data instanceof Map)
                 result.data = [...result.data.values()]
             if (result.data?.message)
-                result.data.message = this.adapter.toSegment(result.data.message,'V11')
+                result.data.message = this.adapter.toSegment('V11',result.data.message)
 
             // send_msg_xxx 时提前把数据写入数据库(也有可能来的比message慢，后来的话会被数据库忽略)
             if (result.status === 'ok' && params.user_id && result.data?.message_id && result.data?.seq) {
@@ -696,6 +693,14 @@ export namespace V11 {
         http_reverse?: (string | Config.HttpReverseConfig)[]
         ws_reverse?: string[]
     }
+    export type Payload<T =object>={
+
+    } & T
+    export type SelfInfo={
+        status:OneBotStatus
+        nickname:string
+    }
+
     export interface GroupInfo{
         group_id:number
         group_name:string
@@ -710,6 +715,10 @@ export namespace V11 {
         user_name:string
     }
     export interface Message{
+    }
+    export interface Segment{
+        type:string
+        data:Dict
     }
     export interface MessageElement{
         type:string

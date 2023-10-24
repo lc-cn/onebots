@@ -4,7 +4,6 @@ import {createOnebots,App} from "@/server/app";
 
 const execArgv = process.argv.splice(2);
 const obj = {}
-console.log(execArgv)
 for (let i = 0; i < execArgv.length; i += 2) {
     const key=execArgv[i]
     const value=execArgv[i + 1]

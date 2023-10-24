@@ -9,7 +9,7 @@ export class CommonAction {
     getLoginInfo(this: V11) {
         return {
             user_id: this.oneBot.uin,
-            nickname: this.adapter.nickname
+            nickname: this.adapter.getSelfInfo(this.oneBot.uin,'V11').nickname
         }
     }
 
@@ -22,7 +22,7 @@ export class CommonAction {
         let msg_entry = await this.db.getMsgById(message_id)
         if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
 
-        return this.adapter.call('deleteMsg',[msg_entry.base64_id])
+        return this.adapter.call(this.oneBot.uin,'V11','deleteMsg',[msg_entry.base64_id])
     }
 
     /**
@@ -34,7 +34,7 @@ export class CommonAction {
         let msg_entry = await this.db.getMsgById(message_id)
         if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
 
-        let msg: Message = await this.adapter.call('getMsg',[msg_entry.base64_id])
+        let msg: Message = await this.adapter.call(this.oneBot.uin,'V11','getMsg',[msg_entry.base64_id])
         msg.message_id = String(message_id)  // nonebot v11 要求 message_id 是 number 类型
         msg["real_id"] = msg.message_id      // nonebot 的reply类型会检测real_id是否存在，虽然它从未使用
         return msg
@@ -45,7 +45,7 @@ export class CommonAction {
      * @param id {string} 合并id
      */
     getForwardMsg(this: V11, id: string) {
-        return this.adapter.call('getForwardMsg',[id])
+        return this.adapter.call(this.oneBot.uin,'V11','getForwardMsg',[id])
     }
 
     /**
@@ -60,7 +60,7 @@ export class CommonAction {
      * 获取 CSRF Token
      */
     getCsrfToken(this: V11) {
-        return this.adapter.call('getCsrfToken')
+        return this.adapter.call(this.oneBot.uin,'V11','getCsrfToken')
     }
 
     /**
@@ -69,8 +69,8 @@ export class CommonAction {
      */
     getCredentials(this: V11, domain: string) {
         return {
-            cookies: this.adapter.call('getCookies',[domain]),
-            csrf_token: this.adapter.call('getCsrfToken')
+            cookies: this.adapter.call(this.oneBot.uin,'V11','getCookies',[domain]),
+            csrf_token: this.adapter.call(this.oneBot.uin,'V11','getCsrfToken')
         }
     }
 
@@ -95,25 +95,25 @@ export class CommonAction {
 
     getStatus(this: V11) {
         return {
-            online: this.adapter.status === OnlineStatus.Online,
+            online: this.adapter.getSelfInfo(this.oneBot.uin,'V11').status === OneBotStatus.Online,
             good: this.oneBot.status === OneBotStatus.Good
         }
     }
 
 
     async submitSlider(this: V11, ticket: string) {
-        return this.adapter.call('callLogin',['submitSlider', ticket])
+        return this.adapter.call(this.oneBot.uin,'V11','callLogin',['submitSlider', ticket])
     }
 
     async submitSmsCode(this: V11, code: string) {
-        return this.adapter.call('callLogin', ['submitSmsCode', code])
+        return this.adapter.call(this.oneBot.uin,'V11','callLogin', ['submitSmsCode', code])
     }
 
     login(this: V11, password?: string) {
-        return this.adapter.call('callLogin', ['login', password])
+        return this.adapter.call(this.oneBot.uin,'V11','callLogin', ['login', password])
     }
 
     logout(this: V11, keepalive?: boolean) {
-        return this.adapter.call('logout', [keepalive])
+        return this.adapter.call(this.oneBot.uin,'V11','logout', [keepalive])
     }
 }

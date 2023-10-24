@@ -1,13 +1,14 @@
 import {V12} from "../index";
 import {processMessage} from "@/service/V12/utils";
+import {OneBot} from "@/onebot";
 
 export class FriendAction {
     getUserInfo(this: V12, user_id: number) {
-        return this.adapter.call('getUserInfo',[user_id])
+        return this.adapter.call(this.oneBot.uin,'V12','getUserInfo',[user_id])
     }
 
     getFriendList(this: V12) {
-        return this.adapter.call('getFriendList')
+        return this.adapter.call(this.oneBot.uin,'V12','getFriendList')
     }
 
     /**
@@ -17,7 +18,7 @@ export class FriendAction {
      * @param source {import('onebots/lib/service/v12').SegmentElem<'reply'>} 引用内容
      */
     async sendPrivateMsg(this: V12, user_id: number, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
-        throw new Error('不支持的API')
+        throw OneBot.UnsupportedMethodError
     }
     /**
      * 为指定用户点赞

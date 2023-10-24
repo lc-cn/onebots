@@ -7,7 +7,7 @@ import {rmSync} from "fs";
 import {Dict} from "@zhinjs/shared";
 import {OneBot} from "@/onebot";
 
-export default class IcqqAdapter extends Adapter<'icqq'> implements Adapter.Base{
+export default class IcqqAdapter extends Adapter<'icqq'>{
     #password?:string
     #disposes:Map<string,Function>=new Map<string, Function>()
     constructor(app: App, config: IcqqAdapter.Config) {
@@ -83,6 +83,15 @@ export default class IcqqAdapter extends Adapter<'icqq'> implements Adapter.Base
         const timer=setTimeout(()=>{
             clean()
         },this.app.config.timeout*1000)
+        disposeArr.push(client.on('message',(event)=>{
+            this.emit('message.receive',oneBot.uin,event)
+        }))
+        disposeArr.push(client.on('notice',(event)=>{
+            this.emit('notice.receive',oneBot.uin,event)
+        }))
+        disposeArr.push(client.on('request',(event)=>{
+            this.emit('request.receive',oneBot.uin,event)
+        }))
         await client.login(parseInt(oneBot.uin),this.#password)
         return clean
     }
