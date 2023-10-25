@@ -59,30 +59,32 @@ export class App extends Koa {
     }
 
     private getConfigMaps() {
-        const result: Map<string, Adapter.Config> = new Map<string, Adapter.Config>()
-        Object.entries(this.config).forEach(([key, value]) => {
-            if (!App.configKeys.includes(key)) {
-                result.set(key, value)
-            }
-        })
+        type AdapterInfo=[string,string,Adapter.Config]
+        const result:AdapterInfo[]=[]
+        for(const [key,value] of Object.entries(this.config)){
+            const [adapter,...uinArr]=key.split('.')
+            const uin=uinArr.join('.')
+            if(!uin) continue
+            result.push([adapter,uin,value])
+        }
         return result
     }
 
     private createOneBots() {
-        for (const [uin, config] of this.getConfigMaps()) {
-            this.createOneBot(uin, config)
+        for (const [platform,uin, config] of this.getConfigMaps()) {
+            this.createOneBot(platform,uin, config)
         }
     }
 
     public addAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
         this.config[uin] = config
-        const oneBot = this.createOneBot(uin, config)
+        const oneBot = this.createOneBot(platform,uin, config)
         oneBot.start()
         writeFileSync(App.configPath, yaml.dump(deepClone(this.config)))
     }
 
     public updateAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
-        const adapter=this.findOrCreateAdapter(config)
+        const adapter=this.findOrCreateAdapter(platform)
         const oneBot=adapter.oneBots.get(uin)
         if (!oneBot) return this.addAccount(platform, uin, config)
         const newConfig = deepMerge(this.config[uin], config)
@@ -91,7 +93,7 @@ export class App extends Koa {
     }
 
     public removeAccount(platform: string, uin: string, force?: boolean) {
-        const adapter = this.findOrCreateAdapter(this.config[platform])
+        const adapter = this.findOrCreateAdapter(platform)
         const oneBot=adapter.oneBots.get(uin)
         if(!oneBot) throw new Error(`未找到账号${uin}`)
         oneBot.stop(force)
@@ -100,8 +102,8 @@ export class App extends Koa {
         writeFileSync(App.configPath, yaml.dump(this.config))
     }
 
-    public createOneBot<P extends string>(uin: string, config: Adapter.Config<P>) {
-        const adapter = this.findOrCreateAdapter<P>(config)
+    public createOneBot<P extends string>(platform : P,uin: string, config: Adapter.Config) {
+        const adapter = this.findOrCreateAdapter<P>(platform,config)
         return adapter.createOneBot(uin,config.protocol,config.versions)
     }
     get oneBots(){
@@ -109,13 +111,12 @@ export class App extends Koa {
             return [...adapter.oneBots.values()]
         }).flat()
     }
-    public findOrCreateAdapter<P extends string>(config:Adapter.Config<P>){
-        if(this.adapters.has(config.platform)) return this.adapters.get(config.platform)
-        const platform = config.platform
+    public findOrCreateAdapter<P extends string>(platform:P,config?:Adapter.Config){
+        if(this.adapters.has(platform)) return this.adapters.get(platform)
         const AdapterClass = App.ADAPTERS.get(platform)
         if (!AdapterClass) throw new Error(`未安装适配器(${platform})`)
         const adapter = new AdapterClass(this, platform, config)
-        this.adapters.set(config.platform, adapter)
+        this.adapters.set(platform, adapter)
         return adapter
     }
 
@@ -223,18 +224,6 @@ export function defineConfig(config: App.Config) {
 
 export namespace App {
     export const ADAPTERS: Map<string, AdapterClass> = new Map()
-    export const configKeys:string[]=[
-        'port',
-        'path',
-        'timeout',
-        'log_level',
-        'general',
-        'env',
-        'keys',
-        'proxy',
-        'subdomainOffset',
-        'proxyIpHeader',
-    ]
     export interface Adapters<P extends string = string> extends Map<P, Adapter<P>> {
     }
 
@@ -247,7 +236,7 @@ export namespace App {
             V11?: V11.Config
             V12?: V12.Config
         }
-    } & KoaOptions & Record<`${number}`, MayBeArray<OneBot.Config<OneBot.Version>>>
+    } & KoaOptions & Record<`${string}.${string}`, Adapter.Config>
     export const defaultConfig: Config = {
         port: 6727,
         timeout: 30,

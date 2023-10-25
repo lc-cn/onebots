@@ -1,6 +1,5 @@
 port: 6727 # 监听端口
 log_level: info # 日志等级
-platform: 5 # 机器人客户端协议（1:Android 2:APad 3:Watch 4:IMac 5:IPad）
 timeout: 30 #登录超时时间(秒)
 general: # 通用配置，在单个配置省略时的默认值
   V11: # oneBotV11的通用配置
@@ -29,11 +28,11 @@ general: # 通用配置，在单个配置省略时的默认值
   protocol:
     platform: 2
 # 每个账号的单独配置(用于覆盖通用配置)
-123456789:
-  password: '' # 账号密码，未配置则扫码登陆
-  platform: icqq
+icqq.123456789: # `${适配器名称}:${账号}`
   versions:
-    - version: v12
+    - version: V12
+  db:
+
   # 。。。其他配置项参见上方对应oneBot版本的通用配置
   protocol: # 将会覆盖通用配置中的protocol
     platform: 1

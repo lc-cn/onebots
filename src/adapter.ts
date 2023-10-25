@@ -79,7 +79,7 @@ export namespace Adapter {
         [key:string]:Adapter.Config
     }
     export type Config<T extends string=string>={
-        platform: T
+        platform?: T
         versions:OneBot.Config<OneBot.Version>[]
         protocol?:Dict
     } & Record<string,any>

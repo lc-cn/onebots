@@ -1,5 +1,5 @@
 import * as crypto from "crypto";
-
+import seedRandom from 'seed-random'
 const packageJson = require('../package.json')
 export const version = packageJson.version
 
@@ -76,7 +76,21 @@ export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
     }
     return result
 }
-
+export function randomId(seed:string):number
+export function randomId(seed:string,length:number):number
+export function randomId(seed:string,min:number,max:number):number
+export function randomId(seed:string,...args:number[]){
+    let [min=0,max=1]=args
+    let formatter=(n:number)=>n
+    if(args.length===1){
+        const len=Math.min(Number.MAX_SAFE_INTEGER.toString().length,args[0])
+        min=10**(len-1)
+        max=Math.min(Number.MAX_SAFE_INTEGER,10**len-1)
+        formatter=(n:number)=>Math.floor(n)
+    }
+    const rand=seedRandom(seed)
+    return formatter(rand()*(max-min)+min)
+}
 /**
  * 将驼峰命名替换为下划线分割命名
  * @param name
