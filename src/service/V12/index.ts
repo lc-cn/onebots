@@ -122,6 +122,18 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
                 }))
             }, this.config.heartbeat * 1000)
         }
+        this.adapter.on('message.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V12','message',event)
+            this.dispatch(payload)
+        })
+        this.adapter.on('notice.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V12','notice',event)
+            this.dispatch(payload)
+        })
+        this.adapter.on('request.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V12','request',event)
+            this.dispatch(payload)
+        })
     }
 
     private startHttp(config: V12.HttpConfig) {
@@ -329,7 +341,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         data.alt_message = data.raw_message
         data.self = this.action.getSelfInfo.apply(this)
         if (!data.detail_type) data.detail_type = data.message_type || data.notice_type || data.request_type || data.system_type
-        data.message = data.type === 'message' ? V12.toSegment(data.message) : data.message
+        data.message = data.type === 'message' ? this.adapter.toSegment('V12',data.message) : data.message
         if (data.source) data.source = {
             ...data.source,
             message_id: data.detail_type === 'private' ?
@@ -395,12 +407,25 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
                 if (Reflect.has(params, k)) {
                     if (BOOLS.includes(k))
                         params[k] = toBool(params[k])
+                    if(k==='message'){
+                        if (typeof params[k] === 'string') {
+                            if (/[CQ:music,type=.+,id=.+]/.test(params[k])){
+                                params[k] = params[k].replace(',type=',',platform=')
+                            }
+                            params[k] = this.adapter.fromCqcode('V11',params[k])
+                        } else {
+                            if(params[k][0].type == 'music' && params[k][0]?.data?.type){
+                                params[k][0].data.platform = params[k][0].data.type
+                                delete params[k][0].data.type
+                            }
+                            params[k] = this.adapter.fromSegment('V11',params[k])
+                        }
+                    }
                     args.push(params[k])
                 }
             }
             let ret: any, result: any
             try {
-                console.log(method, args)
                 ret = this.action[method].apply(this, args)
             } catch (e) {
                 return JSON.stringify(V12.error(e.message))
@@ -417,6 +442,8 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             if (result.data instanceof Map)
                 result.data = [...result.data.values()]
 
+            if (result.data?.message)
+                result.data.message = this.adapter.toSegment('V12',result.data.message)
             if (echo) {
                 result.echo = echo
             }
@@ -618,48 +645,6 @@ export namespace V12 {
     const fileTypes: string[] = ['image', "file", 'record', 'video', 'flash']
     export type Sendable = string | SegmentElem | (string | SegmentElem)[]
 
-    export function fromSegment(msgList: Sendable[]) {
-        msgList = [].concat(msgList);
-        return msgList.map((msg) => {
-            if (typeof msg !== 'object') msg = String(msg)
-            if (typeof msg === 'string') {
-                return {type: 'text', text: msg} as MessageElem
-            }
-            const {type, data = {}, ...other} = msg as SegmentElem;
-            Object.assign(data, other)
-            if (type === 'music' && !data['platform']) {
-                data['platform'] = data['type']
-                delete data['type']
-            }
-            if (type === 'mention') data['qq'] = Number(data['user_id'])
-            if (fileTypes.includes(type) && !data['file']) {
-                data['file'] = data['file_id']
-                delete data['file_id']
-            }
-            return {
-                type: type.replace('mention', 'at').replace('at_all', 'at'),
-                ...other,
-                ...data
-            } as MessageElem
-        })
-    }
-
-    export function toSegment(msgList: IcqqCanSend) {
-        msgList = [].concat(msgList);
-        return msgList.map((msg) => {
-            if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
-            let {type, ...other} = msg;
-            if (fileTypes.includes(type)) other['file_id'] = other['file']
-            return {
-                type: type === 'at' ? other['qq'] ? 'mention' : "mention_all" : type,
-                data: {
-                    ...other,
-                    user_id: other['qq']
-                }
-            } as SegmentElem
-        })
-    }
-
     export interface SegmentMap {
         face: { id: number, text?: string }
         text: { text: string }
@@ -764,10 +749,10 @@ export namespace V12 {
         id: string
         impl: 'onebots'
         version: 12
-        platform: 'qq'
+        platform: string
         self: {
-            platform: 'qq',
-            user_id: `${number}`
+            platform: string,
+            user_id: string
         }
         time: number
         type: 'meta' | 'message' | 'notice' | 'request'

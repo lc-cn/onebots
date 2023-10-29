@@ -13,7 +13,8 @@ export abstract class Adapter<T extends string=string> extends EventEmitter{
     get logger(){
         return this.#logger||=this.app.getLogger(this.platform)
     }
-    getLogger(uin:string,version:string){
+    getLogger(uin:string,version?:string){
+        if(!version) return this.app.getLogger(`${this.platform}-${uin}`)
         return this.app.getLogger(`${this.platform}-${version}(${uin})`)
     }
     createOneBot(uin:string,protocol:Dict,versions:OneBot.Config[]):OneBot{

@@ -86,6 +86,18 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                 })
             }, this.config.heartbeat * 1000)
         }
+        this.adapter.on('message.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V11','message',event)
+            this.dispatch(payload)
+        })
+        this.adapter.on('notice.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V11','notice',event)
+            this.dispatch(payload)
+        })
+        this.adapter.on('request.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V11','request',event)
+            this.dispatch(payload)
+        })
     }
 
     private startHttp() {
@@ -215,13 +227,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                     msg0.data['id'] = await this.getReplyMsgIdFromDB(data)
                 }
             } else {
-                if (data.source) {
-                    data.message.shift()
-                    // segment 更好用, cq 一般只用来显示，就不存储真实id了, 有需求的自己去改
-                    data.message = this.adapter.toCqcode('V11',data).replace(/^(\[CQ:reply,id=)(.+?)\]/, `$1${data.source.seq}]`)
-                }else{
-                    data.message = this.adapter.toCqcode("V11",data)
-                }
+                data.message = this.adapter.toCqcode("V11",data.message)
             }
         }
 
@@ -317,7 +323,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             msg.group_id = 0
             msg.group_name = ''
         }
-        msg.content = data.cqCode
+        msg.content = data.cqCode||data.message
 
         return await this.db.addOrUpdateMsg(msg)
     }
@@ -551,13 +557,13 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                             if (/[CQ:music,type=.+,id=.+]/.test(params[k])){
                                 params[k] = params[k].replace(',type=',',platform=')
                             }
-                            params[k] = this.adapter.fromCqcode(params[k],'V11')
+                            params[k] = this.adapter.fromCqcode('V11',params[k])
                         } else {
                             if(params[k][0].type == 'music' && params[k][0]?.data?.type){
                                 params[k][0].data.platform = params[k][0].data.type
                                 delete params[k][0].data.type
                             }
-                            params[k] = this.adapter.fromSegment(params[k],'V11')
+                            params[k] = this.adapter.fromSegment('V11',params[k])
                         }
                         params['message_id'] = params[k].find(e => e.type === 'reply')?.message_id
                     }

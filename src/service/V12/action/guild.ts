@@ -1,19 +1,17 @@
 import {V12} from "@/service/V12";
-import {processMessage} from "@/service/V12/utils";
-import {OneBot} from "@/onebot";
 
 export class GuildAction {
 
     getGuildList(this: V12) {
-        throw OneBot.UnsupportedMethodError
+        return this.adapter.call(this.oneBot.uin, 'V12', 'getGuildList')
     }
 
     getChannelList(this: V12, guild_id: string) {
-        throw OneBot.UnsupportedMethodError
+        return this.adapter.call(this.oneBot.uin, 'V12', 'getChannelList', [guild_id])
     }
 
     getGuildMemberList(this: V12, guild_id: string) {
-        throw OneBot.UnsupportedMethodError
+        return this.adapter.call(this.oneBot.uin, 'V12', 'getGuildMemberList', [guild_id])
     }
 
     /**
@@ -23,6 +21,6 @@ export class GuildAction {
      * @param message {import('icqq/lib/service').Sendable} 消息
      */
     async sendGuildMsg(this: V12, guild_id: string, channel_id: string, message: V12.Sendable) {
-        throw OneBot.UnsupportedMethodError
+        return this.adapter.call(this.oneBot.uin, 'V12', 'sendGuildMessage', [guild_id, channel_id, message])
     }
 }

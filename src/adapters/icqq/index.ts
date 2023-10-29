@@ -1,7 +1,7 @@
 import {Adapter} from "@/adapter";
 import {App} from "@/server/app";
 import {Config as IcqqConfig} from "icqq/lib/client";
-import {Client} from "icqq";
+import {Client, MessageElem} from "icqq";
 import process from "process";
 import {rmSync} from "fs";
 import {Dict} from "@zhinjs/shared";
@@ -15,20 +15,167 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
     }
     createOneBot(uin: string, protocol: Dict, versions: OneBot.Config[]): OneBot {
         const oneBot= super.createOneBot(uin, protocol, versions);
-        this.#password=this.app.config[uin].password;
+        this.#password=this.app.config[`icqq.${uin}`].password;
         oneBot.internal=new Client(protocol)
         return oneBot
     }
+    formatEventPayload<V extends OneBot.Version>(version: V, event: string, data: any):OneBot.Payload<V> {
+        return {
+            id: data.id,
+            type: event,
+            version: version,
+            self:{
+                platform:'icqq',
+                user_id: data.self_id
+            },
+            detail_type: data.message_type||data.notice_type||data.request_type,
+            platform: 'icqq',
+            ...data,
+            message:this.toMessageElement(data)
+        }
+    }
+    toMessageElement<V extends OneBot.Version>(event: any):OneBot.MessageElement<V>[] {
+        if(!event||!event.message) return null
+        const messageArr:(MessageElem|string)[]=[].concat(event.message)
+        const result:OneBot.MessageElement<V>[]=[]
+        if(event.source){
+            result.push({
+                type:'quote',
+                data:{
+                    id:`${event.source.rand}${event.source.seq}_${event.source.time}`,
+                }
+            })
+        }
+        for(const message of messageArr){
+            if(typeof message==='string'){
+                result.push({
+                    type:'text',
+                    data:{
+                        text:message
+                    }
+                })
+            }else{
+                const {type,...data}=message
+                result.push({
+                    type,
+                    data
+                })
+            }
+        }
+        return result
+    }
+    sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
+        const [user_id,message]=args
+        const result=this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,message.map(m=>{
+            return {
+                type:m.type,
+                ...(m.data||{})
+            }
+        }))
+        return result
+    }
+    sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
+        const [group_id,message]=args
+        const result=this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,message.map(m=>{
+            return {
+                type:m.type,
+                ...(m.data||{})
+            }
+        }))
+        return result
+    }
+
+    call<V extends OneBot.Version>(uin: string, version: V, method: string, args: any[]=[]): Promise<any> {
+        try{
+            if(this[method]) return this[method](uin,version,args)
+            return this.oneBots.get(uin)?.internal[method](...args)
+        }catch {
+            throw OneBot.UnsupportedMethodError
+        }
+    }
+
+    fromSegment<V extends OneBot.Version>(version: V, segment: OneBot.Segment<V>|OneBot.Segment<V>[]): OneBot.MessageElement<V>[] {
+        return [].concat(segment).map(item=>{
+            if(typeof item==="string") return {
+                type:'text',
+                data:{
+                    text:item
+                }
+            }
+            return {
+                type:item.type,
+                data:item
+            }
+        })
+    }
+    toSegment<V extends OneBot.Version>(version: V, message: OneBot.MessageElement<V>[]): OneBot.Segment<V>[] {
+        return [].concat(message).map(item=>{
+            if(!item || typeof item!=="object") return {
+                type:'text',
+                data:{
+                    text:item
+                }
+            }
+            const {type,...data}=item
+            return {
+                type,
+                data
+            }
+        })
+    }
+
+    fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.MessageElement<V>[] {
+        const regExpMatchArray=message.match(/\[CQ:([a-z]+),(!])+]/g)
+        if(!regExpMatchArray) return [
+            {
+                type:'text',
+                data:{
+                    text:message
+                }
+            }
+        ]
+        const result:OneBot.MessageElement<V>[]=[]
+        for(const match of regExpMatchArray){
+            const [type,...valueArr]=match.substring(1,match.length-1).split(',')
+            result.push({
+                type:type,
+                data:Object.fromEntries(valueArr.map(item=>{
+                    const [key,value]=item.split('=')
+                    return [key,value]
+                }))
+            })
+        }
+        return result
+    }
+
+    toCqcode<V extends OneBot.Version>(version: V, messageArr:OneBot.MessageElement<V>[]): string {
+        return [].concat(messageArr).map(item=>{
+            const dataStr=Object.entries(item.data).map(([key,value])=>{
+                // is Buffer
+                if(value instanceof Buffer) return `${key}=${value.toString('base64')}`
+                // is Object
+                if(value instanceof Object) return `${key}=${JSON.stringify(value)}`
+                // is Array
+                if(value instanceof Array) return `${key}=${value.map(v=>JSON.stringify(v)).join(',')}`
+                // is String
+                return `${key}=${item.data[key]}`
+            })
+            return `[CQ:${item.type},${dataStr.join(',')}]`
+        }).join('')
+    }
+
+    getSelfInfo<V extends OneBot.Version>(uin: string, version: V): OneBot.SelfInfo<V> {
+        const client:Client=this.oneBots.get(uin).internal
+        return {
+            nickname: client.nickname,
+            status: this.oneBots.get(uin).status,
+        } as OneBot.SelfInfo<V>;
+    }
+
     async startOneBot(oneBot:OneBot){
         const _this=this;
         const disposeArr=[]
         const client:Client=oneBot.internal
-        const clean = () => {
-            clearTimeout(timer)
-            while (disposeArr.length) {
-                disposeArr.shift()()
-            }
-        }
         client.trap('system.login.qrcode', function qrcodeHelper() {
             _this.logger.log('扫码后回车继续')
             process.stdin.once('data', () => {
@@ -59,17 +206,6 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                 this.off('system.login.device', deviceHelper)
             })
         })
-        client.trap('system.login.error', function errorHandler(e) {
-            if (e.message.includes('密码错误')) {
-                process.stdin.once('data', (e) => {
-                    this.login(e.toString().trim())
-                })
-            } else {
-                _this.logger.error(e.message)
-                clean()
-            }
-            this.off('system.login.error', errorHandler)
-        })
         client.trap('system.login.slider', function sliderHelper(e) {
             _this.logger.mark('请输入滑块验证返回的ticket')
             process.stdin.once('data', (e) => {
@@ -79,10 +215,6 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                 this.off('system.login.slider', sliderHelper)
             })
         })
-        client.trap('system.online', clean)
-        const timer=setTimeout(()=>{
-            clean()
-        },this.app.config.timeout*1000)
         disposeArr.push(client.on('message',(event)=>{
             this.emit('message.receive',oneBot.uin,event)
         }))
@@ -93,7 +225,32 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
             this.emit('request.receive',oneBot.uin,event)
         }))
         await client.login(parseInt(oneBot.uin),this.#password)
-        return clean
+        return new Promise<Function>((resolve,reject)=>{
+            client.trap('system.login.error', function errorHandler(e) {
+                if (e.message.includes('密码错误')) {
+                    process.stdin.once('data', (e) => {
+                        this.login(e.toString().trim())
+                    })
+                } else {
+                    _this.logger.error(e.message)
+                    clean()
+                }
+                this.off('system.login.error', errorHandler)
+            })
+            const clean = () => {
+                clearTimeout(timer)
+                while (disposeArr.length) {
+                    disposeArr.shift()()
+                }
+            }
+            client.trap('system.online', ()=>{
+                resolve(clean)
+            })
+            const timer=setTimeout(()=>{
+                clean()
+                reject('登录超时')
+            },this.app.config.timeout*1000)
+        })
     }
     async start(uin?:string){
         const startOneBots=[...this.oneBots.values()].filter(oneBot=>{

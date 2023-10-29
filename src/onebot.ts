@@ -5,6 +5,7 @@ import {V11} from "./service/V11";
 import {V12} from "./service/V12";
 import {Adapter} from "@/adapter";
 import {Service} from "@/service";
+import {Logger} from "log4js";
 
 export class NotFoundError extends Error {
     message = '不支持的API'
@@ -13,6 +14,7 @@ export class NotFoundError extends Error {
 export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitter {
     public config: OneBot.Config[]
     status: OneBotStatus
+    #logger:Logger
     protected password: string
     internal?:any
     instances: (V11 | V12)[]
@@ -21,6 +23,9 @@ export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitte
     }
     get platform(){
         return this.adapter.platform
+    }
+    get logger(){
+        return this.#logger ||= this.adapter.getLogger(this.uin)
     }
     constructor(public adapter:Adapter, public readonly uin: string, version_configs: OneBot.Config[]) {
         super()

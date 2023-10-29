@@ -31,8 +31,13 @@ general: # 通用配置，在单个配置省略时的默认值
 icqq.123456789: # `${适配器名称}:${账号}`
   versions:
     - version: V12
-  db:
-
+  # 。。。其他配置项参见上方对应oneBot版本的通用配置
+  protocol: # 将会覆盖通用配置中的protocol
+    platform: 1
+  # 。。。其他配置项参见上方对应oneBot版本的通用配置
+qq.a: # `${适配器名称}:${账号}`
+  versions:
+    - version: V11
   # 。。。其他配置项参见上方对应oneBot版本的通用配置
   protocol: # 将会覆盖通用配置中的protocol
     platform: 1

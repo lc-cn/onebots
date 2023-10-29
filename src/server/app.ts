@@ -115,7 +115,7 @@ export class App extends Koa {
         if(this.adapters.has(platform)) return this.adapters.get(platform)
         const AdapterClass = App.ADAPTERS.get(platform)
         if (!AdapterClass) throw new Error(`未安装适配器(${platform})`)
-        const adapter = new AdapterClass(this, platform, config)
+        const adapter = new AdapterClass(this, config)
         this.adapters.set(platform, adapter)
         return adapter
     }

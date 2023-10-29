@@ -1,6 +1,4 @@
 import {V12} from "../index";
-import {processMessage} from "@/service/V12/utils";
-import {OneBot} from "@/onebot";
 
 export class FriendAction {
     getUserInfo(this: V12, user_id: number) {
@@ -18,7 +16,7 @@ export class FriendAction {
      * @param source {import('onebots/lib/service/v12').SegmentElem<'reply'>} 引用内容
      */
     async sendPrivateMsg(this: V12, user_id: number, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
-        throw OneBot.UnsupportedMethodError
+        return this.adapter.call(this.oneBot.uin,'V12','sendPrivateMessage', [user_id, message, source])
     }
     /**
      * 为指定用户点赞

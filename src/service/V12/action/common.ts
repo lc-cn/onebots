@@ -1,5 +1,4 @@
 import {V12} from '@/service/V12'
-import {OnlineStatus} from "icqq";
 import {version} from "@/utils";
 import {OneBotStatus} from "@/onebot";
 import {getProperties,toLine} from '@/utils'
@@ -22,10 +21,7 @@ export class CommonAction{
     async getMsg(this:V12,message_id:string){
         const message=await this.adapter.call(this.oneBot.uin,'V12','getMsg',[message_id])
         if(!message) throw new Error('消息不存在')
-        return {
-            ...message,
-            message: V12.toSegment(message.message)
-        }
+        return message
     }
     getSelfInfo(this:V12){
         return {

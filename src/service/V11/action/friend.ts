@@ -1,4 +1,3 @@
-import {OneBot} from "@/onebot";
 import {V11} from "@/service/V11";
 
 export class FriendAction {
@@ -8,8 +7,8 @@ export class FriendAction {
      * @param message {import('icqq').Sendable} 发送的消息
      * @param message_id {string} 引用的消息ID
      */
-    async sendPrivateMsg(this: V11, user_id: number, message: string, message_id?: string) {
-       return this.adapter.call(this.oneBot.uin,'V11','sendPrivateMsg', [user_id, message, message_id])
+    async sendPrivateMsg(this: V11, user_id: number, message: V11.MessageElement[], message_id?: string) {
+       return this.adapter.call(this.oneBot.uin,'V11','sendPrivateMessage', [user_id, message, message_id])
     }
 
     /**
