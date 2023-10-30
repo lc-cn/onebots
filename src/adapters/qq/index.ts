@@ -64,6 +64,7 @@ export namespace QQAdapter{
         protocol:{
             secret:string
             sandbox?:boolean
+            maxRetry?:number
             intents?:string[]
         }
     }
