@@ -96,7 +96,7 @@ export class SessionManager extends EventEmitter{
         })
     }
     getValidIntends(){
-        return (this.bot.config.intents||[]).reduce((result,item)=>{
+        return (this.bot.config.intents|| []).reduce((result,item)=>{
            return Intends[item as keyof Intends]| result
         },0)
     }
@@ -176,7 +176,10 @@ export class SessionManager extends EventEmitter{
             if (wsRes.t === SessionEvents.READY) {
                 this.bot.oneBot.logger.debug(`[CLIENT] 鉴权通过`);
                 const { d, s } = wsRes;
-                const { session_id } = d;
+                const { session_id,user={} } = d;
+                this.bot.self_id=user.id
+                this.bot.nickname=user.nickname;
+                this.bot.status=user.status;
                 // 获取当前会话参数
                 if (session_id && s) {
                     this.sessionRecord.sessionID = session_id;

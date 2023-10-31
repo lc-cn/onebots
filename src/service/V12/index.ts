@@ -745,7 +745,7 @@ export namespace V12 {
         webhook: [],
         ws_reverse: []
     }
-    export type Payload<T = object> = {
+    export type Payload<T = Dict> = {
         id: string
         impl: 'onebots'
         version: 12

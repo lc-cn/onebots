@@ -699,8 +699,8 @@ export namespace V11 {
         http_reverse?: (string | Config.HttpReverseConfig)[]
         ws_reverse?: string[]
     }
-    export type Payload<T =object>={
-
+    export type Payload<T =Dict>={
+        [P in string|symbol]:any
     } & T
     export type SelfInfo={
         status:OneBotStatus
