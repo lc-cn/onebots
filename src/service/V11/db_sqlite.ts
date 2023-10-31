@@ -1,6 +1,6 @@
 import { MsgEntry } from "./db_entities"
-import { DataSource, Repository } from "typeorm";
-import { Logger } from "log4js";
+import { DataSource, Repository } from "typeorm"
+import { Logger } from "log4js"
 import { AsyncLock } from "@/types"
 
 export class Database {
@@ -15,7 +15,7 @@ export class Database {
     msgRepo: Repository<MsgEntry>
     dbLock: AsyncLock
 
-    constructor(dbPath: string, logger: Logger){
+    constructor(dbPath: string, logger: Logger) {
         this.dbPath = dbPath
         this.logger = logger
         this.dbLock = new AsyncLock()
@@ -33,7 +33,7 @@ export class Database {
         try {
             await this.dataSource.initialize()
             await this.dataSource.synchronize(false)
-        } catch(err) {
+        } catch (err) {
             this.logger.error(`sqlite [${this.dbPath}] open fail!`, err)
             return
         }
@@ -43,7 +43,7 @@ export class Database {
 
         setInterval(() => {
             this.shrinkDB()
-        }, this.msgHistoryCheckInterval);
+        }, this.msgHistoryCheckInterval)
     }
 
     /**
@@ -54,21 +54,20 @@ export class Database {
         await this.dbLock.lock()
         try {
             let msgDataExists = await this.getMsgByParams(msgData.user_id, msgData.group_id, msgData.seq)
-            if(msgDataExists) {
+            if (msgDataExists) {
                 // send_msg() 返回值和同步的 message 消息哪个先来不确定，send_msg 返回值后来时不允许更新数据库
-                if(msgData.content.length == 0) {
+                if (msgData.content.length == 0) {
                     return msgDataExists.id
                 }
                 msgData.id = msgDataExists.id
-                await this.msgRepo.update({id: msgData.id}, msgData)
+                await this.msgRepo.update({ id: msgData.id }, msgData)
                 return msgDataExists.id
             }
 
             msgData = await this.msgRepo.save(msgData)
             this.logger.debug(`addMsg with id:${msgData.id}`)
             return msgData.id
-        }
-        finally {
+        } finally {
             this.dbLock.unlock()
         }
     }
@@ -79,7 +78,7 @@ export class Database {
      * @returns
      */
     public async getMsgByBase64Id(base64_id: string): Promise<MsgEntry | null> {
-        let ret = await this.msgRepo.findOneBy({base64_id: base64_id})
+        let ret = await this.msgRepo.findOneBy({ base64_id: base64_id })
         return ret
     }
 
@@ -89,7 +88,7 @@ export class Database {
      * @returns
      */
     public async getMsgById(id: number): Promise<MsgEntry | null> {
-        let ret = await this.msgRepo.findOneBy({id: id})
+        let ret = await this.msgRepo.findOneBy({ id: id })
         return ret
     }
 
@@ -100,7 +99,7 @@ export class Database {
      * @param seq
      */
     public async getMsgByParams(user_id: number, group_id: number, seq: number): Promise<MsgEntry | null> {
-        let ret = await this.msgRepo.findOneBy({user_id: user_id, group_id: group_id, seq: seq})
+        let ret = await this.msgRepo.findOneBy({ user_id: user_id, group_id: group_id, seq: seq })
         return ret
     }
 
@@ -110,10 +109,12 @@ export class Database {
      * @param id
      */
     public async markMsgAsRecalled(base64_id?: string, id?: number) {
-        if(base64_id || id)
-            await this.msgRepo.update(base64_id ? {base64_id: base64_id} : {id: id}, {recalled: true, recall_time: new Date()})
-        else
-            throw new Error("base64_id 或 id 参数至少一个应该被赋值")
+        if (base64_id || id)
+            await this.msgRepo.update(base64_id ? { base64_id: base64_id } : { id: id }, {
+                recalled: true,
+                recall_time: new Date(),
+            })
+        else throw new Error("base64_id 或 id 参数至少一个应该被赋值")
     }
 
     /**
@@ -123,11 +124,6 @@ export class Database {
         let dt = new Date()
         dt.setDate(dt.getDate() - this.msgHistoryPreserveDays)
 
-        await this.msgRepo
-        .createQueryBuilder()
-        .delete()
-        .from(MsgEntry)
-        .where("create_time < :dt", {dt: dt})
-        .execute()
+        await this.msgRepo.createQueryBuilder().delete().from(MsgEntry).where("create_time < :dt", { dt: dt }).execute()
     }
 }
