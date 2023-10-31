@@ -30,10 +30,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     private path: string
     db: Database
     disposes: Dispose[]
-    protected _queue: Array<{
-        method: keyof Action
-        args: any[]
-    }> = []
+    protected _queue: Array<{ method: keyof Action; args: any[] }> = []
     protected queue_running: boolean = false
     logger: Logger
     wss?: WebSocketServer
