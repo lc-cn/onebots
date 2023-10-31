@@ -613,7 +613,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     // send_msg_xxx 时提前把数据写入数据库(也有可能来的比message慢，后来的话会被数据库忽略)
     if (result.status === "ok" && action.match(sendMsgMethodRegex) && result.data?.message_id && result.data?.seq) {
       result.data.message_id = await this.addMsgToDBFromSendMsgResult(
-        params.user_id || this.client.uin,
+        this.client.uin, // msg send resp uin is always bot uin
         params.group_id || 0,
         result.data.seq,
         result.data.message_id
