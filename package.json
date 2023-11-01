@@ -42,9 +42,9 @@
         "@types/koa-bodyparser": "^4.3.7",
         "@types/node": "latest",
         "@types/ws": "^8.5.3",
+        "prettier": "^3.0.0",
         "ts-node-dev": "latest",
         "tsc-alias": "latest",
-        "prettier": "^3.0.0",
         "tsconfig-paths": "latest",
         "typescript": "latest",
         "vitepress": "^1.0.0-alpha.72"
@@ -68,6 +68,7 @@
         "log4js": "^6.5.2",
         "mime-types": "^2.1.35",
         "reflect-metadata": "^0.1.13",
+        "seed-random": "^2.2.0",
         "sqlite3": "^5.1.6",
         "typeorm": "^0.3.17",
         "ws": "^8.8.0"
