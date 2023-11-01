@@ -98,7 +98,7 @@ export class Database {
      * @param group_id
      * @param seq
      */
-    public async getMsgByParams(user_id: number, group_id: number, seq: number): Promise<MsgEntry | null> {
+    public async getMsgByParams(user_id: string, group_id: number, seq: number): Promise<MsgEntry | null> {
         let ret = await this.msgRepo.findOneBy({ user_id: user_id, group_id: group_id, seq: seq })
         return ret
     }
