@@ -4,7 +4,7 @@ export class GroupAction {
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {import('icqq').Sendable} 消息
+     * @param message {MessageElem[]} 消息
      * @param message_id {string} 引用的消息ID
      */
     async sendGroupMsg(this: V11, group_id: number, message: V11.MessageElement[], message_id?: string) {

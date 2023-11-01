@@ -1,6 +1,6 @@
-import {Message, OnlineStatus} from "icqq";
-import {OneBotStatus} from "@/onebot";
-import {V11} from "@/service/V11";
+import { OneBotStatus } from "@/onebot"
+import { V11 } from "@/service/V11"
+import { Message, OnlineStatus } from "icqq"
 
 export class CommonAction {
     /**
@@ -15,7 +15,7 @@ export class CommonAction {
 
     /**
      * 撤回消息
-     * @param message_id {number} 消息id
+     * @param message_id {string} 消息id
      */
     async deleteMsg(this: V11, message_id: number) {
         if(message_id == 0) throw new Error('getMsg: message_id[0] is invalid')
@@ -28,6 +28,7 @@ export class CommonAction {
     /**
      * 获取消息
      * @param message_id {string} 消息id
+     * @param onebot_id {number}
      */
     async getMsg(this: V11, message_id: number) {
         if(message_id == 0) throw new Error('getMsg: message_id[0] is invalid')
@@ -79,9 +80,9 @@ export class CommonAction {
      */
     getVersion(this: V11) {
         return {
-            app_name: 'icqq',
-            app_version: '2.x',
-            protocol_version: 'v11'
+            app_name: "icqq",
+            app_version: "2.x",
+            protocol_version: "v11",
         }
     }
 
@@ -90,7 +91,7 @@ export class CommonAction {
      * @param delay {number} 要延迟的毫秒数
      */
     setRestart(this: V11, delay: number) {
-        return this.emit('restart', delay)
+        return this.emit("restart", delay)
     }
 
     getStatus(this: V11) {

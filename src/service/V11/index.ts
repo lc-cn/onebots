@@ -2,6 +2,7 @@ import {Config} from "./config";
 import {Action} from "./action";
 import {OneBot, OneBotStatus} from "@/onebot";
 import {Logger} from "log4js";
+import crypto from "crypto";
 import {WebSocket, WebSocketServer} from "ws";
 import {Dispose} from "@/types";
 import {Context} from "koa";
@@ -17,17 +18,17 @@ import { MsgEntry } from "./db_entities";
 import {Service} from "@/service";
 import {Dict} from "@zhinjs/shared";
 
-export class V11 extends Service<'V11'> implements OneBot.Base {
+const sendMsgTypes = ["private", "group", "discuss"]
+const sendMsgMethodRegex = new RegExp(`send_(${sendMsgTypes.join("|")})_msg`)
+
+export class V11 extends Service<"V11"> implements OneBot.Base {
     public action: Action
     public version:OneBot.Version = 'V11'
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
     db: Database
     disposes: Dispose[]
-    protected _queue: Array<{
-        method: keyof Action,
-        args: any[]
-    }> = []
+    protected _queue: Array<{ method: keyof Action; args: any[] }> = []
     protected queue_running: boolean = false
     logger: Logger
     wss?: WebSocketServer
@@ -51,23 +52,23 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     start() {
         if (this.config.use_http) this.startHttp()
         if (this.config.use_ws) this.startWs()
-        this.config.http_reverse.forEach(config => {
-            if (typeof config === 'string') {
+        this.config.http_reverse.forEach((config) => {
+            if (typeof config === "string") {
                 config = {
                     url: config,
                     access_token: this.config.access_token,
-                    secret: this.config.secret
+                    secret: this.config.secret,
                 }
             } else {
                 config = {
                     access_token: this.config.access_token,
                     secret: this.config.secret,
-                    ...config
+                    ...config,
                 }
             }
             this.startHttpReverse(config)
         })
-        this.config.ws_reverse.forEach(config => {
+        this.config.ws_reverse.forEach((config) => {
             this.startWsReverse(config)
         })
 
@@ -106,7 +107,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     }
 
     private startHttpReverse(config: Config.HttpReverseConfig) {
-        this.on('dispatch', (unserialized: any) => {
+        this.on("dispatch", (unserialized: any) => {
             const serialized = JSON.stringify(unserialized)
             const options: http.RequestOptions = {
                 method: "POST",
@@ -120,31 +121,34 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             }
             if (this.config.secret) {
                 //@ts-ignore
-                options.headers["X-Signature"] = "sha1=" + crypto.createHmac("sha1", String(this.config.secret)).update(serialized).digest("hex")
+                options.headers["X-Signature"] =
+                    "sha1=" + crypto.createHmac("sha1", String(this.config.secret)).update(serialized).digest("hex")
             }
             const protocol = config.url.startsWith("https") ? https : http
             try {
-                protocol.request(config.url, options, (res) => {
-                    if (res.statusCode !== 200)
-                        return this.logger.warn(`POST(${config.url})上报事件收到非200响应：` + res.statusCode)
-                    let data = ""
-                    res.setEncoding("utf-8")
-                    res.on("data", (chunk) => data += chunk)
-                    res.on("end", () => {
-                        this.logger.debug(`收到HTTP响应 ${res.statusCode} ：` + data)
-                        if (!data)
-                            return
-                        try {
-                            this._quickOperate(unserialized, JSON.parse(data))
-                        } catch (e) {
-                            this.logger.error(`快速操作遇到错误：` + e.message)
-                        }
+                protocol
+                    .request(config.url, options, (res) => {
+                        if (res.statusCode !== 200)
+                            return this.logger.warn(`POST(${config.url})上报事件收到非200响应：` + res.statusCode)
+                        let data = ""
+                        res.setEncoding("utf-8")
+                        res.on("data", (chunk) => (data += chunk))
+                        res.on("end", () => {
+                            this.logger.debug(`收到HTTP响应 ${res.statusCode} ：` + data)
+                            if (!data) return
+                            try {
+                                this._quickOperate(unserialized, JSON.parse(data))
+                            } catch (e) {
+                                this.logger.error(`快速操作遇到错误：` + e.message)
+                            }
+                        })
                     })
-                }).on("error", (err) => {
-                    this.logger.error(`POST(${config.url})上报事件失败：` + err.message)
-                }).end(serialized, () => {
-                    this.logger.debug(`POST(${config.url})上报事件成功: ` + serialized)
-                })
+                    .on("error", (err) => {
+                        this.logger.error(`POST(${config.url})上报事件失败：` + err.message)
+                    })
+                    .end(serialized, () => {
+                        this.logger.debug(`POST(${config.url})上报事件成功: ` + serialized)
+                    })
             } catch (e) {
                 this.logger.error(`POST(${config.url})上报失败：` + e.message)
             }
@@ -167,21 +171,21 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             })
             if (this.config.access_token) {
                 const url = new URL(req.url, "http://127.0.0.1")
-                const token = url.searchParams.get('access_token')
-                if (token)
-                    req.headers["authorization"] = `Bearer ${token}`
-                if (!req.headers["authorization"] || req.headers["authorization"] !== `Bearer ${this.config.access_token}`)
+                const token = url.searchParams.get("access_token")
+                if (token) req.headers["authorization"] = `Bearer ${token}`
+                if (
+                    !req.headers["authorization"] ||
+                    req.headers["authorization"] !== `Bearer ${this.config.access_token}`
+                )
                     return ws.close(1002, "wrong access token")
             }
             this._webSocketHandler(ws)
         })
-        this.on('dispatch', (serialized) => {
+        this.on("dispatch", (serialized) => {
             for (const ws of this.wss.clients) {
                 ws.send(serialized, (err) => {
-                    if (err)
-                        this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
-                    else
-                        this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
+                    if (err) this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
+                    else this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
                 })
             }
         })
@@ -189,14 +193,12 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
 
     private startWsReverse(url: string) {
         this._createWsr(url)
-        this.on('dispatch', (serialized) => {
-            for(const ws of this.wsr){
+        this.on("dispatch", (serialized) => {
+            for (const ws of this.wsr) {
                 ws.send(serialized, (err) => {
-                    if (err){
+                    if (err) {
                         this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
-                    }
-                    else
-                        this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
+                    } else this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
                 })
             }
         })
@@ -224,22 +226,22 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                 data.message = this.adapter.toSegment('V11',data.message)
                 if (data.source) { // reply
                     let msg0 = data.message[0]
-                    msg0.data['id'] = await this.getReplyMsgIdFromDB(data)
+                    msg0.data["id"] = await this.getReplyMsgIdFromDB(data)
                 }
             } else {
                 data.message = this.adapter.toCqcode("V11",data.message)
             }
         }
 
-        if(data.message_id) {
+        if (data.message_id) {
             data.message_id = await this.addMsgToDB(data)
         }
 
-        if(data.post_type == 'notice' && String(data.notice_type).endsWith('_recall')) {
+        if (data.post_type == "notice" && String(data.notice_type).endsWith("_recall")) {
             this.db.markMsgAsRecalled(data.base64_id)
         }
-        if(data.font){
-            const fontNo=Buffer.from(data.font).readUInt32BE()
+        if (data.font) {
+            const fontNo = Buffer.from(data.font).readUInt32BE()
             // this.db.set(`KVMap.${data.fontNo}`,data.font)
             data.font = fontNo
         }
@@ -248,14 +250,14 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
         //     if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
         //     return value + ''
         // })
-        this.emit('dispatch', this._formatEvent(data))
+        this.emit("dispatch", this._formatEvent(data))
     }
 
     private _formatEvent(data:Dict){
         if (data.post_type === 'notice') {
             // console.log(JSON.stringify(data))
-            const data1:any = {...data}
-            if (data.notice_type === 'group') {
+            const data1: any = { ...data }
+            if (data.notice_type === "group") {
                 delete data1.group
                 delete data1.member
                 switch (data.sub_type) {
@@ -263,25 +265,25 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                         data1.sub_type = data.operator_id === data.user_id ? 'leave' : data.user_id === this.oneBot.uin? 'kick_me': 'kick'
                         data1.notice_type = `${data.notice_type}_${data.sub_type}`
                         break
-                    case 'increase':
+                    case "increase":
                         data1.notice_type = `${data.notice_type}_${data.sub_type}`
-                        data1.sub_type = 'approve' // todo 尚未实现
+                        data1.sub_type = "approve" // todo 尚未实现
                         data1.operator_id = data1.user_id // todo 尚未实现
                         break
-                    case 'ban':
+                    case "ban":
                         data1.notice_type = `${data.notice_type}_${data.sub_type}`
-                        data1.subtype=data.duration?'ban':'lift_ban'
+                        data1.subtype = data.duration ? "ban" : "lift_ban"
                         break
-                    case 'recall':
+                    case "recall":
                         data1.notice_type = `${data.notice_type}_${data.sub_type}`
                         delete data1.sub_type
                         break
-                    case 'admin':
+                    case "admin":
                         data1.notice_type = `${data.notice_type}_${data.sub_type}`
-                        data1.sub_type = data.set?'set':'unset'
+                        data1.sub_type = data.set ? "set" : "unset"
                         break
-                    case 'poke':
-                        data1.notice_type = 'notify'
+                    case "poke":
+                        data1.notice_type = "notify"
                         data1.user_id = data.operator_id
                         break
                     default:
@@ -290,14 +292,14 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             } else {
                 delete data1.friend
                 switch (data.sub_type) {
-                    case 'increase':
+                    case "increase":
                         data1.notice_type = `friend_add`
-                        break;
-                    case 'recall':
+                        break
+                    case "recall":
                         data1.notice_type = `friend_recall`
                         break
                     default:
-                        break;
+                        break
                 }
             }
             return JSON.stringify(data1)
@@ -307,7 +309,8 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     }
 
     private async addMsgToDB(data: any): Promise<number> {
-        if (!data.sender || !('user_id' in data.sender)) { // eg. notice
+        if (!data.sender || !("user_id" in data.sender)) {
+            // eg. notice
             return
         }
         let msg = new MsgEntry()
@@ -315,13 +318,12 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
         msg.seq = data.seq
         msg.user_id = data.sender.user_id
         msg.nickname = data.sender.nickname
-        if(data.message_type === 'group')
-        {
+        if (data.message_type === "group") {
             msg.group_id = data.group_id
-            msg.group_name = data["group_name"] || '' // 可能不存在(gocq默认不发)
+            msg.group_name = data["group_name"] || "" // 可能不存在(gocq默认不发)
         } else {
             msg.group_id = 0
-            msg.group_name = ''
+            msg.group_name = ""
         }
         msg.content = data.cqCode||data.message
 
@@ -336,33 +338,39 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
      * @param seq 消息序号
      * @param base64_id icqq返回的base64格式的消息id
      */
-    private async addMsgToDBFromSendMsgResult(user_id: number, group_id: number, seq: number, base64_id: string): Promise<number> {
+    private async addMsgToDBFromSendMsgResult(
+        user_id: string,
+        group_id: number,
+        seq: number,
+        base64_id: string
+    ): Promise<number> {
         let msg = new MsgEntry()
         msg.base64_id = base64_id
         msg.seq = seq
         msg.user_id = user_id
-        msg.nickname = ''
+        msg.nickname = ""
         msg.group_id = group_id
-        msg.group_name = ''
-        msg.content = ''
+        msg.group_name = ""
+        msg.content = ""
 
         return await this.db.addOrUpdateMsg(msg)
     }
 
     private async getReplyMsgIdFromDB(data: any): Promise<number> {
-        let group_id = (data.message_type === 'group')? data.group_id : 0
+        let group_id = data.message_type === "group" ? data.group_id : 0
         let msg = await this.db.getMsgByParams(data.source.user_id, group_id, data.source.seq)
         return msg ? msg.id : 0
     }
 
     private async _httpRequestHandler(ctx: Context) {
-
-        if (ctx.method === 'OPTIONS') {
-            return ctx.writeHead(200, {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, authorization'
-            }).end()
+        if (ctx.method === "OPTIONS") {
+            return ctx
+                .writeHead(200, {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, authorization",
+                })
+                .end()
         }
         const url = new URL(ctx.url, `http://127.0.0.1`)
         if (this.config.access_token) {
@@ -371,27 +379,27 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                     return ctx.res.writeHead(403).end()
             } else {
                 const access_token = url.searchParams.get("access_token")
-                if (!access_token)
-                    return ctx.res.writeHead(401).end()
-                else if (access_token !== this.config.access_token)
-                    return ctx.res.writeHead(403).end()
+                if (!access_token) return ctx.res.writeHead(401).end()
+                else if (access_token !== this.config.access_token) return ctx.res.writeHead(403).end()
             }
         }
         ctx.res.setHeader("Content-Type", "application/json; charset=utf-8")
-        if (this.config.enable_cors)
-            ctx.res.setHeader("Access-Control-Allow-Origin", "*")
-        const action = url.pathname.replace(`${this.path}`, '').slice(1)
+        if (this.config.enable_cors) ctx.res.setHeader("Access-Control-Allow-Origin", "*")
+        const action = url.pathname.replace(`${this.path}`, "").slice(1)
         if (ctx.method === "GET") {
             try {
-                const ret = await this.apply({action, params: ctx.query})
+                const ret = await this.apply({ action, params: ctx.query })
                 ctx.res.writeHead(200).end(ret)
             } catch (e) {
                 ctx.res.writeHead(500).end(e.message)
             }
         } else if (ctx.method === "POST") {
             try {
-                const params = {...(ctx.request.query || {}), ...(ctx.request.body as object || {})}
-                const ret = await this.apply({action, params})
+                const params = {
+                    ...(ctx.request.query || {}),
+                    ...((ctx.request.body as object) || {}),
+                }
+                const ret = await this.apply({ action, params })
                 ctx.res.writeHead(200).end(ret)
             } catch (e) {
                 ctx.res.writeHead(500).end(e.message)
@@ -407,20 +415,24 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     protected _webSocketHandler(ws: WebSocket) {
         ws.on("message", async (msg) => {
             const msgStr = msg.toString()
-            this.logger.info(" 收到ws消息：", msgStr.length > 2e3? msgStr.slice(0,2e3) + ` ... ${msgStr.length - 2e3} more chars` : msgStr)
+            this.logger.info(
+                " 收到ws消息：",
+                msgStr.length > 2e3 ? msgStr.slice(0, 2e3) + ` ... ${msgStr.length - 2e3} more chars` : msgStr
+            )
             var data
             try {
                 data = JSON.parse(msgStr) as V11.Protocol
                 let ret: string
                 if (data.action.startsWith(".handle_quick_operation")) {
-                    const event = data.params.context, res = data.params.operation
+                    const event = data.params.context,
+                        res = data.params.operation
                     this._quickOperate(event, res)
                     ret = JSON.stringify({
                         retcode: 0,
                         status: "async",
                         data: null,
                         error: null,
-                        echo: data.echo
+                        echo: data.echo,
                     })
                 } else {
                     ret = await this.apply(data)
@@ -435,17 +447,20 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                     code = 1400
                     message = "请求格式错误"
                 }
-                ws.send(JSON.stringify({
-                    retcode: code,
-                    status: "failed",
-                    data: null,
-                    error: {
-                        code, message
-                    },
-                    echo: data?.echo,
-                    msg: e.message, // gocq 返回的消息里有这个字段且很多插件都在访问
-                    action: data.action
-                }))
+                ws.send(
+                    JSON.stringify({
+                        retcode: code,
+                        status: "failed",
+                        data: null,
+                        error: {
+                            code,
+                            message,
+                        },
+                        echo: data?.echo,
+                        msg: e.message, // gocq 返回的消息里有这个字段且很多插件都在访问
+                        action: data.action,
+                    })
+                )
             }
         })
         ws.send(JSON.stringify(V11.genMetaEvent(this.oneBot.uin, "connect")))
@@ -462,9 +477,8 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             "X-Client-Role": "Universal",
             "User-Agent": "OneBot",
         }
-        if (this.config.access_token)
-            headers.Authorization = "Bearer " + this.config.access_token
-        const ws = new WebSocket(url, {headers})
+        if (this.config.access_token) headers.Authorization = "Bearer " + this.config.access_token
+        const ws = new WebSocket(url, { headers })
         ws.on("error", (err) => {
             this.logger.error(err.message)
         })
@@ -475,12 +489,10 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
         })
         ws.on("close", (code) => {
             this.wsr.delete(ws)
-            if (timestmap < this.timestamp)
-                return
+            if (timestmap < this.timestamp) return
             this.logger.warn(`反向ws(${url})被关闭，关闭码${code}，将在${this.config.reconnect_interval}秒后尝试重连。`)
             setTimeout(() => {
-                if (timestmap < this.timestamp)
-                    return
+                if (timestmap < this.timestamp) return
                 this._createWsr(url)
             }, this.config.reconnect_interval * 1000)
         })
@@ -492,8 +504,7 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
     protected _quickOperate(event: any, res: any) {
         if (event.post_type === "message") {
             if (res.reply) {
-                if (event.message_type === "discuss")
-                    return
+                if (event.message_type === "discuss") return
                 const action = event.message_type === "private" ? "sendPrivateMsg" : "sendGroupMsg"
                 const id = event.message_type === "private" ? event.user_id : event.group_id
                 this.action[action].apply(this,[id, res.reply, res.auto_escape])
@@ -518,28 +529,24 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
      */
     async apply(req: V11.Protocol) {
         let {action, params, echo} = req
-        if(typeof params.message_id == 'number' || /^\d+$/.test(params.message_id)){
-            params.message_id = (await this.db.getMsgById(params.message_id)).id // 调用api时把本地的数字id转为base64发给icqq
-        }
         action = toLine(action)
+
         let is_async = action.includes("_async")
-        if (is_async)
-            action = action.replace("_async", "")
+        if (is_async) action = action.replace("_async", "")
+
         let is_queue = action.includes("_rate_limited")
-        if (is_queue)
-            action = action.replace("_rate_limited", "")
-        if (action === 'send_msg') {
-            if (["private", "group", "discuss"].includes(params.message_type)) {
-                action = "send_" + params.message_type + "_msg"
-            } else if (params.user_id)
-                action = "send_private_msg"
-            else if (params.group_id)
-                action = "send_group_msg"
-            else if (params.discuss_id)
-                action = "send_discuss_msg"
-            else throw new Error('required message_type or input (user_id/group_id)')
+        if (is_queue) action = action.replace("_rate_limited", "")
+
+        if (action === "send_msg") {
+            if (sendMsgTypes.includes(params.message_type)) action = "send_" + params.message_type + "_msg"
+            else if (params.user_id) action = "send_private_msg"
+            else if (params.group_id) action = "send_group_msg"
+            else if (params.discuss_id) action = "send_discuss_msg"
+            else throw new Error("required message_type or input (user_id/group_id)")
+        } else if (action === "send_like") {
+            action = "send_user_like"
         }
-        if (action === 'send_like') action = 'send_user_like'
+
         const method = toHump(action) as keyof Action
         if (Reflect.has(this.action, method)) {
             const ARGS = String(Reflect.get(this.action, method)).match(/\(.*\)/)?.[0]
@@ -554,16 +561,16 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
                         params[k] = toBool(params[k])
                     if (k === 'message') {
                         if (typeof params[k] === 'string') {
-                            if (/[CQ:music,type=.+,id=.+]/.test(params[k])){
-                                params[k] = params[k].replace(',type=',',platform=')
+                            if (/[CQ:music,type=.+,id=.+]/.test(params[k])) {
+                                params[k] = params[k].replace(',type=', ',platform=')
                             }
-                            params[k] = this.adapter.fromCqcode('V11',params[k])
+                            params[k] = this.adapter.fromCqcode('V11', params[k])
                         } else {
-                            if(params[k][0].type == 'music' && params[k][0]?.data?.type){
+                            if (params[k][0].type == 'music' && params[k][0]?.data?.type) {
                                 params[k][0].data.platform = params[k][0].data.type
                                 delete params[k][0].data.type
                             }
-                            params[k] = this.adapter.fromSegment('V11',params[k])
+                            params[k] = this.adapter.fromSegment('V11', params[k])
                         }
                         params['message_id'] = params[k].find(e => e.type === 'reply')?.message_id
                     }
@@ -594,29 +601,33 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
             if (result.data instanceof Map)
                 result.data = [...result.data.values()]
             if (result.data?.message)
-                result.data.message = this.adapter.toSegment('V11',result.data.message)
+                result.data.message = this.adapter.toSegment('V11', result.data.message)
 
             // send_msg_xxx 时提前把数据写入数据库(也有可能来的比message慢，后来的话会被数据库忽略)
-            if (result.status === 'ok' && params.user_id && result.data?.message_id && result.data?.seq) {
-                result.data.message_id = await this.addMsgToDBFromSendMsgResult(params.user_id, params.group_id || 0, result.data.seq, result.data.message_id)
+            if (result.status === "ok" && action.match(sendMsgMethodRegex) && result.data?.message_id && result.data?.seq) {
+                result.data.message_id = await this.addMsgToDBFromSendMsgResult(
+                    this.oneBot.uin, // msg send resp uin is always bot uin
+                    params.group_id || 0,
+                    result.data.seq,
+                    result.data.message_id
+                )
             }
             if (echo) {
                 result.echo = echo
             }
             return JSON.stringify(result)
-        } else
-            throw new NotFoundError()
+        }
     }
 
     /**
      * 限速队列调用
      */
-    protected async _runQueue() {
+    async _runQueue() {
         if (this.queue_running) return
         while (this._queue.length > 0) {
             this.queue_running = true
             const task = this._queue.shift()
-            const {method, args} = task as typeof V11.prototype._queue[0]
+            const { method, args } = task as (typeof V11.prototype._queue)[0]
             this.action[method].apply(this, args)
             await new Promise((resolve) => {
                 setTimeout(resolve, this.config.rate_limit_interval * 1000)
@@ -628,44 +639,45 @@ export class V11 extends Service<'V11'> implements OneBot.Base {
 
 export namespace V11 {
     export interface Result<T extends any> {
-        retcode: number,
-        status: "ok" | 'async' | 'error',
-        data: T,
+        retcode: number
+        status: "ok" | "async" | "error"
+        data: T
         error: string
+        echo?: string
     }
 
     export function ok<T extends any>(data: T, retcode = 0, pending?: boolean): Result<T> {
         return {
             retcode,
-            status: pending ? 'async' : 'ok',
+            status: pending ? "async" : "ok",
             data,
-            error: null
+            error: null,
         }
     }
 
     export function error(error: string, retcode = 1): Result<any> {
         return {
             retcode,
-            status: 'error',
+            status: "error",
             data: null,
-            error
+            error,
         }
     }
 
     export const defaultConfig: Config = {
         heartbeat: 3,
-        access_token: '',
+        access_token: "",
         post_timeout: 15,
-        secret: '',
+        secret: "",
         rate_limit_interval: 4,
-        post_message_format: 'string',
+        post_message_format: "string",
         reconnect_interval: 3,
         use_http: true,
         enable_cors: true,
         enable_reissue: false,
         use_ws: true,
         http_reverse: [],
-        ws_reverse: []
+        ws_reverse: [],
     }
 
     export function genMetaEvent(uin: string, type: string) {
@@ -679,7 +691,7 @@ export namespace V11 {
     }
 
     export interface Protocol {
-        action: string,
+        action: string
         params: any
         echo?: any
     }
@@ -690,7 +702,7 @@ export namespace V11 {
         enable_cors?: boolean
         enable_reissue?: boolean
         rate_limit_interval?: number
-        post_message_format?: 'string' | 'array'
+        post_message_format?: "string" | "array"
         heartbeat?: number
         secret?: string
         reconnect_interval?: number
