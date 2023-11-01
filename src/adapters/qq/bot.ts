@@ -42,6 +42,7 @@ export class QQBot extends EventEmitter{
             return ['image','file', 'audio'].indexOf(type) + 1
         }
         const messages:Dict={
+            msg_type:0,
             timestamp:Number((Date.now()/1000).toFixed(0))
         }
         const files:Dict={
@@ -53,6 +54,10 @@ export class QQBot extends EventEmitter{
                 elem = {type: 'text', data: {text: elem}}
             }
             switch (elem.type) {
+                case 'reply':
+                    messages.msg_id=elem.data.id
+                    files.msg_id=elem.data.id
+                    break;
                 case 'text':
                     messages.content ? messages.content += elem.data.text : messages.content = elem.data.text
                     hasMessages=true
@@ -171,6 +176,7 @@ export class QQBot extends EventEmitter{
     }
 }
 export enum QQEvent {
+    'FRIEND_ADD'='notice.friend.add',
     C2C_MESSAGE_CREATE='message.private',
     GROUP_AT_MESSAGE_CREATE='message.group',
 }
@@ -252,7 +258,4 @@ export namespace QQBot{
         }
         return result
     }
-}
-export enum MessageType{
-
 }
