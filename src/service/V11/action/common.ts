@@ -1,6 +1,6 @@
-import {Message, OnlineStatus} from "icqq";
-import {OneBotStatus} from "@/onebot";
-import {V11} from "@/service/V11";
+import { OneBotStatus } from "@/onebot"
+import { V11 } from "@/service/V11"
+import { Message, OnlineStatus } from "icqq"
 
 export class CommonAction {
     /**
@@ -9,34 +9,27 @@ export class CommonAction {
     getLoginInfo(this: V11) {
         return {
             user_id: this.oneBot.uin,
-            nickname: this.client.nickname
+            nickname: this.client.nickname,
         }
     }
 
     /**
      * 撤回消息
-     * @param message_id {number} 消息id
+     * @param message_id {string} 消息id
      */
-    async deleteMsg(this: V11, message_id: number) {
-        if(message_id == 0) throw new Error('getMsg: message_id[0] is invalid')
-        let msg_entry = await this.db.getMsgById(message_id)
-        if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
-
-        return this.client.deleteMsg(msg_entry.base64_id)
+    async deleteMsg(this: V11, message_id: string) {
+        return this.client.deleteMsg(message_id)
     }
 
     /**
      * 获取消息
      * @param message_id {string} 消息id
+     * @param onebot_id {number}
      */
-    async getMsg(this: V11, message_id: number) {
-        if(message_id == 0) throw new Error('getMsg: message_id[0] is invalid')
-        let msg_entry = await this.db.getMsgById(message_id)
-        if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
-
-        let msg: Message = await this.client.getMsg(msg_entry.base64_id)
-        msg.message_id = String(message_id)  // nonebot v11 要求 message_id 是 number 类型
-        msg["real_id"] = msg.message_id      // nonebot 的reply类型会检测real_id是否存在，虽然它从未使用
+    async getMsg(this: V11, message_id: string, onebot_id: number) {
+        let msg: Message = await this.client.getMsg(message_id)
+        msg.message_id = String(onebot_id) // nonebot v11 要求 message_id 是 number 类型
+        msg["real_id"] = onebot_id // nonebot 的reply类型会检测real_id是否存在，虽然它从未使用
         return msg
     }
 
@@ -70,7 +63,7 @@ export class CommonAction {
     getCredentials(this: V11, domain: string) {
         return {
             cookies: this.client.cookies[domain],
-            csrf_token: this.client.getCsrfToken()
+            csrf_token: this.client.getCsrfToken(),
         }
     }
 
@@ -79,9 +72,9 @@ export class CommonAction {
      */
     getVersion(this: V11) {
         return {
-            app_name: 'icqq',
-            app_version: '2.x',
-            protocol_version: 'v11'
+            app_name: "icqq",
+            app_version: "2.x",
+            protocol_version: "v11",
         }
     }
 
@@ -90,30 +83,30 @@ export class CommonAction {
      * @param delay {number} 要延迟的毫秒数
      */
     setRestart(this: V11, delay: number) {
-        return this.emit('restart', delay)
+        return this.emit("restart", delay)
     }
 
     getStatus(this: V11) {
         return {
             online: this.client.status === OnlineStatus.Online,
-            good: this.oneBot.status === OneBotStatus.Good
+            good: this.oneBot.status === OneBotStatus.Good,
         }
     }
 
     callLogin(this: V11, func: string, ...args: any[]) {
-        return new Promise(async resolve => {
+        return new Promise(async (resolve) => {
             const receiveResult = (event) => {
-                this.client.offTrap('system.login.qrcode')
-                this.client.offTrap('system.login.device')
-                this.client.offTrap('system.login.slider')
-                this.client.offTrap('system.login.error')
+                this.client.offTrap("system.login.qrcode")
+                this.client.offTrap("system.login.device")
+                this.client.offTrap("system.login.slider")
+                this.client.offTrap("system.login.error")
                 resolve(event)
             }
-            this.client.trap('system.login.qrcode', receiveResult)
-            this.client.trap('system.login.device', receiveResult)
-            this.client.trap('system.login.slider', receiveResult)
-            this.client.trap('system.login.error', receiveResult)
-            this.client.trapOnce('system.online', receiveResult)
+            this.client.trap("system.login.qrcode", receiveResult)
+            this.client.trap("system.login.device", receiveResult)
+            this.client.trap("system.login.slider", receiveResult)
+            this.client.trap("system.login.error", receiveResult)
+            this.client.trapOnce("system.online", receiveResult)
             try {
                 await this.client[func](...args)
             } catch (reason) {
@@ -123,42 +116,42 @@ export class CommonAction {
     }
 
     async submitSlider(this: V11, ticket: string) {
-        return this.action.callLogin.apply(this, ['submitSlider', ticket])
+        return this.action.callLogin.apply(this, ["submitSlider", ticket])
     }
 
     async submitSmsCode(this: V11, code: string) {
-        return this.action.callLogin.apply(this, ['submitSmsCode', code])
+        return this.action.callLogin.apply(this, ["submitSmsCode", code])
     }
 
     sendSmsCode(this: V11) {
-        return new Promise<any>(resolve => {
+        return new Promise<any>((resolve) => {
             const receiveResult = (e) => {
                 const callback = (data) => {
-                    this.client.offTrap('internal.verbose')
-                    this.client.offTrap('system.login.error')
+                    this.client.offTrap("internal.verbose")
+                    this.client.offTrap("system.login.error")
                     resolve(data)
                 }
-                if ((typeof e === 'string' && e.includes('已发送')) || typeof e !== 'string') {
+                if ((typeof e === "string" && e.includes("已发送")) || typeof e !== "string") {
                     callback(e)
                 }
             }
-            this.client.trap('internal.verbose', receiveResult)
-            this.client.trap('system.login.error', receiveResult)
+            this.client.trap("internal.verbose", receiveResult)
+            this.client.trap("system.login.error", receiveResult)
             this.client.sendSmsCode()
         })
     }
 
     login(this: V11, password?: string) {
-        return this.action.callLogin.apply(this, ['login', password])
+        return this.action.callLogin.apply(this, ["login", password])
     }
 
     logout(this: V11, keepalive?: boolean) {
-        return new Promise(async resolve => {
+        return new Promise(async (resolve) => {
             const receiveResult = (e) => {
-                this.client.offTrap('system.offline')
+                this.client.offTrap("system.offline")
                 resolve(e)
             }
-            this.client.trap('system.offline', receiveResult)
+            this.client.trap("system.offline", receiveResult)
             await this.client.logout(keepalive)
         })
     }

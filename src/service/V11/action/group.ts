@@ -1,24 +1,22 @@
-import {V11} from "@/service/V11";
-import {SegmentElem} from "icqq-cq-enable/lib/utils";
-import {processMessage} from "@/service/V11/utils";
+import { V11 } from "@/service/V11"
+import { processMessage } from "@/service/V11/utils"
 import { shareMusic } from "@/service/shareMusicCustom"
-import { MusicElem } from "icqq/lib/message";
+import { MessageElem, MusicElem } from "icqq/lib/message"
 
 export class GroupAction {
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {import('icqq').Sendable} 消息
+     * @param message {MessageElem[]} 消息
      * @param message_id {string} 引用的消息ID
      */
-    async sendGroupMsg(this: V11, group_id: number, message: string | SegmentElem|SegmentElem[], message_id?: string) {
-        const msg=message_id?await this.client.getMsg(message_id):undefined
-        const {element,quote,music,share}=await processMessage.apply(this.client,[message,msg])
-        if(music) return await shareMusic.call(this.client.pickGroup(group_id), music as MusicElem)
-        if(share) return await this.client.pickGroup(group_id).shareUrl(music.data)
-        if(element.length) {
-            return await this.client.sendGroupMsg(group_id, element, quote ? await this.client.getMsg(quote.data.message_id) : undefined)
-        }
+    async sendGroupMsg(this: V11, group_id: number, message: MessageElem[], message_id?: string) {
+        const msg = message_id ? await this.client.getMsg(message_id) : undefined
+        const { element, music, share } = await processMessage.apply(this.client, [message])
+        if (music) return await shareMusic.call(this.client.pickGroup(group_id), music as MusicElem)
+        if (share) return await this.client.pickGroup(group_id).shareUrl(music.data)
+        if (!element.length) throw new Error("Empty message")
+        return await this.client.sendGroupMsg(group_id, element, msg)
     }
 
     /**
@@ -108,7 +106,7 @@ export class GroupAction {
      * 移除群精华
      * @param message_id
      */
-    deleteEssenceMessage(this:V11, message_id: string) {
+    deleteEssenceMessage(this: V11, message_id: string) {
         return this.client.removeEssenceMessage(message_id)
     }
     /**
@@ -146,7 +144,7 @@ export class GroupAction {
      * @param reason {string} 拒绝理由，approve为false时有效(默认为空)
      * @param block {boolean} 拒绝时是否加入黑名单，(默认：false)
      */
-    setGroupAddRequest(this: V11, flag: string, approve: boolean = true, reason: string = '', block: boolean = false) {
+    setGroupAddRequest(this: V11, flag: string, approve: boolean = true, reason: string = "", block: boolean = false) {
         return this.client.setGroupAddRequest(flag, approve, reason, block)
     }
 
