@@ -1,226 +1,252 @@
-import 'icqq-cq-enable'
-import {EventEmitter} from 'events'
-import {App} from "./server/app";
-import {deepClone, deepMerge} from "./utils";
-import {join} from "path";
-import {Client} from "icqq";
-import {genDmMessageId, genGroupMessageId,Config as IcqqConfig} from 'icqq'
-import {V11} from "./service/V11";
-import {V12} from "./service/V12";
-import {MayBeArray} from "./types";
+import "icqq-cq-enable";
+import { EventEmitter } from "events";
+import { App } from "./server/app";
+import { deepClone, deepMerge } from "./utils";
+import { join } from "path";
+import { Client } from "icqq";
+import { genDmMessageId, genGroupMessageId, Config as IcqqConfig } from "icqq";
+import { V11 } from "./service/V11";
+import { V12 } from "./service/V12";
+import { MayBeArray } from "./types";
 import * as process from "process";
-import {Service} from "@/service";
+import { Service } from "@/service";
 
 export class NotFoundError extends Error {
-    message = '不支持的API'
+    message = "不支持的API";
 }
 
 export class OneBot<V extends OneBot.Version> extends EventEmitter {
-    public config: OneBotConfig[]
-    status: OneBotStatus
-    protected password: string
-    public client: Client
-    instances: (V11 | V12)[]
+    public config: OneBotConfig[];
+    status: OneBotStatus;
+    protected password: string;
+    public client: Client;
+    instances: (V11 | V12)[];
 
-    constructor(public app: App, public readonly uin: number, config: MayBeArray<OneBotConfig>) {
-        super()
-        config = [].concat(config)
-        const protocolConfig:IcqqConfig={
-            data_dir: join(App.configDir, 'data'),
-            ...this.app.config.general.protocol
-        }
+    constructor(
+        public app: App,
+        public readonly uin: number,
+        config: MayBeArray<OneBotConfig>,
+    ) {
+        super();
+        config = [].concat(config);
+        const protocolConfig: IcqqConfig = {
+            data_dir: join(App.configDir, "data"),
+            ...this.app.config.general.protocol,
+        };
         this.config = config.map(c => {
-            if (!c.version) c.version = 'V11'
-            if(!c.protocol) c.protocol={}
-            if(c.password) this.password=c.password
-            Object.assign(protocolConfig,c.protocol)
+            if (!c.version) c.version = "V11";
+            if (!c.protocol) c.protocol = {};
+            if (c.password) this.password = c.password;
+            Object.assign(protocolConfig, c.protocol);
             switch (c.version) {
-                case 'V11':
-                    return deepMerge(deepClone(this.app.config.general.V11), c)
-                case 'V12':
-                    return deepMerge(deepClone(this.app.config.general.V12), c)
+                case "V11":
+                    return deepMerge(deepClone(this.app.config.general.V11), c);
+                case "V12":
+                    return deepMerge(deepClone(this.app.config.general.V12), c);
                 default:
-                    throw new Error('不支持的oneBot版本：' + c.version)
+                    throw new Error("不支持的oneBot版本：" + c.version);
             }
-        })
-        this.client = new Client(protocolConfig)
+        });
+        this.client = new Client(protocolConfig);
         this.instances = this.config.map(c => {
             switch (c.version) {
-                case 'V11':
-                    return new V11(this, this.client, c as OneBot.Config<'V11'>)
-                case 'V12':
-                    return new V12(this, this.client, c as OneBot.Config<'V12'>)
+                case "V11":
+                    return new V11(this, this.client, c as OneBot.Config<"V11">);
+                case "V12":
+                    return new V12(this, this.client, c as OneBot.Config<"V12">);
                 default:
-                    throw new Error('不支持的oneBot版本：' + c.version)
+                    throw new Error("不支持的oneBot版本：" + c.version);
             }
-        })
-        this.status = OneBotStatus.Good
+        });
+        this.status = OneBotStatus.Good;
     }
 
-    start():Promise<[boolean,any]> {
-        this.startListen()
-        const disposeArr = []
+    start(): Promise<[boolean, any]> {
+        this.startListen();
+        const disposeArr = [];
         const clean = () => {
             while (disposeArr.length) {
-                disposeArr.shift()()
+                disposeArr.shift()();
             }
-        }
-        this.client.trap('system.login.qrcode', function qrcodeHelper() {
-            console.log('扫码后回车继续')
-            process.stdin.once('data', () => {
-                this.login()
-            })
+        };
+        this.client.trap("system.login.qrcode", function qrcodeHelper() {
+            console.log("扫码后回车继续");
+            process.stdin.once("data", () => {
+                this.login();
+            });
             disposeArr.push(() => {
-                this.off('system.login.qrcode', qrcodeHelper)
-            })
-        })
-        this.client.trap('system.login.device', function deviceHelper(e) {
-            console.log('请选择验证方式：1.短信验证  2.url验证')
-            process.stdin.once('data', (buf) => {
-                const input=buf.toString().trim()
-                if(input==='1') {
-                    this.sendSmsCode()
-                    console.log('请输入短信验证码:')
-                    process.stdin.once('data',buf=>{
-                        this.submitSmsCode(buf.toString().trim())
-                    })
-                }else{
-                    console.log(`请前往：${e.url} 完成验证后回车继续`)
-                    process.stdin.once('data',()=>{
-                        this.login()
-                    })
+                this.off("system.login.qrcode", qrcodeHelper);
+            });
+        });
+        this.client.trap("system.login.device", function deviceHelper(e) {
+            console.log("请选择验证方式：1.短信验证  2.url验证");
+            process.stdin.once("data", buf => {
+                const input = buf.toString().trim();
+                if (input === "1") {
+                    this.sendSmsCode();
+                    console.log("请输入短信验证码:");
+                    process.stdin.once("data", buf => {
+                        this.submitSmsCode(buf.toString().trim());
+                    });
+                } else {
+                    console.log(`请前往：${e.url} 完成验证后回车继续`);
+                    process.stdin.once("data", () => {
+                        this.login();
+                    });
                 }
-            })
+            });
             disposeArr.push(() => {
-                this.off('system.login.device', deviceHelper)
-            })
-        })
-        this.client.trap('system.login.error', function errorHandler(e) {
-            if (e.message.includes('密码错误')) {
-                process.stdin.once('data', (e) => {
-                    this.login(e.toString().trim())
-                })
+                this.off("system.login.device", deviceHelper);
+            });
+        });
+        this.client.trap("system.login.error", function errorHandler(e) {
+            if (e.message.includes("密码错误")) {
+                process.stdin.once("data", e => {
+                    this.login(e.toString().trim());
+                });
             } else {
-                process.exit()
+                process.exit();
             }
-            this.off('system.login.error', errorHandler)
-        })
-        this.client.trap('system.login.slider', function sliderHelper(e) {
-            console.log('请输入滑块验证返回的ticket')
-            process.stdin.once('data', (e) => {
-                this.submitSlider(e.toString().trim())
-            })
+            this.off("system.login.error", errorHandler);
+        });
+        this.client.trap("system.login.slider", function sliderHelper(e) {
+            console.log("请输入滑块验证返回的ticket");
+            process.stdin.once("data", e => {
+                this.submitSlider(e.toString().trim());
+            });
             disposeArr.push(() => {
-                this.off('system.login.slider', sliderHelper)
-            })
-        })
-        this.client.trap('system.online', clean)
-        return new Promise(async (resolve)=>{
-            const callback=(result)=>{
-                if(timer){
-                    clearTimeout(timer)
-                    timer=null
+                this.off("system.login.slider", sliderHelper);
+            });
+        });
+        this.client.trap("system.online", clean);
+        return new Promise(async resolve => {
+            const callback = result => {
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
                 }
-                resolve(result)
-                while (disposes.length){
-                    const dispose=disposes.shift()
-                    dispose()
+                resolve(result);
+                while (disposes.length) {
+                    const dispose = disposes.shift();
+                    dispose();
                 }
-            }
-            let timer=setTimeout(()=>{
-                callback([false,'登录超时'])
-            },this.app.config.timeout*1000)
-            await this.client.login(this.uin, this.password)
-            const disposes=[this.client.trapOnce('system.online',()=>{callback([true,null])}),
-            this.client.trapOnce('system.login.error',(e)=>callback([false,e.message]))]
-        })
+            };
+            let timer = setTimeout(() => {
+                callback([false, "登录超时"]);
+            }, this.app.config.timeout * 1000);
+            await this.client.login(this.uin, this.password);
+            const disposes = [
+                this.client.trapOnce("system.online", () => {
+                    callback([true, null]);
+                }),
+                this.client.trapOnce("system.login.error", e => callback([false, e.message])),
+            ];
+        });
     }
 
     startListen() {
-        this.client.on('system.online', this.system_online.bind(this, "system.online"))
-        this.client.trap('system', this.dispatch.bind(this, 'system'))
-        this.client.trap('notice', this.dispatch.bind(this, 'notice'))
-        this.client.trap('request', this.dispatch.bind(this, 'request'))
-        this.client.trap('message', this.dispatch.bind(this, 'message'))
+        this.client.on("system.online", this.system_online.bind(this, "system.online"));
+        this.client.trap("system", this.dispatch.bind(this, "system"));
+        this.client.trap("notice", this.dispatch.bind(this, "notice"));
+        this.client.trap("request", this.dispatch.bind(this, "request"));
+        this.client.trap("message", this.dispatch.bind(this, "message"));
         for (const instance of this.instances) {
-            instance.start(this.instances.length > 1 ? '/' + instance.version : undefined)
+            instance.start(this.instances.length > 1 ? "/" + instance.version : undefined);
         }
     }
 
     async stop(force?: boolean) {
         for (const instance of this.instances) {
-            await instance.stop(force)
+            await instance.stop(force);
         }
-        this.client.logout(force)
+        this.client.logout(force);
     }
 
-    system_online(event, data){
+    system_online(event, data) {
         for (const instance of this.instances) {
-            instance.system_online(data)
+            instance.system_online(data);
         }
     }
 
     async dispatch(event, data) {
-        let group_id = data["group_id"]
+        let group_id = data["group_id"];
         for (const instance of this.instances) {
-            if(group_id) {
+            if (group_id) {
                 // 群消息派发白名单
-                let lst = (instance.config as OneBotConfig).group_whitelist
-                if(lst && lst.length > 0 && !lst.includes(group_id))
-                    continue
+                let lst = (instance.config as OneBotConfig).group_whitelist;
+                if (lst && lst.length > 0 && !lst.includes(group_id)) continue;
             }
-            const result = instance.format(event, data)
-            if (data.source) { // 有 data.source 字段代表这是个回复
+            const result = instance.format(event, data);
+            if (data.source) {
+                // 有 data.source 字段代表这是个回复
                 switch (data.message_type) {
-                    case 'group':
+                    case "group":
                         data.message.unshift({
-                            type: 'reply',
+                            type: "reply",
                             seq: data.source.seq,
-                            id: genGroupMessageId(data.group_id, data.source.user_id, data.source.seq, data.source.rand, data.source.time)
-                        })
+                            id: genGroupMessageId(
+                                data.group_id,
+                                data.source.user_id,
+                                data.source.seq,
+                                data.source.rand,
+                                data.source.time,
+                            ),
+                        });
                         break;
-                    case 'private':
+                    case "private":
                         data.message.unshift({
-                            type: 'reply',
+                            type: "reply",
                             seq: data.source.seq,
-                            id: genDmMessageId(data.source.user_id, data.source.seq, data.source.rand, data.source.time)
-                        })
+                            id: genDmMessageId(
+                                data.source.user_id,
+                                data.source.seq,
+                                data.source.rand,
+                                data.source.time,
+                            ),
+                        });
                         break;
                 }
             }
-            instance.dispatch(result)
+            instance.dispatch(result);
         }
     }
 }
 
 export enum OneBotStatus {
     Good,
-    Bad
+    Bad,
 }
 
-export type OneBotConfig = OneBot.Config<OneBot.Version>
+export type OneBotConfig = OneBot.Config<OneBot.Version>;
 export namespace OneBot {
-    export type Filters = {
-
-    }
-    export type Version = 'V11' | 'V12'
-    export type Config<V extends Version = 'V11'> = ({
-        version?: V
-        password?: string
-        group_whitelist?: number[]
-        filters?:Service.Filters
-        protocol?:IcqqConfig
-    } & (V extends 'V11' ? V11.Config : V12.Config))
+    export type Filters = {};
+    export type Version = "V11" | "V12";
+    export type Config<V extends Version = "V11"> = {
+        version?: V;
+        password?: string;
+        group_whitelist?: number[];
+        filters?: Service.Filters;
+        protocol?: IcqqConfig;
+    } & (V extends "V11" ? V11.Config : V12.Config);
 
     export interface Base {
-        start(path?: string): any
+        start(path?: string): any;
 
-        stop(): any
+        stop(): any;
 
-        system_online(...args: any[]): any
-        dispatch(...args: any[]): any
+        system_online(...args: any[]): any;
+        dispatch(...args: any[]): any;
 
-        apply(...args: any[]): any
+        apply(...args: any[]): any;
     }
 }
-export const BOOLS = ["no_cache", "auto_escape", "as_long", "enable", "reject_add_request", "is_dismiss", "approve", "block"]
+export const BOOLS = [
+    "no_cache",
+    "auto_escape",
+    "as_long",
+    "enable",
+    "reject_add_request",
+    "is_dismiss",
+    "approve",
+    "block",
+];
