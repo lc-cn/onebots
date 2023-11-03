@@ -377,7 +377,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
     }
 
     async apply(req: V12.RequestAction) {
-        let {action, params, echo} = req
+        let {action="", params={}, echo} = req
         action = toLine(action)
         let is_async = action.includes("_async")
         if (is_async)
@@ -428,7 +428,8 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             try {
                 ret = this.action[method].apply(this, args)
             } catch (e) {
-                return JSON.stringify(V12.error(e.message))
+                this.logger.error(e)
+                return "API 调用异常"
             }
             if (ret instanceof Promise) {
                 if (is_async) {

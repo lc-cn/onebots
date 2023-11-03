@@ -5,9 +5,14 @@ export class GuildAction {
     getGuildList(this: V12) {
         return this.adapter.call(this.oneBot.uin, 'V12', 'getGuildList')
     }
-
+    getGuildInfo(this:V12, guild_id: string) {
+        return this.adapter.call(this.oneBot.uin, 'V12', 'getGuildInfo', [guild_id])
+    }
     getChannelList(this: V12, guild_id: string) {
         return this.adapter.call(this.oneBot.uin, 'V12', 'getChannelList', [guild_id])
+    }
+    getChannelInfo(this:V12, channel_id: string) {
+        return this.adapter.call(this.oneBot.uin, 'V12', 'getChannelInfo', [channel_id])
     }
 
     getGuildMemberList(this: V12, guild_id: string) {

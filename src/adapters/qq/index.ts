@@ -47,10 +47,7 @@ export default class QQAdapter extends Adapter<'qq'>{
                     text:item
                 }
             }
-            return {
-                type:item.type,
-                data:item
-            }
+            return item
         })
     }
     toSegment<V extends OneBot.Version>(version: V, message: OneBot.MessageElement<V>[]): OneBot.Segment<V>[] {
@@ -163,6 +160,7 @@ export namespace QQAdapter{
     export interface Config extends Adapter.Config<'qq'>{
         protocol:{
             secret:string
+            token?:string
             sandbox?:boolean
             maxRetry?:number
             intents?:string[]

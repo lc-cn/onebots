@@ -136,7 +136,7 @@ export function uuid() {
     return hex.substr(0, 8) + "-" + hex.substr(8, 4) + "-" + hex.substr(12, 4) + "-" + hex.substr(16, 4) + "-" + hex.substr(20)
 }
 
-export function protectedFields<T>(source: T, ...keys: (keyof T)[]): T {
+export function protectedFields<T>(source: T, ...keys: ((keyof T)|string)[]): T {
     const protocolValue=(value)=>{
         if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, value]) => {
             return [key, protocolValue(value)]

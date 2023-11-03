@@ -6,7 +6,7 @@ import {EventEmitter} from "events";
 export const MAX_RETRY=10
 
 export class SessionManager extends EventEmitter{
-    public token:string
+    public access_token:string
     public wsUrl:string
     retry:number=0
     alive?:boolean
@@ -20,6 +20,9 @@ export class SessionManager extends EventEmitter{
         op: OpCode.HEARTBEAT,
         d: null, // 心跳唯一值
     };
+    get token(){
+        return this.bot.config.token
+    }
     constructor(private bot:QQBot) {
         super();
         this.bot.on(SessionEvents.EVENT_WS, (data) => {
@@ -69,7 +72,7 @@ export class SessionManager extends EventEmitter{
             return new Promise<QQBot.Token>(resolve=>{
                 setTimeout(async ()=>{
                     const token=await getToken()
-                    this.token=token.access_token
+                    this.access_token=token.access_token
                     getNext(token.expires_in)
                     resolve(token)
                 },next_time*1000)
@@ -110,7 +113,7 @@ export class SessionManager extends EventEmitter{
     connect(){
         this.bot.ws=new WebSocket(this.wsUrl, {
             headers: {
-                'Authorization': 'QQBot ' + this.token,
+                'Authorization': 'QQBot ' + this.access_token,
                 'X-Union-Appid': this.bot.appId
             }
         })
@@ -119,7 +122,7 @@ export class SessionManager extends EventEmitter{
         const reconnectParam = {
             op: OpCode.RESUME,
             d: {
-                token: `QQBot ${this.token}`,
+                token: `QQBot ${this.access_token}`,
                 session_id: this.sessionRecord.sessionID,
                 seq: this.sessionRecord.seq,
             },
@@ -142,7 +145,7 @@ export class SessionManager extends EventEmitter{
         const authOp = {
             op: OpCode.IDENTIFY, // 鉴权参数
             d: {
-                token: `QQBot ${this.token}`, // 根据配置转换token
+                token: `QQBot ${this.access_token}`, // 根据配置转换token
                 intents: this.getValidIntends(), // todo 接受的类型
                 shard:  [0, 1], // 分片信息,给一个默认值
                 properties: {
@@ -290,6 +293,18 @@ export const WebsocketCloseReason = [
     },
 ];
 export enum Intends{
+    GUILDS=1<<0,
+    GUILD_MEMBERS=1<<1,
+    GUILD_MESSAGES=1<<9,
+    GUILD_MESSAGE_REACTIONS=1<<10,
+    DIRECT_MESSAGE=1<<12,
+    OPEN_FORUMS_EVENTS=1<<18,
+    AUDIO_OR_LIVE_CHANNEL_MEMBERS=1<<19,
     GROUP_MESSAGE_CREATE= 1 << 24,
     GROUP_AT_MESSAGE_CREATE= 1 << 25,
+    INTERACTION_CREATE= 1 << 26,
+    MESSAGE_AUDITION_CREATE= 1 << 27,
+    FORUMS_EVENTS= 1 << 28,
+    AUDIO_ACTIONS= 1 << 29,
+    PUBLIC_GUILD_MESSAGES= 1 << 30,
 }

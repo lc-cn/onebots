@@ -25,8 +25,15 @@ export class QQBot extends EventEmitter{
             }
         })
         this.request.interceptors.request.use((config)=>{
-            config.headers['Authorization']=`QQBot ${this.sessionManager.token}`
-            config.headers['X-Union-Appid']=this.appId
+            if(QQBot.GUilD_APIS.some(c=>{
+                if(typeof c==='string') return c===config.url
+                return c.test(config.url)
+            })){
+                config.headers['Authorization']=`Bot ${this.appId}.${this.sessionManager.token}`
+            }else{
+                config.headers['Authorization']=`QQBot ${this.sessionManager.access_token}`
+                config.headers['X-Union-Appid']=this.appId
+            }
             if(config['rest']){
                 const restObj=config['rest']
                 delete config['rest']
@@ -48,7 +55,7 @@ export class QQBot extends EventEmitter{
         const files:Dict={
             timestamp:Number((Date.now()/1000).toFixed(0))
         }
-        let hasMessages=false,hasFiles=false
+        let hasMessages=false,hasFiles=false,buttons=[];
         for (let elem of message) {
             if (typeof elem === 'string') {
                 elem = {type: 'text', data: {text: elem}}
@@ -58,12 +65,32 @@ export class QQBot extends EventEmitter{
                     messages.msg_id=elem.data.id
                     files.msg_id=elem.data.id
                     break;
+                case "mention":
+                    if(messages.content){
+                        messages.content+=`<@${elem.data.id||'everyone'}>`
+                    }else{
+                        messages.content=`<@${elem.data.id||'everyone'}>`
+                    }
+                case 'link':
+                    if(messages.content){
+                        messages.content+=`<#${elem.data.channel_id}>`
+                    }else{
+                        messages.content=`<#${elem.data.channel_id}>`
+                    }
                 case 'text':
-                    messages.content ? messages.content += elem.data.text : messages.content = elem.data.text
+                    if(messages.content){
+                        messages.content+=elem.data.text
+                    }else{
+                        messages.content=elem.data.text
+                    }
                     hasMessages=true
                     break;
                 case 'face':
-                    messages.content ? messages.content += `<emoji:${elem.data.id}` : messages.content = `<emoji:${elem.data.id}`
+                    if(messages.content){
+                        messages.content+=`<emoji:${elem.data.id}>`
+                    }else{
+                        messages.content=`<emoji:${elem.data.id}>`
+                    }
                     hasMessages=true
                     break;
                 case 'image':
@@ -85,6 +112,23 @@ export class QQBot extends EventEmitter{
                     messages.msg_type = 2
                     hasMessages=true
                     break;
+                case 'button':
+                    buttons.push(elem.data)
+            }
+        }
+        if(buttons.length) {
+            const rows=[]
+            for(let i=0;i<buttons.length;i+=4){
+                rows.push(buttons.slice(i,i+4))
+            }
+            messages.keyboard={
+                content:{
+                    rows:rows.map(row=>{
+                        return {
+                            buttons:row
+                        }
+                    })
+                }
             }
         }
         return {
@@ -103,7 +147,7 @@ export class QQBot extends EventEmitter{
             [`${post_type}_type`]:sub_type.join('.'),
             ...payload
         }
-        if(['message.group','message.private'].includes(event)){
+        if(['message.group','message.private','message.guild'].includes(event)){
             result.message=QQBot.processMessage(payload)
             Object.assign(result,{
                 user_id:payload.author?.id,
@@ -151,6 +195,119 @@ export class QQBot extends EventEmitter{
             timestamp:new Date().getTime()/1000
         }
     }
+    async sendGuildMessage(guild_id:string,channel_id:string,message:OneBot.MessageElement<OneBot.Version>[]){
+        const {hasMessages,messages,hasFiles,files}=QQBot.parseMessageElements(message)
+        let message_id=''
+        if(hasMessages){
+            let {data:{id}}=await this.request.post(`/channels/${channel_id}/messages`,messages)
+            message_id=id
+        }
+        if(hasFiles){
+            let {data:{id}}=await this.request.post(`/channels/${channel_id}/files`,files)
+            if(message_id) message_id=`${message_id}|`
+            message_id=message_id+id
+        }
+        return {
+            message_id,
+            timestamp:new Date().getTime()/1000
+        }
+    }
+    async getGuildInfo(guild_id:string){
+        const result=await this.request.get(`/guilds/${guild_id}`)
+        const {id:_,name:guild_name,joined_at,...guild}=result.data||{}
+        return {
+            guild_id,
+            guild_name,
+            join_time:new Date(joined_at).getTime()/1000,
+            ...guild
+        }
+    }
+    async getGuildRoles(guild_id:string){
+        const result=await this.request.get(`/guilds/${guild_id}/roles`)
+        return (result.data?.roles||[]).map(role=>{
+            return {
+                guild_id,
+                ...role
+            }
+        })
+    }
+    async getGuildList(){
+        const _getGuildList=async(after:string=undefined)=>{
+            const res=await this.request.get('/users/@me/guilds',{
+                params:{
+                    after
+                }
+            })
+            if(!res.data?.length) return []
+            const result= (res.data||[]).map(g=>{
+                const {id:guild_id,name:guild_name,joined_at,...guild}=g
+                return {
+                    guild_id,
+                    guild_name,
+                    join_time:new Date(joined_at).getTime()/1000,
+                    ...guild
+                }
+            })
+            const last=result[result.length-1]
+            return [...result,...await _getGuildList(last.guild_id)]
+        }
+        return _getGuildList()
+    }
+    async getGuildMemberList(guild_id:string){
+        const _getGuildMemberList=async (after:string=undefined)=>{
+            const res=await this.request.get(`/guilds/${guild_id}/members`,{
+                params:{
+                    after,
+                    limit:100
+                }
+            })
+            if(!res.data?.length) return []
+            const result= (res.data||[]).map(m=>{
+                const {id:member_id,role,join_time,...member}=m
+                return {
+                    member_id,
+                    role,
+                    join_time:new Date(join_time).getTime()/1000,
+                    ...member
+                }
+            })
+            const last=result[result.length-1]
+            return [...result,...await _getGuildMemberList(last.member_id)]
+        }
+        return _getGuildMemberList()
+    }
+    async getGuildMemberInfo(guild_id:string,member_id:string){
+        const result=await this.request.get(`/guilds/${guild_id}/members/${member_id}`)
+        const {user:{id:_,...member},nick:nickname,joined_at,roles}=result.data||{}
+        return {
+            guild_id,
+            user_id:member_id,
+            roles,
+            join_time:new Date(joined_at).getTime()/1000,
+            nickname,
+            ...member
+        }
+    }
+    async getChannelList(guild_id:string){
+        const result=await this.request.get(`/guilds/${guild_id}/channels`)
+        return (result.data||[]).map(c=>{
+            const {id:channel_id,name:channel_name,...channel}=c
+            return {
+                channel_id,
+                channel_name,
+                ...channel
+            }
+        })
+    }
+    async getChannelInfo(channel_id:string){
+        const result=await this.request.get(`/channels/${channel_id}`)
+        const {id:_,name:channel_name,...channel}=result.data||{}
+        return {
+            channel_id,
+            channel_name,
+            ...channel
+        }
+    }
     dispatchEvent(event: string, wsRes: any) {
         this.oneBot.logger.debug(event,wsRes)
         const payload = wsRes.d;
@@ -176,7 +333,11 @@ export class QQBot extends EventEmitter{
     }
 }
 export enum QQEvent {
-    'FRIEND_ADD'='notice.friend.add',
+    MESSAGE_CREATE='message.guild',
+    GROUP_ADD_ROBOT='notice.group.increase',
+    GROUP_DEL_ROBOT='notice.group.decrease',
+    FRIEND_ADD='notice.friend.add',
+    FRIEND_DEL='notice.friend.del',
     C2C_MESSAGE_CREATE='message.private',
     GROUP_AT_MESSAGE_CREATE='message.group',
 }
@@ -223,6 +384,19 @@ export namespace QQBot{
                 if(type.startsWith('faceType')) {
                     type='face'
                     attrs=attrs.map((attr:string)=>attr.replace('faceId','id'))
+                }else if(type.startsWith('@')){
+                    if(type.startsWith('@!')){
+                        const id=type.slice(2,)
+                        type='mention'
+                        attrs=Object.entries(payload.mentions.find((u:Dict)=>u.id===id)||{})
+                            .map(([key,value])=>`${key}=${value}`)
+                    }else if(type==='@everyone'){
+                        type='mention'
+                        attrs=[['all',true]]
+                    }
+                }else if(/^[a-z]+:[0-9]+$/.test(type)){
+                    attrs=[['id',type.split(':')[1]]]
+                    type='face'
                 }
                 result.push({
                     type,
@@ -256,6 +430,18 @@ export namespace QQBot{
                 })
             }
         }
+        delete payload.attachments
+        delete payload.mentions
         return result
     }
+    export const GUilD_APIS:(string|RegExp)[]=[
+        "/users/@me/guilds",
+        /^\/guilds\/([a-zA-Z0-9]+)\/members\/([a-zA-Z0-9]+)$/,
+        /^\/guilds\/([a-zA-Z0-9]+)\/members$/,
+        /^\/guilds\/([a-zA-Z0-9]+)$/,
+        /^\/guilds\/([a-zA-Z0-9]+)\/channels$/,
+        /^\/guilds\/([a-zA-Z0-9]+)\/roles$/,
+        /^\/channels\/([a-zA-Z0-9]+)$/,
+        /^\/channels\/([a-zA-Z0-9]+)\/messages$/,
+    ]
 }

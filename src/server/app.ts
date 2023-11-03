@@ -126,7 +126,7 @@ export class App extends Koa {
             ctx.body = this.oneBots.map(bot => {
                 return {
                     uin: bot.uin,
-                    config: bot.config.map(c => protectedFields(c, "access_token")),
+                    config: bot.config.map(c => protectedFields(c,'password','sign_api_addr', "access_token")),
                     urls: bot.config.map(c => `/${c.version}/${bot.uin}`)
                 }
             })
