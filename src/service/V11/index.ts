@@ -176,15 +176,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
 
     private startWsReverse(url: string) {
         this._createWsr(url)
-        this.on("dispatch", (serialized) => {
-            for (const ws of this.wsr) {
-                ws.send(serialized, (err) => {
-                    if (err) {
-                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
-                    } else this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
-                })
-            }
-        })
     }
 
     async stop(force?: boolean) {
@@ -496,6 +487,13 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                 if (timestmap < this.timestamp) return
                 this._createWsr(url)
             }, this.config.reconnect_interval * 1000)
+        })
+        this.on("dispatch", (serialized) => {
+            ws.send(serialized, (err) => {
+                if (err) {
+                    this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
+                } else this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
+            })
         })
     }
 
