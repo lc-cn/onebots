@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.23](https://github.com/lc-cn/onebots/compare/v0.4.22...v0.4.23) (2023-11-06)
+
+
+### Bug Fixes
+
+* 修正多个反向ws时消息被重复派发的bug ([9c8eacd](https://github.com/lc-cn/onebots/commit/9c8eacd95ee479b73038b76b8abd6c7388c405bb))
+* 推送版本 ([f25a871](https://github.com/lc-cn/onebots/commit/f25a871aaafba34d547fd8b2c3bd23352d908050))
+
 ## [0.4.22](https://github.com/icqqjs/onebots/compare/v0.4.21...v0.4.22) (2023-10-16)
 
 
