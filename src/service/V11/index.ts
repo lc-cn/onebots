@@ -66,6 +66,15 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         this.config.ws_reverse.forEach((config) => {
             this.startWsReverse(config)
         })
+        this.on("dispatch", (serialized) => {
+            for (const ws of this.wsr) {
+                ws.send(serialized, (err) => {
+                    if (err) {
+                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
+                    } else this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
+                })
+            }
+        })
 
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
@@ -176,15 +185,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
 
     private startWsReverse(url: string) {
         this._createWsr(url)
-        this.on("dispatch", (serialized) => {
-            for (const ws of this.wsr) {
-                ws.send(serialized, (err) => {
-                    if (err) {
-                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
-                    } else this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
-                })
-            }
-        })
     }
 
     async stop(force?: boolean) {
