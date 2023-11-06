@@ -67,6 +67,12 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             this.startWsReverse(config)
         })
         this.on("dispatch", (serialized) => {
+            for (const ws of this.wss.clients) {
+                ws.send(serialized, (err) => {
+                    if (err) this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
+                    else this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
+                })
+            }
             for (const ws of this.wsr) {
                 ws.send(serialized, (err) => {
                     if (err) {
@@ -172,14 +178,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                     return ws.close(1002, "wrong access token")
             }
             this._webSocketHandler(ws)
-        })
-        this.on("dispatch", (serialized) => {
-            for (const ws of this.wss.clients) {
-                ws.send(serialized, (err) => {
-                    if (err) this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
-                    else this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
-                })
-            }
         })
     }
 

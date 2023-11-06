@@ -118,6 +118,25 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             this.startWsReverse(config)
         })
 
+        this.on('dispatch', (unserialized) => {
+            const serialized = JSON.stringify(unserialized)
+            for (const ws of this.wss.clients) {
+                ws.send(serialized, (err) => {
+                    if (err)
+                        this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
+                    else
+                        this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
+                })
+            }
+            for (const ws of this.wsr) {
+                ws.send(serialized, (err) => {
+                    if (err)
+                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
+                    else
+                        this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
+                })
+            }
+        })
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
                 this.dispatch(V12.formatPayload(this.oneBot.uin, 'heartbeat', {
@@ -264,32 +283,10 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             }
             this._webSocketHandler(ws)
         })
-        this.on('dispatch', (unserialized) => {
-            const serialized = JSON.stringify(unserialized)
-            for (const ws of this.wss.clients) {
-                ws.send(serialized, (err) => {
-                    if (err)
-                        this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
-                    else
-                        this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
-                })
-            }
-        })
     }
 
     private startWsReverse(config: V12.WsReverseConfig) {
         this._createWsr(config.url, config)
-        this.on('dispatch', (unserialized) => {
-            const serialized = JSON.stringify(unserialized)
-            for (const ws of this.wsr) {
-                ws.send(serialized, (err) => {
-                    if (err)
-                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
-                    else
-                        this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
-                })
-            }
-        })
     }
 
     async stop(force?: boolean) {
