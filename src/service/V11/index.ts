@@ -72,6 +72,21 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             this.startWsReverse(config)
         })
 
+        this.on("dispatch", (serialized) => {
+            for (const ws of this.wss.clients) {
+                ws.send(serialized, (err) => {
+                    if (err) this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
+                    else this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
+                })
+            }
+            for (const ws of this.wsr) {
+                ws.send(serialized, (err) => {
+                    if (err) {
+                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
+                    } else this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
+                })
+            }
+        })
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
                 this.dispatch({
@@ -107,8 +122,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     }
 
     private startHttpReverse(config: Config.HttpReverseConfig) {
-        this.on("dispatch", (unserialized: any) => {
-            const serialized = JSON.stringify(unserialized)
+        this.on("dispatch", (serialized: any) => {
             const options: http.RequestOptions = {
                 method: "POST",
                 timeout: this.config.post_timeout * 1000,
@@ -137,7 +151,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                             this.logger.debug(`收到HTTP响应 ${res.statusCode} ：` + data)
                             if (!data) return
                             try {
-                                this._quickOperate(unserialized, JSON.parse(data))
+                                this._quickOperate(JSON.parse(serialized), JSON.parse(data))
                             } catch (e) {
                                 this.logger.error(`快速操作遇到错误：` + e.message)
                             }
@@ -181,27 +195,10 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             }
             this._webSocketHandler(ws)
         })
-        this.on("dispatch", (serialized) => {
-            for (const ws of this.wss.clients) {
-                ws.send(serialized, (err) => {
-                    if (err) this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message)
-                    else this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized)
-                })
-            }
-        })
     }
 
     private startWsReverse(url: string) {
         this._createWsr(url)
-        this.on("dispatch", (serialized) => {
-            for (const ws of this.wsr) {
-                ws.send(serialized, (err) => {
-                    if (err) {
-                        this.logger.error(`反向WS(${ws.url})上报事件失败: ` + err.message)
-                    } else this.logger.debug(`反向WS(${ws.url})上报事件成功: ` + serialized)
-                })
-            }
-        })
     }
 
     async stop(force?: boolean) {
