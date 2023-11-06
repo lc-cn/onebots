@@ -82,6 +82,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             }
         })
 
+
         if (this.config.heartbeat) {
             this.heartbeat = setInterval(() => {
                 this.dispatch({
