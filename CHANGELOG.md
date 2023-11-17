@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.24](https://github.com/lc-cn/onebots/compare/v0.4.23...v0.4.24) (2023-11-17)
+
+
+### Bug Fixes
+
+* 更新README.md ([5967bb2](https://github.com/lc-cn/onebots/commit/5967bb2a67d9fcad227457e9e49ac3424dd9b63c))
+
 ## [0.4.23](https://github.com/lc-cn/onebots/compare/v0.4.22...v0.4.23) (2023-11-06)
 
 
