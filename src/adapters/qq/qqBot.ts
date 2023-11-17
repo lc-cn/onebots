@@ -237,8 +237,10 @@ export class QQBot extends EventEmitter {
             }).catch(()=>({data:[]}))// 私域不支持获取频道列表，做个兼容
             if (!res.data?.length) return []
             const result = (res.data || []).map(g => {
-                const { joined_at, ...guild } = g
+                const {id:guild_id,name:guild_name, joined_at, ...guild } = g
                 return {
+                    guild_id,
+                    guild_name,
                     join_time: new Date(joined_at).getTime() / 1000,
                     ...guild
                 }
@@ -259,9 +261,10 @@ export class QQBot extends EventEmitter {
             }).catch(()=>({data:[]}))// 公域没有权限，做个兼容
             if (!res.data?.length) return []
             const result = (res.data || []).map(m => {
-                const { id: member_id, role, join_time, ...member } = m
+                const { id: member_id,name:member_name, role, join_time, ...member } = m
                 return {
                     member_id,
+                    member_name,
                     role,
                     join_time: new Date(join_time).getTime() / 1000,
                     ...member
@@ -295,7 +298,13 @@ export class QQBot extends EventEmitter {
 
     async getChannelList(guild_id: string) {
         const {data:result=[]} = await this.request.get(`/guilds/${guild_id}/channels`)
-        return result
+        return result.map(({id:channel_id,name:channel_name,...channel})=>{
+            return {
+                channel_id,
+                channel_name,
+                ...channel
+            }
+        })
     }
 
     async sendPrivateMessage(user_id: string, message: Sendable, source?: Quotable) {
