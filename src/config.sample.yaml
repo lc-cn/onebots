@@ -40,5 +40,17 @@ qq.a: # `${适配器名称}:${账号}`
     - version: V11
   # 。。。其他配置项参见上方对应oneBot版本的通用配置
   protocol: # 将会覆盖通用配置中的protocol
-    platform: 1
+    token: '' # qq机器人token
+    secret: '' # qq机器人secret
+    sandbox: false # 是否沙箱环境
+    intents: # 需要监听的intents
+      - 'GROUP_AT_MESSAGE_CREATE' # 群聊@事件 没有群聊权限请注释
+      - 'C2C_MESSAGE_CREATE' # 私聊事件 没有私聊权限请注释
+      - 'DIRECT_MESSAGE' # 频道私信事件
+      #     - 'GUILD_MESSAGES' # 私域机器人频道消息事件，公域机器人请注释
+      - 'GUILDS' # 频道变更事件
+      - 'GUILD_MEMBERS' # 频道成员变更事件
+      - 'GUILD_MESSAGE_REACTIONS' # 频道消息表态事件
+      - 'INTERACTION' # 互动事件
+      - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件，私域机器人请注释
   # 。。。其他配置项参见上方对应oneBot版本的通用配置
