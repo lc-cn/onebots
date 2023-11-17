@@ -14,6 +14,7 @@ export class Bot extends QQBot{
     constructor(public oneBot:OneBot, public appId:string, config:QQAdapter.Config['protocol']) {
         super({
             appid: appId,
+            logLevel: oneBot.app.config.log_level,
             ...config
         })
     }
