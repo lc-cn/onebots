@@ -246,7 +246,7 @@ export class QQBot extends EventEmitter {
                 }
             })
             const last = result[result.length - 1]
-            return [...result, ...await _getGuildList(last.id)]
+            return [...result, ...await _getGuildList(last.guild_id)]
         }
         return await _getGuildList()
     }
@@ -271,7 +271,7 @@ export class QQBot extends EventEmitter {
                 }
             })
             const last = result[result.length - 1]
-            return [...result, ...await _getGuildMemberList(last.user?.id)]
+            return [...result, ...await _getGuildMemberList(last.member_id)]
         }
         return await _getGuildMemberList()
     }
