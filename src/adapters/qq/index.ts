@@ -1,9 +1,8 @@
-import axios from "axios";
-import WebSocket from "ws";
 import {Adapter} from "@/adapter";
 import {App} from "@/server/app";
 import {OneBot, OneBotStatus} from "@/onebot";
-import {QQBot} from "@/adapters/qq/bot";
+import {Bot} from "@/adapters/qq/bot";
+import UnsupportedMethodError = OneBot.UnsupportedMethodError;
 
 export default class QQAdapter extends Adapter<'qq'>{
     constructor(app:App,config:QQAdapter.Config) {
@@ -12,7 +11,7 @@ export default class QQAdapter extends Adapter<'qq'>{
     #disposes:Map<string,Function>=new Map<string, Function>()
     async startOneBot(oneBot:OneBot){
         const config:QQAdapter.Config['protocol']=this.app.config[`qq.${oneBot.uin}`].protocol as any
-        const qqBot=oneBot.internal=new QQBot(oneBot,oneBot.uin,config)
+        const qqBot=oneBot.internal=new Bot(oneBot,oneBot.uin,config)
         await qqBot.init()
         const disposeArr:Function[]=[]
         const clean=()=>{
@@ -37,7 +36,12 @@ export default class QQAdapter extends Adapter<'qq'>{
             throw new Error(`未找到账号${uin}`)
         }
         if(typeof this[method]==='function') return this[method](uin,version,args)
-        return oneBot.internal[method](...(args||[]))
+        if(typeof oneBot.internal[method]!=='function') throw UnsupportedMethodError
+        try{
+            return oneBot.internal[method](...(args||[]))
+        }catch (e){
+            throw new Error(`call internal method error:${e.message}`)
+        }
     }
     fromSegment<V extends OneBot.Version>(version: V, segment: OneBot.Segment<V>|OneBot.Segment<V>[]): OneBot.MessageElement<V>[] {
         return [].concat(segment).map(item=>{
@@ -160,7 +164,7 @@ export namespace QQAdapter{
     export interface Config extends Adapter.Config<'qq'>{
         protocol:{
             secret:string
-            token?:string
+            token:string
             sandbox?:boolean
             maxRetry?:number
             intents?:string[]
