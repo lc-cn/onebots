@@ -1,5 +1,5 @@
 <div align="center">
-    <h1>基于icqq的oneBot实现</h1>
+    <h1>使用ts实现的oneBot应用启动器，支持icqq和qq官方机器人</h1>
     <p>
 
 [![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots) [![Release and Publish](https://github.com/icqqjs/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/icqqjs/onebots/actions/workflows/release.yml) [![dm](https://shields.io/npm/dm/onebots)](https://www.npmjs.com/package/onebots) [![oneBot V11](https://img.shields.io/badge/OneBot-11-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://onebot.dev/)
@@ -50,7 +50,8 @@ npm install onebots icqq
 ## 3. 执行如下命令生成配置文件
 
 ```shell
-npx onebots
+npx onebots -r icqq #注册icqq适配器并启动onebots
+npx onebots -r qq #注册qq官方适配器并启动onebots
 ```
 
 ## 4. 更改生成的默认配置文件成你想要的配置配置后再次运行上面的指令，启动项目
@@ -94,7 +95,7 @@ general: # 通用配置，在单个配置省略时的默认值
     password: "" # 账号密码，未配置则扫码登陆
     # ...其他配置项参考icqq的Config配置
 # 每个账号的单独配置(用于覆盖通用配置)
-123456789:
+icqq.123456789:
   password: "" # 账号密码，未配置则扫码登陆
   version: V11 # 使用的oneBot版本
   # ...其他配置项参见上方对应oneBot版本的通用配置
@@ -102,6 +103,27 @@ general: # 通用配置，在单个配置省略时的默认值
     platform: 2
     sign_api_addr: "" #你的签名地址
     # ...其他配置项参考icqq的Config配置
+
+qq.123456789: # `${适配器名称}:${appId}`
+  versions:
+    - version: V11
+  # 。。。其他配置项参见上方对应oneBot版本的通用配置
+  protocol: # 将会覆盖通用配置中的protocol
+    token: '' # qq机器人token
+    secret: '' # qq机器人secret
+    sandbox: false # 是否沙箱环境
+    intents: # 需要监听的intents
+      - 'GROUP_AT_MESSAGE_CREATE' # 群聊@事件 没有群聊权限请注释
+      - 'C2C_MESSAGE_CREATE' # 私聊事件 没有私聊权限请注释
+      - 'DIRECT_MESSAGE' # 频道私信事件
+      #     - 'GUILD_MESSAGES' # 私域机器人频道消息事件，公域机器人请注释
+      - 'GUILDS' # 频道变更事件
+      - 'GUILD_MEMBERS' # 频道成员变更事件
+      - 'GUILD_MESSAGE_REACTIONS' # 频道消息表态事件
+      - 'INTERACTION' # 互动事件
+      - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件，私域机器人请注释
+  # 。。。其他配置项参见上方对应oneBot版本的通用配置
+
 ```
 
 # 配置解释

@@ -5,7 +5,7 @@ import { Guild } from "@/adapters/qq/entries/guild";
 
 export class GuildAction {
 
-    async getSelfInfo(this:V12) {
+    async getGuildSelfInfo(this:V12) {
         return this.adapter.call(this.oneBot.uin, 'V12', 'getSelfInfo')
     }
     async getChannelPermissionOfRole(this:V12,channel_id:string,role_id:string){
