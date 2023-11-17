@@ -7,17 +7,18 @@ import { Bot } from "./bot";
 
 export class Message {
     sub_type: Message.SubType
-    get self_id() {
-        return this.bot.self_id
-    }
+    self_id:string
     guild_id?:string
     channel_id?: string
     group_id?:string
     message_id: string
+    seq:number
     sender: Message.Sender
     user_id: string
     constructor(public bot: Bot, attrs: Partial<Message>) {
         Object.assign(this, attrs)
+        this.self_id=bot.self_id
+        this.seq=attrs.seq||randomInt(1000000)
     }
     raw_message: string
     message_reference?:{message_id:string}
@@ -31,7 +32,8 @@ export class Message {
     toJSON() {
         return Object.fromEntries(Object.keys(this)
             .filter(key => {
-                return typeof this[key] !== "function" && !(this[key] instanceof QQBot)
+                console.log(key, typeof this[key])
+                return typeof this[key] !== "function" && !(this[key] instanceof Bot)
             })
             .map(key => [key, this[key]])
         )

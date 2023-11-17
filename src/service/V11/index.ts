@@ -317,6 +317,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             }
             return JSON.stringify(data1)
         } else {
+            delete data.bot
             return JSON.stringify(data)
         }
     }

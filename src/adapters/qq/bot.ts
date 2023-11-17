@@ -11,7 +11,6 @@ export class Bot extends QQBot{
     nickname:string
     status:number
     ws:WebSocket
-    sessionManager:SessionManager
     constructor(public oneBot:OneBot, public appId:string, config:QQAdapter.Config['protocol']) {
         super({
             appid: appId,

@@ -96,7 +96,7 @@ export default class QQAdapter extends Adapter<'qq'>{
 
     toCqcode<V extends OneBot.Version>(version: V, messageArr:OneBot.MessageElement<V>[]): string {
         return [].concat(messageArr).map(item=>{
-            const dataStr=Object.entries(item.data).map(([key,value])=>{
+            const dataStr=Object.entries(item).filter(([key])=>key!=='type').map(([key,value])=>{
                 // is Buffer
                 if(value instanceof Buffer) return `${key}=${value.toString('base64')}`
                 // is Object
@@ -104,13 +104,13 @@ export default class QQAdapter extends Adapter<'qq'>{
                 // is Array
                 if(value instanceof Array) return `${key}=${value.map(v=>JSON.stringify(v)).join(',')}`
                 // is String
-                return `${key}=${item.data[key]}`
+                return `${key}=${item[key]}`
             })
             return `[CQ:${item.type},${dataStr.join(',')}]`
         }).join('')
     }
     formatEventPayload<V extends OneBot.Version>(version:V,event:string,data:any):OneBot.Payload<V>{
-        return {
+        const result= {
             id: data.id,
             type: event,
             version: version,
@@ -122,6 +122,8 @@ export default class QQAdapter extends Adapter<'qq'>{
             platform: 'qq',
             ...data,
         }
+        delete data.bot
+        return result
     }
     async start(uin:string){
         const startOneBots=[...this.oneBots.values()].filter(oneBot=>{
