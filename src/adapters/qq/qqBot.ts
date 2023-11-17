@@ -71,7 +71,9 @@ export class QQBot extends EventEmitter {
                 raw_message: brief,
                 sender: {
                     user_id: payload.author?.id,
-                    user_openid: payload.author?.user_openid || payload.author?.member_openid
+                    nickname: payload.author?.name||'',
+                    user_openid: payload.author?.user_openid || payload.author?.member_openid,
+                    ...(payload.author || {})
                 },
                 timestamp: new Date(payload.timestamp).getTime() / 1000,
             })
