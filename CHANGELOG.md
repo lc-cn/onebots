@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.26](https://github.com/lc-cn/onebots/compare/v0.4.25...v0.4.26) (2023-11-17)
+
+
+### Bug Fixes
+
+* 兼容ob11，Stringify错误,优化config.sample.yaml ([d09eb09](https://github.com/lc-cn/onebots/commit/d09eb09e3f07967d7128246e791e5ad4e7bb889f))
+
 ## [0.4.25](https://github.com/lc-cn/onebots/compare/v0.4.24...v0.4.25) (2023-11-17)
 
 
