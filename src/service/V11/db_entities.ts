@@ -12,7 +12,7 @@ export class MsgEntry {
     seq: number // 群聊每个群序号独立，因此不能用来做全局唯一id
 
     @Column()
-    user_id: number
+    user_id: string
 
     @Column()
     nickname: string

@@ -1,5 +1,4 @@
 import {V12} from '@/service/V12'
-import {OnlineStatus} from "icqq";
 import {version} from "@/utils";
 import {OneBotStatus} from "@/onebot";
 import {getProperties,toLine} from '@/utils'
@@ -13,25 +12,22 @@ export class CommonAction{
      * @param message_id {string} 消息id
      */
     deleteMsg(this:V12,message_id:string){
-        return this.client.deleteMsg(message_id)
+        return this.adapter.call(this.oneBot.uin,'V12','deleteMsg',[message_id])
     }
 
     /**
      * 获取消息详情
      */F
     async getMsg(this:V12,message_id:string){
-        const message=await this.client.getMsg(message_id)
+        const message=await this.adapter.call(this.oneBot.uin,'V12','getMsg',[message_id])
         if(!message) throw new Error('消息不存在')
-        return {
-            ...message,
-            message: V12.toSegment(message.message)
-        }
+        return message
     }
     getSelfInfo(this:V12){
         return {
             user_id:this.oneBot.uin+'',
             platform:'qq',
-            nickname:this.client.nickname,
+            nickname:this.adapter.getSelfInfo(this.oneBot.uin,'V12').nickname,
             user_displayname:''
         }
     }
@@ -39,8 +35,8 @@ export class CommonAction{
      * 获取 Cookies
      * @param domain {string} 域名
      */
-    getCookies(this:V12,domain:string):string{
-        return this.client.cookies[domain]
+    async getCookies(this:V12,domain:string):Promise<string>{
+        return await this.adapter.call(this.oneBot.uin,'V12','getCookies',[domain])
     }
 
     getStatus(this:V12){
@@ -49,7 +45,7 @@ export class CommonAction{
             bots:[
                 {
                     self:this.action.getSelfInfo.apply(this),
-                    online:this.client.status===OnlineStatus.Online,
+                    online:this.oneBot.status===OneBotStatus.Online,
                 }
             ]
         }
@@ -71,62 +67,14 @@ export class CommonAction{
             onebot_version:'12'
         }
     }
-    callLogin(this:V12,func:string,...args:any[]){
-        return new Promise(async resolve=>{
-            const receiveResult=(event)=>{
-                this.client.offTrap('system.login.qrcode')
-                this.client.offTrap('system.login.device')
-                this.client.offTrap('system.login.slider')
-                this.client.offTrap('system.login.error')
-                resolve(event)
-            }
-            this.client.trap('system.login.qrcode',receiveResult)
-            this.client.trap('system.login.device',receiveResult)
-            this.client.trap('system.login.slider',receiveResult)
-            this.client.trap('system.login.error',receiveResult)
-            this.client.trapOnce('system.online',receiveResult)
-            try{
-                await this.client[func](...args)
-            }catch (reason){
-                receiveResult(reason)
-            }
-        })
-    }
     async submitSlider(this:V12,ticket:string){
-        return this.action.callLogin.apply(this,['submitSlider',ticket])
+        return this.adapter.call(this.oneBot.uin,'V12','callLogin',['submitSlider',ticket])
     }
     async submitSmsCode(this:V12,code:string){
         return this.action.callLogin.apply(this,['submitSmsCode',code])
     }
-    sendSmsCode(this:V12){
-        return new Promise<any>(resolve=>{
-            const receiveResult=(e)=>{
-                const callback=(data)=>{
-                    this.client.offTrap('internal.verbose')
-                    this.client.offTrap('system.login.error')
-                    resolve(data)
-                }
-                if((typeof e==='string' && e.includes('已发送')) || typeof e!=='string'){
-                    callback(e)
-                }
-            }
-            this.client.trap('internal.verbose',receiveResult)
-            this.client.trap('system.login.error',receiveResult)
-            this.client.sendSmsCode()
-        })
-    }
     login(this:V12,password?:string):Promise<unknown>{
-        return this.action.callLogin.apply(this,['login',password])
-    }
-    logout(this:V12,keepalive?:boolean){
-        return new Promise(async resolve => {
-            const receiveResult=(e)=>{
-                this.client.offTrap('system.offline')
-                resolve(e)
-            }
-            this.client.on('system.offline',receiveResult)
-            await this.client.logout(keepalive)
-        })
+        return this.adapter.call(this.oneBot.uin,'V12','callLogin',['login',password])
     }
     getSupportedActions(this:V12):string[]{
         return [...new Set(getProperties(this.action))].filter(key=>{

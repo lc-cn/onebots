@@ -5,12 +5,11 @@ import {copyFileSync, existsSync, mkdirSync, writeFileSync} from "fs";
 import {Logger, getLogger} from "log4js";
 import {createServer, Server} from "http";
 import yaml from 'js-yaml'
-import {Config as IcqqConfig} from "icqq";
 import KoaBodyParser from "koa-bodyparser";
 import {OneBot} from "@/onebot";
 
 const mime = require('mime-types');
-import {deepMerge, deepClone, protectedFields} from "@/utils";
+import {deepMerge, deepClone, protectedFields, Class} from "@/utils";
 import {Router} from "./router";
 import {readFileSync} from "fs";
 import {V11} from "@/service/V11";
@@ -18,6 +17,7 @@ import {V12} from "@/service/V12";
 import {LogLevel, MayBeArray} from "@/types";
 import {Platform} from "icqq";
 import * as path from "path";
+import {Adapter} from "@/adapter";
 
 export interface KoaOptions {
     env?: string
@@ -28,19 +28,21 @@ export interface KoaOptions {
     maxIpsCount?: number
 }
 
+type AdapterClass = Class<Adapter>
+
 export class App extends Koa {
     public config: App.Config
     readonly httpServer: Server
     public logger: Logger
     static configDir = path.join(os.homedir(), '.onebots')
-    static configPath = path.join(this.configDir, 'config.yaml')
-    oneBots: OneBot<any>[] = []
+    static configPath = path.join(App.configDir, 'config.yaml')
+    adapters:Map<string,Adapter>=new Map<string, Adapter>()
     public router: Router
 
     constructor(config: App.Config = {}) {
         super(config);
         this.config = deepMerge(deepClone(App.defaultConfig), config)
-        this.logger = getLogger('[icqq-OneBot]')
+        this.logger = getLogger('[OneBots]')
         this.logger.level = this.config.log_level
         this.router = new Router({prefix: config.path})
         this.use(KoaBodyParser())
@@ -50,66 +52,72 @@ export class App extends Koa {
         this.createOneBots()
     }
 
-    getLogger(uin: number | string, version = '') {
-        const logger = getLogger(`[icqq-OneBot${version}:${uin}]`)
+    getLogger(patform:string) {
+        const logger = getLogger(`[OneBots:${patform}]`)
         logger.level = this.config.log_level
         return logger
     }
 
-    private getBots() {
-        type OneBotConfig = MayBeArray<OneBot.Config<OneBot.Version>>
-        const result: Map<number, OneBotConfig> = new Map<number, OneBotConfig>()
-        Object.entries(this.config).forEach(([key, value]) => {
-            if (parseInt(key).toString() === key && value && typeof value === 'object') {
-                result.set(parseInt(key), value)
-            }
-        })
+    private getConfigMaps() {
+        type AdapterInfo=[string,string,Adapter.Config]
+        const result:AdapterInfo[]=[]
+        for(const [key,value] of Object.entries(this.config)){
+            const [adapter,...uinArr]=key.split('.')
+            const uin=uinArr.join('.')
+            if(!uin) continue
+            result.push([adapter,uin,value])
+        }
         return result
     }
 
     private createOneBots() {
-        for (const [uin, config] of this.getBots()) {
-            this.createOneBot(uin, config)
+        for (const [platform,uin, config] of this.getConfigMaps()) {
+            this.createOneBot(platform,uin, config)
         }
     }
 
-    public addAccount(uin: number | `${number}`, config: MayBeArray<OneBot.Config<OneBot.Version>>) {
-        if (typeof uin !== "number") uin = Number(uin)
-        if (Number.isNaN(uin)) throw new Error('无效的账号')
-        if (this.oneBots.find(oneBot => oneBot.uin === uin)) throw new Error('账户已存在')
+    public addAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
         this.config[uin] = config
-        const oneBot = this.createOneBot(uin, config)
-        oneBot.startListen()
+        const oneBot = this.createOneBot(platform,uin, config)
+        oneBot.start()
         writeFileSync(App.configPath, yaml.dump(deepClone(this.config)))
     }
 
-    public updateAccount(uin: number | `${number}`, config: MayBeArray<OneBot.Config<OneBot.Version>>) {
-        if (typeof uin !== "number") uin = Number(uin)
-        if (Number.isNaN(uin)) throw new Error('无效的账号')
-        const oneBot = this.oneBots.find(oneBot => oneBot.uin === uin)
-        if (!oneBot) return this.addAccount(uin, config)
+    public updateAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
+        const adapter=this.findOrCreateAdapter(platform)
+        const oneBot=adapter.oneBots.get(uin)
+        if (!oneBot) return this.addAccount(platform, uin, config)
         const newConfig = deepMerge(this.config[uin], config)
-        this.removeAccount(uin)
-        this.addAccount(uin, newConfig)
+        this.removeAccount(platform, uin)
+        this.addAccount(platform, uin, newConfig)
     }
 
-    public removeAccount(uin: number | `${number}`, force?: boolean) {
-        if (typeof uin !== "number") uin = Number(uin)
-        if (Number.isNaN(uin)) throw new Error('无效的账号')
-        const currentIdx = this.oneBots.findIndex(oneBot => oneBot.uin === uin)
-
-        if (currentIdx < 0) throw new Error('账户不存在')
-        const oneBot = this.oneBots[currentIdx]
+    public removeAccount(platform: string, uin: string, force?: boolean) {
+        const adapter = this.findOrCreateAdapter(platform)
+        const oneBot=adapter.oneBots.get(uin)
+        if(!oneBot) throw new Error(`未找到账号${uin}`)
         oneBot.stop(force)
         delete this.config[uin]
-        this.oneBots.splice(currentIdx, 1)
+        adapter.oneBots.delete(uin)
         writeFileSync(App.configPath, yaml.dump(this.config))
     }
 
-    public createOneBot(uin: number, config: MayBeArray<OneBot.Config<OneBot.Version>>) {
-        const oneBot = new OneBot(this, uin, config)
-        this.oneBots.push(oneBot)
-        return oneBot
+    public createOneBot<P extends string>(platform : P,uin: string, config: Adapter.Config) {
+        const adapter = this.findOrCreateAdapter<P>(platform,config)
+        return adapter.createOneBot(uin,config.protocol,config.versions)
+    }
+    get oneBots(){
+        return [...this.adapters.values()].map((adapter)=>{
+            return [...adapter.oneBots.values()]
+        }).flat()
+    }
+    public findOrCreateAdapter<P extends string>(platform:P,config?:Adapter.Config){
+        if(this.adapters.has(platform)) return this.adapters.get(platform)
+        const AdapterClass = App.ADAPTERS.get(platform)
+        if (!AdapterClass) throw new Error(`未安装适配器(${platform})`)
+        const adapter = new AdapterClass(this, config)
+        this.adapters.set(platform, adapter)
+        return adapter
     }
 
     async start() {
@@ -118,7 +126,7 @@ export class App extends Koa {
             ctx.body = this.oneBots.map(bot => {
                 return {
                     uin: bot.uin,
-                    config: bot.config.map(c => protectedFields(c, 'protocol', "access_token")),
+                    config: bot.config.map(c => protectedFields(c,'password','sign_api_addr', "access_token")),
                     urls: bot.config.map(c => `/${c.version}/${bot.uin}`)
                 }
             })
@@ -142,17 +150,17 @@ export class App extends Koa {
         })
         this.router.get('/detail', (ctx) => {
             let {uin} = ctx.request.query
-            const oneBot = this.oneBots.find(bot => bot.uin === Number(uin))
+            const oneBot = this.oneBots.find(bot => bot.uin === String(uin))
             ctx.body = {
                 uin,
-                config: oneBot.config.map(c => protectedFields(c, 'protocol', "access_token")),
+                config: oneBot.config.map(c => protectedFields(c, "access_token")),
                 urls: oneBot.config.map(c => `/${uin}/${c.version}`)
             }
         })
         this.router.post('/add', (ctx, next) => {
             const {uin, ...config} = (ctx.request.body || {}) as any
             try {
-                this.addAccount(uin, config)
+                this.addAccount(config.platform, uin, config)
                 ctx.body = `添加成功`
             } catch (e) {
                 ctx.body = e.message
@@ -161,16 +169,16 @@ export class App extends Koa {
         this.router.post('/edit', (ctx, next) => {
             const {uin, ...config} = (ctx.request.body || {}) as any
             try {
-                this.updateAccount(Number(uin), config)
+                this.updateAccount(config.platform, uin, config)
                 ctx.body = `修改成功`
             } catch (e) {
                 ctx.body = e.message
             }
         })
         this.router.get('/remove', (ctx, next) => {
-            const {uin, force} = ctx.request.query
+            const {uin, platform, force} = ctx.request.query
             try {
-                this.removeAccount(Number(uin), Boolean(force))
+                this.removeAccount(String(platform), String(uin), Boolean(force))
                 ctx.body = `移除成功`
             } catch (e) {
                 console.log(e)
@@ -184,14 +192,13 @@ export class App extends Koa {
             console.error('unhandledRejection', e)
         })
         this.logger.mark(`server listen at http://0.0.0.0:${this.config.port}/${this.config.path ? this.config.path : ''}`)
-        for (const oneBot of this.oneBots) {
-            const [isSuccess,reason]=await oneBot.start()
-            if(!isSuccess) this.logger.warn(`【${oneBot.uin}】： 登录失败,错误信息\n：`,reason)
+        for (const [_,adapter] of this.adapters) {
+            await adapter.start()
         }
     }
 }
 
-export function createApp(config: App.Config | string = 'config.yaml') {
+export function createOnebots(config: App.Config | string = 'config.yaml') {
     if (typeof config === 'string') {
         config = path.resolve(process.cwd(), config)
         App.configDir = path.dirname(config)
@@ -216,6 +223,10 @@ export function defineConfig(config: App.Config) {
 }
 
 export namespace App {
+    export const ADAPTERS: Map<string, AdapterClass> = new Map()
+    export interface Adapters<P extends string = string> extends Map<P, Adapter<P>> {
+    }
+
     export type Config = {
         port?: number
         path?: string
@@ -224,19 +235,45 @@ export namespace App {
         general?: {
             V11?: V11.Config
             V12?: V12.Config
-            protocol?: IcqqConfig
         }
-    } & KoaOptions & Record<`${number}`, MayBeArray<OneBot.Config<OneBot.Version>>>
+    } & KoaOptions & Record<`${string}.${string}`, Adapter.Config>
     export const defaultConfig: Config = {
         port: 6727,
         timeout: 30,
         general: {
             V11: V11.defaultConfig,
             V12: V12.defaultConfig,
-            protocol:{
-                platform: 2
-            }
         },
         log_level: 'info',
+    }
+
+    export function registerAdapter(name: string): void
+    export function registerAdapter<T extends string>(platform: T, adapter: AdapterClass): void
+    export function registerAdapter<T extends string>(platform: T, adapter?: AdapterClass) {
+        if (!adapter) adapter = App.loadAdapter(platform)
+        if (ADAPTERS.has(platform)) {
+            console.warn(`已存在对应的适配器：${platform}`)
+            return this
+        }
+        ADAPTERS.set(platform, adapter)
+    }
+
+    export function loadAdapter<T extends string>(platform: string) {
+        const maybeNames = [
+            path.join(__dirname, '../adapters', platform), // 内置的
+            `@onebots/adapter-${platform}`, // 我写的
+            `onebots-adapter-${platform}`, // 别人按照规范写的
+            platform // 别人写的
+        ]
+        type AdapterClass = Class<Adapter<T>>
+        let adapter: AdapterClass = null
+        for (const adapterName of maybeNames) {
+            try {
+                adapter = require(adapterName)?.default
+                break
+            } catch {}
+        }
+        if (!adapter) throw new Error(`找不到对应的适配器：${platform}`)
+        return adapter
     }
 }

@@ -1,10 +1,9 @@
-import {Client, EventMap, MessageElem, OnlineStatus, Sendable as IcqqCanSend} from "icqq";
+import { EventMap, MessageElem, Sendable as IcqqCanSend} from "icqq";
 import {version} from "@/utils";
 import {join} from 'path'
 import {Config} from './config'
 import {BOOLS, NotFoundError, OneBot} from "@/onebot";
 import {Action} from "./action";
-import {EventEmitter} from "events";
 import {Logger} from "log4js";
 import {Context} from "koa";
 import {URL} from "url";
@@ -13,30 +12,28 @@ import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
 import {toBool, toHump, toLine, transformObj, uuid} from "@/utils";
 import {Database} from "@/db";
-import {App} from "@/server/app";
-import {rmSync} from "fs";
 import {genDmMessageId, genGroupMessageId} from "icqq/lib/message";
 import {Service} from "@/service";
+import {App} from "@/server/app";
+import {Dict} from "@zhinjs/shared";
 
 export class V12 extends Service<'V12'> implements OneBot.Base {
-    public version = 'V12'
+    public version:OneBot.Version = 'V12'
     public action: Action
     protected timestamp = Date.now()
     protected heartbeat?: NodeJS.Timeout
     logger: Logger
-    private path: string
     wss?: WebSocketServer
     wsr: Set<WebSocket> = new Set<WebSocket>()
     private db: Database<{ eventBuffer: V12.Payload<keyof Action>[],msgIdMap:Record<string, number>, files: Record<string, V12.FileInfo> }>
 
-    constructor(public oneBot: OneBot<'V12'>, public client: Client, config: OneBot.Config<'V12'>) {
-        super(config)
+    constructor(public oneBot: OneBot<'V12'>,  public config: OneBot.Config<'V12'>) {
+        super(oneBot.adapter,config)
         this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
         this.db.sync({eventBuffer: [],msgIdMap:{}, files: {}})
         this.action = new Action()
-        this.logger = this.oneBot.app.getLogger(this.oneBot.uin, this.version)
+        this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version)
     }
-
     get history(): V12.Payload<keyof Action>[] {
         return this.db.get('eventBuffer')
     }
@@ -70,9 +67,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         this.db.set('eventBuffer', value)
     }
 
-    start(path?: string) {
-        this.path = `/${this.oneBot.uin}`
-        if (path) this.path += path
+    start() {
         if (this.config.use_http) {
             const config: V12.HttpConfig = typeof this.config.use_http === 'boolean' ? {} : this.config.use_http || {}
             this.startHttp({
@@ -146,6 +141,18 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
                 }))
             }, this.config.heartbeat * 1000)
         }
+        this.adapter.on('message.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V12','message',event)
+            this.dispatch(payload)
+        })
+        this.adapter.on('notice.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V12','notice',event)
+            this.dispatch(payload)
+        })
+        this.adapter.on('request.receive',(uin:string,event)=>{
+            const payload=this.adapter.formatEventPayload('V12','request',event)
+            this.dispatch(payload)
+        })
     }
 
     private startHttp(config: V12.HttpConfig) {
@@ -290,16 +297,9 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
     }
 
     async stop(force?: boolean) {
-        if (this.client.status === OnlineStatus.Online) {
-            await this.client.terminate()
-        }
         this.wss.close()
         for (const ws of this.wsr) {
             ws.close()
-        }
-
-        if (force) {
-            rmSync(this.client.dir, {force: true, recursive: true})
         }
     }
 
@@ -338,7 +338,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         data.alt_message = data.raw_message
         data.self = this.action.getSelfInfo.apply(this)
         if (!data.detail_type) data.detail_type = data.message_type || data.notice_type || data.request_type || data.system_type
-        data.message = data.type === 'message' ? V12.toSegment(data.message) : data.message
+        data.message = data.type === 'message' ? this.adapter.toSegment('V12',data.message) : data.message
         if (data.source) data.source = {
             ...data.source,
             message_id: data.detail_type === 'private' ?
@@ -374,7 +374,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
     }
 
     async apply(req: V12.RequestAction) {
-        let {action, params, echo} = req
+        let {action="", params={}, echo} = req
         action = toLine(action)
         let is_async = action.includes("_async")
         if (is_async)
@@ -404,15 +404,29 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
                 if (Reflect.has(params, k)) {
                     if (BOOLS.includes(k))
                         params[k] = toBool(params[k])
+                    if(k==='message'){
+                        if (typeof params[k] === 'string') {
+                            if (/[CQ:music,type=.+,id=.+]/.test(params[k])){
+                                params[k] = params[k].replace(',type=',',platform=')
+                            }
+                            params[k] = this.adapter.fromCqcode('V11',params[k])
+                        } else {
+                            if(params[k][0].type == 'music' && params[k][0]?.data?.type){
+                                params[k][0].data.platform = params[k][0].data.type
+                                delete params[k][0].data.type
+                            }
+                            params[k] = this.adapter.fromSegment('V11',params[k])
+                        }
+                    }
                     args.push(params[k])
                 }
             }
             let ret: any, result: any
             try {
-                console.log(method, args)
                 ret = this.action[method].apply(this, args)
             } catch (e) {
-                return JSON.stringify(V12.error(e.message))
+                this.logger.error(e)
+                return "API 调用异常"
             }
             if (ret instanceof Promise) {
                 if (is_async) {
@@ -426,6 +440,8 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             if (result.data instanceof Map)
                 result.data = [...result.data.values()]
 
+            if (result.data?.message)
+                result.data.message = this.adapter.toSegment('V12',result.data.message)
             if (echo) {
                 result.echo = echo
             }
@@ -517,16 +533,16 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             }
             if (event.detail_type === "group") {
                 if (res.delete)
-                    this.client.deleteMsg(event.message_id)
+                    this.adapter.call(this.oneBot.uin,'V12','deleteMsg',[event.message_id])
                 if (res.kick && !event.anonymous)
-                    this.client.setGroupKick(event.group_id, event.user_id, res.reject_add_request)
+                    this.adapter.call(this.oneBot.uin,'V12','setGroupKick',[event.group_id, event.user_id, res.reject_add_request])
                 if (res.ban)
-                    this.client.setGroupBan(event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800)
+                    this.adapter.call(this.oneBot.uin,'V12','setGroupBan',[event.group_id, event.user_id, res.ban_duration > 0 ? res.ban_duration : 1800])
             }
         }
         if (event.type === "request" && "approve" in res) {
             const action = event.detail_type === "friend" ? "setFriendAddRequest" : "setGroupAddRequest"
-            this.client[action](event.flag, res.approve, res.reason ? res.reason : "", !!res.block)
+            this.adapter.call(this.oneBot.uin,'V12',action,[event.flag, res.approve, res.reason ? res.reason : "", !!res.block])
         }
     }
 
@@ -626,48 +642,6 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
 export namespace V12 {
     const fileTypes: string[] = ['image', "file", 'record', 'video', 'flash']
     export type Sendable = string | SegmentElem | (string | SegmentElem)[]
-
-    export function fromSegment(msgList: Sendable[]) {
-        msgList = [].concat(msgList);
-        return msgList.map((msg) => {
-            if (typeof msg !== 'object') msg = String(msg)
-            if (typeof msg === 'string') {
-                return {type: 'text', text: msg} as MessageElem
-            }
-            const {type, data = {}, ...other} = msg as SegmentElem;
-            Object.assign(data, other)
-            if (type === 'music' && !data['platform']) {
-                data['platform'] = data['type']
-                delete data['type']
-            }
-            if (type === 'mention') data['qq'] = Number(data['user_id'])
-            if (fileTypes.includes(type) && !data['file']) {
-                data['file'] = data['file_id']
-                delete data['file_id']
-            }
-            return {
-                type: type.replace('mention', 'at').replace('at_all', 'at'),
-                ...other,
-                ...data
-            } as MessageElem
-        })
-    }
-
-    export function toSegment(msgList: IcqqCanSend) {
-        msgList = [].concat(msgList);
-        return msgList.map((msg) => {
-            if (typeof msg === 'string') return {type: 'text', data: {text: msg}} as SegmentElem
-            let {type, ...other} = msg;
-            if (fileTypes.includes(type)) other['file_id'] = other['file']
-            return {
-                type: type === 'at' ? other['qq'] ? 'mention' : "mention_all" : type,
-                data: {
-                    ...other,
-                    user_id: other['qq']
-                }
-            } as SegmentElem
-        })
-    }
 
     export interface SegmentMap {
         face: { id: number, text?: string }
@@ -769,20 +743,23 @@ export namespace V12 {
         webhook: [],
         ws_reverse: []
     }
-    export type Payload<T extends any> = {
+    export type Payload<T = Dict> = {
         id: string
         impl: 'onebots'
         version: 12
-        platform: 'qq'
+        platform: string
         self: {
-            platform: 'qq',
-            user_id: `${number}`
+            platform: string,
+            user_id: string
         }
         time: number
         type: 'meta' | 'message' | 'notice' | 'request'
         detail_type: string
         sub_type: string
     } & T
+    export type SelfInfo={
+        nickname?:string
+    }
 
     export interface Protocol {
         action: string,
@@ -834,9 +811,9 @@ export namespace V12 {
         }
     }
 
-    export function formatPayload<K extends keyof BotEventMap>(uin: number, type: K, data: Omit<BotEventMap[K], K>) {
+    export function formatPayload<K extends keyof BotEventMap>(uin: string, type: K, data: Omit<BotEventMap[K], K>) {
         return {
-            self_id: uin+'',
+            self_id: uin,
             time: Math.floor(Date.now() / 1000),
             detail_type: type,
             type: 'meta',
@@ -862,5 +839,29 @@ export namespace V12 {
         data?: string
         sha256?: string
         total_size?: number
+    }
+    export interface GroupInfo{
+        group_id:string
+        group_name:string
+    }
+    export interface UserInfo{
+        user_id:string
+        user_name:string
+    }
+    export interface GroupMemberInfo{
+        group_id:string
+        user_id:string
+        user_name:string
+    }
+    export interface Segment{
+
+    }
+    export interface Message{
+    }
+    export interface MessageElement extends Dict{
+        type: string
+    }
+    export interface MessageRet{
+        message_id:string
     }
 }
