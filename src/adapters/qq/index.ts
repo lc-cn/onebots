@@ -3,6 +3,7 @@ import {App} from "@/server/app";
 import {OneBot, OneBotStatus} from "@/onebot";
 import {Bot} from "@/adapters/qq/bot";
 import UnsupportedMethodError = OneBot.UnsupportedMethodError;
+import { QQBot } from "@/adapters/qq/qqBot";
 
 export default class QQAdapter extends Adapter<'qq'>{
     constructor(app:App,config:QQAdapter.Config) {
@@ -96,7 +97,7 @@ export default class QQAdapter extends Adapter<'qq'>{
 
     toCqcode<V extends OneBot.Version>(version: V, messageArr:OneBot.MessageElement<V>[]): string {
         return [].concat(messageArr).map(item=>{
-            const dataStr=Object.entries(item).filter(([key])=>key!=='type').map(([key,value])=>{
+            const dataStr=Object.entries(item.data).map(([key,value])=>{
                 // is Buffer
                 if(value instanceof Buffer) return `${key}=${value.toString('base64')}`
                 // is Object
@@ -164,12 +165,6 @@ declare module '@/adapter'{
 }
 export namespace QQAdapter{
     export interface Config extends Adapter.Config<'qq'>{
-        protocol:{
-            secret:string
-            token:string
-            sandbox?:boolean
-            maxRetry?:number
-            intents?:string[]
-        }
+        protocol:Omit<QQBot.Config, 'appid'>
     }
 }

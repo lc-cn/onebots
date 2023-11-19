@@ -1,7 +1,5 @@
 import {V12} from "@/service/V12";
-import { ApiBaseInfo, UpdatePermissionParams } from "@/adapters/qq/types";
-import { Channel } from "@/adapters/qq/entries/channel";
-import { Guild } from "@/adapters/qq/entries/guild";
+import { Dict } from "@zhinjs/shared";
 
 export class GuildAction {
 
@@ -14,13 +12,13 @@ export class GuildAction {
     async setChannelAnnounce(this:V12,guild_id:string,channel_id:string,message_id:string){
         return this.adapter.call(this.oneBot.uin, 'V12', 'setChannelAnnounce', [guild_id, channel_id, message_id])
     }
-    async updateChannelPermissionOfRole(this:V12,channel_id:string,role_id:string,permission:UpdatePermissionParams){
+    async updateChannelPermissionOfRole(this:V12,channel_id:string,role_id:string,permission:Dict){
         return this.adapter.call(this.oneBot.uin, 'V12', 'updateChannelPermissionOfRole', [channel_id, role_id, permission])
     }
     async getChannelMemberPermission(this:V12,channel_id:string,member_id:string){
         return this.adapter.call(this.oneBot.uin, 'V12', 'getChannelMemberPermission', [channel_id, member_id])
     }
-    async updateChannelMemberPermission(this:V12,channel_id:string,member_id:string,permission:UpdatePermissionParams){
+    async updateChannelMemberPermission(this:V12,channel_id:string,member_id:string,permission:Dict){
         return this.adapter.call(this.oneBot.uin, 'V12', 'updateChannelMemberPermission', [channel_id, member_id, permission])
     }
     async getChannelPins(this:V12,channel_id:string):Promise<string[]>{
@@ -32,10 +30,10 @@ export class GuildAction {
     async unPinChannelMessage(this:V12,channel_id:string,message_id:string){
         return this.adapter.call(this.oneBot.uin, 'V12', 'unPinChannelMessage', [channel_id, message_id])
     }
-    async createChannel(this:V12,guild_id: string, channelInfo: Omit<Channel.Info, 'id'>): Promise<Channel.Info> {
+    async createChannel(this:V12,guild_id: string, channelInfo: Dict) {
         return this.adapter.call(this.oneBot.uin, 'V12', 'createChannel', [guild_id, channelInfo])
     }
-    async updateChannel(this:V12,{ channel_id, ...updateInfo }: { channel_id: string } & Partial<Pick<Channel.Info, 'name' | 'position' | 'parent_id' | 'private_type' | 'speak_permission'>>): Promise<Channel.Info> {
+    async updateChannel(this:V12,{ channel_id, ...updateInfo }: { channel_id: string } & Dict){
         return this.adapter.call(this.oneBot.uin, 'V12', 'updateChannel', [channel_id, updateInfo])
     }
     async deleteChannel(this:V12,channel_id: string) {
@@ -44,10 +42,10 @@ export class GuildAction {
     async getGuildRoles(this:V12,guild_id:string){
         return this.adapter.call(this.oneBot.uin, 'V12', 'getGuildRoles', [guild_id])
     }
-    async creatGuildRole(this:V12,guild_id:string,role:Pick<Guild.Role,'name'|'color'|'hoist'>):Promise<Guild.Role>{
+    async creatGuildRole(this:V12,guild_id:string,role:Dict){
         return this.adapter.call(this.oneBot.uin, 'V12', 'creatGuildRole', [guild_id, role])
     }
-    async updateGuildRole(this:V12,guild_id:string,{id,...role}:Pick<Guild.Role,'id'|'name'|'color'|'hoist'>){
+    async updateGuildRole(this:V12,guild_id:string,{id,...role}){
         return this.adapter.call(this.oneBot.uin, 'V12', 'updateGuildRole', [guild_id, role])
     }
     async deleteGuildRole(this:V12,role_id:string){
@@ -56,7 +54,7 @@ export class GuildAction {
     async getGuildAccessApis(this:V12,guild_id:string){
         return this.adapter.call(this.oneBot.uin, 'V12', 'getGuildAccessApis', [guild_id])
     }
-    async applyGuildAccess(this:V12,guild_id:string,channel_id:string,apiInfo:ApiBaseInfo,desc?:string){
+    async applyGuildAccess(this:V12,guild_id:string,channel_id:string,apiInfo:Dict,desc?:string){
         return this.adapter.call(this.oneBot.uin, 'V12', 'applyGuildAccess', [guild_id, channel_id, apiInfo, desc])
     }
     async unMuteGuild(this:V12,guild_id:string){
@@ -106,10 +104,14 @@ export class GuildAction {
 
     /**
      * 发送频道消息
+     * @param guild_id {string} 频道id
      * @param channel_id {string} 子频道id
      * @param message {import('icqq/lib/service').Sendable} 消息
      */
-    async sendGuildMsg(this: V12, channel_id: string, message: V12.Sendable) {
+    async sendGuildMsg(this: V12,guild_id: string, channel_id: string, message: V12.Sendable) {
+        if(channel_id==='direct'){
+            return this.adapter.call(this.oneBot.uin, 'V12', 'sendDirectMessage', [guild_id,message])
+        }
         return this.adapter.call(this.oneBot.uin, 'V12', 'sendGuildMessage', [channel_id, message])
     }
     async createDirectSession(this:V12, guild_id:string,user_id:string){

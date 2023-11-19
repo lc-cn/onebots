@@ -177,11 +177,9 @@ export class SessionManager extends EventEmitter {
     }
 
     startListen() {
-        this.bot.ws.on("open", () => {
-            this.bot.logger.info("[CLIENT] 连接成功");
-        });
         this.bot.ws.on("close", (code) => {
-            this.bot.logger.error(`[CLIENT] 连接关闭：${code}`);
+            this.alive=false
+            this.bot.logger.mark(`[CLIENT] 连接关闭：${code}`);
             this.emit(SessionEvents.EVENT_WS, {
                 eventType: SessionEvents.DISCONNECT,
                 code,
@@ -196,7 +194,8 @@ export class SessionManager extends EventEmitter {
             }
         });
         this.bot.ws.on("error", (e) => {
-            this.bot.logger.error("[CLIENT] 连接错误");
+            this.alive=false
+            this.bot.logger.mark("[CLIENT] 连接错误");
             this.emit(SessionEvents.CLOSED, { eventType: SessionEvents.CLOSED });
         });
         this.bot.ws.on("message", (data) => {
@@ -214,7 +213,7 @@ export class SessionManager extends EventEmitter {
 
             // 鉴权通过
             if (wsRes.t === SessionEvents.READY) {
-                this.bot.logger.info(`[CLIENT] 鉴权通过`);
+                this.bot.logger.mark(`[CLIENT] 鉴权通过`);
                 const { d, s } = wsRes;
                 const { session_id, user = {} } = d;
                 this.bot.self_id = user.id;
