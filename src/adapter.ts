@@ -54,7 +54,7 @@ export interface Adapter extends Adapter.Base{
 }
 export namespace Adapter {
     export interface Base{
-        toSegment<V extends OneBot.Version>(version:V,message:OneBot.MessageElement<V>[]):OneBot.Segment<V>[]
+        toSegment<V extends OneBot.Version,M=any>(version:V,message:M):OneBot.Segment<V>[]
         fromSegment<V extends OneBot.Version>(version:V,segment:OneBot.Segment<V>):OneBot.MessageElement<V>[]
         toCqcode<V extends OneBot.Version>(version:V,message:OneBot.MessageElement<V>[]):string
         fromCqcode<V extends OneBot.Version>(version:V,message:string):OneBot.MessageElement<V>[]

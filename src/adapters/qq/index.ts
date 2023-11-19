@@ -4,6 +4,7 @@ import {OneBot, OneBotStatus} from "@/onebot";
 import {Bot} from "@/adapters/qq/bot";
 import UnsupportedMethodError = OneBot.UnsupportedMethodError;
 import { QQBot } from "@/adapters/qq/qqBot";
+import { Sendable } from "@/adapters/qq/elements";
 
 export default class QQAdapter extends Adapter<'qq'>{
     constructor(app:App,config:QQAdapter.Config) {
@@ -55,7 +56,7 @@ export default class QQAdapter extends Adapter<'qq'>{
             return item
         })
     }
-    toSegment<V extends OneBot.Version>(version: V, message: OneBot.MessageElement<V>[]): OneBot.Segment<V>[] {
+    toSegment<V extends OneBot.Version,M=Sendable>(version: V, message: M): OneBot.Segment<V>[] {
         return [].concat(message).map(item=>{
             if(!item || typeof item!=="object") return {
                 type:'text',

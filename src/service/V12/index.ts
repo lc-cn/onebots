@@ -409,13 +409,13 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
                             if (/[CQ:music,type=.+,id=.+]/.test(params[k])){
                                 params[k] = params[k].replace(',type=',',platform=')
                             }
-                            params[k] = this.adapter.fromCqcode('V11',params[k])
+                            params[k] = this.adapter.fromCqcode('V12',params[k])
                         } else {
                             if(params[k][0].type == 'music' && params[k][0]?.data?.type){
                                 params[k][0].data.platform = params[k][0].data.type
                                 delete params[k][0].data.type
                             }
-                            params[k] = this.adapter.fromSegment('V11',params[k])
+                            params[k] = this.adapter.fromSegment('V12',params[k])
                         }
                     }
                     args.push(params[k])

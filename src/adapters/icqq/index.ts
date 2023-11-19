@@ -1,12 +1,25 @@
 import {Adapter} from "@/adapter";
 import {App} from "@/server/app";
 import {Config as IcqqConfig} from "icqq/lib/client";
-import {Client, MessageElem} from "icqq";
+import { Client, MessageElem } from "icqq";
 import process from "process";
 import {rmSync} from "fs";
 import {Dict} from "@zhinjs/shared";
 import {OneBot} from "@/onebot";
-
+const processMessages=(list:OneBot.MessageElement<OneBot.Version>[])=>{
+    return list.map(item=>{
+        const {type,data}=item
+        if(type==='node') return {
+            type,
+            ...data,
+            message:processMessages(data.message||[])
+        }
+        return {
+            type,
+            ...data
+        }
+    })
+}
 export default class IcqqAdapter extends Adapter<'icqq'>{
     #password?:string
     #disposes:Map<string,Function>=new Map<string, Function>()
@@ -66,23 +79,12 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
     }
     sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
         const [user_id,message]=args
-        const result=this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,message.map(m=>{
-            return {
-                type:m.type,
-                ...(m.data||{})
-            }
-        }))
-        return result
+
+        return this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,processMessages(message))
     }
     sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
         const [group_id,message]=args
-        const result=this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,message.map(m=>{
-            return {
-                type:m.type,
-                ...(m.data||{})
-            }
-        }))
-        return result
+        return this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,processMessages(message))
     }
 
     call<V extends OneBot.Version>(uin: string, version: V, method: string, args: any[]=[]): Promise<any> {
@@ -104,13 +106,13 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
             }
             return {
                 type:item.type,
-                data:item
+                data:item.data
             }
         })
     }
-    toSegment<V extends OneBot.Version>(version: V, message: OneBot.MessageElement<V>[]): OneBot.Segment<V>[] {
+    toSegment<V extends OneBot.Version,M=any>(version: V, message: M): OneBot.Segment<V>[] {
         return [].concat(message).map(item=>{
-            if(!item || typeof item!=="object") return {
+            if(typeof item!=='object') item={
                 type:'text',
                 data:{
                     text:item
