@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.27](https://github.com/lc-cn/onebots/compare/v0.4.26...v0.4.27) (2023-11-19)
+
+
+### Bug Fixes
+
+* 将sqlite3设置为对等依赖(OneBot12用不上，OneBot用户自行安装) ([d87c290](https://github.com/lc-cn/onebots/commit/d87c290bdfd6212d222d01f279c99f131bc5f63b))
+* 格式化字段 ([de34304](https://github.com/lc-cn/onebots/commit/de343042dac0edf4d2c1d50b815d771fd3943caf))
+* 格式化字段 ([7e4680e](https://github.com/lc-cn/onebots/commit/7e4680e3add0df54e113b58520a81240bdcc0b4f))
+
 ## [0.4.26](https://github.com/lc-cn/onebots/compare/v0.4.25...v0.4.26) (2023-11-17)
 
 
