@@ -45,6 +45,7 @@ npm init -y
 
 ```shell
 npm install onebots icqq
+npm install sqlite3 # 如果你需要使用 OneBot11 请自行安装该依赖
 ```
 
 ## 3. 执行如下命令生成配置文件

@@ -374,7 +374,6 @@ export class QQBot extends EventEmitter {
         let message_id: string = ''
         if (hasMessages) {
             const { data: result } = await this.request.post(`/v2/groups/${group_id}/messages`, messages)
-            console.log(result)
             message_id = result.seq
         }
         if (hasFiles) {

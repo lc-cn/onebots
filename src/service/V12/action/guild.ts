@@ -104,10 +104,14 @@ export class GuildAction {
 
     /**
      * 发送频道消息
+     * @param guild_id {string} 频道id
      * @param channel_id {string} 子频道id
      * @param message {import('icqq/lib/service').Sendable} 消息
      */
-    async sendGuildMsg(this: V12, channel_id: string, message: V12.Sendable) {
+    async sendGuildMsg(this: V12,guild_id: string, channel_id: string, message: V12.Sendable) {
+        if(channel_id==='direct'){
+            return this.adapter.call(this.oneBot.uin, 'V12', 'sendDirectMessage', [guild_id,message])
+        }
         return this.adapter.call(this.oneBot.uin, 'V12', 'sendGuildMessage', [channel_id, message])
     }
     async createDirectSession(this:V12, guild_id:string,user_id:string){

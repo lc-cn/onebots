@@ -87,6 +87,9 @@ export interface MessageElemMap {
         res_id?:string
         data: string|Record<string, any>;
     };
+    node:{
+        message:Sendable
+    }
     markdown:{
         content:string
     }
@@ -110,7 +113,8 @@ export type MessageElemType = keyof MessageElemMap;
 // 消息元素
 export type MessageElem<T extends MessageElemType = MessageElemType> = {
     type: T;
-} & MessageElemMap[T];
+    data:MessageElemMap[T]
+};
 // 可以发送的消息类型
 export type TextElem = MessageElem<"text">;
 export type AtElem = MessageElem<"at">;
@@ -122,6 +126,7 @@ export type LinkElem = MessageElem<'link'>
 export type XmlElem = MessageElem<"xml">;
 export type JsonElem = MessageElem<"json">;
 export type MDElem=MessageElem<'markdown'>
+export type NodeElem = MessageElem<"node">
 export type MusicElem = MessageElem<"music">;
 export type ButtonElem = MessageElem<'button'>
 export type ReplyElem = MessageElem<"reply">;
@@ -141,6 +146,7 @@ export type Sendable =
     | (RepeatableCombineElem|string)[] // 可重复组合的消息元素
     | WithReply<
     | MDElem
+    | NodeElem
     | LinkElem // 链接元素
     | VideoElem // 视频消息元素
     | AudioElem // 语音消息元素

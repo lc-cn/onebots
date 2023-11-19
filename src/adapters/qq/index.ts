@@ -97,7 +97,7 @@ export default class QQAdapter extends Adapter<'qq'>{
 
     toCqcode<V extends OneBot.Version>(version: V, messageArr:OneBot.MessageElement<V>[]): string {
         return [].concat(messageArr).map(item=>{
-            const dataStr=Object.entries(item).filter(([key])=>key!=='type').map(([key,value])=>{
+            const dataStr=Object.entries(item.data).map(([key,value])=>{
                 // is Buffer
                 if(value instanceof Buffer) return `${key}=${value.toString('base64')}`
                 // is Object
