@@ -246,6 +246,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                 }
             }
             client.trap('system.online', ()=>{
+                clearTimeout(timer)
                 resolve(clean)
             })
             const timer=setTimeout(()=>{
