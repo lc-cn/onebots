@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.29](https://github.com/lc-cn/onebots/compare/v0.4.28...v0.4.29) (2023-11-20)
+
+
+### Bug Fixes
+
+* 上线后收不到消息Bug ([70da5de](https://github.com/lc-cn/onebots/commit/70da5dee69ac4b9173ae6f98082c1471fb761acc))
+
 ## [0.4.28](https://github.com/lc-cn/onebots/compare/v0.4.27...v0.4.28) (2023-11-19)
 
 
