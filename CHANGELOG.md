@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.28](https://github.com/lc-cn/onebots/compare/v0.4.27...v0.4.28) (2023-11-19)
+
+
+### Bug Fixes
+
+* 修复icqq发消息失败 ([cfc9764](https://github.com/lc-cn/onebots/commit/cfc97644bf3438fa54a50118b6ac6adceae8baf0))
+
 ## [0.4.27](https://github.com/lc-cn/onebots/compare/v0.4.26...v0.4.27) (2023-11-19)
 
 
