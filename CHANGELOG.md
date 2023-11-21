@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.31](https://github.com/lc-cn/onebots/compare/v0.4.30...v0.4.31) (2023-11-21)
+
+
+### Bug Fixes
+
+* 官方适配器循环依赖bug ([6e4cad8](https://github.com/lc-cn/onebots/commit/6e4cad8f680b84d40185046bcdf5e4364de6969c))
+
 ## [0.4.30](https://github.com/lc-cn/onebots/compare/v0.4.29...v0.4.30) (2023-11-21)
 
 
