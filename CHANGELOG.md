@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.30](https://github.com/lc-cn/onebots/compare/v0.4.29...v0.4.30) (2023-11-21)
+
+
+### Bug Fixes
+
+* onebot11事件推送两次bug ([a22e3d5](https://github.com/lc-cn/onebots/commit/a22e3d58a85c3303c7cba09bc2fce29ad82e8a11))
+
 ## [0.4.29](https://github.com/lc-cn/onebots/compare/v0.4.28...v0.4.29) (2023-11-20)
 
 
