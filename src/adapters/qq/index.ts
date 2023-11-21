@@ -124,7 +124,7 @@ export default class QQAdapter extends Adapter<'qq'>{
             platform: 'qq',
             ...data,
         }
-        delete data.bot
+        delete result.bot
         return result
     }
     async start(uin:string){
