@@ -7,7 +7,7 @@ export class FriendAction {
      * @param message {MessageElem[]} 发送的消息
      * @param message_id {string} 引用的消息ID
      */
-    async sendPrivateMsg(this: V11, user_id: number, message: V11.MessageElement[], message_id?: string) {
+    async sendPrivateMsg(this: V11, user_id: number, message: V11.Sendable, message_id?: string) {
        return this.adapter.call(this.oneBot.uin,'V11','sendPrivateMessage', [user_id, message, message_id])
     }
 

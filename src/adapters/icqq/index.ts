@@ -4,21 +4,48 @@ import {Config as IcqqConfig} from "icqq/lib/client";
 import { Client, MessageElem } from "icqq";
 import process from "process";
 import {rmSync} from "fs";
-import {Dict} from "@zhinjs/shared";
 import {OneBot} from "@/onebot";
-const processMessages=(list:OneBot.MessageElement<OneBot.Version>[])=>{
-    return list.map(item=>{
-        const {type,data}=item
-        if(type==='node') return {
+import { deepClone, deepMerge } from "@/utils";
+import * as path from "path";
+import { shareMusic } from "@/service/shareMusicCustom";
+async function processMessages(this:Client,target_id:number,target_type:'group'|'private',list:OneBot.MessageElement<OneBot.Version>[]){
+    let result:MessageElem[]=[]
+    for(const item of list){
+        const {type,data,...other}=item
+        if(type==='node'){
+            result.push({
+                type,
+                ...data,
+                message:await processMessages.call(this,data.user_id,'private',data.message||[])
+            })
+        }
+        if(type==='music'){
+            if(String(item.data.platform) === 'custom') {
+                item.data.platform = item.data['subtype'] // gocq 的平台数据存储在 subtype 内，兼容 icqq 时要求前端必须发送 id 字段
+            }
+            const {type,data}=item
+            await shareMusic.call(this[target_type==='private'?'pickFriend':'pickGroup'](target_id),{
+                type,
+                ...data
+            })
+            continue
+        }
+        if(type==='share'){
+            await this[target_type==='private'?'pickFriend':'pickGroup'](target_id).shareUrl(item.data)
+            continue
+        }
+
+        if(['image','video','audio'].includes(item.type)){
+            if(item['file_id']?.startsWith('base64://')) item['file_id']=Buffer.from(item['file_id'].slice(9),'base64')
+            if(item['file']?.startsWith('base64://')) item['file']=Buffer.from(item['file'].slice(9),'base64')
+        }
+        result.push({
             type,
             ...data,
-            message:processMessages(data.message||[])
-        }
-        return {
-            type,
-            ...data
-        }
-    })
+            ...other
+        })
+    }
+    return result
 }
 export default class IcqqAdapter extends Adapter<'icqq'>{
     #password?:string
@@ -26,10 +53,10 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
     constructor(app: App, config: IcqqAdapter.Config) {
         super(app,'icqq', config);
     }
-    createOneBot(uin: string, protocol: Dict, versions: OneBot.Config[]): OneBot {
+    createOneBot(uin: string, protocol: IcqqConfig, versions: OneBot.Config[]): OneBot {
         const oneBot= super.createOneBot(uin, protocol, versions);
         this.#password=this.app.config[`icqq.${uin}`].password;
-        oneBot.internal=new Client(protocol)
+        oneBot.internal = new Client(deepMerge(protocol, deepClone(defaultIcqqConfig)));
         return oneBot
     }
     formatEventPayload<V extends OneBot.Version>(version: V, event: string, data: any):OneBot.Payload<V> {
@@ -44,47 +71,16 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
             detail_type: data.message_type||data.notice_type||data.request_type,
             platform: 'icqq',
             ...data,
-            message:this.toMessageElement(data)
         }
     }
-    toMessageElement<V extends OneBot.Version>(event: any):OneBot.MessageElement<V>[] {
-        if(!event||!event.message) return null
-        const messageArr:(MessageElem|string)[]=[].concat(event.message)
-        const result:OneBot.MessageElement<V>[]=[]
-        if(event.source){
-            result.push({
-                type:'quote',
-                data:{
-                    id:`${event.source.rand}${event.source.seq}_${event.source.time}`,
-                }
-            })
-        }
-        for(const message of messageArr){
-            if(typeof message==='string'){
-                result.push({
-                    type:'text',
-                    data:{
-                        text:message
-                    }
-                })
-            }else{
-                const {type,...data}=message
-                result.push({
-                    type,
-                    data
-                })
-            }
-        }
-        return result
-    }
-    sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
+    async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
         const [user_id,message]=args
 
-        return this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,processMessages(message))
+        return this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,await processMessages.call(this,user_id,'private',message))
     }
-    sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
+    async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
         const [group_id,message]=args
-        return this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,processMessages(message))
+        return this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,await processMessages.call(this,group_id,'group',message))
     }
 
     call<V extends OneBot.Version>(uin: string, version: V, method: string, args: any[]=[]): Promise<any> {
@@ -104,10 +100,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                     text:item
                 }
             }
-            return {
-                type:item.type,
-                data:item.data
-            }
+            return item
         })
     }
     toSegment<V extends OneBot.Version,M=any>(version: V, message: M): OneBot.Segment<V>[] {
@@ -127,7 +120,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
     }
 
     fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.MessageElement<V>[] {
-        const regExpMatchArray=message.match(/\[CQ:([a-z]+),(!])+]/g)
+        const regExpMatchArray=message.match(/\[CQ:([a-z]+),(!])+]/)
         if(!regExpMatchArray) return [
             {
                 type:'text',
@@ -137,7 +130,18 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
             }
         ]
         const result:OneBot.MessageElement<V>[]=[]
-        for(const match of regExpMatchArray){
+        while (message.length){
+            const [match]=message.match(/\[CQ:([a-z]+),(!])+]/)||[]
+            if(!match) break;
+            const prevText=message.substring(0,match.length)
+            if(prevText){
+                result.push({
+                    type:'text',
+                    data:{
+                        text:prevText
+                    }
+                })
+            }
             const [type,...valueArr]=match.substring(1,match.length-1).split(',')
             result.push({
                 type:type,
@@ -146,12 +150,22 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                     return [key,value]
                 }))
             })
+            message=message.substring(match.length)
+        }
+        if(message.length){
+            result.push({
+                type:'text',
+                data:{
+                    text:message
+                }
+            })
         }
         return result
     }
 
     toCqcode<V extends OneBot.Version>(version: V, messageArr:OneBot.MessageElement<V>[]): string {
         return [].concat(messageArr).map(item=>{
+            if(item.type==='text') return item.data.text
             const dataStr=Object.entries(item.data).map(([key,value])=>{
                 // is Buffer
                 if(value instanceof Buffer) return `${key}=${value.toString('base64')}`
@@ -286,6 +300,10 @@ declare module '@/adapter'{
             icqq: IcqqAdapter.Config
         }
     }
+}
+export const defaultIcqqConfig:IcqqConfig={
+    platform:2,
+    data_dir:path.join(process.cwd(),'data')
 }
 export namespace IcqqAdapter {
     export interface Config extends Adapter.Config<'icqq'> {
