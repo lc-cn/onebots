@@ -168,8 +168,8 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
 
     toCqcode<V extends OneBot.Version>(version: V, messageArr:OneBot.MessageElement<V>[]): string {
         return [].concat(messageArr).map(item=>{
-            if(item.type==='text') return item.data.text
-            const dataStr=Object.entries(item.data).map(([key,value])=>{
+            if(item.type==='text') return item.data?.text||item.text
+            const dataStr=Object.entries(item.data||item).map(([key,value])=>{
                 // is Buffer
                 if(value instanceof Buffer) return `${key}=${value.toString('base64')}`
                 // is Object
@@ -177,7 +177,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                 // is Array
                 if(value instanceof Array) return `${key}=${value.map(v=>JSON.stringify(v)).join(',')}`
                 // is String
-                return `${key}=${item.data[key]}`
+                return `${key}=${item.data?.[key]||item[key]}`
             })
             return `[CQ:${item.type},${dataStr.join(',')}]`
         }).join('')
