@@ -364,11 +364,17 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
                 platform: 'qq',
                 user_id: `${this.oneBot.uin}`
             },
-            ...transformObj(data, (key, value) => {
-                if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
-                return value + ''
-            }),
         } as V12.Payload<any>
+        Object.assign(payload,transformObj(data, (key, value) => {
+            if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
+            return value + ''
+        }),{
+            self_id: `${this.oneBot.uin}`,
+            self: {
+                platform: 'qq',
+                user_id: `${this.oneBot.uin}`
+            },
+        })
         if(!this.filterFn(payload)) return
         this.emit('dispatch', payload)
     }
@@ -551,6 +557,8 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
      */
     protected _createWsr(url: string, config: V12.WsReverseConfig) {
         const timestmap = Date.now()
+        let remoteUrl=url
+        if(config.access_token) remoteUrl+=`?access_token=${config.access_token}`
         const headers: http.OutgoingHttpHeaders = {
             "X-Self-ID": String(this.oneBot.uin),
             "X-Client-Role": "Universal",
@@ -559,7 +567,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         }
         if (config.access_token)
             headers.Authorization = "Bearer " + config.access_token
-        const ws = new WebSocket(url, '12.onebots.v' + version, {headers})
+        const ws = new WebSocket(remoteUrl, {headers})
         ws.on("error", (err) => {
             this.logger.error(err.message)
         })

@@ -22,7 +22,6 @@ export default class QQAdapter extends Adapter<'qq'>{
             }
             qqBot.stop()
         }
-        const _this=this;
         const messageHandler=(event)=>{
             this.emit('message.receive',oneBot.uin,event)
         }
@@ -64,10 +63,13 @@ export default class QQAdapter extends Adapter<'qq'>{
                     text:item
                 }
             }
-            const {type,...data}=item
+            const {type,data,...other}=item
             return {
                 type,
-                data
+                data:{
+                    ...data,
+                    ...other
+                }
             }
         })
     }
@@ -114,7 +116,7 @@ export default class QQAdapter extends Adapter<'qq'>{
     formatEventPayload<V extends OneBot.Version>(version:V,event:string,data:any):OneBot.Payload<V>{
         const result= {
             id: data.id,
-            type: event,
+            [version==='V12'?'type':'post_type']: event,
             version: version,
             self:{
                 platform:'qq',
@@ -122,6 +124,7 @@ export default class QQAdapter extends Adapter<'qq'>{
             },
             detail_type: data.message_type||data.notice_type||data.request_type,
             platform: 'qq',
+            time:data.timestamp,
             ...data,
         }
         delete result.bot

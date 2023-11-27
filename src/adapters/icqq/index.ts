@@ -56,7 +56,10 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
     createOneBot(uin: string, protocol: IcqqConfig, versions: OneBot.Config[]): OneBot {
         const oneBot= super.createOneBot(uin, protocol, versions);
         this.#password=this.app.config[`icqq.${uin}`].password;
-        oneBot.internal = new Client(deepMerge(protocol, deepClone(defaultIcqqConfig)));
+        oneBot.internal = new Client(deepMerge(protocol, deepClone({
+            ...defaultIcqqConfig,
+            log_level:this.app.config.log_level
+        })));
         return oneBot
     }
     formatEventPayload<V extends OneBot.Version>(version: V, event: string, data: any):OneBot.Payload<V> {

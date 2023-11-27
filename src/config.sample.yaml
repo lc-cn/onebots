@@ -25,8 +25,6 @@ general: # 通用配置，在单个配置省略时的默认值
     use_ws: true # 是否启用 websocket
     webhook: [ ] # http 上报地址
     ws_reverse: [ ] # 反向ws连接地址
-  protocol:
-    platform: 2
 # 每个账号的单独配置(用于覆盖通用配置)
 icqq.123456789: # `${适配器名称}:${账号}`
   versions:
