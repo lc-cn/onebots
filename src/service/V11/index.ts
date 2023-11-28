@@ -547,8 +547,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             else if (params.discuss_id) action = "send_discuss_msg";
             else if (params.guild_id) action = params.channel_id === "direct" ? "send_direct_msg" : "send_group_msg";
             else throw new Error("required message_type or input (user_id/group_id)");
-        } else if (action === "send_like") {
-            action = "send_user_like";
         }
 
         const method = toHump(action) as keyof Action;
