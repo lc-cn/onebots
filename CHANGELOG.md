@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.32](https://github.com/lc-cn/onebots/compare/v0.4.31...v0.4.32) (2023-12-28)
+
+
+### Bug Fixes
+
+* 移除sqlite，改为使用本地jsondb ([cce764d](https://github.com/lc-cn/onebots/commit/cce764d934f7a59d57709f0f6ce948d1f2462c1d))
+
 ## [0.4.31](https://github.com/lc-cn/onebots/compare/v0.4.30...v0.4.31) (2023-11-21)
 
 
