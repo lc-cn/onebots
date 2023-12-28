@@ -11,7 +11,7 @@ import http from "http";
 import https from "https";
 import {WebSocket, WebSocketServer} from "ws";
 import {toBool, toHump, toLine, transformObj, uuid} from "@/utils";
-import {Database} from "@/db";
+import {JsonDB} from "@/db";
 import {genDmMessageId, genGroupMessageId} from "icqq/lib/message";
 import {Service} from "@/service";
 import {App} from "@/server/app";
@@ -25,26 +25,30 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
     logger: Logger
     wss?: WebSocketServer
     wsr: Set<WebSocket> = new Set<WebSocket>()
-    private db: Database<{ eventBuffer: V12.Payload<keyof Action>[],msgIdMap:Record<string, number>, files: Record<string, V12.FileInfo> }>
+    private db: JsonDB
 
     constructor(public oneBot: OneBot<'V12'>,  public config: OneBot.Config<'V12'>) {
         super(oneBot.adapter,config)
-        this.db = new Database(join(App.configDir, 'data', this.oneBot.uin + '.json'))
-        this.db.sync({eventBuffer: [],msgIdMap:{}, files: {}})
+        this.db = new JsonDB(join(App.configDir, 'data', `${this.oneBot.uin}_v12.jsondb`))
         this.action = new Action()
         this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version)
     }
+    addHistory(payload:V12.Payload<keyof Action>){
+        return this.db.push('eventBuffer',payload)
+    }
+    shiftHistory(){
+        return this.db.shift('eventBuffer')
+    }
     get history(): V12.Payload<keyof Action>[] {
-        return this.db.get('eventBuffer')
+        return this.db.get('eventBuffer',[])
     }
 
     getFile(file_id: string) {
-        return this.db.get(`files.${file_id}`)
+        return this.db.get<V12.FileInfo>(`files.${file_id}`)
     }
 
     delFile(file_id: string) {
-        const files = this.db.get(`files`)
-        return delete files[file_id]
+        return this.db.delete(`files.${file_id}`)
     }
 
     saveFile(fileInfo: V12.FileInfo) {
@@ -54,7 +58,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
     }
 
     get files(): ({ file_id: string } & V12.FileInfo)[] {
-        const files = this.db.get('files')
+        const files = this.db.get('files',{})
         return Object.keys(files).map((file_id) => {
             return {
                 file_id,
@@ -162,8 +166,8 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         this.on('dispatch', (payload: V12.Payload<keyof Action>) => {
             if (!['message', 'notice', 'request', 'meta'].includes(payload.type)) return
             if (config.event_enabled) {
-                this.history.push(payload)
-                if (config.event_buffer_size !== 0 && this.history.length > config.event_buffer_size) this.history.shift()
+                this.addHistory(payload)
+                if (config.event_buffer_size !== 0 && this.history.length > config.event_buffer_size) this.shiftHistory()
             }
         })
     }

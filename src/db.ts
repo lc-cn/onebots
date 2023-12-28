@@ -1,63 +1,110 @@
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { deleteValue, getValue, Keys, setValue, Value } from "@zhinjs/shared";
+import * as fs from 'fs'
+import * as path from 'path'
+import { parseObjFromStr, stringifyObj } from '@/utils';
+import { Dict } from "@zhinjs/shared";
+export class JsonDB{
+    private data:Dict={}
+    constructor(private readonly filePath:string) {
+        const dir=path.dirname(this.filePath)
+        if(fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true})
+        if(!this.filePath.endsWith('.jsondb')) this.filePath=this.filePath+'.jsondb'
+        if(!fs.existsSync(this.filePath)) this.write()
+        this.init()
+    }
+    private init(){
+        this.read()
 
-export class Database<T extends object = object> {
-    private data: T = {} as any;
-
-    constructor(private readonly path: string) {
-        if (!this.path.toLowerCase().endsWith(".json")) this.path = this.path + ".json";
-        if (!existsSync(this.path)) {
-            writeFileSync(this.path, "", "utf-8");
+    }
+    private write(){
+        fs.writeFileSync(this.filePath, stringifyObj(this.data), 'utf8')
+    }
+    private read(){
+        this.data=parseObjFromStr(fs.readFileSync(this.filePath,'utf8'))
+    }
+    findIndex<T>(route:string,predicate:(value:T,index:number,obj:T[])=>unknown){
+        const arr=this.getArray<T>(route)
+        return arr.findIndex(predicate)
+    }
+    indexOf<T>(route:string,item:T){
+        return this.findIndex<T>(route,(value)=>value===item)
+    }
+    get<T>(route:string,initialValue?:T):T|undefined{
+        this.read()
+        const parentPath=route.split('.')
+        const key=parentPath.pop()
+        if(!key) return this.data as T
+        let temp:Dict=this.data
+        while (parentPath.length){
+            const currentKey=parentPath.shift() as string
+            if(!Reflect.has(temp,currentKey)) Reflect.set(temp,key,{})
+            temp=Reflect.get(temp,currentKey)
         }
+        if(temp[key]!==undefined) return temp[key]
+        temp[key]=initialValue
+        this.write()
+        return initialValue
     }
-
-    sync(defaultValue: T) {
-        try {
-            this.data = JSON.parse(readFileSync(this.path, "utf-8"));
-        } catch {
-            this.data = defaultValue;
-            writeFileSync(this.path, JSON.stringify(defaultValue, null, 2), "utf-8");
-        }
+    set<T>(route:string,data:T):T{
+        const parentPath=route.split('.')
+        const key=parentPath.pop()
+        if(!key) throw new SyntaxError(`route can't empty`)
+        const parentObj=this.get<Dict>(parentPath.join('.'),{})
+        if(!parentObj) throw new SyntaxError(`can't set property ${key} of undefined`)
+        parentObj[key]=data
+        this.write()
+        return data
     }
-
-    get<K extends Keys<T>>(key: K): Value<T, K> {
-        const value = getValue(this.data, key);
-        if (typeof value !== "object") return value as Value<T, K>;
-        const saveValue = () => {
-            this.set(key, value as Value<T, K>);
-        };
-        return new Proxy(value, {
-            set(target, k, v) {
-                const res = Reflect.set(target, k, v);
-                saveValue();
-                return res;
-            },
-            deleteProperty(target, p) {
-                const res = Reflect.deleteProperty(target, p);
-                saveValue();
-                return res;
-            },
-            defineProperty(target, p, r) {
-                const res = Reflect.defineProperty(target, p, r);
-                saveValue();
-                return res;
-            },
-        }) as Value<T, K>;
+    delete(route:string):boolean{
+        const parentPath=route.split('.')
+        const key=parentPath.pop()
+        if(!key) throw new SyntaxError(`route can't empty`)
+        const parentObj=this.get<Dict>(parentPath.join('.'),{})
+        if(!parentObj) throw new SyntaxError(`property ${key} is not exist of undefined`)
+        const result=delete parentObj[key]
+        this.write()
+        return result
     }
-
-    delete<K extends Keys<T>>(key: K) {
-        return deleteValue(this.data, key);
+    private getArray<T>(route:string):T[]{
+        if(!route) throw new Error(`route can't empty`)
+        const arr=this.get<Dict>(route,[])
+        if(!arr) throw new SyntaxError(`route ${route} is not define`)
+        if(!Array.isArray(arr)) throw new TypeError(`data ${route} is not an Array`)
+        return arr
     }
-
-    set<K extends Keys<T>>(key: K, value: Value<T, K>) {
-        setValue(this.data, key, value);
-        return writeFileSync(this.path, JSON.stringify(this.data, null, 2), "utf-8");
+    unshift<T>(route:string,...data:T[]):number{
+        const arr=this.getArray<T>(route)
+        const result=arr.unshift(...data)
+        this.write()
+        return result
     }
-}
-
-export namespace Database {
-    export interface Config {
-        path: string;
-        force?: boolean;
+    shift<T>(route:string){
+        const arr=this.getArray<T>(route)
+        const result=arr.shift()
+        this.write()
+        return result
+    }
+    push<T>(route:string,...data:T[]):number{
+        const arr=this.getArray<T>(route)
+        const result=arr.push(...data)
+        this.write()
+        return result
+    }
+    pop<T>(route:string){
+        const arr=this.getArray<T>(route)
+        const result=arr.pop()
+        this.write()
+        return result
+    }
+    splice<T>(route:string,index:number=0,deleteCount:number=0,...data:T[]):T[]{
+        const arr=this.getArray<T>(route)
+        const result=arr.splice(index,deleteCount,...data)
+        this.write()
+        return result
+    }
+    find<T>(route:string,callback:(item:T)=>boolean):T|undefined{
+        return this.getArray<T>(route).find(callback)
+    }
+    filter<T>(route:string,callback:(item:T)=>boolean):T[]{
+        return this.getArray<T>(route).filter(callback)
     }
 }

@@ -56,8 +56,7 @@
         "/**/LICENSE"
     ],
     "peerDependencies": {
-        "icqq": "latest",
-        "sqlite3": "^5.1.6"
+        "icqq": "latest"
     },
     "dependencies": {
         "@koa/router": "^10.1.1",
@@ -69,8 +68,6 @@
         "log4js": "^6.5.2",
         "mime-types": "^2.1.35",
         "reflect-metadata": "^0.1.13",
-        "seed-random": "^2.2.0",
-        "typeorm": "^0.3.17",
         "ws": "^8.8.0"
     }
 }

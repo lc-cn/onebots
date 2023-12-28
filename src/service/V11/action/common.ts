@@ -1,6 +1,7 @@
 import { OneBotStatus } from "@/onebot"
 import { V11 } from "@/service/V11"
-import { Message, OnlineStatus } from "icqq"
+import { Message } from "icqq"
+import { MsgEntry } from "@/service/V11/db_entities";
 
 export class CommonAction {
     /**
@@ -19,7 +20,9 @@ export class CommonAction {
      */
     async deleteMsg(this: V11, message_id: number) {
         if(message_id == 0) throw new Error('getMsg: message_id[0] is invalid')
-        let msg_entry = await this.db.getMsgById(message_id)
+        let msg_entry = this.db.find<MsgEntry>('messages',(message)=>{
+            return message.id===message_id
+        })
         if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
 
         return this.adapter.call(this.oneBot.uin,'V11','deleteMsg',[msg_entry.base64_id])
@@ -32,7 +35,9 @@ export class CommonAction {
      */
     async getMsg(this: V11, message_id: number) {
         if(message_id == 0) throw new Error('getMsg: message_id[0] is invalid')
-        let msg_entry = await this.db.getMsgById(message_id)
+        let msg_entry =this.db.find<MsgEntry>('messages',(message)=>{
+            return message.id===message_id
+        })
         if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
 
         let msg: Message = await this.adapter.call(this.oneBot.uin,'V11','getMsg',[msg_entry.base64_id])
