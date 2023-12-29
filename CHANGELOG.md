@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.35](https://github.com/lc-cn/onebots/compare/v0.4.34...v0.4.35) (2023-12-29)
+
+
+### Bug Fixes
+
+* 静态资源路径错误 ([b62ca0d](https://github.com/lc-cn/onebots/commit/b62ca0dc5de70fc212a41d9a3a2b271937b27dcb))
+
 ## [0.4.34](https://github.com/lc-cn/onebots/compare/v0.4.33...v0.4.34) (2023-12-29)
 
 
