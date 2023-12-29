@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.36](https://github.com/lc-cn/onebots/compare/v0.4.35...v0.4.36) (2023-12-29)
+
+
+### Bug Fixes
+
+* wss 协议支持 ([f8ff71b](https://github.com/lc-cn/onebots/commit/f8ff71b2a52760f9492a8d0604f8dc9d7e02a051))
+
 ## [0.4.35](https://github.com/lc-cn/onebots/compare/v0.4.34...v0.4.35) (2023-12-29)
 
 
