@@ -211,14 +211,16 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                 if(input==='1') {
                     this.sendSmsCode()
                     _this.logger.mark('请输入短信验证码:')
-                    process.stdin.once('data',buf=>{
-                        this.submitSmsCode(buf.toString().trim())
-                    })
+                    const terminalInputHandler=(buf)=>{
+                        client.submitSmsCode(buf.toString().trim())
+                    }
+                    process.stdin.once('data',terminalInputHandler)
                 }else{
                     _this.logger.mark(`请前往：${e.url} 完成验证后回车继续`)
-                    process.stdin.once('data',()=>{
-                        this.login()
-                    })
+                    const terminalInputHandler=()=>{
+                        client.login()
+                    }
+                    process.stdin.once('data',terminalInputHandler)
                 }
             })
             disposeArr.push(() => {

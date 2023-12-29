@@ -2,23 +2,25 @@ import Koa from 'koa'
 import * as os from 'os'
 import "reflect-metadata";
 import {copyFileSync, existsSync, mkdirSync, writeFileSync} from "fs";
-import {Logger, getLogger} from "log4js";
+import {Logger, getLogger,configure} from "log4js";
 import {createServer, Server} from "http";
+import koaStatic from 'koa-static'
 import yaml from 'js-yaml'
 import KoaBodyParser from "koa-bodyparser";
-import {OneBot} from "@/onebot";
+import basicAuth from 'koa-basic-auth'
 
-const mime = require('mime-types');
 import {deepMerge, deepClone, protectedFields, Class} from "@/utils";
-import {Router} from "./router";
+import { Router, WsServer } from "./router";
 import {readFileSync} from "fs";
 import {V11} from "@/service/V11";
 import {V12} from "@/service/V12";
-import {LogLevel, MayBeArray} from "@/types";
-import {Platform} from "icqq";
+import {LogLevel} from "@/types";
 import * as path from "path";
 import {Adapter} from "@/adapter";
-
+import { ChildProcess } from "child_process";
+import process from "process";
+import * as fs from "fs";
+import { Dict } from "@zhinjs/shared";
 export interface KoaOptions {
     env?: string
     keys?: string[]
@@ -31,27 +33,41 @@ export interface KoaOptions {
 type AdapterClass = Class<Adapter>
 
 export class App extends Koa {
-    public config: App.Config
-    readonly httpServer: Server
+    public config: Required<App.Config>
+    public httpServer: Server
     public logger: Logger
     static configDir = path.join(os.homedir(), '.onebots')
     static configPath = path.join(App.configDir, 'config.yaml')
     adapters:Map<string,Adapter>=new Map<string, Adapter>()
+    public ws:WsServer
     public router: Router
+    static logFile=path.join(process.cwd(),'onebots.log')
 
     constructor(config: App.Config = {}) {
         super(config);
+
         this.config = deepMerge(deepClone(App.defaultConfig), config)
-        this.logger = getLogger('[OneBots]')
-        this.logger.level = this.config.log_level
-        this.router = new Router({prefix: config.path})
-        this.use(KoaBodyParser())
-            .use(this.router.routes())
-            .use(this.router.allowedMethods())
-        this.httpServer = createServer(this.callback())
-        this.createOneBots()
+        this.init()
     }
 
+    init(){
+        this.logger = getLogger('[OneBots]')
+        this.logger.level = this.config.log_level
+        this.router = new Router({prefix: this.config.path})
+        this
+            .use(KoaBodyParser())
+            .use(this.router.routes())
+            .use(this.router.allowedMethods())
+            .use(basicAuth({
+                name:this.config.username,
+                pass:this.config.password
+            }))
+            .use(koaStatic(path.join(process.cwd(),'dist')))
+        this.httpServer = createServer(this.callback())
+        this.ws=this.router.ws('/',this.httpServer)
+
+        this.createOneBots()
+    }
     getLogger(patform:string) {
         const logger = getLogger(`[OneBots:${patform}]`)
         logger.level = this.config.log_level
@@ -65,7 +81,7 @@ export class App extends Koa {
             const [adapter,...uinArr]=key.split('.')
             const uin=uinArr.join('.')
             if(!uin) continue
-            result.push([adapter,uin,value])
+            result.push([adapter,uin,value as Adapter.Config])
         }
         return result
     }
@@ -77,7 +93,7 @@ export class App extends Koa {
     }
 
     public addAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
-        this.config[uin] = config
+        this.config[`${platform}.${uin}`] = config
         const oneBot = this.createOneBot(platform,uin, config)
         oneBot.start()
         writeFileSync(App.configPath, yaml.dump(deepClone(this.config)))
@@ -85,6 +101,7 @@ export class App extends Koa {
 
     public updateAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
         const adapter=this.findOrCreateAdapter(platform)
+        if(!adapter) return
         const oneBot=adapter.oneBots.get(uin)
         if (!oneBot) return this.addAccount(platform, uin, config)
         const newConfig = deepMerge(this.config[uin], config)
@@ -94,16 +111,18 @@ export class App extends Koa {
 
     public removeAccount(platform: string, uin: string, force?: boolean) {
         const adapter = this.findOrCreateAdapter(platform)
+        if(!adapter) return
         const oneBot=adapter.oneBots.get(uin)
-        if(!oneBot) throw new Error(`未找到账号${uin}`)
+        if(!oneBot) return this.logger.warn(`未找到账号${uin}`)
         oneBot.stop(force)
-        delete this.config[uin]
+        delete this.config[`${platform}.${uin}`]
         adapter.oneBots.delete(uin)
         writeFileSync(App.configPath, yaml.dump(this.config))
     }
 
     public createOneBot<P extends string>(platform : P,uin: string, config: Adapter.Config) {
         const adapter = this.findOrCreateAdapter<P>(platform,config)
+        if(!adapter) return
         return adapter.createOneBot(uin,config.protocol,config.versions)
     }
     get oneBots(){
@@ -114,7 +133,7 @@ export class App extends Koa {
     public findOrCreateAdapter<P extends string>(platform:P,config?:Adapter.Config){
         if(this.adapters.has(platform)) return this.adapters.get(platform)
         const AdapterClass = App.ADAPTERS.get(platform)
-        if (!AdapterClass) throw new Error(`未安装适配器(${platform})`)
+        if (!AdapterClass) return this.logger.warn(`未安装适配器(${platform})`)
         const adapter = new AdapterClass(this, config)
         this.adapters.set(platform, adapter)
         return adapter
@@ -122,40 +141,72 @@ export class App extends Koa {
 
     async start() {
         this.httpServer.listen(this.config.port)
+        const fileListener=(e)=>{
+            if(e==='change') this.ws.clients.forEach(client=>{
+                client.send(JSON.stringify({
+                    event:'system.log',
+                    data:fs.readFileSync(App.logFile,'utf8')
+                }))
+            })
+        }
+        fs.watch(App.logFile,fileListener)
+        this.on('close',()=>{
+            fs.unwatchFile(App.logFile,fileListener)
+        })
+        process.on('disconnect',()=>{
+            fs.unwatchFile(App.logFile,fileListener)
+        })
+        this.ws.on('connection',(client)=>{
+            client.send(JSON.stringify({
+                event:'system.sync',
+                data:{
+                    config:fs.readFileSync(App.configPath,'utf8'),
+                    adapters:[...this.adapters.values()].map(adapter=>{
+                        return {
+                            platform:adapter.platform,
+                            config:adapter.config,
+                            bots:[...adapter.oneBots.values()].map(bot=>{
+                                return {
+                                    uin:bot.uin,
+                                    status:bot.status,
+                                    urls:bot.instances.map(ins=>{
+                                        return `/${adapter.platform}/${bot.uin}/${ins.version}`
+                                    })
+                                }
+                            })
+                        }
+                    }),
+                    logs:fs.existsSync(App.logFile) ? fs.readFileSync(App.logFile,'utf8'):''
+                }
+            }))
+            client.on('message',(raw)=>{
+                let payload:Dict={}
+                try{
+                    payload=JSON.parse(raw.toString())
+                }catch {
+                    return
+                }
+                switch (payload.action){
+                    case 'system.input':
+                        return process.stdin.write(`${payload.data}\n`)
+                    case 'system.saveConfig':
+                        return fs.writeFileSync(App.configPath,payload.data,'utf8')
+                    case 'system.reload':
+                        const config=yaml.load(fs.readFileSync(App.configPath,'utf8'))
+                        return this.reload(config)
+                }
+            })
+        })
         this.router.get('/list', (ctx) => {
             ctx.body = this.oneBots.map(bot => {
                 return {
                     uin: bot.uin,
+                    platform:bot.platform,
+                    status:bot.status,
                     config: bot.config.map(c => protectedFields(c,'password','sign_api_addr', "access_token")),
-                    urls: bot.config.map(c => `/${c.version}/${bot.uin}`)
+                    urls: bot.config.map(c => `/${bot.platform}/${c.version}/${bot.uin}`)
                 }
             })
-        })
-        this.router.get('/qrcode', (ctx) => {
-            const {uin} = ctx.query
-            const uinUrl = path.join(App.configDir, 'data', uin as string)
-            if (!existsSync(uinUrl)) {
-                return ctx.res.writeHead(400).end('未登录')
-            }
-            const qrcodePath = path.join(App.configDir, 'data', uin as string, 'qrcode.png')
-            let file = null;
-            try {
-                file = readFileSync(qrcodePath); //读取文件
-            } catch (error) {
-                return ctx.res.writeHead(404).end(error.message)
-            }
-            let mimeType = mime.lookup(qrcodePath); //读取图片文件类型
-            ctx.set('content-type', mimeType); //设置返回类型
-            ctx.body = file; //返回图片
-        })
-        this.router.get('/detail', (ctx) => {
-            let {uin} = ctx.request.query
-            const oneBot = this.oneBots.find(bot => bot.uin === String(uin))
-            ctx.body = {
-                uin,
-                config: oneBot.config.map(c => protectedFields(c, "access_token")),
-                urls: oneBot.config.map(c => `/${uin}/${c.version}`)
-            }
         })
         this.router.post('/add', (ctx, next) => {
             const {uin, ...config} = (ctx.request.body || {}) as any
@@ -196,9 +247,22 @@ export class App extends Koa {
             await adapter.start()
         }
     }
+    async reload(config:App.Config){
+        await this.stop()
+        this.config=deepMerge(deepClone(App.defaultConfig), config)
+        this.start()
+    }
+    async stop(){
+        for(const [_,adapter] of this.adapters){
+            await adapter.stop()
+        }
+        // this.ws.close()
+        this.httpServer.close()
+        this.emit('close')
+    }
 }
 
-export function createOnebots(config: App.Config | string = 'config.yaml') {
+export function createOnebots(config: App.Config | string = 'config.yaml',cp:ChildProcess|null) {
     if (typeof config === 'string') {
         config = path.resolve(process.cwd(), config)
         App.configDir = path.dirname(config)
@@ -215,7 +279,27 @@ export function createOnebots(config: App.Config | string = 'config.yaml') {
         }
         config = yaml.load(readFileSync(App.configPath, 'utf8')) as App.Config
     }
-    return new App(config)
+    configure({
+        appenders:{
+            out:{
+                type:'stdout',
+                layout:{type:'colored'}
+            },
+            files:{
+                type:'file',
+                filename:path.join(process.cwd(),'onebots.log')
+            }
+        },
+        categories:{
+            default:{
+                appenders:['out','files'],
+                level:config.log_level||"info"
+            }
+        },
+        disableClustering:true
+    })
+    if(cp) process.on('disconnect',()=>cp.kill())
+    return  new App(config)
 }
 
 export function defineConfig(config: App.Config) {
@@ -231,6 +315,8 @@ export namespace App {
         port?: number
         path?: string
         timeout?: number
+        username?:string
+        password?:string
         log_level?: LogLevel
         general?: {
             V11?: V11.Config
@@ -239,6 +325,8 @@ export namespace App {
     } & KoaOptions & Record<`${string}.${string}`, Adapter.Config>
     export const defaultConfig: Config = {
         port: 6727,
+        username:'admin',
+        password:'123456',
         timeout: 30,
         general: {
             V11: V11.defaultConfig,

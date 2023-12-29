@@ -1,73 +1,81 @@
 {
-    "name": "onebots",
-    "version": "0.4.32",
-    "description": "基于icqq的多例oneBot实现",
-    "engines": {
-        "node": ">=16"
-    },
-    "main": "lib/index.js",
-    "bin": {
-        "onebots": "./lib/bin.js"
-    },
-    "scripts": {
-        "start": "node .",
-        "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
-        "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq",
-        "pub": "npm publish --access public",
-        "lint": "prettier --check ./**/*.{ts,js}",
-        "lint:fix": "prettier --write ./**/*.{ts,js,md}",
-        "test": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
-        "docs:dev": "vitepress dev docs --port 8989",
-        "docs:build": "vitepress build docs",
-        "docs:preview": "vitepress preview docs"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/liucl-cn/onebots.git"
-    },
-    "keywords": [
-        "onebot",
-        "icqq",
-        "cq-http"
-    ],
-    "author": "凉菜",
-    "license": "MIT",
-    "bugs": {
-        "url": "https://github.com/liucl-cn/onebots/issues"
-    },
-    "homepage": "https://github.com/liucl-cn/onebots#readme",
-    "devDependencies": {
-        "@types/koa": "^2.13.4",
-        "@types/koa__router": "^8.0.11",
-        "@types/koa-bodyparser": "^4.3.7",
-        "@types/node": "latest",
-        "@types/ws": "^8.5.3",
-        "prettier": "^3.0.0",
-        "ts-node-dev": "latest",
-        "tsc-alias": "latest",
-        "tsconfig-paths": "latest",
-        "typescript": "latest",
-        "vitepress": "^1.0.0-alpha.72"
-    },
-    "files": [
-        "/lib/**/*.js",
-        "/lib/**/*.d.ts",
-        "/lib/*.yaml",
-        "/**/LICENSE"
-    ],
-    "peerDependencies": {
-        "icqq": "latest"
-    },
-    "dependencies": {
-        "@koa/router": "^10.1.1",
-        "@zhinjs/shared": "^0.0.9",
-        "icqq-cq-enable": "^1.0.1",
-        "js-yaml": "^4.1.0",
-        "koa": "^2.13.4",
-        "koa-bodyparser": "^4.3.0",
-        "log4js": "^6.5.2",
-        "mime-types": "^2.1.35",
-        "reflect-metadata": "^0.1.13",
-        "ws": "^8.8.0"
-    }
+  "name": "onebots",
+  "version": "0.4.32",
+  "description": "基于icqq的多例oneBot实现",
+  "engines": {
+    "node": ">=16"
+  },
+  "main": "lib/index.js",
+  "bin": {
+    "onebots": "./lib/bin.js"
+  },
+  "scripts": {
+    "start": "node .",
+    "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq",
+    "pub": "npm publish --access public",
+    "lint": "prettier --check ./**/*.{ts,js}",
+    "lint:fix": "prettier --write ./**/*.{ts,js,md}",
+    "test": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
+    "docs:dev": "vitepress dev docs --port 8989",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liucl-cn/onebots.git"
+  },
+  "keywords": [
+    "onebot",
+    "icqq",
+    "cq-http"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/liucl-cn/onebots/issues"
+  },
+  "homepage": "https://github.com/liucl-cn/onebots#readme",
+  "devDependencies": {
+    "@types/koa": "^2.13.4",
+    "@types/koa-basic-auth": "^2.0.6",
+    "@types/koa-bodyparser": "^4.3.7",
+    "@types/koa-static": "^4.0.4",
+    "@types/koa__router": "^8.0.11",
+    "@types/node": "latest",
+    "@types/ws": "^8.5.3",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "prettier": "^3.0.0",
+    "sass": "^1.69.6",
+    "ts-node-dev": "latest",
+    "tsc-alias": "latest",
+    "tsconfig-paths": "latest",
+    "typescript": "latest",
+    "vite": "^5.0.10",
+    "vitepress": "^1.0.0-rc.33",
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts",
+    "/dist/**/*",
+    "/lib/*.yaml",
+    "/**/LICENSE"
+  ],
+  "peerDependencies": {
+    "icqq": "latest"
+  },
+  "dependencies": {
+    "@koa/router": "^10.1.1",
+    "@zhinjs/shared": "^0.0.9",
+    "js-yaml": "^4.1.0",
+    "koa": "^2.13.4",
+    "koa-basic-auth": "^4.0.0",
+    "koa-bodyparser": "^4.3.0",
+    "koa-static": "^5.0.0",
+    "log4js": "^6.5.2",
+    "reflect-metadata": "^0.1.13",
+    "ws": "^8.8.0"
+  }
 }

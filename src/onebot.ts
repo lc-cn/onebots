@@ -14,6 +14,7 @@ export class NotFoundError extends Error {
 export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitter {
     public config: OneBot.Config[]
     status: OneBotStatus
+    avatar:string
     #logger:Logger
     protected password: string
     internal?:any
@@ -80,8 +81,8 @@ export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitte
 }
 
 export enum OneBotStatus {
-    Good,
-    Bad,
+    Good='good',
+    Bad='bad',
     Online='online',
 }
 
