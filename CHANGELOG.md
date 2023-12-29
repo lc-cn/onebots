@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.33](https://github.com/lc-cn/onebots/compare/v0.4.32...v0.4.33) (2023-12-29)
+
+
+### Bug Fixes
+
+* 增加web 面板 初版 ([97aac1b](https://github.com/lc-cn/onebots/commit/97aac1bd631ff96cc7e069395f113c62a8055e4c))
+
 ## [0.4.32](https://github.com/lc-cn/onebots/compare/v0.4.31...v0.4.32) (2023-12-28)
 
 
