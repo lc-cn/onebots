@@ -85,7 +85,7 @@ const dispatch = (event: string, data: any) => {
 };
 const init = () => {
     const port = localStorage.getItem("OneBots:serverPort") || prompt("请输入服务端监听的端口号", location.port);
-    const wsUrl = `ws://${location.hostname}:${port}`;
+    const wsUrl = `${location.protocol.replace('http','ws')}//${location.hostname}:${port}`;
     ws.value = new WebSocket(wsUrl);
     ws.value.onerror = (e) => {
         console.error("连接出错", e);
