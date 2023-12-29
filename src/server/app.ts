@@ -62,7 +62,7 @@ export class App extends Koa {
                 name:this.config.username,
                 pass:this.config.password
             }))
-            .use(koaStatic(path.resolve(__dirname,'../dist')))
+            .use(koaStatic(path.resolve(__dirname,'../../dist')))
         this.httpServer = createServer(this.callback())
         this.ws=this.router.ws('/',this.httpServer)
 
