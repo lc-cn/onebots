@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.37](https://github.com/lc-cn/onebots/compare/v0.4.36...v0.4.37) (2023-12-30)
+
+
+### Bug Fixes
+
+* web 优化 ([f198afd](https://github.com/lc-cn/onebots/commit/f198afd984de243c1cd81bf6a23eae117e038b56))
+
 ## [0.4.36](https://github.com/lc-cn/onebots/compare/v0.4.35...v0.4.36) (2023-12-29)
 
 
