@@ -1,4 +1,4 @@
-import { EventMap, MessageElem, Sendable as IcqqCanSend} from "icqq";
+import { EventMap} from "icqq";
 import {version} from "@/utils";
 import {join} from 'path'
 import {Config} from './config'
@@ -27,7 +27,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
     wsr: Set<WebSocket> = new Set<WebSocket>()
     private db: JsonDB
 
-    constructor(public oneBot: OneBot<'V12'>,  public config: OneBot.Config<'V12'>) {
+    constructor(public oneBot: OneBot,  public config: OneBot.Config<'V12'>) {
         super(oneBot.adapter,config)
         this.db = new JsonDB(join(App.configDir, 'data', `${this.oneBot.uin}_v12.jsondb`))
         this.action = new Action()

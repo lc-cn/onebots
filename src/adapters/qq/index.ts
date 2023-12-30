@@ -1,35 +1,57 @@
-import {Adapter} from "@/adapter";
-import {App} from "@/server/app";
-import {OneBot, OneBotStatus} from "@/onebot";
-import {Bot} from "@/adapters/qq/bot";
-import UnsupportedMethodError = OneBot.UnsupportedMethodError;
-import { QQBot } from "@/adapters/qq/qqBot";
-import { Sendable } from "@/adapters/qq/elements";
+import { Adapter } from "@/adapter";
+import { App } from "@/server/app";
+import { OneBot, OneBotStatus } from "@/onebot";
+import { Bot, Sendable } from "qq-group-bot";
+import * as path from "path";
 
 export default class QQAdapter extends Adapter<'qq'>{
     constructor(app:App,config:QQAdapter.Config) {
         super(app,'qq',config);
+        this.icon=`https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png`
     }
     #disposes:Map<string,Function>=new Map<string, Function>()
-    async startOneBot(oneBot:OneBot){
-        const config:QQAdapter.Config['protocol']=this.app.config[`qq.${oneBot.uin}`].protocol as any
-        const qqBot=oneBot.internal=new Bot(oneBot,oneBot.uin,config)
-        await qqBot.init()
+    async startOneBot(oneBot:OneBot<Bot>){
+        await this.setOnline(oneBot.uin)
+        const selfInfo=await oneBot.internal.getSelfInfo()
+        oneBot.avatar=selfInfo.avatar
+        oneBot.nickname=selfInfo.username
+        const pkg=require(path.resolve(path.dirname(require.resolve('qq-group-bot')),'../package.json'))
+        oneBot.dependency=`qq-group-bot v${pkg.version}`
         const disposeArr:Function[]=[]
         const clean=()=>{
             while (disposeArr.length>0){
                 disposeArr.pop()()
             }
-            qqBot.stop()
+            oneBot.internal.stop()
         }
         const messageHandler=(event)=>{
             this.emit('message.receive',oneBot.uin,event)
         }
-        qqBot.on('message',messageHandler)
+        oneBot.internal.on('message',messageHandler)
         disposeArr.push(()=>{
-            qqBot.off('message',messageHandler)
+            oneBot.internal!.off('message',messageHandler)
         })
         return clean
+    }
+    async setOnline(uin: string) {
+        const oneBot=this.getOneBot<Bot>(uin)
+        await oneBot?.internal.start()
+        oneBot.status=OneBotStatus.Good
+    }
+    async setOffline(uin: string) {
+        const oneBot=this.getOneBot<Bot>(uin)
+        await oneBot?.internal.stop()
+        oneBot.status=OneBotStatus.Bad
+    }
+    createOneBot(uin: string, protocol: Bot.Config, versions: OneBot.Config[]): OneBot {
+        const oneBot = super.createOneBot<Bot>(uin, protocol, versions);
+        oneBot.internal = new Bot({
+            appid:oneBot.uin,
+            logLevel:this.app.config.log_level,
+            ...protocol
+        })
+        oneBot.status=OneBotStatus.Online
+        return oneBot
     }
     call(uin:string,version:string,method:string,args?:any[]):Promise<any>{
         const oneBot=this.oneBots.get(uin)
@@ -37,7 +59,7 @@ export default class QQAdapter extends Adapter<'qq'>{
             throw new Error(`未找到账号${uin}`)
         }
         if(typeof this[method]==='function') return this[method](uin,version,args)
-        if(typeof oneBot.internal[method]!=='function') throw UnsupportedMethodError
+        if(typeof oneBot.internal[method]!=='function') throw OneBot.UnsupportedMethodError
         try{
             return oneBot.internal[method](...(args||[]))
         }catch (e){
@@ -138,6 +160,7 @@ export default class QQAdapter extends Adapter<'qq'>{
             this.#disposes.set(oneBot.uin,await this.startOneBot(oneBot))
         }
         const {protocol}=this.config
+
         await super.start()
     }
     async stop(uin?:string){
@@ -169,6 +192,6 @@ declare module '@/adapter'{
 }
 export namespace QQAdapter{
     export interface Config extends Adapter.Config<'qq'>{
-        protocol:Omit<QQBot.Config, 'appid'>
+        protocol:Omit<Bot.Config, 'appid'>
     }
 }

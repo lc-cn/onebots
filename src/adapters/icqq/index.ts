@@ -1,13 +1,13 @@
-import {Adapter} from "@/adapter";
-import {App} from "@/server/app";
-import {Config as IcqqConfig} from "icqq/lib/client";
-import { Client, MessageElem } from "icqq";
+import { Adapter } from "@/adapter";
+import { App } from "@/server/app";
+import { Client, Config as IcqqConfig, MessageElem } from "icqq";
 import process from "process";
-import {rmSync} from "fs";
-import {OneBot} from "@/onebot";
+import { rmSync } from "fs";
+import { OneBot, OneBotStatus } from "@/onebot";
 import { deepClone, deepMerge } from "@/utils";
 import * as path from "path";
 import { shareMusic } from "@/service/shareMusicCustom";
+
 async function processMessages(this:Client,target_id:number,target_type:'group'|'private',list:OneBot.MessageElement<OneBot.Version>[]){
     let result:MessageElem[]=[]
     for(const item of list){
@@ -52,10 +52,27 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
     #disposes:Map<string,Function>=new Map<string, Function>()
     constructor(app: App, config: IcqqAdapter.Config) {
         super(app,'icqq', config);
+        this.icon=`https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png`
     }
+    async setOnline(uin: string) {
+        const oneBot=this.getOneBot<Client>(uin)
+        if(!oneBot) throw new Error('No one')
+        await oneBot.internal.login(parseInt(uin),this.#password)
+    }
+    async setOffline(uin: string) {
+        const oneBot=this.getOneBot<Client>(uin)
+        if(!oneBot) throw new Error('No one')
+        await oneBot.internal.logout()
+        oneBot.status=OneBotStatus.Bad
+    }
+
     createOneBot(uin: string, protocol: IcqqConfig, versions: OneBot.Config[]): OneBot {
-        const oneBot= super.createOneBot(uin, protocol, versions);
+        const oneBot= super.createOneBot<Client>(uin, protocol, versions);
         this.#password=this.app.config[`icqq.${uin}`].password;
+        oneBot.avatar=`https://q1.qlogo.cn/g?b=qq&s=100&nk=` + uin;
+        const pkg=require(path.resolve(path.dirname(require.resolve('icqq')),'../package.json'))
+        oneBot.dependency=`icqq v${pkg.version}`
+        oneBot.status=OneBotStatus.Online
         oneBot.internal = new Client(deepMerge(protocol, deepClone({
             ...defaultIcqqConfig,
             log_level:this.app.config.log_level
@@ -245,7 +262,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
         disposeArr.push(client.on('request',(event)=>{
             this.emit('request.receive',oneBot.uin,event)
         }))
-        await client.login(parseInt(oneBot.uin),this.#password)
+        this.setOnline(oneBot.uin)
         return new Promise<Function>((resolve,reject)=>{
             client.trap('system.login.error', function errorHandler(e) {
                 if (e.message.includes('密码错误')) {
@@ -254,6 +271,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                     })
                 } else {
                     _this.logger.error(e.message)
+                    oneBot.status=OneBotStatus.Bad
                     clean()
                 }
                 this.off('system.login.error', errorHandler)
@@ -265,10 +283,19 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                 }
             }
             client.trap('system.online', ()=>{
+                oneBot.nickname=client.nickname
+                oneBot.status=OneBotStatus.Good
+                this.app.ws.clients.forEach(client=>{
+                    client.send(JSON.stringify({
+                        event:'bot.change',
+                        data:oneBot.info
+                    }))
+                })
                 clearTimeout(timer)
                 resolve(clean)
             })
             const timer=setTimeout(()=>{
+                oneBot.status=OneBotStatus.Bad
                 clean()
                 reject('登录超时')
             },this.app.config.timeout*1000)

@@ -34,7 +34,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     wss?: WebSocketServer;
     wsr: Set<WebSocket> = new Set<WebSocket>();
 
-    constructor(public oneBot: OneBot<"V11">, public config: OneBot.Config<"V11">) {
+    constructor(public oneBot: OneBot, public config: OneBot.Config<"V11">) {
         super(oneBot.adapter, config);
         this.action = new Action();
         this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version);

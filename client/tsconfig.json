@@ -6,7 +6,7 @@
         "preserveValueImports": false,
         "noImplicitAny": false,
         "isolatedModules": false,
-        "types": ["node","global.d.ts"],
+        "types": ["node","global.d.ts","element-plus/global"],
         "paths": {
             "@/*": ["./src/*"]
         }

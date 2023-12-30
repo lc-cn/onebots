@@ -11,13 +11,15 @@ export class NotFoundError extends Error {
     message = '不支持的API'
 }
 
-export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitter {
+export class OneBot<T=any> extends EventEmitter {
     public config: OneBot.Config[]
     status: OneBotStatus
     avatar:string
+    nickname:string
+    dependency:string
     #logger:Logger
     protected password: string
-    internal?:any
+    internal:T
     instances: (V11 | V12)[]
     get app(){
         return this.adapter.app
@@ -27,6 +29,19 @@ export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitte
     }
     get logger(){
         return this.#logger ||= this.adapter.getLogger(this.uin)
+    }
+    get info(){
+        return {
+            uin:this.uin,
+            status:this.status,
+            platform:this.platform,
+            avatar:this.avatar,
+            nickname:this.nickname,
+            dependency:this.dependency,
+            urls:this.instances.map(ins=>{
+                return `/${this.platform}/${this.uin}/${ins.version}`
+            })
+        }
     }
     constructor(public adapter:Adapter, public readonly uin: string, version_configs: OneBot.Config[]) {
         super()
@@ -65,6 +80,7 @@ export class OneBot<V extends OneBot.Version=OneBot.Version> extends EventEmitte
         for (const instance of this.instances) {
             await instance.stop(force)
         }
+        this.emit('stop')
     }
     getGroupList<V extends OneBot.Version>(version:V):Promise<OneBot.GroupInfo<V>[]>{
         return this.adapter.getGroupList(this.uin,version)

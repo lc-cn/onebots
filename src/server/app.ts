@@ -42,7 +42,28 @@ export class App extends Koa {
     public ws:WsServer
     public router: Router
     static logFile=path.join(process.cwd(),'onebots.log')
-
+    get info(){
+        const pkg=require(path.resolve(__dirname,'../../package.json'))
+        const free_memory=os.freemem()
+        const total_memory=os.totalmem()
+        return {
+            system_platform:process.platform,
+            system_arch:process.arch,
+            system_cpus:os.cpus(),
+            system_version:os.version(),
+            system_uptime:os.uptime()*1000,
+            username:os.userInfo().username,
+            total_memory,
+            free_memory,
+            process_id:process.pid,
+            process_parent_id:process.ppid,
+            process_cwd:process.cwd(),
+            process_use_memory:process.memoryUsage.rss(),
+            node_version:process.version,
+            sdk_version:pkg.version,
+            uptime:process.uptime()*1000
+        }
+    }
     constructor(config: App.Config = {}) {
         super(config);
 
@@ -162,24 +183,13 @@ export class App extends Koa {
                 data:{
                     config:fs.readFileSync(App.configPath,'utf8'),
                     adapters:[...this.adapters.values()].map(adapter=>{
-                        return {
-                            platform:adapter.platform,
-                            config:adapter.config,
-                            bots:[...adapter.oneBots.values()].map(bot=>{
-                                return {
-                                    uin:bot.uin,
-                                    status:bot.status,
-                                    urls:bot.instances.map(ins=>{
-                                        return `/${adapter.platform}/${bot.uin}/${ins.version}`
-                                    })
-                                }
-                            })
-                        }
+                        return adapter.info
                     }),
+                    app:this.info,
                     logs:fs.existsSync(App.logFile) ? fs.readFileSync(App.logFile,'utf8'):''
                 }
             }))
-            client.on('message',(raw)=>{
+            client.on('message',async (raw)=>{
                 let payload:Dict={}
                 try{
                     payload=JSON.parse(raw.toString())
@@ -194,18 +204,28 @@ export class App extends Koa {
                     case 'system.reload':
                         const config=yaml.load(fs.readFileSync(App.configPath,'utf8'))
                         return this.reload(config)
+                    case 'bot.start':{
+                        const {platform,uin}=JSON.parse(payload.data)
+                        await this.adapters.get(platform)?.setOnline(uin)
+                        return client.send(JSON.stringify({
+                            event:'bot.change',
+                            data:this.adapters.get(platform).getOneBot(uin).info
+                        }))
+                    }
+                    case 'bot.stop':{
+                        const {platform,uin}=JSON.parse(payload.data)
+                        await this.adapters.get(platform)?.setOffline(uin)
+                        return client.send(JSON.stringify({
+                            event:'bot.change',
+                            data:this.adapters.get(platform).getOneBot(uin).info
+                        }))
+                    }
                 }
             })
         })
         this.router.get('/list', (ctx) => {
             ctx.body = this.oneBots.map(bot => {
-                return {
-                    uin: bot.uin,
-                    platform:bot.platform,
-                    status:bot.status,
-                    config: bot.config.map(c => protectedFields(c,'password','sign_api_addr', "access_token")),
-                    urls: bot.config.map(c => `/${bot.platform}/${c.version}/${bot.uin}`)
-                }
+                return bot.info
             })
         })
         this.router.post('/add', (ctx, next) => {
@@ -250,12 +270,14 @@ export class App extends Koa {
     async reload(config:App.Config){
         await this.stop()
         this.config=deepMerge(deepClone(App.defaultConfig), config)
-        this.start()
+        this.createOneBots()
+        await this.start()
     }
     async stop(){
         for(const [_,adapter] of this.adapters){
             await adapter.stop()
         }
+        this.adapters.clear()
         // this.ws.close()
         this.httpServer.close()
         this.emit('close')

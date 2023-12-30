@@ -7,18 +7,37 @@ import {Logger} from "log4js";
 export abstract class Adapter<T extends string=string> extends EventEmitter{
     oneBots:Map<string,OneBot>=new Map<string,OneBot>();
     #logger:Logger
+    icon:string
     protected constructor(public app:App,public platform:T, public config:Adapter.Configs[T]) {
         super();
     }
+
+    getOneBot<C=any>(uin:string){
+        return this.oneBots.get(uin) as OneBot<C>|undefined
+    }
     get logger(){
         return this.#logger||=this.app.getLogger(this.platform)
+    }
+    get info(){
+        return {
+            platform:this.platform,
+            config:this.config,
+            icon:this.icon,
+            bots:[...this.oneBots.values()].map(bot=>{
+                return bot.info
+            })
+        }
+    }
+    async setOnline(uin:string){
+    }
+    async setOffline(uin:string){
     }
     getLogger(uin:string,version?:string){
         if(!version) return this.app.getLogger(`${this.platform}-${uin}`)
         return this.app.getLogger(`${this.platform}-${version}(${uin})`)
     }
-    createOneBot(uin:string,protocol:Dict,versions:OneBot.Config[]):OneBot{
-        const oneBot= new OneBot(this,uin,versions)
+    createOneBot<T=any>(uin:string,protocol:Dict,versions:OneBot.Config[]):OneBot<T>{
+        const oneBot= new OneBot<T>(this,uin,versions)
         this.oneBots.set(uin,oneBot)
         return oneBot
     }
@@ -27,6 +46,7 @@ export abstract class Adapter<T extends string=string> extends EventEmitter{
             return uin?oneBot.uin===uin:true
         })
         for(const oneBot of startOneBots){
+            await this.setOnline(oneBot.uin)
             await oneBot.start()
         }
         this.app.emit('adapter.start',this.platform)
@@ -37,6 +57,7 @@ export abstract class Adapter<T extends string=string> extends EventEmitter{
         })
         for(const oneBot of stopOneBots){
             await oneBot.stop(force)
+            await this.setOffline(oneBot.uin)
         }
         this.app.emit('adapter.stop',this.platform)
     }

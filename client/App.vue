@@ -1,49 +1,143 @@
 <template>
-    <div class="OneBots">
-        <section class="config">
-            <h2>配置
-                <span class="buttons">
-                    <button @click="reloadConfig">重载配置</button>
-                    <button @click="saveConfig">保存</button>
-                </span>
-            </h2>
+    <el-row class="OneBots">
+        <el-col :xs="24" :sm="10" :md="10" :xl="8" :lg="8" class="config">
             <textarea v-model="config"></textarea>
-        </section>
-        <section class="adapters">
-            <h2>详情</h2>
-            <ul>
-                <li v-for="adapter of adapters" :key="adapter.platform">
-                    <p>所属平台：{{ adapter.platform }}</p>
-                    <ul>
-                        <li v-for="bot of adapter.bots" :key="bot.uin">
-                            <p>账号：{{ bot.uin }}</p>
-                            <p>状态：{{ bot.status }}</p>
-                            <p>URL：{{ bot.urls }}</p>
-                        </li>
-                    </ul>
-                </li>
-            </ul>
-        </section>
-        <section class="logs">
-            <h2>日志</h2>
+            <p>
+                <el-button @click="reloadConfig" type="success">重载配置</el-button>
+                <el-button @click="saveConfig" type="primary">保存</el-button>
+            </p>
+        </el-col>
+        <el-col :xs="24" :sm="6" :md="6" :xl="6" :lg="6" class="bots">
+            <template v-for="adapter of adapters">
+                <el-card :key="`${bot.platform}:${bot.uin}`" v-for="bot of adapter.bots">
+                    <div class="card-header">
+                        <el-image
+                            style="width: 30px;height: 30px"
+                            :alt="bot.nickname" fit="contain" :src="bot.avatar"/>
+                        <span>{{bot.nickname}}({{bot.uin}})</span>
+                        <el-button type="primary" @click="setOnline(adapter.platform,bot.uin)" size="small" v-if="bot.status==='bad'">上线</el-button>
+                        <el-button type="danger" @click="setOffline(adapter.platform,bot.uin)" size="small" v-if="bot.status==='good'">下线</el-button>
+                    </div>
+                    <p>状态：
+                        <el-tag type="success" v-if="bot.status==='good'">在线</el-tag>
+                        <el-tag v-else-if="bot.status==='online'" type="warning">上线中</el-tag>
+                        <el-tag type="danger" v-else-if="bot.status==='bad'">离线</el-tag>
+                    </p>
+                    <p>所属平台：
+                        <el-image
+                            style="width: 30px;height: 30px"
+                            :alt="adapter.platform" fit="contain" :src="adapter.icon"/>
+                        {{adapter.platform}}
+                    </p>
+                    <p>依赖：{{bot.dependency}}</p>
+                    <p v-for="url in bot.urls" :key="url">
+                        <el-link :href="href(url)" type="primary">{{url}}</el-link>
+                    </p>
+                </el-card>
+            </template>
+        </el-col>
+        <el-col :xs="24" :sm="8" :md="8" :xl="10" :lg="10" class="logs">
+            <el-descriptions title="系统信息">
+                <el-descriptions-item label="用户名">
+                    {{systemInfo.username}}
+                </el-descriptions-item>
+                <el-descriptions-item label="内核">
+                    {{systemInfo.system_platform}}
+                </el-descriptions-item>
+                <el-descriptions-item label="架构">
+                    {{systemInfo.system_arch}}
+                </el-descriptions-item>
+                <el-descriptions-item label="开机时长">
+                    {{formatTime(systemInfo.system_uptime)}}
+                </el-descriptions-item>
+                <el-descriptions-item label="内存">
+                    {{ formatSize(systemInfo.free_memory)}}/{{formatSize(systemInfo.total_memory)}}
+                </el-descriptions-item>
+                <el-descriptions-item label="Node版本">
+                    {{systemInfo.node_version}}
+                </el-descriptions-item>
+                <el-descriptions-item label="SDK">
+                    onebots v{{systemInfo.sdk_version}}
+                </el-descriptions-item>
+                <el-descriptions-item label="运行目录">
+                    {{systemInfo.process_cwd}}
+                </el-descriptions-item>
+                <el-descriptions-item label="PID">
+                    {{systemInfo.process_id}}
+                </el-descriptions-item>
+                <el-descriptions-item label="PPID">
+                    {{systemInfo.process_parent_id}}
+                </el-descriptions-item>
+                <el-descriptions-item label="运行时长">
+                    {{formatTime(systemInfo.uptime)}}
+                </el-descriptions-item>
+                <el-descriptions-item label="占用">
+                    {{formatSize(systemInfo.process_use_memory)}}
+                </el-descriptions-item>
+                {{systemInfo}}
+            </el-descriptions>
             <pre>{{logs}}</pre>
             <div class="input-wrapper">
                 <span class="text">{{inputData}}</span>
                 <input v-model="inputData" @keyup.enter="submitInput">
             </div>
-        </section>
-    </div>
+        </el-col>
+    </el-row>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from "vue";
-import { AdapterInfo } from "./types";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { AdapterInfo, SystemInfo } from "./types";
+import { formatSize, formatTime } from "./utils";
 
 const ws = ref<WebSocket>();
 const config = ref<string>('');
 const adapters = ref<AdapterInfo[]>([]);
 const logs = ref<string>('');
+const systemInfo=ref<SystemInfo>({
+    free_memory:0,
+    node_version:'',
+    process_cwd:'',
+    process_id:0,
+    process_parent_id:0,
+    process_use_memory:0,
+    sdk_version:'',
+    uptime:0,
+    system_arch:'',
+    system_cpus:[],
+    system_platform:'',
+    system_uptime:0,
+    system_version:'',
+    total_memory:0,
+    username:'',
+})
+const href=(url:string)=>`${location.protocol}//${location.hostname}:${localStorage.getItem("OneBots:serverPort")}${url}`
 const inputData = ref("");
+const timer=ref()
+const startTimer=()=>{
+    timer.value=setInterval(()=>{
+        systemInfo.value.uptime+=1000
+        systemInfo.value.system_uptime+=1000
+    },1000)
+}
+const setOnline=(platform:string,uin:string)=>{
+    ws.value.send(JSON.stringify({
+        action:'bot.start',
+        data:JSON.stringify({
+            platform,
+            uin
+        })
+    }))
+}
+const setOffline=(platform:string,uin:string)=>{
+    ws.value.send(JSON.stringify({
+        action:'bot.stop',
+        data:JSON.stringify({
+            platform,
+            uin
+        })
+    }))
+}
 const scrollToBottom=()=>{
     nextTick(() => {
         const logDom = document.querySelector(".OneBots>.logs>pre");
@@ -74,11 +168,19 @@ const saveConfig=()=>{
 const dispatch = (event: string, data: any) => {
     switch (event) {
         case "system.sync":
-            console.log(data);
             config.value = data.config;
             adapters.value = data.adapters;
+            systemInfo.value=data.app
+            startTimer()
             initLog(data.logs);
             break;
+        case 'bot.change':{
+            const adapter=adapters.value.find(adapter => adapter.platform===data.platform)
+            if(!adapter) return
+            const botIdx=adapter.bots.findIndex(bot=>bot.uin===data.uin)
+            if(botIdx===-1) return
+            adapter.bots[botIdx].status=data.status
+        }
         case "system.log":
             initLog(data);
     }
@@ -115,64 +217,64 @@ const submitInput = () => {
     inputData.value=''
 };
 onMounted(init);
+onUnmounted(()=>{
+    clearInterval(timer?.value)
+})
 </script>
 
 <style lang="scss" scoped>
 .OneBots {
     display: flex;
-
-    section {
-        height: 95vh;
+    width: 100%;
+    &>.el-col {
         overflow: auto;
-
+        padding: 8px;
         &.config {
-            min-width: 400px;
             display: flex;
             flex-direction: column;
-            h2{
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding-right: 20px;
-
-                .buttons{
-                    display: flex;
-                    gap:4px;
-                    button{
-                        background-color: #ffffff;
-                        outline: none;
-                        cursor: pointer;
-                        border: 1px solid #e1e1e1;
-                        border-radius: 4px;
-                        color: #1a1a18;
-                        font-size: 14px;
-                        font-weight: 500;
-                        padding:2px 10px;
-                    }
-                }
+            align-items: flex-end;
+            .el-button{
+                margin-top: 20px;
             }
             textarea{
                 flex: auto;
+                max-height: 800px;
+                min-height: 600px;
+                width: 100%;
                 resize: none;
             }
         }
 
-        &.adapters {
-            min-width: 300px;
+        &.bots {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 100vh;
+            overflow: auto;
+            .el-card{
+                .card-header{
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }
+            }
         }
 
         &.logs {
-            flex: auto;
             display: flex;
             flex-direction: column;
+            max-height: 100vh;
+            .el-descriptions{
+                height: 40vh;
+                margin-bottom: 8px;
+            }
             pre {
                 box-sizing: border-box;
                 margin: 0;
                 word-break: break-all;
                 white-space: pre-wrap;
-                padding: 6px;
                 list-style: none;
-                flex: auto;
+                height: calc(60vh - 30px);
                 overflow: auto;
                 background-color: black;
                 color: white;
@@ -223,12 +325,6 @@ onMounted(init);
             }
         }
 
-        h2 {
-            position: sticky;
-            margin-block-start: 0;
-            background-color: aliceblue;
-            top: 0;
-        }
     }
 }
 
