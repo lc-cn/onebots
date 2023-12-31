@@ -1,5 +1,5 @@
 <div align="center">
-    <h1>使用ts实现的oneBot应用启动器，支持icqq和qq官方机器人</h1>
+    <h1>使用ts实现的oneBot应用启动器，支持icqq、qq官方机器人以及钉钉机器人</h1>
     <p>
 
 [![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots) [![Release and Publish](https://github.com/icqqjs/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/icqqjs/onebots/actions/workflows/release.yml) [![dm](https://shields.io/npm/dm/onebots)](https://www.npmjs.com/package/onebots) [![oneBot V11](https://img.shields.io/badge/OneBot-11-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://onebot.dev/)
@@ -41,10 +41,13 @@ onebots
 npm init -y
 ```
 
-## 2. 安装onebots和icqq
+## 2. 安装onebots以及对应适配器的依赖
 
 ```shell
-npm install onebots icqq
+npm install onebots
+npm install icqq # 如需使用icqq适配器，请务必安装
+npm install qq-group-bot # 如需使用qq官方机器人适配器，请务必安装
+npm install node-dd-bot # 如需使用钉钉机器人适配器，请务必安装
 npm install sqlite3 # 如果你需要使用 OneBot11 请自行安装该依赖
 ```
 
@@ -124,7 +127,15 @@ qq.123456789: # `${适配器名称}:${appId}`
       - 'INTERACTION' # 互动事件
       - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件，私域机器人请注释
   # 。。。其他配置项参见上方对应oneBot版本的通用配置
-
+  
+dingtalk.abcedfg: # `${适配器名称}:${clientId}`
+  versions:
+    - version: V11
+    - version: V12
+  protocol:
+    clientSecret: '' # 钉钉机器人秘钥 必填
+    username: '钉钉机器人' #钉钉后台配置的机器人名称 不填则显示'钉钉机器人'
+    avatar: '' # 机器人头像 不填则显示钉钉logo
 ```
 
 # 配置解释

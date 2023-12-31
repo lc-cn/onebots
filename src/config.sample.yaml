@@ -52,3 +52,11 @@ qq.a: # `${适配器名称}:${账号}`
       - 'INTERACTION' # 互动事件
       - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件，私域机器人请注释
   # 。。。其他配置项参见上方对应oneBot版本的通用配置
+dingtalk.abcedfg: # `${适配器名称}:${clientId}`
+  versions:
+    - version: V11
+    - version: V12
+  protocol:
+    clientSecret: '' # 钉钉机器人秘钥 必填
+    username: '钉钉机器人' #钉钉后台配置的机器人名称 不填则显示'钉钉机器人'
+    avatar: '' # 机器人头像 不填则显示钉钉logo
