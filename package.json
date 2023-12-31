@@ -12,7 +12,7 @@
   "scripts": {
     "start": "node .",
     "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq -r dingtalk",
     "pub": "npm publish --access public",
     "lint": "prettier --check ./**/*.{ts,js}",
     "lint:fix": "prettier --write ./**/*.{ts,js,md}",
@@ -69,7 +69,8 @@
   ],
   "peerDependencies": {
     "icqq": "latest",
-    "qq-group-bot": "^1.0.7"
+    "node-dd-bot": "latest",
+    "qq-group-bot": "latest"
   },
   "dependencies": {
     "@koa/router": "^10.1.1",
