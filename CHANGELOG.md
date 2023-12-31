@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.38](https://github.com/lc-cn/onebots/compare/v0.4.37...v0.4.38) (2023-12-31)
+
+
+### Bug Fixes
+
+* 增加钉钉适配器 ([e6b2f32](https://github.com/lc-cn/onebots/commit/e6b2f320c7ee03ec59a0ecceb65cc4826c35f3d9))
+* 更新文档 ([86bb4f7](https://github.com/lc-cn/onebots/commit/86bb4f7d7c31fcce1d4c7c24e32eb86d4f924bfe))
+
 ## [0.4.37](https://github.com/lc-cn/onebots/compare/v0.4.36...v0.4.37) (2023-12-30)
 
 
