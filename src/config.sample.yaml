@@ -60,3 +60,9 @@ dingtalk.abcedfg: # `${适配器名称}:${clientId}`
     clientSecret: '' # 钉钉机器人秘钥 必填
     username: '钉钉机器人' #钉钉后台配置的机器人名称 不填则显示'钉钉机器人'
     avatar: '' # 机器人头像 不填则显示钉钉logo
+
+wechat.bot1: # `${适配器名称}:${机器人唯一标识}`
+  versions:
+    - version: V11
+    - version: V12
+  protocol: {}

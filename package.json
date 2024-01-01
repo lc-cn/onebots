@@ -12,11 +12,11 @@
   "scripts": {
     "start": "node .",
     "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq -r dingtalk",
+    "dev": "ts-node -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq -r dingtalk -r wechat",
     "pub": "npm publish --access public",
     "lint": "prettier --check ./**/*.{ts,js}",
     "lint:fix": "prettier --write ./**/*.{ts,js,md}",
-    "test": "ts-node-dev -r tsconfig-paths/register ./src/test.ts",
+    "test": "ts-node -r tsconfig-paths/register ./src/test.ts",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
@@ -69,6 +69,7 @@
   ],
   "peerDependencies": {
     "icqq": "latest",
+    "lib-wechat": "latest",
     "node-dd-bot": "latest",
     "qq-group-bot": "latest"
   },

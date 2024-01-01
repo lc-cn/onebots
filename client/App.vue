@@ -252,10 +252,18 @@ onUnmounted(()=>{
             max-height: 100vh;
             overflow: auto;
             .el-card{
+                min-height: 250px;
                 .card-header{
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
+                }
+                p{
+                    display: flex;
+                    align-items: center;
+                    gap:2px;
+                    margin-block-start: 10px;
+                    margin-block-end: 10px;
                 }
             }
         }

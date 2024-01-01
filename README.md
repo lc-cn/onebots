@@ -1,5 +1,5 @@
 <div align="center">
-    <h1>使用ts实现的oneBot应用启动器，支持icqq、qq官方机器人以及钉钉机器人</h1>
+    <h1>使用ts实现的oneBot应用启动器，支持icqq、qq官方机器人、微信以及钉钉机器人</h1>
     <p>
 
 [![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots) [![Release and Publish](https://github.com/icqqjs/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/icqqjs/onebots/actions/workflows/release.yml) [![dm](https://shields.io/npm/dm/onebots)](https://www.npmjs.com/package/onebots) [![oneBot V11](https://img.shields.io/badge/OneBot-11-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://onebot.dev/)
@@ -46,16 +46,19 @@ npm init -y
 ```shell
 npm install onebots
 npm install icqq # 如需使用icqq适配器，请务必安装
+npm install lib-wechat # 如需使用微信适配器，请务必安装
 npm install qq-group-bot # 如需使用qq官方机器人适配器，请务必安装
 npm install node-dd-bot # 如需使用钉钉机器人适配器，请务必安装
-npm install sqlite3 # 如果你需要使用 OneBot11 请自行安装该依赖
 ```
 
 ## 3. 执行如下命令生成配置文件
 
 ```shell
 npx onebots -r icqq #注册icqq适配器并启动onebots
+npx onebots -r wechat #注册微信适配器并启动onebots
 npx onebots -r qq #注册qq官方适配器并启动onebots
+npx onebots -r dingtalk #注册钉钉适配器并启动onebots
+# 你也可以同时注册多个适配器，多次使用-r即可，例如 npx onebots -r qq -r icqq -r wechat
 ```
 
 ## 4. 更改生成的默认配置文件成你想要的配置配置后再次运行上面的指令，启动项目
@@ -136,6 +139,12 @@ dingtalk.abcedfg: # `${适配器名称}:${clientId}`
     clientSecret: '' # 钉钉机器人秘钥 必填
     username: '钉钉机器人' #钉钉后台配置的机器人名称 不填则显示'钉钉机器人'
     avatar: '' # 机器人头像 不填则显示钉钉logo
+
+wechat.bot1: # `${适配器名称}:${机器人唯一标识}`
+  versions:
+    - version: V11
+    - version: V12
+  protocol: {}
 ```
 
 # 配置解释
