@@ -169,11 +169,11 @@ export default class DingtalkAdapter extends Adapter<'dingtalk'>{
             [version==='V12'?'type':'post_type']: event,
             version: version,
             self:{
-                platform:'qq',
+                platform:'dingtalk',
                 user_id: data.self_id
             },
             detail_type: data.message_type||data.notice_type||data.request_type,
-            platform: 'qq',
+            platform: 'dingtalk',
             time:data.timestamp,
             ...data,
         }

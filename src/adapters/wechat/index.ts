@@ -161,15 +161,20 @@ export default class WechatAdapter extends Adapter<'wechat'>{
             [version==='V12'?'type':'post_type']: event,
             version: version,
             self:{
-                platform:'qq',
+                platform:'wechat',
                 user_id: data.self_id
             },
             detail_type: data.message_type||data.notice_type||data.request_type,
-            platform: 'qq',
+            platform: 'wechat',
+            group:data.group?.info,
+            member:data.member?.info,
+            friend:data.friend?.info,
             time:data.timestamp,
             ...data,
         }
         delete result.bot
+        delete result.c
+        delete result.parser
         return result
     }
     async start(uin:string){
