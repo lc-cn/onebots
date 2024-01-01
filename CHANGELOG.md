@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.39](https://github.com/lc-cn/onebots/compare/v0.4.38...v0.4.39) (2024-01-01)
+
+
+### Bug Fixes
+
+* 微信支持 ([7bcbb9b](https://github.com/lc-cn/onebots/commit/7bcbb9b9f38d731912e66ab0d7846efc2bc92948))
+
 ## [0.4.38](https://github.com/lc-cn/onebots/compare/v0.4.37...v0.4.38) (2023-12-31)
 
 
