@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.40](https://github.com/lc-cn/onebots/compare/v0.4.39...v0.4.40) (2024-01-01)
+
+
+### Bug Fixes
+
+* 循环依赖 ([63ff05b](https://github.com/lc-cn/onebots/commit/63ff05b3de46370ff09e7ca9201e4118f792e8b3))
+
 ## [0.4.39](https://github.com/lc-cn/onebots/compare/v0.4.38...v0.4.39) (2024-01-01)
 
 
