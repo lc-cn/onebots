@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.43](https://github.com/lc-cn/onebots/compare/v0.4.42...v0.4.43) (2024-01-02)
+
+
+### Bug Fixes
+
+* 控制台输出日志过长导致卡顿（仅发送最后100条） ([8b43038](https://github.com/lc-cn/onebots/commit/8b4303838fd20124d6fc2b5365facce173d084b6))
+
 ## [0.4.42](https://github.com/lc-cn/onebots/compare/v0.4.41...v0.4.42) (2024-01-02)
 
 
