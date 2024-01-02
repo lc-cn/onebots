@@ -1,8 +1,25 @@
 import * as crypto from "crypto";
 import { Dict } from "@zhinjs/shared";
+import * as fs from "fs";
+import * as readline from "readline";
 const packageJson = require('../package.json')
 export const version = packageJson.version
-
+export function readLine(maxLen:number,...params:Parameters<typeof fs.createReadStream>){
+    return new Promise<string[]>(resolve => {
+        const result:string[]=[]
+        const rl=readline.createInterface({
+            input:fs.createReadStream(...params),
+            crlfDelay:Infinity
+        })
+        rl.on('line',(line)=>{
+            result.push(line)
+            if(result.length>maxLen) result.shift()
+        })
+        rl.on('close',()=>{
+            resolve(result)
+        })
+    })
+}
 // 合并对象/数组
 export function deepMerge(base, ...from) {
     if (base === null || base === undefined) base = from.shift()

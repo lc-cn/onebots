@@ -9,7 +9,7 @@ import yaml from 'js-yaml'
 import KoaBodyParser from "koa-bodyparser";
 import basicAuth from 'koa-basic-auth'
 
-import {deepMerge, deepClone, protectedFields, Class} from "@/utils";
+import { deepMerge, deepClone, protectedFields, Class, readLine } from "@/utils";
 import { Router, WsServer } from "./router";
 import {readFileSync} from "fs";
 import {V11} from "@/service/V11";
@@ -177,7 +177,7 @@ export class App extends Koa {
         process.on('disconnect',()=>{
             fs.unwatchFile(App.logFile,fileListener)
         })
-        this.ws.on('connection',(client)=>{
+        this.ws.on('connection',async (client)=>{
             client.send(JSON.stringify({
                 event:'system.sync',
                 data:{
@@ -186,7 +186,7 @@ export class App extends Koa {
                         return adapter.info
                     }),
                     app:this.info,
-                    logs:fs.existsSync(App.logFile) ? fs.readFileSync(App.logFile,'utf8'):''
+                    logs:fs.existsSync(App.logFile) ? await readLine(100,App.logFile,'utf8'):''
                 }
             }))
             client.on('message',async (raw)=>{

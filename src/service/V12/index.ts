@@ -1,4 +1,4 @@
-import { EventMap} from "icqq";
+import { EventMap } from "icqq";
 import {version} from "@/utils";
 import {join} from 'path'
 import {Config} from './config'
@@ -363,9 +363,9 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             id: uuid(),
             impl: 'onebots',
             version: 12,
-            platform: 'qq',
+            platform: this.oneBot.platform,
             self: {
-                platform: 'qq',
+                platform: this.oneBot.platform,
                 user_id: `${this.oneBot.uin}`
             },
         } as V12.Payload<any>
@@ -375,7 +375,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         }),{
             self_id: `${this.oneBot.uin}`,
             self: {
-                platform: 'qq',
+                platform: this.oneBot.platform,
                 user_id: `${this.oneBot.uin}`
             },
         })
@@ -566,7 +566,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         const headers: http.OutgoingHttpHeaders = {
             "X-Self-ID": String(this.oneBot.uin),
             "X-Client-Role": "Universal",
-            "User-Agent": "OneBot/12 (qq) Node-onebots/" + version,
+            "User-Agent": `OneBot/12 (${this.oneBot.platform}) Node-onebots/V12`,
             "Sec-WebSocket-Protocol": "12.onebots.v" + version
         }
         if (config.access_token)
