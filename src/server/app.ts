@@ -166,7 +166,7 @@ export class App extends Koa {
             if(e==='change') this.ws.clients.forEach(client=>{
                 client.send(JSON.stringify({
                     event:'system.log',
-                    data:fs.readFileSync(App.logFile,'utf8')
+                    data:readLine(1,App.logFile)
                 }))
             })
         }
@@ -186,7 +186,7 @@ export class App extends Koa {
                         return adapter.info
                     }),
                     app:this.info,
-                    logs:fs.existsSync(App.logFile) ? await readLine(100,App.logFile,'utf8'):''
+                    logs:fs.existsSync(App.logFile) ? await readLine(100,App.logFile):''
                 }
             }))
             client.on('message',async (raw)=>{
