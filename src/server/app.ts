@@ -163,10 +163,11 @@ export class App extends Koa {
     async start() {
         this.httpServer.listen(this.config.port)
         const fileListener=(e)=>{
-            if(e==='change') this.ws.clients.forEach(client=>{
+            if(e==='change') this.ws.clients.forEach(async (client)=>{
+
                 client.send(JSON.stringify({
                     event:'system.log',
-                    data:readLine(1,App.logFile)
+                    data:await readLine(1,App.logFile)
                 }))
             })
         }
