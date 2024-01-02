@@ -5,7 +5,7 @@ import * as readline from "readline";
 const packageJson = require('../package.json')
 export const version = packageJson.version
 export function readLine(maxLen:number,...params:Parameters<typeof fs.createReadStream>){
-    return new Promise<string>(resolve => {
+    return new Promise<string>((resolve,reject) => {
         const result:string[]=[]
         const rl=readline.createInterface({
             input:fs.createReadStream(...params),
@@ -18,6 +18,7 @@ export function readLine(maxLen:number,...params:Parameters<typeof fs.createRead
         rl.on('close',()=>{
             resolve(result.join('\n'))
         })
+        rl.on('error',reject)
     })
 }
 // 合并对象/数组

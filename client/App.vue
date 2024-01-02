@@ -153,6 +153,10 @@ const initLog = (receive: string) => {
     logs.value = receive;
     scrollToBottom()
 };
+const addLog=(line:string)=>{
+    logs.value+=line+"\n"
+    scrollToBottom()
+}
 const reloadConfig=()=>{
     ws.value.send(JSON.stringify({
         action:'system.reload',
@@ -182,7 +186,7 @@ const dispatch = (event: string, data: any) => {
             adapter.bots[botIdx].status=data.status
         }
         case "system.log":
-            initLog(data);
+            addLog(data);
     }
 };
 const init = () => {
