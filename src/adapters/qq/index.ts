@@ -1,7 +1,7 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { Bot, Sendable } from "qq-group-bot";
+import { Bot, Sendable,Quotable } from "qq-group-bot";
 import * as path from "path";
 
 export default class QQAdapter extends Adapter<'qq'>{
@@ -53,6 +53,36 @@ export default class QQAdapter extends Adapter<'qq'>{
         oneBot.status=OneBotStatus.Online
         return oneBot
     }
+    async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
+        const [group_id,message,source]=args
+        const bot=this.getOneBot<Bot>(uin).internal
+        let quote:Quotable|undefined
+        if(source) quote={id:source}
+        return bot.sendGroupMessage(group_id,message.map(({type,data})=>({type,...data})),quote)
+    }
+    async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
+        const [user_id,message,source]=args
+        const bot=this.getOneBot<Bot>(uin).internal
+        let quote:Quotable|undefined
+        if(source) quote={id:source}
+        return bot.sendPrivateMessage(user_id,message.map(({type,data})=>({type,...data})),quote)
+    }
+
+    async sendGuildMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
+        const [channel_id,message,source]=args
+        const bot=this.getOneBot<Bot>(uin).internal
+        let quote:Quotable|undefined
+        if(source) quote={id:source}
+        return bot.sendGuildMessage(channel_id,message.map(({type,data})=>({type,...data})),quote)
+    }
+    async sendDirectMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
+        const [guild_id,message,source]=args
+        const bot=this.getOneBot<Bot>(uin).internal
+        let quote:Quotable|undefined
+        if(source) quote={id:source}
+        return bot.sendDirectMessage(guild_id,message.map(({type,data})=>({type,...data})),quote)
+    }
+
     call(uin:string,version:string,method:string,args?:any[]):Promise<any>{
         const oneBot=this.oneBots.get(uin)
         if(!oneBot){

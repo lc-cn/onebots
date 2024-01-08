@@ -24,6 +24,12 @@ export class OneBot<T=any> extends EventEmitter {
     get app(){
         return this.adapter.app
     }
+    get V11(){
+        return this.instances.find(i=>i.version==='V11') as V11
+    }
+    get V12(){
+        return this.instances.find(i=>i.version==='V12') as V12
+    }
     get platform(){
         return this.adapter.platform
     }

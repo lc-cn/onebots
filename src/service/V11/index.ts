@@ -49,7 +49,13 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             this.logger.info("");
         });
     }
-
+    transformToInt(path:string,value:string):number{
+        const obj=this.db.get<Dict<number>>(path,{})
+        if(obj[value]) return obj[value]
+        const int=randomInt(1000,Number.MAX_SAFE_INTEGER)
+        this.db.set(`${path}.${value}`,int)
+        return int
+    }
     start() {
         if (this.config.use_http) this.startHttp();
         if (this.config.use_ws) this.startWs();
@@ -556,8 +562,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             if (sendMsgTypes.includes(params.message_type)) action = "send_" + params.message_type + "_msg";
             else if (params.user_id) action = "send_private_msg";
             else if (params.group_id) action = "send_group_msg";
-            else if (params.discuss_id) action = "send_discuss_msg";
-            else if (params.guild_id) action = params.channel_id === "direct" ? "send_direct_msg" : "send_group_msg";
             else throw new Error("required message_type or input (user_id/group_id)");
         }
 

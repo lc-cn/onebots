@@ -1,7 +1,7 @@
 import {V12} from "../index";
 
 export class FriendAction {
-    getUserInfo(this: V12, user_id: number) {
+    getUserInfo(this: V12, user_id: number):Promise<V12.MessageRet> {
         return this.adapter.call(this.oneBot.uin,'V12','getUserInfo',[user_id])
     }
 
@@ -12,10 +12,10 @@ export class FriendAction {
     /**
      * 发送私聊消息
      * @param user_id {number} 用户id
-     * @param message {import('onebots/lib/service/v12').Sendable} 消息
-     * @param source {import('onebots/lib/service/v12').SegmentElem<'reply'>} 引用内容
+     * @param message {V12.Sendable} 消息
+     * @param source {string} 引用id
      */
-    async sendPrivateMsg(this: V12, user_id: number, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
+    async sendPrivateMsg(this: V12, user_id: number, message: V12.Sendable,source?:string) {
         return this.adapter.call(this.oneBot.uin,'V12','sendPrivateMessage', [user_id, message, source])
     }
     /**

@@ -104,20 +104,17 @@ export class GuildAction {
 
     /**
      * 发送频道消息
-     * @param guild_id {string} 频道id
-     * @param channel_id {string} 子频道id
-     * @param message {import('icqq/lib/service').Sendable} 消息
+     * @param channel_id {string} 通道id
+     * @param message {V12.Sendable} 消息
+     * @param source
      */
-    async sendGuildMsg(this: V12,guild_id: string, channel_id: string, message: V12.Sendable) {
-        if(channel_id==='direct'){
-            return this.adapter.call(this.oneBot.uin, 'V12', 'sendDirectMessage', [guild_id,message])
-        }
-        return this.adapter.call(this.oneBot.uin, 'V12', 'sendGuildMessage', [channel_id, message])
+    async sendGuildMsg(this: V12,channel_id:string, message: V12.Sendable,source?:string):Promise<V12.MessageRet> {
+        return this.adapter.call(this.oneBot.uin, 'V12', 'sendGuildMessage', [channel_id, message,source])
     }
     async createDirectSession(this:V12, guild_id:string,user_id:string){
         return this.adapter.call(this.oneBot.uin, 'V12', 'createDirectSession', [guild_id, user_id])
     }
-    async sendDirectMsg(this:V12,guild_id:string,message:V12.Sendable){
-        return this.adapter.call(this.oneBot.uin, 'V12', 'sendDirectMessage', [guild_id, message])
+    async sendDirectMsg(this:V12,guild_id:string,message:V12.Sendable,source?:string):Promise<V12.MessageRet>{
+        return this.adapter.call(this.oneBot.uin, 'V12', 'sendDirectMessage', [guild_id, message,source])
     }
 }

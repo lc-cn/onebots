@@ -4,10 +4,10 @@ export class GroupAction {
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {import('onebots/lib/service/v12').Sendable} 消息
-     * @param source {import('onebots/lib/service/v12').SegmentElem<'reply'>} 引用内容
+     * @param message {V12.Sendable} 消息
+     * @param source {source} 引用消息id
      */
-    async sendGroupMsg(this: V12, group_id: number, message: V12.Sendable,source?:V12.SegmentElem<'reply'>) {
+    async sendGroupMsg(this: V12, group_id: number, message: V12.Sendable,source?:string):Promise<V12.MessageRet> {
         return this.adapter.call(this.oneBot.uin,'V12','sendGroupMessage', [group_id, message, source])
     }
 

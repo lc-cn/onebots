@@ -178,7 +178,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             timeout: config.timeout || this.config.request_timeout,
             headers: {
                 "Content-Type": "application/json",
-                "User-Agent": "OneBot/12 (qq) Node-onebots/" + version,
+                "User-Agent": "OneBot/12 Node-onebots/" + 12,
                 "X-OneBot-Version": 12,
                 "X-Impl": "onebots",
 
@@ -390,7 +390,7 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
         if (is_async)
             action = action.replace("_async", "")
         if (action === 'send_message') {
-            if (["private", "group", "discuss", 'channel'].includes(params.detail_type)) {
+            if (["private", "group", "discuss",'direct','guild'].includes(params.detail_type)) {
                 action = "send_" + params.detail_type + "_msg"
             } else if (params.user_id)
                 action = "send_private_Msg"
@@ -398,9 +398,11 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
                 action = "send_group_msg"
             else if (params.discuss_id)
                 action = "send_discuss_msg"
-            else if (params.channel_id && params.guild_id)
+            else if (params.channel_id)
                 action = "send_guild_msg"
-            else throw new Error('required detail_type or input (user_id/group_id/(guild_id and channel_id))')
+                else if (params.guild_id)
+                    action='send_direct_msg'
+            else throw new Error('required detail_type or input (user_id/group_id/guild_id/channel_id)')
         }
         const method = toHump(action) as keyof Action
         if (Reflect.has(this.action, method)) {

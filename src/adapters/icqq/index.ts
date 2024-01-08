@@ -1,6 +1,6 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
-import { Client, Config as IcqqConfig, MessageElem } from "icqq";
+import { Client, Config as IcqqConfig, MessageElem, Quotable } from "icqq";
 import process from "process";
 import { rmSync } from "fs";
 import { OneBot, OneBotStatus } from "@/onebot";
@@ -85,22 +85,43 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
             type: event,
             version: version,
             self:{
-                platform:'icqq',
+                platform:'qq',
                 user_id: data.self_id
             },
             detail_type: data.message_type||data.notice_type||data.request_type,
-            platform: 'icqq',
+            platform: 'qq',
             ...data,
         }
     }
-    async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
-        const [user_id,message]=args
-
-        return this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,await processMessages.call(this,user_id,'private',message))
+    async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string?]): Promise<OneBot.MessageRet<V>> {
+        const [user_id,message,source]=args
+        const client:Client=this.oneBots.get(uin)?.internal
+        let quote:Quotable|undefined
+        if(source) quote=await client.getMsg(source)
+        const result=await client.sendPrivateMsg(parseInt(user_id),await processMessages.call(this,user_id,'private',message),quote)
+        return {
+            message_id:version==='V11'?this.oneBots.get(uin).V11.transformToInt('message_id',result.message_id):result.message_id
+        } as OneBot.MessageRet<V>
     }
-    async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
-        const [group_id,message]=args
-        return this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,await processMessages.call(this,group_id,'group',message))
+    async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string?]): Promise<OneBot.MessageRet<V>> {
+        const [group_id,message,source]=args
+        const client:Client=this.oneBots.get(uin)?.internal
+        let quote:Quotable|undefined
+        if(source) quote=await client.getMsg(source)
+        const result=await client.sendGroupMsg(parseInt(group_id),await processMessages.call(this,group_id,'group',message),quote)
+        return {
+            message_id:version==='V11'?this.oneBots.get(uin).V11.transformToInt('message_id',result.message_id):result.message_id
+        } as OneBot.MessageRet<V>
+    }
+    async sendGuildMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string?]): Promise<OneBot.MessageRet<V>> {
+        const [target_id,message,source]=args
+        const client:Client=this.oneBots.get(uin)?.internal
+        const [guild_id,channel_id]=target_id.split(':')
+        const result=await client.sendGuildMsg(guild_id,channel_id,await processMessages.call(this,target_id,'channel',message))
+        const message_id=`${result.seq}:${result.rand}:${result.time}`
+        return {
+            message_id:version==='V11'?this.oneBots.get(uin).V11.transformToInt('message_id',message_id):message_id
+        } as OneBot.MessageRet<V>
     }
 
     call<V extends OneBot.Version>(uin: string, version: V, method: string, args: any[]=[]): Promise<any> {

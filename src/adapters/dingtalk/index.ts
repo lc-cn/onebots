@@ -73,7 +73,7 @@ export default class DingtalkAdapter extends Adapter<'dingtalk'>{
             throw new Error(`call internal method error:${e.message}`)
         }
     }
-    async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
+    async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [user_id,message]=args
         return this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,message.map(item=>{
             const {type,data}=item
@@ -83,7 +83,7 @@ export default class DingtalkAdapter extends Adapter<'dingtalk'>{
             }
         }))
     }
-    async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[]]): Promise<OneBot.MessageRet<V>> {
+    async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [group_id,message]=args
         return this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,message.map(item=>{
             const {type,data}=item
