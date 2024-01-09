@@ -70,8 +70,8 @@
   "peerDependencies": {
     "icqq": "latest",
     "lib-wechat": "latest",
-    "node-dd-bot": "latest",
-    "qq-group-bot": "latest"
+    "node-dd-bot": "^1.0.7",
+    "qq-group-bot": "^1.0.9"
   },
   "dependencies": {
     "@koa/router": "^10.1.1",

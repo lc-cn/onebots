@@ -7,43 +7,58 @@ import { OneBot, OneBotStatus } from "@/onebot";
 import { deepClone, deepMerge } from "@/utils";
 import * as path from "path";
 import { shareMusic } from "@/service/shareMusicCustom";
+import { genDmMessageId, genGroupMessageId } from "icqq/lib/message";
 
-async function processMessages(this:Client,target_id:number,target_type:'group'|'private',list:OneBot.MessageElement<OneBot.Version>[]){
+async function processMessages(this:IcqqAdapter,uin:string,target_id:number,target_type:'group'|'private',list:OneBot.MessageElement<OneBot.Version>[]){
     let result:MessageElem[]=[]
     for(const item of list){
         const {type,data,...other}=item
-        if(type==='node'){
-            result.push({
-                type,
-                ...data,
-                message:await processMessages.call(this,data.user_id,'private',data.message||[])
-            })
-        }
-        if(type==='music'){
-            if(String(item.data.platform) === 'custom') {
-                item.data.platform = item.data['subtype'] // gocq 的平台数据存储在 subtype 内，兼容 icqq 时要求前端必须发送 id 字段
+        switch (type){
+            case 'node':{
+                result.push({
+                    type,
+                    ...data,
+                    message:await processMessages.call(this,uin,data.user_id,'private',data.message||[])
+                })
+                break;
             }
-            const {type,data}=item
-            await shareMusic.call(this[target_type==='private'?'pickFriend':'pickGroup'](target_id),{
-                type,
-                ...data
-            })
-            continue
+            case 'music':{
+                if(String(item.data.platform) === 'custom') {
+                    item.data.platform = item.data['subtype'] // gocq 的平台数据存储在 subtype 内，兼容 icqq 时要求前端必须发送 id 字段
+                }
+                const {type,data}=item
+                await shareMusic.call(this[target_type==='private'?'pickFriend':'pickGroup'](target_id),{
+                    type,
+                    ...data
+                })
+                break;
+            }
+            case 'share':{
+                await this[target_type==='private'?'pickFriend':'pickGroup'](target_id).shareUrl(item.data)
+                break
+            }
+            case 'video':
+            case 'audio':
+            case 'image':{
+                if(item['file_id']?.startsWith('base64://')) item['file_id']=Buffer.from(item['file_id'].slice(9),'base64')
+                if(item['file']?.startsWith('base64://')) item['file']=Buffer.from(item['file'].slice(9),'base64')
+                result.push({
+                    type,
+                    ...data,
+                    ...other
+                })
+                break;
+            }
+            case 'reply':{
+                const oneBot=this.getOneBot(uin)
+                const message_id=oneBot.V11.getStrByInt('message_id',data.id)
+                const msg=await oneBot.internal.getMsg(message_id)
+                result.push({
+                    type:'quote',
+                    ...msg
+                })
+            }
         }
-        if(type==='share'){
-            await this[target_type==='private'?'pickFriend':'pickGroup'](target_id).shareUrl(item.data)
-            continue
-        }
-
-        if(['image','video','audio'].includes(item.type)){
-            if(item['file_id']?.startsWith('base64://')) item['file_id']=Buffer.from(item['file_id'].slice(9),'base64')
-            if(item['file']?.startsWith('base64://')) item['file']=Buffer.from(item['file'].slice(9),'base64')
-        }
-        result.push({
-            type,
-            ...data,
-            ...other
-        })
     }
     return result
 }
@@ -79,8 +94,9 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
         })));
         return oneBot
     }
-    formatEventPayload<V extends OneBot.Version>(version: V, event: string, data: any):OneBot.Payload<V> {
-        return {
+    formatEventPayload<V extends OneBot.Version>(uin:string,version: V, event: string, data: any):OneBot.Payload<V> {
+        const oneBot=this.getOneBot<Client>(uin)
+        const result={
             id: data.id,
             type: event,
             version: version,
@@ -92,17 +108,31 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
             platform: 'qq',
             ...data,
         }
+        if(data.source){
+            const message_id=data.message_type==='group'?genGroupMessageId(data.group_id,data.sender.user_id,data.source?.seq,data.source?.rand,data.source?.time,data.source?.pktnum):
+                genDmMessageId(data.sender.user_id,data.source?.seq,data.source?.rand,data.source?.time)
+            data.message[0]={
+                type:'reply',
+                id:version==='V11'?oneBot.V11.transformToInt('message_id',message_id):message_id,
+            }
+        }
+        return result
     }
     async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string?]): Promise<OneBot.MessageRet<V>> {
         const [user_id,message,source]=args
         const client:Client=this.oneBots.get(uin)?.internal
         let quote:Quotable|undefined
         if(source) quote=await client.getMsg(source)
-        const result=await client.sendPrivateMsg(parseInt(user_id),await processMessages.call(this,user_id,'private',message),quote)
+        const result=await client.sendPrivateMsg(parseInt(user_id),await processMessages.call(this,uin,user_id,'private',message),quote)
         return {
             message_id:version==='V11'?this.oneBots.get(uin).V11.transformToInt('message_id',result.message_id):result.message_id
         } as OneBot.MessageRet<V>
     }
+    deleteMessage<V extends OneBot.Version>(uin: string, version: V, args: [string]): Promise<boolean> {
+        const bot=this.getOneBot<Client>(uin).internal
+        return bot.deleteMsg(args[0])
+    }
+
     async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string?]): Promise<OneBot.MessageRet<V>> {
         const [group_id,message,source]=args
         const client:Client=this.oneBots.get(uin)?.internal

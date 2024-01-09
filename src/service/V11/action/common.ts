@@ -20,12 +20,8 @@ export class CommonAction {
      */
     async deleteMsg(this: V11, message_id: number) {
         if(message_id == 0) throw new Error('getMsg: message_id[0] is invalid')
-        let msg_entry = this.db.find<MsgEntry>('messages',(message)=>{
-            return message.id===message_id
-        })
-        if(!msg_entry) throw new Error(`getMsg: can not find msg[${message_id}] in db`)
-
-        return this.adapter.call(this.oneBot.uin,'V11','deleteMsg',[msg_entry.base64_id])
+        const msg_id=this.getStrByInt('message_id',message_id)
+        return this.adapter.call(this.oneBot.uin,'V11','deleteMessage',[this.oneBot.uin,msg_id])
     }
 
     /**

@@ -163,7 +163,8 @@ export default class DingtalkAdapter extends Adapter<'dingtalk'>{
             return `[CQ:${item.type},${dataStr.join(',')}]`
         }).join('')
     }
-    formatEventPayload<V extends OneBot.Version>(version:V,event:string,data:any):OneBot.Payload<V>{
+    formatEventPayload<V extends OneBot.Version>(uin:string,version:V,event:string,data:any):OneBot.Payload<V>{
+        const oneBot=this.getOneBot<Bot>(uin)
         const result= {
             id: data.id,
             [version==='V12'?'type':'post_type']: event,
@@ -176,8 +177,12 @@ export default class DingtalkAdapter extends Adapter<'dingtalk'>{
             platform: 'dingtalk',
             time:data.timestamp,
             ...data,
+            message_id:`${data.message_type}:${data.group_id||data.user_id}:${data.message_id}`
         }
         delete result.bot
+        if(version==='V11'){
+            oneBot.V11.transformStrToIntForObj(result,['user_id','group_id','message_id'])
+        }
         return result
     }
     async start(uin:string){

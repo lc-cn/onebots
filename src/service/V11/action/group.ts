@@ -5,10 +5,12 @@ export class GroupAction {
      * 发送群聊消息
      * @param group_id {number} 群id
      * @param message {V11.Sendable[]} 消息
-     * @param message_id {string} 引用的消息ID
+     * @param message_id {number} 引用的消息ID
      */
-    async sendGroupMsg(this: V11, group_id: number, message: V11.Sendable, message_id?: string):Promise<V11.MessageRet> {
-        return this.adapter.call(this.oneBot.uin,'V11','sendGroupMessage', [group_id, message, message_id])
+    async sendGroupMsg(this: V11, group_id: number, message: V11.Sendable, message_id?: number):Promise<V11.MessageRet> {
+        const msg_id=message_id?this.getStrByInt('message_id',message_id):undefined
+        const gid=this.getStrByInt('group_id',group_id)
+        return this.adapter.call(this.oneBot.uin,'V11','sendGroupMessage', [gid, message, msg_id])
     }
 
     /**

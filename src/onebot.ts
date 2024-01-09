@@ -97,7 +97,7 @@ export class OneBot<T=any> extends EventEmitter {
 
     async dispatch(event, data) {
         for (const instance of this.instances) {
-            instance.dispatch(instance.format(event, this.adapter.formatEventPayload(instance.version,event,data)))
+            instance.dispatch(instance.format(event, this.adapter.formatEventPayload(this.uin,instance.version,event,data)))
         }
     }
 }

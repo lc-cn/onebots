@@ -5,10 +5,12 @@ export class FriendAction {
      * 发送私聊消息
      * @param user_id {number} 用户id
      * @param message {V11.Sendable} 发送的消息
-     * @param message_id {string} 引用的消息ID
+     * @param message_id {number} 引用的消息ID
      */
-    async sendPrivateMsg(this: V11, user_id: number, message: V11.Sendable, message_id?: string):Promise<V11.MessageRet> {
-       return this.adapter.call(this.oneBot.uin,'V11','sendPrivateMessage', [user_id, message, message_id])
+    async sendPrivateMsg(this: V11, user_id: number, message: V11.Sendable, message_id?: number):Promise<V11.MessageRet> {
+        const msg_id=message_id?this.getStrByInt('message_id',message_id):undefined
+        const uid=this.getStrByInt('user_id',user_id)
+       return this.adapter.call(this.oneBot.uin,'V11','sendPrivateMessage', [uid, message, msg_id])
     }
 
     /**

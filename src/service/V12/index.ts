@@ -146,15 +146,15 @@ export class V12 extends Service<'V12'> implements OneBot.Base {
             }, this.config.heartbeat * 1000)
         }
         this.adapter.on('message.receive',(uin:string,event)=>{
-            const payload=this.adapter.formatEventPayload('V12','message',event)
+            const payload=this.adapter.formatEventPayload(uin,'V12','message',event)
             this.dispatch(payload)
         })
         this.adapter.on('notice.receive',(uin:string,event)=>{
-            const payload=this.adapter.formatEventPayload('V12','notice',event)
+            const payload=this.adapter.formatEventPayload(uin,'V12','notice',event)
             this.dispatch(payload)
         })
         this.adapter.on('request.receive',(uin:string,event)=>{
-            const payload=this.adapter.formatEventPayload('V12','request',event)
+            const payload=this.adapter.formatEventPayload(uin,'V12','request',event)
             this.dispatch(payload)
         })
     }

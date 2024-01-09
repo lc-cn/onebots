@@ -45,7 +45,7 @@ export class JsonDB{
         return initialValue
     }
     set<T>(route:string,data:T):T{
-        const parentPath=route.split('.')
+        const parentPath=route.split('.').filter(c=>c.length)
         const key=parentPath.pop()
         if(!key) throw new SyntaxError(`route can't empty`)
         const parentObj=this.get<Dict>(parentPath.join('.'),{})

@@ -19,7 +19,6 @@ import { Dict } from "@zhinjs/shared";
 import { JsonDB } from "@/db";
 
 const sendMsgTypes = ["private", "group", "discuss"];
-const sendMsgMethodRegex = new RegExp(`send_(${sendMsgTypes.join("|")})_msg`);
 
 export class V11 extends Service<"V11"> implements OneBot.Base {
     public action: Action;
@@ -50,11 +49,34 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         });
     }
     transformToInt(path:string,value:string):number{
+        if(!value ||typeof value!=='string') throw new Error(`value must be string`)
+        value=value.replace(/\./g,'%46')
         const obj=this.db.get<Dict<number>>(path,{})
         if(obj[value]) return obj[value]
         const int=randomInt(1000,Number.MAX_SAFE_INTEGER)
+        const isExist=()=>{
+            return Object.keys(obj).some((key)=>{
+                return obj[key]===int
+            })
+        }
+        // 虽然重复概率小，但还是避免下
+        if(isExist()) return this.transformToInt(path,value)
         this.db.set(`${path}.${value}`,int)
         return int
+    }
+    transformStrToIntForObj<T extends object>(obj:T,keys:(keyof T)[]){
+        if(!obj) return
+        for(const key of keys){
+            const value=obj[key]
+            if(typeof value!=='string') continue
+            Reflect.set(obj,key,this.transformToInt(key as string,value))
+        }
+    }
+    getStrByInt(path:string,value:number){
+        const obj=this.db.get<Dict<number>>(path)
+        return Object.keys(obj).find(str=>{
+            return obj[str]===value
+        })?.replace(/%46/g,'.')||value+''
     }
     start() {
         if (this.config.use_http) this.startHttp();
@@ -110,15 +132,15 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             }, this.config.heartbeat * 1000);
         }
         this.adapter.on("message.receive", (uin: string, event) => {
-            const payload = this.adapter.formatEventPayload("V11", "message", event);
+            const payload = this.adapter.formatEventPayload(uin,"V11", "message", event);
             this.dispatch(payload);
         });
         this.adapter.on("notice.receive", (uin: string, event) => {
-            const payload = this.adapter.formatEventPayload("V11", "notice", event);
+            const payload = this.adapter.formatEventPayload(uin,"V11", "notice", event);
             this.dispatch(payload);
         });
         this.adapter.on("request.receive", (uin: string, event) => {
-            const payload = this.adapter.formatEventPayload("V11", "request", event);
+            const payload = this.adapter.formatEventPayload(uin,"V11", "request", event);
             this.dispatch(payload);
         });
     }
@@ -228,32 +250,9 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         if (data.message && data.post_type === "message") {
             if (this.config.post_message_format === "array") {
                 data.message = this.adapter.toSegment("V11", data.message);
-                if (data.source) { // reply
-                    let msg0 = data.message[0];
-                    msg0.data["id"] = await this.getReplyMsgIdFromDB(data);
-                }
             } else {
                 data.message = this.adapter.toCqcode("V11", data.message);
             }
-        }
-
-        if (data.message_id) {
-            data.message_id = await this.addMsgToDB(data);
-        }
-
-        if (data.post_type == "notice" && String(data.notice_type).endsWith("_recall")) {
-            const msgIdx=this.db.findIndex<MsgEntry>('messages',(message)=>{
-                return message.base64_id===data.base64_id
-            })
-            if(msgIdx>=0){
-                this.db.set(`messages.${msgIdx}.recalled`,true);
-                this.db.set(`messages.${msgIdx}.recall_time`,parseInt((Date.now()/1000)+''));
-            }
-        }
-        if (data.font) {
-            const fontNo = Buffer.from(data.font).readUInt32BE();
-            // this.db.set(`KVMap.${data.fontNo}`,data.font)
-            data.font = fontNo;
         }
         data.time = Math.floor(Date.now() / 1000);
         // data = transformObj(data, (key, value) => {
@@ -319,55 +318,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         }
     }
 
-    private async addMsgToDB(data: any): Promise<number> {
-        if (!data.sender || !("user_id" in data.sender)) {
-            // eg. notice
-            return;
-        }
-        const id=randomInt(1,Number.MAX_SAFE_INTEGER)
-        this.db.push<MsgEntry>('messages',{
-            id,
-            base64_id:data.base64_id,
-            seq:data.seq,
-            user_id:data.sender.user_id,
-            nickname:data.sender.nickname,
-            group_id:data.group_id||0,
-            group_name:data.group_name||'',
-            content:data.cqCode||data.message,
-            create_time:data.time,
-        })
-        if(this.db.get<MsgEntry[]>('messages').length>1000)this.db.shift('messages')
-        return id
-    }
-
-    /**
-     * 从 send_msg_xxx() 调用的返回值中提取消息存入数据库(可以让前端在没有收到同步的message数据前就有能力拿到消息对应的base64_id)
-     * (也有可能来的比message慢，后来的话会被数据库忽略)
-     * @param user_id 发送者
-     * @param group_id 群号，私聊为0
-     * @param seq 消息序号
-     * @param base64_id icqq返回的base64格式的消息id
-     */
-    private async addMsgToDBFromSendMsgResult(
-        user_id: string,
-        group_id: number,
-        seq: number,
-        base64_id: string
-    ): Promise<number> {
-        const id=randomInt(1,Number.MAX_SAFE_INTEGER)
-        this.db.push('messages',{
-            id,
-            base64_id,
-            seq,
-            user_id,
-            nickname:'',
-            group_id,
-            group_name:'',
-            content:'',
-        })
-        if(this.db.get<MsgEntry[]>('messages').length>1000)this.db.shift('messages')
-        return id
-    }
 
     private async getReplyMsgIdFromDB(data: any): Promise<number> {
         let group_id = data.message_type === "group" ? data.group_id : 0;
@@ -544,12 +494,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
      */
     async apply(req: V11.Protocol) {
         let { action, params, echo } = req;
-
-        if (typeof params.message_id == "number" || /^\d+$/.test(params.message_id)) {
-            params.message_id = (await this.db.find<MsgEntry>('messages',(message)=>{
-                return params.message_id===message.id
-            }))?.base64_id; // 调用api时把本地的数字id转为base64发给icqq
-        }
         action = toLine(action);
 
         let is_async = action.includes("_async");
@@ -590,7 +534,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                             }
                             params[k] = this.adapter.fromSegment("V11", params[k]);
                         }
-                        params["message_id"] = params[k].find(e => e.type === "reply")?.message_id;
+                        params["message_id"] = params[k].find(e => e.type === "reply")?.id||params['message_id'];
                     }
                     args.push(params[k]);
                 }
@@ -620,16 +564,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                 result.data = [...result.data.values()];
             if (result.data?.message)
                 result.data.message = this.adapter.toSegment("V11", result.data.message);
-
-            // send_msg_xxx 时提前把数据写入数据库(也有可能来的比message慢，后来的话会被数据库忽略)
-            if (result.status === "ok" && action.match(sendMsgMethodRegex) && result.data?.message_id && result.data?.seq) {
-                result.data.message_id = await this.addMsgToDBFromSendMsgResult(
-                    this.oneBot.uin, // msg send resp uin is always bot uin
-                    params.group_id || 0,
-                    result.data.seq,
-                    result.data.message_id
-                );
-            }
             if (echo) {
                 result.echo = echo;
             }

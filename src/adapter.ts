@@ -81,7 +81,7 @@ export namespace Adapter {
         fromCqcode<V extends OneBot.Version>(version:V,message:string):OneBot.MessageElement<V>[]
         getSelfInfo<V extends OneBot.Version>(uin:string,version:V):OneBot.SelfInfo<V>
         /** 格式化事件 */
-        formatEventPayload<V extends OneBot.Version>(version:V,event:string,payload:Dict):OneBot.Payload<V>
+        formatEventPayload<V extends OneBot.Version>(uin:string,version:V,event:string,payload:Dict):OneBot.Payload<V>
         /** 解析消息事件的消息 */
         parseMessage<V extends OneBot.Version>(version:V,payload:Dict):OneBot.Message<V>[]
         /** 获取群列表 */

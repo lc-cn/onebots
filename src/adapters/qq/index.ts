@@ -55,34 +55,70 @@ export default class QQAdapter extends Adapter<'qq'>{
     }
     async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [group_id,message,source]=args
-        const bot=this.getOneBot<Bot>(uin).internal
+        const bot=this.getOneBot<Bot>(uin)
         let quote:Quotable|undefined
         if(source) quote={id:source}
-        return bot.sendGroupMessage(group_id,message.map(({type,data})=>({type,...data})),quote)
+        const result=await bot.internal.sendGroupMessage(group_id,message.map(({type,data})=>({type,...data})),quote)
+        if(result.msg==='success'){
+            return {
+                message_id:version==='V11'?bot.V11.transformToInt('message_id',`group:${group_id}${result.msg_id}`):`group:${group_id}${result.msg_id}`,
+            } as OneBot.MessageRet<V>
+        }
+        throw new Error(result.msg)
     }
     async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [user_id,message,source]=args
-        const bot=this.getOneBot<Bot>(uin).internal
+        const bot=this.getOneBot<Bot>(uin)
         let quote:Quotable|undefined
         if(source) quote={id:source}
-        return bot.sendPrivateMessage(user_id,message.map(({type,data})=>({type,...data})),quote)
+        const result=await bot.internal.sendPrivateMessage(user_id,message.map(({type,data})=>({type,...data})),quote)
+        if(result.msg==='success'){
+            return{
+                message_id:version==='V11'?bot.V11.transformToInt('message_id',`private:${user_id}${result.msg_id}`):`private:${user_id}${result.msg_id}`,
+            } as OneBot.MessageRet<V>
+        }
+        throw new Error(result.msg)
     }
 
     async sendGuildMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [channel_id,message,source]=args
-        const bot=this.getOneBot<Bot>(uin).internal
+        const bot=this.getOneBot<Bot>(uin)
         let quote:Quotable|undefined
         if(source) quote={id:source}
-        return bot.sendGuildMessage(channel_id,message.map(({type,data})=>({type,...data})),quote)
+        const result=await bot.internal.sendGuildMessage(channel_id,message.map(({type,data})=>({type,...data})),quote)
+        if(result.msg==='success'){
+            return{
+                message_id:version==='V11'?bot.V11.transformToInt('message_id',`guild:${channel_id}${result.msg_id}`):`guild:${channel_id}${result.msg_id}`,
+            } as OneBot.MessageRet<V>
+        }
+        throw new Error(result.msg)
     }
     async sendDirectMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [guild_id,message,source]=args
-        const bot=this.getOneBot<Bot>(uin).internal
+        const bot=this.getOneBot<Bot>(uin)
         let quote:Quotable|undefined
         if(source) quote={id:source}
-        return bot.sendDirectMessage(guild_id,message.map(({type,data})=>({type,...data})),quote)
+        const result=await bot.internal.sendDirectMessage(guild_id,message.map(({type,data})=>({type,...data})),quote)
+        if(result.msg==='success'){
+            return{
+                message_id:version==='V11'?bot.V11.transformToInt('message_id',`direct:${guild_id}${result.msg_id}`):`direct:${guild_id}${result.msg_id}`,
+            } as OneBot.MessageRet<V>
+        }
+        throw new Error(result.msg)
     }
-
+    deleteMessage(uin:string,message_id:string){
+        const [from_type,from_id,...msg_idArr]=message_id.split(':')
+        const bot=this.getOneBot<Bot>(uin).internal
+        switch (from_type){
+            case 'private':
+            case 'group':
+                throw new Error(`暂不支持撤回${from_type}类型的消息`)
+            case 'direct':
+                return bot.recallDirectMessage(from_id,msg_idArr.join(':'))
+            case 'guild':
+                return bot.recallGuildMessage(from_id,msg_idArr.join(':'))
+        }
+    }
     call(uin:string,version:string,method:string,args?:any[]):Promise<any>{
         const oneBot=this.oneBots.get(uin)
         if(!oneBot){
@@ -165,7 +201,7 @@ export default class QQAdapter extends Adapter<'qq'>{
             return `[CQ:${item.type},${dataStr.join(',')}]`
         }).join('')
     }
-    formatEventPayload<V extends OneBot.Version>(version:V,event:string,data:any):OneBot.Payload<V>{
+    formatEventPayload<V extends OneBot.Version>(uin:string,version:V,event:string,data:any):OneBot.Payload<V>{
         const result= {
             id: data.id,
             [version==='V12'?'type':'post_type']: event,
@@ -179,7 +215,17 @@ export default class QQAdapter extends Adapter<'qq'>{
             time:data.timestamp,
             ...data,
         }
+        if(data.message_id){
+            data.message_id=`${data.message_type}:${data.channel_id||data.guild_id||data.group_id||data.user_id}:${data.message_id}`
+        }
         delete result.bot
+        const oneBot=this.getOneBot<Bot>(uin)
+        switch (version){
+            case "V11":
+                oneBot.V11.transformStrToIntForObj(result,['message_id','user_id','group_id'])
+                oneBot.V11.transformStrToIntForObj(result.sender,['user_id '])
+                break;
+        }
         return result
     }
     async start(uin:string){

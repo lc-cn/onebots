@@ -155,7 +155,7 @@ export default class WechatAdapter extends Adapter<'wechat'>{
             return `[CQ:${item.type},${dataStr.join(',')}]`
         }).join('')
     }
-    formatEventPayload<V extends OneBot.Version>(version:V,event:string,data:any):OneBot.Payload<V>{
+    formatEventPayload<V extends OneBot.Version>(uin:string,version:V,event:string,data:any):OneBot.Payload<V>{
         const result= {
             id: data.id,
             [version==='V12'?'type':'post_type']: event,
