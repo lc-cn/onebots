@@ -116,7 +116,9 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
                 id:version==='V11'?oneBot.V11.transformToInt('message_id',message_id):message_id,
             }
         }
-        if(version==='V11')oneBot.V11.transformToInt('message_id',data.message_id)
+        if(version==='V11' && result.message_id){
+            result.message_id=oneBot.V11.transformToInt('message_id',result.message_id)
+        }
         return result
     }
     async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string?]): Promise<OneBot.MessageRet<V>> {
