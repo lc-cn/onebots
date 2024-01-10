@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.46](https://github.com/lc-cn/onebots/compare/v0.4.45...v0.4.46) (2024-01-10)
+
+
+### Bug Fixes
+
+* icqq适配器message_id转换 ([5fc1384](https://github.com/lc-cn/onebots/commit/5fc138402734c95c78787f6f6fe1e9e4bbbe2591))
+* icqq适配器message_id转换 ([ea0cff5](https://github.com/lc-cn/onebots/commit/ea0cff590082c83e2d047b09d2e3144f0412d3db))
+
 ## [0.4.45](https://github.com/lc-cn/onebots/compare/v0.4.44...v0.4.45) (2024-01-10)
 
 
