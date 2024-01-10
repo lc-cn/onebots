@@ -224,6 +224,7 @@ export default class QQAdapter extends Adapter<'qq'>{
             case "V11":
                 oneBot.V11.transformStrToIntForObj(result,['message_id','user_id','group_id'])
                 oneBot.V11.transformStrToIntForObj(result.sender,['user_id '])
+                oneBot.V11.transformStrToIntForObj(result.self,['user_id '])
                 break;
         }
         return result

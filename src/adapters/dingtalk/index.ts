@@ -75,23 +75,46 @@ export default class DingtalkAdapter extends Adapter<'dingtalk'>{
     }
     async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [user_id,message]=args
-        return this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,message.map(item=>{
+        const bot= this.getOneBot<Bot>(uin)
+        const result=await bot.internal.sendPrivateMsg(user_id,message.map(item=>{
             const {type,data}=item
             return {
                 type,
                 ...data
             }
         }))
+        return {
+            message_id:version==='V11'?bot.V11.transformToInt('message_id',`private:${user_id}:${result}`):`private:${user_id}:${result}`
+        } as OneBot.MessageRet<V>
     }
     async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [group_id,message]=args
-        return this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,message.map(item=>{
+        const bot= this.getOneBot<Bot>(uin)
+        const result=await bot.internal.sendGroupMsg(group_id,message.map(item=>{
             const {type,data}=item
             return {
                 type,
                 ...data
             }
         }))
+        return {
+            message_id:version==='V11'?bot.V11.transformToInt('message_id',`group:${group_id}:${result}`):`group:${group_id}:${result}`
+        } as OneBot.MessageRet<V>
+    }
+
+    deleteMessage(uin:string,message_id:string){
+        const [from_type,from_id,...msg_idArr]=message_id.split(':')
+        const bot=this.getOneBot<Bot>(uin).internal
+        switch (from_type){
+            case 'private':
+                return bot.recallPrivateMsg(from_id,msg_idArr.join(':'))
+            case 'group':
+                return bot.recallGroupMsg(from_id,msg_idArr.join(':'))
+            case 'direct':
+                throw new Error(`暂不支持撤回${from_type}类型的消息`)
+            case 'guild':
+                throw new Error(`暂不支持撤回${from_type}类型的消息`)
+        }
     }
 
     fromSegment<V extends OneBot.Version>(version: V, segment: OneBot.Segment<V>|OneBot.Segment<V>[]): OneBot.MessageElement<V>[] {

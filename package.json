@@ -70,7 +70,7 @@
   "peerDependencies": {
     "icqq": "latest",
     "lib-wechat": "latest",
-    "node-dd-bot": "^1.0.7",
+    "node-dd-bot": "^1.0.8",
     "qq-group-bot": "^1.0.9"
   },
   "dependencies": {

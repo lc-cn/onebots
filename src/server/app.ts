@@ -38,10 +38,11 @@ export class App extends Koa {
     public logger: Logger
     static configDir = path.join(os.homedir(), '.onebots')
     static configPath = path.join(App.configDir, 'config.yaml')
+    static dataDir = path.join(App.configDir, 'data')
     adapters:Map<string,Adapter>=new Map<string, Adapter>()
     public ws:WsServer
     public router: Router
-    static logFile=path.join(process.cwd(),'onebots.log')
+    static logFile=path.join(App.configDir,'onebots.log')
     get info(){
         const pkg=require(path.resolve(__dirname,'../../package.json'))
         const free_memory=os.freemem()
@@ -290,8 +291,13 @@ export function createOnebots(config: App.Config | string = 'config.yaml',cp:Chi
         config = path.resolve(process.cwd(), config)
         App.configDir = path.dirname(config)
         App.configPath = config
+        App.dataDir=path.join(App.configDir,'data')
         if (!existsSync(App.configDir)) {
             mkdirSync(App.configDir)
+        }
+        if(!existsSync(App.dataDir)){
+            mkdirSync(App.dataDir)
+            console.log('以为你创建数据存储目录',App.dataDir)
         }
         App.configPath = path.resolve(App.configDir, config)
         if (!existsSync(App.configPath)) {

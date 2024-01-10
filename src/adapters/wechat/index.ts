@@ -67,23 +67,52 @@ export default class WechatAdapter extends Adapter<'wechat'>{
     }
     async sendPrivateMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [user_id,message]=args
-        return this.oneBots.get(uin)?.internal.sendPrivateMsg(user_id,message.map(item=>{
+        const bot=this.getOneBot<Client>(uin)
+        let result=await bot.internal.sendPrivateMsg(user_id,message.map(item=>{
             const {type,data}=item
             return {
                 type,
                 ...data
             }
         }))
+        if(Array.isArray(result)) result=JSON.stringify(result)
+        return {
+            message_id:version==='V11'?bot.V11.transformToInt('message_id',`${user_id}:${result}`):`${user_id}:${result}`
+        } as OneBot.MessageRet<V>
     }
     async sendGroupMessage<V extends OneBot.Version>(uin: string, version: V, args: [string, OneBot.MessageElement<V>[],string]): Promise<OneBot.MessageRet<V>> {
         const [group_id,message]=args
-        return this.oneBots.get(uin)?.internal.sendGroupMsg(group_id,message.map(item=>{
+        const bot=this.getOneBot<Client>(uin)
+        let result=await bot.internal.sendGroupMsg(group_id,message.map(item=>{
             const {type,data}=item
             return {
                 type,
                 ...data
             }
         }))
+        if(Array.isArray(result)) result=JSON.stringify(result)
+        return {
+            message_id:version==='V11'?bot.V11.transformToInt('message_id',`${group_id}:${result}`):`${group_id}:${result}`
+        } as OneBot.MessageRet<V>
+    }
+    async deleteMessage<V extends OneBot.Version>(uin: string, version: V, [str]: [string]): Promise<boolean> {
+        const [username,...message_idArr]=str.split(':')
+        const bot=this.getOneBot<Client>(uin)
+        try{
+            const message_ids=JSON.parse(message_idArr.join(':'))
+            if(Array.isArray(message_ids)) {
+                let success=false
+                for(const message_id in message_ids){
+                    success=await bot.internal.recallMsg(username,message_id)
+                    if(!success) return success
+                }
+                return success
+            }else if(message_ids && typeof message_ids==='string'){
+                return await bot.internal.recallMsg(username,message_ids)
+            }
+        }catch {
+            return bot.internal.recallMsg(username,message_idArr.join(':'))
+        }
     }
 
     fromSegment<V extends OneBot.Version>(version: V, segment: OneBot.Segment<V>|OneBot.Segment<V>[]): OneBot.MessageElement<V>[] {
@@ -155,7 +184,29 @@ export default class WechatAdapter extends Adapter<'wechat'>{
             return `[CQ:${item.type},${dataStr.join(',')}]`
         }).join('')
     }
+    async getFriendList<V extends OneBot.Version>(uin:string,version:V):Promise<OneBot.UserInfo<V>[]>{
+        const bot=this.getOneBot<Client>(uin)
+        const result=bot.internal.getFriendList()
+        return result.map(friend=>{
+            return{
+                ...friend,
+                user_name:friend.nickname,
+                user_id:version==="V11"?bot.V11.transformToInt('friend',friend.user_id):friend.user_id,
+            }
+        }) as OneBot.UserInfo<V>[]
+    }
+    async getGroupList<V extends OneBot.Version>(uin:string,version:V):Promise<OneBot.GroupInfo<V>[]>{
+        const bot=this.getOneBot<Client>(uin)
+        const result=bot.internal.getGroupList()
+        return result.map(group=>{
+            return{
+              ...group,
+                group_id:version==="V11"?bot.V11.transformToInt('group',group.group_id):group.group_id,
+            }
+        }) as OneBot.GroupInfo<V>[]
+    }
     formatEventPayload<V extends OneBot.Version>(uin:string,version:V,event:string,data:any):OneBot.Payload<V>{
+        const bot=this.getOneBot<Client>(uin)
         const result= {
             id: data.id,
             [version==='V12'?'type':'post_type']: event,
@@ -175,6 +226,14 @@ export default class WechatAdapter extends Adapter<'wechat'>{
         delete result.bot
         delete result.c
         delete result.parser
+        if(version==='V11'){
+            bot.V11.transformStrToIntForObj(result,['user_id','group_id','message_id'])
+            bot.V11.transformStrToIntForObj(result.self,['user_id'])
+            bot.V11.transformStrToIntForObj(result.sender,['user_id'])
+            bot.V11.transformStrToIntForObj(result.group,['user_id','group_id'])
+            bot.V11.transformStrToIntForObj(result.member,['user_id','member_id'])
+            bot.V11.transformStrToIntForObj(result.friend,['user_id'])
+        }
         return result
     }
     async start(uin:string){
