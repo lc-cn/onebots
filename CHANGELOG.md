@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.44](https://github.com/lc-cn/onebots/compare/v0.4.43...v0.4.44) (2024-01-10)
+
+
+### Bug Fixes
+
+* 优化V11数据类型在各个适配器的表现 ([f3b8b5b](https://github.com/lc-cn/onebots/commit/f3b8b5b5adc695c6b23baf9ce667d36b0e9d6dc5))
+* 启动时检测数据目录是否存在，不存在则自动创建 ([f3b8b5b](https://github.com/lc-cn/onebots/commit/f3b8b5b5adc695c6b23baf9ce667d36b0e9d6dc5))
+* 格式化event ([9111b02](https://github.com/lc-cn/onebots/commit/9111b02cf619cb37889d94de368c757a550a5953))
+* 格式化event ([f9c89aa](https://github.com/lc-cn/onebots/commit/f9c89aaac89d7ee754887674592614090ffc57d9))
+* 追加日志推送错误 ([c953fc4](https://github.com/lc-cn/onebots/commit/c953fc4f51368bad2c986d783e0ca4189d310d27))
+
 ## [0.4.43](https://github.com/lc-cn/onebots/compare/v0.4.42...v0.4.43) (2024-01-02)
 
 
