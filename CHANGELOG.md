@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.45](https://github.com/lc-cn/onebots/compare/v0.4.44...v0.4.45) (2024-01-10)
+
+
+### Bug Fixes
+
+* icqq适配器合并转发失败 ([19db554](https://github.com/lc-cn/onebots/commit/19db55464a2108e831b3218fbe333bd218d245ab))
+* 日志文件跟随运行目录不同而不同 ([19db554](https://github.com/lc-cn/onebots/commit/19db55464a2108e831b3218fbe333bd218d245ab))
+
 ## [0.4.44](https://github.com/lc-cn/onebots/compare/v0.4.43...v0.4.44) (2024-01-10)
 
 
