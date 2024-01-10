@@ -37,12 +37,18 @@ export class App extends Koa {
     public httpServer: Server
     public logger: Logger
     static configDir = path.join(os.homedir(), '.onebots')
-    static configPath = path.join(App.configDir, 'config.yaml')
-    static dataDir = path.join(App.configDir, 'data')
+    static get configPath(){
+        return path.join(App.configDir, 'config.yaml')
+    }
+    static  get dataDir(){
+        return path.join(App.configDir, 'data')
+    }
+    static get logFile(){
+        return path.join(App.configDir,'onebots.log')
+    }
     adapters:Map<string,Adapter>=new Map<string, Adapter>()
     public ws:WsServer
     public router: Router
-    static logFile=path.join(App.configDir,'onebots.log')
     get info(){
         const pkg=require(path.resolve(__dirname,'../../package.json'))
         const free_memory=os.freemem()
@@ -290,8 +296,6 @@ export function createOnebots(config: App.Config | string = 'config.yaml',cp:Chi
     if (typeof config === 'string') {
         config = path.resolve(process.cwd(), config)
         App.configDir = path.dirname(config)
-        App.configPath = config
-        App.dataDir=path.join(App.configDir,'data')
         if (!existsSync(App.configDir)) {
             mkdirSync(App.configDir)
         }
@@ -299,7 +303,6 @@ export function createOnebots(config: App.Config | string = 'config.yaml',cp:Chi
             mkdirSync(App.dataDir)
             console.log('以为你创建数据存储目录',App.dataDir)
         }
-        App.configPath = path.resolve(App.configDir, config)
         if (!existsSync(App.configPath)) {
             copyFileSync(path.resolve(__dirname, '../config.sample.yaml'), App.configPath)
             console.log('未找到对应配置文件，已自动生成默认配置文件，请修改配置文件后重新启动')

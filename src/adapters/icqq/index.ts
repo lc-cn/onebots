@@ -18,7 +18,7 @@ async function processMessages(this:IcqqAdapter,uin:string,target_id:number,targ
                 result.push({
                     type,
                     ...data,
-                    message:await processMessages.call(this,uin,data.user_id,'private',data.message||[])
+                    message:await processMessages.call(this,uin,data.user_id,'private',data.content||[])
                 })
                 break;
             }
