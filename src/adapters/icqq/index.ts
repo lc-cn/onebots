@@ -239,6 +239,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
 
     toCqcode<V extends OneBot.Version>(version: V, messageArr:OneBot.MessageElement<V>[]): string {
         return [].concat(messageArr).map(item=>{
+            if(typeof item==="string") return item
             if(item.type==='text') return item.data?.text||item.text
             const dataStr=Object.entries(item.data||item).map(([key,value])=>{
                 // is Buffer

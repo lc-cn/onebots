@@ -171,6 +171,8 @@ export default class WechatAdapter extends Adapter<'wechat'>{
 
     toCqcode<V extends OneBot.Version>(version: V, messageArr:OneBot.MessageElement<V>[]): string {
         return [].concat(messageArr).map(item=>{
+            if(typeof item==="string") return item
+            if(item.type==='text') return item.data?.text||item.text
             const dataStr=Object.entries(item.data).map(([key,value])=>{
                 // is Buffer
                 if(value instanceof Buffer) return `${key}=${value.toString('base64')}`
