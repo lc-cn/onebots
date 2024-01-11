@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.47](https://github.com/lc-cn/onebots/compare/v0.4.46...v0.4.47) (2024-01-11)
+
+
+### Bug Fixes
+
+* bump version ([8cca764](https://github.com/lc-cn/onebots/commit/8cca764edb69062dab653208cf88ee14a3fa3a98))
+
 ## [0.4.46](https://github.com/lc-cn/onebots/compare/v0.4.45...v0.4.46) (2024-01-10)
 
 
