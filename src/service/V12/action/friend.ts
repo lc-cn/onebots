@@ -1,12 +1,12 @@
-import {V12} from "../index";
+import { V12 } from "../index";
 
 export class FriendAction {
-    getUserInfo(this: V12, user_id: number):Promise<V12.MessageRet> {
-        return this.adapter.call(this.oneBot.uin,'V12','getUserInfo',[user_id])
+    getUserInfo(this: V12, user_id: number): Promise<V12.MessageRet> {
+        return this.adapter.call(this.oneBot.uin, "V12", "getUserInfo", [user_id]);
     }
 
     getFriendList(this: V12) {
-        return this.adapter.call(this.oneBot.uin,'V12','getFriendList')
+        return this.adapter.call(this.oneBot.uin, "V12", "getFriendList");
     }
 
     /**
@@ -15,8 +15,12 @@ export class FriendAction {
      * @param message {V12.Sendable} 消息
      * @param source {string} 引用id
      */
-    async sendPrivateMsg(this: V12, user_id: number, message: V12.Sendable,source?:string) {
-        return this.adapter.call(this.oneBot.uin,'V12','sendPrivateMessage', [user_id, message, source])
+    async sendPrivateMsg(this: V12, user_id: number, message: V12.Sendable, source?: string) {
+        return this.adapter.call(this.oneBot.uin, "V12", "sendPrivateMessage", [
+            user_id,
+            message,
+            source,
+        ]);
     }
     /**
      * 为指定用户点赞
@@ -24,6 +28,6 @@ export class FriendAction {
      * @param times 点赞次数
      */
     async sendUserLike(this: V12, user_id: number, times?: number) {
-        throw new Error('不支持的API')
+        throw new Error("不支持的API");
     }
 }

@@ -1,20 +1,18 @@
-
 export function remove<T>(list: T[], item: T) {
     const index = list.indexOf(item);
     if (index !== -1) list.splice(index, 1);
 }
 
 export function deepClone<T extends object>(obj: T) {
-    if (typeof obj !== "object") return obj
-    if (Array.isArray(obj)) return obj.map(deepClone)
+    if (typeof obj !== "object") return obj;
+    if (Array.isArray(obj)) return obj.map(deepClone);
     const Constructor = obj.constructor;
 
-    let newObj: T = Constructor()
+    let newObj: T = Constructor();
     for (let key in obj) {
-        newObj[key] = deepClone(obj[key as any])
+        newObj[key] = deepClone(obj[key as any]);
     }
     return newObj;
-
 }
 
 /**
@@ -32,27 +30,12 @@ export function findLastIndex<T>(list: T[], predicate: (item: T, index: number) 
 
 export function trimQuote(str: string) {
     const quotes: string[][] = [
-        [
-            '"',
-            '"',
-        ],
-        [
-            "'",
-            "'",
-        ],
-        [
-            '`',
-            '`',
-        ],
-        [
-            '“',
-            '”',
-        ],
-        [
-            '‘',
-            '’',
-        ]
-    ]
+        ['"', '"'],
+        ["'", "'"],
+        ["`", "`"],
+        ["“", "”"],
+        ["‘", "’"],
+    ];
     for (let i = 0; i < quotes.length; i++) {
         const [start, end] = quotes[i];
         if (str.startsWith(start) && str.endsWith(end)) {
@@ -61,4 +44,3 @@ export function trimQuote(str: string) {
     }
     return str;
 }
-
