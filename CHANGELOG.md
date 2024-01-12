@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.48](https://github.com/lc-cn/onebots/compare/v0.4.47...v0.4.48) (2024-01-12)
+
+
+### Bug Fixes
+
+* add onebotV11 (call_api) ([8cc5361](https://github.com/lc-cn/onebots/commit/8cc5361845c9bb88fa1a6efe041134b603dcbd5c))
+* prettier code ([8cc5361](https://github.com/lc-cn/onebots/commit/8cc5361845c9bb88fa1a6efe041134b603dcbd5c))
+* set max cache with 1000 ([8cc5361](https://github.com/lc-cn/onebots/commit/8cc5361845c9bb88fa1a6efe041134b603dcbd5c))
+* 发送消息没反应 ([6fa294f](https://github.com/lc-cn/onebots/commit/6fa294f8c48dfb807f5987d5c333fac6def8c8c3))
+
 ## [0.4.47](https://github.com/lc-cn/onebots/compare/v0.4.46...v0.4.47) (2024-01-11)
 
 
