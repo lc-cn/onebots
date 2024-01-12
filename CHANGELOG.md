@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.49](https://github.com/lc-cn/onebots/compare/v0.4.48...v0.4.49) (2024-01-12)
+
+
+### Bug Fixes
+
+* get_msg ([93195eb](https://github.com/lc-cn/onebots/commit/93195eb12e63fd9401caf191fc100b4ff74974c5))
+
 ## [0.4.48](https://github.com/lc-cn/onebots/compare/v0.4.47...v0.4.48) (2024-01-12)
 
 
