@@ -6,3 +6,4 @@ package-lock.json
 /lib
 .vscode/
 pnpm-lock.yaml
+onebots.log

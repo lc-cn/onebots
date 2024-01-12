@@ -58,6 +58,13 @@ async function processMessages(this:IcqqAdapter,uin:string,target_id:number,targ
                     ...msg
                 })
             }
+            case 'text':{
+                result.push({
+                    type,
+                    ...data,
+                    ...other
+                })
+            }
         }
     }
     return result
@@ -141,7 +148,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
         const client:Client=this.oneBots.get(uin)?.internal
         let quote:Quotable|undefined
         if(source) quote=await client.getMsg(source)
-        const result=await client.sendGroupMsg(parseInt(group_id),await processMessages.call(this,group_id,'group',message),quote)
+        const result=await client.sendGroupMsg(parseInt(group_id),await processMessages.call(this,uin,group_id,'group',message),quote)
         return {
             message_id:version==='V11'?this.oneBots.get(uin).V11.transformToInt('message_id',result.message_id):result.message_id
         } as OneBot.MessageRet<V>
@@ -150,7 +157,7 @@ export default class IcqqAdapter extends Adapter<'icqq'>{
         const [target_id,message,source]=args
         const client:Client=this.oneBots.get(uin)?.internal
         const [guild_id,channel_id]=target_id.split(':')
-        const result=await client.sendGuildMsg(guild_id,channel_id,await processMessages.call(this,target_id,'channel',message))
+        const result=await client.sendGuildMsg(guild_id,channel_id,await processMessages.call(this,uin,target_id,'channel',message))
         const message_id=`${result.seq}:${result.rand}:${result.time}`
         return {
             message_id:version==='V11'?this.oneBots.get(uin).V11.transformToInt('message_id',message_id):message_id

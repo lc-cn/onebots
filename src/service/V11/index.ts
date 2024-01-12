@@ -73,7 +73,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         }
     }
     getStrByInt(path:string,value:number){
-        const obj=this.db.get<Dict<number>>(path)
+        const obj=this.db.get<Dict<number>>(path,{})
         return Object.keys(obj).find(str=>{
             return obj[str]===value
         })?.replace(/%46/g,'.')||value+''
