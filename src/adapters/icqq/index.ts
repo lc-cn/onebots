@@ -110,6 +110,12 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         await oneBot.internal.logout();
         oneBot.status = OneBotStatus.Bad;
     }
+    getMessage<V extends OneBot.Version>(uin: string, version: V): Promise<OneBot.Message<V>> {
+        const oneBot = this.getOneBot<Client>(uin);
+        if (!oneBot) throw new Error("No one");
+        return oneBot.internal.getMsg(version);
+    }
+
     callApi<V extends OneBot.Version>(uin: string, version: V, [name, args]: [string, any[]]) {
         const oneBot = this.getOneBot<Client>(uin);
         if (!oneBot) throw new Error("No one");
