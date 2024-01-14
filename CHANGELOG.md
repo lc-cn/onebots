@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.50](https://github.com/lc-cn/onebots/compare/v0.4.49...v0.4.50) (2024-01-14)
+
+
+### Bug Fixes
+
+* getMessage ([afe2e37](https://github.com/lc-cn/onebots/commit/afe2e37b79f54d52b5d6d4c9ea81e0136489d619))
+* message_id comparison ([f799b69](https://github.com/lc-cn/onebots/commit/f799b69eb7a420f8c24ca1de1df66939ad86ff16))
+* reply id string=&gt;int ([67a17e0](https://github.com/lc-cn/onebots/commit/67a17e05bd6d64f35b815543275eaf3fb9c8905f))
+
 ## [0.4.49](https://github.com/lc-cn/onebots/compare/v0.4.48...v0.4.49) (2024-01-12)
 
 
