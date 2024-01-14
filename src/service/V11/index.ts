@@ -82,7 +82,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         return (
             Object.keys(obj)
                 .find(str => {
-                    return obj[str] === value;
+                    return obj[str] == value;
                 })
                 ?.replace(/%46/g, ".") || value + ""
         );
