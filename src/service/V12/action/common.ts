@@ -19,7 +19,7 @@ export class CommonAction {
      * 获取消息详情
      */
     async getMsg(this: V12, message_id: string) {
-        const message = await this.adapter.call(this.oneBot.uin, "V12", "getMsg", [message_id]);
+        const message = await this.adapter.call(this.oneBot.uin, "V12", "getMessage", [message_id]);
         if (!message) throw new Error("消息不存在");
         return message;
     }

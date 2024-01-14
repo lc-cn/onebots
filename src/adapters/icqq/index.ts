@@ -264,17 +264,11 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
     getMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string],
+        [message_id]: [string],
     ): Promise<OneBot.Message<V>> {
         const oneBot = this.getOneBot<Client>(uin);
-        const num = Number(args[0]);
-        if (num) {
-            return oneBot[version].action.getMsg.call(oneBot[version], num) as Promise<
-                OneBot.Message<V>
-            >;
-        } else {
-            return oneBot.internal.getMsg(args[0]);
-        }
+        if (!oneBot) throw new Error("No one");
+        return oneBot.internal.getMsg(message_id);
     }
 
     call<V extends OneBot.Version>(
@@ -354,7 +348,7 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
                 data: Object.fromEntries(
                     valueArr.map(item => {
                         const [key, value] = item.split("=");
-                        return [key, value];
+                        return [key, type === "reply" && key === "id" ? +value : value];
                     }),
                 ),
             });
