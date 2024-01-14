@@ -110,11 +110,6 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         await oneBot.internal.logout();
         oneBot.status = OneBotStatus.Bad;
     }
-    getMessage<V extends OneBot.Version>(uin: string, version: V): Promise<OneBot.Message<V>> {
-        const oneBot = this.getOneBot<Client>(uin);
-        if (!oneBot) throw new Error("No one");
-        return oneBot.internal.getMsg(version);
-    }
 
     callApi<V extends OneBot.Version>(uin: string, version: V, [name, args]: [string, any[]]) {
         const oneBot = this.getOneBot<Client>(uin);
@@ -264,6 +259,22 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
                     ? this.oneBots.get(uin).V11.transformToInt("message_id", message_id)
                     : message_id,
         } as OneBot.MessageRet<V>;
+    }
+
+    getMessage<V extends OneBot.Version>(
+        uin: string,
+        version: V,
+        args: [string],
+    ): Promise<OneBot.Message<V>> {
+        const oneBot = this.getOneBot<Client>(uin);
+        const num = Number(args[0]);
+        if (num) {
+            return oneBot[version].action.getMsg.call(oneBot[version], num) as Promise<
+                OneBot.Message<V>
+            >;
+        } else {
+            return oneBot.internal.getMsg(args[0]);
+        }
     }
 
     call<V extends OneBot.Version>(

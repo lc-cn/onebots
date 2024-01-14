@@ -141,7 +141,11 @@ export namespace Adapter {
             args: [string, OneBot.MessageElement<V>[], string],
         ): Promise<OneBot.MessageRet<V>>;
         /** 获取消息 */
-        getMessage<V extends OneBot.Version>(uin: string, version: V): Promise<OneBot.Message<V>>;
+        getMessage<V extends OneBot.Version>(
+            uin: string,
+            version: V,
+            args: [string],
+        ): Promise<OneBot.Message<V>>;
         deleteMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
