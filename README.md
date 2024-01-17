@@ -156,16 +156,15 @@ wechat.bot1: # `${适配器名称}:${机器人唯一标识}`
 | port     | number                       | 6727    | 服务监听端口 |
 | logLevel | string                       | info    | 日志级别     |
 | general  | OneBotConfig                 | general | 通用配置     |
-| [number] | OneBotConfig\|OneBotConfig[] | -       | 机器人配置   |
+| [adapter].[number] | OneBotConfig | -       | 机器人配置   |
 
 ## OneBotConfig
 
 | 配置项   | 类型      | 默认值    | desc                                |
-| :------- | :-------- | :-------- | :---------------------------------- |
 | password | string    | -         | 账号密码 未填写或填写为空则扫码登陆 |
-| V11      | ConfigV11 | configV11 | V11配置                             |
-| V12      | ConfigV12 | configV12 | V12配置                             |
-| protocol | Config    | {}        | icqq配置                            |
+| versions      | （V11.config\|V12.config）[]|[] | V11配置   |
+| protocol | Config    | {}        | internal配置    |
+| [string] | any      | -          | 适配器特有配置    |
 
 ## ConfigV11
 
