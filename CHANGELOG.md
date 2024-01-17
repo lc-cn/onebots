@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.51](https://github.com/lc-cn/onebots/compare/v0.4.50...v0.4.51) (2024-01-17)
+
+
+### Bug Fixes
+
+* icqq 配置无效 ([96467db](https://github.com/lc-cn/onebots/commit/96467dbb8208d4082df3d8f804803cbc6b566bbc))
+* onebotV12缺少id字段 ([0900b3f](https://github.com/lc-cn/onebots/commit/0900b3f6b32f3ec6217f7556ce77355c76ae6bf4))
+
 ## [0.4.50](https://github.com/lc-cn/onebots/compare/v0.4.49...v0.4.50) (2024-01-14)
 
 
