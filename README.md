@@ -151,20 +151,21 @@ wechat.bot1: # `${适配器名称}:${机器人唯一标识}`
 
 ## Config
 
-| 配置项   | 类型                         | 默认值  | desc         |
-| :------- | :--------------------------- | :------ | :----------- |
-| port     | number                       | 6727    | 服务监听端口 |
-| logLevel | string                       | info    | 日志级别     |
-| general  | OneBotConfig                 | general | 通用配置     |
-| [adapter].[number] | OneBotConfig | -       | 机器人配置   |
+| 配置项                | 类型                              | 默认值  | desc         |
+|:-------------------|:--------------------------------| :------ | :----------- |
+| port               | number                          | 6727    | 服务监听端口 |
+| logLevel           | string                          | info    | 日志级别     |
+| general            | {V11:V11.Config,V12:V12.Config} | general | 通用配置     |
+| [adapter].[number] | OneBotConfig                    | -       | 机器人配置   |
 
 ## OneBotConfig
 
-| 配置项   | 类型      | 默认值    | desc                                |
-| password | string    | -         | 账号密码 未填写或填写为空则扫码登陆 |
-| versions      | （V11.config\|V12.config）[]|[] | V11配置   |
-| protocol | Config    | {}        | internal配置    |
-| [string] | any      | -          | 适配器特有配置    |
+| 配置项   | 类型              | 默认值    | desc                       |
+| :------- |:----------------| :-------- |:---------------------------|
+| password | string          | -         | 仅icqq生效，账号密码 未填写或填写为空则扫码登陆 |
+| V11      | V11.Config      | configV11 | V11配置                      |
+| V12      | V12.Config      | configV12 | V12配置                      |
+| protocol | 传递给client初始化的配置 | {}        |                            |
 
 ## ConfigV11
 
