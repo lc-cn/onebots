@@ -165,6 +165,7 @@ const setOffline = (platform: string, uin: string) => {
         }),
     );
 };
+const input = ref();
 const scrollToBottom = () => {
     nextTick(() => {
         const logDom = document.querySelector(".OneBots>.logs>pre");
@@ -172,6 +173,9 @@ const scrollToBottom = () => {
         logDom.scrollTo({
             top: height,
             behavior: "smooth",
+        });
+        nextTick(() => {
+            input.value.focus();
         });
     });
 };

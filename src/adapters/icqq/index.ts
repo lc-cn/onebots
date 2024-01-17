@@ -117,6 +117,7 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         if (!oneBot.internal[name]) throw new Error(`internal no api ${name}`);
         return oneBot[version][name](...args);
     }
+
     createOneBot(uin: string, protocol: IcqqConfig, versions: OneBot.Config[]): OneBot {
         const oneBot = super.createOneBot<Client>(uin, protocol, versions);
         this.#password = this.app.config[`icqq.${uin}`].password;
@@ -124,15 +125,11 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         const pkg = require(path.resolve(path.dirname(require.resolve("icqq")), "../package.json"));
         oneBot.dependency = `icqq v${pkg.version}`;
         oneBot.status = OneBotStatus.Online;
-        oneBot.internal = new Client(
-            deepMerge(
-                protocol,
-                deepClone({
-                    ...defaultIcqqConfig,
-                    log_level: this.app.config.log_level,
-                }),
-            ),
-        );
+        oneBot.internal = new Client({
+            ...defaultIcqqConfig,
+            log_level: this.app.config.log_level,
+            ...protocol,
+        });
         return oneBot;
     }
 
