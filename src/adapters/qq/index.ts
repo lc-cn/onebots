@@ -271,7 +271,7 @@ export default class QQAdapter extends Adapter<"qq"> {
         data: any,
     ): OneBot.Payload<V> {
         const result = {
-            id: data.id,
+            id: data.id || Math.random().toString(36).slice(2),
             [version === "V12" ? "type" : "post_type"]: event,
             version: version,
             self: {

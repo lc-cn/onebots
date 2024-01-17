@@ -230,7 +230,7 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
     ): OneBot.Payload<V> {
         const oneBot = this.getOneBot<Bot>(uin);
         const result = {
-            id: data.id,
+            id: data.id || Math.random().toString(36).slice(2),
             [version === "V12" ? "type" : "post_type"]: event,
             version: version,
             self: {

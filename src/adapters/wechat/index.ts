@@ -265,7 +265,7 @@ export default class WechatAdapter extends Adapter<"wechat"> {
     ): OneBot.Payload<V> {
         const bot = this.getOneBot<Client>(uin);
         const result = {
-            id: data.id,
+            id: data.id || Math.random().toString(36).slice(2),
             [version === "V12" ? "type" : "post_type"]: event,
             version: version,
             self: {

@@ -141,7 +141,7 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
     ): OneBot.Payload<V> {
         const oneBot = this.getOneBot<Client>(uin);
         const result = {
-            id: data.id,
+            id: data.id || Math.random().toString(36).slice(2),
             type: event,
             version: version,
             self: {
