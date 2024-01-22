@@ -169,13 +169,19 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
                           data.source?.rand,
                           data.source?.time,
                       );
-            data.message[0] = {
+            const replyEl = {
                 type: "reply",
                 id:
                     version === "V11"
                         ? oneBot.V11.transformToInt("message_id", message_id)
                         : message_id,
             };
+            /* 去除群聊消息的第一个引用消息段 */
+            if (result.detail_type === "group" && data.message[0]?.type === "at") {
+                data.message[0] = replyEl;
+            } else {
+                data.message.unshift(replyEl);
+            }
         }
         if (version === "V11" && result.message_id) {
             result.message_id = oneBot.V11.transformToInt("message_id", result.message_id);
