@@ -4,7 +4,6 @@ import { Client, Config as IcqqConfig, MessageElem, Quotable } from "icqq";
 import process from "process";
 import { rmSync } from "fs";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { deepClone, deepMerge } from "@/utils";
 import * as path from "path";
 import { shareMusic } from "@/service/shareMusicCustom";
 import { genDmMessageId, genGroupMessageId } from "icqq/lib/message";
@@ -76,8 +75,9 @@ async function processMessages(
                     type: "quote",
                     ...msg,
                 });
+                break;
             }
-            case "text": {
+            default: {
                 result.push({
                     type,
                     ...data,
