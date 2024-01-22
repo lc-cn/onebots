@@ -6,7 +6,7 @@ export class JsonDB {
     private data: Dict = {};
     constructor(private readonly filePath: string) {
         const dir = path.dirname(this.filePath);
-        if (fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         if (!this.filePath.endsWith(".jsondb")) this.filePath = this.filePath + ".jsondb";
         if (!fs.existsSync(this.filePath)) this.write();
         this.init();

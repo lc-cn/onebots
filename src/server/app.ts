@@ -319,7 +319,7 @@ export function createOnebots(
         }
         if (!existsSync(App.dataDir)) {
             mkdirSync(App.dataDir);
-            console.log("以为你创建数据存储目录", App.dataDir);
+            console.log("已为你创建数据存储目录", App.dataDir);
         }
         if (!existsSync(App.configPath)) {
             copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
