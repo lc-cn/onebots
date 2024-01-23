@@ -368,23 +368,36 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         return result;
     }
 
+    materialize( content: string ): string {
+        return content
+            .replace( /&(?!(amp|#91|#93|#44);)/g, "&amp;" )
+            .replace( /\[/g, "&#91;" )
+            .replace( /]/g, "&#93;" )
+            .replace( /,/g, "&#44;" )
+    }
+
     toCqcode<V extends OneBot.Version>(version: V, messageArr: OneBot.MessageElement<V>[]): string {
         return []
             .concat(messageArr)
             .map(item => {
                 if (typeof item === "string") return item;
                 if (item.type === "text") return item.data?.text || item.text;
-                const dataStr = Object.entries(item.data || item).map(([key, value]) => {
-                    // is Buffer
-                    if (value instanceof Buffer) return `${key}=${value.toString("base64")}`;
-                    // is Object
-                    if (value instanceof Object) return `${key}=${JSON.stringify(value)}`;
-                    // is Array
-                    if (value instanceof Array)
-                        return `${key}=${value.map(v => JSON.stringify(v)).join(",")}`;
-                    // is String
-                    return `${key}=${item.data?.[key] || item[key]}`;
-                });
+                let dataStr: string[];
+                if (typeof item.data === "string") {
+                    dataStr = [`data=${ this.materialize(item.data) }`];
+                } else {
+                    dataStr = Object.entries(item.data || item).map(([key, value]) => {
+                        // is Buffer
+                        if (value instanceof Buffer) return `${key}=${value.toString("base64")}`;
+                        // is Object
+                        if (value instanceof Object) return `${key}=${JSON.stringify(value)}`;
+                        // is Array
+                        if (value instanceof Array)
+                            return `${key}=${value.map(v => JSON.stringify(v)).join(",")}`;
+                        // is String
+                        return `${key}=${item.data?.[key] || item[key]}`;
+                    });
+                }
                 return `[CQ:${item.type},${dataStr.join(",")}]`;
             })
             .join("");
