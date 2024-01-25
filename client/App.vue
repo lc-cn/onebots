@@ -96,10 +96,10 @@
                 </el-descriptions-item>
                 {{ systemInfo }}
             </el-descriptions>
-            <pre>{{ logs }}</pre>
+            <pre @click="input?.focus?.()">{{ logs }}</pre>
             <div class="input-wrapper">
                 <span class="text">{{ inputData }}</span>
-                <input v-model="inputData" @keyup.enter="submitInput" />
+                <input ref="input" v-model="inputData" @keyup.enter="submitInput" />
             </div>
         </el-col>
     </el-row>
@@ -109,7 +109,7 @@
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { AdapterInfo, SystemInfo } from "./types";
 import { formatSize, formatTime } from "./utils";
-
+const input = ref();
 const ws = ref<WebSocket>();
 const config = ref<string>("");
 const adapters = ref<AdapterInfo[]>([]);
@@ -175,7 +175,7 @@ const scrollToBottom = () => {
             behavior: "smooth",
         });
         nextTick(() => {
-            input.value.focus();
+            input.value?.focus()
         });
     });
 };

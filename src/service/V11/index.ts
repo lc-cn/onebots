@@ -284,6 +284,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         //     if (!['user_id', 'group_id', 'discuss_id', 'member_id', 'channel_id', 'guild_id'].includes(key)) return value
         //     return value + ''
         // })
+        if (!this.filterFn(data)) return;
         this.emit("dispatch", this._formatEvent(data));
     }
 

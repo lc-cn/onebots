@@ -7,3 +7,6 @@ package-lock.json
 .vscode/
 pnpm-lock.yaml
 onebots.log
+auto-imports.d.ts
+components.d.ts
+dist
