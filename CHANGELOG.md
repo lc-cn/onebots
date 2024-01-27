@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.52](https://github.com/lc-cn/onebots/compare/v0.4.51...v0.4.52) (2024-01-27)
+
+
+### Bug Fixes
+
+* call v11 filter ([17883b7](https://github.com/lc-cn/onebots/commit/17883b76e034927e8395ed02a84e2af80bb29a61))
+* data目录创建隐患 ([275d226](https://github.com/lc-cn/onebots/commit/275d226bf74fe1b6d46a5998e2fee75c088e4828))
+* icqq-json消息的cq码格式异常 ([0962c0f](https://github.com/lc-cn/onebots/commit/0962c0f4b39224c7b565bec50e8fc898cbd676bf))
+* icqq发送的消息中丢失了at等消息段 ([4822a3f](https://github.com/lc-cn/onebots/commit/4822a3f6ba4c86b3998154222b17c156706462b0))
+* icqq私聊回复消息中第一个消息段丢失 ([5706e55](https://github.com/lc-cn/onebots/commit/5706e5554abf674679c5ebbd869efb9bae56a2ea))
+* 增强代码健壮性 ([3d871cf](https://github.com/lc-cn/onebots/commit/3d871cf3f13bae59f72493b3a6f0f2464d7549e7))
+
 ## [0.4.51](https://github.com/lc-cn/onebots/compare/v0.4.50...v0.4.51) (2024-01-17)
 
 
