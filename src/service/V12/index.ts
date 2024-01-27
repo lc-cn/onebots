@@ -124,7 +124,7 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
 
         this.on("dispatch", unserialized => {
             const serialized = JSON.stringify(unserialized);
-            for (const ws of this.wss?.clients) {
+            for (const ws of this.wss?.clients || []) {
                 ws.send(serialized, err => {
                     if (err) this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message);
                     else this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized);

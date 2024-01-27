@@ -111,7 +111,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         });
 
         this.on("dispatch", serialized => {
-            for (const ws of this.wss?.clients) {
+            for (const ws of this.wss?.clients || []) {
                 ws.send(serialized, err => {
                     if (err) this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message);
                     else this.logger.debug(`正向WS(${ws.url})上报事件成功: ` + serialized);
@@ -271,12 +271,16 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     }
 
     async dispatch(data: any) {
+        if (!this.filterFn(data)) return;
         data.post_type = data.post_type || "system";
         if (data.message && data.post_type === "message") {
             if (this.config.post_message_format === "array") {
                 data.message = this.adapter.toSegment("V11", data.message);
             } else {
-                data.message = this.adapter.toCqcode("V11", data.message);
+                data.message = this.adapter.toCqcode(
+                    "V11",
+                    (data.message = this.adapter.toSegment("V11", data.message)),
+                );
             }
         }
         data.time = Math.floor(Date.now() / 1000);

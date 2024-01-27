@@ -258,7 +258,7 @@ export default class QQAdapter extends Adapter<"qq"> {
                     if (value instanceof Array)
                         return `${key}=${value.map(v => JSON.stringify(v)).join(",")}`;
                     // is String
-                    return `${key}=${item[key]}`;
+                    return `${key}=${value}`;
                 });
                 return `[CQ:${item.type},${dataStr.join(",")}]`;
             })
