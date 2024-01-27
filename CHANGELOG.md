@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.53](https://github.com/lc-cn/onebots/compare/v0.4.52...v0.4.53) (2024-01-27)
+
+
+### Bug Fixes
+
+* build err ([7bb9d67](https://github.com/lc-cn/onebots/commit/7bb9d67a437b6a1192bc1127d4957aab31efd89a))
+
 ## [0.4.52](https://github.com/lc-cn/onebots/compare/v0.4.51...v0.4.52) (2024-01-27)
 
 
