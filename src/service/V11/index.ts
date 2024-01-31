@@ -515,6 +515,18 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                 if (event.message_type === "discuss") return;
                 const action = event.message_type === "private" ? "sendPrivateMsg" : "sendGroupMsg";
                 const id = event.message_type === "private" ? event.user_id : event.group_id;
+                if (typeof res.reply === "string") {
+                    if (/[CQ:music,type=.+,id=.+]/.test(res.reply)) {
+                        res.reply = res.reply.replace(",type=", ",platform=");
+                    }
+                    res.reply = this.adapter.fromCqcode("V11", res.reply);
+                } else {
+                    if (res.reply[0].type == "music" && res.reply[0]?.data?.type) {
+                        res.reply[0].data.platform = res.reply[0].data.type;
+                        delete res.reply[0].data.type;
+                    }
+                    res.reply = this.adapter.fromSegment("V11", res.reply);
+                }
                 this.action[action].apply(this, [id, res.reply, res.auto_escape]);
             }
             if (event.message_type === "group") {
