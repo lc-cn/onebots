@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.54](https://github.com/lc-cn/onebots/compare/v0.4.53...v0.4.54) (2024-01-31)
+
+
+### Bug Fixes
+
+* handle_quick_operation ([5dfa28e](https://github.com/lc-cn/onebots/commit/5dfa28e11925dc7357edc6ccb15d8cd09fd89aa7))
+
 ## [0.4.53](https://github.com/lc-cn/onebots/compare/v0.4.52...v0.4.53) (2024-01-27)
 
 
