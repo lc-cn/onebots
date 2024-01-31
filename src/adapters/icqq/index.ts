@@ -322,7 +322,7 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
     }
 
     fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.MessageElement<V>[] {
-        const regExpMatchArray = message.match(/\[CQ:([a-z]+),(!])+]/);
+        const regExpMatchArray = message.match(/\[CQ:([a-z]+),([^]])+]/);
         if (!regExpMatchArray)
             return [
                 {
@@ -334,7 +334,7 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
             ];
         const result: OneBot.MessageElement<V>[] = [];
         while (message.length) {
-            const [match] = message.match(/\[CQ:([a-z]+),(!])+]/) || [];
+            const [match] = message.match(/\[CQ:([a-z]+),([^]])+]/) || [];
             if (!match) break;
             const prevText = message.substring(0, match.length);
             if (prevText) {
