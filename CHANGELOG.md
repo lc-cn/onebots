@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.55](https://github.com/lc-cn/onebots/compare/v0.4.54...v0.4.55) (2024-02-21)
+
+
+### Bug Fixes
+
+* CQ code ([eff1c0d](https://github.com/lc-cn/onebots/commit/eff1c0d66968a613d5b10a2ebee12de7542a8f3c))
+* CQCode ([d129f31](https://github.com/lc-cn/onebots/commit/d129f318f0cd3dec9c70ba30def04edb8a7d466d))
+* icqq =&gt; @icqqjs/icqq ([0d4e455](https://github.com/lc-cn/onebots/commit/0d4e455c969429d728cd0dd7f9250a29f1182122))
+
 ## [0.4.54](https://github.com/lc-cn/onebots/compare/v0.4.53...v0.4.54) (2024-01-31)
 
 
