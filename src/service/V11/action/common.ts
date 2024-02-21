@@ -1,6 +1,6 @@
 import { OneBotStatus } from "@/onebot";
 import { V11 } from "@/service/V11";
-import { Message } from "icqq";
+import { Message } from "@icqqjs/icqq";
 import { MsgEntry } from "@/service/V11/db_entities";
 
 export class CommonAction {

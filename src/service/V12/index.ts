@@ -1,4 +1,4 @@
-import { EventMap } from "icqq";
+import { EventMap } from "@icqqjs/icqq";
 import { version } from "@/utils";
 import { join } from "path";
 import { Config } from "./config";
@@ -12,7 +12,7 @@ import https from "https";
 import { WebSocket, WebSocketServer } from "ws";
 import { toBool, toHump, toLine, transformObj, uuid } from "@/utils";
 import { JsonDB } from "@/db";
-import { genDmMessageId, genGroupMessageId } from "icqq/lib/message";
+import { genDmMessageId, genGroupMessageId } from "@icqqjs/icqq/lib/message";
 import { Service } from "@/service";
 import { App } from "@/server/app";
 import { Dict } from "@zhinjs/shared";

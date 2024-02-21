@@ -1,7 +1,7 @@
-import { Contactable } from "icqq/lib/internal";
-import { MusicElem, musicFactory } from "icqq/lib/message";
-import { pb } from "icqq/lib/core";
-import { Encodable } from "icqq/lib/core/protobuf";
+import { Contactable } from "@icqqjs/icqq/lib/internal";
+import { MusicElem, musicFactory } from "@icqqjs/icqq/lib/message";
+import { pb } from "@icqqjs/icqq/lib/core";
+import { Encodable } from "@icqqjs/icqq/lib/core/protobuf";
 import { title } from "process";
 
 /** 发送音乐分享(允许自定义参数) */

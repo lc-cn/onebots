@@ -1,12 +1,12 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
-import { Client, Config as IcqqConfig, MessageElem, Quotable } from "icqq";
+import { Client, Config as IcqqConfig, MessageElem, Quotable } from "@icqqjs/icqq";
 import process from "process";
 import { rmSync } from "fs";
 import { OneBot, OneBotStatus } from "@/onebot";
 import * as path from "path";
 import { shareMusic } from "@/service/shareMusicCustom";
-import { genDmMessageId, genGroupMessageId } from "icqq/lib/message";
+import { genDmMessageId, genGroupMessageId } from "@icqqjs/icqq/lib/message";
 
 async function processMessages(
     this: IcqqAdapter,
@@ -368,12 +368,12 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         return result;
     }
 
-    materialize( content: string ): string {
+    materialize(content: string): string {
         return content
-            .replace( /&(?!(amp|#91|#93|#44);)/g, "&amp;" )
-            .replace( /\[/g, "&#91;" )
-            .replace( /]/g, "&#93;" )
-            .replace( /,/g, "&#44;" )
+            .replace(/&(?!(amp|#91|#93|#44);)/g, "&amp;")
+            .replace(/\[/g, "&#91;")
+            .replace(/]/g, "&#93;")
+            .replace(/,/g, "&#44;");
     }
 
     toCqcode<V extends OneBot.Version>(version: V, messageArr: OneBot.MessageElement<V>[]): string {
@@ -384,7 +384,7 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
                 if (item.type === "text") return item.data?.text || item.text;
                 let dataStr: string[];
                 if (typeof item.data === "string") {
-                    dataStr = [`data=${ this.materialize(item.data) }`];
+                    dataStr = [`data=${this.materialize(item.data)}`];
                 } else {
                     dataStr = Object.entries(item.data || item).map(([key, value]) => {
                         // is Buffer

@@ -1,6 +1,6 @@
 import { remove } from "@/utils";
-import { Client, MessageElem, ShareElem } from "icqq";
-import { MusicElem } from "icqq/lib/message";
+import { Client, MessageElem, ShareElem } from "@icqqjs/icqq";
+import { MusicElem } from "@icqqjs/icqq/lib/message";
 
 export async function processMessage(
     this: Client,

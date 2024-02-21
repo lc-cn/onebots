@@ -16,11 +16,9 @@
 ## 全局安装(0.4.8以后不推荐)
 
 ### 1 安装依赖
-
+- 注意：
 ```shell
 npm install -g onebots
-# 0.4.8以上版本需要安装icqq
-npm install -g icqq
 ```
 
 ### 2 初始化配置文件
@@ -45,12 +43,30 @@ npm init -y
 
 ```shell
 npm install onebots
-npm install icqq # 如需使用icqq适配器，请务必安装
+npm install @icqqjs/icqq # 如需使用icqq适配器，请务必安装
 npm install lib-wechat # 如需使用微信适配器，请务必安装
 npm install qq-group-bot # 如需使用qq官方机器人适配器，请务必安装
 npm install node-dd-bot # 如需使用钉钉机器人适配器，请务必安装
 ```
+- 关于@icqqjs的安装引导：
 
+**安装:**
+1. 在你的项目根目录新建文件 `.npmrc` ,并录入以下内容
+```text
+@icqqjs:registry=https://npm.pkg.github.com
+```
+2. 命令行输入 `npm login --scope=@icqqjs --auth-type=legacy --registry=https://npm.pkg.github.com` ，回车，根据提示登录github
+```shell
+npm login --scope=@icqqjs --auth-type=legacy --registry=https://npm.pkg.github.com
+
+UserName: # 你的github账号
+Password: # 前往 https://github.com/settings/tokens/new  获取，scopes勾选 read:packages 
+E-Mail: # 你的公开邮箱地址
+```
+3. 安装依赖
+```shell
+npm install @icqqjs/icqq  # or > yarn add @icqqjs/icqq
+```
 ## 3. 执行如下命令生成配置文件
 
 ```shell
