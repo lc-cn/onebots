@@ -122,7 +122,7 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         const oneBot = super.createOneBot<Client>(uin, protocol, versions);
         this.#password = this.app.config[`icqq.${uin}`].password;
         oneBot.avatar = `https://q1.qlogo.cn/g?b=qq&s=100&nk=` + uin;
-        const pkg = require(path.resolve(path.dirname(require.resolve("icqq")), "../package.json"));
+        const pkg = require(path.resolve(path.dirname(require.resolve("@icqqjs/icqq")), "../package.json"));
         oneBot.dependency = `icqq v${pkg.version}`;
         oneBot.status = OneBotStatus.Online;
         oneBot.internal = new Client({
