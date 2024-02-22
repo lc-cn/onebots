@@ -27,7 +27,7 @@ jobs:
       # Install dependencies
       - run: npm install
         env:
-          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          NODE_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
         if: ${{ steps.release.outputs.release_created }}
       # Build output
       - run: npm run build
