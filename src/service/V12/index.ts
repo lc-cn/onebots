@@ -654,13 +654,10 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
         let remoteUrl = url;
         if (config.access_token) remoteUrl += `?access_token=${config.access_token}`;
         const headers: http.OutgoingHttpHeaders = {
-            "X-Self-ID": String(this.oneBot.uin),
-            "X-Client-Role": "Universal",
-            "User-Agent": `OneBot/12 (${this.oneBot.platform}) Node-onebots/V12`,
-            "Sec-WebSocket-Protocol": "12.onebots.v" + version,
+            "User-Agent": `OneBot/12 (${this.oneBot.platform}) onebots/${version}`,
         };
         if (config.access_token) headers.Authorization = "Bearer " + config.access_token;
-        const ws = new WebSocket(remoteUrl, { headers });
+        const ws = new WebSocket(remoteUrl, ["12.OneBots"], { headers });
         ws.on("error", err => {
             this.logger.error(err.message);
         });
