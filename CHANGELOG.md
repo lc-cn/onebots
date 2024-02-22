@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.56](https://github.com/lc-cn/onebots/compare/v0.4.55...v0.4.56) (2024-02-22)
+
+
+### Bug Fixes
+
+* add NODE_AUTH_TOKEN ([6b3ea8d](https://github.com/lc-cn/onebots/commit/6b3ea8db1e48de8377626131fd541a9a60a0d886))
+* add NODE_AUTH_TOKEN ([4402d3d](https://github.com/lc-cn/onebots/commit/4402d3ddffa72498c1230dfd3f56bd1248d695f2))
+* add NODE_AUTH_TOKEN ([b80c790](https://github.com/lc-cn/onebots/commit/b80c790df8f9f1ecb1f3b19ac4af2fab06e17e1b))
+* docs build and deploy ([bacf2c5](https://github.com/lc-cn/onebots/commit/bacf2c572265bbcafd2cf48343a4432515143a14))
+* docs build and deploy ([f59f676](https://github.com/lc-cn/onebots/commit/f59f676ab2b59b288f15d4f1b8f824d8d2858fcc))
+* docs build and deploy ([611df60](https://github.com/lc-cn/onebots/commit/611df6043c365ba2b9e028628009a7fd7c124b11))
+
 ## [0.4.55](https://github.com/lc-cn/onebots/compare/v0.4.54...v0.4.55) (2024-02-21)
 
 
