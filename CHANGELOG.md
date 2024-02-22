@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.57](https://github.com/lc-cn/onebots/compare/v0.4.56...v0.4.57) (2024-02-22)
+
+
+### Bug Fixes
+
+* OneBotV12 reverse link error ([b483bdd](https://github.com/lc-cn/onebots/commit/b483bddf38f63ca2df4e7293981a3e4175ab8339))
+
 ## [0.4.56](https://github.com/lc-cn/onebots/compare/v0.4.55...v0.4.56) (2024-02-22)
 
 
