@@ -18,6 +18,8 @@ jobs:
         uses: actions/configure-pages@v4
       - name: Install
         run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
       - name: Build
         run: npm run docs:build
       - name: Upload artifact
