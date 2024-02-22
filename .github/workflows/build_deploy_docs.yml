@@ -16,6 +16,8 @@ jobs:
           node-version: 16
       - name: Install
         run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
       - name: Build
         run: npm run docs:build
       - name: Deploy
