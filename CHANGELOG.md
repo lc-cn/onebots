@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.59](https://github.com/lc-cn/onebots/compare/v0.4.58...v0.4.59) (2024-02-23)
+
+
+### Bug Fixes
+
+* v12 add alt_message when message event ([a8ec809](https://github.com/lc-cn/onebots/commit/a8ec809065b5f2eb31999005f851d3058a4886bc))
+
 ## [0.4.58](https://github.com/lc-cn/onebots/compare/v0.4.57...v0.4.58) (2024-02-23)
 
 
