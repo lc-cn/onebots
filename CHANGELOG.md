@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.58](https://github.com/lc-cn/onebots/compare/v0.4.57...v0.4.58) (2024-02-23)
+
+
+### Bug Fixes
+
+* post message format ([4aa9980](https://github.com/lc-cn/onebots/commit/4aa998083defd67e044c7081327bf575ed07909d))
+
 ## [0.4.57](https://github.com/lc-cn/onebots/compare/v0.4.56...v0.4.57) (2024-02-22)
 
 
