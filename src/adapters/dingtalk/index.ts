@@ -3,6 +3,7 @@ import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
 import { Bot, Sendable } from "node-dd-bot";
 import * as path from "path";
+import { V11 } from "@/service/V11";
 
 export default class DingtalkAdapter extends Adapter<"dingtalk"> {
     constructor(app: App, config: DingtalkAdapter.Config) {
@@ -244,6 +245,9 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
             message_id: `${data.message_type}:${data.group_id || data.user_id}:${data.message_id}`,
         };
         delete result.bot;
+        if (event === "message") {
+            result.message = this.transformMessage(uin, version, result.message);
+        }
         if (version === "V11") {
             oneBot.V11.transformStrToIntForObj(result, ["user_id", "group_id", "message_id"]);
         }

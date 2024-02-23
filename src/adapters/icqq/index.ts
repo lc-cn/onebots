@@ -7,6 +7,7 @@ import { OneBot, OneBotStatus } from "@/onebot";
 import * as path from "path";
 import { shareMusic } from "@/service/shareMusicCustom";
 import { genDmMessageId, genGroupMessageId } from "@icqqjs/icqq/lib/message";
+import { V11 } from "@/service/V11";
 
 async function processMessages(
     this: IcqqAdapter,
@@ -122,7 +123,9 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         const oneBot = super.createOneBot<Client>(uin, protocol, versions);
         this.#password = this.app.config[`icqq.${uin}`].password;
         oneBot.avatar = `https://q1.qlogo.cn/g?b=qq&s=100&nk=` + uin;
-        const pkg = require(path.resolve(path.dirname(require.resolve("@icqqjs/icqq")), "../package.json"));
+        const pkg = require(
+            path.resolve(path.dirname(require.resolve("@icqqjs/icqq")), "../package.json"),
+        );
         oneBot.dependency = `icqq v${pkg.version}`;
         oneBot.status = OneBotStatus.Online;
         oneBot.internal = new Client({
@@ -182,6 +185,9 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
             } else {
                 data.message.unshift(replyEl);
             }
+        }
+        if (event === "message") {
+            result.message = this.transformMessage(uin, version, result.message);
         }
         if (version === "V11" && result.message_id) {
             result.message_id = oneBot.V11.transformToInt("message_id", result.message_id);

@@ -3,6 +3,7 @@ import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
 import { Bot, Sendable, Quotable } from "qq-group-bot";
 import * as path from "path";
+import { V11 } from "@/service/V11";
 
 export default class QQAdapter extends Adapter<"qq"> {
     constructor(app: App, config: QQAdapter.Config) {
@@ -290,6 +291,9 @@ export default class QQAdapter extends Adapter<"qq"> {
         }
         delete result.bot;
         const oneBot = this.getOneBot<Bot>(uin);
+        if (event === "message") {
+            result.message = this.transformMessage(uin, version, result.message);
+        }
         switch (version) {
             case "V11":
                 oneBot.V11.transformStrToIntForObj(result, ["message_id", "user_id", "group_id"]);

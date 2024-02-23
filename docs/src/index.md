@@ -18,7 +18,7 @@ hero:
     text: OneBot V12
     link: /v12/index
   - theme: alt
-    text: 仓库地址
+    text: Repository
     link: https://github.com/icqqjs/onebots
 features:
 - title: OneBot(s) 全面

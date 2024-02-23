@@ -3,6 +3,7 @@ import { App } from "@/server/app";
 import { OneBot } from "@/onebot";
 import { Dict } from "@zhinjs/shared";
 import { Logger } from "log4js";
+import { V11 } from "@/service/V11";
 
 export abstract class Adapter<T extends string = string> extends EventEmitter {
     oneBots: Map<string, OneBot> = new Map<string, OneBot>();
@@ -15,7 +16,13 @@ export abstract class Adapter<T extends string = string> extends EventEmitter {
     ) {
         super();
     }
-
+    transformMessage(uin: string, version: OneBot.Version, message: any) {
+        const onebot = this.getOneBot(uin);
+        const instance = onebot.instances.find(V => V.version === version) as V11;
+        return instance.config.post_message_format === "string"
+            ? this.toCqcode(version, message)
+            : this.toSegment(version, message);
+    }
     getOneBot<C = any>(uin: string) {
         return this.oneBots.get(uin) as OneBot<C> | undefined;
     }
