@@ -247,6 +247,7 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
         delete result.bot;
         if (event === "message") {
             result.message = this.transformMessage(uin, version, result.message);
+            result.alt_message = result.raw_message || "";
         }
         if (version === "V11") {
             oneBot.V11.transformStrToIntForObj(result, ["user_id", "group_id", "message_id"]);

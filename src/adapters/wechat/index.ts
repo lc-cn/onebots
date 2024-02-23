@@ -285,6 +285,7 @@ export default class WechatAdapter extends Adapter<"wechat"> {
         delete result.parser;
         if (event === "message") {
             result.message = this.transformMessage(uin, version, result.message);
+            result.alt_message = result.raw_message || "";
         }
         if (version === "V11") {
             bot.V11.transformStrToIntForObj(result, ["user_id", "group_id", "message_id"]);

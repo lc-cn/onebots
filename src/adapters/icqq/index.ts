@@ -188,6 +188,7 @@ export default class IcqqAdapter extends Adapter<"icqq"> {
         }
         if (event === "message") {
             result.message = this.transformMessage(uin, version, result.message);
+            result.alt_message = result.raw_message || "";
         }
         if (version === "V11" && result.message_id) {
             result.message_id = oneBot.V11.transformToInt("message_id", result.message_id);

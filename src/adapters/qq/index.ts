@@ -293,6 +293,7 @@ export default class QQAdapter extends Adapter<"qq"> {
         const oneBot = this.getOneBot<Bot>(uin);
         if (event === "message") {
             result.message = this.transformMessage(uin, version, result.message);
+            result.alt_message = result.raw_message || "";
         }
         switch (version) {
             case "V11":
