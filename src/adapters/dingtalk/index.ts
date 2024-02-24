@@ -1,11 +1,10 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { Bot, Sendable } from "node-dd-bot";
+import { Bot, Sendable, MessageElem } from "node-dd-bot";
 import * as path from "path";
-import { V11 } from "@/service/V11";
 
-export default class DingtalkAdapter extends Adapter<"dingtalk"> {
+export default class DingtalkAdapter extends Adapter<"dingtalk", Sendable> {
     constructor(app: App, config: DingtalkAdapter.Config) {
         super(app, "dingtalk", config);
         this.icon = `https://img.alicdn.com/imgextra/i4/O1CN01RtfAks1Xa6qJFAekm_!!6000000002939-2-tps-128-128.png`;
@@ -79,7 +78,7 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
     async sendPrivateMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.MessageElement<V>[], string],
+        args: [string, OneBot.Segment<V>[], string],
     ): Promise<OneBot.MessageRet<V>> {
         const [user_id, message] = args;
         const bot = this.getOneBot<Bot>(uin);
@@ -90,7 +89,7 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
                 return {
                     type,
                     ...data,
-                };
+                } as MessageElem;
             }),
         );
         return {
@@ -103,7 +102,7 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
     async sendGroupMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.MessageElement<V>[], string],
+        args: [string, OneBot.Segment<V>[], string],
     ): Promise<OneBot.MessageRet<V>> {
         const [group_id, message] = args;
         const bot = this.getOneBot<Bot>(uin);
@@ -114,7 +113,7 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
                 return {
                     type,
                     ...data,
-                };
+                } as MessageElem;
             }),
         );
         return {
@@ -143,39 +142,34 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
     fromSegment<V extends OneBot.Version>(
         version: V,
         segment: OneBot.Segment<V> | OneBot.Segment<V>[],
-    ): OneBot.MessageElement<V>[] {
+    ): Sendable {
         return [].concat(segment).map(item => {
-            if (typeof item === "string")
-                return {
-                    type: "text",
-                    data: {
-                        text: item,
-                    },
-                };
-            return item;
-        });
-    }
-    toSegment<V extends OneBot.Version, M = Sendable>(version: V, message: M): OneBot.Segment<V>[] {
-        return [].concat(message).map(item => {
-            if (!item || typeof item !== "object")
-                return {
-                    type: "text",
-                    data: {
-                        text: item,
-                    },
-                };
-            const { type, data, ...other } = item;
+            if (typeof item === "string") return item;
+            const { type, data } = item;
             return {
                 type,
-                data: {
-                    ...data,
-                    ...other,
-                },
+                ...data,
+            };
+        });
+    }
+    toSegment<V extends OneBot.Version>(version: V, message: Sendable): OneBot.Segment<V>[] {
+        return [].concat(message).map(item => {
+            if (typeof item !== "object")
+                return {
+                    type: "text",
+                    data: {
+                        text: item + "",
+                    },
+                };
+            const { type, ...data } = item;
+            return {
+                type,
+                data,
             };
         });
     }
 
-    fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.MessageElement<V>[] {
+    fromCqcode<V extends OneBot.Version>(version: V, message: string) {
         const regExpMatchArray = message.match(/\[CQ:([a-z]+),(!])+]/g);
         if (!regExpMatchArray)
             return [
@@ -186,7 +180,7 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
                     },
                 },
             ];
-        const result: OneBot.MessageElement<V>[] = [];
+        const result: OneBot.Segment<V>[] = [];
         for (const match of regExpMatchArray) {
             const [type, ...valueArr] = match.substring(1, match.length - 1).split(",");
             result.push({
@@ -200,28 +194,6 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
             });
         }
         return result;
-    }
-
-    toCqcode<V extends OneBot.Version>(version: V, messageArr: OneBot.MessageElement<V>[]): string {
-        return []
-            .concat(messageArr)
-            .map(item => {
-                if (typeof item === "string") return item;
-                if (item.type === "text") return item.data?.text || item.text;
-                const dataStr = Object.entries(item.data).map(([key, value]) => {
-                    // is Buffer
-                    if (value instanceof Buffer) return `${key}=${value.toString("base64")}`;
-                    // is Object
-                    if (value instanceof Object) return `${key}=${JSON.stringify(value)}`;
-                    // is Array
-                    if (value instanceof Array)
-                        return `${key}=${value.map(v => JSON.stringify(v)).join(",")}`;
-                    // is String
-                    return `${key}=${item[key]}`;
-                });
-                return `[CQ:${item.type},${dataStr.join(",")}]`;
-            })
-            .join("");
     }
     formatEventPayload<V extends OneBot.Version>(
         uin: string,
@@ -246,7 +218,6 @@ export default class DingtalkAdapter extends Adapter<"dingtalk"> {
         };
         delete result.bot;
         if (event === "message") {
-            result.message = this.transformMessage(uin, version, result.message);
             result.alt_message = result.raw_message || "";
         }
         if (version === "V11") {

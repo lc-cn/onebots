@@ -274,14 +274,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         if (!this.filterFn(data)) return;
         data.post_type = data.post_type || "system";
         if (data.message && data.post_type === "message") {
-            if (this.config.post_message_format === "array") {
-                data.message = this.adapter.toSegment("V11", data.message);
-            } else {
-                data.message = this.adapter.toCqcode(
-                    "V11",
-                    (data.message = this.adapter.toSegment("V11", data.message)),
-                );
-            }
+            data.message = this.adapter.transformMessage(this.oneBot.uin, "V11", data.message);
         }
         data.time = Math.floor(Date.now() / 1000);
         // data = transformObj(data, (key, value) => {
@@ -294,7 +287,6 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
 
     private _formatEvent(data: Dict) {
         if (data.post_type === "notice") {
-            // console.log(JSON.stringify(data))
             const data1: any = { ...data };
             if (data.notice_type === "group") {
                 delete data1.group;
@@ -598,13 +590,8 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                                 params[k] = params[k].replace(",type=", ",platform=");
                             }
                             params[k] = this.adapter.fromCqcode("V11", params[k]);
-                        } else {
-                            if (params[k][0].type == "music" && params[k][0]?.data?.type) {
-                                params[k][0].data.platform = params[k][0].data.type;
-                                delete params[k][0].data.type;
-                            }
-                            params[k] = this.adapter.fromSegment("V11", params[k]);
                         }
+                        params[k] = this.adapter.fromSegment("V11", params[k]);
                         params["message_id"] =
                             params[k].find(e => e.type === "reply")?.id || params["message_id"];
                     }
@@ -759,20 +746,14 @@ export namespace V11 {
         user_id: number;
         user_name: string;
     }
-
-    export interface Message {}
-
     export interface Segment {
         type: string;
         data: Dict;
     }
-
-    export interface MessageElement {
-        type: string;
-        data: Dict;
+    export type Sendable = string | Segment | (string | Segment)[];
+    export interface Message {
+        message: Sendable;
     }
-
-    export type Sendable = string | MessageElement | (string | MessageElement)[];
 
     export interface MessageRet {
         message_id: number;

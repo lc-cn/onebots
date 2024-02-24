@@ -5,7 +5,7 @@ import { Dict } from "@zhinjs/shared";
 import { Logger } from "log4js";
 import { V11 } from "@/service/V11";
 
-export abstract class Adapter<T extends string = string> extends EventEmitter {
+export abstract class Adapter<T extends string = string, Sendable = any> extends EventEmitter {
     oneBots: Map<string, OneBot> = new Map<string, OneBot>();
     #logger: Logger;
     icon: string;
@@ -16,11 +16,92 @@ export abstract class Adapter<T extends string = string> extends EventEmitter {
     ) {
         super();
     }
+
+    materialize(content: string): string {
+        return content
+            .replace(/&(?!(amp|#91|#93|#44);)/g, "&amp;")
+            .replace(/\[/g, "&#91;")
+            .replace(/]/g, "&#93;")
+            .replace(/,/g, "&#44;");
+    }
+    toCqcode<V extends OneBot.Version>(version: V, messageArr: OneBot.Segment<V>[]): string {
+        return []
+            .concat(messageArr)
+            .map(item => {
+                if (typeof item === "string") return item;
+                if (item.type === "text") return item.data?.text || item.text;
+                let dataStr: string[];
+                if (typeof item.data === "string") {
+                    dataStr = [`data=${this.materialize(item.data)}`];
+                } else {
+                    dataStr = Object.entries(item.data || item).map(([key, value]) => {
+                        // is Buffer
+                        if (value instanceof Buffer) return `${key}=${value.toString("base64")}`;
+                        // is Object
+                        if (value instanceof Object) return `${key}=${JSON.stringify(value)}`;
+                        // is Array
+                        if (value instanceof Array)
+                            return `${key}=${value.map(v => JSON.stringify(v)).join(",")}`;
+                        // is String
+                        return `${key}=${item.data?.[key] || item[key]}`;
+                    });
+                }
+                return `[CQ:${item.type},${dataStr.join(",")}]`;
+            })
+            .join("");
+    }
+
+    fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.Segment<V>[] {
+        const regExpMatchArray = message.match(/\[CQ:([a-z]+),([^]]+)]/);
+        if (!regExpMatchArray)
+            return [
+                {
+                    type: "text",
+                    data: {
+                        text: message,
+                    },
+                },
+            ];
+        const result: OneBot.Segment<V>[] = [];
+        while (message.length) {
+            const [match] = message.match(/\[CQ:([a-z]+),([^]]+)]/) || [];
+            if (!match) break;
+            const prevText = message.substring(0, match.length);
+            if (prevText) {
+                result.push({
+                    type: "text",
+                    data: {
+                        text: prevText,
+                    },
+                });
+            }
+            const [type, ...valueArr] = match.substring(1, match.length - 1).split(",");
+            result.push({
+                type: type as any,
+                data: Object.fromEntries(
+                    valueArr.map(item => {
+                        const [key, value] = item.split("=");
+                        return [key, type === "reply" && key === "id" ? +value : value];
+                    }),
+                ),
+            });
+            message = message.substring(match.length);
+        }
+        if (message.length) {
+            result.push({
+                type: "text",
+                data: {
+                    text: message,
+                },
+            });
+        }
+        return result;
+    }
     transformMessage(uin: string, version: OneBot.Version, message: any) {
         const onebot = this.getOneBot(uin);
         const instance = onebot.instances.find(V => V.version === version) as V11;
         return instance.config.post_message_format === "string"
-            ? this.toCqcode(version, message)
+            ? this.toCqcode(version, this.toSegment(version, message))
             : this.toSegment(version, message);
     }
     getOneBot<C = any>(uin: string) {
@@ -79,7 +160,7 @@ type UserInfo = {
     user_id: string | number;
     user_name: string;
 };
-export interface Adapter extends Adapter.Base {
+export interface Adapter<T extends string = string, Sendable = any> extends Adapter.Base<Sendable> {
     call<V extends OneBot.Version>(
         uin: string,
         version: V,
@@ -88,17 +169,9 @@ export interface Adapter extends Adapter.Base {
     ): Promise<any>;
 }
 export namespace Adapter {
-    export interface Base {
-        toSegment<V extends OneBot.Version, M = any>(version: V, message: M): OneBot.Segment<V>[];
-        fromSegment<V extends OneBot.Version>(
-            version: V,
-            segment: OneBot.Segment<V>,
-        ): OneBot.MessageElement<V>[];
-        toCqcode<V extends OneBot.Version>(version: V, message: OneBot.MessageElement<V>[]): string;
-        fromCqcode<V extends OneBot.Version>(
-            version: V,
-            message: string,
-        ): OneBot.MessageElement<V>[];
+    export interface Base<Sendable = any> {
+        toSegment<V extends OneBot.Version>(version: V, message: Sendable): OneBot.Segment<V>[];
+        fromSegment<V extends OneBot.Version>(version: V, segment: OneBot.Segment<V>[]): Sendable;
         getSelfInfo<V extends OneBot.Version>(uin: string, version: V): OneBot.SelfInfo<V>;
         /** 格式化事件 */
         formatEventPayload<V extends OneBot.Version>(
@@ -128,24 +201,24 @@ export namespace Adapter {
         sendGroupMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, OneBot.MessageElement<V>[], string],
+            args: [string, OneBot.Segment<V>[], string],
         ): Promise<OneBot.MessageRet<V>>;
         /** 发送私聊消息 */
         sendPrivateMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, OneBot.MessageElement<V>[], string],
+            args: [string, OneBot.Segment<V>[], string],
         ): Promise<OneBot.MessageRet<V>>;
         sendGuildMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, OneBot.MessageElement<V>[], string],
+            args: [string, OneBot.Segment<V>[], string],
         ): Promise<OneBot.MessageRet<V>>;
         /** 发送私聊消息 */
         sendDirectMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, OneBot.MessageElement<V>[], string],
+            args: [string, OneBot.Segment<V>[], string],
         ): Promise<OneBot.MessageRet<V>>;
         /** 获取消息 */
         getMessage<V extends OneBot.Version>(

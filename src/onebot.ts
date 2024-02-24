@@ -133,9 +133,6 @@ export namespace OneBot {
     export type GroupInfo<V extends Version> = V extends "V11" ? V11.GroupInfo : V12.GroupInfo;
     export type UserInfo<V extends Version> = V extends "V11" ? V11.UserInfo : V12.UserInfo;
     export type Message<V extends Version> = V extends "V11" ? V11.Message : V12.Message;
-    export type MessageElement<V extends Version> = V extends "V11"
-        ? V11.MessageElement
-        : V12.MessageElement;
     export type GroupMemberInfo<V extends Version> = V extends "V11"
         ? V11.GroupMemberInfo
         : V12.GroupMemberInfo;

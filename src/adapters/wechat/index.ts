@@ -1,10 +1,10 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { Client, Sendable, BaseClient } from "lib-wechat";
+import { Client, Sendable, BaseClient, MessageElem } from "lib-wechat";
 import * as path from "path";
 type WechatConfig = BaseClient.Config;
-export default class WechatAdapter extends Adapter<"wechat"> {
+export default class WechatAdapter extends Adapter<"wechat", Sendable> {
     constructor(app: App, config: WechatAdapter.Config) {
         super(app, "wechat", config);
         this.icon = `https://res.wx.qq.com/a/wx_fed/assets/res/NTI4MWU5.ico`;
@@ -70,7 +70,7 @@ export default class WechatAdapter extends Adapter<"wechat"> {
     async sendPrivateMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.MessageElement<V>[], string],
+        args: [string, OneBot.Segment<V>[], string],
     ): Promise<OneBot.MessageRet<V>> {
         const [user_id, message] = args;
         const bot = this.getOneBot<Client>(uin);
@@ -81,7 +81,7 @@ export default class WechatAdapter extends Adapter<"wechat"> {
                 return {
                     type,
                     ...data,
-                };
+                } as MessageElem;
             }),
         );
         if (Array.isArray(result)) result = JSON.stringify(result);
@@ -95,7 +95,7 @@ export default class WechatAdapter extends Adapter<"wechat"> {
     async sendGroupMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.MessageElement<V>[], string],
+        args: [string, OneBot.Segment<V>[], string],
     ): Promise<OneBot.MessageRet<V>> {
         const [group_id, message] = args;
         const bot = this.getOneBot<Client>(uin);
@@ -106,7 +106,7 @@ export default class WechatAdapter extends Adapter<"wechat"> {
                 return {
                     type,
                     ...data,
-                };
+                } as MessageElem;
             }),
         );
         if (Array.isArray(result)) result = JSON.stringify(result);
@@ -144,19 +144,17 @@ export default class WechatAdapter extends Adapter<"wechat"> {
     fromSegment<V extends OneBot.Version>(
         version: V,
         segment: OneBot.Segment<V> | OneBot.Segment<V>[],
-    ): OneBot.MessageElement<V>[] {
+    ): Sendable {
         return [].concat(segment).map(item => {
-            if (typeof item === "string")
-                return {
-                    type: "text",
-                    data: {
-                        text: item,
-                    },
-                };
-            return item;
+            if (typeof item === "string") return item;
+            const { type, data } = item;
+            return {
+                type,
+                ...data,
+            };
         });
     }
-    toSegment<V extends OneBot.Version, M = Sendable>(version: V, message: M): OneBot.Segment<V>[] {
+    toSegment<V extends OneBot.Version>(version: V, message: Sendable): OneBot.Segment<V>[] {
         return [].concat(message).map(item => {
             if (!item || typeof item !== "object")
                 return {
@@ -165,64 +163,12 @@ export default class WechatAdapter extends Adapter<"wechat"> {
                         text: item,
                     },
                 };
-            const { type, data, ...other } = item;
+            const { type, ...data } = item;
             return {
                 type,
-                data: {
-                    ...data,
-                    ...other,
-                },
+                data,
             };
         });
-    }
-
-    fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.MessageElement<V>[] {
-        const regExpMatchArray = message.match(/\[CQ:([a-z]+),(!])+]/g);
-        if (!regExpMatchArray)
-            return [
-                {
-                    type: "text",
-                    data: {
-                        text: message,
-                    },
-                },
-            ];
-        const result: OneBot.MessageElement<V>[] = [];
-        for (const match of regExpMatchArray) {
-            const [type, ...valueArr] = match.substring(1, match.length - 1).split(",");
-            result.push({
-                type: type,
-                data: Object.fromEntries(
-                    valueArr.map(item => {
-                        const [key, value] = item.split("=");
-                        return [key, value];
-                    }),
-                ),
-            });
-        }
-        return result;
-    }
-
-    toCqcode<V extends OneBot.Version>(version: V, messageArr: OneBot.MessageElement<V>[]): string {
-        return []
-            .concat(messageArr)
-            .map(item => {
-                if (typeof item === "string") return item;
-                if (item.type === "text") return item.data?.text || item.text;
-                const dataStr = Object.entries(item.data).map(([key, value]) => {
-                    // is Buffer
-                    if (value instanceof Buffer) return `${key}=${value.toString("base64")}`;
-                    // is Object
-                    if (value instanceof Object) return `${key}=${JSON.stringify(value)}`;
-                    // is Array
-                    if (value instanceof Array)
-                        return `${key}=${value.map(v => JSON.stringify(v)).join(",")}`;
-                    // is String
-                    return `${key}=${item[key]}`;
-                });
-                return `[CQ:${item.type},${dataStr.join(",")}]`;
-            })
-            .join("");
     }
     async getFriendList<V extends OneBot.Version>(
         uin: string,
@@ -284,7 +230,6 @@ export default class WechatAdapter extends Adapter<"wechat"> {
         delete result.c;
         delete result.parser;
         if (event === "message") {
-            result.message = this.transformMessage(uin, version, result.message);
             result.alt_message = result.raw_message || "";
         }
         if (version === "V11") {

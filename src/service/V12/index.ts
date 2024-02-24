@@ -452,6 +452,13 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
                 },
             },
         );
+        if (payload.message && payload.type === "message") {
+            payload.message = this.adapter.transformMessage(
+                this.oneBot.uin,
+                "V12",
+                payload.message,
+            );
+        }
         if (!this.filterFn(payload)) return;
         this.emit("dispatch", payload);
     }
@@ -493,13 +500,8 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
                                 params[k] = params[k].replace(",type=", ",platform=");
                             }
                             params[k] = this.adapter.fromCqcode("V12", params[k]);
-                        } else {
-                            if (params[k][0].type == "music" && params[k][0]?.data?.type) {
-                                params[k][0].data.platform = params[k][0].data.type;
-                                delete params[k][0].data.type;
-                            }
-                            params[k] = this.adapter.fromSegment("V12", params[k]);
                         }
+                        params[k] = this.adapter.fromSegment("V12", params[k]);
                     }
                     args.push(params[k]);
                 }
@@ -745,57 +747,6 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
 }
 
 export namespace V12 {
-    const fileTypes: string[] = ["image", "file", "record", "video", "flash"];
-    export type Sendable = string | SegmentElem | (string | SegmentElem)[];
-
-    export interface SegmentMap {
-        face: { id: number; text?: string };
-        text: { text: string };
-        mention: { user_id: string };
-        rps: { id?: string };
-        dice: { id?: string };
-        poke: { user_id: string };
-        mention_all: null;
-        image: { file_id: string };
-        voice: { file_id: string };
-        audio: { file_id: string };
-        file: { file_id: string };
-        music: {
-            type: "163" | "qq" | "xm" | "custom";
-            id?: string;
-            url?: string;
-            audio?: string;
-            title?: string;
-        };
-        location: {
-            latitude: number;
-            longitude: number;
-            title?: string;
-            content?: string;
-        };
-        share: {
-            url: string;
-            title: string;
-            content?: string;
-            image?: string;
-        };
-        reply: {
-            message_id: string;
-        };
-        node: {
-            user_id: string;
-            time?: number;
-            user_name?: string;
-            message: SegmentElem[];
-        };
-        forward: { nodes: SegmentElem<"node">[] };
-    }
-
-    export type SegmentElem<K extends keyof SegmentMap = keyof SegmentMap> = {
-        type: K;
-        data: SegmentMap[K];
-    };
-
     export interface Config {
         heartbeat?: number;
         access_token?: string;
@@ -975,11 +926,15 @@ export namespace V12 {
         user_id: string;
         user_name: string;
     }
-    export interface Segment {}
-    export interface Message {}
-    export interface MessageElement extends Dict {
+    export interface Segment {
         type: string;
+        data: Dict;
     }
+    export type Sendable = string | Segment | (string | Segment)[];
+    export interface Message {
+        message: Sendable;
+    }
+    export interface Message {}
     export interface MessageRet {
         message_id: string;
     }

@@ -9,7 +9,7 @@ import yaml from "js-yaml";
 import KoaBodyParser from "koa-bodyparser";
 import basicAuth from "koa-basic-auth";
 
-import { deepMerge, deepClone, protectedFields, Class, readLine } from "@/utils";
+import { deepMerge, deepClone, Class, readLine } from "@/utils";
 import { Router, WsServer } from "./router";
 import { readFileSync } from "fs";
 import { V11 } from "@/service/V11";
@@ -404,14 +404,12 @@ export namespace App {
             platform, // 别人写的
         ];
         type AdapterClass = Class<Adapter<T>>;
-        let adapter: AdapterClass = null;
-        for (const adapterName of maybeNames) {
-            try {
-                adapter = require(adapterName)?.default;
-                break;
-            } catch {}
+        let adapter: AdapterClass;
+        try {
+            adapter = require(path.join(__dirname, "../adapters", platform))?.default;
+        } catch (e) {
+            console.error(`loadAdapter(${platform}) failed:${e.message}`);
         }
-        if (!adapter) throw new Error(`找不到对应的适配器：${platform}`);
         return adapter;
     }
 }

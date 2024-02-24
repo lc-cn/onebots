@@ -1,11 +1,10 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { Bot, Sendable, Quotable } from "qq-group-bot";
+import { Bot, Sendable, Quotable, MessageElem } from "qq-group-bot";
 import * as path from "path";
-import { V11 } from "@/service/V11";
 
-export default class QQAdapter extends Adapter<"qq"> {
+export default class QQAdapter extends Adapter<"qq", Sendable> {
     constructor(app: App, config: QQAdapter.Config) {
         super(app, "qq", config);
         this.icon = `https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png`;
@@ -59,7 +58,7 @@ export default class QQAdapter extends Adapter<"qq"> {
     async sendGroupMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.MessageElement<V>[], string],
+        args: [string, OneBot.Segment<V>[], string],
     ): Promise<OneBot.MessageRet<V>> {
         const [group_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
@@ -67,7 +66,7 @@ export default class QQAdapter extends Adapter<"qq"> {
         if (source) quote = { id: source };
         const result = await bot.internal.sendGroupMessage(
             group_id,
-            message.map(({ type, data }) => ({ type, ...data })),
+            message.map(({ type, data }) => ({ type, ...data }) as MessageElem) as Sendable,
             quote,
         );
         if (result.msg === "success") {
@@ -83,7 +82,7 @@ export default class QQAdapter extends Adapter<"qq"> {
     async sendPrivateMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.MessageElement<V>[], string],
+        args: [string, OneBot.Segment<V>[], string],
     ): Promise<OneBot.MessageRet<V>> {
         const [user_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
@@ -91,7 +90,7 @@ export default class QQAdapter extends Adapter<"qq"> {
         if (source) quote = { id: source };
         const result = await bot.internal.sendPrivateMessage(
             user_id,
-            message.map(({ type, data }) => ({ type, ...data })),
+            message.map(({ type, data }) => ({ type, ...data }) as MessageElem) as Sendable,
             quote,
         );
         if (result.msg === "success") {
@@ -108,7 +107,7 @@ export default class QQAdapter extends Adapter<"qq"> {
     async sendGuildMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.MessageElement<V>[], string],
+        args: [string, OneBot.Segment<V>[], string],
     ): Promise<OneBot.MessageRet<V>> {
         const [channel_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
@@ -116,7 +115,7 @@ export default class QQAdapter extends Adapter<"qq"> {
         if (source) quote = { id: source };
         const result = await bot.internal.sendGuildMessage(
             channel_id,
-            message.map(({ type, data }) => ({ type, ...data })),
+            message.map(({ type, data }) => ({ type, ...data }) as MessageElem) as Sendable,
             quote,
         );
         if (result.msg === "success") {
@@ -135,7 +134,7 @@ export default class QQAdapter extends Adapter<"qq"> {
     async sendDirectMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.MessageElement<V>[], string],
+        args: [string, OneBot.Segment<V>[], string],
     ): Promise<OneBot.MessageRet<V>> {
         const [guild_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
@@ -143,7 +142,7 @@ export default class QQAdapter extends Adapter<"qq"> {
         if (source) quote = { id: source };
         const result = await bot.internal.sendDirectMessage(
             guild_id,
-            message.map(({ type, data }) => ({ type, ...data })),
+            message.map(({ type, data }) => ({ type, ...data }) as MessageElem) as Sendable,
             quote,
         );
         if (result.msg === "success") {
@@ -185,16 +184,14 @@ export default class QQAdapter extends Adapter<"qq"> {
     fromSegment<V extends OneBot.Version>(
         version: V,
         segment: OneBot.Segment<V> | OneBot.Segment<V>[],
-    ): OneBot.MessageElement<V>[] {
+    ): Sendable {
         return [].concat(segment).map(item => {
-            if (typeof item === "string")
-                return {
-                    type: "text",
-                    data: {
-                        text: item,
-                    },
-                };
-            return item;
+            if (typeof item === "string") return item;
+            const { type, data } = item;
+            return {
+                type,
+                ...data,
+            };
         });
     }
     toSegment<V extends OneBot.Version, M = Sendable>(version: V, message: M): OneBot.Segment<V>[] {
@@ -206,64 +203,12 @@ export default class QQAdapter extends Adapter<"qq"> {
                         text: item,
                     },
                 };
-            const { type, data, ...other } = item;
+            const { type, ...data } = item;
             return {
                 type,
-                data: {
-                    ...data,
-                    ...other,
-                },
+                data,
             };
         });
-    }
-
-    fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.MessageElement<V>[] {
-        const regExpMatchArray = message.match(/\[CQ:([a-z]+),(!])+]/g);
-        if (!regExpMatchArray)
-            return [
-                {
-                    type: "text",
-                    data: {
-                        text: message,
-                    },
-                },
-            ];
-        const result: OneBot.MessageElement<V>[] = [];
-        for (const match of regExpMatchArray) {
-            const [type, ...valueArr] = match.substring(1, match.length - 1).split(",");
-            result.push({
-                type: type,
-                data: Object.fromEntries(
-                    valueArr.map(item => {
-                        const [key, value] = item.split("=");
-                        return [key, value];
-                    }),
-                ),
-            });
-        }
-        return result;
-    }
-
-    toCqcode<V extends OneBot.Version>(version: V, messageArr: OneBot.MessageElement<V>[]): string {
-        return []
-            .concat(messageArr)
-            .map(item => {
-                if (typeof item === "string") return item;
-                if (item.type === "text") return item.data?.text || item.text;
-                const dataStr = Object.entries(item.data).map(([key, value]) => {
-                    // is Buffer
-                    if (value instanceof Buffer) return `${key}=${value.toString("base64")}`;
-                    // is Object
-                    if (value instanceof Object) return `${key}=${JSON.stringify(value)}`;
-                    // is Array
-                    if (value instanceof Array)
-                        return `${key}=${value.map(v => JSON.stringify(v)).join(",")}`;
-                    // is String
-                    return `${key}=${value}`;
-                });
-                return `[CQ:${item.type},${dataStr.join(",")}]`;
-            })
-            .join("");
     }
     formatEventPayload<V extends OneBot.Version>(
         uin: string,
@@ -292,7 +237,6 @@ export default class QQAdapter extends Adapter<"qq"> {
         delete result.bot;
         const oneBot = this.getOneBot<Bot>(uin);
         if (event === "message") {
-            result.message = this.transformMessage(uin, version, result.message);
             result.alt_message = result.raw_message || "";
         }
         switch (version) {
