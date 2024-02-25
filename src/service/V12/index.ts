@@ -691,7 +691,7 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
             try {
                 data = JSON.parse(String(msg)) as V12.Protocol;
                 let ret: string;
-                if (data.action.startsWith(".handle_quick_operation")) {
+                if (data.action?.startsWith(".handle_quick_operation")) {
                     const event = data.params.context,
                         res = data.params.operation;
                     this._quickOperate(event, res);
