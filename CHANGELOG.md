@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.61](https://github.com/lc-cn/onebots/compare/v0.4.60...v0.4.61) (2024-03-01)
+
+
+### Bug Fixes
+
+* add some expand method ([257c8bc](https://github.com/lc-cn/onebots/commit/257c8bc84bf2418164cc2b920fbd4101c0208ff7))
+* git ignore ([854c156](https://github.com/lc-cn/onebots/commit/854c156565f16b529f09c689f7d294a528988453))
+* handle operation ([f593603](https://github.com/lc-cn/onebots/commit/f59360357166a60b28eb1535c9be24d63cf6fbc5))
+
 ## [0.4.60](https://github.com/lc-cn/onebots/compare/v0.4.59...v0.4.60) (2024-02-24)
 
 
