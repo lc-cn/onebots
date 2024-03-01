@@ -658,6 +658,7 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
         const headers: http.OutgoingHttpHeaders = {
             "User-Agent": `OneBot/12 (${this.oneBot.platform}) onebots/${version}`,
         };
+        console.log(config);
         if (config.access_token) headers.Authorization = "Bearer " + config.access_token;
         const ws = new WebSocket(remoteUrl, ["12.OneBots"], { headers });
         ws.on("error", err => {
