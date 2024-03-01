@@ -5,8 +5,10 @@ node_modules
 package-lock.json
 /lib
 .vscode/
+.idea/
 pnpm-lock.yaml
 onebots.log
 auto-imports.d.ts
 components.d.ts
+/docs/.vitepress/cache/
 dist
