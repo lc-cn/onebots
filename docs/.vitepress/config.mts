@@ -54,6 +54,9 @@ export default defineConfig({
                 text: pkg.version,
                 items: [
                     {
+                      text: 'Package',link: `https://www.npmjs.com/package/onebots/v/`+pkg.version
+                    },
+                    {
                       text: "Release", link: `https://github.com/lc-cn/onebots/releases/tag/v`+pkg.version
                     },
                     { text: "Changelog", link: "https://github.com/icqqjs/onebots/blob/master/CHANGELOG.md" }
