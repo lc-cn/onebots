@@ -58,17 +58,13 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
     async sendGroupMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string],
+        args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
         const [group_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
-        const result = await bot.internal.sendGroupMessage(
-            group_id,
-            message.map(({ type, data }) => ({ type, ...data }) as MessageElem) as Sendable,
-            quote,
-        );
+        const result = await bot.internal.sendGroupMessage(group_id, message, quote);
         if (result.msg === "success") {
             return {
                 message_id:
@@ -82,17 +78,13 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
     async sendPrivateMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string],
+        args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
         const [user_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
-        const result = await bot.internal.sendPrivateMessage(
-            user_id,
-            message.map(({ type, data }) => ({ type, ...data }) as MessageElem) as Sendable,
-            quote,
-        );
+        const result = await bot.internal.sendPrivateMessage(user_id, message, quote);
         if (result.msg === "success") {
             return {
                 message_id:
@@ -107,17 +99,13 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
     async sendGuildMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string],
+        args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
         const [channel_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
-        const result = await bot.internal.sendGuildMessage(
-            channel_id,
-            message.map(({ type, data }) => ({ type, ...data }) as MessageElem) as Sendable,
-            quote,
-        );
+        const result = await bot.internal.sendGuildMessage(channel_id, message, quote);
         if (result.msg === "success") {
             return {
                 message_id:
@@ -134,17 +122,13 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
     async sendDirectMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string],
+        args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
         const [guild_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
-        const result = await bot.internal.sendDirectMessage(
-            guild_id,
-            message.map(({ type, data }) => ({ type, ...data }) as MessageElem) as Sendable,
-            quote,
-        );
+        const result = await bot.internal.sendDirectMessage(guild_id, message, quote);
         if (result.msg === "success") {
             return {
                 message_id:

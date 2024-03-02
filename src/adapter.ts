@@ -201,24 +201,24 @@ export namespace Adapter {
         sendGroupMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, OneBot.Segment<V>[], string],
+            args: [string, Sendable, string],
         ): Promise<OneBot.MessageRet<V>>;
         /** 发送私聊消息 */
         sendPrivateMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, OneBot.Segment<V>[], string],
+            args: [string, Sendable, string],
         ): Promise<OneBot.MessageRet<V>>;
         sendGuildMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, OneBot.Segment<V>[], string],
+            args: [string, Sendable, string],
         ): Promise<OneBot.MessageRet<V>>;
         /** 发送私聊消息 */
         sendDirectMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, OneBot.Segment<V>[], string],
+            args: [string, Sendable, string],
         ): Promise<OneBot.MessageRet<V>>;
         /** 获取消息 */
         getMessage<V extends OneBot.Version>(

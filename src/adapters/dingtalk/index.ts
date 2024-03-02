@@ -78,20 +78,11 @@ export default class DingtalkAdapter extends Adapter<"dingtalk", Sendable> {
     async sendPrivateMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string],
+        args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
         const [user_id, message] = args;
         const bot = this.getOneBot<Bot>(uin);
-        const result = await bot.internal.sendPrivateMsg(
-            user_id,
-            message.map(item => {
-                const { type, data } = item;
-                return {
-                    type,
-                    ...data,
-                } as MessageElem;
-            }),
-        );
+        const result = await bot.internal.sendPrivateMsg(user_id, message);
         return {
             message_id:
                 version === "V11"
@@ -102,20 +93,11 @@ export default class DingtalkAdapter extends Adapter<"dingtalk", Sendable> {
     async sendGroupMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string],
+        args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
         const [group_id, message] = args;
         const bot = this.getOneBot<Bot>(uin);
-        const result = await bot.internal.sendGroupMsg(
-            group_id,
-            message.map(item => {
-                const { type, data } = item;
-                return {
-                    type,
-                    ...data,
-                } as MessageElem;
-            }),
-        );
+        const result = await bot.internal.sendGroupMsg(group_id, message);
         return {
             message_id:
                 version === "V11"

@@ -198,7 +198,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     async sendPrivateMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string?],
+        args: [string, Sendable, string?],
     ): Promise<OneBot.MessageRet<V>> {
         const [user_id, message, source] = args;
         const client: Client = this.oneBots.get(uin)?.internal;
@@ -229,7 +229,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     async sendGroupMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string?],
+        args: [string, Sendable, string?],
     ): Promise<OneBot.MessageRet<V>> {
         const [group_id, message, source] = args;
         const client: Client = this.oneBots.get(uin)?.internal;
@@ -251,7 +251,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     async sendGuildMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string?],
+        args: [string, Sendable, string?],
     ): Promise<OneBot.MessageRet<V>> {
         const [target_id, message, source] = args;
         const client: Client = this.oneBots.get(uin)?.internal;

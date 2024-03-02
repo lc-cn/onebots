@@ -70,20 +70,11 @@ export default class WechatAdapter extends Adapter<"wechat", Sendable> {
     async sendPrivateMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string],
+        args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
         const [user_id, message] = args;
         const bot = this.getOneBot<Client>(uin);
-        let result = await bot.internal.sendPrivateMsg(
-            user_id,
-            message.map(item => {
-                const { type, data } = item;
-                return {
-                    type,
-                    ...data,
-                } as MessageElem;
-            }),
-        );
+        let result = await bot.internal.sendPrivateMsg(user_id, message);
         if (Array.isArray(result)) result = JSON.stringify(result);
         return {
             message_id:
@@ -95,20 +86,11 @@ export default class WechatAdapter extends Adapter<"wechat", Sendable> {
     async sendGroupMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, OneBot.Segment<V>[], string],
+        args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
         const [group_id, message] = args;
         const bot = this.getOneBot<Client>(uin);
-        let result = await bot.internal.sendGroupMsg(
-            group_id,
-            message.map(item => {
-                const { type, data } = item;
-                return {
-                    type,
-                    ...data,
-                } as MessageElem;
-            }),
-        );
+        let result = await bot.internal.sendGroupMsg(group_id, message);
         if (Array.isArray(result)) result = JSON.stringify(result);
         return {
             message_id:
