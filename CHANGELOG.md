@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.62](https://github.com/lc-cn/onebots/compare/v0.4.61...v0.4.62) (2024-03-02)
+
+
+### Bug Fixes
+
+* 修复dingtalk、qq、icqq发送消息失败问题 ([5dbea25](https://github.com/lc-cn/onebots/commit/5dbea25ebf4a4729b42c75061fa9c28513be619f))
+
 ## [0.4.61](https://github.com/lc-cn/onebots/compare/v0.4.60...v0.4.61) (2024-03-01)
 
 
