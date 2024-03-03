@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.63](https://github.com/lc-cn/onebots/compare/v0.4.62...v0.4.63) (2024-03-03)
+
+
+### Bug Fixes
+
+* 消息格式处理 ([a5cb49b](https://github.com/lc-cn/onebots/commit/a5cb49b8cfea56fec08c6686cf620e0601948901))
+
 ## [0.4.62](https://github.com/lc-cn/onebots/compare/v0.4.61...v0.4.62) (2024-03-02)
 
 
