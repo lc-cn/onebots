@@ -154,6 +154,10 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             detail_type: data.message_type || data.notice_type || data.request_type,
             platform: "qq",
             ...data,
+            sender: {
+                ...(data?.sender || {}),
+            },
+            user_id: data.user_id || data.sender?.user_id,
         };
         if (data.source) {
             const message_id =

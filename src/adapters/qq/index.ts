@@ -212,6 +212,10 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
             platform: "qq",
             time: data.timestamp,
             ...data,
+            sender: {
+                ...(data?.sender || {}),
+            },
+            user_id: data.user_id || data.sender?.user_id,
         };
         if (data.message_id) {
             data.message_id = `${data.message_type}:${

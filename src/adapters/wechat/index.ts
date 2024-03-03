@@ -1,7 +1,7 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { Client, Sendable, BaseClient, MessageElem } from "lib-wechat";
+import { Client, Sendable, BaseClient } from "lib-wechat";
 import * as path from "path";
 type WechatConfig = BaseClient.Config;
 export default class WechatAdapter extends Adapter<"wechat", Sendable> {
@@ -207,6 +207,10 @@ export default class WechatAdapter extends Adapter<"wechat", Sendable> {
             friend: data.friend?.info,
             time: data.timestamp,
             ...data,
+            sender: {
+                ...(data?.sender || {}),
+            },
+            user_id: data.user_id || data.sender?.user_id,
         };
         delete result.bot;
         delete result.c;

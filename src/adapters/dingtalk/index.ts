@@ -196,6 +196,10 @@ export default class DingtalkAdapter extends Adapter<"dingtalk", Sendable> {
             platform: "dingtalk",
             time: data.timestamp,
             ...data,
+            sender: {
+                ...(data?.sender || {}),
+            },
+            user_id: data.user_id || data.sender?.user_id,
             message_id: `${data.message_type}:${data.group_id || data.user_id}:${data.message_id}`,
         };
         delete result.bot;
