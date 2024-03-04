@@ -12,7 +12,7 @@ npm init
 ## 2. 初始化项目
 - 在终端进入项目文件夹，并执行以下命令，安装 `OneBots`
 ```shell
-npm install onebots
+npm install onebots --legacy-peer-deps
 ```
 - 使用以下命令，运行 `OneBots`，首次运行会自动创建配置文件 `config.yaml`
 ```shell
