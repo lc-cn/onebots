@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.64](https://github.com/lc-cn/onebots/compare/v0.4.63...v0.4.64) (2024-03-04)
+
+
+### Bug Fixes
+
+* 补充部分文档，修复file_id问题 ([dae831b](https://github.com/lc-cn/onebots/commit/dae831b08f019978003ca37e99210a62c1c9805e))
+
 ## [0.4.63](https://github.com/lc-cn/onebots/compare/v0.4.62...v0.4.63) (2024-03-03)
 
 
