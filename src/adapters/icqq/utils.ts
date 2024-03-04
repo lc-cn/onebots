@@ -1,27 +1,85 @@
-import { remove } from "@/utils"
-import { Client, MessageElem, ShareElem } from "icqq"
-import { MusicElem } from "icqq/lib/message"
+import { MessageElem } from "@icqqjs/icqq";
+import { OneBot } from "@/onebot";
+import { shareMusic } from "./shareMusicCustom";
+import IcqqAdapter from "@/adapters/icqq/index";
 
-export async function processMessage(
-    this: Client,
-    elements: MessageElem[]
-): Promise<{ element: MessageElem[]; music?: MessageElem; share?: ShareElem }> {
-    let music = elements.find((e) => e.type === "music") as MusicElem
-    if (music) {
-        remove(elements, music)
-        if (String(music.platform) === "custom") {
-            music.platform = music["subtype"] // gocq 的平台数据存储在 subtype 内，兼容 icqq 时要求前端必须发送 id 字段
+export async function processMessages(
+    this: IcqqAdapter,
+    uin: string,
+    target_id: number,
+    target_type: "group" | "private",
+    list: OneBot.Segment<OneBot.Version>[],
+) {
+    let result: MessageElem[] = [];
+    for (const item of list) {
+        const { type, data, ...other } = item;
+        switch (type) {
+            case "node": {
+                result.push({
+                    type,
+                    ...data,
+                    user_id: data.user_id,
+                    message: await processMessages.call(
+                        this,
+                        uin,
+                        data.user_id,
+                        "private",
+                        data.content || [],
+                    ),
+                });
+                break;
+            }
+            case "music": {
+                if (String(item.data.platform) === "custom") {
+                    item.data.platform = item.data["subtype"]; // gocq 的平台数据存储在 subtype 内，兼容 icqq 时要求前端必须发送 id 字段
+                }
+                const { type, data } = item;
+                await shareMusic.call(
+                    this[target_type === "private" ? "pickFriend" : "pickGroup"](target_id),
+                    {
+                        type,
+                        ...data,
+                    },
+                );
+                break;
+            }
+            case "share": {
+                await this[target_type === "private" ? "pickFriend" : "pickGroup"](
+                    target_id,
+                ).shareUrl(item.data);
+                break;
+            }
+            case "video":
+            case "audio":
+            case "image": {
+                item["file"] = item["file"] || item["file_id"] || item["url"];
+                if (item["file"]?.startsWith("base64://"))
+                    item["file"] = Buffer.from(item["file"].slice(9), "base64");
+                result.push({
+                    type: type as any,
+                    ...data,
+                    ...other,
+                });
+                break;
+            }
+            case "reply": {
+                const oneBot = this.getOneBot(uin);
+                const message_id = oneBot.V11.getStrByInt("message_id", data.id);
+                const msg = await oneBot.internal.getMsg(message_id);
+                result.push({
+                    type: "quote",
+                    ...msg,
+                });
+                break;
+            }
+            default: {
+                result.push({
+                    type: type as any,
+                    ...data,
+                    ...other,
+                });
+            }
         }
     }
-    let share = elements.find((e) => e.type === "share") as ShareElem
-    if (share) remove(elements, share)
-    for (const element of elements) {
-        if (["image", "video", "audio"].includes(element.type)) {
-            if (element["file_id"]?.startsWith("base64://"))
-                element["file_id"] = Buffer.from(element["file_id"].slice(9), "base64")
-            if (element["file"]?.startsWith("base64://"))
-                element["file"] = Buffer.from(element["file"].slice(9), "base64")
-        }
-    }
-    return { element: elements, share, music }
+    return result;
 }

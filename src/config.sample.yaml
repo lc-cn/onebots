@@ -25,8 +25,6 @@ general: # 通用配置，在单个配置省略时的默认值
     use_ws: true # 是否启用 websocket
     webhook: [ ] # http 上报地址
     ws_reverse: [ ] # 反向ws连接地址
-  protocol:
-    platform: 2
 # 每个账号的单独配置(用于覆盖通用配置)
 icqq.123456789: # `${适配器名称}:${账号}`
   versions:
@@ -54,3 +52,17 @@ qq.a: # `${适配器名称}:${账号}`
       - 'INTERACTION' # 互动事件
       - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件，私域机器人请注释
   # 。。。其他配置项参见上方对应oneBot版本的通用配置
+dingtalk.abcedfg: # `${适配器名称}:${clientId}`
+  versions:
+    - version: V11
+    - version: V12
+  protocol:
+    clientSecret: '' # 钉钉机器人秘钥 必填
+    username: '钉钉机器人' #钉钉后台配置的机器人名称 不填则显示'钉钉机器人'
+    avatar: '' # 机器人头像 不填则显示钉钉logo
+
+wechat.bot1: # `${适配器名称}:${机器人唯一标识}`
+  versions:
+    - version: V11
+    - version: V12
+  protocol: {}

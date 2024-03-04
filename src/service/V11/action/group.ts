@@ -1,14 +1,25 @@
-import {V11} from "@/service/V11";
+import { V11 } from "@/service/V11";
 
 export class GroupAction {
     /**
      * 发送群聊消息
      * @param group_id {number} 群id
-     * @param message {MessageElem[]} 消息
-     * @param message_id {string} 引用的消息ID
+     * @param message {V11.Sendable[]} 消息
+     * @param message_id {number} 引用的消息ID
      */
-    async sendGroupMsg(this: V11, group_id: number, message: V11.Sendable, message_id?: string) {
-        return this.adapter.call(this.oneBot.uin,'V11','sendGroupMessage', [group_id, message, message_id])
+    async sendGroupMsg(
+        this: V11,
+        group_id: number,
+        message: V11.Sendable,
+        message_id?: number,
+    ): Promise<V11.MessageRet> {
+        const msg_id = message_id ? this.getStrByInt("message_id", message_id) : undefined;
+        const gid = this.getStrByInt("group_id", group_id);
+        return this.adapter.call(this.oneBot.uin, "V11", "sendGroupMessage", [
+            gid,
+            message,
+            msg_id,
+        ]);
     }
 
     /**
@@ -18,7 +29,11 @@ export class GroupAction {
      * @param reject_add_request {boolean} 是否禁止此人加群请求
      */
     setGroupKick(this: V11, group_id: number, user_id: number, reject_add_request?: boolean) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupKick',[group_id, user_id, reject_add_request])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupKick", [
+            group_id,
+            user_id,
+            reject_add_request,
+        ]);
     }
 
     /**
@@ -28,7 +43,11 @@ export class GroupAction {
      * @param duration {number} 禁言时长(单位：秒)
      */
     setGroupBan(this: V11, group_id: number, user_id: number, duration: number = 1800) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupBan', [group_id, user_id, duration])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupBan", [
+            group_id,
+            user_id,
+            duration,
+        ]);
     }
 
     /**
@@ -38,7 +57,11 @@ export class GroupAction {
      * @param duration {number} 禁言时长(单位：秒)
      */
     setGroupAnonymousBan(this: V11, group_id: number, flag: string, duration: number = 1800) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupAnonymousBan', [group_id, flag, duration])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupAnonymousBan", [
+            group_id,
+            flag,
+            duration,
+        ]);
     }
 
     /**
@@ -47,7 +70,7 @@ export class GroupAction {
      * @param enable {boolean} 是否禁言
      */
     setGroupWholeBan(this: V11, group_id: number, enable?: boolean) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupWholeBan', [group_id, enable])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupWholeBan", [group_id, enable]);
     }
 
     /**
@@ -56,7 +79,7 @@ export class GroupAction {
      * @param enable {boolean} 是否开启
      */
     setGroupAnonymous(this: V11, group_id: number, enable?: boolean) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupAnonymous', [group_id, enable])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupAnonymous", [group_id, enable]);
     }
 
     /**
@@ -66,7 +89,11 @@ export class GroupAction {
      * @param enable {boolean} true 设为管理，false 取消管理
      */
     setGroupAdmin(this: V11, group_id: number, user_id: number, enable?: boolean) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupAdmin', [group_id, user_id, enable])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupAdmin", [
+            group_id,
+            user_id,
+            enable,
+        ]);
     }
 
     /**
@@ -76,7 +103,7 @@ export class GroupAction {
      * @param card {string} 名片信息，不传或传空串则为 删除名片
      */
     setGroupCard(this: V11, group_id: number, user_id: number, card?: string) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupCard', [group_id, user_id, card])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupCard", [group_id, user_id, card]);
     }
 
     /**
@@ -84,22 +111,22 @@ export class GroupAction {
      * @param message_id 消息id
      */
     setEssenceMessage(this: V11, message_id: string) {
-        return this.adapter.call(this.oneBot.uin,'V11','setEssenceMessage', [message_id])
+        return this.adapter.call(this.oneBot.uin, "V11", "setEssenceMessage", [message_id]);
     }
     /**
      * 群打卡
      * @param group_id 群id
      */
     sendGroupSign(this: V11, group_id: number) {
-        return this.adapter.call(this.oneBot.uin,'V11','sendGroupSign', [group_id])
+        return this.adapter.call(this.oneBot.uin, "V11", "sendGroupSign", [group_id]);
     }
 
     /**
      * 移除群精华
      * @param message_id
      */
-    deleteEssenceMessage(this:V11, message_id: string) {
-        return this.adapter.call(this.oneBot.uin,'V11','removeEssenceMessage', [message_id])
+    deleteEssenceMessage(this: V11, message_id: string) {
+        return this.adapter.call(this.oneBot.uin, "V11", "removeEssenceMessage", [message_id]);
     }
     /**
      * 设置群名
@@ -107,7 +134,7 @@ export class GroupAction {
      * @param name {string} 新群名
      */
     setGroupName(this: V11, group_id: number, name: string) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupName', [group_id, name])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupName", [group_id, name]);
     }
 
     /**
@@ -115,7 +142,7 @@ export class GroupAction {
      * @param group_id {number} 群id
      */
     setGroupLeave(this: V11, group_id: number) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupLeave', [group_id])
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupLeave", [group_id]);
     }
 
     /**
@@ -125,8 +152,19 @@ export class GroupAction {
      * @param special_title {string} 头衔
      * @param duration {number} 持有时长 不传则永久
      */
-    setGroupSpecialTitle(this: V11, group_id: number, user_id: number, special_title: string, duration: number = -1) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupSpecialTitle', [group_id, user_id, special_title, duration])
+    setGroupSpecialTitle(
+        this: V11,
+        group_id: number,
+        user_id: number,
+        special_title: string,
+        duration: number = -1,
+    ) {
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupSpecialTitle", [
+            group_id,
+            user_id,
+            special_title,
+            duration,
+        ]);
     }
 
     /**
@@ -136,15 +174,26 @@ export class GroupAction {
      * @param reason {string} 拒绝理由，approve为false时有效(默认为空)
      * @param block {boolean} 拒绝时是否加入黑名单，(默认：false)
      */
-    setGroupAddRequest(this: V11, flag: string, approve: boolean = true, reason: string = '', block: boolean = false) {
-        return this.adapter.call(this.oneBot.uin,'V11','setGroupAddRequest', [flag, approve, reason, block])
+    setGroupAddRequest(
+        this: V11,
+        flag: string,
+        approve: boolean = true,
+        reason: string = "",
+        block: boolean = false,
+    ) {
+        return this.adapter.call(this.oneBot.uin, "V11", "setGroupAddRequest", [
+            flag,
+            approve,
+            reason,
+            block,
+        ]);
     }
 
     /**
      * 获取群列表
      */
     async getGroupList(this: V11) {
-        return this.adapter.call(this.oneBot.uin,'V11','getGroupList')
+        return this.adapter.call(this.oneBot.uin, "V11", "getGroupList");
     }
 
     /**
@@ -152,7 +201,7 @@ export class GroupAction {
      * @param group_id
      */
     getGroupInfo(this: V11, group_id: number) {
-        return this.adapter.call(this.oneBot.uin,'V11','getGroupInfo', [group_id])
+        return this.adapter.call(this.oneBot.uin, "V11", "getGroupInfo", [group_id]);
     }
 
     /**
@@ -160,7 +209,7 @@ export class GroupAction {
      * @param group_id
      */
     async getGroupMemberList(this: V11, group_id: number) {
-        return this.adapter.call(this.oneBot.uin,'V11','getGroupMemberList', [group_id])
+        return this.adapter.call(this.oneBot.uin, "V11", "getGroupMemberList", [group_id]);
     }
 
     /**
@@ -169,6 +218,6 @@ export class GroupAction {
      * @param user_id
      */
     getGroupMemberInfo(this: V11, group_id: number, user_id: number) {
-        return this.adapter.call(this.oneBot.uin,'V11','getGroupMemberInfo', [group_id, user_id])
+        return this.adapter.call(this.oneBot.uin, "V11", "getGroupMemberInfo", [group_id, user_id]);
     }
 }

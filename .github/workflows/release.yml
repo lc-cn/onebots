@@ -16,7 +16,7 @@ jobs:
           release-type: node
           package-name: onebots
       # Checkout
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: ${{ steps.release.outputs.release_created }}
       # Setup node
       - uses: actions/setup-node@v3
@@ -26,6 +26,8 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
       # Install dependencies
       - run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
         if: ${{ steps.release.outputs.release_created }}
       # Build output
       - run: npm run build
