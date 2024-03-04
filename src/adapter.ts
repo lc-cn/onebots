@@ -171,7 +171,11 @@ export interface Adapter<T extends string = string, Sendable = any> extends Adap
 export namespace Adapter {
     export interface Base<Sendable = any> {
         toSegment<V extends OneBot.Version>(version: V, message: Sendable): OneBot.Segment<V>[];
-        fromSegment<V extends OneBot.Version>(version: V, segment: OneBot.Segment<V>[]): Sendable;
+        fromSegment<V extends OneBot.Version>(
+            onebot: OneBot,
+            version: V,
+            segment: OneBot.Segment<V>[],
+        ): Sendable;
         getSelfInfo<V extends OneBot.Version>(uin: string, version: V): OneBot.SelfInfo<V>;
         /** 格式化事件 */
         formatEventPayload<V extends OneBot.Version>(

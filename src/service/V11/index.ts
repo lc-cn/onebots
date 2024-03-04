@@ -517,7 +517,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                         res.reply[0].data.platform = res.reply[0].data.type;
                         delete res.reply[0].data.type;
                     }
-                    res.reply = this.adapter.fromSegment("V11", res.reply);
+                    res.reply = this.adapter.fromSegment(this.oneBot, "V11", res.reply);
                 }
                 this.action[action].apply(this, [id, res.reply, res.auto_escape]);
             }
@@ -591,7 +591,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                             }
                             params[k] = this.adapter.fromCqcode("V11", params[k]);
                         }
-                        params[k] = this.adapter.fromSegment("V11", params[k]);
+                        params[k] = this.adapter.fromSegment(this.oneBot, "V11", params[k]);
                         params["message_id"] =
                             params[k].find(e => e.type === "reply")?.id || params["message_id"];
                     }
@@ -685,7 +685,6 @@ export namespace V11 {
         reconnect_interval: 3,
         use_http: true,
         enable_cors: true,
-        enable_reissue: false,
         use_ws: true,
         http_reverse: [],
         ws_reverse: [],

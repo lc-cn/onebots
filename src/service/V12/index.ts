@@ -462,7 +462,18 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
         if (!this.filterFn(payload)) return;
         this.emit("dispatch", payload);
     }
-
+    transformMedia(segment: V12.Segment): V12.Segment {
+        const file = this.getFile(segment.data.file_id);
+        if (file)
+            return {
+                type: segment.type,
+                data: {
+                    ...segment.data,
+                    file_id: `base64://${file.data}`,
+                },
+            };
+        return segment;
+    }
     async apply(req: V12.RequestAction) {
         let { action = "", params = {}, echo } = req;
         action = toLine(action);
@@ -501,7 +512,7 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
                             }
                             params[k] = this.adapter.fromCqcode("V12", params[k]);
                         }
-                        params[k] = this.adapter.fromSegment("V12", params[k]);
+                        params[k] = this.adapter.fromSegment(this.oneBot, "V12", params[k]);
                     }
                     args.push(params[k]);
                 }

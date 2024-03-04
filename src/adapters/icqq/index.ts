@@ -1,94 +1,12 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
-import { Client, Config as IcqqConfig, MessageElem, Quotable, Sendable } from "@icqqjs/icqq";
+import { Client, Config as IcqqConfig, Quotable, Sendable } from "@icqqjs/icqq";
 import process from "process";
 import { rmSync } from "fs";
 import { OneBot, OneBotStatus } from "@/onebot";
 import * as path from "path";
-import { shareMusic } from "@/service/shareMusicCustom";
 import { genDmMessageId, genGroupMessageId } from "@icqqjs/icqq/lib/message";
-
-async function processMessages(
-    this: IcqqAdapter,
-    uin: string,
-    target_id: number,
-    target_type: "group" | "private",
-    list: OneBot.Segment<OneBot.Version>[],
-) {
-    let result: MessageElem[] = [];
-    for (const item of list) {
-        const { type, data, ...other } = item;
-        switch (type) {
-            case "node": {
-                result.push({
-                    type,
-                    ...data,
-                    user_id: data.user_id,
-                    message: await processMessages.call(
-                        this,
-                        uin,
-                        data.user_id,
-                        "private",
-                        data.content || [],
-                    ),
-                });
-                break;
-            }
-            case "music": {
-                if (String(item.data.platform) === "custom") {
-                    item.data.platform = item.data["subtype"]; // gocq 的平台数据存储在 subtype 内，兼容 icqq 时要求前端必须发送 id 字段
-                }
-                const { type, data } = item;
-                await shareMusic.call(
-                    this[target_type === "private" ? "pickFriend" : "pickGroup"](target_id),
-                    {
-                        type,
-                        ...data,
-                    },
-                );
-                break;
-            }
-            case "share": {
-                await this[target_type === "private" ? "pickFriend" : "pickGroup"](
-                    target_id,
-                ).shareUrl(item.data);
-                break;
-            }
-            case "video":
-            case "audio":
-            case "image": {
-                if (item["file_id"]?.startsWith("base64://"))
-                    item["file_id"] = Buffer.from(item["file_id"].slice(9), "base64");
-                if (item["file"]?.startsWith("base64://"))
-                    item["file"] = Buffer.from(item["file"].slice(9), "base64");
-                result.push({
-                    type: type as any,
-                    ...data,
-                    ...other,
-                });
-                break;
-            }
-            case "reply": {
-                const oneBot = this.getOneBot(uin);
-                const message_id = oneBot.V11.getStrByInt("message_id", data.id);
-                const msg = await oneBot.internal.getMsg(message_id);
-                result.push({
-                    type: "quote",
-                    ...msg,
-                });
-                break;
-            }
-            default: {
-                result.push({
-                    type: type as any,
-                    ...data,
-                    ...other,
-                });
-            }
-        }
-    }
-    return result;
-}
+import { processMessages } from "@/adapters/icqq/utils";
 
 export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     #password?: string;
@@ -304,14 +222,22 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     }
 
     fromSegment<V extends OneBot.Version>(
+        onebot: OneBot<Client>,
         version: V,
         segment: OneBot.Segment<V> | OneBot.Segment<V>[],
     ): Sendable {
-        return [].concat(segment).map(item => {
-            if (typeof item === "string") return item;
-            const { type, data } = item;
-            return { type, ...data };
-        });
+        return []
+            .concat(segment)
+            .map(segment => {
+                if (version === "V12" && ["image", "video", "audio"].includes(segment.type))
+                    return onebot.V12.transformMedia(segment);
+                return segment;
+            })
+            .map(item => {
+                if (typeof item === "string") return item;
+                const { type, data } = item;
+                return { type, ...data };
+            });
     }
 
     toSegment<V extends OneBot.Version>(version: V, message: Sendable): OneBot.Segment<V>[] {

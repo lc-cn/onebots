@@ -157,4 +157,7 @@ export class CommonAction {
     sendLike(this: V12, user_id: string, times: number = 1) {
         return this.adapter.call(this.oneBot.uin, "V12", "sendLike", [user_id, times]);
     }
+    imageOcr(this: V12, file: string) {
+        return this.adapter.call(this.oneBot.uin, "V12", "imageOcr", [file]);
+    }
 }

@@ -1,5 +1,6 @@
 import { defineConfig } from "vitepress";
-const pkg = require("../../package.json")
+
+const pkg = require("../../package.json");
 export default defineConfig({
     title: "OneBots",
     titleTemplate: ":title - OneBots",
@@ -16,22 +17,27 @@ export default defineConfig({
     ignoreDeadLinks: true,
     themeConfig: {
         nav: [
-            { text: "开始", link: "/guide/index", activeMatch: "/guide/" },
+            { text: "开始", link: "/guide/start", activeMatch: "/guide/" },
             {
                 text: "配置",
                 items: [
-                    { text: "全局配置", link: "/config/global" },
-                    { text: "V11", link: "/config/v11" },
-                    { text: "V12", link: "/config/v12" }
-                ]
-            },
-            {
-                text: "适配器",
-                items: [
-                    { text: "ICQQ", link: "/adapter/icqq" },
-                    { text: "QQ", link: "/adapter/qq" },
-                    { text: "微信", link: "/adapter/wechat" },
-                    { text: "钉钉", link: "/adapter/dingtalk" },
+                    {
+                        text: "全局配置",
+                        items: [
+                            { text: "App", link: "/config/global" },
+                            { text: "OneBot 11", link: "/config/v11" },
+                            { text: "OneBot 12", link: "/config/v12" }
+                        ]
+                    },
+                    {
+                        text: "适配器配置",
+                        items: [
+                            { text: "ICQQ", link: "/config/adapter/icqq" },
+                            { text: "QQ", link: "/config/adapter/qq" },
+                            { text: "微信", link: "/config/adapter/wechat" },
+                            { text: "钉钉", link: "/config/adapter/dingtalk" }
+                        ]
+                    }
                 ]
             },
             {
@@ -54,10 +60,10 @@ export default defineConfig({
                 text: pkg.version,
                 items: [
                     {
-                      text: 'Package',link: `https://www.npmjs.com/package/onebots/v/`+pkg.version
+                        text: "Package", link: `https://www.npmjs.com/package/onebots/v/` + pkg.version
                     },
                     {
-                      text: "Release", link: `https://github.com/lc-cn/onebots/releases/tag/v`+pkg.version
+                        text: "Release", link: `https://github.com/lc-cn/onebots/releases/tag/v` + pkg.version
                     },
                     { text: "Changelog", link: "https://github.com/icqqjs/onebots/blob/master/CHANGELOG.md" }
                 ]
@@ -67,18 +73,31 @@ export default defineConfig({
             "/guide/": [
                 { text: `准备工作`, link: "/guide/prepare" },
                 { text: `开始`, link: "/guide/start" },
-                { text: `适配器`, link: "/guide/adapter"}
+                { text: `适配器`, link: "/guide/adapter" }
             ],
             "/config": [
-                { text: "全局配置", link: "/config/global" },
-                { text: "V11", link: "/config/v11" },
-                { text: "V12", link: "/config/v12" }
+                {
+                    text: "全局配置",
+                    items:[
+                        { text: 'App',link: "/config/global" },
+                        { text: "OneBot 11", link: "/config/v11" },
+                        { text: "OneBot 12", link: "/config/v12" },
+                    ]
+                },
+                {
+                    text: "适配器配置", items: [
+                        { text: "ICQQ", link: "/config/adapter/icqq" },
+                        { text: "QQ", link: "/config/adapter/qq" },
+                        { text: "微信", link: "/config/adapter/wechat" },
+                        { text: "钉钉", link: "/config/adapter/dingtalk" }
+                    ]
+                }
             ],
             "/adapter": [
                 { text: "ICQQ", link: "/adapter/icqq" },
                 { text: "QQ", link: "/adapter/qq" },
                 { text: "微信", link: "/adapter/wechat" },
-                { text: "钉钉", link: "/adapter/dingtalk" },
+                { text: "钉钉", link: "/adapter/dingtalk" }
             ],
             "/v11/": [
                 { text: "动作 (Action)", link: "/v11/action" },
@@ -100,7 +119,7 @@ export default defineConfig({
         },
         socialLinks: [{ icon: "github", link: "https://github.com/icqqjs/onebots" }],
         lastUpdated: {
-            text:'上次更新时间'
+            text: "上次更新时间"
         },
         docFooter: {
             prev: "上一节",

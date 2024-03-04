@@ -166,17 +166,25 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         }
     }
     fromSegment<V extends OneBot.Version>(
+        onebot: OneBot<Bot>,
         version: V,
         segment: OneBot.Segment<V> | OneBot.Segment<V>[],
     ): Sendable {
-        return [].concat(segment).map(item => {
-            if (typeof item === "string") return item;
-            const { type, data } = item;
-            return {
-                type,
-                ...data,
-            };
-        });
+        return []
+            .concat(segment)
+            .map(segment => {
+                if (version === "V12" && ["image", "video", "audio"].includes(segment.type))
+                    return onebot.V12.transformMedia(segment);
+                return segment;
+            })
+            .map(item => {
+                if (typeof item === "string") return item;
+                const { type, data } = item;
+                return {
+                    type,
+                    ...data,
+                };
+            });
     }
     toSegment<V extends OneBot.Version, M = Sendable>(version: V, message: M): OneBot.Segment<V>[] {
         return [].concat(message).map(item => {

@@ -20,21 +20,27 @@ export class OneBot<T = any> extends EventEmitter {
     protected password: string;
     internal: T;
     instances: (V11 | V12)[];
+
     get app() {
         return this.adapter.app;
     }
+
     get V11() {
         return this.instances.find(i => i.version === "V11") as V11;
     }
+
     get V12() {
         return this.instances.find(i => i.version === "V12") as V12;
     }
+
     get platform() {
         return this.adapter.platform;
     }
+
     get logger() {
         return (this.#logger ||= this.adapter.getLogger(this.uin));
     }
+
     get info() {
         return {
             uin: this.uin,
@@ -48,6 +54,7 @@ export class OneBot<T = any> extends EventEmitter {
             }),
         };
     }
+
     constructor(
         public adapter: Adapter,
         public readonly uin: string,
@@ -91,9 +98,11 @@ export class OneBot<T = any> extends EventEmitter {
         }
         this.emit("stop");
     }
+
     getGroupList<V extends OneBot.Version>(version: V): Promise<OneBot.GroupInfo<V>[]> {
         return this.adapter.getGroupList(this.uin, version);
     }
+
     getFriendList<V extends OneBot.Version>(version: V): Promise<OneBot.UserInfo<V>[]> {
         return this.adapter.getFriendList(this.uin, version);
     }
@@ -137,10 +146,12 @@ export namespace OneBot {
         ? V11.GroupMemberInfo
         : V12.GroupMemberInfo;
     export type MessageRet<V extends Version> = V extends "V11" ? V11.MessageRet : V12.MessageRet;
+
     export interface Base {
         start(path?: string): any;
 
         stop(): any;
+
         dispatch(...args: any[]): any;
 
         apply(...args: any[]): any;
