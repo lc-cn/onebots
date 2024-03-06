@@ -11,14 +11,14 @@ export class CommonAction {
      * 撤回消息
      * @param message_id {string} 消息id
      */
-    deleteMsg(this: V12, message_id: string) {
+    deleteMessage(this: V12, message_id: string) {
         return this.adapter.call(this.oneBot.uin, "V12", "deleteMsg", [message_id]);
     }
 
     /**
      * 获取消息详情
      */
-    async getMsg(this: V12, message_id: string) {
+    async getMessage(this: V12, message_id: string) {
         const message = await this.adapter.call(this.oneBot.uin, "V12", "getMessage", [message_id]);
         if (!message) throw new Error("消息不存在");
         return message;
