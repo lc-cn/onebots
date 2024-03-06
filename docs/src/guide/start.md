@@ -9,17 +9,13 @@
 ```shell
 npm init
 ```
-## 2. 初始化项目
+## 2. 安装 `OneBots`
 - 在终端进入项目文件夹，并执行以下命令，安装 `OneBots`
 ```shell
 npm install onebots --legacy-peer-deps
 ```
-- 使用以下命令，运行 `OneBots`，首次运行会自动创建配置文件 `config.yaml`
-```shell
-npx onebots
-```
 ## 3. 安装适配器
-
+- 根据你的需求，选择对应的适配器进行安装
 
 ::: tip
 ### icqq 调整提醒
@@ -42,7 +38,6 @@ E-Mail: # 你的公开邮箱地址
 ```
 :::
 
-- 根据你的需求，选择对应的适配器进行安装
 ::: code-group
 ```shell [ICQQ]
 npm install @icqqjs/icqq
@@ -57,7 +52,13 @@ npm install node-dd-bot
 npm install lib-wechat
 ```
 :::
-## 4. 添加机器人配置
+## 4. 初始化配置
+- 使用以下命令，运行 `OneBots`，首次运行会自动创建配置文件 `config.yaml`
+```shell
+npx onebots
+```
+
+## 5. 添加机器人配置
 - 此处仅以添加 `icqq` 机器人距离，更多适配器配置请前往 [适配器](/guide/adapter) 了解更多
 1. 打开生成的配置文件 `config.yaml`，并更新配置为你的机器人参数
 ```yaml
@@ -99,7 +100,7 @@ icqq.12345678: # `${适配器名称}:${账号}`# [!code ++]
     sign_api_addr: http://127.0.0.1/8080/qsign?key=114514 # 签名地址  # [!code ++]
   # 。。。其他配置项参见上方对应oneBot版本的通用配置 # [!code ++]
 ```
-## 5. 启动项目
+## 6. 启动项目
 ::: code-group
 ```shell [ICQQ]
 npx onebot -r icqq
