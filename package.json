@@ -2,9 +2,6 @@
   "name": "onebots",
   "version": "0.4.64",
   "description": "基于icqq的多例oneBot实现",
-  "engines": {
-    "node": ">=16"
-  },
   "main": "lib/index.js",
   "bin": {
     "onebots": "./lib/bin.js"
@@ -20,6 +17,13 @@
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   },
   "repository": {
     "type": "git",
