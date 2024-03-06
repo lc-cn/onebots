@@ -85,12 +85,14 @@ export class App extends Koa {
         this.use(KoaBodyParser())
             .use(this.router.routes())
             .use(this.router.allowedMethods())
-            .use(
-                basicAuth({
+            .use(async (ctx, next) => {
+                const adapter = ctx.path?.slice(1)?.split("/")[0];
+                if (this.adapters.has(adapter)) return next();
+                return basicAuth({
                     name: this.config.username,
                     pass: this.config.password,
-                }),
-            )
+                })(ctx, next);
+            })
             .use(koaStatic(path.resolve(__dirname, "../../dist")));
         this.httpServer = createServer(this.callback());
         this.ws = this.router.ws("/", this.httpServer);

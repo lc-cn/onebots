@@ -34,8 +34,8 @@ export class JsonDB {
         if (!key) return this.data as T;
         let temp: Dict = this.data;
         while (parentPath.length) {
-            const currentKey = parentPath.shift() as string;
-            if (!Reflect.has(temp, currentKey)) Reflect.set(temp, key, {});
+            const currentKey = parentPath.shift();
+            if (!Reflect.has(temp, currentKey)) Reflect.set(temp, currentKey, {});
             temp = Reflect.get(temp, currentKey);
         }
         if (temp[key] !== undefined) return temp[key];

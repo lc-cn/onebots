@@ -52,7 +52,7 @@ export abstract class Adapter<T extends string = string, Sendable = any> extends
     }
 
     fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.Segment<V>[] {
-        const regExpMatchArray = message.match(/\[CQ:([a-z]+),([^]]+)]/);
+        const regExpMatchArray = message.match(/\[CQ:([a-z]+),([^\]]+)]/);
         if (!regExpMatchArray)
             return [
                 {
@@ -64,9 +64,9 @@ export abstract class Adapter<T extends string = string, Sendable = any> extends
             ];
         const result: OneBot.Segment<V>[] = [];
         while (message.length) {
-            const [match] = message.match(/\[CQ:([a-z]+),([^]]+)]/) || [];
+            const [match] = message.match(/\[CQ:([a-z]+),([^\]]+)]/) || [];
             if (!match) break;
-            const prevText = message.substring(0, match.length);
+            const prevText = message.substring(0, message.indexOf(match));
             if (prevText) {
                 result.push({
                     type: "text",
@@ -77,10 +77,11 @@ export abstract class Adapter<T extends string = string, Sendable = any> extends
             }
             const [type, ...valueArr] = match.substring(1, match.length - 1).split(",");
             result.push({
-                type: type as any,
+                type: type.split(":").at(-1),
                 data: Object.fromEntries(
                     valueArr.map(item => {
-                        const [key, value] = item.split("=");
+                        const [key, ...values] = item.split("=");
+                        const value = values.join("=");
                         return [key, type === "reply" && key === "id" ? +value : value];
                     }),
                 ),
