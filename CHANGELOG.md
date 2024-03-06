@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.65](https://github.com/lc-cn/onebots/compare/v0.4.64...v0.4.65) (2024-03-06)
+
+
+### Bug Fixes
+
+* 授权错误、CQ码解析错误，image/video/record文件解析错误 ([d98d69a](https://github.com/lc-cn/onebots/commit/d98d69ac7566ae333618555c41d91e327b5f7f2d))
+
 ## [0.4.64](https://github.com/lc-cn/onebots/compare/v0.4.63...v0.4.64) (2024-03-04)
 
 
