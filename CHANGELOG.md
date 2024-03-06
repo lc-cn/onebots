@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.66](https://github.com/lc-cn/onebots/compare/v0.4.65...v0.4.66) (2024-03-06)
+
+
+### Bug Fixes
+
+* V12 delete_message报错 ([cf08388](https://github.com/lc-cn/onebots/commit/cf08388e4c7bdf4e13b0c90189f0183b3a9c1023))
+* 文档顺序调整 ([b773e66](https://github.com/lc-cn/onebots/commit/b773e66991be1e1e1b7d413bf02027383360d023))
+
 ## [0.4.65](https://github.com/lc-cn/onebots/compare/v0.4.64...v0.4.65) (2024-03-06)
 
 
