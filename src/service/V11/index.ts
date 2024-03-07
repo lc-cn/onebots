@@ -142,16 +142,31 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                 });
             }, this.config.heartbeat * 1000);
         }
-        this.adapter.on("message.receive", (uin: string, event) => {
-            const payload = this.adapter.formatEventPayload(uin, "V11", "message", event);
+        this.oneBot.on("message.receive", event => {
+            const payload = this.adapter.formatEventPayload(
+                this.oneBot.uin,
+                "V11",
+                "message",
+                event,
+            );
             this.dispatch(payload);
         });
-        this.adapter.on("notice.receive", (uin: string, event) => {
-            const payload = this.adapter.formatEventPayload(uin, "V11", "notice", event);
+        this.oneBot.on("notice.receive", event => {
+            const payload = this.adapter.formatEventPayload(
+                this.oneBot.uin,
+                "V11",
+                "notice",
+                event,
+            );
             this.dispatch(payload);
         });
-        this.adapter.on("request.receive", (uin: string, event) => {
-            const payload = this.adapter.formatEventPayload(uin, "V11", "request", event);
+        this.oneBot.on("request.receive", event => {
+            const payload = this.adapter.formatEventPayload(
+                this.oneBot.uin,
+                "V11",
+                "request",
+                event,
+            );
             this.dispatch(payload);
         });
     }

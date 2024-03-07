@@ -15,6 +15,15 @@ export abstract class Adapter<T extends string = string, Sendable = any> extends
         public config: Adapter.Configs[T],
     ) {
         super();
+        this.on("message.receive", (uin: string, ...args: any[]) => {
+            this.oneBots.get(uin)?.emit("message.receive", ...args);
+        });
+        this.on("notice.receive", (uin: string, ...args: any[]) => {
+            this.oneBots.get(uin)?.emit("notice.receive", ...args);
+        });
+        this.on("request.receive", (uin: string, ...args: any[]) => {
+            this.oneBots.get(uin)?.emit("request.receive", ...args);
+        });
     }
 
     materialize(content: string): string {
