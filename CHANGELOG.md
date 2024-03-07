@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.67](https://github.com/lc-cn/onebots/compare/v0.4.66...v0.4.67) (2024-03-07)
+
+
+### Bug Fixes
+
+* 适配器有多个Bot时消息重复上报问题 ([8e4fcd7](https://github.com/lc-cn/onebots/commit/8e4fcd731c20aa78b55f7d3800583d6ca24cf1a1))
+
 ## [0.4.66](https://github.com/lc-cn/onebots/compare/v0.4.65...v0.4.66) (2024-03-06)
 
 
