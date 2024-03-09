@@ -6,10 +6,10 @@
 ```javascript
 const {App,createOnebots} = require('onebots')
 
-App.registerAdapter('icqq') // 如不需要使用icqq，请注释改行
-App.registerAdapter('qq') // 如不需要使用qq官方机器人，请注释改行
-App.registerAdapter('dingtalk') // 如不需要使用钉钉机器人，请注释改行
-App.registerAdapter('wechat') // 如不需要使用微信机器人，请注释改行
+App.registerAdapter('icqq') // 如不需要使用icqq，请注释该行
+App.registerAdapter('qq') // 如不需要使用qq官方机器人，请注释该行
+App.registerAdapter('dingtalk') // 如不需要使用钉钉机器人，请注释该行
+App.registerAdapter('wechat') // 如不需要使用微信机器人，请注释该行
 
 createOnebots({
     port: 5727, // 监听端口 (选填) 
