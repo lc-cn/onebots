@@ -54,6 +54,7 @@ npm install lib-wechat --legacy-peer-deps # 带上后边这个是为了防止自
 :::
 ## 4. 初始化配置
 - 使用以下命令，运行 `OneBots`，首次运行会自动创建配置文件 `config.yaml`
+- 不喜欢通过命令启动？前往[node ./index.js](./start-with-js.md)启动方案
 ```shell
 npx onebots
 ```

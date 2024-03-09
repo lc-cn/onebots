@@ -311,17 +311,13 @@ export class App extends Koa {
 
 export function createOnebots(
     config: App.Config | string = "config.yaml",
-    cp: ChildProcess | null,
+    cp: ChildProcess | null = null,
 ) {
     if (typeof config === "string") {
         config = path.resolve(process.cwd(), config);
         App.configDir = path.dirname(config);
         if (!existsSync(App.configDir)) {
             mkdirSync(App.configDir);
-        }
-        if (!existsSync(App.dataDir)) {
-            mkdirSync(App.dataDir);
-            console.log("已为你创建数据存储目录", App.dataDir);
         }
         if (!existsSync(App.configPath)) {
             copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
@@ -331,6 +327,10 @@ export function createOnebots(
         }
         config = yaml.load(readFileSync(App.configPath, "utf8")) as App.Config;
     }
+    if (!existsSync(App.dataDir)) {
+        mkdirSync(App.dataDir);
+        console.log("已为你创建数据存储目录", App.dataDir);
+    }
     configure({
         appenders: {
             out: {
@@ -339,6 +339,7 @@ export function createOnebots(
             },
             files: {
                 type: "file",
+                maxLogSize: 1024 * 1024 * 50,
                 filename: path.join(process.cwd(), "onebots.log"),
             },
         },
