@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.70](https://github.com/lc-cn/onebots/compare/v0.4.69...v0.4.70) (2024-03-09)
+
+
+### Bug Fixes
+
+* 配置文件提示错误 ([4c3ad54](https://github.com/lc-cn/onebots/commit/4c3ad540790a5eff8c04ebf9781ccc02c2a960c6))
+
 ## [0.4.69](https://github.com/lc-cn/onebots/compare/v0.4.68...v0.4.69) (2024-03-09)
 
 
