@@ -313,8 +313,9 @@ export function createOnebots(
     config: App.Config | string = "config.yaml",
     cp: ChildProcess | null = null,
 ) {
-    if (typeof config === "string") {
-        config = path.resolve(process.cwd(), config);
+    const isStartWithConfigFile = typeof config === "string";
+    if (isStartWithConfigFile) {
+        config = path.resolve(process.cwd(), config as string);
         App.configDir = path.dirname(config);
         if (!existsSync(App.configDir)) {
             mkdirSync(App.configDir);
@@ -323,7 +324,7 @@ export function createOnebots(
     }
     if (!existsSync(App.configPath)) {
         copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
-        if (typeof config === "string") {
+        if (isStartWithConfigFile) {
             console.log("未找到对应配置文件，已自动生成默认配置文件，请修改配置文件后重新启动");
             console.log(`配置文件在:  ${App.configPath}`);
             process.exit();
@@ -351,13 +352,13 @@ export function createOnebots(
         categories: {
             default: {
                 appenders: ["out", "files"],
-                level: config.log_level || "info",
+                level: (config as App.Config).log_level || "info",
             },
         },
         disableClustering: true,
     });
     if (cp) process.on("disconnect", () => cp.kill());
-    return new App(config);
+    return new App(config as App.Config);
 }
 
 export function defineConfig(config: App.Config) {
