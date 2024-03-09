@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.71](https://github.com/lc-cn/onebots/compare/v0.4.70...v0.4.71) (2024-03-09)
+
+
+### Bug Fixes
+
+* 启动错误 ([8d32aa6](https://github.com/lc-cn/onebots/commit/8d32aa6418397e1de96e59948ade50538beb6f20))
+* 启动错误 ([3cdeb01](https://github.com/lc-cn/onebots/commit/3cdeb0115d0645c01de95ea46d9a1ef562602a2b))
+* 状态码错误 ([effd50f](https://github.com/lc-cn/onebots/commit/effd50f756d37f3dc9f2d3c3480ff7dba26827cb))
+
 ## [0.4.70](https://github.com/lc-cn/onebots/compare/v0.4.69...v0.4.70) (2024-03-09)
 
 
