@@ -322,17 +322,15 @@ export function createOnebots(
         App.configDir = path.dirname(config);
     }
     if (!existsSync(App.configDir)) mkdirSync(App.configDir);
-    if (!existsSync(App.configPath)) {
-        if (isStartWithConfigFile) {
-            copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
-            console.log("未找到对应配置文件，已自动生成默认配置文件，请修改配置文件后重新启动");
-            console.log(`配置文件在:  ${App.configPath}`);
-            process.exit();
-        } else {
-            writeFileSync(App.configPath, yaml.dump(config));
-            console.log(`已自动保存配置到：${App.configPath}`);
-            console.log(`配置文件在:  `);
-        }
+    if (!existsSync(App.configPath) && isStartWithConfigFile) {
+        copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
+        console.log("未找到对应配置文件，已自动生成默认配置文件，请修改配置文件后重新启动");
+        console.log(`配置文件在:  ${App.configPath}`);
+        process.exit();
+    }
+    if (!isStartWithConfigFile) {
+        writeFileSync(App.configPath, yaml.dump(config));
+        console.log(`已自动保存配置到：${App.configPath}`);
     }
     if (!existsSync(App.dataDir)) {
         mkdirSync(App.dataDir);
