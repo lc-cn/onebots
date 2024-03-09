@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.72](https://github.com/lc-cn/onebots/compare/v0.4.71...v0.4.72) (2024-03-09)
+
+
+### Bug Fixes
+
+* 配置文件保存错误 ([93e9360](https://github.com/lc-cn/onebots/commit/93e9360695dd039637f4f2eb12491877950a7c61))
+
 ## [0.4.71](https://github.com/lc-cn/onebots/compare/v0.4.70...v0.4.71) (2024-03-09)
 
 
