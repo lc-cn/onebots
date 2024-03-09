@@ -154,7 +154,7 @@ export class App extends Koa {
     public createOneBot<P extends string>(platform: P, uin: string, config: Adapter.Config) {
         const adapter = this.findOrCreateAdapter<P>(platform, config);
         if (!adapter) return;
-        return adapter.createOneBot(uin, config.protocol, config.versions);
+        return adapter.createOneBot(uin, config.protocol, config.versions || []);
     }
     get oneBots() {
         return [...this.adapters.values()]
@@ -317,26 +317,25 @@ export function createOnebots(
     if (isStartWithConfigFile) {
         config = path.resolve(process.cwd(), config as string);
         App.configDir = path.dirname(config);
-        if (!existsSync(App.configDir)) {
-            mkdirSync(App.configDir);
-        }
-        config = yaml.load(readFileSync(App.configPath, "utf8")) as App.Config;
     }
+    if (!existsSync(App.configDir)) mkdirSync(App.configDir);
     if (!existsSync(App.configPath)) {
-        copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
         if (isStartWithConfigFile) {
+            copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
             console.log("未找到对应配置文件，已自动生成默认配置文件，请修改配置文件后重新启动");
             console.log(`配置文件在:  ${App.configPath}`);
             process.exit();
         } else {
-            console.log("未找到对应配置文件，已自动生成默认配置文件");
-            console.log(`配置文件在:  ${App.configPath}`);
+            writeFileSync(yaml.dump(config), App.configPath);
+            console.log(`已自动保存配置到：${App.configPath}`);
+            console.log(`配置文件在:  `);
         }
     }
     if (!existsSync(App.dataDir)) {
         mkdirSync(App.dataDir);
         console.log("已为你创建数据存储目录", App.dataDir);
     }
+    config = yaml.load(readFileSync(App.configPath, "utf8")) as App.Config;
     configure({
         appenders: {
             out: {
