@@ -41,11 +41,11 @@ export class CommonAction {
 
     getStatus(this: V12) {
         return {
-            good: true,
+            good: this.oneBot.app.isStarted,
             bots: [
                 {
                     self: this.action.getSelfInfo.apply(this),
-                    online: this.oneBot.status === OneBotStatus.Online,
+                    good: this.oneBot.app.isStarted,
                 },
             ],
         };

@@ -21,6 +21,7 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
     protected timestamp = Date.now();
     protected heartbeat?: NodeJS.Timeout;
     logger: Logger;
+    app: App;
     wss?: WebSocketServer;
     wsr: Set<WebSocket> = new Set<WebSocket>();
     private db: JsonDB;

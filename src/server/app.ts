@@ -35,6 +35,7 @@ type AdapterClass = Class<Adapter>;
 export class App extends Koa {
     public config: Required<App.Config>;
     public httpServer: Server;
+    isStarted: boolean = false;
     public logger: Logger;
     static configDir = path.join(os.homedir(), ".onebots");
     static get configPath() {
@@ -291,6 +292,7 @@ export class App extends Koa {
         for (const [_, adapter] of this.adapters) {
             await adapter.start();
         }
+        this.isStarted = true;
     }
     async reload(config: App.Config) {
         await this.stop();
@@ -306,6 +308,7 @@ export class App extends Koa {
         // this.ws.close()
         this.httpServer.close();
         this.emit("close");
+        this.isStarted = false;
     }
 }
 

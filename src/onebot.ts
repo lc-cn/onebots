@@ -149,7 +149,6 @@ export namespace OneBot {
     export type MessageRet<V extends Version> = V extends "V11" ? V11.MessageRet : V12.MessageRet;
 
     export interface Base {
-        app: App;
         start(path?: string): any;
 
         stop(): any;

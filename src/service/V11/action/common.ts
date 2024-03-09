@@ -96,7 +96,7 @@ export class CommonAction {
     getStatus(this: V11) {
         return {
             online: this.oneBot.status === OneBotStatus.Online,
-            good: true,
+            good: this.oneBot.app.isStarted,
         };
     }
 
