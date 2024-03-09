@@ -319,13 +319,18 @@ export function createOnebots(
         if (!existsSync(App.configDir)) {
             mkdirSync(App.configDir);
         }
-        if (!existsSync(App.configPath)) {
-            copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
+        config = yaml.load(readFileSync(App.configPath, "utf8")) as App.Config;
+    }
+    if (!existsSync(App.configPath)) {
+        copyFileSync(path.resolve(__dirname, "../config.sample.yaml"), App.configPath);
+        if (typeof config === "string") {
             console.log("未找到对应配置文件，已自动生成默认配置文件，请修改配置文件后重新启动");
             console.log(`配置文件在:  ${App.configPath}`);
             process.exit();
+        } else {
+            console.log("未找到对应配置文件，已自动生成默认配置文件");
+            console.log(`配置文件在:  ${App.configPath}`);
         }
-        config = yaml.load(readFileSync(App.configPath, "utf8")) as App.Config;
     }
     if (!existsSync(App.dataDir)) {
         mkdirSync(App.dataDir);
