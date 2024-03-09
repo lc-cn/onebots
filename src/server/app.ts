@@ -329,7 +329,7 @@ export function createOnebots(
             console.log(`配置文件在:  ${App.configPath}`);
             process.exit();
         } else {
-            writeFileSync(yaml.dump(config), App.configPath);
+            writeFileSync(App.configPath, yaml.dump(config));
             console.log(`已自动保存配置到：${App.configPath}`);
             console.log(`配置文件在:  `);
         }
