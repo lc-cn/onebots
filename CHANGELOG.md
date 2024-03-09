@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.68](https://github.com/lc-cn/onebots/compare/v0.4.67...v0.4.68) (2024-03-09)
+
+
+### Bug Fixes
+
+* 移除非icqq平台的icqq依赖 ([8f0d0da](https://github.com/lc-cn/onebots/commit/8f0d0da4c1b60ce534ef6f7fe84729d101ec7c2f))
+
 ## [0.4.67](https://github.com/lc-cn/onebots/compare/v0.4.66...v0.4.67) (2024-03-07)
 
 
