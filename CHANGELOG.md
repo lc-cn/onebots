@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.69](https://github.com/lc-cn/onebots/compare/v0.4.68...v0.4.69) (2024-03-09)
+
+
+### Bug Fixes
+
+* 允许通过index启动，并增加相关文档 ([4d9f499](https://github.com/lc-cn/onebots/commit/4d9f499c62862cfd5aba59ab0b0a5a5c2c20ddd9))
+* 即使通过index.js启动，也为其创建配置文件，避免后续Bug ([dd6f88a](https://github.com/lc-cn/onebots/commit/dd6f88ac4534c696de7e1a84d75d8150fffaaafc))
+
 ## [0.4.68](https://github.com/lc-cn/onebots/compare/v0.4.67...v0.4.68) (2024-03-09)
 
 
