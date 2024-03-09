@@ -21,22 +21,22 @@
                             type="primary"
                             @click="setOnline(adapter.platform, bot.uin)"
                             size="small"
-                            v-if="bot.status === 'bad'"
+                            v-if="bot.status === 'offline'"
                             >上线</el-button
                         >
                         <el-button
                             type="danger"
                             @click="setOffline(adapter.platform, bot.uin)"
                             size="small"
-                            v-if="bot.status === 'good'"
+                            v-if="bot.status === 'online'"
                             >下线</el-button
                         >
                     </div>
                     <p>
                         状态：
-                        <el-tag type="success" v-if="bot.status === 'good'">在线</el-tag>
-                        <el-tag v-else-if="bot.status === 'online'" type="warning">上线中</el-tag>
-                        <el-tag type="danger" v-else-if="bot.status === 'bad'">离线</el-tag>
+                        <el-tag type="success" v-if="bot.status === 'online'">在线</el-tag>
+                        <el-tag v-else-if="bot.status === 'pending'" type="warning">上线中</el-tag>
+                        <el-tag type="danger" v-else-if="bot.status === 'offline'">离线</el-tag>
                     </p>
                     <p>
                         所属平台：

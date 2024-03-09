@@ -41,7 +41,7 @@ export class CommonAction {
 
     getStatus(this: V12) {
         return {
-            good: this.oneBot.status === OneBotStatus.Good,
+            good: true,
             bots: [
                 {
                     self: this.action.getSelfInfo.apply(this),

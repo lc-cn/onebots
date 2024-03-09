@@ -38,12 +38,12 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
     async setOnline(uin: string) {
         const oneBot = this.getOneBot<Bot>(uin);
         await oneBot?.internal.start();
-        oneBot.status = OneBotStatus.Good;
+        oneBot.status = OneBotStatus.Online;
     }
     async setOffline(uin: string) {
         const oneBot = this.getOneBot<Bot>(uin);
         await oneBot?.internal.stop();
-        oneBot.status = OneBotStatus.Bad;
+        oneBot.status = OneBotStatus.OffLine;
     }
     createOneBot(uin: string, protocol: Bot.Config, versions: OneBot.Config[]): OneBot {
         const oneBot = super.createOneBot<Bot>(uin, protocol, versions);
@@ -52,7 +52,7 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
             logLevel: this.app.config.log_level,
             ...protocol,
         });
-        oneBot.status = OneBotStatus.Online;
+        oneBot.status = OneBotStatus.Pending;
         return oneBot;
     }
     async sendGroupMessage<V extends OneBot.Version>(

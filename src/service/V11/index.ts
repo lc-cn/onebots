@@ -130,10 +130,8 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                 this.dispatch({
                     self_id: this.oneBot.uin,
                     status: {
-                        online:
-                            this.adapter.getSelfInfo(this.oneBot.uin, "V11").status ===
-                            OneBotStatus.Online,
-                        good: this.oneBot.status === OneBotStatus.Good,
+                        online: this.oneBot.status === OneBotStatus.Online,
+                        good: true,
                     },
                     time: Math.floor(Date.now() / 1000),
                     post_type: "meta_event",

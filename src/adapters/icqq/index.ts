@@ -27,7 +27,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         const oneBot = this.getOneBot<Client>(uin);
         if (!oneBot) throw new Error("No one");
         await oneBot.internal.logout();
-        oneBot.status = OneBotStatus.Bad;
+        oneBot.status = OneBotStatus.OffLine;
     }
 
     callApi<V extends OneBot.Version>(uin: string, version: V, [name, args]: [string, any[]]) {
@@ -45,7 +45,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             path.resolve(path.dirname(require.resolve("@icqqjs/icqq")), "../package.json"),
         );
         oneBot.dependency = `icqq v${pkg.version}`;
-        oneBot.status = OneBotStatus.Online;
+        oneBot.status = OneBotStatus.Pending;
         oneBot.internal = new Client({
             ...defaultIcqqConfig,
             log_level: this.app.config.log_level,
@@ -334,7 +334,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                     });
                 } else {
                     _this.logger.error(e.message);
-                    oneBot.status = OneBotStatus.Bad;
+                    oneBot.status = OneBotStatus.OffLine;
                     clean();
                 }
                 this.off("system.login.error", errorHandler);
@@ -347,7 +347,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             };
             client.trap("system.online", () => {
                 oneBot.nickname = client.nickname;
-                oneBot.status = OneBotStatus.Good;
+                oneBot.status = OneBotStatus.Online;
                 this.app.ws.clients.forEach(client => {
                     client.send(
                         JSON.stringify({
@@ -360,7 +360,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                 resolve(clean);
             });
             const timer = setTimeout(() => {
-                oneBot.status = OneBotStatus.Bad;
+                oneBot.status = OneBotStatus.OffLine;
                 clean();
                 reject("登录超时");
             }, this.app.config.timeout * 1000);

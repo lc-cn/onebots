@@ -45,12 +45,12 @@ export default class DingtalkAdapter extends Adapter<"dingtalk", Sendable> {
     async setOnline(uin: string) {
         const oneBot = this.getOneBot<Bot>(uin);
         await oneBot?.internal.start();
-        oneBot.status = OneBotStatus.Good;
+        oneBot.status = OneBotStatus.Online;
     }
     async setOffline(uin: string) {
         const oneBot = this.getOneBot<Bot>(uin);
         await oneBot?.internal.stop();
-        oneBot.status = OneBotStatus.Bad;
+        oneBot.status = OneBotStatus.OffLine;
     }
     createOneBot(uin: string, protocol: Bot.Options, versions: OneBot.Config[]): OneBot {
         const oneBot = super.createOneBot<Bot>(uin, protocol, versions);

@@ -38,12 +38,12 @@ export default class WechatAdapter extends Adapter<"wechat", Sendable> {
         const { data } = await oneBot?.internal.getAvatar(oneBot.internal.info.nickname);
         oneBot.avatar = `data:image/png;base64,${data.toString("base64")}`;
         oneBot.nickname = oneBot.internal.info.nickname;
-        oneBot.status = OneBotStatus.Good;
+        oneBot.status = OneBotStatus.Online;
     }
     async setOffline(uin: string) {
         const oneBot = this.getOneBot<Client>(uin);
         await oneBot?.internal.stop();
-        oneBot.status = OneBotStatus.Bad;
+        oneBot.status = OneBotStatus.OffLine;
     }
     createOneBot(uin: string, protocol: WechatConfig, versions: OneBot.Config[]): OneBot {
         const oneBot = super.createOneBot<Client>(uin, protocol, versions);
@@ -51,7 +51,7 @@ export default class WechatAdapter extends Adapter<"wechat", Sendable> {
             log_level: this.app.config.log_level,
             ...protocol,
         });
-        oneBot.status = OneBotStatus.Online;
+        oneBot.status = OneBotStatus.Pending;
         return oneBot;
     }
     call(uin: string, version: string, method: string, args?: any[]): Promise<any> {

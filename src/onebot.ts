@@ -5,6 +5,7 @@ import { V12 } from "./service/V12";
 import { Adapter } from "@/adapter";
 import { Service } from "@/service";
 import { Logger } from "log4js";
+import { App } from "@/server/app";
 
 export class NotFoundError extends Error {
     message = "不支持的API";
@@ -83,7 +84,7 @@ export class OneBot<T = any> extends EventEmitter {
                     throw new Error("不支持的oneBot版本：" + c.version);
             }
         });
-        this.status = OneBotStatus.Good;
+        this.status = OneBotStatus.Pending;
     }
 
     async start() {
@@ -120,9 +121,9 @@ export class OneBot<T = any> extends EventEmitter {
 }
 
 export enum OneBotStatus {
-    Good = "good",
-    Bad = "bad",
-    Online = "online",
+    Pending = "pending", // 上线中
+    Online = "online", // 已上线
+    OffLine = "offline", // 已离线
 }
 
 export namespace OneBot {
@@ -148,6 +149,7 @@ export namespace OneBot {
     export type MessageRet<V extends Version> = V extends "V11" ? V11.MessageRet : V12.MessageRet;
 
     export interface Base {
+        app: App;
         start(path?: string): any;
 
         stop(): any;
