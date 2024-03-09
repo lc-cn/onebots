@@ -1,7 +1,5 @@
 import { OneBotStatus } from "@/onebot";
 import { V11 } from "@/service/V11";
-import { Message } from "@icqqjs/icqq";
-import { MsgEntry } from "@/service/V11/db_entities";
 
 export class CommonAction {
     /**
@@ -34,8 +32,10 @@ export class CommonAction {
      */
     async getMsg(this: V11, message_id: number) {
         const msg_id = this.getStrByInt("message_id", message_id);
-        let msg: Message = await this.adapter.call(this.oneBot.uin, "V11", "getMessage", [msg_id]);
-        msg.message_id = message_id as any; // nonebot v11 要求 message_id 是 number 类型
+        let msg: V11.MessageRet = await this.adapter.call(this.oneBot.uin, "V11", "getMessage", [
+            msg_id,
+        ]);
+        msg.message_id = message_id; // nonebot v11 要求 message_id 是 number 类型
         msg["real_id"] = msg.message_id; // nonebot 的reply类型会检测real_id是否存在，虽然它从未使用
         return msg;
     }

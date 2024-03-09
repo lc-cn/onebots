@@ -12,7 +12,7 @@ npm init
 ## 2. 安装 `OneBots`
 - 在终端进入项目文件夹，并执行以下命令，安装 `OneBots`
 ```shell
-npm install onebots --legacy-peer-deps
+npm install onebots --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 ## 3. 安装适配器
 - 根据你的需求，选择对应的适配器进行安装
@@ -40,16 +40,16 @@ E-Mail: # 你的公开邮箱地址
 
 ::: code-group
 ```shell [ICQQ]
-npm install @icqqjs/icqq
+npm install @icqqjs/icqq --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 ```shell [QQ官方机器人]
-npm install qq-group-bot
+npm install qq-group-bot --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 ```shell [钉钉机器人]
-npm install node-dd-bot
+npm install node-dd-bot --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 ```shell [微信机器人]
-npm install lib-wechat
+npm install lib-wechat --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 :::
 ## 4. 初始化配置

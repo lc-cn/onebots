@@ -1,4 +1,3 @@
-import { EventMap } from "@icqqjs/icqq";
 import { version } from "@/utils";
 import { join } from "path";
 import { Config } from "./config";
@@ -12,7 +11,6 @@ import https from "https";
 import { WebSocket, WebSocketServer } from "ws";
 import { toBool, toHump, toLine, transformObj, uuid } from "@/utils";
 import { JsonDB } from "@/db";
-import { genDmMessageId, genGroupMessageId } from "@icqqjs/icqq/lib/message";
 import { Service } from "@/service";
 import { App } from "@/server/app";
 import { Dict } from "@zhinjs/shared";
@@ -406,27 +404,6 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
                 data.message_type || data.notice_type || data.request_type || data.system_type;
         data.message =
             data.type === "message" ? this.adapter.toSegment("V12", data.message) : data.message;
-        if (data.source)
-            data.source = {
-                ...data.source,
-                message_id:
-                    data.detail_type === "private"
-                        ? genDmMessageId(
-                              data.source.user_id,
-                              data.source.seq,
-                              data.source.rand,
-                              data.source.time,
-                          )
-                        : genGroupMessageId(
-                              data.group_id,
-                              data.source.user_id,
-                              data.source.seq,
-                              data.source.rand,
-                              data.source.time,
-                          ),
-                user_id: data.source.user_id,
-                message: data.source.message,
-            };
         return V12.formatPayload(this.oneBot.uin, event, data as any);
     }
 
@@ -479,7 +456,7 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
     }
     transformMedia(segment: V12.Segment): V12.Segment {
         const file = this.getFile(segment.data.file_id);
-        if (file)
+        if (file && file.data)
             return {
                 type: segment.type,
                 data: {
@@ -867,18 +844,7 @@ export namespace V12 {
             detail_type: "status_update";
             status: ReturnType<Action["getStatus"]>;
         };
-    } & TransformEventMap;
-    export type TransformEventMap = {
-        [P in keyof EventMap]: TransformEventParams<Parameters<EventMap[P]>>;
     };
-    export type TransformEventParams<T extends any[]> = T extends [infer L, ...infer R]
-        ? L extends object
-            ? L & {
-                  args: R;
-              }
-            : { args: [L, ...R] }
-        : { args: T };
-
     export function success<T extends any>(
         data: T,
         retcode: Result<T>["retcode"] = 0,
