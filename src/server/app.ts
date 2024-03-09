@@ -154,7 +154,7 @@ export class App extends Koa {
     public createOneBot<P extends string>(platform: P, uin: string, config: Adapter.Config) {
         const adapter = this.findOrCreateAdapter<P>(platform, config);
         if (!adapter) return;
-        return adapter.createOneBot(uin, config.protocol, config.versions || []);
+        return adapter.createOneBot(uin, config.protocol || {}, config.versions || []);
     }
     get oneBots() {
         return [...this.adapters.values()]
