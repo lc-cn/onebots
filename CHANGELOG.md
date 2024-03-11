@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.73](https://github.com/lc-cn/onebots/compare/v0.4.72...v0.4.73) (2024-03-11)
+
+
+### Bug Fixes
+
+* OneBotV11 支持 qq官方机器人 ([743b3ba](https://github.com/lc-cn/onebots/commit/743b3ba13382b04c3f761ebd4c22c0e79e24e401))
+* 配置文件保存错误 ([a916108](https://github.com/lc-cn/onebots/commit/a916108c5cbdbc417ffaa2f7b0cb87a79f78304d))
+
 ## [0.4.72](https://github.com/lc-cn/onebots/compare/v0.4.71...v0.4.72) (2024-03-09)
 
 
