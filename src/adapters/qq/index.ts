@@ -60,40 +60,53 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         version: V,
         args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
-        const [group_id, message, source] = args;
+        let [group_id, message, source] = args;
+        if (version === "V11") {
+            const [sub_type] = group_id.split(":");
+            if (sub_type === "guild")
+                return await this.sendGuildMessage(uin, version, [
+                    group_id.slice(6),
+                    message,
+                    source,
+                ]);
+        }
         const bot = this.getOneBot<Bot>(uin);
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
         const result = await bot.internal.sendGroupMessage(group_id, message, quote);
-        if (result.msg === "success") {
-            return {
-                message_id:
-                    version === "V11"
-                        ? bot.V11.transformToInt("message_id", `group:${group_id}${result.msg_id}`)
-                        : `group:${group_id}${result.msg_id}`,
-            } as OneBot.MessageRet<V>;
-        }
-        throw new Error(result.msg);
+        return {
+            message_id:
+                version === "V11"
+                    ? bot.V11.transformToInt("message_id", `group:${group_id}${result.id}`)
+                    : `group:${group_id}${result.id}`,
+        } as OneBot.MessageRet<V>;
     }
     async sendPrivateMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
         args: [string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
-        const [user_id, message, source] = args;
+        let [user_id, message, source] = args;
+        if (version === "V11") {
+            const [sub_type, real_user_id = sub_type] = user_id.split(":");
+            if (sub_type === "direct")
+                return await this.sendDirectMessage(uin, version, [
+                    user_id.slice(7),
+                    message,
+                    source,
+                ]);
+            user_id = real_user_id;
+        }
         const bot = this.getOneBot<Bot>(uin);
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
         const result = await bot.internal.sendPrivateMessage(user_id, message, quote);
-        if (result.msg === "success") {
-            return {
-                message_id:
-                    version === "V11"
-                        ? bot.V11.transformToInt("message_id", `private:${user_id}${result.msg_id}`)
-                        : `private:${user_id}${result.msg_id}`,
-            } as OneBot.MessageRet<V>;
-        }
-        throw new Error(result.msg);
+        return {
+            message_id:
+                version === "V11"
+                    ? bot.V11.transformToInt("message_id", `private:${user_id}${result.id}`)
+                    : `private:${user_id}${result.id}`,
+        } as OneBot.MessageRet<V>;
     }
 
     async sendGuildMessage<V extends OneBot.Version>(
@@ -106,18 +119,12 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
         const result = await bot.internal.sendGuildMessage(channel_id, message, quote);
-        if (result.msg === "success") {
-            return {
-                message_id:
-                    version === "V11"
-                        ? bot.V11.transformToInt(
-                              "message_id",
-                              `guild:${channel_id}${result.msg_id}`,
-                          )
-                        : `guild:${channel_id}${result.msg_id}`,
-            } as OneBot.MessageRet<V>;
-        }
-        throw new Error(result.msg);
+        return {
+            message_id:
+                version === "V11"
+                    ? bot.V11.transformToInt("message_id", `guild:${channel_id}${result.id}`)
+                    : `guild:${channel_id}${result.id}`,
+        } as OneBot.MessageRet<V>;
     }
     async sendDirectMessage<V extends OneBot.Version>(
         uin: string,
@@ -129,15 +136,12 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
         const result = await bot.internal.sendDirectMessage(guild_id, message, quote);
-        if (result.msg === "success") {
-            return {
-                message_id:
-                    version === "V11"
-                        ? bot.V11.transformToInt("message_id", `direct:${guild_id}${result.msg_id}`)
-                        : `direct:${guild_id}${result.msg_id}`,
-            } as OneBot.MessageRet<V>;
-        }
-        throw new Error(result.msg);
+        return {
+            message_id:
+                version === "V11"
+                    ? bot.V11.transformToInt("message_id", `direct:${guild_id}${result.id}`)
+                    : `direct:${guild_id}${result.id}`,
+        } as OneBot.MessageRet<V>;
     }
     deleteMessage(uin: string, message_id: string) {
         const [from_type, from_id, ...msg_idArr] = message_id.split(":");
@@ -175,6 +179,12 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
             .map(segment => {
                 if (version === "V12" && ["image", "video", "audio"].includes(segment.type))
                     return onebot.V12.transformMedia(segment);
+                if (segment.type === "reply") {
+                    if (version === "V11")
+                        segment.data.id = onebot.V11.getStrByInt("message_id", segment.data.id);
+                    const [_1, _2, ...others] = (segment.data.id || "").split(":");
+                    segment.data.id = others.join(":");
+                }
                 return segment;
             })
             .map(item => {
@@ -225,10 +235,22 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
             },
             user_id: data.user_id || data.sender?.user_id,
         };
-        if (data.message_id) {
-            data.message_id = `${data.message_type}:${
-                data.channel_id || data.guild_id || data.group_id || data.user_id
-            }:${data.message_id}`;
+        if (result.message_id) {
+            if (result.message_type === "private") {
+                result.message_id = `${result.sub_type}:${
+                    result.guild_id || result.group_id || result.user_id
+                }:${result.message_id}`;
+                result.user_id = `${result.sub_type}:${result.guild_id || result.group_id || result.user_id}`;
+                if (result.sender) result.sender.user_id = result.user_id;
+            } else if (result.message_type === "guild") {
+                result.message_type = "group";
+                result.message_id = `guild:${result.channel_id}:${result.message_id}`;
+                result.group_id = `guild:${result.channel_id}`;
+            } else {
+                result.message_id = `${result.message_type}:${
+                    result.channel_id || result.guild_id || result.group_id || result.user_id
+                }:${result.message_id}`;
+            }
         }
         delete result.bot;
         const oneBot = this.getOneBot<Bot>(uin);
@@ -238,8 +260,8 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         switch (version) {
             case "V11":
                 oneBot.V11.transformStrToIntForObj(result, ["message_id", "user_id", "group_id"]);
-                oneBot.V11.transformStrToIntForObj(result.sender, ["user_id "]);
-                oneBot.V11.transformStrToIntForObj(result.self, ["user_id "]);
+                oneBot.V11.transformStrToIntForObj(result.sender, ["user_id"]);
+                oneBot.V11.transformStrToIntForObj(result.self, ["user_id"]);
                 break;
         }
         return result;

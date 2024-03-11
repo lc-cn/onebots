@@ -5,7 +5,6 @@ import { V12 } from "./service/V12";
 import { Adapter } from "@/adapter";
 import { Service } from "@/service";
 import { Logger } from "log4js";
-import { App } from "@/server/app";
 
 export class NotFoundError extends Error {
     message = "不支持的API";
