@@ -148,8 +148,9 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         const bot = this.getOneBot<Bot>(uin).internal;
         switch (from_type) {
             case "private":
+                return bot.recallPrivateMessage(from_id, msg_idArr.join(":"));
             case "group":
-                throw new Error(`暂不支持撤回${from_type}类型的消息`);
+                return bot.recallGroupMessage(from_id, msg_idArr.join(":"));
             case "direct":
                 return bot.recallDirectMessage(from_id, msg_idArr.join(":"));
             case "guild":
