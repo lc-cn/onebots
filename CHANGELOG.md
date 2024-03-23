@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.74](https://github.com/lc-cn/onebots/compare/v0.4.73...v0.4.74) (2024-03-23)
+
+
+### Bug Fixes
+
+* 同步支持QQ官方机器人撤回群/私聊消息能力 ([b948c0d](https://github.com/lc-cn/onebots/commit/b948c0dacf96b2a801880660c3243ddf6380f369))
+
 ## [0.4.73](https://github.com/lc-cn/onebots/compare/v0.4.72...v0.4.73) (2024-03-11)
 
 
