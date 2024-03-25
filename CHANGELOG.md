@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.77](https://github.com/lc-cn/onebots/compare/v0.4.76...v0.4.77) (2024-03-25)
+
+
+### Bug Fixes
+
+* 编译类型错误 ([de478f8](https://github.com/lc-cn/onebots/commit/de478f8ec39793e83cda7648d210bd2e7d31ed01))
+
 ## [0.4.76](https://github.com/lc-cn/onebots/compare/v0.4.75...v0.4.76) (2024-03-25)
 
 
