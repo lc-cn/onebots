@@ -117,4 +117,15 @@ export class CommonAction {
     logout(this: V11, keepalive?: boolean) {
         return this.adapter.call(this.oneBot.uin, "V11", "logout", [keepalive]);
     }
+    /**
+     * 上传富媒体
+     * @param this 
+     * @param target_id 目标id
+     * @param target_type {group|user} 目标类型
+     * @param file_data 文件base64或文件网络url
+     */
+    async uploadMedia(this:V11,target_id:number,target_type:'group'|'user',file_data:string){
+        const real_id=this.getStrByInt(`${target_type}_id`,target_id)
+        return this.adapter.call(this.oneBot.uin,'V11','uploadMedia',[real_id,target_type,file_data])
+    }
 }

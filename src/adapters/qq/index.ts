@@ -175,6 +175,10 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
             throw new Error(`call internal method error:${e.message}`);
         }
     }
+    async uploadMedia(uin:string,target_id:number,target_type:'group'|'user',file_data:string){
+        const bot = this.getOneBot<Bot>(uin).internal;
+        return bot.uploadMedia(target_id,target_type,file_data)
+    }
     fromSegment<V extends OneBot.Version>(
         onebot: OneBot<Bot>,
         version: V,
