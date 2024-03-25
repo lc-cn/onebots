@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.75](https://github.com/lc-cn/onebots/compare/v0.4.74...v0.4.75) (2024-03-25)
+
+
+### Bug Fixes
+
+* qq 官方适配器支持上传富媒体 ([1c3092e](https://github.com/lc-cn/onebots/commit/1c3092e7f8fcaa35257b2512dc99326e9a6acbb1))
+* 尝试修复转发Bug ([59b00d9](https://github.com/lc-cn/onebots/commit/59b00d9e9056fa19da750440197276c69e01a9e5))
+
 ## [0.4.74](https://github.com/lc-cn/onebots/compare/v0.4.73...v0.4.74) (2024-03-23)
 
 
