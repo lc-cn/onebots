@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.76](https://github.com/lc-cn/onebots/compare/v0.4.75...v0.4.76) (2024-03-25)
+
+
+### Bug Fixes
+
+* 富媒体添加类型 ([30d4891](https://github.com/lc-cn/onebots/commit/30d489155d2a9f2ce46a67733b883d11426b7f90))
+
 ## [0.4.75](https://github.com/lc-cn/onebots/compare/v0.4.74...v0.4.75) (2024-03-25)
 
 
