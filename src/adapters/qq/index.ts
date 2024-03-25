@@ -143,9 +143,14 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
                     : `direct:${guild_id}${result.id}`,
         } as OneBot.MessageRet<V>;
     }
-    deleteMessage(uin: string, message_id: string) {
+    async deleteMessage(uin: string, version: "V11" | "V12", [message_id]: [string]) {
         const [from_type, from_id, ...msg_idArr] = message_id.split(":");
         const bot = this.getOneBot<Bot>(uin).internal;
+        if (version === "V11") {
+            const [sub_type, real_user_id = sub_type] = from_id.split(":");
+            if (sub_type === "direct")
+                return await bot.recallDirectMessage(from_id.slice(7), message_id);
+        }
         switch (from_type) {
             case "private":
                 return bot.recallPrivateMessage(from_id, msg_idArr.join(":"));

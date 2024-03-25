@@ -17,7 +17,7 @@ export async function processMessages(
             case "node": {
                 result.push({
                     type,
-                    ...data,
+                    ...(data || other),
                     user_id: data.user_id,
                     message: await processMessages.call(
                         this,
@@ -33,12 +33,11 @@ export async function processMessages(
                 if (String(item.data.platform) === "custom") {
                     item.data.platform = item.data["subtype"]; // gocq 的平台数据存储在 subtype 内，兼容 icqq 时要求前端必须发送 id 字段
                 }
-                const { type, data } = item;
                 await shareMusic.call(
                     this[target_type === "private" ? "pickFriend" : "pickGroup"](target_id),
                     {
                         type,
-                        ...data,
+                        ...(data || other),
                     },
                 );
                 break;
@@ -46,7 +45,7 @@ export async function processMessages(
             case "share": {
                 await this[target_type === "private" ? "pickFriend" : "pickGroup"](
                     target_id,
-                ).shareUrl(item.data);
+                ).shareUrl({ ...(data || other) });
                 break;
             }
             case "video":
