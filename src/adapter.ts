@@ -146,7 +146,6 @@ export abstract class Adapter<T extends string = string, Sendable = any> extends
             return uin ? oneBot.uin === uin : true;
         });
         for (const oneBot of startOneBots) {
-            await this.setOnline(oneBot.uin);
             await oneBot.start();
         }
         this.app.emit("adapter.start", this.platform);

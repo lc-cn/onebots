@@ -1,59 +1,40 @@
 import KoaRouter from "@koa/router";
-import { WebSocketServer, RawData } from "ws";
-import http from "http";
-import { parse } from "url";
-import { Dict } from "@zhinjs/shared";
+import { WebSocketServer, WebSocket, ServerOptions } from "ws";
+import { IncomingMessage, Server } from "http";
 
-export class WsServer extends WebSocketServer {
-    waiting_timeout: number = 1000 * 60 * 5;
-    async waitResult<T>(event: string, ...args: any[]) {
-        return new Promise<T>(resolve => {
-            const resolver = (result: T) => {
-                this.clients.forEach(client => client.off("message", listener));
-                clearTimeout(timer);
-                resolve(result);
-            };
-            const echo = Date.now().toString(36).slice(2);
-            let timer = setTimeout(() => {
-                resolver(null);
-            }, this.waiting_timeout);
-            const listener = (raw: RawData) => {
-                let data: Dict = null;
-                try {
-                    data = JSON.parse(raw.toString());
-                } catch {}
-                if (!data) return;
-                if (data.echo === echo) resolver(data.result);
-            };
-            this.clients.forEach(client => {
-                client.on("message", listener);
-                client.send(
-                    JSON.stringify({
-                        event,
-                        echo,
-                        args,
-                    }),
-                );
-            });
-        });
+export class WsServer<
+    T extends typeof WebSocket.WebSocket = typeof WebSocket.WebSocket,
+    U extends typeof IncomingMessage = typeof IncomingMessage,
+> extends WebSocketServer<T, U> {
+    constructor(options?: WsServer.Options<T, U>) {
+        super(options);
+        this.path = options.path;
+    }
+}
+export namespace WsServer {
+    export interface Options<
+        T extends typeof WebSocket.WebSocket = typeof WebSocket.WebSocket,
+        U extends typeof IncomingMessage = typeof IncomingMessage,
+    > extends ServerOptions<T, U> {
+        path: string;
     }
 }
 export class Router extends KoaRouter {
     wsStack: WsServer[] = [];
-
-    ws(path: string, server: http.Server) {
+    constructor(server: Server, options?: KoaRouter.RouterOptions) {
+        super(options);
+        server.on("upgrade", (request, socket, head) => {
+            const { pathname } = new URL(request.url, `wss://localhost`);
+            const wsServer = this.wsStack.find(wss => wss.path === pathname);
+            if (!wsServer) socket.destroy();
+            wsServer.handleUpgrade(request, socket, head, function done(ws) {
+                wsServer.emit("connection", ws, request);
+            });
+        });
+    }
+    ws(path: string) {
         const wsServer = new WsServer({ noServer: true, path });
         this.wsStack.push(wsServer);
-        server.on("upgrade", (request, socket, head) => {
-            const { pathname } = parse(request.url);
-            if (this.wsStack.findIndex(wss => wss.options.path === path) === -1) {
-                socket.destroy();
-            } else if (pathname === path) {
-                wsServer.handleUpgrade(request, socket, head, function done(ws) {
-                    wsServer.emit("connection", ws, request);
-                });
-            }
-        });
         return wsServer;
     }
 }

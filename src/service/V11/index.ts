@@ -234,7 +234,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     }
 
     private startWs() {
-        this.wss = this.oneBot.app.router.ws(this.path, this.oneBot.app.httpServer);
+        this.wss = this.oneBot.app.router.ws(this.path);
         this.logger.mark(
             `开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
         );

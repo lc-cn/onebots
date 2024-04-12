@@ -4,6 +4,10 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import vue from '@vitejs/plugin-vue'
 export default defineConfig({
+    server:{
+        strictPort:false,
+        port:6728
+    },
     plugins:[
         vue(),
         AutoImport({

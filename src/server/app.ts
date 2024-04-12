@@ -82,7 +82,8 @@ export class App extends Koa {
     init() {
         this.logger = getLogger("[OneBots]");
         this.logger.level = this.config.log_level;
-        this.router = new Router({ prefix: this.config.path });
+        this.httpServer = createServer(this.callback());
+        this.router = new Router(this.httpServer, { prefix: this.config.path });
         this.use(KoaBodyParser())
             .use(this.router.routes())
             .use(this.router.allowedMethods())
@@ -95,8 +96,7 @@ export class App extends Koa {
                 })(ctx, next);
             })
             .use(koaStatic(path.resolve(__dirname, "../../dist")));
-        this.httpServer = createServer(this.callback());
-        this.ws = this.router.ws("/", this.httpServer);
+        this.ws = this.router.ws("/");
 
         this.createOneBots();
     }
@@ -187,10 +187,10 @@ export class App extends Koa {
                 });
         };
         fs.watch(App.logFile, fileListener);
-        this.on("close", () => {
+        this.once("close", () => {
             fs.unwatchFile(App.logFile, fileListener);
         });
-        process.on("disconnect", () => {
+        process.once("disconnect", () => {
             fs.unwatchFile(App.logFile, fileListener);
         });
         this.ws.on("connection", async client => {
