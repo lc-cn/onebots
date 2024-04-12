@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.78](https://github.com/lc-cn/onebots/compare/v0.4.77...v0.4.78) (2024-04-12)
+
+
+### Bug Fixes
+
+* 多次调用登录 ([855845b](https://github.com/lc-cn/onebots/commit/855845b5c4021c1c527de9bcae96be46a2bcb9d6))
+
 ## [0.4.77](https://github.com/lc-cn/onebots/compare/v0.4.76...v0.4.77) (2024-03-25)
 
 
