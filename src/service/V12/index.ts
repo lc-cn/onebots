@@ -122,7 +122,9 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
         });
 
         this.on("dispatch", unserialized => {
-            const serialized = JSON.stringify(unserialized);
+            const serialized = JSON.stringify(unserialized, (_, v) =>
+                typeof v === "bigint" ? v.toString() : v,
+            );
             for (const ws of this.wss?.clients || []) {
                 ws.send(serialized, err => {
                     if (err) this.logger.error(`正向WS(${ws.url})上报事件失败: ` + err.message);
@@ -214,7 +216,9 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
         const protocol = config.url.startsWith("https") ? https : http;
         this.on("dispatch", (unserialized: any) => {
             try {
-                const serialized = JSON.stringify(unserialized);
+                const serialized = JSON.stringify(unserialized, (_, v) =>
+                    typeof v === "bigint" ? v.toString() : v,
+                );
                 protocol
                     .request(
                         config.url,
@@ -533,7 +537,7 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
             if (echo) {
                 result.echo = echo;
             }
-            return JSON.stringify(result);
+            return JSON.stringify(result, (_, v) => (typeof v === "bigint" ? v.toString() : v));
         } else throw new NotFoundError();
     }
     private async httpAuth(ctx: Context, config: V12.HttpConfig) {

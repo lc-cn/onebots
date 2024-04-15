@@ -157,6 +157,13 @@ export class CommonAction {
     sendLike(this: V12, user_id: string, times: number = 1) {
         return this.adapter.call(this.oneBot.uin, "V12", "sendLike", [user_id, times]);
     }
+    getForumUrl(this: V12, guild_id: string, channel_id: string, forum_id: string) {
+        return this.adapter.call(this.oneBot.uin, "V12", "getForumUrl", [
+            guild_id,
+            channel_id,
+            forum_id,
+        ]);
+    }
     imageOcr(this: V12, file: string) {
         return this.adapter.call(this.oneBot.uin, "V12", "imageOcr", [file]);
     }

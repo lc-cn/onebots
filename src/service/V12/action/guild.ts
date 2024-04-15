@@ -213,17 +213,20 @@ export class GuildAction {
 
     /**
      * 发送频道消息
+     * @param guild_id {string} 频道id
      * @param channel_id {string} 通道id
      * @param message {V12.Sendable} 消息
      * @param source
      */
     async sendGuildMsg(
         this: V12,
+        guild_id: string,
         channel_id: string,
         message: V12.Sendable,
         source?: string,
     ): Promise<V12.MessageRet> {
         return this.adapter.call(this.oneBot.uin, "V12", "sendGuildMessage", [
+            guild_id,
             channel_id,
             message,
             source,

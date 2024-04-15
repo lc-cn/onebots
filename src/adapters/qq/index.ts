@@ -63,12 +63,15 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         let [group_id, message, source] = args;
         if (version === "V11") {
             const [sub_type] = group_id.split(":");
-            if (sub_type === "guild")
+            if (sub_type === "guild") {
+                const [guild_id, channel_id] = group_id.slice(6);
                 return await this.sendGuildMessage(uin, version, [
-                    group_id.slice(6),
+                    group_id,
+                    channel_id,
                     message,
                     source,
                 ]);
+            }
         }
         const bot = this.getOneBot<Bot>(uin);
         let quote: Quotable | undefined;
@@ -112,9 +115,9 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
     async sendGuildMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, Sendable, string],
+        args: [string, string, Sendable, string],
     ): Promise<OneBot.MessageRet<V>> {
-        const [channel_id, message, source] = args;
+        const [guild_id, channel_id, message, source] = args;
         const bot = this.getOneBot<Bot>(uin);
         let quote: Quotable | undefined;
         if (source) quote = { id: source };
@@ -122,8 +125,8 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         return {
             message_id:
                 version === "V11"
-                    ? bot.V11.transformToInt("message_id", `guild:${channel_id}${result.id}`)
-                    : `guild:${channel_id}${result.id}`,
+                    ? bot.V11.transformToInt("message_id", `${guild_id}:${channel_id}${result.id}`)
+                    : `${guild_id}:${channel_id}${result.id}`,
         } as OneBot.MessageRet<V>;
     }
     async sendDirectMessage<V extends OneBot.Version>(
@@ -175,9 +178,15 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
             throw new Error(`call internal method error:${e.message}`);
         }
     }
-    async uploadMedia(uin:string,target_id:string,target_type:'group'|'user',file_data:string,file_type:1|2|3){
+    async uploadMedia(
+        uin: string,
+        target_id: string,
+        target_type: "group" | "user",
+        file_data: string,
+        file_type: 1 | 2 | 3,
+    ) {
         const bot = this.getOneBot<Bot>(uin).internal;
-        return bot.uploadMedia(target_id,target_type,file_data,file_type)
+        return bot.uploadMedia(target_id, target_type, file_data, file_type);
     }
     fromSegment<V extends OneBot.Version>(
         onebot: OneBot<Bot>,
@@ -254,8 +263,8 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
                 if (result.sender) result.sender.user_id = result.user_id;
             } else if (result.message_type === "guild") {
                 result.message_type = "group";
-                result.message_id = `guild:${result.channel_id}:${result.message_id}`;
-                result.group_id = `guild:${result.channel_id}`;
+                result.message_id = `guild:${result.guild_id}:${result.channel_id}:${result.message_id}`;
+                result.group_id = `guild:${result.guild_id}:${result.channel_id}`;
             } else {
                 result.message_id = `${result.message_type}:${
                     result.channel_id || result.guild_id || result.group_id || result.user_id

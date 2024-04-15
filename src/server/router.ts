@@ -26,7 +26,7 @@ export class Router extends KoaRouter {
         server.on("upgrade", (request, socket, head) => {
             const { pathname } = new URL(request.url, `wss://localhost`);
             const wsServer = this.wsStack.find(wss => wss.path === pathname);
-            if (!wsServer) socket.destroy();
+            if (!wsServer) return socket.destroy();
             wsServer.handleUpgrade(request, socket, head, function done(ws) {
                 wsServer.emit("connection", ws, request);
             });

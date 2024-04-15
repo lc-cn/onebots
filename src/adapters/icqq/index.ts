@@ -74,8 +74,9 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             ...data,
             sender: {
                 ...(data?.sender || {}),
+                user_id: data?.sender?.user_id || data?.sender?.tiny_id,
             },
-            user_id: data.user_id || data.sender?.user_id,
+            user_id: data.user_id || data.sender?.user_id || data.sender?.tiny_id,
         };
         if (data.source) {
             const message_id =
@@ -173,15 +174,14 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     async sendGuildMessage<V extends OneBot.Version>(
         uin: string,
         version: V,
-        args: [string, Sendable, string?],
+        args: [string, string, Sendable, string?],
     ): Promise<OneBot.MessageRet<V>> {
-        const [target_id, message, source] = args;
+        const [guild_id, channel_id, message, source] = args;
         const client: Client = this.oneBots.get(uin)?.internal;
-        const [guild_id, channel_id] = target_id.split(":");
         const result = await client.sendGuildMsg(
             guild_id,
             channel_id,
-            await processMessages.call(this, uin, target_id, "channel", message),
+            await processMessages.call(this, uin, Number(channel_id), "guild", message),
         );
         const message_id = `${result.seq}:${result.rand}:${result.time}`;
         return {
@@ -325,7 +325,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                 this.emit("request.receive", oneBot.uin, event);
             }),
         );
-        this.setOnline(oneBot.uin);
+        await this.setOnline(oneBot.uin);
         return new Promise<Function>((resolve, reject) => {
             client.trap("system.login.error", function errorHandler(e) {
                 if (e.message.includes("密码错误")) {

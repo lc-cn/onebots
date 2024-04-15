@@ -351,10 +351,10 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                         break;
                 }
             }
-            return JSON.stringify(data1);
+            return JSON.stringify(data1, (_, v) => (typeof v === "bigint" ? v.toString() : v));
         } else {
             delete data.bot;
-            return JSON.stringify(data);
+            return JSON.stringify(data, (_, v) => (typeof v === "bigint" ? v.toString() : v));
         }
     }
 
@@ -639,7 +639,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
             if (echo) {
                 result.echo = echo;
             }
-            return JSON.stringify(result);
+            return JSON.stringify(result, (_, v) => (typeof v === "bigint" ? v.toString() : v));
         }
     }
 

@@ -280,5 +280,5 @@ export function stringifyObj(value: any): string {
         }
     };
     _stringify(value, []);
-    return JSON.stringify(result, null, 2);
+    return JSON.stringify(result, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2);
 }

@@ -119,14 +119,33 @@ export class CommonAction {
     }
     /**
      * 上传富媒体
-     * @param this 
+     * @param this
      * @param target_id 目标id
      * @param target_type {group|user} 目标类型
      * @param file_data 文件base64或文件网络url
      * @param file_type {1|2|3} 文件类型 1：图片 2：视频 3：音频
      */
-    async uploadMedia(this:V11,target_id:number,target_type:'group'|'user',file_data:string,file_type:1|2|3){
-        const real_id=this.getStrByInt(`${target_type}_id`,target_id)
-        return this.adapter.call(this.oneBot.uin,'V11','uploadMedia',[real_id,target_type,file_data,file_type])
+    async uploadMedia(
+        this: V11,
+        target_id: number,
+        target_type: "group" | "user",
+        file_data: string,
+        file_type: 1 | 2 | 3,
+    ) {
+        const real_id = this.getStrByInt(`${target_type}_id`, target_id);
+        return this.adapter.call(this.oneBot.uin, "V11", "uploadMedia", [
+            real_id,
+            target_type,
+            file_data,
+            file_type,
+        ]);
+    }
+
+    getForumUrl(this: V11, guild_id: string, channel_id: string, forum_id: string) {
+        return this.adapter.call(this.oneBot.uin, "V12", "getForumUrl", [
+            guild_id,
+            channel_id,
+            forum_id,
+        ]);
     }
 }

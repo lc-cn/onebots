@@ -47,10 +47,11 @@ export abstract class Adapter<T extends string = string, Sendable = any> extends
                         // is Buffer
                         if (value instanceof Buffer) return `${key}=${value.toString("base64")}`;
                         // is Object
-                        if (value instanceof Object) return `${key}=${JSON.stringify(value)}`;
+                        if (value instanceof Object)
+                            return `${key}=${JSON.stringify(value, (_, v) => (typeof v === "bigint" ? v.toString() : v))}`;
                         // is Array
                         if (value instanceof Array)
-                            return `${key}=${value.map(v => JSON.stringify(v)).join(",")}`;
+                            return `${key}=${value.map(v => JSON.stringify(v, (_, v) => (typeof v === "bigint" ? v.toString() : v))).join(",")}`;
                         // is String
                         return `${key}=${item.data?.[key] || item[key]}`;
                     });
@@ -225,7 +226,7 @@ export namespace Adapter {
         sendGuildMessage<V extends OneBot.Version>(
             uin: string,
             version: V,
-            args: [string, Sendable, string],
+            args: [string, string, Sendable, string],
         ): Promise<OneBot.MessageRet<V>>;
         /** 发送私聊消息 */
         sendDirectMessage<V extends OneBot.Version>(
