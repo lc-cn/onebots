@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.79](https://github.com/lc-cn/onebots/compare/v0.4.78...v0.4.79) (2024-04-15)
+
+
+### Bug Fixes
+
+* JSON.stringify调整 ([aa542f5](https://github.com/lc-cn/onebots/commit/aa542f5cc0832e40291019ef04e0942fa084d46c))
+
 ## [0.4.78](https://github.com/lc-cn/onebots/compare/v0.4.77...v0.4.78) (2024-04-12)
 
 
