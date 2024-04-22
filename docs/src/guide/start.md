@@ -104,16 +104,16 @@ icqq.12345678: # `${适配器名称}:${账号}`# [!code ++]
 ## 6. 启动项目
 ::: code-group
 ```shell [ICQQ]
-npx onebot -r icqq
+npx onebots -r icqq
 ```
 ```shell [QQ官方]
-npx onebot -r qq
+npx onebots -r qq
 ```
 ```shell [钉钉机器人]
-npx onebot -r dingtalk
+npx onebots -r dingtalk
 ```
 ```shell [微信机器人]
-npx onebot -r wechat
+npx onebots -r wechat
 ```
 :::
 
