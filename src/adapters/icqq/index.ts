@@ -78,14 +78,10 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             },
             user_id: data.user_id || data.sender?.user_id || data.sender?.tiny_id,
         };
-        for(const key in result){
-            if(['group','friend','member','discuss'].includes) delete result[key]
-            else{
-                const value=Reflect.get(result,key)
-                if(typeof value==='function') delete result[key]
-            }
-
-        }
+        delete result['group']
+        delete result['member']
+        delete result['discuss']
+        delete result['friend']
         if (data.source) {
             const message_id =
                 data.message_type === "group"
