@@ -199,7 +199,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     ): Promise<OneBot.Message<V>> {
         const oneBot = this.getOneBot<Client>(uin);
         if (!oneBot) throw new Error("No one");
-        let { message, ...result } = await oneBot.internal.getMsg(message_id);
+        let { message, ...result } = await oneBot.internal.getMsg.call(oneBot.internal,message_id);
         const segments = this.toSegment(version, message);
         return {
             ...result,
@@ -215,7 +215,8 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     ): Promise<any> {
         try {
             if (this[method]) return this[method](uin, version, args);
-            return this.oneBots.get(uin)?.internal[method](...args);
+            const client=this.oneBots.get(uin)?.internal
+            return client[method].call(this,...args);
         } catch {
             throw OneBot.UnsupportedMethodError;
         }
@@ -272,10 +273,10 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         client.trap("system.login.qrcode", function qrcodeHelper() {
             _this.logger.log("扫码后回车继续");
             process.stdin.once("data", () => {
-                this.login();
+                client.login();
             });
             disposeArr.push(() => {
-                this.off("system.login.qrcode", qrcodeHelper);
+                client.off("system.login.qrcode", qrcodeHelper);
             });
         });
         client.trap("system.login.device", function deviceHelper(e) {
@@ -283,7 +284,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             process.stdin.once("data", buf => {
                 const input = buf.toString().trim();
                 if (input === "1") {
-                    this.sendSmsCode();
+                    client.sendSmsCode();
                     _this.logger.mark("请输入短信验证码:");
                     const terminalInputHandler = buf => {
                         client.submitSmsCode(buf.toString().trim());
@@ -298,16 +299,16 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                 }
             });
             disposeArr.push(() => {
-                this.off("system.login.device", deviceHelper);
+                client.off("system.login.device", deviceHelper);
             });
         });
         client.trap("system.login.slider", function sliderHelper(e) {
             _this.logger.mark("请输入滑块验证返回的ticket");
             process.stdin.once("data", e => {
-                this.submitSlider(e.toString().trim());
+                client.submitSlider(e.toString().trim());
             });
             disposeArr.push(() => {
-                this.off("system.login.slider", sliderHelper);
+                client.off("system.login.slider", sliderHelper);
             });
         });
         disposeArr.push(
@@ -330,14 +331,14 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             client.trap("system.login.error", function errorHandler(e) {
                 if (e.message.includes("密码错误")) {
                     process.stdin.once("data", e => {
-                        this.login(e.toString().trim());
+                        client.login(e.toString().trim());
                     });
                 } else {
                     _this.logger.error(e.message);
                     oneBot.status = OneBotStatus.OffLine;
                     clean();
                 }
-                this.off("system.login.error", errorHandler);
+                client.off("system.login.error", errorHandler);
             });
             const clean = () => {
                 clearTimeout(timer);

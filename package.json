@@ -76,7 +76,7 @@
     "/**/LICENSE"
   ],
   "peerDependencies": {
-    "@icqqjs/icqq": "^1.0.2",
+    "@icqqjs/icqq": "latest",
     "lib-wechat": "latest",
     "node-dd-bot": "latest",
     "qq-group-bot": "latest"
