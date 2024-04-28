@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.81](https://github.com/lc-cn/onebots/compare/v0.4.80...v0.4.81) (2024-04-28)
+
+
+### Bug Fixes
+
+* point error ([fb6a7fa](https://github.com/lc-cn/onebots/commit/fb6a7fa0f2590dd37e09862864b8bc057908ffda))
+* point error ([088aad1](https://github.com/lc-cn/onebots/commit/088aad1d2b3e893f2231a32e2892408768f82091))
+* point error ([90aef14](https://github.com/lc-cn/onebots/commit/90aef14b9462eed77445cdd87c5d3edc2d31f337))
+
 ## [0.4.80](https://github.com/lc-cn/onebots/compare/v0.4.79...v0.4.80) (2024-04-28)
 
 
