@@ -270,16 +270,16 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         const _this = this;
         const disposeArr = [];
         const client: Client = oneBot.internal;
-        client.trap("system.login.qrcode", function qrcodeHelper() {
+        client.on("system.login.qrcode", function qrcodeHelper() {
             _this.logger.log("扫码后回车继续");
             process.stdin.once("data", () => {
                 client.login();
             });
             disposeArr.push(() => {
-                client.off("system.login.qrcode", qrcodeHelper);
+                client.off("system.login.qrcode");
             });
         });
-        client.trap("system.login.device", function deviceHelper(e) {
+        client.on("system.login.device", function deviceHelper(e) {
             _this.logger.mark("请选择验证方式：1.短信验证  2.url验证");
             process.stdin.once("data", buf => {
                 const input = buf.toString().trim();
@@ -299,16 +299,16 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                 }
             });
             disposeArr.push(() => {
-                client.off("system.login.device", deviceHelper);
+                client.off("system.login.device");
             });
         });
-        client.trap("system.login.slider", function sliderHelper(e) {
+        client.on("system.login.slider", function sliderHelper(e) {
             _this.logger.mark("请输入滑块验证返回的ticket");
             process.stdin.once("data", e => {
                 client.submitSlider(e.toString().trim());
             });
             disposeArr.push(() => {
-                client.off("system.login.slider", sliderHelper);
+                client.off("system.login.slider");
             });
         });
         disposeArr.push(
@@ -328,7 +328,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         );
         await this.setOnline(oneBot.uin);
         return new Promise<Function>((resolve, reject) => {
-            client.trap("system.login.error", function errorHandler(e) {
+            client.on("system.login.error", function errorHandler(e) {
                 if (e.message.includes("密码错误")) {
                     process.stdin.once("data", e => {
                         client.login(e.toString().trim());
@@ -338,7 +338,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                     oneBot.status = OneBotStatus.OffLine;
                     clean();
                 }
-                client.off("system.login.error", errorHandler);
+                client.off("system.login.error");
             });
             const clean = () => {
                 clearTimeout(timer);
@@ -346,7 +346,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                     disposeArr.shift()();
                 }
             };
-            client.trap("system.online", () => {
+            client.on("system.online", () => {
                 oneBot.nickname = client.nickname;
                 oneBot.status = OneBotStatus.Online;
                 this.app.ws.clients.forEach(client => {
