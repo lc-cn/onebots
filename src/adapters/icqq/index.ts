@@ -78,10 +78,10 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             },
             user_id: data.user_id || data.sender?.user_id || data.sender?.tiny_id,
         };
-        delete result['group']
-        delete result['member']
-        delete result['discuss']
-        delete result['friend']
+        delete result["group"];
+        delete result["member"];
+        delete result["discuss"];
+        delete result["friend"];
         if (data.source) {
             const message_id =
                 data.message_type === "group"
@@ -203,7 +203,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     ): Promise<OneBot.Message<V>> {
         const oneBot = this.getOneBot<Client>(uin);
         if (!oneBot) throw new Error("No one");
-        let { message, ...result } = await oneBot.internal.getMsg.call(oneBot.internal,message_id);
+        let { message, ...result } = await oneBot.internal.getMsg.call(oneBot.internal, message_id);
         const segments = this.toSegment(version, message);
         return {
             ...result,
@@ -219,8 +219,8 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
     ): Promise<any> {
         try {
             if (this[method]) return this[method](uin, version, args);
-            const client=this.oneBots.get(uin)?.internal
-            return client[method].call(this,...args);
+            const client = this.oneBots.get(uin)?.internal;
+            return client[method].call(client, ...args);
         } catch {
             throw OneBot.UnsupportedMethodError;
         }
