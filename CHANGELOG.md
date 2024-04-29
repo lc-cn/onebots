@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.82](https://github.com/lc-cn/onebots/compare/v0.4.81...v0.4.82) (2024-04-29)
+
+
+### Bug Fixes
+
+* this 错误 ([ed1816e](https://github.com/lc-cn/onebots/commit/ed1816e43d6bb459033f539f7bc87b38894d4d83))
+
 ## [0.4.81](https://github.com/lc-cn/onebots/compare/v0.4.80...v0.4.81) (2024-04-28)
 
 
