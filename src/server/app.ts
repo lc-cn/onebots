@@ -1,17 +1,17 @@
 import Koa from "koa";
 import * as os from "os";
 import "reflect-metadata";
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
-import { Logger, getLogger, configure } from "log4js";
+import * as fs from "fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { configure, getLogger, Logger } from "log4js";
 import { createServer, Server } from "http";
 import koaStatic from "koa-static";
 import yaml from "js-yaml";
 import KoaBodyParser from "koa-bodyparser";
 import basicAuth from "koa-basic-auth";
 
-import { deepMerge, deepClone, Class, readLine } from "@/utils";
+import { Class, deepClone, deepMerge, readLine } from "@/utils";
 import { Router, WsServer } from "./router";
-import { readFileSync } from "fs";
 import { V11 } from "@/service/V11";
 import { V12 } from "@/service/V12";
 import { LogLevel } from "@/types";
@@ -19,8 +19,8 @@ import * as path from "path";
 import { Adapter } from "@/adapter";
 import { ChildProcess } from "child_process";
 import process from "process";
-import * as fs from "fs";
 import { Dict } from "@zhinjs/shared";
+
 export interface KoaOptions {
     env?: string;
     keys?: string[];
@@ -216,7 +216,22 @@ export class App extends Koa {
                 }
                 switch (payload.action) {
                     case "system.input":
-                        return process.stdin.write(`${payload.data}\n`);
+                        // 将流的模式切换到“流动模式”
+                        process.stdin.resume();
+
+                        // 使用以下函数来模拟输入数据
+                    function simulateInput(data: Buffer) {
+                        process.nextTick(() => {
+                            process.stdin.emit("data", data);
+                        });
+                    }
+
+                        simulateInput(Buffer.from(payload.data + "\n", "utf8"));
+                        // 模拟结束
+                        process.nextTick(() => {
+                            process.stdin.emit("end");
+                        });
+                        return true;
                     case "system.saveConfig":
                         return fs.writeFileSync(App.configPath, payload.data, "utf8");
                     case "system.reload":

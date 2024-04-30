@@ -34,7 +34,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         const oneBot = this.getOneBot<Client>(uin);
         if (!oneBot) throw new Error("No one");
         if (!oneBot.internal[name]) throw new Error(`internal no api ${name}`);
-        return oneBot[version][name](...args);
+        return oneBot.internal[name](...args);
     }
 
     createOneBot(uin: string, protocol: IcqqConfig, versions: OneBot.Config[]): OneBot {
