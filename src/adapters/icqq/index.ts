@@ -204,7 +204,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         const oneBot = this.getOneBot<Client>(uin);
         if (!oneBot) throw new Error("No one");
         let { message, ...result } = await oneBot.internal.getMsg.call(oneBot.internal, message_id);
-        const segments = this.toSegment(version, message);
+        const segments = version === "V11" ? message : this.toSegment(version, message);
         return {
             ...result,
             message: segments,
