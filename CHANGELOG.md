@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.83](https://github.com/lc-cn/onebots/compare/v0.4.82...v0.4.83) (2024-05-28)
+
+
+### Bug Fixes
+
+* V11模式的错误码使用错误 ([0dbb76a](https://github.com/lc-cn/onebots/commit/0dbb76afdf7fb03caef491f53f860309e6437dbd))
+* 修复 webConsole 无法选中复制及模拟的输入事件未触发 ([0dbb76a](https://github.com/lc-cn/onebots/commit/0dbb76afdf7fb03caef491f53f860309e6437dbd))
+* 修复callApi错误调用 ([0dbb76a](https://github.com/lc-cn/onebots/commit/0dbb76afdf7fb03caef491f53f860309e6437dbd))
+* 修复V11的get_msg获取图片等消息时结构出现多一层data的问题 ([2dbe6c3](https://github.com/lc-cn/onebots/commit/2dbe6c32b6f9eb520fe67fedaa82965c690189e0))
+* 修复合并转发bug ([0dbb76a](https://github.com/lc-cn/onebots/commit/0dbb76afdf7fb03caef491f53f860309e6437dbd))
+
 ## [0.4.82](https://github.com/lc-cn/onebots/compare/v0.4.81...v0.4.82) (2024-04-29)
 
 

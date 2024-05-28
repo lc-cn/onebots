@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.4.82",
+  "version": "0.4.83",
   "description": "基于icqq的多例oneBot实现",
   "main": "lib/index.js",
   "bin": {
