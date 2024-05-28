@@ -96,7 +96,7 @@
                 </el-descriptions-item>
                 {{ systemInfo }}
             </el-descriptions>
-            <pre @click="input?.focus?.()">{{ logs }}</pre>
+            <pre>{{ logs }}</pre>
             <div class="input-wrapper">
                 <span class="text">{{ inputData }}</span>
                 <input ref="input" v-model="inputData" @keyup.enter="submitInput" />
@@ -109,6 +109,7 @@
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { AdapterInfo, SystemInfo } from "./types";
 import { formatSize, formatTime } from "./utils";
+
 const input = ref();
 const ws = ref<WebSocket>();
 const config = ref<string>("");
@@ -226,7 +227,8 @@ const init = () => {
     const port =
         localStorage.getItem("OneBots:serverPort") ||
         prompt("请输入服务端监听的端口号", location.port);
-    const wsUrl = `${location.protocol.replace("http", "ws")}//${location.hostname}:${port}`;
+    const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsProtocol}//${location.hostname}:${port}`;
     ws.value = new WebSocket(wsUrl);
     ws.value.onerror = e => {
         console.error("连接出错", e);

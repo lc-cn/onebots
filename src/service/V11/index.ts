@@ -1,14 +1,13 @@
 import { Config } from "./config";
 import { Action } from "./action";
-import { OneBot, OneBotStatus } from "@/onebot";
+import { BOOLS, NotFoundError, OneBot, OneBotStatus } from "@/onebot";
 import { Logger } from "log4js";
 import crypto from "crypto";
 import { WebSocket, WebSocketServer } from "ws";
 import { Dispose } from "@/types";
 import { Context } from "koa";
 import { URL } from "url";
-import { toBool, toHump, toLine, randomInt } from "@/utils";
-import { BOOLS, NotFoundError } from "@/onebot";
+import { randomInt, toBool, toHump, toLine } from "@/utils";
 import http from "http";
 import https from "https";
 import { join } from "path";
@@ -621,7 +620,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                     ret = await this.action[method].apply(this, args);
                 } catch (e) {
                     this.logger.error(`run ${action} with args:${args.length} failed:`, e);
-                    return JSON.stringify(V11.error(e.message));
+                    return JSON.stringify(V11.error(e.message, echo));
                 }
                 if (ret instanceof Promise) {
                     if (is_async) {
@@ -640,7 +639,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                 result.echo = echo;
             }
             return JSON.stringify(result, (_, v) => (typeof v === "bigint" ? v.toString() : v));
-        }
+        } else throw new NotFoundError();
     }
 
     /**
@@ -667,24 +666,30 @@ export namespace V11 {
         status: "ok" | "async" | "error";
         data: T;
         error: string;
+        msg?: string;
+        wording?: string;
         echo?: string;
     }
 
-    export function ok<T extends any>(data: T, retcode = 0, pending?: boolean): Result<T> {
+    export function ok<T extends any>(data: T, retcode = 0, pending?: boolean, echo?: string): Result<T> {
         return {
-            retcode,
+            retcode: pending ? 1 : retcode,
             status: pending ? "async" : "ok",
             data,
             error: null,
+            echo
         };
     }
 
-    export function error(error: string, retcode = 1): Result<any> {
+    export function error(error: string, echo?: string, retcode = 1500, wording?: string): Result<any> {
         return {
             retcode,
             status: "error",
             data: null,
             error,
+            msg: error,
+            wording,
+            echo
         };
     }
 

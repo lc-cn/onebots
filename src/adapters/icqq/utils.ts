@@ -15,16 +15,17 @@ export async function processMessages(
         const { type, data, ...other } = item;
         switch (type) {
             case "node": {
+                const node = data || { ...other };
                 result.push({
                     type,
-                    ...(data || other),
-                    user_id: data.user_id,
+                    ...node,
+                    user_id: node.user_id,
                     message: await processMessages.call(
                         this,
                         uin,
-                        data.user_id,
+                        node.user_id,
                         "private",
-                        data.content || [],
+                        node.content || []
                     ),
                 });
                 break;
