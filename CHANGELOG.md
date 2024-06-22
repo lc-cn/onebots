@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.85](https://github.com/lc-cn/onebots/compare/v0.4.84...v0.4.85) (2024-06-22)
+
+
+### Bug Fixes
+
+* build type error ([8a70fe7](https://github.com/lc-cn/onebots/commit/8a70fe72121f0fe3ea747de9538fd3861a20595b))
+
 ## [0.4.84](https://github.com/lc-cn/onebots/compare/v0.4.83...v0.4.84) (2024-06-22)
 
 
