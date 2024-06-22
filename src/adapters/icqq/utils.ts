@@ -25,7 +25,7 @@ export async function processMessages(
                         uin,
                         node.user_id,
                         "private",
-                        node.content || []
+                        node.content || [],
                     ),
                 });
                 break;
@@ -52,9 +52,9 @@ export async function processMessages(
             case "video":
             case "audio":
             case "image": {
-                item["file"] = item["file"] || item["file_id"] || item["url"];
-                if (item["file"]?.startsWith("base64://"))
-                    item["file"] = Buffer.from(item["file"].slice(9), "base64");
+                data["file"] = data["file"] || data["file_id"] || data["url"];
+                if (data["file"]?.startsWith("base64://"))
+                    data["file"] = Buffer.from(data["file"].slice(9), "base64");
                 result.push({
                     type: type as any,
                     ...data,
