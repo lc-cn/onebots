@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.84](https://github.com/lc-cn/onebots/compare/v0.4.83...v0.4.84) (2024-06-22)
+
+
+### Bug Fixes
+
+* 支持send_private_forward_msg和send_group_forward_msg ([2edf3b4](https://github.com/lc-cn/onebots/commit/2edf3b43e2f8ddf8f96291f25854c791ff9b7e96))
+
 ## [0.4.83](https://github.com/lc-cn/onebots/compare/v0.4.82...v0.4.83) (2024-05-28)
 
 
