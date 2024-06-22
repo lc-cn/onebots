@@ -94,8 +94,8 @@ export namespace Service {
                 value.length === 2 &&
                 value.every(item => typeof item === "number")
             ) {
-                const [start, end] = value;
-                return event >= start && event <= end;
+                const [start, end] = value as [number, number];
+                return Number(event) >= start && Number(event) <= end;
             }
             if (Array.isArray(value)) {
                 return value.includes(event[key]);
