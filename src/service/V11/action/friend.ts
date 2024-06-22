@@ -23,6 +23,18 @@ export class FriendAction {
     }
 
     /**
+     * 发送转发消息
+     * @param user_id {number} 用户id
+     * @param messages {V11.MessageNode[]} 转发节点
+     */
+    async sendPrivateForwardMsg(this: V11, user_id: number, messages: V11.MessageNode[]) {
+        const uid = this.getStrByInt("user_id", user_id);
+        return this.adapter.call(this.oneBot.uin, "V11", "sendPrivateForwardMessage", [
+            uid,
+            messages,
+        ]);
+    }
+    /**
      * 获取好友列表
      */
     async getFriendList(this: V11) {

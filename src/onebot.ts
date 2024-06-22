@@ -156,6 +156,9 @@ export namespace OneBot {
 
         apply(...args: any[]): any;
     }
+    export type MessageNode<V extends Version> = V extends "V11"
+        ? V11.MessageNode
+        : V12.MessageNode;
 }
 export const BOOLS = [
     "no_cache",

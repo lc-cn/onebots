@@ -1,6 +1,6 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
-import { Client, Config as IcqqConfig, Quotable, Sendable } from "@icqqjs/icqq";
+import { Client, Config as IcqqConfig, MessageElem, Quotable, Sendable } from "@icqqjs/icqq";
 import process from "process";
 import { rmSync } from "fs";
 import { OneBot, OneBotStatus } from "@/onebot";
@@ -195,7 +195,52 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                     : message_id,
         } as OneBot.MessageRet<V>;
     }
-
+    async sendPrivateForwardMessage<V extends OneBot.Version>(
+        uin: string,
+        version: V,
+        [user_id, messages]: [string, OneBot.MessageNode<V>[]],
+    ) {
+        return this.sendPrivateMessage(uin, version, [
+            user_id,
+            this.fromSegment(
+                this.getOneBot(uin),
+                version,
+                messages.map(message => {
+                    return {
+                        type: "node",
+                        data: {
+                            user_id: message.uin,
+                            nickname: message.name,
+                            message: message.content,
+                        },
+                    };
+                }),
+            ),
+        ]);
+    }
+    async sendGroupForwardMessage<V extends OneBot.Version>(
+        uin: string,
+        version: V,
+        [group_id, messages]: [string, OneBot.MessageNode<V>[]],
+    ) {
+        return this.sendGroupMessage(uin, version, [
+            group_id,
+            this.fromSegment(
+                this.getOneBot(uin),
+                version,
+                messages.map(message => {
+                    return {
+                        type: "node",
+                        data: {
+                            user_id: message.uin,
+                            nickname: message.name,
+                            message: message.content,
+                        },
+                    };
+                }),
+            ),
+        ]);
+    }
     async getMessage<V extends OneBot.Version>(
         uin: string,
         version: V,

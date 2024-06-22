@@ -771,7 +771,11 @@ export namespace V11 {
     export interface Message {
         message: Sendable;
     }
-
+    export type MessageNode = {
+        uin: number;
+        name: string;
+        content: Sendable;
+    };
     export interface MessageRet {
         message_id: number;
     }

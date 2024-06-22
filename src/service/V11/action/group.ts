@@ -23,6 +23,18 @@ export class GroupAction {
     }
 
     /**
+     * 发送群聊转发消息
+     * @param group_id {number} 群id
+     * @param messages {V11.MessageNode[]} 转发消息内容
+     */
+    async sendGroupForwardMsg(this: V11, group_id: number, messages: V11.MessageNode[]) {
+        const gid = this.getStrByInt("group_id", group_id);
+        return this.adapter.call(this.oneBot.uin, "V11", "sendGroupForwardMessage", [
+            gid,
+            messages,
+        ]);
+    }
+    /**
      * 群组踢人
      * @param group_id {number} 群id
      * @param user_id {number} 成员id

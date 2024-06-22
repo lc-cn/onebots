@@ -932,6 +932,12 @@ export namespace V12 {
     export interface Message {
         message: Sendable;
     }
+
+    export type MessageNode = {
+        uin: number;
+        name: string;
+        content: Sendable;
+    };
     export interface Message {}
     export interface MessageRet {
         message_id: string;
