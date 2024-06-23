@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.87](https://github.com/lc-cn/onebots/compare/v0.4.86...v0.4.87) (2024-06-23)
+
+
+### Bug Fixes
+
+* 图片发送错误 ([7ed4fbc](https://github.com/lc-cn/onebots/commit/7ed4fbc58a3eb0d590812546e02731a0276bacaf))
+
 ## [0.4.86](https://github.com/lc-cn/onebots/compare/v0.4.85...v0.4.86) (2024-06-22)
 
 
