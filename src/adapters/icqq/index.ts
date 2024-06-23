@@ -119,7 +119,11 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         if (version === "V11" && result.message_id) {
             result.message_id = oneBot.V11.transformToInt("message_id", result.message_id);
         }
-        return result;
+        return Object.fromEntries(
+            Object.entries(result).filter(([_, value]) => {
+                return typeof value === "function";
+            }),
+        ) as OneBot.Payload<V>;
     }
 
     async sendPrivateMessage<V extends OneBot.Version>(
@@ -279,8 +283,12 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         return []
             .concat(segment)
             .map(segment => {
-                if (version === "V12" && ["image", "video", "audio"].includes(segment.type))
-                    return onebot.V12.transformMedia(segment);
+                if (version === "V12" && ["image", "video", "audio"].includes(segment.type)) {
+                    const result = onebot.V12.transformMedia(segment);
+                    result.data["file"] =
+                        result.data["file"] || result.data["file_id"] || result.data["url"];
+                    return result;
+                }
                 return segment;
             })
             .map(item => {
