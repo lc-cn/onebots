@@ -121,7 +121,7 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
         }
         return Object.fromEntries(
             Object.entries(result).filter(([_, value]) => {
-                return typeof value === "function";
+                return typeof value !== "function";
             }),
         ) as OneBot.Payload<V>;
     }

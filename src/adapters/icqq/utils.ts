@@ -10,9 +10,10 @@ export async function processMessages(
     target_type: "group" | "private",
     list: Sendable,
 ) {
+    if (!Array.isArray(list)) list = [list];
     let result: MessageElem[] = [];
-    console.log(list);
-    for (const item of [].concat(list).filter(Boolean)) {
+    for (let item of [].concat(list).filter(Boolean)) {
+        if (typeof item === "string") item = { type: "text", text: item };
         const { type, ...data } = item;
         switch (type) {
             case "node": {
