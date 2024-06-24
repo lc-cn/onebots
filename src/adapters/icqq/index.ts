@@ -213,8 +213,8 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                     return {
                         type: "node",
                         data: {
-                            user_id: message.uin,
-                            nickname: message.name,
+                            user_id: message.uin || message.user_id,
+                            nickname: message.name || message.nickname,
                             message: message.content,
                         },
                     };

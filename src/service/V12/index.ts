@@ -934,10 +934,21 @@ export namespace V12 {
     }
 
     export type MessageNode = {
-        uin: number;
-        name: string;
         content: Sendable;
-    };
+    } & (
+        | {
+              uin: number;
+              user_id: never;
+              name: string;
+              nickname: never;
+          }
+        | {
+              user_id: number;
+              uin: never;
+              nickname: string;
+              name: never;
+          }
+    );
     export interface Message {}
     export interface MessageRet {
         message_id: string;

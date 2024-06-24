@@ -671,17 +671,27 @@ export namespace V11 {
         echo?: string;
     }
 
-    export function ok<T extends any>(data: T, retcode = 0, pending?: boolean, echo?: string): Result<T> {
+    export function ok<T extends any>(
+        data: T,
+        retcode = 0,
+        pending?: boolean,
+        echo?: string,
+    ): Result<T> {
         return {
             retcode: pending ? 1 : retcode,
             status: pending ? "async" : "ok",
             data,
             error: null,
-            echo
+            echo,
         };
     }
 
-    export function error(error: string, echo?: string, retcode = 1500, wording?: string): Result<any> {
+    export function error(
+        error: string,
+        echo?: string,
+        retcode = 1500,
+        wording?: string,
+    ): Result<any> {
         return {
             retcode,
             status: "error",
@@ -689,7 +699,7 @@ export namespace V11 {
             error,
             msg: error,
             wording,
-            echo
+            echo,
         };
     }
 
@@ -772,10 +782,21 @@ export namespace V11 {
         message: Sendable;
     }
     export type MessageNode = {
-        uin: number;
-        name: string;
         content: Sendable;
-    };
+    } & (
+        | {
+              uin: number;
+              user_id: never;
+              name: string;
+              nickname: never;
+          }
+        | {
+              user_id: number;
+              uin: never;
+              nickname: string;
+              name: never;
+          }
+    );
     export interface MessageRet {
         message_id: number;
     }
