@@ -84,6 +84,7 @@ export abstract class Adapter<T extends string = string, Sendable = any> extends
                         text: prevText,
                     },
                 });
+                message = message.substring(prevText.length);
             }
             const [type, ...valueArr] = match.substring(1, match.length - 1).split(",");
             result.push({
