@@ -297,11 +297,9 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                 if (type === "node")
                     return {
                         type,
-                        data: {
-                            user_id: data.user_id,
-                            nickname: data.nickname,
-                            message: this.fromSegment(onebot, version, data.message),
-                        },
+                        user_id: data.user_id,
+                        nickname: data.nickname,
+                        message: this.fromSegment(onebot, version, data.message),
                     };
                 return { type, ...data };
             });
