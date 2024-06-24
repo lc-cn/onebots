@@ -317,6 +317,14 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
                     },
                 };
             const { type, ...data } = item;
+            if (type === "node")
+                return {
+                    type,
+                    data: {
+                        ...data,
+                        message: this.toSegment(version, data.message),
+                    },
+                };
             return {
                 type,
                 data,
