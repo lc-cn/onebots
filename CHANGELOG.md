@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.91](https://github.com/lc-cn/onebots/compare/v0.4.90...v0.4.91) (2024-06-24)
+
+
+### Bug Fixes
+
+* 字段名兼容 ([5a20125](https://github.com/lc-cn/onebots/commit/5a201256a5da93a51b370a36588335fb773955e0))
+
 ## [0.4.90](https://github.com/lc-cn/onebots/compare/v0.4.89...v0.4.90) (2024-06-24)
 
 
