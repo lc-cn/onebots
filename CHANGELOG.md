@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.90](https://github.com/lc-cn/onebots/compare/v0.4.89...v0.4.90) (2024-06-24)
+
+
+### Bug Fixes
+
+* node嵌套 ([ea815f2](https://github.com/lc-cn/onebots/commit/ea815f212e04832e51f6fe02748f0fd2bd360418))
+
 ## [0.4.89](https://github.com/lc-cn/onebots/compare/v0.4.88...v0.4.89) (2024-06-24)
 
 
