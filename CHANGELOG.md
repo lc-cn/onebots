@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.92](https://github.com/lc-cn/onebots/compare/v0.4.91...v0.4.92) (2024-06-24)
+
+
+### Bug Fixes
+
+* cq码解析错误 ([364f39e](https://github.com/lc-cn/onebots/commit/364f39ebe998c0bb1c7552f00547907d91353fc3))
+
 ## [0.4.91](https://github.com/lc-cn/onebots/compare/v0.4.90...v0.4.91) (2024-06-24)
 
 
