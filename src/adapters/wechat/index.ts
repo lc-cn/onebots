@@ -1,7 +1,7 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { Client, Sendable, BaseClient } from "lib-wechat";
+import { Client, Sendable, BaseClient } from "web-wechat";
 import * as path from "path";
 type WechatConfig = BaseClient.Config;
 export default class WechatAdapter extends Adapter<"wechat", Sendable> {
@@ -13,9 +13,9 @@ export default class WechatAdapter extends Adapter<"wechat", Sendable> {
     async startOneBot(oneBot: OneBot<Client>) {
         await this.setOnline(oneBot.uin);
         const pkg = require(
-            path.resolve(path.dirname(require.resolve("lib-wechat")), "../package.json"),
+            path.resolve(path.dirname(require.resolve("web-wechat")), "../package.json"),
         );
-        oneBot.dependency = `lib-wechat v${pkg.version}`;
+        oneBot.dependency = `web-wechat v${pkg.version}`;
         const disposeArr: Function[] = [];
         const clean = () => {
             while (disposeArr.length > 0) {

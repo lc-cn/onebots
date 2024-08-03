@@ -49,8 +49,8 @@ npm init -y
 ```shell
 npm install onebots
 npm install @icqqjs/icqq # 如需使用icqq适配器，请务必安装
-npm install lib-wechat # 如需使用微信适配器，请务必安装
-npm install qq-group-bot # 如需使用qq官方机器人适配器，请务必安装
+npm install web-wechat # 如需使用微信适配器，请务必安装
+npm install qq-official-bot # 如需使用qq官方机器人适配器，请务必安装
 npm install node-dd-bot # 如需使用钉钉机器人适配器，请务必安装
 ```
 - 关于@icqqjs的安装引导：

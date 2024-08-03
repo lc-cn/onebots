@@ -43,13 +43,13 @@ E-Mail: # 你的公开邮箱地址
 npm install @icqqjs/icqq --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 ```shell [QQ官方机器人]
-npm install qq-group-bot --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
+npm install qq-official-bot --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 ```shell [钉钉机器人]
 npm install node-dd-bot --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 ```shell [微信机器人]
-npm install lib-wechat --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
+npm install web-wechat --legacy-peer-deps # 带上后边这个是为了防止自动安装对等依赖
 ```
 :::
 ## 4. 初始化配置

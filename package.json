@@ -77,9 +77,23 @@
   ],
   "peerDependencies": {
     "@icqqjs/icqq": "latest",
-    "lib-wechat": "latest",
+    "web-wechat": "latest",
     "node-dd-bot": "latest",
-    "qq-group-bot": "latest"
+    "qq-official-bot": "latest"
+  },
+  "peerDependenciesMeta": {
+    "@icqqjs/icqq": {
+      "optional": true
+    },
+    "web-wechat": {
+      "optional": true
+    },
+    "node-dd-bot": {
+      "optional": true
+    },
+    "qq-official-bot": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@koa/router": "^10.1.1",

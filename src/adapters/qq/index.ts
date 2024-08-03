@@ -1,7 +1,7 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { Bot, Sendable, Quotable, MessageElem } from "qq-group-bot";
+import { Bot, Sendable, Quotable, MessageElem } from "qq-official-bot";
 import * as path from "path";
 
 export default class QQAdapter extends Adapter<"qq", Sendable> {
@@ -16,9 +16,9 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         oneBot.avatar = selfInfo.avatar;
         oneBot.nickname = selfInfo.username;
         const pkg = require(
-            path.resolve(path.dirname(require.resolve("qq-group-bot")), "../package.json"),
+            path.resolve(path.dirname(require.resolve("qq-official-bot")), "../package.json"),
         );
-        oneBot.dependency = `qq-group-bot v${pkg.version}`;
+        oneBot.dependency = `qq-official-bot v${pkg.version}`;
         const disposeArr: Function[] = [];
         const clean = () => {
             while (disposeArr.length > 0) {
