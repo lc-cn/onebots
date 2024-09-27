@@ -1,6 +1,6 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
-import { Client, Config as IcqqConfig, MessageElem, Quotable, Sendable } from "@icqqjs/icqq";
+import { Client, Config as IcqqConfig, Quotable, Sendable } from "@icqqjs/icqq";
 import process from "process";
 import { rmSync } from "fs";
 import { OneBot, OneBotStatus } from "@/onebot";
@@ -294,13 +294,14 @@ export default class IcqqAdapter extends Adapter<"icqq", Sendable> {
             .map(item => {
                 if (typeof item === "string") return item;
                 const { type, data } = item;
-                if (type === "node")
+                if (type === "node") {
                     return {
                         type,
-                        user_id: data.user_id,
-                        nickname: data.nickname,
-                        message: this.fromSegment(onebot, version, data.message),
+                        user_id: data.user_id || data.uin,
+                        nickname: data.nickname || data.name,
+                        message: this.fromSegment(onebot, version, data.content)
                     };
+                }
                 return { type, ...data };
             });
     }

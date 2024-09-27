@@ -456,6 +456,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
                 } else {
                     code = 1400;
                     message = "请求格式错误";
+                    this.logger.error("_webSocketHandler fail: ", e);
                 }
                 ws.send(
                     JSON.stringify({
