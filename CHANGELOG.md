@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.95](https://github.com/lc-cn/onebots/compare/v0.4.94...v0.4.95) (2024-09-27)
+
+
+### Bug Fixes
+
+* 更新依赖 ([c07bf5f](https://github.com/lc-cn/onebots/commit/c07bf5ff5580e7804d9295e86ebfb69789d1bb7f))
+
 ## [0.4.94](https://github.com/lc-cn/onebots/compare/v0.4.93...v0.4.94) (2024-09-27)
 
 
