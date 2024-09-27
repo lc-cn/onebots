@@ -572,7 +572,8 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
                 const ret = await this.apply(ctx.query as unknown as V12.RequestAction);
                 ctx.res.writeHead(200).end(ret);
             } catch (e) {
-                ctx.res.writeHead(500).end(e.message);
+                this.logger.error(e);
+                ctx.res.writeHead(500).end(e.stack || e.message);
             }
         } else if (ctx.method === "POST") {
             try {
@@ -583,7 +584,8 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
                 const ret = await this.apply(params as unknown as V12.RequestAction);
                 ctx.res.writeHead(200).end(ret);
             } catch (e) {
-                ctx.res.writeHead(500).end(e.message);
+                this.logger.error(e);
+                ctx.res.writeHead(500).end(e.stack || e.message);
             }
         } else {
             ctx.res.writeHead(405).end();
@@ -598,7 +600,8 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
                 const ret = await this.apply({ action, params: ctx.query });
                 ctx.res.writeHead(200).end(ret);
             } catch (e) {
-                ctx.res.writeHead(500).end(e.message);
+                this.logger.error(e);
+                ctx.res.writeHead(500).end(e.stack || e.message);
             }
         } else if (ctx.method === "POST") {
             try {
@@ -609,7 +612,8 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
                 const ret = await this.apply({ action, params });
                 ctx.res.writeHead(200).end(ret);
             } catch (e) {
-                ctx.res.writeHead(500).end(e.message);
+                this.logger.error(e);
+                ctx.res.writeHead(500).end(e.stack || e.message);
             }
         } else {
             ctx.res.writeHead(405).end();
@@ -666,7 +670,6 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
         const headers: http.OutgoingHttpHeaders = {
             "User-Agent": `OneBot/12 (${this.oneBot.platform}) onebots/${version}`,
         };
-        console.log(config);
         if (config.access_token) headers.Authorization = "Bearer " + config.access_token;
         const ws = new WebSocket(remoteUrl, ["12.OneBots"], { headers });
         ws.on("error", err => {

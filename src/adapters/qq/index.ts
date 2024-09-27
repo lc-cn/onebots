@@ -1,7 +1,7 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
 import { OneBot, OneBotStatus } from "@/onebot";
-import { Bot, Sendable, Quotable, MessageElem } from "qq-official-bot";
+import { Bot, Sendable, Quotable } from "qq-official-bot";
 import * as path from "path";
 
 export default class QQAdapter extends Adapter<"qq", Sendable> {
