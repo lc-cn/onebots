@@ -80,8 +80,11 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         return {
             message_id:
                 version === "V11"
-                    ? bot.V11.transformToInt("message_id", `group:${group_id}${result.id}`)
-                    : `group:${group_id}${result.id}`,
+                    ? bot.V11.transformToInt(
+                          "message_id",
+                          `group:${group_id}${result["id"] || result["file_uuid"]}`,
+                      )
+                    : `group:${group_id}${result["id"] || result["file_uuid"]}`,
         } as OneBot.MessageRet<V>;
     }
     async sendPrivateMessage<V extends OneBot.Version>(
@@ -107,8 +110,11 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         return {
             message_id:
                 version === "V11"
-                    ? bot.V11.transformToInt("message_id", `private:${user_id}${result.id}`)
-                    : `private:${user_id}${result.id}`,
+                    ? bot.V11.transformToInt(
+                          "message_id",
+                          `private:${user_id}${result["id"] || result["file_uuid"]}`,
+                      )
+                    : `private:${user_id}${result["id"] || result["file_uuid"]}`,
         } as OneBot.MessageRet<V>;
     }
 
@@ -125,8 +131,11 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         return {
             message_id:
                 version === "V11"
-                    ? bot.V11.transformToInt("message_id", `${guild_id}:${channel_id}${result.id}`)
-                    : `${guild_id}:${channel_id}${result.id}`,
+                    ? bot.V11.transformToInt(
+                          "message_id",
+                          `${guild_id}:${channel_id}${result["id"] || result["file_uuid"]}`,
+                      )
+                    : `${guild_id}:${channel_id}${result["id"] || result["file_uuid"]}`,
         } as OneBot.MessageRet<V>;
     }
     async sendDirectMessage<V extends OneBot.Version>(
@@ -142,8 +151,11 @@ export default class QQAdapter extends Adapter<"qq", Sendable> {
         return {
             message_id:
                 version === "V11"
-                    ? bot.V11.transformToInt("message_id", `direct:${guild_id}${result.id}`)
-                    : `direct:${guild_id}${result.id}`,
+                    ? bot.V11.transformToInt(
+                          "message_id",
+                          `direct:${guild_id}${result["id"] || result["file_uuid"]}`,
+                      )
+                    : `direct:${guild_id}${result["id"] || result["file_uuid"]}`,
         } as OneBot.MessageRet<V>;
     }
     async deleteMessage(uin: string, version: "V11" | "V12", [message_id]: [string]) {

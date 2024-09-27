@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.4.93",
+  "version": "0.4.94",
   "description": "基于icqq的多例oneBot实现",
   "main": "lib/index.js",
   "bin": {
@@ -52,6 +52,10 @@
     "@types/node": "latest",
     "@types/ws": "^8.5.3",
     "@vitejs/plugin-vue": "^5.0.0",
+    "@icqqjs/icqq": "latest",
+    "node-dd-bot": "latest",
+    "qq-official-bot": "latest",
+    "web-wechat": "latest",
     "dayjs": "^1.11.10",
     "element-plus": "^2.4.4",
     "prettier": "^3.0.0",
@@ -77,9 +81,9 @@
   ],
   "peerDependencies": {
     "@icqqjs/icqq": "latest",
-    "web-wechat": "latest",
     "node-dd-bot": "latest",
-    "qq-official-bot": "latest"
+    "qq-official-bot": "latest",
+    "web-wechat": "latest"
   },
   "peerDependenciesMeta": {
     "@icqqjs/icqq": {
