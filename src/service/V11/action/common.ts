@@ -1,5 +1,6 @@
 import { OneBotStatus } from "@/onebot";
 import { V11 } from "@/service/V11";
+import { version } from "@/utils";
 
 export class CommonAction {
     /**
@@ -77,10 +78,10 @@ export class CommonAction {
     /**
      * 获取版本信息
      */
-    getVersion(this: V11) {
+    getVersionInfo(this: V11) {
         return {
-            app_name: "icqq",
-            app_version: "2.x",
+            app_name: "onebots",
+            app_version: version,
             protocol_version: "v11",
         };
     }
