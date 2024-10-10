@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.96](https://github.com/lc-cn/onebots/compare/v0.4.95...v0.4.96) (2024-10-10)
+
+
+### Bug Fixes
+
+* 修复获取版本信息API和转发异常 ([4006445](https://github.com/lc-cn/onebots/commit/4006445246f85cfee2a7eba46a0d53cb6a688a43))
+
 ## [0.4.95](https://github.com/lc-cn/onebots/compare/v0.4.94...v0.4.95) (2024-09-27)
 
 
