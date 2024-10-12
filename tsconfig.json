@@ -12,8 +12,12 @@
         "lib": ["es6", "dom"],
         "paths": {
             "@/*": ["src/*"]
-        }
+        },
+        "skipLibCheck": true
     },
     "include": ["./src/"],
-    "exclude": ["./src/test.ts"]
+    "exclude": [
+        "./src/test.ts",
+        "node_modules"
+    ]
 }
