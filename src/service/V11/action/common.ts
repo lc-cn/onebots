@@ -54,7 +54,7 @@ export class CommonAction {
      * @param domain {string} 域名
      */
     getCookies(this: V11, domain: string) {
-        return this.adapter.call["getCookies"]([domain]);
+        return this.adapter.call(this.oneBot.uin, "V11", "getCookies", [domain])
     }
 
     /**
