@@ -11,15 +11,19 @@
     "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
     "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq -r dingtalk -r wechat",
     "pub": "npm publish --access public",
-    "lint": "prettier --check ./**/*.{ts,js}",
-    "lint:fix": "prettier --write ./**/*.{ts,js,md}",
+    "lint": "prettier --check ./**/*.{ts,js} && eslint 'src/**/*.{ts,js}'",
+    "lint:fix": "prettier --write ./**/*.{ts,js,md} && eslint 'src/**/*.{ts,js}' --fix",
+    "type-check": "tsc --noEmit",
     "test": "ts-node -r tsconfig-paths/register ./src/test.ts",
+    "test:ci": "npm run type-check && npm run lint",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "prepare": "husky install || true"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   },
   "publishConfig": {
     "access": "public",
@@ -44,33 +48,41 @@
   },
   "homepage": "https://github.com/lc-cn/onebots#readme",
   "devDependencies": {
-    "@types/koa": "^2.13.4",
-    "@types/koa__router": "^8.0.11",
-    "@types/koa-basic-auth": "^2.0.6",
-    "@types/koa-bodyparser": "^4.3.7",
+    "@types/koa": "^2.15.0",
+    "@types/koa__router": "^12.0.4",
+    "@types/koa-basic-auth": "^4.0.6",
+    "@types/koa-bodyparser": "^4.3.12",
     "@types/koa-static": "^4.0.4",
-    "@types/node": "latest",
-    "@types/ws": "^8.5.3",
-    "@vitejs/plugin-vue": "^5.0.0",
+    "@types/node": "^20.17.10",
+    "@types/ws": "^8.5.13",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitejs/plugin-vue": "^5.2.1",
     "@icqqjs/icqq": "latest",
     "node-dd-bot": "latest",
     "qq-official-bot": "latest",
     "web-wechat": "latest",
-    "dayjs": "^1.11.10",
-    "element-plus": "^2.4.4",
-    "prettier": "^3.0.0",
-    "sass": "^1.69.6",
-    "ts-node-dev": "latest",
-    "tsc-alias": "latest",
-    "tsconfig-paths": "latest",
-    "typescript": "latest",
-    "unplugin-auto-import": "^0.17.3",
-    "unplugin-vue-components": "^0.26.0",
-    "vite": "^5.0.10",
+    "dayjs": "^1.11.13",
+    "element-plus": "^2.9.1",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
+    "prettier": "^3.4.2",
+    "sass": "^1.82.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "tsc-alias": "^1.8.10",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.2",
+    "unplugin-auto-import": "^0.18.6",
+    "unplugin-vue-components": "^0.27.4",
+    "vite": "^5.4.11",
     "vite-plugin-style-import": "^2.0.0",
-    "vitepress": "^1.0.0-rc.33",
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.5"
+    "vitepress": "^1.5.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
   },
   "files": [
     "/lib/**/*.js",
@@ -100,15 +112,24 @@
     }
   },
   "dependencies": {
-    "@koa/router": "^10.1.1",
+    "@koa/router": "^13.1.0",
     "@zhinjs/shared": "^0.0.9",
     "js-yaml": "^4.1.0",
-    "koa": "^2.13.4",
+    "koa": "^2.15.3",
     "koa-basic-auth": "^4.0.0",
-    "koa-bodyparser": "^4.3.0",
+    "koa-bodyparser": "^4.4.1",
     "koa-static": "^5.0.0",
-    "log4js": "^6.5.2",
-    "reflect-metadata": "^0.1.13",
-    "ws": "^8.16.0"
+    "log4js": "^6.9.1",
+    "reflect-metadata": "^0.2.2",
+    "ws": "^8.18.0"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }

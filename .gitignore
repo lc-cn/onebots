@@ -1,14 +1,49 @@
+# Test files
 /src/test.ts
+
+# Data and logs
 /data
+onebots.log
+*.log
+
+# Configuration
 config.yaml
+
+# Dependencies
 node_modules
 package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Build outputs
 /lib
+dist
+*.tsbuildinfo
+
+# IDE
 .vscode/
 .idea/
-pnpm-lock.yaml
-onebots.log
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Auto-generated
 auto-imports.d.ts
 components.d.ts
+
+# Docs cache
 /docs/.vitepress/cache/
-dist
+/docs/.vitepress/dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Coverage
+coverage
+.nyc_output
+
+# Misc
+.husky/_

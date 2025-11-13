@@ -1,0 +1,60 @@
+version: 2
+updates:
+  # Enable version updates for npm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      # Group TypeScript and related packages
+      typescript:
+        patterns:
+          - "typescript"
+          - "@typescript-*"
+          - "ts-*"
+      # Group build tools
+      build-tools:
+        patterns:
+          - "vite*"
+          - "tsc-*"
+          - "tsconfig-*"
+      # Group linting tools
+      linters:
+        patterns:
+          - "eslint*"
+          - "prettier"
+          - "@typescript-eslint/*"
+      # Group Vue ecosystem
+      vue:
+        patterns:
+          - "vue*"
+          - "@vitejs/*"
+          - "unplugin-*"
+          - "element-plus"
+      # Group documentation
+      docs:
+        patterns:
+          - "vitepress"
+      # Group testing
+      testing:
+        patterns:
+          - "*test*"
+          - "*jest*"
+          - "*mocha*"
+      # Group Koa and server dependencies
+      server:
+        patterns:
+          - "koa*"
+          - "@koa/*"
+      # Group types
+      types:
+        patterns:
+          - "@types/*"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

@@ -1,313 +1,171 @@
 <div align="center">
-    <h1>使用ts实现的oneBot应用启动器，支持icqq、qq官方机器人、微信以及钉钉机器人</h1>
+    <h1>使用 TypeScript 实现的 OneBot 应用启动器</h1>
+    <p>支持 ICQQ、QQ 官方机器人、微信以及钉钉机器人的现代化全面解决方案</p>
     <p>
 
+[![CI](https://github.com/lc-cn/onebots/actions/workflows/ci.yml/badge.svg)](https://github.com/lc-cn/onebots/actions/workflows/ci.yml)
 [![Build Package](https://github.com/icqqjs/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/icqqjs/onebots/actions/workflows/release.yml) 
 [![Build Docs](https://github.com/lc-cn/onebots/actions/workflows/build_deploy_docs.yml/badge.svg)](https://github.com/lc-cn/onebots/actions/workflows/build_deploy_docs.yml)
 
 [![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots) 
 [![dm](https://shields.io/npm/dm/onebots)](https://www.npmjs.com/package/onebots) 
-[![oneBot V11](https://img.shields.io/badge/OneBot-11-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://onebot.dev/)
-[![oneBot V12](https://img.shields.io/badge/OneBot-12-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://12.onebot.dev/) [![node engine](https://img.shields.io/node/v/onebots?color=339933&style=flat-square&labelColor=FAFAFA&logo=Node.js)](https://nodejs.org)
-[![qq group](https://img.shields.io/badge/group-860669870-blue?style=flat-square&labelColor=FAFAFA&logo=data:image/png;base64,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&logoColor=000000)](https://jq.qq.com/?_wv=1027&k=B22VGXov)
+[![License](https://img.shields.io/github/license/lc-cn/onebots)](https://github.com/lc-cn/onebots/blob/master/LICENSE)
+[![node engine](https://img.shields.io/node/v/onebots?color=339933&style=flat-square&labelColor=FAFAFA&logo=Node.js)](https://nodejs.org)
 
-[Docs](https://docs.onebots.org)
+[![oneBot V11](https://img.shields.io/badge/OneBot-11-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://onebot.dev/)
+[![oneBot V12](https://img.shields.io/badge/OneBot-12-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://12.onebot.dev/)
+[![qq group](https://img.shields.io/badge/group-860669870-blue?style=flat-square&labelColor=FAFAFA&logo=data:image/png;base64,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&logoCode=000000)](https://jq.qq.com/?_wv=1027&k=B22VGXov)
+
+[📖 文档](https://docs.onebots.org) | [🚀 快速开始](#快速开始) | [💬 社区讨论](https://github.com/lc-cn/onebots/discussions)
 
 </p>
 </div>
 
-# 使用示例
+## ✨ 特性
 
-## 全局安装(0.4.8以后不推荐)
+- 🎯 **多平台支持** - ICQQ、QQ 官方、微信、钉钉机器人
+- 📦 **现代化架构** - TypeScript 5.7+ 编写，完整类型支持
+- 🔌 **双协议兼容** - 同时支持 OneBot V11 和 V12
+- 🛡️ **安全可靠** - 定期安全审计和依赖更新
+- 📊 **完善监控** - 内置日志和健康检查
+- 🎨 **Web 管理** - 可视化配置和管理界面
+- ⚡ **高性能** - 优化的事件处理和资源管理
+- 🔧 **易于扩展** - 清晰的插件架构
 
-### 1 安装依赖
-- 注意：
-```shell
-npm install -g onebots
-```
+## 📋 环境要求
 
-### 2 初始化配置文件
+- **Node.js** >= 18.0.0
+- **npm** >= 9.0.0
 
-在你想存放配置文件的目录执行如下命令
+## 🚀 快速开始
 
-```shell
-onebots
-```
+### 方式一：局部安装（推荐）
 
-### 3 更改生成的默认配置文件成你想要的配置配置后再次运行上面的指令，启动项目
+#### 1. 初始化 Node.js 项目
 
-## 局部安装
-
-## 1 初始化node项目
-
-```shell
+```bash
 npm init -y
 ```
 
-## 2. 安装onebots以及对应适配器的依赖
+#### 2. 安装 OneBots 和适配器依赖
 
-```shell
+```bash
+# 安装核心包
 npm install onebots
-npm install @icqqjs/icqq # 如需使用icqq适配器，请务必安装
-npm install web-wechat # 如需使用微信适配器，请务必安装
-npm install qq-official-bot # 如需使用qq官方机器人适配器，请务必安装
-npm install node-dd-bot # 如需使用钉钉机器人适配器，请务必安装
-```
-- 关于@icqqjs的安装引导：
 
-**安装:**
-1. 在你的项目根目录新建文件 `.npmrc` ,并录入以下内容
-```text
-@icqqjs:registry=https://npm.pkg.github.com
-```
-2. 命令行输入 `npm login --scope=@icqqjs --auth-type=legacy --registry=https://npm.pkg.github.com` ，回车，根据提示登录github
-```shell
-npm login --scope=@icqqjs --auth-type=legacy --registry=https://npm.pkg.github.com
-
-UserName: # 你的github账号
-Password: # 前往 https://github.com/settings/tokens/new  获取，scopes勾选 read:packages 
-E-Mail: # 你的公开邮箱地址
-```
-3. 安装依赖
-```shell
-npm install @icqqjs/icqq  # or > yarn add @icqqjs/icqq
-```
-## 3. 执行如下命令生成配置文件
-
-```shell
-npx onebots -r icqq #注册icqq适配器并启动onebots
-npx onebots -r wechat #注册微信适配器并启动onebots
-npx onebots -r qq #注册qq官方适配器并启动onebots
-npx onebots -r dingtalk #注册钉钉适配器并启动onebots
-# 你也可以同时注册多个适配器，多次使用-r即可，例如 npx onebots -r qq -r icqq -r wechat
+# 根据需要安装对应的适配器（可选）
+npm install @icqqjs/icqq        # ICQQ 适配器
+npm install web-wechat          # 微信适配器
+npm install qq-official-bot     # QQ 官方机器人适配器
+npm install node-dd-bot         # 钉钉机器人适配器
 ```
 
-## 4. 更改生成的默认配置文件成你想要的配置配置后再次运行上面的指令，启动项目
+<details>
+<summary>📦 关于 @icqqjs/icqq 的安装说明</summary>
 
-# 默认配置文件
+1. 在项目根目录创建 `.npmrc` 文件并添加：
+   ```text
+   @icqqjs:registry=https://npm.pkg.github.com
+   ```
 
-```yaml
-port: 6727 # 监听端口
-log_level: info # 日志等级
-platform: 5 # 机器人客户端协议（1:Android 2:APad 3:Watch 4:IMac 5:IPad）
-timeout: 30 #登录超时时间(秒)
-general: # 通用配置，在单个配置省略时的默认值
-  V11: # oneBotV11的通用配置
-    heartbeat: 3 # 心跳间隔 (秒)
-    access_token: "" # 访问api的token
-    post_timeout: 15 # 上报超时时间，(秒)
-    secret: "" # 上报数据的sha1签名密钥
-    rate_limit_interval: 4 # ws心跳间隔(秒)
-    post_message_format: string # "string"或"array"
-    reconnect_interval: 3 # 重连间隔 (秒)
-    use_http: true # 是否使用 http
-    enable_cors: true # 是否允许跨域
-    filters: {} # 过滤器配置
-    use_ws: true # 是否使用websocket
-    http_reverse: [] # http上报地址
-    ws_reverse: [] # 反向ws连接地址
-  V12: # oneBotV12的通用配置
-    heartbeat: 3 # 心跳间隔 (秒)
-    access_token: "" # 访问api的token
-    request_timeout: 15 # 上报超时时间 (秒)
-    reconnect_interval: 3 # 重连间隔 (秒)
-    enable_cors: true # 是否允许跨域
-    use_http: true # 是否启用http
-    use_ws: true # 是否启用 websocket
-    filters: {} # 过滤器配置
-    webhook: [] # http 上报地址
-    ws_reverse: [] # 反向ws连接地址
-  protocol:
-    platform: 2
-    sign_api_addr: "" #你的签名地址
-    password: "" # 账号密码，未配置则扫码登陆
-    # ...其他配置项参考icqq的Config配置
-# 每个账号的单独配置(用于覆盖通用配置)
-icqq.123456789:
-  password: "" # 账号密码，未配置则扫码登陆
-  version: V11 # 使用的oneBot版本
-  # ...其他配置项参见上方对应oneBot版本的通用配置
-  protocol:
-    platform: 2
-    sign_api_addr: "" #你的签名地址
-    # ...其他配置项参考icqq的Config配置
+2. 登录 GitHub Package Registry：
+   ```bash
+   npm login --scope=@icqqjs --auth-type=legacy --registry=https://npm.pkg.github.com
+   ```
+   
+   根据提示输入：
+   - **Username**: 你的 GitHub 账号
+   - **Password**: GitHub Personal Access Token（[创建 Token](https://github.com/settings/tokens/new)，勾选 `read:packages` 权限）
+   - **E-Mail**: 你的公开邮箱
 
-qq.123456789: # `${适配器名称}:${appId}`
-  versions:
-    - version: V11
-  # 。。。其他配置项参见上方对应oneBot版本的通用配置
-  protocol: # 将会覆盖通用配置中的protocol
-    token: '' # qq机器人token
-    secret: '' # qq机器人secret
-    sandbox: false # 是否沙箱环境
-    intents: # 需要监听的intents
-      - 'GROUP_AT_MESSAGE_CREATE' # 群聊@事件 没有群聊权限请注释
-      - 'C2C_MESSAGE_CREATE' # 私聊事件 没有私聊权限请注释
-      - 'DIRECT_MESSAGE' # 频道私信事件
-      #     - 'GUILD_MESSAGES' # 私域机器人频道消息事件，公域机器人请注释
-      - 'GUILDS' # 频道变更事件
-      - 'GUILD_MEMBERS' # 频道成员变更事件
-      - 'GUILD_MESSAGE_REACTIONS' # 频道消息表态事件
-      - 'INTERACTION' # 互动事件
-      - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件，私域机器人请注释
-  # 。。。其他配置项参见上方对应oneBot版本的通用配置
-  
-dingtalk.abcedfg: # `${适配器名称}:${clientId}`
-  versions:
-    - version: V11
-    - version: V12
-  protocol:
-    clientSecret: '' # 钉钉机器人秘钥 必填
-    username: '钉钉机器人' #钉钉后台配置的机器人名称 不填则显示'钉钉机器人'
-    avatar: '' # 机器人头像 不填则显示钉钉logo
+3. 安装依赖：
+   ```bash
+   npm install @icqqjs/icqq
+   ```
+</details>
 
-wechat.bot1: # `${适配器名称}:${机器人唯一标识}`
-  versions:
-    - version: V11
-    - version: V12
-  protocol: {}
+#### 3. 生成配置文件并启动
+
+```bash
+# 注册适配器并生成配置
+npx onebots -r icqq      # 使用 ICQQ
+npx onebots -r wechat    # 使用微信
+npx onebots -r qq        # 使用 QQ 官方
+npx onebots -r dingtalk  # 使用钉钉
+
+# 可以同时注册多个适配器
+npx onebots -r icqq -r wechat -r qq -r dingtalk
 ```
 
-# 配置解释
+#### 4. 配置并启动
 
-## Config
+编辑生成的 `config.yaml` 配置文件，然后重新运行上述命令启动服务。
 
-| 配置项                | 类型                              | 默认值  | desc         |
-|:-------------------|:--------------------------------| :------ | :----------- |
-| port               | number                          | 6727    | 服务监听端口 |
-| logLevel           | string                          | info    | 日志级别     |
-| general            | {V11:V11.Config,V12:V12.Config} | general | 通用配置     |
-| [adapter].[number] | OneBotConfig                    | -       | 机器人配置   |
+### 方式二：全局安装（不推荐，v0.4.8 后已弃用）
 
-## OneBotConfig
+```bash
+# 全局安装
+npm install -g onebots
 
-| 配置项   | 类型              | 默认值    | desc                       |
-| :------- |:----------------| :-------- |:---------------------------|
-| password | string          | -         | 仅icqq生效，账号密码 未填写或填写为空则扫码登陆 |
-| V11      | V11.Config      | configV11 | V11配置                      |
-| V12      | V12.Config      | configV12 | V12配置                      |
-| protocol | 传递给client初始化的配置 | {}        |                            |
-
-## ConfigV11
-
-| 配置项              | 类型     | 默认值 | desc              |
-| :------------------ | :------- | :----- | :---------------- |
-| heartbeat           | number   | 3      | 心跳间隔 单位：秒 |
-| access_token        | string   | -      | 访问令牌          |
-| secret              | string   | -      | 签名密钥          |
-| rate_limit_interval | number   | 4      | 限速间隔 单位：秒 |
-| post_message_format | string   | string | 消息格式化        |
-| reconnect_interval  | number   | 3      | 重连间隔 单位：秒 |
-| use_http            | boolean  | false  | 是否使用http协议  |
-| enable_cors         | boolean  | false  | 是否允许跨域      |
-| filters             | Filters  | {}     | 事件过滤器配置    |
-| use_ws              | boolean  | false  | 是否使用ws协议    |
-| http_reverse_url    | string[] | -      | http上报地址地址  |
-| ws_reverse_url      | string[] | -      | 反向ws连接地址    |
-
-## ConfigV12
-
-| 配置项              | 类型     | 默认值 | desc              |
-| :------------------ | :------- | :----- | :---------------- |
-| heartbeat           | number   | 3      | 心跳间隔 单位：秒 |
-| access_token        | string   | -      | 访问令牌          |
-| request_timeout     | number   | 15     | 请求超时 单位：秒 |
-| reconnect_interval  | number   | 3      | 重连间隔 单位：秒 |
-| enable_cors         | boolean  | false  | 是否允许跨域      |
-| filters             | Filters  | {}     | 事件过滤器配置    |
-| use_http            | boolean  | false  | 是否使用http协议  |
-| use_ws              | boolean  | false  | 是否使用ws协议    |
-| webhook_reverse_url | string[] | -      | webhook上报地址   |
-| ws_reverse_url      | string[] | -      | 反向ws连接地址    |
-
-# 事件过滤器
-
-## 语法说明
-
-- `onebots` 的事件过滤器最外层是一个JSON对象，其中的键是键如果是运算法，则值作为运算符的参数，如果不是运算符，则表示对事件数据对象相应 `key` 进行过滤。
-- 过滤规则中任何一个对象, 只有在它的所有项都匹配的情况下, 才会让事件通过（等价于一个 and 运算），如果值为一个数组，则表示事件对应 `key` 值需满足其中一个。
-- 可用逻辑运算符有：`$and` (逻辑与) 、`$or` (逻辑或) 、 `$not` (逻辑非)、`$nor` (逻辑异或)、`$regexp` (文本正则匹配)、`$like` (文本模糊匹配)、`$gt` (数值大于比较)、`$gte` (数值大于等于比较)、`$lt` (数值小于比较)、`$lte` (数值小于等于比较)、`$between` (数值范围比较)
-
-## 示例
-
-### 1. 仅上报私聊事件
-
-```yaml
-filters:
-  message_type: private
+# 在配置目录运行
+onebots
 ```
 
-### 2. 私聊或指定群聊
+## 📖 文档
 
-```yaml
-filters:
-  $or:
-    message_type: private
-    group_id:
-      - 123456789 987654321
+完整文档请访问：[https://docs.onebots.org](https://docs.onebots.org)
+
+### 主要章节
+
+- [快速开始](https://docs.onebots.org/guide/start.html)
+- [适配器配置](https://docs.onebots.org/guide/adapter.html)
+- [OneBot V11 API](https://docs.onebots.org/v12/)
+- [OneBot V12 API](https://docs.onebots.org/v12/)
+
+## 🔧 开发
+
+```bash
+# 安装依赖
+npm install
+
+# 开发模式
+npm run dev
+
+# 类型检查
+npm run type-check
+
+# 代码检查
+npm run lint
+
+# 自动修复
+npm run lint:fix
+
+# 构建
+npm run build
 ```
 
-### 3. 私聊事件且不是指定用户
+## 🤝 贡献
 
-```yaml
-filters:
-  message_type: private
-  $not:
-    user_id:
-      - 123456789 987654321
-```
+欢迎贡献！请查看 [贡献指南](CONTRIBUTING.md)。
 
-### 4. 私聊事件(排除指定用户的事件)或指定群聊事件
+参与贡献前请阅读：
+- [行为准则](CODE_OF_CONDUCT.md)
+- [安全政策](SECURITY.md)
 
-```yaml
-filters:
-  $or:
-    - message_type: private
-      $not:
-        user_id: 123456789
-    - message_type: group
-      group_id: 987654321
-```
+## 📄 许可证
 
-### 5. 仅上报消息事件且用户年龄大于18岁
+[MIT](LICENSE) © 凉菜
 
-```yaml
-filters:
-  type: message
-  sender:
-    age:
-      $gt: 18
-```
+## 🌟 致谢
 
-### 6. 仅上报消息事件且消息内容以！开头的消息
+- [icqqjs/icqq](https://github.com/icqqjs/icqq) - 底层服务支持
+- [takayama-lily/onebot](https://github.com/takayama-lily/node-onebot) - OneBot V11 原始实现
 
-```yaml
-filters:
-  type: message
-  raw_message:
-    .regexp: '^！|\!'
-```
+---
 
-### 7. 不上报消息内容包含`cnm`的消息
-
-```yaml
-filters:
-  $not:
-    type: message
-    raw_message:
-      $like: cnm
-```
-
-# 使用API管理oneBot
-
-| url     | method | params          | desc                                           |
-| :------ | :----- | :-------------- | :--------------------------------------------- |
-| /list   | GET    |                 | 获取当前运行的机器人列表                       |
-| /detail | GET    | uin             | 获取指定机器人配置                             |
-| /qrcode | GET    | uin             | 获取指定机器人登录二维码                       |
-| /add    | POST   | {uin,...config} | 添加机器人 config 为机器人配置                 |
-| /edit   | POST   | {uin,...config} | 修改机器人配置 config 为机器人配置             |
-| /remove | get    | uin,force       | 移除机器人,force为true时，将删除机器人data目录 |
+<div align="center">
+  <sub>使用 ❤️ 构建 | 由社区驱动</sub>
+</div>
 
 # 鸣谢
 
