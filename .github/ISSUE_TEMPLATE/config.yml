@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 社区讨论 / Community Discussions
+    url: https://github.com/lc-cn/onebots/discussions
+    about: 提问、分享想法或与社区讨论 / Ask questions, share ideas, or discuss with the community
+  - name: 📖 文档 / Documentation
+    url: https://docs.onebots.org
+    about: 查看项目文档 / View the project documentation
+  - name: QQ 交流群 / QQ Group
+    url: https://jq.qq.com/?_wv=1027&k=B22VGXov
+    about: 加入 QQ 群：860669870 / Join QQ group: 860669870

@@ -1,0 +1,46 @@
+---
+name: 🐛 Bug Report | Bug 报告
+about: 报告一个问题以帮助我们改进 / Report a bug to help us improve
+title: '[Bug] '
+labels: bug
+assignees: ''
+---
+
+## 🐛 问题描述 / Bug Description
+
+<!-- 清晰简洁地描述这个 bug / A clear and concise description of what the bug is -->
+
+## 📝 重现步骤 / Steps to Reproduce
+
+<!-- 重现问题的步骤 / Steps to reproduce the behavior -->
+
+1. 
+2. 
+3. 
+
+## ✅ 期望行为 / Expected Behavior
+
+<!-- 描述你期望发生什么 / A clear description of what you expected to happen -->
+
+## 🖼️ 截图 / Screenshots
+
+<!-- 如果有帮助的话，添加截图 / If applicable, add screenshots to help explain -->
+
+## 🌍 环境信息 / Environment
+
+- **OS / 操作系统**: [e.g. Ubuntu 22.04]
+- **Node.js 版本**: [e.g. 20.10.0]
+- **OneBots 版本**: [e.g. 0.4.96]
+- **适配器**: [e.g. icqq, qq, wechat, dingtalk]
+
+## 📋 附加信息 / Additional Context
+
+<!-- 其他有关问题的上下文 / Any other context about the problem -->
+
+## 🔍 日志 / Logs
+
+<!-- 如果有相关日志，请粘贴在这里 / If applicable, paste relevant logs here -->
+
+```
+粘贴日志内容
+```

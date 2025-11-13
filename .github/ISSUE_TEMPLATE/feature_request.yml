@@ -1,0 +1,32 @@
+---
+name: ✨ Feature Request | 功能请求
+about: 建议一个新功能或改进 / Suggest a new feature or enhancement
+title: '[Feature] '
+labels: enhancement
+assignees: ''
+---
+
+## 🚀 功能描述 / Feature Description
+
+<!-- 清晰简洁地描述你想要的功能 / A clear and concise description of what you want -->
+
+## 🎯 使用场景 / Use Case
+
+<!-- 描述这个功能的使用场景 / Describe the use case for this feature -->
+
+## 💡 建议的解决方案 / Proposed Solution
+
+<!-- 如果你有想法，描述你希望如何实现 / If you have ideas, describe how you'd like it implemented -->
+
+## 🔄 替代方案 / Alternatives
+
+<!-- 描述你考虑过的其他替代方案 / Describe alternatives you've considered -->
+
+## 📋 附加信息 / Additional Context
+
+<!-- 其他有关功能请求的上下文或截图 / Any other context or screenshots about the feature request -->
+
+## ✅ 检查清单 / Checklist
+
+- [ ] 我已经搜索过类似的功能请求 / I have searched for similar feature requests
+- [ ] 这个功能与项目目标一致 / This feature aligns with the project goals
