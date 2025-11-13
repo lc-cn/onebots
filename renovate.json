@@ -1,0 +1,32 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "schedule": [
+    "before 5am on Monday"
+  ],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "matchDepTypes": ["devDependencies"],
+      "automerge": true,
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
+    },
+    {
+      "matchPackagePatterns": ["^@types/"],
+      "automerge": true
+    },
+    {
+      "groupName": "TypeScript and related packages",
+      "matchPackagePatterns": ["^typescript$", "^@typescript-eslint/", "^ts-"],
+      "automerge": false
+    },
+    {
+      "groupName": "Linters",
+      "matchPackagePatterns": ["eslint", "prettier"],
+      "automerge": false
+    }
+  ]
+}

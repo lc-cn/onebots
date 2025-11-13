@@ -1,14 +1,22 @@
 {
-    "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
+    "include": ["env.d.ts", "src/**/*", "src/**/*.vue", "./**/*", "./**/*.vue"],
     "compilerOptions": {
         "baseUrl": ".",
-        "importsNotUsedAsValues": "preserve",
-        "preserveValueImports": false,
+        "target": "ES2020",
+        "module": "ESNext",
+        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "moduleResolution": "bundler",
+        "verbatimModuleSyntax": false,
         "noImplicitAny": false,
-        "isolatedModules": false,
-        "types": ["node","global.d.ts","element-plus/global"],
+        "isolatedModules": true,
+        "types": ["node", "element-plus/global"],
         "paths": {
             "@/*": ["./src/*"]
-        }
+        },
+        "jsx": "preserve",
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "skipLibCheck": true,
+        "resolveJsonModule": true
     }
 }
