@@ -2,6 +2,10 @@
 
 This guide explains how to create a new platform adapter for OneBots, implementing support for platforms like QQ, WeChat, Telegram, Discord, etc.
 
+> **Note:** This guide is for creating **NEW** adapters using the `BaseAdapter` class.
+> For migrating existing adapters, see **MIGRATION_GUIDE.md**.
+> For architecture comparison, see **ADAPTER_ARCHITECTURE.md**.
+
 ## Overview
 
 Platform adapters are responsible for:
@@ -9,7 +13,14 @@ Platform adapters are responsible for:
 2. Implementing all required methods defined in `BaseAdapter`
 3. Converting platform-specific events and data to the adapter's interface
 
-All platform adapters must extend the `BaseAdapter` class and implement its abstract methods.
+All platform adapters must extend the **`BaseAdapter`** class (from `src/adapter-base.ts`) and implement its abstract methods.
+
+### Why BaseAdapter?
+
+- **Protocol-independent**: Works with OneBot, Milky, Satori, and future protocols
+- **Cleaner code**: No protocol-specific logic in adapters
+- **Type-safe**: Complete TypeScript type definitions
+- **Simpler**: Just provide data, protocols handle formatting
 
 ## BaseAdapter Abstract Methods
 

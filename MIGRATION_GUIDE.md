@@ -1,25 +1,37 @@
 # Adapter Migration Guide
 
-This guide explains how to migrate existing adapters from the old architecture to the new BaseAdapter system.
+This guide explains how to migrate existing adapters from the **old `Adapter` class** to the **new `BaseAdapter` class**.
+
+> **Note:** Migration is **optional**. The old `Adapter` class is fully supported and maintained for backward compatibility.
+> Migrate only if you want multi-protocol support or cleaner code.
+
+## Which Adapter Class to Use?
+
+- **`Adapter`** (in `src/adapter.ts`) - **LEGACY**: OneBot-specific, version parameters, protocol-dependent
+- **`BaseAdapter`** (in `src/adapter-base.ts`) - **NEW**: Protocol-independent, universal parameters, cleaner
+
+See **ADAPTER_ARCHITECTURE.md** for complete comparison.
 
 ## Overview of Changes
 
-### Old Architecture
+### Old Architecture (Adapter)
 ```
-Platform Adapter → OneBot Protocol → Dispatch
+Platform Adapter → toSegment() → OneBot Protocol → Dispatch
 ```
 
-### New Architecture
+### New Architecture (BaseAdapter)
 ```
-Platform Adapter (BaseAdapter) → CommonEvent → Protocol (OneBot/Milky/Satori) → Dispatch
+Platform Adapter → AdapterAPI Types → Protocol (OneBot/Milky/Satori) → Dispatch
 ```
 
 ## Key Differences
 
 1. **Base Class**: `Adapter` → `BaseAdapter`
-2. **Abstract Methods**: Old adapters had protocol-specific methods, new adapters have platform-agnostic methods
-3. **Event Handling**: Old adapters emitted protocol-specific events, new adapters work with `CommonEvent`
-4. **Message Format**: Old adapters worked with protocol-specific segments, new adapters use universal message format
+2. **Version Parameters**: Methods no longer need `version: V` parameter
+3. **Type System**: `OneBot.*` types → `AdapterAPI.*` types
+4. **Protocol Logic**: Moved from adapter to protocol implementations
+5. **Message Conversion**: `toSegment()`, `fromSegment()` removed (handled by protocols)
+6. **Event Formatting**: `formatEventPayload()` removed (handled by protocols)
 
 ## Migration Steps
 
