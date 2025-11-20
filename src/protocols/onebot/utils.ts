@@ -1,4 +1,4 @@
-import { OneBot } from "@/onebot";
+import { OneBot } from "@/account";
 import { Adapter } from "@/adapter";
 
 /**

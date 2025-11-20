@@ -63,3 +63,12 @@ export namespace SatoriConfig {
         filters?: any;
     }
 }
+declare module '../base'{
+    namespace Protocol {
+        interface ConfigMaps {
+            satori: {
+                v1: SatoriConfig.Config;
+            };
+        }
+    }
+}

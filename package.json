@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node .",
     "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r dingtalk -r wechat",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml",
     "pub": "npm publish --access public",
     "lint": "prettier --check ./**/*.{ts,js}",
     "lint:fix": "prettier --write ./**/*.{ts,js,md}",

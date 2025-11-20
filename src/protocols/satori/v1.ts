@@ -1,5 +1,5 @@
 import { Protocol } from "../base";
-import { OneBot } from "@/onebot";
+import { Account } from "@/account";
 import { Adapter } from "@/adapter";
 import { Dict } from "@zhinjs/shared";
 import { CommonEvent } from "@/common-types";
@@ -13,7 +13,7 @@ import { Logger } from "log4js";
  * Satori is a cross-platform chatbot protocol
  * Reference: https://github.com/satorijs/satori
  */
-export class SatoriV1 extends EventEmitter implements Protocol.Base {
+export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     public readonly name = "satori";
     public readonly version = "v1" as const;
     protected logger: Logger;
@@ -21,11 +21,11 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
 
     constructor(
         public adapter: Adapter,
-        public oneBot: OneBot,
-        public config: SatoriConfig.Config,
+        public account: Account,
+        public config: Protocol.Config<SatoriConfig.Config>,
     ) {
-        super();
-        this.logger = adapter.getLogger(oneBot.uin, "satori-v1");
+        super(adapter, account, config);
+        this.logger = adapter.getLogger(account.uin, "satori-v1");
     }
 
     filterFn(event: Dict): boolean {
@@ -34,7 +34,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     start(): void {
-        this.logger.info(`Starting Satori protocol v1 for ${this.oneBot.platform}/${this.oneBot.uin}`);
+        this.logger.info(`Starting Satori protocol v1 for ${this.account.platform}/${this.account.uin}`);
         
         // Initialize Satori protocol services
         if (this.config.use_http) {
@@ -303,7 +303,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
 
     // Action implementations
     private async createMessage(params: any): Promise<Satori.Message[]> {
-        const result = await this.adapter.sendPrivateMessage(this.oneBot.uin, {
+        const result = await this.adapter.sendPrivateMessage(this.account.uin, {
             message_type: params.message_type || "private",
             user_id: params.user_id,
             group_id: params.channel_id,
@@ -317,7 +317,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getMessage(params: any): Promise<Satori.Message> {
-        const msg = await this.adapter.getMessage(this.oneBot.uin, {
+        const msg = await this.adapter.getMessage(this.account.uin, {
             message_id: params.message_id,
         });
         
@@ -329,7 +329,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async deleteMessage(params: any): Promise<void> {
-        await this.adapter.deleteMessage(this.oneBot.uin, {
+        await this.adapter.deleteMessage(this.account.uin, {
             message_id: params.message_id,
         });
     }
@@ -345,7 +345,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getChannel(params: any): Promise<Satori.Channel> {
-        const info = await this.adapter.getGroupInfo(this.oneBot.uin, {
+        const info = await this.adapter.getGroupInfo(this.account.uin, {
             group_id: params.channel_id,
         });
         
@@ -357,7 +357,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getChannelList(params: any): Promise<Satori.List<Satori.Channel>> {
-        const groups = await this.adapter.getGroupList(this.oneBot.uin);
+        const groups = await this.adapter.getGroupList(this.account.uin);
         
         return {
             data: groups.map(g => ({
@@ -384,7 +384,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getGuild(params: any): Promise<Satori.Guild> {
-        const info = await this.adapter.getGroupInfo(this.oneBot.uin, {
+        const info = await this.adapter.getGroupInfo(this.account.uin, {
             group_id: params.guild_id,
         });
         
@@ -395,7 +395,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getGuildList(params: any): Promise<Satori.List<Satori.Guild>> {
-        const groups = await this.adapter.getGroupList(this.oneBot.uin);
+        const groups = await this.adapter.getGroupList(this.account.uin);
         
         return {
             data: groups.map(g => ({
@@ -406,7 +406,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getGuildMember(params: any): Promise<Satori.GuildMember> {
-        const info = await this.adapter.getGroupMemberInfo(this.oneBot.uin, {
+        const info = await this.adapter.getGroupMemberInfo(this.account.uin, {
             group_id: params.guild_id,
             user_id: params.user_id,
         });
@@ -421,7 +421,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getGuildMemberList(params: any): Promise<Satori.List<Satori.GuildMember>> {
-        const members = await this.adapter.getGroupMemberList(this.oneBot.uin, {
+        const members = await this.adapter.getGroupMemberList(this.account.uin, {
             group_id: params.guild_id,
         });
         
@@ -447,7 +447,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getUser(params: any): Promise<Satori.User> {
-        const info = await this.adapter.getUserInfo(this.oneBot.uin, {
+        const info = await this.adapter.getUserInfo(this.account.uin, {
             user_id: params.user_id,
         });
         
@@ -466,7 +466,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getFriendList(params: any): Promise<Satori.List<Satori.User>> {
-        const friends = await this.adapter.getFriendList(this.oneBot.uin);
+        const friends = await this.adapter.getFriendList(this.account.uin);
         
         return {
             data: friends.map(f => ({
@@ -482,7 +482,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getLogin(): Promise<Satori.Login> {
-        const info = await this.adapter.getLoginInfo(this.oneBot.uin);
+        const info = await this.adapter.getLoginInfo(this.account.uin);
         
         return {
             user: {
@@ -490,7 +490,7 @@ export class SatoriV1 extends EventEmitter implements Protocol.Base {
                 name: info.nickname,
             },
             self_id: String(info.user_id),
-            platform: this.config.platform || this.oneBot.platform,
+            platform: this.config.platform || this.account.platform,
             status: 1,
         };
     }

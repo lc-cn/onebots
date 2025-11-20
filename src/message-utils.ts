@@ -1,4 +1,4 @@
-import { OneBot } from "@/onebot";
+import { Account } from "@/account";
 import { Dict } from "@zhinjs/shared";
 
 /**
@@ -48,7 +48,7 @@ export namespace MessageUtils {
      * Add reply element to message
      * Handles both V11 and V12 formats
      */
-    export function addReplyToMessage<V extends OneBot.Version>(
+    export function addReplyToMessage<V extends string>(
         message: any[],
         messageId: string | number,
         version: V,

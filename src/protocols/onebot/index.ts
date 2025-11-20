@@ -15,6 +15,16 @@ ProtocolRegistry.register("onebot", "v12", OneBotV12Protocol, {
     versions: ["v12"],
 });
 
+declare module '../base'{
+    namespace Protocol {
+        interface ConfigMaps {
+            onebot: {
+                v11: OneBotV11Protocol.Config;
+                v12: OneBotV12Protocol.Config;
+            };
+        }
+    }
+}
 export * from "./v11";
 export * from "./v12";
 export * from "./utils";

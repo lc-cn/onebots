@@ -1,6 +1,6 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
-import { OneBot, OneBotStatus } from "@/onebot";
+import { OneBot, OneBotStatus } from "@/account";
 import { Client, Sendable, BaseClient } from "web-wechat";
 import * as path from "path";
 type WechatConfig = BaseClient.Config;

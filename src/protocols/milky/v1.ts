@@ -1,11 +1,10 @@
 import { Protocol } from "../base";
-import { OneBot } from "@/onebot";
+import { Account } from "@/account";
 import { Adapter } from "@/adapter";
 import { Dict } from "@zhinjs/shared";
 import { CommonEvent } from "@/common-types";
 import { Milky } from "./types";
 import { MilkyConfig } from "./config";
-import { EventEmitter } from "events";
 import { Logger } from "log4js";
 
 /**
@@ -13,18 +12,18 @@ import { Logger } from "log4js";
  * Milky is a QQ bot protocol similar to OneBot but with different message formats
  * Reference: https://milky.ntqqrev.org/
  */
-export class MilkyV1 extends EventEmitter implements Protocol.Base {
+export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     public readonly name = "milky";
     public readonly version = "v1" as const;
     protected logger: Logger;
 
     constructor(
         public adapter: Adapter,
-        public oneBot: OneBot,
-        public config: MilkyConfig.Config,
+        public account: Account,
+        public config: Protocol.Config,
     ) {
-        super();
-        this.logger = adapter.getLogger(oneBot.uin, "milky-v1");
+        super(adapter,account,config);
+        this.logger = adapter.getLogger(account.uin, "milky-v1");
     }
 
     filterFn(event: Dict): boolean {
@@ -34,7 +33,7 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
     }
 
     start(): void {
-        this.logger.info(`Starting Milky protocol v1 for ${this.oneBot.platform}/${this.oneBot.uin}`);
+        this.logger.info(`Starting Milky protocol v1 for ${this.account.platform}/${this.account.uin}`);
         
         // Initialize Milky protocol services
         if (this.config.use_http) {
@@ -233,7 +232,7 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
 
     // Action implementations
     private async sendPrivateMessage(params: any): Promise<Milky.SendMessageResult> {
-        const result = await this.adapter.sendPrivateMessage(this.oneBot.uin, {
+        const result = await this.adapter.sendPrivateMessage(this.account.uin, {
             message_type: "private",
             user_id: params.user_id,
             message: params.message,
@@ -242,7 +241,7 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async sendGroupMessage(params: any): Promise<Milky.SendMessageResult> {
-        const result = await this.adapter.sendGroupMessage(this.oneBot.uin, {
+        const result = await this.adapter.sendGroupMessage(this.account.uin, {
             message_type: "group",
             group_id: params.group_id,
             message: params.message,
@@ -259,13 +258,13 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async deleteMessage(params: any): Promise<void> {
-        await this.adapter.deleteMessage(this.oneBot.uin, {
+        await this.adapter.deleteMessage(this.account.uin, {
             message_id: params.message_id,
         });
     }
 
     private async getMessage(params: any): Promise<Milky.MessageInfo> {
-        const msg = await this.adapter.getMessage(this.oneBot.uin, {
+        const msg = await this.adapter.getMessage(this.account.uin, {
             message_id: params.message_id,
         });
         return {
@@ -284,7 +283,7 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getLoginInfo(): Promise<Milky.LoginInfo> {
-        const info = await this.adapter.getLoginInfo(this.oneBot.uin);
+        const info = await this.adapter.getLoginInfo(this.account.uin);
         return {
             user_id: info.user_id,
             nickname: info.nickname,
@@ -292,7 +291,7 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getStrangerInfo(params: any): Promise<Milky.User> {
-        const info = await this.adapter.getUserInfo(this.oneBot.uin, {
+        const info = await this.adapter.getUserInfo(this.account.uin, {
             user_id: params.user_id,
         });
         return {
@@ -302,11 +301,16 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getFriendList(): Promise<Milky.FriendInfo[]> {
-        return await this.adapter.getFriendList(this.oneBot.uin);
+        const result = await this.adapter.getFriendList(this.account.uin);
+        return result.map(info => ({
+            user_id: info.user_id,
+            nickname: info.nickname,
+            remark: info.remark || "",
+        }));
     }
 
     private async getGroupInfo(params: any): Promise<Milky.GroupInfo> {
-        const info = await this.adapter.getGroupInfo(this.oneBot.uin, {
+        const info = await this.adapter.getGroupInfo(this.account.uin, {
             group_id: params.group_id,
         });
         return {
@@ -318,11 +322,17 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getGroupList(): Promise<Milky.GroupInfo[]> {
-        return await this.adapter.getGroupList(this.oneBot.uin);
+        const result = await this.adapter.getGroupList(this.account.uin);
+        return result.map(info => ({
+            group_id: info.group_id,
+            group_name: info.group_name,
+            member_count: info.member_count || 0,
+            max_member_count: info.max_member_count || 0,
+        }));
     }
 
     private async getGroupMemberInfo(params: any): Promise<Milky.GroupMemberInfo> {
-        const info = await this.adapter.getGroupMemberInfo(this.oneBot.uin, {
+        const info = await this.adapter.getGroupMemberInfo(this.account.uin, {
             group_id: params.group_id,
             user_id: params.user_id,
         });
@@ -346,7 +356,7 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
     }
 
     private async getGroupMemberList(params: any): Promise<Milky.GroupMemberInfo[]> {
-        const list = await this.adapter.getGroupMemberList(this.oneBot.uin, {
+        const list = await this.adapter.getGroupMemberList(this.account.uin, {
             group_id: params.group_id,
         });
         return list.map(info => ({
@@ -423,7 +433,7 @@ export class MilkyV1 extends EventEmitter implements Protocol.Base {
         setInterval(() => {
             const heartbeatEvent: Milky.MetaEvent = {
                 time: Math.floor(Date.now() / 1000),
-                self_id: this.oneBot.uin,
+                self_id: this.account.uin,
                 post_type: "meta_event",
                 meta_event_type: "heartbeat",
                 interval: this.config.heartbeat || 5,

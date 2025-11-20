@@ -1,4 +1,4 @@
-import { Milky } from "./types";
+
 
 export namespace MilkyConfig {
     /**

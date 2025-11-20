@@ -1,258 +1,281 @@
 import { EventEmitter } from "events";
 import { App } from "@/server/app";
-import { OneBot } from "@/onebot";
-import { Dict } from "@zhinjs/shared";
+import { Account } from "@/account";
 import { Logger } from "log4js";
-import { V11 } from "@/service/V11";
+import { Dict } from "@zhinjs/shared";
 
-export abstract class Adapter<T extends string = string, Sendable = any> extends EventEmitter {
-    oneBots: Map<string, OneBot> = new Map<string, OneBot>();
+/**
+ * Base Adapter Interface
+ * Defines all methods that platform adapters must implement
+ * Platform adapters provide the actual implementation for their specific platform
+ */
+export namespace Adapter {
+    export interface Config<T extends keyof Configs=keyof Configs> {
+        platform: T;
+        [key: string]: any;
+    }
+    export interface Configs extends Record<string, any> {}
+    /**
+     * Send message parameters
+     */
+    export interface SendMessageParams {
+        message_type?: "private" | "group";
+        user_id?: string | number;
+        group_id?: string | number;
+        message: any[];
+    }
+
+    /**
+     * Delete message parameters
+     */
+    export interface DeleteMessageParams {
+        message_id: string | number;
+    }
+
+    /**
+     * Get message parameters
+     */
+    export interface GetMessageParams {
+        message_id: string | number;
+    }
+
+    /**
+     * Get user info parameters
+     */
+    export interface GetUserInfoParams {
+        user_id: string | number;
+    }
+
+    /**
+     * Get group info parameters
+     */
+    export interface GetGroupInfoParams {
+        group_id: string | number;
+    }
+
+    /**
+     * Get group member info parameters
+     */
+    export interface GetGroupMemberInfoParams {
+        group_id: string | number;
+        user_id: string | number;
+    }
+
+    /**
+     * Get group member list parameters
+     */
+    export interface GetGroupMemberListParams {
+        group_id: string | number;
+    }
+
+    /**
+     * Message info
+     */
+    export interface MessageInfo {
+        message_id: string | number;
+        time: number;
+        message_type: "private" | "group";
+        sender: any;
+        message: any[];
+    }
+
+    /**
+     * User info
+     */
+    export interface UserInfo {
+        user_id: string | number;
+        nickname: string;
+        [key: string]: any;
+    }
+
+    /**
+     * Friend info
+     */
+    export interface FriendInfo {
+        user_id: string | number;
+        nickname: string;
+        remark?: string;
+    }
+
+    /**
+     * Group info
+     */
+    export interface GroupInfo {
+        group_id: string | number;
+        group_name: string;
+        member_count?: number;
+        max_member_count?: number;
+    }
+
+    /**
+     * Group member info
+     */
+    export interface GroupMemberInfo {
+        group_id: string | number;
+        user_id: string | number;
+        nickname: string;
+        card?: string;
+        role?: "owner" | "admin" | "member";
+        [key: string]: any;
+    }
+
+    /**
+     * Send message result
+     */
+    export interface SendMessageResult {
+        message_id: string | number;
+    }
+}
+
+/**
+ * Base Adapter class with abstract methods
+ * Platform adapters must implement these methods for their specific platform
+ */
+export abstract class Adapter<C=any,T extends string = string> extends EventEmitter {
+    accounts: Map<string, Account<C>> = new Map<string, Account<C>>();
     #logger: Logger;
     icon: string;
+
     protected constructor(
         public app: App,
         public platform: T,
-        public config: Adapter.Configs[T],
+        public config: any,
     ) {
         super();
-        this.on("message.receive", (uin: string, ...args: any[]) => {
-            this.getOneBot(uin).emit("message.receive", ...args);
-        });
-        this.on("notice.receive", (uin: string, ...args: any[]) => {
-            this.getOneBot(uin).emit("notice.receive", ...args);
-        });
-        this.on("request.receive", (uin: string, ...args: any[]) => {
-            this.getOneBot(uin).emit("request.receive", ...args);
-        });
     }
 
-    materialize(content: string): string {
-        return content
-            .replace(/&(?!(amp|#91|#93|#44);)/g, "&amp;")
-            .replace(/\[/g, "&#91;")
-            .replace(/]/g, "&#93;")
-            .replace(/,/g, "&#44;");
-    }
-    toCqcode<V extends OneBot.Version>(version: V, messageArr: OneBot.Segment<V>[]): string {
-        return []
-            .concat(messageArr)
-            .map(item => {
-                if (typeof item === "string") return item;
-                if (item.type === "text") return item.data?.text || item.text;
-                let dataStr: string[];
-                if (typeof item.data === "string") {
-                    dataStr = [`data=${this.materialize(item.data)}`];
-                } else {
-                    dataStr = Object.entries(item.data || item).map(([key, value]) => {
-                        // is Buffer
-                        if (value instanceof Buffer) return `${key}=${value.toString("base64")}`;
-                        // is Object
-                        if (value instanceof Object)
-                            return `${key}=${JSON.stringify(value, (_, v) => (typeof v === "bigint" ? v.toString() : v))}`;
-                        // is Array
-                        if (value instanceof Array)
-                            return `${key}=${value.map(v => JSON.stringify(v, (_, v) => (typeof v === "bigint" ? v.toString() : v))).join(",")}`;
-                        // is String
-                        return `${key}=${item.data?.[key] || item[key]}`;
-                    });
-                }
-                return `[CQ:${item.type},${dataStr.join(",")}]`;
-            })
-            .join("");
+    // ============================================
+    // Abstract methods - Must be implemented by platform adapters
+    // ============================================
+
+    /**
+     * Send a private message
+     */
+    abstract sendPrivateMessage(
+        uin: string,
+        params: Adapter.SendMessageParams
+    ): Promise<Adapter.SendMessageResult>;
+
+    /**
+     * Send a group message
+     */
+    abstract sendGroupMessage(
+        uin: string,
+        params: Adapter.SendMessageParams
+    ): Promise<Adapter.SendMessageResult>;
+
+    /**
+     * Delete a message
+     */
+    abstract deleteMessage(
+        uin: string,
+        params: Adapter.DeleteMessageParams
+    ): Promise<void>;
+
+    /**
+     * Get message by ID
+     */
+    abstract getMessage(
+        uin: string,
+        params: Adapter.GetMessageParams
+    ): Promise<Adapter.MessageInfo>;
+
+    /**
+     * Get user/stranger info
+     */
+    abstract getUserInfo(
+        uin: string,
+        params: Adapter.GetUserInfoParams
+    ): Promise<Adapter.UserInfo>;
+
+    /**
+     * Get friend list
+     */
+    abstract getFriendList(uin: string): Promise<Adapter.FriendInfo[]>;
+
+    /**
+     * Get group info
+     */
+    abstract getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams
+    ): Promise<Adapter.GroupInfo>;
+
+    /**
+     * Get group list
+     */
+    abstract getGroupList(uin: string): Promise<Adapter.GroupInfo[]>;
+
+    /**
+     * Get group member info
+     */
+    abstract getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams
+    ): Promise<Adapter.GroupMemberInfo>;
+
+    /**
+     * Get group member list
+     */
+    abstract getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams
+    ): Promise<Adapter.GroupMemberInfo[]>;
+
+    /**
+     * Get login info (bot's own info)
+     */
+    abstract getLoginInfo(uin: string): Promise<Adapter.UserInfo>;
+
+    // ============================================
+    // Concrete methods
+    // ============================================
+
+    getAccount(uin: string) {
+        return this.accounts.get(uin) as Account<C> | undefined;
     }
 
-    fromCqcode<V extends OneBot.Version>(version: V, message: string): OneBot.Segment<V>[] {
-        const regExpMatchArray = message.match(/\[CQ:([a-z]+),([^\]]+)]/);
-        if (!regExpMatchArray)
-            return [
-                {
-                    type: "text",
-                    data: {
-                        text: message,
-                    },
-                },
-            ];
-        const result: OneBot.Segment<V>[] = [];
-        while (message.length) {
-            const [match] = message.match(/\[CQ:([a-z]+),([^\]]+)]/) || [];
-            if (!match) break;
-            const prevText = message.substring(0, message.indexOf(match));
-            if (prevText) {
-                result.push({
-                    type: "text",
-                    data: {
-                        text: prevText,
-                    },
-                });
-                message = message.substring(prevText.length);
-            }
-            const [type, ...valueArr] = match.substring(1, match.length - 1).split(",");
-            result.push({
-                type: type.split(":").at(-1),
-                data: Object.fromEntries(
-                    valueArr.map(item => {
-                        const [key, ...values] = item.split("=");
-                        const value = values.join("=");
-                        return [key, type === "reply" && key === "id" ? +value : value];
-                    }),
-                ),
-            });
-            message = message.substring(match.length);
-        }
-        if (message.length) {
-            result.push({
-                type: "text",
-                data: {
-                    text: message,
-                },
-            });
-        }
-        return result;
-    }
-    transformMessage(uin: string, version: OneBot.Version, message: any) {
-        const onebot = this.getOneBot(uin);
-        const instance = onebot.instances.find(V => V.version === version) as V11;
-        return instance.config.post_message_format === "string"
-            ? this.toCqcode(version, this.toSegment(version, message))
-            : this.toSegment(version, message);
-    }
-    getOneBot<C = any>(uin: string) {
-        return this.oneBots.get(uin) as OneBot<C> | undefined;
-    }
     get logger() {
         return (this.#logger ||= this.app.getLogger(this.platform));
     }
+
     get info() {
         return {
             platform: this.platform,
             config: this.config,
             icon: this.icon,
-            bots: [...this.oneBots.values()].map(bot => {
-                return bot.info;
+            bots: [...this.accounts.values()].map(account => {
+                return account.info;
             }),
         };
     }
+
     async setOnline(uin: string) {}
     async setOffline(uin: string) {}
+
     getLogger(uin: string, version?: string) {
         if (!version) return this.app.getLogger(`${this.platform}-${uin}`);
         return this.app.getLogger(`${this.platform}-${version}(${uin})`);
     }
-    createOneBot<T = any>(uin: string, protocol: Dict, versions: OneBot.Config[]): OneBot<T> {
-        const oneBot = new OneBot<T>(this, uin, versions);
-        this.oneBots.set(uin, oneBot);
-        return oneBot;
-    }
+
+    abstract createAccount(uin: string, protocol: Dict, versions: Account.Config[]): Account<this>;
+
     async start(uin?: string): Promise<any> {
-        const startOneBots = [...this.oneBots.values()].filter(oneBot => {
-            return uin ? oneBot.uin === uin : true;
+        const startAccounts = [...this.accounts.values()].filter(account => {
+            return uin ? account.uin === uin : true;
         });
-        for (const oneBot of startOneBots) {
-            await oneBot.start();
+        for (const account of startAccounts) {
+            await account.start();
         }
-        this.app.emit("adapter.start", this.platform);
     }
-    async stop(uin?: string, force?: boolean): Promise<any> {
-        const stopOneBots = [...this.oneBots.values()].filter(oneBot => {
-            return uin ? oneBot.uin === uin : true;
+
+    async stop(uin?: string): Promise<any> {
+        const stopAccounts = [...this.accounts.values()].filter(account => {
+            return uin ? account.uin === uin : true;
         });
-        for (const oneBot of stopOneBots) {
-            await oneBot.stop(force);
-            await this.setOffline(oneBot.uin);
+        for (const account of stopAccounts) {
+            await account.stop();
         }
-        this.app.emit("adapter.stop", this.platform);
     }
 }
-type GroupInfo = {
-    group_id: string | number;
-    group_name: string;
-};
-type UserInfo = {
-    user_id: string | number;
-    user_name: string;
-};
-export interface Adapter<T extends string = string, Sendable = any> extends Adapter.Base<Sendable> {
-    call<V extends OneBot.Version>(
-        uin: string,
-        version: V,
-        method: string,
-        args?: any[],
-    ): Promise<any>;
-}
-export namespace Adapter {
-    export interface Base<Sendable = any> {
-        toSegment<V extends OneBot.Version>(version: V, message: Sendable): OneBot.Segment<V>[];
-        fromSegment<V extends OneBot.Version>(
-            onebot: OneBot,
-            version: V,
-            segment: OneBot.Segment<V>[],
-        ): Sendable;
-        getSelfInfo<V extends OneBot.Version>(uin: string, version: V): OneBot.SelfInfo<V>;
-        /** 格式化事件 */
-        formatEventPayload<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-            event: string,
-            payload: Dict,
-        ): OneBot.Payload<V>;
-        /** 解析消息事件的消息 */
-        parseMessage<V extends OneBot.Version>(version: V, payload: Dict): OneBot.Message<V>[];
-        /** 获取群列表 */
-        getGroupList<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-        ): Promise<OneBot.GroupInfo<V>[]>;
-        /** 获取好友列表 */
-        getFriendList<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-        ): Promise<OneBot.UserInfo<V>[]>;
-        getGroupMemberList<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-            args: [string],
-        ): Promise<OneBot.GroupMemberInfo<V>[]>;
-        /** 发送群消息 */
-        sendGroupMessage<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-            args: [string, Sendable, string],
-        ): Promise<OneBot.MessageRet<V>>;
-        /** 发送私聊消息 */
-        sendPrivateMessage<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-            args: [string, Sendable, string],
-        ): Promise<OneBot.MessageRet<V>>;
-        sendGuildMessage<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-            args: [string, string, Sendable, string],
-        ): Promise<OneBot.MessageRet<V>>;
-        /** 发送私聊消息 */
-        sendDirectMessage<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-            args: [string, Sendable, string],
-        ): Promise<OneBot.MessageRet<V>>;
-        /** 获取消息 */
-        getMessage<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-            args: [string],
-        ): Promise<OneBot.Message<V>>;
-        deleteMessage<V extends OneBot.Version>(
-            uin: string,
-            version: V,
-            args: [string],
-        ): Promise<boolean>;
-    }
-    export interface Configs {
-        [key: string]: Adapter.Config;
-    }
-    export type Config<T extends string = string> = {
-        platform?: T;
-        versions: OneBot.Config<OneBot.Version>[];
-        protocol?: Dict;
-    } & Record<string, any>;
-}
+export type AdapterClient<T extends Adapter = Adapter> = T extends Adapter<infer C, infer _> ? C : never;

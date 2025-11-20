@@ -1,6 +1,6 @@
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
-import { OneBot, OneBotStatus } from "@/onebot";
+import { OneBot, OneBotStatus } from "@/account";
 import { Bot, Sendable, Quotable } from "qq-official-bot";
 import * as path from "path";
 

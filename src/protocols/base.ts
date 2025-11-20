@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import { OneBot } from "@/onebot";
+import { Account } from "@/account";
 import { Adapter } from "@/adapter";
 import { Logger } from "log4js";
 import { Dict } from "@zhinjs/shared";
@@ -10,7 +10,7 @@ import { Dict } from "@zhinjs/shared";
  */
 export abstract class Protocol<
     V extends string = string,
-    Config extends Protocol.Config = Protocol.Config,
+    C =any,
 > extends EventEmitter {
     public abstract readonly name: string;
     public abstract readonly version: V;
@@ -18,18 +18,18 @@ export abstract class Protocol<
 
     constructor(
         public adapter: Adapter,
-        public oneBot: OneBot,
-        public config: Config,
+        public account: Account,
+        public config: Protocol.Config<C>,
     ) {
         super();
-        this.logger = this.adapter.getLogger(this.oneBot.uin, `${this.name}/${this.version}`);
+        this.logger = this.adapter.getLogger(this.account.uin, `${this.config.protocol}/${this.config.version}`);
     }
 
     /**
      * Get the URL path for this protocol
      */
     protected get path(): string {
-        return `/${this.oneBot.platform}/${this.name}/${this.version}`;
+        return `/${this.account.platform}/${this.config.protocol}/${this.config.version}`;
     }
 
     /**
@@ -64,12 +64,14 @@ export abstract class Protocol<
 }
 
 export namespace Protocol {
+    export interface ConfigMaps extends Record<string, Record<string, Record<string, any>>> { }
     /**
      * Base configuration for protocols
      */
-    export interface Config {
+    export type Config<T extends Record<string, any> = Record<string, any>> = T & {
         filters?: Filters;
-        [key: string]: any;
+        version: string;
+        protocol: string
     }
 
     /**
@@ -110,7 +112,7 @@ export namespace Protocol {
      */
     export type Factory<T extends Protocol = Protocol> = new (
         adapter: Adapter,
-        oneBot: OneBot,
+        account: Account,
         config: any,
     ) => T;
 }

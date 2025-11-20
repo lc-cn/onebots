@@ -12,8 +12,6 @@ import basicAuth from "koa-basic-auth";
 
 import { Class, deepClone, deepMerge, readLine } from "@/utils";
 import { Router, WsServer } from "./router";
-import { V11 } from "@/service/V11";
-import { V12 } from "@/service/V12";
 import { LogLevel } from "@/types";
 import * as path from "path";
 import { Adapter } from "@/adapter";
@@ -47,7 +45,7 @@ export class App extends Koa {
     static get logFile() {
         return path.join(App.configDir, "onebots.log");
     }
-    adapters: Map<string, Adapter> = new Map<string, Adapter>();
+    adapters: Map<keyof Adapter.Configs, Adapter> = new Map<keyof Adapter.Configs, Adapter>();
     public ws: WsServer;
     public router: Router;
     get info() {
@@ -98,7 +96,7 @@ export class App extends Koa {
             .use(koaStatic(path.resolve(__dirname, "../../dist")));
         this.ws = this.router.ws("/");
 
-        this.createOneBots();
+        this.initAccounts();
     }
     getLogger(patform: string) {
         const logger = getLogger(`[OneBots:${patform}]`);
@@ -118,53 +116,53 @@ export class App extends Koa {
         return result;
     }
 
-    private createOneBots() {
+    private initAccounts() {
         for (const [platform, uin, config] of this.getConfigMaps()) {
-            this.createOneBot(platform, uin, config);
+            this.initAccountByConfig(platform, uin, config);
         }
     }
 
     public addAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
         this.config[`${platform}.${uin}`] = config;
-        const oneBot = this.createOneBot(platform, uin, config);
-        oneBot.start();
+        const account = this.initAccountByConfig(platform, uin, config);
+        account.start();
         writeFileSync(App.configPath, yaml.dump(deepClone(this.config)));
     }
 
-    public updateAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
-        const adapter = this.findOrCreateAdapter(platform);
+    public updateAccount<P extends string>(p: P, uin: string, config: Adapter.Configs[P]) {
+        const adapter = this.findOrCreateAdapter(p);
         if (!adapter) return;
-        const oneBot = adapter.oneBots.get(uin);
-        if (!oneBot) return this.addAccount(platform, uin, config);
+        const account = adapter.accounts.get(uin);
+        if (!account) return this.addAccount(p, uin, config);
         const newConfig = deepMerge(this.config[uin], config);
-        this.removeAccount(platform, uin);
-        this.addAccount(platform, uin, newConfig);
+        this.removeAccount(p, uin);
+        this.addAccount(p, uin, newConfig);
     }
 
-    public removeAccount(platform: string, uin: string, force?: boolean) {
-        const adapter = this.findOrCreateAdapter(platform);
+    public removeAccount(p: string, uin: string, force?: boolean) {
+        const adapter = this.findOrCreateAdapter(p);
         if (!adapter) return;
-        const oneBot = adapter.oneBots.get(uin);
-        if (!oneBot) return this.logger.warn(`未找到账号${uin}`);
-        oneBot.stop(force);
-        delete this.config[`${platform}.${uin}`];
-        adapter.oneBots.delete(uin);
+        const account = adapter.accounts.get(uin);
+        if (!account) return this.logger.warn(`未找到账号${uin}`);
+        account.stop(force);
+        delete this.config[`${p}.${uin}`];
+        adapter.accounts.delete(uin);
         writeFileSync(App.configPath, yaml.dump(this.config));
     }
 
-    public createOneBot<P extends string>(platform: P, uin: string, config: Adapter.Config) {
+    public initAccountByConfig<P extends keyof Adapter.Configs>(platform: P, uin: string, config: Adapter.Config<P>) {
         const adapter = this.findOrCreateAdapter<P>(platform, config);
         if (!adapter) return;
-        return adapter.createOneBot(uin, config.protocol || {}, config.versions || []);
+        return adapter.createAccount(uin, config.protocol || {}, config.versions || []);
     }
-    get oneBots() {
+    get accounts() {
         return [...this.adapters.values()]
             .map(adapter => {
-                return [...adapter.oneBots.values()];
+                return [...adapter.accounts.values()];
             })
             .flat();
     }
-    public findOrCreateAdapter<P extends string>(platform: P, config?: Adapter.Config) {
+    public findOrCreateAdapter<P extends keyof Adapter.Configs>(platform: P, config?: Adapter.Config<P>) {
         if (this.adapters.has(platform)) return this.adapters.get(platform);
         const AdapterClass = App.ADAPTERS.get(platform);
         if (!AdapterClass) return this.logger.warn(`未安装适配器(${platform})`);
@@ -243,7 +241,7 @@ export class App extends Koa {
                         return client.send(
                             JSON.stringify({
                                 event: "bot.change",
-                                data: this.adapters.get(platform).getOneBot(uin).info,
+                                data: this.adapters.get(platform).getAccount(uin).info,
                             }),
                         );
                     }
@@ -253,7 +251,7 @@ export class App extends Koa {
                         return client.send(
                             JSON.stringify({
                                 event: "bot.change",
-                                data: this.adapters.get(platform).getOneBot(uin).info,
+                                data: this.adapters.get(platform).getAccount(uin).info,
                             }),
                         );
                     }
@@ -261,7 +259,7 @@ export class App extends Koa {
             });
         });
         this.router.get("/list", ctx => {
-            ctx.body = this.oneBots.map(bot => {
+            ctx.body = this.accounts.map(bot => {
                 return bot.info;
             });
         });
@@ -312,7 +310,7 @@ export class App extends Koa {
     async reload(config: App.Config) {
         await this.stop();
         this.config = deepMerge(deepClone(App.defaultConfig), config);
-        this.createOneBots();
+        this.initAccounts();
         await this.start();
     }
     async stop() {
@@ -381,7 +379,7 @@ export function defineConfig(config: App.Config) {
 }
 
 export namespace App {
-    export const ADAPTERS: Map<string, AdapterClass> = new Map();
+    export const ADAPTERS: Map<keyof Adapter.Configs, AdapterClass> = new Map();
     export interface Adapters<P extends string = string> extends Map<P, Adapter<P>> {}
 
     export type Config = {
@@ -392,8 +390,8 @@ export namespace App {
         password?: string;
         log_level?: LogLevel;
         general?: {
-            V11?: V11.Config;
-            V12?: V12.Config;
+            V11?: {};
+            V12?: {};
         };
     } & KoaOptions &
         Record<`${string}.${string}`, Adapter.Config>;
@@ -403,8 +401,8 @@ export namespace App {
         password: "123456",
         timeout: 30,
         general: {
-            V11: V11.defaultConfig,
-            V12: V12.defaultConfig,
+            V11: {},
+            V12: {},
         },
         log_level: "info",
     };
@@ -428,12 +426,17 @@ export namespace App {
             platform, // 别人写的
         ];
         type AdapterClass = Class<Adapter<T>>;
+        let error: Error;
         let adapter: AdapterClass;
-        try {
-            adapter = require(path.join(__dirname, "../adapters", platform))?.default;
-        } catch (e) {
-            console.error(`loadAdapter(${platform}) failed:${e.message}`);
+        for(const name of maybeNames){
+            try {
+                adapter = require(name)?.default;
+                if(adapter) break;
+            } catch (e) {
+                error = e;
+            }
         }
+        if (!adapter) throw error;
         return adapter;
     }
 }

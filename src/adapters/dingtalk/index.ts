@@ -1,253 +1,52 @@
+import { Account } from "@/account";
 import { Adapter } from "@/adapter";
 import { App } from "@/server/app";
-import { OneBot, OneBotStatus } from "@/onebot";
-import { Bot, Sendable, MessageElem } from "node-dd-bot";
+import { Dict } from "@zhinjs/shared";
+import { Bot} from "node-dd-bot";
 import * as path from "path";
 
-export default class DingtalkAdapter extends Adapter<"dingtalk", Sendable> {
+export default class DingtalkAdapter extends Adapter<Bot,"dingtalk"> {
     constructor(app: App, config: DingtalkAdapter.Config) {
         super(app, "dingtalk", config);
         this.icon = `https://img.alicdn.com/imgextra/i4/O1CN01RtfAks1Xa6qJFAekm_!!6000000002939-2-tps-128-128.png`;
     }
-    #disposes: Map<string, Function> = new Map<string, Function>();
-    async startOneBot(oneBot: OneBot<Bot>) {
-        await this.setOnline(oneBot.uin);
-        const selfInfo = this.getBaseInfo(oneBot.uin);
-        oneBot.avatar = selfInfo.avatar;
-        oneBot.nickname = selfInfo.username;
-        const pkg = require(
-            path.resolve(path.dirname(require.resolve("node-dd-bot")), "../package.json"),
-        );
-        oneBot.dependency = `node-dd-bot v${pkg.version}`;
-        const disposeArr: Function[] = [];
-        const clean = () => {
-            while (disposeArr.length > 0) {
-                disposeArr.pop()();
-            }
-            oneBot.internal.stop();
-        };
-        const messageHandler = event => {
-            this.emit("message.receive", oneBot.uin, event);
-        };
-        oneBot.internal.on("message", messageHandler);
-        disposeArr.push(() => {
-            oneBot.internal!.off("message", messageHandler);
-        });
-        return clean;
+    async sendPrivateMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+        const result=await this.accounts.get(uin).client.sendPrivateMsg(String(params.user_id), params.message);
+        return {message_id:result};
     }
-    getBaseInfo(uin: string): { username: string; avatar: string } {
-        const config = this.app.config[`${this.platform}.${uin}`].protocol;
-        return {
-            avatar: config.avatar || this.icon,
-            username: config.username || "钉钉机器人",
-        };
+    async sendGroupMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+        const result=await this.accounts.get(uin).client.sendGroupMsg(String(params.group_id), params.message);
+        return {message_id:result};
     }
-    async setOnline(uin: string) {
-        const oneBot = this.getOneBot<Bot>(uin);
-        await oneBot?.internal.start();
-        oneBot.status = OneBotStatus.Online;
+    deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
+        throw new Error("Method not implemented.");
     }
-    async setOffline(uin: string) {
-        const oneBot = this.getOneBot<Bot>(uin);
-        await oneBot?.internal.stop();
-        oneBot.status = OneBotStatus.OffLine;
+    getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
+        throw new Error("Method not implemented.");
     }
-    createOneBot(uin: string, protocol: Bot.Options, versions: OneBot.Config[]): OneBot {
-        const oneBot = super.createOneBot<Bot>(uin, protocol, versions);
-        oneBot.internal = new Bot({
-            clientId: oneBot.uin,
-            log_level: this.app.config.log_level,
-            ...protocol,
-        });
-        oneBot.status = OneBotStatus.Online;
-        return oneBot;
+    getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
+        throw new Error("Method not implemented.");
     }
-    call(uin: string, version: string, method: string, args?: any[]): Promise<any> {
-        const oneBot = this.oneBots.get(uin);
-        if (!oneBot) {
-            throw new Error(`未找到账号${uin}`);
-        }
-        if (typeof this[method] === "function") return this[method](uin, version, args);
-        if (typeof oneBot.internal[method] !== "function") throw OneBot.UnsupportedMethodError;
-        try {
-            return oneBot.internal[method](...(args || []));
-        } catch (e) {
-            throw new Error(`call internal method error:${e.message}`);
-        }
+    getFriendList(uin: string): Promise<Adapter.FriendInfo[]> {
+        throw new Error("Method not implemented.");
     }
-    async sendPrivateMessage<V extends OneBot.Version>(
-        uin: string,
-        version: V,
-        args: [string, Sendable, string],
-    ): Promise<OneBot.MessageRet<V>> {
-        const [user_id, message] = args;
-        const bot = this.getOneBot<Bot>(uin);
-        const result = await bot.internal.sendPrivateMsg(user_id, message);
-        return {
-            message_id:
-                version === "V11"
-                    ? bot.V11.transformToInt("message_id", `private:${user_id}:${result}`)
-                    : `private:${user_id}:${result}`,
-        } as OneBot.MessageRet<V>;
+    getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+        throw new Error("Method not implemented.");
     }
-    async sendGroupMessage<V extends OneBot.Version>(
-        uin: string,
-        version: V,
-        args: [string, Sendable, string],
-    ): Promise<OneBot.MessageRet<V>> {
-        const [group_id, message] = args;
-        const bot = this.getOneBot<Bot>(uin);
-        const result = await bot.internal.sendGroupMsg(group_id, message);
-        return {
-            message_id:
-                version === "V11"
-                    ? bot.V11.transformToInt("message_id", `group:${group_id}:${result}`)
-                    : `group:${group_id}:${result}`,
-        } as OneBot.MessageRet<V>;
+    getGroupList(uin: string): Promise<Adapter.GroupInfo[]> {
+        throw new Error("Method not implemented.");
     }
-
-    deleteMessage(uin: string, message_id: string) {
-        const [from_type, from_id, ...msg_idArr] = message_id.split(":");
-        const bot = this.getOneBot<Bot>(uin).internal;
-        switch (from_type) {
-            case "private":
-                return bot.recallPrivateMsg(from_id, msg_idArr.join(":"));
-            case "group":
-                return bot.recallGroupMsg(from_id, msg_idArr.join(":"));
-            case "direct":
-                throw new Error(`暂不支持撤回${from_type}类型的消息`);
-            case "guild":
-                throw new Error(`暂不支持撤回${from_type}类型的消息`);
-        }
+    getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
+        throw new Error("Method not implemented.");
     }
-
-    fromSegment<V extends OneBot.Version>(
-        onebot: OneBot<Bot>,
-        version: V,
-        segment: OneBot.Segment<V> | OneBot.Segment<V>[],
-    ): Sendable {
-        return []
-            .concat(segment)
-            .map(segment => {
-                if (version === "V12" && ["image", "video", "audio"].includes(segment.type))
-                    return onebot.V12.transformMedia(segment);
-                return segment;
-            })
-            .map(item => {
-                if (typeof item === "string") return item;
-                const { type, data } = item;
-                return {
-                    type,
-                    ...data,
-                };
-            });
+    getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+        throw new Error("Method not implemented.");
     }
-    toSegment<V extends OneBot.Version>(version: V, message: Sendable): OneBot.Segment<V>[] {
-        return [].concat(message).map(item => {
-            if (typeof item !== "object")
-                return {
-                    type: "text",
-                    data: {
-                        text: item + "",
-                    },
-                };
-            const { type, ...data } = item;
-            return {
-                type,
-                data,
-            };
-        });
+    getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
+        throw new Error("Method not implemented.");
     }
-
-    fromCqcode<V extends OneBot.Version>(version: V, message: string) {
-        const regExpMatchArray = message.match(/\[CQ:([a-z]+),(!])+]/g);
-        if (!regExpMatchArray)
-            return [
-                {
-                    type: "text",
-                    data: {
-                        text: message,
-                    },
-                },
-            ];
-        const result: OneBot.Segment<V>[] = [];
-        for (const match of regExpMatchArray) {
-            const [type, ...valueArr] = match.substring(1, match.length - 1).split(",");
-            result.push({
-                type: type,
-                data: Object.fromEntries(
-                    valueArr.map(item => {
-                        const [key, value] = item.split("=");
-                        return [key, value];
-                    }),
-                ),
-            });
-        }
-        return result;
-    }
-    formatEventPayload<V extends OneBot.Version>(
-        uin: string,
-        version: V,
-        event: string,
-        data: any,
-    ): OneBot.Payload<V> {
-        const oneBot = this.getOneBot<Bot>(uin);
-        const result = {
-            id: data.id || Math.random().toString(36).slice(2),
-            [version === "V12" ? "type" : "post_type"]: event,
-            version: version,
-            self: {
-                platform: "dingtalk",
-                user_id: data.self_id,
-            },
-            detail_type: data.message_type || data.notice_type || data.request_type,
-            platform: "dingtalk",
-            time: data.timestamp,
-            ...data,
-            sender: {
-                ...(data?.sender || {}),
-            },
-            user_id: data.user_id || data.sender?.user_id,
-            message_id: `${data.message_type}:${data.group_id || data.user_id}:${data.message_id}`,
-        };
-        delete result.bot;
-        if (event === "message") {
-            result.alt_message = result.raw_message || "";
-        }
-        if (version === "V11") {
-            oneBot.V11.transformStrToIntForObj(result, ["user_id", "group_id", "message_id"]);
-        }
-        return result;
-    }
-    async start(uin: string) {
-        const startOneBots = [...this.oneBots.values()].filter(oneBot => {
-            return uin ? oneBot.uin === uin : true;
-        });
-        for (const oneBot of startOneBots) {
-            this.#disposes.set(oneBot.uin, await this.startOneBot(oneBot));
-        }
-        const { protocol } = this.config;
-
-        await super.start();
-    }
-    async stop(uin?: string) {
-        const stopOneBots = [...this.oneBots.values()].filter(oneBot => {
-            return uin ? oneBot.uin === uin : true;
-        });
-        for (const oneBot of stopOneBots) {
-            const dispose = this.#disposes.get(oneBot.uin);
-            if (dispose) {
-                dispose();
-            }
-        }
-        await super.stop();
-    }
-    getSelfInfo<V extends OneBot.Version>(uin: string, version: V): OneBot.SelfInfo<V> {
-        const oneBot = this.oneBots.get(uin);
-        return {
-            nickname: oneBot?.internal?.nickname,
-            status: OneBotStatus.Online,
-        } as OneBot.SelfInfo<V>;
+    createAccount(uin: string, protocol: Dict, versions: Account.Config[]): Account<this> {
+        throw new Error("Method not implemented.");
     }
 }
 declare module "@/adapter" {
