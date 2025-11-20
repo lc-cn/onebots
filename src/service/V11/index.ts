@@ -169,20 +169,14 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     }
 
     private startHttp() {
-        // Register both legacy path and new protocol-based path
+        // Register protocol-based path only
         this.oneBot.app.router.all(
             new RegExp(`^${this.path}/(.*)$`),
             this._httpRequestHandler.bind(this),
         );
-        this.oneBot.app.router.all(
-            new RegExp(`^${this.protocolPath}/(.*)$`),
-            this._httpRequestHandler.bind(this),
-        );
         this.logger.mark(
-            `开启http服务器成功，监听:`,
+            `开启http服务器成功，监听: http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
         );
-        this.logger.mark(`  旧格式: http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`);
-        this.logger.mark(`  新格式: http://127.0.0.1:${this.oneBot.app.config.port}${this.protocolPath}`);
     }
 
     private startHttpReverse(config: Config.HttpReverseConfig) {
@@ -241,47 +235,36 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
 
     private startWs() {
         this.wss = this.oneBot.app.router.ws(this.path);
-        // Note: We register the new protocol path as an alias to maintain backward compatibility
-        // Both paths will route to the same WebSocket server
-        const protocolWss = this.oneBot.app.router.ws(this.protocolPath);
         
         this.logger.mark(
-            `开启ws服务器成功，监听:`,
+            `开启ws服务器成功，监听: ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
         );
-        this.logger.mark(`  旧格式: ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`);
-        this.logger.mark(`  新格式: ws://127.0.0.1:${this.oneBot.app.config.port}${this.protocolPath}`);
         
-        // Setup handlers for both WebSocket servers
-        const setupHandlers = (wss: WebSocketServer) => {
-            wss.on("error", err => {
-                this.logger.error(err.message);
+        this.wss.on("error", err => {
+            this.logger.error(err.message);
+        });
+        this.wss.on("connection", (ws, req) => {
+            this.logger.info(`ws客户端(${req.url})已连接`);
+            ws.on("error", err => {
+                this.logger.error(`ws客户端(${req.url})报错：${err.message}`);
             });
-            wss.on("connection", (ws, req) => {
-                this.logger.info(`ws客户端(${req.url})已连接`);
-                ws.on("error", err => {
-                    this.logger.error(`ws客户端(${req.url})报错：${err.message}`);
-                });
-                ws.on("close", (code, reason) => {
-                    this.logger.warn(
-                        `ws客户端(${req.url})连接关闭，关闭码${code}，关闭理由：` + reason,
-                    );
-                });
-                if (this.config.access_token) {
-                    const url = new URL(req.url, "http://127.0.0.1");
-                    const token = url.searchParams.get("access_token");
-                    if (token) req.headers["authorization"] = `Bearer ${token}`;
-                    if (
-                        !req.headers["authorization"] ||
-                        req.headers["authorization"] !== `Bearer ${this.config.access_token}`
-                    )
-                        return ws.close(1002, "wrong access token");
-                }
-                this._webSocketHandler(ws);
+            ws.on("close", (code, reason) => {
+                this.logger.warn(
+                    `ws客户端(${req.url})连接关闭，关闭码${code}，关闭理由：` + reason,
+                );
             });
-        };
-        
-        setupHandlers(this.wss);
-        setupHandlers(protocolWss);
+            if (this.config.access_token) {
+                const url = new URL(req.url, "http://127.0.0.1");
+                const token = url.searchParams.get("access_token");
+                if (token) req.headers["authorization"] = `Bearer ${token}`;
+                if (
+                    !req.headers["authorization"] ||
+                    req.headers["authorization"] !== `Bearer ${this.config.access_token}`
+                )
+                    return ws.close(1002, "wrong access token");
+            }
+            this._webSocketHandler(ws);
+        });
     }
 
     private startWsReverse(url: string) {

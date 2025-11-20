@@ -11,21 +11,9 @@ export class Service<V extends OneBot.Version> extends EventEmitter {
     
     /**
      * Get the URL path for this service
-     * Supports both legacy format and new protocol-based format
-     */
-    protected get path() {
-        // New format: /{platform}/{uin}/{protocol}/{version}
-        // For OneBot: /{platform}/{uin}/onebot/{version}
-        // Legacy format: /{platform}/{uin}/{version}
-        return `/${this.oneBot.platform}/${this.oneBot.uin}/${this.version}`;
-    }
-
-    /**
-     * Get the new protocol-based path
      * Format: /{platform}/{uin}/{protocol}/{version}
      */
-    protected get protocolPath() {
-        // Extract protocol name from version (e.g., "V11" -> "onebot/v11")
+    protected get path() {
         const protocol = this.getProtocolName();
         const version = this.getProtocolVersion();
         return `/${this.oneBot.platform}/${this.oneBot.uin}/${protocol}/${version}`;
