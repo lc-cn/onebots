@@ -11,11 +11,12 @@ import https from "https";
 import { WebSocket, WebSocketServer } from "ws";
 import { toBool, toHump, toLine, transformObj, uuid } from "@/utils";
 import { SqliteDB } from "@/db";
-import { Service } from "@/service";
 import { App } from "@/server/app";
 import { Dict } from "@zhinjs/shared";
+import { OneBotFilters } from "../filters";
+import { EventEmitter } from "events";
 
-export class V12 extends Service<"V12"> implements OneBot.Base {
+export class V12 extends EventEmitter implements OneBot.Base {
     public version: OneBot.Version = "V12";
     public action: Action;
     protected timestamp = Date.now();
@@ -25,15 +26,21 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
     wss?: WebSocketServer;
     wsr: Set<WebSocket> = new Set<WebSocket>();
     private db: SqliteDB;
+    filterFn: (event: Dict) => boolean;
+
+    protected get path() {
+        return `/${this.oneBot.platform}/${this.oneBot.uin}/onebot/v12`;
+    }
 
     constructor(
         public oneBot: OneBot,
         public config: OneBot.Config<"V12">,
     ) {
-        super(oneBot.adapter, config);
+        super();
         this.db = new SqliteDB(join(App.configDir, "data", `${this.oneBot.uin}_v12`));
         this.action = new Action();
         this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version);
+        this.filterFn = OneBotFilters.createFilterFunction(config.filters || {});
     }
     addHistory(payload: V12.Payload<keyof Action>) {
         return this.db.push("eventBuffer", payload);

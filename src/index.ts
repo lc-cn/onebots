@@ -3,6 +3,5 @@ export * from "./server/router";
 export * from "./onebot";
 export * from "./types";
 export * from "./utils";
-export * from "./adapter-utils";
 export * from "./message-utils";
 export * from "./protocols";

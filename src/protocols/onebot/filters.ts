@@ -1,60 +1,26 @@
-import { EventEmitter } from "events";
-import { OneBot } from "@/onebot";
 import { Dict } from "@zhinjs/shared";
-import { Adapter } from "@/adapter";
-export interface Service<V extends OneBot.Version> {
-    filterFn(event: Dict): boolean;
-}
-export class Service<V extends OneBot.Version> extends EventEmitter {
-    oneBot: OneBot;
-    version: OneBot.Version;
-    
-    /**
-     * Get the URL path for this service
-     * Format: /{platform}/{uin}/{protocol}/{version}
-     */
-    protected get path() {
-        const protocol = this.getProtocolName();
-        const version = this.getProtocolVersion();
-        return `/${this.oneBot.platform}/${this.oneBot.uin}/${protocol}/${version}`;
-    }
 
-    /**
-     * Get protocol name based on version
-     * Override this in subclasses for other protocols
-     */
-    protected getProtocolName(): string {
-        return "onebot"; // Default to OneBot
-    }
-
-    /**
-     * Get protocol version
-     * Override this in subclasses for version-specific logic
-     */
-    protected getProtocolVersion(): string {
-        return this.version.toLowerCase(); // V11 -> v11, V12 -> v12
-    }
-
-    constructor(
-        public adapter: Adapter,
-        public config: OneBot.Config,
-    ) {
-        super();
-        this.filterFn = Service.createFilterFunction(config.filters || {});
-    }
-}
-export namespace Service {
+/**
+ * OneBot filter utilities
+ * Used by both V11 and V12 to filter events
+ */
+export namespace OneBotFilters {
     type MaybeArray<T = any> = T | T[];
+    
     type AttrFilter = {
         [P in keyof Dict]?: MaybeArray | boolean;
     };
+    
     export type Filters = AttrFilter | WithFilter | UnionFilter | ExcludeFilter;
+    
     export type WithFilter = {
         $and: Filters;
     };
+    
     export type UnionFilter = {
         $or: Filters;
     };
+    
     export type ExcludeFilter = {
         $not: Filters;
     };
@@ -75,8 +41,9 @@ export namespace Service {
                 "$between",
             ].includes(key);
         };
+        
         const filterFn = (event: Dict, key: string, value: any) => {
-            // 如果 key 为 $and、$or、$not、$nor 则递归调用
+            // If key is $and, $or, $not, $nor, recursively call
             if (key === "$and" || key === "$or" || key === "$not" || key === "$nor") {
                 if (!value || typeof value !== "object") throw new Error("invalid filter");
                 switch (key) {
@@ -98,9 +65,11 @@ export namespace Service {
                         return !filterFn(event, "$and", value);
                 }
             }
+            
             if (typeof value === "boolean" && typeof event[key] !== "boolean") {
                 return value;
             }
+            
             if (typeof value !== "object") {
                 if (key === "$regex" && typeof value === "string")
                     return new RegExp(value).test(String(event));
@@ -112,6 +81,7 @@ export namespace Service {
                 if (key === "$lte" && typeof value === "number") return Number(event) <= value;
                 return value === event[key];
             }
+            
             if (
                 key === "$between" &&
                 Array.isArray(value) &&
@@ -121,11 +91,14 @@ export namespace Service {
                 const [start, end] = value as [number, number];
                 return Number(event) >= start && Number(event) <= end;
             }
+            
             if (Array.isArray(value)) {
                 return value.includes(event[key]);
             }
+            
             return createFilterFunction(value)(isLogicKey(key) ? event : event[key]);
         };
+        
         return (event: Dict) => {
             return Object.entries(filters).every(([key, value]) => filterFn(event, key, value));
         };

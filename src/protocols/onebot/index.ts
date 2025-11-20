@@ -17,3 +17,5 @@ ProtocolRegistry.register("onebot", "v12", OneBotV12Protocol, {
 
 export * from "./v11";
 export * from "./v12";
+export * from "./utils";
+export * from "./filters";

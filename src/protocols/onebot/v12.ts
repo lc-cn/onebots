@@ -1,12 +1,12 @@
 import { Protocol } from "../base";
-import { V12 as OneBotV12 } from "@/service/V12";
+import { V12 as OneBotV12 } from "./v12-impl";
 import { OneBot } from "@/onebot";
 import { Adapter } from "@/adapter";
 import { Dict } from "@zhinjs/shared";
 
 /**
  * OneBot V12 Protocol Implementation
- * Wraps the existing V12 service to conform to the new Protocol interface
+ * Wraps the V12 implementation to conform to the Protocol interface
  */
 export class OneBotV12Protocol extends Protocol<"v12", OneBot.Config<"V12">> {
     public readonly name = "onebot";
@@ -15,7 +15,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBot.Config<"V12">> {
 
     constructor(adapter: Adapter, oneBot: OneBot, config: OneBot.Config<"V12">) {
         super(adapter, oneBot, config);
-        // Reuse existing V12 service implementation
+        // Use V12 implementation
         this.service = new OneBotV12(oneBot, config);
     }
 
@@ -43,7 +43,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBot.Config<"V12">> {
         return this.service.apply(action, params);
     }
 
-    // Expose service for backward compatibility
+    // Expose service for access to implementation details
     get instance(): OneBotV12 {
         return this.service;
     }
