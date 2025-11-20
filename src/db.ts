@@ -1,109 +1,230 @@
+import { DatabaseSync } from "node:sqlite";
 import * as fs from "fs";
 import * as path from "path";
-import { parseObjFromStr, stringifyObj } from "@/utils";
 import { Dict } from "@zhinjs/shared";
-export class JsonDB {
-    private data: Dict = {};
+
+/**
+ * SQLite-based database implementation to replace JsonDB
+ * Uses Node.js built-in SQLite support (node:sqlite)
+ */
+export class SqliteDB {
+    private db: DatabaseSync;
+
     constructor(private readonly filePath: string) {
         const dir = path.dirname(this.filePath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        if (!this.filePath.endsWith(".jsondb")) this.filePath = this.filePath + ".jsondb";
-        if (!fs.existsSync(this.filePath)) this.write();
+        
+        // Ensure file has .db extension
+        if (!this.filePath.endsWith(".db")) this.filePath = this.filePath + ".db";
+        
+        // Open or create database
+        this.db = new DatabaseSync(this.filePath);
         this.init();
     }
+
     private init() {
-        this.read();
+        // Create key-value store table
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS kv_store (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                type TEXT NOT NULL
+            )
+        `);
+
+        // Create index for faster lookups
+        this.db.exec(`
+            CREATE INDEX IF NOT EXISTS idx_key ON kv_store(key)
+        `);
     }
-    private write() {
-        fs.writeFileSync(this.filePath, stringifyObj(this.data), "utf8");
+
+    /**
+     * Get value by route/key
+     */
+    get<T>(route: string, initialValue?: T): T | undefined {
+        const stmt = this.db.prepare("SELECT value, type FROM kv_store WHERE key = ?");
+        const row = stmt.get(route) as { value: string; type: string } | undefined;
+
+        if (row) {
+            return this.deserialize(row.value, row.type) as T;
+        }
+
+        if (initialValue !== undefined) {
+            this.set(route, initialValue);
+        }
+
+        return initialValue;
     }
-    private read() {
-        this.data = parseObjFromStr(fs.readFileSync(this.filePath, "utf8"));
+
+    /**
+     * Set value by route/key
+     */
+    set<T>(route: string, data: T): T {
+        const { value, type } = this.serialize(data);
+        
+        const stmt = this.db.prepare(`
+            INSERT OR REPLACE INTO kv_store (key, value, type)
+            VALUES (?, ?, ?)
+        `);
+        
+        stmt.run(route, value, type);
+        return data;
     }
-    findIndex<T>(route: string, predicate: (value: T, index: number, obj: T[]) => unknown) {
+
+    /**
+     * Delete value by route/key
+     */
+    delete(route: string): boolean {
+        const stmt = this.db.prepare("DELETE FROM kv_store WHERE key = ?");
+        const result = stmt.run(route);
+        return result.changes > 0;
+    }
+
+    /**
+     * Get array from storage
+     */
+    private getArray<T>(route: string): T[] {
+        const arr = this.get<T[]>(route, []);
+        if (!Array.isArray(arr)) {
+            throw new TypeError(`data ${route} is not an Array`);
+        }
+        return arr;
+    }
+
+    /**
+     * Find index in array
+     */
+    findIndex<T>(route: string, predicate: (value: T, index: number, obj: T[]) => unknown): number {
         const arr = this.getArray<T>(route);
         return arr.findIndex(predicate);
     }
-    indexOf<T>(route: string, item: T) {
+
+    /**
+     * Get index of item in array
+     */
+    indexOf<T>(route: string, item: T): number {
         return this.findIndex<T>(route, value => value === item);
     }
-    get<T>(route: string, initialValue?: T): T | undefined {
-        this.read();
-        const parentPath = route.split(".");
-        const key = parentPath.pop();
-        if (!key) return this.data as T;
-        let temp: Dict = this.data;
-        while (parentPath.length) {
-            const currentKey = parentPath.shift();
-            if (!Reflect.has(temp, currentKey)) Reflect.set(temp, currentKey, {});
-            temp = Reflect.get(temp, currentKey);
-        }
-        if (temp[key] !== undefined) return temp[key];
-        temp[key] = initialValue;
-        this.write();
-        return initialValue;
-    }
-    set<T>(route: string, data: T): T {
-        const parentPath = route.split(".").filter(c => c.length);
-        const key = parentPath.pop();
-        if (!key) throw new SyntaxError(`route can't empty`);
-        const parentObj = this.get<Dict>(parentPath.join("."), {});
-        if (!parentObj) throw new SyntaxError(`can't set property ${key} of undefined`);
-        parentObj[key] = data;
-        this.write();
-        return data;
-    }
-    delete(route: string): boolean {
-        const parentPath = route.split(".");
-        const key = parentPath.pop();
-        if (!key) throw new SyntaxError(`route can't empty`);
-        const parentObj = this.get<Dict>(parentPath.join("."), {});
-        if (!parentObj) throw new SyntaxError(`property ${key} is not exist of undefined`);
-        const result = delete parentObj[key];
-        this.write();
-        return result;
-    }
-    private getArray<T>(route: string): T[] {
-        if (!route) throw new Error(`route can't empty`);
-        const arr = this.get<Dict>(route, []);
-        if (!arr) throw new SyntaxError(`route ${route} is not define`);
-        if (!Array.isArray(arr)) throw new TypeError(`data ${route} is not an Array`);
-        return arr;
-    }
+
+    /**
+     * Add items to beginning of array
+     */
     unshift<T>(route: string, ...data: T[]): number {
         const arr = this.getArray<T>(route);
         const result = arr.unshift(...data);
-        this.write();
+        this.set(route, arr);
         return result;
     }
-    shift<T>(route: string) {
+
+    /**
+     * Remove and return first item from array
+     */
+    shift<T>(route: string): T | undefined {
         const arr = this.getArray<T>(route);
         const result = arr.shift();
-        this.write();
+        this.set(route, arr);
         return result;
     }
+
+    /**
+     * Add items to end of array
+     */
     push<T>(route: string, ...data: T[]): number {
         const arr = this.getArray<T>(route);
         const result = arr.push(...data);
-        this.write();
+        this.set(route, arr);
         return result;
     }
-    pop<T>(route: string) {
+
+    /**
+     * Remove and return last item from array
+     */
+    pop<T>(route: string): T | undefined {
         const arr = this.getArray<T>(route);
         const result = arr.pop();
-        this.write();
+        this.set(route, arr);
         return result;
     }
+
+    /**
+     * Splice array
+     */
     splice<T>(route: string, index: number = 0, deleteCount: number = 0, ...data: T[]): T[] {
         const arr = this.getArray<T>(route);
         const result = arr.splice(index, deleteCount, ...data);
-        this.write();
+        this.set(route, arr);
         return result;
     }
+
+    /**
+     * Find item in array
+     */
     find<T>(route: string, callback: (item: T) => boolean): T | undefined {
         return this.getArray<T>(route).find(callback);
     }
+
+    /**
+     * Filter array
+     */
     filter<T>(route: string, callback: (item: T) => boolean): T[] {
         return this.getArray<T>(route).filter(callback);
+    }
+
+    /**
+     * Close database connection
+     */
+    close(): void {
+        this.db.close();
+    }
+
+    /**
+     * Serialize data for storage
+     */
+    private serialize(data: any): { value: string; type: string } {
+        let type = typeof data;
+        let value: string;
+
+        if (data === null) {
+            type = "null";
+            value = "";
+        } else if (Array.isArray(data)) {
+            type = "array";
+            value = JSON.stringify(data);
+        } else if (type === "object") {
+            type = "object";
+            value = JSON.stringify(data);
+        } else if (type === "boolean") {
+            value = data ? "1" : "0";
+        } else if (type === "number") {
+            value = data.toString();
+        } else if (type === "bigint") {
+            type = "bigint";
+            value = data.toString();
+        } else {
+            value = String(data);
+        }
+
+        return { value, type };
+    }
+
+    /**
+     * Deserialize data from storage
+     */
+    private deserialize(value: string, type: string): any {
+        switch (type) {
+            case "null":
+                return null;
+            case "array":
+            case "object":
+                return JSON.parse(value);
+            case "boolean":
+                return value === "1";
+            case "number":
+                return Number(value);
+            case "bigint":
+                return BigInt(value);
+            default:
+                return value;
+        }
     }
 }

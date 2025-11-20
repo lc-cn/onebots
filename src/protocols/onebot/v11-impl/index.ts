@@ -13,33 +13,40 @@ import https from "https";
 import { join } from "path";
 import { App } from "@/server/app";
 import { MsgEntry } from "./db_entities";
-import { Service } from "@/service";
 import { Dict } from "@zhinjs/shared";
-import { JsonDB } from "@/db";
+import { SqliteDB } from "@/db";
+import { OneBotFilters } from "../filters";
+import { EventEmitter } from "events";
 
 const sendMsgTypes = ["private", "group", "discuss"];
 
-export class V11 extends Service<"V11"> implements OneBot.Base {
+export class V11 extends EventEmitter implements OneBot.Base {
     public action: Action;
     public version: OneBot.Version = "V11";
     protected timestamp = Date.now();
     protected heartbeat?: NodeJS.Timeout;
-    db: JsonDB;
+    db: SqliteDB;
     disposes: Dispose[];
     protected _queue: Array<{ method: keyof Action; args: any[] }> = [];
     protected queue_running: boolean = false;
     logger: Logger;
     wss?: WebSocketServer;
     wsr: Set<WebSocket> = new Set<WebSocket>();
+    filterFn: (event: Dict) => boolean;
+
+    protected get path() {
+        return `/${this.oneBot.platform}/${this.oneBot.uin}/onebot/v11`;
+    }
 
     constructor(
         public oneBot: OneBot,
         public config: OneBot.Config<"V11">,
     ) {
-        super(oneBot.adapter, config);
+        super();
         this.action = new Action();
         this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version);
-        this.db = new JsonDB(join(App.configDir, "data", `${this.oneBot.uin}_v11.jsondb`));
+        this.db = new SqliteDB(join(App.configDir, "data", `${this.oneBot.uin}_v11`));
+        this.filterFn = OneBotFilters.createFilterFunction(config.filters || {});
         this.oneBot.on("online", async () => {
             this.logger.info("【好友列表】");
             const friendList = await this.oneBot.getFriendList("V11");
@@ -169,12 +176,13 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     }
 
     private startHttp() {
+        // Register protocol-based path only
         this.oneBot.app.router.all(
             new RegExp(`^${this.path}/(.*)$`),
             this._httpRequestHandler.bind(this),
         );
         this.logger.mark(
-            `开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
+            `开启http服务器成功，监听: http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
         );
     }
 
@@ -234,9 +242,11 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
 
     private startWs() {
         this.wss = this.oneBot.app.router.ws(this.path);
+        
         this.logger.mark(
-            `开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
+            `开启ws服务器成功，监听: ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
         );
+        
         this.wss.on("error", err => {
             this.logger.error(err.message);
         });

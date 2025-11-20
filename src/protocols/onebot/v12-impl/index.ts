@@ -10,12 +10,13 @@ import http from "http";
 import https from "https";
 import { WebSocket, WebSocketServer } from "ws";
 import { toBool, toHump, toLine, transformObj, uuid } from "@/utils";
-import { JsonDB } from "@/db";
-import { Service } from "@/service";
+import { SqliteDB } from "@/db";
 import { App } from "@/server/app";
 import { Dict } from "@zhinjs/shared";
+import { OneBotFilters } from "../filters";
+import { EventEmitter } from "events";
 
-export class V12 extends Service<"V12"> implements OneBot.Base {
+export class V12 extends EventEmitter implements OneBot.Base {
     public version: OneBot.Version = "V12";
     public action: Action;
     protected timestamp = Date.now();
@@ -24,16 +25,22 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
     app: App;
     wss?: WebSocketServer;
     wsr: Set<WebSocket> = new Set<WebSocket>();
-    private db: JsonDB;
+    private db: SqliteDB;
+    filterFn: (event: Dict) => boolean;
+
+    protected get path() {
+        return `/${this.oneBot.platform}/${this.oneBot.uin}/onebot/v12`;
+    }
 
     constructor(
         public oneBot: OneBot,
         public config: OneBot.Config<"V12">,
     ) {
-        super(oneBot.adapter, config);
-        this.db = new JsonDB(join(App.configDir, "data", `${this.oneBot.uin}_v12.jsondb`));
+        super();
+        this.db = new SqliteDB(join(App.configDir, "data", `${this.oneBot.uin}_v12`));
         this.action = new Action();
         this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version);
+        this.filterFn = OneBotFilters.createFilterFunction(config.filters || {});
     }
     addHistory(payload: V12.Payload<keyof Action>) {
         return this.db.push("eventBuffer", payload);
@@ -179,12 +186,13 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
     }
 
     private startHttp(config: V12.HttpConfig) {
+        // Register protocol-based path only
         this.oneBot.app.router.all(this.path, ctx => this.httpRequestHandler(ctx, config));
         this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), ctx =>
             this._httpRequestHandler(ctx, config),
         );
         this.logger.mark(
-            `开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
+            `开启http服务器成功，监听: http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
         );
         this.on("dispatch", (payload: V12.Payload<keyof Action>) => {
             if (!["message", "notice", "request", "meta"].includes(payload.type)) return;
@@ -325,9 +333,11 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
 
     private startWs(config: V12.WsConfig) {
         this.wss = this.oneBot.app.router.ws(this.path);
+        
         this.logger.mark(
-            `开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
+            `开启ws服务器成功，监听: ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
         );
+        
         this.wss.on("error", err => {
             this.logger.error(err.message);
         });

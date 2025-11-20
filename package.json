@@ -1,7 +1,7 @@
 {
   "name": "onebots",
   "version": "0.4.96",
-  "description": "基于icqq的多例oneBot实现",
+  "description": "多平台多协议的机器人应用启动器",
   "main": "lib/index.js",
   "bin": {
     "onebots": "./lib/bin.js"
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node .",
     "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq -r dingtalk -r wechat",
+    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r dingtalk -r wechat",
     "pub": "npm publish --access public",
     "lint": "prettier --check ./**/*.{ts,js}",
     "lint:fix": "prettier --write ./**/*.{ts,js,md}",
@@ -31,11 +31,11 @@
   },
   "keywords": [
     "onebot",
-    "icqq",
     "qq",
     "wechat",
     "dingtalk",
-    "cq-http"
+    "cq-http",
+    "multi-protocol"
   ],
   "author": "凉菜",
   "license": "MIT",
@@ -52,7 +52,6 @@
     "@types/node": "latest",
     "@types/ws": "^8.5.3",
     "@vitejs/plugin-vue": "^5.0.0",
-    "@icqqjs/icqq": "latest",
     "node-dd-bot": "latest",
     "qq-official-bot": "latest",
     "web-wechat": "latest",
@@ -80,15 +79,11 @@
     "/**/LICENSE"
   ],
   "peerDependencies": {
-    "@icqqjs/icqq": "latest",
     "node-dd-bot": "latest",
     "qq-official-bot": "latest",
     "web-wechat": "latest"
   },
   "peerDependenciesMeta": {
-    "@icqqjs/icqq": {
-      "optional": true
-    },
     "web-wechat": {
       "optional": true
     },
