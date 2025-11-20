@@ -107,14 +107,10 @@ export class OneBot<T = any> extends EventEmitter {
         return this.adapter.getFriendList(this.uin, version);
     }
 
-    async dispatch(event, data) {
+    async dispatch(commonEvent: any) {
+        // Each protocol instance formats the common event to its own standard
         for (const instance of this.instances) {
-            instance.dispatch(
-                instance.format(
-                    event,
-                    this.adapter.formatEventPayload(this.uin, instance.version, event, data),
-                ),
-            );
+            instance.dispatchCommonEvent(commonEvent);
         }
     }
 }
