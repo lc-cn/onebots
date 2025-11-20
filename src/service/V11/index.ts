@@ -15,7 +15,7 @@ import { App } from "@/server/app";
 import { MsgEntry } from "./db_entities";
 import { Service } from "@/service";
 import { Dict } from "@zhinjs/shared";
-import { JsonDB } from "@/db";
+import { SqliteDB } from "@/db";
 
 const sendMsgTypes = ["private", "group", "discuss"];
 
@@ -24,7 +24,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
     public version: OneBot.Version = "V11";
     protected timestamp = Date.now();
     protected heartbeat?: NodeJS.Timeout;
-    db: JsonDB;
+    db: SqliteDB;
     disposes: Dispose[];
     protected _queue: Array<{ method: keyof Action; args: any[] }> = [];
     protected queue_running: boolean = false;
@@ -39,7 +39,7 @@ export class V11 extends Service<"V11"> implements OneBot.Base {
         super(oneBot.adapter, config);
         this.action = new Action();
         this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version);
-        this.db = new JsonDB(join(App.configDir, "data", `${this.oneBot.uin}_v11.jsondb`));
+        this.db = new SqliteDB(join(App.configDir, "data", `${this.oneBot.uin}_v11`));
         this.oneBot.on("online", async () => {
             this.logger.info("【好友列表】");
             const friendList = await this.oneBot.getFriendList("V11");

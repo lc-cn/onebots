@@ -2,6 +2,10 @@ import * as fs from "fs";
 import * as path from "path";
 import { parseObjFromStr, stringifyObj } from "@/utils";
 import { Dict } from "@zhinjs/shared";
+
+/**
+ * @deprecated Use SqliteDB instead. JsonDB is kept for backward compatibility.
+ */
 export class JsonDB {
     private data: Dict = {};
     constructor(private readonly filePath: string) {
@@ -107,3 +111,6 @@ export class JsonDB {
         return this.getArray<T>(route).filter(callback);
     }
 }
+
+// Export SqliteDB as the new default
+export { SqliteDB } from "./sqlite-db";

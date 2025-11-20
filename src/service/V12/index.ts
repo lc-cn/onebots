@@ -10,7 +10,7 @@ import http from "http";
 import https from "https";
 import { WebSocket, WebSocketServer } from "ws";
 import { toBool, toHump, toLine, transformObj, uuid } from "@/utils";
-import { JsonDB } from "@/db";
+import { SqliteDB } from "@/db";
 import { Service } from "@/service";
 import { App } from "@/server/app";
 import { Dict } from "@zhinjs/shared";
@@ -24,14 +24,14 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
     app: App;
     wss?: WebSocketServer;
     wsr: Set<WebSocket> = new Set<WebSocket>();
-    private db: JsonDB;
+    private db: SqliteDB;
 
     constructor(
         public oneBot: OneBot,
         public config: OneBot.Config<"V12">,
     ) {
         super(oneBot.adapter, config);
-        this.db = new JsonDB(join(App.configDir, "data", `${this.oneBot.uin}_v12.jsondb`));
+        this.db = new SqliteDB(join(App.configDir, "data", `${this.oneBot.uin}_v12`));
         this.action = new Action();
         this.logger = this.oneBot.adapter.getLogger(this.oneBot.uin, this.version);
     }
