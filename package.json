@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.4.96",
+  "version": "0.4.97",
   "description": "多平台多协议的机器人应用启动器",
   "main": "lib/index.js",
   "bin": {
