@@ -8,9 +8,45 @@ export interface Service<V extends OneBot.Version> {
 export class Service<V extends OneBot.Version> extends EventEmitter {
     oneBot: OneBot;
     version: OneBot.Version;
+    
+    /**
+     * Get the URL path for this service
+     * Supports both legacy format and new protocol-based format
+     */
     protected get path() {
+        // New format: /{platform}/{uin}/{protocol}/{version}
+        // For OneBot: /{platform}/{uin}/onebot/{version}
+        // Legacy format: /{platform}/{uin}/{version}
         return `/${this.oneBot.platform}/${this.oneBot.uin}/${this.version}`;
     }
+
+    /**
+     * Get the new protocol-based path
+     * Format: /{platform}/{uin}/{protocol}/{version}
+     */
+    protected get protocolPath() {
+        // Extract protocol name from version (e.g., "V11" -> "onebot/v11")
+        const protocol = this.getProtocolName();
+        const version = this.getProtocolVersion();
+        return `/${this.oneBot.platform}/${this.oneBot.uin}/${protocol}/${version}`;
+    }
+
+    /**
+     * Get protocol name based on version
+     * Override this in subclasses for other protocols
+     */
+    protected getProtocolName(): string {
+        return "onebot"; // Default to OneBot
+    }
+
+    /**
+     * Get protocol version
+     * Override this in subclasses for version-specific logic
+     */
+    protected getProtocolVersion(): string {
+        return this.version.toLowerCase(); // V11 -> v11, V12 -> v12
+    }
+
     constructor(
         public adapter: Adapter,
         public config: OneBot.Config,

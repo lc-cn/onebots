@@ -179,13 +179,20 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
     }
 
     private startHttp(config: V12.HttpConfig) {
+        // Register both legacy path and new protocol-based path
         this.oneBot.app.router.all(this.path, ctx => this.httpRequestHandler(ctx, config));
         this.oneBot.app.router.all(new RegExp(`^${this.path}/(.*)$`), ctx =>
             this._httpRequestHandler(ctx, config),
         );
-        this.logger.mark(
-            `开启http服务器成功，监听:http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
+        this.oneBot.app.router.all(this.protocolPath, ctx => this.httpRequestHandler(ctx, config));
+        this.oneBot.app.router.all(new RegExp(`^${this.protocolPath}/(.*)$`), ctx =>
+            this._httpRequestHandler(ctx, config),
         );
+        this.logger.mark(
+            `开启http服务器成功，监听:`,
+        );
+        this.logger.mark(`  旧格式: http://127.0.0.1:${this.oneBot.app.config.port}${this.path}`);
+        this.logger.mark(`  新格式: http://127.0.0.1:${this.oneBot.app.config.port}${this.protocolPath}`);
         this.on("dispatch", (payload: V12.Payload<keyof Action>) => {
             if (!["message", "notice", "request", "meta"].includes(payload.type)) return;
             if (config.event_enabled) {
@@ -325,34 +332,45 @@ export class V12 extends Service<"V12"> implements OneBot.Base {
 
     private startWs(config: V12.WsConfig) {
         this.wss = this.oneBot.app.router.ws(this.path);
+        // Also register the new protocol-based path
+        const protocolWss = this.oneBot.app.router.ws(this.protocolPath);
+        
         this.logger.mark(
-            `开启ws服务器成功，监听:ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`,
+            `开启ws服务器成功，监听:`,
         );
-        this.wss.on("error", err => {
-            this.logger.error(err.message);
-        });
-        this.wss.on("connection", (ws, req) => {
-            this.logger.info(`ws客户端(${req.url})已连接`);
-            ws.on("error", err => {
-                this.logger.error(`ws客户端(${req.url})报错：${err.message}`);
+        this.logger.mark(`  旧格式: ws://127.0.0.1:${this.oneBot.app.config.port}${this.path}`);
+        this.logger.mark(`  新格式: ws://127.0.0.1:${this.oneBot.app.config.port}${this.protocolPath}`);
+        
+        const setupHandlers = (wss: WebSocketServer) => {
+            wss.on("error", err => {
+                this.logger.error(err.message);
             });
-            ws.on("close", (code, reason) => {
-                this.logger.warn(
-                    `ws客户端(${req.url})连接关闭，关闭码${code}，关闭理由：` + reason,
-                );
+            wss.on("connection", (ws, req) => {
+                this.logger.info(`ws客户端(${req.url})已连接`);
+                ws.on("error", err => {
+                    this.logger.error(`ws客户端(${req.url})报错：${err.message}`);
+                });
+                ws.on("close", (code, reason) => {
+                    this.logger.warn(
+                        `ws客户端(${req.url})连接关闭，关闭码${code}，关闭理由：` + reason,
+                    );
+                });
+                if (config.access_token) {
+                    const url = new URL(req.url, "http://127.0.0.1");
+                    const token = url.searchParams.get("access_token");
+                    if (token) req.headers["authorization"] = `Bearer ${token}`;
+                    if (
+                        !req.headers["authorization"] ||
+                        req.headers["authorization"] !== `Bearer ${config.access_token}`
+                    )
+                        return ws.close(401, "wrong access token");
+                }
+                this._webSocketHandler(ws);
             });
-            if (config.access_token) {
-                const url = new URL(req.url, "http://127.0.0.1");
-                const token = url.searchParams.get("access_token");
-                if (token) req.headers["authorization"] = `Bearer ${token}`;
-                if (
-                    !req.headers["authorization"] ||
-                    req.headers["authorization"] !== `Bearer ${config.access_token}`
-                )
-                    return ws.close(401, "wrong access token");
-            }
-            this._webSocketHandler(ws);
-        });
+        };
+        
+        setupHandlers(this.wss);
+        setupHandlers(protocolWss);
     }
 
     private startWsReverse(config: V12.WsReverseConfig) {
