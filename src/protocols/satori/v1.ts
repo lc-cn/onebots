@@ -7,6 +7,8 @@ import { Satori } from "./types";
 import { SatoriConfig } from "./config";
 import { EventEmitter } from "events";
 import { Logger } from "log4js";
+import { Context } from "koa";
+import { WebSocket } from "ws";
 
 /**
  * Satori Protocol V1 Implementation
@@ -26,11 +28,6 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     ) {
         super(adapter, account, config);
         this.logger = adapter.getLogger(account.uin, "satori-v1");
-    }
-
-    filterFn(event: Dict): boolean {
-        // Implement Satori-specific event filtering
-        return true;
     }
 
     start(): void {
@@ -303,10 +300,9 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     // Action implementations
     private async createMessage(params: any): Promise<Satori.Message[]> {
-        const result = await this.adapter.sendPrivateMessage(this.account.uin, {
-            message_type: params.message_type || "private",
-            user_id: params.user_id,
-            group_id: params.channel_id,
+        const result = await this.adapter.sendMessage(this.account.uin, {
+            scene_id: params.message_type === "private" ? "private" : "group",
+            scene_type: params.message_type,
             message: this.parseMessageContent(params.content),
         });
         
@@ -414,7 +410,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         return {
             user: {
                 id: String(info.user_id),
-                name: info.nickname,
+                name: info.user_name,
             },
             nick: info.card,
         };
@@ -429,7 +425,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             data: members.map(m => ({
                 user: {
                     id: String(m.user_id),
-                    name: m.nickname,
+                    name: m.user_name,
                 },
                 nick: m.card,
             })),
@@ -453,7 +449,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         
         return {
             id: String(info.user_id),
-            name: info.nickname,
+            name: info.user_name,
         };
     }
 
@@ -471,7 +467,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         return {
             data: friends.map(f => ({
                 id: String(f.user_id),
-                name: f.nickname,
+                name: f.user_name,
             })),
         };
     }
@@ -487,7 +483,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         return {
             user: {
                 id: String(info.user_id),
-                name: info.nickname,
+                name: info.user_name,
             },
             self_id: String(info.user_id),
             platform: this.config.platform || this.account.platform,
@@ -516,42 +512,180 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         });
     }
 
+    /**
+     * Verify access token
+     */
+    private verifyToken(token?: string): boolean {
+        const requiredToken = this.config.token;
+        if (!requiredToken) return true;
+        return token === requiredToken;
+    }
+
     // Service implementations
     private startHttp(): void {
         this.logger.info("Starting Satori HTTP server");
-        const httpConfig = typeof this.config.use_http === "object" 
-            ? this.config.use_http 
-            : {};
         
-        const host = httpConfig.host || "0.0.0.0";
-        const port = httpConfig.port || 5140;
-        
-        this.logger.info(`Satori HTTP server would start at http://${host}:${port}`);
-        // HTTP server implementation requires Koa/Express integration
-        // This is handled by the main application server routing
+        // Register HTTP POST endpoint for API calls
+        this.router.post(`${this.path}/v1/:method`, async (ctx) => {
+            // Verify access token
+            const authHeader = ctx.headers['authorization'];
+            const token = (typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : undefined) || 
+                         (typeof ctx.headers['x-platform'] === 'string' ? ctx.headers['x-platform'].split('/')[1] : undefined);
+            
+            if (!this.verifyToken(token)) {
+                ctx.status = 401;
+                ctx.body = { message: "Unauthorized" };
+                return;
+            }
+
+            const method = ctx.params.method;
+            const params = ctx.request.body;
+
+            try {
+                const result = await this.apply(method, params);
+                ctx.body = result;
+            } catch (error) {
+                this.logger.error(`HTTP API ${method} failed:`, error);
+                ctx.status = 500;
+                ctx.body = {
+                    message: error.message,
+                };
+            }
+        });
+
+        // GET /v1/login for login info
+        this.router.get(`${this.path}/v1/login`, async (ctx) => {
+            // Verify access token
+            const authHeader = ctx.headers['authorization'];
+            const token = typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : undefined;
+            if (!this.verifyToken(token)) {
+                ctx.status = 401;
+                ctx.body = { message: "Unauthorized" };
+                return;
+            }
+
+            try {
+                const login = await this.getLogin();
+                ctx.body = login;
+            } catch (error) {
+                this.logger.error("Get login failed:", error);
+                ctx.status = 500;
+                ctx.body = { message: error.message };
+            }
+        });
+
+        this.logger.info(`Satori HTTP server listening on ${this.path}/v1`);
     }
 
     private startWs(): void {
         this.logger.info("Starting Satori WebSocket server");
-        const wsConfig = typeof this.config.use_ws === "object" 
-            ? this.config.use_ws 
-            : {};
         
-        const host = wsConfig.host || "0.0.0.0";
-        const port = wsConfig.port || 5140;
+        const wss = this.router.ws(`${this.path}/v1/events`);
         
-        this.logger.info(`Satori WebSocket server would start at ws://${host}:${port}`);
-        // WebSocket server implementation requires WS integration
-        // This is handled by the main application server routing
+        wss.on("connection", (ws, request) => {
+            // Verify access token
+            const authHeader = request.headers['authorization'];
+            const token = typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : undefined;
+            
+            if (!this.verifyToken(token)) {
+                ws.close(1008, "Unauthorized");
+                return;
+            }
+
+            this.logger.info(`Satori WebSocket client connected: ${this.path}/v1/events`);
+
+            // Send ready event
+            const readyPayload = {
+                op: 0, // READY
+                body: {
+                    logins: [{
+                        user: {
+                            id: this.account.uin,
+                            name: this.account.uin,
+                        },
+                        self_id: this.account.uin,
+                        platform: this.config.platform || this.account.platform,
+                        status: 1, // ONLINE
+                    }],
+                },
+            };
+            ws.send(JSON.stringify(readyPayload));
+
+            // Listen for dispatch events and send to client
+            const onDispatch = (data: string) => {
+                if (ws.readyState === ws.OPEN) {
+                    const event = JSON.parse(data);
+                    const eventPayload = {
+                        op: 0, // EVENT
+                        body: event,
+                    };
+                    ws.send(JSON.stringify(eventPayload));
+                }
+            };
+            this.on("dispatch", onDispatch);
+
+            // Handle incoming messages (e.g., PING)
+            ws.on("message", async (data) => {
+                try {
+                    const message = JSON.parse(data.toString());
+                    
+                    if (message.op === 1) { // PING
+                        // Respond with PONG
+                        ws.send(JSON.stringify({ op: 2 })); // PONG
+                    }
+                } catch (error) {
+                    this.logger.error("WebSocket message error:", error);
+                }
+            });
+
+            ws.on("close", () => {
+                this.logger.info(`Satori WebSocket client disconnected: ${this.path}/v1/events`);
+                this.off("dispatch", onDispatch);
+            });
+
+            ws.on("error", (error) => {
+                this.logger.error("WebSocket error:", error);
+            });
+        });
+
+        this.logger.info(`Satori WebSocket server listening on ${this.path}/v1/events`);
     }
 
     private startWebhook(config: SatoriConfig.WebhookConfig): void {
         this.logger.info(`Starting Satori webhook: ${config.url}`);
         
-        // Webhook implementation
-        this.on("dispatch", (eventData: string) => {
-            // POST event to the configured URL
-            this.logger.debug(`Would POST event to ${config.url}`);
-        });
+        // Listen for dispatch events and POST to external server
+        const onDispatch = async (data: string) => {
+            try {
+                const headers: any = {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Satori/1.0',
+                    'X-Platform': this.config.platform || this.account.platform,
+                    'X-Self-ID': this.account.uin,
+                };
+
+                // Add access token if configured
+                const token = config.token || this.config.token;
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
+                const response = await fetch(config.url, {
+                    method: 'POST',
+                    headers,
+                    body: data,
+                    signal: AbortSignal.timeout(15000),
+                });
+
+                if (!response.ok) {
+                    this.logger.warn(`Webhook POST failed: ${response.status} ${response.statusText}`);
+                }
+            } catch (error) {
+                this.logger.error(`Webhook POST error:`, error);
+            }
+        };
+
+        this.on("dispatch", onDispatch);
+        this.logger.info(`Satori webhook configured to POST events to ${config.url}`);
     }
 }

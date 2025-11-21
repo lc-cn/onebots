@@ -3,6 +3,8 @@ import { Account } from "@/account";
 import { Adapter } from "@/adapter";
 import { Logger } from "log4js";
 import { Dict } from "@zhinjs/shared";
+import { Router } from "@/server/router";
+import { App } from "@/server/app";
 
 /**
  * Base Protocol class
@@ -15,7 +17,12 @@ export abstract class Protocol<
     public abstract readonly name: string;
     public abstract readonly version: V;
     protected logger: Logger;
-
+    get app(): App {
+        return this.adapter.app;
+    }
+    get router(): Router {
+        return this.adapter.app.router;
+    }
     constructor(
         public adapter: Adapter,
         public account: Account,
@@ -35,7 +42,9 @@ export abstract class Protocol<
     /**
      * Filter function to determine if event should be processed
      */
-    abstract filterFn(event: Dict): boolean;
+    filterFn(event: Dict): boolean{
+        return Protocol.createFilter(this.config.filters)(event);
+    }
 
     /**
      * Start the protocol service
@@ -115,4 +124,83 @@ export namespace Protocol {
         account: Account,
         config: any,
     ) => T;
+
+    export function createFilter(filters: Filters) {
+        const isLogicKey = (key: string) => {
+            return [
+                "$and",
+                "$or",
+                "$not",
+                "$nor",
+                "$regexp",
+                "$like",
+                "$gt",
+                "$gte",
+                "$lt",
+                "$lte",
+                "$between",
+            ].includes(key);
+        };
+        
+        const filterFn = (event: Dict, key: string, value: any) => {
+            // If key is $and, $or, $not, $nor, recursively call
+            if (key === "$and" || key === "$or" || key === "$not" || key === "$nor") {
+                if (!value || typeof value !== "object") throw new Error("invalid filter");
+                switch (key) {
+                    case "$and":
+                        return Array.isArray(value)
+                            ? value.every(item => filterFn(event, key, item))
+                            : Object.entries(value).every(([key, value]) =>
+                                  filterFn(event, key, value),
+                              );
+                    case "$or":
+                        return Array.isArray(value)
+                            ? value.some(item => filterFn(event, key, item))
+                            : Object.entries(value).some(([key, value]) =>
+                                  filterFn(event, key, value),
+                              );
+                    case "$nor":
+                        return !filterFn(event, "$or", value);
+                    case "$not":
+                        return !filterFn(event, "$and", value);
+                }
+            }
+            
+            if (typeof value === "boolean" && typeof event[key] !== "boolean") {
+                return value;
+            }
+            
+            if (typeof value !== "object") {
+                if (key === "$regex" && typeof value === "string")
+                    return new RegExp(value).test(String(event));
+                if (key === "$like" && typeof value === "string")
+                    return String(event).includes(value);
+                if (key === "$gt" && typeof value === "number") return Number(event) > value;
+                if (key === "$gte" && typeof value === "number") return Number(event) >= value;
+                if (key === "$lt" && typeof value === "number") return Number(event) < value;
+                if (key === "$lte" && typeof value === "number") return Number(event) <= value;
+                return value === event[key];
+            }
+            
+            if (
+                key === "$between" &&
+                Array.isArray(value) &&
+                value.length === 2 &&
+                value.every(item => typeof item === "number")
+            ) {
+                const [start, end] = value as [number, number];
+                return Number(event) >= start && Number(event) <= end;
+            }
+            
+            if (Array.isArray(value)) {
+                return value.includes(event[key]);
+            }
+            
+            return createFilter(value)(isLogicKey(key) ? event : event[key]);
+        };
+        
+        return (event: Dict) => {
+            return Object.entries(filters).every(([key, value]) => filterFn(event, key, value));
+        };
+    }
 }

@@ -5,13 +5,13 @@ import { OneBotV12Protocol } from "./v12";
 // Register OneBot protocols
 ProtocolRegistry.register("onebot", "v11", OneBotV11Protocol, {
     displayName: "OneBot V11",
-    description: "OneBot 协议 V11 版本",
+    description: "OneBot 协议 V11 版本，基于 OneBot 11 标准",
     versions: ["v11"],
 });
 
 ProtocolRegistry.register("onebot", "v12", OneBotV12Protocol, {
     displayName: "OneBot V12",
-    description: "OneBot 协议 V12 版本",
+    description: "OneBot 协议 V12 版本，基于 OneBot 12 标准",
     versions: ["v12"],
 });
 
@@ -25,7 +25,10 @@ declare module '../base'{
         }
     }
 }
+
 export * from "./v11";
 export * from "./v12";
 export * from "./utils";
-export * from "./filters";
+export * from "./types";
+export * from "./types-v12";
+export * from "./cqcode";

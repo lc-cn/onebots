@@ -6,6 +6,8 @@ import { CommonEvent } from "@/common-types";
 import { Milky } from "./types";
 import { MilkyConfig } from "./config";
 import { Logger } from "log4js";
+import { createHmac } from "crypto";
+import { WebSocket } from "ws";
 
 /**
  * Milky Protocol V1 Implementation
@@ -232,18 +234,18 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     // Action implementations
     private async sendPrivateMessage(params: any): Promise<Milky.SendMessageResult> {
-        const result = await this.adapter.sendPrivateMessage(this.account.uin, {
-            message_type: "private",
-            user_id: params.user_id,
+        const result = await this.adapter.sendMessage(this.account.uin, {
+            scene_type: "private",
+            scene_id: params.user_id,
             message: params.message,
         });
         return { message_id: result.message_id };
     }
 
     private async sendGroupMessage(params: any): Promise<Milky.SendMessageResult> {
-        const result = await this.adapter.sendGroupMessage(this.account.uin, {
-            message_type: "group",
-            group_id: params.group_id,
+        const result = await this.adapter.sendMessage(this.account.uin, {
+            scene_type: "group",
+            scene_id: params.group_id,
             message: params.message,
         });
         return { message_id: result.message_id };
@@ -268,12 +270,15 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             message_id: params.message_id,
         });
         return {
-            time: msg.time,
-            message_type: msg.message_type,
+            time: msg.time || Math.floor(Date.now() / 1000),
+            message_type: (msg.sender.scene_type as "private" | "group"),
             message_id: msg.message_id,
             real_id: 0,
-            sender: msg.sender,
-            message: msg.message,
+            sender: {
+                user_id: msg.sender.sender_id,
+                nickname: msg.sender.sender_name,
+            },
+            message: msg.message as any,
         };
     }
 
@@ -286,7 +291,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const info = await this.adapter.getLoginInfo(this.account.uin);
         return {
             user_id: info.user_id,
-            nickname: info.nickname,
+            nickname: info.user_name,
         };
     }
 
@@ -296,7 +301,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         });
         return {
             user_id: info.user_id,
-            nickname: info.nickname,
+            nickname: info.user_name,
         };
     }
 
@@ -304,7 +309,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const result = await this.adapter.getFriendList(this.account.uin);
         return result.map(info => ({
             user_id: info.user_id,
-            nickname: info.nickname,
+            nickname: info.user_name,
             remark: info.remark || "",
         }));
     }
@@ -339,7 +344,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         return {
             group_id: info.group_id,
             user_id: info.user_id,
-            nickname: info.nickname,
+            nickname: info.user_name,
             card: info.card || "",
             sex: "unknown",
             age: 0,
@@ -362,7 +367,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         return list.map(info => ({
             group_id: info.group_id,
             user_id: info.user_id,
-            nickname: info.nickname,
+            nickname: info.user_name,
             card: info.card || "",
             sex: "unknown",
             age: 0,
@@ -378,54 +383,253 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         }));
     }
 
+    /**
+     * Verify access token
+     */
+    private verifyToken(token?: string): boolean {
+        const requiredToken = this.config.access_token;
+        if (!requiredToken) return true;
+        return token === requiredToken;
+    }
+
+    /**
+     * Verify signature
+     */
+    private verifySignature(body: string, signature?: string): boolean {
+        const secret = this.config.secret;
+        if (!secret) return true;
+        if (!signature) return false;
+        
+        const hmac = createHmac('sha1', secret);
+        const expected = 'sha1=' + hmac.update(body).digest('hex');
+        return signature === expected;
+    }
+
     // Service implementations
     private startHttp(): void {
         this.logger.info("Starting Milky HTTP server");
-        const httpConfig = typeof this.config.use_http === "object" 
-            ? this.config.use_http 
-            : {};
         
-        const host = httpConfig.host || "0.0.0.0";
-        const port = httpConfig.port || 5700;
-        
-        this.logger.info(`Milky HTTP server would start at http://${host}:${port}`);
-        // HTTP server implementation requires Koa/Express integration
-        // This is handled by the main application server routing
+        // Register HTTP POST endpoint for API calls
+        this.router.post(`${this.path}/:action`, async (ctx) => {
+            // Verify access token
+            const token = ctx.query.access_token || ctx.headers.authorization?.replace('Bearer ', '');
+            if (!this.verifyToken(token as string)) {
+                ctx.status = 401;
+                ctx.body = { status: "failed", retcode: 1403, message: "Unauthorized" };
+                return;
+            }
+
+            const action = ctx.params.action;
+            const params = ctx.request.body;
+
+            try {
+                const result = await this.apply(action, params);
+                ctx.body = result;
+            } catch (error) {
+                this.logger.error(`HTTP API ${action} failed:`, error);
+                ctx.body = {
+                    status: "failed",
+                    retcode: -1,
+                    message: error.message,
+                };
+            }
+        });
+
+        this.logger.info(`Milky HTTP server listening on ${this.path}/:action`);
     }
 
     private startWs(): void {
         this.logger.info("Starting Milky WebSocket server");
-        const wsConfig = typeof this.config.use_ws === "object" 
-            ? this.config.use_ws 
-            : {};
         
-        const host = wsConfig.host || "0.0.0.0";
-        const port = wsConfig.port || 6700;
+        const wss = this.router.ws(this.path);
         
-        this.logger.info(`Milky WebSocket server would start at ws://${host}:${port}`);
-        // WebSocket server implementation requires WS integration
-        // This is handled by the main application server routing
+        wss.on("connection", (ws, request) => {
+            // Verify access token
+            const url = new URL(request.url!, `ws://localhost`);
+            const token = url.searchParams.get('access_token') || request.headers.authorization?.replace('Bearer ', '');
+            
+            if (!this.verifyToken(token as string)) {
+                ws.close(1008, "Unauthorized");
+                return;
+            }
+
+            this.logger.info(`Milky WebSocket client connected: ${this.path}`);
+
+            // Send meta event: lifecycle.connect
+            const connectEvent = {
+                time: Math.floor(Date.now() / 1000),
+                self_id: this.account.uin,
+                post_type: "meta_event",
+                meta_event_type: "lifecycle",
+                sub_type: "connect",
+            };
+            ws.send(JSON.stringify(connectEvent));
+
+            // Listen for dispatch events and send to client
+            const onDispatch = (data: string) => {
+                if (ws.readyState === ws.OPEN) {
+                    ws.send(data);
+                }
+            };
+            this.on("dispatch", onDispatch);
+
+            // Handle incoming API calls
+            ws.on("message", async (data) => {
+                try {
+                    const request = JSON.parse(data.toString());
+                    const { action, params, echo } = request;
+
+                    const result = await this.apply(action, params);
+                    ws.send(JSON.stringify({ ...result, echo }));
+                } catch (error) {
+                    this.logger.error("WebSocket message error:", error);
+                    ws.send(JSON.stringify({
+                        status: "failed",
+                        retcode: -1,
+                        message: error.message,
+                    }));
+                }
+            });
+
+            ws.on("close", () => {
+                this.logger.info(`Milky WebSocket client disconnected: ${this.path}`);
+                this.off("dispatch", onDispatch);
+            });
+
+            ws.on("error", (error) => {
+                this.logger.error("WebSocket error:", error);
+            });
+        });
+
+        this.logger.info(`Milky WebSocket server listening on ${this.path}`);
     }
 
     private startHttpReverse(config: MilkyConfig.HttpReverseConfig): void {
         this.logger.info(`Starting Milky HTTP reverse: ${config.url}`);
         
-        // HTTP reverse (webhook) implementation
-        this.on("dispatch", (eventData: string) => {
-            // POST event to the configured URL
-            // Implementation would use fetch/axios to send events
-            this.logger.debug(`Would POST event to ${config.url}`);
-        });
+        // Listen for dispatch events and POST to external server
+        const onDispatch = async (data: string) => {
+            try {
+                const headers: any = {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Milky/1.0',
+                    'X-Self-ID': this.account.uin,
+                };
+
+                // Add access token if configured
+                const token = config.access_token || this.config.access_token;
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
+                // Add signature if secret is configured
+                const secret = config.secret || this.config.secret;
+                if (secret) {
+                    const hmac = createHmac('sha1', secret);
+                    headers['X-Signature'] = 'sha1=' + hmac.update(data).digest('hex');
+                }
+
+                const response = await fetch(config.url, {
+                    method: 'POST',
+                    headers,
+                    body: data,
+                    signal: AbortSignal.timeout((config.post_timeout || 5) * 1000),
+                });
+
+                if (!response.ok) {
+                    this.logger.warn(`HTTP POST failed: ${response.status} ${response.statusText}`);
+                }
+            } catch (error) {
+                this.logger.error(`HTTP POST error:`, error);
+            }
+        };
+
+        this.on("dispatch", onDispatch);
+        this.logger.info(`Milky HTTP reverse configured to POST events to ${config.url}`);
     }
 
     private startWsReverse(config: MilkyConfig.WsReverseConfig): void {
         this.logger.info(`Starting Milky WebSocket reverse: ${config.url}`);
         
-        // WebSocket reverse (client) implementation
-        this.on("dispatch", (eventData: string) => {
-            // Send event via WebSocket client
-            this.logger.debug(`Would send event via WS to ${config.url}`);
-        });
+        let ws: WebSocket | null = null;
+        let reconnectTimer: any = null;
+
+        const connect = () => {
+            try {
+                // Add access token to URL if configured
+                let wsUrl = config.url;
+                const token = config.access_token || this.config.access_token;
+                if (token) {
+                    const separator = wsUrl.includes('?') ? '&' : '?';
+                    wsUrl = `${wsUrl}${separator}access_token=${token}`;
+                }
+
+                ws = new WebSocket(wsUrl, {
+                    headers: {
+                        'User-Agent': 'Milky/1.0',
+                        'X-Self-ID': this.account.uin,
+                        'X-Client-Role': 'Universal',
+                    },
+                });
+
+                ws.on('open', () => {
+                    this.logger.info(`Milky WebSocket reverse connected to ${config.url}`);
+                    
+                    // Send meta event: lifecycle.connect
+                    const connectEvent = {
+                        time: Math.floor(Date.now() / 1000),
+                        self_id: this.account.uin,
+                        post_type: "meta_event",
+                        meta_event_type: "lifecycle",
+                        sub_type: "connect",
+                    };
+                    ws.send(JSON.stringify(connectEvent));
+
+                    // Clear reconnect timer
+                    if (reconnectTimer) {
+                        clearTimeout(reconnectTimer);
+                        reconnectTimer = null;
+                    }
+                });
+
+                ws.on('message', async (data: Buffer) => {
+                    try {
+                        const request = JSON.parse(data.toString());
+                        const { action, params, echo } = request;
+
+                        const result = await this.apply(action, params);
+                        ws.send(JSON.stringify({ ...result, echo }));
+                    } catch (error) {
+                        this.logger.error("WebSocket reverse message error:", error);
+                    }
+                });
+
+                ws.on('close', () => {
+                    const interval = (config.reconnect_interval || 5) * 1000;
+                    this.logger.warn(`Milky WebSocket reverse disconnected from ${config.url}, reconnecting in ${config.reconnect_interval || 5}s...`);
+                    reconnectTimer = setTimeout(connect, interval);
+                });
+
+                ws.on('error', (error: Error) => {
+                    this.logger.error("Milky WebSocket reverse error:", error);
+                });
+
+                // Listen for dispatch events and send to server
+                const onDispatch = (data: string) => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(data);
+                    }
+                };
+                this.on("dispatch", onDispatch);
+
+            } catch (error) {
+                this.logger.error(`Milky WebSocket reverse connection failed:`, error);
+                const interval = (config.reconnect_interval || 5) * 1000;
+                reconnectTimer = setTimeout(connect, interval);
+            }
+        };
+
+        connect();
     }
 
     private startHeartbeat(): void {

@@ -1,39 +1,8 @@
-import { OneBot } from "@/account";
-import { Adapter } from "@/adapter";
-
 /**
- * Common adapter utilities
- * Provides reusable helper methods for platform adapters
+ * OneBot protocol utilities
+ * Provides reusable helper methods for OneBot protocols
  */
-export namespace AdapterUtils {
-    /**
-     * Transform message ID for V11 compatibility
-     * In V11, message IDs need to be integers, so we use the transformToInt method
-     */
-    export function transformMessageId<V extends OneBot.Version>(
-        oneBot: OneBot,
-        version: V,
-        messageId: string,
-    ): string | number {
-        if (version === "V11") {
-            return oneBot.V11.transformToInt("message_id", messageId);
-        }
-        return messageId;
-    }
-
-    /**
-     * Create a message result with proper ID format
-     */
-    export function createMessageResult<V extends OneBot.Version>(
-        oneBot: OneBot,
-        version: V,
-        messageId: string,
-    ): OneBot.MessageRet<V> {
-        return {
-            message_id: transformMessageId(oneBot, version, messageId),
-        } as OneBot.MessageRet<V>;
-    }
-
+export namespace OneBotUtils {
     /**
      * Create event handler disposer
      * Returns a cleanup function that removes all event listeners
@@ -108,5 +77,43 @@ export namespace AdapterUtils {
      */
     export function createCompositeId(type: string, ...parts: (string | number)[]): string {
         return [type, ...parts].join(":");
+    }
+
+    /**
+     * Validate QQ number format
+     */
+    export function isValidQQ(qq: string | number): boolean {
+        const qqStr = String(qq);
+        return /^\d{5,11}$/.test(qqStr);
+    }
+
+    /**
+     * Validate group number format
+     */
+    export function isValidGroup(group: string | number): boolean {
+        const groupStr = String(group);
+        return /^\d{6,10}$/.test(groupStr);
+    }
+
+    /**
+     * Format timestamp to OneBot time format (seconds)
+     */
+    export function formatTime(timestamp: number): number {
+        // If timestamp is in milliseconds, convert to seconds
+        if (timestamp > 9999999999) {
+            return Math.floor(timestamp / 1000);
+        }
+        return timestamp;
+    }
+
+    /**
+     * Parse OneBot time to milliseconds
+     */
+    export function parseTime(time: number): number {
+        // OneBot times are in seconds, convert to milliseconds
+        if (time < 9999999999) {
+            return time * 1000;
+        }
+        return time;
     }
 }

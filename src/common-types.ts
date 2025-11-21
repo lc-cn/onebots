@@ -5,6 +5,7 @@ import { Dict } from "@zhinjs/shared";
  * This provides a unified interface for different protocols to consume
  */
 export namespace CommonEvent {
+    export type MessageScene="private" | "group" | "channel"|"direct";
     /**
      * Base event structure
      */
@@ -46,16 +47,11 @@ export namespace CommonEvent {
     }
 
     /**
-     * Message segment types
-     */
-    export type SegmentType = "text" | "image" | "video" | "audio" | "file" | "at" | "reply" | "custom";
-
-    /**
      * Message segment
      */
     export interface Segment {
         /** Segment type */
-        type: SegmentType;
+        type: string;
         /** Segment data */
         data: Dict;
     }
@@ -65,8 +61,7 @@ export namespace CommonEvent {
      */
     export interface Message extends Base {
         type: "message";
-        /** Message type: private, group, channel */
-        message_type: "private" | "group" | "channel";
+        message_type: MessageScene;
         /** Sender information */
         sender: User;
         /** Group information (for group/channel messages) */

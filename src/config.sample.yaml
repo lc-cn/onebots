@@ -1,68 +1,162 @@
 port: 6727 # 监听端口
 log_level: info # 日志等级
-timeout: 30 #登录超时时间(秒)
-general: # 通用配置，在单个配置省略时的默认值
-  V11: # oneBotV11的通用配置
-    heartbeat: 3 # 心跳间隔 (秒)
-    access_token: '' # 访问api的token
-    post_timeout: 15 # 上报超时时间，(秒)
-    secret: '' # 上报数据的sha1签名密钥
-    rate_limit_interval: 4 # ws心跳间隔(秒)
-    post_message_format: string # "string"或"array"
-    reconnect_interval: 3 # 重连间隔 (秒)
-    use_http: true # 是否使用 http
-    enable_cors: true # 是否允许跨域
-    use_ws: true # 是否使用websocket
-    http_reverse: [ ] # http上报地址
-    ws_reverse: [ ] # 反向ws连接地址
-  V12: # oneBotV12的通用配置
-    heartbeat: 3 # 心跳间隔 (秒)
-    access_token: '' # 访问api的token
-    request_timeout: 15 # 上报超时时间 (秒)
-    reconnect_interval: 3 # 重连间隔 (秒)
-    enable_cors: true # 是否允许跨域
-    use_http: true # 是否启用http
-    use_ws: true # 是否启用 websocket
-    webhook: [ ] # http 上报地址
-    ws_reverse: [ ] # 反向ws连接地址
-# 每个账号的单独配置(用于覆盖通用配置)
-icqq.123456789: # `${适配器名称}:${账号}`
-  versions:
-    - version: V12
-  # 。。。其他配置项参见上方对应oneBot版本的通用配置
-  protocol: # 将会覆盖通用配置中的protocol
-    platform: 1
-  # 。。。其他配置项参见上方对应oneBot版本的通用配置
-qq.a: # `${适配器名称}:${账号}`
-  versions:
-    - version: V11
-  # 。。。其他配置项参见上方对应oneBot版本的通用配置
-  protocol: # 将会覆盖通用配置中的protocol
-    token: '' # qq机器人token
-    secret: '' # qq机器人secret
-    sandbox: false # 是否沙箱环境
-    intents: # 需要监听的intents
-      - 'GROUP_AT_MESSAGE_CREATE' # 群聊@事件 没有群聊权限请注释
-      - 'C2C_MESSAGE_CREATE' # 私聊事件 没有私聊权限请注释
-      - 'DIRECT_MESSAGE' # 频道私信事件
-      #     - 'GUILD_MESSAGES' # 私域机器人频道消息事件，公域机器人请注释
-      - 'GUILDS' # 频道变更事件
-      - 'GUILD_MEMBERS' # 频道成员变更事件
-      - 'GUILD_MESSAGE_REACTIONS' # 频道消息表态事件
-      - 'INTERACTION' # 互动事件
-      - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件，私域机器人请注释
-  # 。。。其他配置项参见上方对应oneBot版本的通用配置
-dingtalk.abcedfg: # `${适配器名称}:${clientId}`
-  versions:
-    - version: V11
-    - version: V12
-  protocol:
-    clientSecret: '' # 钉钉机器人秘钥 必填
-    username: '钉钉机器人' #钉钉后台配置的机器人名称 不填则显示'钉钉机器人'
-    avatar: '' # 机器人头像 不填则显示钉钉logo
+timeout: 30 # 登录超时时间(秒)
 
-wechat.bot1: # `${适配器名称}:${机器人唯一标识}`
-  versions:
-    - version: V11
-    - version: V12
-  protocol: {}
+# 全局默认配置
+general:
+  onebot.v11:
+    use_http: true
+    use_ws: true
+    access_token: ''
+    secret: ''
+    enable_cors: true
+    heartbeat_interval: 5
+    http_reverse: []
+    ws_reverse: []
+
+  onebot.v12:
+    use_http: true
+    use_ws: true
+    access_token: ''
+    secret: ''
+    enable_cors: true
+    heartbeat_interval: 5
+    webhooks: []
+    ws_reverse: []
+    request_timeout: 15
+  
+  satori.v1:
+    use_http: true
+    use_ws: true
+    token: ''
+    platform: 'unknown'
+    webhooks: []
+  
+  milky.v1:
+    use_http: true
+    use_ws: true
+    access_token: ''
+    secret: ''
+    heartbeat: 5
+    http_reverse: []
+    ws_reverse: []
+
+# ============================================
+# 账号配置示例
+# ============================================
+
+# QQ 官方机器人
+qq.my_bot:
+  # OneBot V11 协议配置
+  onebot.v11:
+    use_http: true
+    use_ws: true
+    access_token: 'qq_v11_token'
+    heartbeat_interval: 5
+  
+  # Satori V1 协议配置（可选）
+  satori.v1:
+    use_http: true
+    use_ws: true
+    token: 'qq_satori_token'
+    platform: 'qq'
+  
+  # QQ 平台配置
+  token: '' # QQ 机器人 token
+  secret: '' # QQ 机器人 secret
+  sandbox: false # 是否沙箱环境
+  intents: # 需要监听的 intents
+    - 'GROUP_AT_MESSAGE_CREATE' # 群聊@事件
+    - 'C2C_MESSAGE_CREATE' # 私聊事件
+    - 'DIRECT_MESSAGE' # 频道私信事件
+    - 'GUILDS' # 频道变更事件
+    - 'GUILD_MEMBERS' # 频道成员变更事件
+    - 'GUILD_MESSAGE_REACTIONS' # 频道消息表态事件
+    - 'INTERACTION' # 互动事件
+    - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件
+
+# 钉钉机器人
+dingtalk.client_id:
+  onebot.v11:
+    use_http: true
+    use_ws: true
+  
+  onebot.v12:
+    use_http: true
+    use_ws: true
+  
+  # 钉钉平台配置
+  clientSecret: '' # 钉钉机器人密钥(必填)
+  username: '钉钉机器人' # 机器人名称
+  avatar: '' # 机器人头像
+
+# 企业微信机器人
+wechat.bot_id:
+  onebot.v11:
+    use_http: true
+    use_ws: true
+  
+  onebot.v12:
+    use_http: true
+    use_ws: true
+
+# Kook (开黑啦) 机器人
+kook.bot_id:
+  # 可以同时启用多个协议
+  onebot.v11:
+    use_http: true
+    use_ws: true
+    access_token: 'kook_v11_token'
+    secret: ''
+    heartbeat_interval: 5
+    http_reverse: []
+    ws_reverse: []
+  
+  onebot.v12:
+    use_http: true
+    use_ws: true
+    access_token: 'kook_v12_token'
+    secret: ''
+    heartbeat_interval: 5
+    webhooks: []
+    ws_reverse: []
+  
+  satori.v1:
+    use_http: true
+    use_ws: true
+    token: 'kook_satori_token'
+    platform: 'kook'
+    webhooks: []
+  
+  milky.v1:
+    use_http: true
+    use_ws: true
+    access_token: 'kook_milky_token'
+    secret: ''
+    heartbeat: 5
+  
+  # Kook 平台配置
+  token: '' # Kook Bot Token (从开发者中心获取)
+
+# ============================================
+# 配置说明
+# ============================================
+# 
+# 1. 账号标识格式：{platform}.{account_id}
+#    - platform: 平台名称 (qq, kook, dingtalk, wechat 等)
+#    - account_id: 账号唯一标识
+# 
+# 2. 协议配置：{protocol}.{version}
+#    - onebot.v11: OneBot V11 协议
+#    - onebot.v12: OneBot V12 协议
+#    - satori.v1: Satori V1 协议
+#    - milky.v1: Milky V1 协议
+#    - 可以同时配置多个协议
+#    - 未指定的配置项会使用 general 中的默认值
+# 
+# 3. 平台配置：直接在账号下配置
+#    - 不以协议名开头的配置项都是平台特定配置
+#    - 每个平台的配置项不同
+# 
+# 4. 配置优先级：
+#    账号配置 > general 默认配置

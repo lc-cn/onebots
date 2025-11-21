@@ -111,7 +111,46 @@ export class App extends Koa {
             const [adapter, ...uinArr] = key.split(".");
             const uin = uinArr.join(".");
             if (!uin) continue;
-            result.push([adapter, uin, value as Adapter.Config]);
+            
+            const accountConfig = value as any;
+            
+            // 检查是否有协议.版本字段
+            const protocolKeys = Object.keys(accountConfig).filter(k => k.includes('.'));
+            if (protocolKeys.length > 0) {
+                // 新格式: 扁平化配置
+                const adapterConfig: Adapter.Config = {
+                    protocol: {},
+                    versions: []
+                };
+                
+                // 提取协议配置和平台配置
+                for (const [configKey, configValue] of Object.entries(accountConfig)) {
+                    if (configKey.includes('.')) {
+                        // 协议配置：格式为 protocol.version
+                        const [protocolName, versionStr] = configKey.split('.');
+                        
+                        // 获取 general 中的默认配置
+                        const generalConfig = this.config.general?.[configKey] || {};
+                        
+                        // 合并配置：general 默认值 + 账号特定配置
+                        const mergedConfig = deepMerge(deepClone(generalConfig), configValue);
+                        
+                        adapterConfig.versions.push({
+                            protocol: protocolName,
+                            version: versionStr.toUpperCase(),
+                            ...mergedConfig
+                        });
+                    } else {
+                        // 平台配置：不包含点的键都是平台特定配置
+                        adapterConfig.protocol[configKey] = configValue;
+                    }
+                }
+                
+                result.push([adapter, uin, adapterConfig]);
+            } else {
+                // 旧格式兼容
+                result.push([adapter, uin, value as Adapter.Config]);
+            }
         }
         return result;
     }
@@ -382,6 +421,26 @@ export namespace App {
     export const ADAPTERS: Map<keyof Adapter.Configs, AdapterClass> = new Map();
     export interface Adapters<P extends string = string> extends Map<P, Adapter<P>> {}
 
+    export interface ProtocolConfig {
+        [key: string]: any;
+    }
+
+    export interface GeneralConfig {
+        'onebot.v11'?: ProtocolConfig;
+        'onebot.v12'?: ProtocolConfig;
+        'satori.v1'?: ProtocolConfig;
+        'milky.v1'?: ProtocolConfig;
+    }
+
+    export interface AccountConfig {
+        'onebot.v11'?: ProtocolConfig;
+        'onebot.v12'?: ProtocolConfig;
+        'satori.v1'?: ProtocolConfig;
+        'milky.v1'?: ProtocolConfig;
+        // 其他字段都是平台特定配置
+        [key: string]: any;
+    }
+
     export type Config = {
         port?: number;
         path?: string;
@@ -389,12 +448,9 @@ export namespace App {
         username?: string;
         password?: string;
         log_level?: LogLevel;
-        general?: {
-            V11?: {};
-            V12?: {};
-        };
+        general?: GeneralConfig;
     } & KoaOptions &
-        Record<`${string}.${string}`, Adapter.Config>;
+        Record<`${string}.${string}`, Adapter.Config | AccountConfig>;
     export const defaultConfig: Config = {
         port: 6727,
         username: "admin",

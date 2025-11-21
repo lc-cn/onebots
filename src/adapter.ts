@@ -3,6 +3,7 @@ import { App } from "@/server/app";
 import { Account } from "@/account";
 import { Logger } from "log4js";
 import { Dict } from "@zhinjs/shared";
+import { CommonEvent } from "./common-types";
 
 /**
  * Base Adapter Interface
@@ -15,68 +16,61 @@ export namespace Adapter {
         [key: string]: any;
     }
     export interface Configs extends Record<string, any> {}
-    /**
-     * Send message parameters
-     */
-    export interface SendMessageParams {
-        message_type?: "private" | "group";
-        user_id?: string | number;
-        group_id?: string | number;
-        message: any[];
-    }
+    export type MessageScene="private" | "group" | "channel" | "direct";
 
-    /**
-     * Delete message parameters
-     */
+    
+    export interface SendMessageParams {
+        scene_type: MessageScene;
+        scene_id: string | number;
+        message: CommonEvent.Segment[];
+    }
+    
     export interface DeleteMessageParams {
         message_id: string | number;
     }
-
-    /**
-     * Get message parameters
-     */
     export interface GetMessageParams {
         message_id: string | number;
     }
 
-    /**
-     * Get user info parameters
-     */
     export interface GetUserInfoParams {
         user_id: string | number;
     }
 
-    /**
-     * Get group info parameters
-     */
     export interface GetGroupInfoParams {
         group_id: string | number;
     }
 
-    /**
-     * Get group member info parameters
-     */
     export interface GetGroupMemberInfoParams {
         group_id: string | number;
         user_id: string | number;
     }
 
-    /**
-     * Get group member list parameters
-     */
+  
     export interface GetGroupMemberListParams {
         group_id: string | number;
     }
-
+    export interface GetChannelInfoParams {
+        channel_id: string | number;
+    }
+    
+    export interface GetChannelListParams {
+        channel_id: string | number;
+    }
+    export interface MessageSender{
+        scene_type: MessageScene;
+        sender_id: string | number;
+        scene_id: string | number;
+        sender_name: string;
+        scene_name: string;
+    }
     /**
      * Message info
      */
     export interface MessageInfo {
         message_id: string | number;
         time: number;
-        message_type: "private" | "group";
-        sender: any;
-        message: any[];
+        sender: MessageSender;
+        message: CommonEvent.Segment[];
     }
 
     /**
@@ -84,8 +78,7 @@ export namespace Adapter {
      */
     export interface UserInfo {
         user_id: string | number;
-        nickname: string;
-        [key: string]: any;
+        user_name: string;
     }
 
     /**
@@ -93,7 +86,7 @@ export namespace Adapter {
      */
     export interface FriendInfo {
         user_id: string | number;
-        nickname: string;
+        user_name: string;
         remark?: string;
     }
 
@@ -113,17 +106,90 @@ export namespace Adapter {
     export interface GroupMemberInfo {
         group_id: string | number;
         user_id: string | number;
-        nickname: string;
+        user_name: string;
         card?: string;
         role?: "owner" | "admin" | "member";
-        [key: string]: any;
     }
-
-    /**
-     * Send message result
-     */
+    export interface ChannelInfo {
+        channel_id: string | number;
+        channel_name: string;
+        member_count?: number;
+    }
+    export interface GetChannelMemberInfoParams {
+        channel_id: string | number;
+        user_id: string | number;
+    }
+    export interface ChannelMemberInfo {
+        channel_id: string | number;
+        user_id: string | number;
+        user_name: string;
+        role?: "owner" | "admin" | "member";
+    }
+    export interface GetChannelMemberListParams {
+        channel_id: string | number;
+    }
+    export interface ChannelMemberList {
+        channel_id: string | number;
+        user_id: string | number;
+        user_name: string;
+    }
+    
     export interface SendMessageResult {
         message_id: string | number;
+    }
+    export interface ChangeChannelMemberRoleInfoParams {
+        channel_id: string | number;
+        user_id: string | number;
+        role: "owner" | "admin" | "member";
+    }
+    export interface ChangeChannelMemberCardParams {
+        channel_id: string | number;
+        user_id: string | number;
+        card: string;
+    }
+    export interface KickChannelMemberParams {
+        channel_id: string | number;
+        user_id: string | number;
+    }
+    export interface SetChannelMemberMuteParams {
+        channel_id: string | number;
+        user_id: string | number;
+        mute: boolean;
+    }
+    export interface SetChannelMuteParams {
+        channel_id: string | number;
+        mute: boolean;
+    }
+    export interface InviteChannelMemberParams {
+        channel_id: string | number;
+        user_id: string | number;
+    }
+    export interface SetChannelMemberCardParams {
+        channel_id: string | number;
+        user_id: string | number;
+        card: string;
+    }
+    export interface SetChannelMemberRoleParams {
+        channel_id: string | number;
+        user_id: string | number;
+        role: "owner" | "admin" | "member";
+    }
+    export interface SetChannelMemberMuteParams {
+        channel_id: string | number;
+        user_id: string | number;
+        mute: boolean;
+    }
+    export interface SetChannelMuteParams {
+        channel_id: string | number;
+        mute: boolean;
+    }
+    export interface InviteChannelMemberParams {
+        channel_id: string | number;
+        user_id: string | number;
+    }
+    export interface KickChannelMemberParams {
+        channel_id: string | number;
+        user_id: string | number;
     }
 }
 
@@ -151,15 +217,7 @@ export abstract class Adapter<C=any,T extends string = string> extends EventEmit
     /**
      * Send a private message
      */
-    abstract sendPrivateMessage(
-        uin: string,
-        params: Adapter.SendMessageParams
-    ): Promise<Adapter.SendMessageResult>;
-
-    /**
-     * Send a group message
-     */
-    abstract sendGroupMessage(
+    abstract sendMessage(
         uin: string,
         params: Adapter.SendMessageParams
     ): Promise<Adapter.SendMessageResult>;
@@ -221,12 +279,78 @@ export abstract class Adapter<C=any,T extends string = string> extends EventEmit
         uin: string,
         params: Adapter.GetGroupMemberListParams
     ): Promise<Adapter.GroupMemberInfo[]>;
+    /**
+     * Get channel info
+     */
+    abstract getChannelInfo(
+        uin: string,
+        params: Adapter.GetChannelInfoParams
+    ): Promise<Adapter.ChannelInfo>;
 
+    /**
+     * Get channel list
+     */
+    abstract getChannelList(uin: string): Promise<Adapter.ChannelInfo[]>;
+    /**
+     * Get channel member info
+     */
+    abstract getChannelMemberInfo(
+        uin: string,
+        params: Adapter.GetChannelMemberInfoParams
+    ): Promise<Adapter.ChannelMemberInfo>;
+    /**
+     * Get guild member list    
+     */
+    abstract getChannelMemberList(
+        uin: string,
+        params: Adapter.GetChannelMemberListParams
+    ): Promise<Adapter.ChannelMemberInfo[]>;/**
+    * Set channel member card
+    */
+   abstract setChannelMemberCard(
+       uin: string,
+       params: Adapter.SetChannelMemberCardParams
+   ): Promise<void>;
+   /**
+    * Set channel member role
+    */
+   abstract setChannelMemberRole(
+       uin: string,
+       params: Adapter.SetChannelMemberRoleParams
+   ): Promise<void>;
+   /**
+    * Set channel mute
+    */
+   abstract setChannelMute(
+       uin: string,
+       params: Adapter.SetChannelMuteParams
+   ): Promise<void>;
+   /**
+    * Invite channel member
+    */
+   abstract inviteChannelMember(
+       uin: string,
+       params: Adapter.InviteChannelMemberParams
+   ): Promise<void>;
+    /**
+     * Kick channel member
+     */
+    abstract kickChannelMember(
+        uin: string,
+        params: Adapter.KickChannelMemberParams
+    ): Promise<void>;
+    /**
+     * Set channel member mute
+     */
+    abstract setChannelMemberMute(
+        uin: string,
+        params: Adapter.SetChannelMemberMuteParams
+    ): Promise<void>;
     /**
      * Get login info (bot's own info)
      */
     abstract getLoginInfo(uin: string): Promise<Adapter.UserInfo>;
-
+    
     // ============================================
     // Concrete methods
     // ============================================
