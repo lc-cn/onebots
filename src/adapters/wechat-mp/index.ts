@@ -8,6 +8,84 @@ export default class WechatMpAdapter extends Adapter<WeChatMPBot, "wechat-mp"> {
     constructor(app: App) {
         super(app, "wechat-mp");
         this.icon = `https://res.wx.qq.com/a/wx_fed/assets/res/NTI4MWU5.ico`;
+        this.setupWebhookRoutes();
+    }
+
+    /**
+     * Setup webhook routes for receiving messages from WeChat
+     */
+    private setupWebhookRoutes(): void {
+        // WeChat verification endpoint (GET)
+        this.app.router.get(`/${this.platform}/:account_id/webhook`, async ctx => {
+            const { account_id } = ctx.params;
+            const { signature, timestamp, nonce, echostr } = ctx.query;
+
+            const account = this.getAccount(account_id);
+            if (!account) {
+                ctx.status = 404;
+                ctx.body = "Account not found";
+                return;
+            }
+
+            const bot = account.client;
+            if (bot.verifySignature(signature as string, timestamp as string, nonce as string)) {
+                ctx.body = echostr;
+            } else {
+                ctx.status = 403;
+                ctx.body = "Invalid signature";
+            }
+        });
+
+        // WeChat message endpoint (POST)
+        this.app.router.post(`/${this.platform}/:account_id/webhook`, async ctx => {
+            const { account_id } = ctx.params;
+            const { signature, timestamp, nonce } = ctx.query;
+
+            const account = this.getAccount(account_id);
+            if (!account) {
+                ctx.status = 404;
+                ctx.body = "Account not found";
+                return;
+            }
+
+            const bot = account.client;
+
+            // Verify signature
+            if (!bot.verifySignature(signature as string, timestamp as string, nonce as string)) {
+                ctx.status = 403;
+                ctx.body = "Invalid signature";
+                return;
+            }
+
+            try {
+                // Get raw XML body
+                let xmlBody = "";
+                if (typeof ctx.request.body === "string") {
+                    xmlBody = ctx.request.body;
+                } else if (ctx.req) {
+                    // Read raw body if bodyparser didn't parse it
+                    const chunks: Buffer[] = [];
+                    for await (const chunk of ctx.req) {
+                        chunks.push(chunk);
+                    }
+                    xmlBody = Buffer.concat(chunks).toString("utf-8");
+                }
+
+                // Parse XML message
+                const wechatMsg = await bot.parseXMLMessage(xmlBody);
+
+                // Emit message event
+                bot.emit("message", wechatMsg);
+
+                // For passive reply mode, we could build a reply here
+                // For now, just return success
+                ctx.body = "success";
+            } catch (error) {
+                this.logger.error(`Failed to process WeChat message:`, error);
+                ctx.status = 500;
+                ctx.body = "Internal server error";
+            }
+        });
     }
 
     async sendMessage(
