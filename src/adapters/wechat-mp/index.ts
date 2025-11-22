@@ -184,7 +184,7 @@ export default class WechatMpAdapter extends Adapter<WeChatMPBot, "wechat-mp"> {
                             remark: userInfo.remark,
                         });
                     } catch (error) {
-                        console.error(`Failed to get user info for ${openid}:`, error);
+                        this.logger.error(`Failed to get user info for ${openid}:`, error);
                     }
                 }
             }
