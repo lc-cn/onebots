@@ -7,7 +7,7 @@ export namespace Milky {
     /**
      * Message segment types
      */
-    export type SegmentType = 
+    export type SegmentType =
         | "text"
         | "image"
         | "face"

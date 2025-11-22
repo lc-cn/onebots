@@ -12,7 +12,8 @@ export class KookUtils {
         const { type, channel_type, extra } = eventData;
 
         // Message events
-        if (type === 1) { // Text message
+        if (type === 1) {
+            // Text message
             return this.transformMessageEvent(uin, eventData);
         }
 
@@ -28,7 +29,8 @@ export class KookUtils {
      * Transform Kook message event to CommonEvent
      */
     private transformMessageEvent(uin: string, eventData: any): CommonEvent.Message {
-        const { msg_id, msg_timestamp, author_id, content, channel_type, target_id, extra } = eventData;
+        const { msg_id, msg_timestamp, author_id, content, channel_type, target_id, extra } =
+            eventData;
         const author = extra?.author || {};
 
         // Parse message content
@@ -99,7 +101,8 @@ export class KookUtils {
                     timestamp: Date.now(),
                     notice_type: "custom",
                     message_id: body.msg_id,
-                    custom_type: systemType === "updated_message" ? "message_update" : "message_delete",
+                    custom_type:
+                        systemType === "updated_message" ? "message_update" : "message_delete",
                 };
 
             case "guild_member_online": // Member online
@@ -119,7 +122,8 @@ export class KookUtils {
                         id: body.guild_id,
                         name: "",
                     },
-                    custom_type: systemType === "guild_member_online" ? "member_online" : "member_offline",
+                    custom_type:
+                        systemType === "guild_member_online" ? "member_online" : "member_offline",
                 };
 
             case "added_guild": // Bot added to guild
@@ -387,4 +391,3 @@ export class KookUtils {
         return types[type] || "unknown";
     }
 }
-

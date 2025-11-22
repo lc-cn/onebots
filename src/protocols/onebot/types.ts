@@ -6,7 +6,7 @@ import { Dict } from "@zhinjs/shared";
  */
 export namespace OneBotV11 {
     // ============ Message Types ============
-    
+
     /**
      * Message segment (CQ code)
      */
@@ -211,7 +211,7 @@ export namespace OneBotV11 {
     }
 
     // ============ Event Types ============
-    
+
     /**
      * Base event
      */
@@ -449,7 +449,7 @@ export namespace OneBotV11 {
     }
 
     // ============ API Response Types ============
-    
+
     /**
      * Standard API response
      */
@@ -574,4 +574,3 @@ export namespace OneBotV11 {
         };
     }
 }
-

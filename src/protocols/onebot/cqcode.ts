@@ -11,15 +11,12 @@ export namespace CQCode {
      * Escape special characters in CQ code
      */
     export function escape(text: string, insideCQ: boolean = false): string {
-        let result = text
-            .replace(/&/g, "&amp;")
-            .replace(/\[/g, "&#91;")
-            .replace(/\]/g, "&#93;");
-        
+        let result = text.replace(/&/g, "&amp;").replace(/\[/g, "&#91;").replace(/\]/g, "&#93;");
+
         if (insideCQ) {
             result = result.replace(/,/g, "&#44;");
         }
-        
+
         return result;
     }
 
@@ -144,7 +141,10 @@ export namespace CQCode {
     /**
      * Get all segments of a specific type
      */
-    export function getSegmentsByType(segments: CommonEvent.Segment[], type: string): CommonEvent.Segment[] {
+    export function getSegmentsByType(
+        segments: CommonEvent.Segment[],
+        type: string,
+    ): CommonEvent.Segment[] {
         return segments.filter(seg => seg.type === type);
     }
 
@@ -191,13 +191,16 @@ export namespace CQCode {
     /**
      * Create image segment
      */
-    export function image(file: string, options?: {
-        type?: "flash";
-        url?: string;
-        cache?: boolean;
-        proxy?: boolean;
-        timeout?: number;
-    }): CommonEvent.Segment {
+    export function image(
+        file: string,
+        options?: {
+            type?: "flash";
+            url?: string;
+            cache?: boolean;
+            proxy?: boolean;
+            timeout?: number;
+        },
+    ): CommonEvent.Segment {
         return {
             type: "image",
             data: {
@@ -228,13 +231,16 @@ export namespace CQCode {
     /**
      * Create record (voice) segment
      */
-    export function record(file: string, options?: {
-        magic?: boolean;
-        url?: string;
-        cache?: boolean;
-        proxy?: boolean;
-        timeout?: number;
-    }): CommonEvent.Segment {
+    export function record(
+        file: string,
+        options?: {
+            magic?: boolean;
+            url?: string;
+            cache?: boolean;
+            proxy?: boolean;
+            timeout?: number;
+        },
+    ): CommonEvent.Segment {
         return {
             type: "record",
             data: {
@@ -251,12 +257,15 @@ export namespace CQCode {
     /**
      * Create video segment
      */
-    export function video(file: string, options?: {
-        url?: string;
-        cache?: boolean;
-        proxy?: boolean;
-        timeout?: number;
-    }): CommonEvent.Segment {
+    export function video(
+        file: string,
+        options?: {
+            url?: string;
+            cache?: boolean;
+            proxy?: boolean;
+            timeout?: number;
+        },
+    ): CommonEvent.Segment {
         return {
             type: "video",
             data: {
@@ -272,10 +281,14 @@ export namespace CQCode {
     /**
      * Create share segment
      */
-    export function share(url: string, title: string, options?: {
-        content?: string;
-        image?: string;
-    }): CommonEvent.Segment {
+    export function share(
+        url: string,
+        title: string,
+        options?: {
+            content?: string;
+            image?: string;
+        },
+    ): CommonEvent.Segment {
         return {
             type: "share",
             data: {
@@ -290,10 +303,7 @@ export namespace CQCode {
     /**
      * Create music segment
      */
-    export function music(
-        type: "qq" | "163" | "xm",
-        id: string
-    ): CommonEvent.Segment;
+    export function music(type: "qq" | "163" | "xm", id: string): CommonEvent.Segment;
     export function music(
         type: "custom",
         options: {
@@ -302,11 +312,11 @@ export namespace CQCode {
             title: string;
             content?: string;
             image?: string;
-        }
+        },
     ): CommonEvent.Segment;
     export function music(
         type: "qq" | "163" | "xm" | "custom",
-        idOrOptions: string | any
+        idOrOptions: string | any,
     ): CommonEvent.Segment {
         if (type === "custom") {
             return {
@@ -329,10 +339,14 @@ export namespace CQCode {
     /**
      * Create location segment
      */
-    export function location(lat: number, lon: number, options?: {
-        title?: string;
-        content?: string;
-    }): CommonEvent.Segment {
+    export function location(
+        lat: number,
+        lon: number,
+        options?: {
+            title?: string;
+            content?: string;
+        },
+    ): CommonEvent.Segment {
         return {
             type: "location",
             data: {
@@ -407,4 +421,3 @@ export namespace CQCode {
         return { type: "xml", data: { data } };
     }
 }
-

@@ -26,7 +26,7 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
     createAccount(uin: string, config: KookAdapter.BotConfig): Account {
         const account = new Account(this, uin, []);
         account.status = AccountStatus.Pending;
-        
+
         // Create Kook client
         const client: KookAdapter.Client = {
             token: config.token,
@@ -35,10 +35,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
             sn: 0,
             sessionId: "",
         };
-        
+
         this.clients.set(uin, client);
         this.accounts.set(uin, account);
-        
+
         return account;
     }
 
@@ -48,7 +48,7 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
     async start(uin: string): Promise<void> {
         const account = this.accounts.get(uin);
         const client = this.clients.get(uin);
-        
+
         if (!account || !client) {
             throw new Error(`Account ${uin} not found`);
         }
@@ -56,17 +56,19 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         try {
             // Get gateway URL
             const gatewayUrl = await this.getGateway(client.token);
-            
+
             // Connect to WebSocket
             await this.connectWebSocket(uin, gatewayUrl);
-            
+
             // Get bot info
             const botInfo = await this.getBotInfo(client.token);
             account.nickname = botInfo.username;
             account.avatar = botInfo.avatar;
             account.status = AccountStatus.Online;
-            
-            this.getLogger(uin).info(`Kook bot ${botInfo.username}#${botInfo.identify_num} started`);
+
+            this.getLogger(uin).info(
+                `Kook bot ${botInfo.username}#${botInfo.identify_num} started`,
+            );
         } catch (error) {
             account.status = AccountStatus.OffLine;
             this.getLogger(uin).error(`Failed to start Kook bot:`, error);
@@ -80,7 +82,7 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
     async stop(uin: string): Promise<void> {
         const account = this.accounts.get(uin);
         const client = this.clients.get(uin);
-        
+
         if (!account || !client) {
             return;
         }
@@ -121,7 +123,7 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
 
         ws.on("close", (code: number, reason: string) => {
             this.getLogger(uin).warn(`Kook WebSocket closed: ${code} ${reason}`);
-            
+
             // Clear heartbeat
             if (client.heartbeatInterval) {
                 clearInterval(client.heartbeatInterval);
@@ -170,7 +172,7 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
                 case 1: // Hello
                     this.getLogger(uin).debug("Received Hello, session_id:", payload.d.session_id);
                     client.sessionId = payload.d.session_id;
-                    
+
                     // Start heartbeat
                     this.startHeartbeat(uin);
                     break;
@@ -212,7 +214,8 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
 
         // Send ping every 30 seconds (Kook requires heartbeat every 30s)
         client.heartbeatInterval = setInterval(() => {
-            if (client.ws && client.ws.readyState === 1) { // 1 = OPEN
+            if (client.ws && client.ws.readyState === 1) {
+                // 1 = OPEN
                 const ping = {
                     s: 2, // Ping signal
                     sn: client.sn,
@@ -319,14 +322,17 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
     // Implement Adapter abstract methods
     // ============================================
 
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const { scene_type, scene_id, message } = params;
-        
+
         // Convert message segments to Kook format
         const content = this.utils.segmentsToKMarkdown(message);
-        
+
         let type = 1; // 1 = text, 2 = image, 3 = video, 4 = file, 9 = KMarkdown, 10 = card
-        
+
         // Check if message contains special types
         if (message.some(seg => seg.type === "image")) {
             type = 2;
@@ -389,7 +395,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         return []; // Kook doesn't provide friend list API
     }
 
-    async getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
         const result = await this.request(uin, "GET", "/guild/view", {
             guild_id: params.group_id,
         });
@@ -413,7 +422,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         }));
     }
 
-    async getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
         const result = await this.request(uin, "GET", "/guild/user-view", {
             guild_id: params.group_id,
             user_id: params.user_id,
@@ -428,7 +440,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         };
     }
 
-    async getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         const result = await this.request(uin, "GET", "/guild/user-list", {
             guild_id: params.group_id,
         });
@@ -442,7 +457,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         }));
     }
 
-    async getChannelInfo(uin: string, params: Adapter.GetChannelInfoParams): Promise<Adapter.ChannelInfo> {
+    async getChannelInfo(
+        uin: string,
+        params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
         const result = await this.request(uin, "GET", "/channel/view", {
             target_id: params.channel_id,
         });
@@ -472,14 +490,20 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
 
                 allChannels.push(...channels);
             } catch (error) {
-                this.getLogger(uin).error(`Failed to get channels for guild ${guild.group_id}:`, error);
+                this.getLogger(uin).error(
+                    `Failed to get channels for guild ${guild.group_id}:`,
+                    error,
+                );
             }
         }
 
         return allChannels;
     }
 
-    async setChannelMemberCard(uin: string, params: Adapter.SetChannelMemberCardParams): Promise<void> {
+    async setChannelMemberCard(
+        uin: string,
+        params: Adapter.SetChannelMemberCardParams,
+    ): Promise<void> {
         // Kook uses guild-level nickname
         await this.request(uin, "POST", "/guild/nickname", {
             guild_id: params.channel_id,
@@ -488,7 +512,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         });
     }
 
-    async setChannelMemberRole(uin: string, params: Adapter.SetChannelMemberRoleParams): Promise<void> {
+    async setChannelMemberRole(
+        uin: string,
+        params: Adapter.SetChannelMemberRoleParams,
+    ): Promise<void> {
         // Kook uses role system, this is a simplified implementation
         if (params.role === "admin") {
             await this.request(uin, "POST", "/guild-role/grant", {
@@ -504,7 +531,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         throw new Error("setChannelMute not supported by Kook platform");
     }
 
-    async inviteChannelMember(uin: string, params: Adapter.InviteChannelMemberParams): Promise<void> {
+    async inviteChannelMember(
+        uin: string,
+        params: Adapter.InviteChannelMemberParams,
+    ): Promise<void> {
         // Kook doesn't have direct invite API
         throw new Error("inviteChannelMember not supported by Kook platform");
     }
@@ -516,7 +546,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         });
     }
 
-    async setChannelMemberMute(uin: string, params: Adapter.SetChannelMemberMuteParams): Promise<void> {
+    async setChannelMemberMute(
+        uin: string,
+        params: Adapter.SetChannelMemberMuteParams,
+    ): Promise<void> {
         const type = params.mute ? 1 : 2; // 1 = mute, 2 = unmute
         await this.request(uin, "POST", "/guild-mute/create", {
             guild_id: params.channel_id,
@@ -525,7 +558,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         });
     }
 
-    async getChannelMemberInfo(uin: string, params: Adapter.GetChannelMemberInfoParams): Promise<Adapter.ChannelMemberInfo> {
+    async getChannelMemberInfo(
+        uin: string,
+        params: Adapter.GetChannelMemberInfoParams,
+    ): Promise<Adapter.ChannelMemberInfo> {
         // Kook uses guild-level member info, not channel-specific
         const member = await this.getGroupMemberInfo(uin, {
             group_id: params.channel_id,
@@ -540,7 +576,10 @@ export default class KookAdapter extends Adapter<KookAdapter.Config, "kook"> {
         };
     }
 
-    async getChannelMemberList(uin: string, params: Adapter.GetChannelMemberListParams): Promise<Adapter.ChannelMemberInfo[]> {
+    async getChannelMemberList(
+        uin: string,
+        params: Adapter.GetChannelMemberListParams,
+    ): Promise<Adapter.ChannelMemberInfo[]> {
         // Kook uses guild-level member list
         const members = await this.getGroupMemberList(uin, {
             group_id: params.channel_id,
@@ -586,4 +625,3 @@ declare module "@/adapter" {
         }
     }
 }
-

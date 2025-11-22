@@ -122,11 +122,7 @@ export namespace MessageUtils {
     /**
      * Create message event payload
      */
-    export function createMessageEvent(
-        type: "message",
-        detailType: string,
-        data: Dict,
-    ): Dict {
+    export function createMessageEvent(type: "message", detailType: string, data: Dict): Dict {
         return {
             type,
             detail_type: detailType,
@@ -137,10 +133,7 @@ export namespace MessageUtils {
     /**
      * Create notice event payload
      */
-    export function createNoticeEvent(
-        noticeType: string,
-        data: Dict,
-    ): Dict {
+    export function createNoticeEvent(noticeType: string, data: Dict): Dict {
         return {
             type: "notice",
             detail_type: noticeType,
@@ -152,10 +145,7 @@ export namespace MessageUtils {
     /**
      * Create request event payload
      */
-    export function createRequestEvent(
-        requestType: string,
-        data: Dict,
-    ): Dict {
+    export function createRequestEvent(requestType: string, data: Dict): Dict {
         return {
             type: "request",
             detail_type: requestType,

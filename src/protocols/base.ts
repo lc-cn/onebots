@@ -10,10 +10,7 @@ import { App } from "@/server/app";
  * Base Protocol class
  * Represents a communication protocol (e.g., OneBot, Milky, Satori)
  */
-export abstract class Protocol<
-    V extends string = string,
-    C =any,
-> extends EventEmitter {
+export abstract class Protocol<V extends string = string, C = any> extends EventEmitter {
     public abstract readonly name: string;
     public abstract readonly version: V;
     get app(): App {
@@ -22,8 +19,8 @@ export abstract class Protocol<
     get router(): Router {
         return this.adapter.app.router;
     }
-    get logger(){
-        return this.app.getLogger(`${this.name}/${this.version}`)
+    get logger() {
+        return this.app.getLogger(`${this.name}/${this.version}`);
     }
     constructor(
         public adapter: Adapter,
@@ -43,7 +40,7 @@ export abstract class Protocol<
     /**
      * Filter function to determine if event should be processed
      */
-    filterFn(event: Dict): boolean{
+    filterFn(event: Dict): boolean {
         return Protocol.createFilter(this.config.filters)(event);
     }
 
@@ -74,22 +71,22 @@ export abstract class Protocol<
 }
 
 export namespace Protocol {
-    export interface ConfigMaps extends Record<string, Record<string, any>> { }
+    export interface ConfigMaps extends Record<string, Record<string, any>> {}
     /**
      * Base configuration for protocols
      */
     export type Config<T extends Record<string, any> = Record<string, any>> = T & {
         filters?: Filters;
-    }
+    };
     export type FullConfig<T extends Record<string, any> = Record<string, any>> = T & {
         filters?: Filters;
-        protocol: string
+        protocol: string;
         version: string;
-    }
+    };
     export type Configs = {
-      [P in keyof ConfigMaps]: {
-        [V in keyof ConfigMaps[P] as `${P}.${V & string}`]: Config<ConfigMaps[P][V]>
-      } 
+        [P in keyof ConfigMaps]: {
+            [V in keyof ConfigMaps[P] as `${P}.${V & string}`]: Config<ConfigMaps[P][V]>;
+        };
     }[keyof ConfigMaps];
 
     /**
@@ -150,7 +147,7 @@ export namespace Protocol {
                 "$between",
             ].includes(key);
         };
-        
+
         const filterFn = (event: Dict, key: string, value: any) => {
             // If key is $and, $or, $not, $nor, recursively call
             if (key === "$and" || key === "$or" || key === "$not" || key === "$nor") {
@@ -174,11 +171,11 @@ export namespace Protocol {
                         return !filterFn(event, "$and", value);
                 }
             }
-            
+
             if (typeof value === "boolean" && typeof event[key] !== "boolean") {
                 return value;
             }
-            
+
             if (typeof value !== "object") {
                 if (key === "$regex" && typeof value === "string")
                     return new RegExp(value).test(String(event));
@@ -190,7 +187,7 @@ export namespace Protocol {
                 if (key === "$lte" && typeof value === "number") return Number(event) <= value;
                 return value === event[key];
             }
-            
+
             if (
                 key === "$between" &&
                 Array.isArray(value) &&
@@ -200,14 +197,14 @@ export namespace Protocol {
                 const [start, end] = value as [number, number];
                 return Number(event) >= start && Number(event) <= end;
             }
-            
+
             if (Array.isArray(value)) {
                 return value.includes(event[key]);
             }
-            
+
             return createFilter(value)(isLogicKey(key) ? event : event[key]);
         };
-        
+
         return (event: Dict) => {
             return Object.entries(filters).every(([key, value]) => filterFn(event, key, value));
         };

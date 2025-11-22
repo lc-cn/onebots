@@ -59,9 +59,11 @@ export namespace OneBotUtils {
      * Extract platform-specific ID from composite ID
      * E.g., "guild:123:456" => { type: "guild", id1: "123", id2: "456" }
      */
-    export function parseCompositeId(
-        compositeId: string,
-    ): { type: string; parts: string[]; fullId: string } {
+    export function parseCompositeId(compositeId: string): {
+        type: string;
+        parts: string[];
+        fullId: string;
+    } {
         const parts = compositeId.split(":");
         const type = parts[0];
         return {

@@ -39,16 +39,16 @@
 ### 架构流程
 
 ```
-平台原始事件 
-    ↓ 
-Platform Adapter.extractEvent() 
-    ↓ 
+平台原始事件
+    ↓
+Platform Adapter.extractEvent()
+    ↓
 CommonEvent (统一格式)
-    ↓ 
+    ↓
 OneBot.dispatch()
-    ↓ 
+    ↓
 Protocol.dispatchCommonEvent() (V11/V12/Milky/Satori)
-    ↓ 
+    ↓
 转换为协议特定格式并上报
 ```
 
@@ -64,16 +64,19 @@ Protocol.dispatchCommonEvent() (V11/V12/Milky/Satori)
 ## 文件变更摘要
 
 ### 删除的文件
+
 - `src/adapters/icqq/index.ts`
 - `src/adapters/icqq/utils.ts`
 - `src/adapters/icqq/shareMusicCustom.ts`
 - `src/sqlite-db.ts` (重命名为 db.ts)
 
 ### 新增的文件
+
 - `src/common-types.ts` - 通用事件和动作类型定义
 - `src/adapter-new.ts` - 新的适配器基类
 
 ### 修改的文件
+
 - `package.json` - 移除 icqq 依赖
 - `src/service.ts` - 移除向后兼容的路径
 - `src/service/V11/index.ts` - 简化为单一URL格式
@@ -84,10 +87,12 @@ Protocol.dispatchCommonEvent() (V11/V12/Milky/Satori)
 ## 下一步
 
 现有的 qq、wechat、dingtalk 适配器需要更新以使用新的架构：
+
 1. 继承新的 `Adapter` 基类（来自 `adapter-new.ts`）
 2. 实现 `extractEvent()` 方法
 3. 实现 `executeAction()` 方法
 4. 实现 `call()` 方法
 
 V11 和 V12 协议实现需要添加：
+
 - `dispatchCommonEvent()` 方法来处理通用事件并转换为协议特定格式

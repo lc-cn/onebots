@@ -216,13 +216,17 @@ export namespace Satori {
         "message.create"(channel_id: string, content: string | Element[]): Promise<Message[]>;
         "message.get"(channel_id: string, message_id: string): Promise<Message>;
         "message.delete"(channel_id: string, message_id: string): Promise<void>;
-        "message.update"(channel_id: string, message_id: string, content: string | Element[]): Promise<void>;
+        "message.update"(
+            channel_id: string,
+            message_id: string,
+            content: string | Element[],
+        ): Promise<void>;
         "message.list"(
             channel_id: string,
             next?: string,
             direction?: Direction,
             limit?: number,
-            order?: Order
+            order?: Order,
         ): Promise<BidiList<Message>>;
 
         // Guild methods
@@ -235,12 +239,20 @@ export namespace Satori {
         "guild.member.kick"(guild_id: string, user_id: string, permanent?: boolean): Promise<void>;
         "guild.member.mute"(guild_id: string, user_id: string, duration: number): Promise<void>;
         "guild.member.role.set"(guild_id: string, user_id: string, role_id: string): Promise<void>;
-        "guild.member.role.unset"(guild_id: string, user_id: string, role_id: string): Promise<void>;
+        "guild.member.role.unset"(
+            guild_id: string,
+            user_id: string,
+            role_id: string,
+        ): Promise<void>;
 
         // Guild role methods
         "guild.role.list"(guild_id: string, next?: string): Promise<List<GuildRole>>;
         "guild.role.create"(guild_id: string, data: Partial<GuildRole>): Promise<GuildRole>;
-        "guild.role.update"(guild_id: string, role_id: string, data: Partial<GuildRole>): Promise<void>;
+        "guild.role.update"(
+            guild_id: string,
+            role_id: string,
+            data: Partial<GuildRole>,
+        ): Promise<void>;
         "guild.role.delete"(guild_id: string, role_id: string): Promise<void>;
 
         // User methods
@@ -254,13 +266,27 @@ export namespace Satori {
         // Request approval methods
         "friend.approve"(message_id: string, approve: boolean, comment?: string): Promise<void>;
         "guild.approve"(message_id: string, approve: boolean, comment?: string): Promise<void>;
-        "guild.member.approve"(message_id: string, approve: boolean, comment?: string): Promise<void>;
+        "guild.member.approve"(
+            message_id: string,
+            approve: boolean,
+            comment?: string,
+        ): Promise<void>;
 
         // Reaction methods
         "reaction.create"(channel_id: string, message_id: string, emoji: string): Promise<void>;
-        "reaction.delete"(channel_id: string, message_id: string, emoji: string, user_id?: string): Promise<void>;
+        "reaction.delete"(
+            channel_id: string,
+            message_id: string,
+            emoji: string,
+            user_id?: string,
+        ): Promise<void>;
         "reaction.clear"(channel_id: string, message_id: string, emoji?: string): Promise<void>;
-        "reaction.list"(channel_id: string, message_id: string, emoji: string, next?: string): Promise<List<User>>;
+        "reaction.list"(
+            channel_id: string,
+            message_id: string,
+            emoji: string,
+            next?: string,
+        ): Promise<List<User>>;
 
         // Login methods
         "login.get"(): Promise<Login>;

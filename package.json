@@ -51,13 +51,13 @@
     "@types/koa-static": "^4.0.4",
     "@types/node": "latest",
     "@types/ws": "^8.5.3",
+    "@types/xml2js": "^0.4.14",
     "@vitejs/plugin-vue": "^5.0.0",
-    "node-dd-bot": "latest",
-    "qq-official-bot": "latest",
-    "web-wechat": "latest",
     "dayjs": "^1.11.10",
     "element-plus": "^2.4.4",
+    "node-dd-bot": "latest",
     "prettier": "^3.0.0",
+    "qq-official-bot": "latest",
     "sass": "^1.69.6",
     "ts-node-dev": "latest",
     "tsc-alias": "latest",
@@ -69,7 +69,8 @@
     "vite-plugin-style-import": "^2.0.0",
     "vitepress": "^1.0.0-rc.33",
     "vue": "^3.4.0",
-    "vue-router": "^4.2.5"
+    "vue-router": "^4.2.5",
+    "web-wechat": "latest"
   },
   "files": [
     "/lib/**/*.js",
@@ -97,6 +98,7 @@
   "dependencies": {
     "@koa/router": "^10.1.1",
     "@zhinjs/shared": "^0.0.9",
+    "axios": "^1.6.2",
     "js-yaml": "^4.1.0",
     "koa": "^2.13.4",
     "koa-basic-auth": "^4.0.0",
@@ -104,6 +106,10 @@
     "koa-static": "^5.0.0",
     "log4js": "^6.5.2",
     "reflect-metadata": "^0.1.13",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "xml2js": "^0.6.2"
+  },
+  "optionalDependencies": {
+    "@zhin.js/adapter-wechat-mp": "^0.1.3"
   }
 }

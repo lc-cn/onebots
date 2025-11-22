@@ -158,7 +158,7 @@ export function randomInt(min: number, max: number): number;
 export function randomInt(...args: number[]) {
     let min = args[0] || 0,
         max = args[1];
-    if (args.length === 1) (max = min), (min = 0);
+    if (args.length === 1) ((max = min), (min = 0));
     return Math.floor(Math.random() * (max - min) + min);
 }
 export function protectedFields<T>(source: T, ...keys: (keyof T | string)[]): T {

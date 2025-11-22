@@ -23,7 +23,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         public account: Account,
         config: Protocol.Config,
     ) {
-        super(adapter,account,{
+        super(adapter, account, {
             ...config,
             protocol: "milky",
             version: "v1",
@@ -37,7 +37,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     start(): void {
-        
         // Initialize Milky protocol services
         if (this.config.use_http) {
             this.startHttp();
@@ -97,7 +96,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     async apply(action: string, params?: any): Promise<Milky.Response> {
         // Execute Milky API action
         this.logger.debug(`Milky action: ${action}`, params);
-        
+
         try {
             const result = await this.executeAction(action, params);
             return {
@@ -271,7 +270,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         });
         return {
             time: msg.time || Math.floor(Date.now() / 1000),
-            message_type: (msg.sender.scene_type as "private" | "group"),
+            message_type: msg.sender.scene_type as "private" | "group",
             message_id: msg.message_id,
             real_id: 0,
             sender: {
@@ -399,20 +398,21 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const secret = this.config.secret;
         if (!secret) return true;
         if (!signature) return false;
-        
-        const hmac = createHmac('sha1', secret);
-        const expected = 'sha1=' + hmac.update(body).digest('hex');
+
+        const hmac = createHmac("sha1", secret);
+        const expected = "sha1=" + hmac.update(body).digest("hex");
         return signature === expected;
     }
 
     // Service implementations
     private startHttp(): void {
         this.logger.info("Starting Milky HTTP server");
-        
+
         // Register HTTP POST endpoint for API calls
-        this.router.post(`${this.path}/:action`, async (ctx) => {
+        this.router.post(`${this.path}/:action`, async ctx => {
             // Verify access token
-            const token = ctx.query.access_token || ctx.headers.authorization?.replace('Bearer ', '');
+            const token =
+                ctx.query.access_token || ctx.headers.authorization?.replace("Bearer ", "");
             if (!this.verifyToken(token as string)) {
                 ctx.status = 401;
                 ctx.body = { status: "failed", retcode: 1403, message: "Unauthorized" };
@@ -440,14 +440,16 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private startWs(): void {
         this.logger.info("Starting Milky WebSocket server");
-        
+
         const wss = this.router.ws(this.path);
-        
+
         wss.on("connection", (ws, request) => {
             // Verify access token
             const url = new URL(request.url!, `ws://localhost`);
-            const token = url.searchParams.get('access_token') || request.headers.authorization?.replace('Bearer ', '');
-            
+            const token =
+                url.searchParams.get("access_token") ||
+                request.headers.authorization?.replace("Bearer ", "");
+
             if (!this.verifyToken(token as string)) {
                 ws.close(1008, "Unauthorized");
                 return;
@@ -474,7 +476,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             this.on("dispatch", onDispatch);
 
             // Handle incoming API calls
-            ws.on("message", async (data) => {
+            ws.on("message", async data => {
                 try {
                     const request = JSON.parse(data.toString());
                     const { action, params, echo } = request;
@@ -483,11 +485,13 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     ws.send(JSON.stringify({ ...result, echo }));
                 } catch (error) {
                     this.logger.error("WebSocket message error:", error);
-                    ws.send(JSON.stringify({
-                        status: "failed",
-                        retcode: -1,
-                        message: error.message,
-                    }));
+                    ws.send(
+                        JSON.stringify({
+                            status: "failed",
+                            retcode: -1,
+                            message: error.message,
+                        }),
+                    );
                 }
             });
 
@@ -496,7 +500,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 this.off("dispatch", onDispatch);
             });
 
-            ws.on("error", (error) => {
+            ws.on("error", error => {
                 this.logger.error("WebSocket error:", error);
             });
         });
@@ -506,31 +510,31 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private startHttpReverse(config: MilkyConfig.HttpReverseConfig): void {
         this.logger.info(`Starting Milky HTTP reverse: ${config.url}`);
-        
+
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
                 const headers: any = {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Milky/1.0',
-                    'X-Self-ID': this.account.account_id,
+                    "Content-Type": "application/json",
+                    "User-Agent": "Milky/1.0",
+                    "X-Self-ID": this.account.account_id,
                 };
 
                 // Add access token if configured
                 const token = config.access_token || this.config.access_token;
                 if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
+                    headers["Authorization"] = `Bearer ${token}`;
                 }
 
                 // Add signature if secret is configured
                 const secret = config.secret || this.config.secret;
                 if (secret) {
-                    const hmac = createHmac('sha1', secret);
-                    headers['X-Signature'] = 'sha1=' + hmac.update(data).digest('hex');
+                    const hmac = createHmac("sha1", secret);
+                    headers["X-Signature"] = "sha1=" + hmac.update(data).digest("hex");
                 }
 
                 const response = await fetch(config.url, {
-                    method: 'POST',
+                    method: "POST",
                     headers,
                     body: data,
                     signal: AbortSignal.timeout((config.post_timeout || 5) * 1000),
@@ -550,7 +554,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private startWsReverse(config: MilkyConfig.WsReverseConfig): void {
         this.logger.info(`Starting Milky WebSocket reverse: ${config.url}`);
-        
+
         let ws: WebSocket | null = null;
         let reconnectTimer: any = null;
 
@@ -560,21 +564,21 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 let wsUrl = config.url;
                 const token = config.access_token || this.config.access_token;
                 if (token) {
-                    const separator = wsUrl.includes('?') ? '&' : '?';
+                    const separator = wsUrl.includes("?") ? "&" : "?";
                     wsUrl = `${wsUrl}${separator}access_token=${token}`;
                 }
 
                 ws = new WebSocket(wsUrl, {
                     headers: {
-                        'User-Agent': 'Milky/1.0',
-                        'X-Self-ID': this.account.account_id,
-                        'X-Client-Role': 'Universal',
+                        "User-Agent": "Milky/1.0",
+                        "X-Self-ID": this.account.account_id,
+                        "X-Client-Role": "Universal",
                     },
                 });
 
-                ws.on('open', () => {
+                ws.on("open", () => {
                     this.logger.info(`Milky WebSocket reverse connected to ${config.url}`);
-                    
+
                     // Send meta event: lifecycle.connect
                     const connectEvent = {
                         time: Math.floor(Date.now() / 1000),
@@ -592,7 +596,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     }
                 });
 
-                ws.on('message', async (data: Buffer) => {
+                ws.on("message", async (data: Buffer) => {
                     try {
                         const request = JSON.parse(data.toString());
                         const { action, params, echo } = request;
@@ -604,13 +608,15 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     }
                 });
 
-                ws.on('close', () => {
+                ws.on("close", () => {
                     const interval = (config.reconnect_interval || 5) * 1000;
-                    this.logger.warn(`Milky WebSocket reverse disconnected from ${config.url}, reconnecting in ${config.reconnect_interval || 5}s...`);
+                    this.logger.warn(
+                        `Milky WebSocket reverse disconnected from ${config.url}, reconnecting in ${config.reconnect_interval || 5}s...`,
+                    );
                     reconnectTimer = setTimeout(connect, interval);
                 });
 
-                ws.on('error', (error: Error) => {
+                ws.on("error", (error: Error) => {
                     this.logger.error("Milky WebSocket reverse error:", error);
                 });
 
@@ -621,7 +627,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     }
                 };
                 this.on("dispatch", onDispatch);
-
             } catch (error) {
                 this.logger.error(`Milky WebSocket reverse connection failed:`, error);
                 const interval = (config.reconnect_interval || 5) * 1000;

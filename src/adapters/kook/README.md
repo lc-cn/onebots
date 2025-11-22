@@ -27,38 +27,37 @@ Kook 平台适配器，实现与 Kook（原开黑啦）平台的通信和交互�
 
 ```yaml
 # Kook 机器人配置
-kook.my_bot:  # 格式：kook.{机器人标识}
-  
+kook.my_bot: # 格式：kook.{机器人标识}
   # 平台配置
   config:
-    token: '1/ABCDEFG/aaaaaccccccccccbbbbb=='  # Kook Bot Token
-  
+    token: "1/ABCDEFG/aaaaaccccccccccbbbbb==" # Kook Bot Token
+
   # OneBot V11 协议配置
   onebot.v11:
     use_http: true
     use_ws: true
-    access_token: 'my_token'
-    secret: 'my_secret'
+    access_token: "my_token"
+    secret: "my_secret"
     heartbeat_interval: 5
-  
+
   # OneBot V12 协议配置（可选）
   onebot.v12:
     use_http: true
     use_ws: true
-    access_token: 'my_token'
-  
+    access_token: "my_token"
+
   # Satori V1 协议配置（可选）
   satori.v1:
     use_http: true
     use_ws: true
-    token: 'satori_token'
-    platform: 'kook'
-  
+    token: "satori_token"
+    platform: "kook"
+
   # Milky V1 协议配置（可选）
   milky.v1:
     use_http: true
     use_ws: true
-    access_token: 'milky_token'
+    access_token: "milky_token"
 ```
 
 **配置说明**：
@@ -106,27 +105,32 @@ kook.my_bot:  # 格式：kook.{机器人标识}
 Kook 使用 KMarkdown 作为消息格式，适配器会自动转换：
 
 #### 文本消息
+
 ```
 CommonEvent.Segment[] -> KMarkdown
 [{type: "text", data: {text: "Hello"}}] -> "Hello"
 ```
 
 #### @提及用户
+
 ```
 [{type: "at", data: {user_id: "123456"}}] -> "(met)123456(met)"
 ```
 
 #### @全体成员
+
 ```
 [{type: "at", data: {user_id: "all"}}] -> "(met)all(met)"
 ```
 
 #### 图片
+
 ```
 [{type: "image", data: {url: "https://..."}}] -> "![](https://...)"
 ```
 
 #### 表情
+
 ```
 [{type: "face", data: {id: "emoji_id"}}] -> "(emj)emoji_id(emj)[emoji_id]"
 ```
@@ -188,6 +192,7 @@ CommonEvent.Segment[] -> KMarkdown
 ### 速率限制
 
 Kook API 有速率限制，请注意：
+
 - 全局: 120 次/分钟
 - 单个接口: 5 次/秒
 
@@ -199,9 +204,7 @@ Kook API 有速率限制，请注意：
 await kookAdapter.sendMessage("bot_id", {
   scene_type: "group",
   scene_id: "channel_id",
-  message: [
-    { type: "text", data: { text: "Hello, Kook!" } }
-  ]
+  message: [{ type: "text", data: { text: "Hello, Kook!" } }],
 });
 ```
 
@@ -213,8 +216,8 @@ await kookAdapter.sendMessage("bot_id", {
   scene_id: "channel_id",
   message: [
     { type: "at", data: { user_id: "123456" } },
-    { type: "text", data: { text: " 你好！" } }
-  ]
+    { type: "text", data: { text: " 你好！" } },
+  ],
 });
 ```
 
@@ -224,9 +227,7 @@ await kookAdapter.sendMessage("bot_id", {
 await kookAdapter.sendMessage("bot_id", {
   scene_type: "group",
   scene_id: "channel_id",
-  message: [
-    { type: "image", data: { url: "https://example.com/image.png" } }
-  ]
+  message: [{ type: "image", data: { url: "https://example.com/image.png" } }],
 });
 ```
 
@@ -239,6 +240,7 @@ log_level: debug
 ```
 
 日志输出包括：
+
 - WebSocket 连接状态
 - 心跳发送和接收
 - 事件接收和处理
@@ -289,4 +291,3 @@ log_level: debug
 - ✅ 服务器和频道管理
 - ✅ 事件处理
 - ✅ 自动重连
-

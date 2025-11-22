@@ -11,10 +11,10 @@ import { CQCode } from "./cqcode";
  * Implements the OneBot 11 standard
  * Reference: https://github.com/botuniverse/onebot-11
  */
-export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> {
+export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Protocol.Config> {
     public readonly name = "onebot";
     public readonly version = "v11" as const;
-    
+
     // Message ID transformation maps (V11 requires integer message IDs)
     private messageIdMap = new Map<number, string>();
     private reverseMessageIdMap = new Map<string, number>();
@@ -27,7 +27,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
             version: "v11",
         });
     }
-    
+
     /**
      * Start the OneBot V11 protocol service
      */
@@ -65,7 +65,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         if (!this.filterFn(event)) {
             return;
         }
-        
+
         const v11Event = this.convertToV11Format(event);
         if (v11Event) {
             this.logger.debug(`OneBot V11 dispatch:`, v11Event);
@@ -90,7 +90,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
      */
     async apply(action: string, params?: any): Promise<any> {
         this.logger.debug(`OneBot V11 action: ${action}`, params);
-        
+
         try {
             const result = await this.executeAction(action, params);
             return {
@@ -152,7 +152,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 return this.setFriendAddRequest(params);
             case "set_group_add_request":
                 return this.setGroupAddRequest(params);
-            
+
             // Info API
             case "get_login_info":
                 return this.getLoginInfo(params);
@@ -170,7 +170,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 return this.getGroupMemberList(params);
             case "get_group_honor_info":
                 return this.getGroupHonorInfo(params);
-            
+
             // Other API
             case "get_cookies":
                 return this.getCookies(params);
@@ -194,24 +194,24 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 return this.setRestart(params);
             case "clean_cache":
                 return this.cleanCache(params);
-            
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
     }
 
     // ============ Message API Implementations ============
-    
+
     private async sendPrivateMsg(params: any): Promise<any> {
         const { user_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
-        
+
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
             scene_id: String(user_id),
             message: segments,
         });
-        
+
         return {
             message_id: this.transformToInt(result.message_id),
         };
@@ -220,13 +220,13 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     private async sendGroupMsg(params: any): Promise<any> {
         const { group_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
-        
+
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
             scene_id: String(group_id),
             message: segments,
         });
-        
+
         return {
             message_id: this.transformToInt(result.message_id),
         };
@@ -234,20 +234,20 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
 
     private async sendMsg(params: any): Promise<any> {
         const { message_type, user_id, group_id, message, auto_escape = false } = params;
-        
+
         if (message_type === "private") {
             return this.sendPrivateMsg({ user_id, message, auto_escape });
         } else if (message_type === "group") {
             return this.sendGroupMsg({ group_id, message, auto_escape });
         }
-        
+
         throw new Error("Invalid message_type");
     }
 
     private async deleteMsg(params: any): Promise<void> {
         const { message_id } = params;
         const realMessageId = this.transformFromInt(message_id);
-        
+
         await this.adapter.deleteMessage(this.account.account_id, {
             message_id: realMessageId,
         });
@@ -256,11 +256,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     private async getMsg(params: any): Promise<any> {
         const { message_id } = params;
         const realMessageId = this.transformFromInt(message_id);
-        
+
         const msg = await this.adapter.getMessage(this.account.account_id, {
             message_id: realMessageId,
         });
-        
+
         return this.convertMessageInfoToV11(msg);
     }
 
@@ -275,7 +275,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     }
 
     // ============ Group Management API Implementations ============
-    
+
     private async setGroupKick(params: any): Promise<void> {
         const { group_id, user_id, reject_add_request = false } = params;
         // Implementation depends on adapter support
@@ -336,7 +336,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     }
 
     // ============ Request Handling API Implementations ============
-    
+
     private async setFriendAddRequest(params: any): Promise<void> {
         const { flag, approve = true, remark = "" } = params;
         // Implementation depends on adapter support
@@ -350,7 +350,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     }
 
     // ============ Info API Implementations ============
-    
+
     private async getLoginInfo(params: any): Promise<any> {
         return {
             user_id: Number(this.account.account_id),
@@ -360,11 +360,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
 
     private async getStrangerInfo(params: any): Promise<any> {
         const { user_id, no_cache = false } = params;
-        
+
         const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
             user_id: String(user_id),
         });
-        
+
         return {
             user_id: Number(userInfo.user_id),
             nickname: userInfo.user_name,
@@ -375,7 +375,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
 
     private async getFriendList(params: any): Promise<any> {
         const friends = await this.adapter.getFriendList(this.account.account_id);
-        
+
         return friends.map(friend => ({
             user_id: Number(friend.user_id),
             nickname: friend.user_name,
@@ -385,11 +385,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
 
     private async getGroupInfo(params: any): Promise<any> {
         const { group_id, no_cache = false } = params;
-        
+
         const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: String(group_id),
         });
-        
+
         return {
             group_id: Number(groupInfo.group_id),
             group_name: groupInfo.group_name,
@@ -400,7 +400,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
 
     private async getGroupList(params: any): Promise<any> {
         const groups = await this.adapter.getGroupList(this.account.account_id);
-        
+
         return groups.map(group => ({
             group_id: Number(group.group_id),
             group_name: group.group_name,
@@ -411,12 +411,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
 
     private async getGroupMemberInfo(params: any): Promise<any> {
         const { group_id, user_id, no_cache = false } = params;
-        
+
         const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: String(group_id),
             user_id: String(user_id),
         });
-        
+
         return {
             group_id: Number(group_id),
             user_id: Number(memberInfo.user_id),
@@ -438,11 +438,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
 
     private async getGroupMemberList(params: any): Promise<any> {
         const { group_id } = params;
-        
+
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: String(group_id),
         });
-        
+
         return members.map(member => ({
             group_id: Number(group_id),
             user_id: Number(member.user_id),
@@ -469,7 +469,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     }
 
     // ============ Other API Implementations ============
-    
+
     private async getCookies(params: any): Promise<any> {
         const { domain = "" } = params;
         // Implementation depends on platform support
@@ -535,7 +535,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     }
 
     // ============ Utility Methods ============
-    
+
     /**
      * Convert common event to OneBot V11 format
      */
@@ -561,9 +561,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                     nickname: event.sender.name || "",
                     ...event.sender,
                 },
-                ...(event.group ? {
-                    group_id: Number(event.group.id),
-                } : {}),
+                ...(event.group
+                    ? {
+                          group_id: Number(event.group.id),
+                      }
+                    : {}),
             };
         } else if (event.type === "notice") {
             return {
@@ -592,7 +594,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 sub_type: event.sub_type,
             };
         }
-        
+
         return null;
     }
 
@@ -616,11 +618,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 data: seg.data,
             }));
         }
-        
+
         if (auto_escape) {
             return [{ type: "text", data: { text: message } }];
         }
-        
+
         // Parse CQ code format
         return CQCode.parse(message);
     }
@@ -639,11 +641,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         if (typeof messageId === "number") {
             return messageId;
         }
-        
+
         if (this.reverseMessageIdMap.has(messageId)) {
             return this.reverseMessageIdMap.get(messageId)!;
         }
-        
+
         const intId = ++this.messageIdCounter;
         this.messageIdMap.set(intId, messageId);
         this.reverseMessageIdMap.set(messageId, intId);
@@ -657,7 +659,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         if (typeof messageId === "string") {
             return messageId;
         }
-        
+
         return this.messageIdMap.get(messageId) || String(messageId);
     }
 
@@ -692,10 +694,10 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     private verifySignature(body: string, signature?: string): boolean {
         if (!this.config.secret) return true;
         if (!signature) return false;
-        
-        const crypto = require('crypto');
-        const hmac = crypto.createHmac('sha1', this.config.secret);
-        const expected = 'sha1=' + hmac.update(body).digest('hex');
+
+        const crypto = require("crypto");
+        const hmac = crypto.createHmac("sha1", this.config.secret);
+        const expected = "sha1=" + hmac.update(body).digest("hex");
         return signature === expected;
     }
 
@@ -704,11 +706,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
      */
     private startHttp(): void {
         this.logger.info("Starting HTTP server");
-        
+
         // Register HTTP POST endpoint for API calls
-        this.router.post(`${this.path}/:action`, async (ctx) => {
+        this.router.post(`${this.path}/:action`, async ctx => {
             // Verify access token
-            const token = ctx.query.access_token || ctx.headers.authorization?.replace('Bearer ', '');
+            const token =
+                ctx.query.access_token || ctx.headers.authorization?.replace("Bearer ", "");
             if (!this.verifyToken(token as string)) {
                 ctx.status = 401;
                 ctx.body = { status: "failed", retcode: 1403, msg: "Unauthorized" };
@@ -739,14 +742,16 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
      */
     private startWebSocket(): void {
         this.logger.info("Starting WebSocket server");
-        
+
         const wss = this.router.ws(this.path);
-        
+
         wss.on("connection", (ws, request) => {
             // Verify access token
             const url = new URL(request.url!, `ws://localhost`);
-            const token = url.searchParams.get('access_token') || request.headers.authorization?.replace('Bearer ', '');
-            
+            const token =
+                url.searchParams.get("access_token") ||
+                request.headers.authorization?.replace("Bearer ", "");
+
             if (!this.verifyToken(token as string)) {
                 ws.close(1008, "Unauthorized");
                 return;
@@ -770,7 +775,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
             this.on("dispatch", onDispatch);
 
             // Handle incoming API calls
-            ws.on("message", async (data) => {
+            ws.on("message", async data => {
                 try {
                     const request = JSON.parse(data.toString());
                     const { action, params, echo } = request;
@@ -779,11 +784,13 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                     ws.send(JSON.stringify({ ...result, echo }));
                 } catch (error) {
                     this.logger.error("WebSocket message error:", error);
-                    ws.send(JSON.stringify({
-                        status: "failed",
-                        retcode: -1,
-                        msg: error.message,
-                    }));
+                    ws.send(
+                        JSON.stringify({
+                            status: "failed",
+                            retcode: -1,
+                            msg: error.message,
+                        }),
+                    );
                 }
             });
 
@@ -792,7 +799,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 this.off("dispatch", onDispatch);
             });
 
-            ws.on("error", (error) => {
+            ws.on("error", error => {
                 this.logger.error("WebSocket error:", error);
             });
         });
@@ -820,30 +827,29 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
      */
     private startHttpReverse(url: string): void {
         this.logger.info(`Starting HTTP reverse to ${url}`);
-        
 
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
                 const headers: any = {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'OneBot/11',
-                    'X-Self-ID': this.account.account_id,
+                    "Content-Type": "application/json",
+                    "User-Agent": "OneBot/11",
+                    "X-Self-ID": this.account.account_id,
                 };
 
                 // Add access token if configured
                 if (this.config.access_token) {
-                    headers['Authorization'] = `Bearer ${this.config.access_token}`;
+                    headers["Authorization"] = `Bearer ${this.config.access_token}`;
                 }
 
                 // Add signature if secret is configured
                 if (this.config.secret) {
-                    const hmac = crypto.createHmac('sha1', this.config.secret);
-                    headers['X-Signature'] = 'sha1=' + hmac.update(data).digest('hex');
+                    const hmac = crypto.createHmac("sha1", this.config.secret);
+                    headers["X-Signature"] = "sha1=" + hmac.update(data).digest("hex");
                 }
 
                 const response = await fetch(url, {
-                    method: 'POST',
+                    method: "POST",
                     headers,
                     body: data,
                     signal: AbortSignal.timeout(this.config.post_timeout || 5000),
@@ -866,8 +872,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
      */
     private startWsReverse(url: string): void {
         this.logger.info(`Starting WebSocket reverse to ${url}`);
-        
-        const WebSocket = require('ws');
+
+        const WebSocket = require("ws");
         let ws: any = null;
         let reconnectTimer: any = null;
 
@@ -876,21 +882,21 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 // Add access token to URL if configured
                 let wsUrl = url;
                 if (this.config.access_token) {
-                    const separator = url.includes('?') ? '&' : '?';
+                    const separator = url.includes("?") ? "&" : "?";
                     wsUrl = `${url}${separator}access_token=${this.config.access_token}`;
                 }
 
                 ws = new WebSocket(wsUrl, {
                     headers: {
-                        'User-Agent': 'OneBot/11',
-                        'X-Self-ID': this.account.account_id,
-                        'X-Client-Role': 'Universal',
+                        "User-Agent": "OneBot/11",
+                        "X-Self-ID": this.account.account_id,
+                        "X-Client-Role": "Universal",
                     },
                 });
 
-                ws.on('open', () => {
+                ws.on("open", () => {
                     this.logger.info(`WebSocket reverse connected to ${url}`);
-                    
+
                     // Send meta event: lifecycle.connect
                     const connectEvent = this.format("meta_event", {
                         meta_event_type: "lifecycle",
@@ -905,7 +911,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                     }
                 });
 
-                ws.on('message', async (data: Buffer) => {
+                ws.on("message", async (data: Buffer) => {
                     try {
                         const request = JSON.parse(data.toString());
                         const { action, params, echo } = request;
@@ -917,12 +923,14 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                     }
                 });
 
-                ws.on('close', () => {
-                    this.logger.warn(`WebSocket reverse disconnected from ${url}, reconnecting in 5s...`);
+                ws.on("close", () => {
+                    this.logger.warn(
+                        `WebSocket reverse disconnected from ${url}, reconnecting in 5s...`,
+                    );
                     reconnectTimer = setTimeout(connect, 5000);
                 });
 
-                ws.on('error', (error: Error) => {
+                ws.on("error", (error: Error) => {
                     this.logger.error("WebSocket reverse error:", error);
                 });
 
@@ -933,7 +941,6 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                     }
                 };
                 this.on("dispatch", onDispatch);
-
             } catch (error) {
                 this.logger.error(`WebSocket reverse connection failed:`, error);
                 reconnectTimer = setTimeout(connect, 5000);

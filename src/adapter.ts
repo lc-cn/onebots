@@ -11,15 +11,14 @@ import { CommonEvent } from "./common-types";
  */
 export namespace Adapter {
     export interface Configs extends Record<string, any> {}
-    export type MessageScene="private" | "group" | "channel" | "direct";
+    export type MessageScene = "private" | "group" | "channel" | "direct";
 
-    
     export interface SendMessageParams {
         scene_type: MessageScene;
         scene_id: string | number;
         message: CommonEvent.Segment[];
     }
-    
+
     export interface DeleteMessageParams {
         message_id: string | number;
     }
@@ -40,18 +39,17 @@ export namespace Adapter {
         user_id: string | number;
     }
 
-  
     export interface GetGroupMemberListParams {
         group_id: string | number;
     }
     export interface GetChannelInfoParams {
         channel_id: string | number;
     }
-    
+
     export interface GetChannelListParams {
         channel_id: string | number;
     }
-    export interface MessageSender{
+    export interface MessageSender {
         scene_type: MessageScene;
         sender_id: string | number;
         scene_id: string | number;
@@ -128,7 +126,7 @@ export namespace Adapter {
         user_id: string | number;
         user_name: string;
     }
-    
+
     export interface SendMessageResult {
         message_id: string | number;
     }
@@ -192,14 +190,17 @@ export namespace Adapter {
  * Base Adapter class with abstract methods
  * Platform adapters must implement these methods for their specific platform
  */
-export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adapter.Configs> extends EventEmitter {
-    accounts: Map<string, Account<T,C>> = new Map<string, Account<T,C>>();
+export abstract class Adapter<
+    C = any,
+    T extends keyof Adapter.Configs = keyof Adapter.Configs,
+> extends EventEmitter {
+    accounts: Map<string, Account<T, C>> = new Map<string, Account<T, C>>();
     #logger: Logger;
     icon: string;
 
     protected constructor(
         public app: App,
-        public platform: T
+        public platform: T,
     ) {
         super();
     }
@@ -213,32 +214,26 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
      */
     abstract sendMessage(
         uin: string,
-        params: Adapter.SendMessageParams
+        params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult>;
 
     /**
      * Delete a message
      */
-    abstract deleteMessage(
-        uin: string,
-        params: Adapter.DeleteMessageParams
-    ): Promise<void>;
+    abstract deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void>;
 
     /**
      * Get message by ID
      */
     abstract getMessage(
         uin: string,
-        params: Adapter.GetMessageParams
+        params: Adapter.GetMessageParams,
     ): Promise<Adapter.MessageInfo>;
 
     /**
      * Get user/stranger info
      */
-    abstract getUserInfo(
-        uin: string,
-        params: Adapter.GetUserInfoParams
-    ): Promise<Adapter.UserInfo>;
+    abstract getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo>;
 
     /**
      * Get friend list
@@ -250,7 +245,7 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
      */
     abstract getGroupInfo(
         uin: string,
-        params: Adapter.GetGroupInfoParams
+        params: Adapter.GetGroupInfoParams,
     ): Promise<Adapter.GroupInfo>;
 
     /**
@@ -263,7 +258,7 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
      */
     abstract getGroupMemberInfo(
         uin: string,
-        params: Adapter.GetGroupMemberInfoParams
+        params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo>;
 
     /**
@@ -271,14 +266,14 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
      */
     abstract getGroupMemberList(
         uin: string,
-        params: Adapter.GetGroupMemberListParams
+        params: Adapter.GetGroupMemberListParams,
     ): Promise<Adapter.GroupMemberInfo[]>;
     /**
      * Get channel info
      */
     abstract getChannelInfo(
         uin: string,
-        params: Adapter.GetChannelInfoParams
+        params: Adapter.GetChannelInfoParams,
     ): Promise<Adapter.ChannelInfo>;
 
     /**
@@ -290,67 +285,61 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
      */
     abstract getChannelMemberInfo(
         uin: string,
-        params: Adapter.GetChannelMemberInfoParams
+        params: Adapter.GetChannelMemberInfoParams,
     ): Promise<Adapter.ChannelMemberInfo>;
     /**
-     * Get guild member list    
+     * Get guild member list
      */
     abstract getChannelMemberList(
         uin: string,
-        params: Adapter.GetChannelMemberListParams
-    ): Promise<Adapter.ChannelMemberInfo[]>;/**
-    * Set channel member card
-    */
-   abstract setChannelMemberCard(
-       uin: string,
-       params: Adapter.SetChannelMemberCardParams
-   ): Promise<void>;
-   /**
-    * Set channel member role
-    */
-   abstract setChannelMemberRole(
-       uin: string,
-       params: Adapter.SetChannelMemberRoleParams
-   ): Promise<void>;
-   /**
-    * Set channel mute
-    */
-   abstract setChannelMute(
-       uin: string,
-       params: Adapter.SetChannelMuteParams
-   ): Promise<void>;
-   /**
-    * Invite channel member
-    */
-   abstract inviteChannelMember(
-       uin: string,
-       params: Adapter.InviteChannelMemberParams
-   ): Promise<void>;
+        params: Adapter.GetChannelMemberListParams,
+    ): Promise<Adapter.ChannelMemberInfo[]>; /**
+     * Set channel member card
+     */
+    abstract setChannelMemberCard(
+        uin: string,
+        params: Adapter.SetChannelMemberCardParams,
+    ): Promise<void>;
+    /**
+     * Set channel member role
+     */
+    abstract setChannelMemberRole(
+        uin: string,
+        params: Adapter.SetChannelMemberRoleParams,
+    ): Promise<void>;
+    /**
+     * Set channel mute
+     */
+    abstract setChannelMute(uin: string, params: Adapter.SetChannelMuteParams): Promise<void>;
+    /**
+     * Invite channel member
+     */
+    abstract inviteChannelMember(
+        uin: string,
+        params: Adapter.InviteChannelMemberParams,
+    ): Promise<void>;
     /**
      * Kick channel member
      */
-    abstract kickChannelMember(
-        uin: string,
-        params: Adapter.KickChannelMemberParams
-    ): Promise<void>;
+    abstract kickChannelMember(uin: string, params: Adapter.KickChannelMemberParams): Promise<void>;
     /**
      * Set channel member mute
      */
     abstract setChannelMemberMute(
         uin: string,
-        params: Adapter.SetChannelMemberMuteParams
+        params: Adapter.SetChannelMemberMuteParams,
     ): Promise<void>;
     /**
      * Get login info (bot's own info)
      */
     abstract getLoginInfo(uin: string): Promise<Adapter.UserInfo>;
-    
+
     // ============================================
     // Concrete methods
     // ============================================
 
     getAccount(uin: string) {
-        return this.accounts.get(uin)
+        return this.accounts.get(uin);
     }
 
     get logger() {
@@ -390,4 +379,5 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
         }
     }
 }
-export type AdapterClient<T extends Adapter = Adapter> = T extends Adapter<infer C, infer _> ? C : never;
+export type AdapterClient<T extends Adapter = Adapter> =
+    T extends Adapter<infer C, infer _> ? C : never;

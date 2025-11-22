@@ -106,19 +106,19 @@ export class App extends Koa {
         return logger;
     }
 
-    get adapterConfigs():Map<string,Account.Config[]> {
-        const map=new Map<string,Account.Config[]>();
-        Object.keys(this.config).forEach(key=>{
-            const [platform, ...accountId]=key.split(".");
-            const account_id=accountId.join(".");
-            if(!account_id) return;
-            if(!App.ADAPTERS.has(platform)) return console.warn(`未找到对应的适配器：${platform}`);
-            if(!map.has(platform)) map.set(platform,[]);
-            const accountList=map.get(platform);
+    get adapterConfigs(): Map<string, Account.Config[]> {
+        const map = new Map<string, Account.Config[]>();
+        Object.keys(this.config).forEach(key => {
+            const [platform, ...accountId] = key.split(".");
+            const account_id = accountId.join(".");
+            if (!account_id) return;
+            if (!App.ADAPTERS.has(platform)) return console.warn(`未找到对应的适配器：${platform}`);
+            if (!map.has(platform)) map.set(platform, []);
+            const accountList = map.get(platform);
             accountList.push({
                 ...this.config[key],
                 platform,
-                account_id
+                account_id,
             });
         });
         return map;
@@ -126,23 +126,23 @@ export class App extends Koa {
 
     private initAdapters() {
         for (const [platform, accountList] of this.adapterConfigs) {
-            const adapter= this.findOrCreateAdapter(platform);
-            if(!adapter) continue;
-            for(const accountConfig of accountList){
-                const account=adapter.createAccount(accountConfig);
+            const adapter = this.findOrCreateAdapter(platform);
+            if (!adapter) continue;
+            for (const accountConfig of accountList) {
+                const account = adapter.createAccount(accountConfig);
                 adapter.accounts.set(accountConfig.account_id, account);
-                if(this.isStarted) account.start();
+                if (this.isStarted) account.start();
             }
         }
     }
 
-    public addAccount<P extends keyof Adapter.Configs>(config:Account.Config<P>) {
+    public addAccount<P extends keyof Adapter.Configs>(config: Account.Config<P>) {
         this.config[`${config.platform}.${config.account_id}`] = config;
         const adapter = this.findOrCreateAdapter<P>(config.platform);
         if (!adapter) return;
         const account = adapter.createAccount(config);
         adapter.accounts.set(config.account_id, account);
-        if(this.isStarted) account.start();
+        if (this.isStarted) account.start();
         writeFileSync(App.configPath, yaml.dump(deepClone(this.config)));
     }
 
@@ -230,11 +230,11 @@ export class App extends Koa {
                         process.stdin.resume();
 
                         // 使用以下函数来模拟输入数据
-                    function simulateInput(data: Buffer) {
-                        process.nextTick(() => {
-                            process.stdin.emit("data", data);
-                        });
-                    }
+                        function simulateInput(data: Buffer) {
+                            process.nextTick(() => {
+                                process.stdin.emit("data", data);
+                            });
+                        }
 
                         simulateInput(Buffer.from(payload.data + "\n", "utf8"));
                         // 模拟结束
@@ -393,7 +393,8 @@ export function defineConfig(config: App.Config) {
 export namespace App {
     export const ADAPTERS: Map<keyof Adapter.Configs, AdapterClass> = new Map();
     export type AdapterConfig = {
-        [P in keyof Adapter.Configs as `${P}.${string}`]?: Adapter.Configs[P] & Partial<Protocol.Configs>;
+        [P in keyof Adapter.Configs as `${P}.${string}`]?: Adapter.Configs[P] &
+            Partial<Protocol.Configs>;
     };
     export type Config = {
         port?: number;
@@ -403,7 +404,8 @@ export namespace App {
         password?: string;
         log_level?: LogLevel;
         general?: Protocol.Configs;
-    } & KoaOptions & AdapterConfig;
+    } & KoaOptions &
+        AdapterConfig;
     export const defaultConfig: Config = {
         port: 6727,
         username: "admin",
@@ -423,7 +425,10 @@ export namespace App {
         }
         ADAPTERS.set(platform, adapter);
     }
-    export function registerGeneral<K extends keyof Protocol.Configs>(name: K, config: Protocol.Configs[K]) {
+    export function registerGeneral<K extends keyof Protocol.Configs>(
+        name: K,
+        config: Protocol.Configs[K],
+    ) {
         defaultConfig.general[name] = config;
     }
     export function loadAdapter<T extends string>(platform: string) {
@@ -436,10 +441,10 @@ export namespace App {
         type AdapterClass = Class<Adapter<T>>;
         let error: Error;
         let adapter: AdapterClass;
-        for(const name of maybeNames){
+        for (const name of maybeNames) {
             try {
                 adapter = require(name)?.default;
-                if(adapter) break;
+                if (adapter) break;
             } catch (e) {
                 error = e;
             }

@@ -5,7 +5,7 @@ import { Dict } from "@zhinjs/shared";
  * This provides a unified interface for different protocols to consume
  */
 export namespace CommonEvent {
-    export type MessageScene="private" | "group" | "channel"|"direct";
+    export type MessageScene = "private" | "group" | "channel" | "direct";
     /**
      * Base event structure
      */
@@ -77,7 +77,13 @@ export namespace CommonEvent {
     /**
      * Notice event types
      */
-    export type NoticeType = "group_increase" | "group_decrease" | "group_admin" | "group_ban" | "friend_add" | "custom";
+    export type NoticeType =
+        | "group_increase"
+        | "group_decrease"
+        | "group_admin"
+        | "group_ban"
+        | "friend_add"
+        | "custom";
 
     /**
      * Notice event

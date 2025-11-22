@@ -62,14 +62,14 @@ export namespace SatoriConfig {
         /** Event filters */
         filters?: any;
     }
-    App.registerGeneral('satori.v1', {
+    App.registerGeneral("satori.v1", {
         use_http: false,
         use_ws: true,
         webhooks: [],
-        platform: 'satori',
+        platform: "satori",
     });
 }
-declare module '../base'{
+declare module "../base" {
     namespace Protocol {
         interface ConfigMaps {
             satori: {

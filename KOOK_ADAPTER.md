@@ -74,62 +74,61 @@ general:
     use_http: true
     use_ws: true
     heartbeat_interval: 5
-  
+
   onebot.v12:
     use_http: true
     use_ws: true
     heartbeat_interval: 5
-  
+
   satori.v1:
     use_http: true
     use_ws: true
-  
+
   milky.v1:
     use_http: true
     use_ws: true
 
 # Kook 机器人配置
-kook.my_bot:  # 格式：{platform}.{account_id}
-  
+kook.my_bot: # 格式：{platform}.{account_id}
   # 平台特定配置（直接放在账号下）
-  token: '1/ABCDEFG/aaaaaccccccccccbbbbb=='  # Kook Bot Token
-  
+  token: "1/ABCDEFG/aaaaaccccccccccbbbbb==" # Kook Bot Token
+
   # OneBot V11 协议配置
   onebot.v11:
     use_http: true
     use_ws: true
-    access_token: 'my_token'
-    secret: 'my_secret'
+    access_token: "my_token"
+    secret: "my_secret"
     enable_cors: true
     heartbeat_interval: 5
     http_reverse: []
     ws_reverse: []
-  
+
   # OneBot V12 协议配置
   onebot.v12:
     use_http: true
     use_ws: true
-    access_token: 'my_token'
-    secret: 'my_secret'
+    access_token: "my_token"
+    secret: "my_secret"
     enable_cors: true
     heartbeat_interval: 5
     webhooks: []
     ws_reverse: []
-  
+
   # Satori V1 协议配置
   satori.v1:
     use_http: true
     use_ws: true
-    token: 'satori_token'
-    platform: 'kook'
+    token: "satori_token"
+    platform: "kook"
     webhooks: []
-  
+
   # Milky V1 协议配置
   milky.v1:
     use_http: true
     use_ws: true
-    access_token: 'milky_token'
-    secret: 'milky_secret'
+    access_token: "milky_token"
+    secret: "milky_secret"
     heartbeat: 5
 ```
 
@@ -158,13 +157,10 @@ Bot 会自动连接到 Kook 平台并开始工作。
 
 ```typescript
 // Kook KMarkdown
-"(met)123456(met) Hello!"
-
-// 转换为 CommonEvent
-[
-  { type: "at", data: { user_id: "123456" } },
-  { type: "text", data: { text: " Hello!" } }
-]
+"(met)123456(met) Hello!"[
+  // 转换为 CommonEvent
+  ({ type: "at", data: { user_id: "123456" } }, { type: "text", data: { text: " Hello!" } })
+];
 ```
 
 ### CommonEvent -> Kook
@@ -174,46 +170,46 @@ Bot 会自动连接到 Kook 平台并开始工作。
 [
   { type: "at", data: { user_id: "123456" } },
   { type: "text", data: { text: " 你好！" } },
-  { type: "image", data: { url: "https://..." } }
-]
+  { type: "image", data: { url: "https://..." } },
+];
 
 // 转换为 KMarkdown
-"(met)123456(met) 你好！![](https://...)"
+("(met)123456(met) 你好！![](https://...)");
 ```
 
 ## API 映射
 
 ### 消息 API
 
-| CommonEvent API | Kook API | 说明 |
-|-----------------|----------|------|
-| `sendMessage` | `/message/create` | 发送消息 |
-| `deleteMessage` | `/message/delete` | 删除消息 |
-| `getMessage` | ❌ 不支持 | Kook API 限制 |
+| CommonEvent API | Kook API          | 说明          |
+| --------------- | ----------------- | ------------- |
+| `sendMessage`   | `/message/create` | 发送消息      |
+| `deleteMessage` | `/message/delete` | 删除消息      |
+| `getMessage`    | ❌ 不支持         | Kook API 限制 |
 
 ### 用户 API
 
-| CommonEvent API | Kook API | 说明 |
-|-----------------|----------|------|
-| `getUserInfo` | `/user/view` | 获取用户信息 |
-| `getLoginInfo` | `/user/me` | 获取 Bot 信息 |
-| `getFriendList` | ❌ 不支持 | Kook 无好友系统 |
+| CommonEvent API | Kook API     | 说明            |
+| --------------- | ------------ | --------------- |
+| `getUserInfo`   | `/user/view` | 获取用户信息    |
+| `getLoginInfo`  | `/user/me`   | 获取 Bot 信息   |
+| `getFriendList` | ❌ 不支持    | Kook 无好友系统 |
 
 ### 服务器 API
 
-| CommonEvent API | Kook API | 说明 |
-|-----------------|----------|------|
-| `getGroupInfo` | `/guild/view` | 获取服务器信息 |
-| `getGroupList` | `/guild/list` | 获取服务器列表 |
-| `getGroupMemberInfo` | `/guild/user-view` | 获取成员信息 |
-| `getGroupMemberList` | `/guild/user-list` | 获取成员列表 |
+| CommonEvent API      | Kook API           | 说明           |
+| -------------------- | ------------------ | -------------- |
+| `getGroupInfo`       | `/guild/view`      | 获取服务器信息 |
+| `getGroupList`       | `/guild/list`      | 获取服务器列表 |
+| `getGroupMemberInfo` | `/guild/user-view` | 获取成员信息   |
+| `getGroupMemberList` | `/guild/user-list` | 获取成员列表   |
 
 ### 频道 API
 
-| CommonEvent API | Kook API | 说明 |
-|-----------------|----------|------|
-| `getChannelInfo` | `/channel/view` | 获取频道信息 |
-| `getChannelList` | `/channel/list` | 获取频道列表 |
+| CommonEvent API        | Kook API           | 说明               |
+| ---------------------- | ------------------ | ------------------ |
+| `getChannelInfo`       | `/channel/view`    | 获取频道信息       |
+| `getChannelList`       | `/channel/list`    | 获取频道列表       |
 | `getChannelMemberInfo` | `/guild/user-view` | 复用服务器成员 API |
 | `getChannelMemberList` | `/guild/user-list` | 复用服务器成员 API |
 
@@ -223,32 +219,32 @@ Bot 会自动连接到 Kook 平台并开始工作。
 
 Kook 消息类型映射：
 
-| Kook Type | 名称 | CommonEvent Type |
-|-----------|------|------------------|
-| 1 | 文本消息 | `message` |
-| 2 | 图片消息 | `message` (with image segment) |
-| 3 | 视频消息 | `message` (with video segment) |
-| 4 | 文件消息 | `message` (with file segment) |
-| 9 | KMarkdown | `message` |
-| 10 | 卡片消息 | `message` |
+| Kook Type | 名称      | CommonEvent Type               |
+| --------- | --------- | ------------------------------ |
+| 1         | 文本消息  | `message`                      |
+| 2         | 图片消息  | `message` (with image segment) |
+| 3         | 视频消息  | `message` (with video segment) |
+| 4         | 文件消息  | `message` (with file segment)  |
+| 9         | KMarkdown | `message`                      |
+| 10        | 卡片消息  | `message`                      |
 
 ### 系统事件
 
-| Kook Event | CommonEvent Type | Notice Type |
-|------------|------------------|-------------|
-| `added_reaction` | `notice` | `message_reaction` |
-| `deleted_reaction` | `notice` | `message_reaction` |
-| `updated_message` | `notice` | `message_update` |
-| `deleted_message` | `notice` | `message_delete` |
-| `guild_member_online` | `notice` | `member_online` |
-| `guild_member_offline` | `notice` | `member_offline` |
-| `added_guild` | `notice` | `group_increase` |
-| `deleted_guild` | `notice` | `group_decrease` |
-| `joined_guild` | `notice` | `group_increase` |
-| `exited_guild` | `notice` | `group_decrease` |
-| `added_channel` | `notice` | `channel_update` |
-| `updated_channel` | `notice` | `channel_update` |
-| `deleted_channel` | `notice` | `channel_update` |
+| Kook Event             | CommonEvent Type | Notice Type        |
+| ---------------------- | ---------------- | ------------------ |
+| `added_reaction`       | `notice`         | `message_reaction` |
+| `deleted_reaction`     | `notice`         | `message_reaction` |
+| `updated_message`      | `notice`         | `message_update`   |
+| `deleted_message`      | `notice`         | `message_delete`   |
+| `guild_member_online`  | `notice`         | `member_online`    |
+| `guild_member_offline` | `notice`         | `member_offline`   |
+| `added_guild`          | `notice`         | `group_increase`   |
+| `deleted_guild`        | `notice`         | `group_decrease`   |
+| `joined_guild`         | `notice`         | `group_increase`   |
+| `exited_guild`         | `notice`         | `group_decrease`   |
+| `added_channel`        | `notice`         | `channel_update`   |
+| `updated_channel`      | `notice`         | `channel_update`   |
+| `deleted_channel`      | `notice`         | `channel_update`   |
 
 ## KMarkdown 语法
 
@@ -358,12 +354,13 @@ kook.my_bot:
   versions:
     - version: V11
   protocol:
-    token: ${KOOK_BOT_TOKEN}  # 使用环境变量
+    token: ${KOOK_BOT_TOKEN} # 使用环境变量
 ```
 
 ### 2. 速率限制
 
 Kook API 速率限制：
+
 - 全局: 120 次/分钟
 - 单个接口: 5 次/秒
 
@@ -372,6 +369,7 @@ Kook API 速率限制：
 ### 3. 权限配置
 
 确保 Bot 有以下权限：
+
 - 查看频道
 - 发送消息
 - 管理消息（如需删除消息）
@@ -396,6 +394,7 @@ Kook API 速率限制：
 **问题**: WebSocket 连接失败
 
 **解决方案**:
+
 1. 检查 Token 是否正确
 2. 检查网络连接
 3. 查看日志获取详细错误信息
@@ -406,6 +405,7 @@ Kook API 速率限制：
 **问题**: Bot 在线但收不到消息
 
 **解决方案**:
+
 1. 检查 WebSocket 连接状态
 2. 确认心跳正常
 3. 检查 Bot 是否在频道中
@@ -416,6 +416,7 @@ Kook API 速率限制：
 **问题**: 消息发送失败
 
 **解决方案**:
+
 1. 确认 Bot 在目标频道中
 2. 检查 Bot 权限
 3. 确认频道 ID 正确
@@ -426,6 +427,7 @@ Kook API 速率限制：
 **问题**: API 返回错误
 
 **解决方案**:
+
 1. 检查速率限制
 2. 确认参数正确
 3. 查看 Kook API 文档
@@ -479,27 +481,29 @@ curl -X POST http://localhost:6727/kook/my_bot/V12/call \
 
 ```javascript
 // OneBot V11 WebSocket
-const ws = new WebSocket('ws://localhost:6727/kook/my_bot/V11/ws');
+const ws = new WebSocket("ws://localhost:6727/kook/my_bot/V11/ws");
 
-ws.on('open', () => {
-  console.log('Connected to Kook bot via OneBot V11');
+ws.on("open", () => {
+  console.log("Connected to Kook bot via OneBot V11");
 });
 
-ws.on('message', (data) => {
+ws.on("message", data => {
   const event = JSON.parse(data);
-  console.log('Received event:', event);
-  
+  console.log("Received event:", event);
+
   // 响应消息
-  if (event.post_type === 'message') {
-    ws.send(JSON.stringify({
-      action: 'send_msg',
-      params: {
-        message_type: event.message_type,
-        group_id: event.group_id,
-        message: 'Hello!'
-      },
-      echo: 'reply_1'
-    }));
+  if (event.post_type === "message") {
+    ws.send(
+      JSON.stringify({
+        action: "send_msg",
+        params: {
+          message_type: event.message_type,
+          group_id: event.group_id,
+          message: "Hello!",
+        },
+        echo: "reply_1",
+      }),
+    );
   }
 });
 ```
@@ -570,4 +574,3 @@ npm test -- --grep "Kook"
 ## 许可证
 
 与 OneBots 项目保持一致。
-

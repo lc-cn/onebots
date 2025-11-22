@@ -100,6 +100,23 @@ wechat.bot_id:
     use_http: true
     use_ws: true
 
+# 微信公众号机器人
+wechat-mp.my_official_account:
+  onebot.v11:
+    use_http: true
+    use_ws: true
+  
+  onebot.v12:
+    use_http: true
+    use_ws: true
+  
+  # 微信公众号平台配置
+  appId: '' # 公众号 AppID (从微信公众平台获取)
+  appSecret: '' # 公众号 AppSecret (从微信公众平台获取)
+  token: '' # 服务器配置 Token (自定义，用于验证服务器)
+  encodingAESKey: '' # 消息加解密密钥 (可选，用于加密模式)
+  encrypt: false # 是否启用加密模式
+
 # Kook (开黑啦) 机器人
 kook.bot_id:
   # 可以同时启用多个协议

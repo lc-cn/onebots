@@ -4,7 +4,10 @@ import { App } from "@/server/app";
 import { Bot } from "node-dd-bot";
 
 export default class DingtalkAdapter extends Adapter<Bot, "dingtalk"> {
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -12,15 +15,23 @@ export default class DingtalkAdapter extends Adapter<Bot, "dingtalk"> {
         const { scene_id, scene_type, message } = params;
 
         // 构建消息内容
-        const messageText = typeof message === 'string' ? message :
-            Array.isArray(message) ? message.map(seg => {
-                if (typeof seg === 'string') return seg;
-                if (seg.type === 'text') return seg.data.text;
-                if (seg.type === 'at') return `@${seg.data.qq || seg.data.name || 'user'}`;
-                if (seg.type === 'image') return `[图片:${seg.data.url || seg.data.file}]`;
-                return '';
-            }).join('') : '';
-            let result:string;
+        const messageText =
+            typeof message === "string"
+                ? message
+                : Array.isArray(message)
+                  ? message
+                        .map(seg => {
+                            if (typeof seg === "string") return seg;
+                            if (seg.type === "text") return seg.data.text;
+                            if (seg.type === "at")
+                                return `@${seg.data.qq || seg.data.name || "user"}`;
+                            if (seg.type === "image")
+                                return `[图片:${seg.data.url || seg.data.file}]`;
+                            return "";
+                        })
+                        .join("")
+                  : "";
+        let result: string;
         switch (scene_type) {
             case "private":
                 result = await bot.sendPrivateMsg(scene_id as string, messageText);
@@ -35,16 +46,25 @@ export default class DingtalkAdapter extends Adapter<Bot, "dingtalk"> {
             message_id: result || String(Date.now()),
         };
     }
-    getChannelInfo(uin: string, params: Adapter.GetChannelInfoParams): Promise<Adapter.ChannelInfo> {
+    getChannelInfo(
+        uin: string,
+        params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
         throw new Error("Method not implemented.");
     }
     getChannelList(uin: string): Promise<Adapter.ChannelInfo[]> {
         throw new Error("Method not implemented.");
     }
-    getChannelMemberInfo(uin: string, params: Adapter.GetChannelMemberInfoParams): Promise<Adapter.ChannelMemberInfo> {
+    getChannelMemberInfo(
+        uin: string,
+        params: Adapter.GetChannelMemberInfoParams,
+    ): Promise<Adapter.ChannelMemberInfo> {
         throw new Error("Method not implemented.");
     }
-    getChannelMemberList(uin: string, params: Adapter.GetChannelMemberListParams): Promise<Adapter.ChannelMemberInfo[]> {
+    getChannelMemberList(
+        uin: string,
+        params: Adapter.GetChannelMemberListParams,
+    ): Promise<Adapter.ChannelMemberInfo[]> {
         throw new Error("Method not implemented.");
     }
     setChannelMemberCard(uin: string, params: Adapter.SetChannelMemberCardParams): Promise<void> {
@@ -87,19 +107,25 @@ export default class DingtalkAdapter extends Adapter<Bot, "dingtalk"> {
     getGroupList(uin: string): Promise<Adapter.GroupInfo[]> {
         throw new Error("Method not implemented.");
     }
-    getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
+    getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
         throw new Error("Method not implemented.");
     }
-    getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         throw new Error("Method not implemented.");
     }
     getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         throw new Error("Method not implemented.");
     }
-    createAccount(config: Account.Config<'dingtalk'>): Account<'dingtalk', Bot> {
-        const bot= new Bot(config);
-        const account= new Account<'dingtalk', Bot>(this, bot, config);
-        account.on("start",()=>{
+    createAccount(config: Account.Config<"dingtalk">): Account<"dingtalk", Bot> {
+        const bot = new Bot(config);
+        const account = new Account<"dingtalk", Bot>(this, bot, config);
+        account.on("start", () => {
             bot.start();
         });
         return account;
@@ -113,5 +139,5 @@ declare module "@/adapter" {
     }
 }
 export namespace DingtalkAdapter {
-    export interface Config extends Bot.Options { }
+    export interface Config extends Bot.Options {}
 }

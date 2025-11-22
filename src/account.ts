@@ -2,19 +2,22 @@ import { EventEmitter } from "events";
 import { deepClone, deepMerge } from "./utils";
 import { Adapter } from "@/adapter";
 import { Logger } from "log4js";
-import { Protocol,ProtocolRegistry } from "./protocols";
+import { Protocol, ProtocolRegistry } from "./protocols";
 
 export class NotFoundError extends Error {
     message = "不支持的API";
 }
 
-export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=any> extends EventEmitter {
+export class Account<
+    P extends keyof Adapter.Configs = keyof Adapter.Configs,
+    C = any,
+> extends EventEmitter {
     status: AccountStatus;
     avatar: string;
     nickname: string;
     dependency: string;
     #logger: Logger;
-    protocols: Protocol[]
+    protocols: Protocol[];
     get account_id() {
         return this.config.account_id;
     }
@@ -43,33 +46,35 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=an
             }),
         };
     }
-    get protocolConfigs():Protocol.FullConfig<C>[] {
+    get protocolConfigs(): Protocol.FullConfig<C>[] {
         const result: Protocol.FullConfig<C>[] = [];
-        Object.keys(this.config).forEach(key=>{
-            const [protocol,version]=key.split(".");
-            if(ProtocolRegistry.has(protocol,version)){
-                const config= this.config[key]||{};
-                const general = this.app.config.general[key]||{};
+        Object.keys(this.config).forEach(key => {
+            const [protocol, version] = key.split(".");
+            if (ProtocolRegistry.has(protocol, version)) {
+                const config = this.config[key] || {};
+                const general = this.app.config.general[key] || {};
                 result.push({
-                    ...deepMerge(deepClone(general),config),
+                    ...deepMerge(deepClone(general), config),
                     protocol,
-                    version
-                })
+                    version,
+                });
             }
         });
         return result;
     }
     constructor(
         public adapter: Adapter<C>,
-        public client:C,
+        public client: C,
         public config: Account.Config<P>,
     ) {
         super();
 
-        this.protocols = this.protocolConfigs.map(({protocol,version,...config}:Protocol.FullConfig<C>) => {
-            const Factory = ProtocolRegistry.get(protocol, version);
-            return new Factory(this.adapter,this, config);
-        });
+        this.protocols = this.protocolConfigs.map(
+            ({ protocol, version, ...config }: Protocol.FullConfig<C>) => {
+                const Factory = ProtocolRegistry.get(protocol, version);
+                return new Factory(this.adapter, this, config);
+            },
+        );
         this.status = AccountStatus.Pending;
     }
 
@@ -92,7 +97,7 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=an
         return this.adapter.getGroupList(this.account_id);
     }
 
-    getFriendList(){
+    getFriendList() {
         return this.adapter.getFriendList(this.account_id);
     }
 
@@ -112,10 +117,12 @@ export enum AccountStatus {
 
 export namespace Account {
     export type Filters = {};
-    export type Config<P extends keyof Adapter.Configs = keyof Adapter.Configs> = Adapter.Configs[P] & Partial<Protocol.Configs> & {
-        platform: string;
-        account_id:string
-    }
+    export type Config<P extends keyof Adapter.Configs = keyof Adapter.Configs> =
+        Adapter.Configs[P] &
+            Partial<Protocol.Configs> & {
+                platform: string;
+                account_id: string;
+            };
     export const UnsupportedMethodError = new Error("不支持的方法");
     export const UnsupportedVersionError = new Error("不支持的Account版本");
 }

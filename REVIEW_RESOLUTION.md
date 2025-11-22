@@ -6,7 +6,7 @@ This document tracks the resolution of review comments.
 
 **File:** `src/adapter-base.ts`  
 **Comment:** "@copilot 和adapter-new.ts用哪个？？？"  
-**Author:** @lc-cn  
+**Author:** @lc-cn
 
 **Resolution:** ✅ Resolved in commit 5666b6c
 
@@ -49,6 +49,7 @@ This document tracks the resolution of review comments.
    - **When to use:** New adapters, want multi-protocol support
 
 **Documentation:**
+
 - `ADAPTER_ARCHITECTURE.md` - Complete architecture explanation
 - `ADAPTER_GUIDE.md` - Creating new adapters with BaseAdapter
 - `MIGRATION_GUIDE.md` - Migrating from Adapter to BaseAdapter
@@ -61,7 +62,7 @@ This document tracks the resolution of review comments.
 
 **File:** `src/adapter-new.ts`  
 **Comment:** "@copilot 和adapter-base.ts，用哪个"  
-**Author:** @lc-cn  
+**Author:** @lc-cn
 
 **Resolution:** ✅ Resolved in commit 5666b6c
 

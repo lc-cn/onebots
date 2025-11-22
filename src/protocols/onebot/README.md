@@ -168,17 +168,17 @@ OneBot V11 是基于 OneBot 11 标准的实现，完全兼容 CQHTTP 接口。
 protocols:
   - protocol: onebot
     version: v11
-    use_http: true          # 启用 HTTP
-    use_ws: true            # 启用 WebSocket
-    http_reverse:           # HTTP POST 上报地址
+    use_http: true # 启用 HTTP
+    use_ws: true # 启用 WebSocket
+    http_reverse: # HTTP POST 上报地址
       - http://localhost:5000/onebot
-    ws_reverse:             # WebSocket 反向连接地址
+    ws_reverse: # WebSocket 反向连接地址
       - ws://localhost:5000/ws
-    enable_cors: true       # 启用 CORS
-    access_token: ""        # 访问令牌
-    secret: ""              # 签名密钥
-    post_timeout: 5000      # HTTP POST 超时时间（毫秒）
-    post_message_format: "array"  # 上报消息格式: string | array
+    enable_cors: true # 启用 CORS
+    access_token: "" # 访问令牌
+    secret: "" # 签名密钥
+    post_timeout: 5000 # HTTP POST 超时时间（毫秒）
+    post_message_format: "array" # 上报消息格式: string | array
     serve_data_files: false # 是否提供数据文件访问
 ```
 
@@ -206,9 +206,9 @@ await protocol.apply("send_private_msg", {
 #### 处理事件
 
 ```typescript
-protocol.on("dispatch", (data) => {
+protocol.on("dispatch", data => {
   const event = JSON.parse(data);
-  
+
   if (event.post_type === "message") {
     console.log(`收到消息: ${event.raw_message}`);
   } else if (event.post_type === "notice") {
@@ -228,11 +228,7 @@ import { CQCode } from "./cqcode";
 const segments = CQCode.parse("Hello [CQ:at,qq=123] [CQ:image,file=test.jpg]");
 
 // 生成 CQ 码
-const message = CQCode.stringify([
-  CQCode.text("Hello "),
-  CQCode.at(123),
-  CQCode.image("test.jpg"),
-]);
+const message = CQCode.stringify([CQCode.text("Hello "), CQCode.at(123), CQCode.image("test.jpg")]);
 
 // 创建消息段
 const atSegment = CQCode.at(12345678);
@@ -381,14 +377,14 @@ OneBot V12 使用统一的消息段数组格式：
 protocols:
   - protocol: onebot
     version: v12
-    use_http: true          # 启用 HTTP
-    use_ws: true            # 启用 WebSocket
-    http_webhook:           # HTTP webhook 上报地址
+    use_http: true # 启用 HTTP
+    use_ws: true # 启用 WebSocket
+    http_webhook: # HTTP webhook 上报地址
       - http://localhost:5000/onebot/v12
-    ws_reverse:             # WebSocket 反向连接地址
+    ws_reverse: # WebSocket 反向连接地址
       - ws://localhost:5000/ws/v12
-    enable_cors: true       # 启用 CORS
-    access_token: ""        # 访问令牌
+    enable_cors: true # 启用 CORS
+    access_token: "" # 访问令牌
     heartbeat_interval: 5000 # 心跳间隔（毫秒）
 ```
 
@@ -410,9 +406,9 @@ await protocol.apply("send_message", {
 #### 处理事件
 
 ```typescript
-protocol.on("dispatch", (data) => {
+protocol.on("dispatch", data => {
   const event = JSON.parse(data);
-  
+
   if (event.type === "message") {
     console.log(`收到消息: ${event.alt_message}`);
   } else if (event.type === "notice") {
@@ -423,15 +419,15 @@ protocol.on("dispatch", (data) => {
 
 ### V11 vs V12 主要区别
 
-| 特性 | OneBot V11 | OneBot V12 |
-| --- | --- | --- |
-| 消息格式 | CQ码/数组 | 统一数组格式 |
-| API命名 | 下划线分隔 | 下划线分隔 |
-| 消息ID | 整数 | 字符串 |
-| 用户ID | 整数 | 字符串 |
+| 特性     | OneBot V11               | OneBot V12         |
+| -------- | ------------------------ | ------------------ |
+| 消息格式 | CQ码/数组                | 统一数组格式       |
+| API命名  | 下划线分隔               | 下划线分隔         |
+| 消息ID   | 整数                     | 字符串             |
+| 用户ID   | 整数                     | 字符串             |
 | 事件结构 | post_type + message_type | type + detail_type |
-| 平台标识 | 无 | platform字段 |
-| 频道支持 | 无 | 原生支持 |
+| 平台标识 | 无                       | platform字段       |
+| 频道支持 | 无                       | 原生支持           |
 
 ## 开发指南
 
@@ -471,4 +467,3 @@ protocol.on("dispatch", (data) => {
 ## License
 
 本项目遵循 OneBot 标准，采用 MIT 许可证。
-

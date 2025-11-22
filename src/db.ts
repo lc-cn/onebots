@@ -13,10 +13,10 @@ export class SqliteDB {
     constructor(private readonly filePath: string) {
         const dir = path.dirname(this.filePath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        
+
         // Ensure file has .db extension
         if (!this.filePath.endsWith(".db")) this.filePath = this.filePath + ".db";
-        
+
         // Open or create database
         this.db = new DatabaseSync(this.filePath);
         this.init();
@@ -61,12 +61,12 @@ export class SqliteDB {
      */
     set<T>(route: string, data: T): T {
         const { value, type } = this.serialize(data);
-        
+
         const stmt = this.db.prepare(`
             INSERT OR REPLACE INTO kv_store (key, value, type)
             VALUES (?, ?, ?)
         `);
-        
+
         stmt.run(route, value, type);
         return data;
     }

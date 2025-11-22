@@ -6,7 +6,7 @@ import { Dict } from "@zhinjs/shared";
  */
 export namespace OneBotV12 {
     // ============ Basic Types ============
-    
+
     /**
      * Bot self information
      */
@@ -28,7 +28,7 @@ export namespace OneBotV12 {
     }
 
     // ============ Message Types ============
-    
+
     /**
      * Message segment
      */
@@ -140,7 +140,7 @@ export namespace OneBotV12 {
     }
 
     // ============ Event Types ============
-    
+
     /**
      * Base event
      */
@@ -300,7 +300,7 @@ export namespace OneBotV12 {
     }
 
     // ============ API Request/Response Types ============
-    
+
     /**
      * Standard API response
      */
@@ -426,7 +426,7 @@ export namespace OneBotV12 {
     }
 
     // ============ Action Parameters ============
-    
+
     /**
      * Send message params
      */
@@ -654,4 +654,3 @@ export namespace OneBotV12 {
         size: number;
     }
 }
-

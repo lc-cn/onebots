@@ -1,5 +1,3 @@
-
-
 import { App } from "@/server/app";
 export namespace MilkyConfig {
     /**
@@ -83,7 +81,7 @@ export namespace MilkyConfig {
         /** Event filters */
         filters?: any;
     }
-    App.registerGeneral('milky.v1', {
+    App.registerGeneral("milky.v1", {
         use_http: false,
         http_reverse: [],
         use_ws: true,
