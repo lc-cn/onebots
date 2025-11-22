@@ -18,20 +18,21 @@ import { WebSocket } from "ws";
 export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     public readonly name = "satori";
     public readonly version = "v1" as const;
-    protected logger: Logger;
     private eventId = 0;
 
     constructor(
         public adapter: Adapter,
         public account: Account,
-        public config: Protocol.Config<SatoriConfig.Config>,
+        config: SatoriConfig.Config,
     ) {
-        super(adapter, account, config);
-        this.logger = adapter.getLogger(account.uin, "satori-v1");
+        super(adapter, account, {
+            ...config,
+            protocol: "satori",
+            version: "v1",
+        });
     }
 
     start(): void {
-        this.logger.info(`Starting Satori protocol v1 for ${this.account.platform}/${this.account.uin}`);
         
         // Initialize Satori protocol services
         if (this.config.use_http) {
@@ -300,7 +301,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     // Action implementations
     private async createMessage(params: any): Promise<Satori.Message[]> {
-        const result = await this.adapter.sendMessage(this.account.uin, {
+        const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_id: params.message_type === "private" ? "private" : "group",
             scene_type: params.message_type,
             message: this.parseMessageContent(params.content),
@@ -313,7 +314,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getMessage(params: any): Promise<Satori.Message> {
-        const msg = await this.adapter.getMessage(this.account.uin, {
+        const msg = await this.adapter.getMessage(this.account.account_id, {
             message_id: params.message_id,
         });
         
@@ -325,7 +326,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async deleteMessage(params: any): Promise<void> {
-        await this.adapter.deleteMessage(this.account.uin, {
+        await this.adapter.deleteMessage(this.account.account_id, {
             message_id: params.message_id,
         });
     }
@@ -341,7 +342,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getChannel(params: any): Promise<Satori.Channel> {
-        const info = await this.adapter.getGroupInfo(this.account.uin, {
+        const info = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: params.channel_id,
         });
         
@@ -353,7 +354,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getChannelList(params: any): Promise<Satori.List<Satori.Channel>> {
-        const groups = await this.adapter.getGroupList(this.account.uin);
+        const groups = await this.adapter.getGroupList(this.account.account_id);
         
         return {
             data: groups.map(g => ({
@@ -380,7 +381,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getGuild(params: any): Promise<Satori.Guild> {
-        const info = await this.adapter.getGroupInfo(this.account.uin, {
+        const info = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: params.guild_id,
         });
         
@@ -391,7 +392,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getGuildList(params: any): Promise<Satori.List<Satori.Guild>> {
-        const groups = await this.adapter.getGroupList(this.account.uin);
+        const groups = await this.adapter.getGroupList(this.account.account_id);
         
         return {
             data: groups.map(g => ({
@@ -402,7 +403,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getGuildMember(params: any): Promise<Satori.GuildMember> {
-        const info = await this.adapter.getGroupMemberInfo(this.account.uin, {
+        const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: params.guild_id,
             user_id: params.user_id,
         });
@@ -417,7 +418,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getGuildMemberList(params: any): Promise<Satori.List<Satori.GuildMember>> {
-        const members = await this.adapter.getGroupMemberList(this.account.uin, {
+        const members = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: params.guild_id,
         });
         
@@ -443,7 +444,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getUser(params: any): Promise<Satori.User> {
-        const info = await this.adapter.getUserInfo(this.account.uin, {
+        const info = await this.adapter.getUserInfo(this.account.account_id, {
             user_id: params.user_id,
         });
         
@@ -462,7 +463,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getFriendList(params: any): Promise<Satori.List<Satori.User>> {
-        const friends = await this.adapter.getFriendList(this.account.uin);
+        const friends = await this.adapter.getFriendList(this.account.account_id);
         
         return {
             data: friends.map(f => ({
@@ -478,7 +479,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private async getLogin(): Promise<Satori.Login> {
-        const info = await this.adapter.getLoginInfo(this.account.uin);
+        const info = await this.adapter.getLoginInfo(this.account.account_id);
         
         return {
             user: {
@@ -486,7 +487,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
                 name: info.user_name,
             },
             self_id: String(info.user_id),
-            platform: this.config.platform || this.account.platform,
+            platform: this.account.platform as string,
             status: 1,
         };
     }
@@ -526,7 +527,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         this.logger.info("Starting Satori HTTP server");
         
         // Register HTTP POST endpoint for API calls
-        this.router.post(`${this.path}/v1/:method`, async (ctx) => {
+        this.router.post(`${this.path}/:method`, async (ctx) => {
             // Verify access token
             const authHeader = ctx.headers['authorization'];
             const token = (typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : undefined) || 
@@ -554,7 +555,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         });
 
         // GET /v1/login for login info
-        this.router.get(`${this.path}/v1/login`, async (ctx) => {
+        this.router.get(`${this.path}/login`, async (ctx) => {
             // Verify access token
             const authHeader = ctx.headers['authorization'];
             const token = typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : undefined;
@@ -574,13 +575,13 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             }
         });
 
-        this.logger.info(`Satori HTTP server listening on ${this.path}/v1`);
+        this.logger.info(`Satori HTTP server listening on ${this.path}`);
     }
 
     private startWs(): void {
         this.logger.info("Starting Satori WebSocket server");
         
-        const wss = this.router.ws(`${this.path}/v1/events`);
+        const wss = this.router.ws(`${this.path}//events`);
         
         wss.on("connection", (ws, request) => {
             // Verify access token
@@ -592,7 +593,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
                 return;
             }
 
-            this.logger.info(`Satori WebSocket client connected: ${this.path}/v1/events`);
+            this.logger.info(`Satori WebSocket client connected: ${this.path}/events`);
 
             // Send ready event
             const readyPayload = {
@@ -600,10 +601,10 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
                 body: {
                     logins: [{
                         user: {
-                            id: this.account.uin,
-                            name: this.account.uin,
+                            id: this.account.account_id,
+                            name: this.account.account_id,
                         },
-                        self_id: this.account.uin,
+                        self_id: this.account.account_id,
                         platform: this.config.platform || this.account.platform,
                         status: 1, // ONLINE
                     }],
@@ -639,7 +640,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             });
 
             ws.on("close", () => {
-                this.logger.info(`Satori WebSocket client disconnected: ${this.path}/v1/events`);
+                this.logger.info(`Satori WebSocket client disconnected: ${this.path}/events`);
                 this.off("dispatch", onDispatch);
             });
 
@@ -648,7 +649,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             });
         });
 
-        this.logger.info(`Satori WebSocket server listening on ${this.path}/v1/events`);
+        this.logger.info(`Satori WebSocket server listening on ${this.path}/events`);
     }
 
     private startWebhook(config: SatoriConfig.WebhookConfig): void {
@@ -661,7 +662,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
                     'Content-Type': 'application/json',
                     'User-Agent': 'Satori/1.0',
                     'X-Platform': this.config.platform || this.account.platform,
-                    'X-Self-ID': this.account.uin,
+                    'X-Self-ID': this.account.account_id,
                 };
 
                 // Add access token if configured

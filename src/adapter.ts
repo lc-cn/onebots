@@ -2,7 +2,6 @@ import { EventEmitter } from "events";
 import { App } from "@/server/app";
 import { Account } from "@/account";
 import { Logger } from "log4js";
-import { Dict } from "@zhinjs/shared";
 import { CommonEvent } from "./common-types";
 
 /**
@@ -11,10 +10,6 @@ import { CommonEvent } from "./common-types";
  * Platform adapters provide the actual implementation for their specific platform
  */
 export namespace Adapter {
-    export interface Config<T extends keyof Configs=keyof Configs> {
-        platform: T;
-        [key: string]: any;
-    }
     export interface Configs extends Record<string, any> {}
     export type MessageScene="private" | "group" | "channel" | "direct";
 
@@ -197,15 +192,14 @@ export namespace Adapter {
  * Base Adapter class with abstract methods
  * Platform adapters must implement these methods for their specific platform
  */
-export abstract class Adapter<C=any,T extends string = string> extends EventEmitter {
-    accounts: Map<string, Account<C>> = new Map<string, Account<C>>();
+export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adapter.Configs> extends EventEmitter {
+    accounts: Map<string, Account<T,C>> = new Map<string, Account<T,C>>();
     #logger: Logger;
     icon: string;
 
     protected constructor(
         public app: App,
-        public platform: T,
-        public config: any,
+        public platform: T
     ) {
         super();
     }
@@ -356,19 +350,18 @@ export abstract class Adapter<C=any,T extends string = string> extends EventEmit
     // ============================================
 
     getAccount(uin: string) {
-        return this.accounts.get(uin) as Account<C> | undefined;
+        return this.accounts.get(uin)
     }
 
     get logger() {
-        return (this.#logger ||= this.app.getLogger(this.platform));
+        return (this.#logger ||= this.app.getLogger(this.platform as string));
     }
 
     get info() {
         return {
             platform: this.platform,
-            config: this.config,
             icon: this.icon,
-            bots: [...this.accounts.values()].map(account => {
+            accounts: [...this.accounts.values()].map(account => {
                 return account.info;
             }),
         };
@@ -376,26 +369,21 @@ export abstract class Adapter<C=any,T extends string = string> extends EventEmit
 
     async setOnline(uin: string) {}
     async setOffline(uin: string) {}
+    abstract createAccount(config: Account.Config<T>): Account<T, C>;
 
-    getLogger(uin: string, version?: string) {
-        if (!version) return this.app.getLogger(`${this.platform}-${uin}`);
-        return this.app.getLogger(`${this.platform}-${version}(${uin})`);
-    }
-
-    abstract createAccount(uin: string, protocol: Dict, versions: Account.Config[]): Account<this>;
-
-    async start(uin?: string): Promise<any> {
+    async start(account_id?: string): Promise<any> {
+        this.logger.info(`Starting adapter for platform ${this.platform}`);
         const startAccounts = [...this.accounts.values()].filter(account => {
-            return uin ? account.uin === uin : true;
+            return account_id ? account.account_id === account_id : true;
         });
         for (const account of startAccounts) {
             await account.start();
         }
     }
 
-    async stop(uin?: string): Promise<any> {
+    async stop(account_id?: string): Promise<any> {
         const stopAccounts = [...this.accounts.values()].filter(account => {
-            return uin ? account.uin === uin : true;
+            return account_id ? account.account_id === account_id : true;
         });
         for (const account of stopAccounts) {
             await account.stop();

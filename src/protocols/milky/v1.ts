@@ -17,15 +17,17 @@ import { WebSocket } from "ws";
 export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     public readonly name = "milky";
     public readonly version = "v1" as const;
-    protected logger: Logger;
 
     constructor(
         public adapter: Adapter,
         public account: Account,
-        public config: Protocol.Config,
+        config: Protocol.Config,
     ) {
-        super(adapter,account,config);
-        this.logger = adapter.getLogger(account.uin, "milky-v1");
+        super(adapter,account,{
+            ...config,
+            protocol: "milky",
+            version: "v1",
+        });
     }
 
     filterFn(event: Dict): boolean {
@@ -35,7 +37,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     start(): void {
-        this.logger.info(`Starting Milky protocol v1 for ${this.account.platform}/${this.account.uin}`);
         
         // Initialize Milky protocol services
         if (this.config.use_http) {
@@ -71,7 +72,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     dispatch(event: Milky.Event): void {
         // Dispatch Milky-formatted event
-        this.logger.debug(`Milky dispatch:`, event);
         this.emit("dispatch", JSON.stringify(event));
     }
 
@@ -234,7 +234,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     // Action implementations
     private async sendPrivateMessage(params: any): Promise<Milky.SendMessageResult> {
-        const result = await this.adapter.sendMessage(this.account.uin, {
+        const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
             scene_id: params.user_id,
             message: params.message,
@@ -243,7 +243,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async sendGroupMessage(params: any): Promise<Milky.SendMessageResult> {
-        const result = await this.adapter.sendMessage(this.account.uin, {
+        const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
             scene_id: params.group_id,
             message: params.message,
@@ -260,13 +260,13 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async deleteMessage(params: any): Promise<void> {
-        await this.adapter.deleteMessage(this.account.uin, {
+        await this.adapter.deleteMessage(this.account.account_id, {
             message_id: params.message_id,
         });
     }
 
     private async getMessage(params: any): Promise<Milky.MessageInfo> {
-        const msg = await this.adapter.getMessage(this.account.uin, {
+        const msg = await this.adapter.getMessage(this.account.account_id, {
             message_id: params.message_id,
         });
         return {
@@ -288,7 +288,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async getLoginInfo(): Promise<Milky.LoginInfo> {
-        const info = await this.adapter.getLoginInfo(this.account.uin);
+        const info = await this.adapter.getLoginInfo(this.account.account_id);
         return {
             user_id: info.user_id,
             nickname: info.user_name,
@@ -296,7 +296,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async getStrangerInfo(params: any): Promise<Milky.User> {
-        const info = await this.adapter.getUserInfo(this.account.uin, {
+        const info = await this.adapter.getUserInfo(this.account.account_id, {
             user_id: params.user_id,
         });
         return {
@@ -306,7 +306,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async getFriendList(): Promise<Milky.FriendInfo[]> {
-        const result = await this.adapter.getFriendList(this.account.uin);
+        const result = await this.adapter.getFriendList(this.account.account_id);
         return result.map(info => ({
             user_id: info.user_id,
             nickname: info.user_name,
@@ -315,7 +315,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async getGroupInfo(params: any): Promise<Milky.GroupInfo> {
-        const info = await this.adapter.getGroupInfo(this.account.uin, {
+        const info = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: params.group_id,
         });
         return {
@@ -327,7 +327,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async getGroupList(): Promise<Milky.GroupInfo[]> {
-        const result = await this.adapter.getGroupList(this.account.uin);
+        const result = await this.adapter.getGroupList(this.account.account_id);
         return result.map(info => ({
             group_id: info.group_id,
             group_name: info.group_name,
@@ -337,7 +337,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async getGroupMemberInfo(params: any): Promise<Milky.GroupMemberInfo> {
-        const info = await this.adapter.getGroupMemberInfo(this.account.uin, {
+        const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: params.group_id,
             user_id: params.user_id,
         });
@@ -361,7 +361,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async getGroupMemberList(params: any): Promise<Milky.GroupMemberInfo[]> {
-        const list = await this.adapter.getGroupMemberList(this.account.uin, {
+        const list = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: params.group_id,
         });
         return list.map(info => ({
@@ -458,7 +458,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             // Send meta event: lifecycle.connect
             const connectEvent = {
                 time: Math.floor(Date.now() / 1000),
-                self_id: this.account.uin,
+                self_id: this.account.account_id,
                 post_type: "meta_event",
                 meta_event_type: "lifecycle",
                 sub_type: "connect",
@@ -513,7 +513,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 const headers: any = {
                     'Content-Type': 'application/json',
                     'User-Agent': 'Milky/1.0',
-                    'X-Self-ID': this.account.uin,
+                    'X-Self-ID': this.account.account_id,
                 };
 
                 // Add access token if configured
@@ -567,7 +567,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 ws = new WebSocket(wsUrl, {
                     headers: {
                         'User-Agent': 'Milky/1.0',
-                        'X-Self-ID': this.account.uin,
+                        'X-Self-ID': this.account.account_id,
                         'X-Client-Role': 'Universal',
                     },
                 });
@@ -578,7 +578,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     // Send meta event: lifecycle.connect
                     const connectEvent = {
                         time: Math.floor(Date.now() / 1000),
-                        self_id: this.account.uin,
+                        self_id: this.account.account_id,
                         post_type: "meta_event",
                         meta_event_type: "lifecycle",
                         sub_type: "connect",
@@ -637,7 +637,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         setInterval(() => {
             const heartbeatEvent: Milky.MetaEvent = {
                 time: Math.floor(Date.now() / 1000),
-                self_id: this.account.uin,
+                self_id: this.account.account_id,
                 post_type: "meta_event",
                 meta_event_type: "heartbeat",
                 interval: this.config.heartbeat || 5,

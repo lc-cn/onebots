@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import { deepClone, deepMerge } from "./utils";
-import { Adapter,AdapterClient } from "@/adapter";
+import { Adapter } from "@/adapter";
 import { Logger } from "log4js";
 import { Protocol,ProtocolRegistry } from "./protocols";
 
@@ -8,17 +8,16 @@ export class NotFoundError extends Error {
     message = "不支持的API";
 }
 
-export class Account<C=any, V extends Account.Config = Account.Config> extends EventEmitter {
-    public config: V[];
+export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=any> extends EventEmitter {
     status: AccountStatus;
     avatar: string;
     nickname: string;
     dependency: string;
     #logger: Logger;
-    protected password: string;
-    client: C;
     protocols: Protocol[]
-
+    get account_id() {
+        return this.config.account_id;
+    }
     get app() {
         return this.adapter.app;
     }
@@ -28,49 +27,55 @@ export class Account<C=any, V extends Account.Config = Account.Config> extends E
     }
 
     get logger() {
-        return (this.#logger ||= this.adapter.getLogger(this.uin));
+        return (this.#logger ||= this.app.getLogger(this.account_id));
     }
 
     get info() {
         return {
-            uin: this.uin,
+            uin: this.account_id,
             status: this.status,
             platform: this.platform,
             avatar: this.avatar,
             nickname: this.nickname,
             dependency: this.dependency,
             urls: this.protocols.map(ins => {
-                return `/${this.platform}/${this.uin}/${ins.version}`;
+                return `/${this.platform}/${this.account_id}/${ins.version}`;
             }),
         };
     }
-
+    get protocolConfigs():Protocol.FullConfig<C>[] {
+        const result: Protocol.FullConfig<C>[] = [];
+        Object.keys(this.config).forEach(key=>{
+            const [protocol,version]=key.split(".");
+            if(ProtocolRegistry.has(protocol,version)){
+                const config= this.config[key]||{};
+                const general = this.app.config.general[key]||{};
+                result.push({
+                    ...deepMerge(deepClone(general),config),
+                    protocol,
+                    version
+                })
+            }
+        });
+        return result;
+    }
     constructor(
         public adapter: Adapter<C>,
-        public readonly uin: string,
-        version_configs: Account.Config[],
+        public client:C,
+        public config: Account.Config<P>,
     ) {
         super();
 
-        this.config = version_configs.map(c => {
-            if (!c.version) c.version = "V11";
-            switch (c.version) {
-                case "V11":
-                    return deepMerge(deepClone(this.adapter.app.config.general.V11), c);
-                case "V12":
-                    return deepMerge(deepClone(this.adapter.app.config.general.V12), c);
-                default:
-                    throw new Error("不支持的Account版本：" + c.version);
-            }
-        });
-        this.protocols = this.config.map((c:V) => {
-            const Factory = ProtocolRegistry.get(c.protocol, c.version);
-            return new Factory(this.adapter,this, c);
+        this.protocols = this.protocolConfigs.map(({protocol,version,...config}:Protocol.FullConfig<C>) => {
+            const Factory = ProtocolRegistry.get(protocol, version);
+            return new Factory(this.adapter,this, config);
         });
         this.status = AccountStatus.Pending;
     }
 
     async start() {
+        this.logger.info(`Starting account ${this.account_id}`);
+        this.emit("start");
         for (const protocol of this.protocols) {
             protocol.start();
         }
@@ -83,12 +88,12 @@ export class Account<C=any, V extends Account.Config = Account.Config> extends E
         this.emit("stop");
     }
 
-    getGroupList<V extends Account.Version>() {
-        return this.adapter.getGroupList(this.uin);
+    getGroupList() {
+        return this.adapter.getGroupList(this.account_id);
     }
 
-    getFriendList<V extends Account.Version>(){
-        return this.adapter.getFriendList(this.uin);
+    getFriendList(){
+        return this.adapter.getFriendList(this.account_id);
     }
 
     async dispatch(commonEvent: any) {
@@ -107,12 +112,10 @@ export enum AccountStatus {
 
 export namespace Account {
     export type Filters = {};
-    export type Version = "V11" | "V12";
-    export type Config<P extends string=string,V extends string=string> = {
-        version: V;
-        protocol: P;
-        // filters?: Service.Filters;
-    } & Protocol.ConfigMaps[P][V];
+    export type Config<P extends keyof Adapter.Configs = keyof Adapter.Configs> = Adapter.Configs[P] & Partial<Protocol.Configs> & {
+        platform: string;
+        account_id:string
+    }
     export const UnsupportedMethodError = new Error("不支持的方法");
     export const UnsupportedVersionError = new Error("不支持的Account版本");
 }

@@ -11,27 +11,27 @@ import { CQCode } from "./cqcode";
  * Implements the OneBot 11 standard
  * Reference: https://github.com/botuniverse/onebot-11
  */
-export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"v11">> {
+export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> {
     public readonly name = "onebot";
     public readonly version = "v11" as const;
-    protected logger: Logger;
     
     // Message ID transformation maps (V11 requires integer message IDs)
     private messageIdMap = new Map<number, string>();
     private reverseMessageIdMap = new Map<string, number>();
     private messageIdCounter = 0;
 
-    constructor(adapter: Adapter, account: Account, config: Account.Config<'onebot',"v11">) {
-        super(adapter, account, config);
-        this.logger = adapter.getLogger(account.uin, `onebot/v11`);
+    constructor(adapter: Adapter, account: Account, config: OneBotV11Protocol.Config) {
+        super(adapter, account, {
+            ...config,
+            protocol: "onebot",
+            version: "v11",
+        });
     }
     
     /**
      * Start the OneBot V11 protocol service
      */
     start(): void {
-        this.logger.info(`Starting OneBot V11 protocol for ${this.account.platform}/${this.account.uin}`);
-        
         // Initialize communication methods
         if (this.config.use_http) {
             this.startHttp();
@@ -79,7 +79,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
     format(event: string, payload: any): any {
         return {
             time: Math.floor(Date.now() / 1000),
-            self_id: Number(this.account.uin),
+            self_id: Number(this.account.account_id),
             post_type: event,
             ...payload,
         };
@@ -206,7 +206,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
         const { user_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
         
-        const result = await this.adapter.sendMessage(this.account.uin, {
+        const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
             scene_id: String(user_id),
             message: segments,
@@ -221,7 +221,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
         const { group_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
         
-        const result = await this.adapter.sendMessage(this.account.uin, {
+        const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
             scene_id: String(group_id),
             message: segments,
@@ -248,7 +248,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
         const { message_id } = params;
         const realMessageId = this.transformFromInt(message_id);
         
-        await this.adapter.deleteMessage(this.account.uin, {
+        await this.adapter.deleteMessage(this.account.account_id, {
             message_id: realMessageId,
         });
     }
@@ -257,7 +257,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
         const { message_id } = params;
         const realMessageId = this.transformFromInt(message_id);
         
-        const msg = await this.adapter.getMessage(this.account.uin, {
+        const msg = await this.adapter.getMessage(this.account.account_id, {
             message_id: realMessageId,
         });
         
@@ -353,15 +353,15 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
     
     private async getLoginInfo(params: any): Promise<any> {
         return {
-            user_id: Number(this.account.uin),
-            nickname: this.account.uin,
+            user_id: Number(this.account.account_id),
+            nickname: this.account.account_id,
         };
     }
 
     private async getStrangerInfo(params: any): Promise<any> {
         const { user_id, no_cache = false } = params;
         
-        const userInfo = await this.adapter.getUserInfo(this.account.uin, {
+        const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
             user_id: String(user_id),
         });
         
@@ -374,7 +374,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
     }
 
     private async getFriendList(params: any): Promise<any> {
-        const friends = await this.adapter.getFriendList(this.account.uin);
+        const friends = await this.adapter.getFriendList(this.account.account_id);
         
         return friends.map(friend => ({
             user_id: Number(friend.user_id),
@@ -386,7 +386,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
     private async getGroupInfo(params: any): Promise<any> {
         const { group_id, no_cache = false } = params;
         
-        const groupInfo = await this.adapter.getGroupInfo(this.account.uin, {
+        const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: String(group_id),
         });
         
@@ -399,7 +399,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
     }
 
     private async getGroupList(params: any): Promise<any> {
-        const groups = await this.adapter.getGroupList(this.account.uin);
+        const groups = await this.adapter.getGroupList(this.account.account_id);
         
         return groups.map(group => ({
             group_id: Number(group.group_id),
@@ -412,7 +412,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
     private async getGroupMemberInfo(params: any): Promise<any> {
         const { group_id, user_id, no_cache = false } = params;
         
-        const memberInfo = await this.adapter.getGroupMemberInfo(this.account.uin, {
+        const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: String(group_id),
             user_id: String(user_id),
         });
@@ -439,7 +439,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
     private async getGroupMemberList(params: any): Promise<any> {
         const { group_id } = params;
         
-        const members = await this.adapter.getGroupMemberList(this.account.uin, {
+        const members = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: String(group_id),
         });
         
@@ -542,7 +542,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
     private convertToV11Format(event: CommonEvent.Event): any {
         const base = {
             time: Math.floor(event.timestamp / 1000),
-            self_id: Number(this.account.uin),
+            self_id: Number(this.account.account_id),
         };
 
         if (event.type === "message") {
@@ -828,7 +828,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
                 const headers: any = {
                     'Content-Type': 'application/json',
                     'User-Agent': 'OneBot/11',
-                    'X-Self-ID': this.account.uin,
+                    'X-Self-ID': this.account.account_id,
                 };
 
                 // Add access token if configured
@@ -883,7 +883,7 @@ export class OneBotV11Protocol extends Protocol<"v11", Account.Config<'onebot',"
                 ws = new WebSocket(wsUrl, {
                     headers: {
                         'User-Agent': 'OneBot/11',
-                        'X-Self-ID': this.account.uin,
+                        'X-Self-ID': this.account.account_id,
                         'X-Client-Role': 'Universal',
                     },
                 });

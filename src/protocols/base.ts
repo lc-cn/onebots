@@ -16,27 +16,28 @@ export abstract class Protocol<
 > extends EventEmitter {
     public abstract readonly name: string;
     public abstract readonly version: V;
-    protected logger: Logger;
     get app(): App {
         return this.adapter.app;
     }
     get router(): Router {
         return this.adapter.app.router;
     }
+    get logger(){
+        return this.app.getLogger(`${this.name}/${this.version}`)
+    }
     constructor(
         public adapter: Adapter,
         public account: Account,
-        public config: Protocol.Config<C>,
+        public config: Protocol.FullConfig<C>,
     ) {
         super();
-        this.logger = this.adapter.getLogger(this.account.uin, `${this.config.protocol}/${this.config.version}`);
     }
 
     /**
      * Get the URL path for this protocol
      */
     protected get path(): string {
-        return `/${this.account.platform}/${this.config.protocol}/${this.config.version}`;
+        return `/${this.account.platform}/${this.account.account_id}/${this.config.protocol}/${this.config.version}`;
     }
 
     /**
@@ -73,15 +74,23 @@ export abstract class Protocol<
 }
 
 export namespace Protocol {
-    export interface ConfigMaps extends Record<string, Record<string, Record<string, any>>> { }
+    export interface ConfigMaps extends Record<string, Record<string, any>> { }
     /**
      * Base configuration for protocols
      */
     export type Config<T extends Record<string, any> = Record<string, any>> = T & {
         filters?: Filters;
-        version: string;
-        protocol: string
     }
+    export type FullConfig<T extends Record<string, any> = Record<string, any>> = T & {
+        filters?: Filters;
+        protocol: string
+        version: string;
+    }
+    export type Configs = {
+      [P in keyof ConfigMaps]: {
+        [V in keyof ConfigMaps[P] as `${P}.${V & string}`]: Config<ConfigMaps[P][V]>
+      } 
+    }[keyof ConfigMaps];
 
     /**
      * Filter configuration

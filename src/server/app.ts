@@ -15,9 +15,11 @@ import { Router, WsServer } from "./router";
 import { LogLevel } from "@/types";
 import * as path from "path";
 import { Adapter } from "@/adapter";
+import { Protocol } from "@/protocols/base";
 import { ChildProcess } from "child_process";
 import process from "process";
 import { Dict } from "@zhinjs/shared";
+import { Account } from "@/account";
 
 export interface KoaOptions {
     env?: string;
@@ -96,7 +98,7 @@ export class App extends Koa {
             .use(koaStatic(path.resolve(__dirname, "../../dist")));
         this.ws = this.router.ws("/");
 
-        this.initAccounts();
+        this.initAdapters();
     }
     getLogger(patform: string) {
         const logger = getLogger(`[OneBots:${patform}]`);
@@ -104,78 +106,54 @@ export class App extends Koa {
         return logger;
     }
 
-    private getConfigMaps() {
-        type AdapterInfo = [string, string, Adapter.Config];
-        const result: AdapterInfo[] = [];
-        for (const [key, value] of Object.entries(this.config)) {
-            const [adapter, ...uinArr] = key.split(".");
-            const uin = uinArr.join(".");
-            if (!uin) continue;
-            
-            const accountConfig = value as any;
-            
-            // 检查是否有协议.版本字段
-            const protocolKeys = Object.keys(accountConfig).filter(k => k.includes('.'));
-            if (protocolKeys.length > 0) {
-                // 新格式: 扁平化配置
-                const adapterConfig: Adapter.Config = {
-                    protocol: {},
-                    versions: []
-                };
-                
-                // 提取协议配置和平台配置
-                for (const [configKey, configValue] of Object.entries(accountConfig)) {
-                    if (configKey.includes('.')) {
-                        // 协议配置：格式为 protocol.version
-                        const [protocolName, versionStr] = configKey.split('.');
-                        
-                        // 获取 general 中的默认配置
-                        const generalConfig = this.config.general?.[configKey] || {};
-                        
-                        // 合并配置：general 默认值 + 账号特定配置
-                        const mergedConfig = deepMerge(deepClone(generalConfig), configValue);
-                        
-                        adapterConfig.versions.push({
-                            protocol: protocolName,
-                            version: versionStr.toUpperCase(),
-                            ...mergedConfig
-                        });
-                    } else {
-                        // 平台配置：不包含点的键都是平台特定配置
-                        adapterConfig.protocol[configKey] = configValue;
-                    }
-                }
-                
-                result.push([adapter, uin, adapterConfig]);
-            } else {
-                // 旧格式兼容
-                result.push([adapter, uin, value as Adapter.Config]);
+    get adapterConfigs():Map<string,Account.Config[]> {
+        const map=new Map<string,Account.Config[]>();
+        Object.keys(this.config).forEach(key=>{
+            const [platform, ...accountId]=key.split(".");
+            const account_id=accountId.join(".");
+            if(!account_id) return;
+            if(!App.ADAPTERS.has(platform)) return console.warn(`未找到对应的适配器：${platform}`);
+            if(!map.has(platform)) map.set(platform,[]);
+            const accountList=map.get(platform);
+            accountList.push({
+                ...this.config[key],
+                platform,
+                account_id
+            });
+        });
+        return map;
+    }
+
+    private initAdapters() {
+        for (const [platform, accountList] of this.adapterConfigs) {
+            const adapter= this.findOrCreateAdapter(platform);
+            if(!adapter) continue;
+            for(const accountConfig of accountList){
+                const account=adapter.createAccount(accountConfig);
+                adapter.accounts.set(accountConfig.account_id, account);
+                if(this.isStarted) account.start();
             }
         }
-        return result;
     }
 
-    private initAccounts() {
-        for (const [platform, uin, config] of this.getConfigMaps()) {
-            this.initAccountByConfig(platform, uin, config);
-        }
-    }
-
-    public addAccount<P extends string>(platform: P, uin: string, config: Adapter.Configs[P]) {
-        this.config[`${platform}.${uin}`] = config;
-        const account = this.initAccountByConfig(platform, uin, config);
-        account.start();
+    public addAccount<P extends keyof Adapter.Configs>(config:Account.Config<P>) {
+        this.config[`${config.platform}.${config.account_id}`] = config;
+        const adapter = this.findOrCreateAdapter<P>(config.platform);
+        if (!adapter) return;
+        const account = adapter.createAccount(config);
+        adapter.accounts.set(config.account_id, account);
+        if(this.isStarted) account.start();
         writeFileSync(App.configPath, yaml.dump(deepClone(this.config)));
     }
 
-    public updateAccount<P extends string>(p: P, uin: string, config: Adapter.Configs[P]) {
-        const adapter = this.findOrCreateAdapter(p);
+    public updateAccount<P extends keyof Adapter.Configs>(config: Adapter.Configs[P]) {
+        const adapter = this.findOrCreateAdapter(config.platform);
         if (!adapter) return;
-        const account = adapter.accounts.get(uin);
-        if (!account) return this.addAccount(p, uin, config);
-        const newConfig = deepMerge(this.config[uin], config);
-        this.removeAccount(p, uin);
-        this.addAccount(p, uin, newConfig);
+        const account = adapter.accounts.get(config.account_id);
+        if (!account) return this.addAccount(config);
+        const newConfig = deepMerge(this.config[`${config.platform}.${config.account_id}`], config);
+        this.removeAccount(config.platform, config.account_id);
+        this.addAccount(newConfig);
     }
 
     public removeAccount(p: string, uin: string, force?: boolean) {
@@ -189,11 +167,6 @@ export class App extends Koa {
         writeFileSync(App.configPath, yaml.dump(this.config));
     }
 
-    public initAccountByConfig<P extends keyof Adapter.Configs>(platform: P, uin: string, config: Adapter.Config<P>) {
-        const adapter = this.findOrCreateAdapter<P>(platform, config);
-        if (!adapter) return;
-        return adapter.createAccount(uin, config.protocol || {}, config.versions || []);
-    }
     get accounts() {
         return [...this.adapters.values()]
             .map(adapter => {
@@ -201,11 +174,11 @@ export class App extends Koa {
             })
             .flat();
     }
-    public findOrCreateAdapter<P extends keyof Adapter.Configs>(platform: P, config?: Adapter.Config<P>) {
+    public findOrCreateAdapter<P extends keyof Adapter.Configs>(platform: P) {
         if (this.adapters.has(platform)) return this.adapters.get(platform);
         const AdapterClass = App.ADAPTERS.get(platform);
         if (!AdapterClass) return this.logger.warn(`未安装适配器(${platform})`);
-        const adapter = new AdapterClass(this, config);
+        const adapter = new AdapterClass(this);
         this.adapters.set(platform, adapter);
         return adapter;
     }
@@ -303,18 +276,18 @@ export class App extends Koa {
             });
         });
         this.router.post("/add", (ctx, next) => {
-            const { uin, ...config } = (ctx.request.body || {}) as any;
+            const config = (ctx.request.body || {}) as any;
             try {
-                this.addAccount(config.platform, uin, config);
+                this.addAccount(config);
                 ctx.body = `添加成功`;
             } catch (e) {
                 ctx.body = e.message;
             }
         });
         this.router.post("/edit", (ctx, next) => {
-            const { uin, ...config } = (ctx.request.body || {}) as any;
+            const config = (ctx.request.body || {}) as any;
             try {
-                this.updateAccount(config.platform, uin, config);
+                this.updateAccount(config);
                 ctx.body = `修改成功`;
             } catch (e) {
                 ctx.body = e.message;
@@ -349,7 +322,7 @@ export class App extends Koa {
     async reload(config: App.Config) {
         await this.stop();
         this.config = deepMerge(deepClone(App.defaultConfig), config);
-        this.initAccounts();
+        this.initAdapters();
         await this.start();
     }
     async stop() {
@@ -419,28 +392,9 @@ export function defineConfig(config: App.Config) {
 
 export namespace App {
     export const ADAPTERS: Map<keyof Adapter.Configs, AdapterClass> = new Map();
-    export interface Adapters<P extends string = string> extends Map<P, Adapter<P>> {}
-
-    export interface ProtocolConfig {
-        [key: string]: any;
-    }
-
-    export interface GeneralConfig {
-        'onebot.v11'?: ProtocolConfig;
-        'onebot.v12'?: ProtocolConfig;
-        'satori.v1'?: ProtocolConfig;
-        'milky.v1'?: ProtocolConfig;
-    }
-
-    export interface AccountConfig {
-        'onebot.v11'?: ProtocolConfig;
-        'onebot.v12'?: ProtocolConfig;
-        'satori.v1'?: ProtocolConfig;
-        'milky.v1'?: ProtocolConfig;
-        // 其他字段都是平台特定配置
-        [key: string]: any;
-    }
-
+    export type AdapterConfig = {
+        [P in keyof Adapter.Configs as `${P}.${string}`]?: Adapter.Configs[P] & Partial<Protocol.Configs>;
+    };
     export type Config = {
         port?: number;
         path?: string;
@@ -448,18 +402,14 @@ export namespace App {
         username?: string;
         password?: string;
         log_level?: LogLevel;
-        general?: GeneralConfig;
-    } & KoaOptions &
-        Record<`${string}.${string}`, Adapter.Config | AccountConfig>;
+        general?: Protocol.Configs;
+    } & KoaOptions & AdapterConfig;
     export const defaultConfig: Config = {
         port: 6727,
         username: "admin",
         password: "123456",
         timeout: 30,
-        general: {
-            V11: {},
-            V12: {},
-        },
+        general: {},
         log_level: "info",
     };
 
@@ -473,7 +423,9 @@ export namespace App {
         }
         ADAPTERS.set(platform, adapter);
     }
-
+    export function registerGeneral<K extends keyof Protocol.Configs>(name: K, config: Protocol.Configs[K]) {
+        defaultConfig.general[name] = config;
+    }
     export function loadAdapter<T extends string>(platform: string) {
         const maybeNames = [
             path.join(__dirname, "../adapters", platform), // 内置的

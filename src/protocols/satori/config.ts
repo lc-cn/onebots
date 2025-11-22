@@ -1,4 +1,4 @@
-import { Satori } from "./types";
+import { App } from "@/server/app";
 
 export namespace SatoriConfig {
     /**
@@ -62,6 +62,12 @@ export namespace SatoriConfig {
         /** Event filters */
         filters?: any;
     }
+    App.registerGeneral('satori.v1', {
+        use_http: false,
+        use_ws: true,
+        webhooks: [],
+        platform: 'satori',
+    });
 }
 declare module '../base'{
     namespace Protocol {

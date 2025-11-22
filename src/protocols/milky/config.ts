@@ -1,5 +1,6 @@
 
 
+import { App } from "@/server/app";
 export namespace MilkyConfig {
     /**
      * HTTP configuration
@@ -82,4 +83,12 @@ export namespace MilkyConfig {
         /** Event filters */
         filters?: any;
     }
+    App.registerGeneral('milky.v1', {
+        use_http: false,
+        http_reverse: [],
+        use_ws: true,
+        ws_reverse: [],
+        heartbeat: 3,
+        post_message_format: "array",
+    });
 }

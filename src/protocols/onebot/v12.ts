@@ -11,21 +11,22 @@ import { WebSocket } from "ws";
  * Implements the OneBot 12 standard
  * Reference: https://12.onebot.dev
  */
-export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"v12">> {
+export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> {
     public readonly name = "onebot";
     public readonly version = "v12" as const;
-    protected logger: Logger;
     private eventIdCounter = 0;
-    constructor(adapter: Adapter, account: Account, config: Account.Config<'onebot',"v12">) {
-        super(adapter, account, config);
-        this.logger = adapter.getLogger(account.uin, `onebot/v12`);
+    constructor(adapter: Adapter, account: Account, config: OneBotV12Protocol.Config) {
+        super(adapter, account, {
+            ...config,
+            protocol: "onebot",
+            version: "v12",
+        });
     }
 
     /**
      * Start the OneBot V12 protocol service
      */
     start(): void {
-        this.logger.info(`Starting OneBot V12 protocol for ${this.account.platform}/${this.account.uin}`);
         
         // Initialize communication methods
         if (this.config.use_http) {
@@ -220,7 +221,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
         }
 
         const segments = this.convertToCommonSegments(message);
-        const result = await this.adapter.sendMessage(this.account.uin, {
+        const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type,
             scene_id,
             message: segments,
@@ -233,7 +234,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     }
 
     private async deleteMessage(params: OneBotV12.DeleteMessageParams): Promise<void> {
-        await this.adapter.deleteMessage(this.account.uin, {
+        await this.adapter.deleteMessage(this.account.account_id, {
             message_id: params.message_id,
         });
     }
@@ -242,8 +243,8 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     
     private getSelfInfo(): OneBotV12.BotSelf {
         return {
-            platform: this.account.platform,
-            user_id: this.account.uin,
+            platform: this.account.platform as string,
+            user_id: this.account.account_id,
         };
     }
 
@@ -287,7 +288,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     // ============ User API Implementations ============
     
     private async getUserInfo(params: OneBotV12.GetUserInfoParams): Promise<OneBotV12.UserInfo> {
-        const userInfo = await this.adapter.getUserInfo(this.account.uin, {
+        const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
             user_id: params.user_id,
         });
 
@@ -298,7 +299,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     }
 
     private async getFriendList(): Promise<OneBotV12.UserInfo[]> {
-        const friends = await this.adapter.getFriendList(this.account.uin);
+        const friends = await this.adapter.getFriendList(this.account.account_id);
 
         return friends.map(friend => ({
             user_id: String(friend.user_id),
@@ -310,7 +311,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     // ============ Group API Implementations ============
     
     private async getGroupInfo(params: OneBotV12.GetGroupInfoParams): Promise<OneBotV12.GroupInfo> {
-        const groupInfo = await this.adapter.getGroupInfo(this.account.uin, {
+        const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: params.group_id,
         });
 
@@ -321,7 +322,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     }
 
     private async getGroupList(): Promise<OneBotV12.GroupInfo[]> {
-        const groups = await this.adapter.getGroupList(this.account.uin);
+        const groups = await this.adapter.getGroupList(this.account.account_id);
 
         return groups.map(group => ({
             group_id: String(group.group_id),
@@ -330,7 +331,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     }
 
     private async getGroupMemberInfo(params: OneBotV12.GetGroupMemberInfoParams): Promise<OneBotV12.GroupMemberInfo> {
-        const memberInfo = await this.adapter.getGroupMemberInfo(this.account.uin, {
+        const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: params.group_id,
             user_id: params.user_id,
         });
@@ -342,7 +343,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     }
 
     private async getGroupMemberList(params: OneBotV12.GetGroupMemberListParams): Promise<OneBotV12.GroupMemberInfo[]> {
-        const members = await this.adapter.getGroupMemberList(this.account.uin, {
+        const members = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: params.group_id,
         });
 
@@ -397,7 +398,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
     // ============ Channel API Implementations ============
     
     private async getChannelInfo(params: OneBotV12.GetChannelInfoParams): Promise<OneBotV12.ChannelInfo> {
-        const channelInfo = await this.adapter.getChannelInfo(this.account.uin, {
+        const channelInfo = await this.adapter.getChannelInfo(this.account.account_id, {
             channel_id: params.channel_id,
         });
 
@@ -568,7 +569,7 @@ export class OneBotV12Protocol extends Protocol<"v12", Account.Config<'onebot',"
      * Generate unique event ID
      */
     private generateEventId(): string {
-        return `${this.account.platform}.${this.account.uin}.${Date.now()}.${++this.eventIdCounter}`;
+        return `${this.account.platform}.${this.account.account_id}.${Date.now()}.${++this.eventIdCounter}`;
     }
 
     /**
