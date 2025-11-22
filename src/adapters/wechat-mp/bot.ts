@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import axios, { AxiosInstance } from "axios";
 import * as crypto from "crypto";
 import { parseStringPromise, Builder } from "xml2js";
+import { Logger } from "log4js";
 
 /**
  * WeChat Official Account Bot Configuration
@@ -12,6 +13,7 @@ export interface WeChatMPBotConfig {
     token: string;
     encodingAESKey?: string;
     encrypt?: boolean;
+    logger?: Logger;
 }
 
 /**
@@ -50,9 +52,11 @@ export class WeChatMPBot extends EventEmitter {
     private tokenRefreshTimer?: NodeJS.Timeout;
     private http: AxiosInstance;
     private isRunning: boolean = false;
+    private logger?: Logger;
 
     constructor(public config: WeChatMPBotConfig) {
         super();
+        this.logger = config.logger;
         this.http = axios.create({
             baseURL: "https://api.weixin.qq.com",
             timeout: 30000,
@@ -153,7 +157,9 @@ export class WeChatMPBot extends EventEmitter {
                 throw new Error(`Failed to get access token: ${JSON.stringify(response.data)}`);
             }
         } catch (error) {
-            console.error("Failed to refresh access token:", error);
+            if (this.logger) {
+                this.logger.error("Failed to refresh access token:", error);
+            }
             throw error;
         }
     }
@@ -219,7 +225,9 @@ export class WeChatMPBot extends EventEmitter {
 
             return String(Date.now());
         } catch (error) {
-            console.error("Failed to send message:", error);
+            if (this.logger) {
+                this.logger.error("Failed to send message:", error);
+            }
             throw error;
         }
     }
@@ -247,7 +255,9 @@ export class WeChatMPBot extends EventEmitter {
 
             return response.data;
         } catch (error) {
-            console.error("Failed to get user info:", error);
+            if (this.logger) {
+                this.logger.error("Failed to get user info:", error);
+            }
             throw error;
         }
     }
@@ -284,7 +294,9 @@ export class WeChatMPBot extends EventEmitter {
 
             return response.data.media_id;
         } catch (error) {
-            console.error("Failed to upload media:", error);
+            if (this.logger) {
+                this.logger.error("Failed to upload media:", error);
+            }
             throw error;
         }
     }
@@ -313,7 +325,9 @@ export class WeChatMPBot extends EventEmitter {
 
             return response.data;
         } catch (error) {
-            console.error("Failed to get user list:", error);
+            if (this.logger) {
+                this.logger.error("Failed to get user list:", error);
+            }
             throw error;
         }
     }

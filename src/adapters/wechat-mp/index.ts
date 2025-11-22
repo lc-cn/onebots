@@ -279,6 +279,7 @@ export default class WechatMpAdapter extends Adapter<WeChatMPBot, "wechat-mp"> {
             token: config.token,
             encodingAESKey: config.encodingAESKey,
             encrypt: config.encrypt,
+            logger: this.logger,
         };
 
         const bot = new WeChatMPBot(botConfig);
