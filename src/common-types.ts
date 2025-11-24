@@ -1,3 +1,4 @@
+import { Adapter } from "@/adapter.js";
 import { Dict } from "@zhinjs/shared";
 
 /**
@@ -11,13 +12,13 @@ export namespace CommonEvent {
      */
     export interface Base {
         /** Event ID */
-        id: string;
+        id: Adapter.Id;
         /** Timestamp in milliseconds */
         timestamp: number;
         /** Platform identifier (qq, wechat, dingtalk, etc.) */
         platform: string;
         /** Bot identifier */
-        bot_id: string;
+        bot_id: Adapter.Id;
     }
 
     /**
@@ -25,7 +26,7 @@ export namespace CommonEvent {
      */
     export interface User {
         /** User ID */
-        id: string;
+        id: Adapter.Id;
         /** User nickname */
         name?: string;
         /** User avatar URL */
@@ -39,7 +40,7 @@ export namespace CommonEvent {
      */
     export interface Group {
         /** Group ID */
-        id: string;
+        id: Adapter.Id;
         /** Group name */
         name?: string;
         /** Additional group data */
@@ -71,7 +72,7 @@ export namespace CommonEvent {
         /** Raw message text */
         raw_message?: string;
         /** Message ID from platform */
-        message_id: string;
+        message_id: Adapter.Id;
     }
 
     /**
@@ -154,11 +155,11 @@ export namespace CommonAction {
         /** Message type */
         message_type: "private" | "group" | "channel";
         /** Target ID (user_id, group_id, or channel_id) */
-        target_id: string;
+        target_id: Adapter.Id;
         /** Message content */
         message: CommonEvent.Segment[];
         /** Source message ID for reply */
-        source?: string;
+        source?: Adapter.Id;
     }
 
     /**
@@ -166,7 +167,7 @@ export namespace CommonAction {
      */
     export interface DeleteMessage {
         /** Message ID to delete */
-        message_id: string;
+        message_id: Adapter.Id;
     }
 
     /**
@@ -174,7 +175,7 @@ export namespace CommonAction {
      */
     export interface GetMessage {
         /** Message ID to retrieve */
-        message_id: string;
+        message_id: Adapter.Id;
     }
 
     /**
@@ -182,7 +183,7 @@ export namespace CommonAction {
      */
     export interface GetUserInfo {
         /** User ID */
-        user_id: string;
+        user_id: Adapter.Id;
     }
 
     /**
@@ -190,7 +191,7 @@ export namespace CommonAction {
      */
     export interface GetGroupInfo {
         /** Group ID */
-        group_id: string;
+        group_id: Adapter.Id;
     }
 
     /**
@@ -198,7 +199,7 @@ export namespace CommonAction {
      */
     export interface GetGroupMemberList {
         /** Group ID */
-        group_id: string;
+        group_id: Adapter.Id;
     }
 
     /**
@@ -206,8 +207,8 @@ export namespace CommonAction {
      */
     export interface GetGroupMemberInfo {
         /** Group ID */
-        group_id: string;
+        group_id: Adapter.Id;
         /** User ID */
-        user_id: string;
+        user_id: Adapter.Id;
     }
 }

@@ -1,6 +1,6 @@
-import { Account } from "@/account";
-import { Adapter } from "@/adapter";
-import { App } from "@/server/app";
+import { Account } from "@/account.js";
+import { Adapter } from "@/adapter.js";
+import { App } from "@/server/app.js";
 import { Bot } from "node-dd-bot";
 
 export default class DingtalkAdapter extends Adapter<Bot, "dingtalk"> {
@@ -23,16 +23,16 @@ export default class DingtalkAdapter extends Adapter<Bot, "dingtalk"> {
             let result:string;
         switch (scene_type) {
             case "private":
-                result = await bot.sendPrivateMsg(scene_id as string, messageText);
+                result = await bot.sendPrivateMsg(scene_id.string, messageText);
                 break;
             case "group":
-                result = await bot.sendGroupMsg(scene_id as string, messageText);
+                result = await bot.sendGroupMsg(scene_id.string, messageText);
                 break;
             default:
                 throw new Error(`Unsupported scene_type: ${scene_type}`);
         }
         return {
-            message_id: result || String(Date.now()),
+            message_id: this.createId(result),
         };
     }
     getChannelInfo(uin: string, params: Adapter.GetChannelInfoParams): Promise<Adapter.ChannelInfo> {
@@ -99,13 +99,13 @@ export default class DingtalkAdapter extends Adapter<Bot, "dingtalk"> {
     createAccount(config: Account.Config<'dingtalk'>): Account<'dingtalk', Bot> {
         const bot= new Bot(config);
         const account= new Account<'dingtalk', Bot>(this, bot, config);
-        account.on("start",()=>{
-            bot.start();
-        });
+        // account.on("start",()=>{
+        //     bot.start();
+        // });
         return account;
     }
 }
-declare module "@/adapter" {
+declare module "@/adapter.js" {
     export namespace Adapter {
         export interface Configs {
             dingtalk: DingtalkAdapter.Config;

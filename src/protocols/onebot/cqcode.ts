@@ -1,5 +1,5 @@
 import { Dict } from "@zhinjs/shared";
-import { CommonEvent } from "@/common-types";
+import { CommonEvent } from "@/common-types.js";
 
 /**
  * CQ Code utilities for OneBot V11

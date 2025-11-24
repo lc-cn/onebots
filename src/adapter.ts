@@ -1,209 +1,62 @@
 import { EventEmitter } from "events";
-import { App } from "@/server/app";
-import { Account } from "@/account";
+import { App } from "@/server/app.js";
+import { Account } from "@/account.js";
 import { Logger } from "log4js";
-import { CommonEvent } from "./common-types";
-
-/**
- * Base Adapter Interface
- * Defines all methods that platform adapters must implement
- * Platform adapters provide the actual implementation for their specific platform
- */
-export namespace Adapter {
-    export interface Configs extends Record<string, any> {}
-    export type MessageScene="private" | "group" | "channel" | "direct";
-
-    
-    export interface SendMessageParams {
-        scene_type: MessageScene;
-        scene_id: string | number;
-        message: CommonEvent.Segment[];
-    }
-    
-    export interface DeleteMessageParams {
-        message_id: string | number;
-    }
-    export interface GetMessageParams {
-        message_id: string | number;
-    }
-
-    export interface GetUserInfoParams {
-        user_id: string | number;
-    }
-
-    export interface GetGroupInfoParams {
-        group_id: string | number;
-    }
-
-    export interface GetGroupMemberInfoParams {
-        group_id: string | number;
-        user_id: string | number;
-    }
-
-  
-    export interface GetGroupMemberListParams {
-        group_id: string | number;
-    }
-    export interface GetChannelInfoParams {
-        channel_id: string | number;
-    }
-    
-    export interface GetChannelListParams {
-        channel_id: string | number;
-    }
-    export interface MessageSender{
-        scene_type: MessageScene;
-        sender_id: string | number;
-        scene_id: string | number;
-        sender_name: string;
-        scene_name: string;
-    }
-    /**
-     * Message info
-     */
-    export interface MessageInfo {
-        message_id: string | number;
-        time: number;
-        sender: MessageSender;
-        message: CommonEvent.Segment[];
-    }
-
-    /**
-     * User info
-     */
-    export interface UserInfo {
-        user_id: string | number;
-        user_name: string;
-    }
-
-    /**
-     * Friend info
-     */
-    export interface FriendInfo {
-        user_id: string | number;
-        user_name: string;
-        remark?: string;
-    }
-
-    /**
-     * Group info
-     */
-    export interface GroupInfo {
-        group_id: string | number;
-        group_name: string;
-        member_count?: number;
-        max_member_count?: number;
-    }
-
-    /**
-     * Group member info
-     */
-    export interface GroupMemberInfo {
-        group_id: string | number;
-        user_id: string | number;
-        user_name: string;
-        card?: string;
-        role?: "owner" | "admin" | "member";
-    }
-    export interface ChannelInfo {
-        channel_id: string | number;
-        channel_name: string;
-        member_count?: number;
-    }
-    export interface GetChannelMemberInfoParams {
-        channel_id: string | number;
-        user_id: string | number;
-    }
-    export interface ChannelMemberInfo {
-        channel_id: string | number;
-        user_id: string | number;
-        user_name: string;
-        role?: "owner" | "admin" | "member";
-    }
-    export interface GetChannelMemberListParams {
-        channel_id: string | number;
-    }
-    export interface ChannelMemberList {
-        channel_id: string | number;
-        user_id: string | number;
-        user_name: string;
-    }
-    
-    export interface SendMessageResult {
-        message_id: string | number;
-    }
-    export interface ChangeChannelMemberRoleInfoParams {
-        channel_id: string | number;
-        user_id: string | number;
-        role: "owner" | "admin" | "member";
-    }
-    export interface ChangeChannelMemberCardParams {
-        channel_id: string | number;
-        user_id: string | number;
-        card: string;
-    }
-    export interface KickChannelMemberParams {
-        channel_id: string | number;
-        user_id: string | number;
-    }
-    export interface SetChannelMemberMuteParams {
-        channel_id: string | number;
-        user_id: string | number;
-        mute: boolean;
-    }
-    export interface SetChannelMuteParams {
-        channel_id: string | number;
-        mute: boolean;
-    }
-    export interface InviteChannelMemberParams {
-        channel_id: string | number;
-        user_id: string | number;
-    }
-    export interface SetChannelMemberCardParams {
-        channel_id: string | number;
-        user_id: string | number;
-        card: string;
-    }
-    export interface SetChannelMemberRoleParams {
-        channel_id: string | number;
-        user_id: string | number;
-        role: "owner" | "admin" | "member";
-    }
-    export interface SetChannelMemberMuteParams {
-        channel_id: string | number;
-        user_id: string | number;
-        mute: boolean;
-    }
-    export interface SetChannelMuteParams {
-        channel_id: string | number;
-        mute: boolean;
-    }
-    export interface InviteChannelMemberParams {
-        channel_id: string | number;
-        user_id: string | number;
-    }
-    export interface KickChannelMemberParams {
-        channel_id: string | number;
-        user_id: string | number;
-    }
-}
+import { CommonEvent } from "./common-types.js";
+import { SqliteDB } from "./db.js";
 
 /**
  * Base Adapter class with abstract methods
  * Platform adapters must implement these methods for their specific platform
  */
-export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adapter.Configs> extends EventEmitter {
-    accounts: Map<string, Account<T,C>> = new Map<string, Account<T,C>>();
+export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof Adapter.Configs> extends EventEmitter {
+    accounts: Map<string, Account<T, C>> = new Map<string, Account<T, C>>();
     #logger: Logger;
     icon: string;
-
+    get db(): SqliteDB {
+        return this.app.db;
+    }
+    get tableName() {
+        return `id_map_${this.platform}`;
+    }
     protected constructor(
         public app: App,
         public platform: T
     ) {
         super();
+        this.db.create(this.tableName, {
+            string: SqliteDB.Column("TEXT"),
+            number: SqliteDB.Column("INTEGER", { unique: true }),
+            source: SqliteDB.Column("TEXT")
+        });
     }
+    createId(id: string | number): Adapter.Id {
+        if (typeof id === "number") return { string: id.toString(), number: id, source: id };
+        const [existData] = this.db.select('*').from(this.tableName).where({
+            string: id
+        }).run()
+        if (existData) return existData as Adapter.Id;
+        const randomNum = Math.floor(Math.random() * 100000000000);
+        const [checkExist] = this.db.select('*').from(this.tableName).where({
+            number: randomNum
+        }).run();
 
+        if (checkExist) return this.createId(id);
+        const newId: Adapter.Id = {
+            string: id,
+            number: randomNum,
+            source: id
+        }
+        this.db.insert(this.tableName).values(newId).run();
+        return newId;
+    }
+    resolveId(id: string | number): Adapter.Id {
+        const [dbRecord] = this.db.select('*').from(this.tableName).where({
+            [typeof id === "number" ? "number" : "string"]: id
+        }).run();
+        if (dbRecord) return dbRecord as Adapter.Id;
+        return this.createId(id);
+    }
     // ============================================
     // Abstract methods - Must be implemented by platform adapters
     // ============================================
@@ -301,31 +154,31 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
     ): Promise<Adapter.ChannelMemberInfo[]>;/**
     * Set channel member card
     */
-   abstract setChannelMemberCard(
-       uin: string,
-       params: Adapter.SetChannelMemberCardParams
-   ): Promise<void>;
-   /**
-    * Set channel member role
-    */
-   abstract setChannelMemberRole(
-       uin: string,
-       params: Adapter.SetChannelMemberRoleParams
-   ): Promise<void>;
-   /**
-    * Set channel mute
-    */
-   abstract setChannelMute(
-       uin: string,
-       params: Adapter.SetChannelMuteParams
-   ): Promise<void>;
-   /**
-    * Invite channel member
-    */
-   abstract inviteChannelMember(
-       uin: string,
-       params: Adapter.InviteChannelMemberParams
-   ): Promise<void>;
+    abstract setChannelMemberCard(
+        uin: string,
+        params: Adapter.SetChannelMemberCardParams
+    ): Promise<void>;
+    /**
+     * Set channel member role
+     */
+    abstract setChannelMemberRole(
+        uin: string,
+        params: Adapter.SetChannelMemberRoleParams
+    ): Promise<void>;
+    /**
+     * Set channel mute
+     */
+    abstract setChannelMute(
+        uin: string,
+        params: Adapter.SetChannelMuteParams
+    ): Promise<void>;
+    /**
+     * Invite channel member
+     */
+    abstract inviteChannelMember(
+        uin: string,
+        params: Adapter.InviteChannelMemberParams
+    ): Promise<void>;
     /**
      * Kick channel member
      */
@@ -344,7 +197,7 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
      * Get login info (bot's own info)
      */
     abstract getLoginInfo(uin: string): Promise<Adapter.UserInfo>;
-    
+
     // ============================================
     // Concrete methods
     // ============================================
@@ -367,8 +220,8 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
         };
     }
 
-    async setOnline(uin: string) {}
-    async setOffline(uin: string) {}
+    async setOnline(uin: string) { }
+    async setOffline(uin: string) { }
     abstract createAccount(config: Account.Config<T>): Account<T, C>;
 
     async start(account_id?: string): Promise<any> {
@@ -391,3 +244,192 @@ export abstract class Adapter<C=any,T extends keyof Adapter.Configs = keyof Adap
     }
 }
 export type AdapterClient<T extends Adapter = Adapter> = T extends Adapter<infer C, infer _> ? C : never;
+
+/**
+ * Base Adapter Interface
+ * Defines all methods that platform adapters must implement
+ * Platform adapters provide the actual implementation for their specific platform
+ */
+export namespace Adapter {
+    export interface Configs extends Record<string, any> { }
+    export type MessageScene = "private" | "group" | "channel" | "direct";
+
+    export type Id = {
+        string: string
+        source: string | number
+        number: number
+    }
+    export interface SendMessageParams {
+        scene_type: MessageScene;
+        scene_id: Id;
+        message: CommonEvent.Segment[];
+    }
+
+    export interface DeleteMessageParams {
+        message_id: Id;
+    }
+    export interface GetMessageParams {
+        message_id: Id;
+    }
+
+    export interface GetUserInfoParams {
+        user_id: Id;
+    }
+
+    export interface GetGroupInfoParams {
+        group_id: Id;
+    }
+
+    export interface GetGroupMemberInfoParams {
+        group_id: Id;
+        user_id: Id;
+    }
+
+
+    export interface GetGroupMemberListParams {
+        group_id: Id;
+    }
+    export interface GetChannelInfoParams {
+        channel_id: Id;
+    }
+
+    export interface GetChannelListParams {
+        channel_id: Id;
+    }
+    export interface MessageSender {
+        scene_type: MessageScene;
+        sender_id: Id;
+        scene_id: Id;
+        sender_name: string;
+        scene_name: string;
+    }
+    /**
+     * Message info
+     */
+    export interface MessageInfo {
+        message_id: Id;
+        time: number;
+        sender: MessageSender;
+        message: CommonEvent.Segment[];
+    }
+
+    /**
+     * User info
+     */
+    export interface UserInfo {
+        user_id: Id;
+        user_name: string;
+    }
+
+    /**
+     * Friend info
+     */
+    export interface FriendInfo {
+        user_id: Id;
+        user_name: string;
+        remark?: string;
+    }
+
+    /**
+     * Group info
+     */
+    export interface GroupInfo {
+        group_id: Id;
+        group_name: string;
+        member_count?: number;
+        max_member_count?: number;
+    }
+
+    /**
+     * Group member info
+     */
+    export interface GroupMemberInfo {
+        group_id: Id;
+        user_id: Id;
+        user_name: string;
+        card?: string;
+        role?: "owner" | "admin" | "member";
+    }
+    export interface ChannelInfo {
+        channel_id: Id;
+        channel_name: string;
+        member_count?: number;
+    }
+    export interface GetChannelMemberInfoParams {
+        channel_id: Id;
+        user_id: Id;
+    }
+    export interface ChannelMemberInfo {
+        channel_id: Id;
+        user_id: Id;
+        user_name: string;
+        role?: "owner" | "admin" | "member";
+    }
+    export interface GetChannelMemberListParams {
+        channel_id: Id;
+    }
+    export interface ChannelMemberList {
+        channel_id: Id;
+        user_id: Id;
+        user_name: string;
+    }
+
+    export interface SendMessageResult {
+        message_id: Id;
+    }
+    export interface ChangeChannelMemberRoleInfoParams {
+        channel_id: Id;
+        user_id: Id;
+        role: "owner" | "admin" | "member";
+    }
+    export interface ChangeChannelMemberCardParams {
+        channel_id: Id;
+        user_id: Id;
+        card: string;
+    }
+    export interface KickChannelMemberParams {
+        channel_id: Id;
+        user_id: Id;
+    }
+    export interface SetChannelMemberMuteParams {
+        channel_id: Id;
+        user_id: Id;
+        mute: boolean;
+    }
+    export interface SetChannelMuteParams {
+        channel_id: Id;
+        mute: boolean;
+    }
+    export interface InviteChannelMemberParams {
+        channel_id: Id;
+        user_id: Id;
+    }
+    export interface SetChannelMemberCardParams {
+        channel_id: Id;
+        user_id: Id;
+        card: string;
+    }
+    export interface SetChannelMemberRoleParams {
+        channel_id: Id;
+        user_id: Id;
+        role: "owner" | "admin" | "member";
+    }
+    export interface SetChannelMemberMuteParams {
+        channel_id: Id;
+        user_id: Id;
+        mute: boolean;
+    }
+    export interface SetChannelMuteParams {
+        channel_id: Id;
+        mute: boolean;
+    }
+    export interface InviteChannelMemberParams {
+        channel_id: Id;
+        user_id: Id;
+    }
+    export interface KickChannelMemberParams {
+        channel_id: Id;
+        user_id: Id;
+    }
+}
+

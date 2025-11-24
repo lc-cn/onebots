@@ -1,10 +1,9 @@
-import { Protocol } from "../base";
-import { Account } from "@/account";
-import { Adapter } from "@/adapter";
+import { Protocol } from "../base.js";
+import { Account } from "@/account.js";
+import { Adapter } from "@/adapter.js";
 import crypto from "crypto";
-import { CommonEvent } from "@/common-types";
-import { Logger } from "log4js";
-import { CQCode } from "./cqcode";
+import { CommonEvent } from "@/common-types.js";
+import { CQCode } from "./cqcode.js";
 
 /**
  * OneBot V11 Protocol Implementation
@@ -26,6 +25,9 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
             protocol: "onebot",
             version: "v11",
         });
+    }
+    get db(){
+        return this.adapter.app.db;
     }
     
     /**
@@ -72,14 +74,13 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
             this.emit("dispatch", JSON.stringify(v11Event));
         }
     }
-
     /**
      * Format event data to OneBot V11 specification
      */
     format(event: string, payload: any): any {
         return {
             time: Math.floor(Date.now() / 1000),
-            self_id: Number(this.account.account_id),
+            self_id: this.adapter.resolveId(this.account.account_id).number,
             post_type: event,
             ...payload,
         };
@@ -206,15 +207,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         const { user_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
         
-        const result = await this.adapter.sendMessage(this.account.account_id, {
+        return  await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
-            scene_id: String(user_id),
+            scene_id: this.adapter.resolveId(user_id),
             message: segments,
         });
-        
-        return {
-            message_id: this.transformToInt(result.message_id),
-        };
     }
 
     private async sendGroupMsg(params: any): Promise<any> {
@@ -223,12 +220,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
-            scene_id: String(group_id),
+            scene_id: this.adapter.resolveId(group_id),
             message: segments,
         });
         
         return {
-            message_id: this.transformToInt(result.message_id),
+            message_id: result.message_id.number,
         };
     }
 
@@ -246,19 +243,17 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
 
     private async deleteMsg(params: any): Promise<void> {
         const { message_id } = params;
-        const realMessageId = this.transformFromInt(message_id);
         
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: realMessageId,
+            message_id: this.adapter.resolveId(message_id),
         });
     }
 
     private async getMsg(params: any): Promise<any> {
         const { message_id } = params;
-        const realMessageId = this.transformFromInt(message_id);
         
         const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: realMessageId,
+            message_id: this.adapter.resolveId(message_id),
         });
         
         return this.convertMessageInfoToV11(msg);
@@ -362,11 +357,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         const { user_id, no_cache = false } = params;
         
         const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: String(user_id),
+            user_id: this.adapter.resolveId(user_id),
         });
         
         return {
-            user_id: Number(userInfo.user_id),
+            user_id,
             nickname: userInfo.user_name,
             sex: "unknown",
             age: 0,
@@ -387,11 +382,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         const { group_id, no_cache = false } = params;
         
         const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: String(group_id),
+            group_id: this.adapter.resolveId(group_id),
         });
         
         return {
-            group_id: Number(groupInfo.group_id),
+            group_id,
             group_name: groupInfo.group_name,
             member_count: groupInfo.member_count || 0,
             max_member_count: groupInfo.max_member_count || 0,
@@ -402,7 +397,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         const groups = await this.adapter.getGroupList(this.account.account_id);
         
         return groups.map(group => ({
-            group_id: Number(group.group_id),
+            group_id: group.group_id.number,
             group_name: group.group_name,
             member_count: group.member_count || 0,
             max_member_count: group.max_member_count || 0,
@@ -413,13 +408,13 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         const { group_id, user_id, no_cache = false } = params;
         
         const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: String(group_id),
-            user_id: String(user_id),
+            group_id: this.adapter.resolveId(group_id),
+            user_id: this.adapter.resolveId(user_id),
         });
         
         return {
-            group_id: Number(group_id),
-            user_id: Number(memberInfo.user_id),
+            group_id: group_id,
+            user_id: user_id,
             nickname: memberInfo.user_name,
             card: memberInfo.card || "",
             sex: "unknown",
@@ -440,12 +435,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         const { group_id } = params;
         
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: String(group_id),
+            group_id: this.adapter.resolveId(group_id),
         });
         
         return members.map(member => ({
-            group_id: Number(group_id),
-            user_id: Number(member.user_id),
+            group_id: group_id,
+            user_id: member.user_id.number,
             nickname: member.user_name,
             card: member.card || "",
             sex: "unknown",
@@ -542,7 +537,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
     private convertToV11Format(event: CommonEvent.Event): any {
         const base = {
             time: Math.floor(event.timestamp / 1000),
-            self_id: Number(this.account.account_id),
+            self_id: this.transformToInt(this.account.account_id),
         };
 
         if (event.type === "message") {
@@ -551,8 +546,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 post_type: "message",
                 message_type: event.message_type,
                 sub_type: event.message_type === "private" ? "friend" : "normal",
-                message_id: this.transformToInt(event.message_id),
-                user_id: Number(event.sender.id),
+                message_id: event.message_id.number,
+                user_id: event.sender.id.number,
                 message: this.convertSegmentsToV11(event.message),
                 raw_message: event.raw_message || this.segmentsToString(event.message),
                 font: 0,
@@ -570,19 +565,19 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
                 ...base,
                 post_type: "notice",
                 notice_type: event.notice_type,
-                ...(event.user ? { user_id: Number(event.user.id) } : {}),
-                ...(event.operator ? { operator_id: Number(event.operator.id) } : {}),
-                ...(event.group ? { group_id: Number(event.group.id) } : {}),
+                ...(event.user ? { user_id: event.user.id.number } : {}),
+                ...(event.operator ? { operator_id: event.operator.id.number } : {}),
+                ...(event.group ? { group_id: event.group.id.number } : {}),
             };
         } else if (event.type === "request") {
             return {
                 ...base,
                 post_type: "request",
                 request_type: event.request_type,
-                user_id: Number(event.user.id),
+                user_id: event.user.id.number,
                 comment: event.comment || "",
                 flag: event.flag,
-                ...(event.group ? { group_id: Number(event.group.id) } : {}),
+                ...(event.group ? { group_id: event.group.id.number } : {}),
             };
         } else if (event.type === "meta") {
             return {
@@ -668,10 +663,10 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Protocol.Config> 
         return {
             time: msg.time,
             message_type: msg.sender.scene_type,
-            message_id: this.transformToInt(msg.message_id),
-            real_id: this.transformToInt(msg.message_id),
+            message_id: msg.message_id.number,
+            real_id: msg.message_id.number,
             sender: {
-                user_id: Number(msg.sender.sender_id),
+                user_id: msg.sender.sender_id.number,
                 nickname: msg.sender.sender_name,
             },
             message: this.convertSegmentsToV11(msg.message),

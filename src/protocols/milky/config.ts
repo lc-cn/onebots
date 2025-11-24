@@ -1,6 +1,6 @@
 
 
-import { App } from "@/server/app";
+import { App } from "@/server/app.js";
 export namespace MilkyConfig {
     /**
      * HTTP configuration

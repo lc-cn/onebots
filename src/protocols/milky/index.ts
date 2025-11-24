@@ -1,6 +1,6 @@
-import { ProtocolRegistry } from "../registry";
-import { MilkyV1 } from "./v1";
-import {MilkyConfig} from "./config";
+import { ProtocolRegistry } from "../registry.js";
+import { MilkyV1 } from "./v1.js";
+import {MilkyConfig} from "./config.js";
 
 // Register Milky protocol
 ProtocolRegistry.register("milky", "v1", MilkyV1, {
@@ -8,7 +8,7 @@ ProtocolRegistry.register("milky", "v1", MilkyV1, {
     description: "Milky 协议 V1 版本 - QQ 机器人协议",
     versions: ["v1"],
 });
-declare module '../base'{
+declare module '../base.js'{
     namespace Protocol {
         interface ConfigMaps {
             milky: {
@@ -17,6 +17,6 @@ declare module '../base'{
         }
     }
 }
-export * from "./v1";
-export * from "./types";
-export * from "./config";
+export * from "./v1.js";
+export * from "./types.js";
+export * from "./config.js";

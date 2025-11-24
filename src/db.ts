@@ -1,7 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import * as fs from "fs";
 import * as path from "path";
-import { Dict } from "@zhinjs/shared";
 
 /**
  * SQLite-based database implementation to replace JsonDB
@@ -9,8 +8,12 @@ import { Dict } from "@zhinjs/shared";
  */
 export class SqliteDB {
     private db: DatabaseSync;
-
-    constructor(private readonly filePath: string) {
+    static getType(data: any): string {
+        if (data === null) return "null";
+        if (Array.isArray(data)) return "array";
+        return typeof data;
+    }
+    constructor(private filePath: string) {
         const dir = path.dirname(this.filePath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         
@@ -19,155 +22,44 @@ export class SqliteDB {
         
         // Open or create database
         this.db = new DatabaseSync(this.filePath);
-        this.init();
     }
-
-    private init() {
-        // Create key-value store table
-        this.db.exec(`
-            CREATE TABLE IF NOT EXISTS kv_store (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                type TEXT NOT NULL
-            )
-        `);
-
-        // Create index for faster lookups
-        this.db.exec(`
-            CREATE INDEX IF NOT EXISTS idx_key ON kv_store(key)
-        `);
-    }
-
-    /**
-     * Get value by route/key
-     */
-    get<T>(route: string, initialValue?: T): T | undefined {
-        const stmt = this.db.prepare("SELECT value, type FROM kv_store WHERE key = ?");
-        const row = stmt.get(route) as { value: string; type: string } | undefined;
-
-        if (row) {
-            return this.deserialize(row.value, row.type) as T;
-        }
-
-        if (initialValue !== undefined) {
-            this.set(route, initialValue);
-        }
-
-        return initialValue;
-    }
-
-    /**
-     * Set value by route/key
-     */
-    set<T>(route: string, data: T): T {
-        const { value, type } = this.serialize(data);
+    create(tableName: string, schema: SqliteDB.Schema): void {
+        const indexColumns: string[] = [];
+        const columns = Object.entries(schema)
+            .map(([columnName, columnDef]) => {
+                let colDef = `${columnName} ${columnDef.type}`;
+                if (columnDef.index) indexColumns.push(columnName);
+                if (columnDef.primaryKey) colDef += " PRIMARY KEY";
+                if (columnDef.autoIncrement) colDef += " AUTOINCREMENT";
+                if (columnDef.notNull) colDef += " NOT NULL";
+                if (columnDef.unique) colDef += " UNIQUE";
+                if (columnDef.default !== undefined)
+                    colDef += ` DEFAULT (${columnDef.default()})`;
+                return colDef;
+            })
+            .join(", ");
         
-        const stmt = this.db.prepare(`
-            INSERT OR REPLACE INTO kv_store (key, value, type)
-            VALUES (?, ?, ?)
-        `);
-        
-        stmt.run(route, value, type);
-        return data;
-    }
-
-    /**
-     * Delete value by route/key
-     */
-    delete(route: string): boolean {
-        const stmt = this.db.prepare("DELETE FROM kv_store WHERE key = ?");
-        const result = stmt.run(route);
-        return result.changes > 0;
-    }
-
-    /**
-     * Get array from storage
-     */
-    private getArray<T>(route: string): T[] {
-        const arr = this.get<T[]>(route, []);
-        if (!Array.isArray(arr)) {
-            throw new TypeError(`data ${route} is not an Array`);
+        const createTableSQL = `CREATE TABLE IF NOT EXISTS ${tableName} (${columns})`;
+        this.db.exec(createTableSQL);
+        if(indexColumns.length>0){
+            for(const col of indexColumns){
+                const indexName=`idx_${tableName}_${col}`;
+                const createIndexSQL=`CREATE INDEX IF NOT EXISTS ${indexName} ON ${tableName}(${col})`;
+                this.db.exec(createIndexSQL);
+            }
         }
-        return arr;
     }
-
-    /**
-     * Find index in array
-     */
-    findIndex<T>(route: string, predicate: (value: T, index: number, obj: T[]) => unknown): number {
-        const arr = this.getArray<T>(route);
-        return arr.findIndex(predicate);
+    select(...fieds:string[]){
+        return new Selection(this.db,fieds);
     }
-
-    /**
-     * Get index of item in array
-     */
-    indexOf<T>(route: string, item: T): number {
-        return this.findIndex<T>(route, value => value === item);
+    insert(table:string){
+        return new Insertion(this.db,table);
     }
-
-    /**
-     * Add items to beginning of array
-     */
-    unshift<T>(route: string, ...data: T[]): number {
-        const arr = this.getArray<T>(route);
-        const result = arr.unshift(...data);
-        this.set(route, arr);
-        return result;
+    update(table:string){
+        return new Updation(this.db,table);
     }
-
-    /**
-     * Remove and return first item from array
-     */
-    shift<T>(route: string): T | undefined {
-        const arr = this.getArray<T>(route);
-        const result = arr.shift();
-        this.set(route, arr);
-        return result;
-    }
-
-    /**
-     * Add items to end of array
-     */
-    push<T>(route: string, ...data: T[]): number {
-        const arr = this.getArray<T>(route);
-        const result = arr.push(...data);
-        this.set(route, arr);
-        return result;
-    }
-
-    /**
-     * Remove and return last item from array
-     */
-    pop<T>(route: string): T | undefined {
-        const arr = this.getArray<T>(route);
-        const result = arr.pop();
-        this.set(route, arr);
-        return result;
-    }
-
-    /**
-     * Splice array
-     */
-    splice<T>(route: string, index: number = 0, deleteCount: number = 0, ...data: T[]): T[] {
-        const arr = this.getArray<T>(route);
-        const result = arr.splice(index, deleteCount, ...data);
-        this.set(route, arr);
-        return result;
-    }
-
-    /**
-     * Find item in array
-     */
-    find<T>(route: string, callback: (item: T) => boolean): T | undefined {
-        return this.getArray<T>(route).find(callback);
-    }
-
-    /**
-     * Filter array
-     */
-    filter<T>(route: string, callback: (item: T) => boolean): T[] {
-        return this.getArray<T>(route).filter(callback);
+    delete(table:string){
+        return new Deletion(this.db,table);
     }
 
     /**
@@ -176,55 +68,186 @@ export class SqliteDB {
     close(): void {
         this.db.close();
     }
-
-    /**
-     * Serialize data for storage
-     */
-    private serialize(data: any): { value: string; type: string } {
-        let type = typeof data;
-        let value: string;
-
-        if (data === null) {
-            type = "null";
-            value = "";
-        } else if (Array.isArray(data)) {
-            type = "array";
-            value = JSON.stringify(data);
-        } else if (type === "object") {
-            type = "object";
-            value = JSON.stringify(data);
-        } else if (type === "boolean") {
-            value = data ? "1" : "0";
-        } else if (type === "number") {
-            value = data.toString();
-        } else if (type === "bigint") {
-            type = "bigint";
-            value = data.toString();
-        } else {
-            value = String(data);
-        }
-
-        return { value, type };
+}
+export namespace SqliteDB {
+    export type ColumnType="TEXT" | "INTEGER" | "REAL" | "BLOB";
+    export type Column = {
+        type: ColumnType;
+        primaryKey?: boolean;
+        autoIncrement?: boolean;
+        index?: boolean;
+        notNull?: boolean;
+        unique?: boolean;
+        default?:()=> string | number | boolean;
     }
-
-    /**
-     * Deserialize data from storage
-     */
-    private deserialize(value: string, type: string): any {
-        switch (type) {
-            case "null":
-                return null;
-            case "array":
-            case "object":
-                return JSON.parse(value);
-            case "boolean":
-                return value === "1";
-            case "number":
-                return Number(value);
-            case "bigint":
-                return BigInt(value);
-            default:
-                return value;
+    export type Schema={
+        [columnName: string]: Column;
+    }
+    export function Column(type: ColumnType,options?:Omit<Column,"type">):Column
+    export function Column(column:Column):Column
+    export function Column(input:ColumnType|Column,options?:Omit<Column,"type">):Column{
+        if(typeof input==="string"){
+            return {
+                type:input,
+                ...options
+            }
+        }else{
+            return input;
         }
     }
+    export function formatValue(value:any){
+        return JSON.stringify(value).replace(/"/g,"'");
+    }
+    export type QueryCondition<T extends {}={}>= T & {
+        $and?: QueryCondition<T>;
+        $or?: QueryCondition<T>;
+        $like?: string;
+        $not?: QueryCondition<T>;
+        $regexp?: string;
+        $gt?: number;
+        $gte?: number;
+        $lt?: number;
+        $lte?: number;
+        $between?: [number, number];
+    };
+    export function generateWhereClause(conditions: QueryCondition[],logic="AND"):string{
+        const clauses:string[] = [];
+        for(const condition of conditions){
+            const subClauses:string[] = [];
+            for(const key in condition){
+                const value=condition[key];
+                if(key==="$and" && typeof value==="object"){
+                    subClauses.push(`(${generateWhereClause([value],"AND")})`);
+                }else if(key==="$or" && typeof value==="object"){
+                    subClauses.push(`(${generateWhereClause([value],"OR")})`);
+                }else if(key==="$not" && typeof value==="object"){
+                    subClauses.push(`NOT (${generateWhereClause([value],"AND")})`);
+                }else if(key==="$like" && typeof value==="string"){
+                    subClauses.push(`LIKE ${formatValue(value)}`);
+                }else if(key==="$regexp" && typeof value==="string"){
+                    subClauses.push(`REGEXP ${formatValue(value)}`);
+                }else if(key==="$gt" && typeof value==="number"){
+                    subClauses.push(`> ${value}`);
+                }else if(key==="$gte" && typeof value==="number"){
+                    subClauses.push(`>= ${value}`);
+                }else if(key==="$lt" && typeof value==="number"){
+                    subClauses.push(`< ${value}`);
+                }else if(key==="$lte" && typeof value==="number"){
+                    subClauses.push(`<= ${value}`);
+                }else if(key==="$between" && Array.isArray(value) && value.length===2){
+                    subClauses.push(`BETWEEN ${value[0]} AND ${value[1]}`);
+                }else if(typeof value==='object' && value === null){
+                    subClauses.push(`${key} IS NULL`);
+                }else{
+                    subClauses.push(`${key} = ${formatValue(value)}`);
+                }
+            }
+            if(subClauses.length>0){
+                clauses.push(`(${subClauses.join(" AND ")})`);
+            }
+        }
+        return clauses.join(` ${logic} `);
+    }
+                    
+}
+export class Selection{
+    private tableName:string;
+    private whereClauses: SqliteDB.QueryCondition[] = [];
+    private groupByClauses: string[] = [];
+    private orderByClauses: string[] = [];
+    constructor(private db:DatabaseSync,private fields:string[]){
+    }
+    from(tableName:string){
+        this.tableName=tableName;
+        return this;
+    }
+    where<T extends {}=Record<string, any>>(condition:SqliteDB.QueryCondition<T>){
+        this.whereClauses.push(condition);
+        return this;
+    }
+    groupBy(field:string){
+        this.groupByClauses.push(field);
+        return this;
+    }
+    orderBy(field:string,order:"ASC"|"DESC"="ASC"){
+        this.orderByClauses.push(`${field} ${order}`);
+        return this;
+    }
+    get sql(){
+        return `SELECT ${this.fields.join(", ")} FROM ${this.tableName}
+        ${this.whereClauses.length>0?`WHERE ${SqliteDB.generateWhereClause(this.whereClauses)}`:""}
+        ${this.groupByClauses.length>0?`GROUP BY ${this.groupByClauses.join(", ")}`:""}
+        ${this.orderByClauses.length>0?`ORDER BY ${this.orderByClauses.join(", ")}`:""}
+        `;
+    }
+    run(){
+        const stmt= this.db.prepare(this.sql);
+        return stmt.all();
+    }
+}
+export class Insertion{
+    private columns: string[] = [];
+    #values: (any[])[] = [];
+    constructor(private db:DatabaseSync,private tableName:string){
+    }
+    values<T extends object>(first:T,...rest:T[]){
+        const columns=Object.keys(first);
+        this.columns=columns;
+        this.#values.push(columns.map(col=>first[col]));
+        for(const item of rest){
+            this.#values.push(columns.map(col=>item[col]||null));
+        }
+        return this;
+    }
+    get sql(){
+        const placeholders=this.#values.map((item)=>item.map(v=>SqliteDB.formatValue(v)).join(", ")).join("), (");
+        return `INSERT INTO ${this.tableName} (${this.columns.join(", ")}) VALUES (${placeholders})`;
+    }
+    run(){
+        const stmt= this.db.prepare(this.sql);
+        return stmt.run();
+    }
+}
+export class Updation{
+    private setClauses: string[] = [];
+    private whereClauses: SqliteDB.QueryCondition[] = [];
+    constructor(private db:DatabaseSync,private tableName:string){
+    }
+    set<T extends object>(value:T){
+        for(const key in value){
+            this.setClauses.push(`${key} = ${SqliteDB.formatValue(value[key])}`);
+        }
+        return this;
+    }
+    where<T extends {}=Record<string, any>>(condition:SqliteDB.QueryCondition<T>){
+        this.whereClauses.push(condition);
+        return this;
+    }
+    get sql(){
+        return `UPDATE ${this.tableName} SET ${this.setClauses.join(", ")}
+        ${this.whereClauses.length>0?`WHERE ${SqliteDB.generateWhereClause(this.whereClauses)}`:""}
+        `;
+    }
+    run(){
+        const stmt= this.db.prepare(this.sql);
+        return stmt.run();
+    }
+}
+export class Deletion{
+    private whereClauses: SqliteDB.QueryCondition[] = [];
+    constructor(private db:DatabaseSync,private tableName:string){
+    }
+    where<T extends {}=Record<string, any>>(condition:SqliteDB.QueryCondition<T>){
+        this.whereClauses.push(condition);
+        return this;
+    }
+    get sql(){
+        return `DELETE FROM ${this.tableName}
+        ${this.whereClauses.length>0?`WHERE ${SqliteDB.generateWhereClause(this.whereClauses)}`:""}
+        `;
+    }
+    run(){
+        const stmt= this.db.prepare(this.sql);
+        return stmt.run();
+    }   
 }

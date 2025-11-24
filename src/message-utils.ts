@@ -1,4 +1,3 @@
-import { Account } from "@/account";
 import { Dict } from "@zhinjs/shared";
 
 /**

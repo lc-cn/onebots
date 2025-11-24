@@ -1,10 +1,9 @@
 import { EventEmitter } from "events";
-import { Account } from "@/account";
-import { Adapter } from "@/adapter";
-import { Logger } from "log4js";
+import { Account } from "@/account.js";
+import { Adapter } from "@/adapter.js";
 import { Dict } from "@zhinjs/shared";
-import { Router } from "@/server/router";
-import { App } from "@/server/app";
+import { Router } from "@/server/router.js";
+import { App } from "@/server/app.js";
 
 /**
  * Base Protocol class

@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import { Dict } from "@zhinjs/shared";
 import * as fs from "fs";
 import * as readline from "readline";
-const packageJson = require("../package.json");
+import packageJson from "../package.json" with { type: "json" };
 export const version = packageJson.version;
 export function readLine(maxLen: number, ...params: Parameters<typeof fs.createReadStream>) {
     return new Promise<string>((resolve, reject) => {

@@ -1,7 +1,7 @@
-import { ProtocolRegistry } from "../registry";
-import { App } from "@/server/app";
-import { OneBotV11Protocol } from "./v11";
-import { OneBotV12Protocol } from "./v12";
+import { ProtocolRegistry } from "../registry.js";
+import { App } from "@/server/app.js";
+import { OneBotV11Protocol } from "./v11.js";
+import { OneBotV12Protocol } from "./v12.js";
 
 // Register OneBot protocols
 ProtocolRegistry.register("onebot", "v11", OneBotV11Protocol, {
@@ -25,7 +25,7 @@ App.registerGeneral('onebot.v12', {
     use_ws: false,
     use_http: true,
 });
-declare module '../base'{
+declare module '../base.js'{
     namespace Protocol {
         interface ConfigMaps {
             onebot: {
@@ -36,9 +36,9 @@ declare module '../base'{
     }
 }
 
-export * from "./v11";
-export * from "./v12";
-export * from "./utils";
-export * from "./types";
-export * from "./types-v12";
-export * from "./cqcode";
+export * from "./v11.js";
+export * from "./v12.js";
+export * from "./utils.js";
+export * from "./types.js";
+export * from "./types-v12.js";
+export * from "./cqcode.js";

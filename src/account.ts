@@ -1,8 +1,8 @@
 import { EventEmitter } from "events";
-import { deepClone, deepMerge } from "./utils";
-import { Adapter } from "@/adapter";
+import { deepClone, deepMerge } from "./utils.js";
+import { Adapter } from "@/adapter.js";
 import { Logger } from "log4js";
-import { Protocol,ProtocolRegistry } from "./protocols";
+import { Protocol,ProtocolRegistry } from "./protocols/index.js";
 
 export class NotFoundError extends Error {
     message = "不支持的API";

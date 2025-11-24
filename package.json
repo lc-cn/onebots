@@ -2,6 +2,7 @@
   "name": "onebots",
   "version": "0.4.96",
   "description": "多平台多协议的机器人应用启动器",
+  "type": "module",
   "main": "lib/index.js",
   "bin": {
     "onebots": "./lib/bin.js"
@@ -9,17 +10,17 @@
   "scripts": {
     "start": "node .",
     "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
-    "dev": "ts-node-dev -r tsconfig-paths/register ./src/bin.ts -r dingtalk -c config.yaml",
+    "dev": "tsx -r tsconfig-paths/register ./src/bin.ts -r dingtalk -c config.yaml",
     "pub": "npm publish --access public",
     "lint": "prettier --check ./**/*.{ts,js}",
     "lint:fix": "prettier --write ./**/*.{ts,js,md}",
-    "test": "ts-node -r tsconfig-paths/register ./src/test.ts",
+    "test": "tsx -r tsconfig-paths/register ./src/test.ts",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=22"
   },
   "publishConfig": {
     "access": "public",
@@ -59,7 +60,7 @@
     "element-plus": "^2.4.4",
     "prettier": "^3.0.0",
     "sass": "^1.69.6",
-    "ts-node-dev": "latest",
+    "tsx": "latest",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "typescript": "latest",

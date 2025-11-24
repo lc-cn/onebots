@@ -1,14 +1,9 @@
-import { Protocol } from "../base";
-import { Account } from "@/account";
-import { Adapter } from "@/adapter";
-import { Dict } from "@zhinjs/shared";
-import { CommonEvent } from "@/common-types";
-import { Satori } from "./types";
-import { SatoriConfig } from "./config";
-import { EventEmitter } from "events";
-import { Logger } from "log4js";
-import { Context } from "koa";
-import { WebSocket } from "ws";
+import { Protocol } from "../base.js";
+import { Account } from "@/account.js";
+import { Adapter } from "@/adapter.js";
+import { CommonEvent } from "@/common-types.js";
+import { Satori } from "./types.js";
+import { SatoriConfig } from "./config.js";
 
 /**
  * Satori Protocol V1 Implementation
@@ -207,7 +202,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             id: this.eventId++,
             type: "message-created",
             platform: this.config.platform || event.platform,
-            self_id: this.config.self_id || event.bot_id,
+            self_id: this.adapter.resolveId(this.account.account_id).string,
             timestamp: event.timestamp,
             channel: event.group
                 ? {
@@ -240,7 +235,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             id: this.eventId++,
             type: eventTypeMap[event.notice_type] || "internal",
             platform: this.config.platform || event.platform,
-            self_id: this.config.self_id || event.bot_id,
+            self_id: this.adapter.resolveId(this.account.account_id).string,
             timestamp: event.timestamp,
             user: event.user
                 ? {
@@ -262,7 +257,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             id: this.eventId++,
             type: event.request_type === "friend" ? "friend-request" : "guild-member-request",
             platform: this.config.platform || event.platform,
-            self_id: this.config.self_id || event.bot_id,
+            self_id: this.adapter.resolveId(this.account.account_id).string,
             timestamp: event.timestamp,
             user: {
                 id: String(event.user.id),
@@ -276,7 +271,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             id: this.eventId++,
             type: "internal",
             platform: this.config.platform || event.platform,
-            self_id: this.config.self_id || event.bot_id,
+            self_id: this.adapter.resolveId(this.account.account_id).string,
             timestamp: event.timestamp,
         };
     }
@@ -302,24 +297,24 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     // Action implementations
     private async createMessage(params: any): Promise<Satori.Message[]> {
         const result = await this.adapter.sendMessage(this.account.account_id, {
-            scene_id: params.message_type === "private" ? "private" : "group",
+            scene_id: this.adapter.resolveId(params.message_type === "private" ?params.user_id : params.channel_id),
             scene_type: params.message_type,
             message: this.parseMessageContent(params.content),
         });
         
         return [{
-            id: String(result.message_id),
+            id: result.message_id.string,
             content: params.content || "",
         }];
     }
 
     private async getMessage(params: any): Promise<Satori.Message> {
         const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: params.message_id,
+            message_id: this.adapter.resolveId(params.message_id),
         });
         
         return {
-            id: String(msg.message_id),
+            id: msg.message_id.string,
             content: this.convertMessageContent(msg.message),
             created_at: msg.time * 1000,
         };
@@ -327,7 +322,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     private async deleteMessage(params: any): Promise<void> {
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: params.message_id,
+            message_id: this.adapter.resolveId(params.message_id),
         });
     }
 
@@ -343,11 +338,11 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     private async getChannel(params: any): Promise<Satori.Channel> {
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: params.channel_id,
+            group_id: this.adapter.resolveId(params.channel_id),
         });
         
         return {
-            id: String(info.group_id),
+            id: params.channel_id,
             type: 0,
             name: info.group_name,
         };
@@ -358,7 +353,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         
         return {
             data: groups.map(g => ({
-                id: String(g.group_id),
+                id: g.group_id.string,
                 type: 0,
                 name: g.group_name,
             })),
@@ -382,11 +377,11 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     private async getGuild(params: any): Promise<Satori.Guild> {
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: params.guild_id,
+            group_id: this.adapter.resolveId(params.guild_id),
         });
         
         return {
-            id: String(info.group_id),
+            id: params.guild_id,
             name: info.group_name,
         };
     }
@@ -396,7 +391,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         
         return {
             data: groups.map(g => ({
-                id: String(g.group_id),
+                id: g.group_id.string,
                 name: g.group_name,
             })),
         };
@@ -404,13 +399,13 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     private async getGuildMember(params: any): Promise<Satori.GuildMember> {
         const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: params.guild_id,
-            user_id: params.user_id,
+            group_id: this.adapter.resolveId(params.guild_id),
+            user_id: this.adapter.resolveId(params.user_id),
         });
         
         return {
             user: {
-                id: String(info.user_id),
+                id: info.user_id.string,
                 name: info.user_name,
             },
             nick: info.card,
@@ -419,13 +414,13 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     private async getGuildMemberList(params: any): Promise<Satori.List<Satori.GuildMember>> {
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: params.guild_id,
+            group_id: this.adapter.resolveId(params.guild_id),
         });
         
         return {
             data: members.map(m => ({
                 user: {
-                    id: String(m.user_id),
+                    id: m.user_id.string,
                     name: m.user_name,
                 },
                 nick: m.card,
@@ -445,11 +440,11 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     private async getUser(params: any): Promise<Satori.User> {
         const info = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: params.user_id,
+            user_id: this.adapter.resolveId(params.user_id),
         });
         
         return {
-            id: String(info.user_id),
+            id: info.user_id.string,
             name: info.user_name,
         };
     }
@@ -467,7 +462,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         
         return {
             data: friends.map(f => ({
-                id: String(f.user_id),
+                id: f.user_id.string,
                 name: f.user_name,
             })),
         };
@@ -483,10 +478,10 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         
         return {
             user: {
-                id: String(info.user_id),
+                id: info.user_id.string,
                 name: info.user_name,
             },
-            self_id: String(info.user_id),
+            self_id: info.user_id.string,
             platform: this.account.platform as string,
             status: 1,
         };

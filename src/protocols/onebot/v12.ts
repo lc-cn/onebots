@@ -1,9 +1,8 @@
-import { Protocol } from "../base";
-import { Account } from "@/account";
-import { Adapter } from "@/adapter";
-import { CommonEvent } from "@/common-types";
-import { Logger } from "log4js";
-import { OneBotV12 } from "./types-v12";
+import { Protocol } from "../base.js";
+import { Account } from "@/account.js";
+import { Adapter } from "@/adapter.js";
+import { CommonEvent } from "@/common-types.js";
+import { OneBotV12 } from "./types-v12.js";
 import { WebSocket } from "ws";
 
 /**
@@ -11,7 +10,7 @@ import { WebSocket } from "ws";
  * Implements the OneBot 12 standard
  * Reference: https://12.onebot.dev
  */
-export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> {
+export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Protocol.Config> {
     public readonly name = "onebot";
     public readonly version = "v12" as const;
     private eventIdCounter = 0;
@@ -27,7 +26,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
      * Start the OneBot V12 protocol service
      */
     start(): void {
-        
+
         // Initialize communication methods
         if (this.config.use_http) {
             this.startHttp();
@@ -63,7 +62,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
         if (!this.filterFn(event)) {
             return;
         }
-        
+
         const v12Event = this.convertToV12Format(event);
         if (v12Event) {
             this.logger.debug(`OneBot V12 dispatch:`, v12Event);
@@ -89,7 +88,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
      */
     async apply(action: string, params?: any): Promise<OneBotV12.Response> {
         this.logger.debug(`OneBot V12 action: ${action}`, params);
-        
+
         try {
             const result = await this.executeAction(action, params);
             return {
@@ -200,10 +199,10 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
     }
 
     // ============ Message API Implementations ============
-    
+
     private async sendMessage(params: OneBotV12.SendMessageParams): Promise<OneBotV12.SendMessageResponse> {
         const { detail_type, user_id, group_id, guild_id, channel_id, message } = params;
-        
+
         let scene_type: Adapter.MessageScene;
         let scene_id: string;
 
@@ -223,7 +222,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
         const segments = this.convertToCommonSegments(message);
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type,
-            scene_id,
+            scene_id: this.adapter.resolveId(scene_id),
             message: segments,
         });
 
@@ -235,16 +234,16 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
 
     private async deleteMessage(params: OneBotV12.DeleteMessageParams): Promise<void> {
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: params.message_id,
+            message_id: this.adapter.resolveId(params.message_id),
         });
     }
 
     // ============ Bot Self API Implementations ============
-    
+
     private getSelfInfo(): OneBotV12.BotSelf {
         return {
             platform: this.account.platform as string,
-            user_id: this.account.account_id,
+            user_id: this.adapter.resolveId(this.account.account_id).string,
         };
     }
 
@@ -286,10 +285,10 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
     }
 
     // ============ User API Implementations ============
-    
+
     private async getUserInfo(params: OneBotV12.GetUserInfoParams): Promise<OneBotV12.UserInfo> {
         const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: params.user_id,
+            user_id: this.adapter.resolveId(params.user_id),
         });
 
         return {
@@ -302,21 +301,21 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
         const friends = await this.adapter.getFriendList(this.account.account_id);
 
         return friends.map(friend => ({
-            user_id: String(friend.user_id),
+            user_id: friend.user_id.string,
             user_name: friend.user_name,
             user_remark: friend.remark,
         }));
     }
 
     // ============ Group API Implementations ============
-    
+
     private async getGroupInfo(params: OneBotV12.GetGroupInfoParams): Promise<OneBotV12.GroupInfo> {
         const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: params.group_id,
+            group_id: this.adapter.resolveId(params.group_id),
         });
 
         return {
-            group_id: String(groupInfo.group_id),
+            group_id: groupInfo.group_id.string,
             group_name: groupInfo.group_name,
         };
     }
@@ -332,23 +331,23 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
 
     private async getGroupMemberInfo(params: OneBotV12.GetGroupMemberInfoParams): Promise<OneBotV12.GroupMemberInfo> {
         const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: params.group_id,
-            user_id: params.user_id,
+            group_id: this.adapter.resolveId(params.group_id),
+            user_id: this.adapter.resolveId(params.user_id),
         });
 
         return {
-            user_id: String(memberInfo.user_id),
+            user_id: memberInfo.user_id.string,
             user_name: memberInfo.user_name,
         };
     }
 
     private async getGroupMemberList(params: OneBotV12.GetGroupMemberListParams): Promise<OneBotV12.GroupMemberInfo[]> {
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: params.group_id,
+            group_id: this.adapter.resolveId(params.group_id),
         });
 
         return members.map(member => ({
-            user_id: String(member.user_id),
+            user_id: member.user_id.string,
             user_name: member.user_name,
         }));
     }
@@ -364,7 +363,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
     }
 
     // ============ Guild API Implementations ============
-    
+
     private async getGuildInfo(params: OneBotV12.GetGuildInfoParams): Promise<OneBotV12.GuildInfo> {
         // Implementation depends on adapter support
         throw new Error("get_guild_info not implemented");
@@ -396,14 +395,14 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
     }
 
     // ============ Channel API Implementations ============
-    
+
     private async getChannelInfo(params: OneBotV12.GetChannelInfoParams): Promise<OneBotV12.ChannelInfo> {
         const channelInfo = await this.adapter.getChannelInfo(this.account.account_id, {
-            channel_id: params.channel_id,
+            channel_id: this.adapter.resolveId(params.channel_id),
         });
 
         return {
-            channel_id: String(channelInfo.channel_id),
+            channel_id: channelInfo.channel_id.string,
             channel_name: channelInfo.channel_name,
         };
     }
@@ -434,7 +433,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
     }
 
     // ============ File API Implementations ============
-    
+
     private async uploadFile(params: OneBotV12.UploadFileParams): Promise<OneBotV12.FileInfo> {
         // Implementation depends on adapter support
         throw new Error("upload_file not implemented");
@@ -471,13 +470,13 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
     }
 
     // ============ Utility Methods ============
-    
+
     /**
      * Convert common event to OneBot V12 format
      */
     private convertToV12Format(event: CommonEvent.Event): OneBotV12.BaseEvent | null {
         const base = {
-            id: this.generateEventId(),
+            id: event.id.string,
             time: Math.floor(event.timestamp / 1000),
             self: this.getSelfInfo(),
         };
@@ -486,18 +485,18 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
             const messageEvent: OneBotV12.MessageEvent = {
                 ...base,
                 type: "message",
-                detail_type: event.message_type === "private" ? "private" : 
-                            event.message_type === "group" ? "group" : 
-                            event.message_type === "channel" ? "channel" : "private",
+                detail_type: event.message_type === "private" ? "private" :
+                    event.message_type === "group" ? "group" :
+                        event.message_type === "channel" ? "channel" : "private",
                 sub_type: "",
-                message_id: String(event.message_id),
+                message_id: event.message_id.string,
                 message: this.convertToV12Segments(event.message),
                 alt_message: event.raw_message,
-                user_id: String(event.sender.id),
+                user_id: event.sender.id.string,
             };
 
             if (event.group) {
-                (messageEvent as OneBotV12.GroupMessageEvent).group_id = String(event.group.id);
+                (messageEvent as OneBotV12.GroupMessageEvent).group_id = event.group.id.string;
             }
 
             return messageEvent;
@@ -602,7 +601,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
      */
     private startHttp(): void {
         this.logger.info("Starting HTTP server");
-        
+
         // Register HTTP POST endpoint for API calls
         this.router.post(`${this.path}/:action`, async (ctx) => {
             // Verify access token
@@ -638,14 +637,14 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
      */
     private startWebSocket(): void {
         this.logger.info("Starting WebSocket server");
-        
+
         const wss = this.router.ws(this.path);
-        
+
         wss.on("connection", (ws, request) => {
             // Verify access token
             const url = new URL(request.url!, `ws://localhost`);
             const token = url.searchParams.get('access_token') || request.headers.authorization?.replace('Bearer ', '');
-            
+
             if (!this.verifyToken(token as string)) {
                 ws.close(1008, "Unauthorized");
                 return;
@@ -673,7 +672,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
                     const { action, params, echo } = request;
 
                     const result = await this.apply(action, params);
-                    
+
                     // Add echo if present
                     const response = echo !== undefined ? { ...result, echo } : result;
                     ws.send(JSON.stringify(response));
@@ -715,7 +714,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
      */
     private startHttpWebhook(url: string): void {
         this.logger.info(`Starting HTTP webhook to ${url}`);
-        
+
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
@@ -755,7 +754,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
      */
     private startWsReverse(url: string): void {
         this.logger.info(`Starting WebSocket reverse to ${url}`);
-        
+
         let ws: any = null;
         let reconnectTimer: any = null;
 
@@ -778,7 +777,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
 
                 ws.on('open', () => {
                     this.logger.info(`WebSocket reverse connected to ${url}`);
-                    
+
                     // Send connect meta event
                     this.dispatchMetaEvent("connect", {
                         version: this.getVersionInfo(),
@@ -797,7 +796,7 @@ export class OneBotV12Protocol extends Protocol<"v12",OneBotV12Protocol.Config> 
                         const { action, params, echo } = request;
 
                         const result = await this.apply(action, params);
-                        
+
                         // Add echo if present
                         const response = echo !== undefined ? { ...result, echo } : result;
                         ws.send(JSON.stringify(response));

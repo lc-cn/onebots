@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneBots 系统架构图</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .diagram-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 5px;
+        }
+        .diagram-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #444;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4CAF50;
+        }
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .export-buttons {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .export-btn {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+            font-size: 16px;
+        }
+        .export-btn:hover {
+            background: #45a049;
+        }
+        .info-box {
+            background: #e3f2fd;
+            padding: 15px;
+            border-left: 4px solid #2196F3;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .feature-item {
+            background: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .feature-item h3 {
+            color: #4CAF50;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 OneBots 系统架构图</h1>
+        
+        <div class="info-box">
+            <strong>提示：</strong>右键点击图表可以保存为PNG或SVG格式。或者使用下方的导出按钮。
+        </div>
+
+        <div class="export-buttons">
+            <button class="export-btn" onclick="exportAllAsPNG()">📷 导出所有为PNG</button>
+            <button class="export-btn" onclick="exportAllAsSVG()">🎨 导出所有为SVG</button>
+        </div>
+
+        <!-- 整体架构图 -->
+        <div class="diagram-section">
+            <div class="diagram-title">1️⃣ 整体系统架构</div>
+            <div class="mermaid">
+graph TB
+    subgraph APP["🏢 应用层 (App Layer)"]
+        App["App<br/>📦 Koa Application<br/>- 配置管理<br/>- 日志系统<br/>- HTTP/WS服务器<br/>- 路由管理"]
+    end
+
+    subgraph ADAPTERS["🔌 平台适配器层 (Adapter Layer)"]
+        QQAdapter["QQ Adapter<br/>📱 qq-official-bot<br/>- 事件提取<br/>- 动作执行"]
+        WeChatAdapter["WeChat Adapter<br/>💬 WeChat Web<br/>- 事件提取<br/>- 动作执行"]
+        DingTalkAdapter["DingTalk Adapter<br/>📧 DingTalk SDK<br/>- 事件提取<br/>- 动作执行"]
+    end
+
+    subgraph ACCOUNTS["👤 账号层 (Account Layer)"]
+        Account1["Account<br/>🆔 qq.123456<br/>- status: online<br/>- protocols: []"]
+        Account2["Account<br/>🆔 wechat.bot001<br/>- status: online<br/>- protocols: []"]
+    end
+
+    subgraph PROTOCOLS["📡 协议层 (Protocol Layer)"]
+        OneBotV11["OneBot V11<br/>🔗 /qq/123456/onebot/v11<br/>- HTTP Server<br/>- WebSocket<br/>- 事件转换"]
+        OneBotV12["OneBot V12<br/>🔗 /qq/123456/onebot/v12<br/>- HTTP Server<br/>- WebSocket<br/>- 事件转换"]
+        Satori["Satori V1<br/>🔗 /qq/123456/satori/v1<br/>- 跨平台支持<br/>- 统一API"]
+        Milky["Milky V1<br/>🔗 /qq/123456/milky/v1<br/>- QQ专用协议"]
+    end
+
+    subgraph CLIENTS["💻 客户端"]
+        Client1["HTTP Client"]
+        Client2["WebSocket Client"]
+    end
+
+    App --> QQAdapter
+    App --> WeChatAdapter
+    App --> DingTalkAdapter
+    
+    QQAdapter --> Account1
+    WeChatAdapter --> Account2
+    
+    Account1 --> OneBotV11
+    Account1 --> OneBotV12
+    Account1 --> Satori
+    Account1 --> Milky
+    
+    OneBotV11 --> Client1
+    OneBotV12 --> Client2
+    Satori --> Client1
+    
+    style App fill:#4CAF50,stroke:#333,stroke-width:2px,color:#fff
+    style QQAdapter fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+    style WeChatAdapter fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+    style DingTalkAdapter fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+    style Account1 fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
+    style Account2 fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
+    style OneBotV11 fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
+    style OneBotV12 fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
+    style Satori fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
+    style Milky fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
+            </div>
+        </div>
+
+        <!-- 数据流向图 -->
+        <div class="diagram-section">
+            <div class="diagram-title">2️⃣ 数据流向图</div>
+            <div class="mermaid">
+graph LR
+    subgraph UP["⬆️ 上行流程：平台事件 → 协议事件"]
+        A1["平台原始事件<br/>QQ/WeChat/DingTalk"] --> A2["Adapter<br/>extractEvent()"]
+        A2 --> A3["Account<br/>dispatch()"]
+        A3 --> A4["Protocol<br/>format()"]
+        A4 --> A5["协议标准格式<br/>OneBot/Satori"]
+        A5 --> A6["客户端接收<br/>HTTP/WebSocket"]
+    end
+
+    subgraph DOWN["⬇️ 下行流程：API调用 → 平台动作"]
+        B1["客户端请求<br/>HTTP/WebSocket"] --> B2["Protocol<br/>apply()"]
+        B2 --> B3["Adapter<br/>executeAction()"]
+        B3 --> B4["平台SDK执行<br/>发送消息等"]
+    end
+
+    style A1 fill:#e3f2fd,stroke:#2196F3,stroke-width:2px
+    style A2 fill:#fff3e0,stroke:#FF9800,stroke-width:2px
+    style A3 fill:#fce4ec,stroke:#E91E63,stroke-width:2px
+    style A4 fill:#f3e5f5,stroke:#9C27B0,stroke-width:2px
+    style A5 fill:#e8f5e9,stroke:#4CAF50,stroke-width:2px
+    style A6 fill:#e0f2f1,stroke:#009688,stroke-width:2px
+    
+    style B1 fill:#e0f2f1,stroke:#009688,stroke-width:2px
+    style B2 fill:#f3e5f5,stroke:#9C27B0,stroke-width:2px
+    style B3 fill:#fff3e0,stroke:#FF9800,stroke-width:2px
+    style B4 fill:#e3f2fd,stroke:#2196F3,stroke-width:2px
+            </div>
+        </div>
+
+        <!-- 类关系图 -->
+        <div class="diagram-section">
+            <div class="diagram-title">3️⃣ 核心类关系图</div>
+            <div class="mermaid">
+classDiagram
+    class App {
+        +Map~string,Adapter~ adapters
+        +Router router
+        +Config config
+        +Logger logger
+        +start()
+        +stop()
+        +registerAdapter()
+        +getLogger()
+    }
+
+    class Adapter {
+        <<abstract>>
+        +string platform
+        +Map~string,Account~ accounts
+        +App app
+        +createAccount()
+        +sendMessage()
+        +getMessage()
+        +getFriendList()
+        +getGroupList()
+    }
+
+    class Account {
+        +string account_id
+        +string platform
+        +AccountStatus status
+        +Protocol[] protocols
+        +Adapter adapter
+        +start()
+        +stop()
+        +dispatch()
+    }
+
+    class Protocol {
+        <<abstract>>
+        +string name
+        +string version
+        +Adapter adapter
+        +Account account
+        +start()
+        +stop()
+        +dispatch()
+        +format()
+        +apply()
+        +filterFn()
+    }
+
+    class OneBotV11 {
+        +name: "onebot"
+        +version: "v11"
+        +V11Service service
+        +start()
+        +stop()
+    }
+
+    class OneBotV12 {
+        +name: "onebot"
+        +version: "v12"
+        +V12Service service
+        +start()
+        +stop()
+    }
+
+    class ProtocolRegistry {
+        <<singleton>>
+        +Map protocols
+        +register()
+        +create()
+        +has()
+    }
+
+    App "1" --> "*" Adapter : manages
+    Adapter "1" --> "*" Account : manages
+    Account "1" --> "*" Protocol : has
+    Protocol <|-- OneBotV11 : implements
+    Protocol <|-- OneBotV12 : implements
+    ProtocolRegistry ..> Protocol : creates
+            </div>
+        </div>
+
+        <!-- URL路由结构 -->
+        <div class="diagram-section">
+            <div class="diagram-title">4️⃣ URL 路由结构</div>
+            <div class="mermaid">
+graph TD
+    ROOT["根路径 /"] --> PLATFORM["平台层<br/>/{platform}"]
+    
+    PLATFORM --> QQ["QQ<br/>/qq"]
+    PLATFORM --> WECHAT["WeChat<br/>/wechat"]
+    PLATFORM --> DINGTALK["DingTalk<br/>/dingtalk"]
+    
+    QQ --> ACCOUNT1["账号层<br/>/qq/{account_id}"]
+    ACCOUNT1 --> PROTO1["协议层<br/>/qq/123456/{protocol}"]
+    
+    PROTO1 --> ONEBOT["OneBot<br/>/qq/123456/onebot"]
+    PROTO1 --> SATORI_P["Satori<br/>/qq/123456/satori"]
+    PROTO1 --> MILKY_P["Milky<br/>/qq/123456/milky"]
+    
+    ONEBOT --> V11["版本层<br/>/qq/123456/onebot/v11"]
+    ONEBOT --> V12["/qq/123456/onebot/v12"]
+    
+    V11 --> ACTION1["动作层<br/>/qq/123456/onebot/v11/send_private_msg"]
+    V11 --> ACTION2["/qq/123456/onebot/v11/get_friend_list"]
+    V11 --> WS1["WebSocket<br/>ws://...../qq/123456/onebot/v11"]
+    
+    V12 --> ACTION3["/qq/123456/onebot/v12/send_message"]
+    V12 --> ACTION4["/qq/123456/onebot/v12/get_login_info"]
+    
+    style ROOT fill:#4CAF50,stroke:#333,stroke-width:3px,color:#fff
+    style PLATFORM fill:#2196F3,stroke:#333,stroke-width:2px,color:#fff
+    style QQ fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
+    style WECHAT fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
+    style DINGTALK fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
+    style ACCOUNT1 fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
+    style PROTO1 fill:#E91E63,stroke:#333,stroke-width:2px,color:#fff
+    style ONEBOT fill:#00BCD4,stroke:#333,stroke-width:2px,color:#fff
+    style V11 fill:#009688,stroke:#333,stroke-width:2px,color:#fff
+    style V12 fill:#009688,stroke:#333,stroke-width:2px,color:#fff
+            </div>
+        </div>
+
+        <!-- 协议注册流程 -->
+        <div class="diagram-section">
+            <div class="diagram-title">5️⃣ 协议注册与实例化流程</div>
+            <div class="mermaid">
+sequenceDiagram
+    participant App
+    participant Adapter
+    participant Account
+    participant Registry as ProtocolRegistry
+    participant Protocol
+
+    App->>Adapter: 创建平台适配器
+    activate Adapter
+    Adapter->>App: 注册适配器
+    deactivate Adapter
+
+    App->>Adapter: 根据配置创建账号
+    activate Adapter
+    Adapter->>Account: new Account(account_id, config)
+    activate Account
+    
+    Account->>Account: 解析协议配置
+    Note over Account: onebot.v11<br/>onebot.v12<br/>satori.v1
+    
+    loop 每个协议配置
+        Account->>Registry: create(protocol, version, ...)
+        activate Registry
+        Registry->>Protocol: new Protocol(adapter, account, config)
+        activate Protocol
+        Protocol-->>Registry: protocol实例
+        deactivate Protocol
+        Registry-->>Account: protocol实例
+        deactivate Registry
+        Account->>Account: protocols.push(protocol)
+    end
+    
+    Account->>Protocol: start() 启动所有协议
+    activate Protocol
+    Protocol->>Protocol: 启动HTTP服务
+    Protocol->>Protocol: 启动WebSocket服务
+    Protocol-->>Account: 启动完成
+    deactivate Protocol
+    
+    Account-->>Adapter: 账号创建完成
+    deactivate Account
+    Adapter-->>App: 适配器就绪
+            </div>
+        </div>
+
+        <!-- 事件处理流程 -->
+        <div class="diagram-section">
+            <div class="diagram-title">6️⃣ 事件处理流程（上行）</div>
+            <div class="mermaid">
+sequenceDiagram
+    participant SDK as 平台SDK
+    participant Adapter
+    participant Account
+    participant Protocol
+    participant Client as 客户端
+
+    SDK->>Adapter: 原始事件<br/>(message, notice, request)
+    activate Adapter
+    Note over Adapter: 提取通用事件结构
+    Adapter->>Account: dispatch(event)
+    deactivate Adapter
+    
+    activate Account
+    Note over Account: 分发给所有协议
+    loop 每个Protocol
+        Account->>Protocol: dispatch(event)
+        activate Protocol
+        
+        Protocol->>Protocol: filterFn(event)<br/>事件过滤
+        
+        alt 通过过滤器
+            Protocol->>Protocol: format(event)<br/>转换为协议格式
+            Note over Protocol: OneBot V11/V12<br/>Satori<br/>Milky
+            
+            Protocol->>Client: HTTP Post / WebSocket Push
+            Note over Protocol,Client: 推送到客户端
+            
+            Client-->>Protocol: 快速操作响应(可选)
+            Protocol->>Adapter: executeAction(quickOp)
+        end
+        
+        deactivate Protocol
+    end
+    deactivate Account
+            </div>
+        </div>
+
+        <!-- API调用流程 -->
+        <div class="diagram-section">
+            <div class="diagram-title">7️⃣ API 调用流程（下行）</div>
+            <div class="mermaid">
+sequenceDiagram
+    participant Client as 客户端
+    participant Router
+    participant Protocol
+    participant Adapter
+    participant SDK as 平台SDK
+
+    Client->>Router: POST /qq/123456/onebot/v11/send_private_msg
+    activate Router
+    Note over Router: 解析URL<br/>platform=qq<br/>account_id=123456<br/>protocol=onebot<br/>version=v11
+    
+    Router->>Protocol: apply(action, params)
+    deactivate Router
+    
+    activate Protocol
+    Note over Protocol: 验证访问令牌<br/>参数校验
+    
+    Protocol->>Protocol: 转换参数格式
+    Note over Protocol: OneBot格式 → 平台格式
+    
+    Protocol->>Adapter: sendMessage(user_id, message)
+    deactivate Protocol
+    
+    activate Adapter
+    Adapter->>SDK: 调用平台SDK
+    activate SDK
+    SDK-->>Adapter: 返回结果
+    deactivate SDK
+    
+    Adapter-->>Protocol: 返回结果
+    deactivate Adapter
+    
+    activate Protocol
+    Protocol->>Protocol: 格式化返回值
+    Protocol-->>Client: JSON响应
+    deactivate Protocol
+    
+    Note over Client: {<br/>  "status": "ok",<br/>  "retcode": 0,<br/>  "data": {...}<br/>}
+            </div>
+        </div>
+
+        <!-- 特性列表 -->
+        <div class="diagram-section">
+            <div class="diagram-title">✨ 核心特性</div>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <h3>🌐 多平台支持</h3>
+                    <ul>
+                        <li>QQ官方机器人</li>
+                        <li>微信 (Web/Official)</li>
+                        <li>钉钉</li>
+                        <li>易于扩展新平台</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-item">
+                    <h3>📡 多协议支持</h3>
+                    <ul>
+                        <li>OneBot V11 标准</li>
+                        <li>OneBot V12 标准</li>
+                        <li>Satori 跨平台协议</li>
+                        <li>Milky QQ协议</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-item">
+                    <h3>🔄 多实例运行</h3>
+                    <ul>
+                        <li>同一账号多协议并存</li>
+                        <li>多账号独立管理</li>
+                        <li>灵活的配置系统</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-item">
+                    <h3>🚀 高性能</h3>
+                    <ul>
+                        <li>Node.js 异步架构</li>
+                        <li>内置 SQLite 数据库</li>
+                        <li>WebSocket 实时通信</li>
+                        <li>事件过滤优化</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-item">
+                    <h3>🛠️ 易于扩展</h3>
+                    <ul>
+                        <li>清晰的分层架构</li>
+                        <li>协议注册机制</li>
+                        <li>插件化设计</li>
+                        <li>TypeScript 类型支持</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-item">
+                    <h3>🔐 安全可靠</h3>
+                    <ul>
+                        <li>访问令牌验证</li>
+                        <li>CORS 跨域控制</li>
+                        <li>完整的日志系统</li>
+                        <li>优雅停机机制</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            },
+            sequence: {
+                diagramMarginX: 50,
+                diagramMarginY: 10,
+                actorMargin: 50,
+                width: 150,
+                height: 65,
+                boxMargin: 10,
+                boxTextMargin: 5,
+                noteMargin: 10,
+                messageMargin: 35
+            }
+        });
+
+        // 导出为PNG
+        async function exportAllAsPNG() {
+            const diagrams = document.querySelectorAll('.mermaid');
+            for (let i = 0; i < diagrams.length; i++) {
+                const svg = diagrams[i].querySelector('svg');
+                if (svg) {
+                    await exportSVGtoPNG(svg, `onebots-architecture-${i + 1}.png`);
+                }
+            }
+            alert('所有图表已导出为PNG格式！');
+        }
+
+        // 导出为SVG
+        function exportAllAsSVG() {
+            const diagrams = document.querySelectorAll('.mermaid');
+            diagrams.forEach((diagram, i) => {
+                const svg = diagram.querySelector('svg');
+                if (svg) {
+                    const serializer = new XMLSerializer();
+                    const source = serializer.serializeToString(svg);
+                    const blob = new Blob([source], { type: 'image/svg+xml' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `onebots-architecture-${i + 1}.svg`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                }
+            });
+            alert('所有图表已导出为SVG格式！');
+        }
+
+        // SVG转PNG
+        function exportSVGtoPNG(svg, filename) {
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const svgData = new XMLSerializer().serializeToString(svg);
+                const img = new Image();
+                
+                const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svgBlob);
+                
+                img.onload = function() {
+                    canvas.width = img.width * 2; // 2x for better quality
+                    canvas.height = img.height * 2;
+                    ctx.scale(2, 2);
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                    
+                    canvas.toBlob(function(blob) {
+                        const pngUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = pngUrl;
+                        a.download = filename;
+                        a.click();
+                        URL.revokeObjectURL(pngUrl);
+                        URL.revokeObjectURL(url);
+                        resolve();
+                    });
+                };
+                
+                img.src = url;
+            });
+        }
+
+        // 添加右键菜单保存功能
+        document.querySelectorAll('.mermaid').forEach(diagram => {
+            diagram.addEventListener('contextmenu', function(e) {
+                // 允许浏览器默认的右键菜单，方便保存图片
+            });
+        });
+    </script>
+</body>
+</html>

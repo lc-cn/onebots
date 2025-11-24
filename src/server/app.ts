@@ -3,23 +3,24 @@ import * as os from "os";
 import "reflect-metadata";
 import * as fs from "fs";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { configure, getLogger, Logger } from "log4js";
+import log4js from "log4js";
+import type { Logger } from "log4js";
 import { createServer, Server } from "http";
 import koaStatic from "koa-static";
 import yaml from "js-yaml";
 import KoaBodyParser from "koa-bodyparser";
 import basicAuth from "koa-basic-auth";
-
-import { Class, deepClone, deepMerge, readLine } from "@/utils";
-import { Router, WsServer } from "./router";
-import { LogLevel } from "@/types";
+const { configure, getLogger } = log4js;
+import { Class, deepClone, deepMerge, readLine } from "@/utils.js";
+import { Router, WsServer } from "./router.js";
+import { LogLevel } from "@/types.js";
 import * as path from "path";
-import { Adapter } from "@/adapter";
-import { Protocol } from "@/protocols/base";
-import { ChildProcess } from "child_process";
+import { Adapter } from "@/adapter.js";
+import { Protocol } from "@/protocols/base.js";
 import process from "process";
 import { Dict } from "@zhinjs/shared";
-import { Account } from "@/account";
+import { Account } from "@/account.js";
+import { SqliteDB } from "@/db.js";
 
 export interface KoaOptions {
     env?: string;
@@ -47,6 +48,7 @@ export class App extends Koa {
     static get logFile() {
         return path.join(App.configDir, "onebots.log");
     }
+    db:SqliteDB
     adapters: Map<keyof Adapter.Configs, Adapter> = new Map<keyof Adapter.Configs, Adapter>();
     public ws: WsServer;
     public router: Router;
@@ -74,13 +76,14 @@ export class App extends Koa {
     }
     constructor(config: App.Config = {}) {
         super(config);
-
+        
         this.config = deepMerge(deepClone(App.defaultConfig), config);
         this.init();
     }
 
     init() {
         this.logger = getLogger("[OneBots]");
+        this.db=new SqliteDB(path.resolve(App.dataDir, this.config.database));
         this.logger.level = this.config.log_level;
         this.httpServer = createServer(this.callback());
         this.router = new Router(this.httpServer, { prefix: this.config.path });
@@ -95,7 +98,7 @@ export class App extends Koa {
                     pass: this.config.password,
                 })(ctx, next);
             })
-            .use(koaStatic(path.resolve(__dirname, "../../dist")));
+            .use(koaStatic(path.resolve(import.meta.dirname, "../../dist")));
         this.ws = this.router.ws("/");
 
         this.initAdapters();
@@ -339,7 +342,7 @@ export class App extends Koa {
 
 export function createOnebots(
     config: App.Config | string = "config.yaml",
-    cp: ChildProcess | null = null,
+    // cp: ChildProcess | null = null,
 ) {
     const isStartWithConfigFile = typeof config === "string";
     if (isStartWithConfigFile) {
@@ -382,7 +385,7 @@ export function createOnebots(
         },
         disableClustering: true,
     });
-    if (cp) process.on("disconnect", () => cp.kill());
+    // if (cp) process.on("disconnect", () => cp.kill());
     return new App(config as App.Config);
 }
 
@@ -398,6 +401,7 @@ export namespace App {
     export type Config = {
         port?: number;
         path?: string;
+        database?: string;
         timeout?: number;
         username?: string;
         password?: string;
@@ -406,6 +410,7 @@ export namespace App {
     } & KoaOptions & AdapterConfig;
     export const defaultConfig: Config = {
         port: 6727,
+        database: "onebots.db",
         username: "admin",
         password: "123456",
         timeout: 30,
@@ -413,10 +418,10 @@ export namespace App {
         log_level: "info",
     };
 
-    export function registerAdapter(name: string): void;
-    export function registerAdapter<T extends string>(platform: T, adapter: AdapterClass): void;
-    export function registerAdapter<T extends string>(platform: T, adapter?: AdapterClass) {
-        if (!adapter) adapter = App.loadAdapter(platform);
+    export async function registerAdapter(name: string): Promise<void>;
+    export async function registerAdapter<T extends string>(platform: T, adapter: AdapterClass): Promise<void>;
+    export async function registerAdapter<T extends string>(platform: T, adapter?: AdapterClass) {
+        if (!adapter) adapter = await App.loadAdapter(platform);
         if (ADAPTERS.has(platform)) {
             console.warn(`已存在对应的适配器：${platform}`);
             return this;
@@ -426,9 +431,9 @@ export namespace App {
     export function registerGeneral<K extends keyof Protocol.Configs>(name: K, config: Protocol.Configs[K]) {
         defaultConfig.general[name] = config;
     }
-    export function loadAdapter<T extends string>(platform: string) {
+    export async function loadAdapter<T extends string>(platform: string) {
         const maybeNames = [
-            path.join(__dirname, "../adapters", platform), // 内置的
+            path.join(import.meta.dirname, "../adapters", platform), // 内置的
             `@onebots/adapter-${platform}`, // 我写的
             `onebots-adapter-${platform}`, // 别人按照规范写的
             platform, // 别人写的
@@ -438,7 +443,7 @@ export namespace App {
         let adapter: AdapterClass;
         for(const name of maybeNames){
             try {
-                adapter = require(name)?.default;
+                adapter = await import(name).then(m => m.default);
                 if(adapter) break;
             } catch (e) {
                 error = e;

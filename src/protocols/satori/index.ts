@@ -1,5 +1,5 @@
-import { ProtocolRegistry } from "../registry";
-import { SatoriV1 } from "./v1";
+import { ProtocolRegistry } from "../registry.js";
+import { SatoriV1 } from "./v1.js";
 
 // Register Satori protocol
 ProtocolRegistry.register("satori", "v1", SatoriV1, {
@@ -8,6 +8,6 @@ ProtocolRegistry.register("satori", "v1", SatoriV1, {
     versions: ["v1"],
 });
 
-export * from "./v1";
-export * from "./types";
-export * from "./config";
+export * from "./v1.js";
+export * from "./types.js";
+export * from "./config.js";

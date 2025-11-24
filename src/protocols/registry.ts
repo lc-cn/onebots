@@ -1,5 +1,4 @@
-import { Protocol } from "./base";
-import { Dict } from "@zhinjs/shared";
+import { Protocol } from "./base.js";
 
 /**
  * Protocol Registry

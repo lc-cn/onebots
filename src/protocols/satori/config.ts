@@ -1,4 +1,4 @@
-import { App } from "@/server/app";
+import { App } from "@/server/app.js";
 
 export namespace SatoriConfig {
     /**
@@ -69,7 +69,7 @@ export namespace SatoriConfig {
         platform: 'satori',
     });
 }
-declare module '../base'{
+declare module '../base.js'{
     namespace Protocol {
         interface ConfigMaps {
             satori: {

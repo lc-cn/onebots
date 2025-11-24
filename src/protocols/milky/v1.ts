@@ -1,11 +1,10 @@
-import { Protocol } from "../base";
-import { Account } from "@/account";
-import { Adapter } from "@/adapter";
+import { Protocol } from "../base.js";
+import { Account } from "@/account.js";
+import { Adapter } from "@/adapter.js";
 import { Dict } from "@zhinjs/shared";
-import { CommonEvent } from "@/common-types";
-import { Milky } from "./types";
-import { MilkyConfig } from "./config";
-import { Logger } from "log4js";
+import { CommonEvent } from "@/common-types.js";
+import { Milky } from "./types.js";
+import { MilkyConfig } from "./config.js";
 import { createHmac } from "crypto";
 import { WebSocket } from "ws";
 
@@ -172,11 +171,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private formatMilkyMessage(event: CommonEvent.Message): Milky.MessageEvent {
         return {
             time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id,
+            self_id: event.bot_id.string,
             post_type: "message",
             message_type: event.message_type as "private" | "group",
-            message_id: event.message_id,
-            user_id: event.sender.id,
+            message_id: event.message_id.string,
+            user_id: event.sender.id.string,
             message: event.message.map(seg => ({
                 type: seg.type as any,
                 data: seg.data,
@@ -184,42 +183,42 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             raw_message: event.raw_message || this.extractPlainText(event.message),
             font: 0,
             sender: {
-                user_id: event.sender.id,
+                user_id: event.sender.id.string,
                 nickname: event.sender.name,
             },
-            ...(event.group ? { group_id: event.group.id } : {}),
+            ...(event.group ? { group_id: event.group.id.string } : {}),
         };
     }
 
     private formatMilkyNotice(event: CommonEvent.Notice): Milky.NoticeEvent {
         return {
             time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id,
+            self_id: event.bot_id.string,
             post_type: "notice",
             notice_type: event.notice_type as any,
-            user_id: event.user?.id,
-            group_id: event.group?.id,
-            operator_id: event.operator?.id,
+            user_id: event.user?.id.string,
+            group_id: event.group?.id.string,
+            operator_id: event.operator?.id.string,
         };
     }
 
     private formatMilkyRequest(event: CommonEvent.Request): Milky.RequestEvent {
         return {
             time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id,
+            self_id: event.bot_id.string,
             post_type: "request",
             request_type: event.request_type as any,
-            user_id: event.user.id,
+            user_id: event.user.id.string,
             comment: event.comment || "",
             flag: event.flag,
-            group_id: event.group?.id,
+            group_id: event.group?.id.string,
         };
     }
 
     private formatMilkyMeta(event: CommonEvent.Meta): Milky.MetaEvent {
         return {
             time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id,
+            self_id: event.bot_id.string,
             post_type: "meta_event",
             meta_event_type: event.meta_type as any,
         };
@@ -239,7 +238,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             scene_id: params.user_id,
             message: params.message,
         });
-        return { message_id: result.message_id };
+        return { message_id: result.message_id.string };
     }
 
     private async sendGroupMessage(params: any): Promise<Milky.SendMessageResult> {
@@ -248,7 +247,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             scene_id: params.group_id,
             message: params.message,
         });
-        return { message_id: result.message_id };
+        return { message_id: result.message_id.string };
     }
 
     private async sendMessage(params: any): Promise<Milky.SendMessageResult> {
@@ -272,10 +271,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         return {
             time: msg.time || Math.floor(Date.now() / 1000),
             message_type: (msg.sender.scene_type as "private" | "group"),
-            message_id: msg.message_id,
+            message_id: msg.message_id.string,
             real_id: 0,
             sender: {
-                user_id: msg.sender.sender_id,
+                user_id: msg.sender.sender_id.string,
                 nickname: msg.sender.sender_name,
             },
             message: msg.message as any,
@@ -290,7 +289,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async getLoginInfo(): Promise<Milky.LoginInfo> {
         const info = await this.adapter.getLoginInfo(this.account.account_id);
         return {
-            user_id: info.user_id,
+            user_id: info.user_id.string,
             nickname: info.user_name,
         };
     }
@@ -300,7 +299,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             user_id: params.user_id,
         });
         return {
-            user_id: info.user_id,
+            user_id: info.user_id.string,
             nickname: info.user_name,
         };
     }
@@ -308,7 +307,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async getFriendList(): Promise<Milky.FriendInfo[]> {
         const result = await this.adapter.getFriendList(this.account.account_id);
         return result.map(info => ({
-            user_id: info.user_id,
+            user_id: info.user_id.string,
             nickname: info.user_name,
             remark: info.remark || "",
         }));
@@ -319,7 +318,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             group_id: params.group_id,
         });
         return {
-            group_id: info.group_id,
+            group_id: info.group_id.string,
             group_name: info.group_name,
             member_count: info.member_count || 0,
             max_member_count: info.max_member_count || 0,
@@ -329,7 +328,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async getGroupList(): Promise<Milky.GroupInfo[]> {
         const result = await this.adapter.getGroupList(this.account.account_id);
         return result.map(info => ({
-            group_id: info.group_id,
+            group_id: info.group_id.string,
             group_name: info.group_name,
             member_count: info.member_count || 0,
             max_member_count: info.max_member_count || 0,
@@ -338,12 +337,12 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private async getGroupMemberInfo(params: any): Promise<Milky.GroupMemberInfo> {
         const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: params.group_id,
-            user_id: params.user_id,
+            group_id: params.group_id.string,
+            user_id: params.user_id.string,
         });
         return {
-            group_id: info.group_id,
-            user_id: info.user_id,
+            group_id: info.group_id.string,
+            user_id: info.user_id.string,
             nickname: info.user_name,
             card: info.card || "",
             sex: "unknown",
@@ -362,11 +361,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private async getGroupMemberList(params: any): Promise<Milky.GroupMemberInfo[]> {
         const list = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: params.group_id,
+            group_id: this.adapter.resolveId(params.group_id),
         });
         return list.map(info => ({
-            group_id: info.group_id,
-            user_id: info.user_id,
+            group_id: info.group_id.string,
+            user_id: info.user_id.string,
             nickname: info.user_name,
             card: info.card || "",
             sex: "unknown",
