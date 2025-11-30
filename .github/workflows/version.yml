@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - master
-    paths:
-      - '.changeset/**'
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -22,21 +21,37 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check for changesets
+        id: check_changesets
+        run: |
+          # 检查是否有 changeset 文件（排除 README.md）
+          if [ -n "$(find .changeset -name '*.md' ! -name 'README.md' -type f 2>/dev/null)" ]; then
+            echo "has_changesets=true" >> $GITHUB_OUTPUT
+            echo "✅ Found changesets to process"
+          else
+            echo "has_changesets=false" >> $GITHUB_OUTPUT
+            echo "ℹ️  No changesets found"
+          fi
+
       - name: Setup pnpm
+        if: steps.check_changesets.outputs.has_changesets == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 9
 
       - name: Setup Node.js
+        if: steps.check_changesets.outputs.has_changesets == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
+        if: steps.check_changesets.outputs.has_changesets == 'true'
         run: pnpm install
 
       - name: Create Release Pull Request
+        if: steps.check_changesets.outputs.has_changesets == 'true'
         uses: changesets/action@v1
         with:
           version: pnpm changeset version
