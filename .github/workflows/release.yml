@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'v*'
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -14,7 +14,6 @@ jobs:
     permissions:
       contents: write
       packages: write
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v4
         with:
           version: 9
 
@@ -35,35 +34,103 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
-
-      - name: Check for changesets
-        id: check_changesets
-        run: |
-          if [ -n "$(ls -A .changeset/*.md 2>/dev/null | grep -v README)" ]; then
-            echo "has_changesets=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changesets=false" >> $GITHUB_OUTPUT
-          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Build packages
-        if: steps.check_changesets.outputs.has_changesets == 'true'
         run: pnpm build
 
       - name: Run tests
-        if: steps.check_changesets.outputs.has_changesets == 'true'
         run: pnpm test
         continue-on-error: true
 
-      - name: Create Release Pull Request or Publish
-        if: steps.check_changesets.outputs.has_changesets == 'true'
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          version: pnpm version
-          publish: pnpm release
-          commit: 'chore: release packages'
-          title: 'chore: release packages'
+      - name: Generate changelog
+        run: |
+          # 获取最新标签
+          LATEST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          CURRENT_TAG=$(git describe --tags --abbrev=0 HEAD)
+          
+          echo "# Release $CURRENT_TAG" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## 🎉 What's New" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          if [ -n "$LATEST_TAG" ]; then
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$LATEST_TAG...$CURRENT_TAG" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "## 📝 Changes since $LATEST_TAG" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            # 获取提交信息并分类
+            echo "### 🚀 Features" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LATEST_TAG..HEAD --grep="^feat" >> CHANGELOG.md || echo "- No new features" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            echo "### 🐛 Bug Fixes" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LATEST_TAG..HEAD --grep="^fix" >> CHANGELOG.md || echo "- No bug fixes" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            echo "### 🔧 Maintenance" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LATEST_TAG..HEAD --grep="^chore\|^refactor\|^style\|^docs" >> CHANGELOG.md || echo "- No maintenance changes" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            
+            echo "### 📦 Dependencies" >> CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LATEST_TAG..HEAD --grep="^deps\|^depend" >> CHANGELOG.md || echo "- No dependency updates" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+          else
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/releases/tag/$CURRENT_TAG" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "## 🎊 Initial Release" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "This is the initial release of OneBots - a multi-platform multi-protocol bot launcher!" >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "### ✨ Features" >> CHANGELOG.md
+            echo "- 🏗️ Protocol conversion service architecture" >> CHANGELOG.md
+            echo "- 🔌 Support for multiple platforms (WeChat, QQ, DingTalk, Kook)" >> CHANGELOG.md
+            echo "- 📡 Multiple protocol support (OneBot V11/V12, Satori, Milky)" >> CHANGELOG.md
+            echo "- 🎯 TypeScript-first development experience" >> CHANGELOG.md
+            echo "- 🎨 Modern web-based management interface" >> CHANGELOG.md
+          fi
+          
+          echo "" >> CHANGELOG.md
+          echo "## 📦 Installation" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "\`\`\`bash" >> CHANGELOG.md
+          echo "# Install OneBots CLI" >> CHANGELOG.md
+          echo "npm install -g onebots" >> CHANGELOG.md
+          echo "# or" >> CHANGELOG.md
+          echo "pnpm add -g onebots" >> CHANGELOG.md
+          echo "# or" >> CHANGELOG.md
+          echo "yarn global add onebots" >> CHANGELOG.md
+          echo "\`\`\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## 🚀 Quick Start" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "\`\`\`bash" >> CHANGELOG.md
+          echo "# Initialize config" >> CHANGELOG.md
+          echo "onebots init" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "# Start OneBots" >> CHANGELOG.md
+          echo "onebots start" >> CHANGELOG.md
+          echo "\`\`\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "## 🔗 Links" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "- 📖 [Documentation](https://onebots.js.org)" >> CHANGELOG.md
+          echo "- 🐛 [Report Issues](https://github.com/${{ github.repository }}/issues)" >> CHANGELOG.md
+          echo "- 💬 [Discussions](https://github.com/${{ github.repository }}/discussions)" >> CHANGELOG.md
+
+      - name: Publish to npm
+        run: pnpm publish -r --no-git-checks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          bodyFile: "CHANGELOG.md"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+          generateReleaseNotes: true
+          makeLatest: true
