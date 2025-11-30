@@ -21,9 +21,8 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "changeset": "changeset",
-    "version": "changeset version && git add .",
-    "tag": "git tag v$(node -p \"require('./package.json').version\")",
-    "release": "pnpm version && pnpm tag && git push --follow-tags"
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish"
   },
   "engines": {
     "node": ">=22"

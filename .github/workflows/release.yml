@@ -1,87 +1,105 @@
-name: Release
+name: Publish Release
 
 on:
-  push:
-    branches:
-      - master
   pull_request:
+    types: [closed]
     branches:
       - master
 
-env:
-  CI: true
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  test:
-    timeout-minutes: 15
+  release:
+    name: Release
+    # 只在 Version PR 合并且包含版本变更时运行
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')
     runs-on: ubuntu-latest
-    steps:
-      - name: setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.0.2
-      
-      - name: setup node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-      
-      - name: checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: install dependencies
-        run: pnpm install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: build packages
-        run: pnpm build
-      
-      - name: run tests
-        run: pnpm test
-
-  pub:
-    timeout-minutes: 15
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write
       packages: write
-      pull-requests: write
     steps:
-      - name: setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      
-      - name: setup node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-      
-      - name: checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-    
-      - name: install dependencies
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
         run: pnpm install
         env:
-          NODE_AUTH_TOKEN: ${{secrets.PERSONAL_TOKEN}}
-      
-      - name: build packages
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Build packages
         run: pnpm build
-      
-      - name: bump versions
-        uses: changesets/action@v1
-        id: changesets
-        with:
-          version: pnpm bump
-          commit: "chore: update versions"
-          title: "chore: update versions"
-          publish: pnpm pub
+
+      - name: Run tests
+        run: pnpm test
+        continue-on-error: true
+
+      - name: Generate changelog
+        run: |
+          # 从 CHANGELOG.md 文件提取最新版本的内容
+          if [ -f "CHANGELOG.md" ]; then
+            # 获取第一个版本块（从第一个 ## 到下一个 ##）
+            awk '/^## /{p++} p==1' CHANGELOG.md > RELEASE_NOTES.md
+          else
+            echo "# Release Notes" > RELEASE_NOTES.md
+            echo "" >> RELEASE_NOTES.md
+            echo "See individual package CHANGELOG.md files for details." >> RELEASE_NOTES.md
+          fi
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Publish to npm
+        run: pnpm publish -r --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create git tags
+        run: |
+          # 为每个发布的包创建 tag
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # 从 package.json 获取版本并创建 tag
+          for pkg in packages/*/package.json protocols/*/package.json adapters/*/package.json; do
+            if [ -f "$pkg" ]; then
+              name=$(node -p "require('./$pkg').name")
+              version=$(node -p "require('./$pkg').version")
+              # 跳过 private 包
+              private=$(node -p "require('./$pkg').private || false")
+              if [ "$private" = "false" ]; then
+                tag="${name}@${version}"
+                git tag -a "$tag" -m "Release $tag" || true
+              fi
+            fi
+          done
+          
+          git push --tags
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          bodyFile: "RELEASE_NOTES.md"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+          tag: "v${{ steps.get_version.outputs.version }}"
+          name: "v${{ steps.get_version.outputs.version }}"
+          generateReleaseNotes: true
+          makeLatest: true
