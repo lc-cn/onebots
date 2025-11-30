@@ -8,7 +8,7 @@
 "@onebots/protocol-onebot-v11": minor
 "@onebots/protocol-onebot-v12": minor
 "@onebots/protocol-satori-v1": minor
-"onebots-test": minor
+"onebots-dev": minor
 ---
 
 fix: refactory
