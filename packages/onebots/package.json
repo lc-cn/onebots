@@ -10,7 +10,8 @@
   },
   "scripts": {
     "start": "node lib/bin.js",
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml"
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
+    "clean": "rm -rf lib *.tsbuildinfo"
   },
   "engines": {
     "node": ">=22"
@@ -43,8 +44,6 @@
   "dependencies": {
     "koa-static":"^5.0.0",
     "@onebots/core": "workspace:*",
-    "@onebots/protocol-onebot-v11": "workspace:*",
-    "@onebots/protocol-onebot-v12": "workspace:*",
     "@onebots/client": "workspace:*"
   }
 }

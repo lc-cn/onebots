@@ -1,16 +1,18 @@
 {
-  "name": "@onebots/protocol-milky-v1",
-  "version": "0.0.1",
-  "description": "OneBots Milky 协议实现",
+  "name": "@onebots/protocol-onebot-v11",
+  "version": "0.4.96",
+  "description": "OneBots OneBot v11 协议实现",
   "type": "module",
-  "main": "lib/v1.js",
-  "types": "lib/v1.d.ts",
+  "main": "lib/v11.js",
+  "types": "lib/v11.d.ts",
   "scripts": {
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json"
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo"
   },
   "keywords": [
     "onebots",
-    "milky",
+    "onebot",
+    "v11",
     "protocol"
   ],
   "author": "凉菜",
@@ -24,15 +26,14 @@
     "/lib/**/*.d.ts"
   ],
   "peerDependencies": {
-    "onebots":"workspace:*"
+    "onebots": "workspace:*"
   },
   "devDependencies": {
-    "onebots":"workspace:*",
+    "onebots": "workspace:*",
     "tsc-alias": "latest",
     "typescript": "latest"
   },
   "dependencies": {
-    "koa-static": "^5.0.0",
     "ws": "latest"
   }
 }

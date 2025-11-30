@@ -33,6 +33,43 @@ importers:
         specifier: ^8.18.3
         version: 8.18.3
 
+  adapters/adapter-wechat:
+    dependencies:
+      '@types/koa':
+        specifier: ^2.13.4
+        version: 2.15.0
+      '@types/node':
+        specifier: ^22.7.3
+        version: 22.7.3
+      koa:
+        specifier: latest
+        version: 3.1.1
+    devDependencies:
+      onebots:
+        specifier: workspace:*
+        version: link:../../packages/onebots
+      tsc-alias:
+        specifier: latest
+        version: 1.8.16
+      typescript:
+        specifier: latest
+        version: 5.9.3
+
+  development:
+    dependencies:
+      '@onebots/adapter-wechat':
+        specifier: workspace:*
+        version: link:../adapters/adapter-wechat
+      '@onebots/protocol-milky-v1':
+        specifier: workspace:*
+        version: link:../protocols/protocol-milky-v1
+      '@onebots/protocol-satori-v1':
+        specifier: workspace:*
+        version: link:../protocols/protocol-satori
+      onebots:
+        specifier: workspace:*
+        version: link:../packages/onebots
+
   docs:
     devDependencies:
       element-plus:
@@ -50,28 +87,6 @@ importers:
       vue:
         specifier: ^3.5.13
         version: 3.5.25(typescript@5.9.3)
-
-  packages/adapter-wechat:
-    dependencies:
-      '@types/koa':
-        specifier: ^2.13.4
-        version: 2.15.0
-      '@types/node':
-        specifier: ^22.7.3
-        version: 22.7.3
-      koa:
-        specifier: latest
-        version: 3.1.1
-    devDependencies:
-      onebots:
-        specifier: workspace:*
-        version: link:../onebots
-      tsc-alias:
-        specifier: latest
-        version: 1.8.16
-      typescript:
-        specifier: latest
-        version: 5.9.3
 
   packages/client:
     dependencies:
@@ -179,12 +194,6 @@ importers:
       '@onebots/core':
         specifier: workspace:*
         version: link:../core
-      '@onebots/protocol-onebot-v11':
-        specifier: workspace:*
-        version: link:../protocol-onebot-v11
-      '@onebots/protocol-onebot-v12':
-        specifier: workspace:*
-        version: link:../protocol-onebot-v12
       koa-static:
         specifier: ^5.0.0
         version: 5.0.0
@@ -205,7 +214,7 @@ importers:
         specifier: latest
         version: 5.9.3
 
-  packages/protocol-milky-v1:
+  protocols/protocol-milky-v1:
     dependencies:
       koa-static:
         specifier: ^5.0.0
@@ -216,7 +225,7 @@ importers:
     devDependencies:
       onebots:
         specifier: workspace:*
-        version: link:../onebots
+        version: link:../../packages/onebots
       tsc-alias:
         specifier: latest
         version: 1.8.16
@@ -224,7 +233,7 @@ importers:
         specifier: latest
         version: 5.9.3
 
-  packages/protocol-onebot-v11:
+  protocols/protocol-onebot-v11:
     dependencies:
       ws:
         specifier: latest
@@ -232,7 +241,7 @@ importers:
     devDependencies:
       onebots:
         specifier: workspace:*
-        version: link:../onebots
+        version: link:../../packages/onebots
       tsc-alias:
         specifier: latest
         version: 1.8.16
@@ -240,7 +249,7 @@ importers:
         specifier: latest
         version: 5.9.3
 
-  packages/protocol-onebot-v12:
+  protocols/protocol-onebot-v12:
     dependencies:
       ws:
         specifier: latest
@@ -248,7 +257,7 @@ importers:
     devDependencies:
       onebots:
         specifier: workspace:*
-        version: link:../onebots
+        version: link:../../packages/onebots
       tsc-alias:
         specifier: latest
         version: 1.8.16
@@ -256,7 +265,7 @@ importers:
         specifier: latest
         version: 5.9.3
 
-  packages/protocol-satori:
+  protocols/protocol-satori:
     dependencies:
       ws:
         specifier: latest
@@ -264,28 +273,13 @@ importers:
     devDependencies:
       onebots:
         specifier: workspace:*
-        version: link:../onebots
+        version: link:../../packages/onebots
       tsc-alias:
         specifier: latest
         version: 1.8.16
       typescript:
         specifier: latest
         version: 5.9.3
-
-  test:
-    dependencies:
-      '@onebots/adapter-wechat':
-        specifier: workspace:*
-        version: link:../packages/adapter-wechat
-      '@onebots/protocol-milky-v1':
-        specifier: workspace:*
-        version: link:../packages/protocol-milky-v1
-      '@onebots/protocol-satori-v1':
-        specifier: workspace:*
-        version: link:../packages/protocol-satori
-      onebots:
-        specifier: workspace:*
-        version: link:../packages/onebots
 
 packages:
 

@@ -1,12 +1,12 @@
 {
-  "name": "onebots-test",
+  "name": "onebots-dev",
   "private": true,
   "version": "1.0.0",
-  "description": "OneBots test module",
+  "description": "OneBots dev module",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "onebots -r wechat -p milky-v1 -p satori-v1 -c config.yaml"
+    "dev": "onebots -r wechat -p milky-v1 -p satori-v1 -c config.yaml"
   },
   "keywords": [],
   "author": "",

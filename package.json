@@ -5,13 +5,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm -r build",
-    "build:core": "pnpm -r --filter=@onebots/core build",
-    "build:client": "pnpm -r --filter=@onebots/client build",
-    "build:onebots": "pnpm -r --filter=onebots build",
-    "dev": "pnpm -r --filter=onebots dev",
+    "build": "pnpm build:packages && pnpm build:rest",
+    "build:packages": "pnpm --filter='./packages/*' --workspace-concurrency=1 build",
+    "build:rest": "pnpm --filter='./protocols/*' --filter='./adapters/*' --filter=@onebots/docs --filter=onebots-dev build",
+    "clean": "pnpm -r clean",
+    "dev": "pnpm --filter=onebots-dev dev",
     "dev:client": "pnpm -r --filter=@onebots/client dev",
-    "start": "pnpm -r --filter=onebots start",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
@@ -47,8 +46,10 @@
   },
   "workspaces": [
     "packages/*",
+    "adapters/*",
+    "protocols/*",
     "docs",
-    "test"
+    "development"
   ],
   "homepage": "https://github.com/lc-cn/onebots#readme",
   "devDependencies": {

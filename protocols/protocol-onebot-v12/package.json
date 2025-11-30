@@ -6,7 +6,8 @@
   "main": "lib/v12.js",
   "types": "lib/v12.d.ts",
   "scripts": {
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json"
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo"
   },
   "keywords": [
     "onebots",

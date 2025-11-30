@@ -1,17 +1,17 @@
 {
-  "name": "@onebots/protocol-onebot-v11",
+  "name": "@onebots/protocol-satori-v1",
   "version": "0.4.96",
-  "description": "OneBots OneBot v11 协议实现",
+  "description": "OneBots Satori 协议实现",
   "type": "module",
-  "main": "lib/v11.js",
-  "types": "lib/v11.d.ts",
+  "main": "lib/v1.js",
+  "types": "lib/v1.d.ts",
   "scripts": {
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json"
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo"
   },
   "keywords": [
     "onebots",
-    "onebot",
-    "v11",
+    "satori",
     "protocol"
   ],
   "author": "凉菜",

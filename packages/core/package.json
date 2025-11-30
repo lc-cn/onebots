@@ -7,7 +7,8 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "start": "node .",
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json"
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo"
   },
   "engines": {
     "node": ">=22"

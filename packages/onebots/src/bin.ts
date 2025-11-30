@@ -24,17 +24,14 @@ for (let i = 0; i < execArgv.length; i += 2) {
         else obj[key] = [obj[key], value];
     }
 }
-if (!obj['-p']) obj['-p'] = []
-if (!Array.isArray(obj['-p'])) obj['-p'] = [obj['-p'] as string]
-if (!obj['-p'].includes('onebot-v11')) obj['-p'].push('onebot-v11')
-if (!obj['-p'].includes('onebot-v12')) obj['-p'].push('onebot-v12')
-if (Array.isArray(obj['-c'])) obj['-c'] = obj['-c'][obj['-c'].length - 1]
 if (obj["-r"]) {
     const adapters = [].concat(obj["-r"]);
     for (const adapter of adapters) {
         await App.registerAdapter(adapter);
     }
 }
+if (!obj['-p']) obj['-p'] = []
+if (!Array.isArray(obj['-p'])) obj['-p'] = [obj['-p'] as string]
 if (obj["-p"]) {
     const protocols = [].concat(obj["-p"]);
     for (const protocol of protocols) {
@@ -44,4 +41,5 @@ if (obj["-p"]) {
         await App.registerProtocol(name,version);
     }
 }
+if (Array.isArray(obj['-c'])) obj['-c'] = obj['-c'][obj['-c'].length - 1]
 createOnebots(obj["-c"] as string).start();
