@@ -36,14 +36,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Check for changesets
+        id: check_changesets
+        run: |
+          if [ -n "$(ls -A .changeset/*.md 2>/dev/null | grep -v README)" ]; then
+            echo "has_changesets=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changesets=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build packages
+        if: steps.check_changesets.outputs.has_changesets == 'true'
         run: pnpm build
 
       - name: Run tests
+        if: steps.check_changesets.outputs.has_changesets == 'true'
         run: pnpm test
         continue-on-error: true
 
       - name: Create Release Pull Request or Publish
+        if: steps.check_changesets.outputs.has_changesets == 'true'
         id: changesets
         uses: changesets/action@v1
         with:
