@@ -1,6 +1,6 @@
 {
   "name": "@onebots/core",
-  "version": "0.4.96",
+  "version": "0.5.0",
   "description": "多平台多协议的机器人应用启动器核心包",
   "type": "module",
   "main": "lib/index.js",

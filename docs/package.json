@@ -1,6 +1,6 @@
 {
   "name": "@onebots/docs",
-  "version": "0.4.96",
+  "version": "0.5.0",
   "description": "OneBots documentation",
   "private": true,
   "type": "module",

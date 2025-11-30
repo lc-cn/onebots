@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-wechat",
-  "version": "0.4.96",
+  "version": "1.0.0",
   "description": "OneBots 微信公众号适配器",
   "type": "module",
   "main": "lib/index.js",
@@ -26,11 +26,11 @@
   ],
   "devDependencies": {
     "tsc-alias": "latest",
-    "onebots":"workspace:*",
+    "onebots": "workspace:*",
     "typescript": "latest"
   },
   "peerDependencies": {
-    "onebots":"workspace:*"
+    "onebots": "workspace:*"
   },
   "dependencies": {
     "@types/koa": "^2.13.4",
