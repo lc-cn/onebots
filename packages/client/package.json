@@ -1,6 +1,6 @@
 {
   "name": "@onebots/client",
-  "version": "0.4.96",
+  "version": "0.5.0",
   "description": "OneBots Web 管理界面",
   "type": "module",
   "scripts": {
