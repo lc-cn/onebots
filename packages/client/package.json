@@ -1,0 +1,26 @@
+{
+  "name": "@onebots/client",
+  "version": "0.4.96",
+  "description": "OneBots Web 管理界面",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5",
+    "element-plus": "^2.4.4",
+    "dayjs": "^1.11.10"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "sass": "^1.69.6",
+    "typescript": "latest",
+    "unplugin-auto-import": "^0.17.3",
+    "unplugin-vue-components": "^0.26.0",
+    "vite": "^5.0.10",
+    "vite-plugin-style-import": "^2.0.0"
+  }
+}

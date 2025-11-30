@@ -1,0 +1,26 @@
+{
+  "name": "@onebots/docs",
+  "version": "0.4.96",
+  "description": "OneBots documentation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev src",
+    "build": "vitepress build src",
+    "preview": "vitepress preview src"
+  },
+  "keywords": [
+    "onebots",
+    "documentation",
+    "vitepress"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "devDependencies": {
+    "element-plus": "^2.11.9",
+    "vite": "^6.0.5",
+    "vite-plugin-style-import": "^2.0.0",
+    "vitepress": "^1.5.0",
+    "vue": "^3.5.13"
+  }
+}

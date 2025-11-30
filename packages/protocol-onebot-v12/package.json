@@ -1,0 +1,38 @@
+{
+  "name": "@onebots/protocol-onebot-v12",
+  "version": "0.4.96",
+  "description": "OneBots OneBot v12 协议实现",
+  "type": "module",
+  "main": "lib/v12.js",
+  "types": "lib/v12.d.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json"
+  },
+  "keywords": [
+    "onebots",
+    "onebot",
+    "v12",
+    "protocol"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "peerDependencies": {
+    "onebots": "workspace:*"
+  },
+  "devDependencies": {
+    "onebots": "workspace:*",
+    "tsc-alias": "latest",
+    "typescript": "latest"
+  },
+  "dependencies": {
+    "ws": "latest"
+  }
+}

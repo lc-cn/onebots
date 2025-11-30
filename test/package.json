@@ -1,0 +1,20 @@
+{
+  "name": "onebots-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "OneBots test module",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "onebots -r wechat -p milky-v1 -p satori-v1 -c config.yaml"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "onebots": "workspace:*",
+    "@onebots/protocol-milky-v1": "workspace:*",
+    "@onebots/protocol-satori-v1": "workspace:*",
+    "@onebots/adapter-wechat": "workspace:*"
+  }
+}

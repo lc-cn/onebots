@@ -1,30 +1,32 @@
 {
-  "name": "onebots",
+  "name": "onebots-monorepo",
   "version": "0.4.96",
   "description": "多平台多协议的机器人应用启动器",
+  "private": true,
   "type": "module",
-  "main": "lib/index.js",
-  "bin": {
-    "onebots": "./lib/bin.js"
-  },
   "scripts": {
-    "start": "node .",
-    "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
-    "dev": "tsx -r tsconfig-paths/register ./src/bin.ts -r dingtalk -c config.yaml",
-    "pub": "npm publish --access public",
+    "build": "pnpm -r build",
+    "build:core": "pnpm -r --filter=@onebots/core build",
+    "build:client": "pnpm -r --filter=@onebots/client build",
+    "build:onebots": "pnpm -r --filter=onebots build",
+    "dev": "pnpm -r --filter=onebots dev",
+    "dev:client": "pnpm -r --filter=@onebots/client dev",
+    "start": "pnpm -r --filter=onebots start",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
     "lint": "prettier --check ./**/*.{ts,js}",
     "lint:fix": "prettier --write ./**/*.{ts,js,md}",
-    "test": "tsx -r tsconfig-paths/register ./src/test.ts",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
   },
   "engines": {
     "node": ">=22"
-  },
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org"
   },
   "repository": {
     "type": "git",
@@ -43,68 +45,20 @@
   "bugs": {
     "url": "https://github.com/lc-cn/onebots/issues"
   },
+  "workspaces": [
+    "packages/*",
+    "docs",
+    "test"
+  ],
   "homepage": "https://github.com/lc-cn/onebots#readme",
   "devDependencies": {
-    "@types/koa": "^2.13.4",
-    "@types/koa__router": "^8.0.11",
-    "@types/koa-basic-auth": "^2.0.6",
-    "@types/koa-bodyparser": "^4.3.7",
-    "@types/koa-static": "^4.0.4",
-    "@types/node": "latest",
+    "@changesets/cli": "^2.29.8",
     "@types/ws": "^8.5.3",
-    "@vitejs/plugin-vue": "^5.0.0",
-    "node-dd-bot": "latest",
-    "qq-official-bot": "latest",
-    "web-wechat": "latest",
-    "dayjs": "^1.11.10",
-    "element-plus": "^2.4.4",
+    "@vitest/coverage-v8": "^1.6.1",
+    "@vitest/ui": "^1.6.1",
     "prettier": "^3.0.0",
-    "sass": "^1.69.6",
-    "tsx": "latest",
-    "tsc-alias": "latest",
-    "tsconfig-paths": "latest",
-    "typescript": "latest",
-    "unplugin-auto-import": "^0.17.3",
-    "unplugin-vue-components": "^0.26.0",
-    "vite": "^5.0.10",
-    "vite-plugin-style-import": "^2.0.0",
     "vitepress": "^1.0.0-rc.33",
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.5"
-  },
-  "files": [
-    "/lib/**/*.js",
-    "/lib/**/*.d.ts",
-    "/dist/**/*",
-    "/lib/*.yaml",
-    "/**/LICENSE"
-  ],
-  "peerDependencies": {
-    "node-dd-bot": "latest",
-    "qq-official-bot": "latest",
-    "web-wechat": "latest"
-  },
-  "peerDependenciesMeta": {
-    "web-wechat": {
-      "optional": true
-    },
-    "node-dd-bot": {
-      "optional": true
-    },
-    "qq-official-bot": {
-      "optional": true
-    }
-  },
-  "dependencies": {
-    "@koa/router": "^10.1.1",
-    "@zhinjs/shared": "^0.0.9",
-    "js-yaml": "^4.1.0",
-    "koa": "^2.13.4",
-    "koa-basic-auth": "^4.0.0",
-    "koa-bodyparser": "^4.3.0",
-    "koa-static": "^5.0.0",
-    "log4js": "^6.5.2",
-    "reflect-metadata": "^0.1.13",
-    "ws": "^8.16.0"
+    "vitest": "^1.6.1",
+    "ws": "^8.18.3"
   }
 }

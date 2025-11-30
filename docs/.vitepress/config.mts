@@ -7,7 +7,7 @@ export default defineConfig({
     head: [["meta", { name: "theme-color", content: "#3c8772" }]],
     srcDir: "./src",
     outDir: "./dist",
-    description: "基于icqq的OneBot实现",
+    description: "基于NodeJS的 M Platform => N Protocol 解决方案",
     markdown: {
         async config(md) {
         }
@@ -21,39 +21,28 @@ export default defineConfig({
             {
                 text: "配置",
                 items: [
-                    {
-                        text: "全局配置",
-                        items: [
-                            { text: "App", link: "/config/global" },
-                            { text: "OneBot 11", link: "/config/v11" },
-                            { text: "OneBot 12", link: "/config/v12" }
-                        ]
-                    },
-                    {
-                        text: "适配器配置",
-                        items: [
-                            { text: "ICQQ", link: "/config/adapter/icqq" },
-                            { text: "QQ", link: "/config/adapter/qq" },
-                            { text: "微信", link: "/config/adapter/wechat" },
-                            { text: "钉钉", link: "/config/adapter/dingtalk" }
-                        ]
-                    }
+                    { text: "全局配置", link: "/config/global" },
+                    { text: "通用配置", link: "/config/general" },
+                    { text: "平台配置", link: "/config/platform" },
+                    { text: "协议配置", link: "/config/protocol" }
                 ]
             },
             {
-                text: "V11",
+                text: "平台",
                 items: [
-                    { text: "动作 (Action)", link: "/v11/action" },
-                    { text: "事件 (Event)", link: "/v11/event" },
-                    { text: "CQ码 (CQ CODE)", link: "/v11/cqcode" }
+                    { text: "微信", link: "/platform/wechat" },
+                    { text: "QQ", link: "/platform/qq" },
+                    { text: "钉钉", link: "/platform/dingtalk" },
+                    { text: "Kook", link: "/platform/kook" }
                 ]
             },
             {
-                text: "V12",
+                text: "协议",
                 items: [
-                    { text: "动作 (Action)", link: "/v12/action" },
-                    { text: "事件 (Event)", link: "/v12/event" },
-                    { text: "消息段 (Segment)", link: "/v12/segment" }
+                    { text: "OneBot V11", link: "/protocol/onebot-v11" },
+                    { text: "OneBot V12", link: "/protocol/onebot-v12" },
+                    { text: "Satori", link: "/protocol/satori" },
+                    { text: "Milky", link: "/protocol/milky" }
                 ]
             },
             {
@@ -72,42 +61,26 @@ export default defineConfig({
         sidebar: {
             "/guide/": [
                 { text: `准备工作`, link: "/guide/prepare" },
-                { text: `开始`, link: "/guide/start" },
-                { text: `适配器`, link: "/guide/adapter" }
+                { text: `快速开始`, link: "/guide/start" },
+                { text: `开发适配器`, link: "/guide/adapter" }
             ],
-            "/config": [
-                {
-                    text: "全局配置",
-                    items:[
-                        { text: 'App',link: "/config/global" },
-                        { text: "OneBot 11", link: "/config/v11" },
-                        { text: "OneBot 12", link: "/config/v12" },
-                    ]
-                },
-                {
-                    text: "适配器配置", items: [
-                        { text: "ICQQ", link: "/config/adapter/icqq" },
-                        { text: "QQ", link: "/config/adapter/qq" },
-                        { text: "微信", link: "/config/adapter/wechat" },
-                        { text: "钉钉", link: "/config/adapter/dingtalk" }
-                    ]
-                }
+            "/config/": [
+                { text: "全局配置", link: "/config/global" },
+                { text: "通用配置 (general)", link: "/config/general" },
+                { text: "平台配置", link: "/config/platform" },
+                { text: "协议配置", link: "/config/protocol" }
             ],
-            "/adapter": [
-                { text: "ICQQ", link: "/adapter/icqq" },
-                { text: "QQ", link: "/adapter/qq" },
-                { text: "微信", link: "/adapter/wechat" },
-                { text: "钉钉", link: "/adapter/dingtalk" }
+            "/platform/": [
+                { text: "微信", link: "/platform/wechat" },
+                { text: "QQ", link: "/platform/qq" },
+                { text: "钉钉", link: "/platform/dingtalk" },
+                { text: "Kook", link: "/platform/kook" }
             ],
-            "/v11/": [
-                { text: "动作 (Action)", link: "/v11/action" },
-                { text: "事件 (Event)", link: "/v11/event" },
-                { text: "CQ码 (CQ CODE)", link: "/v11/cqcode" }
-            ],
-            "/v12/": [
-                { text: "动作 (Action)", link: "/v12/action" },
-                { text: "事件 (Event)", link: "/v12/event" },
-                { text: "消息段 (Segment)", link: "/v12/segment" }
+            "/protocol/": [
+                { text: "OneBot V11", link: "/protocol/onebot-v11" },
+                { text: "OneBot V12", link: "/protocol/onebot-v12" },
+                { text: "Satori", link: "/protocol/satori" },
+                { text: "Milky", link: "/protocol/milky" }
             ]
         },
         footer: {

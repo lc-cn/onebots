@@ -1,0 +1,39 @@
+{
+  "name": "@onebots/adapter-wechat",
+  "version": "0.4.96",
+  "description": "OneBots 微信公众号适配器",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json"
+  },
+  "keywords": [
+    "onebots",
+    "wechat",
+    "adapter"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "devDependencies": {
+    "tsc-alias": "latest",
+    "onebots":"workspace:*",
+    "typescript": "latest"
+  },
+  "peerDependencies": {
+    "onebots":"workspace:*"
+  },
+  "dependencies": {
+    "@types/koa": "^2.13.4",
+    "@types/node": "^22.7.3",
+    "koa": "latest"
+  }
+}

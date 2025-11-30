@@ -1,0 +1,41 @@
+# OneBot WebHook 和反向 WebSocket 测试配置示例
+# 将此配置添加到你的 config.yaml 中以启用相应的测试
+
+accounts:
+  - platform: dingtalk
+    account_id: your_account_id  # 替换为你的账号ID
+    protocols:
+      onebot:
+        # OneBot V11 配置
+        v11:
+          # HTTP Reverse (WebHook)
+          # OneBots 将通过 HTTP POST 将事件推送到这些 URL
+          http_reverse:
+            - "http://localhost:18080"  # WebHook 测试服务器
+          
+          # WebSocket Reverse
+          # OneBots 将主动连接到这些 WebSocket 服务器
+          ws_reverse:
+            - "ws://localhost:18081"    # WS-Reverse 测试服务器
+        
+        # OneBot V12 配置
+        v12:
+          # WebSocket Reverse
+          ws_reverse:
+            - "ws://localhost:18082"    # WS-Reverse V12 测试服务器
+
+# 注意事项:
+# 1. 配置修改后需要重启 OneBots 服务器才能生效
+# 2. 运行测试前确保对应的端口没有被占用
+# 3. 测试服务器会在测试开始时自动启动，测试结束时自动关闭
+# 4. WebHook 测试和 WS-Reverse 测试可以独立运行
+
+# 端口说明:
+# - 18080: OneBot V11 WebHook 测试服务器
+# - 18081: OneBot V11 WebSocket Reverse 测试服务器
+# - 18082: OneBot V12 WebSocket Reverse 测试服务器
+
+# 运行测试:
+# pnpm vitest run __tests__/onebot/v11/webhook/http-reverse.spec.js
+# pnpm vitest run __tests__/onebot/v11/websocket/ws-reverse.spec.js
+# pnpm vitest run __tests__/onebot/v12/websocket/ws-reverse.spec.js

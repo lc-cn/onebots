@@ -1,0 +1,37 @@
+{
+  "name": "@onebots/protocol-satori-v1",
+  "version": "0.4.96",
+  "description": "OneBots Satori 协议实现",
+  "type": "module",
+  "main": "lib/v1.js",
+  "types": "lib/v1.d.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json"
+  },
+  "keywords": [
+    "onebots",
+    "satori",
+    "protocol"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "peerDependencies": {
+    "onebots": "workspace:*"
+  },
+  "devDependencies": {
+    "onebots": "workspace:*",
+    "tsc-alias": "latest",
+    "typescript": "latest"
+  },
+  "dependencies": {
+    "ws": "latest"
+  }
+}

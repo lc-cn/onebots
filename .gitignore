@@ -1,14 +1,25 @@
+# Test files
 /src/test.ts
-/data
-config.yaml
+
+# Runtime data
+**/data
+**/config.yaml
+onebots.log
+**/tsconfig.tsbuildinfo
+# Dependencies
 node_modules
-package-lock.json
-/lib
+
+# Build outputs
+**/lib
+**/dist
+
+# Auto-generated
+**/auto-imports.d.ts
+**/components.d.ts
+
+# IDE
 .vscode/
 .idea/
-pnpm-lock.yaml
-onebots.log
-auto-imports.d.ts
-components.d.ts
+
+# Docs cache
 /docs/.vitepress/cache/
-dist

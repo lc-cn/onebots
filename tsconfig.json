@@ -1,24 +1,11 @@
 {
-    "compilerOptions": {
-        "outDir": "./lib",
-        "rootDir": "./src",
-        "baseUrl": ".",
-        "target": "esnext",
-        "module": "nodenext",
-        "declaration": true,
-        "resolveJsonModule": true,
-        "esModuleInterop": true,
-        "emitDecoratorMetadata": true,
-        "moduleResolution": "nodenext",
-        "experimentalDecorators": true,
-        "paths": {
-            "@/*": ["src/*"]
-        },
-        "skipLibCheck": true
-    },
-    "include": ["./src/"],
-    "exclude": [
-        "./src/test.ts",
-        "node_modules"
-    ]
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  }
 }

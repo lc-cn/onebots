@@ -1,0 +1,50 @@
+{
+  "name": "onebots",
+  "version": "0.4.96",
+  "description": "多平台多协议的机器人应用启动器",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "bin": {
+    "onebots": "./lib/bin.js"
+  },
+  "scripts": {
+    "start": "node lib/bin.js",
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "onebot",
+    "qq",
+    "wechat",
+    "dingtalk",
+    "cq-http",
+    "multi-protocol"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "devDependencies": {
+    "@types/koa-static": "^4.0.4",
+    "tsc-alias": "latest",
+    "tsconfig-paths": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  },
+  "dependencies": {
+    "koa-static":"^5.0.0",
+    "@onebots/core": "workspace:*",
+    "@onebots/protocol-onebot-v11": "workspace:*",
+    "@onebots/protocol-onebot-v12": "workspace:*",
+    "@onebots/client": "workspace:*"
+  }
+}

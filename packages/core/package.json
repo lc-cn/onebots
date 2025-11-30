@@ -1,0 +1,52 @@
+{
+  "name": "@onebots/core",
+  "version": "0.4.96",
+  "description": "多平台多协议的机器人应用启动器核心包",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "start": "node .",
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "onebot",
+    "qq",
+    "wechat",
+    "dingtalk",
+    "cq-http",
+    "multi-protocol"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/koa": "^2.13.4",
+    "@types/koa-basic-auth": "^2.0.6",
+    "@types/koa-bodyparser": "^4.3.7",
+    "@types/koa__router": "^8.0.11",
+    "@types/node": "^22.7.3",
+    "@types/ws": "^8.5.3",
+    "tsc-alias": "latest",
+    "tsconfig-paths": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "web-wechat": "latest"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "dependencies": {
+    "@koa/router": "^10.1.1",
+    "js-yaml": "^4.1.0",
+    "koa": "^2.13.4",
+    "koa-basic-auth": "^4.0.0",
+    "koa-bodyparser": "^4.3.0",
+    "log4js": "^6.5.2",
+    "reflect-metadata": "^0.1.13",
+    "ws": "^8.16.0"
+  }
+}
