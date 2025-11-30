@@ -1,6 +1,6 @@
 {
   "name": "@onebots/protocol-satori-v1",
-  "version": "0.4.96",
+  "version": "1.0.0",
   "description": "OneBots Satori 协议实现",
   "type": "module",
   "main": "lib/v1.js",

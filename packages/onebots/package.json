@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "0.4.96",
+  "version": "0.5.0",
   "description": "多平台多协议的机器人应用启动器",
   "type": "module",
   "main": "lib/index.js",
@@ -42,7 +42,7 @@
     "typescript": "latest"
   },
   "dependencies": {
-    "koa-static":"^5.0.0",
+    "koa-static": "^5.0.0",
     "@onebots/core": "workspace:*",
     "@onebots/client": "workspace:*"
   }
