@@ -6,7 +6,7 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
     "clean": "rm -rf lib *.tsbuildinfo"
   },
   "keywords": [
@@ -26,7 +26,6 @@
   ],
   "devDependencies": {
     "tsc-alias": "latest",
-    "onebots": "workspace:*",
     "typescript": "latest"
   },
   "peerDependencies": {

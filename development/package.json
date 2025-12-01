@@ -13,6 +13,8 @@
   "license": "MIT",
   "dependencies": {
     "onebots": "workspace:*",
+    "@onebots/protocol-onebot-v11": "workspace:*",
+    "@onebots/protocol-onebot-v12": "workspace:*",
     "@onebots/protocol-milky-v1": "workspace:*",
     "@onebots/protocol-satori-v1": "workspace:*",
     "@onebots/adapter-wechat": "workspace:*"

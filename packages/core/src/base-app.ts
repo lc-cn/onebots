@@ -20,7 +20,8 @@ import process from "process";
 import { Dict } from "./types.js";
 import { Account } from "@/account.js";
 import { SqliteDB } from "@/db.js";
-import { AdapterRegistry } from "./registry.js";
+import pkg from "../package.json" with { type: "json" };
+import { AdapterRegistry,ProtocolRegistry } from "./registry.js";
 export {
     configure,
     yaml,
@@ -53,10 +54,8 @@ export class BaseApp extends Koa {
     }
     db:SqliteDB
     adapters: Map<keyof Adapter.Configs, Adapter> = new Map<keyof Adapter.Configs, Adapter>();
-    public ws: WsServer;
     public router: Router;
     get info() {
-        const pkg = require(path.resolve(__dirname, "../../package.json"));
         const free_memory = os.freemem();
         const total_memory = os.totalmem();
         return {
@@ -90,7 +89,12 @@ export class BaseApp extends Koa {
         this.logger.level = this.config.log_level;
         this.httpServer = createServer(this.callback());
         this.router = new Router(this.httpServer, { prefix: this.config.path });
-        this.use(KoaBodyParser({}))
+        this.use(KoaBodyParser({
+            enableTypes: ['json', 'form', 'text'],
+            extendTypes: {
+                text: ['text/plain']
+            }
+        }))
             .use(this.router.routes())
             .use(this.router.allowedMethods())
             .use(async (ctx, next) => {
@@ -101,7 +105,6 @@ export class BaseApp extends Koa {
                     pass: this.config.password,
                 })(ctx, next);
             });
-        this.ws = this.router.ws("/");
 
         this.initAdapters();
     }
@@ -188,124 +191,6 @@ export class BaseApp extends Koa {
 
     async start() {
         this.httpServer.listen(this.config.port);
-        const fileListener = e => {
-            if (e === "change")
-                this.ws.clients.forEach(async client => {
-                    client.send(
-                        JSON.stringify({
-                            event: "system.log",
-                            data: await readLine(1, BaseApp.logFile),
-                        }),
-                    );
-                });
-        };
-        fs.watch(BaseApp.logFile, fileListener);
-        this.once("close", () => {
-            fs.unwatchFile(BaseApp.logFile, fileListener);
-        });
-        process.once("disconnect", () => {
-            fs.unwatchFile(BaseApp.logFile, fileListener);
-        });
-        this.ws.on("connection", async client => {
-            client.send(
-                JSON.stringify({
-                    event: "system.sync",
-                    data: {
-                        config: fs.readFileSync(BaseApp.configPath, "utf8"),
-                        adapters: [...this.adapters.values()].map(adapter => {
-                            return adapter.info;
-                        }),
-                        app: this.info,
-                        logs: fs.existsSync(BaseApp.logFile) ? await readLine(100, BaseApp.logFile) : "",
-                    },
-                }),
-            );
-            client.on("message", async raw => {
-                let payload: Dict = {};
-                try {
-                    payload = JSON.parse(raw.toString());
-                } catch {
-                    return;
-                }
-                switch (payload.action) {
-                    case "system.input":
-                        // 将流的模式切换到“流动模式”
-                        process.stdin.resume();
-
-                        // 使用以下函数来模拟输入数据
-                    function simulateInput(data: Buffer) {
-                        process.nextTick(() => {
-                            process.stdin.emit("data", data);
-                        });
-                    }
-
-                        simulateInput(Buffer.from(payload.data + "\n", "utf8"));
-                        // 模拟结束
-                        process.nextTick(() => {
-                            process.stdin.emit("end");
-                        });
-                        return true;
-                    case "system.saveConfig":
-                        return fs.writeFileSync(BaseApp.configPath, payload.data, "utf8");
-                    case "system.reload":
-                        const config = yaml.load(fs.readFileSync(BaseApp.configPath, "utf8"));
-                        return this.reload(config);
-                    case "bot.start": {
-                        const { platform, uin } = JSON.parse(payload.data);
-                        await this.adapters.get(platform)?.setOnline(uin);
-                        return client.send(
-                            JSON.stringify({
-                                event: "bot.change",
-                                data: this.adapters.get(platform).getAccount(uin).info,
-                            }),
-                        );
-                    }
-                    case "bot.stop": {
-                        const { platform, uin } = JSON.parse(payload.data);
-                        await this.adapters.get(platform)?.setOffline(uin);
-                        return client.send(
-                            JSON.stringify({
-                                event: "bot.change",
-                                data: this.adapters.get(platform).getAccount(uin).info,
-                            }),
-                        );
-                    }
-                }
-            });
-        });
-        this.router.get("/list", ctx => {
-            ctx.body = this.accounts.map(bot => {
-                return bot.info;
-            });
-        });
-        this.router.post("/add", (ctx, next) => {
-            const config = (ctx.request.body || {}) as any;
-            try {
-                this.addAccount(config);
-                ctx.body = `添加成功`;
-            } catch (e) {
-                ctx.body = e.message;
-            }
-        });
-        this.router.post("/edit", (ctx, next) => {
-            const config = (ctx.request.body || {}) as any;
-            try {
-                this.updateAccount(config);
-                ctx.body = `修改成功`;
-            } catch (e) {
-                ctx.body = e.message;
-            }
-        });
-        this.router.get("/remove", (ctx, next) => {
-            const { uin, platform, force } = ctx.request.query;
-            try {
-                this.removeAccount(String(platform), String(uin), Boolean(force));
-                ctx.body = `移除成功`;
-            } catch (e) {
-                console.log(e);
-                ctx.body = e.message;
-            }
-        });
         this.logger.mark(
             `server listen at http://0.0.0.0:${this.config.port}/${
                 this.config.path ? this.config.path : ""

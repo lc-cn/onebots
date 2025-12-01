@@ -1,17 +1,22 @@
-export interface BotInfo {
+export interface AccountInfo {
     uin: string;
     status: string;
     avatar: string;
     platform: string;
     nickname: string;
-    dependency: string;
+    dependency?: string;
     urls: string[];
 }
+
+// 保持向后兼容
+export type BotInfo = AccountInfo;
+
 export type CPUInfo = {
-    mode: string;
+    model: string;
     speed: number;
     times: { user: number; irq: number; nice: number; sys: number; idle: number };
 };
+
 export interface SystemInfo {
     free_memory: number;
     node_version: string;
@@ -29,9 +34,16 @@ export interface SystemInfo {
     total_memory: number;
     username: string;
 }
+
 export interface AdapterInfo {
     platform: string;
-    config: any;
     icon: string;
-    bots: BotInfo[];
+    accounts: AccountInfo[];
+}
+
+export interface ProtocolInfo {
+    name: string;
+    displayName: string;
+    description: string;
+    versions: string[];
 }

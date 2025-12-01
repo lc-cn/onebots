@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "OneBots OneBot v11 协议实现",
   "type": "module",
-  "main": "lib/v11.js",
-  "types": "lib/v11.d.ts",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
-    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
     "clean": "rm -rf lib *.tsbuildinfo"
   },
   "keywords": [

@@ -54,9 +54,11 @@
   "homepage": "https://github.com/lc-cn/onebots#readme",
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
+    "@types/koa-static": "^4.0.4",
     "@types/ws": "^8.5.3",
     "@vitest/coverage-v8": "^1.6.1",
     "@vitest/ui": "^1.6.1",
+    "koa-static": "^5.0.0",
     "prettier": "^3.0.0",
     "vitepress": "^1.0.0-rc.33",
     "vitest": "^1.6.1",

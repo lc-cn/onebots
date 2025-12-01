@@ -1,18 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN" class="dark">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>OneBots</title>
+    <title>OneBots 管理平台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        body{margin: 0}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body, #app {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+        }
+        body {
+            background: #fafafa;
+        }
+        html.dark body {
+            background: #0a0a0a;
+        }
     </style>
 </head>
 <body>
 <noscript>
-    <strong>We're sorry but OneBots doesn't work properly without JavaScript enabled. Please enable it to
-        continue.</strong>
+    <strong>OneBots 需要启用 JavaScript 才能正常运行，请启用后继续。</strong>
 </noscript>
 <div id="app"></div>
 <script type="module" src="/src/main.ts"></script>

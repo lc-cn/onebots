@@ -10,10 +10,14 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.5",
+    "@element-plus/icons-vue": "^2.3.2",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "dayjs": "^1.11.10",
     "element-plus": "^2.4.4",
-    "dayjs": "^1.11.10"
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
