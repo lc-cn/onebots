@@ -9,13 +9,11 @@
     "preview": "vite preview",
     "clean": "rm -rf dist"
   },
-  "dependencies": {
+  "devDependencies": {
     "vue": "^3.4.0",
     "vue-router": "^4.2.5",
     "element-plus": "^2.4.4",
-    "dayjs": "^1.11.10"
-  },
-  "devDependencies": {
+    "dayjs": "^1.11.10",
     "@vitejs/plugin-vue": "^5.0.0",
     "sass": "^1.69.6",
     "typescript": "latest",
