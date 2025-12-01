@@ -1,5 +1,11 @@
 # @onebots/adapter-wechat
 
+## 1.0.1
+
+### Patch Changes
+
+- onebots@0.5.1
+
 ## 1.0.0
 
 ### Minor Changes

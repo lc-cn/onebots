@@ -1,5 +1,14 @@
 # onebots-dev
 
+## 1.1.1
+
+### Patch Changes
+
+- onebots@0.5.1
+- @onebots/adapter-wechat@1.0.1
+- @onebots/protocol-milky-v1@1.0.1
+- @onebots/protocol-satori-v1@1.0.1
+
 ## 1.1.0
 
 ### Minor Changes

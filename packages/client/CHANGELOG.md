@@ -1,5 +1,11 @@
 # @onebots/client
 
+## 0.5.1
+
+### Patch Changes
+
+- 74fb4fd: fix: change to dev dep
+
 ## 0.5.0
 
 ### Minor Changes
