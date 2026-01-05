@@ -51,7 +51,6 @@ export class HttpClient {
     }
     
     const url = urlObj.toString();
-    console.log(`[HttpClient] POST ${url}`);
     
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -69,7 +68,6 @@ export class HttpClient {
     });
 
     if (!response.ok) {
-      console.error(`[HttpClient] Request failed: ${response.status} ${response.statusText}`);
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 

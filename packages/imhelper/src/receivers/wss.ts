@@ -3,7 +3,7 @@ import { Adapter } from '../adapter.js';
 import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 
-export class WSSReceiver<Id extends string | number = string | number, Content extends string | any[] = string | any[], Response extends any = any> extends Receiver<Id, Content, Response> {
+export class WSSReceiver<Id extends string | number = string | number> extends Receiver<Id> {
     private server?: http.Server;
     private wss?: WebSocketServer;
     private accessToken?: string;
@@ -85,18 +85,16 @@ export class WSSReceiver<Id extends string | number = string | number, Content e
         this.transformToMessage(event);
     }
 
-    private transformToMessage(event: any): void {
+    private transformToMessage(event: unknown): void {
         // 如果 adapter 有 transformEvent 方法，使用它
-        if (typeof (this.adapter as any).transformEvent === 'function') {
-            (this.adapter as any).transformEvent(event);
-            return;
+        if (this.adapter.transformEvent) {
+            this.adapter.transformEvent(event);
+        }else{
+            throw new Error('Adapter does not have transformEvent method');
         }
-
-        // 否则尝试通用转换并触发原始事件
-        // adapter 应该监听 'event' 事件并自行转换
     }
 
-    constructor(adapter: Adapter<Id, Content, Response>, public path: string, accessToken?: string) {
+    constructor(adapter: Adapter<Id>, public path: string, accessToken?: string) {
         super(adapter);
         this.accessToken = accessToken;
     }

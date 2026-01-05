@@ -5,15 +5,15 @@ const require = createRequire(import.meta.url);
 
 // 对于 Node.js 环境，使用 eventsource 库
 // 对于浏览器环境，使用原生 EventSource
-let EventSource: any;
-if (typeof window !== 'undefined' && (window as any).EventSource) {
+let EventSource: typeof import('eventsource').EventSource | typeof globalThis.EventSource;
+if (typeof window !== 'undefined' && 'EventSource' in window) {
     // 浏览器环境
-    EventSource = (window as any).EventSource;
+    EventSource = window.EventSource as typeof globalThis.EventSource;
 } else {
     EventSource = require('eventsource');
 }
 
-export class SSEReceiver<Id extends string | number = string | number, Content extends string | any[] = string | any[], Response extends any = any> extends Receiver<Id, Content, Response> {
+export class SSEReceiver<Id extends string | number = string | number> extends Receiver<Id> {
     private eventSource?: any;
     private reconnectTimer?: NodeJS.Timeout;
     private accessToken?: string;
@@ -27,12 +27,16 @@ export class SSEReceiver<Id extends string | number = string | number, Content e
                 }
 
                 // 对于 Node.js 的 eventsource 库，需要传递 headers
-                const headers: Record<string, string> = {};
-                if (this.accessToken) {
-                    headers['Authorization'] = `Bearer ${this.accessToken}`;
+                // 浏览器原生 EventSource 不支持 headers，但 eventsource 库支持
+                const options: any = {};
+                if (this.accessToken && typeof window === 'undefined') {
+                    // 只在 Node.js 环境下设置 headers
+                    options.headers = {
+                        'Authorization': `Bearer ${this.accessToken}`,
+                    };
                 }
 
-                this.eventSource = new EventSource(url.toString(), { headers });
+                this.eventSource = new EventSource(url.toString(), options);
 
                 this.eventSource.onopen = () => {
                     resolve();
@@ -94,18 +98,16 @@ export class SSEReceiver<Id extends string | number = string | number, Content e
         this.transformToMessage(event);
     }
 
-    private transformToMessage(event: any): void {
+    private transformToMessage(event: unknown): void {
         // 如果 adapter 有 transformEvent 方法，使用它
-        if (typeof (this.adapter as any).transformEvent === 'function') {
-            (this.adapter as any).transformEvent(event);
-            return;
+        if (this.adapter.transformEvent) {
+            this.adapter.transformEvent(event);
+        }else{
+            throw new Error('Adapter does not have transformEvent method');
         }
-
-        // 否则尝试通用转换并触发原始事件
-        // adapter 应该监听 'event' 事件并自行转换
     }
 
-    constructor(adapter: Adapter<Id, Content, Response>, public url: string, accessToken?: string) {
+    constructor(adapter: Adapter<Id>, public url: string, accessToken?: string) {
         super(adapter);
         this.accessToken = accessToken;
     }

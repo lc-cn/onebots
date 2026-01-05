@@ -28,6 +28,9 @@
   "dependencies": {
     "ws": "^8.18.3"
   },
+  "peerDependencies": {
+    "imhelper": "workspace:*"
+  },
   "devDependencies": {
     "@types/ws": "^8.18.1",
     "tsc-alias": "latest",

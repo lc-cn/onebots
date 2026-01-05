@@ -22,7 +22,7 @@
     "/lib/**/*.d.ts"
   ],
   "dependencies": {
-    "eventsource": "^2.0.2",
+    "eventsource": "^4.1.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {

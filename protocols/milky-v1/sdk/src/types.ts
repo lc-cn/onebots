@@ -26,12 +26,18 @@ export interface MilkyV1Event {
   request_type?: string;
   meta_event_type?: string;
   time: number;
-  self_id: number;
+  self_id: string | number; // Milky 协议中 self_id 可能是 string 或 number
   message_id?: string;
-  user_id?: number;
-  group_id?: number;
+  user_id?: string | number;
+  group_id?: string | number;
   message?: string | any[];
   raw_message?: string;
+  sub_type?: string;
+  sender?: {
+    user_id: string | number;
+    nickname?: string;
+    avatar?: string;
+  };
   [key: string]: any;
 }
 

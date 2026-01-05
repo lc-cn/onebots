@@ -27,8 +27,10 @@
     "/lib/**/*.d.ts"
   ],
   "dependencies": {
-    "imhelper": "workspace:*",
     "ws": "^8.18.3"
+  },
+  "peerDependencies": {
+    "imhelper": "workspace:*"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",

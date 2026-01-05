@@ -2,7 +2,7 @@ import { Receiver } from '../receiver.js';
 import { Adapter } from '../adapter.js';
 import WebSocket from 'ws';
 
-export class WebSocketReceiver<Id extends string | number = string | number, Content extends string | any[] = string | any[], Response extends any = any> extends Receiver<Id, Content, Response> {
+export class WebSocketReceiver<Id extends string | number = string | number> extends Receiver<Id> {
     private ws?: WebSocket;
     private reconnectTimer?: NodeJS.Timeout;
     private reconnectAttempts = 0;
@@ -107,18 +107,16 @@ export class WebSocketReceiver<Id extends string | number = string | number, Con
         this.transformToMessage(event);
     }
 
-    private transformToMessage(event: any): void {
+    private transformToMessage(event: unknown): void {
         // 如果 adapter 有 transformEvent 方法，使用它
-        if (typeof (this.adapter as any).transformEvent === 'function') {
-            (this.adapter as any).transformEvent(event);
-            return;
+        if (this.adapter.transformEvent) {
+            this.adapter.transformEvent(event);
+        }else{
+            throw new Error('Adapter does not have transformEvent method');
         }
-
-        // 否则尝试通用转换并触发原始事件
-        // adapter 应该监听 'event' 事件并自行转换
     }
 
-    constructor(adapter: Adapter<Id, Content, Response>, public url: string, accessToken?: string) {
+    constructor(adapter: Adapter<Id>, public url: string, accessToken?: string) {
         super(adapter);
         this.accessToken = accessToken;
     }
