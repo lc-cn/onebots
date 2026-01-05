@@ -25,6 +25,10 @@ import { ConfigValidator, BaseAppConfigSchema } from "./config-validator.js";
 import { LifecycleManager } from "./lifecycle.js";
 import { ErrorHandler, ConfigError } from "./errors.js";
 import { Logger as EnhancedLogger, createLogger } from "./logger.js";
+import { initSecurityAudit, securityAudit, closeSecurityAudit } from "./middleware/security-audit.js";
+import { defaultRateLimit } from "./middleware/rate-limit.js";
+import { metricsCollector } from "./middleware/metrics-collector.js";
+import { metrics } from "./metrics.js";
 export {
     configure,
     yaml,
@@ -131,10 +135,20 @@ export class BaseApp extends Koa {
             });
         });
         
+        // 初始化安全审计日志
+        initSecurityAudit(path.join(BaseApp.dataDir, 'audit'));
+        
         // 注册健康检查端点（无需认证）
         this.setupHealthEndpoints();
         
+        // 中间件链
         this.use(KoaBody())
+            // 性能指标收集（最早执行，以便记录所有请求）
+            .use(metricsCollector())
+            // 安全审计日志
+            .use(securityAudit())
+            // 速率限制（在认证之前，防止暴力破解）
+            .use(defaultRateLimit)
             .use(async (ctx, next) => {
                 // 健康检查端点跳过认证
                 if (ctx.path === '/health' || ctx.path === '/ready' || ctx.path === '/metrics') {
@@ -226,39 +240,39 @@ export class BaseApp extends Koa {
             };
         });
 
-        // /metrics - 简单的 Prometheus 格式指标
+        // /metrics - Prometheus 格式指标
         this.router.get('/metrics', (ctx) => {
-            const metrics: string[] = [];
-            const now = Date.now();
+            const metricLines: string[] = [];
 
             // 基础指标
-            metrics.push(`# HELP onebots_info OneBots application info`);
-            metrics.push(`# TYPE onebots_info gauge`);
-            metrics.push(`onebots_info{version="${pkg.version}"} 1`);
+            metricLines.push(`# HELP onebots_info OneBots application info`);
+            metricLines.push(`# TYPE onebots_info gauge`);
+            metricLines.push(`onebots_info{version="${pkg.version}"} 1`);
 
-            metrics.push(`# HELP onebots_uptime_seconds Application uptime in seconds`);
-            metrics.push(`# TYPE onebots_uptime_seconds gauge`);
-            metrics.push(`onebots_uptime_seconds ${process.uptime()}`);
+            metricLines.push(`# HELP onebots_uptime_seconds Application uptime in seconds`);
+            metricLines.push(`# TYPE onebots_uptime_seconds gauge`);
+            metricLines.push(`onebots_uptime_seconds ${process.uptime()}`);
 
-            metrics.push(`# HELP onebots_started Whether the application is started`);
-            metrics.push(`# TYPE onebots_started gauge`);
-            metrics.push(`onebots_started ${this.isStarted ? 1 : 0}`);
+            metricLines.push(`# HELP onebots_started Whether the application is started`);
+            metricLines.push(`# TYPE onebots_started gauge`);
+            metricLines.push(`onebots_started ${this.isStarted ? 1 : 0}`);
 
             // 内存使用
             const memUsage = process.memoryUsage();
-            metrics.push(`# HELP onebots_memory_bytes Memory usage in bytes`);
-            metrics.push(`# TYPE onebots_memory_bytes gauge`);
-            metrics.push(`onebots_memory_bytes{type="rss"} ${memUsage.rss}`);
-            metrics.push(`onebots_memory_bytes{type="heapTotal"} ${memUsage.heapTotal}`);
-            metrics.push(`onebots_memory_bytes{type="heapUsed"} ${memUsage.heapUsed}`);
+            metricLines.push(`# HELP onebots_memory_bytes Memory usage in bytes`);
+            metricLines.push(`# TYPE onebots_memory_bytes gauge`);
+            metricLines.push(`onebots_memory_bytes{type="rss"} ${memUsage.rss}`);
+            metricLines.push(`onebots_memory_bytes{type="heapTotal"} ${memUsage.heapTotal}`);
+            metricLines.push(`onebots_memory_bytes{type="heapUsed"} ${memUsage.heapUsed}`);
+            metricLines.push(`onebots_memory_bytes{type="external"} ${memUsage.external}`);
 
             // 适配器和账号指标
-            metrics.push(`# HELP onebots_adapters_total Total number of adapters`);
-            metrics.push(`# TYPE onebots_adapters_total gauge`);
-            metrics.push(`onebots_adapters_total ${this.adapters.size}`);
+            metricLines.push(`# HELP onebots_adapters_total Total number of adapters`);
+            metricLines.push(`# TYPE onebots_adapters_total gauge`);
+            metricLines.push(`onebots_adapters_total ${this.adapters.size}`);
 
-            metrics.push(`# HELP onebots_accounts_total Total accounts by platform and status`);
-            metrics.push(`# TYPE onebots_accounts_total gauge`);
+            metricLines.push(`# HELP onebots_accounts_total Total accounts by platform and status`);
+            metricLines.push(`# TYPE onebots_accounts_total gauge`);
             
             for (const [platform, adapter] of this.adapters) {
                 let online = 0;
@@ -267,12 +281,19 @@ export class BaseApp extends Koa {
                     if (account.status === 'online') online++;
                     else offline++;
                 }
-                metrics.push(`onebots_accounts_total{platform="${platform}",status="online"} ${online}`);
-                metrics.push(`onebots_accounts_total{platform="${platform}",status="offline"} ${offline}`);
+                metricLines.push(`onebots_accounts_total{platform="${platform}",status="online"} ${online}`);
+                metricLines.push(`onebots_accounts_total{platform="${platform}",status="offline"} ${offline}`);
+            }
+
+            // 添加性能指标
+            const prometheusMetrics = metrics.exportPrometheus();
+            if (prometheusMetrics.trim()) {
+                metricLines.push('\n# Performance metrics');
+                metricLines.push(prometheusMetrics);
             }
 
             ctx.type = 'text/plain; charset=utf-8';
-            ctx.body = metrics.join('\n') + '\n';
+            ctx.body = metricLines.join('\n') + '\n';
         });
     }
 
@@ -422,6 +443,9 @@ export class BaseApp extends Koa {
             
             // 清理资源
             await this.lifecycle.cleanup();
+            
+            // 关闭安全审计日志
+            closeSecurityAudit();
             
             this.emit("close");
             this.isStarted = false;

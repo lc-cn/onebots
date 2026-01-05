@@ -20,3 +20,9 @@ export * from "./lifecycle.js";
 // Utilities
 export * from "./retry.js";
 export * from "./rate-limiter.js";
+export * from "./circuit-breaker.js";
+export * from "./metrics.js";
+export * from "./connection-pool.js";
+
+// Middleware
+export * from "./middleware/index.js";
