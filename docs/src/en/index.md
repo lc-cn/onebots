@@ -26,7 +26,7 @@ features:
 - title: 🎯 Protocol Standardization
   details: Unify differences across major platforms, output standard OneBot, Satori, and Milky protocols
 - title: 🔌 Extensive Platform Compatibility
-  details: Built-in 10+ mainstream platform adapters, supporting QQ, WeChat, DingTalk, Feishu, WeCom, Telegram, Slack, Discord, Kook, Microsoft Teams, and more, easily extensible
+  details: Built-in 15+ mainstream platform adapters, supporting QQ, ICQQ, WeChat, DingTalk, Feishu, WeCom, Telegram, Slack, Discord, Kook, Microsoft Teams, Line, Email, WhatsApp, Zulip, and more, easily extensible
 - title: 📡 Multiple Protocols Simultaneously
   details: One account can provide multiple protocol interfaces including OneBot V11/V12, Satori, Milky, and more
 - title: 💻 Unified Client SDK

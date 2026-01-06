@@ -8,7 +8,8 @@
     "dev": "vitepress dev",
     "build": "vitepress build",
     "preview": "vitepress preview",
-    "clean": "rm -rf dist .vitepress/cache"
+    "clean": "rm -rf dist .vitepress/cache",
+    "sync-versions": "node scripts/sync-versions.js"
   },
   "keywords": [
     "onebots",

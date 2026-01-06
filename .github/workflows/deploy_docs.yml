@@ -1,50 +1,266 @@
-name: CI Deploy Docs
+name: Deploy Multi-Version Docs
+
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_rebuild_all:
+        description: 'Force rebuild all versions'
+        required: false
+        default: 'false'
+        type: boolean
   push:
     branches:
       - master
+    paths:
+      - 'docs/**'
+      - '.github/workflows/deploy_docs.yml'
+      - 'package.json'
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
   group: pages
   cancel-in-progress: false
+
 jobs:
-  Build:
+  # 获取所有版本标签
+  get-versions:
     runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.get_versions.outputs.versions }}
+      current_version: ${{ steps.get_current_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get all version tags
+        id: get_versions
+        run: |
+          # 获取所有版本标签（格式: vX.X.X），保留最近 10 个
+          VERSIONS=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r | head -10 | sort -V)
+          if [ -z "$VERSIONS" ]; then
+            echo "⚠️  No version tags found"
+            VERSIONS_JSON="[]"
+          else
+            VERSIONS_JSON=$(echo "$VERSIONS" | jq -R -s -c 'split("\n") | map(select(. != "")) | map(sub("^v"; ""))')
+          fi
+          echo "versions=$VERSIONS_JSON" >> $GITHUB_OUTPUT
+          echo "📦 Found versions: $VERSIONS_JSON"
+
+      - name: Get current version
+        id: get_current_version
+        run: |
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Current version: $CURRENT_VERSION"
+
+  # 检查已部署的版本
+  check-deployed:
+    runs-on: ubuntu-latest
+    needs: get-versions
+    outputs:
+      missing_versions: ${{ steps.check.outputs.missing }}
+      all_versions: ${{ steps.check.outputs.all }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check deployed versions
+        id: check
+        run: |
+          VERSIONS='${{ needs.get-versions.outputs.versions }}'
+          CURRENT_VERSION='${{ needs.get-versions.outputs.current_version }}'
+          FORCE_REBUILD='${{ github.event.inputs.force_rebuild_all }}'
+          
+          # 如果强制重建，返回所有版本
+          if [ "$FORCE_REBUILD" = "true" ]; then
+            echo "🔄 Force rebuild all versions"
+            echo "missing=$VERSIONS" >> $GITHUB_OUTPUT
+            echo "all=$VERSIONS" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # 过滤掉当前版本，只构建历史版本
+          # 当前版本由 build-current job 处理
+          MISSING_VERSIONS=$(echo "$VERSIONS" | jq -c --arg current "$CURRENT_VERSION" '[.[] | select(. != $current)]')
+          ALL_VERSIONS=$(echo "$VERSIONS" | jq -c '.')
+          
+          echo "📋 All versions: $ALL_VERSIONS"
+          echo "📋 Missing versions (to build): $MISSING_VERSIONS"
+          echo "missing=$MISSING_VERSIONS" >> $GITHUB_OUTPUT
+          echo "all=$ALL_VERSIONS" >> $GITHUB_OUTPUT
+
+  # 构建当前版本（主版本）
+  build-current:
+    runs-on: ubuntu-latest
+    needs: [get-versions, check-deployed]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9.0.2
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Install
+
+      - name: Install dependencies
         run: pnpm install
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
-      - name: Build
-        run: pnpm run docs:build
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+
+      - name: Sync versions from Git tags
+        run: |
+          cd docs
+          pnpm sync-versions || echo "⚠️  Version sync failed, using existing config"
+
+      - name: Build current version docs
+        run: |
+          cd docs
+          pnpm install
+          pnpm build
+          echo "✅ Built current version docs"
+
+      - name: Upload current version artifact
+        uses: actions/upload-artifact@v4
         with:
+          name: docs-current
           path: docs/dist
+          retention-days: 7
+
+  # 构建历史版本（并行）
+  build-versions:
+    runs-on: ubuntu-latest
+    needs: [get-versions, check-deployed]
+    # 如果没有历史版本需要构建，跳过此 job
+    if: ${{ needs.check-deployed.outputs.missing_versions != '[]' && needs.check-deployed.outputs.missing_versions != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJson(needs.check-deployed.outputs.missing_versions) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: v${{ matrix.version }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
+
+      - name: Build version ${{ matrix.version }} docs
+        run: |
+          cd docs
+          pnpm install
+          pnpm build
+          echo "✅ Built docs for version ${{ matrix.version }}"
+
+      - name: Upload version ${{ matrix.version }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-v${{ matrix.version }}
+          path: docs/dist
+          retention-days: 7
+
+  # 合并并部署所有版本
   deploy:
+    runs-on: ubuntu-latest
+    needs: [get-versions, check-deployed, build-current]
+    if: always() && (needs.build-current.result == 'success' || needs.build-current.result == 'skipped')
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    needs: Build
-    runs-on: ubuntu-latest
-    name: Deploy
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/configure-pages@v4
+
+      - name: Download current version artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-current
+          path: dist/current
+
+      - name: Download all version artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: docs-v*
+          merge-multiple: false
+          path: dist/versions
+
+      - name: Setup deployment structure
+        run: |
+          mkdir -p dist
+          
+          # 复制当前版本到根目录
+          if [ -d "dist/current" ]; then
+            cp -r dist/current/* dist/
+            echo "✅ Copied current version to root"
+          fi
+          
+          # 复制历史版本到对应目录
+          if [ -d "dist/versions" ]; then
+            for version_dir in dist/versions/docs-v*/; do
+              if [ -d "$version_dir" ]; then
+                # 提取版本号（从目录名 docs-v0.5.0 提取 0.5.0）
+                version=$(basename "$version_dir" | sed 's/^docs-v//')
+                if [ -n "$version" ]; then
+                  mkdir -p "dist/v$version"
+                  cp -r "$version_dir"* "dist/v$version/"
+                  echo "✅ Copied version v$version"
+                fi
+              fi
+            done
+          fi
+          
+          # 创建版本索引页面
+          VERSIONS='${{ needs.check-deployed.outputs.all_versions }}'
+          cat > dist/versions.html <<'VERSIONS_EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Documentation Versions</title>
+            <meta http-equiv="refresh" content="0; url=/">
+          </head>
+          <body>
+            <h1>Available Versions</h1>
+            <ul>
+              <li><a href="/">Current (Latest)</a></li>
+VERSIONS_EOF
+          echo "$VERSIONS" | jq -r '.[]' | while read version; do
+            if [ -n "$version" ]; then
+              echo "              <li><a href=\"/v$version/\">v$version</a></li>" >> dist/versions.html
+            fi
+          done
+          cat >> dist/versions.html <<'VERSIONS_EOF'
+            </ul>
+          </body>
+          </html>
+VERSIONS_EOF
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

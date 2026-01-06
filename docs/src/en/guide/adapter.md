@@ -9,6 +9,7 @@ onebots currently supports the following platform adapters:
 | Platform | Status | Package | Description |
 |----------|--------|---------|-------------|
 | **QQ Official Bot** | ✅ Implemented | `@onebots/adapter-qq` | Supports QQ channels, group chats, private chats |
+| **ICQQ** | ✅ Implemented | `@onebots/adapter-icqq` | Supports QQ via unofficial protocol with more complete features |
 | **Kook** | ✅ Implemented | `@onebots/adapter-kook` | Supports channels, private chats, server management |
 | **WeChat** | ✅ Implemented | `@onebots/adapter-wechat` | Supports WeChat Official Accounts |
 | **Discord** | ✅ Implemented | `@onebots/adapter-discord` | Supports Discord bots |
@@ -18,10 +19,15 @@ onebots currently supports the following platform adapters:
 | **Slack** | ✅ Implemented | `@onebots/adapter-slack` | Supports channel messages, private chats, app commands |
 | **WeCom** | ✅ Implemented | `@onebots/adapter-wecom` | Supports app message push, contact sync |
 | **Microsoft Teams** | ✅ Implemented | `@onebots/adapter-teams` | Supports channel messages, private chats, adaptive cards |
+| **Line** | ✅ Implemented | `@onebots/adapter-line` | Supports Line bot messages and events |
+| **Email** | ✅ Implemented | `@onebots/adapter-email` | Supports SMTP sending and IMAP receiving |
+| **WhatsApp** | ✅ Implemented | `@onebots/adapter-whatsapp` | Supports WhatsApp Business API |
+| **Zulip** | ✅ Implemented | `@onebots/adapter-zulip` | Supports Zulip streams and private messages |
 
 ### Quick Links
 
 - [QQ Adapter Documentation](/en/platform/qq)
+- [ICQQ Adapter Documentation](/en/platform/icqq)
 - [Kook Adapter Documentation](/en/platform/kook)
 - [WeChat Adapter Documentation](/en/platform/wechat)
 - [Discord Adapter Documentation](/en/platform/discord)
@@ -31,6 +37,10 @@ onebots currently supports the following platform adapters:
 - [Slack Adapter Documentation](/en/platform/slack)
 - [WeCom Adapter Documentation](/en/platform/wecom)
 - [Microsoft Teams Adapter Documentation](/en/platform/teams)
+- [Line Adapter Documentation](/en/platform/line)
+- [Email Adapter Documentation](/en/platform/email)
+- [WhatsApp Adapter Documentation](/en/platform/whatsapp)
+- [Zulip Adapter Documentation](/en/platform/zulip)
 
 ## Installation
 

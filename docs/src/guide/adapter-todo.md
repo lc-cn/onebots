@@ -7,93 +7,26 @@
 | 平台 | 状态 | 包名 | 说明 |
 |------|------|------|------|
 | **QQ官方机器人** | ✅ 已实现 | `@onebots/adapter-qq` | 支持QQ频道、群聊、私聊 |
+| **ICQQ** | ✅ 已实现 | `@onebots/adapter-icqq` | 支持QQ非官方协议，功能更完整 |
 | **Kook** | ✅ 已实现 | `@onebots/adapter-kook` | 支持频道、私聊、服务器管理 |
 | **微信** | ✅ 已实现 | `@onebots/adapter-wechat` | 支持微信公众号 |
 | **Discord** | ✅ 已实现 | `@onebots/adapter-discord` | 支持Discord机器人 |
+| **Telegram** | ✅ 已实现 | `@onebots/adapter-telegram` | 支持私聊、群组、频道 |
+| **飞书** | ✅ 已实现 | `@onebots/adapter-feishu` | 支持单聊、群聊、富文本消息 |
+| **钉钉** | ✅ 已实现 | `@onebots/adapter-dingtalk` | 支持企业内部应用和自定义机器人 |
+| **Slack** | ✅ 已实现 | `@onebots/adapter-slack` | 支持频道消息、私聊、应用命令 |
+| **企业微信** | ✅ 已实现 | `@onebots/adapter-wecom` | 支持应用消息推送、通讯录同步 |
+| **Microsoft Teams** | ✅ 已实现 | `@onebots/adapter-teams` | 支持频道消息、私聊、自适应卡片 |
+| **Line** | ✅ 已实现 | `@onebots/adapter-line` | 支持Line机器人消息和事件 |
+| **Email** | ✅ 已实现 | `@onebots/adapter-email` | 支持SMTP发送和IMAP接收邮件 |
+| **WhatsApp** | ✅ 已实现 | `@onebots/adapter-whatsapp` | 支持WhatsApp Business API |
+| **Zulip** | ✅ 已实现 | `@onebots/adapter-zulip` | 支持Zulip流和私信 |
 
 ## 计划中的适配器
 
 ### 高优先级
 
-#### 1. 钉钉适配器 🚧
-
-**状态**: 计划中  
-**优先级**: 高  
-**预计包名**: `@onebots/adapter-dingtalk`
-
-**功能规划**:
-- ✅ 企业内部应用机器人
-  - 通过企业内部应用接入
-  - 支持完整的消息和事件能力
-  - 支持卡片消息、Markdown 消息
-- ✅ 自定义机器人（Webhook）
-  - 通过 Webhook 方式接入
-  - 支持群聊消息推送
-  - 支持@用户、@所有人
-- ✅ 事件订阅
-  - 用户加入/退出群组
-  - 消息撤回
-  - 机器人被@
-
-**参考资源**:
-- [钉钉开放平台](https://open.dingtalk.com/)
-- [钉钉机器人开发文档](https://open.dingtalk.com/document/robots/robot-overview)
-
----
-
-#### 2. Telegram 适配器 ✅
-
-**状态**: 已实现  
-**优先级**: 高  
-**包名**: `@onebots/adapter-telegram`
-
-**功能规划**:
-- ✅ Bot API 支持
-  - 私聊消息收发
-  - 群组消息收发
-  - 频道消息收发
-- ✅ 丰富的消息类型
-  - 文本、图片、视频、音频
-  - 文件、位置、联系人
-  - 投票、游戏
-- ✅ 交互功能
-  - Inline Keyboard（内联键盘）
-  - Callback Query（回调查询）
-  - 命令处理（/command）
-- ✅ 群组管理
-  - 成员管理
-  - 权限管理
-  - 群组信息获取
-
-**参考资源**:
-- [Telegram Bot API](https://core.telegram.org/bots/api)
-- [Telegram Bot 开发文档](https://core.telegram.org/bots)
-
----
-
-#### 3. 飞书适配器 ✅
-
-**状态**: 已实现  
-**优先级**: 高  
-**包名**: `@onebots/adapter-feishu`
-
-**功能规划**:
-- ✅ 单聊和群聊
-  - 消息收发
-  - 富文本消息
-  - 卡片消息
-- ✅ 事件订阅
-  - 消息事件
-  - 用户事件
-  - 群组事件
-- ✅ 应用能力
-  - 应用消息推送
-  - 通讯录同步
-  - 文件上传下载
-
-**参考资源**:
-- [飞书开放平台](https://open.feishu.cn/)
-- [飞书机器人开发文档](https://open.feishu.cn/document/ukTMukTMukTM/uczM3QjL3MzN04yNzcDN)
+> 所有高优先级适配器已完成实现，详见上方"已实现的适配器"列表。
 
 ---
 

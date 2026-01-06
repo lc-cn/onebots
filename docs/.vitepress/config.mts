@@ -1,9 +1,19 @@
 import { defineConfig } from "vitepress";
 import { withMermaid } from "vitepress-plugin-mermaid";
+import { versions, getCurrentVersion, getOtherVersions } from "./version-selector.js";
+import { withVersioning } from "./plugins/versioning.js";
 
 const pkg = require("../../package.json");
 
-export default withMermaid(defineConfig({
+// 版本配置
+const versioningOptions = {
+    versions: versions,
+    currentVersion: getCurrentVersion()?.version,
+    position: 'end' as const
+};
+
+// 基础配置
+const baseConfig = defineConfig({
     title: "onebots",
     titleTemplate: ":title - onebots",
     head: [["meta", { name: "theme-color", content: "#3c8772" }]],
@@ -184,13 +194,26 @@ export default withMermaid(defineConfig({
                         ]
                     },
                     {
-                        text: pkg.version,
+                        text: getCurrentVersion()?.label || `v${pkg.version}`,
                         items: [
+                            // 当前版本链接
                             {
-                                text: "Package", link: `https://www.npmjs.com/package/onebots/v/` + pkg.version
+                                text: `v${pkg.version} (Current)`,
+                                link: "/en/"
+                            },
+                            // 其他版本
+                            ...getOtherVersions().map(v => ({
+                                text: v.label,
+                                link: `/en${v.link}`
+                            })),
+                            // 外部链接
+                            {
+                                text: "NPM Package",
+                                link: `https://www.npmjs.com/package/onebots/v/${pkg.version}`
                             },
                             {
-                                text: "Release", link: `https://github.com/lc-cn/onebots/releases/tag/v` + pkg.version
+                                text: "GitHub Release",
+                                link: `https://github.com/lc-cn/onebots/releases/tag/v${pkg.version}`
                             },
                             { text: "Changelog", link: "https://github.com/icqqjs/onebots/blob/master/CHANGELOG.md" }
                         ]
@@ -306,4 +329,7 @@ export default withMermaid(defineConfig({
     mermaidPlugin: {
         class: "mermaid"
     }
-}));
+});
+
+// 应用版本管理和 Mermaid 插件
+export default withMermaid(withVersioning(baseConfig, versioningOptions));

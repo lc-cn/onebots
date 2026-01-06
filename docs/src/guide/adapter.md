@@ -13,6 +13,7 @@ onebots 目前支持以下平台适配器：
 | 平台 | 状态 | 包名 | 说明 |
 |------|------|------|------|
 | **QQ官方机器人** | ✅ 已实现 | `@onebots/adapter-qq` | 支持QQ频道、群聊、私聊 |
+| **ICQQ** | ✅ 已实现 | `@onebots/adapter-icqq` | 支持QQ非官方协议，功能更完整 |
 | **Kook** | ✅ 已实现 | `@onebots/adapter-kook` | 支持频道、私聊、服务器管理 |
 | **微信** | ✅ 已实现 | `@onebots/adapter-wechat` | 支持微信公众号 |
 | **Discord** | ✅ 已实现 | `@onebots/adapter-discord` | 支持Discord机器人 |
@@ -22,19 +23,28 @@ onebots 目前支持以下平台适配器：
 | **Slack** | ✅ 已实现 | `@onebots/adapter-slack` | 支持频道消息、私聊、应用命令 |
 | **企业微信** | ✅ 已实现 | `@onebots/adapter-wecom` | 支持应用消息推送、通讯录同步 |
 | **Microsoft Teams** | ✅ 已实现 | `@onebots/adapter-teams` | 支持频道消息、私聊、自适应卡片 |
+| **Line** | ✅ 已实现 | `@onebots/adapter-line` | 支持Line机器人消息和事件 |
+| **Email** | ✅ 已实现 | `@onebots/adapter-email` | 支持SMTP发送和IMAP接收邮件 |
+| **WhatsApp** | ✅ 已实现 | `@onebots/adapter-whatsapp` | 支持WhatsApp Business API |
+| **Zulip** | ✅ 已实现 | `@onebots/adapter-zulip` | 支持Zulip流和私信 |
 
 ### 快速链接
 
-- [QQ 适配器文档](/zh/platform/qq)
-- [Kook 适配器文档](/zh/platform/kook)
-- [微信适配器文档](/zh/platform/wechat)
-- [Discord 适配器文档](/zh/platform/discord)
-- [钉钉适配器文档](/zh/platform/dingtalk)
-- [Telegram 适配器文档](/zh/platform/telegram)
-- [飞书适配器文档](/zh/platform/feishu)
-- [Slack 适配器文档](/zh/platform/slack)
-- [企业微信适配器文档](/zh/platform/wecom)
-- [Microsoft Teams 适配器文档](/zh/platform/teams)
+- [QQ 适配器文档](/platform/qq)
+- [ICQQ 适配器文档](/platform/icqq)
+- [Kook 适配器文档](/platform/kook)
+- [微信适配器文档](/platform/wechat)
+- [Discord 适配器文档](/platform/discord)
+- [钉钉适配器文档](/platform/dingtalk)
+- [Telegram 适配器文档](/platform/telegram)
+- [飞书适配器文档](/platform/feishu)
+- [Slack 适配器文档](/platform/slack)
+- [企业微信适配器文档](/platform/wecom)
+- [Microsoft Teams 适配器文档](/platform/teams)
+- [Line 适配器文档](/platform/line)
+- [Email 适配器文档](/platform/email)
+- [WhatsApp 适配器文档](/platform/whatsapp)
+- [Zulip 适配器文档](/platform/zulip)
 
 ## 1. 安装依赖 
 
