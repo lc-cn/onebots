@@ -1,10 +1,23 @@
 import { Protocol,ProtocolRegistry } from "onebots";
+import type { Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
 import { CommonEvent,CommonTypes } from "onebots";
 import { WebSocket } from "ws";
 import { Satori } from "./types.js";
 import { SatoriConfig } from "./config.js";
+
+const satoriSchema: Schema = {
+    use_http: { type: 'boolean', label: '启用 HTTP' },
+    use_ws: { type: 'boolean', label: '启用 WebSocket' },
+    webhooks: { type: 'array', label: 'Webhook 地址' },
+    token: { type: 'string', label: 'Token' },
+    self_id: { type: 'string', label: 'Self ID' },
+    platform: { type: 'string', label: '平台标识' },
+    filters: { type: 'object', label: '事件过滤器' },
+};
+
+ProtocolRegistry.registerSchema('satori.v1', satoriSchema);
 
 /**
  * Satori Protocol V1 Implementation

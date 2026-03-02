@@ -1,7 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { isAuthenticated, hasExpiredFlag, clearExpiredFlag } from '../composables/useAuth'
 
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('../views/Login.vue'),
+    meta: { title: '登录', public: true }
+  },
   {
     path: '/',
     component: () => import('../layouts/MainLayout.vue'),
@@ -44,6 +51,20 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to) => {
+  if (to.meta?.public) return true
+  if (isAuthenticated()) return true
+  const expired = hasExpiredFlag()
+  if (expired) clearExpiredFlag()
+  return {
+    path: '/login',
+    query: {
+      redirect: to.fullPath,
+      reason: expired ? 'expired' : 'unauthorized'
+    }
+  }
 })
 
 export default router

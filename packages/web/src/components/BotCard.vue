@@ -101,6 +101,7 @@
 <script setup lang="ts">
 import { VideoPlay, VideoPause, Loading, Link } from '@element-plus/icons-vue'
 import type { AccountInfo } from '../types'
+import { getServerPort } from '../config'
 
 interface Props {
   bot: AccountInfo
@@ -115,7 +116,7 @@ const emit = defineEmits<{
 }>()
 
 const getFullUrl = (url: string) => {
-  const port = localStorage.getItem('onebots:serverPort')
+  const port = getServerPort()
   return `${location.protocol}//${location.hostname}:${port}${url}`
 }
 </script>

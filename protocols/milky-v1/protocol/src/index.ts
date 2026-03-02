@@ -1,9 +1,23 @@
 import { Protocol,ProtocolRegistry,Account,Adapter } from "onebots";
-import type { CommonEvent, CommonTypes,Dict } from "onebots";
+import type { CommonEvent, CommonTypes,Dict, Schema } from "onebots";
 import { Milky } from "./types.js";
 import { MilkyConfig } from "./config.js";
 import { createHmac } from "crypto";
 import { WebSocket } from "ws";
+
+const milkySchema: Schema = {
+    use_http: { type: 'boolean', label: '启用 HTTP' },
+    use_ws: { type: 'boolean', label: '启用 WebSocket' },
+    http_reverse: { type: 'array', label: 'HTTP 反向上报地址' },
+    ws_reverse: { type: 'array', label: 'WS 反向连接地址' },
+    access_token: { type: 'string', label: 'Access Token' },
+    secret: { type: 'string', label: 'Secret' },
+    heartbeat: { type: 'number', label: '心跳间隔(秒)' },
+    post_message_format: { type: 'string', enum: ['string', 'array'], label: '消息格式' },
+    filters: { type: 'object', label: '事件过滤器' },
+};
+
+ProtocolRegistry.registerSchema('milky.v1', milkySchema);
 
 /**
  * Milky Protocol V1 Implementation

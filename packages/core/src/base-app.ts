@@ -154,11 +154,15 @@ export class BaseApp extends Koa {
                 if (ctx.path === '/health' || ctx.path === '/ready' || ctx.path === '/metrics') {
                     return next();
                 }
+                // 管理端点由应用层 Token 鉴权处理
+                if (ctx.path.startsWith('/api')) {
+                    return next();
+                }
                 // 检查是否是协议路径格式: /{platform}/{accountId}/{protocol}/{version}/...
                 const pathParts = ctx.path?.split("/").filter(p => p) || [];
                 
                 const [_platform, _accountId, protocol, version] = pathParts;
-                if(ProtocolRegistry.has(protocol, version)) {
+                if (ProtocolRegistry.has(protocol, version)) {
                     return next();
                 }
                 return await basicAuth({

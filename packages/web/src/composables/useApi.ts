@@ -1,9 +1,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import type { AdapterInfo, SystemInfo } from '../types'
-
-// 开发环境使用代理（相对路径），生产环境使用绝对路径
-const isDev = process.env.NODE_ENV === 'development'
-const API_BASE = isDev ? '' : 'http://localhost:6727'
+import { buildApiUrl } from '../config'
+import { authFetch, appendAuthQuery } from './useAuth'
 
 export function useApi() {
   const adapters = ref<AdapterInfo[]>([])
@@ -24,7 +22,7 @@ export function useApi() {
 
   const fetchAdapters = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/adapters`)
+      const response = await authFetch(buildApiUrl('/api/adapters'))
       if (response.ok) {
         adapters.value = await response.json()
       }
@@ -35,7 +33,7 @@ export function useApi() {
 
   const fetchSystemInfo = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/system`)
+      const response = await authFetch(buildApiUrl('/api/system'))
       if (response.ok) {
         systemInfo.value = await response.json()
       }
@@ -45,7 +43,7 @@ export function useApi() {
   }
 
   const startLogsSSE = () => {
-    logsEventSource = new EventSource(`${API_BASE}/api/logs`)
+    logsEventSource = new EventSource(appendAuthQuery(buildApiUrl('/api/logs')))
     
     logsEventSource.onmessage = (e) => {
       const logData = JSON.parse(e.data)
@@ -64,7 +62,7 @@ export function useApi() {
 
   const startBot = async (platform: string, uin: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE}/api/bots/start`, {
+      const response = await authFetch(buildApiUrl('/api/bots/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform, uin }),
@@ -82,7 +80,7 @@ export function useApi() {
 
   const stopBot = async (platform: string, uin: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE}/api/bots/stop`, {
+      const response = await authFetch(buildApiUrl('/api/bots/stop'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform, uin }),

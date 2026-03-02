@@ -2,6 +2,7 @@ import { Protocol } from "./protocol.js";
 import { Adapter } from "./adapter.js";
 import { BaseApp } from "./base-app.js";
 import { Account } from "./account.js";
+import type { Schema } from "./config-validator.js";
 
 /**
  * Protocol Registry
@@ -10,6 +11,7 @@ import { Account } from "./account.js";
 export class ProtocolRegistry {
     private static protocols: Map<string, Map<string, Protocol.Factory>> = new Map();
     private static metadata: Map<string, Protocol.Metadata> = new Map();
+    private static schemas: Map<string, Schema> = new Map();
 
     /**
      * Register a protocol implementation
@@ -44,6 +46,27 @@ export class ProtocolRegistry {
                 meta.versions.push(version);
             }
         }
+    }
+
+    /**
+     * Register a protocol config schema (key format: name.version)
+     */
+    static registerSchema(key: string, schema: Schema): void {
+        this.schemas.set(key, schema);
+    }
+
+    /**
+     * Get a protocol config schema by key
+     */
+    static getSchema(key: string): Schema | undefined {
+        return this.schemas.get(key);
+    }
+
+    /**
+     * Get all protocol config schemas
+     */
+    static getAllSchemas(): Record<string, Schema> {
+        return Object.fromEntries(this.schemas.entries());
     }
 
     /**
@@ -143,6 +166,7 @@ export class ProtocolRegistry {
     static clear(): void {
         this.protocols.clear();
         this.metadata.clear();
+        this.schemas.clear();
     }
 }
 /**
@@ -152,6 +176,7 @@ export class ProtocolRegistry {
 export class AdapterRegistry {
     private static adapters: Map<string, Adapter.Factory> = new Map();
     private static metadata: Map<string, Adapter.Metadata> = new Map();
+    private static schemas: Map<string, Schema> = new Map();
 
     /**
      * Register an adapter implementation
@@ -176,6 +201,27 @@ export class AdapterRegistry {
                 author: metadata?.author,
             });
         }
+    }
+
+    /**
+     * Register an adapter config schema
+     */
+    static registerSchema(name: string, schema: Schema): void {
+        this.schemas.set(name, schema);
+    }
+
+    /**
+     * Get an adapter config schema
+     */
+    static getSchema(name: string): Schema | undefined {
+        return this.schemas.get(name);
+    }
+
+    /**
+     * Get all adapter config schemas
+     */
+    static getAllSchemas(): Record<string, Schema> {
+        return Object.fromEntries(this.schemas.entries());
     }
 
     /**
@@ -242,5 +288,6 @@ export class AdapterRegistry {
     static clear(): void {
         this.adapters.clear();
         this.metadata.clear();
+        this.schemas.clear();
     }
 }
