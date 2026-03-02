@@ -62,20 +62,30 @@ export class App extends BaseApp {
 
         process.stdout.write = ((chunk: any, encoding?: any, callback?: any) => {
             const message = chunk.toString();
-            // 缓存到文件
-            this.cacheLog(message);
-            // 广播到所有 SSE 客户端
-            this.broadcastLog(message);
+            try {
+                // 缓存到文件
+                this.cacheLog(message);
+                // 广播到所有 SSE 客户端
+                this.broadcastLog(message);
+            } catch (e) {
+                // Use the original write to avoid re-entering the interceptor
+                originalStderrWrite(`[onebots] Log interceptor error: ${e}\n`);
+            }
             // 继续正常输出
             return originalStdoutWrite(chunk, encoding, callback);
         }) as any;
 
         process.stderr.write = ((chunk: any, encoding?: any, callback?: any) => {
             const message = chunk.toString();
-            // 缓存到文件
-            this.cacheLog(message);
-            // 广播到所有 SSE 客户端
-            this.broadcastLog(message);
+            try {
+                // 缓存到文件
+                this.cacheLog(message);
+                // 广播到所有 SSE 客户端
+                this.broadcastLog(message);
+            } catch (e) {
+                // Use the original write to avoid re-entering the interceptor
+                originalStderrWrite(`[onebots] Log interceptor error: ${e}\n`);
+            }
             // 继续正常输出
             return originalStderrWrite(chunk, encoding, callback);
         }) as any;
