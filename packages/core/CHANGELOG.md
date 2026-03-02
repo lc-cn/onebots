@@ -1,5 +1,11 @@
 # @onebots/core
 
+## 1.0.2
+
+### Patch Changes
+
+- 78d4de2: fix: bump version
+
 ## 1.0.1
 
 ### Patch Changes

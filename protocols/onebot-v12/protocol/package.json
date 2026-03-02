@@ -1,6 +1,6 @@
 {
   "name": "@onebots/protocol-onebot-v12",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "onebots OneBot v12 协议实现",
   "type": "module",
   "main": "lib/index.js",
