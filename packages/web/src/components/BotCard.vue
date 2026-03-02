@@ -68,6 +68,8 @@
           v-if="bot.status === 'offline'"
           type="success"
           :icon="VideoPlay"
+          :loading="props.loading"
+          :disabled="props.loading"
           @click="emit('start', bot)"
         >
           上线
@@ -76,6 +78,8 @@
           v-else-if="bot.status === 'online'"
           type="danger"
           :icon="VideoPause"
+          :loading="props.loading"
+          :disabled="props.loading"
           @click="emit('stop', bot)"
         >
           下线
@@ -101,6 +105,7 @@ import type { AccountInfo } from '../types'
 interface Props {
   bot: AccountInfo
   adapterIcon: string
+  loading?: boolean
 }
 
 const props = defineProps<Props>()

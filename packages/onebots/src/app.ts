@@ -62,20 +62,30 @@ export class App extends BaseApp {
 
         process.stdout.write = ((chunk: any, encoding?: any, callback?: any) => {
             const message = chunk.toString();
-            // 缓存到文件
-            this.cacheLog(message);
-            // 广播到所有 SSE 客户端
-            this.broadcastLog(message);
+            try {
+                // 缓存到文件
+                this.cacheLog(message);
+                // 广播到所有 SSE 客户端
+                this.broadcastLog(message);
+            } catch (e) {
+                // Use the original write to avoid re-entering the interceptor
+                originalStderrWrite(`[onebots] Log interceptor error: ${e}\n`);
+            }
             // 继续正常输出
             return originalStdoutWrite(chunk, encoding, callback);
         }) as any;
 
         process.stderr.write = ((chunk: any, encoding?: any, callback?: any) => {
             const message = chunk.toString();
-            // 缓存到文件
-            this.cacheLog(message);
-            // 广播到所有 SSE 客户端
-            this.broadcastLog(message);
+            try {
+                // 缓存到文件
+                this.cacheLog(message);
+                // 广播到所有 SSE 客户端
+                this.broadcastLog(message);
+            } catch (e) {
+                // Use the original write to avoid re-entering the interceptor
+                originalStderrWrite(`[onebots] Log interceptor error: ${e}\n`);
+            }
             // 继续正常输出
             return originalStderrWrite(chunk, encoding, callback);
         }) as any;
@@ -392,6 +402,30 @@ export class App extends BaseApp {
             try {
                 this.removeAccount(String(platform), String(uin), Boolean(force));
                 ctx.body = { success: true, message: '移除成功' };
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: e.message };
+            }
+        });
+
+        this.router.post("/api/bots/start", async (ctx: RouterContext) => {
+            const { platform, uin } = ctx.request.body as { platform: string; uin: string };
+            try {
+                const adapter = this.adapters.get(platform);
+                await adapter?.setOnline(uin);
+                ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: e.message };
+            }
+        });
+
+        this.router.post("/api/bots/stop", async (ctx: RouterContext) => {
+            const { platform, uin } = ctx.request.body as { platform: string; uin: string };
+            try {
+                const adapter = this.adapters.get(platform);
+                await adapter?.setOffline(uin);
+                ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
             } catch (e) {
                 ctx.status = 500;
                 ctx.body = { success: false, message: e.message };

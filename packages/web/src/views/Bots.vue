@@ -16,6 +16,7 @@
             :key="`${bot.platform}:${bot.uin}`"
             :bot="bot"
             :adapter-icon="adapter.icon"
+            :loading="loadingBots.has(`${bot.platform}:${bot.uin}`)"
             @start="handleBotStart"
             @stop="handleBotStop"
           />
@@ -26,22 +27,47 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { Monitor } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useApi } from '../composables/useApi'
 import BotCard from '../components/BotCard.vue'
 import type { AccountInfo } from '../types'
 
-const { adapters, totalBotCount } = useApi()
+const { adapters, totalBotCount, startBot, stopBot } = useApi()
 
-const handleBotStart = (bot: AccountInfo) => {
-  // TODO: 实现启动机器人的逻辑
-  ElMessage.success(`正在启动机器人 ${bot.uin}...`)
+const loadingBots = ref<Set<string>>(new Set())
+
+const botKey = (bot: AccountInfo) => `${bot.platform}:${bot.uin}`
+
+const handleBotStart = async (bot: AccountInfo) => {
+  const key = botKey(bot)
+  loadingBots.value.add(key)
+  try {
+    const ok = await startBot(bot.platform, bot.uin)
+    if (ok) {
+      ElMessage.success(`机器人 ${bot.uin} 已上线`)
+    } else {
+      ElMessage.error(`启动机器人 ${bot.uin} 失败`)
+    }
+  } finally {
+    loadingBots.value.delete(key)
+  }
 }
 
-const handleBotStop = (bot: AccountInfo) => {
-  // TODO: 实现停止机器人的逻辑
-  ElMessage.warning(`正在停止机器人 ${bot.uin}...`)
+const handleBotStop = async (bot: AccountInfo) => {
+  const key = botKey(bot)
+  loadingBots.value.add(key)
+  try {
+    const ok = await stopBot(bot.platform, bot.uin)
+    if (ok) {
+      ElMessage.warning(`机器人 ${bot.uin} 已下线`)
+    } else {
+      ElMessage.error(`停止机器人 ${bot.uin} 失败`)
+    }
+  } finally {
+    loadingBots.value.delete(key)
+  }
 }
 </script>
 

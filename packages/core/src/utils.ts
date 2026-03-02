@@ -62,21 +62,13 @@ export function transformObj(obj, callback) {
 
 // 深拷贝
 export function deepClone<T extends any>(obj: T): T {
-    if (typeof obj !== "object") return obj;
-    if (!obj) return obj;
-    //判断拷贝的obj是对象还是数组
-    if (Array.isArray(obj)) return obj.map(item => deepClone(item)) as T;
-    const objClone = {} as T;
-    for (const key in obj) {
-        if (obj.hasOwnProperty(key)) {
-            if (obj[key] && typeof obj[key] === "object") {
-                objClone[key] = deepClone(obj[key]);
-            } else {
-                objClone[key] = obj[key];
-            }
-        }
+    try {
+        return structuredClone(obj);
+    } catch {
+        // structuredClone does not support all types (e.g. functions, DOM nodes).
+        // Return the original reference as a best-effort fallback.
+        return obj;
     }
-    return objClone;
 }
 
 export function pick<T extends object, K extends keyof T>(
@@ -104,10 +96,14 @@ export function omit<T, K extends keyof T>(source: T, keys?: Iterable<K>) {
  * 将驼峰命名替换为下划线分割命名
  * @param name
  * @returns
- * @todo 是否应该改名 ToUnderLine()？
  */
-export function toLine<T extends string>(name: T) {
+export function toUnderLine(name: string): string {
     return name.replace(/([A-Z])/g, "_$1").toLowerCase();
+}
+
+/** @deprecated Use {@link toUnderLine} instead. */
+export function toLine<T extends string>(name: T): string {
+    return toUnderLine(name);
 }
 export interface Class<T = any> {
     new (...args: any[]): T;
