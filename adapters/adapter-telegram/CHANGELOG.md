@@ -1,5 +1,13 @@
 # @onebots/adapter-telegram
 
+## 1.0.2
+
+### Patch Changes
+
+- 78d4de2: fix: bump version
+- Updated dependencies [78d4de2]
+  - onebots@1.0.2
+
 ## 1.0.1
 
 ### Patch Changes

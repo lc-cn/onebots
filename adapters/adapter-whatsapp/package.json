@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-whatsapp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "onebots WhatsApp 适配器",
   "type": "module",
   "main": "lib/index.js",
@@ -44,4 +44,3 @@
     "url": "git+https://github.com/lc-cn/onebots.git"
   }
 }
-
