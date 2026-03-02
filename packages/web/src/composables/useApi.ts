@@ -62,6 +62,42 @@ export function useApi() {
     }
   }
 
+  const startBot = async (platform: string, uin: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${API_BASE}/api/bots/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, uin }),
+      })
+      if (response.ok) {
+        await fetchAdapters()
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('启动机器人失败:', error)
+      return false
+    }
+  }
+
+  const stopBot = async (platform: string, uin: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${API_BASE}/api/bots/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, uin }),
+      })
+      if (response.ok) {
+        await fetchAdapters()
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('停止机器人失败:', error)
+      return false
+    }
+  }
+
   const cleanup = () => {
     logsEventSource?.close()
   }
@@ -83,6 +119,8 @@ export function useApi() {
     onlineBotCount,
     fetchAdapters,
     fetchSystemInfo,
+    startBot,
+    stopBot,
     startLogsSSE,
     cleanup
   }

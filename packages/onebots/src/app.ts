@@ -408,6 +408,30 @@ export class App extends BaseApp {
             }
         });
 
+        this.router.post("/api/bots/start", async (ctx: RouterContext) => {
+            const { platform, uin } = ctx.request.body as { platform: string; uin: string };
+            try {
+                const adapter = this.adapters.get(platform);
+                await adapter?.setOnline(uin);
+                ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: e.message };
+            }
+        });
+
+        this.router.post("/api/bots/stop", async (ctx: RouterContext) => {
+            const { platform, uin } = ctx.request.body as { platform: string; uin: string };
+            try {
+                const adapter = this.adapters.get(platform);
+                await adapter?.setOffline(uin);
+                ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: e.message };
+            }
+        });
+
         // 静态文件服务
         if (fs.existsSync(client)) {
             this.use(koaStatic(client));
