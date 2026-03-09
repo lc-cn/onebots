@@ -3,7 +3,6 @@
     <p>使用 TypeScript 实现的多平台多协议机器人应用框架，支持 QQ、ICQQ、微信、钉钉、飞书、企业微信、Telegram、Slack、Discord、Kook、Microsoft Teams、Line、Email、WhatsApp、Zulip 等 15+ 平台</p>
 
 [![Build Package](https://github.com/icqqjs/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/icqqjs/onebots/actions/workflows/release.yml) 
-[![Build Docs](https://github.com/lc-cn/onebots/actions/workflows/deploy_docs.yml/badge.svg)](https://github.com/lc-cn/onebots/actions/workflows/deploy_docs.yml)
 [![License](https://img.shields.io/github/license/lc-cn/onebots?color=blue)](https://github.com/lc-cn/onebots/blob/master/LICENSE)
 
 [![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots) 
