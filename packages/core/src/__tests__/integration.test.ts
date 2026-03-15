@@ -18,8 +18,8 @@ describe('Integration Tests', () => {
             
             expect(validated.port).toBe(6727);
             expect(validated.database).toBe('onebots.db');
-            expect(validated.username).toBe('admin');
-            expect(validated.password).toBe('123456');
+            expect(validated.username).toBeUndefined();
+            expect(validated.password).toBeUndefined();
             expect(validated.log_level).toBe('info');
         });
 

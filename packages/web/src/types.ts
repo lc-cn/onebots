@@ -33,6 +33,14 @@ export interface SystemInfo {
     system_version: string;
     total_memory: number;
     username: string;
+    /** 当前是否为自动生成的默认账号，应提示用户修改密码 */
+    isDefaultCredentials?: boolean;
+    /** 配置目录（Docker 下多为 /data，便于确认卷挂载） */
+    configDir?: string;
+    /** 配置文件路径 */
+    configPath?: string;
+    /** 数据目录（数据库、日志等） */
+    dataDir?: string;
 }
 
 export interface AdapterInfo {

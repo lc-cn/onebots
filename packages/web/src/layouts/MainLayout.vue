@@ -63,6 +63,18 @@
 
       <!-- 主内容区 -->
       <el-main class="content">
+        <el-alert
+          v-if="systemInfo?.isDefaultCredentials"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="security-banner"
+        >
+          <template #title>安全提示</template>
+          当前使用自动生成的默认账号，存在安全风险，请尽快前往
+          <router-link to="/config">配置管理</router-link>
+          修改「管理端用户名」与「管理端密码」。
+        </el-alert>
         <router-view v-slot="{ Component }">
           <transition name="fade-slide" mode="out-in">
             <component :is="Component" />
@@ -86,7 +98,7 @@ const router = useRouter()
 const currentRoute = computed(() => route.path)
 
 const { isDark, toggleTheme } = useTheme()
-const { onlineBotCount } = useApi()
+const { onlineBotCount, systemInfo } = useApi()
 const isCollapse = ref(false)
 
 const handleLogout = async () => {
@@ -195,6 +207,16 @@ const handleLogout = async () => {
       }
     }
   }
+}
+
+.security-banner {
+  margin: 12px 16px;
+  flex-shrink: 0;
+}
+
+.security-banner a {
+  color: var(--el-color-warning);
+  font-weight: 500;
 }
 
 .content {

@@ -1,8 +1,7 @@
 port: 6727 # 监听端口
 log_level: info # 日志等级
 timeout: 30 # 登录超时时间(秒)
-username: admin # Web 管理端账号
-password: "123456" # Web 管理端密码（YAML 中请用引号，否则数字会校验失败）
+# username / password 不配置时首次启动将自动生成并写入本文件，请务必修改默认账号密码
 
 # 全局默认配置
 general:

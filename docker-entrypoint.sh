@@ -13,6 +13,18 @@ if [ ! -f /data/config.yaml ]; then
   fi
 fi
 
+# 未显式传 -c/--config 时强制使用 /data/config.yaml，保证配置持久化在挂载卷内
+HAS_CONFIG=0
+for arg in "$@"; do
+  if [ "$arg" = "-c" ] || [ "$arg" = "--config" ]; then
+    HAS_CONFIG=1
+    break
+  fi
+done
+if [ "$HAS_CONFIG" = 0 ]; then
+  set -- -c /data/config.yaml "$@"
+fi
+
 # 从 development 目录启动，以便 require 能解析 workspace 的 node_modules（适配器、协议在此）
 cd /app/development
 exec node /app/packages/onebots/lib/bin.js "$@"

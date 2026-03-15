@@ -61,6 +61,14 @@ const handleLogin = async () => {
     return
   }
 
+  if (result.isDefaultCredentials) {
+    ElMessage.warning({
+      message: '当前为自动生成的默认账号，存在安全风险，请尽快在「系统」或「配置」中修改用户名与密码。',
+      duration: 8000,
+      showClose: true,
+    })
+  }
+
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
   router.replace(redirect)
 }

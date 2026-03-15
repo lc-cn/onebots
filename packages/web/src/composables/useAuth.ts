@@ -105,7 +105,7 @@ export const login = async (username: string, password: string) => {
   const result = await response.json()
   if (result?.token) {
     setToken(result.token, result.expiresAt, result.refreshToken)
-    return { ok: true }
+    return { ok: true, isDefaultCredentials: !!result.isDefaultCredentials }
   }
 
   return { ok: false, message: result?.message || '登录失败' }

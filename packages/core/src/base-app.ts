@@ -482,8 +482,6 @@ export namespace BaseApp {
     export const defaultConfig: Config = {
         port: 6727,
         database: "onebots.db",
-        username: "admin",
-        password: "123456",
         timeout: 30,
         general: {},
         log_level: "info",

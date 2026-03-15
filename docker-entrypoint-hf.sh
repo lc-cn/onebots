@@ -29,5 +29,17 @@ if command -v sed >/dev/null 2>&1; then
   sed -i "s/^port:.*/port: ${HF_PORT}/" /data/config.yaml 2>/dev/null || true
 fi
 
+# 未显式传 -c/--config 时强制使用 /data/config.yaml，保证配置持久化在挂载卷内
+HAS_CONFIG=0
+for arg in "$@"; do
+  if [ "$arg" = "-c" ] || [ "$arg" = "--config" ]; then
+    HAS_CONFIG=1
+    break
+  fi
+done
+if [ "$HAS_CONFIG" = 0 ]; then
+  set -- -c /data/config.yaml "$@"
+fi
+
 # onebots 通过 process.cwd()/node_modules 解析适配器，故必须在 development 下执行
 exec node /app/packages/onebots/lib/bin.js "$@"

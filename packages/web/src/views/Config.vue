@@ -10,6 +10,9 @@
           <el-button type="primary" :icon="Plus" @click="openAddAccount">
             新增账号
           </el-button>
+          <el-button :icon="Download" @click="handleDownloadConfig">
+            下载当前配置
+          </el-button>
           <el-button type="success" :icon="Refresh" @click="handleReload">
             重载配置
           </el-button>
@@ -274,7 +277,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed, watch } from 'vue'
-import { Setting, Refresh, Check, Plus } from '@element-plus/icons-vue'
+import { Setting, Refresh, Check, Plus, Download } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { buildApiUrl } from '../config'
 import { authFetch } from '../composables/useAuth'
@@ -584,6 +587,24 @@ const handleReload = () => {
   ElMessage.info('正在重载配置...')
   loadSchema()
   loadConfig()
+}
+
+const handleDownloadConfig = async () => {
+  try {
+    const response = await authFetch(buildApiUrl('/api/config'))
+    if (!response.ok) throw new Error('获取配置失败')
+    const text = await response.text()
+    const blob = new Blob([text], { type: 'application/yaml' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `config.yaml`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('已下载 config.yaml')
+  } catch (e) {
+    ElMessage.error((e as Error).message || '下载失败')
+  }
 }
 
 const handleSave = async () => {
