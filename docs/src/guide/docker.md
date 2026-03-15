@@ -140,6 +140,26 @@ docker run -d \
   - 若需查看或备份：可通过 OneBots 自带的 Web 管理端（若有）查看配置与状态，或自行在应用里加只读 API（如列出 `/data` 下的文件、下载 `config.yaml`）。  
   - 首次运行且未挂载持久化卷时，入口脚本会在 `/data` 下生成默认 `config.yaml`，仅当启用持久化后该文件才会在重启后保留。
 
+### HF 免付费：用 Space 仓库备份整个 data 目录
+
+未购买持久化存储时，每次重启或重建 Space 会清空 `/data`。可用 **Space 的 Git 仓库** 备份**整个 data 目录**（配置、数据库、日志等），仓库里的文件会保留。
+
+1. **设置变量**（Space → Settings → Variables）  
+   - **`HF_REPO_ID`**：你的 Space 仓库 ID，格式 `用户名/Space 名称`（例如 `liangcai/onebots`）。入口脚本在启动时若发现 `/data` 为空或缺少 `config.yaml`，会按顺序尝试：  
+     - 下载 **`data_backup.tar.gz`**（整个 data 的压缩包），解压到 `/data`，实现完整恢复；  
+     - 若无该文件，再下载 **`config_backup.yaml`** 仅恢复配置。
+
+2. **自动备份（推荐）**  
+   - 在 Space → Settings → **Secrets** 中新增 **`HF_TOKEN`**（需有写权限的 [Access Token](https://huggingface.co/settings/tokens)）。  
+   - 在 **Variables** 中设置 **`HF_REPO_ID`**（同上）。  
+   - 之后在 Web 端「配置管理」里点击「保存配置」时，会将**整个 `/data` 目录**打成 `data_backup.tar.gz`，并与当前配置一起提交到该 Space 仓库（`config_backup.yaml` + `data_backup.tar.gz`）。下次重启时优先用 `data_backup.tar.gz` 完整恢复，无需手动操作。  
+   - 若 data 目录过大（例如 >15MB），可能只会上传 `config_backup.yaml`，可定期在 Web 端保存以更新备份。
+
+3. **仅手动备份**  
+   - 不设置 `HF_TOKEN`，只设置 **`HF_REPO_ID`**。  
+   - 在 Web 端改好配置后点击「下载当前配置」，在 Space 的 **Files** 里上传为 **`config_backup.yaml`**；若有本地 data 目录压缩包，可上传为 **`data_backup.tar.gz`**（解压后内容应为 config.yaml、data/ 等，与 `/data` 结构一致）。  
+   - 下次重启时脚本会优先用 `data_backup.tar.gz` 恢复整个 data，否则用 `config_backup.yaml` 恢复配置。
+
 本地测试 HF 镜像（映射 7860）：
 
 ```bash

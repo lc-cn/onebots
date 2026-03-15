@@ -14,6 +14,26 @@ export NODE_PATH="/app/development/node_modules"
 mkdir -p /data
 HF_PORT="${PORT:-7860}"
 
+# 无持久化卷时从 Space 仓库恢复整个 data 或仅配置（免付费：备份在仓库的 data_backup.tar.gz / config_backup.yaml）
+if [ ! -f /data/config.yaml ] && [ -n "${HF_REPO_ID}" ] && command -v curl >/dev/null 2>&1; then
+  echo "[onebots] 尝试从 Space 仓库恢复: ${HF_REPO_ID}"
+  # 优先恢复整个 data 目录（data_backup.tar.gz）
+  if curl -sfL "https://huggingface.co/spaces/${HF_REPO_ID}/resolve/main/data_backup.tar.gz" -o /tmp/data_backup.tar.gz 2>/dev/null && [ -s /tmp/data_backup.tar.gz ]; then
+    if command -v tar >/dev/null 2>&1; then
+      tar -xzf /tmp/data_backup.tar.gz -C /data 2>/dev/null && echo "[onebots] 已从仓库恢复整个 data 目录 (data_backup.tar.gz)"
+    fi
+    rm -f /tmp/data_backup.tar.gz
+  fi
+  # 若未有完整备份，再尝试仅恢复配置文件
+  if [ ! -f /data/config.yaml ]; then
+    if curl -sfL "https://huggingface.co/spaces/${HF_REPO_ID}/resolve/main/config_backup.yaml" -o /data/config.yaml 2>/dev/null && [ -s /data/config.yaml ]; then
+      echo "[onebots] 已从仓库恢复 config_backup.yaml 到 /data/config.yaml"
+    else
+      rm -f /data/config.yaml
+    fi
+  fi
+fi
+
 if [ ! -f /data/config.yaml ]; then
   if [ -f /app/packages/onebots/lib/config.sample.yaml ]; then
     cp /app/packages/onebots/lib/config.sample.yaml /data/config.yaml
