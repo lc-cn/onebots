@@ -10,7 +10,31 @@ You can run the onebots gateway with Docker without installing Node.js on the ho
 
 ### Option 1: Docker Compose (recommended)
 
-In the project root, use the existing `docker-compose.yml` or create one, then:
+Create a `docker-compose.yml` in your project directory. Recommended example (copy from the repo root or adjust as needed):
+
+```yaml
+# OneBots gateway - Docker Compose
+# Usage: docker compose up -d
+# Config and data persist in ./data
+
+services:
+  onebots:
+    build: .
+    image: onebots:latest
+    container_name: onebots
+    restart: unless-stopped
+    ports:
+      - "6727:6727"
+    volumes:
+      # Config and data (config.yaml, SQLite, logs)
+      - ./data:/data
+    environment:
+      - NODE_ENV=production
+```
+
+To use the official pre-built image instead of building locally, remove `build: .` and set `image: ghcr.io/lc-cn/onebots:master`.
+
+Then run:
 
 ```bash
 # Start (runs in background; config and data are in ./data)
@@ -50,18 +74,18 @@ docker stop onebots && docker rm onebots
 If the repo uses [GitHub Actions to build Docker images](https://github.com/lc-cn/onebots/actions), you can pull from GHCR instead of building locally:
 
 ```bash
-# Pull latest (replace <owner>/<repo> with your repo, e.g. lc-cn/onebots)
-docker pull ghcr.io/<owner>/<repo>:master
+# Pull latest
+docker pull ghcr.io/lc-cn/onebots:master
 
 # Run
 docker run -d \
   --name onebots \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
-  ghcr.io/<owner>/<repo>:master
+  ghcr.io/lc-cn/onebots:master
 ```
 
-Released versions are tagged by version, e.g. `ghcr.io/<owner>/<repo>:1.0.0`.
+Released versions use version tags, e.g. `ghcr.io/lc-cn/onebots:1.0.0`.
 
 ## Data and configuration
 

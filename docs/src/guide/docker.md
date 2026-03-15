@@ -10,7 +10,31 @@
 
 ### 方式一：使用 Docker Compose（推荐）
 
-在项目根目录创建 `docker-compose.yml`（若仓库中已有可跳过），然后执行：
+在项目目录下创建 `docker-compose.yml`，推荐内容如下（可从仓库根目录复制或按需修改）：
+
+```yaml
+# OneBots 网关 - Docker Compose
+# 使用：docker compose up -d
+# 配置与数据持久化在 ./data 目录
+
+services:
+  onebots:
+    build: .
+    image: onebots:latest
+    container_name: onebots
+    restart: unless-stopped
+    ports:
+      - "6727:6727"
+    volumes:
+      # 配置与数据持久化（config.yaml、SQLite、日志等）
+      - ./data:/data
+    environment:
+      - NODE_ENV=production
+```
+
+若使用官方预构建镜像、不本地构建，可将 `build: .` 去掉，并设置 `image: ghcr.io/lc-cn/onebots:master`。
+
+然后执行：
 
 ```bash
 # 启动（后台运行，配置与数据持久化在 ./data）
@@ -50,18 +74,18 @@ docker stop onebots && docker rm onebots
 若仓库已配置 [GitHub Actions 构建 Docker 镜像](https://github.com/lc-cn/onebots/actions)，可直接拉取 GHCR 镜像，无需本地构建：
 
 ```bash
-# 拉取最新镜像（将 <owner>/<repo> 替换为你的仓库，如 lc-cn/onebots）
-docker pull ghcr.io/<owner>/<repo>:master
+# 拉取最新镜像
+docker pull ghcr.io/lc-cn/onebots:master
 
 # 运行
 docker run -d \
   --name onebots \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
-  ghcr.io/<owner>/<repo>:master
+  ghcr.io/lc-cn/onebots:master
 ```
 
-发布 Release 后会有带版本号的标签，例如：`ghcr.io/<owner>/<repo>:1.0.0`。
+发布 Release 后会有带版本号的标签，例如：`ghcr.io/lc-cn/onebots:1.0.0`。
 
 ## 数据与配置
 
