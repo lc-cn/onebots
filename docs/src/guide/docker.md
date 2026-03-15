@@ -10,17 +10,16 @@
 
 ### 方式一：使用 Docker Compose（推荐）
 
-在项目目录下创建 `docker-compose.yml`，推荐内容如下（可从仓库根目录复制或按需修改）：
+在项目目录下创建 `docker-compose.yml`，
 
 ```yaml
-# OneBots 网关 - Docker Compose
+# OneBots 网关 - Docker Compose（使用官方镜像）
 # 使用：docker compose up -d
 # 配置与数据持久化在 ./data 目录
 
 services:
   onebots:
-    build: .
-    image: onebots:latest
+    image: ghcr.io/lc-cn/onebots:master
     container_name: onebots
     restart: unless-stopped
     ports:
@@ -31,8 +30,6 @@ services:
     environment:
       - NODE_ENV=production
 ```
-
-若使用官方预构建镜像、不本地构建，可将 `build: .` 去掉，并设置 `image: ghcr.io/lc-cn/onebots:master`。
 
 然后执行：
 

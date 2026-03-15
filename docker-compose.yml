@@ -1,11 +1,10 @@
-# OneBots 网关 - Docker Compose
+# OneBots 网关 - Docker Compose（使用官方镜像，无需本地构建）
 # 使用：docker compose up -d
 # 配置与数据持久化在 ./data 目录
 
 services:
   onebots:
-    build: .
-    image: onebots:latest
+    image: ghcr.io/lc-cn/onebots:master
     container_name: onebots
     restart: unless-stopped
     ports:

@@ -10,17 +10,16 @@ You can run the onebots gateway with Docker without installing Node.js on the ho
 
 ### Option 1: Docker Compose (recommended)
 
-Create a `docker-compose.yml` in your project directory. Recommended example (copy from the repo root or adjust as needed):
+Create a `docker-compose.yml` in your project directory.
 
 ```yaml
-# OneBots gateway - Docker Compose
+# OneBots gateway - Docker Compose (official image)
 # Usage: docker compose up -d
 # Config and data persist in ./data
 
 services:
   onebots:
-    build: .
-    image: onebots:latest
+    image: ghcr.io/lc-cn/onebots:master
     container_name: onebots
     restart: unless-stopped
     ports:
@@ -31,8 +30,6 @@ services:
     environment:
       - NODE_ENV=production
 ```
-
-To use the official pre-built image instead of building locally, remove `build: .` and set `image: ghcr.io/lc-cn/onebots:master`.
 
 Then run:
 
