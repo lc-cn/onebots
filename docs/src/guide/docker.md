@@ -162,6 +162,8 @@ docker run -d \
 
 本地测试 HF 镜像（映射 7860）：
 
+**Telegram / Discord 等外部 API**：HF 上容器内 DNS 有时无法解析 `api.telegram.org`、`discord.com` 等，会报 `ENOTFOUND`。入口脚本已尝试在启动时将 DNS 设为 8.8.8.8 / 1.1.1.1；若仍报 ENOTFOUND，可能是 HF 将 `/etc/resolv.conf` 只读挂载或限制出网，可到 [HF 论坛](https://discuss.huggingface.co/c/spaces/11) 反馈或改用自建/其它托管。
+
 ```bash
 docker build -f Dockerfile.hf -t onebots-hf .
 docker run -p 7860:7860 -v $(pwd)/data:/data onebots-hf

@@ -15,6 +15,12 @@ export NODE_PATH="/app/development/node_modules"
 mkdir -p /data
 HF_PORT="${PORT:-7860}"
 
+# 使用公共 DNS，避免 HF 等环境中容器内 DNS 不可达导致 api.telegram.org、discord.com 等 ENOTFOUND
+if [ -w /etc/resolv.conf ] 2>/dev/null; then
+  printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf
+  echo "[onebots] 已设置 DNS 为 8.8.8.8 / 1.1.1.1（便于解析 Telegram、Discord 等外部 API）"
+fi
+
 # 无持久化卷时从 Space 仓库恢复整个 data 或仅配置（免付费：备份在仓库的 data_backup.tar.gz / config_backup.yaml）
 # 只要设置了 HF_REPO_ID 就尝试恢复，不依赖本地是否已有 config（否则重启后本地有残留就不会拉备份）
 if command -v curl >/dev/null 2>&1; then
