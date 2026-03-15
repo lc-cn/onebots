@@ -86,6 +86,7 @@ const baseConfig = defineConfig({
                     "/guide/": [
                         { text: `准备工作`, link: "/guide/prepare" },
                         { text: `快速开始`, link: "/guide/start" },
+                        { text: `Docker 部署`, link: "/guide/docker" },
                         { text: `系统架构`, link: "/guide/architecture" },
                         { text: `客户端SDK`, link: "/guide/client-sdk" },
                         { text: `开发适配器`, link: "/guide/adapter" },
@@ -223,6 +224,7 @@ const baseConfig = defineConfig({
                     "/en/guide/": [
                         { text: "Preparation", link: "/en/guide/prepare" },
                         { text: "Quick Start", link: "/en/guide/start" },
+                        { text: "Docker Deployment", link: "/en/guide/docker" },
                         { text: "Architecture", link: "/en/guide/architecture" },
                         { text: "Client SDK", link: "/en/guide/client-sdk" },
                         { text: "Adapter Development", link: "/en/guide/adapter" },

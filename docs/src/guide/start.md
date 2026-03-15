@@ -96,6 +96,18 @@ wechat.my_wechat_mp:
 
 ## 启动服务
 
+### Docker 部署（推荐用于生产）
+
+若已安装 Docker，可直接用镜像运行，无需在宿主机安装 Node.js。详见 [Docker 部署](/guide/docker)。
+
+```bash
+# 使用 docker compose
+docker compose up -d
+
+# 或使用 docker run
+docker run -d -p 6727:6727 -v $(pwd)/data:/data onebots
+```
+
 ### 方式一：命令行（推荐）
 
 ```bash

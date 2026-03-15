@@ -96,6 +96,18 @@ For complete configuration examples, see [Configuration Guide](/en/config/global
 
 ## Start Service
 
+### Docker (recommended for production)
+
+If Docker is installed, you can run the image directly without Node.js on the host. See [Docker Deployment](/en/guide/docker).
+
+```bash
+# Using docker compose
+docker compose up -d
+
+# Or docker run
+docker run -d -p 6727:6727 -v $(pwd)/data:/data onebots
+```
+
 ### Method 1: Command Line (Recommended)
 
 ```bash
