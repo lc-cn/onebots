@@ -123,9 +123,20 @@ docker run -d \
 2. 在 Space 仓库中放入以下两个文件（可从本仓库复制）：
    - **Dockerfile**：复制自仓库的 `Dockerfile.hf`（或把 `Dockerfile.hf` 重命名为 `Dockerfile`）。
    - **docker-entrypoint-hf.sh**：与 `Dockerfile.hf` 同目录的入口脚本。
-3. 如需持久化配置，在 Space 的 **Storage** 中挂载卷到 `/data`，并在其中放置或生成 `config.yaml`。
+3. 如需持久化配置与数据，见下方「HF 上持久化并查看 /data」。
 
 `Dockerfile.hf` 基于官方镜像 `ghcr.io/lc-cn/onebots:master`，仅增加 HF 的端口与入口脚本，构建快且不需要 GitHub Packages 的 build secret。
+
+### HF 上挂载并查看持久化的 /data
+
+- **挂载**：Hugging Face 的持久化存储由平台在**运行时**自动挂载，路径固定为 **`/data`**（与 OneBots 使用的目录一致）。  
+  1. 打开你的 Space → **Settings** → **Storage**（或 Billing / 存储相关设置）。  
+  2. 若提供 **Persistent storage** 升级项，开通后 HF 会把持久化卷挂载到容器的 `/data`，无需在 Dockerfile 里写 `VOLUME` 或挂载命令。  
+  3. 若当前账号/区域未提供持久化存储，重启或重建 Space 后 `/data` 内的内容会丢失；可将重要配置备份到 [Dataset](https://huggingface.co/docs/hub/spaces-storage#dataset-storage) 或外部存储。
+
+- **查看**：HF 不提供“在网页上浏览容器内 `/data` 文件”的功能；Space 的 **Files** 页只显示仓库（Dockerfile、脚本等），不显示运行时卷里的内容。  
+  - 若需查看或备份：可通过 OneBots 自带的 Web 管理端（若有）查看配置与状态，或自行在应用里加只读 API（如列出 `/data` 下的文件、下载 `config.yaml`）。  
+  - 首次运行且未挂载持久化卷时，入口脚本会在 `/data` 下生成默认 `config.yaml`，仅当启用持久化后该文件才会在重启后保留。
 
 本地测试 HF 镜像（映射 7860）：
 

@@ -20,7 +20,12 @@ import type { WsServer, Dict } from "@onebots/core";
 import * as pty from "@karinjs/node-pty";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), 'node_modules')));
-const client = path.resolve(path.join(process.cwd(), 'node_modules/@onebots/web/dist'));
+// 优先使用 onebots 包自身的 node_modules（Docker/HF 从 development 启动时 cwd 下无 @onebots/web）
+const client = (() => {
+    const fromPackage = path.join(import.meta.dirname, '..', 'node_modules', '@onebots', 'web', 'dist');
+    if (existsSync(fromPackage)) return path.resolve(fromPackage);
+    return path.resolve(path.join(process.cwd(), 'node_modules', '@onebots', 'web', 'dist'));
+})();
 
 export class App extends BaseApp {
     public ws: WsServer;

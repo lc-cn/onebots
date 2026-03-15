@@ -123,9 +123,20 @@ The repo includes Docker files for [Hugging Face Spaces](https://huggingface.co/
 2. In the Space repo, add these two files (copy from this repo):
    - **Dockerfile**: copy from `Dockerfile.hf` (or rename `Dockerfile.hf` to `Dockerfile`).
    - **docker-entrypoint-hf.sh**: the entrypoint script next to `Dockerfile.hf`.
-3. To persist config, mount Space **Storage** at `/data` and place (or generate) `config.yaml` there.
+3. To persist config and data, see **Mounting and viewing /data on HF** below.
 
 `Dockerfile.hf` is based on the official image `ghcr.io/lc-cn/onebots:master` and only adds the HF port and entrypoint, so builds are fast and no GitHub Packages build secret is needed.
+
+### Mounting and viewing persistent /data on HF
+
+- **Mount**: Hugging Face mounts persistent storage at **`/data`** at **runtime** (same path OneBots uses). You do not add a `VOLUME` or mount in the Dockerfile.  
+  1. Open your Space → **Settings** → **Storage** (or Billing / storage).  
+  2. If **Persistent storage** is available, enable it; the platform will attach the volume to `/data`.  
+  3. If persistent storage is not offered for your account/region, anything under `/data` is lost on Space restart; back up important config to a [Dataset](https://huggingface.co/docs/hub/spaces-storage#dataset-storage) or external store.
+
+- **View**: HF does not provide a file browser for the container’s `/data`. The Space **Files** tab shows only the repo (Dockerfile, scripts), not the runtime volume.  
+  - To inspect or back up: use OneBots’ web UI if it exposes config/state, or add a read-only API in your app (e.g. list files under `/data`, serve `config.yaml`).  
+  - On first run without persistent storage, the entrypoint creates a default `config.yaml` under `/data`; it will persist across restarts only if persistent storage is enabled.
 
 Test the HF image locally (port 7860):
 
