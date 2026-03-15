@@ -22,23 +22,28 @@ export const getServerPort = () => {
 
 const getProtocol = () => window.location.protocol
 
+/** 生产环境且未配置单独 API 地址时，使用同源（与页面同 host:port），避免 HF/Docker 等部署时仍请求 6727 */
 export const getApiBaseUrl = () => {
   if (isDev) return ''
 
   const envBase = import.meta.env.VITE_API_BASE
   if (envBase) return envBase
 
-  const port = getServerPort()
-  return `${getProtocol()}//${window.location.hostname}:${port}`
+  return ''
 }
 
+/** 生产环境且未配置单独 WS 地址时，使用当前页面的 origin（HF/Docker 等与页面同端口） */
 export const getWsBaseUrl = () => {
   const envBase = import.meta.env.VITE_WS_BASE
   if (envBase) return envBase
 
-  const port = getServerPort()
+  if (isDev) {
+    const port = getServerPort()
+    const wsProtocol = getProtocol() === 'https:' ? 'wss' : 'ws'
+    return `${wsProtocol}://${window.location.hostname}:${port}`
+  }
   const wsProtocol = getProtocol() === 'https:' ? 'wss' : 'ws'
-  return `${wsProtocol}://${window.location.hostname}:${port}`
+  return `${wsProtocol}://${window.location.host}`
 }
 
 export const buildApiUrl = (path: string) => {
