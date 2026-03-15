@@ -160,15 +160,28 @@ export class BaseApp extends Koa {
                 }
                 // 检查是否是协议路径格式: /{platform}/{accountId}/{protocol}/{version}/...
                 const pathParts = ctx.path?.split("/").filter(p => p) || [];
-                
                 const [_platform, _accountId, protocol, version] = pathParts;
                 if (ProtocolRegistry.has(protocol, version)) {
                     return next();
                 }
-                return await basicAuth({
-                    name: this.config.username,
-                    pass: this.config.password,
-                })(ctx, next)
+                // 非 API、非协议路径需鉴权：支持 Bearer access_token 或 Basic 用户名密码
+                const accessToken = this.config.access_token?.trim();
+                const authHeader = ctx.request.headers.authorization;
+                if (accessToken && authHeader && typeof authHeader === 'string') {
+                    const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+                    if (bearerMatch && bearerMatch[1] === accessToken) {
+                        return next();
+                    }
+                }
+                if (this.config.username != null && this.config.password != null) {
+                    return await basicAuth({
+                        name: this.config.username,
+                        pass: this.config.password,
+                    })(ctx, next);
+                }
+                ctx.status = 401;
+                ctx.set('WWW-Authenticate', accessToken ? 'Bearer' : 'Basic');
+                ctx.body = { error: 'Unauthorized', message: '需要鉴权' };
             })
             .use(this.router.routes())
             .use(this.router.allowedMethods());
