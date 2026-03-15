@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-discord",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "onebots Discord 适配器（轻量版，支持 Node.js 和 Cloudflare Workers）",
   "type": "module",
   "main": "lib/index.js",
