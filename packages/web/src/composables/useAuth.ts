@@ -65,6 +65,16 @@ export const appendAuthQuery = (url: string) => {
   return `${url}${separator}access_token=${encodeURIComponent(token)}`
 }
 
+/** 从当前 URL query 读取 access_token，若存在则写入 localStorage 并返回 true（便于首屏通过 ?access_token= 访问） */
+export const consumeTokenFromQuery = (): string | null => {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const token = params.get('access_token')?.trim()
+  if (!token) return null
+  setToken(token, null, null)
+  return token
+}
+
 export const authFetch = async (
   input: RequestInfo | URL,
   init: RequestInit = {},

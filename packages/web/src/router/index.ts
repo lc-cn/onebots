@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { isAuthenticated, hasExpiredFlag, clearExpiredFlag } from '../composables/useAuth'
+import { isAuthenticated, hasExpiredFlag, clearExpiredFlag, setToken } from '../composables/useAuth'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -55,6 +55,14 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta?.public) return true
+  // 支持通过 URL ?access_token= 传入鉴权码，写入本地后去掉 query 避免泄露
+  const queryToken = to.query.access_token
+  if (queryToken && typeof queryToken === 'string') {
+    setToken(queryToken.trim(), null, null)
+    const q = { ...to.query }
+    delete q.access_token
+    return { path: to.path, query: q, replace: true }
+  }
   if (isAuthenticated()) return true
   const expired = hasExpiredFlag()
   if (expired) clearExpiredFlag()

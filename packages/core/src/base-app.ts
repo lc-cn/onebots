@@ -164,14 +164,16 @@ export class BaseApp extends Koa {
                 if (ProtocolRegistry.has(protocol, version)) {
                     return next();
                 }
-                // 非 API、非协议路径需鉴权：支持 Bearer access_token 或 Basic 用户名密码
+                // 非 API、非协议路径需鉴权：支持 Bearer / query access_token 或 Basic 用户名密码
                 const accessToken = this.config.access_token?.trim();
                 const authHeader = ctx.request.headers.authorization;
-                if (accessToken && authHeader && typeof authHeader === 'string') {
-                    const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-                    if (bearerMatch && bearerMatch[1] === accessToken) {
-                        return next();
+                const queryToken = ctx.request.query?.access_token as string | undefined;
+                if (accessToken) {
+                    if (authHeader && typeof authHeader === 'string') {
+                        const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+                        if (bearerMatch && bearerMatch[1] === accessToken) return next();
                     }
+                    if (queryToken && queryToken === accessToken) return next();
                 }
                 if (this.config.username != null && this.config.password != null) {
                     return await basicAuth({
