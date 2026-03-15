@@ -20,11 +20,23 @@ import type { WsServer, Dict } from "@onebots/core";
 import * as pty from "@karinjs/node-pty";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), 'node_modules')));
-// 优先使用 onebots 包自身的 node_modules（Docker/HF 从 development 启动时 cwd 下无 @onebots/web）
+// 多目录依次查找 @onebots/web/dist，找到即用（Docker/HF 从 development 启动时 cwd 下无 @onebots/web）
 const client = (() => {
-    const fromPackage = path.join(import.meta.dirname, '..', 'node_modules', '@onebots', 'web', 'dist');
-    if (existsSync(fromPackage)) return path.resolve(fromPackage);
-    return path.resolve(path.join(process.cwd(), 'node_modules', '@onebots', 'web', 'dist'));
+    const rel = ['..', 'node_modules', '@onebots', 'web', 'dist'];
+    const candidates = [
+        path.join(import.meta.dirname, ...rel),
+        path.join(process.cwd(), 'node_modules', '@onebots', 'web', 'dist'),
+        path.join(import.meta.dirname, '..', '..', '..', 'packages', 'web', 'dist'),
+    ].map(p => path.resolve(p));
+    for (const dir of candidates) {
+        console.log('[onebots] 查找 Web 前端目录:', dir);
+        if (existsSync(dir)) {
+            console.log('[onebots] 使用 Web 前端目录:', dir);
+            return dir;
+        }
+    }
+    console.log('[onebots] 未找到 @onebots/web/dist，管理端页面将不可用');
+    return '';
 })();
 
 export class App extends BaseApp {
