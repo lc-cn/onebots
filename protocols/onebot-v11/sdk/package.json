@@ -1,6 +1,6 @@
 {
   "name": "@imhelper/onebot-v11",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "OneBot V11 协议客户端 SDK",
   "type": "module",
   "main": "lib/index.js",

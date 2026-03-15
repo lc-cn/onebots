@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-icqq",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "onebots ICQQ 适配器 - 基于 ICQQ 协议的 QQ 机器人",
   "type": "module",
   "main": "lib/index.js",

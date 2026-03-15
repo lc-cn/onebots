@@ -18,6 +18,7 @@
             :inactive-icon="Sunny"
             @change="toggleTheme"
           />
+          <el-button :icon="SwitchButton" circle @click="handleLogout" />
         </div>
       </div>
     </el-header>
@@ -74,17 +75,24 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { Monitor, Setting, DataAnalysis, Document, Connection, Moon, Sunny, Expand, Fold } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Monitor, Setting, DataAnalysis, Document, Connection, Moon, Sunny, Expand, Fold, SwitchButton } from '@element-plus/icons-vue'
 import { useTheme } from '../composables/useTheme'
 import { useApi } from '../composables/useApi'
+import { logout } from '../composables/useAuth'
 
 const route = useRoute()
+const router = useRouter()
 const currentRoute = computed(() => route.path)
 
 const { isDark, toggleTheme } = useTheme()
 const { onlineBotCount } = useApi()
 const isCollapse = ref(false)
+
+const handleLogout = async () => {
+  await logout()
+  router.replace('/login')
+}
 </script>
 
 <style lang="scss" scoped>

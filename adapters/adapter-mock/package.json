@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-mock",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "onebots Mock 适配器 - 用于测试和开发",
   "type": "module",
   "main": "lib/index.js",

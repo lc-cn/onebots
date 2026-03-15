@@ -1,5 +1,30 @@
 # onebots-dev
 
+## 1.1.4
+
+### Patch Changes
+
+- 78d4de2: fix: bump version
+- Updated dependencies [78d4de2]
+  - @onebots/adapter-dingtalk@1.0.2
+  - @onebots/adapter-discord@1.0.2
+  - @onebots/adapter-feishu@1.0.2
+  - @onebots/adapter-kook@1.0.2
+  - @onebots/adapter-qq@1.0.2
+  - @onebots/adapter-slack@1.0.2
+  - @onebots/adapter-teams@1.0.2
+  - @onebots/adapter-telegram@1.0.2
+  - @onebots/adapter-wechat@1.0.2
+  - @onebots/adapter-wecom@1.0.2
+  - imhelper@1.0.2
+  - onebots@1.0.2
+  - @onebots/protocol-milky-v1@1.0.2
+  - @onebots/protocol-onebot-v11@1.0.2
+  - @imhelper/onebot-v11@1.0.2
+  - @onebots/protocol-onebot-v12@1.0.2
+  - @imhelper/onebot-v12@1.0.2
+  - @onebots/protocol-satori-v1@1.0.2
+
 ## 1.1.3
 
 ### Patch Changes

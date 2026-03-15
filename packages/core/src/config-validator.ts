@@ -17,6 +17,12 @@ export interface ValidationRule<T = any> {
     validator?: (value: T) => boolean | string;
     default?: T | (() => T);
     transform?: (value: any) => T;
+    /** 用于表单展示的标签 */
+    label?: string;
+    /** 用于表单展示的说明 */
+    description?: string;
+    /** 用于表单展示的占位提示 */
+    placeholder?: string;
 }
 
 export interface Schema {

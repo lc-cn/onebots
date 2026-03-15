@@ -1,5 +1,11 @@
 # @onebots/docs
 
+## 0.5.1
+
+### Patch Changes
+
+- 78d4de2: fix: bump version
+
 ## 0.5.0
 
 ### Minor Changes

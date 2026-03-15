@@ -37,9 +37,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Document, Delete, Connection } from '@element-plus/icons-vue'
 import '@xterm/xterm/css/xterm.css'
-
-const isDev = process.env.NODE_ENV === 'development'
-const API_BASE = isDev ? '' : 'http://localhost:6727'
+import { buildApiUrl } from '../config'
+import { appendAuthQuery } from '../composables/useAuth'
 
 const logsContainer = ref<HTMLElement>()
 let terminal: Terminal | null = null
@@ -60,7 +59,7 @@ const connectSSE = () => {
     eventSource.close()
   }
   
-  eventSource = new EventSource(`${API_BASE}/api/logs`)
+  eventSource = new EventSource(appendAuthQuery(buildApiUrl('/api/logs')))
   
   eventSource.onopen = () => {
     isConnected.value = true

@@ -68,6 +68,8 @@
           v-if="bot.status === 'offline'"
           type="success"
           :icon="VideoPlay"
+          :loading="props.loading"
+          :disabled="props.loading"
           @click="emit('start', bot)"
         >
           上线
@@ -76,6 +78,8 @@
           v-else-if="bot.status === 'online'"
           type="danger"
           :icon="VideoPause"
+          :loading="props.loading"
+          :disabled="props.loading"
           @click="emit('stop', bot)"
         >
           下线
@@ -97,10 +101,12 @@
 <script setup lang="ts">
 import { VideoPlay, VideoPause, Loading, Link } from '@element-plus/icons-vue'
 import type { AccountInfo } from '../types'
+import { getServerPort } from '../config'
 
 interface Props {
   bot: AccountInfo
   adapterIcon: string
+  loading?: boolean
 }
 
 const props = defineProps<Props>()
@@ -110,7 +116,7 @@ const emit = defineEmits<{
 }>()
 
 const getFullUrl = (url: string) => {
-  const port = localStorage.getItem('onebots:serverPort')
+  const port = getServerPort()
   return `${location.protocol}//${location.hostname}:${port}${url}`
 }
 </script>

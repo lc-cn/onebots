@@ -1,6 +1,6 @@
 {
   "name": "@onebots/web",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "IMHelper Web 管理界面",
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "@xterm/xterm": "^5.5.0",
     "dayjs": "^1.11.10",
     "element-plus": "^2.4.4",
+    "js-yaml": "^4.1.0",
     "vue": "^3.4.0",
     "vue-router": "^4.2.5"
   },

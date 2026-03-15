@@ -1,11 +1,28 @@
 import WebSocket from "ws";
-import { Protocol,ProtocolRegistry } from "onebots";
+import { Protocol, ProtocolRegistry } from "onebots";
+import type { Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
 import crypto from "crypto";
 import { CommonEvent, CommonTypes } from "onebots";
 import { CQCode } from "./cqcode.js";
 import { OneBotV11Config } from "./config.js";
+
+const onebotV11Schema: Schema = {
+    use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
+    use_ws: { type: 'boolean', default: false, label: '启用 WebSocket' },
+    http_reverse: { type: 'array', label: 'HTTP 反向上报地址' },
+    ws_reverse: { type: 'array', label: 'WS 反向连接地址' },
+    enable_cors: { type: 'boolean', label: '启用 CORS' },
+    access_token: { type: 'string', label: 'Access Token' },
+    secret: { type: 'string', label: 'Secret' },
+    post_timeout: { type: 'number', label: 'POST 超时(秒)' },
+    post_message_format: { type: 'string', enum: ['string', 'array'], default: 'array', label: '消息格式' },
+    serve_data_files: { type: 'boolean', label: '静态文件服务' },
+    heartbeat_interval: { type: 'number', label: '心跳间隔(秒)' },
+};
+
+ProtocolRegistry.registerSchema('onebot.v11', onebotV11Schema);
 
 /**
  * OneBot V11 Protocol Implementation

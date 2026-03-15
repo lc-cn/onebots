@@ -1,10 +1,24 @@
 import { Protocol,ProtocolRegistry } from "onebots";
+import type { Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
 import { CommonEvent,CommonTypes } from "onebots";
 import { OneBotV12 } from "./types.js";
 import { WebSocket } from "ws";
 import { OneBotV12Config } from "./config.js";
+
+const onebotV12Schema: Schema = {
+    use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
+    use_ws: { type: 'boolean', default: false, label: '启用 WebSocket' },
+    http_webhook: { type: 'array', label: 'HTTP Webhook 地址' },
+    ws_reverse: { type: 'array', label: 'WS 反向连接地址' },
+    request_timeout: { type: 'number', label: '请求超时(秒)' },
+    access_token: { type: 'string', label: 'Access Token' },
+    heartbeat_interval: { type: 'number', label: '心跳间隔(秒)' },
+    enable_cors: { type: 'boolean', label: '启用 CORS' },
+};
+
+ProtocolRegistry.registerSchema('onebot.v12', onebotV12Schema);
 
 /**
  * OneBot V12 Protocol Implementation

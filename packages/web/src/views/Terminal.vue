@@ -40,9 +40,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Monitor, Delete, Connection } from '@element-plus/icons-vue'
 import '@xterm/xterm/css/xterm.css'
-
-const isDev = process.env.NODE_ENV === 'development'
-const WS_BASE = isDev ? 'ws://localhost:6727' : `ws://${window.location.hostname}:6727`
+import { buildWsUrl } from '../config'
+import { appendAuthQuery } from '../composables/useAuth'
 
 const terminalContainer = ref<HTMLElement>()
 let terminal: Terminal | null = null
@@ -63,7 +62,7 @@ const connectWebSocket = () => {
     ws.close()
   }
   
-  ws = new WebSocket(`${WS_BASE}/api/terminal`)
+  ws = new WebSocket(appendAuthQuery(buildWsUrl('/api/terminal')))
   
   ws.onopen = () => {
     isConnected.value = true

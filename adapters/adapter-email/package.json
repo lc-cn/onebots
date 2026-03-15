@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-email",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "onebots 邮件适配器",
   "type": "module",
   "main": "lib/index.js",
@@ -48,4 +48,3 @@
     "url": "git+https://github.com/lc-cn/onebots.git"
   }
 }
-

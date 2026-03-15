@@ -1,4 +1,15 @@
-import { BaseApp, yaml,RouterContext, ProtocolRegistry, configure, Protocol, readLine } from "@onebots/core";
+import {
+    BaseApp,
+    yaml,
+    RouterContext,
+    ProtocolRegistry,
+    configure,
+    Protocol,
+    readLine,
+    createManagedTokenValidator,
+    initTokenManager,
+} from "@onebots/core";
+import { getAppConfigSchema } from "./config-schema.js";
 import * as path from "path";
 import * as fs from "fs";
 import { createRequire } from "module";
@@ -18,6 +29,10 @@ export class App extends BaseApp {
     private logClients: Set<any> = new Set();
     private ptyTerminal: any = null;
     private terminalClients: Set<any> = new Set();
+    private tokenManager = initTokenManager({
+        defaultExpiration: 12 * 60 * 60 * 1000,
+        refreshExpiration: 7 * 24 * 60 * 60 * 1000,
+    });
 
     constructor(config: App.Config) {
         super(config);
@@ -62,20 +77,30 @@ export class App extends BaseApp {
 
         process.stdout.write = ((chunk: any, encoding?: any, callback?: any) => {
             const message = chunk.toString();
-            // 缓存到文件
-            this.cacheLog(message);
-            // 广播到所有 SSE 客户端
-            this.broadcastLog(message);
+            try {
+                // 缓存到文件
+                this.cacheLog(message);
+                // 广播到所有 SSE 客户端
+                this.broadcastLog(message);
+            } catch (e) {
+                // Use the original write to avoid re-entering the interceptor
+                originalStderrWrite(`[onebots] Log interceptor error: ${e}\n`);
+            }
             // 继续正常输出
             return originalStdoutWrite(chunk, encoding, callback);
         }) as any;
 
         process.stderr.write = ((chunk: any, encoding?: any, callback?: any) => {
             const message = chunk.toString();
-            // 缓存到文件
-            this.cacheLog(message);
-            // 广播到所有 SSE 客户端
-            this.broadcastLog(message);
+            try {
+                // 缓存到文件
+                this.cacheLog(message);
+                // 广播到所有 SSE 客户端
+                this.broadcastLog(message);
+            } catch (e) {
+                // Use the original write to avoid re-entering the interceptor
+                originalStderrWrite(`[onebots] Log interceptor error: ${e}\n`);
+            }
             // 继续正常输出
             return originalStderrWrite(chunk, encoding, callback);
         }) as any;
@@ -120,6 +145,85 @@ export class App extends BaseApp {
     }
 
     async start() {
+        const authValidator = createManagedTokenValidator(this.tokenManager, {
+            tokenName: 'access_token',
+            errorMessage: 'Unauthorized',
+        });
+        const expectedUsername = this.config.username ?? BaseApp.defaultConfig.username;
+        const expectedPassword = this.config.password ?? BaseApp.defaultConfig.password;
+        const getTokenFromRequest = (request: import('http').IncomingMessage) => {
+            const authHeader = request.headers.authorization;
+            if (authHeader && typeof authHeader === 'string') {
+                const match = authHeader.match(/^Bearer\s+(.+)$/i);
+                return match ? match[1] : authHeader;
+            }
+            try {
+                const url = new URL(request.url || '/', 'http://localhost');
+                return url.searchParams.get('access_token') || undefined;
+            } catch {
+                return undefined;
+            }
+        };
+
+        this.router.post("/api/auth/login", (ctx: RouterContext) => {
+            const { username, password } = ctx.request.body as { username?: string; password?: string };
+            if (!username || !password || username !== expectedUsername || password !== expectedPassword) {
+                ctx.status = 401;
+                ctx.body = { success: false, message: "用户名或密码错误" };
+                return;
+            }
+            const tokenInfo = this.tokenManager.generateToken({ username });
+            ctx.body = {
+                success: true,
+                token: tokenInfo.token,
+                expiresAt: tokenInfo.expiresAt,
+                refreshToken: tokenInfo.refreshToken,
+            };
+        });
+
+        this.router.post("/api/auth/refresh", (ctx: RouterContext) => {
+            const { refreshToken } = ctx.request.body as { refreshToken?: string };
+            if (!refreshToken) {
+                ctx.status = 400;
+                ctx.body = { success: false, message: "缺少 refreshToken" };
+                return;
+            }
+            const tokenInfo = this.tokenManager.refreshToken(refreshToken);
+            if (!tokenInfo) {
+                ctx.status = 401;
+                ctx.body = { success: false, message: "refreshToken 无效或已过期" };
+                return;
+            }
+            ctx.body = {
+                success: true,
+                token: tokenInfo.token,
+                expiresAt: tokenInfo.expiresAt,
+                refreshToken: tokenInfo.refreshToken,
+            };
+        });
+
+        this.router.use('/api', async (ctx: RouterContext, next) => {
+            if (ctx.path === '/api/auth/login' || ctx.path === '/api/auth/refresh') return next();
+            return authValidator(ctx as any, next as any);
+        });
+
+        this.router.post("/api/auth/logout", (ctx: RouterContext) => {
+            const token = ctx.state.token as string | undefined;
+            if (token) this.tokenManager.revokeToken(token);
+            ctx.body = { success: true };
+        });
+
+        this.router.get("/api/auth/me", (ctx: RouterContext) => {
+            const tokenInfo = ctx.state.tokenInfo as { expiresAt?: number; metadata?: Record<string, any> } | undefined;
+            ctx.body = {
+                success: true,
+                data: {
+                    username: tokenInfo?.metadata?.username ?? expectedUsername,
+                    expiresAt: tokenInfo?.expiresAt ?? null,
+                },
+            };
+        });
+
         // WebSocket 日志监听
         const fileListener = e => {
             if (e === "change")
@@ -145,13 +249,14 @@ export class App extends BaseApp {
             client.send(
                 JSON.stringify({
                     event: "system.sync",
-                    data: {
+                        data: {
                         config: fs.readFileSync(BaseApp.configPath, "utf8"),
                         adapters: [...this.adapters.values()].map(adapter => {
                             return adapter.info;
                         }),
                         protocol: ProtocolRegistry.getAllMetadata(),
                         app: this.info,
+                            schema: getAppConfigSchema(),
                         logs: fs.existsSync(BaseApp.logFile) ? await readLine(100, BaseApp.logFile) : "",
                     },
                 }),
@@ -270,7 +375,12 @@ export class App extends BaseApp {
 
         // PTY 终端 WebSocket 端点
         const terminalWs = this.router.ws("/api/terminal");
-        terminalWs.on("connection", (client) => {
+        terminalWs.on("connection", (client, request) => {
+            const token = getTokenFromRequest(request);
+            if (!token || !this.tokenManager.validateToken(token).valid) {
+                client.close(1008, "Unauthorized");
+                return;
+            }
             // 创建 PTY 终端实例（如果不存在）
             if (!this.ptyTerminal) {
                 const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
@@ -397,6 +507,10 @@ export class App extends BaseApp {
             ctx.body = fs.readFileSync(BaseApp.configPath, "utf8");
         });
 
+        this.router.get("/api/config/schema", ctx => {
+            ctx.body = getAppConfigSchema();
+        });
+
         this.router.post("/api/config", (ctx: RouterContext) => {
             try {
                 const configContent = ctx.request.body as string;
@@ -440,6 +554,30 @@ export class App extends BaseApp {
             try {
                 this.removeAccount(String(platform), String(uin), Boolean(force));
                 ctx.body = { success: true, message: '移除成功' };
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: e.message };
+            }
+        });
+
+        this.router.post("/api/bots/start", async (ctx: RouterContext) => {
+            const { platform, uin } = ctx.request.body as { platform: string; uin: string };
+            try {
+                const adapter = this.adapters.get(platform);
+                await adapter?.setOnline(uin);
+                ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: e.message };
+            }
+        });
+
+        this.router.post("/api/bots/stop", async (ctx: RouterContext) => {
+            const { platform, uin } = ctx.request.body as { platform: string; uin: string };
+            try {
+                const adapter = this.adapters.get(platform);
+                await adapter?.setOffline(uin);
+                ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
             } catch (e) {
                 ctx.status = 500;
                 ctx.body = { success: false, message: e.message };
