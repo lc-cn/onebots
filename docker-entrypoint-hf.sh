@@ -2,6 +2,9 @@
 # Hugging Face Spaces 入口：使用 PORT（默认 7860），并确保 config 中端口一致
 set -e
 
+# 确保工作目录为应用根目录，以便 require 能解析 node_modules 与 workspace 包
+cd /app
+
 mkdir -p /data
 HF_PORT="${PORT:-7860}"
 

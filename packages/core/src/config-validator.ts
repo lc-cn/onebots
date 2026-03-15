@@ -209,11 +209,13 @@ export const BaseAppConfigSchema: Schema = {
         type: 'string',
         min: 1,
         default: 'admin',
+        transform: (v: unknown) => (v != null ? String(v) : undefined),
     },
     password: {
         type: 'string',
         min: 1,
         default: '123456',
+        transform: (v: unknown) => (v != null ? String(v) : undefined),
     },
     log_level: {
         type: 'string',
