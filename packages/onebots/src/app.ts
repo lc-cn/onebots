@@ -609,12 +609,11 @@ export class App extends BaseApp {
         // 静态文件服务
         if (fs.existsSync(client)) {
             this.use(koaStatic(client));
-            // SPA fallback
+            // SPA fallback：未匹配到静态文件时一律返回 index.html，支持 history 路由刷新
             this.use(async (ctx) => {
-                if (!ctx.path.startsWith(this.config.path || '')) {
-                    ctx.type = 'html';
-                    ctx.body = fs.readFileSync(path.join(client, 'index.html'));
-                }
+                if (ctx.method !== 'HEAD' && ctx.method !== 'GET') return;
+                ctx.type = 'html';
+                ctx.body = fs.readFileSync(path.join(client, 'index.html'));
             });
         }
 
