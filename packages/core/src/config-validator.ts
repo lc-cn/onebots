@@ -94,6 +94,10 @@ export class ConfigValidator {
             }
 
             const finalValue = (result as any)[key];
+            // transform 可能将空字符串等转为 undefined，视为可选字段未填，跳过后续类型与范围检查
+            if (finalValue === undefined) {
+                continue;
+            }
 
             // 类型检查
             if (validationRule.type) {
