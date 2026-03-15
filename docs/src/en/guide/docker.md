@@ -119,6 +119,27 @@ Same as CLI: `-r` for adapters (repeatable), `-p` for protocols (repeatable), `-
 - Default gateway port is **6727** (configurable via `port` in `config.yaml`).
 - When using `docker run`, match `-p` to the configured port (e.g. if `port: 8080`, use `-p 8080:8080`).
 
+## Deploy to Hugging Face Spaces
+
+The repo includes Docker files for [Hugging Face Spaces](https://huggingface.co/docs/hub/spaces-sdks-docker): they use port **7860** (HF default) and do not require building from source on HF.
+
+**Steps:**
+
+1. Create a Space on Hugging Face and choose **Docker** as the SDK.
+2. In the Space repo, add these two files (copy from this repo):
+   - **Dockerfile**: copy from `Dockerfile.hf` (or rename `Dockerfile.hf` to `Dockerfile`).
+   - **docker-entrypoint-hf.sh**: the entrypoint script next to `Dockerfile.hf`.
+3. To persist config, mount Space **Storage** at `/data` and place (or generate) `config.yaml` there.
+
+`Dockerfile.hf` is based on the official image `ghcr.io/lc-cn/onebots:master` and only adds the HF port and entrypoint, so builds are fast and no GitHub Packages build secret is needed.
+
+Test the HF image locally (port 7860):
+
+```bash
+docker build -f Dockerfile.hf -t onebots-hf .
+docker run -p 7860:7860 -v $(pwd)/data:/data onebots-hf
+```
+
 ## Production tips
 
 - Use **docker compose** or an orchestrator (e.g. Kubernetes) with a restart policy (`restart: unless-stopped` or equivalent).

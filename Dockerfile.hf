@@ -1,0 +1,21 @@
+# OneBots 网关 - 专用于 Hugging Face Spaces
+# 基于官方镜像，仅增加 HF 要求的端口 7860 与入口脚本，无需在 HF 上从源码构建（无需 GH_PKG_TOKEN）
+# 在 HF 创建 Space 时选择 Docker，将本文件命名为 Dockerfile 或通过 Build 设置指定
+# 文档：https://huggingface.co/docs/hub/spaces-sdks-docker
+
+FROM ghcr.io/lc-cn/onebots:master
+
+# Hugging Face Spaces 默认暴露 7860，由 PORT 环境变量传入
+ENV PORT=7860
+EXPOSE 7860
+
+COPY docker-entrypoint-hf.sh /docker-entrypoint-hf.sh
+RUN chmod +x /docker-entrypoint-hf.sh
+ENTRYPOINT ["/docker-entrypoint-hf.sh"]
+
+CMD [ \
+  "-c", "/data/config.yaml", \
+  "-r", "kook", "-r", "qq", "-r", "telegram", "-r", "feishu", "-r", "slack", \
+  "-r", "teams", "-r", "wecom", "-r", "discord", "-r", "dingtalk", "-r", "wechat", \
+  "-p", "milky-v1", "-p", "satori-v1", "-p", "onebot-v12", "-p", "onebot-v11" \
+]

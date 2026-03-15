@@ -119,6 +119,27 @@ docker run -d \
 - 默认网关端口为 **6727**（可在 `config.yaml` 中修改 `port`）。
 - 使用 `docker run` 时需保证 `-p` 与配置中的端口一致，例如配置改为 `port: 8080` 则使用 `-p 8080:8080`。
 
+## 部署到 Hugging Face Spaces
+
+仓库内提供了面向 [Hugging Face Spaces](https://huggingface.co/docs/hub/spaces-sdks-docker) 的 Docker 配置，使用端口 **7860**（HF 默认），无需在 HF 上从源码构建。
+
+**使用步骤：**
+
+1. 在 Hugging Face 创建 Space，SDK 选择 **Docker**。
+2. 在 Space 仓库中放入以下两个文件（可从本仓库复制）：
+   - **Dockerfile**：复制自仓库的 `Dockerfile.hf`（或把 `Dockerfile.hf` 重命名为 `Dockerfile`）。
+   - **docker-entrypoint-hf.sh**：与 `Dockerfile.hf` 同目录的入口脚本。
+3. 如需持久化配置，在 Space 的 **Storage** 中挂载卷到 `/data`，并在其中放置或生成 `config.yaml`。
+
+`Dockerfile.hf` 基于官方镜像 `ghcr.io/lc-cn/onebots:master`，仅增加 HF 的端口与入口脚本，构建快且不需要 GitHub Packages 的 build secret。
+
+本地测试 HF 镜像（映射 7860）：
+
+```bash
+docker build -f Dockerfile.hf -t onebots-hf .
+docker run -p 7860:7860 -v $(pwd)/data:/data onebots-hf
+```
+
 ## 生产环境建议
 
 - 使用 **docker compose** 或编排系统（如 Kubernetes）管理容器，并设置 `restart: unless-stopped` 或等效重启策略。
