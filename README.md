@@ -414,29 +414,6 @@ MIT License - 查看 [LICENSE](./LICENSE) 文件了解详情
 - QQ群: [860669870](https://jq.qq.com/?_wv=1027&k=B22VGXov)
 - GitHub Issues: [https://github.com/lc-cn/onebots/issues](https://github.com/lc-cn/onebots/issues)
 
-## ☕ 赞助支持
-
-如果这个项目对你有帮助，欢迎赞助支持！
-
-<div align="center">
-  <table>
-    <tr>
-      <td align="center">
-        <img src="https://github.com/lc-cn/onebots/raw/master/docs/public/sponsor/alipay.png" width="200" alt="支付宝"/>
-        <br/>
-        <b>支付宝</b>
-      </td>
-      <td align="center">
-        <img src="https://github.com/lc-cn/onebots/raw/master/docs/public/sponsor/wechat.png" width="200" alt="微信"/>
-        <br/>
-        <b>微信</b>
-      </td>
-    </tr>
-  </table>
-</div>
-
-[![爱发电](https://img.shields.io/badge/爱发电-赞助我-946ce6?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyMWwtMS40NS0xLjMyQzUuNCAxNS4zNiAyIDEyLjI4IDIgOC41IDIgNS40MiA0LjQyIDMgNy41IDNjMS43NCAwIDMuNDEuODEgNC41IDIuMDlDMTMuMDkgMy44MSAxNC43NiAzIDE2LjUgMyAxOS41OCAzIDIyIDUuNDIgMjIgOC41YzAgMy43OC0zLjQgNi44Ni04LjU1IDExLjE4TDEyIDIxeiIvPjwvc3ZnPg==)](https://afdian.net/a/lc-cn)
-
 ---
 
 <div align="center">
