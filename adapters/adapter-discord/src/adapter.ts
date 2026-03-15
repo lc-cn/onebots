@@ -786,10 +786,12 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
                 messageType = 'group';
             } else {
                 messageType = 'channel';
-                if (message.guild) {
+                // 使用 channel.id 作为 group.id，以便 OneBot send_group_msg 时 scene_id 为频道 ID（Discord 发消息必须用 channel_id，用 guild_id 会 404 Unknown Channel）
+                if (message.channel) {
+                    const ch = message.channel as { id: string; name?: string };
                     group = {
-                        id: this.createId(message.guild.id),
-                        name: message.guild.name,
+                        id: this.createId(ch.id),
+                        name: ch.name || message.guild?.name || '',
                     };
                 }
             }
