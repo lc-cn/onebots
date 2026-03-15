@@ -147,6 +147,22 @@ pnpm build:packages
 pnpm build:rest
 ```
 
+### Docker 部署
+
+```bash
+# 构建镜像
+docker build -t onebots .
+
+# 运行（配置与数据持久化在 ./data）
+docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots onebots
+
+# 或使用 docker compose
+docker compose up -d
+```
+
+- 首次运行会在挂载的 `./data` 下生成默认 `config.yaml`，按需修改后重启容器。
+- 网关端口默认 `6727`，可在配置文件中修改并保持与 `docker run -p` 一致。
+
 ### 测试
 
 ```bash

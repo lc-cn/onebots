@@ -1,0 +1,17 @@
+# OneBots 网关 - Docker Compose
+# 使用：docker compose up -d
+# 配置与数据持久化在 ./data 目录
+
+services:
+  onebots:
+    build: .
+    image: onebots:latest
+    container_name: onebots
+    restart: unless-stopped
+    ports:
+      - "6727:6727"
+    volumes:
+      # 配置与数据持久化（config.yaml、SQLite、日志等）
+      - ./data:/data
+    environment:
+      - NODE_ENV=production

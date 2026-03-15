@@ -1,0 +1,38 @@
+# 依赖与构建产物（在镜像内重新安装和构建）
+node_modules
+**/node_modules
+**/lib
+**/dist
+*.tsbuildinfo
+
+# Git 与 IDE
+.git
+.gitignore
+.cursor
+.cursorignore
+.vscode
+.idea
+*.md
+!README.md
+
+# 测试与覆盖率
+coverage
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+.vitest
+
+# 开发与文档源码（文档构建仍会执行，仅忽略源码以减小上下文）
+# docs 保留以便 build:rest 能构建
+
+# 本地开发数据与日志
+*.log
+data
+development/data
+development/config.yaml
+
+# 其他
+.env
+.env.*
+*.local
+.DS_Store
