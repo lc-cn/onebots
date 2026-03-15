@@ -17,8 +17,10 @@ COPY protocols ./protocols
 COPY docs ./docs
 COPY development ./development
 
-# 安装依赖并构建
-RUN pnpm install --frozen-lockfile
+# 安装依赖并构建（需从 GitHub Packages 拉取 @icqqjs/icqq，通过 build secret 传入 NODE_AUTH_TOKEN）
+RUN --mount=type=secret,id=NODE_AUTH_TOKEN \
+  printf '//npm.pkg.github.com/:_authToken=%s\n@icqqjs:registry=https://npm.pkg.github.com\n' "$(cat /run/secrets/NODE_AUTH_TOKEN)" > .npmrc && \
+  pnpm install --frozen-lockfile
 RUN pnpm build
 
 # 生产依赖（去掉 devDependencies 以减小镜像）

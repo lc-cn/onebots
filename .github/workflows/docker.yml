@@ -1,5 +1,8 @@
 # 构建并推送 Docker 镜像到 GitHub Container Registry (ghcr.io)
 # 文档：https://docs.github.com/en/actions/publishing-packages/publishing-docker-images
+#
+# 依赖 @icqqjs/icqq（GitHub Packages）：默认使用 GITHUB_TOKEN；若 401，请在仓库 Settings → Secrets 中
+# 添加 NODE_AUTH_TOKEN（PAT，勾选 read:packages），用于拉取其他组织的私有包。
 
 name: Build and Push Docker image
 
@@ -63,6 +66,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # 从 GitHub Packages 拉取 @icqqjs/icqq 需认证；优先用 NODE_AUTH_TOKEN（PAT with read:packages），否则用 GITHUB_TOKEN
+          secrets: |
+            NODE_AUTH_TOKEN=${{ secrets.NODE_AUTH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'
