@@ -7,6 +7,7 @@
 
 [![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots) 
 [![dm](https://shields.io/npm/dm/onebots)](https://www.npmjs.com/package/onebots) 
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Flc--cn%2Fonebots-blue?logo=docker)](https://github.com/lc-cn/onebots/pkgs/container/onebots)
 [![node engine](https://img.shields.io/node/v/onebots?color=339933&logo=Node.js)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
@@ -78,9 +79,9 @@ onebots/
 │   ├── satori-v1/
 │   │   ├── protocol/           # @onebots/protocol-satori-v1 - Satori协议实现
 │   │   └── sdk/             # @imhelper/satori-v1 - Satori客户端SDK
-│   └── milky-1/
+│   └── milky-v1/
 │       ├── protocol/           # @onebots/protocol-milky-v1 - Milky协议实现
-│       └── sdk/              # @imhelper/milky-v1 - Milky客户端SDK
+│       └── sdk/                # @imhelper/milky-v1 - Milky客户端SDK
 ├── development/                 # 开发环境配置
 ├── docs/                        # 文档
 └── pnpm-workspace.yaml         # workspace 配置
@@ -106,61 +107,49 @@ onebots/
 
 ## 🚀 快速开始
 
-### 安装
+### 方式一：Docker（推荐，无需安装 Node.js）
+
+使用官方镜像，配置与数据持久化在 `./data`：
+
+```bash
+# 创建 docker-compose.yml（见仓库根目录），然后：
+docker compose up -d
+```
+
+或直接运行：
+
+```bash
+docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots ghcr.io/lc-cn/onebots:master
+```
+
+首次运行会在 `./data` 下生成默认 `config.yaml`，修改后执行 `docker compose restart` 或重启容器。  
+完整说明见 [文档 - Docker 部署](https://onebots.pages.dev/guide/docker)。也可部署到 [Hugging Face Spaces](https://onebots.pages.dev/guide/docker#部署到-hugging-face-spaces)。
+
+### 方式二：从源码运行
 
 ```bash
 # 克隆项目
-git clone https://github.com/liucl-cn/onebots.git
+git clone https://github.com/lc-cn/onebots.git
 cd onebots
 
 # 安装依赖
 pnpm install
 ```
 
-### 开发模式
+**开发模式：**
 
 ```bash
-# 运行服务器（开发环境）
-pnpm dev
-
-# 运行 Web 管理界面（可选）
-pnpm web:dev
-
-# 运行客户端SDK开发测试（可选）
-pnpm sdk:dev
-
-# 运行文档（可选）
-pnpm docs:dev
+pnpm dev          # 运行网关
+pnpm web:dev      # Web 管理界面（可选）
+pnpm docs:dev     # 文档（可选）
 ```
 
-### 构建
+**构建与测试：**
 
 ```bash
-# 构建所有包
-pnpm build
-
-# 仅构建核心包
-pnpm build:packages
-
-# 仅构建适配器和协议
-pnpm build:rest
+pnpm build        # 构建所有包
+pnpm test         # 运行测试
 ```
-
-### Docker 部署
-
-```bash
-# 构建镜像
-docker build -t onebots .
-
-# 运行（配置与数据持久化在 ./data）
-docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots onebots
-
-# 或使用 docker compose
-docker compose up -d
-```
-
-- 首次运行会在挂载的 `./data` 下生成默认 `config.yaml`，按需修改后重启容器。
-- 网关端口默认 `6727`，可在配置文件中修改并保持与 `docker run -p` 一致。
 
 ### 测试
 
@@ -346,7 +335,7 @@ await adapter.connect();
 await helper.sendPrivateMessage('123456', 'Hello!');
 ```
 
-更多客户端SDK使用示例，请查看 [客户端SDK使用指南](https://docs.onebots.org/guide/client-sdk)
+更多客户端 SDK 使用示例，请查看 [客户端 SDK 使用指南](https://onebots.pages.dev/guide/client-sdk)。
 
 ## 🎯 支持的平台
 
@@ -375,7 +364,7 @@ await helper.sendPrivateMessage('123456', 'Hello!');
 
 ## 📚 文档
 
-- [完整文档](https://docs.onebots.org)
+- [完整文档](https://onebots.pages.dev)（含快速开始、Docker 部署、Hugging Face、配置与协议说明）
 - [架构文档](./packages/core/ARCHITECTURE.md)
 - [核心包文档](./packages/core/README.md)
 - [主应用包文档](./packages/onebots/README.md)
@@ -387,7 +376,7 @@ await helper.sendPrivateMessage('123456', 'Hello!');
 - **packages/core** - 核心抽象层，定义适配器、协议、账号等基础接口
 - **packages/onebots** - 主应用包，提供命令行工具和应用逻辑
 - **packages/web** - Web 管理界面
-- **packages/client** - 客户端SDK核心包
+- **packages/imhelper** - 客户端 SDK 核心包
 - **adapters/** - 各平台适配器实现
 - **protocols/** - 各协议实现和客户端SDK
 
