@@ -164,6 +164,10 @@ export class BaseApp extends Koa {
                 if (ProtocolRegistry.has(protocol, version)) {
                     return next();
                 }
+                // 静态资源不鉴权（浏览器请求 JS/CSS 等不会带 query/Header，否则首屏 401）
+                if (ctx.path.startsWith('/assets/') || /\.(js|css|ico|svg|woff2?|png|jpg|jpeg|gif|webp|map)$/i.test(ctx.path)) {
+                    return next();
+                }
                 // 非 API、非协议路径需鉴权：支持 Bearer / query access_token 或 Basic 用户名密码
                 const accessToken = this.config.access_token?.trim();
                 const authHeader = ctx.request.headers.authorization;
