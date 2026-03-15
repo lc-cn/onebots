@@ -101,7 +101,6 @@
 <script setup lang="ts">
 import { VideoPlay, VideoPause, Loading, Link } from '@element-plus/icons-vue'
 import type { AccountInfo } from '../types'
-import { getServerPort } from '../config'
 
 interface Props {
   bot: AccountInfo
@@ -115,9 +114,11 @@ const emit = defineEmits<{
   stop: [bot: AccountInfo]
 }>()
 
+// 使用当前页同源，协议地址可直接复制使用（HF/Docker/反向代理下端口正确）
 const getFullUrl = (url: string) => {
-  const port = getServerPort()
-  return `${location.protocol}//${location.hostname}:${port}${url}`
+  const base = import.meta.env.VITE_API_BASE || window.location.origin
+  const path = url.startsWith('/') ? url : `/${url}`
+  return `${base.replace(/\/$/, '')}${path}`
 }
 </script>
 

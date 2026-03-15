@@ -349,9 +349,26 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         const bot = new TelegramBot(telegramConfig);
         const account = new Account<'telegram', TelegramBot>(this, bot, config);
 
-        // Webhook 路由（grammy 会自动处理，这里保留接口）
+        // Webhook 模式：按 bot 注册独立 webhook 路径，供 Telegram 服务器 POST 推送
         if (telegramConfig.webhook?.url) {
-            // grammy 的 webhook 处理由框架自动完成
+            this.app.router.post(`${account.path}/webhook`, async (ctx: import('onebots').RouterContext) => {
+                const secretHeader = ctx.request.headers['x-telegram-bot-api-secret-token'] as string | undefined;
+                if (!bot.verifyWebhookSecret(secretHeader)) {
+                    ctx.status = 401;
+                    ctx.body = { ok: false };
+                    return;
+                }
+                try {
+                    await bot.handleWebhookUpdate(ctx.request.body);
+                    ctx.status = 200;
+                    ctx.body = { ok: true };
+                } catch (e) {
+                    this.logger.error(`Telegram webhook ${config.account_id} 处理失败:`, e);
+                    ctx.status = 500;
+                    ctx.body = { ok: false };
+                }
+            });
+            this.logger.info(`Telegram Bot ${config.account_id} Webhook 路径: ${account.path}/webhook`);
         }
 
         // 监听 Bot 事件

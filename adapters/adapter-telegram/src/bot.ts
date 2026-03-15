@@ -4,7 +4,6 @@
  */
 import { EventEmitter } from 'events';
 import { Bot, Context, InputFile } from 'grammy';
-import type { RouterContext, Next } from 'onebots';
 import { createRequire } from 'module';
 import type { TelegramConfig, ProxyConfig } from './types.js';
 
@@ -214,11 +213,21 @@ export class TelegramBot extends EventEmitter {
     }
 
     /**
-     * 处理 Webhook 请求
+     * 处理 Webhook 推送的 Update（由适配器在 POST 路由中调用）
+     * @param update Telegram 推送的 Update 对象
      */
-    async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        // grammy 会自动处理 webhook，这里只需要确保中间件正确设置
-        await next();
+    async handleWebhookUpdate(update: any): Promise<void> {
+        if (!this.initialized) await this.initBot();
+        await this.bot.handleUpdate(update);
+    }
+
+    /**
+     * 校验 Webhook secret_token（X-Telegram-Bot-Api-Secret-Token）
+     */
+    verifyWebhookSecret(headerToken: string | undefined): boolean {
+        const expected = this.config.webhook?.secret_token;
+        if (!expected) return true;
+        return headerToken === expected;
     }
 
     /**

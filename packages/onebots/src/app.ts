@@ -736,9 +736,13 @@ export class App extends BaseApp {
         // 静态文件服务
         if (fs.existsSync(client)) {
             this.use(koaStatic(client));
-            // SPA fallback：未匹配到静态文件时一律返回 index.html，支持 history 路由刷新
-            this.use(async (ctx) => {
-                if (ctx.method !== 'HEAD' && ctx.method !== 'GET') return;
+            // SPA fallback：仅对已知前端路由返回 index.html；协议与 adapter 提供的路径（如 /platform/accountId/...、.../webhook）一律 next，由 router 处理
+            const spaPathRegex = /^\/(login|bots|config|system|terminal|logs)(\/.*)?$/;
+            this.use(async (ctx, next) => {
+                if (ctx.method !== 'HEAD' && ctx.method !== 'GET') return next();
+                const p = ctx.path;
+                const isSpaRoute = p === '/' || spaPathRegex.test(p);
+                if (!isSpaRoute) return next();
                 ctx.type = 'html';
                 ctx.body = fs.readFileSync(path.join(client, 'index.html'));
             });
