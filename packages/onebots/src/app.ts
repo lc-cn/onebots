@@ -297,6 +297,7 @@ export class App extends BaseApp {
             };
         });
 
+        // 仅对 Web 管理端 /api 鉴权（Bearer / access_token / 登录 token）；各平台对外 API（OneBot、KOOK 等）由各自协议/适配器鉴权，不经过此处
         this.router.use('/api', async (ctx: RouterContext, next) => {
             if (ctx.path === '/api/auth/login' || ctx.path === '/api/auth/refresh') return next();
             const token = getTokenFromKoa(ctx);

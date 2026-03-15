@@ -8,7 +8,6 @@ import type { Logger } from "log4js";
 import { createServer, Server } from "http";
 import yaml from "js-yaml";
 import KoaBody from "koa-body";
-import basicAuth from "koa-basic-auth";
 const { configure,connectLogger,getLogger } = log4js;
 import { Class, deepClone, deepMerge, readLine } from "@/utils.js";
 import { Router, WsServer } from "./router.js";
@@ -149,45 +148,9 @@ export class BaseApp extends Koa {
             .use(securityAudit())
             // 速率限制（在认证之前，防止暴力破解）
             .use(defaultRateLimit)
-            .use(async (ctx, next) => {
-                // 健康检查端点跳过认证
-                if (ctx.path === '/health' || ctx.path === '/ready' || ctx.path === '/metrics') {
-                    return next();
-                }
-                // 管理端点由应用层 Token 鉴权处理
-                if (ctx.path.startsWith('/api')) {
-                    return next();
-                }
-                // 检查是否是协议路径格式: /{platform}/{accountId}/{protocol}/{version}/...
-                const pathParts = ctx.path?.split("/").filter(p => p) || [];
-                const [_platform, _accountId, protocol, version] = pathParts;
-                if (ProtocolRegistry.has(protocol, version)) {
-                    return next();
-                }
-                // 静态资源不鉴权（浏览器请求 JS/CSS 等不会带 query/Header，否则首屏 401）
-                if (ctx.path.startsWith('/assets/') || /\.(js|css|ico|svg|woff2?|png|jpg|jpeg|gif|webp|map)$/i.test(ctx.path)) {
-                    return next();
-                }
-                // 非 API、非协议路径需鉴权：支持 Bearer / query access_token 或 Basic 用户名密码
-                const accessToken = this.config.access_token?.trim();
-                const authHeader = ctx.request.headers.authorization;
-                const queryToken = ctx.request.query?.access_token as string | undefined;
-                if (accessToken) {
-                    if (authHeader && typeof authHeader === 'string') {
-                        const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-                        if (bearerMatch && bearerMatch[1] === accessToken) return next();
-                    }
-                    if (queryToken && queryToken === accessToken) return next();
-                }
-                if (this.config.username != null && this.config.password != null) {
-                    return await basicAuth({
-                        name: this.config.username,
-                        pass: this.config.password,
-                    })(ctx, next);
-                }
-                ctx.status = 401;
-                ctx.set('WWW-Authenticate', accessToken ? 'Bearer' : 'Basic');
-                ctx.body = { error: 'Unauthorized', message: '需要鉴权' };
+            .use(async (_ctx, next) => {
+                // 本层不做鉴权。管理端鉴权仅针对 /api（由 onebots 应用层负责）；各平台对外 API（如 /{platform}/{accountId}/onebot/v11/...）由各自协议/适配器单独鉴权。
+                return next();
             })
             .use(this.router.routes())
             .use(this.router.allowedMethods());
