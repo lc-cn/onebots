@@ -10,12 +10,12 @@ You can run the onebots gateway with Docker without installing Node.js on the ho
 
 ### Option 1: Docker Compose (recommended)
 
-Create a `docker-compose.yml` in your project directory.
+Create a `docker-compose.yml` in your project directory. **You must mount `./data` to `/data`** so that user config (`config.yaml`) and data are persisted; otherwise they are lost when the container restarts.
 
 ```yaml
 # OneBots gateway - Docker Compose (official image)
 # Usage: docker compose up -d
-# Config and data persist in ./data
+# Mount ./data to persist user config.yaml and data
 
 services:
   onebots:
@@ -25,7 +25,7 @@ services:
     ports:
       - "6727:6727"
     volumes:
-      # Config and data (config.yaml, SQLite, logs)
+      # Persist user config config.yaml and data (SQLite, logs)
       - ./data:/data
     environment:
       - NODE_ENV=production
@@ -49,15 +49,12 @@ On first run, a `./data` directory is created and a default `config.yaml` is gen
 ### Option 2: docker run
 
 ```bash
-# Build image (from repository root)
-docker build -t onebots .
-
-# Run: publish port 6727 and mount config/data
+# Run official image (use -v to persist user config)
 docker run -d \
   --name onebots \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
-  onebots
+  ghcr.io/lc-cn/onebots:master
 
 # View logs
 docker logs -f onebots
@@ -88,13 +85,13 @@ Released versions use version tags, e.g. `ghcr.io/lc-cn/onebots:1.0.0`.
 
 | Path (in container) | Description |
 |---------------------|-------------|
-| `/data/config.yaml` | Main config file; **must** be mounted for persistence and edits |
-| `/data/data/`      | Database and audit logs; created by the app |
+| `/data/config.yaml` | User config file; **must** be mounted or it is lost on container restart |
+| `/data/data/`       | Database and audit logs; created by the app |
 
-Mount a host directory to `/data` (e.g. `-v $(pwd)/data:/data`) so that:
+**Always** mount a host directory to `/data` (e.g. `-v $(pwd)/data:/data` or `./data:/data` in docker-compose) so that:
 
-- Config changes take effect after container restart
-- Data and logs survive container removal
+- User config `config.yaml` is persisted on the host and survives restarts or rebuilds
+- Database and logs are not lost when the container is removed
 
 ## Custom adapters and protocols
 

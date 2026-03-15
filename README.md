@@ -109,20 +109,20 @@ onebots/
 
 ### 方式一：Docker（推荐，无需安装 Node.js）
 
-使用官方镜像，配置与数据持久化在 `./data`：
+使用官方镜像。**务必挂载 `./data` 到容器的 `/data`**，以持久化用户配置（config.yaml）与数据，否则重启容器后配置会丢失：
 
 ```bash
 # 创建 docker-compose.yml（见仓库根目录），然后：
 docker compose up -d
 ```
 
-或直接运行：
+或直接运行（`-v` 挂载不可省略）：
 
 ```bash
 docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots ghcr.io/lc-cn/onebots:master
 ```
 
-首次运行会在 `./data` 下生成默认 `config.yaml`，修改后执行 `docker compose restart` 或重启容器。  
+首次运行会在 `./data` 下生成默认 `config.yaml`，修改后执行 `docker compose restart` 或重启容器即可生效。  
 完整说明见 [文档 - Docker 部署](https://onebots.pages.dev/guide/docker)。也可部署到 [Hugging Face Spaces](https://onebots.pages.dev/guide/docker#部署到-hugging-face-spaces)。
 
 ### 方式二：从源码运行

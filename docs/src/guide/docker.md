@@ -10,12 +10,12 @@
 
 ### 方式一：使用 Docker Compose（推荐）
 
-在项目目录下创建 `docker-compose.yml`，
+在项目目录下创建 `docker-compose.yml`，推荐直接使用官方镜像（无需本地构建）。**务必挂载 `./data` 到容器的 `/data`**，否则用户配置（config.yaml）与数据不会持久化，重启容器后会丢失。
 
 ```yaml
 # OneBots 网关 - Docker Compose（使用官方镜像）
 # 使用：docker compose up -d
-# 配置与数据持久化在 ./data 目录
+# 必须挂载 ./data 以持久化用户 config.yaml 与数据
 
 services:
   onebots:
@@ -25,7 +25,7 @@ services:
     ports:
       - "6727:6727"
     volumes:
-      # 配置与数据持久化（config.yaml、SQLite、日志等）
+      # 持久化用户配置 config.yaml 与数据（SQLite、日志等）
       - ./data:/data
     environment:
       - NODE_ENV=production
@@ -49,15 +49,12 @@ docker compose down
 ### 方式二：使用 docker run
 
 ```bash
-# 构建镜像（在仓库根目录执行）
-docker build -t onebots .
-
-# 运行容器：映射端口 6727，挂载配置与数据目录
+# 使用官方镜像并运行（务必 -v 挂载以持久化用户 config）
 docker run -d \
   --name onebots \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
-  onebots
+  ghcr.io/lc-cn/onebots:master
 
 # 查看日志
 docker logs -f onebots
@@ -88,12 +85,12 @@ docker run -d \
 
 | 路径（容器内） | 说明 |
 |----------------|------|
-| `/data/config.yaml` | 主配置文件，**必须**通过卷挂载以便持久化与修改 |
+| `/data/config.yaml` | 用户主配置文件，**必须**通过卷挂载以持久化，否则重启容器后丢失 |
 | `/data/data/` | 数据库与审计日志等，由应用自动创建 |
 
-建议将宿主机目录挂载到容器的 `/data`，例如 `-v $(pwd)/data:/data`，这样：
+**务必**将宿主机目录挂载到容器的 `/data`（如 `-v $(pwd)/data:/data` 或 docker-compose 中的 `./data:/data`），这样：
 
-- 配置文件修改后重启容器即可生效
+- 用户配置 `config.yaml` 持久化在宿主机，重启或重建容器后仍生效
 - 数据库、日志等不会随容器删除而丢失
 
 ## 自定义适配器与协议
