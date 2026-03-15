@@ -14,6 +14,8 @@ export class TelegramBot extends EventEmitter {
     private config: TelegramConfig;
     private me: any = null;
     private initialized: boolean = false;
+    /** grammy Bot 已 init（handleUpdate 前必须，仅 webhook 模式需在首请求时兜底） */
+    private botInited: boolean = false;
 
     constructor(config: TelegramConfig) {
         super();
@@ -169,7 +171,11 @@ export class TelegramBot extends EventEmitter {
             
             // 根据配置选择启动方式
             if (this.config.webhook?.url) {
-                // Webhook 模式
+                // Webhook 模式：grammy 要求先 init 才能 handleUpdate
+                if (typeof this.bot.init === 'function') {
+                    await this.bot.init();
+                    this.botInited = true;
+                }
                 await this.bot.api.setWebhook(this.config.webhook.url, {
                     secret_token: this.config.webhook.secret_token,
                     allowed_updates: this.config.webhook.allowed_updates,
@@ -218,6 +224,11 @@ export class TelegramBot extends EventEmitter {
      */
     async handleWebhookUpdate(update: any): Promise<void> {
         if (!this.initialized) await this.initBot();
+        // grammy 要求 bot 已 init 才能 handleUpdate（start() 未跑到时兜底，只 init 一次）
+        if (!this.botInited && typeof this.bot.init === 'function') {
+            await this.bot.init();
+            this.botInited = true;
+        }
         await this.bot.handleUpdate(update);
     }
 
