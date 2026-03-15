@@ -1,6 +1,6 @@
 {
   "name": "@imhelper/satori-v1",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Satori 协议客户端 SDK",
   "type": "module",
   "main": "lib/index.js",

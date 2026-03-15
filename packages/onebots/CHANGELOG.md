@@ -1,5 +1,14 @@
 # onebots
 
+## 1.0.3
+
+### Patch Changes
+
+- 5d3787b: fix: v1.0.1
+- Updated dependencies [5d3787b]
+  - @onebots/core@1.0.3
+  - @onebots/web@1.0.3
+
 ## 1.0.2
 
 ### Patch Changes

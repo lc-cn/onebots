@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-teams",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "onebots Microsoft Teams适配器",
   "type": "module",
   "main": "lib/index.js",
