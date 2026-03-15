@@ -21,7 +21,8 @@ COPY development ./development
 RUN --mount=type=secret,id=NODE_AUTH_TOKEN \
   printf '//npm.pkg.github.com/:_authToken=%s\n@icqqjs:registry=https://npm.pkg.github.com\n' "$(cat /run/secrets/NODE_AUTH_TOKEN)" > .npmrc && \
   pnpm install --frozen-lockfile
-RUN pnpm build
+# 仅构建网关所需包（跳过 docs：VitePress 需 git，Alpine 镜像未安装且运行时不需要文档）
+RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' build
 
 # 生产依赖（去掉 devDependencies 以减小镜像）
 RUN pnpm prune --prod
