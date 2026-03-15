@@ -20,6 +20,9 @@ jobs:
     permissions:
       contents: write
       id-token: write  # Required for OIDC
+    # 与 Docker 构建一致：从 GitHub Packages 拉取 @icqqjs/icqq 需 GH_PKG_TOKEN
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
