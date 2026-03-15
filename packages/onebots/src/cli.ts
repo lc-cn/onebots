@@ -274,11 +274,14 @@ program
                 path?: string;
                 username?: string;
                 password?: string;
+                access_token?: string;
             };
             const port = config?.port ?? 6727;
             const pathPrefix = config?.path ?? "";
             baseUrl = `http://127.0.0.1:${port}${pathPrefix}`;
-            if (config?.username && config?.password) {
+            if (config?.access_token) {
+                auth = { Authorization: `Bearer ${config.access_token}` };
+            } else if (config?.username && config?.password) {
                 auth = {
                     Authorization: "Basic " + Buffer.from(`${config.username}:${config.password}`).toString("base64"),
                 };

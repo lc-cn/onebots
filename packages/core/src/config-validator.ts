@@ -213,6 +213,10 @@ export const BaseAppConfigSchema: Schema = {
         type: 'string',
         transform: (v: unknown) => (v != null && String(v).trim() !== '' ? String(v) : undefined),
     },
+    access_token: {
+        type: 'string',
+        transform: (v: unknown) => (v != null && String(v).trim() !== '' ? String(v) : undefined),
+    },
     log_level: {
         type: 'string',
         enum: ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'mark', 'off'],

@@ -5,6 +5,9 @@
 
 FROM ghcr.io/lc-cn/onebots:master
 
+# 入口脚本需用 curl 从 Space 仓库拉取 data 备份，Alpine 默认无 curl
+RUN apk add --no-cache curl
+
 # Hugging Face Spaces 默认暴露 7860，由 PORT 环境变量传入
 ENV PORT=7860
 EXPOSE 7860

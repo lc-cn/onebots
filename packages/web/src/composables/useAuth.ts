@@ -90,6 +90,28 @@ export const authFetch = async (
   return response
 }
 
+/** 使用鉴权码登录（Bearer Token，与 config 中 access_token 一致） */
+export const loginWithToken = async (accessToken: string) => {
+  const response = await fetch(buildApiUrl('/api/auth/login'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ access_token: accessToken.trim() })
+  })
+
+  if (!response.ok) {
+    const message = await response.json().catch(() => ({ message: '鉴权码错误' }))
+    return { ok: false, message: message.message || '鉴权码错误' }
+  }
+
+  const result = await response.json()
+  if (result?.token) {
+    setToken(result.token, result.expiresAt, result.refreshToken)
+    return { ok: true, isDefaultCredentials: !!result.isDefaultCredentials }
+  }
+
+  return { ok: false, message: result?.message || '登录失败' }
+}
+
 export const login = async (username: string, password: string) => {
   const response = await fetch(buildApiUrl('/api/auth/login'), {
     method: 'POST',

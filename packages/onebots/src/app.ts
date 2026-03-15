@@ -166,6 +166,51 @@ export class App extends BaseApp {
         }
     }
 
+    /** 将当前配置与整个 data 目录备份到 HF Space 仓库（需 HF_TOKEN、HF_REPO_ID） */
+    private async backupDataToHf(configContent: string): Promise<{ success: boolean; message?: string }> {
+        const hfToken = process.env.HF_TOKEN;
+        const hfRepoId = process.env.HF_REPO_ID;
+        if (!hfToken || !hfRepoId || !/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(hfRepoId)) {
+            return { success: false, message: "未配置 HF_TOKEN 或 HF_REPO_ID" };
+        }
+        const [namespace, repo] = hfRepoId.split("/");
+        const files: { path: string; content: string; encoding?: "utf-8" | "base64" }[] = [
+            { path: "config_backup.yaml", content: configContent },
+        ];
+        try {
+            const dataDir = BaseApp.configDir;
+            if (existsSync(dataDir)) {
+                const tarBuf = execFileSync("tar", ["-czf", "-", "-C", dataDir, "."], {
+                    encoding: "buffer",
+                    maxBuffer: 15 * 1024 * 1024,
+                }) as Buffer;
+                if (tarBuf.length > 0) {
+                    files.push({ path: "data_backup.tar.gz", content: tarBuf.toString("base64"), encoding: "base64" });
+                }
+            }
+            const res = await fetch(`https://huggingface.co/api/spaces/${namespace}/${repo}/commit/main`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${hfToken}`,
+                },
+                body: JSON.stringify({
+                    summary: "onebots data backup",
+                    files,
+                }),
+            });
+            if (!res.ok) {
+                const text = await res.text();
+                this.logger?.warn?.("备份到 HF 仓库失败:", res.status, text);
+                return { success: false, message: `备份失败: ${res.status} ${text}` };
+            }
+            return { success: true };
+        } catch (e) {
+            this.logger?.warn?.("备份到 HF 仓库异常:", e);
+            return { success: false, message: (e as Error).message };
+        }
+    }
+
     async start() {
         const authValidator = createManagedTokenValidator(this.tokenManager, {
             tokenName: 'access_token',
@@ -173,6 +218,9 @@ export class App extends BaseApp {
         });
         const expectedUsername = this.config.username ?? BaseApp.defaultConfig.username;
         const expectedPassword = this.config.password ?? BaseApp.defaultConfig.password;
+        const expectedAccessToken = (this.config as { access_token?: string }).access_token?.trim()
+            || process.env.ONEBOTS_ACCESS_TOKEN?.trim()
+            || undefined;
         const getTokenFromRequest = (request: import('http').IncomingMessage) => {
             const authHeader = request.headers.authorization;
             if (authHeader && typeof authHeader === 'string') {
@@ -186,15 +234,39 @@ export class App extends BaseApp {
                 return undefined;
             }
         };
+        const getTokenFromKoa = (ctx: RouterContext) => {
+            const authHeader = ctx.request.headers.authorization;
+            if (authHeader && typeof authHeader === 'string') {
+                const match = authHeader.match(/^Bearer\s+(.+)$/i);
+                return match ? match[1] : authHeader;
+            }
+            return (ctx.request.query?.access_token as string) || undefined;
+        };
 
         this.router.post("/api/auth/login", (ctx: RouterContext) => {
-            const { username, password } = ctx.request.body as { username?: string; password?: string };
-            if (!username || !password || username !== expectedUsername || password !== expectedPassword) {
+            const body = ctx.request.body as { username?: string; password?: string; access_token?: string };
+            // 鉴权码登录：Bearer 鉴权码，与 config 中 access_token 或环境变量 ONEBOTS_ACCESS_TOKEN 一致即可
+            if (body.access_token != null && body.access_token !== '') {
+                if (expectedAccessToken && body.access_token === expectedAccessToken) {
+                    ctx.body = {
+                        success: true,
+                        token: body.access_token,
+                        expiresAt: null,
+                        refreshToken: null,
+                        isDefaultCredentials: false,
+                    };
+                    return;
+                }
+                ctx.status = 401;
+                ctx.body = { success: false, message: "鉴权码错误" };
+                return;
+            }
+            if (!body.username || !body.password || body.username !== expectedUsername || body.password !== expectedPassword) {
                 ctx.status = 401;
                 ctx.body = { success: false, message: "用户名或密码错误" };
                 return;
             }
-            const tokenInfo = this.tokenManager.generateToken({ username });
+            const tokenInfo = this.tokenManager.generateToken({ username: body.username });
             ctx.body = {
                 success: true,
                 token: tokenInfo.token,
@@ -227,17 +299,23 @@ export class App extends BaseApp {
 
         this.router.use('/api', async (ctx: RouterContext, next) => {
             if (ctx.path === '/api/auth/login' || ctx.path === '/api/auth/refresh') return next();
+            const token = getTokenFromKoa(ctx);
+            if (expectedAccessToken && token === expectedAccessToken) {
+                (ctx as any).state.token = token;
+                (ctx as any).state.tokenInfo = { metadata: { username: 'token' }, expiresAt: null };
+                return next();
+            }
             return authValidator(ctx as any, next as any);
         });
 
         this.router.post("/api/auth/logout", (ctx: RouterContext) => {
             const token = ctx.state.token as string | undefined;
-            if (token) this.tokenManager.revokeToken(token);
+            if (token && token !== expectedAccessToken) this.tokenManager.revokeToken(token);
             ctx.body = { success: true };
         });
 
         this.router.get("/api/auth/me", (ctx: RouterContext) => {
-            const tokenInfo = ctx.state.tokenInfo as { expiresAt?: number; metadata?: Record<string, any> } | undefined;
+            const tokenInfo = ctx.state.tokenInfo as { expiresAt?: number | null; metadata?: Record<string, any> } | undefined;
             ctx.body = {
                 success: true,
                 data: {
@@ -362,6 +440,23 @@ export class App extends BaseApp {
             };
         });
 
+        /** 手动将 data 与配置备份到 HF 仓库（与保存配置时的备份逻辑一致） */
+        this.router.post("/api/system/backup-to-hf", async (ctx: RouterContext) => {
+            try {
+                const configContent = readFileSync(BaseApp.configPath, "utf8");
+                const result = await this.backupDataToHf(configContent);
+                if (result.success) {
+                    ctx.body = { success: true, message: "已备份到仓库" };
+                } else {
+                    ctx.status = 400;
+                    ctx.body = { success: false, message: result.message ?? "备份失败" };
+                }
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: (e as Error).message };
+            }
+        });
+
         /** 重启服务：进程退出后由 Docker 的 restart 策略自动拉起容器；非 Docker 需手动重新启动 */
         this.router.post("/api/system/restart", (ctx: RouterContext) => {
             ctx.body = { success: true, message: "服务即将重启" };
@@ -424,7 +519,8 @@ export class App extends BaseApp {
         const terminalWs = this.router.ws("/api/terminal");
         terminalWs.on("connection", (client, request) => {
             const token = getTokenFromRequest(request);
-            if (!token || !this.tokenManager.validateToken(token).valid) {
+            const valid = !!token && (expectedAccessToken ? token === expectedAccessToken : this.tokenManager.validateToken(token).valid);
+            if (!valid) {
                 client.close(1008, "Unauthorized");
                 return;
             }
@@ -563,42 +659,9 @@ export class App extends BaseApp {
                 const configContent = ctx.request.body as string;
                 fs.writeFileSync(BaseApp.configPath, configContent, "utf8");
                 credentialsWereAutoGenerated = false;
-                // 若在 HF 且配置了凭据，将整个 data 目录与配置同步备份到 Space 仓库（免付费持久化）
-                const hfToken = process.env.HF_TOKEN;
-                const hfRepoId = process.env.HF_REPO_ID;
-                if (hfToken && hfRepoId && /^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(hfRepoId)) {
-                    const [namespace, repo] = hfRepoId.split("/");
-                    const files: { path: string; content: string; encoding?: "utf-8" | "base64" }[] = [
-                        { path: "config_backup.yaml", content: configContent },
-                    ];
-                    try {
-                        const dataDir = BaseApp.configDir;
-                        if (existsSync(dataDir)) {
-                            const tarBuf = execFileSync("tar", ["-czf", "-", "-C", dataDir, "."], {
-                                encoding: "buffer",
-                                maxBuffer: 15 * 1024 * 1024,
-                            }) as Buffer;
-                            if (tarBuf.length > 0) {
-                                files.push({ path: "data_backup.tar.gz", content: tarBuf.toString("base64"), encoding: "base64" });
-                            }
-                        }
-                        const res = await fetch(`https://huggingface.co/api/spaces/${namespace}/${repo}/commit/main`, {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json",
-                                "Authorization": `Bearer ${hfToken}`,
-                            },
-                            body: JSON.stringify({
-                                summary: "onebots data backup",
-                                files,
-                            }),
-                        });
-                        if (!res.ok) {
-                            this.logger?.warn?.("备份到 HF 仓库失败:", res.status, await res.text());
-                        }
-                    } catch (e) {
-                        this.logger?.warn?.("备份到 HF 仓库异常:", e);
-                    }
+                const backupResult = await this.backupDataToHf(configContent);
+                if (!backupResult.success && backupResult.message) {
+                    this.logger?.warn?.(backupResult.message);
                 }
                 ctx.body = { success: true, message: "配置已保存" };
             } catch (e) {
@@ -757,7 +820,8 @@ export function createOnebots(
         console.log("已为你创建数据存储目录", BaseApp.dataDir);
     }
     config = yaml.load(readFileSync(BaseApp.configPath, "utf8")) as BaseApp.Config;
-    if (!config.username || !config.password) {
+    const hasAccessToken = !!(config as { access_token?: string }).access_token?.trim();
+    if ((!config.username || !config.password) && !hasAccessToken) {
         const generatedUser = "onebots_" + randomBytes(4).toString("hex");
         const generatedPass = randomBytes(16).toString("hex");
         (config as Record<string, unknown>).username = generatedUser;

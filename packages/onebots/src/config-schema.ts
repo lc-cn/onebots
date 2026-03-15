@@ -59,8 +59,9 @@ const baseWithLabels: Schema = {
     path: withLabel('path', '服务路径前缀', 'HTTP 服务前缀路径，可为空'),
     database: withLabel('database', '数据库文件', '数据库文件名或路径'),
     timeout: withLabel('timeout', '登录超时(秒)', '账号登录超时秒数'),
-    username: withLabel('username', '管理端用户名', 'Web 管理端登录用户名'),
-    password: withLabel('password', '管理端密码', 'Web 管理端登录密码'),
+    username: withLabel('username', '管理端用户名', 'Web 管理端登录用户名（与鉴权码二选一）'),
+    password: withLabel('password', '管理端密码', 'Web 管理端登录密码（与鉴权码二选一）'),
+    access_token: withLabel('access_token', '管理端鉴权码', 'Bearer 鉴权码，配置后可使用 Authorization: Bearer <鉴权码> 访问 API，无需用户名密码'),
     log_level: withLabel('log_level', '日志等级', 'trace | debug | info | warn | error | fatal | mark | off'),
 };
 

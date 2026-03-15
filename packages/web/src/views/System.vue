@@ -6,6 +6,9 @@
           <el-icon><DataAnalysis /></el-icon>
           系统信息
         </h2>
+        <el-button type="primary" :icon="Upload" :loading="backupLoading" @click="handleBackup">
+          备份到仓库
+        </el-button>
         <el-button type="warning" :icon="RefreshRight" :loading="restartLoading" @click="handleRestart">
           重启服务
         </el-button>
@@ -153,7 +156,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { DataAnalysis, Clock, Histogram, Cpu, InfoFilled, CircleCheckFilled, CircleCloseFilled, RefreshRight } from '@element-plus/icons-vue'
+import { DataAnalysis, Clock, Histogram, Cpu, InfoFilled, CircleCheckFilled, CircleCloseFilled, RefreshRight, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useApi } from '../composables/useApi'
 import { authFetch } from '../composables/useAuth'
@@ -166,6 +169,24 @@ const healthStatus = ref<{ ok: boolean; error?: string }>({ ok: false })
 const readyStatus = ref<{ ok: boolean; error?: string }>({ ok: false })
 const healthLoading = ref(false)
 const restartLoading = ref(false)
+const backupLoading = ref(false)
+
+async function handleBackup() {
+  backupLoading.value = true
+  try {
+    const res = await authFetch(buildApiUrl('/api/system/backup-to-hf'), { method: 'POST' })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok && data?.success) {
+      ElMessage.success(data?.message ?? '已备份到仓库')
+    } else {
+      ElMessage.error(data?.message ?? '备份失败')
+    }
+  } catch (e) {
+    ElMessage.error((e as Error).message ?? '请求失败')
+  } finally {
+    backupLoading.value = false
+  }
+}
 
 async function checkHealth() {
   healthLoading.value = true

@@ -476,6 +476,8 @@ export namespace BaseApp {
         timeout?: number;
         username?: string;
         password?: string;
+        /** 管理端 Bearer 鉴权码，配置后可使用 Authorization: Bearer <access_token> 访问 API，无需用户名密码 */
+        access_token?: string;
         log_level?: LogLevel;
         general?: Protocol.Configs;
     } & KoaOptions & AdapterConfig;
