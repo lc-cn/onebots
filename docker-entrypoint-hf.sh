@@ -2,8 +2,14 @@
 # Hugging Face Spaces 入口：使用 PORT（默认 7860），并确保 config 中端口一致
 set -e
 
-# 确保工作目录为应用根目录，以便 require 能解析 node_modules 与 workspace 包
-cd /app
+# 从 development 目录启动，以便 require 能解析 workspace 的 node_modules（适配器、协议在此）
+cd /app/development
+# 便于排查：若 HF 报找不到适配器/协议，请清除 Space 构建缓存后重新部署，确保拉取到最新基础镜像
+if [ ! -d node_modules ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
+  echo "[onebots] 错误: /app/development/node_modules 不存在或为空，请使用最新的 ghcr.io/lc-cn/onebots 镜像并清除 HF 构建缓存后重试"
+  exit 1
+fi
+export NODE_PATH="/app/development/node_modules"
 
 mkdir -p /data
 HF_PORT="${PORT:-7860}"
@@ -23,4 +29,5 @@ if command -v sed >/dev/null 2>&1; then
   sed -i "s/^port:.*/port: ${HF_PORT}/" /data/config.yaml 2>/dev/null || true
 fi
 
+# onebots 通过 process.cwd()/node_modules 解析适配器，故必须在 development 下执行
 exec node /app/packages/onebots/lib/bin.js "$@"

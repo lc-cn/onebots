@@ -224,9 +224,14 @@ export class App extends BaseApp {
             };
         });
 
-        // WebSocket 日志监听
-        const fileListener = e => {
-            if (e === "change")
+        // WebSocket 日志监听（确保日志文件存在再 watch，避免 ENOENT）
+        if (!existsSync(BaseApp.logFile)) {
+            const dir = path.dirname(BaseApp.logFile);
+            if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+            writeFileSync(BaseApp.logFile, "", "utf8");
+        }
+        const fileListener = (eventType: string) => {
+            if (eventType === "change")
                 this.ws.clients.forEach(async client => {
                     client.send(
                         JSON.stringify({
@@ -236,12 +241,12 @@ export class App extends BaseApp {
                     );
                 });
         };
-        fs.watch(BaseApp.logFile, fileListener);
+        const logWatcher = fs.watch(BaseApp.logFile, fileListener);
         this.once("close", () => {
-            fs.unwatchFile(BaseApp.logFile, fileListener);
+            logWatcher.close();
         });
         process.once("disconnect", () => {
-            fs.unwatchFile(BaseApp.logFile, fileListener);
+            logWatcher.close();
         });
 
         // WebSocket 连接处理
@@ -684,7 +689,7 @@ export function createOnebots(
             files: {
                 type: "file",
                 maxLogSize: 1024 * 1024 * 50,
-                filename: path.join(process.cwd(), "onebots.log"),
+                filename: BaseApp.logFile,
             },
         },
         categories: {

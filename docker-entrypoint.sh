@@ -13,5 +13,6 @@ if [ ! -f /data/config.yaml ]; then
   fi
 fi
 
-# 启动网关（前台）：传递所有参数给 onebots CLI
+# 从 development 目录启动，以便 require 能解析 workspace 的 node_modules（适配器、协议在此）
+cd /app/development
 exec node /app/packages/onebots/lib/bin.js "$@"
