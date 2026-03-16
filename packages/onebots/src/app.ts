@@ -49,6 +49,11 @@ export class App extends BaseApp {
     private logCacheFile: string;
     private logWriteStream: fs.WriteStream;
     private logClients: Set<any> = new Set();
+    private verificationClients: Set<any> = new Set();
+    /** 待处理验证请求（Web 离线时也可稍后拉取完成），key: platform:account_id */
+    private pendingVerifications: Map<string, { payload: Record<string, unknown>; createdAt: number }> = new Map();
+    private static readonly VERIFICATION_TTL_MS = 30 * 60 * 1000; // 30 分钟过期
+    private static readonly MAX_PENDING_VERIFICATIONS = 20; // 最多保留条数，避免堆积过多
     private ptyTerminal: any = null;
     private terminalClients: Set<any> = new Set();
     private tokenManager = initTokenManager({
@@ -142,6 +147,62 @@ export class App extends BaseApp {
                 }
             });
         }
+    }
+
+    /** 将验证请求推送给所有已连接的 verification SSE 客户端 */
+    private broadcastVerification(payload: Record<string, unknown>) {
+        const data = `data: ${JSON.stringify(payload)}\n\n`;
+        this.verificationClients.forEach(client => {
+            try {
+                client.write(data);
+            } catch (e) {
+                this.verificationClients.delete(client);
+            }
+        });
+    }
+
+    /** 存储待处理验证并广播（Web 离线时也会持久化，用户稍后打开页面可拉取完成）；超出上限时剔除最旧的；key 含 type 以便同一账号同时存在 device 与 sms */
+    private storeAndBroadcastVerification(payload: Record<string, unknown>) {
+        const platform = String(payload.platform ?? '');
+        const account_id = String(payload.account_id ?? '');
+        const type = String(payload.type ?? '');
+        if (!platform || !account_id) return;
+        const key = `${platform}:${account_id}:${type}`;
+        const createdAt = Date.now();
+        if (this.pendingVerifications.size >= App.MAX_PENDING_VERIFICATIONS && !this.pendingVerifications.has(key)) {
+            let oldestKey: string | null = null;
+            let oldestTime = Infinity;
+            for (const [k, { createdAt: t }] of this.pendingVerifications) {
+                if (t < oldestTime) {
+                    oldestTime = t;
+                    oldestKey = k;
+                }
+            }
+            if (oldestKey != null) this.pendingVerifications.delete(oldestKey);
+        }
+        this.pendingVerifications.set(key, { payload, createdAt });
+        this.broadcastVerification(payload);
+    }
+
+    /** 返回未过期的待处理验证列表（用于 GET /api/verification/pending） */
+    private getPendingVerificationList(): Record<string, unknown>[] {
+        const now = Date.now();
+        const list: Record<string, unknown>[] = [];
+        for (const [key, { payload, createdAt }] of this.pendingVerifications) {
+            if (now - createdAt <= App.VERIFICATION_TTL_MS) {
+                list.push(payload);
+            } else {
+                this.pendingVerifications.delete(key);
+            }
+        }
+        return list;
+    }
+
+    /** 订阅适配器的 verification:request，用于推送到 Web 并持久化待处理列表 */
+    protected onAdapterCreated(adapter: import("@onebots/core").Adapter): void {
+        adapter.on('verification:request', (payload: Record<string, unknown>) => {
+            this.storeAndBroadcastVerification(payload);
+        });
     }
 
     private cleanupLogCache() {
@@ -644,6 +705,116 @@ export class App extends BaseApp {
                 clearInterval(heartbeat);
                 this.logClients.delete(ctx.res);
             });
+        });
+
+        // 验证流 SSE 端点（登录验证事件推送到 Web）
+        this.router.get("/api/verification/stream", ctx => {
+            ctx.request.socket.setTimeout(0);
+            ctx.req.socket.setNoDelay(true);
+            ctx.req.socket.setKeepAlive(true);
+            ctx.set({
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            });
+            ctx.status = 200;
+            ctx.respond = false;
+            this.verificationClients.add(ctx.res);
+            const heartbeatVerification = setInterval(() => {
+                try {
+                    ctx.res.write(': heartbeat\n\n');
+                } catch (error) {
+                    clearInterval(heartbeatVerification);
+                    this.verificationClients.delete(ctx.res);
+                }
+            }, 30000);
+            ctx.req.on('close', () => {
+                clearInterval(heartbeatVerification);
+                this.verificationClients.delete(ctx.res);
+            });
+        });
+
+        // 订阅已有适配器的验证事件（init 时创建的适配器已通过 onAdapterCreated 订阅，此处为兜底）
+        for (const [, adapter] of this.adapters) {
+            if (!adapter.listenerCount('verification:request')) {
+                adapter.on('verification:request', (payload: Record<string, unknown>) => {
+                    this.storeAndBroadcastVerification(payload);
+                });
+            }
+        }
+
+        // 待处理验证列表（Web 打开页面时拉取，避免离线期间错过验证）
+        this.router.get("/api/verification/pending", (ctx: RouterContext) => {
+            ctx.body = this.getPendingVerificationList();
+        });
+
+        // 请求发送短信验证码（设备锁带手机号时，用户选短信验证前调用）
+        this.router.post("/api/verification/request-sms", async (ctx: RouterContext) => {
+            try {
+                const body = (ctx.request.body as { platform?: string; account_id?: string }) || {};
+                const platform = String(body.platform ?? '');
+                const account_id = String(body.account_id ?? '');
+                if (!platform || !account_id) {
+                    ctx.status = 400;
+                    ctx.body = { success: false, message: '缺少 platform 或 account_id' };
+                    return;
+                }
+                const adapter = this.adapters.get(platform as keyof import("@onebots/core").Adapter.Configs);
+                if (!adapter) {
+                    ctx.status = 404;
+                    ctx.body = { success: false, message: `适配器 ${platform} 不存在` };
+                    return;
+                }
+                const requestSms = (adapter as { requestSmsCode?(a: string): void | Promise<void> }).requestSmsCode;
+                if (typeof requestSms !== 'function') {
+                    ctx.status = 501;
+                    ctx.body = { success: false, message: `适配器 ${platform} 不支持请求短信验证码` };
+                    return;
+                }
+                await Promise.resolve(requestSms.call(adapter, account_id));
+                ctx.body = { success: true };
+            } catch (e) {
+                const err = e as Error;
+                ctx.status = 500;
+                ctx.body = { success: false, message: err?.message ?? '请求失败' };
+            }
+        });
+
+        // 验证提交接口（Web 完成滑块/短信等后提交）
+        this.router.post("/api/verification/submit", async (ctx: RouterContext) => {
+            try {
+                const body = (ctx.request.body as { platform?: string; account_id?: string; type?: string; data?: Record<string, unknown> }) || {};
+                const platform = String(body.platform ?? '');
+                const account_id = String(body.account_id ?? '');
+                const type = String(body.type ?? '');
+                const data = body.data && typeof body.data === 'object' ? body.data : {};
+                if (!platform || !account_id || !type) {
+                    ctx.status = 400;
+                    ctx.body = { success: false, message: '缺少 platform、account_id 或 type' };
+                    return;
+                }
+                const adapter = this.adapters.get(platform as keyof import("@onebots/core").Adapter.Configs);
+                if (!adapter) {
+                    ctx.status = 404;
+                    ctx.body = { success: false, message: `适配器 ${platform} 不存在` };
+                    return;
+                }
+                const submit = (adapter as { submitVerification?(a: string, t: string, d: Record<string, unknown>): void | Promise<void> }).submitVerification;
+                if (typeof submit !== 'function') {
+                    ctx.status = 501;
+                    ctx.body = { success: false, message: `适配器 ${platform} 不支持 Web 验证提交` };
+                    return;
+                }
+                await Promise.resolve(submit.call(adapter, account_id, type, data));
+                this.pendingVerifications.delete(`${platform}:${account_id}:${type}`);
+                ctx.body = { success: true };
+            } catch (e) {
+                const err = e as Error;
+                ctx.status = 500;
+                ctx.body = { success: false, message: err?.message ?? '提交失败' };
+            }
         });
 
         // 配置接口

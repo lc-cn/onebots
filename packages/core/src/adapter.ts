@@ -834,6 +834,17 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
     async setOffline(uin: string) { }
 
     /**
+     * Web 验证提交 - 可选实现。支持 Web 端完成登录验证的适配器实现此方法，
+     * 根据 type 将 data 转交给平台 Bot（如 submitSlider / submitSmsCode）。
+     */
+    submitVerification?(accountId: string, type: string, data: Record<string, unknown>): void | Promise<void>;
+
+    /**
+     * 请求发送短信验证码 - 可选实现。设备锁带手机号时，用户选择短信验证前需先调用此方法。
+     */
+    requestSmsCode?(accountId: string): void | Promise<void>;
+
+    /**
      * 创建账号 - 必须由平台适配器实现
      */
     abstract createAccount(config: Account.Config<T>): Account<T, C>;
@@ -866,6 +877,41 @@ export type AdapterClient<T extends Adapter = Adapter> = T extends Adapter<infer
  */
 export namespace Adapter {
     export interface Configs extends Record<string, any> { }
+
+    /**
+     * 验证请求的展示块（Web 按 type 通用渲染，适配器按需组合）
+     */
+    export type VerificationBlock =
+        | { type: 'image'; base64: string; alt?: string }
+        | { type: 'link'; url: string; label?: string }
+        | { type: 'text'; content: string }
+        | { type: 'input'; key: string; placeholder?: string; maxLength?: number; secret?: boolean };
+
+    /**
+     * 验证请求的展示配置（全平台通用，由适配器提供）
+     */
+    export interface VerificationRequestOptions {
+        blocks?: VerificationBlock[];
+    }
+
+    /**
+     * 统一登录验证请求（适配器 emit('verification:request', payload) 时使用）
+     * hint、options 由适配器提供，Web 仅做通用展示；onApprove/onReject 由前端绑定。
+     */
+    export interface VerificationRequest {
+        platform: string;
+        account_id: string;
+        type: string;
+        /** 说明文案，由适配器提供，适用于全平台 */
+        hint: string;
+        /** 展示配置（链接、图片、输入框等），由适配器提供 */
+        options?: VerificationRequestOptions;
+        /** 为 true 时 Web 显示「发送验证码」按钮，需配合 requestSmsCode 使用 */
+        requestSmsAvailable?: boolean;
+        /** 扩展数据，可选 */
+        data?: Record<string, unknown>;
+        request_id?: string;
+    }
 
     // ============================================
     // 消息相关类型 (7个方法)

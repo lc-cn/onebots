@@ -611,6 +611,14 @@ export class ICQQBot extends EventEmitter {
     }
 
     /**
+     * 请求发送短信验证码（设备锁时可选，先调用此方法再提交验证码）
+     */
+    sendSmsCode(): Promise<void> {
+        if (!this.client) throw new Error('Bot not connected');
+        return this.client.sendSmsCode();
+    }
+
+    /**
      * 提交短信验证码
      */
     submitSmsCode(code: string): void {

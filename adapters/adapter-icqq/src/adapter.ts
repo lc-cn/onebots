@@ -351,20 +351,62 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
 
         bot.on('qrcode', (event: any) => {
             this.logger.info(`ICQQ 请扫描二维码登录`);
-            // 可以通过事件通知前端显示二维码
             this.emit('qrcode', { account_id: config.account_id, image: event.image });
+            const imageBase64 = event.image instanceof Buffer ? event.image.toString('base64') : event.image;
+            this.emit('verification:request', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'qrcode',
+                hint: '请使用手机 QQ 扫描下方二维码登录',
+                options: { blocks: [{ type: 'image', base64: imageBase64, alt: '登录二维码' }] },
+            } as unknown as Adapter.VerificationRequest);
         });
 
         bot.on('slider', (event: any) => {
             this.logger.info(`ICQQ 需要滑块验证: ${event.url}`);
-            // 可以通过事件通知前端进行滑块验证
             this.emit('slider', { account_id: config.account_id, url: event.url });
+            this.emit('verification:request', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'slider',
+                hint: '请在浏览器中打开下方链接完成滑块验证，完成后将获取的 ticket 填入并提交',
+                options: {
+                    blocks: [
+                        { type: 'link', url: event.url, label: event.url },
+                        { type: 'input', key: 'ticket', placeholder: '粘贴 ticket' },
+                    ],
+                },
+            } as unknown as Adapter.VerificationRequest);
         });
 
         bot.on('device', (event: any) => {
             this.logger.info(`ICQQ 需要设备锁验证: ${event.url}`);
-            // 可以通过事件通知前端进行设备锁验证
             this.emit('device', { account_id: config.account_id, url: event.url, phone: event.phone });
+            const blocks: Array<{ type: 'link'; url: string; label?: string } | { type: 'text'; content: string }> = [
+                { type: 'link', url: event.url, label: event.url },
+            ];
+            if (event.phone) blocks.push({ type: 'text', content: `手机号：${event.phone}` });
+            this.emit('verification:request', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'device',
+                hint: '请在浏览器中打开下方链接完成设备锁验证',
+                options: { blocks },
+            } as unknown as Adapter.VerificationRequest);
+            if (event.phone) {
+                this.emit('verification:request', {
+                    platform: 'icqq',
+                    account_id: config.account_id,
+                    type: 'sms',
+                    hint: '使用短信验证：请先点击「发送验证码」，收到后填入 6 位验证码并提交',
+                    requestSmsAvailable: true,
+                    options: {
+                        blocks: [
+                            { type: 'input', key: 'code', placeholder: '6 位短信验证码', maxLength: 6 },
+                        ],
+                    },
+                } as unknown as Adapter.VerificationRequest);
+            }
         });
 
         bot.on('login_error', (event: any) => {
@@ -504,6 +546,39 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         });
 
         return account;
+    }
+
+    /**
+     * Web 验证提交：将前端提交的滑块 ticket 或短信验证码转交给 ICQQ Bot
+     * 支持 data.ticket / data.code（兼容）或通用 data.value
+     */
+    override submitVerification(accountId: string, type: string, data: Record<string, unknown>): void {
+        const account = this.getAccount(accountId);
+        if (!account) {
+            this.logger.warn(`submitVerification: 账号不存在 ${accountId}`);
+            return;
+        }
+        const bot = account.client;
+        const value = typeof data.value === 'string' ? data.value : undefined;
+        if (type === 'slider') {
+            const ticket = (data.ticket ?? value) as string | undefined;
+            if (typeof ticket === 'string') bot.submitSlider(ticket);
+        } else if (type === 'sms') {
+            const code = (data.code ?? value) as string | undefined;
+            if (typeof code === 'string') bot.submitSmsCode(code);
+        } else {
+            this.logger.debug(`submitVerification: 忽略类型 ${type} 或缺少参数`);
+        }
+    }
+
+    /** 请求向密保手机发送短信验证码（设备锁时用户选短信验证前调用） */
+    override requestSmsCode(accountId: string): Promise<void> {
+        const account = this.getAccount(accountId);
+        if (!account) {
+            this.logger.warn(`requestSmsCode: 账号不存在 ${accountId}`);
+            return Promise.resolve();
+        }
+        return account.client.sendSmsCode();
     }
 
     // ============================================

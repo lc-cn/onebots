@@ -11,6 +11,9 @@
           <el-badge :value="onlineBotCount" :hidden="onlineBotCount === 0" type="success">
             <el-button :icon="Connection" circle />
           </el-badge>
+          <el-badge :value="verificationPending.length" :hidden="verificationPending.length === 0" type="warning">
+            <el-button :icon="Warning" circle @click="verification.requestOpenDrawer()" title="待处理验证" />
+          </el-badge>
           <el-switch
             v-model="isDark"
             inline-prompt
@@ -82,16 +85,28 @@
         </router-view>
       </el-main>
     </el-container>
+
+    <!-- 登录验证（滑块/扫码/设备锁/短信等） -->
+    <VerificationPanel
+      :pending="verificationPending"
+      :on-approve="(req, data) => verification.submit(req.platform, req.account_id, req.type, data)"
+      :on-reject="verification.dismiss"
+      :request-sms="verification.requestSms"
+      :should-open-drawer="verificationShouldOpen"
+      :reset-open-drawer="verification.resetOpenDrawer"
+    />
   </el-container>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Monitor, Setting, DataAnalysis, Document, Connection, Moon, Sunny, Expand, Fold, SwitchButton } from '@element-plus/icons-vue'
+import { Monitor, Setting, DataAnalysis, Document, Connection, Moon, Sunny, Expand, Fold, SwitchButton, Warning } from '@element-plus/icons-vue'
 import { useTheme } from '../composables/useTheme'
 import { useApi } from '../composables/useApi'
+import { useVerification } from '../composables/useVerification'
 import { logout } from '../composables/useAuth'
+import VerificationPanel from '../components/VerificationPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,6 +114,9 @@ const currentRoute = computed(() => route.path)
 
 const { isDark, toggleTheme } = useTheme()
 const { onlineBotCount, systemInfo } = useApi()
+const verification = useVerification()
+const verificationPending = computed(() => verification.pending.value)
+const verificationShouldOpen = computed(() => verification.shouldOpenDrawer.value)
 const isCollapse = ref(false)
 
 const handleLogout = async () => {

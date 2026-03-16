@@ -353,10 +353,16 @@ export class BaseApp extends Koa {
     }
     public findOrCreateAdapter<P extends keyof Adapter.Configs>(platform: P) {
         if (this.adapters.has(platform)) return this.adapters.get(platform);
-        const adapter = AdapterRegistry.create(`${platform}`,this);
+        const adapter = AdapterRegistry.create(`${platform}`, this);
         this.adapters.set(platform, adapter);
+        this.onAdapterCreated(adapter);
         return adapter;
     }
+
+    /**
+     * 适配器首次创建后的钩子，子类可覆写以订阅该适配器事件（如 verification:request）
+     */
+    protected onAdapterCreated(_adapter: Adapter): void {}
 
     async start() {
         const stopTimer = this.enhancedLogger.start('Application start');
