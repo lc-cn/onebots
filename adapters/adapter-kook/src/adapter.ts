@@ -284,7 +284,9 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const bot = account.client;
         const guildId = params.group_id.string;
         const guild = await bot.getGuild(guildId);
-
+        if (!guild?.id) {
+            throw new Error(`获取群信息失败：无效的 guild 响应（guild_id=${guildId}）`);
+        }
         return {
             group_id: this.createId(guild.id),
             group_name: guild.name,
@@ -536,7 +538,9 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         const bot = account.client;
         const guild = await bot.getGuild(params.guild_id.string);
-
+        if (!guild?.id) {
+            throw new Error(`获取服务器信息失败：无效的 guild 响应（guild_id=${params.guild_id.string}）`);
+        }
         return {
             guild_id: this.createId(guild.id),
             guild_name: guild.name,

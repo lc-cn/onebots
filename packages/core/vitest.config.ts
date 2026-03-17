@@ -55,8 +55,8 @@ export default defineConfig({
     env: {
       ONEBOTS_URL: process.env.ONEBOTS_URL || 'http://localhost:6727',
       ONEBOTS_WS_URL: process.env.ONEBOTS_WS_URL || 'ws://localhost:6727',
-      PLATFORM: process.env.PLATFORM || 'dingtalk',
-      ACCOUNT_ID: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+      PLATFORM: process.env.PLATFORM || 'kook',
+      ACCOUNT_ID: process.env.ACCOUNT_ID || 'zhin',
       ACCESS_TOKEN: process.env.ACCESS_TOKEN || '',
     },
   }

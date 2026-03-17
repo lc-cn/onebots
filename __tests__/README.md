@@ -9,6 +9,8 @@
 ## 📚 文档索引
 
 - **[📊 测试总览](./TESTING_OVERVIEW.md)** - 完整测试统计和覆盖率报告（139 APIs, 23 文件, 268+ 测试）
+- **[🔐 鉴权与心跳测试依据](./PROTOCOL_AUTH_HEARTBEAT.md)** - 连接鉴权、心跳与协议文档严格对照（OB11/OB12/Milky/Satori）
+- **[☑ 鉴权与心跳逐条清单](./CHECKLIST_AUTH_HEARTBEAT.md)** - 可勾选完成清单，便于回归与审查
 - **[🔐 鉴权测试报告](./AUTH_TESTING_REPORT.md)** - HTTP/WebSocket/WebHook/WS-Reverse 鉴权测试
 - **[📋 OneBot 12 请求头测试](./ONEBOT12_HEADERS_TESTING.md)** - OneBot 12 标准请求头验证
 - **[🥛 Milky V1 测试文档](./MILKY_V1_TESTING.md)** - Milky 协议完整测试指南（59 APIs + 3 事件推送）

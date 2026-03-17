@@ -421,8 +421,15 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         
         // Register HTTP POST endpoint for API calls
         this.router.post(`${this.path}/api/:action`, async (ctx) => {
-            // Verify access token
-            const token = ctx.query.access_token || ctx.headers.authorization?.replace('Bearer ', '');
+            // Milky 通信规范：不支持的 Content-Type 返回 415
+            const contentType = ctx.headers['content-type'] || '';
+            if (!contentType.toLowerCase().includes('application/json')) {
+                ctx.status = 415;
+                return;
+            }
+            // Verify access token（Authorization: Bearer 优先，再 Query）
+            const authHeader = ctx.headers.authorization;
+            const token = (typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : undefined) || ctx.query.access_token;
             if (!this.verifyToken(token as string)) {
                 ctx.status = 401;
                 ctx.body = { status: "failed", retcode: 1403, message: "Unauthorized" };

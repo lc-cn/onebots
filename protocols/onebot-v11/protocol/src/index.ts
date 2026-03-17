@@ -905,9 +905,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
         // Setup heartbeat (only once per protocol instance)
         if (this.config.heartbeat_interval && !this.heartbeatTimer) {
-            // 确保心跳间隔至少为 1000ms（1秒），避免过于频繁
-            const interval = Math.max(this.config.heartbeat_interval, 1000);
-            
+            // 配置为秒，转换为毫秒；至少 1 秒
+            const intervalMs = Math.max(Number(this.config.heartbeat_interval) || 1, 1) * 1000;
             this.heartbeatTimer = setInterval(() => {
                 const heartbeatEvent = this.format("meta_event", {
                     meta_event_type: "heartbeat",
@@ -915,10 +914,10 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                         online: true,
                         good: true,
                     },
-                    interval: interval,
+                    interval: intervalMs,
                 });
                 this.emit("dispatch", JSON.stringify(heartbeatEvent));
-            }, interval);
+            }, intervalMs);
         }
 
         this.logger.info(`WebSocket server listening on ${this.path}`);

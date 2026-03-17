@@ -1,7 +1,12 @@
 /**
  * OneBot 11 WebSocket 鉴权测试
  * 测试正向 WebSocket 的 access_token 鉴权机制
- * 参考: https://github.com/botuniverse/onebot-v11/blob/master/communication/ws.md
+ *
+ * 依据（鉴权）:
+ * - OneBot 11 标准: https://github.com/botuniverse/onebot-11
+ * - WS 鉴权在协议 upgrade 前完成；Query access_token 或 Header Authorization: Bearer
+ * - 鉴权失败须返回 HTTP 401 Unauthorized
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -10,8 +15,8 @@ import { checkServerAvailable } from '../../utils/http-client.js';
 
 const CONFIG = {
   wsUrl: process.env.ONEBOTS_WS_URL || 'ws://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
 };
 
 let serverAvailable = false;

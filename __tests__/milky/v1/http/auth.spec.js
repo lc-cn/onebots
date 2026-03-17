@@ -1,11 +1,12 @@
 /**
  * Milky V1 HTTP 鉴权测试
  * 测试 HTTP API 的 access_token 鉴权机制
- * 参考: https://milky.ntqqrev.org/guide/communication
- * 
- * 鉴权方式:
- * - Authorization Header: Bearer <access_token>
- * - 401 状态码: 鉴权凭据未提供或不匹配
+ *
+ * 依据（鉴权）:
+ * - Milky 通信: https://milky.ntqqrev.org/guide/communication
+ * - Authorization: Bearer {access_token}; 鉴权失败 401
+ * - 415 不支持的 Content-Type; 404 API 不存在; 无参须传 {}
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -13,8 +14,8 @@ import { callMilkyAPI, checkServerAvailable } from '../../utils/http-client.js';
 
 const CONFIG = {
   baseUrl: process.env.ONEBOTS_URL || 'http://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
 };
 
 let serverAvailable = false;
@@ -99,8 +100,8 @@ describe('Milky V1 - HTTP 鉴权测试', () => {
     }, 'get_login_info', {});
 
     console.log('📊 使用 Authorization Header 访问结果:', data);
-    if (status === 0) { console.log("⏭️  跳过：连接失败"); return; }
-      expect(status).toBe(200);
+    if (status === 0) { console.log('⏭️  跳过：连接失败'); return; }
+    expect(status).toBe(200);
     expect(data.status).toBe('ok');
     expect(data.retcode).toBe(0);
   });

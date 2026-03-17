@@ -16,8 +16,8 @@ import { checkServerAvailable } from '../../utils/http-client.js';
 
 const CONFIG = {
   baseUrl: process.env.ONEBOTS_URL || 'http://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
   webhookPort: parseInt(process.env.WEBHOOK_PORT) || 8899,
   monitorDuration: parseInt(process.env.MONITOR_DURATION) || 5000,
 };

@@ -1,6 +1,11 @@
 /**
  * OneBot 11 HTTP Reverse (WebHook) 测试
  * 测试 OneBot 11 的 HTTP POST 推送功能
+ *
+ * 依据（心跳）:
+ * - 元事件心跳: post_type=meta_event, meta_event_type=heartbeat
+ * - 必选字段: interval (number, 毫秒), status (object)
+ * - 见 docs/src/protocol/onebot-v11/event.md、PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';

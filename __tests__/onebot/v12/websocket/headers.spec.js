@@ -1,12 +1,12 @@
 /**
  * OneBot 12 WebSocket Reverse 请求头测试
  * 测试反向 WebSocket 的请求头是否符合 OneBot 12 标准
- * 参考: https://12.onebot.dev/connect/communication/websocket-reverse/
- * 
- * 必需的请求头:
- * - User-Agent: 如 OneBot/12 (qq) Go-LibOneBot/1.0.0
- * - Sec-WebSocket-Protocol: <onebot_version>.<impl> 如 12.onebots
- * - Authorization: Bearer <access_token> (如果配置了 access_token)
+ *
+ * 依据（鉴权与请求头）:
+ * - 12.onebot.dev 反向 WebSocket: https://12.onebot.dev/connect/communication/websocket-reverse/
+ * - 必须: Sec-WebSocket-Protocol: <version>.<impl>; User-Agent
+ * - 若配置 access_token: Authorization: Bearer <token> 或 query access_token
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';

@@ -1,6 +1,11 @@
 /**
  * OneBot 11 WebSocket Reverse 鉴权测试
  * 测试反向 WebSocket 的 access_token 鉴权机制
+ *
+ * 依据（鉴权）:
+ * - OneBot 11 标准: https://github.com/botuniverse/onebot-11
+ * - 反向 WS: Query access_token 或 Header Authorization: Bearer；鉴权失败 401
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';

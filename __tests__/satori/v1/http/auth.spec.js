@@ -1,7 +1,11 @@
 /**
  * Satori V1 HTTP 鉴权测试
  * 测试 Satori 协议的鉴权机制
- * 参考: https://satori.chat/zh-CN/protocol/
+ *
+ * 依据（鉴权与响应格式）:
+ * - Satori 协议: https://satori.chat/zh-CN/protocol/
+ * - Bearer Token 鉴权; 错误响应 { message: string }, 成功 { data: any }
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -9,8 +13,8 @@ import { checkServerAvailable, callSatoriAPI } from '../../utils/http-client.js'
 
 const CONFIG = {
   baseUrl: process.env.ONEBOTS_URL || 'http://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
   token: process.env.SATORI_TOKEN || process.env.ACCESS_TOKEN || '',
 };
 

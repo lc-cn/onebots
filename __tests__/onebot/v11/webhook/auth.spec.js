@@ -1,7 +1,11 @@
 /**
  * OneBot 11 HTTP Reverse (WebHook) 鉴权测试
  * 测试 WebHook 推送时的签名验证机制
- * 参考: https://github.com/botuniverse/onebot-v11/blob/master/communication/http-post.md
+ *
+ * 依据（鉴权）:
+ * - OneBot 11 标准: https://github.com/botuniverse/onebot-11
+ * - HTTP POST 反向推送的 access_token / X-Signature 签名验证
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';

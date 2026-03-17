@@ -49,14 +49,14 @@ export async function httpRequest(config, protocol, version, action, body = {}) 
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(config.timeout),
     });
-    
-    const data = await response.json();
-    return { status: response.status, data };
+
+    const data = await response.json().catch(() => ({}));
+    return { status: response.status, data: data && typeof data === 'object' ? data : {} };
   } catch (error) {
-    return { 
-      status: 0, 
+    return {
+      status: 0,
+      data: {},
       error: error.message,
-      data: null 
     };
   }
 }

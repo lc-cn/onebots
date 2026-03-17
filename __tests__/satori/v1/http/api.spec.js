@@ -15,8 +15,8 @@ import { checkServerAvailable, callSatoriAPI } from '../../utils/http-client.js'
 
 const CONFIG = {
   baseUrl: process.env.ONEBOTS_URL || 'http://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
   token: process.env.SATORI_TOKEN || process.env.ACCESS_TOKEN || '',
 };
 

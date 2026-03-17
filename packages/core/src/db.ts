@@ -95,8 +95,14 @@ export namespace SqliteDB {
             return input;
         }
     }
-    export function formatValue(value:any){
-        return JSON.stringify(value).replace(/"/g,"'");
+    /** 将值格式化为 SQL 字面量（字符串加单引号并转义，数字等直接返回，null/undefined 返回 NULL） */
+    export function formatValue(value: any): string {
+        if (value === undefined || value === null) return 'NULL';
+        if (typeof value === 'number') return String(value);
+        const s = typeof value === 'string' ? value : JSON.stringify(value);
+        if (typeof s !== 'string') return 'NULL';
+        // 字符串必须用单引号包裹，否则 SQL 会将其解析为列名（如 "no such column: zhin"）
+        return "'" + s.replace(/'/g, "''") + "'";
     }
     export type QueryCondition<T extends {}={}>= T & {
         $and?: QueryCondition<T>;
@@ -136,7 +142,7 @@ export namespace SqliteDB {
                     subClauses.push(`<= ${value}`);
                 }else if(key==="$between" && Array.isArray(value) && value.length===2){
                     subClauses.push(`BETWEEN ${value[0]} AND ${value[1]}`);
-                }else if(typeof value==='object' && value === null){
+                }else if (value === undefined || value === null){
                     subClauses.push(`${key} IS NULL`);
                 }else{
                     subClauses.push(`${key} = ${formatValue(value)}`);

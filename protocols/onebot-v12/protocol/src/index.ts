@@ -663,8 +663,9 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
 
         // Register HTTP POST endpoint for API calls
         this.router.post(`${this.path}/:action`, async (ctx) => {
-            // Verify access token
-            const token = ctx.query.access_token || ctx.headers.authorization?.replace('Bearer ', '');
+            // Verify access token（12.onebot.dev：先 Authorization 头，再 access_token Query）
+            const authHeader = ctx.headers.authorization;
+            const token = (typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : undefined) || ctx.query.access_token;
             if (!this.verifyToken(token as string)) {
                 ctx.status = 401;
                 ctx.body = { status: "failed", retcode: 1403, message: "Unauthorized", data: null };
@@ -700,9 +701,10 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         const wss = this.router.ws(this.path);
 
         wss.on("connection", (ws, request) => {
-            // Verify access token
+            // Verify access token（12.onebot.dev：先 Authorization 头，再 access_token Query）
+            const authHeader = request.headers.authorization;
             const url = new URL(request.url!, `ws://localhost`);
-            const token = url.searchParams.get('access_token') || request.headers.authorization?.replace('Bearer ', '');
+            const token = (typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : undefined) || url.searchParams.get('access_token');
 
             if (!this.verifyToken(token as string)) {
                 ws.close(1008, "Unauthorized");
@@ -758,14 +760,13 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
 
         // Setup heartbeat (only once per protocol instance)
         if (this.config.heartbeat_interval && !this.heartbeatTimer) {
-            // 确保心跳间隔至少为 1000ms（1秒），避免过于频繁
-            const interval = Math.max(this.config.heartbeat_interval, 1000);
-            
+            // 配置为秒，转换为毫秒；至少 1 秒
+            const intervalMs = Math.max(Number(this.config.heartbeat_interval) || 1, 1) * 1000;
             this.heartbeatTimer = setInterval(() => {
                 this.dispatchMetaEvent("heartbeat", {
-                    interval: interval,
+                    interval: intervalMs,
                 });
-            }, interval);
+            }, intervalMs);
         }
 
         this.logger.info(`WebSocket server listening on ${this.path}`);

@@ -33,14 +33,14 @@ export async function callMilkyAPI(config, api, params = {}) {
       body: JSON.stringify(params),
       signal: AbortSignal.timeout(config.timeout || 5000),
     });
-    
-    const data = await response.json();
-    return { status: response.status, data };
+
+    const data = await response.json().catch(() => ({}));
+    return { status: response.status, data: data && typeof data === 'object' ? data : {} };
   } catch (error) {
-    return { 
-      status: 0, 
+    return {
+      status: 0,
+      data: {},
       error: error.message,
-      data: null 
     };
   }
 }

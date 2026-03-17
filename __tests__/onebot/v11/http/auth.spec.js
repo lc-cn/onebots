@@ -1,7 +1,12 @@
 /**
  * OneBot 11 HTTP 鉴权测试
  * 测试 HTTP API 的 access_token 鉴权机制
- * 参考: https://github.com/botuniverse/onebot-v11/blob/master/communication/http.md
+ *
+ * 依据（鉴权）:
+ * - OneBot 11 标准: https://github.com/botuniverse/onebot-11
+ * - HTTP 鉴权: Authorization: Bearer <access_token> 或 URL ?access_token=xxx
+ * - 鉴权失败: 401 或 retcode 表示未授权
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -9,8 +14,8 @@ import { httpRequest, checkServerAvailable } from '../../utils/http-client.js';
 
 const CONFIG = {
   baseUrl: process.env.ONEBOTS_URL || 'http://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
 };
 
 let serverAvailable = false;

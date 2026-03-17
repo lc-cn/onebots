@@ -111,7 +111,7 @@ beforeAll(async () => {
       
       // 检查账号是否存在
       const accountCheck = await fetch(
-        `${CONFIG.baseUrl}/${CONFIG.platform}/${CONFIG.accountId}/milky/v1/get_login_info`,
+        `${CONFIG.baseUrl}/${CONFIG.platform}/${CONFIG.accountId}/milky/v1/api/get_login_info`,
         { 
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

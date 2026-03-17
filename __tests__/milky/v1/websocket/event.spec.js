@@ -1,12 +1,11 @@
 /**
  * Milky V1 WebSocket 事件连接测试
  * 测试 WebSocket 事件推送功能
- * 参考: https://milky.ntqqrev.org/guide/communication
- * 
- * WebSocket 连接:
- * - URL: ws://{host}:{port}/event
- * - 鉴权: Authorization: Bearer <access_token> 或 ?access_token=xxx
- * - 事件格式: JSON
+ *
+ * 依据（鉴权）:
+ * - Milky 通信: https://milky.ntqqrev.org/guide/communication
+ * - WS /event; Authorization: Bearer {access_token} 或 query access_token
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -16,8 +15,8 @@ import { checkServerAvailable } from '../../utils/http-client.js';
 const CONFIG = {
   baseUrl: process.env.ONEBOTS_URL || 'http://localhost:6727',
   wsUrl: process.env.ONEBOTS_WS_URL || 'ws://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
   accessToken: process.env.ACCESS_TOKEN || '',
   monitorDuration: parseInt(process.env.MONITOR_DURATION) || 5000,
 };

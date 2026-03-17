@@ -1,6 +1,11 @@
 /**
  * OneBot 12 WebSocket Reverse 测试
  * 测试 OneBot 12 的反向 WebSocket 连接功能
+ *
+ * 依据（心跳）:
+ * - 12.onebot.dev 元事件: type=meta, detail_type=heartbeat
+ * - 必选字段: interval (number, 毫秒)
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';

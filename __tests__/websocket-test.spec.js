@@ -7,8 +7,8 @@ import { WebSocket } from 'ws';
 
 const CONFIG = {
   wsUrl: process.env.ONEBOTS_WS_URL || 'ws://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
   accessToken: process.env.ACCESS_TOKEN || '',
   monitorDuration: parseInt(process.env.MONITOR_DURATION) || 5000, // 默认监听 5 秒（测试模式）
 };

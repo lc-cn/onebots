@@ -45,6 +45,9 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
     // ============================================
 
     createId(id: string | number): CommonTypes.Id {
+        if (id === undefined || id === null) {
+            throw new Error('createId: id 不能为 undefined 或 null');
+        }
         if (typeof id === "number") return { string: id.toString(), number: id, source: id };
         const [existData] = this.db.select('*').from(this.tableName).where({
             string: id

@@ -1,12 +1,11 @@
 /**
  * Satori V1 WebSocket 事件测试
  * 测试 Satori WebSocket 事件推送
- * 参考: https://satori.chat/zh-CN/protocol/events.html
- * 
- * WebSocket 连接:
- * - URL: ws://{host}:{port}/{platform}/{account_id}/satori/v1/events
- * - 鉴权: Authorization: Bearer <token>
- * - 事件格式: Satori Event
+ *
+ * 依据（鉴权）:
+ * - Satori 协议: https://satori.chat/zh-CN/protocol/
+ * - WebSocket 鉴权: Authorization: Bearer <token>
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
@@ -16,8 +15,8 @@ import { checkServerAvailable } from '../../utils/http-client.js';
 const CONFIG = {
   baseUrl: process.env.ONEBOTS_URL || 'http://localhost:6727',
   wsUrl: process.env.ONEBOTS_WS_URL || 'ws://localhost:6727',
-  platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  platform: process.env.PLATFORM || 'kook',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
   token: process.env.SATORI_TOKEN || process.env.ACCESS_TOKEN || '',
   monitorDuration: parseInt(process.env.MONITOR_DURATION) || 5000,
 };

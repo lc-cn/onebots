@@ -1,6 +1,11 @@
 /**
  * OneBot 11 WebSocket Reverse 测试
  * 测试 OneBot 11 的反向 WebSocket 连接功能
+ *
+ * 依据（心跳）:
+ * - 元事件心跳: post_type=meta_event, meta_event_type=heartbeat
+ * - 必选字段: interval (number, 毫秒), status (object)
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';

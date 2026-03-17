@@ -16,7 +16,7 @@ import { callMilkyAPI, checkServerAvailable } from '../../utils/http-client.js';
 const CONFIG = {
   baseUrl: process.env.ONEBOTS_URL || 'http://localhost:6727',
   platform: process.env.PLATFORM || 'dingtalk',
-  accountId: process.env.ACCOUNT_ID || 'dingl4hqvwwxewpk6tcn',
+  accountId: process.env.ACCOUNT_ID || 'zhin',
   accessToken: process.env.ACCESS_TOKEN || '',
   timeout: 5000,
 };

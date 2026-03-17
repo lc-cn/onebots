@@ -1,14 +1,12 @@
 /**
  * OneBot 12 HTTP Webhook 请求头测试
  * 测试 HTTP Webhook 的请求头是否符合 OneBot 12 标准
- * 参考: https://12.onebot.dev/connect/communication/http-webhook/
- * 
- * 必需的请求头:
- * - Content-Type: application/json
- * - User-Agent: 如 OneBot/12 (qq) Go-LibOneBot/1.0.0
- * - X-OneBot-Version: 12
- * - X-Impl: 实现名称
- * - Authorization: Bearer <access_token> (如果配置了 access_token)
+ *
+ * 依据（鉴权与请求头）:
+ * - 12.onebot.dev HTTP Webhook: https://12.onebot.dev/connect/communication/http-webhook/
+ * - 必须: Content-Type, User-Agent, X-OneBot-Version, X-Impl
+ * - 若配置 access_token: Authorization: Bearer <token> 或 query
+ * 详见: __tests__/PROTOCOL_AUTH_HEARTBEAT.md
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
