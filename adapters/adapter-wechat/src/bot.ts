@@ -539,13 +539,21 @@ export class WechatBot extends EventEmitter {
         // POST 请求 - 接收消息/事件
         if (ctx.method === 'POST') {
             let xmlBody = '';
-            
-            // 从原始请求流读取数据（绕过 bodyParser）
-            const chunks: Buffer[] = [];
-            for await (const chunk of ctx.req) {
-                chunks.push(chunk as Buffer);
+
+            // koa-body 会先解析 text/xml 等并消费 Node 请求流，若仍从 ctx.req 读会得到空 body → 误判 400
+            const parsedBody = (ctx.request as { body?: unknown }).body;
+            if (typeof parsedBody === 'string' && parsedBody.length > 0) {
+                xmlBody = parsedBody;
+            } else if (Buffer.isBuffer(parsedBody) && parsedBody.length > 0) {
+                xmlBody = parsedBody.toString('utf-8');
+            } else {
+                // 未命中 koa-body 的 Content-Type（如 application/xml）时，流尚未被读取
+                const chunks: Buffer[] = [];
+                for await (const chunk of ctx.req) {
+                    chunks.push(chunk as Buffer);
+                }
+                xmlBody = Buffer.concat(chunks).toString('utf-8');
             }
-            xmlBody = Buffer.concat(chunks).toString('utf-8');
 
             if (!xmlBody) {
                 ctx.status = 400;
