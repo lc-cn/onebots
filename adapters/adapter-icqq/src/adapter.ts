@@ -63,7 +63,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        await bot.recallMessage(params.message_id.string);
+        await bot.recallMessage(this.coerceId(params.message_id as CommonTypes.Id | string | number).string);
     }
 
     /**
@@ -74,7 +74,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msg = await bot.getMessage(params.message_id.string);
+        const msg = await bot.getMessage(this.coerceId(params.message_id as CommonTypes.Id | string | number).string);
 
         const isGroup = !!msg.group_id;
         return {

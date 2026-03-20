@@ -98,8 +98,8 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
-        const chatId = params.scene_id?.string || '';
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const chatId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
         // 飞书删除消息 API
         const http = bot.getHttpClient();
@@ -114,7 +114,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         // 飞书获取消息 API
         const http = bot.getHttpClient();
@@ -151,7 +151,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         // 解析消息内容
         let text = '';

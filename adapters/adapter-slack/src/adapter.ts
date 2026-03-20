@@ -81,8 +81,8 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
-        const channelId = params.scene_id?.string || '';
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
         if (channelId) {
             await bot.deleteMessage(channelId, msgId);
@@ -105,8 +105,9 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
-        const channelId = (params as any).scene_id?.string || '';
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const rawScene = (params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }).scene_id;
+        const channelId = rawScene != null ? this.coerceId(rawScene as CommonTypes.Id | string | number).string : '';
 
         // 解析消息内容
         let text = '';

@@ -27,7 +27,8 @@ export class WeComAdapter extends Adapter<WeComBot, "wecom"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';

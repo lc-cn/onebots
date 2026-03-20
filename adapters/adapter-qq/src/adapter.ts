@@ -100,9 +100,10 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const messageId = params.message_id.string;
+        const messageId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
         const sceneType = params.scene_type;
-        const sceneId = params.scene_id?.string;
+        const sceneId =
+            params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : undefined;
 
         if (!sceneId || !sceneType) {
             throw new Error("删除消息需要提供 scene_type 和 scene_id");

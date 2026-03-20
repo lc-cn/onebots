@@ -292,13 +292,13 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private async deleteMessage(params: any): Promise<void> {
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: params.message_id,
+            message_id: this.adapter.resolveId(params.message_id),
         });
     }
 
     private async getMessage(params: any): Promise<Milky.MessageInfo> {
         const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: params.message_id,
+            message_id: this.adapter.resolveId(params.message_id),
         });
         return {
             time: msg.time || Math.floor(Date.now() / 1000),
@@ -328,7 +328,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private async getStrangerInfo(params: any): Promise<Milky.User> {
         const info = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: params.user_id,
+            user_id: this.adapter.resolveId(params.user_id),
         });
         return {
             user_id: info.user_id.string,
@@ -347,7 +347,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private async getGroupInfo(params: any): Promise<Milky.GroupInfo> {
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: params.group_id,
+            group_id: this.adapter.resolveId(params.group_id),
         });
         return {
             group_id: info.group_id.string,
@@ -369,8 +369,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private async getGroupMemberInfo(params: any): Promise<Milky.GroupMemberInfo> {
         const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: params.group_id.string,
-            user_id: params.user_id.string,
+            group_id: this.adapter.resolveId(params.group_id),
+            user_id: this.adapter.resolveId(params.user_id),
         });
         return {
             group_id: info.group_id.string,

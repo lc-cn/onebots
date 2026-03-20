@@ -70,8 +70,9 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const messageId = params.message_id.string;
-        const channelId = params.scene_id?.string;
+        const messageId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const channelId =
+            params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
         if (!channelId) {
             throw new Error('删除消息需要提供 scene_id (频道ID)');
@@ -88,8 +89,9 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const messageId = params.message_id.string;
-        const channelId = params.scene_id?.string;
+        const messageId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const channelId =
+            params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
         if (!channelId) {
             throw new Error('获取消息需要提供 scene_id (频道ID)');
@@ -108,7 +110,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const channelId = params.scene_id.string;
+        const channelId = this.coerceId(params.scene_id as CommonTypes.Id | string | number).string;
         const limit = params.limit || 50;
 
         const messages = await bot.getMessageHistory(channelId, limit);
@@ -336,8 +338,8 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const guildId = params.group_id.string;
-        const userId = params.user_id.string;
+        const guildId = this.coerceId(params.group_id as CommonTypes.Id | string | number).string;
+        const userId = this.coerceId(params.user_id as CommonTypes.Id | string | number).string;
 
         await bot.setMemberNickname(guildId, userId, params.card || null);
     }
@@ -350,8 +352,8 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const channelId = params.group_id.string;
-        const messageId = params.message_id.string;
+        const channelId = this.coerceId(params.group_id as CommonTypes.Id | string | number).string;
+        const messageId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
         
         // Discord 使用 Unicode emoji 或自定义 emoji 格式
         const emoji = String.fromCodePoint(params.face_id);

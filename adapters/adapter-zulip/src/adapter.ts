@@ -31,7 +31,8 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';
@@ -100,7 +101,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const messageId = parseInt(params.message_id.string);
+        const messageId = parseInt(this.coerceId(params.message_id as CommonTypes.Id | string | number).string, 10);
         await bot.deleteMessage(messageId);
     }
 
@@ -120,7 +121,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const messageId = parseInt(params.message_id.string);
+        const messageId = parseInt(this.coerceId(params.message_id as CommonTypes.Id | string | number).string, 10);
 
         // 解析消息内容
         let text = '';

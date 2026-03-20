@@ -111,8 +111,8 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = parseInt(params.message_id.string);
-        const chatId = params.scene_id?.string || '';
+        const msgId = parseInt(this.coerceId(params.message_id as CommonTypes.Id | string | number).string, 10);
+        const chatId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
         if (chatId) {
             await bot.deleteMessage(chatId, msgId);
@@ -136,8 +136,9 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = parseInt(params.message_id.string);
-        const chatId = (params as any).scene_id?.string || '';
+        const msgId = parseInt(this.coerceId(params.message_id as CommonTypes.Id | string | number).string, 10);
+        const rawScene = (params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }).scene_id;
+        const chatId = rawScene != null ? this.coerceId(rawScene as CommonTypes.Id | string | number).string : '';
 
         // 解析消息内容
         let text = '';

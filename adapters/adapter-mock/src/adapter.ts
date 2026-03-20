@@ -35,7 +35,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        await bot.deleteMessage(params.message_id.string);
+        await bot.deleteMessage(this.coerceId(params.message_id as CommonTypes.Id | string | number).string);
     }
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {

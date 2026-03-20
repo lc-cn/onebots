@@ -75,8 +75,8 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
-        const conversationId = params.scene_id?.string || '';
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const conversationId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
         await bot.deleteMessage(conversationId, msgId);
     }
@@ -97,7 +97,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         // 解析消息内容
         let text = '';

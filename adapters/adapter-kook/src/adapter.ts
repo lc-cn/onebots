@@ -92,12 +92,12 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         // 根据场景类型删除消息
         // 需要从消息中获取 channel_id，这里简化处理
         // 实际应该从消息缓存或数据库中获取
-        const channelId = params.scene_id?.string || '';
+        const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
         if (channelId) {
             await bot.deleteMessage(channelId, msgId);
         }
@@ -111,8 +111,8 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
-        const channelId = params.scene_id?.string || '';
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
         const msg = await bot.getMessage(channelId, msgId);
 
@@ -141,7 +141,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msgId = params.message_id.string;
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         // 解析消息内容
         let content = '';
@@ -155,7 +155,8 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         // 更新消息需要 channelId，但参数中没有，尝试从消息中获取
         // 如果无法获取，则使用第一个可用的频道（简化处理）
-        const channelId = (params as any).scene_id?.string || '';
+        const rawScene = (params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }).scene_id;
+        const channelId = rawScene != null ? this.coerceId(rawScene as CommonTypes.Id | string | number).string : '';
         if (!channelId) {
             throw new Error('更新消息需要 channel_id，但参数中未提供');
         }
