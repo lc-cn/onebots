@@ -262,11 +262,14 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         const { user_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
         
-        return  await this.adapter.sendMessage(this.account.account_id, {
+        const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
             scene_id: this.adapter.resolveId(user_id),
             message: segments,
         });
+        return {
+            message_id: result.message_id.number,
+        };
     }
 
     private async sendGroupMsg(params: any): Promise<any> {
@@ -298,7 +301,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async deleteMsg(params: any): Promise<void> {
         const { message_id } = params;
-        
+
         await this.adapter.deleteMessage(this.account.account_id, {
             message_id: this.adapter.resolveId(message_id),
         });
@@ -306,7 +309,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getMsg(params: any): Promise<any> {
         const { message_id } = params;
-        
+
         const msg = await this.adapter.getMessage(this.account.account_id, {
             message_id: this.adapter.resolveId(message_id),
         });
@@ -403,7 +406,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     
     private async getLoginInfo(params: any): Promise<any> {
         return {
-            user_id: Number(this.account.account_id),
+            user_id: this.adapter.resolveId(this.account.account_id).number,
             nickname: this.account.account_id,
         };
     }
@@ -427,7 +430,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         const friends = await this.adapter.getFriendList(this.account.account_id);
         
         return friends.map(friend => ({
-            user_id: Number(friend.user_id),
+            user_id: friend.user_id.number,
             nickname: friend.user_name,
             remark: friend.remark || "",
         }));
@@ -593,7 +596,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         try {
             const base = {
                 time: Math.floor(event.timestamp / 1000),
-                self_id: this.transformToInt(this.account.account_id),
+                self_id: this.adapter.resolveId(this.account.account_id).number,
             };
 
             if (event.type === "message") {
@@ -603,7 +606,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                     messageType = "group";
                 }
                 
-                // 确保 message_id 和 sender.id 有 number 属性
+                // 确保 message_id 和 sender.id 输出为框架层 Id.number（与 V11 数值 ID 对齐）
                 const messageIdObj = event.message_id as CommonTypes.Id;
                 const senderIdObj = event.sender?.id as CommonTypes.Id;
                 
@@ -722,7 +725,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
      * Transform string message ID to integer (V11 requirement)
      */
     private transformToInt(messageId: string | number | CommonTypes.Id): number {
-        // 如果是 Id 对象，使用其 number 属性
+        // 若已是框架层 Id，优先使用其 number（与 id_map / V11 数值域一致）
         if (messageId && typeof messageId === 'object' && 'number' in messageId) {
             return (messageId as CommonTypes.Id).number;
         }
