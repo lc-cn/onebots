@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TeamsBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { TeamsConfig, TeamsEvent } from "./types.js";
 
 export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
@@ -27,7 +27,8 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, message } = params;
+        const { message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';
@@ -58,7 +59,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         }
 
         // 发送消息
-        const conversationId = scene_id.string;
+        const conversationId = sceneId.string;
         const result = await bot.sendMessage(conversationId, text, options);
 
         return {

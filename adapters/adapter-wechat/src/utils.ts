@@ -67,9 +67,11 @@ export function parseXML(xml: string): Record<string, any> {
 }
 
 /**
- * 构建被动回复 XML
+ * 构建被动回复 XML（下行消息）
+ * @param toWechatUser 接收方：用户 openid（与上行包里的 FromUserName 相同）
+ * @param fromOfficialAccount 发送方：公众号原始 ID（与上行包里的 ToUserName 相同）
  */
-export function buildPassiveReply(toUser: string, fromUser: string, message: {
+export function buildPassiveReply(toWechatUser: string, fromOfficialAccount: string, message: {
     type: 'text' | 'image' | 'voice' | 'video' | 'music' | 'news';
     content?: string;
     mediaId?: string;
@@ -129,8 +131,8 @@ export function buildPassiveReply(toUser: string, fromUser: string, message: {
     }
 
     return `<xml>
-        <ToUserName><![CDATA[${toUser}]]></ToUserName>
-        <FromUserName><![CDATA[${fromUser}]]></FromUserName>
+        <ToUserName><![CDATA[${toWechatUser}]]></ToUserName>
+        <FromUserName><![CDATA[${fromOfficialAccount}]]></FromUserName>
         <CreateTime>${timestamp}</CreateTime>
         <MsgType><![CDATA[${message.type}]]></MsgType>
         ${contentXml}

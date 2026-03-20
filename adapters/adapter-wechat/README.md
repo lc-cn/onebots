@@ -117,6 +117,26 @@ http://your-domain:6727/wechat/{account_id}
 http://example.com:6727/wechat/my_wechat_mp
 ```
 
+## 被动回复：sendMessage 如何通过 Webhook 回到公众号会话
+
+微信 **被动回复** 的规则是：在用户发消息的 **同一次 HTTP POST** 响应体里返回 XML（不能靠另起一个请求把「回复」推给微信）。时限约 **5 秒**，实现上本适配器在 Webhook 里 **最多等待约 4 秒** 收集回复再结束响应。
+
+### 链路（本仓库已实现）
+
+1. **微信** `POST .../webhook` 推送用户消息 XML → `WechatBot.handleWebhook` 解析后写入 `messageContext`（按用户 openid 记录上行里的 `FromUserName` / `ToUserName`）。
+2. 同步 `emit('message', ...)` → 适配器转成 **CommonEvent** → 各协议/Milky 等可异步处理。
+3. 协议层调用 **`Adapter.sendMessage`**（私聊 `scene_id` 为用户 **openid**）→ `WechatBot.sendText` / 其他发送方法。
+4. 若在 **约 5 秒内** 且未设 `forceActive`：不向 `custom/send` 发请求，而是把拼好的 **被动回复 XML** 放入 `passiveReplyQueue`（按 openid）。
+5. `handleWebhook` 里 **`waitForPassiveReply(openid)`** 轮询队列，取到 XML 后作为 **`ctx.body`** 返回（`Content-Type: application/xml`），微信再把内容下发给用户。
+6. 若已超过窗口或非被动路径：走 **客服消息** `POST /cgi-bin/message/custom/send`（需 **服务号** 等权限，且有 48 小时等限制）。
+
+### 接入侧注意
+
+- **必须在用户发消息后的几秒钟内** 完成 `sendMessage`（从收到 Webhook 开始算），被动回复才能进队并被写进本次响应。
+- 若业务很慢（例如先 HTTP 出去再处理），被动回复往往来不及，应依赖 **客服消息** 或 **异步客服**，或缩短链路。
+- 需要强制走接口而不是被动回复时，可在参数里传 `forceActive: true`（见 `sendMessage` 实现中的扩展字段）。
+- **安全模式/加密** 下，被动回复 XML 若也需加密，需按微信文档对返回体再包一层（当前实现以明文或文档约定为准时，请对照后台「消息加解密」配置）。
+
 ## 支持的消息类型
 
 ### 接收消息

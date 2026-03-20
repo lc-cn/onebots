@@ -10,7 +10,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { KookBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { KookConfig, KookEvent, KookMessageType } from "./types.js";
 import { parseKMarkdown, mentionUser, mentionAll, mentionHere } from "./utils.js";
 
@@ -33,7 +33,8 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let content = '';
@@ -67,13 +68,13 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         if (scene_type === 'private' || scene_type === 'direct') {
             // 私聊消息
-            result = await bot.sendDirectMessage(scene_id.string, content);
+            result = await bot.sendDirectMessage(sceneId.string, content);
         } else if (scene_type === 'channel') {
             // 频道消息
-            result = await bot.sendChannelMessage(scene_id.string, content);
+            result = await bot.sendChannelMessage(sceneId.string, content);
         } else if (scene_type === 'group') {
             // 群组消息也发送到频道
-            result = await bot.sendChannelMessage(scene_id.string, content);
+            result = await bot.sendChannelMessage(sceneId.string, content);
         } else {
             throw new Error(`KOOK 不支持的消息场景类型: ${scene_type}`);
         }

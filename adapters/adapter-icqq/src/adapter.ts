@@ -34,11 +34,12 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 转换消息格式
         const icqqMessage = this.buildICQQMessage(message);
-        const targetId = parseInt(scene_id.string);
+        const targetId = parseInt(sceneId.string);
 
         let result: any;
         if (scene_type === 'private') {

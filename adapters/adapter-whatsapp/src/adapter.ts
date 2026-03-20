@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { WhatsAppBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { RouterContext, Next } from "onebots";
 import type {
     WhatsAppConfig,
@@ -32,12 +32,13 @@ export class WhatsAppAdapter extends Adapter<WhatsAppBot, "whatsapp"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, message } = params;
+        const { message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';
         const sendParams: WhatsAppSendMessageParams = {
-            to: scene_id.string, // WhatsApp 电话号码（带国家代码）
+            to: sceneId.string, // WhatsApp 电话号码（带国家代码）
             type: 'text',
         };
 

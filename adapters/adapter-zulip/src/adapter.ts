@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { ZulipBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type {
     ZulipConfig,
     ZulipMessageEvent,
@@ -57,7 +57,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         // 解析 scene_id
         // stream 消息格式: "stream_name" 或 "stream_name/topic"
         // private 消息格式: "email" 或 "email1,email2"
-        const sceneIdStr = scene_id.string;
+        const sceneIdStr = sceneId.string;
         let sendParams: ZulipSendMessageParams;
 
         if (scene_type === 'group' || sceneIdStr.includes('/')) {

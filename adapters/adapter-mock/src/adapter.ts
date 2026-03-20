@@ -18,11 +18,12 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         const content = this.buildMessageContent(message);
         const type = scene_type === "private" ? "private" : "group";
-        const result = await bot.sendMessage(scene_id.string, content, type);
+        const result = await bot.sendMessage(sceneId.string, content, type);
 
         return {
             message_id: this.createId(result.message_id),

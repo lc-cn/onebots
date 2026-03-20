@@ -76,6 +76,23 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
         return this.createId(id);
     }
 
+    /**
+     * 将协议传入的 scene_id / user_id 归一为 CommonTypes.Id。
+     * - 事件侧经 createId 上报的 Id：直接可用，.string / .source 存平台原始标识。
+     * - Milky 等若传入 JSON 原始 string/number：需 resolveId 查表或建档，才能与 passiveReply 等场景用的 openid 一致。
+     */
+    protected coerceId(value: CommonTypes.Id | string | number): CommonTypes.Id {
+        if (
+            typeof value === "object" &&
+            value !== null &&
+            typeof (value as CommonTypes.Id).string === "string" &&
+            typeof (value as CommonTypes.Id).number === "number"
+        ) {
+            return value as CommonTypes.Id;
+        }
+        return this.resolveId(value as string | number);
+    }
+
     // ============================================
     // 消息相关方法 (Message - 7个)
     // ============================================

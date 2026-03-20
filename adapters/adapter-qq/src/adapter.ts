@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { QQBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type {
     QQConfig,
     QQMessageEvent,
@@ -41,7 +41,8 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 构建消息内容
         const content = this.buildMessageContent(message);
@@ -58,7 +59,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
         switch (scene_type) {
             case "group":
                 // QQ群消息
-                result = await bot.sendGroupMessage(scene_id.string, {
+                result = await bot.sendGroupMessage(sceneId.string, {
                     ...sendParams,
                     msg_type: 0, // 文本消息
                 });
@@ -66,7 +67,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
                 
             case "private":
                 // 单聊消息 (C2C)
-                result = await bot.sendC2CMessage(scene_id.string, {
+                result = await bot.sendC2CMessage(sceneId.string, {
                     ...sendParams,
                     msg_type: 0,
                 });
@@ -74,12 +75,12 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
                 
             case "channel":
                 // 频道消息
-                result = await bot.sendChannelMessage(scene_id.string, sendParams);
+                result = await bot.sendChannelMessage(sceneId.string, sendParams);
                 break;
                 
             case "direct":
                 // 频道私信
-                result = await bot.sendDMSMessage(scene_id.string, sendParams);
+                result = await bot.sendDMSMessage(sceneId.string, sendParams);
                 break;
                 
             default:

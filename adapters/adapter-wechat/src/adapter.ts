@@ -9,7 +9,7 @@ import { Account,AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { WechatBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { WechatConfig } from "./types.js";
 
 export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
@@ -35,13 +35,15 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         if (scene_type !== "private") {
             throw new Error(`微信公众号只支持私聊消息 (private)，不支持 ${scene_type}`);
         }
 
-        const openid = scene_id.string;
+        // id_map.string 存的是微信 openid；与 webhook 里 messageContext 的键一致
+        const openid = sceneId.string;
         let messageId: string;
 
         // 检查是否强制使用客服消息

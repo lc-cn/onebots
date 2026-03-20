@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { DingTalkBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { DingTalkConfig, DingTalkEvent } from "./types.js";
 
 export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
@@ -27,7 +27,8 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';
@@ -68,7 +69,7 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
             receiveIdType = 'chat';
         }
 
-        const result = await bot.sendMessage(scene_id.string, receiveIdType, content, 'text');
+        const result = await bot.sendMessage(sceneId.string, receiveIdType, content, 'text');
 
         // 钉钉返回的是 task_id，不是 message_id，这里使用 task_id
         return {

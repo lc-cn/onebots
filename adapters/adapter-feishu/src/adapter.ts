@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { FeishuBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import { FeishuEndpoint, type FeishuConfig, type FeishuEvent } from "./types.js";
 
 export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
@@ -44,7 +44,8 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';
@@ -82,7 +83,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             receiveIdType = 'chat_id';
         }
 
-        const result = await bot.sendMessage(scene_id.string, receiveIdType, content, 'text');
+        const result = await bot.sendMessage(sceneId.string, receiveIdType, content, 'text');
 
         return {
             message_id: this.createId(result.data.message_id),

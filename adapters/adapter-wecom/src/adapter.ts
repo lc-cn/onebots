@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { WeComBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { WeComConfig, WeComEvent, WeComSendMessageRequest } from "./types.js";
 
 export class WeComAdapter extends Adapter<WeComBot, "wecom"> {
@@ -38,10 +38,10 @@ export class WeComAdapter extends Adapter<WeComBot, "wecom"> {
 
         // 根据场景类型设置接收者
         if (scene_type === 'private' || scene_type === 'direct') {
-            request.touser = scene_id.string;
+            request.touser = sceneId.string;
         } else if (scene_type === 'group') {
             // 企业微信群聊通过 toparty 或 totag
-            request.toparty = scene_id.string;
+            request.toparty = sceneId.string;
         }
 
         for (const seg of message) {

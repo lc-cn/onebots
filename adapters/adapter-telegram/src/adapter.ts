@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TelegramBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { TelegramConfig } from "./types.js";
 
 export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
@@ -27,7 +27,8 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';
@@ -49,7 +50,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
                 // 图片需要单独发送
                 if (seg.data.url || seg.data.file) {
                     const photo = seg.data.url || seg.data.file;
-                    const chatId = scene_id.string;
+                    const chatId = sceneId.string;
                     const result = await bot.sendPhoto(chatId, photo, {
                         caption: text || undefined,
                     });
@@ -60,7 +61,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             } else if (seg.type === 'video') {
                 if (seg.data.url || seg.data.file) {
                     const video = seg.data.url || seg.data.file;
-                    const chatId = scene_id.string;
+                    const chatId = sceneId.string;
                     const result = await bot.sendVideo(chatId, video, {
                         caption: text || undefined,
                     });
@@ -71,7 +72,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             } else if (seg.type === 'audio') {
                 if (seg.data.url || seg.data.file) {
                     const audio = seg.data.url || seg.data.file;
-                    const chatId = scene_id.string;
+                    const chatId = sceneId.string;
                     const result = await bot.sendAudio(chatId, audio, {
                         caption: text || undefined,
                     });
@@ -82,7 +83,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             } else if (seg.type === 'file') {
                 if (seg.data.url || seg.data.file) {
                     const document = seg.data.url || seg.data.file;
-                    const chatId = scene_id.string;
+                    const chatId = sceneId.string;
                     const result = await bot.sendDocument(chatId, document, {
                         caption: text || undefined,
                     });
@@ -94,7 +95,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         }
 
         // 发送文本消息
-        const chatId = scene_id.string;
+        const chatId = sceneId.string;
         const result = await bot.sendMessage(chatId, text, options);
 
         return {

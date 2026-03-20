@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { SlackBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { SlackConfig, SlackEvent } from "./types.js";
 
 export class SlackAdapter extends Adapter<SlackBot, "slack"> {
@@ -27,7 +27,8 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';
@@ -64,7 +65,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         }
 
         // 发送消息
-        const channelId = scene_id.string;
+        const channelId = sceneId.string;
         const result = await bot.sendMessage(channelId, text, options);
 
         return {

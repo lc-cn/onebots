@@ -133,7 +133,8 @@ export class WechatBot extends EventEmitter {
         
         // 如果5秒内收到过消息且未强制主动发送，使用被动回复
         if (!forceActive && context && now - context.timestamp < 5000) {
-            const replyXml = buildPassiveReply(context.toUser, context.fromUser, {
+            // 被动回复 XML：ToUserName=收消息的用户 openid，FromUserName=公众号原始 ID（与上行 XML 中的 From/To 对调）
+            const replyXml = buildPassiveReply(context.fromUser, context.toUser, {
                 type: 'text',
                 content,
             });
@@ -181,7 +182,7 @@ export class WechatBot extends EventEmitter {
         
         // 被动回复
         if (!forceActive && context && now - context.timestamp < 5000) {
-            const replyXml = buildPassiveReply(context.toUser, context.fromUser, {
+            const replyXml = buildPassiveReply(context.fromUser, context.toUser, {
                 type: 'image',
                 mediaId,
             });
@@ -209,7 +210,7 @@ export class WechatBot extends EventEmitter {
         
         // 被动回复
         if (!forceActive && context && now - context.timestamp < 5000) {
-            const replyXml = buildPassiveReply(context.toUser, context.fromUser, {
+            const replyXml = buildPassiveReply(context.fromUser, context.toUser, {
                 type: 'voice',
                 mediaId,
             });
@@ -243,7 +244,7 @@ export class WechatBot extends EventEmitter {
         
         // 被动回复
         if (!forceActive && context && now - context.timestamp < 5000) {
-            const replyXml = buildPassiveReply(context.toUser, context.fromUser, {
+            const replyXml = buildPassiveReply(context.fromUser, context.toUser, {
                 type: 'video',
                 mediaId,
                 title,
@@ -285,7 +286,7 @@ export class WechatBot extends EventEmitter {
         
         // 被动回复
         if (!forceActive && context && now - context.timestamp < 5000) {
-            const replyXml = buildPassiveReply(context.toUser, context.fromUser, {
+            const replyXml = buildPassiveReply(context.fromUser, context.toUser, {
                 type: 'music',
                 title,
                 description,
@@ -332,7 +333,7 @@ export class WechatBot extends EventEmitter {
         
         // 被动回复
         if (!forceActive && context && now - context.timestamp < 5000) {
-            const replyXml = buildPassiveReply(context.toUser, context.fromUser, {
+            const replyXml = buildPassiveReply(context.fromUser, context.toUser, {
                 type: 'news',
                 articles,
             });

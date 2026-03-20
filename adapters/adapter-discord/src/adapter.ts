@@ -29,10 +29,11 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, scene_type, message } = params;
+        const { scene_type, message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         let messageId: string;
-        const channelId = scene_id.string;
+        const channelId = sceneId.string;
 
         // 构建消息内容
         const { content, embeds } = this.buildDiscordMessage(message);

@@ -267,7 +267,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async sendPrivateMessage(params: any): Promise<Milky.SendMessageResult> {
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
-            scene_id: params.user_id,
+            scene_id: this.adapter.resolveId(params.user_id),
             message: params.message,
         });
         return { message_id: result.message_id.string };
@@ -276,7 +276,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async sendGroupMessage(params: any): Promise<Milky.SendMessageResult> {
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
-            scene_id: params.group_id,
+            scene_id: this.adapter.resolveId(params.group_id),
             message: params.message,
         });
         return { message_id: result.message_id.string };

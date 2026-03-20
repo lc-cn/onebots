@@ -6,7 +6,7 @@ import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { EmailBot } from "./bot.js";
-import { CommonEvent } from "onebots";
+import { CommonEvent, type CommonTypes } from "onebots";
 import type { EmailConfig, EmailMessage } from "./types.js";
 
 export class EmailAdapter extends Adapter<EmailBot, "email"> {
@@ -27,7 +27,8 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_id, message } = params;
+        const { message } = params;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
         let text = '';
@@ -82,7 +83,7 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
         }
 
         // 发送邮件
-        const to = scene_id.string; // 收件人邮箱地址
+        const to = sceneId.string; // 收件人邮箱地址
         const messageId = await bot.sendEmail({
             to,
             subject: `来自 ${account.nickname || uin} 的消息`,
