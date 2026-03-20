@@ -3,7 +3,7 @@
  * 继承 Adapter 基类，实现 ICQQ 平台功能
  */
 import { Buffer } from "node:buffer";
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
+import { Account, AdapterRegistry, AccountStatus, unixSecondsToEventMs } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { ICQQBot, segment } from "./bot.js";
@@ -79,7 +79,8 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         const isGroup = !!msg.group_id;
         return {
             message_id: this.createId(msg.message_id),
-            time: msg.time * 1000,
+            // MessageInfo.time 约定为 Unix 秒（与 OneBot get_msg 等一致）
+            time: msg.time,
             sender: {
                 scene_type: isGroup ? 'group' : 'private',
                 sender_id: this.createId(msg.user_id.toString()),
@@ -429,7 +430,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.message_id),
-                timestamp: event.time * 1000,
+                timestamp: unixSecondsToEventMs(event.time),
                 platform: 'icqq',
                 bot_id: this.createId(config.account_id),
                 type: 'message',
@@ -462,7 +463,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.message_id),
-                timestamp: event.time * 1000,
+                timestamp: unixSecondsToEventMs(event.time),
                 platform: 'icqq',
                 bot_id: this.createId(config.account_id),
                 type: 'message',
@@ -489,7 +490,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         bot.on('group_increase', (event: any) => {
             const noticeEvent: CommonEvent.Notice = {
                 id: this.createId(`${event.group_id}_${event.user_id}_${event.time}`),
-                timestamp: event.time * 1000,
+                timestamp: unixSecondsToEventMs(event.time),
                 platform: 'icqq',
                 bot_id: this.createId(config.account_id),
                 type: 'notice',
@@ -512,7 +513,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         bot.on('group_decrease', (event: any) => {
             const noticeEvent: CommonEvent.Notice = {
                 id: this.createId(`${event.group_id}_${event.user_id}_${event.time}`),
-                timestamp: event.time * 1000,
+                timestamp: unixSecondsToEventMs(event.time),
                 platform: 'icqq',
                 bot_id: this.createId(config.account_id),
                 type: 'notice',

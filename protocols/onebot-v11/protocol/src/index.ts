@@ -815,8 +815,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
             }
 
             const action = ctx.params.action;
-            const params = (ctx.request as any).body;
-            
+            const params = (ctx.request as any).body ?? {};
+
             this.logger.debug(`[OneBot V11] Processing action: ${action}`, params);
 
             try {

@@ -712,7 +712,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             }
 
             const method = ctx.params.method;
-            const params = (ctx.request as any).body;
+            const params = (ctx.request as any).body ?? {};
 
             try {
                 const result = await this.apply(method, params);

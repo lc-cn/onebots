@@ -97,9 +97,11 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=an
         return this.adapter.getFriendList(this.account_id);
     }
 
-    async dispatch(commonEvent: CommonEvent.Base) {
+    /**
+     * 将通用事件同步派发到本账号绑定的各协议（协议内自行 catch，避免一次失败阻断其它协议）
+     */
+    dispatch(commonEvent: CommonEvent.Base): void {
         this.logger.debug(`Dispatching event: ${commonEvent.type} to ${this.protocols.length} protocol(s)`);
-        // Each protocol instance formats the common event to its own standard
         for (const protocol of this.protocols) {
             this.logger.debug(`Dispatching to protocol: ${protocol.name}/${protocol.version}`);
             protocol.dispatch(commonEvent);

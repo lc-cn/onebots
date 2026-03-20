@@ -2,7 +2,7 @@
  * Telegram 适配器
  * 继承 Adapter 基类，实现 Telegram 平台功能
  */
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
+import { Account, AdapterRegistry, AccountStatus, unixSecondsToEventMs } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TelegramBot } from "./bot.js";
@@ -443,7 +443,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.message_id.toString()),
-                timestamp: event.date * 1000,
+                timestamp: unixSecondsToEventMs(event.date),
                 platform: 'telegram',
                 bot_id: this.createId(config.account_id),
                 type: 'message',
@@ -524,7 +524,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.message_id.toString()),
-                timestamp: event.date * 1000,
+                timestamp: unixSecondsToEventMs(event.date),
                 platform: 'telegram',
                 bot_id: this.createId(config.account_id),
                 type: 'message',

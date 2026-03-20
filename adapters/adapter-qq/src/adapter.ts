@@ -2,7 +2,7 @@
  * QQ官方机器人适配器
  * 继承Adapter基类，实现QQ官方机器人的消息收发和管理功能
  */
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
+import { Account, AdapterRegistry, AccountStatus, dateLikeToEventMs } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { QQBot } from "./bot.js";
@@ -624,7 +624,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
 
         const commonEvent: CommonEvent.Message = {
             id: this.createId(message.id),
-            timestamp: new Date(message.timestamp).getTime(),
+            timestamp: dateLikeToEventMs(message.timestamp),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'message',
@@ -662,7 +662,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
 
         const commonEvent: CommonEvent.Message = {
             id: this.createId(message.id),
-            timestamp: new Date(message.timestamp || Date.now()).getTime(),
+            timestamp: dateLikeToEventMs(message.timestamp),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'message',
@@ -696,7 +696,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
 
         const commonEvent: CommonEvent.Message = {
             id: this.createId(message.id),
-            timestamp: new Date(message.timestamp).getTime(),
+            timestamp: dateLikeToEventMs(message.timestamp),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'message',
@@ -733,7 +733,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
 
         const commonEvent: CommonEvent.Message = {
             id: this.createId(message.id),
-            timestamp: new Date(message.timestamp).getTime(),
+            timestamp: dateLikeToEventMs(message.timestamp),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'message',
@@ -808,7 +808,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
 
         const commonEvent: CommonEvent.Notice = {
             id: this.createId(Date.now().toString()),
-            timestamp: event.joined_at ? new Date(event.joined_at).getTime() : Date.now(),
+            timestamp: dateLikeToEventMs(event.joined_at),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'notice',
@@ -869,7 +869,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
     private handleInteractionEvent(account: Account<'qq', QQBot>, event: QQInteractionEvent, accountId: string): void {
         const commonEvent: CommonEvent.Notice = {
             id: this.createId(event.id),
-            timestamp: new Date(event.timestamp).getTime(),
+            timestamp: dateLikeToEventMs(event.timestamp),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'notice',

@@ -68,12 +68,30 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
         return newId;
     }
 
-    resolveId(id: string | number): CommonTypes.Id {
-        const [dbRecord] = this.db.select('*').from(this.tableName).where({
-            [typeof id === "number" ? "number" : "string"]: id
-        }).run();
+    /**
+     * 将 string / number / 已是框架层的 Id 归一到当前适配器的 Id。
+     * - 已带有 string+number 的 Id：原样返回（避免被当成 string 键查错）。
+     * - string / number：查 id_map，无则 createId。
+     */
+    resolveId(id: string | number | CommonTypes.Id): CommonTypes.Id {
+        if (
+            typeof id === "object" &&
+            id !== null &&
+            typeof (id as CommonTypes.Id).string === "string" &&
+            typeof (id as CommonTypes.Id).number === "number"
+        ) {
+            return id as CommonTypes.Id;
+        }
+        const primitive = id as string | number;
+        const [dbRecord] = this.db
+            .select("*")
+            .from(this.tableName)
+            .where({
+                [typeof primitive === "number" ? "number" : "string"]: primitive,
+            })
+            .run();
         if (dbRecord) return dbRecord as CommonTypes.Id;
-        return this.createId(id);
+        return this.createId(primitive);
     }
 
     /**
@@ -82,15 +100,7 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
      * - Milky 等若传入 JSON 原始 string/number：需 resolveId 查表或建档，才能与 passiveReply 等场景用的 openid 一致。
      */
     protected coerceId(value: CommonTypes.Id | string | number): CommonTypes.Id {
-        if (
-            typeof value === "object" &&
-            value !== null &&
-            typeof (value as CommonTypes.Id).string === "string" &&
-            typeof (value as CommonTypes.Id).number === "number"
-        ) {
-            return value as CommonTypes.Id;
-        }
-        return this.resolveId(value as string | number);
+        return this.resolveId(value as string | number | CommonTypes.Id);
     }
 
     // ============================================
@@ -990,6 +1000,7 @@ export namespace Adapter {
         scene_name: string;
     }
 
+    /** 单条消息详情（getMessage 等）；time 为 **Unix 秒**，与 OneBot 等协议常见约定一致 */
     export interface MessageInfo {
         message_id: CommonTypes.Id;
         time: number;

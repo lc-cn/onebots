@@ -2,7 +2,7 @@
  * Slack 适配器
  * 继承 Adapter 基类，实现 Slack 平台功能
  */
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
+import { Account, AdapterRegistry, AccountStatus, unixSecondsToEventMs } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { SlackBot } from "./bot.js";
@@ -434,7 +434,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.ts || event.event_ts),
-                timestamp: parseFloat(event.ts || event.event_ts) * 1000,
+                timestamp: unixSecondsToEventMs(event.ts ?? event.event_ts),
                 platform: 'slack',
                 bot_id: this.createId(account.config.account_id),
                 type: 'message',

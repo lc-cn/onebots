@@ -2,7 +2,7 @@
  * 钉钉适配器
  * 继承 Adapter 基类，实现钉钉平台功能
  */
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
+import { Account, AdapterRegistry, AccountStatus, unixMillisToEventMs } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { DingTalkBot } from "./bot.js";
@@ -383,7 +383,8 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(message.msgId),
-                timestamp: message.createAt || Date.now(),
+                // 钉钉消息 createAt 为毫秒时间戳
+                timestamp: unixMillisToEventMs(message.createAt),
                 platform: 'dingtalk',
                 bot_id: this.createId(account.config.account_id),
                 type: 'message',

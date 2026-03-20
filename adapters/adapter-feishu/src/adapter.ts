@@ -2,7 +2,7 @@
  * 飞书适配器
  * 继承 Adapter 基类，实现飞书平台功能
  */
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
+import { Account, AdapterRegistry, AccountStatus, unixSecondsToEventMs, toUnixSeconds } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { FeishuBot } from "./bot.js";
@@ -30,6 +30,19 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      */
     private isLarkEndpoint(endpoint: string): boolean {
         return endpoint.includes('larksuite.com');
+    }
+
+    /**
+     * 解析飞书 IM 消息 body.content（通常为 JSON 字符串），非 JSON 时退回原文，避免事件链路因 JSON.parse 抛错中断
+     */
+    private parseFeishuImBodyText(raw: string | undefined): string {
+        if (typeof raw !== 'string' || raw.length === 0) return '';
+        try {
+            const parsed = JSON.parse(raw) as { text?: string };
+            return parsed.text ?? '';
+        } catch {
+            return raw;
+        }
     }
 
     // ============================================
@@ -85,8 +98,13 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         const result = await bot.sendMessage(sceneId.string, receiveIdType, content, 'text');
 
+        const messageId = result.data?.message_id;
+        if (!messageId) {
+            throw new Error('发送消息失败: 响应中缺少 message_id');
+        }
+
         return {
-            message_id: this.createId(result.data.message_id),
+            message_id: this.createId(messageId),
         };
     }
 
@@ -124,21 +142,29 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             throw new Error(`获取消息失败: ${response.data.msg}`);
         }
 
-        const msg = response.data.data.items[0];
+        const items = response.data.data?.items;
+        const msg = Array.isArray(items) && items.length > 0 ? items[0] : undefined;
+        if (!msg) {
+            throw new Error('获取消息失败: 响应中无消息内容');
+        }
+
+        const text = this.parseFeishuImBodyText(msg.body?.content);
+
+        const senderId = msg.sender?.id ?? '';
 
         return {
             message_id: this.createId(msg.message_id),
-            time: parseInt(msg.create_time),
+            time: toUnixSeconds(msg.create_time),
             sender: {
                 scene_type: msg.chat_id ? 'group' : 'private',
-                sender_id: this.createId(msg.sender.id),
-                scene_id: this.createId(msg.chat_id || msg.sender.id),
-                sender_name: msg.sender.id,
+                sender_id: this.createId(senderId),
+                scene_id: this.createId(msg.chat_id || senderId),
+                sender_name: senderId,
                 scene_name: '',
             },
             message: [{
                 type: 'text',
-                data: { text: JSON.parse(msg.body.content).text || '' },
+                data: { text },
             }],
         };
     }
@@ -458,7 +484,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             if (me && message.sender.id === me.open_id) return;
 
             // 打印消息接收日志
-            const content = JSON.parse(message.body.content || '{}').text || '';
+            const content = this.parseFeishuImBodyText(message.body?.content);
             const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
             this.logger.info(
                 `[飞书] 收到消息 | 消息ID: ${message.message_id} | ` +
@@ -481,7 +507,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(message.message_id),
-                timestamp: parseInt(message.create_time) * 1000,
+                timestamp: unixSecondsToEventMs(message.create_time),
                 platform: 'feishu',
                 bot_id: this.createId(account.config.account_id),
                 type: 'message',

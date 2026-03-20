@@ -673,7 +673,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             }
 
             const action = ctx.params.action;
-            const params = (ctx.request as any).body;
+            const params = (ctx.request as any).body ?? {};
 
             try {
                 const result = await this.apply(action, params);

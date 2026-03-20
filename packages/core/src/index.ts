@@ -5,6 +5,7 @@ export * from "./base-app.js";
 export * from "./router.js";
 export * from "./types.js";
 export * from "./utils.js";
+export * from "./timestamp.js";
 export * from "./message-utils.js";
 export * from "./protocol.js";
 export * from "./registry.js";

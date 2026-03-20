@@ -5,7 +5,7 @@
  * - 粉丝管理（getFriendList, getFriendInfo等，对应微信的关注用户）
  * - 标签管理（getGroupList, getGroupInfo等，对应微信的用户标签）
  */
-import { Account,AdapterRegistry, AccountStatus } from "onebots";
+import { Account, AdapterRegistry, AccountStatus, unixSecondsToEventMs } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { WechatBot } from "./bot.js";
@@ -392,7 +392,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(message.MsgId || Date.now().toString()),
-                timestamp: (message.CreateTime || Date.now()) * 1000,
+                timestamp: unixSecondsToEventMs(message.CreateTime),
                 platform: 'wechat',
                 bot_id: this.createId(config.account_id),
                 type: 'message',
@@ -416,7 +416,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(Date.now().toString()),
-                timestamp: (message.CreateTime || Date.now()) * 1000,
+                timestamp: unixSecondsToEventMs(message.CreateTime),
                 platform: 'wechat',
                 bot_id: this.createId(config.account_id),
                 type: 'notice',
@@ -436,7 +436,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(Date.now().toString()),
-                timestamp: (message.CreateTime || Date.now()) * 1000,
+                timestamp: unixSecondsToEventMs(message.CreateTime),
                 platform: 'wechat',
                 bot_id: this.createId(config.account_id),
                 type: 'notice',
@@ -457,7 +457,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(Date.now().toString()),
-                timestamp: (message.CreateTime || Date.now()) * 1000,
+                timestamp: unixSecondsToEventMs(message.CreateTime),
                 platform: 'wechat',
                 bot_id: this.createId(config.account_id),
                 type: 'notice',
@@ -480,7 +480,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(Date.now().toString()),
-                timestamp: (message.CreateTime || Date.now()) * 1000,
+                timestamp: unixSecondsToEventMs(message.CreateTime),
                 platform: 'wechat',
                 bot_id: this.createId(config.account_id),
                 type: 'notice',
@@ -504,7 +504,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(Date.now().toString()),
-                timestamp: (message.CreateTime || Date.now()) * 1000,
+                timestamp: unixSecondsToEventMs(message.CreateTime),
                 platform: 'wechat',
                 bot_id: this.createId(config.account_id),
                 type: 'notice',
@@ -526,7 +526,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(Date.now().toString()),
-                timestamp: (message.CreateTime || Date.now()) * 1000,
+                timestamp: unixSecondsToEventMs(message.CreateTime),
                 platform: 'wechat',
                 bot_id: this.createId(config.account_id),
                 type: 'notice',
