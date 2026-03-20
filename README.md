@@ -1,421 +1,321 @@
 <div align="center">
-    <h1>OneBots - 多平台多协议机器人应用框架</h1>
-    <p>使用 TypeScript 实现的多平台多协议机器人应用框架，支持 QQ、ICQQ、微信、钉钉、飞书、企业微信、Telegram、Slack、Discord、Kook、Microsoft Teams、Line、Email、WhatsApp、Zulip 等 15+ 平台</p>
 
-[![Build Package](https://github.com/icqqjs/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/icqqjs/onebots/actions/workflows/release.yml) 
+# OneBots
+
+**多平台、多协议的即时通讯机器人网关与框架（TypeScript / Node.js）**
+
+*One multi-platform bot gateway: one `CommonEvent` model, many adapters, many wire protocols (OneBot / Satori / Milky).*
+
+[![Build](https://github.com/lc-cn/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/lc-cn/onebots/actions/workflows/release.yml)
 [![License](https://img.shields.io/github/license/lc-cn/onebots?color=blue)](https://github.com/lc-cn/onebots/blob/master/LICENSE)
+[![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots)
+[![Node](https://img.shields.io/node/v/onebots?color=339933&logo=Node.js)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Flc--cn%2Fonebots-blue?logo=docker)](https://github.com/lc-cn/onebots/pkgs/container/onebots)
 
-[![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots) 
-[![dm](https://shields.io/npm/dm/onebots)](https://www.npmjs.com/package/onebots) 
-[![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Flc--cn%2Fonebots-blue?logo=docker)](https://github.com/lc-cn/onebots/pkgs/container/onebots)
-[![node engine](https://img.shields.io/node/v/onebots?color=339933&logo=Node.js)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![OneBot V11](https://img.shields.io/badge/OneBot-v11-black)](https://onebot.dev/)
+[![OneBot V12](https://img.shields.io/badge/OneBot-v12-black)](https://12.onebot.dev/)
+[![Satori](https://img.shields.io/badge/Satori-v1-6366f1)](https://satori.js.org/)
+[![Milky](https://img.shields.io/badge/Milky-v1-f472b6)](https://github.com/aspect-y/milky)
 
-[![GitHub stars](https://img.shields.io/github/stars/lc-cn/onebots?style=social)](https://github.com/lc-cn/onebots/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/lc-cn/onebots?style=social)](https://github.com/lc-cn/onebots/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/lc-cn/onebots)](https://github.com/lc-cn/onebots/issues)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/lc-cn/onebots/pulls)
-
-[![oneBot V11](https://img.shields.io/badge/onebot-v11-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://onebot.dev/)
-[![oneBot V12](https://img.shields.io/badge/onebot-v12-black?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAABwCAMAAADxPgR5AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAAxQTFRF////29vbr6+vAAAAk1hCcwAAAAR0Uk5T////AEAqqfQAAAKcSURBVHja7NrbctswDATQXfD//zlpO7FlmwAWIOnOtNaTM5JwDMa8E+PNFz7g3waJ24fviyDPgfhz8fHP39cBcBL9KoJbQUxjA2iYqHL3FAnvzhL4GtVNUcoSZe6eSHizBcK5LL7dBr2AUZlev1ARRHCljzRALIEog6H3U6bCIyqIZdAT0eBuJYaGiJaHSjmkYIZd+qSGWAQnIaz2OArVnX6vrItQvbhZJtVGB5qX9wKqCMkb9W7aexfCO/rwQRBzsDIsYx4AOz0nhAtWu7bqkEQBO0Pr+Ftjt5fFCUEbm0Sbgdu8WSgJ5NgH2iu46R/o1UcBXJsFusWF/QUaz3RwJMEgngfaGGdSxJkE/Yg4lOBryBiMwvAhZrVMUUvwqU7F05b5WLaUIN4M4hRocQQRnEedgsn7TZB3UCpRrIJwQfqvGwsg18EnI2uSVNC8t+0QmMXogvbPg/xk+Mnw/6kW/rraUlvqgmFreAA09xW5t0AFlHrQZ3CsgvZm0FbHNKyBmheBKIF2cCA8A600aHPmFtRB1XvMsJAiza7LpPog0UJwccKdzw8rdf8MyN2ePYF896LC5hTzdZqxb6VNXInaupARLDNBWgI8spq4T0Qb5H4vWfPmHo8OyB1ito+AysNNz0oglj1U955sjUN9d41LnrX2D/u7eRwxyOaOpfyevCWbTgDEoilsOnu7zsKhjRCsnD/QzhdkYLBLXjiK4f3UWmcx2M7PO21CKVTH84638NTplt6JIQH0ZwCNuiWAfvuLhdrcOYPVO9eW3A67l7hZtgaY9GZo9AFc6cryjoeFBIWeU+npnk/nLE0OxCHL1eQsc1IciehjpJv5mqCsjeopaH6r15/MrxNnVhu7tmcslay2gO2Z1QfcfX0JMACG41/u0RrI9QAAAABJRU5ErkJggg==)](https://12.onebot.dev/) 
-[![Satori](https://img.shields.io/badge/satori-v1-6366f1?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48cGF0aCBkPSJNOCAxNHMxLjUgMiA0IDIgNC0yIDQtMiIvPjxsaW5lIHgxPSI5IiB4Mj0iOS4wMSIgeTE9IjkiIHkyPSI5Ii8+PGxpbmUgeDE9IjE1IiB4Mj0iMTUuMDEiIHkxPSI5IiB5Mj0iOSIvPjwvc3ZnPg==)](https://satori.js.org/)
-[![Milky](https://img.shields.io/badge/milky-v1-f472b6)](https://github.com/aspect-y/milky)
-
-[![qq group](https://img.shields.io/badge/QQ群-860669870-12B7F5?logo=tencentqq&logoColor=white)](https://jq.qq.com/?_wv=1027&k=B22VGXov)
-
-[📚 文档 Docs](https://onebots.pages.dev)
+**[📚 在线文档](https://onebots.pages.dev)** · **[English README](./README.en.md)** · **[Issues](https://github.com/lc-cn/onebots/issues)** · **QQ 群 [860669870](https://jq.qq.com/?_wv=1027&k=B22VGXov)**
 
 </div>
 
-## 📖 简介
+---
 
-OneBots 是一个基于 TypeScript 开发的多平台、多协议机器人应用框架。它提供了统一的接口来连接和管理不同平台的机器人，支持 OneBot V11/V12、Satori、Milky 等多种协议。
+## 它解决什么问题？
 
-### ✨ 核心特性
+你想做的往往是这件事：
 
-- 🎯 **多平台支持** - 支持 QQ、ICQQ、微信、钉钉、飞书、企业微信、Telegram、Slack、Discord、Kook、Microsoft Teams、Line、Email、WhatsApp、Zulip 等 15+ 平台
-- 📡 **多协议支持** - 支持 OneBot V11/V12、Satori、Milky 等协议
-- 🔌 **插件化架构** - 适配器和协议可动态加载
-- 🏗️ **模块化设计** - 清晰的代码结构，易于扩展和维护
-- 📦 **Monorepo 管理** - 使用 pnpm workspace 统一管理
-- 🎨 **Web 管理界面** - 内置可视化管理界面（可选）
-- 🔄 **事件驱动** - 基于事件的通信机制
-- 📝 **TypeScript** - 完整的类型支持
+> **在一个进程里接多个 IM 平台，又用同一套（或多套）开放协议暴露给下游插件 / 业务**——而不是每个平台写一遍胶水代码。
 
-## 📦 项目结构
+OneBots 提供：
 
-本项目采用 **pnpm workspace** 管理的 Monorepo 结构：
+| 层次 | 作用 |
+|------|------|
+| **Adapter（适配器）** | 把各平台原始事件与 API，变成统一的 **`CommonEvent` + 通用 Adapter API** |
+| **Protocol（协议）** | 把 `CommonEvent` 转成 **OneBot v11/v12、Satori、Milky** 等对外报文，并处理入站调用 |
+| **`@onebots/core`** | 账号、ID 映射（`createId` / `resolveId`）、路由、协议注册等 **共用内核** |
+| **`onebots` 主包** | 配置、加载插件、HTTP/WS 网关、可选 **Web 管理端** |
 
-```
-onebots/
-├── packages/                    # 核心包
-│   ├── core/                   # @onebots/core - 核心抽象层
-│   ├── onebots/                # onebots - 主应用包
-│   ├── web/                    # @onebots/web - Web 管理界面
-│   └── imhelper/               # imhelper - 客户端SDK核心
-├── adapters/                    # 适配器包
-│   ├── adapter-qq/             # @onebots/adapter-qq - QQ官方机器人适配器
-│   ├── adapter-kook/           # @onebots/adapter-kook - Kook适配器
-│   ├── adapter-wechat/         # @onebots/adapter-wechat - 微信适配器
-│   ├── adapter-discord/        # @onebots/adapter-discord - Discord适配器
-│   ├── adapter-telegram/       # @onebots/adapter-telegram - Telegram适配器
-│   ├── adapter-feishu/         # @onebots/adapter-feishu - 飞书适配器
-│   ├── adapter-dingtalk/       # @onebots/adapter-dingtalk - 钉钉适配器
-│   ├── adapter-slack/          # @onebots/adapter-slack - Slack适配器
-│   ├── adapter-wecom/          # @onebots/adapter-wecom - 企业微信适配器
-│   ├── adapter-teams/          # @onebots/adapter-teams - Microsoft Teams适配器
-│   ├── adapter-line/           # @onebots/adapter-line - Line适配器
-│   ├── adapter-email/          # @onebots/adapter-email - 邮件适配器
-│   ├── adapter-whatsapp/       # @onebots/adapter-whatsapp - WhatsApp适配器
-│   ├── adapter-zulip/           # @onebots/adapter-zulip - Zulip适配器
-│   └── adapter-icqq/           # @onebots/adapter-icqq - ICQQ适配器（私有包）
-├── protocols/                   # 协议包
-│   ├── onebot-v11/
-│   │   ├── protocol/           # @onebots/protocol-onebot-v11 - OneBot V11协议实现
-│   │   └── sdk/             # @imhelper/onebot-v11 - OneBot V11客户端SDK
-│   ├── onebot-v12/
-│   │   ├── protocol/           # @onebots/protocol-onebot-v12 - OneBot V12协议实现
-│   │   └── sdk/             # @imhelper/onebot-v12 - OneBot V12客户端SDK
-│   ├── satori-v1/
-│   │   ├── protocol/           # @onebots/protocol-satori-v1 - Satori协议实现
-│   │   └── sdk/             # @imhelper/satori-v1 - Satori客户端SDK
-│   └── milky-v1/
-│       ├── protocol/           # @onebots/protocol-milky-v1 - Milky协议实现
-│       └── sdk/                # @imhelper/milky-v1 - Milky客户端SDK
-├── development/                 # 开发环境配置
-├── docs/                        # 文档
-└── pnpm-workspace.yaml         # workspace 配置
+### 架构一瞥
+
+```mermaid
+flowchart LR
+  subgraph IM["IM 平台"]
+        A1[QQ / 微信 / 飞书 / …]
+  end
+  subgraph OB["OneBots"]
+        B[Adapter]
+        C[Account + id_map]
+        D[Protocol]
+  end
+  subgraph Down["下游"]
+        E[OneBot 客户端]
+        F[Satori / Milky 客户端]
+        G[自研业务]
+  end
+  A1 --> B --> C --> D
+  D --> E
+  D --> F
+  D --> G
 ```
 
-### 📚 包名规范
+---
 
-#### 服务器端包（`@onebots/*`）
+## 适合谁？不适合谁？
 
-- `@onebots/core` - 核心抽象层，提供适配器、协议、账号等基础接口
-- `onebots` - 主应用包，提供命令行工具和完整应用功能
-- `@onebots/web` - Web 管理界面
-- `@onebots/adapter-*` - 各平台适配器（qq、kook、wechat、discord、telegram、feishu、dingtalk、slack、wecom、teams、line、email、whatsapp、zulip、icqq）
-- `@onebots/protocol-*` - 各协议实现（onebot-v11、onebot-v12、satori-v1、milky-v1）
+**更适合：**
 
-#### 客户端SDK包（`imhelper` / `@imhelper/*`）
+- 要 **多平台接入**，且希望事件与 ID 在框架内 **先统一、再按协议导出**
+- 要 **同一账号同时开 OneBot + Satori + Milky** 等，给不同生态用
+- 技术栈是 **Node.js 22+ / TypeScript**，接受 **自部署网关**
 
-- `imhelper` - 客户端SDK核心包，提供统一的客户端接口和接收器
-- `@imhelper/onebot-v11` - OneBot V11 客户端SDK
-- `@imhelper/onebot-v12` - OneBot V12 客户端SDK
-- `@imhelper/satori-v1` - Satori 客户端SDK
-- `@imhelper/milky-v1` - Milky 客户端SDK
+**未必适合：**
 
-## 🚀 快速开始
+- 只做 **单一平台、单一 SDK**（例如只做 Discord.js）——直接官方 SDK 更简单
+- 强依赖 **Python 生态**（如大量 NoneBot 插件）——更适合留在 NoneBot / 桥接方案
 
-### 方式一：Docker（推荐，无需安装 Node.js）
+---
 
-使用官方镜像。**务必挂载 `./data` 到容器的 `/data`**，以持久化用户配置（config.yaml）与数据，否则重启容器后配置会丢失：
+## 和其他方案怎么选？（中性对比）
 
-```bash
-# 创建 docker-compose.yml（见仓库根目录），然后：
-docker compose up -d
-```
+| 维度 | 直连各平台 SDK | 其他机器人框架 | **OneBots** |
+|------|----------------|----------------|------------|
+| 多平台抽象 | 自己封装 | 多数有 | ✅ `CommonEvent` + 多适配器 |
+| 多协议对外 | 自己实现 | 视项目 | ✅ 同账号多协议 |
+| 技术栈 | 任意 | 多为 Python/TS | **TS / ESM / pnpm monorepo** |
+| 社区与插件量 | — | 部分更成熟 | 偏 **基础设施定位**，插件生态靠社区增长 |
 
-或直接运行（`-v` 挂载不可省略）：
+没有「唯一正确」选型；OneBots 更偏 **自托管的 IM 机器人中台 + 协议出口**。
+
+---
+
+## 核心特性（摘要）
+
+- **15+ 平台适配器**：QQ 官方、ICQQ、微信、钉钉、飞书、企业微信、Telegram、Slack、Discord、Kook、Teams、Line、邮件、WhatsApp、Zulip 等（详见下文列表）
+- **多协议**：OneBot v11 / v12、Satori v1、Milky v1
+- **Monorepo**：`pnpm workspace` — `packages/*`、`adapters/*`、`protocols/*`
+- **可选 Web 管理界面**：`@onebots/web`
+- **客户端 SDK 体系**：`imhelper` + `@imhelper/*` 协议客户端（连本网关或其他兼容实现）
+- **事件驱动**：适配器 `account.dispatch(commonEvent)` → 各协议 `dispatch`
+
+---
+
+## 五分钟上手
+
+### 方式 A：Docker（推荐）
+
+**务必挂载数据目录**，否则重启丢配置：
 
 ```bash
 docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots ghcr.io/lc-cn/onebots:master
 ```
 
-首次运行会在 `./data` 下生成默认 `config.yaml`，修改后执行 `docker compose restart` 或重启容器即可生效。  
-完整说明见 [文档 - Docker 部署](https://onebots.pages.dev/guide/docker)。也可部署到 [Hugging Face Spaces](https://onebots.pages.dev/guide/docker#部署到-hugging-face-spaces)。
+首次运行后在 `./data` 生成 `config.yaml`。详见 **[文档：Docker 部署](https://onebots.pages.dev/guide/docker)**（含 Hugging Face Spaces）。
 
-### 方式二：从源码运行
+### 方式 B：npm 安装（Mock 试跑）
 
-```bash
-# 克隆项目
-git clone https://github.com/lc-cn/onebots.git
-cd onebots
-
-# 安装依赖
-pnpm install
-```
-
-**开发模式：**
-
-```bash
-pnpm dev          # 运行网关
-pnpm web:dev      # Web 管理界面（可选）
-pnpm docs:dev     # 文档（可选）
-```
-
-**构建与测试：**
-
-```bash
-pnpm build        # 构建所有包
-pnpm test         # 运行测试
-```
-
-### 测试
-
-```bash
-# 运行所有测试
-pnpm test
-
-# 监听模式
-pnpm test:watch
-
-# 测试UI
-pnpm test:ui
-
-# 测试覆盖率
-pnpm test:coverage
-```
-
-## 📖 使用指南
-
-### 服务器端使用
-
-#### 1. 安装主应用包
-
-```bash
-npm install onebots
-# 或
-pnpm add onebots
-```
-
-#### 2. 安装所需适配器
-
-```bash
-# QQ官方机器人适配器
-npm install @onebots/adapter-qq
-
-# Kook适配器
-npm install @onebots/adapter-kook
-
-# 微信适配器
-npm install @onebots/adapter-wechat
-
-# Discord适配器
-npm install @onebots/adapter-discord
-
-# Telegram适配器
-npm install @onebots/adapter-telegram
-
-# 飞书适配器
-npm install @onebots/adapter-feishu
-
-# 钉钉适配器
-npm install @onebots/adapter-dingtalk
-
-# Slack适配器
-npm install @onebots/adapter-slack
-
-# 企业微信适配器
-npm install @onebots/adapter-wecom
-
-# Microsoft Teams适配器
-npm install @onebots/adapter-teams
-
-# Line适配器
-npm install @onebots/adapter-line
-
-# 邮件适配器
-npm install @onebots/adapter-email
-
-# WhatsApp适配器
-npm install @onebots/adapter-whatsapp
-
-# Zulip适配器
-npm install @onebots/adapter-zulip
-```
-
-#### 3. 创建配置文件
-
-创建 `config.yaml`:
+安装依赖后，与同目录下 **`config.yaml`** 一起启动（无文件时会自动生成模板，建议先手写最小 Mock 配置如下）：
 
 ```yaml
-# 全局配置
-port: 6727              # HTTP 服务器端口
-log_level: info         # 日志级别
+port: 6727
+log_level: info
 
-# 通用配置（协议默认配置）
+general:
+  onebot.v11:
+    use_http: true
+    use_ws: true
+
+# 平台名 mock + 账号名 demo，对应适配器注册的 platform「mock」
+mock.demo:
+  onebot.v11:
+    use_http: true
+    use_ws: true
+```
+
+```bash
+pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
+npx onebots -r mock -p onebot-v11 -c config.yaml
+```
+
+无子命令时，上述命令即 **前台启动网关**。若要写子命令，请把 **`-r` / `-p` / `-c` 放在 `gateway` 之前**（Commander 把它们挂在根命令上），例如：
+
+```bash
+npx onebots -r mock -p onebot-v11 -c config.yaml gateway start
+```
+
+**CLI `-r` / `-p` 与包名对应关系**（源码：`App.loadAdapterFactory` / `App.loadProtocolFactory`）：
+
+| 参数 | 含义 | 示例 | 将尝试加载的模块 |
+|------|------|------|------------------|
+| `-r <name>` | 适配器短名（与 `AdapterRegistry` 一致） | `mock`、`kook`、`wechat` | `@onebots/adapter-<name>` → `onebots-adapter-<name>` → `<name>` |
+| `-p <name>` | 协议包名去掉前缀后的后缀 | `onebot-v11`、`satori-v1`、`milky-v1` | `@onebots/protocol-<name>` → … |
+
+`adapter-mock` 仅用于本地打通 HTTP/WS 与协议层，**不接真实 IM**。
+
+### 方式 C：源码开发
+
+```bash
+git clone https://github.com/lc-cn/onebots.git
+cd onebots
+pnpm install
+pnpm dev              # 网关
+pnpm docs:dev         # 文档站点（可选）
+pnpm web:dev          # Web 前端（可选）
+pnpm build && pnpm test
+```
+
+**要求：Node.js ≥ 22**（见 `package.json` engines）。
+
+---
+
+## 使用指南（生产路径）
+
+### 1. 安装主包与插件
+
+```bash
+pnpm add onebots
+pnpm add @onebots/adapter-<platform>
+# 如需多协议，继续安装 @onebots/protocol-onebot-v11 等
+```
+
+### 2. 配置文件 `config.yaml`
+
+最小思路：`general` 里写协议默认；**`{platform}.{account_id}`** 下写账号与平台密钥。完整字段见 **[官方文档 - 配置](https://onebots.pages.dev)**。
+
+```yaml
+port: 6727
+log_level: info
+
 general:
   onebot.v11:
     use_http: true
     use_ws: true
     access_token: ''
-    heartbeat_interval: 5000
-  onebot.v12:
-    use_http: true
-    use_ws: true
-    access_token: ''
-    heartbeat_interval: 5000
-  satori.v1:
-    use_http: true
-    use_ws: true
-    token: ''
-  milky.v1:
-    use_http: true
-    use_ws: true
 
-# 账号配置
 kook.zhin:
   token: 'your_kook_token'
   onebot.v11:
-    access_token: 'kook_v11_token'
-  onebot.v12:
-    access_token: 'kook_v12_token'
+    access_token: 'optional'
 ```
 
-#### 4. 启动应用
+### 3. 启动
 
 ```bash
-# 使用命令行工具
 npx onebots -r kook -r qq -p onebot-v11 -p onebot-v12 -c config.yaml
-
-# 或使用 Node.js
-import { App } from 'onebots';
-
-const app = new App();
-await app.start();
 ```
 
-### 客户端SDK使用
+或以代码 `App` 启动（见 [`packages/onebots/README.md`](./packages/onebots/README.md)）。
 
-#### 1. 安装客户端SDK核心包
+### 4. 下游客户端（imhelper）
 
 ```bash
-npm install imhelper
-# 或
-pnpm add imhelper
+pnpm add imhelper @imhelper/onebot-v11
 ```
 
-#### 2. 安装协议客户端包
+示例与更多协议见 **[客户端 SDK 指南](https://onebots.pages.dev/guide/client-sdk)**。
+
+---
+
+## 支持的平台与协议
+
+**平台（节选）**
+
+| 平台 | 包 |
+|------|-----|
+| QQ 官方机器人 | `@onebots/adapter-qq` |
+| ICQQ | `@onebots/adapter-icqq`（私有源配置见文档） |
+| Kook | `@onebots/adapter-kook` |
+| 微信公众号 | `@onebots/adapter-wechat` |
+| Discord / Telegram / Slack / … | `@onebots/adapter-discord` 等 |
+| 飞书 / 钉钉 / 企业微信 | `@onebots/adapter-feishu` 等 |
+
+完整列表见 **仓库目录 [`adapters/`](./adapters/)** 与 **[文档](https://onebots.pages.dev)**。
+
+**协议**
+
+| 协议 | 包 |
+|------|-----|
+| OneBot v11 | `@onebots/protocol-onebot-v11` |
+| OneBot v12 | `@onebots/protocol-onebot-v12` |
+| Satori v1 | `@onebots/protocol-satori-v1` |
+| Milky v1 | `@onebots/protocol-milky-v1` |
+
+---
+
+## 仓库结构（Monorepo）
+
+<details>
+<summary><b>展开目录树（与包命名）</b></summary>
+
+```
+onebots/
+├── packages/
+│   ├── core/           # @onebots/core — 适配器、协议、账号、ID、路由
+│   ├── onebots/        # onebots — 网关主程序、CLI
+│   ├── web/            # @onebots/web — 管理端
+│   └── imhelper/       # 客户端 SDK 核心
+├── adapters/           # @onebots/adapter-*
+├── protocols/          # @onebots/protocol-* + @imhelper/* SDK
+├── docs/               # VitePress 文档源码
+└── __tests__/          # 集成/协议测试
+```
+
+**命名约定**
+
+- 服务端：`@onebots/*`
+- 协议客户端：`imhelper`、`@imhelper/*`
+
+</details>
+
+---
+
+## 文档与链接
+
+| 资源 | 链接 |
+|------|------|
+| 在线文档 | https://onebots.pages.dev |
+| 架构说明 | [packages/core/ARCHITECTURE.md](./packages/core/ARCHITECTURE.md) |
+| 核心包 | [packages/core/README.md](./packages/core/README.md) |
+| 主应用包 | [packages/onebots/README.md](./packages/onebots/README.md) |
+
+---
+
+## 开发与贡献
 
 ```bash
-# OneBot V11 客户端
-npm install @imhelper/onebot-v11
-
-# OneBot V12 客户端
-npm install @imhelper/onebot-v12
-
-# Satori 客户端
-npm install @imhelper/satori-v1
-
-# Milky 客户端
-npm install @imhelper/milky-v1
+pnpm build
+pnpm test
+pnpm changeset          # 发版前变更集
 ```
 
-#### 3. 使用示例
+- 添加适配器：继承 `Adapter`，注册到 `AdapterRegistry`（参见现有 `adapters/*`）
+- 添加协议：实现 `Protocol`，注册到 `ProtocolRegistry`（参见 `protocols/*`）
+- 贡献指南：[CONTRIBUTING.md](./CONTRIBUTING.md)
 
-```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot11Adapter } from '@imhelper/onebot-v11';
+---
 
-// 创建适配器
-const adapter = createOnebot11Adapter({
-  baseUrl: 'http://localhost:6727',
-  selfId: 'zhin',
-  accessToken: 'your_token',
-  receiveMode: 'ws', // 'ws' | 'wss' | 'webhook' | 'sse'
-  path: '/kook/zhin/onebot/v11',
-  wsUrl: 'ws://localhost:6727/kook/zhin/onebot/v11',
-  platform: 'kook',
-});
+## 许可证
 
-// 创建 ImHelper 实例
-const helper = createImHelper(adapter);
+[MIT](./LICENSE)
 
-// 监听消息事件
-helper.on('message.private', (message) => {
-  console.log('收到私聊消息:', message.content);
-  message.reply('收到！');
-});
+---
 
-// 连接
-await adapter.connect();
+## 鸣谢
 
-// 发送消息
-await helper.sendPrivateMessage('123456', 'Hello!');
-```
-
-更多客户端 SDK 使用示例，请查看 [客户端 SDK 使用指南](https://onebots.pages.dev/guide/client-sdk)。
-
-## 🎯 支持的平台
-
-- ✅ **QQ官方机器人** - 通过 `@onebots/adapter-qq`
-- ✅ **ICQQ** - 通过 `@onebots/adapter-icqq`（私有包，需配置 GitHub Packages 访问）
-- ✅ **Kook** - 通过 `@onebots/adapter-kook`
-- ✅ **微信公众号** - 通过 `@onebots/adapter-wechat`
-- ✅ **Discord** - 通过 `@onebots/adapter-discord`
-- ✅ **Telegram** - 通过 `@onebots/adapter-telegram`
-- ✅ **飞书/Lark** - 通过 `@onebots/adapter-feishu`
-- ✅ **钉钉** - 通过 `@onebots/adapter-dingtalk`
-- ✅ **Slack** - 通过 `@onebots/adapter-slack`
-- ✅ **企业微信** - 通过 `@onebots/adapter-wecom`
-- ✅ **Microsoft Teams** - 通过 `@onebots/adapter-teams`
-- ✅ **Line** - 通过 `@onebots/adapter-line`
-- ✅ **邮件** - 通过 `@onebots/adapter-email`
-- ✅ **WhatsApp** - 通过 `@onebots/adapter-whatsapp`
-- ✅ **Zulip** - 通过 `@onebots/adapter-zulip`
-
-## 📡 支持的协议
-
-- ✅ **OneBot V11** - 标准 OneBot V11 协议
-- ✅ **OneBot V12** - 标准 OneBot V12 协议
-- ✅ **Satori** - Satori 协议
-- ✅ **Milky** - Milky 协议
-
-## 📚 文档
-
-- [完整文档](https://onebots.pages.dev)（含快速开始、Docker 部署、Hugging Face、配置与协议说明）
-- [架构文档](./packages/core/ARCHITECTURE.md)
-- [核心包文档](./packages/core/README.md)
-- [主应用包文档](./packages/onebots/README.md)
-
-## 🔧 开发
-
-### 项目结构说明
-
-- **packages/core** - 核心抽象层，定义适配器、协议、账号等基础接口
-- **packages/onebots** - 主应用包，提供命令行工具和应用逻辑
-- **packages/web** - Web 管理界面
-- **packages/imhelper** - 客户端 SDK 核心包
-- **adapters/** - 各平台适配器实现
-- **protocols/** - 各协议实现和客户端SDK
-
-### 添加新适配器
-
-1. 在 `adapters/` 目录下创建新适配器目录
-2. 实现 `Adapter` 基类的抽象方法
-3. 在 `adapters/*/package.json` 中配置包名和依赖
-4. 在主应用的 `optionalDependencies` 中添加新适配器
-
-### 添加新协议
-
-1. 在 `protocols/` 目录下创建新协议目录
-2. 在 `protocol/` 子目录中实现协议服务端逻辑
-3. 在 `client/` 子目录中实现协议客户端SDK
-4. 在 `protocols/*/protocol/package.json` 和 `protocols/*/client/package.json` 中配置包名
-
-## 🤝 贡献
-
-欢迎贡献代码！请查看 [CONTRIBUTING.md](./CONTRIBUTING.md) 了解贡献指南。
-
-## 📄 许可证
-
-MIT License - 查看 [LICENSE](./LICENSE) 文件了解详情
-
-## 🙏 鸣谢
-
-1. [icqqjs/icqq](https://github.com/icqqjs/icqq) - 底层服务支持
-2. [takayama-lily/onebot](https://github.com/takayama-lily/node-onebot) - OneBot V11 参考实现
-3. [zhinjs/kook-client](https://github.com/zhinjs/kook-client) - Kook 客户端参考
-4. [zhinjs/qq-official-bot](https://github.com/zhinjs/qq-official-bot) - QQ官方机器人参考
-
-## 📞 联系方式
-
-- QQ群: [860669870](https://jq.qq.com/?_wv=1027&k=B22VGXov)
-- GitHub Issues: [https://github.com/lc-cn/onebots/issues](https://github.com/lc-cn/onebots/issues)
+- [icqqjs/icqq](https://github.com/icqqjs/icqq)
+- [takayama-lily/node-onebot](https://github.com/takayama-lily/node-onebot)
+- [zhinjs/kook-client](https://github.com/zhinjs/kook-client)
+- [zhinjs/qq-official-bot](https://github.com/zhinjs/qq-official-bot)
 
 ---
 
 <div align="center">
-  Made with ❤️ by 凉菜
+
+**如果觉得有用，欢迎在 [GitHub](https://github.com/lc-cn/onebots) 点一颗 ⭐**
+
+Made with ❤️ by 凉菜 & contributors
+
 </div>

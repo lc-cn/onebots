@@ -32,7 +32,7 @@
   "packageManager": "pnpm@9.0.2",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/liucl-cn/onebots.git"
+    "url": "git+https://github.com/lc-cn/onebots.git"
   },
   "keywords": [
     "onebot",
