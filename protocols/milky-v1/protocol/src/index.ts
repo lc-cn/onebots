@@ -80,20 +80,41 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         this.removeAllListeners();
     }
 
-    dispatch(event: Milky.Event): void {
-        // Dispatch Milky-formatted event
-        this.emit("dispatch", JSON.stringify(event));
+    /**
+     * 上报事件到 Milky 客户端（HTTP 反连 / WebSocket 等）。
+     * Account.dispatch 传入的是 CommonEvent；心跳等内部调用传入的已是 Milky 事件（含 post_type）。
+     */
+    dispatch(event: unknown): void {
+        if (!this.filterFn(event as Dict)) {
+            return;
+        }
+        let milkyEvent: Milky.Event | null = null;
+        if (this.isMilkyShapedEvent(event)) {
+            milkyEvent = event;
+        } else {
+            milkyEvent = this.convertToMilkyFormat(event as CommonEvent.Event);
+        }
+        if (milkyEvent) {
+            this.logger.debug(`Milky dispatch:`, milkyEvent);
+            this.emit("dispatch", JSON.stringify(milkyEvent));
+        }
+    }
+
+    /** 协议内部构造的事件（post_type）无需从 CommonEvent 转换 */
+    private isMilkyShapedEvent(e: unknown): e is Milky.Event {
+        return (
+            typeof e === "object" &&
+            e !== null &&
+            "post_type" in e &&
+            typeof (e as { post_type: unknown }).post_type === "string"
+        );
     }
 
     /**
-     * Convert common event to Milky format and dispatch
+     * 与 dispatch 相同，便于阅读；Account 只调用各协议的 dispatch(CommonEvent)
      */
     dispatchCommonEvent(commonEvent: CommonEvent.Event): void {
-        // Convert CommonEvent to Milky format
-        const milkyEvent = this.convertToMilkyFormat(commonEvent);
-        if (milkyEvent) {
-            this.dispatch(milkyEvent);
-        }
+        this.dispatch(commonEvent);
     }
 
     format(event: string, payload: any): any {

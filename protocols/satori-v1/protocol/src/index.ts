@@ -1,5 +1,5 @@
 import { Protocol,ProtocolRegistry } from "onebots";
-import type { Schema } from "onebots";
+import type { Dict, Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
 import { CommonEvent,CommonTypes } from "onebots";
@@ -64,20 +64,33 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         this.removeAllListeners();
     }
 
-    dispatch(event: Satori.Event): void {
-        // Dispatch Satori-formatted event
-        this.logger.debug(`Satori dispatch:`, event);
-        this.emit("dispatch", JSON.stringify(event));
+    /**
+     * Account.dispatch 传入 CommonEvent；dispatchCommonEvent 等会传入已构造的 Satori.Event
+     */
+    dispatch(event: unknown): void {
+        if (!this.filterFn(event as Dict)) {
+            return;
+        }
+        let satoriEvent: Satori.Event | null = null;
+        if (this.isCommonEventShape(event)) {
+            satoriEvent = this.convertToSatoriFormat(event);
+        } else {
+            satoriEvent = event as Satori.Event;
+        }
+        if (satoriEvent) {
+            this.logger.debug(`Satori dispatch:`, satoriEvent);
+            this.emit("dispatch", JSON.stringify(satoriEvent));
+        }
     }
 
-    /**
-     * Convert common event to Satori format and dispatch
-     */
+    private isCommonEventShape(e: unknown): e is CommonEvent.Event {
+        if (typeof e !== "object" || e === null) return false;
+        const t = (e as { type?: string }).type;
+        return t === "message" || t === "notice" || t === "request" || t === "meta";
+    }
+
     dispatchCommonEvent(commonEvent: CommonEvent.Event): void {
-        const satoriEvent = this.convertToSatoriFormat(commonEvent);
-        if (satoriEvent) {
-            this.dispatch(satoriEvent);
-        }
+        this.dispatch(commonEvent);
     }
 
     format(event: string, payload: any): any {
