@@ -99,6 +99,62 @@
               class="config-textarea"
             />
           </el-tab-pane>
+          <el-tab-pane label="站点静态" name="static">
+            <div class="static-pane">
+              <el-alert type="info" show-icon :closable="false" class="static-alert">
+                <template #title>可信域名等校验文件</template>
+                请先在「表单」→「基础配置」中设置 <strong>public_static_dir</strong>（如 <code>static</code>）并<strong>保存配置</strong>后，再上传文件。保存后公网访问地址示例：
+                <code>{{ publicBaseUrl }}你的文件名.txt</code>
+                <span v-if="staticHfHint">；{{ staticHfHint }}</span>
+              </el-alert>
+              <el-alert v-if="staticError" type="warning" show-icon :closable="false" class="static-alert">
+                {{ staticError }}
+              </el-alert>
+              <el-space wrap class="static-toolbar">
+                <el-upload
+                  :show-file-list="false"
+                  accept=".txt,.html,.json,text/plain"
+                  :disabled="staticUploading"
+                  :http-request="submitStaticUpload"
+                >
+                  <el-button type="primary" :icon="Upload" :loading="staticUploading">
+                    上传文件
+                  </el-button>
+                </el-upload>
+                <el-button :icon="Refresh" :loading="staticLoading" @click="loadStaticFiles">
+                  刷新列表
+                </el-button>
+              </el-space>
+              <el-text v-if="staticRootDisplay" type="info" class="static-root-hint">
+                目录：{{ staticRootDisplay }}
+              </el-text>
+              <el-table
+                v-loading="staticLoading"
+                :data="staticFiles"
+                style="width: 100%"
+                empty-text="暂无文件"
+              >
+                <el-table-column prop="name" label="文件名" min-width="220" />
+                <el-table-column label="公网路径" min-width="280">
+                  <template #default="scope">
+                    <code class="static-path">{{ publicBaseUrl }}{{ scope.row.name }}</code>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="120">
+                  <template #default="scope">
+                    <el-button
+                      type="danger"
+                      size="small"
+                      :icon="Delete"
+                      @click="handleDeleteStaticFile(scope.row.name)"
+                    >
+                      删除
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </el-tab-pane>
           <el-tab-pane label="账号" name="accounts">
             <el-table :data="accounts" style="width: 100%" :empty-text="accountEmptyText">
               <el-table-column prop="platform" label="平台" width="160" />
@@ -277,7 +333,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive, computed, watch } from 'vue'
-import { Setting, Refresh, Check, Plus, Download } from '@element-plus/icons-vue'
+import { Setting, Refresh, Check, Plus, Download, Upload, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { buildApiUrl } from '../config'
 import { authFetch } from '../composables/useAuth'
@@ -319,7 +375,7 @@ type SchemaGroup = {
 }
 
 const config = ref<string>('')
-const activeTab = ref<'schema' | 'raw'>('schema')
+const activeTab = ref<'schema' | 'raw' | 'accounts' | 'static'>('schema')
 const schema = ref<SchemaBundle | null>(null)
 const schemaGroups = ref<SchemaGroup[]>([])
 const activeGroups = ref<string[]>([])
@@ -345,6 +401,36 @@ const accountAdapterFields = ref<SchemaField[]>([])
 const accountActiveProtocolGroups = ref<string[]>([])
 const accountProtocolEnabled = reactive<Record<string, boolean>>({})
 const isAccountEdit = ref(false)
+
+/** 站点根静态文件（public_static_dir） */
+const staticFiles = ref<{ name: string }[]>([])
+const staticRootDisplay = ref('')
+const staticError = ref('')
+const staticLoading = ref(false)
+const staticUploading = ref(false)
+
+/** Hugging Face Space 典型域名，用于提示上传后会触发仓库备份 */
+const staticHfHint =
+  typeof window !== 'undefined' && /\.hf\.space$/i.test(window.location.hostname)
+    ? '在 HF 上若已配置 HF_TOKEN / HF_REPO_ID，上传或删除后将自动把整包 data（含 static）推送到 Space 仓库，避免重启丢失'
+    : ''
+
+const publicBaseUrl =
+  typeof window !== 'undefined' ? `${window.location.origin}/` : '/'
+
+type StaticApiHfBackup = { attempted: boolean; success?: boolean; message?: string }
+
+const notifyStaticHfBackup = (hf: StaticApiHfBackup | undefined, primaryOk: string) => {
+  if (!hf?.attempted) {
+    ElMessage.success(primaryOk)
+    return
+  }
+  if (hf.success) {
+    ElMessage.success(`${primaryOk}，已同步备份至 Hugging Face 仓库（config_backup.yaml + data_backup.tar.gz）`)
+  } else {
+    ElMessage.warning(`${primaryOk}，但 Hugging Face 备份失败：${hf.message || '未知错误'}，请检查 Secrets 或稍后重试`)
+  }
+}
 
 const isRule = (rule: ValidationRule | Schema): rule is ValidationRule => {
   return typeof rule === 'object' && ('type' in rule || 'required' in rule || 'enum' in rule || 'default' in rule)
@@ -647,8 +733,98 @@ const handleSave = async () => {
   }
 }
 
+const loadStaticFiles = async () => {
+  staticLoading.value = true
+  staticError.value = ''
+  try {
+    const response = await authFetch(buildApiUrl('/api/public-static/files'))
+    const data = (await response.json().catch(() => ({}))) as {
+      success?: boolean
+      message?: string
+      files?: string[]
+      root?: string
+    }
+    if (!response.ok) {
+      staticFiles.value = []
+      staticRootDisplay.value = ''
+      staticError.value = data.message || '无法加载列表（请检查是否已配置 public_static_dir 并保存）'
+      return
+    }
+    staticFiles.value = (data.files || []).map((name) => ({ name }))
+    staticRootDisplay.value = data.root || ''
+  } catch {
+    staticFiles.value = []
+    staticRootDisplay.value = ''
+    staticError.value = '加载静态文件列表失败'
+  } finally {
+    staticLoading.value = false
+  }
+}
+
+/** 使用 authFetch 以便 401 时刷新 Token，与下载配置等行为一致 */
+const submitStaticUpload = async (options: {
+  file: File
+  onSuccess?: (body?: unknown) => void
+  onError?: (err: Error) => void
+}) => {
+  staticUploading.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', options.file, options.file.name)
+    const res = await authFetch(buildApiUrl('/api/public-static/upload'), {
+      method: 'POST',
+      body: fd,
+    })
+    const data = (await res.json().catch(() => ({}))) as {
+      message?: string
+      hf_backup?: StaticApiHfBackup
+    }
+    if (!res.ok) {
+      const err = new Error(data.message || '上传失败')
+      options.onError?.(err)
+      ElMessage.error(data.message || '上传失败')
+      return
+    }
+    options.onSuccess?.(data)
+    notifyStaticHfBackup(data.hf_backup, data.message || '上传成功')
+    await loadStaticFiles()
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error('上传失败')
+    options.onError?.(err)
+    ElMessage.error('上传失败，请检查网络、登录状态或文件是否过大（≤2MB）')
+  } finally {
+    staticUploading.value = false
+  }
+}
+
+const handleDeleteStaticFile = async (name: string) => {
+  try {
+    await ElMessageBox.confirm(`确定删除「${name}」吗？`, '删除静态文件', { type: 'warning' })
+  } catch {
+    return
+  }
+  const response = await authFetch(
+    buildApiUrl(`/api/public-static/${encodeURIComponent(name)}`),
+    { method: 'DELETE' },
+  )
+  const result = (await response.json().catch(() => ({}))) as {
+    message?: string
+    hf_backup?: StaticApiHfBackup
+  }
+  if (response.ok) {
+    notifyStaticHfBackup(result.hf_backup, result.message || '已删除')
+    await loadStaticFiles()
+  } else {
+    ElMessage.error(result.message || '删除失败')
+  }
+}
+
 onMounted(() => {
   loadSchema().finally(loadConfig)
+})
+
+watch(activeTab, (name) => {
+  if (name === 'static') void loadStaticFiles()
 })
 
 const openAddAccount = () => {
@@ -858,5 +1034,28 @@ watch(
   white-space: pre-wrap;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.static-pane {
+  padding: 16px;
+}
+
+.static-alert {
+  margin-bottom: 12px;
+}
+
+.static-toolbar {
+  margin-bottom: 12px;
+}
+
+.static-root-hint {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.static-path {
+  font-size: 12px;
+  word-break: break-all;
 }
 </style>

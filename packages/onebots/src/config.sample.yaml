@@ -1,6 +1,8 @@
 port: 6727 # 监听端口
 log_level: info # 日志等级
 timeout: 30 # 登录超时时间(秒)
+# 站点根静态文件（可信域名校验 txt 等），相对「配置文件所在目录」。Docker 挂载 -v ./data:/data 时填 static 即使用 /data/static
+# public_static_dir: static
 # username / password 不配置时首次启动将自动生成并写入本文件，请务必修改默认账号密码
 
 # 全局默认配置

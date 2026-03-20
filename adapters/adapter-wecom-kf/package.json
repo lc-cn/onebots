@@ -1,0 +1,43 @@
+{
+  "name": "@onebots/adapter-wecom-kf",
+  "version": "0.1.0",
+  "description": "onebots 企业微信「微信客服」适配器（API 会话与消息）",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "keywords": [
+    "onebots",
+    "wecom",
+    "wechat-work",
+    "wxkf",
+    "adapter"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.7.3",
+    "tsc-alias": "latest",
+    "typescript": "latest",
+    "vitest": "^1.6.1"
+  },
+  "peerDependencies": {
+    "onebots": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/onebots.git"
+  }
+}

@@ -22,6 +22,39 @@ import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), 'node_modules')));
+
+type PublicStaticUploadedFile = {
+    filepath?: string;
+    originalFilename?: string | null;
+    newFilename?: string | null;
+};
+
+/** 站点静态根目录下的文件名：禁止路径分隔与控制字符，仅使用 basename */
+function sanitizePublicStaticBasename(original: string | null | undefined): string | null {
+    if (original == null || String(original).trim() === '') return null;
+    let raw = String(original).trim();
+    try {
+        raw = decodeURIComponent(raw);
+    } catch {
+        return null;
+    }
+    if (/[\\/]/.test(raw) || raw.includes('..')) return null;
+    if (/[\x00-\x1f]/.test(raw)) return null;
+    const base = path.basename(raw);
+    if (!base || base !== raw || base === '.' || base === '..') return null;
+    if (base.length > 255) return null;
+    return base;
+}
+
+function pickPublicStaticUpload(files: Record<string, unknown> | undefined): PublicStaticUploadedFile | null {
+    if (!files || typeof files !== 'object') return null;
+    const raw = files.file ?? files.upload;
+    if (!raw) return null;
+    const file = Array.isArray(raw) ? raw[0] : raw;
+    if (!file || typeof file !== 'object') return null;
+    return file as PublicStaticUploadedFile;
+}
+
 // 多目录依次查找 @onebots/web/dist，找到即用（Docker/HF 从 development 启动时 cwd 下无 @onebots/web）
 const client = (() => {
     const rel = ['..', 'node_modules', '@onebots', 'web', 'dist'];
@@ -269,6 +302,31 @@ export class App extends BaseApp {
         } catch (e) {
             this.logger?.warn?.("备份到 HF 仓库异常:", e);
             return { success: false, message: (e as Error).message };
+        }
+    }
+
+    /**
+     * 站点静态文件变更后：若配置了 HF_TOKEN + HF_REPO_ID（如 Hugging Face Space），则再次打包整个配置目录并提交到仓库，持久化 static 等文件
+     */
+    private async backupDataDirToHfAfterStaticChange(): Promise<
+        { attempted: false } | { attempted: true; success: boolean; message?: string }
+    > {
+        const hfToken = process.env.HF_TOKEN;
+        const hfRepoId = process.env.HF_REPO_ID;
+        if (!hfToken || !hfRepoId || !/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(hfRepoId)) {
+            return { attempted: false };
+        }
+        try {
+            const configContent = readFileSync(BaseApp.configPath, 'utf8');
+            const r = await this.backupDataToHf(configContent);
+            if (!r.success && r.message) {
+                this.logger?.warn?.(`Hugging Face 备份（站点静态变更后）: ${r.message}`);
+            }
+            return { attempted: true, success: r.success, message: r.message };
+        } catch (e) {
+            const msg = (e as Error).message;
+            this.logger?.warn?.('Hugging Face 备份（站点静态变更后）异常:', e);
+            return { attempted: true, success: false, message: msg };
         }
     }
 
@@ -836,6 +894,120 @@ export class App extends BaseApp {
                     this.logger?.warn?.(backupResult.message);
                 }
                 ctx.body = { success: true, message: "配置已保存" };
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: (e as Error).message };
+            }
+        });
+
+        // 站点根静态文件（public_static_dir）：列表 / 上传 / 删除（需已配置并保存 public_static_dir）
+        this.router.get("/api/public-static/files", (ctx: RouterContext) => {
+            const root = this.getPublicStaticRoot();
+            if (!root) {
+                ctx.status = 400;
+                ctx.body = {
+                    success: false,
+                    message: '请先在基础配置中设置 public_static_dir 并保存配置',
+                };
+                return;
+            }
+            try {
+                const names = fs
+                    .readdirSync(root, { withFileTypes: true })
+                    .filter((d) => d.isFile())
+                    .map((d) => d.name)
+                    .sort((a, b) => a.localeCompare(b));
+                ctx.body = { success: true, files: names, root };
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: (e as Error).message };
+            }
+        });
+
+        this.router.post("/api/public-static/upload", async (ctx: RouterContext) => {
+            const root = this.getPublicStaticRoot();
+            if (!root) {
+                ctx.status = 400;
+                ctx.body = {
+                    success: false,
+                    message: '请先在基础配置中设置 public_static_dir 并保存配置',
+                };
+                return;
+            }
+            const file = pickPublicStaticUpload(ctx.request.files as Record<string, unknown> | undefined);
+            if (!file?.filepath) {
+                ctx.status = 400;
+                ctx.body = { success: false, message: '缺少上传文件（字段名 file）' };
+                return;
+            }
+            const safeName = sanitizePublicStaticBasename(file.originalFilename ?? file.newFilename);
+            if (!safeName) {
+                try {
+                    fs.unlinkSync(file.filepath);
+                } catch {
+                    /* 忽略临时文件清理失败 */
+                }
+                ctx.status = 400;
+                ctx.body = { success: false, message: '非法或无法识别的文件名' };
+                return;
+            }
+            const dest = path.join(root, safeName);
+            const tmpPath = file.filepath;
+            try {
+                fs.copyFileSync(tmpPath, dest);
+                ctx.body = { success: true, message: '上传成功', filename: safeName };
+                const hf = await this.backupDataDirToHfAfterStaticChange();
+                if (hf.attempted) {
+                    (ctx.body as { hf_backup?: typeof hf }).hf_backup = hf;
+                }
+            } catch (e) {
+                ctx.status = 500;
+                ctx.body = { success: false, message: (e as Error).message };
+            } finally {
+                try {
+                    fs.unlinkSync(tmpPath);
+                } catch {
+                    /* 忽略 */
+                }
+            }
+        });
+
+        this.router.delete("/api/public-static/:filename", async (ctx: RouterContext) => {
+            const root = this.getPublicStaticRoot();
+            if (!root) {
+                ctx.status = 400;
+                ctx.body = {
+                    success: false,
+                    message: '请先在基础配置中设置 public_static_dir 并保存配置',
+                };
+                return;
+            }
+            const safeName = sanitizePublicStaticBasename(ctx.params.filename ?? '');
+            if (!safeName) {
+                ctx.status = 400;
+                ctx.body = { success: false, message: '非法文件名' };
+                return;
+            }
+            const resolvedRoot = path.resolve(root);
+            const target = path.join(root, safeName);
+            const rel = path.relative(resolvedRoot, path.resolve(target));
+            if (rel.startsWith('..') || path.isAbsolute(rel) || rel === '') {
+                ctx.status = 400;
+                ctx.body = { success: false, message: '路径非法' };
+                return;
+            }
+            try {
+                if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+                    ctx.status = 404;
+                    ctx.body = { success: false, message: '文件不存在' };
+                    return;
+                }
+                fs.unlinkSync(target);
+                ctx.body = { success: true, message: '已删除' };
+                const hf = await this.backupDataDirToHfAfterStaticChange();
+                if (hf.attempted) {
+                    (ctx.body as { hf_backup?: typeof hf }).hf_backup = hf;
+                }
             } catch (e) {
                 ctx.status = 500;
                 ctx.body = { success: false, message: (e as Error).message };

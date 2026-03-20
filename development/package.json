@@ -25,6 +25,7 @@
     "@onebots/adapter-discord": "workspace:*",
     "@onebots/adapter-dingtalk": "workspace:*",
     "@onebots/adapter-wecom": "workspace:*",
+    "@onebots/adapter-wecom-kf": "workspace:*",
     "@onebots/adapter-slack": "workspace:*",
     "@onebots/adapter-telegram": "workspace:*",
     "@onebots/adapter-feishu": "workspace:*",

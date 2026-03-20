@@ -13,6 +13,7 @@ fi
 export NODE_PATH="/app/development/node_modules"
 
 mkdir -p /data
+mkdir -p /data/static
 HF_PORT="${PORT:-7860}"
 
 # 使用公共 DNS，避免 HF 等环境中容器内 DNS 不可达导致 api.telegram.org、discord.com 等 ENOTFOUND

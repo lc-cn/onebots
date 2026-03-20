@@ -226,5 +226,10 @@ export const BaseAppConfigSchema: Schema = {
         enum: ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'mark', 'off'],
         default: 'info',
     },
+    /** 站点根静态文件目录（相对 BaseApp.configDir 或绝对路径），用于可信域名校验文件等 */
+    public_static_dir: {
+        type: 'string',
+        transform: (v: unknown) => (v != null && String(v).trim() !== '' ? String(v).trim() : undefined),
+    },
 };
 

@@ -37,6 +37,7 @@
     "@types/koa": "^3.0.1",
     "@types/koa__router": "^12.0.5",
     "@types/koa-basic-auth": "^2.0.6",
+    "@types/koa-static": "^4.0.4",
     "@types/node": "^22.7.3",
     "@types/ws": "^8.5.3",
     "tsc-alias": "latest",
@@ -55,6 +56,7 @@
     "koa": "^3.1.1",
     "koa-basic-auth": "^4.0.0",
     "koa-body": "^7.0.0",
+    "koa-static": "^5.0.0",
     "log4js": "^6.5.2",
     "reflect-metadata": "^0.1.13",
     "ws": "^8.16.0"

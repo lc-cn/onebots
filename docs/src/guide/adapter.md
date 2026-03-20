@@ -40,6 +40,7 @@ onebots 目前支持以下平台适配器：
 - [飞书适配器文档](/platform/feishu)
 - [Slack 适配器文档](/platform/slack)
 - [企业微信适配器文档](/platform/wecom)
+- [微信客服适配器文档](/platform/wecom-kf)
 - [Microsoft Teams 适配器文档](/platform/teams)
 - [Line 适配器文档](/platform/line)
 - [Email 适配器文档](/platform/email)

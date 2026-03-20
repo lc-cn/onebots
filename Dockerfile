@@ -1,6 +1,7 @@
 # OneBots 多平台机器人网关 - Docker 镜像
 # 构建：docker build -t onebots .
 # 运行：docker run -p 6727:6727 -v ./data:/data onebots
+# 持久化：将配置、数据库与静态校验文件放在挂载卷 /data；配置 public_static_dir: static 时，将可信域名 txt 放入宿主 ./data/static（容器内 /data/static）
 
 FROM node:24-alpine AS builder
 

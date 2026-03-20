@@ -63,6 +63,11 @@ const baseWithLabels: Schema = {
     password: withLabel('password', '管理端密码', 'Web 管理端登录密码（与鉴权码二选一）'),
     access_token: withLabel('access_token', '管理端鉴权码', 'Bearer 鉴权码，配置后可使用 Authorization: Bearer <鉴权码> 访问 API，无需用户名密码'),
     log_level: withLabel('log_level', '日志等级', 'trace | debug | info | warn | error | fatal | mark | off'),
+    public_static_dir: withLabel(
+        'public_static_dir',
+        '站点根静态目录',
+        '相对配置文件目录或绝对路径，用于企业微信等可信域名校验文件（站点根路径 GET）；留空不启用。Docker：配置 static 并将校验文件放入挂载卷内 /data/static',
+    ),
 };
 
 export type ConfigSchemaBundle = {

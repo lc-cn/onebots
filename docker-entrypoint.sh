@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# 持久化数据目录（配置、数据库、可选 static 校验文件等）
+mkdir -p /data/static
+
 # 若挂载的 /data 下没有 config.yaml，则从示例复制一份
 if [ ! -f /data/config.yaml ]; then
   mkdir -p /data

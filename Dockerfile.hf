@@ -2,6 +2,7 @@
 # 基于官方镜像，仅增加 HF 要求的端口 7860 与入口脚本，无需在 HF 上从源码构建（无需 GH_PKG_TOKEN）
 # 在 HF 创建 Space 时选择 Docker，将本文件命名为 Dockerfile 或通过 Build 设置指定
 # 文档：https://huggingface.co/docs/hub/spaces-sdks-docker
+# 持久化：与标准镜像相同，数据在 /data；可信域名校验文件可放在 /data/static（config 中 public_static_dir: static），并纳入 data_backup.tar.gz 备份
 
 FROM ghcr.io/lc-cn/onebots:master
 

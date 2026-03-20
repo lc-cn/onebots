@@ -8,6 +8,7 @@ import type { Logger } from "log4js";
 import { createServer, Server } from "http";
 import yaml from "js-yaml";
 import KoaBody from "koa-body";
+import koaStatic from "koa-static";
 const { configure,connectLogger,getLogger } = log4js;
 import { Class, deepClone, deepMerge, readLine } from "@/utils.js";
 import { Router, WsServer } from "./router.js";
@@ -140,8 +141,23 @@ export class BaseApp extends Koa {
         // 注册健康检查端点（无需认证）
         this.setupHealthEndpoints();
         
-        // 中间件链
-        this.use(KoaBody())
+        // 用户配置的站点根静态目录（需在 Router 等功能路由之前，便于 GET /xxx.txt 等直出）
+        const publicStaticDir = this.resolvePublicStaticDirectory();
+        if (publicStaticDir) {
+            this.enhancedLogger.info('已启用站点根静态目录', { dir: publicStaticDir });
+            this.use(koaStatic(publicStaticDir));
+        }
+        
+        // 中间件链（multipart：管理端上传站点静态文件等）
+        this.use(
+            KoaBody({
+                multipart: true,
+                formidable: {
+                    maxFileSize: 2 * 1024 * 1024,
+                    keepExtensions: true,
+                },
+            }),
+        )
             // 性能指标收集（最早执行，以便记录所有请求）
             .use(metricsCollector())
             // 安全审计日志
@@ -281,6 +297,55 @@ export class BaseApp extends Koa {
             ctx.type = 'text/plain; charset=utf-8';
             ctx.body = metricLines.join('\n') + '\n';
         });
+    }
+
+    /**
+     * 解析 public_static_dir：相对路径基于配置文件目录（configDir），禁止相对路径穿越出 configDir；绝对路径按原样使用
+     */
+    private resolvePublicStaticDirectory(): string | null {
+        const raw = this.config.public_static_dir;
+        if (raw == null || String(raw).trim() === '') return null;
+        const trimmed = String(raw).trim();
+        const configDirResolved = path.resolve(BaseApp.configDir);
+        const abs = path.isAbsolute(trimmed)
+            ? path.resolve(trimmed)
+            : path.resolve(configDirResolved, trimmed);
+        if (!path.isAbsolute(trimmed)) {
+            const rel = path.relative(configDirResolved, abs);
+            // 禁止 `.`、等价空相对路径，避免整个配置目录被当作静态站点根
+            if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+                this.enhancedLogger.warn('public_static_dir 必须为配置目录下的子目录（不能为 . 或路径穿越），已忽略', {
+                    configured: trimmed,
+                    resolved: abs,
+                    configDir: configDirResolved,
+                });
+                return null;
+            }
+        }
+        let st: fs.Stats;
+        try {
+            st = fs.statSync(abs);
+        } catch {
+            try {
+                fs.mkdirSync(abs, { recursive: true });
+                st = fs.statSync(abs);
+            } catch (e) {
+                this.enhancedLogger.warn('public_static_dir 无法创建或访问，静态托管已跳过', { abs, error: e });
+                return null;
+            }
+        }
+        if (!st.isDirectory()) {
+            this.enhancedLogger.warn('public_static_dir 不是目录，已忽略', { abs });
+            return null;
+        }
+        return abs;
+    }
+
+    /**
+     * 管理端 API：当前解析后的站点根静态目录（未配置或无效时为 null）
+     */
+    getPublicStaticRoot(): string | null {
+        return this.resolvePublicStaticDirectory();
     }
 
     get adapterConfigs():Map<string,Account.Config[]> {
@@ -467,6 +532,8 @@ export namespace BaseApp {
         /** 管理端 Bearer 鉴权码，配置后可使用 Authorization: Bearer <access_token> 访问 API，无需用户名密码 */
         access_token?: string;
         log_level?: LogLevel;
+        /** 站点根静态目录，相对配置文件所在目录（configDir）或绝对路径；用于企业微信等可信域名校验文件 */
+        public_static_dir?: string;
         general?: Protocol.Configs;
     } & KoaOptions & AdapterConfig;
     export const defaultConfig: Config = {
