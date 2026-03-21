@@ -1,5 +1,6 @@
 import type { Schema } from '@onebots/core';
 import { BaseAppConfigSchema, AdapterRegistry, ProtocolRegistry } from '@onebots/core';
+import { ADAPTER_SCHEMA_PRESETS } from './adapter-schema-presets.js';
 
 /**
  * App 层配置 Schema（可在此扩展）
@@ -83,7 +84,9 @@ export const getAppConfigSchema = (): ConfigSchemaBundle => {
         ...ProtocolRegistry.getAllSchemas(),
     } as Record<string, Schema>;
 
+    // 预设补全未 -r 加载的适配器 schema，供 Web 配置页使用；已加载时以 Registry 为准（覆盖预设）
     const adapters = {
+        ...ADAPTER_SCHEMA_PRESETS,
         ...AdapterRegistry.getAllSchemas(),
     } as Record<string, Schema>;
 

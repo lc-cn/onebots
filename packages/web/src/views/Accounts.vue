@@ -43,7 +43,17 @@
       <el-dialog v-model="dialogVisible" :title="dialogTitle" width="760px">
         <el-form :model="form" label-width="120px">
           <el-form-item label="平台" required>
-            <el-input v-model="form.platform" placeholder="例如: qq" />
+            <el-select
+              v-model="form.platform"
+              class="schema-select"
+              style="width: 100%"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="选择或输入平台 ID（如 qq、wecom-kf、icqq）"
+            >
+              <el-option v-for="name in adapterNames" :key="name" :label="name" :value="name" />
+            </el-select>
           </el-form-item>
           <el-form-item label="账号ID" required>
             <el-input v-model="form.account_id" placeholder="例如: my_bot" />
@@ -191,7 +201,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, Plus, Refresh } from '@element-plus/icons-vue'
 import yaml from 'js-yaml'
@@ -259,6 +269,11 @@ const form = ref({
   platform: '',
   account_id: ''
 })
+
+/** 与配置页一致：来自 /api/config/schema 的 adapters 键（含未 -r 加载的预设） */
+const adapterNames = computed(() =>
+  schema.value?.adapters ? Object.keys(schema.value.adapters).sort((a, b) => a.localeCompare(b)) : []
+)
 
 const makeKey = (path: string[]) => path.join('::')
 

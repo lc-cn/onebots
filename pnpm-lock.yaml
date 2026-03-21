@@ -431,6 +431,9 @@ importers:
       '@onebots/adapter-feishu':
         specifier: workspace:*
         version: link:../adapters/adapter-feishu
+      '@onebots/adapter-icqq':
+        specifier: workspace:*
+        version: link:../adapters/adapter-icqq
       '@onebots/adapter-kook':
         specifier: workspace:*
         version: link:../adapters/adapter-kook
