@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-wecom-kf",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "onebots 企业微信「微信客服」适配器（API 会话与消息）",
   "type": "module",
   "main": "lib/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-line",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "onebots Line Messaging API 适配器（轻量版，支持 Node.js 和 Cloudflare Workers）",
   "type": "module",
   "main": "lib/index.js",
