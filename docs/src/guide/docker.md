@@ -110,6 +110,12 @@ docker run -d \
 
 参数含义与命令行一致：`-r` 指定适配器（可多次），`-p` 指定协议（可多次），`-c` 指定配置文件。
 
+### 官方镜像与 ICQQ（非官方 QQ 协议）
+
+**GHCR 官方 Docker 镜像不包含** `adapter-icqq` 及其依赖 `@icqqjs/icqq`：仓库根目录 `.dockerignore` 会排除 `adapters/adapter-icqq`，构建阶段也不再使用 GitHub Packages 的 build secret。因此镜像内**没有** ICQQ 适配器，默认启动参数里**也不会**带 `-r icqq`。
+
+若你确需在容器中使用 ICQQ，请**自行在本地用完整源码构建镜像**（勿排除上述目录），并自行配置能拉取 `@icqqjs/icqq` 的 npm 凭据与合规评估。一般场景请使用 **QQ 官方开放平台**适配器（`-r qq`）。
+
 ## 端口与网络
 
 - 默认网关端口为 **6727**（可在 `config.yaml` 中修改 `port`）。

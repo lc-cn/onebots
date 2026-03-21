@@ -108,6 +108,12 @@ docker run -d \
 
 Same as CLI: `-r` for adapters (repeatable), `-p` for protocols (repeatable), `-c` for config path.
 
+### Official image and ICQQ (unofficial QQ protocol)
+
+**Official GHCR images do not include** `adapter-icqq` or its dependency `@icqqjs/icqq`: the repo root `.dockerignore` excludes `adapters/adapter-icqq`, and the Docker build no longer uses a GitHub Packages build secret. The image therefore has **no** ICQQ adapter, and the default startup command **does not** pass `-r icqq`.
+
+If you still need ICQQ in a container, **build your own image from the full source tree** (do not exclude that directory) and supply npm credentials that can resolve `@icqqjs/icqq`, and assess compliance yourself. For typical use, prefer the **QQ Open Platform** adapter (`-r qq`).
+
 ## Port and network
 
 - Default gateway port is **6727** (configurable via `port` in `config.yaml`).

@@ -1,7 +1,7 @@
 # 构建并推送 Docker 镜像到 GitHub Container Registry (ghcr.io)
 # 文档：https://docs.github.com/en/actions/publishing-packages/publishing-docker-images
 #
-# 依赖 @icqqjs/icqq（GitHub Packages）：使用仓库 Secret GH_PKG_TOKEN（PAT，read:packages）拉包。
+# 官方镜像不包含 ICQQ 适配器，构建无需 GitHub Packages token。
 
 name: Build and Push Docker image
 
@@ -65,9 +65,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # 从 GitHub Packages 拉取 @icqqjs/icqq，使用 GH_PKG_TOKEN 写入 .npmrc
-          secrets: |
-            NODE_AUTH_TOKEN=${{ secrets.GH_PKG_TOKEN }}
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'

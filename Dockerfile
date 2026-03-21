@@ -18,10 +18,8 @@ COPY protocols ./protocols
 COPY docs ./docs
 COPY development ./development
 
-# 安装依赖并构建（需从 GitHub Packages 拉取 @icqqjs/icqq，通过 build secret 传入 NODE_AUTH_TOKEN）
-RUN --mount=type=secret,id=NODE_AUTH_TOKEN \
-  printf '//npm.pkg.github.com/:_authToken=%s\n@icqqjs:registry=https://npm.pkg.github.com\n' "$(cat /run/secrets/NODE_AUTH_TOKEN)" > .npmrc && \
-  pnpm install --frozen-lockfile
+# 安装依赖并构建（.dockerignore 已排除 adapter-icqq，无需 GitHub Packages token；锁文件与完整仓库可能不一致，故不用 --frozen-lockfile）
+RUN pnpm install --no-frozen-lockfile
 # 仅构建网关所需包（跳过 docs：VitePress 需 git，Alpine 镜像未安装且运行时不需要文档）
 RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' build
 
@@ -54,6 +52,6 @@ ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD [ \
   "-c", "/data/config.yaml", \
   "-r", "kook", "-r", "qq", "-r", "telegram", "-r", "feishu", "-r", "slack", \
-  "-r", "teams", "-r", "wecom", "-r", "wecom-kf", "-r", "icqq", "-r", "discord", "-r", "dingtalk", "-r", "wechat", \
+  "-r", "teams", "-r", "wecom", "-r", "wecom-kf", "-r", "discord", "-r", "dingtalk", "-r", "wechat", \
   "-p", "milky-v1", "-p", "satori-v1", "-p", "onebot-v12", "-p", "onebot-v11" \
 ]
