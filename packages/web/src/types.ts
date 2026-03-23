@@ -59,6 +59,7 @@ export interface ProtocolInfo {
 /** 验证请求展示块（Web 按 type 通用渲染） */
 export type VerificationBlock =
     | { type: 'image'; base64: string; alt?: string }
+    | { type: 'image_url'; url: string; alt?: string }
     | { type: 'link'; url: string; label?: string }
     | { type: 'text'; content: string }
     | { type: 'input'; key: string; placeholder?: string; maxLength?: number; secret?: boolean }

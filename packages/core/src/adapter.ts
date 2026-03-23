@@ -24,8 +24,12 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
         return this.app.db;
     }
 
+    /**
+     * id_map 表名：平台名可能含 `-`（如 wechat-ilink），不能直接拼进 SQL，需规范为合法标识符。
+     */
     get tableName() {
-        return `id_map_${this.platform}`;
+        const safe = String(this.platform).replace(/[^a-zA-Z0-9_]/g, "_");
+        return `id_map_${safe}`;
     }
 
     protected constructor(
@@ -913,6 +917,8 @@ export namespace Adapter {
      */
     export type VerificationBlock =
         | { type: 'image'; base64: string; alt?: string }
+        /** 远程图片 URL（如微信 CDN），Web 端用 img 的 src 直接展示 */
+        | { type: 'image_url'; url: string; alt?: string }
         | { type: 'link'; url: string; label?: string }
         | { type: 'text'; content: string }
         | { type: 'input'; key: string; placeholder?: string; maxLength?: number; secret?: boolean };

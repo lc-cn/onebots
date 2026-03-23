@@ -26,6 +26,13 @@
                   :alt="block.alt ?? ''"
                   class="block-img"
                 />
+                <img
+                  v-else-if="block.type === 'image_url'"
+                  :src="block.url"
+                  :alt="block.alt ?? ''"
+                  class="block-img"
+                  referrerpolicy="no-referrer"
+                />
                 <el-link
                   v-else-if="block.type === 'link'"
                   :href="block.url"

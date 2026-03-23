@@ -44,7 +44,7 @@
     "tsconfig-paths": "latest",
     "tsx": "latest",
     "typescript": "latest",
-    "web-wechat": "latest"
+    "wechat": "latest"
   },
   "files": [
     "/lib/**/*.js",
