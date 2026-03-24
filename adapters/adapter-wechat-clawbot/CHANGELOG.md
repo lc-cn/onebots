@@ -1,5 +1,13 @@
 # @onebots/adapter-wechat-clawbot
 
+## 1.1.1
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+- Updated dependencies [b00497a]
+  - onebots@1.0.7
+
 ## 1.1.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @onebots/adapter-wecom-kf
 
+## 0.2.3
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+- Updated dependencies [b00497a]
+  - onebots@1.0.7
+
 ## 0.2.2
 
 ### Patch Changes

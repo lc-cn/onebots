@@ -1,5 +1,13 @@
 # @imhelper/satori-v1
 
+## 1.0.4
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+- Updated dependencies [b00497a]
+  - imhelper@1.0.4
+
 ## 1.0.3
 
 ### Patch Changes

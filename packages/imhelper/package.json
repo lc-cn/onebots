@@ -1,6 +1,6 @@
 {
   "name": "imhelper",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "IMHelper 客户端SDK核心，提供统一的客户端接口和接收器",
   "type": "module",
   "main": "lib/index.js",

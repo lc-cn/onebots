@@ -1,5 +1,11 @@
 # @onebots/docs
 
+## 0.5.3
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+
 ## 0.5.2
 
 ### Patch Changes

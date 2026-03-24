@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-wechat",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "onebots 微信公众号适配器",
   "type": "module",
   "main": "lib/index.js",
