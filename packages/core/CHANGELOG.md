@@ -1,5 +1,11 @@
 # @onebots/core
 
+## 1.0.6
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+
 ## 1.0.5
 
 ### Patch Changes

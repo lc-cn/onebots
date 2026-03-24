@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "OneBots 整合适配器和协议，提供HTTP/WebSocket服务",
   "type": "module",
   "main": "lib/index.js",

@@ -1,5 +1,13 @@
 # @onebots/protocol-milky-v1
 
+## 1.0.7
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+- Updated dependencies [b00497a]
+  - onebots@1.0.7
+
 ## 1.0.6
 
 ### Patch Changes
