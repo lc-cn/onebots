@@ -27,7 +27,7 @@
     "/lib/**/*.d.ts"
   ],
   "devDependencies": {
-    "@types/node": "^22.7.3",
+    "@types/node": "^24.0.0",
     "tsc-alias": "latest",
     "typescript": "catalog:"
   },

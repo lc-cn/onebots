@@ -70,7 +70,7 @@ flowchart LR
 
 - 要 **多平台接入**，且希望事件与 ID 在框架内 **先统一、再按协议导出**
 - 要 **同一账号同时开 OneBot + Satori + Milky** 等，给不同生态用
-- 技术栈是 **Node.js 22+ / TypeScript**，接受 **自部署网关**
+- 技术栈是 **Node.js ≥24（推荐与 `.node-version` 一致）/ TypeScript**，接受 **自部署网关**
 
 **未必适合：**
 
@@ -167,7 +167,7 @@ pnpm web:dev          # Web 前端（可选）
 pnpm build && pnpm test
 ```
 
-**要求：Node.js ≥ 22**（见 `package.json` engines）。
+**要求：Node.js ≥24**（`package.json#engines`；`.node-version` / `.nvmrc` 为推荐本地版本，可用 `fnm use` / `nvm use`）。
 
 ---
 

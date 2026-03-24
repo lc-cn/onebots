@@ -11,7 +11,7 @@
     "clean": "rm -rf lib *.tsbuildinfo"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "exports": {
     ".": {
@@ -39,7 +39,7 @@
     "@types/koa-basic-auth": "^2.0.6",
     "@types/koa-static": "^4.0.4",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.7.3",
+    "@types/node": "^24.0.0",
     "@types/ws": "^8.5.3",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",

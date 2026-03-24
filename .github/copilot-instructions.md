@@ -7,7 +7,7 @@ OneBots 是一个使用 TypeScript 实现的多平台多协议机器人应用框
 ## 技术栈
 
 - **语言**: TypeScript (ESM)
-- **运行时**: Node.js 22+
+- **运行时**: Node.js ≥24（`package.json#engines`；`.node-version` 为推荐版本）
 - **包管理**: pnpm (workspace monorepo)
 - **构建**: tsc + tsc-alias
 - **测试**: Vitest

@@ -14,7 +14,7 @@
     "clean": "rm -rf lib *.tsbuildinfo"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "keywords": [
     "onebot",
@@ -37,7 +37,7 @@
   "devDependencies": {
     "@types/koa": "^3.0.1",
     "@types/koa-static": "^4.0.4",
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "tsx": "latest",

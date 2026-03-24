@@ -5,7 +5,7 @@
 
 FROM node:24-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@9.0.2 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
 
 # 复制依赖声明与工作空间配置
@@ -29,7 +29,7 @@ RUN pnpm prune --prod
 # ---------- 运行阶段 ----------
 FROM node:24-alpine
 
-RUN corepack enable && corepack prepare pnpm@9.0.2 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
 
 # 从构建阶段复制产物

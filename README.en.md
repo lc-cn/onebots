@@ -64,7 +64,7 @@ flowchart LR
 
 - Need **multiple IM platforms** and a **unified internal event model** before exporting to protocols
 - Want **multiple protocols on the same account** (e.g. OneBot + Satori) for different ecosystems
-- Prefer **Node.js 22+ / TypeScript** and a **self-hosted gateway**
+- Prefer **Node.js ≥24 (`.node-version` recommended) / TypeScript** and a **self-hosted gateway**
 
 **Maybe not if you:**
 

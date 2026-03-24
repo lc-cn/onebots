@@ -5,6 +5,8 @@ packages:
   - 'docs'
   - 'development'
 
-# 工作区统一版本，子包 devDependencies 写 "typescript": "catalog:" 即可
+# npm 包版本：子包 devDependencies 写 "typescript": "catalog:" 即可
 catalog:
   typescript: 5.9.3
+
+# Node：根 package.json#engines（>=24）；.node-version / .nvmrc 为推荐本地版本。pnpm 见 packageManager（catalog 仅用于 npm 依赖）
