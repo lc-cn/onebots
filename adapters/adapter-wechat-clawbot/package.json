@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-wechat-clawbot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "OneBots 微信扩展 ClawBot（iLink Bot HTTP）适配器：扫码登录、长轮询、会话持久化与媒体收发",
   "type": "module",
   "main": "lib/index.js",

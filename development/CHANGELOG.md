@@ -1,5 +1,12 @@
 # onebots-dev
 
+## 1.1.9
+
+### Patch Changes
+
+- Updated dependencies [5415d7b]
+  - @onebots/adapter-wechat-clawbot@1.1.0
+
 ## 1.1.8
 
 ### Patch Changes
