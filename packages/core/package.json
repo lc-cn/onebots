@@ -1,6 +1,6 @@
 {
   "name": "@onebots/core",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "IMHelper 核心抽象层，提供适配器、协议、账号等基础接口和类型",
   "type": "module",
   "main": "lib/index.js",
