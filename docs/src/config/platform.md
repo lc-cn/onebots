@@ -488,6 +488,7 @@ wechat.prod:
 - [协议配置](/config/protocol)
 - [适配器配置指南](/guide/adapter)
 - [微信平台](/platform/wechat)
+- [微信 ClawBot (iLink)](/platform/wechat-clawbot)
 - [QQ 平台](/platform/qq)
 - [Discord 平台](/platform/discord)
 - [Kook 平台](/platform/kook)

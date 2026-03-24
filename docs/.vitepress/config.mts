@@ -44,6 +44,7 @@ const baseConfig = defineConfig({
                         text: "平台",
                         items: [
                             { text: "微信公众号", link: "/platform/wechat" },
+                            { text: "微信 ClawBot (iLink)", link: "/platform/wechat-clawbot" },
                             { text: "QQ机器人", link: "/platform/qq" },
                             { text: "ICQQ", link: "/platform/icqq" },
                             { text: "钉钉机器人", link: "/platform/dingtalk" },
@@ -101,6 +102,7 @@ const baseConfig = defineConfig({
                     ],
                     "/platform/": [
                         { text: "微信公众号", link: "/platform/wechat" },
+                        { text: "微信 ClawBot (iLink)", link: "/platform/wechat-clawbot" },
                         { text: "QQ机器人", link: "/platform/qq" },
                         { text: "ICQQ", link: "/platform/icqq" },
                         { text: "Discord", link: "/platform/discord" },
@@ -171,6 +173,7 @@ const baseConfig = defineConfig({
                         text: "Platforms",
                         items: [
                             { text: "WeChat", link: "/en/platform/wechat" },
+                            { text: "WeChat ClawBot (iLink)", link: "/en/platform/wechat-clawbot" },
                             { text: "QQ", link: "/en/platform/qq" },
                             { text: "ICQQ", link: "/en/platform/icqq" },
                             { text: "DingTalk", link: "/en/platform/dingtalk" },
@@ -241,6 +244,7 @@ const baseConfig = defineConfig({
                     ],
                     "/en/platform/": [
                         { text: "WeChat", link: "/en/platform/wechat" },
+                        { text: "WeChat ClawBot (iLink)", link: "/en/platform/wechat-clawbot" },
                         { text: "QQ", link: "/en/platform/qq" },
                         { text: "ICQQ", link: "/en/platform/icqq" },
                         { text: "Discord", link: "/en/platform/discord" },

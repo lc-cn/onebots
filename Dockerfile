@@ -52,6 +52,6 @@ ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD [ \
   "-c", "/data/config.yaml", \
   "-r", "kook", "-r", "qq", "-r", "telegram", "-r", "feishu", "-r", "slack", \
-  "-r", "teams", "-r", "wecom", "-r", "wecom-kf", "-r", "discord", "-r", "dingtalk", "-r", "wechat", "-r", "wechat-ilink", \
+  "-r", "teams", "-r", "wecom", "-r", "wecom-kf", "-r", "discord", "-r", "dingtalk", "-r", "wechat", "-r", "wechat-clawbot", \
   "-p", "milky-v1", "-p", "satori-v1", "-p", "onebot-v12", "-p", "onebot-v11" \
 ]

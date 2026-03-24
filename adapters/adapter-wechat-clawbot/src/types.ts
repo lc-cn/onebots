@@ -1,12 +1,12 @@
 /**
- * wechat-ilink：微信扩展 / iLink Bot HTTP 适配器配置
+ * 微信 ClawBot（iLink Bot HTTP）适配器配置
  *
  * 约定（由适配器注入，无需在 YAML 填写）：
  * - API：`https://ilinkai.weixin.qq.com`
  * - CDN：`https://novac2c.cdn.weixin.qq.com/c2c`
  * - `bot_type`：`3`
  * - `qr_login`：`true`（无会话时扫码）
- * - token / ilink_bot_id：来自会话文件 `{cwd}/data/wechat-ilink/<account_id>.json`
+ * - token / ilink_bot_id：来自会话文件 `{cwd}/data/wechat-clawbot/<account_id>.json`
  *
  * YAML 仅需 `account_id`（隐含在键名中）及可选轮询/超时调优字段。
  */

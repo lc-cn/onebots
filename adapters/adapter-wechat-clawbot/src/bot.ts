@@ -2,12 +2,15 @@ import path from "node:path";
 import { IlinkBot } from "./sdk/ilink-bot.js";
 import type { WechatIlinkConfig } from "./types.js";
 import type { StaleCredentialFault } from "./sdk/internal/errors.js";
-import type { IlinkContextTokenStore } from "./context-token-store.js";
+import type { ClawbotContextTokenStore } from "./context-token-store.js";
 
-/** 约定会话文件路径（JsonFileCredentialStore）：`{cwd}/data/wechat-ilink/{account_id}.json` */
+/** 会话 JSON 所在子目录（与平台标识一致） */
+const SESSION_DATA_SUBDIR = "wechat-clawbot";
+
+/** 约定会话文件路径（JsonFileCredentialStore）：`{cwd}/data/wechat-clawbot/{account_id}.json` */
 function conventionSessionPath(accountId: string): string {
     const safeId = String(accountId).replace(/[^a-zA-Z0-9._-]/g, "_");
-    return path.join(process.cwd(), "data", "wechat-ilink", `${safeId}.json`);
+    return path.join(process.cwd(), "data", SESSION_DATA_SUBDIR, `${safeId}.json`);
 }
 
 /** OneBots 封装的 iLink 客户端：启动长轮询、可选扫码登录 */
@@ -18,7 +21,7 @@ export class WechatIlinkBot extends IlinkBot {
 
     constructor(
         config: WechatIlinkConfig,
-        deps?: { contextTokenStore?: IlinkContextTokenStore },
+        deps?: { contextTokenStore?: ClawbotContextTokenStore },
     ) {
         const initial =
             config.token && config.ilink_bot_id
@@ -114,7 +117,7 @@ export class WechatIlinkBot extends IlinkBot {
                 session = await this.getSession();
             } else {
                 throw new Error(
-                    "未找到 iLink 会话：请扫码登录（会话写入工作目录 data/wechat-ilink/<账号>.json，重启可恢复）。",
+                    "未找到 iLink 会话：请扫码登录（会话写入工作目录 data/wechat-clawbot/<账号>.json，重启可恢复）。",
                 );
             }
         }

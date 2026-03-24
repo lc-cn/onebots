@@ -16,6 +16,7 @@ onebots 目前支持以下平台适配器：
 | **ICQQ** | ✅ 已实现 | `@onebots/adapter-icqq` | 支持QQ非官方协议，功能更完整 |
 | **Kook** | ✅ 已实现 | `@onebots/adapter-kook` | 支持频道、私聊、服务器管理 |
 | **微信** | ✅ 已实现 | `@onebots/adapter-wechat` | 支持微信公众号 |
+| **微信 ClawBot (iLink)** | ✅ 已实现 | `@onebots/adapter-wechat-clawbot` | 微信 iLink Bot HTTP，扫码登录与长轮询 |
 | **Discord** | ✅ 已实现 | `@onebots/adapter-discord` | 支持Discord机器人 |
 | **Telegram** | ✅ 已实现 | `@onebots/adapter-telegram` | 支持私聊、群组、频道 |
 | **飞书** | ✅ 已实现 | `@onebots/adapter-feishu` | 支持单聊、群聊、富文本消息 |
@@ -34,6 +35,7 @@ onebots 目前支持以下平台适配器：
 - [ICQQ 适配器文档](/platform/icqq)
 - [Kook 适配器文档](/platform/kook)
 - [微信适配器文档](/platform/wechat)
+- [微信 ClawBot (iLink) 文档](/platform/wechat-clawbot)
 - [Discord 适配器文档](/platform/discord)
 - [钉钉适配器文档](/platform/dingtalk)
 - [Telegram 适配器文档](/platform/telegram)
@@ -60,6 +62,9 @@ npm install @onebots/adapter-kook
 
 # 微信
 npm install @onebots/adapter-wechat
+
+# iLink 微信扩展
+npm install @onebots/adapter-wechat-clawbot
 
 # Discord
 npm install @onebots/adapter-discord discord.js
@@ -291,6 +296,7 @@ discord.bot1:
 - [QQ 适配器配置](/config/adapter/qq)
 - [Kook 适配器配置](/config/adapter/kook)
 - [微信适配器配置](/config/adapter/wechat)
+- [微信 ClawBot 适配器配置](/config/adapter/wechat-clawbot)
 - [Discord 适配器配置](/config/adapter/discord)
 
 ## 4. 使用客户端SDK连接

@@ -12,6 +12,7 @@ onebots currently supports the following platform adapters:
 | **ICQQ** | ✅ Implemented | `@onebots/adapter-icqq` | Supports QQ via unofficial protocol with more complete features |
 | **Kook** | ✅ Implemented | `@onebots/adapter-kook` | Supports channels, private chats, server management |
 | **WeChat** | ✅ Implemented | `@onebots/adapter-wechat` | Supports WeChat Official Accounts |
+| **WeChat ClawBot (iLink)** | ✅ Implemented | `@onebots/adapter-wechat-clawbot` | WeChat iLink Bot HTTP (QR login, long polling) |
 | **Discord** | ✅ Implemented | `@onebots/adapter-discord` | Supports Discord bots |
 | **Telegram** | ✅ Implemented | `@onebots/adapter-telegram` | Supports private chats, groups, channels |
 | **Feishu** | ✅ Implemented | `@onebots/adapter-feishu` | Supports private chats, group chats, rich text messages |
@@ -30,6 +31,7 @@ onebots currently supports the following platform adapters:
 - [ICQQ Adapter Documentation](/en/platform/icqq)
 - [Kook Adapter Documentation](/en/platform/kook)
 - [WeChat Adapter Documentation](/en/platform/wechat)
+- [WeChat ClawBot (iLink)](/en/platform/wechat-clawbot)
 - [Discord Adapter Documentation](/en/platform/discord)
 - [DingTalk Adapter Documentation](/en/platform/dingtalk)
 - [Telegram Adapter Documentation](/en/platform/telegram)
@@ -55,6 +57,9 @@ npm install @onebots/adapter-kook
 
 # WeChat
 npm install @onebots/adapter-wechat
+
+# WeChat iLink
+npm install @onebots/adapter-wechat-clawbot
 
 # Discord
 npm install @onebots/adapter-discord discord.js

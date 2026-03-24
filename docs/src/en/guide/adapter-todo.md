@@ -9,6 +9,7 @@ This document lists the IM platform adapters planned for the onebots project.
 | **QQ Official Bot** | ✅ Implemented | `@onebots/adapter-qq` | Supports QQ channels, group chats, private chats |
 | **Kook** | ✅ Implemented | `@onebots/adapter-kook` | Supports channels, private chats, server management |
 | **WeChat** | ✅ Implemented | `@onebots/adapter-wechat` | Supports WeChat Official Accounts |
+| **WeChat ClawBot (iLink)** | ✅ Implemented | `@onebots/adapter-wechat-clawbot` | WeChat iLink Bot HTTP |
 | **Discord** | ✅ Implemented | `@onebots/adapter-discord` | Supports Discord bots |
 | **Telegram** | ✅ Implemented | `@onebots/adapter-telegram` | Supports private chats, groups, channels |
 | **Feishu** | ✅ Implemented | `@onebots/adapter-feishu` | Supports private chats, group chats, rich text messages |

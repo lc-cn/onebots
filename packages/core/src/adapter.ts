@@ -25,7 +25,7 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
     }
 
     /**
-     * id_map 表名：平台名可能含 `-`（如 wechat-ilink），不能直接拼进 SQL，需规范为合法标识符。
+     * id_map 表名：平台名可能含 `-`（如 wechat-clawbot），不能直接拼进 SQL，需规范为合法标识符。
      */
     get tableName() {
         const safe = String(this.platform).replace(/[^a-zA-Z0-9_]/g, "_");

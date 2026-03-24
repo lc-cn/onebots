@@ -10,6 +10,7 @@
 | **ICQQ** | ✅ 已实现 | `@onebots/adapter-icqq` | 支持QQ非官方协议，功能更完整 |
 | **Kook** | ✅ 已实现 | `@onebots/adapter-kook` | 支持频道、私聊、服务器管理 |
 | **微信** | ✅ 已实现 | `@onebots/adapter-wechat` | 支持微信公众号 |
+| **微信 ClawBot (iLink)** | ✅ 已实现 | `@onebots/adapter-wechat-clawbot` | 微信 iLink Bot HTTP |
 | **Discord** | ✅ 已实现 | `@onebots/adapter-discord` | 支持Discord机器人 |
 | **Telegram** | ✅ 已实现 | `@onebots/adapter-telegram` | 支持私聊、群组、频道 |
 | **飞书** | ✅ 已实现 | `@onebots/adapter-feishu` | 支持单聊、群聊、富文本消息 |

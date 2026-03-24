@@ -32,7 +32,7 @@ import {
 import { IlinkJsonTransport } from "./transport/ilink-json-transport.js";
 import { JsonFileCredentialStore, MemoryCredentialStore } from "./state/persist.js";
 import { pullUserMediaAttachment, stageBinaryForPeer, mapMimeFamilyToUploadKind } from "./cdn/payload-pipeline.js";
-import type { IlinkContextTokenStore } from "../context-token-store.js";
+import type { ClawbotContextTokenStore } from "../context-token-store.js";
 
 export interface IlinkBotOptions {
     session?: Partial<CredentialBlob> | null;
@@ -47,7 +47,7 @@ export interface IlinkBotOptions {
      * 与 `contextTokenAccountKey` 同时传入时，context_token 只读写 SQLite（OneBots 主库），
      * 会话 JSON 不再持久化 contextTokens；写入带会话 `accountId` + 对端 peer，读取按 accountKey + peer。
      */
-    contextTokenStore?: IlinkContextTokenStore;
+    contextTokenStore?: ClawbotContextTokenStore;
     /** OneBots 配置账号键（如 `account_id`） */
     contextTokenAccountKey?: string;
 }
@@ -76,7 +76,7 @@ export class IlinkBot extends EventEmitter {
     private pollKnobs: PollingOptions;
     private readonly regexBindings: RegexBinding[] = [];
     private readonly typingPass = new Map<string, string>();
-    private readonly contextTokenStore?: IlinkContextTokenStore;
+    private readonly contextTokenStore?: ClawbotContextTokenStore;
     private readonly contextTokenAccountKey?: string;
     /** 已从会话文件迁入 DB 后写回空 contextTokens（仅 DB 模式用一次） */
     private didMigrateContextTokensFromFile = false;

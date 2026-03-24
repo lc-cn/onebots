@@ -1,5 +1,5 @@
 /**
- * wechat-ilink：微信扩展（iLink Bot HTTP）适配器
+ * 微信 ClawBot（iLink Bot HTTP）适配器，平台标识 **`wechat-clawbot`**。
  */
 import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
@@ -15,25 +15,25 @@ import {
 } from "./sdk/internal/config.js";
 import { StaleCredentialFault } from "./sdk/internal/errors.js";
 import {
-    ensureWechatIlinkContextTokenTable,
-    SqliteIlinkContextTokenStore,
+    ensureWechatClawbotContextTokenTable,
+    SqliteClawbotContextTokenStore,
 } from "./context-token-store.js";
 
-function buildWechatIlinkQrBlocks(qrCodeUrl: string, _qrcode: string): Adapter.VerificationBlock[] {
+function buildWechatClawbotQrBlocks(qrCodeUrl: string, _qrcode: string): Adapter.VerificationBlock[] {
     const blocks: Adapter.VerificationBlock[] = [];
     const img = qrCodeUrl.trim();
     if (img.startsWith("http://") || img.startsWith("https://")) {
         blocks.push({
             type: "image_url",
             url: img,
-            alt: "iLink 登录二维码",
+            alt: "ClawBot / iLink 登录二维码",
         });
     } else if (img.startsWith("data:image")) {
         const comma = img.indexOf(",");
         const base64 = comma >= 0 ? img.slice(comma + 1) : img;
-        blocks.push({ type: "image", base64, alt: "iLink 登录二维码" });
+        blocks.push({ type: "image", base64, alt: "ClawBot / iLink 登录二维码" });
     } else {
-        blocks.push({ type: "image", base64: img, alt: "iLink 登录二维码" });
+        blocks.push({ type: "image", base64: img, alt: "ClawBot / iLink 登录二维码" });
     }
     blocks.push({
         type: "text",
@@ -48,9 +48,9 @@ function ilinkTimeToMs(t?: number): number {
     return Math.floor(t * 1000);
 }
 
-export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> {
+export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbot"> {
     constructor(app: BaseApp) {
-        super(app, "wechat-ilink");
+        super(app, "wechat-clawbot");
         this.icon = "https://res.wx.qq.com/a/wx_fed/assets/res/OTE0YTAw.png";
     }
 
@@ -63,7 +63,7 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         if (scene_type !== "private") {
-            throw new Error(`wechat-ilink 仅支持私聊 (private)，当前: ${scene_type}`);
+            throw new Error(`${this.platform} 仅支持私聊 (private)，当前: ${scene_type}`);
         }
 
         const chatId = sceneId.string;
@@ -114,16 +114,16 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
         const cfg = account.client.getConfig();
         return {
             user_id: this.createId(cfg.ilink_bot_id ?? uin),
-            user_name: account.nickname || cfg.ilink_bot_id || "wechat-ilink",
+            user_name: account.nickname || cfg.ilink_bot_id || this.platform,
             avatar: account.avatar || this.icon,
         };
     }
 
     async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
-            app_name: "onebots wechat-ilink adapter",
+            app_name: "onebots wechat-clawbot adapter",
             app_version: "1.0.0",
-            impl: "wechat-ilink",
+            impl: this.platform,
             version: "1.0.0",
         };
     }
@@ -210,7 +210,7 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
         return segments;
     }
 
-    createAccount(config: Account.Config<"wechat-ilink">): Account<"wechat-ilink", WechatIlinkBot> {
+    createAccount(config: Account.Config<"wechat-clawbot">): Account<"wechat-clawbot", WechatIlinkBot> {
         /** token / ilink_bot_id / 端点 / bot_type / qr_login 等由约定与会话文件驱动，不从 YAML 读取 */
         const wc: WechatIlinkConfig = {
             account_id: config.account_id,
@@ -223,21 +223,21 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
             polling_retry_delay_ms: config.polling_retry_delay_ms,
         };
 
-        ensureWechatIlinkContextTokenTable(this.db);
-        const contextTokenStore = new SqliteIlinkContextTokenStore(this.db);
+        ensureWechatClawbotContextTokenTable(this.db);
+        const contextTokenStore = new SqliteClawbotContextTokenStore(this.db);
         const bot = new WechatIlinkBot(wc, { contextTokenStore });
-        const account = new Account<"wechat-ilink", WechatIlinkBot>(this, bot, config);
+        const account = new Account<"wechat-clawbot", WechatIlinkBot>(this, bot, config);
 
         bot.on("qr", (payload: { qrCodeUrl: string; qrcode: string }) => {
             this.logger.info(
-                `[wechat-ilink] ${config.account_id} 请使用微信扫描登录: ${payload.qrCodeUrl} (qrcode=${payload.qrcode.slice(0, 16)}...)`,
+                `[${this.platform}] ${config.account_id} 请使用微信扫描登录: ${payload.qrCodeUrl} (qrcode=${payload.qrcode.slice(0, 16)}...)`,
             );
             this.emit("verification:request", {
-                platform: "wechat-ilink",
+                platform: this.platform,
                 account_id: config.account_id,
                 type: "qrcode",
                 hint: "请使用微信扫描下方二维码完成 iLink 扩展登录",
-                options: { blocks: buildWechatIlinkQrBlocks(payload.qrCodeUrl, payload.qrcode) },
+                options: { blocks: buildWechatClawbotQrBlocks(payload.qrCodeUrl, payload.qrcode) },
                 data: { qrcode: payload.qrcode },
             } as unknown as Adapter.VerificationRequest);
         });
@@ -245,40 +245,40 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
         bot.on("login", (session) => {
             account.nickname = session.accountId;
             account.avatar = this.icon;
-            this.logger.info(`[wechat-ilink] ${config.account_id} 扫码登录成功，ilink_bot_id=${session.accountId}`);
+            this.logger.info(`[${this.platform}] ${config.account_id} 扫码登录成功，ilink_bot_id=${session.accountId}`);
         });
 
         bot.on("credential_stale", (err: StaleCredentialFault) => {
             account.status = AccountStatus.Pending;
             this.logger.warn(
-                `[wechat-ilink] ${config.account_id} 会话已在服务端失效，本地凭证已清除，将自动弹出二维码重新登录（无需重启）。原因: ${err.message}`,
+                `[${this.platform}] ${config.account_id} 会话已在服务端失效，本地凭证已清除，将自动弹出二维码重新登录（无需重启）。原因: ${err.message}`,
             );
         });
 
         bot.on("relogin_blocked", (payload: { message: string }) => {
             account.status = AccountStatus.OffLine;
-            this.logger.warn(`[wechat-ilink] ${config.account_id} ${payload.message}`);
+            this.logger.warn(`[${this.platform}] ${config.account_id} ${payload.message}`);
         });
 
         bot.on("relogin_failed", (e: unknown) => {
             account.status = AccountStatus.OffLine;
-            this.logger.error(`[wechat-ilink] ${config.account_id} 自动重新扫码登录失败:`, e);
+            this.logger.error(`[${this.platform}] ${config.account_id} 自动重新扫码登录失败:`, e);
         });
 
         bot.on("ready", () => {
             account.status = AccountStatus.Online;
-            this.logger.info(`[wechat-ilink] ${config.account_id} 长轮询已启动`);
+            this.logger.info(`[${this.platform}] ${config.account_id} 长轮询已启动`);
         });
 
         bot.on("polling_error", (err: unknown) => {
             if (err instanceof StaleCredentialFault) return;
-            this.logger.error(`[wechat-ilink] ${config.account_id} 轮询错误:`, err);
+            this.logger.error(`[${this.platform}] ${config.account_id} 轮询错误:`, err);
         });
 
         bot.on("message", (m: IlinkBotMessage) => {
             const rawText = m.text ?? m.caption ?? "";
             const preview = rawText.length > 80 ? `${rawText.slice(0, 80)}...` : rawText;
-            this.logger.info(`[wechat-ilink] 收到私聊 | from=${m.from.id} | ${preview}`);
+            this.logger.info(`[${this.platform}] 收到私聊 | from=${m.from.id} | ${preview}`);
 
             const segments = this.buildSegments(m);
             const mid = m.id != null ? String(m.id) : m.seq != null ? String(m.seq) : String(Date.now());
@@ -286,7 +286,7 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(mid),
                 timestamp: ilinkTimeToMs(m.date),
-                platform: "wechat-ilink",
+                platform: this.platform,
                 bot_id: this.createId(config.account_id),
                 type: "message",
                 message_type: "private",
@@ -303,7 +303,7 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
         });
 
         void bot.start().catch((e: unknown) => {
-            this.logger.error(`[wechat-ilink] ${config.account_id} 启动失败:`, e);
+            this.logger.error(`[${this.platform}] ${config.account_id} 启动失败:`, e);
             account.status = AccountStatus.OffLine;
         });
 
@@ -314,15 +314,15 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
 declare module "onebots" {
     export namespace Adapter {
         export interface Configs {
-            "wechat-ilink": WechatIlinkConfig;
+            "wechat-clawbot": WechatIlinkConfig;
         }
     }
 }
 
-AdapterRegistry.register("wechat-ilink", WechatIlinkAdapter, {
-    name: "wechat-ilink",
-    displayName: "微信 iLink",
-    description: "基于 iLink Bot HTTP 的微信扩展机器人（扫码登录 + 长轮询，需合规使用）",
+AdapterRegistry.register("wechat-clawbot", WechatClawbotAdapter, {
+    name: "wechat-clawbot",
+    displayName: "微信 ClawBot (iLink)",
+    description: "基于 iLink Bot HTTP 的微信扩展（ClawBot）：扫码登录 + 长轮询，需合规使用",
     icon: "https://res.wx.qq.com/a/wx_fed/assets/res/OTE0YTAw.png",
     homepage: "https://ilinkai.weixin.qq.com",
     author: "凉菜",

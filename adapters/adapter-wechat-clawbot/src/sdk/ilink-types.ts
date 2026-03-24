@@ -49,4 +49,4 @@ export { UploadKind as UploadMediaType } from "./protocol/wire-models.js";
 
 export { GatewayFault, MissingReplyLaneFault, StaleCredentialFault } from "./internal/errors.js";
 export type { ClearSessionOptions } from "./ilink-bot.js";
-export type { IlinkContextTokenStore } from "../context-token-store.js";
+export type { ClawbotContextTokenStore } from "../context-token-store.js";

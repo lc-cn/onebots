@@ -333,7 +333,7 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
-  adapters/adapter-wechat-ilink:
+  adapters/adapter-wechat-clawbot:
     dependencies:
       onebots:
         specifier: workspace:*
@@ -474,9 +474,9 @@ importers:
       '@onebots/adapter-wechat':
         specifier: workspace:*
         version: link:../adapters/adapter-wechat
-      '@onebots/adapter-wechat-ilink':
+      '@onebots/adapter-wechat-clawbot':
         specifier: workspace:*
-        version: link:../adapters/adapter-wechat-ilink
+        version: link:../adapters/adapter-wechat-clawbot
       '@onebots/adapter-wecom':
         specifier: workspace:*
         version: link:../adapters/adapter-wecom

@@ -26,7 +26,7 @@ features:
 - title: 🎯 协议标准化
   details: 统一各大平台的差异，输出标准的 OneBot、Satori、Milky 协议
 - title: 🔌 广泛的平台兼容
-  details: 内置 15+ 主流平台适配器，支持 QQ、ICQQ、微信、钉钉、飞书、企业微信、Telegram、Slack、Discord、Kook、Microsoft Teams、Line、Email、WhatsApp、Zulip 等，可轻松扩展
+  details: 内置 16+ 主流平台适配器，支持 QQ、ICQQ、微信、微信 iLink 扩展、钉钉、飞书、企业微信、Telegram、Slack、Discord、Kook、Microsoft Teams、Line、Email、WhatsApp、Zulip 等，可轻松扩展
 - title: 📡 多协议同时提供
   details: 一个账号可同时提供 OneBot V11/V12、Satori、Milky 等多种协议接口
 - title: 💻 统一客户端SDK

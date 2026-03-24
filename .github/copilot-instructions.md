@@ -34,6 +34,7 @@ onebots/
 │   ├── adapter-slack/          # Slack
 │   ├── adapter-wecom/          # 企业微信
 │   ├── adapter-wechat/         # 微信公众号
+│   ├── adapter-wechat-clawbot/ # 微信 ClawBot（iLink Bot HTTP）
 │   ├── adapter-teams/          # Microsoft Teams
 │   ├── adapter-line/           # Line
 │   └── adapter-mock/           # Mock (测试用)
