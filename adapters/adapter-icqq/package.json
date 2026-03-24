@@ -28,7 +28,7 @@
   ],
   "devDependencies": {
     "tsc-alias": "latest",
-    "typescript": "latest"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "onebots": "workspace:*"

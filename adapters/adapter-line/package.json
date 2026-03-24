@@ -30,7 +30,7 @@
   "devDependencies": {
     "@types/node": "^22.7.3",
     "tsc-alias": "latest",
-    "typescript": "latest"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "onebots": "workspace:*"

@@ -4,3 +4,7 @@ packages:
   - 'protocols/*/*'
   - 'docs'
   - 'development'
+
+# 工作区统一版本，子包 devDependencies 写 "typescript": "catalog:" 即可
+catalog:
+  typescript: 5.9.3

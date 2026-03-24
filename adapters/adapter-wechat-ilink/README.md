@@ -1,14 +1,16 @@
 # @onebots/adapter-wechat-ilink
 
 OneBots 适配器：**微信扩展 / iLink Bot HTTP**（平台名 **`wechat-ilink`**）。  
-实现扫码登录、`ilink/bot/getupdates` 长轮询、`get_updates_buf` 游标与 **`context_token`** 持久化、CDN 媒体收发等。
+实现扫码登录、`ilink/bot/getupdates` 长轮询、`get_updates_buf` 游标、**`context_token` 写入 OneBots 主库 SQLite**、CDN 媒体收发等。
 
 ## 功能一览
 
 | 能力 | 说明 |
 |------|------|
 | 约定配置 | API/CDN、`bot_type`、自动扫码等由适配器固定，减少 YAML 必填项 |
-| 会话文件 | 默认 `{工作目录}/data/wechat-ilink/<account_id>.json`，扫码后 token / sync / context 落盘，重启可恢复 |
+| 会话文件 | 默认 `{工作目录}/data/wechat-ilink/<account_id>.json`，仅存 token / sync 等；**不含** `contextTokens`（见下表） |
+| context_token | 表 **`wechat_ilink_context_token`**（与 `onebots.db` 同库）：主键 `(account_key, peer_id)`，并记录当前 `ilink_bot_id`；读取按 **OneBots `account_id` + 对端 `ilink_user_id`**，与会话里 `accountId` 写入时关联 |
+| 会话失效 | 长轮询若收到凭证失效（如 `-14`），会**删除会话 JSON**；**库内 context_token 保留**，自动弹出二维码重登后仍可按 peer 复用 |
 | Web 扫码 | 触发 `verification:request`，管理端 SSE 展示二维码（与 icqq 验证流一致） |
 | 账号状态 | 长轮询非阻塞启动，正常进入 `ready`，控制台显示在线 |
 | `getFriendList` | 返回 1 条占位；`user_id` / `user_name` 使用会话中 **`userId`（微信用户）**，**不用 `accountId`（机器人）** 冒充好友 |
@@ -48,11 +50,12 @@ wechat-ilink.my_bot: {}
 | 无会话时 | 自动扫码登录（`qr_login` 恒为 `true`） |
 | token / ilink_bot_id | 由扫码写入会话文件，**不从配置读取** |
 
-### 会话文件
+### 会话文件与 context_token
 
-- 路径：**`{工作目录}/data/wechat-ilink/<account_id>.json`**
-- 文件名中的 `account_id` 会规范为安全字符（非 `[a-zA-Z0-9._-]` → `_`）
-- `context_token` 随入站消息更新时会 **自动 `save`** 会话文件
+- 会话 JSON 路径：**`{工作目录}/data/wechat-ilink/<account_id>.json`**（文件名中的 `account_id` 会规范为安全字符）
+- **`context_token`**：入站更新时写入 **SQLite** 表 `wechat_ilink_context_token`（配置项 `database` 指向的库，默认 `onebots.db`）
+- 若曾使用旧版把 `contextTokens` 写在 JSON 里，**首次启动会迁移进库**并写回不含 `contextTokens` 的会话文件
+- 单独使用 `IlinkBot`（不经过 OneBots 适配器）时未注入存储，行为仍为内存 + 可选 JSON 中的 `contextTokens`
 
 ### 重要限制（与上游一致）
 

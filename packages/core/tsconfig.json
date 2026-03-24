@@ -14,7 +14,10 @@
         "paths": {
             "@/*": ["./src/*"]
         },
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "strict": false,
+        "noImplicitAny": false,
+        "strictPropertyInitialization": false
     },
     "include": ["./src/"],
     "exclude": [

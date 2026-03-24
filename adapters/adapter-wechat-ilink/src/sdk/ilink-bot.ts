@@ -32,6 +32,7 @@ import {
 import { IlinkJsonTransport } from "./transport/ilink-json-transport.js";
 import { JsonFileCredentialStore, MemoryCredentialStore } from "./state/persist.js";
 import { pullUserMediaAttachment, stageBinaryForPeer, mapMimeFamilyToUploadKind } from "./cdn/payload-pipeline.js";
+import type { IlinkContextTokenStore } from "../context-token-store.js";
 
 export interface IlinkBotOptions {
     session?: Partial<CredentialBlob> | null;
@@ -42,6 +43,22 @@ export interface IlinkBotOptions {
     cdnBaseUrl?: string;
     routeTag?: string;
     polling?: boolean | PollingOptions;
+    /**
+     * 与 `contextTokenAccountKey` 同时传入时，context_token 只读写 SQLite（OneBots 主库），
+     * 会话 JSON 不再持久化 contextTokens；写入带会话 `accountId` + 对端 peer，读取按 accountKey + peer。
+     */
+    contextTokenStore?: IlinkContextTokenStore;
+    /** OneBots 配置账号键（如 `account_id`） */
+    contextTokenAccountKey?: string;
+}
+
+/** {@link IlinkBot.clearSession} 选项 */
+export interface ClearSessionOptions {
+    /**
+     * 未启用 `contextTokenStore` 时：为 true 则清除凭证但把 context_token 暂存内存，待下次 `useSession` 合并回快照。
+     * 已启用 DB 存储时：context_token 始终在库中，本项无效。
+     */
+    preserveContextTokens?: boolean;
 }
 
 type RegexBinding = { pattern: RegExp; listener: OnTextListener };
@@ -54,10 +71,17 @@ export class IlinkBot extends EventEmitter {
     private readonly seedCredential: Partial<CredentialBlob> | null;
     private hydrated = false;
     private pollArmed = false;
-    private pollLoop: Promise<void> | null = null;
+    /** 子类在凭证失效重登前可 await 其结束并置 null */
+    protected pollLoop: Promise<void> | null = null;
     private pollKnobs: PollingOptions;
     private readonly regexBindings: RegexBinding[] = [];
     private readonly typingPass = new Map<string, string>();
+    private readonly contextTokenStore?: IlinkContextTokenStore;
+    private readonly contextTokenAccountKey?: string;
+    /** 已从会话文件迁入 DB 后写回空 contextTokens（仅 DB 模式用一次） */
+    private didMigrateContextTokensFromFile = false;
+    /** 凭证清理时暂存的 context_token（仅无 DB 存储时） */
+    private contextTokensCarryover: Record<string, string> | null = null;
 
     constructor(options: IlinkBotOptions = {}) {
         super();
@@ -86,6 +110,9 @@ export class IlinkBot extends EventEmitter {
             token: options.token,
         });
 
+        this.contextTokenStore = options.contextTokenStore;
+        this.contextTokenAccountKey = options.contextTokenAccountKey;
+
         this.pollKnobs =
             typeof options.polling === "object" ? options.polling : { timeoutMs: ILINK_LONG_WAIT_MS };
 
@@ -107,7 +134,6 @@ export class IlinkBot extends EventEmitter {
         const disk = pickCredentialOrNull(await this.store.load());
         const inline = pickCredentialOrNull(this.seedCredential);
         this.snapshot = disk ?? inline;
-        this.hydrated = true;
 
         if (this.snapshot) {
             this.transport.patchRuntimeTargets({
@@ -117,20 +143,59 @@ export class IlinkBot extends EventEmitter {
                 routeTag: this.snapshot.routeTag,
             });
         }
+
+        await this.maybeMigrateContextTokensFromSessionFile();
+
+        this.hydrated = true;
         return this.snapshot;
+    }
+
+    /** 会话落盘时不带 contextTokens（由 DB 或内存维护） */
+    private stripForJsonSave(blob: CredentialBlob): CredentialBlob {
+        if (!this.contextTokenStore) return blob;
+        return { ...blob, contextTokens: {} };
+    }
+
+    /** 旧版 JSON 里若有 contextTokens，一次性写入 SQLite 并写回空对象 */
+    private async maybeMigrateContextTokensFromSessionFile(): Promise<void> {
+        if (this.didMigrateContextTokensFromFile) return;
+        this.didMigrateContextTokensFromFile = true;
+        if (!this.contextTokenStore || !this.contextTokenAccountKey || !this.snapshot) return;
+        const ct = this.snapshot.contextTokens;
+        if (!ct || Object.keys(ct).length === 0) return;
+        for (const [peerId, tok] of Object.entries(ct)) {
+            if (typeof tok === "string" && tok.length > 0) {
+                this.contextTokenStore.set(this.contextTokenAccountKey, this.snapshot.accountId, peerId, tok);
+            }
+        }
+        this.snapshot.contextTokens = {};
+        await this.store.save(this.stripForJsonSave(this.snapshot));
     }
 
     private async persistSnapshot(): Promise<void> {
         if (!this.snapshot) return;
         this.snapshot.updatedAt = new Date().toISOString();
-        await this.store.save(this.snapshot);
+        await this.store.save(this.stripForJsonSave(this.snapshot));
     }
 
     async getSession(): Promise<CredentialBlob | null> {
         return this.ensureSessionLoaded();
     }
 
-    async clearSession(): Promise<void> {
+    async clearSession(options?: ClearSessionOptions): Promise<void> {
+        if (
+            !this.contextTokenStore &&
+            options?.preserveContextTokens &&
+            this.snapshot?.contextTokens
+        ) {
+            const prev = this.snapshot.contextTokens;
+            const keys = Object.keys(prev);
+            if (keys.length > 0) {
+                this.contextTokensCarryover = { ...prev };
+            }
+        } else {
+            this.contextTokensCarryover = null;
+        }
         this.snapshot = null;
         this.hydrated = true;
         this.typingPass.clear();
@@ -139,10 +204,14 @@ export class IlinkBot extends EventEmitter {
     }
 
     async useSession(session: CredentialBlob): Promise<void> {
+        const carried = this.contextTokenStore ? {} : (this.contextTokensCarryover ?? {});
+        this.contextTokensCarryover = null;
         this.snapshot = {
             ...session,
             syncBuffer: session.syncBuffer ?? "",
-            contextTokens: { ...(session.contextTokens ?? {}) },
+            contextTokens: this.contextTokenStore
+                ? {}
+                : { ...carried, ...(session.contextTokens ?? {}) },
             updatedAt: new Date().toISOString(),
             createdAt: session.createdAt ?? new Date().toISOString(),
         };
@@ -187,6 +256,10 @@ export class IlinkBot extends EventEmitter {
 
     async getLatestContextToken(chatId: string): Promise<string | undefined> {
         const s = await this.ensureSessionLoaded();
+        if (this.contextTokenStore && this.contextTokenAccountKey && s) {
+            const fromDb = this.contextTokenStore.get(this.contextTokenAccountKey, s.accountId, chatId);
+            if (fromDb) return fromDb;
+        }
         return s?.contextTokens?.[chatId];
     }
 
@@ -199,7 +272,11 @@ export class IlinkBot extends EventEmitter {
 
     private async obtainReplyContext(peerKey: string, override?: string): Promise<string> {
         const s = this.insistSnapshot(await this.ensureSessionLoaded());
-        const ctx = override ?? s.contextTokens?.[peerKey];
+        let ctx = override;
+        if (ctx == null && this.contextTokenStore && this.contextTokenAccountKey) {
+            ctx = this.contextTokenStore.get(this.contextTokenAccountKey, s.accountId, peerKey);
+        }
+        if (ctx == null) ctx = s.contextTokens?.[peerKey];
         if (!ctx) throw new MissingReplyLaneFault(peerKey);
         return ctx;
     }
@@ -207,8 +284,12 @@ export class IlinkBot extends EventEmitter {
     private async memorizeReplyContext(peerKey: string, contextToken?: string): Promise<void> {
         if (!contextToken) return;
         const s = this.insistSnapshot(await this.ensureSessionLoaded());
-        s.contextTokens = s.contextTokens ?? {};
-        s.contextTokens[peerKey] = contextToken;
+        if (this.contextTokenStore && this.contextTokenAccountKey) {
+            this.contextTokenStore.set(this.contextTokenAccountKey, s.accountId, peerKey, contextToken);
+        } else {
+            s.contextTokens = s.contextTokens ?? {};
+            s.contextTokens[peerKey] = contextToken;
+        }
         await this.persistSnapshot();
     }
 
@@ -345,11 +426,18 @@ export class IlinkBot extends EventEmitter {
                         await this.fanOutInbound(mapInboundWirePacket(row));
                     }
                 } catch (err) {
-                    this.emit("polling_error", err);
                     if (err instanceof StaleCredentialFault) {
+                        // 停止轮询并清除磁盘/内存会话，避免下次启动仍用坏凭证
                         this.pollArmed = false;
-                        throw err;
+                        try {
+                            await this.clearSession({ preserveContextTokens: true });
+                        } catch (clearErr: unknown) {
+                            this.emit("polling_error", clearErr);
+                        }
+                        this.emit("credential_stale", err);
+                        continue;
                     }
+                    this.emit("polling_error", err);
                     await delay(knobs.retryDelayMs ?? 2_000);
                 }
             }

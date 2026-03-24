@@ -519,7 +519,7 @@ export class App extends BaseApp {
                         return;
                     case "system.reload":
                         const config = yaml.load(fs.readFileSync(BaseApp.configPath, "utf8"));
-                        return this.reload(config);
+                        return this.reload(config as App.Config);
                     case "bot.start": {
                         const { platform, uin } = JSON.parse(payload.data);
                         await this.adapters.get(platform)?.setOnline(uin);

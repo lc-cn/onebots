@@ -41,7 +41,7 @@
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "tsx": "latest",
-    "typescript": "latest"
+    "typescript": "catalog:"
   },
   "dependencies": {
     "@karinjs/node-pty": "^1.1.3",

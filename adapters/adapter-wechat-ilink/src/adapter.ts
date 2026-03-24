@@ -13,6 +13,11 @@ import {
     ILINK_HTTP_ORIGIN_DEFAULT,
     ILINK_QR_BOT_CLASS_DEFAULT,
 } from "./sdk/internal/config.js";
+import { StaleCredentialFault } from "./sdk/internal/errors.js";
+import {
+    ensureWechatIlinkContextTokenTable,
+    SqliteIlinkContextTokenStore,
+} from "./context-token-store.js";
 
 function buildWechatIlinkQrBlocks(qrCodeUrl: string, _qrcode: string): Adapter.VerificationBlock[] {
     const blocks: Adapter.VerificationBlock[] = [];
@@ -218,7 +223,9 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
             polling_retry_delay_ms: config.polling_retry_delay_ms,
         };
 
-        const bot = new WechatIlinkBot(wc);
+        ensureWechatIlinkContextTokenTable(this.db);
+        const contextTokenStore = new SqliteIlinkContextTokenStore(this.db);
+        const bot = new WechatIlinkBot(wc, { contextTokenStore });
         const account = new Account<"wechat-ilink", WechatIlinkBot>(this, bot, config);
 
         bot.on("qr", (payload: { qrCodeUrl: string; qrcode: string }) => {
@@ -238,8 +245,24 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
         bot.on("login", (session) => {
             account.nickname = session.accountId;
             account.avatar = this.icon;
-            console.log('session', session);
             this.logger.info(`[wechat-ilink] ${config.account_id} 扫码登录成功，ilink_bot_id=${session.accountId}`);
+        });
+
+        bot.on("credential_stale", (err: StaleCredentialFault) => {
+            account.status = AccountStatus.Pending;
+            this.logger.warn(
+                `[wechat-ilink] ${config.account_id} 会话已在服务端失效，本地凭证已清除，将自动弹出二维码重新登录（无需重启）。原因: ${err.message}`,
+            );
+        });
+
+        bot.on("relogin_blocked", (payload: { message: string }) => {
+            account.status = AccountStatus.OffLine;
+            this.logger.warn(`[wechat-ilink] ${config.account_id} ${payload.message}`);
+        });
+
+        bot.on("relogin_failed", (e: unknown) => {
+            account.status = AccountStatus.OffLine;
+            this.logger.error(`[wechat-ilink] ${config.account_id} 自动重新扫码登录失败:`, e);
         });
 
         bot.on("ready", () => {
@@ -248,6 +271,7 @@ export class WechatIlinkAdapter extends Adapter<WechatIlinkBot, "wechat-ilink"> 
         });
 
         bot.on("polling_error", (err: unknown) => {
+            if (err instanceof StaleCredentialFault) return;
             this.logger.error(`[wechat-ilink] ${config.account_id} 轮询错误:`, err);
         });
 

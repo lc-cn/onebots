@@ -30,7 +30,7 @@
   "devDependencies": {
     "onebots": "workspace:*",
     "tsc-alias": "latest",
-    "typescript": "latest"
+    "typescript": "catalog:"
   },
   "dependencies": {
     "ws": "latest"

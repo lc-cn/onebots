@@ -27,9 +27,10 @@
     "changeset:publish": "changeset publish"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "pnpm": ">=9.12.0"
   },
-  "packageManager": "pnpm@9.0.2",
+  "packageManager": "pnpm@9.15.9",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lc-cn/onebots.git"
@@ -56,19 +57,20 @@
   ],
   "homepage": "https://github.com/lc-cn/onebots#readme",
   "devDependencies": {
-    "@changesets/cli": "^2.29.8",
+    "@changesets/cli": "^2.30.0",
     "@types/koa-static": "^4.0.4",
-    "@types/node": "^22.7.3",
+    "@types/node": "^22.19.15",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^1.6.1",
     "@vitest/ui": "^1.6.1",
     "d3-sankey": "^0.12.3",
     "koa-static": "^5.0.0",
-    "prettier": "^3.7.3",
+    "prettier": "^3.8.1",
     "socks-proxy-agent": "^8.0.5",
+    "typescript": "catalog:",
     "vitepress": "^1.6.4",
     "vitest": "^1.6.1",
-    "ws": "^8.18.3"
+    "ws": "^8.20.0"
   },
   "pnpm": {
     "overrides": {

@@ -63,6 +63,13 @@ export class SqliteDB {
     }
 
     /**
+     * 执行原始 SQL（如复合主键建表），调用方需保证语句幂等（常用 IF NOT EXISTS）
+     */
+    execSQL(sql: string): void {
+        this.db.exec(sql);
+    }
+
+    /**
      * Close database connection
      */
     close(): void {

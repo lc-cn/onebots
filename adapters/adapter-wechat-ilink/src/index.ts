@@ -4,6 +4,12 @@ import type { Schema } from "onebots";
 export type { WechatIlinkConfig } from "./types.js";
 export * from "./adapter.js";
 export * from "./bot.js";
+export {
+    ensureWechatIlinkContextTokenTable,
+    SqliteIlinkContextTokenStore,
+    WECHAT_ILINK_CONTEXT_TOKEN_TABLE,
+} from "./context-token-store.js";
+export type { IlinkContextTokenStore } from "./context-token-store.js";
 
 /** 配置表单字段（端点 / 扫码等见适配器约定，README） */
 const WechatIlinkSchema: Schema = {
