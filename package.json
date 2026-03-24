@@ -24,7 +24,9 @@
     "docs:preview": "vitepress preview docs",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "changeset publish"
+    "changeset:publish": "changeset publish",
+    "bump": "changeset version",
+    "pub": "changeset publish"
   },
   "engines": {
     "node": ">=24",

@@ -1,68 +1,89 @@
-name: Publish Release
+# 使用 Changesets：有待处理的 .changeset 时打开「版本」PR；合并后再次 push 到 master 时执行发布。
+# 参考 changesets/action 推荐用法，结合 npm OIDC 可信发布（无需 NPM_TOKEN）。
+name: Build and Publish
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches:
       - master
+  workflow_dispatch:
 
 permissions:
-  id-token: write  # Required for OIDC
-  contents: read
+  contents: write
+  packages: write
+  pull-requests: write
+  id-token: write # npm 可信发布 / provenance 需要
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
+env:
+  CI: true
+  # changeset 调起 npm/pnpm publish 时继承，生成 provenance
+  NPM_CONFIG_PROVENANCE: "true"
+
 jobs:
   release:
-    name: Release
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')
+    name: Version or Publish
+    timeout-minutes: 30
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write  # Required for OIDC
-    # 与 Docker 构建一致：从 GitHub Packages 拉取 @icqqjs/icqq 需 GH_PKG_TOKEN
+    # 安装依赖时拉取 GitHub Packages（如 @icqqjs/*）需要 token
     env:
       NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: 24
           cache: pnpm
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: "https://registry.npmjs.org"
 
-      - run: pnpm install
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - run: pnpm build
+      - name: Build packages
+        run: pnpm build
 
-      - run: pnpm test
+      - name: Test
+        run: pnpm test
         continue-on-error: true
 
-      - name: Get version
-        id: get_version
-        run: |
-          VERSION=$(jq -r '.version' package.json)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Bump versions or publish to npm
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm bump
+          commit: "chore: version packages"
+          title: "chore: version packages"
+          publish: pnpm pub
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # OIDC 可信发布 - 无需 TOKEN
-      - run: pnpm publish -r --no-git-checks --access public --provenance
+      - name: Read root version after publish
+        id: pkg_version
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create git tags
+        if: steps.changesets.outputs.published == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
+
           MAIN_VERSION=$(jq -r '.version' package.json)
-          git tag -a "v${MAIN_VERSION}" -m "Release v${MAIN_VERSION}" || echo "Tag exists"
-          
+          git tag -a "v${MAIN_VERSION}" -m "Release v${MAIN_VERSION}" 2>/dev/null || echo "Root tag exists or skip"
+
           for pkg in packages/*/package.json protocols/*/*/package.json adapters/*/package.json; do
             if [ -f "$pkg" ]; then
               name=$(jq -r '.name' "$pkg")
@@ -73,12 +94,13 @@ jobs:
               fi
             fi
           done
-          
+
           git push --tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate changelog
+      - name: Generate changelog excerpt
+        if: steps.changesets.outputs.published == 'true'
         run: |
           if [ -f "CHANGELOG.md" ]; then
             awk '/^## /{p++} p==1' CHANGELOG.md > RELEASE_NOTES.md
@@ -87,12 +109,14 @@ jobs:
             echo "See individual package CHANGELOG.md files for details." >> RELEASE_NOTES.md
           fi
 
-      - uses: ncipollo/release-action@v1
+      - name: GitHub Release
+        if: steps.changesets.outputs.published == 'true'
+        uses: ncipollo/release-action@v1
         with:
           bodyFile: "RELEASE_NOTES.md"
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: "v${{ steps.get_version.outputs.version }}"
-          name: "🚀 OneBots v${{ steps.get_version.outputs.version }}"
+          tag: "v${{ steps.pkg_version.outputs.version }}"
+          name: "🚀 OneBots v${{ steps.pkg_version.outputs.version }}"
           generateReleaseNotes: true
           makeLatest: true
           allowUpdates: true

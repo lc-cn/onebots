@@ -55,12 +55,11 @@ git commit -m "chore: add changeset for vX.X.X"
 git push origin master
 ```
 
-### 5. 等待 CI
+### 5. 等待 CI（`release.yml` / Changesets）
 
-1. `version.yml` 检测到 changeset
-2. 自动创建 Version PR
-3. 审核并合并 PR
-4. `release.yml` 自动发布到 npm
+1. push 到 `master` 后，`changesets/action` 检测到 `.changeset` 时自动创建 **Version PR**
+2. 审核并合并该 PR（更新版本号与 CHANGELOG）
+3. 合并再次触发 `release.yml`，在无待处理 changeset 时执行 **`pnpm pub`** 发布到 npm，并打 tag、创建 GitHub Release
 
 ## 版本号规范
 
