@@ -63,6 +63,10 @@ docker logs -f onebots
 docker stop onebots && docker rm onebots
 ```
 
+### 方式三：1Panel
+
+仓库内提供与 [1Panel 应用商店](https://github.com/1Panel-dev/appstore) 相同布局的应用描述（`data.yml`、`docker-compose.yml`、表单端口等），便于在面板中一键编排或向官方应用库投稿。说明见 **[deploy/1panel](../../../deploy/1panel/README.md)**。
+
 ## 使用 GitHub 构建的镜像
 
 若仓库已配置 [GitHub Actions 构建 Docker 镜像](https://github.com/lc-cn/onebots/actions)，可直接拉取 GHCR 镜像，无需本地构建：

@@ -1,0 +1,34 @@
+name: onebots
+tags:
+  - 开发工具
+title: OneBots 多平台机器人网关
+description: 多平台、多协议（OneBot / Satori / Milky 等）即时通讯机器人应用框架与网关
+additionalProperties:
+  key: onebots
+  name: OneBots
+  tags:
+    - DevTools
+  shortDescZh: 多平台多协议 IM 机器人网关
+  shortDescEn: Multi-platform multi-protocol IM bot gateway
+  description:
+    en: OneBots connects QQ, WeChat, Discord, Telegram, Feishu and more to OneBot, Satori, Milky and other protocols.
+    zh: OneBots 将 QQ、微信、Discord、Telegram、飞书等平台接入 OneBot、Satori、Milky 等协议。
+    ja: 複数のIMプラットフォームをOneBot/Satori等のプロトコルに接続するゲートウェイです。
+    ko: 여러 IM 플랫폼을 OneBot, Satori 등 프로토콜에 연결하는 게이트웨이입니다.
+    zh-Hant: 多平台多協定 IM 機器人閘道。
+    es-es: Puerta de enlace multiplataforma para bots de mensajería instantánea.
+    ms: Gerbang bot IM pelbagai platform dan protokol.
+    pt-br: Gateway de bots de mensagens multiplataforma e multiprotocolo.
+    ru: Шлюз мультиплатформенных ботов для мгновенных сообщений.
+    tr: Çoklu platform ve protokol için anlık mesaj botu ağ geçidi.
+  type: website
+  crossVersionUpdate: true
+  limit: 0
+  recommend: 0
+  batchInstallSupport: true
+  website: https://github.com/lc-cn/onebots
+  github: https://github.com/lc-cn/onebots
+  document: https://github.com/lc-cn/onebots#readme
+  architectures:
+    - amd64
+    - arm64

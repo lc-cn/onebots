@@ -1,0 +1,21 @@
+additionalProperties:
+  formFields:
+    - default: 6727
+      edit: true
+      envKey: PANEL_APP_PORT_HTTP
+      labelEn: Gateway HTTP port
+      labelZh: 网关 HTTP 端口
+      label:
+        en: Gateway HTTP port
+        zh: 网关 HTTP 端口
+        es-es: Puerto HTTP del gateway
+        zh-Hant: 閘道 HTTP 埠
+        ja: ゲートウェイ HTTP ポート
+        ko: 게이트웨이 HTTP 포트
+        ms: Port HTTP gerbang
+        pt-br: Porta HTTP do gateway
+        ru: HTTP-порт шлюза
+        tr: Ağ geçidi HTTP bağlantı noktası
+      required: true
+      rule: paramPort
+      type: number

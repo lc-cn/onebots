@@ -1,0 +1,18 @@
+# OneBots — 与根目录 Dockerfile / docker-entrypoint.sh 一致：配置与数据在 /data
+services:
+  onebots:
+    image: ghcr.io/lc-cn/onebots:0.5.0
+    container_name: ${CONTAINER_NAME}
+    restart: always
+    networks:
+      - 1panel-network
+    ports:
+      - "${PANEL_APP_PORT_HTTP}:6727"
+    volumes:
+      - ./data:/data
+    labels:
+      createdBy: "Apps"
+
+networks:
+  1panel-network:
+    external: true
