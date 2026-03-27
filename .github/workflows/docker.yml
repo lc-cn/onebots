@@ -1,10 +1,4 @@
-# 构建并推送 Docker 镜像到 GitHub Container Registry (ghcr.io)
-# 文档：https://docs.github.com/en/actions/publishing-packages/publishing-docker-images
-#
-# 官方镜像不包含 ICQQ 适配器，构建无需 GitHub Packages token。
-#
-# 多架构：`platforms` 必须与 FROM 的基础镜像在 Docker Hub 上实际提供的架构一致（可用
-# `docker buildx imagetools inspect node:24-alpine` 查看）。node:24-alpine 通常仅有 amd64/arm64。
+# 参考：https://docs.docker.com/build/ci/github-actions/multi-platform/
 
 name: Build and Push Docker image
 
@@ -21,33 +15,16 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
-    name: Build and push to GHCR
+  meta:
+    name: Docker metadata
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
-
+    outputs:
+      tags: ${{ steps.export.outputs.tags }}
+      labels: ${{ steps.export-labels.outputs.labels }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # QEMU 须在 Buildx 之前，否则多架构构建无法拉取非本机架构的基础镜像
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -60,23 +37,166 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=
 
-      - name: Build and push Docker image
-        id: push
+      - name: Export tags（多行写入 job outputs）
+        id: export
+        env:
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          {
+            echo 'tags<<DELIM_META_TAGS'
+            echo "$META_TAGS"
+            echo 'DELIM_META_TAGS'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Export labels（多行）
+        id: export-labels
+        env:
+          META_LABELS: ${{ steps.meta.outputs.labels }}
+        run: |
+          {
+            echo 'labels<<DELIM_META_LABELS'
+            echo "$META_LABELS"
+            echo 'DELIM_META_LABELS'
+          } >> "$GITHUB_OUTPUT"
+
+  build-amd64:
+    name: Build linux/amd64
+    runs-on: ubuntu-latest
+    needs: meta
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 准备推送标签（PR → meta 标签；push → 临时 amd64）
+        id: pick-tags
+        env:
+          META_TAGS: ${{ needs.meta.outputs.tags }}
+          TEMP_TAG: ${{ format('{0}/{1}:build-{2}-amd64', env.REGISTRY, env.IMAGE_NAME, github.run_id) }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            {
+              echo 'tags<<DELIM_BUILD_TAGS'
+              echo "$META_TAGS"
+              echo 'DELIM_BUILD_TAGS'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=$TEMP_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          tags: ${{ steps.pick-tags.outputs.tags }}
+          labels: ${{ needs.meta.outputs.labels }}
+          cache-from: type=gha,scope=amd64
+          cache-to: type=gha,mode=max,scope=amd64
+
+  build-arm64:
+    name: Build linux/arm64
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    needs: meta
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push（临时 arm64 标签）
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/arm64
+          tags: ${{ format('{0}/{1}:build-{2}-arm64', env.REGISTRY, env.IMAGE_NAME, github.run_id) }}
+          labels: ${{ needs.meta.outputs.labels }}
+          cache-from: type=gha,scope=arm64
+          cache-to: type=gha,mode=max,scope=arm64
+
+  merge:
+    name: Merge multi-arch manifest
+    if: github.event_name != 'pull_request' && needs.build-amd64.result == 'success' && needs.build-arm64.result == 'success'
+    runs-on: ubuntu-latest
+    needs: [meta, build-amd64, build-arm64]
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list
+        id: merge
+        env:
+          AMD64_REF: ${{ format('{0}/{1}:build-{2}-amd64', env.REGISTRY, env.IMAGE_NAME, github.run_id) }}
+          ARM64_REF: ${{ format('{0}/{1}:build-{2}-arm64', env.REGISTRY, env.IMAGE_NAME, github.run_id) }}
+          TAGS_RAW: ${{ needs.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          mapfile -t tags <<< "$TAGS_RAW"
+          args=()
+          for t in "${tags[@]}"; do
+            [ -z "${t:-}" ] && continue
+            args+=(-t "$t")
+          done
+          if [ ${#args[@]} -eq 0 ]; then
+            echo "无待合并标签"; exit 1
+          fi
+          docker buildx imagetools create "${args[@]}" "$AMD64_REF" "$ARM64_REF"
+          FIRST_TAG=""
+          for t in "${tags[@]}"; do
+            [ -n "${t:-}" ] && FIRST_TAG="$t" && break
+          done
+          DIGEST=$(docker buildx imagetools inspect "$FIRST_TAG" --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+          if ! echo "$DIGEST" | grep -qE '^sha256:[a-f0-9]{64}$'; then
+            DIGEST=$(docker buildx imagetools inspect "$FIRST_TAG" 2>/dev/null | grep -m1 -oE 'sha256:[a-f0-9]{64}' || true)
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "manifest digest: ${DIGEST}"
 
       - name: Generate artifact attestation
-        if: github.event_name != 'pull_request'
+        if: startsWith(steps.merge.outputs.digest, 'sha256:')
         uses: actions/attest-build-provenance@v3
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.merge.outputs.digest }}
           push-to-registry: true
