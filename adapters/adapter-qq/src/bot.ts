@@ -228,13 +228,14 @@ export class QQBot extends EventEmitter {
      * 连接WebSocket
      */
     async connect(): Promise<void> {
-        if (this.isConnecting || this.isStopped) return;
+        if (this.isStopped || this.isConnecting || this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN) return;
         this.isConnecting = true;
         try {
             const gateway = await this.getGateway();
             this.ws = new WebSocket(gateway.url);
             
             this.ws.on('open', () => {
+                this.isConnecting = false;
                 this.emit('ws_open');
             });
             
@@ -243,6 +244,7 @@ export class QQBot extends EventEmitter {
             });
             
             this.ws.on('close', (code, reason) => {
+                this.isConnecting = false;
                 this.emit('ws_close', code, reason.toString());
                 this.stopHeartbeat();
                 
@@ -264,9 +266,9 @@ export class QQBot extends EventEmitter {
             });
             
             this.ws.on('error', (error) => {
+                this.isConnecting = false;
                 this.emit('error', error);
             });
-            this.isConnecting = false;
         } catch (error) {
             this.isConnecting = false;
             this.emit('error', error);

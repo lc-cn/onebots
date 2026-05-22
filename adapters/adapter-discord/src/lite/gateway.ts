@@ -69,6 +69,7 @@ export class DiscordGateway extends EventEmitter {
     private rest: DiscordREST;
     private isReady = false;
     private reconnectAttempts = 0;
+    private reconnectTimer: NodeJS.Timeout | null = null;
 
     constructor(options: GatewayOptions) {
         super();
@@ -150,7 +151,11 @@ export class DiscordGateway extends EventEmitter {
                         DiscordGateway.MAX_RECONNECT_DELAY_MS
                     );
                     this.reconnectAttempts = (this.reconnectAttempts || 0) + 1;
-                    setTimeout(() => this.reconnect(), delay);
+                    this.clearReconnectTimer();
+                    this.reconnectTimer = setTimeout(() => {
+                        this.reconnectTimer = null;
+                        void this.reconnect();
+                    }, delay);
                 }
             });
 
@@ -232,6 +237,7 @@ export class DiscordGateway extends EventEmitter {
                 this.resumeGatewayUrl = data.resume_gateway_url;
                 this.isReady = true;
                 this.reconnectAttempts = 0;
+                this.clearReconnectTimer();
                 this.emit('ready', data.user);
                 break;
 
@@ -362,6 +368,10 @@ export class DiscordGateway extends EventEmitter {
      * 重连
      */
     private async reconnect() {
+        if (this.isReady && this.ws && this.ws.readyState === 1) {
+            return;
+        }
+
         this.cleanup();
         
         if (this.resumeGatewayUrl && this.sessionId) {
@@ -383,6 +393,7 @@ export class DiscordGateway extends EventEmitter {
      * 清理资源
      */
     private cleanup() {
+        this.clearReconnectTimer();
         this.stopHeartbeat();
         this.isReady = false;
         
@@ -404,6 +415,13 @@ export class DiscordGateway extends EventEmitter {
         this.cleanup();
     }
 
+    private clearReconnectTimer() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+    }
+
     /**
      * 获取 REST 客户端
      */
@@ -411,4 +429,3 @@ export class DiscordGateway extends EventEmitter {
         return this.rest;
     }
 }
-
