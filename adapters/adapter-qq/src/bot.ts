@@ -40,6 +40,8 @@ export class QQBot extends EventEmitter {
     private isResuming: boolean = false;
     private resumeFailCount: number = 0; // RESUME 失败次数
     private user: QQUser | null = null;
+    private isConnecting: boolean = false;
+    private isStopped: boolean = false;
     
     private readonly baseURL: string;
     private readonly wsURL: string;
@@ -226,6 +228,8 @@ export class QQBot extends EventEmitter {
      * 连接WebSocket
      */
     async connect(): Promise<void> {
+        if (this.isConnecting || this.isStopped) return;
+        this.isConnecting = true;
         try {
             const gateway = await this.getGateway();
             this.ws = new WebSocket(gateway.url);
@@ -262,7 +266,9 @@ export class QQBot extends EventEmitter {
             this.ws.on('error', (error) => {
                 this.emit('error', error);
             });
+            this.isConnecting = false;
         } catch (error) {
+            this.isConnecting = false;
             this.emit('error', error);
             throw error;
         }
@@ -427,6 +433,7 @@ export class QQBot extends EventEmitter {
      * 处理重连
      */
     private handleReconnect(): void {
+        if (this.isStopped) return;
         if (this.reconnectAttempts >= (this.config.maxRetry || 10)) {
             this.emit('error', new Error('重连次数超过最大限制'));
             return;
@@ -873,9 +880,11 @@ export class QQBot extends EventEmitter {
      * 停止Bot
      */
     async stop(): Promise<void> {
+        this.isStopped = true;
         this.stopHeartbeat();
         
         if (this.ws) {
+            this.ws.removeAllListeners();
             this.ws.close(1000, 'Normal closure');
             this.ws = null;
         }
@@ -884,6 +893,7 @@ export class QQBot extends EventEmitter {
         this.lastSeq = 0;
         this.accessToken = '';
         this.tokenExpireTime = 0;
+        this.isConnecting = false;
         
         this.emit('stop');
     }

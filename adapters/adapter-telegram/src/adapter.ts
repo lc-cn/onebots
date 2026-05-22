@@ -384,6 +384,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
 
         // 监听私聊消息
         bot.on('private_message', (event: any) => {
+            try {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
             if (me && event.from?.id === me.id) return;
@@ -460,10 +461,12 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
 
             // 派发到协议层
             account.dispatch(commonEvent);
+            } catch (e) { this.logger.error(`[Telegram] 处理私聊消息事件异常:`, e); }
         });
 
         // 监听群组消息
         bot.on('group_message', (event: any) => {
+            try {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
             if (me && event.from?.id === me.id) return;
@@ -545,6 +548,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
 
             // 派发到协议层
             account.dispatch(commonEvent);
+            } catch (e) { this.logger.error(`[Telegram] 处理群组消息事件异常:`, e); }
         });
 
         // 启动时初始化 Bot

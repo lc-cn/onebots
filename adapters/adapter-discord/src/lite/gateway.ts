@@ -65,6 +65,7 @@ export class DiscordGateway extends EventEmitter {
     private resumeGatewayUrl: string | null = null;
     private rest: DiscordREST;
     private isReady = false;
+    private reconnectAttempts = 0;
 
     constructor(options: GatewayOptions) {
         super();
@@ -109,14 +110,14 @@ export class DiscordGateway extends EventEmitter {
                 // @ts-ignore - socks-proxy-agent 是可选依赖
                 const { SocksProxyAgent } = await import('socks-proxy-agent');
                 wsOptions.agent = new SocksProxyAgent(socksUrl);
-                console.log(`[Gateway] 使用 SOCKS5 代理: ${socksUrl}`);
+                console.log(`[Gateway] 使用 SOCKS5 代理: ${socksUrl.replace(/\/\/[^@]+@/, '//***:***@')}`);
             } catch {
                 // 回退到 https-proxy-agent
                 try {
                     // @ts-ignore - https-proxy-agent 是可选依赖
                     const { HttpsProxyAgent } = await import('https-proxy-agent');
                     wsOptions.agent = new HttpsProxyAgent(this.proxyUrl);
-                    console.log(`[Gateway] 使用 HTTP 代理: ${this.proxyUrl}`);
+                    console.log(`[Gateway] 使用 HTTP 代理: ${this.proxyUrl.replace(/\/\/[^@]+@/, '//***:***@')}`);
                 } catch {
                     console.warn('[Gateway] 代理 agent 未安装，将直接连接');
                 }
@@ -139,9 +140,11 @@ export class DiscordGateway extends EventEmitter {
                 this.cleanup();
                 this.emit('close', code, reason.toString());
                 
-                // 自动重连
+                // 自动重连 (指数退避)
                 if (code !== 1000 && code !== 4004) {
-                    setTimeout(() => this.reconnect(), 5000);
+                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts || 0), 30000);
+                    this.reconnectAttempts = (this.reconnectAttempts || 0) + 1;
+                    setTimeout(() => this.reconnect(), delay);
                 }
             });
 
@@ -222,6 +225,7 @@ export class DiscordGateway extends EventEmitter {
                 this.sessionId = data.session_id;
                 this.resumeGatewayUrl = data.resume_gateway_url;
                 this.isReady = true;
+                this.reconnectAttempts = 0;
                 this.emit('ready', data.user);
                 break;
 

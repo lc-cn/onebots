@@ -14,12 +14,15 @@ export interface RateLimiterOptions {
     queueExcess?: boolean;
     /** 队列最大长度 */
     maxQueueSize?: number;
+    /** 队列中请求的最大等待时间（毫秒），默认 30000 */
+    requestTimeout?: number;
 }
 
 interface QueuedRequest<T> {
     execute: () => Promise<T>;
     resolve: (value: T) => void;
     reject: (error: Error) => void;
+    enqueueTime: number;
 }
 
 /**
@@ -37,6 +40,7 @@ export class RateLimiter {
     private readonly minInterval: number;
     private readonly queueExcess: boolean;
     private readonly maxQueueSize: number;
+    private readonly requestTimeout: number;
     
     constructor(options: RateLimiterOptions) {
         this.maxRequests = options.maxRequests;
@@ -44,6 +48,7 @@ export class RateLimiter {
         this.minInterval = options.minInterval ?? 0;
         this.queueExcess = options.queueExcess ?? true;
         this.maxQueueSize = options.maxQueueSize ?? 100;
+        this.requestTimeout = options.requestTimeout ?? 30000;
         
         this.tokens = this.maxRequests;
         this.lastRefill = Date.now();
@@ -119,7 +124,7 @@ export class RateLimiter {
         
         // 加入队列
         return new Promise((resolve, reject) => {
-            this.queue.push({ execute: fn, resolve, reject });
+            this.queue.push({ execute: fn, resolve, reject, enqueueTime: Date.now() });
             this.processQueue();
         });
     }
@@ -150,6 +155,11 @@ export class RateLimiter {
             if (this.tryAcquire()) {
                 const request = this.queue.shift();
                 if (request) {
+                    // Check if request has timed out
+                    if (Date.now() - request.enqueueTime > this.requestTimeout) {
+                        request.reject(new RateLimitError('Request timeout in rate limiter queue'));
+                        continue;
+                    }
                     this.lastRequest = Date.now();
                     try {
                         const result = await request.execute();

@@ -78,7 +78,7 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=an
         this.logger.info(`Starting account ${this.account_id}`);
         this.emit("start");
         for (const protocol of this.protocols) {
-            protocol.start();
+            await protocol.start();
         }
     }
 
@@ -87,6 +87,7 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=an
             await protocol.stop(force);
         }
         this.emit("stop");
+        this.removeAllListeners();
     }
 
     getGroupList() {
