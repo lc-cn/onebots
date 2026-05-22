@@ -10,6 +10,7 @@ import type {
     KookUser,
     KookGuild,
     KookChannel,
+    KookApiResponse,
 } from './types.js';
 
 export class KookBot extends EventEmitter {
@@ -246,6 +247,37 @@ export class KookBot extends EventEmitter {
     async deleteMessage(channelId: string, messageId: string): Promise<boolean> {
         const channel = this.client.pickChannel(channelId);
         return await channel.recallMsg(messageId);
+    }
+
+    /**
+     * 仅通过消息 ID 删除消息（不需要 channelId）
+     * 先尝试频道消息删除，失败后尝试私聊消息删除
+     */
+    async deleteMessageById(messageId: string): Promise<boolean> {
+        try {
+            const result = await this.client.request.post('/v3/message/delete', {
+                msg_id: messageId,
+            }) as KookApiResponse;
+            if (result.code !== 0) {
+                throw new Error(`Channel message delete failed: ${result.message} (code: ${result.code})`);
+            }
+            return true;
+        } catch (channelDeleteError) {
+            // 频道消息删除失败，尝试私聊消息删除
+            try {
+                const result = await this.client.request.post('/v3/direct-message/delete', {
+                    msg_id: messageId,
+                }) as KookApiResponse;
+                return result.code === 0;
+            } catch (directMessageDeleteError) {
+                const error = new Error(
+                    `Failed to delete message ${messageId} via both channel and direct-message APIs.`,
+                    { cause: channelDeleteError },
+                ) as Error & { directMessageDeleteError?: unknown };
+                error.directMessageDeleteError = directMessageDeleteError;
+                throw error;
+            }
+        }
     }
 
     /**
