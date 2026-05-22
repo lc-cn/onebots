@@ -94,12 +94,12 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
-        // 根据场景类型删除消息
-        // 需要从消息中获取 channel_id，这里简化处理
-        // 实际应该从消息缓存或数据库中获取
         const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
         if (channelId) {
             await bot.deleteMessage(channelId, msgId);
+        } else {
+            // 没有 scene_id 时，直接通过消息 ID 删除
+            await bot.deleteMessageById(msgId);
         }
     }
 

@@ -249,6 +249,25 @@ export class KookBot extends EventEmitter {
     }
 
     /**
+     * 仅通过消息 ID 删除消息（不需要 channelId）
+     * 先尝试频道消息删除，失败后尝试私聊消息删除
+     */
+    async deleteMessageById(messageId: string): Promise<boolean> {
+        try {
+            const result = await this.client.request.post('/v3/message/delete', {
+                msg_id: messageId,
+            });
+            return (result as any)?.code === 0;
+        } catch {
+            // 频道消息删除失败，尝试私聊消息删除
+            const result = await this.client.request.post('/v3/direct-message/delete', {
+                msg_id: messageId,
+            });
+            return (result as any)?.code === 0;
+        }
+    }
+
+    /**
      * 更新消息
      */
     async updateMessage(channelId: string, messageId: string, content: string): Promise<boolean> {
