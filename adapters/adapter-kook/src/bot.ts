@@ -258,12 +258,21 @@ export class KookBot extends EventEmitter {
                 msg_id: messageId,
             });
             return (result as any)?.code === 0;
-        } catch {
+        } catch (channelDeleteError) {
             // 频道消息删除失败，尝试私聊消息删除
-            const result = await this.client.request.post('/v3/direct-message/delete', {
-                msg_id: messageId,
-            });
-            return (result as any)?.code === 0;
+            try {
+                const result = await this.client.request.post('/v3/direct-message/delete', {
+                    msg_id: messageId,
+                });
+                return (result as any)?.code === 0;
+            } catch (directMessageDeleteError) {
+                const error = new Error(
+                    `Failed to delete message ${messageId} via both channel and direct-message APIs.`,
+                    { cause: channelDeleteError },
+                ) as Error & { directMessageDeleteError?: unknown };
+                error.directMessageDeleteError = directMessageDeleteError;
+                throw error;
+            }
         }
     }
 
