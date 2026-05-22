@@ -140,6 +140,14 @@ export class RateLimiter {
         this.processing = true;
         
         while (this.queue.length > 0) {
+            // Check if head of queue has timed out (before acquiring a token)
+            const peek = this.queue[0];
+            if (peek && Date.now() - peek.enqueueTime > this.requestTimeout) {
+                this.queue.shift();
+                peek.reject(new RateLimitError('Request timeout in rate limiter queue'));
+                continue;
+            }
+
             const waitTime = this.getWaitTime();
             
             if (waitTime > 0) {
@@ -155,11 +163,6 @@ export class RateLimiter {
             if (this.tryAcquire()) {
                 const request = this.queue.shift();
                 if (request) {
-                    // Check if request has timed out
-                    if (Date.now() - request.enqueueTime > this.requestTimeout) {
-                        request.reject(new RateLimitError('Request timeout in rate limiter queue'));
-                        continue;
-                    }
                     this.lastRequest = Date.now();
                     try {
                         const result = await request.execute();

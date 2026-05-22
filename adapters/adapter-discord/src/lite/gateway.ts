@@ -55,6 +55,9 @@ export interface GatewayOptions {
 }
 
 export class DiscordGateway extends EventEmitter {
+    private static readonly BASE_RECONNECT_DELAY_MS = 1000;
+    private static readonly MAX_RECONNECT_DELAY_MS = 30000;
+
     private ws: any = null;
     private token: string;
     private intents: number;
@@ -142,7 +145,10 @@ export class DiscordGateway extends EventEmitter {
                 
                 // 自动重连 (指数退避)
                 if (code !== 1000 && code !== 4004) {
-                    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts || 0), 30000);
+                    const delay = Math.min(
+                        DiscordGateway.BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts || 0),
+                        DiscordGateway.MAX_RECONNECT_DELAY_MS
+                    );
                     this.reconnectAttempts = (this.reconnectAttempts || 0) + 1;
                     setTimeout(() => this.reconnect(), delay);
                 }

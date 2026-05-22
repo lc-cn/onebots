@@ -38,6 +38,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     private reverseMessageIdMap = new Map<string, number>();
     private messageIdCounter = 0;
     private static readonly MAX_MESSAGE_ID_MAP_SIZE = 10000;
+    private static readonly EVICTION_RATIO = 0.2;
     
     // Heartbeat timer
     private heartbeatTimer?: NodeJS.Timeout;
@@ -742,7 +743,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         
         // Evict oldest entries when map exceeds max size
         if (this.messageIdMap.size >= OneBotV11Protocol.MAX_MESSAGE_ID_MAP_SIZE) {
-            const entriesToDelete = Math.floor(OneBotV11Protocol.MAX_MESSAGE_ID_MAP_SIZE * 0.2);
+            const entriesToDelete = Math.floor(OneBotV11Protocol.MAX_MESSAGE_ID_MAP_SIZE * OneBotV11Protocol.EVICTION_RATIO);
             const iter = this.messageIdMap.entries();
             for (let i = 0; i < entriesToDelete; i++) {
                 const entry = iter.next();
