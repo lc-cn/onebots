@@ -55,6 +55,9 @@ export interface GatewayOptions {
 }
 
 export class DiscordGateway extends EventEmitter {
+    private static readonly BASE_RECONNECT_DELAY_MS = 1000;
+    private static readonly MAX_RECONNECT_DELAY_MS = 30000;
+
     private ws: any = null;
     private token: string;
     private intents: number;
@@ -65,6 +68,8 @@ export class DiscordGateway extends EventEmitter {
     private resumeGatewayUrl: string | null = null;
     private rest: DiscordREST;
     private isReady = false;
+    private reconnectAttempts = 0;
+    private reconnectTimer: NodeJS.Timeout | null = null;
 
     constructor(options: GatewayOptions) {
         super();
@@ -109,14 +114,14 @@ export class DiscordGateway extends EventEmitter {
                 // @ts-ignore - socks-proxy-agent 是可选依赖
                 const { SocksProxyAgent } = await import('socks-proxy-agent');
                 wsOptions.agent = new SocksProxyAgent(socksUrl);
-                console.log(`[Gateway] 使用 SOCKS5 代理: ${socksUrl}`);
+                console.log(`[Gateway] 使用 SOCKS5 代理: ${socksUrl.replace(/\/\/[^@]+@/, '//***:***@')}`);
             } catch {
                 // 回退到 https-proxy-agent
                 try {
                     // @ts-ignore - https-proxy-agent 是可选依赖
                     const { HttpsProxyAgent } = await import('https-proxy-agent');
                     wsOptions.agent = new HttpsProxyAgent(this.proxyUrl);
-                    console.log(`[Gateway] 使用 HTTP 代理: ${this.proxyUrl}`);
+                    console.log(`[Gateway] 使用 HTTP 代理: ${this.proxyUrl.replace(/\/\/[^@]+@/, '//***:***@')}`);
                 } catch {
                     console.warn('[Gateway] 代理 agent 未安装，将直接连接');
                 }
@@ -139,9 +144,18 @@ export class DiscordGateway extends EventEmitter {
                 this.cleanup();
                 this.emit('close', code, reason.toString());
                 
-                // 自动重连
+                // 自动重连 (指数退避)
                 if (code !== 1000 && code !== 4004) {
-                    setTimeout(() => this.reconnect(), 5000);
+                    const delay = Math.min(
+                        DiscordGateway.BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts || 0),
+                        DiscordGateway.MAX_RECONNECT_DELAY_MS
+                    );
+                    this.reconnectAttempts = (this.reconnectAttempts || 0) + 1;
+                    this.clearReconnectTimer();
+                    this.reconnectTimer = setTimeout(() => {
+                        this.reconnectTimer = null;
+                        void this.reconnect();
+                    }, delay);
                 }
             });
 
@@ -222,6 +236,8 @@ export class DiscordGateway extends EventEmitter {
                 this.sessionId = data.session_id;
                 this.resumeGatewayUrl = data.resume_gateway_url;
                 this.isReady = true;
+                this.reconnectAttempts = 0;
+                this.clearReconnectTimer();
                 this.emit('ready', data.user);
                 break;
 
@@ -352,6 +368,10 @@ export class DiscordGateway extends EventEmitter {
      * 重连
      */
     private async reconnect() {
+        if (this.isReady && this.ws && this.ws.readyState === 1) {
+            return;
+        }
+
         this.cleanup();
         
         if (this.resumeGatewayUrl && this.sessionId) {
@@ -373,6 +393,7 @@ export class DiscordGateway extends EventEmitter {
      * 清理资源
      */
     private cleanup() {
+        this.clearReconnectTimer();
         this.stopHeartbeat();
         this.isReady = false;
         
@@ -394,6 +415,13 @@ export class DiscordGateway extends EventEmitter {
         this.cleanup();
     }
 
+    private clearReconnectTimer() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+    }
+
     /**
      * 获取 REST 客户端
      */
@@ -401,4 +429,3 @@ export class DiscordGateway extends EventEmitter {
         return this.rest;
     }
 }
-

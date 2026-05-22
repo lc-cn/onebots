@@ -46,7 +46,7 @@ export class TelegramBot extends EventEmitter {
                     },
                 };
                 
-                console.log(`[Telegram] 已配置代理: ${this.config.proxy.url}`);
+                console.log(`[Telegram] 已配置代理: ${this.config.proxy.url.replace(/\/\/[^@]+@/, '//***:***@')}`);
             } catch (error) {
                 console.warn('[Telegram] 创建代理失败，将直接连接:', error);
             }

@@ -704,6 +704,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
 
         // 监听消息事件
         bot.on('messageCreate', (message: DiscordMessage) => {
+            try {
             // 忽略机器人自己的消息
             if (message.author.bot) return;
 
@@ -820,10 +821,12 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
 
             // 派发到协议层
             account.dispatch(commonEvent);
+            } catch (e) { this.logger.error(`[Discord] 处理消息事件异常:`, e); }
         });
 
         // 监听成员加入事件
         bot.on('guildMemberAdd', (member: DiscordMember & { guild: DiscordGuild }) => {
+            try {
             this.logger.info(`成员加入: ${member.user.username} -> ${member.guild?.name}`);
 
             const commonEvent: CommonEvent.Notice = {
@@ -845,10 +848,12 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
             };
 
             account.dispatch(commonEvent);
+            } catch (e) { this.logger.error(`[Discord] 处理成员加入事件异常:`, e); }
         });
 
         // 监听成员离开事件
         bot.on('guildMemberRemove', (member: DiscordMember & { guild: DiscordGuild }) => {
+            try {
             this.logger.info(`成员离开: ${member.user?.username} <- ${member.guild?.name}`);
 
             const commonEvent: CommonEvent.Notice = {
@@ -870,6 +875,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
             };
 
             account.dispatch(commonEvent);
+            } catch (e) { this.logger.error(`[Discord] 处理成员离开事件异常:`, e); }
         });
 
         // 启动时初始化 Bot
