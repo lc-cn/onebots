@@ -301,11 +301,10 @@ export interface SendMessageParams {
     keyboard?: QQKeyboard;
     msg_type?: number;
     media?: { file_info: string };
-}
-
-export interface SendGroupMessageParams extends SendMessageParams {
     msg_seq?: number;
 }
+
+export interface SendGroupMessageParams extends SendMessageParams {}
 
 export interface SendDMSParams extends SendMessageParams {}
 

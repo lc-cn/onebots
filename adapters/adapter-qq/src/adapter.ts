@@ -23,9 +23,50 @@ import type {
 } from "./types.js";
 
 export class QQAdapter extends Adapter<QQBot, "qq"> {
+    // 缓存最近收到的消息ID，用于被动回复时满足QQ API的msg_id要求
+    // key: "private:{user_openid}" 或 "group:{group_openid}"
+    private recentMsgIdCache: Map<string, string> = new Map();
+    // 消息序列号计数器，用于群消息和C2C消息的msg_seq
+    private msgSeqCounter: number = 0;
+    // 缓存大小上限，防止内存泄漏
+    private static readonly MAX_CACHE_SIZE = 1000;
+
     constructor(app: BaseApp) {
         super(app, "qq");
         this.icon = "https://q.qq.com/favicon.ico";
+    }
+
+    /**
+     * 缓存收到的消息ID
+     */
+    private cacheReceivedMsgId(sceneType: string, sceneId: string, msgId: string): void {
+        const key = `${sceneType}:${sceneId}`;
+        // 超过上限时清除最早的缓存
+        if (this.recentMsgIdCache.size >= QQAdapter.MAX_CACHE_SIZE) {
+            const firstKey = this.recentMsgIdCache.keys().next().value;
+            if (firstKey) this.recentMsgIdCache.delete(firstKey);
+        }
+        this.recentMsgIdCache.set(key, msgId);
+    }
+
+    /**
+     * 获取并消费缓存的消息ID（用于被动回复）
+     */
+    private consumeCachedMsgId(sceneType: string, sceneId: string): string | undefined {
+        const key = `${sceneType}:${sceneId}`;
+        const msgId = this.recentMsgIdCache.get(key);
+        this.recentMsgIdCache.delete(key);
+        return msgId;
+    }
+
+    /**
+     * 获取下一个消息序列号
+     */
+    private getNextMsgSeq(): number {
+        if (this.msgSeqCounter >= Number.MAX_SAFE_INTEGER) {
+            this.msgSeqCounter = 0;
+        }
+        return ++this.msgSeqCounter;
     }
 
     // ============================================
@@ -57,21 +98,29 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
         let result: any;
         
         switch (scene_type) {
-            case "group":
-                // QQ群消息
+            case "group": {
+                // QQ群消息 - 需要msg_id和msg_seq
+                const groupMsgId = this.consumeCachedMsgId('group', sceneId.string);
                 result = await bot.sendGroupMessage(sceneId.string, {
                     ...sendParams,
                     msg_type: 0, // 文本消息
+                    msg_id: groupMsgId,
+                    msg_seq: this.getNextMsgSeq(),
                 });
                 break;
+            }
                 
-            case "private":
-                // 单聊消息 (C2C)
+            case "private": {
+                // 单聊消息 (C2C) - 需要msg_id和msg_seq
+                const privateMsgId = this.consumeCachedMsgId('private', sceneId.string);
                 result = await bot.sendC2CMessage(sceneId.string, {
                     ...sendParams,
                     msg_type: 0,
+                    msg_id: privateMsgId,
+                    msg_seq: this.getNextMsgSeq(),
                 });
                 break;
+            }
                 
             case "channel":
                 // 频道消息
@@ -692,6 +741,9 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
             `发送者: ${message.author.member_openid || message.author.id} | 内容: ${contentPreview}`
         );
 
+        // 缓存消息ID，用于后续被动回复
+        this.cacheReceivedMsgId('group', message.group_openid, message.id);
+
         const messageSegments = this.parseMessageContent(message.content || '', message.attachments);
 
         const commonEvent: CommonEvent.Message = {
@@ -728,6 +780,10 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
             `[QQ] 收到私聊消息 | 消息ID: ${message.id} | ` +
             `发送者: ${message.author.user_openid || message.author.id} | 内容: ${contentPreview}`
         );
+
+        // 缓存消息ID，用于后续被动回复
+        const userOpenId = message.author.user_openid || message.author.id;
+        this.cacheReceivedMsgId('private', userOpenId, message.id);
 
         const messageSegments = this.parseMessageContent(message.content || '', message.attachments);
 
