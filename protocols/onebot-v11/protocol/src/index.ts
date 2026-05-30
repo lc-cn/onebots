@@ -263,10 +263,13 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     private async sendPrivateMsg(params: any): Promise<any> {
         const { user_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
-        
+
+        // Transform user_id back to original string if it was converted to integer
+        const originalUserId = this.transformFromInt(user_id);
+
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
-            scene_id: this.adapter.resolveId(user_id),
+            scene_id: this.adapter.resolveId(originalUserId),
             message: segments,
         });
         return {
@@ -277,13 +280,16 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     private async sendGroupMsg(params: any): Promise<any> {
         const { group_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
-        
+
+        // Transform group_id back to original string if it was converted to integer
+        const originalGroupId = this.transformFromInt(group_id);
+
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
-            scene_id: this.adapter.resolveId(group_id),
+            scene_id: this.adapter.resolveId(originalGroupId),
             message: segments,
         });
-        
+
         return {
             message_id: result.message_id.number,
         };
@@ -304,18 +310,24 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     private async deleteMsg(params: any): Promise<void> {
         const { message_id } = params;
 
+        // Transform message_id back to original string if it was converted to integer
+        const originalMessageId = this.transformFromInt(message_id);
+
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
+            message_id: this.adapter.resolveId(originalMessageId),
         });
     }
 
     private async getMsg(params: any): Promise<any> {
         const { message_id } = params;
 
+        // Transform message_id back to original string if it was converted to integer
+        const originalMessageId = this.transformFromInt(message_id);
+
         const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
+            message_id: this.adapter.resolveId(originalMessageId),
         });
-        
+
         return this.convertMessageInfoToV11(msg);
     }
 
@@ -415,11 +427,14 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getStrangerInfo(params: any): Promise<any> {
         const { user_id, no_cache = false } = params;
-        
+
+        // Transform user_id back to original string if it was converted to integer
+        const originalUserId = this.transformFromInt(user_id);
+
         const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: this.adapter.resolveId(user_id),
+            user_id: this.adapter.resolveId(originalUserId),
         });
-        
+
         return {
             user_id,
             nickname: userInfo.user_name,
@@ -440,11 +455,14 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getGroupInfo(params: any): Promise<any> {
         const { group_id, no_cache = false } = params;
-        
+
+        // Transform group_id back to original string if it was converted to integer
+        const originalGroupId = this.transformFromInt(group_id);
+
         const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
+            group_id: this.adapter.resolveId(originalGroupId),
         });
-        
+
         return {
             group_id,
             group_name: groupInfo.group_name,
@@ -466,12 +484,16 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getGroupMemberInfo(params: any): Promise<any> {
         const { group_id, user_id, no_cache = false } = params;
-        
+
+        // Transform IDs back to original strings if they were converted to integers
+        const originalGroupId = this.transformFromInt(group_id);
+        const originalUserId = this.transformFromInt(user_id);
+
         const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            user_id: this.adapter.resolveId(user_id),
+            group_id: this.adapter.resolveId(originalGroupId),
+            user_id: this.adapter.resolveId(originalUserId),
         });
-        
+
         return {
             group_id: group_id,
             user_id: user_id,
@@ -493,11 +515,14 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getGroupMemberList(params: any): Promise<any> {
         const { group_id } = params;
-        
+
+        // Transform group_id back to original string if it was converted to integer
+        const originalGroupId = this.transformFromInt(group_id);
+
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
+            group_id: this.adapter.resolveId(originalGroupId),
         });
-        
+
         return members.map(member => ({
             group_id: group_id,
             user_id: member.user_id.number,
