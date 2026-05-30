@@ -263,10 +263,10 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     private async sendPrivateMsg(params: any): Promise<any> {
         const { user_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
-        
+
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
-            scene_id: this.adapter.resolveId(user_id),
+            scene_id: this.resolveV11Id(user_id),
             message: segments,
         });
         return {
@@ -277,13 +277,13 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     private async sendGroupMsg(params: any): Promise<any> {
         const { group_id, message, auto_escape = false } = params;
         const segments = this.parseMessage(message, auto_escape);
-        
+
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
-            scene_id: this.adapter.resolveId(group_id),
+            scene_id: this.resolveV11Id(group_id),
             message: segments,
         });
-        
+
         return {
             message_id: result.message_id.number,
         };
@@ -305,7 +305,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         const { message_id } = params;
 
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
+            message_id: this.resolveV11Id(message_id),
         });
     }
 
@@ -313,9 +313,9 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         const { message_id } = params;
 
         const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
+            message_id: this.resolveV11Id(message_id),
         });
-        
+
         return this.convertMessageInfoToV11(msg);
     }
 
@@ -415,11 +415,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getStrangerInfo(params: any): Promise<any> {
         const { user_id, no_cache = false } = params;
-        
+
         const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: this.adapter.resolveId(user_id),
+            user_id: this.resolveV11Id(user_id),
         });
-        
+
         return {
             user_id,
             nickname: userInfo.user_name,
@@ -440,11 +440,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getGroupInfo(params: any): Promise<any> {
         const { group_id, no_cache = false } = params;
-        
+
         const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
+            group_id: this.resolveV11Id(group_id),
         });
-        
+
         return {
             group_id,
             group_name: groupInfo.group_name,
@@ -466,12 +466,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getGroupMemberInfo(params: any): Promise<any> {
         const { group_id, user_id, no_cache = false } = params;
-        
+
         const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            user_id: this.adapter.resolveId(user_id),
+            group_id: this.resolveV11Id(group_id),
+            user_id: this.resolveV11Id(user_id),
         });
-        
+
         return {
             group_id: group_id,
             user_id: user_id,
@@ -493,11 +493,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     private async getGroupMemberList(params: any): Promise<any> {
         const { group_id } = params;
-        
+
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
+            group_id: this.resolveV11Id(group_id),
         });
-        
+
         return members.map(member => ({
             group_id: group_id,
             user_id: member.user_id.number,
@@ -760,15 +760,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         return intId;
     }
 
-    /**
-     * Transform integer back to original message ID
-     */
-    private transformFromInt(messageId: number | string): string {
-        if (typeof messageId === "string") {
-            return messageId;
+    private resolveV11Id(id: string | number | CommonTypes.Id): CommonTypes.Id {
+        if (typeof id === "string" && /^-?\d+$/.test(id)) {
+            return this.adapter.resolveId(Number(id));
         }
-        
-        return this.messageIdMap.get(messageId) || String(messageId);
+        return this.adapter.resolveId(id);
     }
 
     /**
