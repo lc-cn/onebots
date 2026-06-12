@@ -1,5 +1,12 @@
 # @onebots/adapter-teams
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [d9fdbd5]
+  - onebots@1.1.0
+
 ## 1.0.7
 
 ### Patch Changes

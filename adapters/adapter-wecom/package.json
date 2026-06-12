@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-wecom",
-  "version": "1.0.7",
+  "version": "2.0.0",
   "description": "onebots 企业微信适配器",
   "type": "module",
   "main": "lib/index.js",
