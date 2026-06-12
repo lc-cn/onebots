@@ -1,43 +1,43 @@
 /**
  * Discord Lite - 轻量版 Discord 客户端
- * 
+ *
  * 特性：
  * - 使用原生 fetch，无外部依赖
  * - 自动检测运行时环境
  * - Node.js: 支持 Gateway WebSocket
  * - Cloudflare Workers / Vercel: 支持 Interactions Webhook
- * 
+ *
  * @example Node.js Gateway 模式
  * ```ts
  * import { DiscordLite, GatewayIntents } from './lite';
- * 
+ *
  * const client = new DiscordLite({
  *   token: 'your-bot-token',
  *   intents: GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.MessageContent,
  *   mode: 'gateway',
  * });
- * 
+ *
  * client.on('messageCreate', (message) => {
  *   console.log(message.content);
  * });
- * 
+ *
  * await client.start();
  * ```
- * 
+ *
  * @example Cloudflare Workers Webhook 模式
  * ```ts
  * import { DiscordLite, InteractionsHandler } from './lite';
- * 
+ *
  * const handler = new InteractionsHandler({
  *   publicKey: 'your-public-key',
  *   token: 'your-bot-token',
  *   applicationId: 'your-app-id',
  * });
- * 
+ *
  * handler.onCommand('hello', async (interaction) => {
  *   return InteractionsHandler.messageResponse('Hello, World!');
  * });
- * 
+ *
  * export default {
  *   fetch: (request) => handler.handleRequest(request),
  * };
@@ -47,33 +47,34 @@
 import { EventEmitter } from 'events';
 import { DiscordREST, type RESTOptions } from './rest.js';
 import { DiscordGateway, GatewayIntents, type GatewayOptions } from './gateway.js';
-import { 
-    InteractionsHandler, 
-    InteractionType, 
+import {
+    InteractionsHandler,
+    InteractionType,
     InteractionCallbackType,
     verifyInteractionSignature,
-    type InteractionWebhookOptions 
+    type InteractionWebhookOptions
 } from './interactions.js';
 import { DiscordLiteBot, type DiscordLiteBotConfig } from './bot.js';
+import type { DiscordApiUser, CreateMessageBody, EditMessageBody } from '../types.js';
 
 // 重新导出
 export { DiscordREST, type RESTOptions } from './rest.js';
 export { DiscordGateway, GatewayIntents, GatewayOpcodes, type GatewayOptions } from './gateway.js';
-export { 
-    InteractionsHandler, 
-    InteractionType, 
+export {
+    InteractionsHandler,
+    InteractionType,
     InteractionCallbackType,
     verifyInteractionSignature,
-    type InteractionWebhookOptions 
+    type InteractionWebhookOptions
 } from './interactions.js';
 export { DiscordLiteBot, type DiscordLiteBotConfig } from './bot.js';
-export type { 
-    DiscordUser, 
-    DiscordMessage, 
-    DiscordGuild, 
-    DiscordChannel, 
-    DiscordMember, 
-    DiscordAttachment 
+export type {
+    DiscordUser,
+    DiscordMessage,
+    DiscordGuild,
+    DiscordChannel,
+    DiscordMember,
+    DiscordAttachment
 } from './bot.js';
 
 /**
@@ -86,22 +87,22 @@ export type RuntimeType = 'node' | 'cloudflare' | 'vercel' | 'deno' | 'bun' | 'b
  */
 export function detectRuntime(): RuntimeType {
     // Cloudflare Workers
-    if (typeof globalThis.caches !== 'undefined' && typeof (globalThis as any).WebSocketPair !== 'undefined') {
+    if (typeof globalThis.caches !== 'undefined' && typeof (globalThis as Record<string, unknown>).WebSocketPair !== 'undefined') {
         return 'cloudflare';
     }
 
     // Vercel Edge Runtime
-    if (typeof (globalThis as any).EdgeRuntime !== 'undefined') {
+    if (typeof (globalThis as Record<string, unknown>).EdgeRuntime !== 'undefined') {
         return 'vercel';
     }
 
     // Deno
-    if (typeof (globalThis as any).Deno !== 'undefined') {
+    if (typeof (globalThis as Record<string, unknown>).Deno !== 'undefined') {
         return 'deno';
     }
 
     // Bun
-    if (typeof (globalThis as any).Bun !== 'undefined') {
+    if (typeof (globalThis as Record<string, unknown>).Bun !== 'undefined') {
         return 'bun';
     }
 
@@ -153,7 +154,7 @@ export class DiscordLite extends EventEmitter {
     private rest: DiscordREST;
     private runtime: RuntimeType;
     private mode: 'gateway' | 'interactions';
-    private user: any = null;
+    private user: DiscordApiUser | null = null;
 
     constructor(options: DiscordLiteOptions) {
         super();
@@ -184,8 +185,8 @@ export class DiscordLite extends EventEmitter {
         }
 
         const intents = this.options.intents ?? (
-            GatewayIntents.Guilds | 
-            GatewayIntents.GuildMessages | 
+            GatewayIntents.Guilds |
+            GatewayIntents.GuildMessages |
             GatewayIntents.DirectMessages |
             GatewayIntents.MessageContent
         );
@@ -197,22 +198,22 @@ export class DiscordLite extends EventEmitter {
         });
 
         // 转发事件
-        this.gateway.on('ready', (user) => {
-            this.user = user;
+        this.gateway.on('ready', (user: unknown) => {
+            this.user = user as DiscordApiUser;
             this.emit('ready', user);
         });
 
-        this.gateway.on('messageCreate', (message) => this.emit('messageCreate', message));
-        this.gateway.on('messageUpdate', (message) => this.emit('messageUpdate', message));
-        this.gateway.on('messageDelete', (data) => this.emit('messageDelete', data));
-        this.gateway.on('guildCreate', (guild) => this.emit('guildCreate', guild));
-        this.gateway.on('guildDelete', (guild) => this.emit('guildDelete', guild));
-        this.gateway.on('guildMemberAdd', (member) => this.emit('guildMemberAdd', member));
-        this.gateway.on('guildMemberRemove', (member) => this.emit('guildMemberRemove', member));
-        this.gateway.on('interactionCreate', (interaction) => this.emit('interactionCreate', interaction));
-        this.gateway.on('dispatch', (event, data) => this.emit('dispatch', event, data));
-        this.gateway.on('error', (error) => this.emit('error', error));
-        this.gateway.on('close', (code, reason) => this.emit('close', code, reason));
+        this.gateway.on('messageCreate', (message: unknown) => this.emit('messageCreate', message));
+        this.gateway.on('messageUpdate', (message: unknown) => this.emit('messageUpdate', message));
+        this.gateway.on('messageDelete', (data: unknown) => this.emit('messageDelete', data));
+        this.gateway.on('guildCreate', (guild: unknown) => this.emit('guildCreate', guild));
+        this.gateway.on('guildDelete', (guild: unknown) => this.emit('guildDelete', guild));
+        this.gateway.on('guildMemberAdd', (member: unknown) => this.emit('guildMemberAdd', member));
+        this.gateway.on('guildMemberRemove', (member: unknown) => this.emit('guildMemberRemove', member));
+        this.gateway.on('interactionCreate', (interaction: unknown) => this.emit('interactionCreate', interaction));
+        this.gateway.on('dispatch', (event: unknown, data: unknown) => this.emit('dispatch', event, data));
+        this.gateway.on('error', (error: unknown) => this.emit('error', error));
+        this.gateway.on('close', (code: unknown, reason: unknown) => this.emit('close', code, reason));
 
         await this.gateway.connect();
     }
@@ -264,7 +265,7 @@ export class DiscordLite extends EventEmitter {
     /**
      * 获取当前用户
      */
-    getUser(): any {
+    getUser(): DiscordApiUser | null {
         return this.user;
     }
 
@@ -287,12 +288,12 @@ export class DiscordLite extends EventEmitter {
     // ============================================
 
     /** 发送消息 */
-    async sendMessage(channelId: string, content: string | { content?: string; embeds?: any[] }) {
+    async sendMessage(channelId: string, content: string | CreateMessageBody) {
         return this.rest.createMessage(channelId, content);
     }
 
     /** 编辑消息 */
-    async editMessage(channelId: string, messageId: string, content: string | { content?: string; embeds?: any[] }) {
+    async editMessage(channelId: string, messageId: string, content: string | EditMessageBody) {
         return this.rest.editMessage(channelId, messageId, content);
     }
 
@@ -323,4 +324,3 @@ export class DiscordLite extends EventEmitter {
 export function createClient(options: DiscordLiteOptions): DiscordLite {
     return new DiscordLite(options);
 }
-

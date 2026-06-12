@@ -7,7 +7,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TeamsBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { TeamsConfig, TeamsEvent } from "./types.js";
+import type { TeamsConfig, TeamsEvent, TeamsActivity, TeamsAttachment } from "./types.js";
 
 export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     constructor(app: BaseApp) {
@@ -32,7 +32,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
 
         // 解析消息内容
         let text = '';
-        const options: any = {};
+        const options: Record<string, unknown> = {};
 
         for (const seg of message) {
             if (typeof seg === 'string') {
@@ -472,8 +472,8 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     /**
      * 转换消息格式
      */
-    private transformMessage(activity: any): Adapter.MessageInfo {
-        const segments: any[] = [];
+    private transformMessage(activity: TeamsActivity): Adapter.MessageInfo {
+        const segments: Adapter.MessageInfo['message'] = [];
         
         if (activity.text) {
             segments.push({

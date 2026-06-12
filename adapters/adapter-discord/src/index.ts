@@ -5,6 +5,24 @@ import type { Schema } from 'onebots';
 export type { DiscordConfig, ProxyConfig, GatewayIntentName, PresenceStatus } from './types.js';
 export { ChannelType, MessageType, ActivityType } from './types.js';
 
+// 导出 Discord API 类型
+export type {
+    DiscordApiUser,
+    DiscordApiMessage,
+    DiscordApiAttachment,
+    DiscordApiChannel,
+    DiscordApiGuild,
+    DiscordApiGuildMember,
+    DiscordRole,
+    DiscordEmbed,
+    DiscordInteraction,
+    DiscordInteractionResponse,
+    CreateMessageBody,
+    EditMessageBody,
+    GatewayQueryOptions,
+    GatewayMemberQueryOptions,
+} from './types.js';
+
 // 导出适配器
 export * from './adapter.js';
 

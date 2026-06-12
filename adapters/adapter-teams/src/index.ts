@@ -7,7 +7,7 @@ import type { Schema } from 'onebots';
  */
 export { TeamsAdapter } from './adapter.js';
 export { TeamsBot } from './bot.js';
-export type { TeamsConfig, TeamsUser, TeamsChannel, TeamsMessage, TeamsActivity, TeamsEvent } from './types.js';
+export type { TeamsConfig, TeamsUser, TeamsChannel, TeamsMessage, TeamsActivity, TeamsEvent, TeamsChannelData, TeamsChannelDataTenant, TeamsEntity, SendMessageOptions } from './types.js';
 
 const teamsSchema: Schema = {
 	account_id: { type: 'string', required: true, label: '账号标识' },

@@ -3,6 +3,9 @@
  * 基于 @icqqjs/icqq 库
  */
 
+// log4js Configuration type -- not importable directly, use unknown as passthrough
+type Log4jsConfiguration = unknown;
+
 // ============================================
 // 配置类型
 // ============================================
@@ -38,7 +41,7 @@ export interface ICQQProtocol {
     /** 数据存储目录，默认 path.join(process.cwd(), "data") */
     data_dir?: string;
     /** log4js 配置 */
-    log_config?: any;
+    log_config?: Log4jsConfiguration;
     /** 群聊和频道中过滤自己的消息，默认 true */
     ignore_self?: boolean;
     /** 被风控时是否尝试用分片发送，默认 true */
@@ -156,6 +159,20 @@ export interface ICQQGroupMember {
 // ============================================
 
 /**
+ * 消息发送返回值
+ */
+export interface ICQQMessageRet {
+    /** 消息 ID */
+    message_id: string;
+    /** 消息序号 */
+    seq: number;
+    /** 随机数 */
+    rand: number;
+    /** 发送时间 */
+    time: number;
+}
+
+/**
  * 消息段类型
  */
 export type ICQQMessageElement =
@@ -193,7 +210,7 @@ export interface ICQQPrivateMessageEvent {
         age?: number;
     };
     /** 自动回复函数 */
-    reply?: (message: string | ICQQMessageElement[], quote?: boolean) => Promise<any>;
+    reply?: (message: string | ICQQMessageElement[], quote?: boolean) => Promise<ICQQMessageRet>;
 }
 
 /**
@@ -230,7 +247,7 @@ export interface ICQQGroupMessageEvent {
     /** @提及的 QQ 列表 */
     atme?: boolean;
     /** 自动回复函数 */
-    reply?: (message: string | ICQQMessageElement[], quote?: boolean) => Promise<any>;
+    reply?: (message: string | ICQQMessageElement[], quote?: boolean) => Promise<ICQQMessageRet>;
 }
 
 // ============================================
@@ -427,6 +444,16 @@ export interface ICQQDeviceEvent {
     url: string;
     /** 手机号 */
     phone: string;
+}
+
+/**
+ * 登录错误事件
+ */
+export interface ICQQLoginErrorEvent {
+    /** 错误码 */
+    code: number;
+    /** 错误消息 */
+    message: string;
 }
 
 /**

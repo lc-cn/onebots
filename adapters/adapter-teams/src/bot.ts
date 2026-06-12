@@ -3,31 +3,38 @@
  * 基于 Bot Framework SDK
  */
 import { EventEmitter } from 'events';
-import { BotFrameworkAdapter, Activity, TurnContext, MessageFactory, ConversationReference, ConversationAccount } from 'botbuilder';
+import { BotFrameworkAdapter, type BotFrameworkAdapterSettings, type Attachment, Activity, TurnContext, MessageFactory, ConversationReference, ConversationAccount, ResourceResponse } from 'botbuilder';
 import type { RouterContext, Next } from 'onebots';
-import type { TeamsConfig, TeamsActivity, TeamsEvent } from './types.js';
+import type { TeamsConfig, TeamsActivity, TeamsChannelData, TeamsEvent, SendMessageOptions } from './types.js';
+
+/** Bot 缓存的自身信息 */
+interface CachedBotInfo {
+    id?: string;
+    name?: string;
+    avatar?: string;
+}
 
 export class TeamsBot extends EventEmitter {
     private config: TeamsConfig;
     private adapter: BotFrameworkAdapter;
-    private me: any = null;
+    private me: CachedBotInfo | null = null;
 
     constructor(config: TeamsConfig) {
         super();
         this.config = config;
-        
+
         // 创建 Bot Framework Adapter
-        const adapterSettings = {
+        const adapterSettings: BotFrameworkAdapterSettings = {
             appId: config.app_id,
             appPassword: config.app_password,
         };
 
         if (config.channel_service) {
-            (adapterSettings as any).channelService = config.channel_service;
+            adapterSettings.channelService = config.channel_service;
         }
 
         if (config.open_id_metadata) {
-            (adapterSettings as any).openIdMetadata = config.open_id_metadata;
+            adapterSettings.openIdMetadata = config.open_id_metadata;
         }
 
         this.adapter = new BotFrameworkAdapter(adapterSettings);
@@ -50,6 +57,7 @@ export class TeamsBot extends EventEmitter {
      * 转换活动为内部格式
      */
     private transformActivity(activity: Activity): TeamsActivity {
+        const channelData = activity.channelData as TeamsChannelData | undefined;
         return {
             type: activity.type || 'message',
             id: activity.id || '',
@@ -57,9 +65,9 @@ export class TeamsBot extends EventEmitter {
             from: {
                 id: activity.from?.id || '',
                 name: activity.from?.name || '',
-                aadObjectId: (activity.from as any)?.aadObjectId,
+                aadObjectId: activity.from?.aadObjectId,
                 role: activity.from?.role,
-                tenantId: (activity.from as any)?.tenantId || (activity.channelData as any)?.tenant?.id,
+                tenantId: channelData?.tenant?.id,
             },
             conversation: {
                 id: activity.conversation?.id || '',
@@ -67,7 +75,7 @@ export class TeamsBot extends EventEmitter {
                 isGroup: activity.conversation?.conversationType === 'channel',
             },
             channelId: activity.channelId || '',
-            channelData: activity.channelData,
+            channelData: channelData,
             text: activity.text,
             attachments: activity.attachments?.map(att => ({
                 contentType: att.contentType,
@@ -76,7 +84,7 @@ export class TeamsBot extends EventEmitter {
                 name: att.name,
                 thumbnailUrl: att.thumbnailUrl,
             })),
-            value: activity.value,
+            value: activity.value as Record<string, unknown> | undefined,
         };
     }
 
@@ -113,16 +121,16 @@ export class TeamsBot extends EventEmitter {
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
         try {
             // Bot Framework Adapter 需要 Express 风格的 req/res
-            // 使用类型断言来处理 Koa 的 req/res
+            // Koa 的 req/res 兼容 WebRequest/WebResponse 接口，此处使用 unknown 中转断言
             await this.adapter.processActivity(
-                ctx.req as any,
-                ctx.res as any,
+                ctx.req as unknown as import('botbuilder').WebRequest,
+                ctx.res as unknown as import('botbuilder').WebResponse,
                 async (turnContext: TurnContext) => {
                     const activity = turnContext.activity;
-                    
+
                     // 转换活动
                     const teamsActivity = this.transformActivity(activity);
-                    
+
                     // 根据活动类型触发不同事件
                     if (activity.type === 'message') {
                         // 判断是私聊还是群聊
@@ -168,9 +176,10 @@ export class TeamsBot extends EventEmitter {
                             activity: teamsActivity,
                         });
                     } else {
-                        // 其他类型的事件
+                        // 其他类型的事件（activity.type 在 Bot Framework 中为 string，
+                        // 但 TeamsEvent.type 限定了特定值，此处已知非标准类型）
                         this.emit('event', {
-                            type: activity.type as any,
+                            type: activity.type as TeamsEvent['type'],
                             activity: teamsActivity,
                         });
                     }
@@ -186,14 +195,14 @@ export class TeamsBot extends EventEmitter {
     /**
      * 获取缓存的 Bot 信息
      */
-    getCachedMe(): any {
+    getCachedMe(): CachedBotInfo | null {
         return this.me;
     }
 
     /**
      * 发送消息
      */
-    async sendMessage(conversationId: string, text: string, options?: any): Promise<any> {
+    async sendMessage(conversationId: string, text: string, options?: SendMessageOptions): Promise<ResourceResponse> {
         const conversation: ConversationAccount = {
             id: conversationId,
             conversationType: options?.isGroup ? 'channel' : 'personal',
@@ -212,11 +221,11 @@ export class TeamsBot extends EventEmitter {
             activity.replyToId = options.reply_to_message_id;
         }
 
-        let result: any;
+        let result: ResourceResponse = { id: '' };
         await this.adapter.continueConversation(
             reference as ConversationReference,
             async (turnContext: TurnContext) => {
-                result = await turnContext.sendActivity(activity);
+                result = await turnContext.sendActivity(activity) as ResourceResponse;
             }
         );
         return result;
@@ -225,7 +234,7 @@ export class TeamsBot extends EventEmitter {
     /**
      * 发送自适应卡片
      */
-    async sendCard(conversationId: string, card: any, options?: any): Promise<any> {
+    async sendCard(conversationId: string, card: Attachment, options?: SendMessageOptions): Promise<ResourceResponse> {
         const conversation: ConversationAccount = {
             id: conversationId,
             conversationType: options?.isGroup ? 'channel' : 'personal',
@@ -240,11 +249,11 @@ export class TeamsBot extends EventEmitter {
 
         const activity = MessageFactory.attachment(card);
 
-        let result: any;
+        let result: ResourceResponse = { id: '' };
         await this.adapter.continueConversation(
             reference as ConversationReference,
             async (turnContext: TurnContext) => {
-                result = await turnContext.sendActivity(activity);
+                result = await turnContext.sendActivity(activity) as ResourceResponse;
             }
         );
         return result;
@@ -253,7 +262,7 @@ export class TeamsBot extends EventEmitter {
     /**
      * 更新消息
      */
-    async updateMessage(conversationId: string, activityId: string, text: string, options?: any): Promise<void> {
+    async updateMessage(conversationId: string, activityId: string, text: string, options?: SendMessageOptions): Promise<void> {
         const conversation: ConversationAccount = {
             id: conversationId,
             conversationType: options?.isGroup ? 'channel' : 'personal',
@@ -281,7 +290,7 @@ export class TeamsBot extends EventEmitter {
     /**
      * 删除消息
      */
-    async deleteMessage(conversationId: string, activityId: string, options?: any): Promise<void> {
+    async deleteMessage(conversationId: string, activityId: string, options?: SendMessageOptions): Promise<void> {
         const conversation: ConversationAccount = {
             id: conversationId,
             conversationType: options?.isGroup ? 'channel' : 'personal',

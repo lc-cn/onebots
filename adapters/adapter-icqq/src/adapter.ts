@@ -9,10 +9,26 @@ import { BaseApp } from "onebots";
 import { ICQQBot, segment } from "./bot.js";
 import { CommonEvent, CommonTypes } from "onebots";
 import type {
+    Sendable,
+    MessageElem,
+} from '@icqqjs/icqq/lib/message';
+import type {
+    MessageRet,
+} from '@icqqjs/icqq/lib/events';
+import type {
+    ICQQOfflineEvent,
+    ICQQQRCodeEvent,
+    ICQQSliderEvent,
+    ICQQDeviceEvent,
+    ICQQLoginErrorEvent,
+} from './types.js';
+import type {
     ICQQConfig,
     ICQQUser,
     ICQQPrivateMessageEvent,
     ICQQGroupMessageEvent,
+    ICQQGroupIncreaseEvent,
+    ICQQGroupDecreaseEvent,
     ICQQMessageElement,
 } from "./types.js";
 
@@ -41,7 +57,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         const icqqMessage = this.buildICQQMessage(message);
         const targetId = parseInt(sceneId.string);
 
-        let result: any;
+        let result: MessageRet;
         if (scene_type === 'private') {
             result = await bot.sendPrivateMessage(targetId, icqqMessage);
         } else if (scene_type === 'group') {
@@ -346,12 +362,12 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             account.avatar = user.avatar;
         });
 
-        bot.on('offline', (event: any) => {
+        bot.on('offline', (event: ICQQOfflineEvent) => {
             this.logger.warn(`ICQQ Bot 离线: ${event.message}`);
             account.status = AccountStatus.OffLine;
         });
 
-        bot.on('qrcode', (event: any) => {
+        bot.on('qrcode', (event: ICQQQRCodeEvent) => {
             this.logger.info(`ICQQ 请扫描二维码登录`);
             this.emit('qrcode', { account_id: config.account_id, image: event.image });
             const imageBase64 = event.image instanceof Buffer ? event.image.toString('base64') : event.image;
@@ -364,7 +380,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             } as unknown as Adapter.VerificationRequest);
         });
 
-        bot.on('slider', (event: any) => {
+        bot.on('slider', (event: ICQQSliderEvent) => {
             this.logger.info(`ICQQ 需要滑块验证: ${event.url}`);
             this.emit('slider', { account_id: config.account_id, url: event.url });
             this.emit('verification:request', {
@@ -381,7 +397,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             } as unknown as Adapter.VerificationRequest);
         });
 
-        bot.on('device', (event: any) => {
+        bot.on('device', (event: ICQQDeviceEvent) => {
             this.logger.info(`ICQQ 需要设备锁验证: ${event.url}`);
             this.emit('device', { account_id: config.account_id, url: event.url, phone: event.phone });
             const blocks: Array<{ type: 'link'; url: string; label?: string } | { type: 'text'; content: string }> = [
@@ -411,7 +427,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             }
         });
 
-        bot.on('login_error', (event: any) => {
+        bot.on('login_error', (event: ICQQLoginErrorEvent) => {
             this.logger.error(`ICQQ 登录失败:`, event);
             account.status = AccountStatus.OffLine;
         });
@@ -487,7 +503,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         });
 
         // 监听群成员增加
-        bot.on('group_increase', (event: any) => {
+        bot.on('group_increase', (event: ICQQGroupIncreaseEvent) => {
             const noticeEvent: CommonEvent.Notice = {
                 id: this.createId(`${event.group_id}_${event.user_id}_${event.time}`),
                 timestamp: unixSecondsToEventMs(event.time),
@@ -510,7 +526,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         });
 
         // 监听群成员减少
-        bot.on('group_decrease', (event: any) => {
+        bot.on('group_decrease', (event: ICQQGroupDecreaseEvent) => {
             const noticeEvent: CommonEvent.Notice = {
                 id: this.createId(`${event.group_id}_${event.user_id}_${event.time}`),
                 timestamp: unixSecondsToEventMs(event.time),
@@ -591,7 +607,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
      * 处理 base64:// 前缀的文件数据
      * 如果是 base64 格式，转换为 Buffer；否则返回原始数据
      */
-    private processFileData(file: string | any): string | Buffer | any {
+    private processFileData(file: string): string | Buffer {
         if (typeof file === 'string' && file.startsWith('base64://')) {
             const base64Data = file.replace(/^base64:\/\//, '');
             
@@ -617,8 +633,8 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 构建 ICQQ 消息
      */
-    private buildICQQMessage(message: CommonTypes.Segment[]): any[] {
-        const result: any[] = [];
+    private buildICQQMessage(message: CommonTypes.Segment[]): Sendable[] {
+        const result: Sendable[] = [];
 
         for (const seg of message) {
             if (typeof seg === 'string') {
@@ -655,7 +671,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             } else if (seg.type === 'reply') {
                 const id = seg.data.id;
                 if (id) {
-                    result.push({ type: 'reply', id } as any);
+                    result.push({ type: 'reply', id } as MessageElem);
                 }
             } else if (seg.type === 'share') {
                 result.push(segment.share(
@@ -713,7 +729,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
                     result.push({ type: 'reply', data: { id: elem.id } });
                     break;
                 default:
-                    result.push({ type: 'text', data: { text: `[${(elem as any).type}]` } });
+                    result.push({ type: 'text', data: { text: `[${(elem as ICQQMessageElement).type}]` } });
             }
         }
 

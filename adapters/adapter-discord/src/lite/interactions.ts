@@ -4,6 +4,15 @@
  */
 
 import { DiscordREST } from './rest.js';
+import type {
+    DiscordInteraction,
+    DiscordInteractionResponse,
+    DiscordInteractionCallbackData,
+    DiscordEmbed,
+    DiscordMessageComponent,
+    CreateMessageBody,
+    EditMessageBody,
+} from '../types.js';
 
 // Interaction Types
 export enum InteractionType {
@@ -31,6 +40,11 @@ export interface InteractionWebhookOptions {
     token: string;
     applicationId: string;
 }
+
+/**
+ * Interaction 处理器回调函数类型
+ */
+type InteractionHandler = (interaction: DiscordInteraction) => Promise<DiscordInteractionResponse>;
 
 /**
  * 验证 Discord Interaction 请求签名
@@ -82,7 +96,7 @@ export class InteractionsHandler {
     private token: string;
     private applicationId: string;
     private rest: DiscordREST;
-    private handlers: Map<string, (interaction: any) => Promise<any>> = new Map();
+    private handlers: Map<string, InteractionHandler> = new Map();
 
     constructor(options: InteractionWebhookOptions) {
         this.publicKey = options.publicKey;
@@ -94,21 +108,21 @@ export class InteractionsHandler {
     /**
      * 注册命令处理器
      */
-    onCommand(name: string, handler: (interaction: any) => Promise<any>) {
+    onCommand(name: string, handler: InteractionHandler) {
         this.handlers.set(`command:${name}`, handler);
     }
 
     /**
      * 注册消息组件处理器
      */
-    onComponent(customId: string, handler: (interaction: any) => Promise<any>) {
+    onComponent(customId: string, handler: InteractionHandler) {
         this.handlers.set(`component:${customId}`, handler);
     }
 
     /**
      * 注册模态框提交处理器
      */
-    onModalSubmit(customId: string, handler: (interaction: any) => Promise<any>) {
+    onModalSubmit(customId: string, handler: InteractionHandler) {
         this.handlers.set(`modal:${customId}`, handler);
     }
 
@@ -138,7 +152,7 @@ export class InteractionsHandler {
         }
 
         // 解析并处理 Interaction
-        const interaction = JSON.parse(body);
+        const interaction = JSON.parse(body) as DiscordInteraction;
         const response = await this.handleInteraction(interaction);
 
         return new Response(JSON.stringify(response), {
@@ -149,7 +163,7 @@ export class InteractionsHandler {
     /**
      * 处理 Interaction
      */
-    async handleInteraction(interaction: any): Promise<any> {
+    async handleInteraction(interaction: DiscordInteraction): Promise<DiscordInteractionResponse> {
         const { type, data } = interaction;
 
         // Ping/Pong 健康检查
@@ -158,7 +172,7 @@ export class InteractionsHandler {
         }
 
         // 应用命令
-        if (type === InteractionType.ApplicationCommand) {
+        if (type === InteractionType.ApplicationCommand && data) {
             const handler = this.handlers.get(`command:${data.name}`);
             if (handler) {
                 return handler(interaction);
@@ -167,14 +181,14 @@ export class InteractionsHandler {
         }
 
         // 消息组件
-        if (type === InteractionType.MessageComponent) {
+        if (type === InteractionType.MessageComponent && data) {
             // 尝试精确匹配
             let handler = this.handlers.get(`component:${data.custom_id}`);
-            
+
             // 尝试前缀匹配
             if (!handler) {
                 for (const [key, h] of this.handlers) {
-                    if (key.startsWith('component:') && data.custom_id.startsWith(key.slice(10))) {
+                    if (key.startsWith('component:') && data.custom_id?.startsWith(key.slice(10))) {
                         handler = h;
                         break;
                     }
@@ -188,7 +202,7 @@ export class InteractionsHandler {
         }
 
         // 模态框提交
-        if (type === InteractionType.ModalSubmit) {
+        if (type === InteractionType.ModalSubmit && data) {
             const handler = this.handlers.get(`modal:${data.custom_id}`);
             if (handler) {
                 return handler(interaction);
@@ -197,7 +211,7 @@ export class InteractionsHandler {
         }
 
         // 自动补全
-        if (type === InteractionType.ApplicationCommandAutocomplete) {
+        if (type === InteractionType.ApplicationCommandAutocomplete && data) {
             const handler = this.handlers.get(`autocomplete:${data.name}`);
             if (handler) {
                 return handler(interaction);
@@ -214,7 +228,7 @@ export class InteractionsHandler {
     /**
      * 默认响应
      */
-    private defaultResponse(message: string) {
+    private defaultResponse(message: string): DiscordInteractionResponse {
         return {
             type: InteractionCallbackType.ChannelMessageWithSource,
             data: {
@@ -227,7 +241,7 @@ export class InteractionsHandler {
     /**
      * 创建延迟响应
      */
-    static deferResponse(ephemeral = false) {
+    static deferResponse(ephemeral = false): DiscordInteractionResponse {
         return {
             type: InteractionCallbackType.DeferredChannelMessageWithSource,
             data: ephemeral ? { flags: 64 } : {},
@@ -237,8 +251,17 @@ export class InteractionsHandler {
     /**
      * 创建消息响应
      */
-    static messageResponse(content: string | { content?: string; embeds?: any[]; components?: any[] }, ephemeral = false) {
-        const data = typeof content === 'string' ? { content } : content;
+    static messageResponse(
+        content: string | CreateMessageBody,
+        ephemeral = false
+    ): DiscordInteractionResponse {
+        const data: DiscordInteractionCallbackData = typeof content === 'string'
+            ? { content }
+            : {
+                content: content.content,
+                embeds: content.embeds,
+                components: content.components,
+            };
         return {
             type: InteractionCallbackType.ChannelMessageWithSource,
             data: {
@@ -251,8 +274,14 @@ export class InteractionsHandler {
     /**
      * 创建更新消息响应
      */
-    static updateResponse(content: string | { content?: string; embeds?: any[]; components?: any[] }) {
-        const data = typeof content === 'string' ? { content } : content;
+    static updateResponse(content: string | EditMessageBody): DiscordInteractionResponse {
+        const data: DiscordInteractionCallbackData = typeof content === 'string'
+            ? { content }
+            : {
+                content: content.content,
+                embeds: content.embeds,
+                components: content.components,
+            };
         return {
             type: InteractionCallbackType.UpdateMessage,
             data,
@@ -262,7 +291,7 @@ export class InteractionsHandler {
     /**
      * 创建模态框响应
      */
-    static modalResponse(customId: string, title: string, components: any[]) {
+    static modalResponse(customId: string, title: string, components: DiscordMessageComponent[]): DiscordInteractionResponse {
         return {
             type: InteractionCallbackType.Modal,
             data: {
@@ -283,7 +312,7 @@ export class InteractionsHandler {
     /**
      * 编辑后续消息（用于延迟响应后）
      */
-    async editFollowup(interactionToken: string, content: any) {
+    async editFollowup(interactionToken: string, content: EditMessageBody) {
         return this.rest.editOriginalInteractionResponse(
             this.applicationId,
             interactionToken,
@@ -294,7 +323,7 @@ export class InteractionsHandler {
     /**
      * 发送后续消息
      */
-    async sendFollowup(interactionToken: string, content: any) {
+    async sendFollowup(interactionToken: string, content: CreateMessageBody) {
         return this.rest.createFollowupMessage(
             this.applicationId,
             interactionToken,
@@ -302,4 +331,3 @@ export class InteractionsHandler {
         );
     }
 }
-

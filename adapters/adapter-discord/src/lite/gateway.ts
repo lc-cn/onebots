@@ -6,6 +6,17 @@
 import { EventEmitter } from 'events';
 import { DiscordREST } from './rest.js';
 import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from 'onebots';
+import type { Agent } from 'http';
+import type {
+    DiscordApiUser,
+    DiscordApiGuild,
+    DiscordApiGuildMember,
+    DiscordApiMessage,
+    DiscordMessageDeleteData,
+    DiscordInteraction,
+    GatewayHelloData,
+    GatewayReadyData,
+} from '../types.js';
 
 // Gateway Opcodes
 export enum GatewayOpcodes {
@@ -55,8 +66,29 @@ export interface GatewayOptions {
     };
 }
 
+/**
+ * Gateway 接收的消息结构
+ */
+interface GatewayPayload {
+    op: number;
+    d: unknown;
+    s: number | null;
+    t: string | null;
+}
+
+/**
+ * ws 模块的 WebSocket 实例接口
+ */
+interface WsWebSocket {
+    readyState: number;
+    send(data: string): void;
+    close(): void;
+    removeAllListeners(): void;
+    on(event: string, listener: (...args: unknown[]) => void): void;
+}
+
 export class DiscordGateway extends EventEmitter {
-    private ws: any = null;
+    private ws: WsWebSocket | null = null;
     private token: string;
     private intents: number;
     private proxyUrl?: string;
@@ -112,9 +144,9 @@ export class DiscordGateway extends EventEmitter {
     private async connectToGateway(url: string): Promise<void> {
         // 动态导入 ws
         const { WebSocket } = await import('ws');
-        
+
         // 如果有代理，使用共享代理工具
-        let wsOptions: any = {};
+        const wsOptions: { agent?: Agent } = {};
         if (this.proxyUrl) {
             const agent = await createProxyAgent({ url: this.proxyUrl }, true);
             if (agent) {
@@ -126,31 +158,35 @@ export class DiscordGateway extends EventEmitter {
         }
 
         return new Promise((resolve, reject) => {
-            this.ws = new WebSocket(url, wsOptions);
+            this.ws = new WebSocket(url, wsOptions) as unknown as WsWebSocket;
 
             this.ws.on('open', () => {
                 console.log('[Gateway] WebSocket 已连接');
             });
 
-            this.ws.on('message', (data: Buffer) => {
-                this.handleMessage(JSON.parse(data.toString()));
+            this.ws.on('message', (data: unknown) => {
+                const buffer = data as Buffer;
+                this.handleMessage(JSON.parse(buffer.toString()));
             });
 
-            this.ws.on('close', (code: number, reason: Buffer) => {
-                console.log(`[Gateway] WebSocket 关闭: ${code} - ${reason.toString()}`);
+            this.ws.on('close', (code: unknown, reason: unknown) => {
+                const closeCode = code as number;
+                const closeReason = (reason as Buffer).toString();
+                console.log(`[Gateway] WebSocket 关闭: ${closeCode} - ${closeReason}`);
                 this.cleanup();
-                this.emit('close', code, reason.toString());
+                this.emit('close', closeCode, closeReason);
 
                 // 使用 ConnectionManager 管理重连，支持指数退避
-                if (code !== 1000 && code !== 4004) {
-                    this.connectionManager.scheduleReconnect(new Error(`WebSocket closed with code ${code}`));
+                if (closeCode !== 1000 && closeCode !== 4004) {
+                    this.connectionManager.scheduleReconnect(new Error(`WebSocket closed with code ${closeCode}`));
                 }
             });
 
-            this.ws.on('error', (error: Error) => {
-                console.error('[Gateway] WebSocket 错误:', error);
-                this.emit('error', error);
-                reject(error);
+            this.ws.on('error', (error: unknown) => {
+                const err = error instanceof Error ? error : new Error(String(error));
+                console.error('[Gateway] WebSocket 错误:', err);
+                this.emit('error', err);
+                reject(err);
             });
 
             // 设置超时
@@ -170,7 +206,8 @@ export class DiscordGateway extends EventEmitter {
     /**
      * 处理 Gateway 消息
      */
-    private handleMessage(payload: any) {
+    private handleMessage(rawPayload: unknown) {
+        const payload = rawPayload as GatewayPayload;
         const { op, d, s, t } = payload;
 
         // 更新序列号
@@ -179,10 +216,12 @@ export class DiscordGateway extends EventEmitter {
         }
 
         switch (op) {
-            case GatewayOpcodes.Hello:
-                this.startHeartbeat(d.heartbeat_interval);
+            case GatewayOpcodes.Hello: {
+                const helloData = d as GatewayHelloData;
+                this.startHeartbeat(helloData.heartbeat_interval);
                 this.identify();
                 break;
+            }
 
             case GatewayOpcodes.HeartbeatAck:
                 // 心跳确认
@@ -193,7 +232,7 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case GatewayOpcodes.Dispatch:
-                this.handleDispatch(t, d);
+                this.handleDispatch(t!, d);
                 break;
 
             case GatewayOpcodes.Reconnect:
@@ -202,9 +241,10 @@ export class DiscordGateway extends EventEmitter {
                 this.connectionManager.scheduleReconnect(new Error('Discord requested reconnect'));
                 break;
 
-            case GatewayOpcodes.InvalidSession:
+            case GatewayOpcodes.InvalidSession: {
                 console.log('[Gateway] 会话无效，重新识别');
-                if (d) {
+                const isResumable = d as boolean;
+                if (isResumable) {
                     // 可恢复，尝试 resume
                     setTimeout(() => this.resume(), 1000);
                 } else {
@@ -213,20 +253,23 @@ export class DiscordGateway extends EventEmitter {
                     setTimeout(() => this.identify(), 1000);
                 }
                 break;
+            }
         }
     }
 
     /**
      * 处理 Dispatch 事件
      */
-    private handleDispatch(eventName: string, data: any) {
+    private handleDispatch(eventName: string, data: unknown) {
         switch (eventName) {
-            case 'READY':
-                this.sessionId = data.session_id;
-                this.resumeGatewayUrl = data.resume_gateway_url;
+            case 'READY': {
+                const readyData = data as GatewayReadyData;
+                this.sessionId = readyData.session_id;
+                this.resumeGatewayUrl = readyData.resume_gateway_url;
                 this.isReady = true;
-                this.emit('ready', data.user);
+                this.emit('ready', readyData.user);
                 break;
+            }
 
             case 'RESUMED':
                 console.log('[Gateway] 会话已恢复');
@@ -234,35 +277,35 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case 'MESSAGE_CREATE':
-                this.emit('messageCreate', data);
+                this.emit('messageCreate', data as DiscordApiMessage);
                 break;
 
             case 'MESSAGE_UPDATE':
-                this.emit('messageUpdate', data);
+                this.emit('messageUpdate', data as DiscordApiMessage);
                 break;
 
             case 'MESSAGE_DELETE':
-                this.emit('messageDelete', data);
+                this.emit('messageDelete', data as DiscordMessageDeleteData);
                 break;
 
             case 'GUILD_CREATE':
-                this.emit('guildCreate', data);
+                this.emit('guildCreate', data as DiscordApiGuild);
                 break;
 
             case 'GUILD_DELETE':
-                this.emit('guildDelete', data);
+                this.emit('guildDelete', data as DiscordApiGuild);
                 break;
 
             case 'GUILD_MEMBER_ADD':
-                this.emit('guildMemberAdd', data);
+                this.emit('guildMemberAdd', data as DiscordApiGuildMember);
                 break;
 
             case 'GUILD_MEMBER_REMOVE':
-                this.emit('guildMemberRemove', data);
+                this.emit('guildMemberRemove', data as DiscordApiGuildMember);
                 break;
 
             case 'INTERACTION_CREATE':
-                this.emit('interactionCreate', data);
+                this.emit('interactionCreate', data as DiscordInteraction);
                 break;
 
             default:
@@ -313,7 +356,7 @@ export class DiscordGateway extends EventEmitter {
      */
     private startHeartbeat(interval: number) {
         this.stopHeartbeat();
-        
+
         // 首次心跳添加随机抖动
         const jitter = Math.random() * interval;
         setTimeout(() => {
@@ -345,7 +388,7 @@ export class DiscordGateway extends EventEmitter {
     /**
      * 发送数据
      */
-    private send(data: any) {
+    private send(data: Record<string, unknown>) {
         if (this.ws && this.ws.readyState === 1) {
             this.ws.send(JSON.stringify(data));
         }
@@ -357,7 +400,7 @@ export class DiscordGateway extends EventEmitter {
     private cleanup() {
         this.stopHeartbeat();
         this.isReady = false;
-        
+
         if (this.ws) {
             this.ws.removeAllListeners();
             if (this.ws.readyState === 1) {
