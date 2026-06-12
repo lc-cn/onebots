@@ -214,7 +214,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         return [...guilds.values()].map(guild => ({
             group_id: this.createId(guild.id),
             group_name: guild.name,
-            member_count: guild.member_count,
+            member_count: guild.approximate_member_count ?? 0,
         }));
     }
 
@@ -233,7 +233,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         return {
             group_id: this.createId(guild.id),
             group_name: guild.name,
-            member_count: guild.member_count,
+            member_count: guild.approximate_member_count ?? 0,
         };
     }
 
