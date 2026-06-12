@@ -68,13 +68,13 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         if (scene_type === 'private' || scene_type === 'direct') {
             // 私聊消息
-            result = await bot.sendDirectMessage(sceneId.string, content);
+            result = (await bot.sendDirectMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
         } else if (scene_type === 'channel') {
             // 频道消息
-            result = await bot.sendChannelMessage(sceneId.string, content);
+            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
         } else if (scene_type === 'group') {
             // 群组消息也发送到频道
-            result = await bot.sendChannelMessage(sceneId.string, content);
+            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
         } else {
             throw new Error(`KOOK 不支持的消息场景类型: ${scene_type}`);
         }
@@ -114,21 +114,22 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
         const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
-        const msg = await bot.getMessage(channelId, msgId);
+        // getMessage returns kook-client's Message type which has message_id, timestamp, author, raw_message
+        const msg = await bot.getMessage(channelId, msgId) as unknown as { message_id: string; timestamp: number; author: { id: string; username: string }; raw_message: string };
 
         return {
-            message_id: this.createId(msg.id),
-            time: msg.create_at,
+            message_id: this.createId(msg.message_id),
+            time: msg.timestamp,
             sender: {
                 scene_type: 'channel',
                 sender_id: this.createId(msg.author.id),
-                scene_id: this.createId(msg.id),
+                scene_id: this.createId(msg.message_id),
                 sender_name: msg.author.username,
                 scene_name: '',
             },
             message: [{
-                type: msg.type === 9 ? 'text' : 'text',
-                data: { text: parseKMarkdown(msg.content) },
+                type: 'text',
+                data: { text: parseKMarkdown(msg.raw_message) },
             }],
         };
     }
@@ -175,7 +176,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const me = await bot.getMe();
+        const me = await bot.getMe() as unknown as { id: string; username: string; nickname: string; avatar: string };
 
         return {
             user_id: this.createId(me.id),
@@ -194,7 +195,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         const bot = account.client;
         const userId = params.user_id.string;
-        const user = await bot.getUser(userId);
+        const user = await bot.getUser(userId) as unknown as { id: string; username: string; nickname: string; avatar: string };
 
         return {
             user_id: this.createId(user.id),
