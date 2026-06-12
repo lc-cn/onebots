@@ -4,7 +4,7 @@
  */
 import { EventEmitter } from 'events';
 import { Bot, Context, InputFile } from 'grammy';
-import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from '@onebots/core';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
 import type { TelegramConfig, ProxyConfig } from './types.js';
 
 export class TelegramBot extends EventEmitter {

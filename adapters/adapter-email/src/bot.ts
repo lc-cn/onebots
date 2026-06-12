@@ -7,7 +7,7 @@ import nodemailer, { Transporter } from 'nodemailer';
 import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
 import type { EmailConfig, EmailMessage } from './types.js';
-import { createHttpsProxyAgent } from '@onebots/core';
+import { createHttpsProxyAgent } from 'onebots';
 
 export class EmailBot extends EventEmitter {
     private config: EmailConfig;

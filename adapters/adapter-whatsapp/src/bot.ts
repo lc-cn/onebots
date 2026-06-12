@@ -13,7 +13,7 @@ import type {
     WhatsAppMessageEvent,
     ProxyConfig,
 } from './types.js';
-import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from '@onebots/core';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
 
 const require = createRequire(import.meta.url);
 

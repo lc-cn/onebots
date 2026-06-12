@@ -6,7 +6,7 @@
 
 import { EventEmitter } from 'events';
 import { createHmac } from 'crypto';
-import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from '@onebots/core';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
 import type {
     LineConfig,
     WebhookEvent,

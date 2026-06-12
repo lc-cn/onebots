@@ -4,7 +4,7 @@
  */
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
-import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from '@onebots/core';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
 
 export interface RESTOptions {
     token: string;

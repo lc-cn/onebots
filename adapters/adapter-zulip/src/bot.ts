@@ -14,7 +14,7 @@ import type {
     ZulipMessageEvent,
     ProxyConfig,
 } from './types.js';
-import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent, ConnectionManager, RetryPresets } from '@onebots/core';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent, ConnectionManager, RetryPresets } from 'onebots';
 
 const require = createRequire(import.meta.url);
 

@@ -35,6 +35,12 @@ export {
     toUnixSeconds,
     unixSecondsToEventMs,
     unixMillisToEventMs,
+    // Proxy
+    buildProxyUrl,
+    maskProxyUrl,
+    createProxyAgent,
+    createHttpsProxyAgent,
+    createSocksProxyAgent,
     // Auth
     createManagedTokenValidator,
     initTokenManager,

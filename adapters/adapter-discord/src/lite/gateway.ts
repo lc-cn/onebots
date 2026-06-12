@@ -5,7 +5,7 @@
 
 import { EventEmitter } from 'events';
 import { DiscordREST } from './rest.js';
-import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from '@onebots/core';
+import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from 'onebots';
 
 // Gateway Opcodes
 export enum GatewayOpcodes {
