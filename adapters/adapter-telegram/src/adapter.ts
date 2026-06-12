@@ -51,9 +51,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
                 if (seg.data.url || seg.data.file) {
                     const photo = seg.data.url || seg.data.file;
                     const chatId = sceneId.string;
-                    const result = await bot.sendPhoto(chatId, photo, {
-                        caption: text || undefined,
-                    });
+                    const result = await bot.sendPhoto(chatId, photo, { caption: text || undefined } as never);
                     return {
                         message_id: this.createId(result.message_id.toString()),
                     };
@@ -62,9 +60,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
                 if (seg.data.url || seg.data.file) {
                     const video = seg.data.url || seg.data.file;
                     const chatId = sceneId.string;
-                    const result = await bot.sendVideo(chatId, video, {
-                        caption: text || undefined,
-                    });
+                    const result = await bot.sendVideo(chatId, video, { caption: text || undefined } as never);
                     return {
                         message_id: this.createId(result.message_id.toString()),
                     };
@@ -73,9 +69,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
                 if (seg.data.url || seg.data.file) {
                     const audio = seg.data.url || seg.data.file;
                     const chatId = sceneId.string;
-                    const result = await bot.sendAudio(chatId, audio, {
-                        caption: text || undefined,
-                    });
+                    const result = await bot.sendAudio(chatId, audio, { caption: text || undefined } as never);
                     return {
                         message_id: this.createId(result.message_id.toString()),
                     };
@@ -84,9 +78,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
                 if (seg.data.url || seg.data.file) {
                     const document = seg.data.url || seg.data.file;
                     const chatId = sceneId.string;
-                    const result = await bot.sendDocument(chatId, document, {
-                        caption: text || undefined,
-                    });
+                    const result = await bot.sendDocument(chatId, document, { caption: text || undefined } as never);
                     return {
                         message_id: this.createId(result.message_id.toString()),
                     };
@@ -96,7 +88,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
 
         // 发送文本消息
         const chatId = sceneId.string;
-        const result = await bot.sendMessage(chatId, text, options);
+        const result = await bot.sendMessage(chatId, text, options as never);
 
         return {
             message_id: this.createId(result.message_id.toString()),
