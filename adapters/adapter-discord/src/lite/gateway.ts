@@ -384,4 +384,3 @@ export class DiscordGateway extends EventEmitter {
         return this.rest;
     }
 }
-

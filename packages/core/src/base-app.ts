@@ -388,22 +388,22 @@ export class BaseApp extends Koa {
         writeFileSync(BaseApp.configPath, yaml.dump(deepClone(this.config)));
     }
 
-    public updateAccount<P extends keyof Adapter.Configs>(config: Adapter.Configs[P]) {
+    public async updateAccount<P extends keyof Adapter.Configs>(config: Adapter.Configs[P]) {
         const adapter = this.findOrCreateAdapter(config.platform);
         if (!adapter) return;
         const account = adapter.accounts.get(config.account_id);
         if (!account) return this.addAccount(config);
         const newConfig = deepMerge(this.config[`${config.platform}.${config.account_id}`], config);
-        this.removeAccount(config.platform, config.account_id);
+        await this.removeAccount(config.platform, config.account_id);
         this.addAccount(newConfig);
     }
 
-    public removeAccount(p: string, uin: string, force?: boolean) {
+    public async removeAccount(p: string, uin: string, force?: boolean) {
         const adapter = this.findOrCreateAdapter(p);
         if (!adapter) return;
         const account = adapter.accounts.get(uin);
         if (!account) return this.logger.warn(`未找到账号${uin}`);
-        account.stop(force);
+        await account.stop(force);
         delete this.config[`${p}.${uin}`];
         adapter.accounts.delete(uin);
         writeFileSync(BaseApp.configPath, yaml.dump(this.config));

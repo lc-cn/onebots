@@ -48,9 +48,12 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
     // ID 管理方法
     // ============================================
 
-    createId(id: string | number): CommonTypes.Id {
+    createId(id: string | number, _retries: number = 0): CommonTypes.Id {
         if (id === undefined || id === null) {
             throw new Error('createId: id 不能为 undefined 或 null');
+        }
+        if (_retries > 10) {
+            throw new Error('createId: 超过最大重试次数，无法生成唯一 ID');
         }
         if (typeof id === "number") return { string: id.toString(), number: id, source: id };
         const [existData] = this.db.select('*').from(this.tableName).where({
@@ -62,7 +65,7 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
             number: randomNum
         }).run();
 
-        if (checkExist) return this.createId(id);
+        if (checkExist) return this.createId(id, _retries + 1);
         const newId: CommonTypes.Id = {
             string: id,
             number: randomNum,

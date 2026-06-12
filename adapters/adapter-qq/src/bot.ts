@@ -41,6 +41,8 @@ export class QQBot extends EventEmitter {
     private isResuming: boolean = false;
     private resumeFailCount: number = 0; // RESUME 失败次数
     private user: QQUser | null = null;
+    private isConnecting: boolean = false;
+    private isStopped: boolean = false;
     
     private readonly baseURL: string;
     private readonly wsURL: string;
@@ -240,11 +242,14 @@ export class QQBot extends EventEmitter {
      * 连接WebSocket
      */
     async connect(): Promise<void> {
+        if (this.isStopped || this.isConnecting || this.ws?.readyState === WebSocket.CONNECTING || this.ws?.readyState === WebSocket.OPEN) return;
+        this.isConnecting = true;
         try {
             const gateway = await this.getGateway();
             this.ws = new WebSocket(gateway.url);
             
             this.ws.on('open', () => {
+                this.isConnecting = false;
                 this.emit('ws_open');
             });
             
@@ -253,6 +258,7 @@ export class QQBot extends EventEmitter {
             });
             
             this.ws.on('close', (code, reason) => {
+                this.isConnecting = false;
                 this.emit('ws_close', code, reason.toString());
                 this.stopHeartbeat();
                 
@@ -274,9 +280,11 @@ export class QQBot extends EventEmitter {
             });
             
             this.ws.on('error', (error) => {
+                this.isConnecting = false;
                 this.emit('error', error);
             });
         } catch (error) {
+            this.isConnecting = false;
             this.emit('error', error);
             throw error;
         }
@@ -440,6 +448,7 @@ export class QQBot extends EventEmitter {
      * 处理重连
      */
     private handleReconnect(): void {
+        if (this.isStopped) return;
         // 只有在有 sessionId 且 isResuming 标志为 true 时才尝试 RESUME
         // 如果 isResuming 已经被清除（比如 4902 错误），则使用 IDENTIFY
         // 注意：不要覆盖已经在 close 事件中设置的 isResuming 值
@@ -876,10 +885,12 @@ export class QQBot extends EventEmitter {
      * 停止Bot
      */
     async stop(): Promise<void> {
+        this.isStopped = true;
         this.stopHeartbeat();
         this.connectionManager.stop();
 
         if (this.ws) {
+            this.ws.removeAllListeners();
             this.ws.close(1000, 'Normal closure');
             this.ws = null;
         }
@@ -888,6 +899,7 @@ export class QQBot extends EventEmitter {
         this.lastSeq = 0;
         this.accessToken = '';
         this.tokenExpireTime = 0;
+        this.isConnecting = false;
         
         this.emit('stop');
     }

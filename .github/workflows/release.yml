@@ -55,7 +55,6 @@ jobs:
 
       - name: Test
         run: pnpm test
-        continue-on-error: true
 
       - name: Bump versions or publish to npm
         id: changesets

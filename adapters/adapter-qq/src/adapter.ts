@@ -509,81 +509,81 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
 
         // 监听频道消息事件
         bot.on('message.guild', (message: QQMessageEvent) => {
-            this.handleGuildMessage(account, message, config.account_id);
+            try { this.handleGuildMessage(account, message, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道消息事件异常:`, e); }
         });
 
         // 监听频道私信事件
         bot.on('message.direct', (message: QQDirectMessageEvent) => {
-            this.handleDirectMessage(account, message, config.account_id);
+            try { this.handleDirectMessage(account, message, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道私信事件异常:`, e); }
         });
 
         // 监听群消息事件
         bot.on('message.group', (message: QQGroupMessageEvent) => {
-            this.handleGroupMessage(account, message, config.account_id);
+            try { this.handleGroupMessage(account, message, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理群消息事件异常:`, e); }
         });
 
         // 监听私聊消息事件
         bot.on('message.private', (message: QQC2CMessageEvent) => {
-            this.handleC2CMessage(account, message, config.account_id);
+            try { this.handleC2CMessage(account, message, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理私聊消息事件异常:`, e); }
         });
 
         // 监听频道创建事件
         bot.on('GUILD_CREATE', (event: QQGuildEvent) => {
-            this.handleGuildEvent(account, 'create', event, config.account_id);
+            try { this.handleGuildEvent(account, 'create', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道创建事件异常:`, e); }
         });
 
         // 监听频道更新事件
         bot.on('GUILD_UPDATE', (event: QQGuildEvent) => {
-            this.handleGuildEvent(account, 'update', event, config.account_id);
+            try { this.handleGuildEvent(account, 'update', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道更新事件异常:`, e); }
         });
 
         // 监听频道删除事件
         bot.on('GUILD_DELETE', (event: QQGuildEvent) => {
-            this.handleGuildEvent(account, 'delete', event, config.account_id);
+            try { this.handleGuildEvent(account, 'delete', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道删除事件异常:`, e); }
         });
 
         // 监听子频道创建事件
         bot.on('CHANNEL_CREATE', (event: QQChannelEvent) => {
-            this.handleChannelEvent(account, 'create', event, config.account_id);
+            try { this.handleChannelEvent(account, 'create', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理子频道创建事件异常:`, e); }
         });
 
         // 监听子频道更新事件
         bot.on('CHANNEL_UPDATE', (event: QQChannelEvent) => {
-            this.handleChannelEvent(account, 'update', event, config.account_id);
+            try { this.handleChannelEvent(account, 'update', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理子频道更新事件异常:`, e); }
         });
 
         // 监听子频道删除事件
         bot.on('CHANNEL_DELETE', (event: QQChannelEvent) => {
-            this.handleChannelEvent(account, 'delete', event, config.account_id);
+            try { this.handleChannelEvent(account, 'delete', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理子频道删除事件异常:`, e); }
         });
 
         // 监听成员增加事件
         bot.on('GUILD_MEMBER_ADD', (event: QQGuildMemberEvent) => {
-            this.handleMemberEvent(account, 'add', event, config.account_id);
+            try { this.handleMemberEvent(account, 'add', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理成员增加事件异常:`, e); }
         });
 
         // 监听成员更新事件
         bot.on('GUILD_MEMBER_UPDATE', (event: QQGuildMemberEvent) => {
-            this.handleMemberEvent(account, 'update', event, config.account_id);
+            try { this.handleMemberEvent(account, 'update', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理成员更新事件异常:`, e); }
         });
 
         // 监听成员移除事件
         bot.on('GUILD_MEMBER_REMOVE', (event: QQGuildMemberEvent) => {
-            this.handleMemberEvent(account, 'remove', event, config.account_id);
+            try { this.handleMemberEvent(account, 'remove', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理成员移除事件异常:`, e); }
         });
 
         // 监听表态事件
         bot.on('MESSAGE_REACTION_ADD', (event: QQReactionEvent) => {
-            this.handleReactionEvent(account, 'add', event, config.account_id);
+            try { this.handleReactionEvent(account, 'add', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理表态事件异常:`, e); }
         });
 
         bot.on('MESSAGE_REACTION_REMOVE', (event: QQReactionEvent) => {
-            this.handleReactionEvent(account, 'remove', event, config.account_id);
+            try { this.handleReactionEvent(account, 'remove', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理取消表态事件异常:`, e); }
         });
 
         // 监听互动事件
         bot.on('INTERACTION_CREATE', (event: QQInteractionEvent) => {
-            this.handleInteractionEvent(account, event, config.account_id);
+            try { this.handleInteractionEvent(account, event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理互动事件异常:`, e); }
         });
 
         // 账号生命周期

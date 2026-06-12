@@ -1035,10 +1035,10 @@ export class App extends BaseApp {
             }
         });
 
-        this.router.post("/api/edit", (ctx: RouterContext) => {
+        this.router.post("/api/edit", async (ctx: RouterContext) => {
             const config = ctx.request.body;
             try {
-                this.updateAccount(config);
+                await this.updateAccount(config);
                 ctx.body = { success: true, message: '修改成功' };
             } catch (e) {
                 ctx.status = 500;
@@ -1046,10 +1046,10 @@ export class App extends BaseApp {
             }
         });
 
-        this.router.get("/api/remove", ctx => {
+        this.router.get("/api/remove", async ctx => {
             const { uin, platform, force } = ctx.request.query;
             try {
-                this.removeAccount(String(platform), String(uin), Boolean(force));
+                await this.removeAccount(String(platform), String(uin), Boolean(force));
                 ctx.body = { success: true, message: '移除成功' };
             } catch (e) {
                 ctx.status = 500;
