@@ -7,7 +7,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { SlackBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { SlackConfig, SlackEvent } from "./types.js";
+import type { SlackConfig, SlackEvent, SlackMessageOptions } from "./types.js";
 
 export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     constructor(app: BaseApp) {
@@ -32,7 +32,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
 
         // 解析消息内容
         let text = '';
-        const options: any = {};
+        const options: SlackMessageOptions = {};
 
         for (const seg of message) {
             if (typeof seg === 'string') {
@@ -401,7 +401,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         // 处理消息事件
         if (eventType === 'message') {
             // 忽略子类型消息（如 bot_message, message_changed 等）
-            if ((event as any).subtype && (event as any).subtype !== 'thread_broadcast') {
+            if (event.subtype && event.subtype !== 'thread_broadcast') {
                 return;
             }
 
@@ -419,7 +419,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             if (content) {
                 messageSegments.push({
                     type: 'text',

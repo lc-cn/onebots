@@ -126,7 +126,7 @@ export interface WechatAccessToken {
 }
 
 // API 响应
-export interface WechatApiResponse<T = any> {
+export interface WechatApiResponse<T = unknown> {
     errcode?: number;
     errmsg?: string;
     data?: T;

@@ -6,7 +6,7 @@ import { EventEmitter } from 'events';
 import nodemailer, { Transporter } from 'nodemailer';
 import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
-import type { EmailConfig, EmailMessage } from './types.js';
+import type { EmailConfig, EmailMessage, SmtpTransportOptions } from './types.js';
 import { createHttpsProxyAgent } from 'onebots';
 
 export class EmailBot extends EventEmitter {
@@ -28,7 +28,7 @@ export class EmailBot extends EventEmitter {
     private async initSMTP(): Promise<void> {
         const smtpConfig = this.config.smtp;
         
-        const transporterConfig: any = {
+        const transporterConfig: SmtpTransportOptions = {
             host: smtpConfig.host,
             port: smtpConfig.port || 587,
             secure: smtpConfig.secure ?? false,

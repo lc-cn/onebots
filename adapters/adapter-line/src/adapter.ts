@@ -26,6 +26,8 @@ import type {
     FileMessage,
     LocationMessage,
     StickerMessage,
+    RoomSource,
+    SendMessage,
 } from "./types.js";
 
 export class LineAdapter extends Adapter<LineBot, "line"> {
@@ -50,7 +52,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
-        const messages: any[] = [];
+        const messages: SendMessage[] = [];
         let textContent = '';
 
         for (const seg of message) {
@@ -393,10 +395,11 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
 
                 await bot.handleWebhook(body, signature);
                 ctx.body = 'OK';
-            } catch (error: any) {
-                this.logger.error(`Webhook 处理错误:`, error);
+            } catch (error: unknown) {
+                const err = error instanceof Error ? error : new Error(String(error));
+                this.logger.error(`Webhook 处理错误:`, err);
                 ctx.status = 400;
-                ctx.body = error.message;
+                ctx.body = err.message;
             }
         });
 
@@ -502,7 +505,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
             } else {
                 messageType = 'group';
                 group = {
-                    id: this.createId((source as any).roomId),
+                    id: this.createId((source as RoomSource).roomId),
                     name: 'Room',
                 };
             }
@@ -534,7 +537,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
             };
 
             // 保存 replyToken 用于快速回复
-            (commonEvent as any).replyToken = event.replyToken;
+            (commonEvent as CommonEvent.Message & { replyToken: string }).replyToken = event.replyToken;
 
             account.dispatch(commonEvent);
         });
@@ -565,7 +568,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         // 监听加入群组事件
         bot.on('join', (event: JoinEvent) => {
             const source = event.source;
-            const groupId = source.type === 'group' ? source.groupId : (source as any).roomId;
+            const groupId = source.type === 'group' ? source.groupId : (source as RoomSource).roomId;
 
             this.logger.info(`[LINE] 机器人加入群组: ${groupId}`);
         });
@@ -573,7 +576,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         // 监听离开群组事件
         bot.on('leave', (event: LeaveEvent) => {
             const source = event.source;
-            const groupId = source.type === 'group' ? source.groupId : (source as any).roomId;
+            const groupId = source.type === 'group' ? source.groupId : (source as RoomSource).roomId;
 
             this.logger.info(`[LINE] 机器人离开群组: ${groupId}`);
         });
@@ -581,7 +584,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         // 监听成员加入事件
         bot.on('memberJoined', (event: MemberJoinedEvent) => {
             const source = event.source;
-            const groupId = source.type === 'group' ? source.groupId : (source as any).roomId;
+            const groupId = source.type === 'group' ? source.groupId : (source as RoomSource).roomId;
 
             for (const member of event.joined.members) {
                 const commonEvent: CommonEvent.Notice = {
@@ -608,7 +611,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         // 监听成员离开事件
         bot.on('memberLeft', (event: MemberLeftEvent) => {
             const source = event.source;
-            const groupId = source.type === 'group' ? source.groupId : (source as any).roomId;
+            const groupId = source.type === 'group' ? source.groupId : (source as RoomSource).roomId;
 
             for (const member of event.left.members) {
                 const commonEvent: CommonEvent.Notice = {

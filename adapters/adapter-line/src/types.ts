@@ -325,8 +325,8 @@ export interface SendFlexMessage {
 }
 
 // 模板和 Flex 消息的简化类型（完整类型非常复杂）
-export type TemplateObject = any;
-export type FlexContainer = any;
+export type TemplateObject = Record<string, unknown>;
+export type FlexContainer = Record<string, unknown>;
 
 // ============================================
 // 用户资料类型

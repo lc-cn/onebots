@@ -90,6 +90,47 @@ export interface FeishuMessage {
     }>;
 }
 
+// 飞书事件的通用事件载荷
+export interface FeishuMessageReceiveEventPayload {
+    message: {
+        message_id: string;
+        root_id?: string;
+        parent_id?: string;
+        create_time: string;
+        chat_id: string;
+        chat_type?: string;
+        message_type?: string;
+        content?: string;
+        body?: {
+            content: string;
+        };
+        sender: {
+            id: string;
+            id_type: string;
+            sender_type: string;
+            tenant_key?: string;
+        };
+        mentions?: Array<{
+            key: string;
+            id: string;
+            id_type: string;
+            name: string;
+            tenant_key?: string;
+        }>;
+        [key: string]: unknown;
+    };
+    sender?: {
+        sender_id?: {
+            open_id?: string;
+            user_id?: string;
+            union_id?: string;
+        };
+        sender_type?: string;
+        tenant_key?: string;
+    };
+    [key: string]: unknown;
+}
+
 // 飞书事件类型
 export interface FeishuEvent {
     schema: string;
@@ -101,7 +142,7 @@ export interface FeishuEvent {
         app_id: string;
         tenant_key: string;
     };
-    event: any;
+    event: FeishuMessageReceiveEventPayload | Record<string, unknown>;
 }
 
 // 访问令牌响应
@@ -118,7 +159,7 @@ export interface FeishuSendMessageRequest {
     receive_id: string;
     receive_id_type: 'open_id' | 'user_id' | 'union_id' | 'email' | 'chat_id';
     msg_type: 'text' | 'post' | 'image' | 'file' | 'audio' | 'media' | 'sticker' | 'interactive' | 'share_chat' | 'share_user';
-    content: string | any;
+    content: string | Record<string, unknown>;
     uuid?: string;
 }
 
@@ -129,5 +170,59 @@ export interface FeishuSendMessageResponse {
     data: {
         message_id: string;
     };
+}
+
+// 飞书通用 API 响应
+export interface FeishuAPIResponse {
+    code: number;
+    msg: string;
+    data?: unknown;
+    [key: string]: unknown;
+}
+
+// 飞书用户信息 API 响应
+export interface FeishuUserAPIResponse {
+    code: number;
+    msg: string;
+    data?: {
+        user?: FeishuUser;
+        [key: string]: unknown;
+    };
+}
+
+// 飞书群组信息 API 响应
+export interface FeishuChatAPIResponse {
+    code: number;
+    msg: string;
+    data?: FeishuChat & {
+        [key: string]: unknown;
+    };
+}
+
+// 飞书群组成员 API 响应
+export interface FeishuChatMembersAPIResponse {
+    code: number;
+    msg: string;
+    data?: {
+        items?: FeishuUser[];
+        [key: string]: unknown;
+    };
+}
+
+// 飞书 Webhook 请求体（URL 验证和事件）
+export interface FeishuWebhookBody {
+    type?: string;
+    challenge?: string;
+    header?: {
+        token?: string;
+        event_id?: string;
+        event_type?: string;
+        create_time?: string;
+        app_id?: string;
+        tenant_key?: string;
+    };
+    event?: FeishuMessageReceiveEventPayload | Record<string, unknown>;
+    schema?: string;
+    [key: string]: unknown;
 }
 

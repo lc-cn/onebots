@@ -117,3 +117,21 @@ export interface EmailMessage {
     references?: string[];
 }
 
+/**
+ * nodemailer SMTP 传输器配置
+ * 由于 nodemailer 未提供 TypeScript 类型，手动定义关键字段
+ */
+export interface SmtpTransportOptions {
+    host: string;
+    port?: number;
+    secure?: boolean;
+    requireTLS?: boolean;
+    auth?: {
+        user: string;
+        pass: string;
+    };
+    /** HTTPS/SOCKS 代理 agent */
+    agent?: unknown;
+    [key: string]: unknown;
+}
+

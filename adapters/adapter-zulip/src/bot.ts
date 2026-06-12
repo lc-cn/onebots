@@ -4,6 +4,7 @@
  */
 import { EventEmitter } from 'events';
 import axios, { AxiosInstance } from 'axios';
+import type { Agent as HttpAgent } from 'http';
 import WebSocket from 'ws';
 import { createRequire } from 'module';
 import type {
@@ -12,6 +13,9 @@ import type {
     ZulipAPIResponse,
     ZulipWebSocketEvent,
     ZulipMessageEvent,
+    ZulipStreamsResponse,
+    ZulipUserResponse,
+    ZulipUser,
     ProxyConfig,
 } from './types.js';
 import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent, ConnectionManager, RetryPresets } from 'onebots';
@@ -24,7 +28,7 @@ export class ZulipBot extends EventEmitter {
     private ws: WebSocket | null = null;
     private connectionManager: ConnectionManager;
     private isConnected: boolean = false;
-    private agent: any = null;
+    private agent: HttpAgent | null = null;
     private initialized: boolean = false;
 
     constructor(config: ZulipConfig) {
@@ -69,7 +73,7 @@ export class ZulipBot extends EventEmitter {
         try {
             const agent = await createHttpsProxyAgent(this.config.proxy);
             if (agent) {
-                this.agent = agent;
+                this.agent = agent as HttpAgent;
                 console.log(`[Zulip] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
             } else {
                 console.warn('[Zulip] 创建代理失败，将直接连接');
@@ -91,8 +95,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             console.log(`[Zulip] REST API 连接成功，用户: ${response.data.email}`);
-        } catch (error: any) {
-            console.error('[Zulip] REST API 连接失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] REST API 连接失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
 
@@ -114,7 +119,7 @@ export class ZulipBot extends EventEmitter {
                 const wsUrl = this.config.serverUrl.replace(/^http/, 'ws') + '/api/v1/events';
                 const auth = Buffer.from(`${this.config.email}:${this.config.apiKey}`).toString('base64');
 
-                const wsOptions: any = {
+                const wsOptions: WebSocket.ClientOptions = {
                     headers: {
                         'Authorization': `Basic ${auth}`,
                     },
@@ -210,8 +215,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 发送消息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 发送消息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -235,8 +241,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 更新消息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 更新消息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -252,8 +259,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 删除消息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 删除消息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -261,7 +269,7 @@ export class ZulipBot extends EventEmitter {
     /**
      * 获取流列表
      */
-    async getStreams(): Promise<any> {
+    async getStreams(): Promise<ZulipStreamsResponse> {
         await this.initAgent();
 
         try {
@@ -269,8 +277,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 获取流列表失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 获取流列表失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -278,7 +287,7 @@ export class ZulipBot extends EventEmitter {
     /**
      * 获取用户信息
      */
-    async getUserInfo(userId: number): Promise<any> {
+    async getUserInfo(userId: number): Promise<ZulipUserResponse> {
         await this.initAgent();
 
         try {
@@ -286,8 +295,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 获取用户信息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 获取用户信息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -295,7 +305,7 @@ export class ZulipBot extends EventEmitter {
     /**
      * 获取当前用户信息
      */
-    async getMe(): Promise<any> {
+    async getMe(): Promise<ZulipUser> {
         await this.initAgent();
 
         try {
@@ -303,8 +313,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 获取当前用户信息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 获取当前用户信息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }

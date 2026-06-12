@@ -296,3 +296,28 @@ export interface WhatsAppAPIResponse {
     }>;
 }
 
+/**
+ * WhatsApp Webhook metadata (display_phone_number, phone_number_id)
+ */
+export interface WhatsAppWebhookMetadata {
+    display_phone_number: string;
+    phone_number_id: string;
+}
+
+/**
+ * WhatsApp Message status update event (from 'statuses' in webhook)
+ */
+export interface WhatsAppMessageStatusEvent {
+    id: string;
+    status: WhatsAppMessageStatus;
+    timestamp: string;
+    recipient_id: string;
+    errors?: Array<{
+        code: number;
+        title: string;
+        message?: string;
+        error_data?: {
+            details: string;
+        };
+    }>;
+}

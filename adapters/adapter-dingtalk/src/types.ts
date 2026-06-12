@@ -39,6 +39,58 @@ export interface DingTalkChat {
     icon?: string;
 }
 
+// 钉钉消息内容（用于 sendMessage 构建）
+export interface DingTalkMessageContent {
+    text?: string;
+    title?: string;
+    at?: {
+        isAtAll?: boolean;
+        atUserIds?: string[];
+    };
+}
+
+// 钉钉 ActionCard 消息类型
+export interface DingTalkActionCard {
+    title: string;
+    text: string;
+    single_title?: string;
+    single_url?: string;
+    btn_orientation?: '0' | '1';
+    btns?: Array<{
+        title: string;
+        action_url: string;
+    }>;
+}
+
+// 钉钉 Link 消息类型
+export interface DingTalkLink {
+    title: string;
+    text: string;
+    picUrl?: string;
+    messageUrl: string;
+}
+
+// 钉钉 File 消息类型
+export interface DingTalkFile {
+    mediaId: string;
+    fileName?: string;
+    fileSize?: number;
+    fileType?: string;
+}
+
+// 钉钉 Voice 消息类型
+export interface DingTalkVoice {
+    mediaId: string;
+    duration?: number;
+}
+
+// 钉钉 Video 消息类型
+export interface DingTalkVideo {
+    mediaId: string;
+    duration?: number;
+    picUrl?: string;
+}
+
 // 钉钉消息类型
 export interface DingTalkMessage {
     msgId: string;
@@ -62,12 +114,18 @@ export interface DingTalkMessage {
         title: string;
         text: string;
     };
-    actionCard?: any;
-    link?: any;
-    file?: any;
-    voice?: any;
-    video?: any;
-    [key: string]: any;
+    actionCard?: DingTalkActionCard;
+    link?: DingTalkLink;
+    file?: DingTalkFile;
+    voice?: DingTalkVoice;
+    video?: DingTalkVideo;
+    [key: string]: unknown;
+}
+
+// 钉钉事件数据类型
+export interface DingTalkEventData {
+    msg?: DingTalkMessage;
+    [key: string]: unknown;
 }
 
 // 钉钉事件类型
@@ -76,7 +134,14 @@ export interface DingTalkEvent {
     eventId: string;
     eventTime: number;
     eventCorpId?: string;
-    eventData: any;
+    eventData: DingTalkEventData;
+}
+
+// 获取用户信息响应
+export interface DingTalkUserGetResponse {
+    errcode: number;
+    errmsg: string;
+    result: DingTalkUser;
 }
 
 // 访问令牌响应
@@ -102,13 +167,13 @@ export interface DingTalkSendMessageRequest {
             title: string;
             text: string;
         };
-        actionCard?: any;
-        link?: any;
-        file?: any;
+        actionCard?: DingTalkActionCard;
+        link?: DingTalkLink;
+        file?: DingTalkFile;
         image?: {
             media_id: string;
         };
-        [key: string]: any;
+        [key: string]: unknown;
     };
 }
 
@@ -130,8 +195,8 @@ export interface DingTalkWebhookMessage {
         title: string;
         text: string;
     };
-    actionCard?: any;
-    link?: any;
+    actionCard?: DingTalkActionCard;
+    link?: DingTalkLink;
     at?: {
         atMobiles?: string[];
         atUserIds?: string[];

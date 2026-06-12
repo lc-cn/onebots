@@ -120,13 +120,13 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
     createAccount(config: Account.Config<'mock'>): Account<'mock', MockBot> {
         const mockConfig: MockConfig = {
             account_id: config.account_id,
-            nickname: (config as any).nickname,
-            avatar: (config as any).avatar,
-            auto_events: (config as any).auto_events ?? false,
-            event_interval: (config as any).event_interval ?? 5000,
-            latency: (config as any).latency ?? 10,
-            friends: (config as any).friends,
-            groups: (config as any).groups,
+            nickname: config.nickname,
+            avatar: config.avatar,
+            auto_events: config.auto_events ?? false,
+            event_interval: config.event_interval ?? 5000,
+            latency: config.latency ?? 10,
+            friends: config.friends,
+            groups: config.groups,
         };
 
         const bot = new MockBot(mockConfig);

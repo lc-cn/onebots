@@ -6,6 +6,8 @@
 
 import { EventEmitter } from 'events';
 import { createHmac } from 'crypto';
+import type { Agent as HttpAgent } from 'http';
+import type { RequestOptions as HttpRequestOptions } from 'https';
 import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
 import type {
     LineConfig,
@@ -33,7 +35,7 @@ function isNode(): boolean {
  */
 export class LineBot extends EventEmitter {
     private config: LineConfig;
-    private agent: any = null;
+    private agent: HttpAgent | null = null;
     private initialized = false;
 
     constructor(config: LineConfig) {
@@ -52,7 +54,7 @@ export class LineBot extends EventEmitter {
 
         const agent = await createHttpsProxyAgent(this.config.proxy);
         if (agent) {
-            this.agent = agent;
+            this.agent = agent as HttpAgent;
             console.log(`[LineBot] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
         } else {
             console.warn('[LineBot] https-proxy-agent 未安装，将直接连接');
@@ -75,22 +77,22 @@ export class LineBot extends EventEmitter {
             const https = await import('https');
             const urlObj = new URL(url);
 
-            const reqOptions: any = {
+            const reqOptions: import('https').RequestOptions = {
                 hostname: urlObj.hostname,
                 port: urlObj.port || 443,
                 path: urlObj.pathname + urlObj.search,
-                method: options.method,
+                method: options.method as string,
                 headers: options.headers,
             };
 
             if (this.agent) {
-                reqOptions.agent = this.agent;
+                (reqOptions as Record<string, unknown>).agent = this.agent;
             }
 
             const req = https.request(reqOptions, (res) => {
                 let data = '';
 
-                res.on('data', (chunk) => {
+                res.on('data', (chunk: Buffer) => {
                     data += chunk;
                 });
 
@@ -159,11 +161,11 @@ export class LineBot extends EventEmitter {
     /**
      * 发送 API 请求
      */
-    async request<T = any>(
+    async request<T = unknown>(
         endpoint: string,
         options: {
             method?: string;
-            body?: any;
+            body?: unknown;
             baseUrl?: string;
         } = {}
     ): Promise<T> {
@@ -434,7 +436,7 @@ export class LineBot extends EventEmitter {
                 const https = await import('https');
                 const urlObj = new URL(url);
 
-                const reqOptions: any = {
+                const reqOptions: import('https').RequestOptions = {
                     hostname: urlObj.hostname,
                     port: 443,
                     path: urlObj.pathname,
@@ -443,7 +445,7 @@ export class LineBot extends EventEmitter {
                 };
 
                 if (this.agent) {
-                    reqOptions.agent = this.agent;
+                    (reqOptions as Record<string, unknown>).agent = this.agent;
                 }
 
                 const req = https.request(reqOptions, (res) => {

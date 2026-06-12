@@ -69,8 +69,8 @@ export interface SlackMessage {
         mimetype?: string;
         size?: number;
     }>;
-    attachments?: any[];
-    blocks?: any[];
+    attachments?: SlackAttachment[];
+    blocks?: SlackBlock[];
     thread_ts?: string;
     reply_count?: number;
     reactions?: Array<{
@@ -78,17 +78,72 @@ export interface SlackMessage {
         users: string[];
         count: number;
     }>;
-    [key: string]: any;
+    [key: string]: unknown;
+}
+
+// Slack attachment type
+export interface SlackAttachment {
+    fallback?: string;
+    color?: string;
+    image_url?: string;
+    text?: string;
+    title?: string;
+    title_link?: string;
+    fields?: Array<{ title: string; value: string; short?: boolean }>;
+    [key: string]: unknown;
+}
+
+// Slack block type (generic for known block types)
+export interface SlackBlock {
+    type: string;
+    [key: string]: unknown;
 }
 
 // Slack 事件类型
 export interface SlackEvent {
     type: string;
+    subtype?: string;
     event_ts: string;
     user?: string;
     channel?: string;
     text?: string;
     ts?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
+// Slack webhook body type
+export interface SlackWebhookBody {
+    type?: string;
+    challenge?: string;
+    token?: string;
+    event?: SlackEvent;
+    [key: string]: unknown;
+}
+
+// Slack message send options
+export interface SlackMessageOptions {
+    thread_ts?: string;
+    mrkdwn?: boolean;
+    attachments?: SlackAttachment[];
+    blocks?: SlackBlock[];
+    unfurl_links?: boolean;
+    unfurl_media?: boolean;
+    icon_emoji?: string;
+    icon_url?: string;
+    username?: string;
+    [key: string]: unknown;
+}
+
+// Slack chat.postMessage result
+export interface SlackChatResult {
+    ok: boolean;
+    channel?: string;
+    ts?: string;
+    message?: {
+        text?: string;
+        ts?: string;
+        [key: string]: unknown;
+    };
+    error?: string;
+    [key: string]: unknown;
+}

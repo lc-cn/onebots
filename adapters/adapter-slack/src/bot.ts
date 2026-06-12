@@ -5,12 +5,16 @@
 import { EventEmitter } from 'events';
 import { WebClient } from '@slack/web-api';
 import type { RouterContext, Next } from 'onebots';
-import type { 
-    SlackConfig, 
+import type {
+    SlackConfig,
     SlackUser,
     SlackChannel,
     SlackMessage,
-    SlackEvent
+    SlackEvent,
+    SlackWebhookBody,
+    SlackBlock,
+    SlackMessageOptions,
+    SlackChatResult
 } from './types.js';
 
 export class SlackBot extends EventEmitter {
@@ -57,7 +61,7 @@ export class SlackBot extends EventEmitter {
      * 处理 Webhook 请求（Events API）
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        const body = ctx.request.body as any;
+        const body = ctx.request.body as SlackWebhookBody;
         
         // 处理 URL 验证（Slack 首次配置 webhook 时会发送验证请求）
         if (body.type === 'url_verification') {
@@ -97,7 +101,7 @@ export class SlackBot extends EventEmitter {
     /**
      * 发送消息
      */
-    async sendMessage(channel: string, text: string, options?: any): Promise<any> {
+    async sendMessage(channel: string, text: string, options?: SlackMessageOptions): Promise<SlackChatResult> {
         const result = await this.client.chat.postMessage({
             channel,
             text,
@@ -114,7 +118,7 @@ export class SlackBot extends EventEmitter {
     /**
      * 发送带 Blocks 的消息
      */
-    async sendBlocks(channel: string, blocks: any[], text?: string): Promise<any> {
+    async sendBlocks(channel: string, blocks: SlackBlock[], text?: string): Promise<SlackChatResult> {
         const result = await this.client.chat.postMessage({
             channel,
             blocks,
@@ -131,7 +135,7 @@ export class SlackBot extends EventEmitter {
     /**
      * 更新消息
      */
-    async updateMessage(channel: string, ts: string, text: string, options?: any): Promise<any> {
+    async updateMessage(channel: string, ts: string, text: string, options?: SlackMessageOptions): Promise<SlackChatResult> {
         const result = await this.client.chat.update({
             channel,
             ts,

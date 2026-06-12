@@ -56,6 +56,6 @@ export interface MockMessage {
 export interface MockEvent {
     type: 'message' | 'notice' | 'request' | 'meta';
     detail_type: string;
-    data: Record<string, any>;
+    data: Record<string, unknown>;
 }
 

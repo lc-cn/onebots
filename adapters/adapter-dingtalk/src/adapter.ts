@@ -7,7 +7,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { DingTalkBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { DingTalkConfig, DingTalkEvent } from "./types.js";
+import type { DingTalkConfig, DingTalkEvent, DingTalkSendMessageResponse, DingTalkWebhookResponse } from "./types.js";
 
 export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
     constructor(app: BaseApp) {
@@ -32,7 +32,13 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
 
         // 解析消息内容
         let text = '';
-        const content: any = {};
+        const content: {
+            text?: string;
+            at?: {
+                isAtAll?: boolean;
+                atUserIds?: string[];
+            };
+        } = {};
 
         for (const seg of message) {
             if (typeof seg === 'string') {
@@ -73,7 +79,7 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
 
         // 钉钉返回的是 task_id，不是 message_id，这里使用 task_id
         return {
-            message_id: this.createId((result as any).task_id || Date.now().toString()),
+            message_id: this.createId('task_id' in result ? result.task_id || Date.now().toString() : Date.now().toString()),
         };
     }
 
@@ -351,7 +357,7 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
 
         // 处理消息事件
         if (eventType === 'chat_update_message' || eventType === 'im.message.receive') {
-            const message = event.eventData.msg || event.eventData;
+            const message = event.eventData.msg;
             if (!message) return;
 
             // 忽略自己发送的消息
@@ -360,7 +366,7 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
             if (me && message.senderId === me.userid) return;
 
             // 打印消息接收日志
-            const content = message.text?.content || message.content || '';
+            const content = message.text?.content || '';
             const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
             this.logger.info(
                 `[钉钉] 收到消息 | 消息ID: ${message.msgId} | ` +
@@ -368,7 +374,7 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             if (content) {
                 messageSegments.push({
                     type: 'text',
@@ -396,7 +402,7 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
                 },
                 ...(isGroup ? {
                     group: {
-                        id: this.createId(message.conversationId || message.chatid || ''),
+                        id: this.createId(message.conversationId || ''),
                         name: '',
                     },
                 } : {}),

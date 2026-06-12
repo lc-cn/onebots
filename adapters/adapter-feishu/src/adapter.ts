@@ -62,7 +62,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         // 解析消息内容
         let text = '';
-        const content: any = {};
+        const content: Record<string, unknown> = {};
 
         for (const seg of message) {
             if (typeof seg === 'string') {
@@ -492,7 +492,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             if (content) {
                 messageSegments.push({
                     type: 'text',
