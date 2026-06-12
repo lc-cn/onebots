@@ -177,7 +177,7 @@ export interface ICQQMessageRet {
  */
 export type ICQQMessageElement =
     | { type: 'text'; text: string }
-    | { type: 'face'; id: number }
+    | { type: 'face' | 'sface'; id: number }
     | { type: 'image'; file: string; url?: string }
     | { type: 'record'; file: string; url?: string }
     | { type: 'video'; file: string; url?: string }

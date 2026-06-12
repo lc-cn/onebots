@@ -59,9 +59,9 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
 
         let result: MessageRet;
         if (scene_type === 'private') {
-            result = await bot.sendPrivateMessage(targetId, icqqMessage);
+            result = await bot.sendPrivateMessage(targetId, icqqMessage as never);
         } else if (scene_type === 'group') {
-            result = await bot.sendGroupMessage(targetId, icqqMessage);
+            result = await bot.sendGroupMessage(targetId, icqqMessage as never);
         } else {
             throw new Error(`不支持的消息类型: ${scene_type}`);
         }
@@ -92,7 +92,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         const bot = account.client;
         const msg = await bot.getMessage(this.coerceId(params.message_id as CommonTypes.Id | string | number).string);
 
-        const isGroup = !!msg.group_id;
+        const isGroup = !!(msg as { group_id?: unknown }).group_id;
         return {
             message_id: this.createId(msg.message_id),
             // MessageInfo.time 约定为 Unix 秒（与 OneBot get_msg 等一致）
@@ -100,11 +100,11 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             sender: {
                 scene_type: isGroup ? 'group' : 'private',
                 sender_id: this.createId(msg.user_id.toString()),
-                scene_id: this.createId(isGroup ? msg.group_id.toString() : msg.user_id.toString()),
+                scene_id: this.createId(isGroup ? String((msg as { group_id?: unknown }).group_id) : msg.user_id.toString()),
                 sender_name: msg.sender?.nickname || '',
                 scene_name: '',
             },
-            message: this.convertICQQMessageToSegments(msg.message || []),
+            message: this.convertICQQMessageToSegments((msg as { message?: ICQQMessageElement[] }).message || []),
         };
     }
 
