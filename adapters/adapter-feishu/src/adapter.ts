@@ -7,7 +7,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { FeishuBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import { FeishuEndpoint, type FeishuConfig, type FeishuEvent } from "./types.js";
+import { FeishuEndpoint, type FeishuConfig, type FeishuEvent, type FeishuMessageReceiveEventPayload, type FeishuAPIResponse, type FeishuMessage } from "./types.js";
 
 export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     constructor(app: BaseApp) {
@@ -62,7 +62,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         // 解析消息内容
         let text = '';
-        const content: any = {};
+        const content: Record<string, unknown> = {};
 
         for (const seg of message) {
             if (typeof seg === 'string') {
@@ -136,13 +136,14 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         // 飞书获取消息 API
         const http = bot.getHttpClient();
-        const response = await http.get(`/im/v1/messages/${msgId}`);
+        const response = await http.get<FeishuAPIResponse>(`/im/v1/messages/${msgId}`);
 
         if (response.data.code !== 0) {
             throw new Error(`获取消息失败: ${response.data.msg}`);
         }
 
-        const items = response.data.data?.items;
+        const dataPayload = response.data.data as { items?: FeishuMessage[] } | undefined;
+        const items = dataPayload?.items;
         const msg = Array.isArray(items) && items.length > 0 ? items[0] : undefined;
         if (!msg) {
             throw new Error('获取消息失败: 响应中无消息内容');
@@ -475,7 +476,8 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         // 处理消息事件
         if (eventType === 'im.message.receive_v1') {
-            const message = event.event.message;
+            const payload = event.event as FeishuMessageReceiveEventPayload;
+            const message = payload.message;
             if (!message) return;
 
             // 忽略自己发送的消息
@@ -492,7 +494,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             if (content) {
                 messageSegments.push({
                     type: 'text',

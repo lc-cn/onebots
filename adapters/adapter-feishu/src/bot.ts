@@ -4,15 +4,20 @@
  */
 import { EventEmitter } from 'events';
 import type { RouterContext, Next } from 'onebots';
-import { 
+import {
     FeishuEndpoint,
-    type FeishuConfig, 
-    type FeishuTokenResponse, 
+    type FeishuConfig,
+    type FeishuTokenResponse,
     type FeishuSendMessageRequest,
     type FeishuSendMessageResponse,
     type FeishuEvent,
     type FeishuUser,
-    type FeishuChat
+    type FeishuChat,
+    type FeishuWebhookBody,
+    type FeishuAPIResponse,
+    type FeishuUserAPIResponse,
+    type FeishuChatAPIResponse,
+    type FeishuChatMembersAPIResponse,
 } from './types.js';
 
 /**
@@ -21,7 +26,7 @@ import {
 interface RequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
     headers?: Record<string, string>;
-    body?: any;
+    body?: string | Record<string, unknown>;
     params?: Record<string, string | number | boolean>;
     skipAuth?: boolean;
 }
@@ -44,7 +49,7 @@ export class FeishuBot extends EventEmitter {
     /**
      * 发送 HTTP 请求
      */
-    private async request<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
+    private async request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
         const { method = 'GET', headers = {}, body, params, skipAuth = false } = options;
         
         // 构建 URL
@@ -82,7 +87,7 @@ export class FeishuBot extends EventEmitter {
     /**
      * GET 请求
      */
-    async get<T = any>(path: string, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
+    async get<T = unknown>(path: string, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
         const data = await this.request<T>(path, { params });
         return { data };
     }
@@ -90,7 +95,7 @@ export class FeishuBot extends EventEmitter {
     /**
      * POST 请求
      */
-    async post<T = any>(path: string, body?: any, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
+    async post<T = unknown>(path: string, body?: string | Record<string, unknown>, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
         const data = await this.request<T>(path, { method: 'POST', body, params });
         return { data };
     }
@@ -98,7 +103,7 @@ export class FeishuBot extends EventEmitter {
     /**
      * PUT 请求
      */
-    async put<T = any>(path: string, body?: any): Promise<{ data: T }> {
+    async put<T = unknown>(path: string, body?: string | Record<string, unknown>): Promise<{ data: T }> {
         const data = await this.request<T>(path, { method: 'PUT', body });
         return { data };
     }
@@ -106,7 +111,7 @@ export class FeishuBot extends EventEmitter {
     /**
      * DELETE 请求
      */
-    async delete<T = any>(path: string): Promise<{ data: T }> {
+    async delete<T = unknown>(path: string): Promise<{ data: T }> {
         const data = await this.request<T>(path, { method: 'DELETE' });
         return { data };
     }
@@ -167,7 +172,7 @@ export class FeishuBot extends EventEmitter {
      * 处理 Webhook 请求
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        const body = ctx.request.body as any;
+        const body = ctx.request.body as FeishuWebhookBody;
         
         // 验证事件（如果配置了 verification_token）
         if (this.config.verification_token && body.header?.token !== this.config.verification_token) {
@@ -183,7 +188,7 @@ export class FeishuBot extends EventEmitter {
         }
 
         // 处理事件
-        const event: FeishuEvent = body;
+        const event = body as unknown as FeishuEvent;
         this.emit('event', event);
 
         ctx.body = { code: 0 };
@@ -201,7 +206,7 @@ export class FeishuBot extends EventEmitter {
      * 获取 Bot 信息
      */
     async getBotInfo(): Promise<FeishuUser> {
-        const response = await this.get<any>('/im/v1/bots', { page_size: 1 });
+        const response = await this.get<FeishuAPIResponse>('/im/v1/bots', { page_size: 1 });
 
         if (response.data.code !== 0) {
             throw new Error(`获取 Bot 信息失败: ${response.data.msg}`);
@@ -218,15 +223,15 @@ export class FeishuBot extends EventEmitter {
     /**
      * 发送消息
      */
-    async sendMessage(receiveId: string, receiveIdType: 'open_id' | 'user_id' | 'union_id' | 'email' | 'chat_id', content: string | any, msgType: string = 'text'): Promise<FeishuSendMessageResponse> {
+    async sendMessage(receiveId: string, receiveIdType: 'open_id' | 'user_id' | 'union_id' | 'email' | 'chat_id', content: string | Record<string, unknown>, msgType: string = 'text'): Promise<FeishuSendMessageResponse> {
         const request: FeishuSendMessageRequest = {
             receive_id: receiveId,
             receive_id_type: receiveIdType,
-            msg_type: msgType as any,
+            msg_type: msgType as FeishuSendMessageRequest['msg_type'],
             content: typeof content === 'string' ? JSON.stringify({ text: content }) : JSON.stringify(content),
         };
 
-        const response = await this.post<FeishuSendMessageResponse>('/im/v1/messages', request, {
+        const response = await this.post<FeishuSendMessageResponse>('/im/v1/messages', request as unknown as Record<string, unknown>, {
             receive_id_type: receiveIdType,
         });
 
@@ -241,11 +246,11 @@ export class FeishuBot extends EventEmitter {
      * 获取用户信息
      */
     async getUserInfo(userId: string, userIdType: 'open_id' | 'user_id' | 'union_id' = 'open_id'): Promise<FeishuUser> {
-        const response = await this.get<any>(`/contact/v3/users/${userId}`, {
+        const response = await this.get<FeishuUserAPIResponse>(`/contact/v3/users/${userId}`, {
             user_id_type: userIdType,
         });
 
-        if (response.data.code !== 0) {
+        if (response.data.code !== 0 || !response.data.data?.user) {
             throw new Error(`获取用户信息失败: ${response.data.msg}`);
         }
 
@@ -256,22 +261,22 @@ export class FeishuBot extends EventEmitter {
      * 获取群组信息
      */
     async getChatInfo(chatId: string): Promise<FeishuChat> {
-        const response = await this.get<any>(`/im/v1/chats/${chatId}`);
+        const response = await this.get<FeishuChatAPIResponse>(`/im/v1/chats/${chatId}`);
 
-        if (response.data.code !== 0) {
+        if (response.data.code !== 0 || !response.data.data) {
             throw new Error(`获取群组信息失败: ${response.data.msg}`);
         }
 
-        return response.data.data;
+        return response.data.data as FeishuChat;
     }
 
     /**
      * 获取群组成员列表
      */
     async getChatMembers(chatId: string): Promise<FeishuUser[]> {
-        const response = await this.get<any>(`/im/v1/chats/${chatId}/members`);
+        const response = await this.get<FeishuChatMembersAPIResponse>(`/im/v1/chats/${chatId}/members`);
 
-        if (response.data.code !== 0) {
+        if (response.data.code !== 0 || !response.data.data) {
             throw new Error(`获取群组成员列表失败: ${response.data.msg}`);
         }
 

@@ -34,6 +34,26 @@ export interface TeamsChannel {
     teamId?: string;
 }
 
+// Teams channelData 中的 tenant 信息
+export interface TeamsChannelDataTenant {
+    id?: string;
+    name?: string;
+}
+
+// Teams channelData 结构
+export interface TeamsChannelData {
+    channel?: { id?: string; name?: string };
+    team?: { id?: string; name?: string };
+    tenant?: TeamsChannelDataTenant;
+    [key: string]: unknown;
+}
+
+// Teams Entity 类型（Bot Framework Entity 的扩展）
+export interface TeamsEntity {
+    type: string;
+    [key: string]: unknown;
+}
+
 // Teams 消息类型
 export interface TeamsMessage {
     id: string;
@@ -48,16 +68,16 @@ export interface TeamsMessage {
         name?: string;
         isGroup?: boolean;
     };
-    channelData?: any;
-    entities?: any[];
-    [key: string]: any;
+    channelData?: TeamsChannelData;
+    entities?: TeamsEntity[];
+    [key: string]: unknown;
 }
 
 // Teams 附件类型
 export interface TeamsAttachment {
     contentType: string;
     contentUrl?: string;
-    content?: any;
+    content?: Record<string, unknown>;
     name?: string;
     thumbnailUrl?: string;
 }
@@ -74,16 +94,23 @@ export interface TeamsActivity {
         isGroup?: boolean;
     };
     channelId: string;
-    channelData?: any;
+    channelData?: TeamsChannelData;
     text?: string;
     attachments?: TeamsAttachment[];
-    value?: any;
-    [key: string]: any;
+    value?: Record<string, unknown>;
+    [key: string]: unknown;
 }
 
 // Teams 事件类型
 export interface TeamsEvent {
     type: 'message' | 'messageUpdate' | 'messageDelete' | 'conversationUpdate' | 'typing' | 'endOfConversation' | 'event' | 'invoke';
     activity: TeamsActivity;
+}
+
+// sendMessage / sendCard 的选项
+export interface SendMessageOptions {
+    isGroup?: boolean;
+    conversationName?: string;
+    reply_to_message_id?: string;
 }
 

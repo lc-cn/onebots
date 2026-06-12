@@ -3,16 +3,18 @@
  * 基于 grammy 封装
  */
 import { EventEmitter } from 'events';
-import { Bot, Context, InputFile } from 'grammy';
-import { createRequire } from 'module';
-import type { TelegramConfig, ProxyConfig } from './types.js';
-
-const require = createRequire(import.meta.url);
+import { Bot, Context, InputFile, type PollingOptions } from 'grammy';
+import type { Opts, MessageEntity } from 'grammy/types';
+import type { Update } from 'grammy/types';
+import type { UserFromGetMe, ChatFullInfo, ChatMember, ChatMemberOwner, ChatMemberAdministrator } from 'grammy/types';
+import type { Message } from 'grammy/types';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
+import type { TelegramConfig, ProxyConfig, TelegramMessage } from './types.js';
 
 export class TelegramBot extends EventEmitter {
     private bot!: Bot;
     private config: TelegramConfig;
-    private me: any = null;
+    private me: UserFromGetMe | null = null;
     private initialized: boolean = false;
     /** grammy Bot 已 init（handleUpdate 前必须，仅 webhook 模式需在首请求时兜底） */
     private botInited: boolean = false;
@@ -30,45 +32,22 @@ export class TelegramBot extends EventEmitter {
         
         const botConfig: ConstructorParameters<typeof Bot>[1] = {};
         
-        // 配置代理 - grammy 使用 node-fetch，需要配置 agent
-        if (this.config.proxy?.url) {
-            try {
-                const { HttpsProxyAgent } = require('https-proxy-agent');
-                
-                const proxyUrl = this.buildProxyUrl(this.config.proxy);
-                const agent = new HttpsProxyAgent(proxyUrl);
-                
-                // 通过 baseFetchConfig 传递 agent 给 node-fetch
-                botConfig.client = {
-                    baseFetchConfig: {
-                        agent: agent,
-                        compress: true,
-                    },
-                };
-                
-                console.log(`[Telegram] 已配置代理: ${this.config.proxy.url.replace(/\/\/[^@]+@/, '//***:***@')}`);
-            } catch (error) {
-                console.warn('[Telegram] 创建代理失败，将直接连接:', error);
-            }
+        const agent = await createHttpsProxyAgent(this.config.proxy);
+        if (agent) {
+            botConfig.client = {
+                baseFetchConfig: {
+                    agent: agent,
+                    compress: true,
+                },
+            };
+            console.log(`[Telegram] 已配置代理: ${this.config.proxy.url}`);
+        } else {
+            console.warn('[Telegram] 创建代理失败，将直接连接');
         }
         
         this.bot = new Bot(this.config.token, botConfig);
         this.setupEventHandlers();
         this.initialized = true;
-    }
-
-    /**
-     * 构建代理 URL（包含认证信息）
-     */
-    private buildProxyUrl(proxy: ProxyConfig): string {
-        const proxyUrl = new URL(proxy.url);
-        if (proxy.username) {
-            proxyUrl.username = proxy.username;
-        }
-        if (proxy.password) {
-            proxyUrl.password = proxy.password;
-        }
-        return proxyUrl.toString();
     }
 
     /**
@@ -135,27 +114,27 @@ export class TelegramBot extends EventEmitter {
     /**
      * 转换消息为内部格式
      */
-    private transformMessage(message: any, ctx: Context): any {
+    private transformMessage(message: Message, ctx: Context): TelegramMessage {
         return {
             message_id: message.message_id,
             from: message.from,
             date: message.date,
             chat: message.chat,
-            text: message.text,
-            caption: message.caption,
-            photo: message.photo,
-            video: message.video,
-            audio: message.audio,
-            document: message.document,
-            sticker: message.sticker,
-            location: message.location,
-            contact: message.contact,
-            reply_to_message: message.reply_to_message,
-            entities: message.entities,
-            caption_entities: message.caption_entities,
+            text: (message as Message.TextMessage).text,
+            caption: (message as Message & { caption?: string }).caption,
+            photo: (message as Message.PhotoMessage).photo,
+            video: (message as Message.VideoMessage).video,
+            audio: (message as Message.AudioMessage).audio,
+            document: (message as Message.DocumentMessage).document,
+            sticker: (message as Message.StickerMessage).sticker,
+            location: (message as Message.LocationMessage).location,
+            contact: (message as Message.ContactMessage).contact,
+            reply_to_message: message.reply_to_message as unknown as TelegramMessage,
+            entities: (message as Message.TextMessage).entities,
+            caption_entities: (message as Message & { caption_entities?: MessageEntity[] }).caption_entities,
             _original: message,
             _ctx: ctx,
-        };
+        } as TelegramMessage;
     }
 
     /**
@@ -183,7 +162,7 @@ export class TelegramBot extends EventEmitter {
                 this.emit('ready');
             } else if (this.config.polling?.enabled !== false) {
                 // 轮询模式（默认）
-                const pollingOptions: any = {};
+                const pollingOptions: PollingOptions = {};
                 if (this.config.polling?.allowed_updates) {
                     pollingOptions.allowed_updates = this.config.polling.allowed_updates;
                 }
@@ -222,7 +201,7 @@ export class TelegramBot extends EventEmitter {
      * 处理 Webhook 推送的 Update（由适配器在 POST 路由中调用）
      * @param update Telegram 推送的 Update 对象
      */
-    async handleWebhookUpdate(update: any): Promise<void> {
+    async handleWebhookUpdate(update: Update): Promise<void> {
         if (!this.initialized) await this.initBot();
         // grammy 要求 bot 已 init 才能 handleUpdate（start() 未跑到时兜底，只 init 一次）
         if (!this.botInited && typeof this.bot.init === 'function') {
@@ -244,7 +223,7 @@ export class TelegramBot extends EventEmitter {
     /**
      * 获取缓存的 Bot 信息
      */
-    getCachedMe(): any {
+    getCachedMe(): UserFromGetMe | null {
         return this.me;
     }
 
@@ -255,7 +234,7 @@ export class TelegramBot extends EventEmitter {
     /**
      * 获取 Bot 信息
      */
-    async getMe(): Promise<any> {
+    async getMe(): Promise<UserFromGetMe> {
         this.me = await this.bot.api.getMe();
         return this.me;
     }
@@ -263,42 +242,42 @@ export class TelegramBot extends EventEmitter {
     /**
      * 发送消息
      */
-    async sendMessage(chatId: number | string, text: string, options?: any): Promise<any> {
+    async sendMessage(chatId: number | string, text: string, options?: Opts<"sendMessage">): Promise<Message.TextMessage> {
         return await this.bot.api.sendMessage(chatId, text, options);
     }
 
     /**
      * 发送图片
      */
-    async sendPhoto(chatId: number | string, photo: string | InputFile, options?: any): Promise<any> {
+    async sendPhoto(chatId: number | string, photo: string | InputFile, options?: Opts<"sendPhoto">): Promise<Message.PhotoMessage> {
         return await this.bot.api.sendPhoto(chatId, photo, options);
     }
 
     /**
      * 发送视频
      */
-    async sendVideo(chatId: number | string, video: string | InputFile, options?: any): Promise<any> {
+    async sendVideo(chatId: number | string, video: string | InputFile, options?: Opts<"sendVideo">): Promise<Message.VideoMessage> {
         return await this.bot.api.sendVideo(chatId, video, options);
     }
 
     /**
      * 发送音频
      */
-    async sendAudio(chatId: number | string, audio: string | InputFile, options?: any): Promise<any> {
+    async sendAudio(chatId: number | string, audio: string | InputFile, options?: Opts<"sendAudio">): Promise<Message.AudioMessage> {
         return await this.bot.api.sendAudio(chatId, audio, options);
     }
 
     /**
      * 发送文档
      */
-    async sendDocument(chatId: number | string, document: string | InputFile, options?: any): Promise<any> {
+    async sendDocument(chatId: number | string, document: string | InputFile, options?: Opts<"sendDocument">): Promise<Message.DocumentMessage> {
         return await this.bot.api.sendDocument(chatId, document, options);
     }
 
     /**
      * 编辑消息
      */
-    async editMessageText(chatId: number | string, messageId: number, text: string, options?: any): Promise<any> {
+    async editMessageText(chatId: number | string, messageId: number, text: string, options?: Opts<"editMessageText">): Promise<true | (Message.CommonMessage & { edit_date: number })> {
         return await this.bot.api.editMessageText(chatId, messageId, text, options);
     }
 
@@ -312,21 +291,21 @@ export class TelegramBot extends EventEmitter {
     /**
      * 获取聊天信息
      */
-    async getChat(chatId: number | string): Promise<any> {
+    async getChat(chatId: number | string): Promise<ChatFullInfo> {
         return await this.bot.api.getChat(chatId);
     }
 
     /**
      * 获取聊天成员
      */
-    async getChatMember(chatId: number | string, userId: number): Promise<any> {
+    async getChatMember(chatId: number | string, userId: number): Promise<ChatMember> {
         return await this.bot.api.getChatMember(chatId, userId);
     }
 
     /**
      * 获取聊天成员列表
      */
-    async getChatAdministrators(chatId: number | string): Promise<any[]> {
+    async getChatAdministrators(chatId: number | string): Promise<(ChatMemberOwner | ChatMemberAdministrator)[]> {
         return await this.bot.api.getChatAdministrators(chatId);
     }
 
@@ -340,14 +319,14 @@ export class TelegramBot extends EventEmitter {
     /**
      * 踢出成员
      */
-    async banChatMember(chatId: number | string, userId: number, options?: any): Promise<boolean> {
+    async banChatMember(chatId: number | string, userId: number, options?: Opts<"banChatMember">): Promise<boolean> {
         return await this.bot.api.banChatMember(chatId, userId, options);
     }
 
     /**
      * 取消封禁成员
      */
-    async unbanChatMember(chatId: number | string, userId: number, options?: any): Promise<boolean> {
+    async unbanChatMember(chatId: number | string, userId: number, options?: Opts<"unbanChatMember">): Promise<boolean> {
         return await this.bot.api.unbanChatMember(chatId, userId, options);
     }
 

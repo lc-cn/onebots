@@ -6,7 +6,8 @@ import { EventEmitter } from 'events';
 import nodemailer, { Transporter } from 'nodemailer';
 import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
-import type { EmailConfig, EmailMessage } from './types.js';
+import type { EmailConfig, EmailMessage, SmtpTransportOptions } from './types.js';
+import { createHttpsProxyAgent } from 'onebots';
 
 export class EmailBot extends EventEmitter {
     private config: EmailConfig;
@@ -27,7 +28,7 @@ export class EmailBot extends EventEmitter {
     private async initSMTP(): Promise<void> {
         const smtpConfig = this.config.smtp;
         
-        const transporterConfig: any = {
+        const transporterConfig: SmtpTransportOptions = {
             host: smtpConfig.host,
             port: smtpConfig.port || 587,
             secure: smtpConfig.secure ?? false,
@@ -40,12 +41,11 @@ export class EmailBot extends EventEmitter {
 
         // 配置代理（如果需要）
         if (smtpConfig.proxy?.url) {
-            try {
-                const { HttpsProxyAgent } = await import('https-proxy-agent');
-                const proxyUrl = this.buildProxyUrl(smtpConfig.proxy);
-                transporterConfig.agent = new HttpsProxyAgent(proxyUrl);
-            } catch (error) {
-                console.warn('[Email] 创建代理失败，将直接连接:', error);
+            const agent = await createHttpsProxyAgent(smtpConfig.proxy);
+            if (agent) {
+                transporterConfig.agent = agent;
+            } else {
+                console.warn('[Email] 创建代理失败，将直接连接');
             }
         }
 
@@ -95,19 +95,6 @@ export class EmailBot extends EventEmitter {
 
             this.imap.connect();
         });
-    }
-
-    /**
-     * 构建代理 URL
-     */
-    private buildProxyUrl(proxy: { url: string; username?: string; password?: string }): string {
-        let url = proxy.url;
-        if (proxy.username && proxy.password) {
-            const protocol = url.split('://')[0];
-            const rest = url.split('://')[1];
-            url = `${protocol}://${proxy.username}:${proxy.password}@${rest}`;
-        }
-        return url;
     }
 
     /**

@@ -11,7 +11,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { KookBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { KookConfig, KookEvent, KookMessageType } from "./types.js";
+import type { KookConfig, KookMessageType, KookTransformedChannelEvent, KookTransformedPrivateEvent, KookEvent } from "./types.js";
 import { parseKMarkdown, mentionUser, mentionAll, mentionHere } from "./utils.js";
 
 export class KookAdapter extends Adapter<KookBot, "kook"> {
@@ -68,13 +68,13 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         if (scene_type === 'private' || scene_type === 'direct') {
             // 私聊消息
-            result = await bot.sendDirectMessage(sceneId.string, content);
+            result = (await bot.sendDirectMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
         } else if (scene_type === 'channel') {
             // 频道消息
-            result = await bot.sendChannelMessage(sceneId.string, content);
+            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
         } else if (scene_type === 'group') {
             // 群组消息也发送到频道
-            result = await bot.sendChannelMessage(sceneId.string, content);
+            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
         } else {
             throw new Error(`KOOK 不支持的消息场景类型: ${scene_type}`);
         }
@@ -114,21 +114,22 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
         const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
 
-        const msg = await bot.getMessage(channelId, msgId);
+        // getMessage returns kook-client's Message type which has message_id, timestamp, author, raw_message
+        const msg = await bot.getMessage(channelId, msgId) as unknown as { message_id: string; timestamp: number; author: { id: string; username: string }; raw_message: string };
 
         return {
-            message_id: this.createId(msg.id),
-            time: msg.create_at,
+            message_id: this.createId(msg.message_id),
+            time: msg.timestamp,
             sender: {
                 scene_type: 'channel',
                 sender_id: this.createId(msg.author.id),
-                scene_id: this.createId(msg.id),
+                scene_id: this.createId(msg.message_id),
                 sender_name: msg.author.username,
                 scene_name: '',
             },
             message: [{
-                type: msg.type === 9 ? 'text' : 'text',
-                data: { text: parseKMarkdown(msg.content) },
+                type: 'text',
+                data: { text: parseKMarkdown(msg.raw_message) },
             }],
         };
     }
@@ -175,7 +176,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const me = await bot.getMe();
+        const me = await bot.getMe() as unknown as { id: string; username: string; nickname: string; avatar: string };
 
         return {
             user_id: this.createId(me.id),
@@ -194,7 +195,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         const bot = account.client;
         const userId = params.user_id.string;
-        const user = await bot.getUser(userId);
+        const user = await bot.getUser(userId) as unknown as { id: string; username: string; nickname: string; avatar: string };
 
         return {
             user_id: this.createId(user.id),
@@ -625,7 +626,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         });
 
         // 监听频道消息
-        bot.on('channel_message', (event: KookEvent) => {
+        bot.on('channel_message', (event: KookTransformedChannelEvent) => {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
             if (me && event.author_id === me.id) return;
@@ -633,17 +634,15 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             // 打印消息接收日志
             const content = event.content || '';
             const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
-            const channelId = (event as any).channel_id || '';
+            const channelId = event.channel_id || '';
             this.logger.info(
                 `[KOOK] 收到频道消息 | 消息ID: ${event.msg_id} | 频道: ${channelId} | ` +
                 `发送者: ${event.extra?.author?.username || event.author_id} | 内容: ${contentPreview}`
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             const rawContent = event.content || '';
-            
-            // 根据消息类型处理
             switch (event.type) {
                 case 1:  // 文字消息
                 case 9:  // KMarkdown
@@ -713,7 +712,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
                     avatar: event.extra?.author?.avatar,
                 },
                 group: {
-                    id: this.createId(event.extra?.guild_id || (event as any).channel_id || ''),
+                    id: this.createId(event.extra?.guild_id || event.channel_id || ''),
                     name: '',
                 },
                 message_id: this.createId(event.msg_id),
@@ -726,7 +725,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         });
 
         // 监听私聊消息
-        bot.on('direct_message', (event: KookEvent) => {
+        bot.on('direct_message', (event: KookTransformedPrivateEvent) => {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
             if (me && event.author_id === me.id) return;
@@ -740,9 +739,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             const rawContent = event.content || '';
-            
+
+
             switch (event.type) {
                 case 1:
                 case 9:

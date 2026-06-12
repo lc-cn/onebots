@@ -5,11 +5,12 @@
  */
 
 import { EventEmitter } from 'events';
-import { createRequire } from 'module';
 import { createHmac } from 'crypto';
+import type { Agent as HttpAgent } from 'http';
+import type { RequestOptions as HttpRequestOptions } from 'https';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
 import type {
     LineConfig,
-    ProxyConfig,
     WebhookEvent,
     MessageEvent,
     UserProfile,
@@ -19,7 +20,6 @@ import type {
     SendMessage,
     SendMessageResponse,
 } from './types.js';
-const require = createRequire(import.meta.url);
 const LINE_API_BASE = 'https://api.line.me/v2';
 const LINE_API_DATA = 'https://api-data.line.me/v2';
 
@@ -35,7 +35,7 @@ function isNode(): boolean {
  */
 export class LineBot extends EventEmitter {
     private config: LineConfig;
-    private agent: any = null;
+    private agent: HttpAgent | null = null;
     private initialized = false;
 
     constructor(config: LineConfig) {
@@ -46,27 +46,19 @@ export class LineBot extends EventEmitter {
     /**
      * 初始化代理 Agent
      */
-    private initAgent(): void {
+    private async initAgent(): Promise<void> {
         if (this.initialized) return;
         this.initialized = true;
 
         if (!this.config.proxy?.url || !isNode()) return;
 
-        try {
-            const proxyUrl = this.buildProxyUrl(this.config.proxy);
-            const { HttpsProxyAgent } = require('https-proxy-agent');
-            this.agent = new HttpsProxyAgent(proxyUrl);
-            console.log(`[LineBot] 已配置代理: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
-        } catch {
+        const agent = await createHttpsProxyAgent(this.config.proxy);
+        if (agent) {
+            this.agent = agent as HttpAgent;
+            console.log(`[LineBot] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+        } else {
             console.warn('[LineBot] https-proxy-agent 未安装，将直接连接');
         }
-    }
-
-    private buildProxyUrl(proxy: ProxyConfig): string {
-        const proxyUrl = new URL(proxy.url);
-        if (proxy.username) proxyUrl.username = proxy.username;
-        if (proxy.password) proxyUrl.password = proxy.password;
-        return proxyUrl.toString();
     }
 
     // ============================================
@@ -85,22 +77,22 @@ export class LineBot extends EventEmitter {
             const https = await import('https');
             const urlObj = new URL(url);
 
-            const reqOptions: any = {
+            const reqOptions: import('https').RequestOptions = {
                 hostname: urlObj.hostname,
                 port: urlObj.port || 443,
                 path: urlObj.pathname + urlObj.search,
-                method: options.method,
+                method: options.method as string,
                 headers: options.headers,
             };
 
             if (this.agent) {
-                reqOptions.agent = this.agent;
+                (reqOptions as Record<string, unknown>).agent = this.agent;
             }
 
             const req = https.request(reqOptions, (res) => {
                 let data = '';
 
-                res.on('data', (chunk) => {
+                res.on('data', (chunk: Buffer) => {
                     data += chunk;
                 });
 
@@ -169,15 +161,15 @@ export class LineBot extends EventEmitter {
     /**
      * 发送 API 请求
      */
-    async request<T = any>(
+    async request<T = unknown>(
         endpoint: string,
         options: {
             method?: string;
-            body?: any;
+            body?: unknown;
             baseUrl?: string;
         } = {}
     ): Promise<T> {
-        this.initAgent();
+        await this.initAgent();
 
         const { method = 'GET', body, baseUrl = LINE_API_BASE } = options;
         const url = `${baseUrl}${endpoint}`;
@@ -444,7 +436,7 @@ export class LineBot extends EventEmitter {
                 const https = await import('https');
                 const urlObj = new URL(url);
 
-                const reqOptions: any = {
+                const reqOptions: import('https').RequestOptions = {
                     hostname: urlObj.hostname,
                     port: 443,
                     path: urlObj.pathname,
@@ -453,7 +445,7 @@ export class LineBot extends EventEmitter {
                 };
 
                 if (this.agent) {
-                    reqOptions.agent = this.agent;
+                    (reqOptions as Record<string, unknown>).agent = this.agent;
                 }
 
                 const req = https.request(reqOptions, (res) => {

@@ -61,10 +61,22 @@ export const IntentBits: Record<QQIntent, number> = {
 
 export interface WSPayload {
     op: number;
-    d?: any;
+    d?: WSEventData;
     s?: number;
     t?: string;
 }
+
+/**
+ * WebSocket 事件数据 — 可以是各类事件对象、鉴权信息、心跳间隔等
+ */
+export type WSEventData =
+    | ReadyEvent
+    | WSHelloData
+    | WSResumeData
+    | WSIdentifyData
+    | boolean  // INVALID_SESSION: resumable flag
+    | Record<string, unknown>;
+
 
 export enum OpCode {
     DISPATCH = 0,           // 服务端推送消息
@@ -86,6 +98,31 @@ export interface GatewayResponse {
         remaining: number;
         reset_after: number;
         max_concurrency: number;
+    };
+}
+
+// ============================================
+// WebSocket 辅助数据类型
+// ============================================
+
+export interface WSHelloData {
+    heartbeat_interval: number;
+}
+
+export interface WSResumeData {
+    token: string;
+    session_id: string;
+    seq: number;
+}
+
+export interface WSIdentifyData {
+    token: string;
+    intents: number;
+    shard: [number, number];
+    properties: {
+        $os: string;
+        $browser: string;
+        $device: string;
     };
 }
 
@@ -434,7 +471,7 @@ export interface QQGroupMessageEvent {
 // API 响应类型
 // ============================================
 
-export interface QQApiResponse<T = any> {
+export interface QQApiResponse<T = unknown> {
     code?: number;
     message?: string;
     data?: T;
@@ -443,6 +480,7 @@ export interface QQApiResponse<T = any> {
 
 export interface MessageSendResult {
     id: string;
+    message_id?: string;
     timestamp?: string;
 }
 
@@ -476,7 +514,7 @@ export interface MediaUploadResult {
 
 export interface WebhookPayload {
     op: number;           // 操作码
-    d?: any;              // 事件数据
+    d?: WSEventData;      // 事件数据
     id?: string;          // 事件ID
     t?: string;           // 事件类型
     s?: number;           // 序列号
@@ -490,4 +528,84 @@ export interface WebhookValidation {
 export interface WebhookValidationResponse {
     plain_token: string;
     signature: string;
+}
+
+// ============================================
+// 角色相关类型
+// ============================================
+
+export interface QQRole {
+    id: string;
+    name: string;
+    color: number;
+    hoist: number;        // 0=不单独显示, 1=单独显示
+    number: number;       // 成员数量
+    member_limit: number;
+}
+
+export interface QQGuildRolesResult {
+    guild_id: string;
+    roles: QQRole[];
+    role_num_limit: string;
+}
+
+export interface QQCreateRoleResult {
+    role_id: string;
+    role: QQRole;
+}
+
+// ============================================
+// 公告 & 精华消息类型
+// ============================================
+
+export interface QQAnnounceResult {
+    guild_id: string;
+    channel_id: string;
+    message_id: string;
+}
+
+export interface QQPinResult {
+    guild_id: string;
+    channel_id: string;
+    message_ids: string[];
+    create_time: string;
+}
+
+// ============================================
+// 日程相关类型
+// ============================================
+
+export interface QQSchedule {
+    id: string;
+    name: string;
+    description?: string;
+    start_timestamp: string;
+    end_timestamp: string;
+    creator?: QQMember;
+    jump_channel_id?: string;
+    remind_type?: string;
+}
+
+// ============================================
+// QQ API 错误类型
+// ============================================
+
+export class QQApiError extends Error {
+    constructor(
+        message: string,
+        public readonly code?: number,
+        public readonly status?: number,
+    ) {
+        super(message);
+        this.name = 'QQApiError';
+    }
+}
+
+// ============================================
+// Access Token 响应类型
+// ============================================
+
+export interface AccessTokenResponse {
+    access_token: string;
+    expires_in: number;
 }

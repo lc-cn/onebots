@@ -4,16 +4,18 @@
  */
 import { EventEmitter } from 'events';
 import type { RouterContext, Next } from 'onebots';
-import type { 
-    DingTalkConfig, 
-    DingTalkTokenResponse, 
+import type {
+    DingTalkConfig,
+    DingTalkTokenResponse,
     DingTalkSendMessageRequest,
     DingTalkSendMessageResponse,
     DingTalkEvent,
     DingTalkUser,
     DingTalkChat,
     DingTalkWebhookMessage,
-    DingTalkWebhookResponse
+    DingTalkWebhookResponse,
+    DingTalkUserGetResponse,
+    DingTalkMessageContent
 } from './types.js';
 
 const DINGTALK_API_BASE = 'https://oapi.dingtalk.com';
@@ -24,7 +26,7 @@ const DINGTALK_API_BASE = 'https://oapi.dingtalk.com';
 interface RequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
     headers?: Record<string, string>;
-    body?: any;
+    body?: Record<string, unknown>;
     params?: Record<string, string | number | boolean>;
     skipAuth?: boolean;
 }
@@ -51,7 +53,7 @@ export class DingTalkBot extends EventEmitter {
     /**
      * 发送 HTTP 请求
      */
-    private async request<T = any>(url: string, options: RequestOptions = {}): Promise<T> {
+    private async request<T = unknown>(url: string, options: RequestOptions = {}): Promise<T> {
         const { method = 'GET', headers = {}, body, params, skipAuth = false } = options;
         
         // 构建 URL
@@ -87,7 +89,7 @@ export class DingTalkBot extends EventEmitter {
     /**
      * GET 请求
      */
-    async get<T = any>(path: string, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
+    async get<T = unknown>(path: string, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
         const data = await this.request<T>(`${DINGTALK_API_BASE}${path}`, { params });
         return { data };
     }
@@ -95,7 +97,7 @@ export class DingTalkBot extends EventEmitter {
     /**
      * POST 请求
      */
-    async post<T = any>(path: string, body?: any, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
+    async post<T = unknown>(path: string, body?: Record<string, unknown>, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
         const data = await this.request<T>(`${DINGTALK_API_BASE}${path}`, { method: 'POST', body, params });
         return { data };
     }
@@ -168,7 +170,7 @@ export class DingTalkBot extends EventEmitter {
      * 处理 Webhook 请求（事件订阅）
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        const body = ctx.request.body as any;
+        const body = ctx.request.body as Record<string, unknown>;
         
         // 验证事件（如果配置了 token）
         if (this.config.token && body.token !== this.config.token) {
@@ -188,11 +190,12 @@ export class DingTalkBot extends EventEmitter {
 
         // 处理事件
         const event: DingTalkEvent = {
-            eventType: body.eventType || body.type,
-            eventId: body.eventId || body.id,
-            eventTime: body.eventTime || body.timestamp || Date.now(),
-            eventCorpId: body.eventCorpId || body.corpId,
-            eventData: body.data || body,
+            eventType: String(body.eventType || body.type || ''),
+            eventId: String(body.eventId || body.id || ''),
+            eventTime: Number(body.eventTime || body.timestamp) || Date.now(),
+            eventCorpId: body.eventCorpId != null ? String(body.eventCorpId) :
+                         body.corpId != null ? String(body.corpId) : undefined,
+            eventData: (body.data as Record<string, unknown>) || body,
         };
         
         this.emit('event', event);
@@ -272,9 +275,9 @@ export class DingTalkBot extends EventEmitter {
      * 发送消息（统一接口）
      */
     async sendMessage(
-        receiveId: string, 
-        receiveIdType: 'user' | 'chat', 
-        content: string | any, 
+        receiveId: string,
+        receiveIdType: 'user' | 'chat',
+        content: string | DingTalkMessageContent,
         msgType: string = 'text'
     ): Promise<DingTalkSendMessageResponse | DingTalkWebhookResponse> {
         if (this.mode === 'webhook') {
@@ -289,13 +292,13 @@ export class DingTalkBot extends EventEmitter {
                 };
             } else if (msgType === 'markdown') {
                 webhookMessage.markdown = {
-                    title: content.title || '消息',
+                    title: typeof content === 'string' ? '消息' : content.title || '消息',
                     text: typeof content === 'string' ? content : content.text || '',
                 };
             }
 
             // 处理 @
-            if (receiveIdType === 'chat' && content.at) {
+            if (receiveIdType === 'chat' && typeof content !== 'string' && content.at) {
                 webhookMessage.at = content.at;
             }
 
@@ -322,7 +325,7 @@ export class DingTalkBot extends EventEmitter {
                 };
             } else if (msgType === 'markdown') {
                 request.msg.markdown = {
-                    title: content.title || '消息',
+                    title: typeof content === 'string' ? '消息' : content.title || '消息',
                     text: typeof content === 'string' ? content : content.text || '',
                 };
             }
@@ -339,7 +342,7 @@ export class DingTalkBot extends EventEmitter {
             throw new Error('Webhook 模式不支持获取用户信息');
         }
 
-        const response = await this.get<any>('/topapi/v2/user/get', { userid: userId });
+        const response = await this.get<DingTalkUserGetResponse>('/topapi/v2/user/get', { userid: userId });
 
         if (response.data.errcode !== 0) {
             throw new Error(`获取用户信息失败: ${response.data.errmsg}`);

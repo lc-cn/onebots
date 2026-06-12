@@ -12,10 +12,14 @@ export default defineConfig({
     // 启用全局测试 API
     globals: true,
     
-    // 测试文件匹配模式 - 扫描所有 packages
+    // 测试文件匹配模式 - 扫描所有 packages 和 adapters
     include: [
       'packages/**/src/**/*.{test,spec}.{js,ts}',
       'packages/**/__tests__/**/*.{test,spec}.{js,ts}',
+      'adapters/**/src/**/*.{test,spec}.{js,ts}',
+      'adapters/**/__tests__/**/*.{test,spec}.{js,ts}',
+      'protocols/**/src/**/*.{test,spec}.{js,ts}',
+      'protocols/**/__tests__/**/*.{test,spec}.{js,ts}',
       '__tests__/**/*.{test,spec}.{js,ts}',
       'test/**/*.{test,spec}.{js,ts}'
     ],
@@ -35,13 +39,25 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
       include: [
-        'packages/*/src/**/*.ts'
+        'packages/*/src/**/*.ts',
+        'adapters/*/src/**/*.ts',
+        'protocols/*/protocol/src/**/*.ts',
+        'protocols/*/sdk/src/**/*.ts'
       ],
       exclude: [
         'packages/*/src/**/*.d.ts',
         'packages/*/src/**/*.spec.ts',
         'packages/*/src/**/*.test.ts',
         'packages/*/src/bin.ts',
+        'adapters/*/src/**/*.d.ts',
+        'adapters/*/src/**/*.spec.ts',
+        'adapters/*/src/**/*.test.ts',
+        'protocols/*/protocol/src/**/*.d.ts',
+        'protocols/*/protocol/src/**/*.spec.ts',
+        'protocols/*/protocol/src/**/*.test.ts',
+        'protocols/*/sdk/src/**/*.d.ts',
+        'protocols/*/sdk/src/**/*.spec.ts',
+        'protocols/*/sdk/src/**/*.test.ts',
         'packages/client/**',
         'packages/docs/**'
       ],

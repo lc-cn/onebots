@@ -10,7 +10,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { WechatBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { WechatConfig } from "./types.js";
+import type { WechatConfig, WechatIncomingMessage } from "./types.js";
 
 export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
     constructor(app: BaseApp) {
@@ -47,7 +47,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         let messageId: string;
 
         // 检查是否强制使用客服消息
-        const forceActive = (params as any).forceActive === true;
+        const forceActive = 'forceActive' in params && params.forceActive === true;
 
         // 解析消息内容
         if (typeof message === 'string') {
@@ -337,7 +337,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         });
 
         // 监听消息事件
-        bot.on('message', (message: any) => {
+        bot.on('message', (message: WechatIncomingMessage) => {
             // 打印消息接收日志
             const content = message.Content || message.MediaId || '';
             const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
@@ -347,7 +347,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             );
             
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             switch (message.MsgType) {
                 case 'text':
                     messageSegments.push({
@@ -411,7 +411,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         });
 
         // 监听关注事件
-        bot.on('event.subscribe', (message: any) => {
+        bot.on('event.subscribe', (message: WechatIncomingMessage) => {
             this.logger.info(`用户关注: ${message.FromUserName}`);
             
             const commonEvent: CommonEvent.Notice = {
@@ -431,7 +431,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         });
 
         // 监听取消关注事件
-        bot.on('event.unsubscribe', (message: any) => {
+        bot.on('event.unsubscribe', (message: WechatIncomingMessage) => {
             this.logger.info(`用户取消关注: ${message.FromUserName}`);
             
             const commonEvent: CommonEvent.Notice = {
@@ -452,7 +452,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         });
 
         // 监听扫码事件
-        bot.on('event.scan', (message: any) => {
+        bot.on('event.scan', (message: WechatIncomingMessage) => {
             this.logger.info(`用户扫码: ${message.FromUserName}, EventKey: ${message.EventKey}`);
             
             const commonEvent: CommonEvent.Notice = {
@@ -475,7 +475,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         });
 
         // 监听位置事件
-        bot.on('event.location', (message: any) => {
+        bot.on('event.location', (message: WechatIncomingMessage) => {
             this.logger.debug(`用户上报位置: ${message.FromUserName}`);
             
             const commonEvent: CommonEvent.Notice = {
@@ -499,7 +499,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         });
 
         // 监听菜单点击事件
-        bot.on('event.click', (message: any) => {
+        bot.on('event.click', (message: WechatIncomingMessage) => {
             this.logger.debug(`菜单点击: ${message.EventKey}`);
             
             const commonEvent: CommonEvent.Notice = {
@@ -521,7 +521,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
         });
 
         // 监听菜单跳转事件
-        bot.on('event.view', (message: any) => {
+        bot.on('event.view', (message: WechatIncomingMessage) => {
             this.logger.debug(`菜单跳转: ${message.EventKey}`);
             
             const commonEvent: CommonEvent.Notice = {
@@ -547,7 +547,7 @@ export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
             try {
                 await bot.start();
                 account.status = AccountStatus.Online;
-                account.nickname = (config as any).nickname || '微信公众号';
+                account.nickname = ((config as unknown) as Record<string, unknown>).nickname as string || '微信公众号';
                 account.avatar = this.icon;
             } catch (error) {
                 this.logger.error(`启动微信公众号失败:`, error);

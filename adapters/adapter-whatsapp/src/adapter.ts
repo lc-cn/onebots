@@ -12,6 +12,9 @@ import type {
     WhatsAppConfig,
     WhatsAppMessageEvent,
     WhatsAppSendMessageParams,
+    WhatsAppMessageStatus,
+    WhatsAppWebhookMetadata,
+    WhatsAppMessageStatusEvent,
 } from "./types.js";
 
 export class WhatsAppAdapter extends Adapter<WhatsAppBot, "whatsapp"> {
@@ -334,7 +337,7 @@ export class WhatsAppAdapter extends Adapter<WhatsAppBot, "whatsapp"> {
         });
 
         // 监听收到的消息
-        bot.on('message', (message: WhatsAppMessageEvent, metadata: any) => {
+        bot.on('message', (message: WhatsAppMessageEvent, metadata: WhatsAppWebhookMetadata) => {
             // 打印消息接收日志
             const content = message.text?.body || message.image?.caption || message.video?.caption || 
                           message.document?.caption || '[媒体消息]';
@@ -345,7 +348,7 @@ export class WhatsAppAdapter extends Adapter<WhatsAppBot, "whatsapp"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             
             if (message.text) {
                 messageSegments.push({
@@ -419,7 +422,7 @@ export class WhatsAppAdapter extends Adapter<WhatsAppBot, "whatsapp"> {
         });
 
         // 监听消息状态
-        bot.on('status', (status: any) => {
+        bot.on('status', (status: WhatsAppMessageStatusEvent) => {
             this.logger.debug(`[WhatsApp] 消息状态更新: ${status.id} -> ${status.status}`);
         });
 

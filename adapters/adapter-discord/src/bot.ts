@@ -7,77 +7,37 @@ import { EventEmitter } from 'events';
 import { DiscordLite, GatewayIntents, type DiscordLiteOptions } from './lite/index.js';
 import type { DiscordREST } from './lite/rest.js';
 import type { DiscordConfig, ProxyConfig } from './types.js';
+import type {
+    DiscordApiUser,
+    DiscordApiMessage,
+    DiscordApiAttachment,
+    DiscordApiGuild,
+    DiscordApiChannel,
+    DiscordApiGuildMember,
+    DiscordRole,
+    CreateMessageBody,
+    EditMessageBody,
+    GatewayQueryOptions,
+    GatewayMemberQueryOptions,
+} from './types.js';
 
-// Discord API 返回的类型
-export interface DiscordUser {
-    id: string;
-    username: string;
-    discriminator: string;
-    global_name?: string | null;
-    avatar: string | null;
-    bot?: boolean;
+// 带辅助方法的增强类型
+export interface DiscordUser extends DiscordApiUser {
     displayAvatarURL: () => string;
-    tag?: string;
+    tag: string;
 }
 
-export interface DiscordMessage {
-    id: string;
-    channel_id: string;
-    guild_id?: string;
-    author: DiscordUser;
-    content: string;
-    timestamp: string;
-    edited_timestamp?: string | null;
-    tts: boolean;
-    mention_everyone: boolean;
-    mentions: DiscordUser[];
-    attachments: DiscordAttachment[];
-    embeds: any[];
-    pinned: boolean;
-    type: number;
+export interface DiscordMessage extends Omit<DiscordApiMessage, 'author'> {
     createdTimestamp: number;
     channel: { id: string; type: number };
     guild?: { id: string; name?: string };
+    author: DiscordUser;
 }
 
-export interface DiscordAttachment {
-    id: string;
-    filename: string;
-    size: number;
-    url: string;
-    proxy_url: string;
-    height?: number;
-    width?: number;
-    content_type?: string;
-}
-
-export interface DiscordGuild {
-    id: string;
-    name: string;
-    icon: string | null;
-    owner_id: string;
-    member_count?: number;
-}
-
-export interface DiscordChannel {
-    id: string;
-    type: number;
-    guild_id?: string;
-    name?: string;
-    topic?: string | null;
-    nsfw?: boolean;
-    parent_id?: string | null;
-}
-
-export interface DiscordMember {
-    user: DiscordUser;
-    nick?: string | null;
-    roles: string[];
-    joined_at: string;
-    premium_since?: string | null;
-    pending?: boolean;
-    communication_disabled_until?: string | null;
-}
+export interface DiscordAttachment extends DiscordApiAttachment {}
+export interface DiscordGuild extends DiscordApiGuild {}
+export interface DiscordChannel extends DiscordApiChannel {}
+export interface DiscordMember extends DiscordApiGuildMember {}
 
 /**
  * Discord Bot
@@ -93,7 +53,7 @@ export class DiscordBot extends EventEmitter {
     constructor(config: DiscordConfig) {
         super();
         this.config = config;
-        
+
         // 解析 intents
         const intents = this.parseIntents(config.intents);
 
@@ -161,51 +121,53 @@ export class DiscordBot extends EventEmitter {
      * 设置事件监听器
      */
     private setupEventListeners(): void {
-        this.client.on('ready', (user) => {
+        this.client.on('ready', (user: unknown) => {
             this.ready = true;
-            this.user = this.wrapUser(user);
+            this.user = this.wrapUser(user as DiscordApiUser);
             this.emit('ready', this.user);
         });
 
-        this.client.on('messageCreate', (message) => {
-            this.emit('messageCreate', this.wrapMessage(message));
+        this.client.on('messageCreate', (message: unknown) => {
+            this.emit('messageCreate', this.wrapMessage(message as DiscordApiMessage));
         });
 
-        this.client.on('messageUpdate', (message) => {
-            this.emit('messageUpdate', null, this.wrapMessage(message));
+        this.client.on('messageUpdate', (message: unknown) => {
+            this.emit('messageUpdate', null, this.wrapMessage(message as DiscordApiMessage));
         });
 
-        this.client.on('messageDelete', (data) => {
+        this.client.on('messageDelete', (data: unknown) => {
             this.emit('messageDelete', data);
         });
 
-        this.client.on('guildCreate', (guild) => {
-            this.guilds.set(guild.id, guild);
+        this.client.on('guildCreate', (guild: unknown) => {
+            const g = guild as DiscordApiGuild;
+            this.guilds.set(g.id, g);
             this.emit('guildCreate', guild);
         });
 
-        this.client.on('guildDelete', (guild) => {
-            this.guilds.delete(guild.id);
+        this.client.on('guildDelete', (guild: unknown) => {
+            const g = guild as DiscordApiGuild;
+            this.guilds.delete(g.id);
             this.emit('guildDelete', guild);
         });
 
-        this.client.on('guildMemberAdd', (member) => {
-            this.emit('guildMemberAdd', this.wrapMember(member));
+        this.client.on('guildMemberAdd', (member: unknown) => {
+            this.emit('guildMemberAdd', this.wrapMember(member as DiscordApiGuildMember));
         });
 
-        this.client.on('guildMemberRemove', (member) => {
-            this.emit('guildMemberRemove', this.wrapMember(member));
+        this.client.on('guildMemberRemove', (member: unknown) => {
+            this.emit('guildMemberRemove', this.wrapMember(member as DiscordApiGuildMember));
         });
 
-        this.client.on('interactionCreate', (interaction) => {
+        this.client.on('interactionCreate', (interaction: unknown) => {
             this.emit('interactionCreate', interaction);
         });
 
-        this.client.on('error', (error) => {
+        this.client.on('error', (error: unknown) => {
             this.emit('error', error);
         });
 
-        this.client.on('close', (code, reason) => {
+        this.client.on('close', (code: unknown, reason: unknown) => {
             this.ready = false;
             this.emit('close', code, reason);
         });
@@ -252,7 +214,7 @@ export class DiscordBot extends EventEmitter {
      */
     async sendMessage(
         channelId: string,
-        content: string | { content?: string; embeds?: any[]; files?: any[] }
+        content: string | CreateMessageBody
     ): Promise<DiscordMessage> {
         const body = typeof content === 'string' ? { content } : content;
         const result = await this.getREST().createMessage(channelId, body);
@@ -264,7 +226,7 @@ export class DiscordBot extends EventEmitter {
      */
     async sendDM(
         userId: string,
-        content: string | { content?: string; embeds?: any[]; files?: any[] }
+        content: string | CreateMessageBody
     ): Promise<DiscordMessage> {
         // 首先创建 DM 频道
         const dmChannel = await this.getREST().request<DiscordChannel>('/users/@me/channels', {
@@ -278,7 +240,7 @@ export class DiscordBot extends EventEmitter {
     /**
      * 发送 Embed 消息
      */
-    async sendEmbed(channelId: string, embeds: any[]): Promise<DiscordMessage> {
+    async sendEmbed(channelId: string, embeds: CreateMessageBody['embeds']): Promise<DiscordMessage> {
         return this.sendMessage(channelId, { embeds });
     }
 
@@ -288,7 +250,7 @@ export class DiscordBot extends EventEmitter {
     async sendWithAttachments(
         channelId: string,
         content: string,
-        _attachments: any[]
+        _attachments: unknown[]
     ): Promise<DiscordMessage> {
         // 轻量版暂不支持附件上传，仅发送文本
         return this.sendMessage(channelId, content);
@@ -321,9 +283,9 @@ export class DiscordBot extends EventEmitter {
      * 获取消息历史
      */
     async getMessageHistory(channelId: string, limit: number = 50, before?: string): Promise<Map<string, DiscordMessage>> {
-        const query: Record<string, string> = { limit: String(limit) };
+        const query: GatewayQueryOptions = { limit };
         if (before) query.before = before;
-        const messages = await this.getREST().getMessages(channelId, query as any);
+        const messages = await this.getREST().getMessages(channelId, query);
         const map = new Map<string, DiscordMessage>();
         for (const msg of messages) {
             map.set(msg.id, this.wrapMessage(msg));
@@ -403,12 +365,14 @@ export class DiscordBot extends EventEmitter {
      * 获取服务器成员列表
      */
     async getGuildMembers(guildId: string, limit?: number): Promise<Map<string, DiscordMember>> {
-        const query: Record<string, string> = {};
-        if (limit) query.limit = String(limit);
-        const members = await this.getREST().getGuildMembers(guildId, query as any);
+        const query: GatewayMemberQueryOptions = {};
+        if (limit) query.limit = limit;
+        const members = await this.getREST().getGuildMembers(guildId, query);
         const map = new Map<string, DiscordMember>();
         for (const member of members) {
-            map.set(member.user.id, this.wrapMember(member));
+            if (member.user) {
+                map.set(member.user.id, this.wrapMember(member));
+            }
         }
         return map;
     }
@@ -455,7 +419,7 @@ export class DiscordBot extends EventEmitter {
      */
     async timeoutMember(guildId: string, userId: string, duration: number, _reason?: string): Promise<DiscordMember> {
         const until = new Date(Date.now() + duration * 1000).toISOString();
-        const result = await this.getREST().request(`/guilds/${guildId}/members/${userId}`, {
+        const result = await this.getREST().request<DiscordApiGuildMember>(`/guilds/${guildId}/members/${userId}`, {
             method: 'PATCH',
             body: { communication_disabled_until: until },
         });
@@ -466,7 +430,7 @@ export class DiscordBot extends EventEmitter {
      * 解除禁言
      */
     async removeTimeout(guildId: string, userId: string, _reason?: string): Promise<DiscordMember> {
-        const result = await this.getREST().request(`/guilds/${guildId}/members/${userId}`, {
+        const result = await this.getREST().request<DiscordApiGuildMember>(`/guilds/${guildId}/members/${userId}`, {
             method: 'PATCH',
             body: { communication_disabled_until: null },
         });
@@ -477,7 +441,7 @@ export class DiscordBot extends EventEmitter {
      * 修改成员昵称
      */
     async setMemberNickname(guildId: string, userId: string, nickname: string | null, _reason?: string): Promise<DiscordMember> {
-        const result = await this.getREST().request(`/guilds/${guildId}/members/${userId}`, {
+        const result = await this.getREST().request<DiscordApiGuildMember>(`/guilds/${guildId}/members/${userId}`, {
             method: 'PATCH',
             body: { nick: nickname },
         });
@@ -523,7 +487,7 @@ export class DiscordBot extends EventEmitter {
      * 获取服务器频道列表
      */
     async getGuildChannels(guildId: string): Promise<Map<string, DiscordChannel>> {
-        const channels = await this.getREST().request<DiscordChannel[]>(`/guilds/${guildId}/channels`);
+        const channels = await this.getREST().request<DiscordApiChannel[]>(`/guilds/${guildId}/channels`);
         const map = new Map<string, DiscordChannel>();
         for (const channel of channels) {
             map.set(channel.id, channel);
@@ -539,7 +503,7 @@ export class DiscordBot extends EventEmitter {
         name: string,
         options?: { topic?: string; parent?: string; nsfw?: boolean }
     ): Promise<DiscordChannel> {
-        return this.getREST().request(`/guilds/${guildId}/channels`, {
+        return this.getREST().request<DiscordChannel>(`/guilds/${guildId}/channels`, {
             method: 'POST',
             body: {
                 name,
@@ -567,7 +531,7 @@ export class DiscordBot extends EventEmitter {
         channelId: string,
         options: { name?: string; topic?: string; nsfw?: boolean; parent?: string }
     ): Promise<DiscordChannel> {
-        return this.getREST().request(`/channels/${channelId}`, {
+        return this.getREST().request<DiscordChannel>(`/channels/${channelId}`, {
             method: 'PATCH',
             body: {
                 name: options.name,
@@ -585,9 +549,9 @@ export class DiscordBot extends EventEmitter {
     /**
      * 获取服务器角色列表
      */
-    async getGuildRoles(guildId: string): Promise<Map<string, any>> {
-        const roles = await this.getREST().request<any[]>(`/guilds/${guildId}/roles`);
-        const map = new Map<string, any>();
+    async getGuildRoles(guildId: string): Promise<Map<string, DiscordRole>> {
+        const roles = await this.getREST().request<DiscordRole[]>(`/guilds/${guildId}/roles`);
+        const map = new Map<string, DiscordRole>();
         for (const role of roles) {
             map.set(role.id, role);
         }
@@ -597,7 +561,7 @@ export class DiscordBot extends EventEmitter {
     /**
      * 获取角色信息
      */
-    async getRole(guildId: string, roleId: string): Promise<any | null> {
+    async getRole(guildId: string, roleId: string): Promise<DiscordRole | null> {
         const roles = await this.getGuildRoles(guildId);
         return roles.get(roleId) || null;
     }
@@ -608,8 +572,8 @@ export class DiscordBot extends EventEmitter {
     async createRole(
         guildId: string,
         options: { name: string; color?: number; hoist?: boolean; mentionable?: boolean; permissions?: bigint }
-    ): Promise<any> {
-        return this.getREST().request(`/guilds/${guildId}/roles`, {
+    ): Promise<DiscordRole> {
+        return this.getREST().request<DiscordRole>(`/guilds/${guildId}/roles`, {
             method: 'POST',
             body: {
                 name: options.name,
@@ -651,10 +615,9 @@ export class DiscordBot extends EventEmitter {
     /**
      * 包装用户对象
      */
-    private wrapUser(user: any): DiscordUser {
+    private wrapUser(user: DiscordApiUser): DiscordUser {
         return {
             ...user,
-            global_name: user.global_name || user.globalName,
             displayAvatarURL: () => {
                 if (user.avatar) {
                     return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
@@ -669,17 +632,17 @@ export class DiscordBot extends EventEmitter {
     /**
      * 包装成员对象
      */
-    private wrapMember(member: any): DiscordMember {
+    private wrapMember(member: DiscordApiGuildMember): DiscordMember {
         return {
             ...member,
-            user: this.wrapUser(member.user),
-        };
+            user: member.user ? this.wrapUser(member.user) : undefined,
+        } as DiscordMember;
     }
 
     /**
      * 包装消息对象
      */
-    private wrapMessage(message: any): DiscordMessage {
+    private wrapMessage(message: DiscordApiMessage): DiscordMessage {
         return {
             ...message,
             createdTimestamp: new Date(message.timestamp).getTime(),

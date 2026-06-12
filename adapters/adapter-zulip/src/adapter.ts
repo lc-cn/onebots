@@ -11,6 +11,9 @@ import type {
     ZulipConfig,
     ZulipMessageEvent,
     ZulipSendMessageParams,
+    ZulipUpdateMessageEvent,
+    ZulipDeleteMessageEvent,
+    ZulipStream,
 } from "./types.js";
 
 export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
@@ -219,7 +222,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         const bot = account.client;
         const streams = await bot.getStreams();
 
-        return streams.streams.map((stream: any) => ({
+        return streams.streams.map((stream: ZulipStream) => ({
             group_id: this.createId(stream.stream_id.toString()),
             group_name: stream.name,
         }));
@@ -235,7 +238,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         const bot = account.client;
         const streams = await bot.getStreams();
         const streamId = parseInt(params.group_id.string);
-        const stream = streams.streams.find((s: any) => s.stream_id === streamId);
+        const stream = streams.streams.find((s: ZulipStream) => s.stream_id === streamId);
 
         if (!stream) {
             throw new Error(`Stream ${streamId} not found`);
@@ -357,7 +360,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             messageSegments.push({
                 type: 'text',
                 data: { text: message.content },
@@ -394,12 +397,12 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         });
 
         // 监听消息更新
-        bot.on('update_message', (event: any) => {
+        bot.on('update_message', (event: ZulipUpdateMessageEvent) => {
             this.logger.debug(`[Zulip] 消息已更新: ${event.message_id}`);
         });
 
         // 监听消息删除
-        bot.on('delete_message', (event: any) => {
+        bot.on('delete_message', (event: ZulipDeleteMessageEvent) => {
             this.logger.debug(`[Zulip] 消息已删除: ${event.message_id}`);
         });
 

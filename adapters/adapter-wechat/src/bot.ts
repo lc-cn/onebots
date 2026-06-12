@@ -23,8 +23,8 @@ export class WechatBot extends EventEmitter {
     private baseURL: string = 'https://api.weixin.qq.com';
     private config: WechatConfig;
     private isServiceAccount: boolean;
-    // 被动回复队列 (openid -> 回复内容)
-    private passiveReplyQueue: Map<string, any> = new Map();
+    // 被动回复队列 (openid -> 回复 XML 内容)
+    private passiveReplyQueue: Map<string, string> = new Map();
     // 消息上下文 (openid -> { timestamp, fromUser, toUser })
     private messageContext: Map<string, { timestamp: number; fromUser: string; toUser: string }> = new Map();
 
@@ -68,8 +68,9 @@ export class WechatBot extends EventEmitter {
             
             this.emit('token_refreshed', this.accessToken);
             return this.accessToken;
-        } catch (error: any) {
-            this.emit('error', new Error(`获取 Access Token 失败: ${error.message}`));
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.emit('error', new Error(`获取 Access Token 失败: ${message}`));
             throw error;
         }
     }
@@ -77,10 +78,10 @@ export class WechatBot extends EventEmitter {
     /**
      * 调用微信 API
      */
-    private async callApi<T = any>(
+    private async callApi<T = unknown>(
         method: 'GET' | 'POST',
         path: string,
-        body?: any,
+        body?: Record<string, unknown> | object,
         params?: Record<string, string>
     ): Promise<T> {
         const token = await this.getAccessToken();
@@ -113,7 +114,7 @@ export class WechatBot extends EventEmitter {
             }
 
             return data as T;
-        } catch (error: any) {
+        } catch (error: unknown) {
             this.emit('error', error);
             throw error;
         }
@@ -598,7 +599,7 @@ export class WechatBot extends EventEmitter {
                 }
 
                 // 解析 XML
-                const message = parseXML(messageXml) as WechatIncomingMessage;
+                const message = parseXML(messageXml) as unknown as WechatIncomingMessage;
                 
                 // 记录消息上下文（用于被动回复）
                 if (message.FromUserName && message.ToUserName) {
@@ -627,10 +628,11 @@ export class WechatBot extends EventEmitter {
                     // 返回空字符串表示不回复
                     ctx.body = '';
                 }
-            } catch (error: any) {
+            } catch (error: unknown) {
                 this.emit('error', error);
                 ctx.status = 500;
-                ctx.body = `Error: ${error.message}`;
+                const message = error instanceof Error ? error.message : String(error);
+                ctx.body = `Error: ${message}`;
             }
         }
     }

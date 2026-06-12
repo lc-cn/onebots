@@ -20,6 +20,7 @@ export * from "./lifecycle.js";
 
 // Utilities
 export * from "./retry.js";
+export * from "./proxy.js";
 export * from "./rate-limiter.js";
 export * from "./circuit-breaker.js";
 export * from "./metrics.js";

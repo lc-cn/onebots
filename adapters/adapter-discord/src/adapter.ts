@@ -5,9 +5,10 @@
 import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
-import { DiscordBot, type DiscordMessage, type DiscordMember, type DiscordGuild, type DiscordChannel } from "./bot.js";
+import { DiscordBot, type DiscordMessage, type DiscordMember, type DiscordGuild, type DiscordChannel, type DiscordUser } from "./bot.js";
 import { CommonEvent, CommonTypes } from "onebots";
 import type { DiscordConfig } from "./types.js";
+import type { DiscordEmbed } from "./types.js";
 import { ChannelType } from "./types.js";
 
 export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
@@ -52,7 +53,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
             }
 
             messageId = sentMessage.id;
-        } catch (error: any) {
+        } catch (error: unknown) {
             this.logger.error(`发送消息失败:`, error);
             throw error;
         }
@@ -213,7 +214,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         return [...guilds.values()].map(guild => ({
             group_id: this.createId(guild.id),
             group_name: guild.name,
-            member_count: guild.member_count,
+            member_count: guild.approximate_member_count ?? 0,
         }));
     }
 
@@ -232,7 +233,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         return {
             group_id: this.createId(guild.id),
             group_name: guild.name,
-            member_count: guild.member_count,
+            member_count: guild.approximate_member_count ?? 0,
         };
     }
 
@@ -825,7 +826,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         });
 
         // 监听成员加入事件
-        bot.on('guildMemberAdd', (member: DiscordMember & { guild: DiscordGuild }) => {
+        bot.on('guildMemberAdd', (member: DiscordMember & { guild: DiscordGuild; user: DiscordUser }) => {
             try {
             this.logger.info(`成员加入: ${member.user.username} -> ${member.guild?.name}`);
 
@@ -852,7 +853,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
         });
 
         // 监听成员离开事件
-        bot.on('guildMemberRemove', (member: DiscordMember & { guild: DiscordGuild }) => {
+        bot.on('guildMemberRemove', (member: DiscordMember & { guild: DiscordGuild; user: DiscordUser }) => {
             try {
             this.logger.info(`成员离开: ${member.user?.username} <- ${member.guild?.name}`);
 
@@ -905,10 +906,10 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
      */
     private buildDiscordMessage(message: CommonTypes.Segment[]): {
         content: string;
-        embeds: any[];
+        embeds: DiscordEmbed[];
     } {
         let content = '';
-        const embeds: any[] = [];
+        const embeds: DiscordEmbed[] = [];
 
         for (const seg of message) {
             switch (seg.type) {
@@ -933,9 +934,9 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
                     }
                     break;
 
-                case 'share':
+                case 'share': {
                     // 使用 Embed 展示分享链接
-                    const shareEmbed: any = {
+                    const shareEmbed: DiscordEmbed = {
                         title: seg.data.title || '分享链接',
                         url: seg.data.url,
                         description: seg.data.content || '',
@@ -947,6 +948,7 @@ export class DiscordAdapter extends Adapter<DiscordBot, "discord"> {
                     
                     embeds.push(shareEmbed);
                     break;
+                }
 
                 case 'face':
                     // Discord 使用 Unicode emoji

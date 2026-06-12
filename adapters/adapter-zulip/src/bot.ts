@@ -4,6 +4,7 @@
  */
 import { EventEmitter } from 'events';
 import axios, { AxiosInstance } from 'axios';
+import type { Agent as HttpAgent } from 'http';
 import WebSocket from 'ws';
 import { createRequire } from 'module';
 import type {
@@ -12,8 +13,12 @@ import type {
     ZulipAPIResponse,
     ZulipWebSocketEvent,
     ZulipMessageEvent,
+    ZulipStreamsResponse,
+    ZulipUserResponse,
+    ZulipUser,
     ProxyConfig,
 } from './types.js';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent, ConnectionManager, RetryPresets } from 'onebots';
 
 const require = createRequire(import.meta.url);
 
@@ -21,16 +26,19 @@ export class ZulipBot extends EventEmitter {
     private config: ZulipConfig;
     private apiClient: AxiosInstance;
     private ws: WebSocket | null = null;
-    private wsReconnectTimer?: NodeJS.Timeout;
-    private reconnectAttempts: number = 0;
+    private connectionManager: ConnectionManager;
     private isConnected: boolean = false;
-    private agent: any = null;
+    private agent: HttpAgent | null = null;
     private initialized: boolean = false;
 
     constructor(config: ZulipConfig) {
         super();
         this.config = config;
         this.apiClient = this.createAPIClient();
+        this.connectionManager = new ConnectionManager(
+            () => this.connectWebSocket(),
+            RetryPresets.websocket,
+        );
     }
 
     /**
@@ -63,26 +71,16 @@ export class ZulipBot extends EventEmitter {
         if (!this.config.proxy?.url) return;
 
         try {
-            const proxyUrl = this.buildProxyUrl(this.config.proxy);
-            const { HttpsProxyAgent } = await import('https-proxy-agent');
-            this.agent = new HttpsProxyAgent(proxyUrl);
-            console.log(`[Zulip] 已配置代理: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
+            const agent = await createHttpsProxyAgent(this.config.proxy);
+            if (agent) {
+                this.agent = agent as HttpAgent;
+                console.log(`[Zulip] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+            } else {
+                console.warn('[Zulip] 创建代理失败，将直接连接');
+            }
         } catch (error) {
             console.warn('[Zulip] 创建代理失败，将直接连接:', error);
         }
-    }
-
-    /**
-     * 构建代理 URL
-     */
-    private buildProxyUrl(proxy: ProxyConfig): string {
-        let url = proxy.url;
-        if (proxy.username && proxy.password) {
-            const protocol = url.split('://')[0];
-            const rest = url.split('://')[1];
-            url = `${protocol}://${proxy.username}:${proxy.password}@${rest}`;
-        }
-        return url;
     }
 
     /**
@@ -97,8 +95,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             console.log(`[Zulip] REST API 连接成功，用户: ${response.data.email}`);
-        } catch (error: any) {
-            console.error('[Zulip] REST API 连接失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] REST API 连接失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
 
@@ -120,7 +119,7 @@ export class ZulipBot extends EventEmitter {
                 const wsUrl = this.config.serverUrl.replace(/^http/, 'ws') + '/api/v1/events';
                 const auth = Buffer.from(`${this.config.email}:${this.config.apiKey}`).toString('base64');
 
-                const wsOptions: any = {
+                const wsOptions: WebSocket.ClientOptions = {
                     headers: {
                         'Authorization': `Basic ${auth}`,
                     },
@@ -135,7 +134,6 @@ export class ZulipBot extends EventEmitter {
                 this.ws.on('open', () => {
                     console.log('[Zulip] WebSocket 连接成功');
                     this.isConnected = true;
-                    this.reconnectAttempts = 0;
                     resolve();
                 });
 
@@ -151,15 +149,13 @@ export class ZulipBot extends EventEmitter {
                 this.ws.on('error', (error) => {
                     console.error('[Zulip] WebSocket 错误:', error);
                     this.isConnected = false;
-                    if (this.reconnectAttempts === 0) {
-                        reject(error);
-                    }
+                    reject(error);
                 });
 
                 this.ws.on('close', () => {
                     console.log('[Zulip] WebSocket 连接已关闭');
                     this.isConnected = false;
-                    this.scheduleReconnect();
+                    this.connectionManager.scheduleReconnect();
                 });
 
             } catch (error) {
@@ -185,31 +181,6 @@ export class ZulipBot extends EventEmitter {
         } else {
             this.emit('event', event);
         }
-    }
-
-    /**
-     * 安排重连
-     */
-    private scheduleReconnect(): void {
-        if (this.config.websocket?.enabled === false) return;
-
-        const maxAttempts = this.config.websocket?.maxReconnectAttempts || 10;
-        if (this.reconnectAttempts >= maxAttempts) {
-            console.error('[Zulip] 达到最大重连次数，停止重连');
-            return;
-        }
-
-        this.reconnectAttempts++;
-        const interval = this.config.websocket?.reconnectInterval || 3000;
-
-        this.wsReconnectTimer = setTimeout(async () => {
-            console.log(`[Zulip] 尝试重连 (${this.reconnectAttempts}/${maxAttempts})...`);
-            try {
-                await this.connectWebSocket();
-            } catch (error) {
-                console.error('[Zulip] 重连失败:', error);
-            }
-        }, interval);
     }
 
     /**
@@ -244,8 +215,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 发送消息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 发送消息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -269,8 +241,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 更新消息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 更新消息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -286,8 +259,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 删除消息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 删除消息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -295,7 +269,7 @@ export class ZulipBot extends EventEmitter {
     /**
      * 获取流列表
      */
-    async getStreams(): Promise<any> {
+    async getStreams(): Promise<ZulipStreamsResponse> {
         await this.initAgent();
 
         try {
@@ -303,8 +277,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 获取流列表失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 获取流列表失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -312,7 +287,7 @@ export class ZulipBot extends EventEmitter {
     /**
      * 获取用户信息
      */
-    async getUserInfo(userId: number): Promise<any> {
+    async getUserInfo(userId: number): Promise<ZulipUserResponse> {
         await this.initAgent();
 
         try {
@@ -320,8 +295,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 获取用户信息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 获取用户信息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -329,7 +305,7 @@ export class ZulipBot extends EventEmitter {
     /**
      * 获取当前用户信息
      */
-    async getMe(): Promise<any> {
+    async getMe(): Promise<ZulipUser> {
         await this.initAgent();
 
         try {
@@ -337,8 +313,9 @@ export class ZulipBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[Zulip] 获取当前用户信息失败:', error.response?.data || error.message);
+        } catch (error: unknown) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            console.error('[Zulip] 获取当前用户信息失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
             throw error;
         }
     }
@@ -347,10 +324,7 @@ export class ZulipBot extends EventEmitter {
      * 停止 Bot
      */
     async stop(): Promise<void> {
-        if (this.wsReconnectTimer) {
-            clearTimeout(this.wsReconnectTimer);
-            this.wsReconnectTimer = undefined;
-        }
+        this.connectionManager.stop();
 
         if (this.ws) {
             this.ws.close();

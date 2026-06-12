@@ -117,7 +117,34 @@ export interface ZulipMessageEvent {
     /** 提及的用户 ID */
     mentioned_user_ids?: number[];
     /** 子消息 */
-    submessages?: any[];
+    submessages?: ZulipSubmessage[];
+}
+
+/**
+ * Zulip 子消息
+ */
+export interface ZulipSubmessage {
+    msg_type: string;
+    content: string;
+    sender_id: number;
+    message_id: number;
+    id: number;
+}
+
+/**
+ * Zulip 获取流列表响应
+ */
+export interface ZulipStreamsResponse {
+    streams: ZulipStream[];
+}
+
+/**
+ * Zulip 获取用户信息响应
+ */
+export interface ZulipUserResponse {
+    result: string;
+    msg: string;
+    user: ZulipUser;
 }
 
 /**

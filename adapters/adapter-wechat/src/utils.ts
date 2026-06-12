@@ -45,16 +45,17 @@ export function decryptMessage(encryptedMsg: string, encodingAESKey: string): st
         const result = content.slice(4, msgLength + 4).toString();
         
         return result;
-    } catch (error: any) {
-        throw new Error(`解密消息失败: ${error.message}`);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`解密消息失败: ${message}`);
     }
 }
 
 /**
  * 解析 XML 消息
  */
-export function parseXML(xml: string): Record<string, any> {
-    const message: any = {};
+export function parseXML(xml: string): Record<string, unknown> {
+    const message: Record<string, unknown> = {};
     
     // 简单的 XML 解析
     const matches = xml.matchAll(/<(\w+)>(?:<!\[CDATA\[(.*?)\]\]>|(\d+))<\/\1>/g);

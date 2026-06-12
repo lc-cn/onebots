@@ -5,6 +5,25 @@
 import { EventEmitter } from 'events';
 import { createClient, Client, segment as Segment } from '@icqqjs/icqq';
 import type {
+    Config as ICQQClientConfig,
+    PrivateMessageEvent,
+    GroupMessageEvent,
+} from '@icqqjs/icqq';
+import type {
+    FriendInfo,
+    GroupInfo,
+    MemberInfo,
+} from '@icqqjs/icqq/lib/entities';
+import type {
+    MessageElem,
+    Sendable,
+    PrivateMessage,
+    GroupMessage,
+} from '@icqqjs/icqq/lib/message';
+import type {
+    MessageRet,
+} from '@icqqjs/icqq/lib/events';
+import type {
     ICQQConfig,
     ICQQProtocol,
     ICQQUser,
@@ -12,6 +31,9 @@ import type {
     ICQQGroup,
     ICQQGroupMember,
     ICQQMessageElement,
+    ICQQMessageRet,
+    ICQQPrivateMessageEvent,
+    ICQQGroupMessageEvent,
     Platform,
 } from './types.js';
 
@@ -58,8 +80,8 @@ export class ICQQBot extends EventEmitter {
 
         // 构建 ICQQ 配置
         const protocol = this.config.protocol || {};
-        const clientConfig: any = {
-            platform: protocol.platform || 2,
+        const clientConfig: ICQQClientConfig = {
+            platform: (protocol.platform ?? 2) as ICQQClientConfig['platform'],
             sign_api_addr: protocol.sign_api_addr,
             data_dir: protocol.data_dir,
             ignore_self: protocol.ignore_self !== false,
@@ -73,7 +95,7 @@ export class ICQQBot extends EventEmitter {
             clientConfig.ver = protocol.ver;
         }
         if (protocol.log_config) {
-            clientConfig.log_config = protocol.log_config;
+            clientConfig.log_config = protocol.log_config as ICQQClientConfig['log_config'];
         }
         if (protocol.ffmpeg_path) {
             clientConfig.ffmpeg_path = protocol.ffmpeg_path;
@@ -167,7 +189,7 @@ export class ICQQBot extends EventEmitter {
                 nickname: event.nickname,
                 comment: event.comment,
                 source: event.source,
-                time: (event as any).time || Date.now() / 1000,
+                time: event.time,
             });
         });
 
@@ -179,8 +201,8 @@ export class ICQQBot extends EventEmitter {
                 user_id: event.user_id,
                 nickname: event.nickname,
                 sub_type: event.sub_type,
-                comment: (event as any).comment || '',
-                time: (event as any).time || Date.now() / 1000,
+                comment: 'comment' in event ? event.comment : '',
+                time: event.time,
             });
         });
 
@@ -272,7 +294,7 @@ export class ICQQBot extends EventEmitter {
     /**
      * 转换私聊消息
      */
-    private convertPrivateMessage(event: any): any {
+    private convertPrivateMessage(event: PrivateMessageEvent): ICQQPrivateMessageEvent {
         return {
             message_id: event.message_id,
             user_id: event.user_id,
@@ -282,11 +304,14 @@ export class ICQQBot extends EventEmitter {
             sender: {
                 user_id: event.sender.user_id,
                 nickname: event.sender.nickname,
-                sex: event.sender.sex,
-                age: event.sender.age,
             },
-            reply: (message: string | any[], quote?: boolean) => {
-                return event.reply(message, quote);
+            reply: (message: string | ICQQMessageElement[], quote?: boolean) => {
+                return event.reply(message, quote).then(r => ({
+                    message_id: r.message_id,
+                    seq: r.seq,
+                    rand: r.rand,
+                    time: r.time,
+                }));
             },
         };
     }
@@ -294,7 +319,7 @@ export class ICQQBot extends EventEmitter {
     /**
      * 转换群消息
      */
-    private convertGroupMessage(event: any): any {
+    private convertGroupMessage(event: GroupMessageEvent): ICQQGroupMessageEvent {
         return {
             message_id: event.message_id,
             group_id: event.group_id,
@@ -316,8 +341,13 @@ export class ICQQBot extends EventEmitter {
                 group_name: event.group_name,
             },
             atme: event.atme,
-            reply: (message: string | any[], quote?: boolean) => {
-                return event.reply(message, quote);
+            reply: (message: string | ICQQMessageElement[], quote?: boolean) => {
+                return event.reply(message, quote).then(r => ({
+                    message_id: r.message_id,
+                    seq: r.seq,
+                    rand: r.rand,
+                    time: r.time,
+                }));
             },
         };
     }
@@ -325,19 +355,19 @@ export class ICQQBot extends EventEmitter {
     /**
      * 转换消息段
      */
-    private convertMessage(message: any[]): ICQQMessageElement[] {
-        return message.map((elem: any) => {
+    private convertMessage(message: MessageElem[]): ICQQMessageElement[] {
+        return message.map((elem: MessageElem) => {
             switch (elem.type) {
                 case 'text':
                     return { type: 'text', text: elem.text };
                 case 'face':
                     return { type: 'face', id: elem.id };
                 case 'image':
-                    return { type: 'image', file: elem.file, url: elem.url };
+                    return { type: 'image', file: String(elem.file), url: elem.url };
                 case 'record':
-                    return { type: 'record', file: elem.file, url: elem.url };
+                    return { type: 'record', file: String(elem.file), url: elem.url };
                 case 'video':
-                    return { type: 'video', file: elem.file, url: elem.url };
+                    return { type: 'video', file: String(elem.file), url: undefined };
                 case 'at':
                     return { type: 'at', qq: elem.qq };
                 case 'share':
@@ -363,7 +393,7 @@ export class ICQQBot extends EventEmitter {
     /**
      * 发送私聊消息
      */
-    async sendPrivateMessage(userId: number, message: string | any[]): Promise<any> {
+    async sendPrivateMessage(userId: number, message: string | MessageElem[]): Promise<MessageRet> {
         if (!this.client) throw new Error('Bot not connected');
         return this.client.sendPrivateMsg(userId, message);
     }
@@ -371,7 +401,7 @@ export class ICQQBot extends EventEmitter {
     /**
      * 发送群消息
      */
-    async sendGroupMessage(groupId: number, message: string | any[]): Promise<any> {
+    async sendGroupMessage(groupId: number, message: string | MessageElem[]): Promise<MessageRet> {
         if (!this.client) throw new Error('Bot not connected');
         return this.client.sendGroupMsg(groupId, message);
     }
@@ -387,7 +417,7 @@ export class ICQQBot extends EventEmitter {
     /**
      * 获取消息
      */
-    async getMessage(messageId: string): Promise<any> {
+    async getMessage(messageId: string): Promise<PrivateMessage | GroupMessage | undefined> {
         if (!this.client) throw new Error('Bot not connected');
         return this.client.getMsg(messageId);
     }
@@ -402,7 +432,7 @@ export class ICQQBot extends EventEmitter {
     async getFriendList(): Promise<ICQQFriend[]> {
         if (!this.client) throw new Error('Bot not connected');
         const friends = this.client.fl;
-        return Array.from(friends.values()).map((friend: any) => ({
+        return Array.from(friends.values()).map((friend: FriendInfo) => ({
             user_id: friend.user_id,
             nickname: friend.nickname,
             sex: friend.sex,
@@ -452,7 +482,7 @@ export class ICQQBot extends EventEmitter {
     async getGroupList(): Promise<ICQQGroup[]> {
         if (!this.client) throw new Error('Bot not connected');
         const groups = this.client.gl;
-        return Array.from(groups.values()).map((group: any) => ({
+        return Array.from(groups.values()).map((group: GroupInfo) => ({
             group_id: group.group_id,
             group_name: group.group_name,
             owner_id: group.owner_id,
@@ -483,7 +513,7 @@ export class ICQQBot extends EventEmitter {
     async getGroupMemberList(groupId: number): Promise<ICQQGroupMember[]> {
         if (!this.client) throw new Error('Bot not connected');
         const members = await this.client.getGroupMemberList(groupId);
-        return Array.from(members.values()).map((member: any) => ({
+        return Array.from(members.values()).map((member: MemberInfo) => ({
             group_id: groupId,
             user_id: member.user_id,
             nickname: member.nickname,

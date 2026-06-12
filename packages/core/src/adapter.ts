@@ -913,6 +913,8 @@ export type AdapterClient<T extends Adapter = Adapter> = T extends Adapter<infer
  * 定义所有 API 的参数和返回值类型
  */
 export namespace Adapter {
+    /** 适配器配置注册表 — 键为平台名，值为对应配置类型。`any` 是注册表模式的必要约束 */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- 注册表模式要求值类型为 any 以支持任意配置
     export interface Configs extends Record<string, any> { }
 
     /**
@@ -1212,14 +1214,22 @@ export namespace Adapter {
         role?: "owner" | "admin" | "member";
     }
 
+    /** 群荣誉成员信息 */
+    export interface HonorMember {
+        user_id: CommonTypes.Id;
+        user_name: string;
+        avatar?: string;
+        description?: string;
+    }
+
     export interface GroupHonorInfo {
         group_id: CommonTypes.Id;
-        current_talkative?: any;
-        talkative_list?: any[];
-        performer_list?: any[];
-        legend_list?: any[];
-        strong_newbie_list?: any[];
-        emotion_list?: any[];
+        current_talkative?: HonorMember;
+        talkative_list?: HonorMember[];
+        performer_list?: HonorMember[];
+        legend_list?: HonorMember[];
+        strong_newbie_list?: HonorMember[];
+        emotion_list?: HonorMember[];
     }
 
     export interface GroupNotification {
@@ -1527,10 +1537,17 @@ export namespace Adapter {
         impl_version?: string;  // Milky
     }
 
+    /** 单个机器人状态信息（OneBot V12） */
+    export interface BotStatus {
+        self: CommonTypes.Id;
+        online: boolean;
+        [key: string]: unknown;
+    }
+
     export interface StatusInfo {
         online?: boolean;  // OneBot V11
         good: boolean;
-        bots?: any[];  // OneBot V12
+        bots?: BotStatus[];  // OneBot V12
     }
 
     export interface CredentialsInfo {

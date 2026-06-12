@@ -279,7 +279,7 @@ export class MockBot extends EventEmitter {
     /**
      * 手动触发事件（用于测试）
      */
-    triggerEvent(event: string, data: any): void {
+    triggerEvent(event: string, data: unknown): void {
         this.emit(event, data);
     }
 

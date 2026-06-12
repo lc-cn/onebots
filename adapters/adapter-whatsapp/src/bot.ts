@@ -3,7 +3,7 @@
  * 基于 WhatsApp Business API (Meta Graph API)
  */
 import { EventEmitter } from 'events';
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosInstance, type AxiosError } from 'axios';
 import { createRequire } from 'module';
 import type {
     WhatsAppConfig,
@@ -11,15 +11,17 @@ import type {
     WhatsAppAPIResponse,
     WhatsAppWebhookEvent,
     WhatsAppMessageEvent,
+    WhatsAppMessageStatus,
     ProxyConfig,
 } from './types.js';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
 
 const require = createRequire(import.meta.url);
 
 export class WhatsAppBot extends EventEmitter {
     private config: WhatsAppConfig;
     private apiClient: AxiosInstance;
-    private agent: any = null;
+    private agent: object | null = null;
     private initialized: boolean = false;
 
     constructor(config: WhatsAppConfig) {
@@ -55,27 +57,13 @@ export class WhatsAppBot extends EventEmitter {
 
         if (!this.config.proxy?.url) return;
 
-        try {
-            const proxyUrl = this.buildProxyUrl(this.config.proxy);
-            const { HttpsProxyAgent } = await import('https-proxy-agent');
-            this.agent = new HttpsProxyAgent(proxyUrl);
-            console.log(`[WhatsApp] 已配置代理: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
-        } catch (error) {
-            console.warn('[WhatsApp] 创建代理失败，将直接连接:', error);
+        const agent = await createHttpsProxyAgent(this.config.proxy);
+        if (agent) {
+            this.agent = agent;
+            console.log(`[WhatsApp] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+        } else {
+            console.warn('[WhatsApp] 创建代理失败，将直接连接');
         }
-    }
-
-    /**
-     * 构建代理 URL
-     */
-    private buildProxyUrl(proxy: ProxyConfig): string {
-        let url = proxy.url;
-        if (proxy.username && proxy.password) {
-            const protocol = url.split('://')[0];
-            const rest = url.split('://')[1];
-            url = `${protocol}://${proxy.username}:${proxy.password}@${rest}`;
-        }
-        return url;
     }
 
     /**
@@ -89,8 +77,9 @@ export class WhatsAppBot extends EventEmitter {
             await this.apiClient.get('/');
             console.log('[WhatsApp] 连接验证成功');
             this.emit('ready');
-        } catch (error: any) {
-            console.error('[WhatsApp] 连接验证失败:', error.response?.data || error.message);
+        } catch (error) {
+            const axiosError = error as AxiosError;
+            console.error('[WhatsApp] 连接验证失败:', axiosError.response?.data || (axiosError as Error).message);
             throw error;
         }
     }
@@ -108,7 +97,7 @@ export class WhatsAppBot extends EventEmitter {
     async sendMessage(params: WhatsAppSendMessageParams): Promise<WhatsAppAPIResponse> {
         await this.initAgent();
 
-        const payload: any = {
+        const payload: Record<string, unknown> = {
             messaging_product: 'whatsapp',
             recipient_type: 'individual',
             to: params.to,
@@ -140,8 +129,9 @@ export class WhatsAppBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data;
-        } catch (error: any) {
-            console.error('[WhatsApp] 发送消息失败:', error.response?.data || error.message);
+        } catch (error) {
+            const axiosError = error as AxiosError;
+            console.error('[WhatsApp] 发送消息失败:', axiosError.response?.data || (axiosError as Error).message);
             throw error;
         }
     }
@@ -194,8 +184,9 @@ export class WhatsAppBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return response.data.url;
-        } catch (error: any) {
-            console.error('[WhatsApp] 获取媒体 URL 失败:', error.response?.data || error.message);
+        } catch (error) {
+            const axiosError = error as AxiosError;
+            console.error('[WhatsApp] 获取媒体 URL 失败:', axiosError.response?.data || (axiosError as Error).message);
             throw error;
         }
     }
@@ -215,8 +206,9 @@ export class WhatsAppBot extends EventEmitter {
                 httpsAgent: this.agent,
             });
             return Buffer.from(response.data);
-        } catch (error: any) {
-            console.error('[WhatsApp] 下载媒体失败:', error.message);
+        } catch (error) {
+            const axiosError = error as AxiosError;
+            console.error('[WhatsApp] 下载媒体失败:', (axiosError as Error).message);
             throw error;
         }
     }

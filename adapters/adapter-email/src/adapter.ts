@@ -296,7 +296,7 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             
             if (emailMessage.text) {
                 messageSegments.push({

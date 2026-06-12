@@ -3,9 +3,18 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { execSync } from "child_process";
+import * as os from "os";
+import { execFileSync } from "child_process";
 
 const SERVICE_NAME = "onebots-gateway";
+
+function getHomeDir(): string {
+    const home = process.env.HOME || os.homedir();
+    if (!home) {
+        throw new Error("无法确定用户主目录（HOME 环境变量未设置且 os.homedir() 返回空）");
+    }
+    return home;
+}
 
 function getConfigDir(configPath: string): string {
     return path.dirname(path.resolve(process.cwd(), configPath));
@@ -19,7 +28,7 @@ export async function serviceInstall(configPath: string): Promise<void> {
     const startCmd = `"${nodePath}" "${binPath}" gateway start -c "${resolvedConfig}"`;
 
     if (process.platform === "darwin") {
-        const plistPath = path.join(process.env.HOME!, "Library", "LaunchAgents", `com.onebots.${SERVICE_NAME}.plist`);
+        const plistPath = path.join(getHomeDir(), "Library", "LaunchAgents", `com.onebots.${SERVICE_NAME}.plist`);
         const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -56,7 +65,7 @@ export async function serviceInstall(configPath: string): Promise<void> {
     }
 
     if (process.platform === "linux") {
-        const unitDir = path.join(process.env.HOME!, ".config", "systemd", "user");
+        const unitDir = path.join(getHomeDir(), ".config", "systemd", "user");
         if (!fs.existsSync(unitDir)) fs.mkdirSync(unitDir, { recursive: true });
         const unitPath = path.join(unitDir, `${SERVICE_NAME}.service`);
         const unit = `[Unit]
@@ -76,7 +85,7 @@ WantedBy=default.target
         fs.writeFileSync(unitPath, unit, "utf8");
         console.log("已安装 systemd 用户服务:", unitPath);
         try {
-            execSync("systemctl --user daemon-reload", { stdio: "inherit" });
+            execFileSync("systemctl", ["--user", "daemon-reload"], { stdio: "inherit" });
             console.log("启用: systemctl --user enable --now " + SERVICE_NAME);
         } catch {
             console.log("请执行: systemctl --user daemon-reload && systemctl --user enable --now " + SERVICE_NAME);
@@ -102,11 +111,11 @@ WantedBy=default.target
 
 export async function serviceUninstall(): Promise<void> {
     if (process.platform === "darwin") {
-        const plistPath = path.join(process.env.HOME!, "Library", "LaunchAgents", `com.onebots.${SERVICE_NAME}.plist`);
+        const plistPath = path.join(getHomeDir(), "Library", "LaunchAgents", `com.onebots.${SERVICE_NAME}.plist`);
         try {
-            execSync(`launchctl unload "${plistPath}"`, { stdio: "inherit" });
+            execFileSync("launchctl", ["unload", plistPath], { stdio: "inherit" });
         } catch {
-            // ignore
+            // launchctl unload 失败（服务可能未加载），忽略
         }
         if (fs.existsSync(plistPath)) {
             fs.unlinkSync(plistPath);
@@ -116,20 +125,20 @@ export async function serviceUninstall(): Promise<void> {
     }
 
     if (process.platform === "linux") {
-        const unitPath = path.join(process.env.HOME!, ".config", "systemd", "user", `${SERVICE_NAME}.service`);
+        const unitPath = path.join(getHomeDir(), ".config", "systemd", "user", `${SERVICE_NAME}.service`);
         try {
-            execSync("systemctl --user disable " + SERVICE_NAME, { stdio: "inherit" });
+            execFileSync("systemctl", ["--user", "disable", SERVICE_NAME], { stdio: "inherit" });
         } catch {
-            // ignore
+            // systemctl disable 失败（服务可能未启用），忽略
         }
         if (fs.existsSync(unitPath)) {
             fs.unlinkSync(unitPath);
             console.log("已卸载 systemd 服务");
         }
         try {
-            execSync("systemctl --user daemon-reload", { stdio: "inherit" });
+            execFileSync("systemctl", ["--user", "daemon-reload"], { stdio: "inherit" });
         } catch {
-            // ignore
+            // daemon-reload 失败，忽略
         }
         return;
     }
@@ -147,8 +156,9 @@ export async function serviceUninstall(): Promise<void> {
 export async function serviceStatus(): Promise<void> {
     if (process.platform === "darwin") {
         try {
-            const out = execSync("launchctl list | grep onebots", { encoding: "utf8" });
-            console.log(out || "未找到 onebots 服务");
+            const out = execFileSync("launchctl", ["list"], { encoding: "utf8" });
+            const lines = out.split("\n").filter(line => line.includes("onebots"));
+            console.log(lines.length > 0 ? lines.join("\n") : "未找到 onebots 服务");
         } catch {
             console.log("未找到 onebots 服务或未加载");
         }
@@ -157,9 +167,9 @@ export async function serviceStatus(): Promise<void> {
 
     if (process.platform === "linux") {
         try {
-            execSync("systemctl --user status " + SERVICE_NAME, { stdio: "inherit" });
-        } catch (e: unknown) {
-            const code = (e as { status?: number })?.status;
+            execFileSync("systemctl", ["--user", "status", SERVICE_NAME], { stdio: "inherit" });
+        } catch (error: unknown) {
+            const code = (error as { status?: number })?.status;
             if (code !== 0) console.log("服务未运行或未安装");
         }
         return;

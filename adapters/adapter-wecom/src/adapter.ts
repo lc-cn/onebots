@@ -7,7 +7,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { WeComBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { WeComConfig, WeComEvent, WeComSendMessageRequest } from "./types.js";
+import type { WeComConfig, WeComEvent, WeComChangeEvent, WeComSendMessageRequest } from "./types.js";
 
 export class WeComAdapter extends Adapter<WeComBot, "wecom"> {
     constructor(app: BaseApp) {
@@ -371,16 +371,19 @@ export class WeComAdapter extends Adapter<WeComBot, "wecom"> {
     private handleWeComEvent(account: Account<'wecom', WeComBot>, event: WeComEvent): void {
         const eventType = event.EventType;
 
-        // 处理消息事件
-        if (eventType === 'change_contact' && (event as any).ChangeType === 'create_user') {
-            // 用户创建事件
-            this.logger.info(`用户创建: ${(event as any).UserID}`);
-        } else if (eventType === 'change_contact' && (event as any).ChangeType === 'update_user') {
-            // 用户更新事件
-            this.logger.info(`用户更新: ${(event as any).UserID}`);
-        } else if (eventType === 'change_contact' && (event as any).ChangeType === 'delete_user') {
-            // 用户删除事件
-            this.logger.info(`用户删除: ${(event as any).UserID}`);
+        // 处理通讯录变更事件
+        if (eventType === 'change_contact') {
+            const changeEvent = event as WeComChangeEvent;
+            if (changeEvent.ChangeType === 'create_user') {
+                // 用户创建事件
+                this.logger.info(`用户创建: ${changeEvent.UserID}`);
+            } else if (changeEvent.ChangeType === 'update_user') {
+                // 用户更新事件
+                this.logger.info(`用户更新: ${changeEvent.UserID}`);
+            } else if (changeEvent.ChangeType === 'delete_user') {
+                // 用户删除事件
+                this.logger.info(`用户删除: ${changeEvent.UserID}`);
+            }
         }
         // 注意：企业微信的消息事件需要通过其他方式接收（如应用消息回调）
     }

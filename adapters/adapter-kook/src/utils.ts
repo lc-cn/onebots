@@ -2,11 +2,12 @@
  * KOOK (开黑了) 工具函数
  */
 import { createDecipheriv, createHash } from 'crypto';
+import type { KookCard, KookCardModule } from './types.js';
 
 /**
  * 验证 Webhook 请求
  */
-export function verifyWebhook(body: any, verifyToken: string): boolean {
+export function verifyWebhook(body: { d?: { verify_token?: string } }, verifyToken: string): boolean {
     if (!body || !body.d) return false;
     return body.d.verify_token === verifyToken;
 }
@@ -37,8 +38,9 @@ export function decryptWebhookMessage(encryptedData: string, encryptKey: string)
         decrypted = Buffer.concat([decrypted, decipher.final()]);
         
         return decrypted.toString('utf-8');
-    } catch (error: any) {
-        throw new Error(`解密消息失败: ${error.message}`);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`解密消息失败: ${message}`);
     }
 }
 
@@ -212,7 +214,7 @@ export function generateNonce(): string {
 /**
  * 解析卡片消息
  */
-export function parseCardMessage(content: string): any[] {
+export function parseCardMessage(content: string): KookCard[] {
     try {
         return JSON.parse(content);
     } catch {
@@ -243,7 +245,7 @@ export function buildTextCard(text: string, theme: 'primary' | 'success' | 'dang
  * 构建图片卡片
  */
 export function buildImageCard(imageUrl: string, title?: string): string {
-    const modules: any[] = [];
+    const modules: KookCardModule[] = [];
     
     if (title) {
         modules.push({

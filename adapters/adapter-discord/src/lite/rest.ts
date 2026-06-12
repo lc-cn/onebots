@@ -4,6 +4,21 @@
  */
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
+import type { Agent } from 'http';
+import type {
+    RESTRequestOptions,
+    CreateMessageBody,
+    EditMessageBody,
+    DiscordApiMessage,
+    DiscordApiChannel,
+    DiscordApiGuild,
+    DiscordApiUser,
+    DiscordApiGuildMember,
+    DiscordRole,
+    GatewayQueryOptions,
+    GatewayMemberQueryOptions,
+} from '../types.js';
 
 export interface RESTOptions {
     token: string;
@@ -16,7 +31,7 @@ export interface RESTOptions {
 
 export interface RequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-    body?: any;
+    body?: unknown;
     headers?: Record<string, string>;
     query?: Record<string, string>;
 }
@@ -29,22 +44,31 @@ function isNode(): boolean {
 }
 
 /**
+ * Node.js https 模块请求选项
+ */
+interface NodeHttpsRequestOptions {
+    hostname: string;
+    port: number | string;
+    path: string;
+    method: string;
+    headers: Record<string, string>;
+    agent?: Agent;
+}
+
+/**
  * 轻量版 Discord REST 客户端
  */
 export class DiscordREST {
     private token: string;
     private proxyUrl?: string;
-    private agent: any = null;
+    private agent: Agent | null = null;
     private initialized = false;
 
     constructor(options: RESTOptions) {
         this.token = options.token;
-        
+
         if (options.proxy?.url) {
-            const proxyUrl = new URL(options.proxy.url);
-            if (options.proxy.username) proxyUrl.username = options.proxy.username;
-            if (options.proxy.password) proxyUrl.password = options.proxy.password;
-            this.proxyUrl = proxyUrl.toString();
+            this.proxyUrl = buildProxyUrl(options.proxy);
         }
     }
 
@@ -57,12 +81,11 @@ export class DiscordREST {
 
         if (!this.proxyUrl || !isNode()) return;
 
-        try {
-            // @ts-ignore - https-proxy-agent 是可选依赖
-            const { HttpsProxyAgent } = await import('https-proxy-agent');
-            this.agent = new HttpsProxyAgent(this.proxyUrl);
-            console.log(`[DiscordREST] 已配置代理: ${this.proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
-        } catch {
+        const agent = await createHttpsProxyAgent({ url: this.proxyUrl });
+        if (agent) {
+            this.agent = agent as Agent;
+            console.log(`[DiscordREST] 已配置代理: ${maskProxyUrl(this.proxyUrl)}`);
+        } else {
             console.warn('[DiscordREST] https-proxy-agent 未安装，将直接连接');
         }
     }
@@ -79,7 +102,7 @@ export class DiscordREST {
             const https = await import('https');
             const urlObj = new URL(url);
 
-            const reqOptions: any = {
+            const reqOptions: NodeHttpsRequestOptions = {
                 hostname: urlObj.hostname,
                 port: urlObj.port || 443,
                 path: urlObj.pathname + urlObj.search,
@@ -95,21 +118,21 @@ export class DiscordREST {
             const req = https.request(reqOptions, (res) => {
                 let data = '';
 
-                res.on('data', (chunk) => {
+                res.on('data', (chunk: Buffer) => {
                     data += chunk;
                 });
 
                 res.on('end', () => {
                     if (res.statusCode === 204) {
-                        resolve(undefined as T);
+                        resolve(undefined as unknown as T);
                         return;
                     }
 
                     if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
                         try {
-                            resolve(data ? JSON.parse(data) : undefined);
+                            resolve(data ? JSON.parse(data) : undefined as unknown as T);
                         } catch {
-                            resolve(data as T);
+                            resolve(data as unknown as T);
                         }
                     } else {
                         let errorMsg = `Discord API Error: ${res.statusCode}`;
@@ -124,7 +147,7 @@ export class DiscordREST {
                 });
             });
 
-            req.on('error', (error) => {
+            req.on('error', (error: Error) => {
                 reject(error);
             });
 
@@ -157,7 +180,7 @@ export class DiscordREST {
         });
 
         if (response.status === 204) {
-            return undefined as T;
+            return undefined as unknown as T;
         }
 
         if (!response.ok) {
@@ -171,12 +194,12 @@ export class DiscordREST {
     /**
      * 发送请求
      */
-    async request<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+    async request<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
         // 初始化代理
         await this.initAgent();
 
         const { method = 'GET', body, headers = {}, query } = options;
-        
+
         let url = `${DISCORD_API_BASE}${endpoint}`;
         if (query) {
             const filteredQuery = Object.fromEntries(
@@ -219,13 +242,13 @@ export class DiscordREST {
     // ============================================
 
     /** 获取当前用户 */
-    async getCurrentUser() {
-        return this.request('/users/@me');
+    async getCurrentUser(): Promise<DiscordApiUser> {
+        return this.request<DiscordApiUser>('/users/@me');
     }
 
     /** 获取用户 */
-    async getUser(userId: string) {
-        return this.request(`/users/${userId}`);
+    async getUser(userId: string): Promise<DiscordApiUser> {
+        return this.request<DiscordApiUser>(`/users/${userId}`);
     }
 
     // ============================================
@@ -233,43 +256,43 @@ export class DiscordREST {
     // ============================================
 
     /** 获取频道 */
-    async getChannel(channelId: string) {
-        return this.request(`/channels/${channelId}`);
+    async getChannel(channelId: string): Promise<DiscordApiChannel> {
+        return this.request<DiscordApiChannel>(`/channels/${channelId}`);
     }
 
     /** 发送消息 */
-    async createMessage(channelId: string, content: string | { content?: string; embeds?: any[]; components?: any[] }) {
+    async createMessage(channelId: string, content: string | CreateMessageBody): Promise<DiscordApiMessage> {
         const body = typeof content === 'string' ? { content } : content;
-        return this.request(`/channels/${channelId}/messages`, {
+        return this.request<DiscordApiMessage>(`/channels/${channelId}/messages`, {
             method: 'POST',
             body,
         });
     }
 
     /** 编辑消息 */
-    async editMessage(channelId: string, messageId: string, content: string | { content?: string; embeds?: any[] }) {
+    async editMessage(channelId: string, messageId: string, content: string | EditMessageBody): Promise<DiscordApiMessage> {
         const body = typeof content === 'string' ? { content } : content;
-        return this.request(`/channels/${channelId}/messages/${messageId}`, {
+        return this.request<DiscordApiMessage>(`/channels/${channelId}/messages/${messageId}`, {
             method: 'PATCH',
             body,
         });
     }
 
     /** 删除消息 */
-    async deleteMessage(channelId: string, messageId: string) {
-        return this.request(`/channels/${channelId}/messages/${messageId}`, {
+    async deleteMessage(channelId: string, messageId: string): Promise<void> {
+        return this.request<void>(`/channels/${channelId}/messages/${messageId}`, {
             method: 'DELETE',
         });
     }
 
     /** 获取消息 */
-    async getMessage(channelId: string, messageId: string) {
-        return this.request(`/channels/${channelId}/messages/${messageId}`);
+    async getMessage(channelId: string, messageId: string): Promise<DiscordApiMessage> {
+        return this.request<DiscordApiMessage>(`/channels/${channelId}/messages/${messageId}`);
     }
 
     /** 获取消息历史 */
-    async getMessages(channelId: string, options?: { limit?: number; before?: string; after?: string; around?: string }) {
-        return this.request(`/channels/${channelId}/messages`, {
+    async getMessages(channelId: string, options?: GatewayQueryOptions): Promise<DiscordApiMessage[]> {
+        return this.request<DiscordApiMessage[]>(`/channels/${channelId}/messages`, {
             query: options as Record<string, string>,
         });
     }
@@ -279,37 +302,37 @@ export class DiscordREST {
     // ============================================
 
     /** 获取服务器 */
-    async getGuild(guildId: string) {
-        return this.request(`/guilds/${guildId}`);
+    async getGuild(guildId: string): Promise<DiscordApiGuild> {
+        return this.request<DiscordApiGuild>(`/guilds/${guildId}`);
     }
 
     /** 获取服务器列表 */
-    async getGuilds() {
-        return this.request('/users/@me/guilds');
+    async getGuilds(): Promise<DiscordApiGuild[]> {
+        return this.request<DiscordApiGuild[]>('/users/@me/guilds');
     }
 
     /** 获取服务器成员 */
-    async getGuildMember(guildId: string, userId: string) {
-        return this.request(`/guilds/${guildId}/members/${userId}`);
+    async getGuildMember(guildId: string, userId: string): Promise<DiscordApiGuildMember> {
+        return this.request<DiscordApiGuildMember>(`/guilds/${guildId}/members/${userId}`);
     }
 
     /** 获取服务器成员列表 */
-    async getGuildMembers(guildId: string, options?: { limit?: number; after?: string }) {
-        return this.request(`/guilds/${guildId}/members`, {
+    async getGuildMembers(guildId: string, options?: GatewayMemberQueryOptions): Promise<DiscordApiGuildMember[]> {
+        return this.request<DiscordApiGuildMember[]>(`/guilds/${guildId}/members`, {
             query: options as Record<string, string>,
         });
     }
 
     /** 踢出成员 */
-    async removeGuildMember(guildId: string, userId: string) {
-        return this.request(`/guilds/${guildId}/members/${userId}`, {
+    async removeGuildMember(guildId: string, userId: string): Promise<void> {
+        return this.request<void>(`/guilds/${guildId}/members/${userId}`, {
             method: 'DELETE',
         });
     }
 
     /** 封禁成员 */
-    async banGuildMember(guildId: string, userId: string, options?: { delete_message_seconds?: number }) {
-        return this.request(`/guilds/${guildId}/bans/${userId}`, {
+    async banGuildMember(guildId: string, userId: string, options?: { delete_message_seconds?: number }): Promise<void> {
+        return this.request<void>(`/guilds/${guildId}/bans/${userId}`, {
             method: 'PUT',
             body: options,
         });
@@ -320,29 +343,29 @@ export class DiscordREST {
     // ============================================
 
     /** 回复 Interaction */
-    async createInteractionResponse(interactionId: string, interactionToken: string, response: any) {
-        return this.request(`/interactions/${interactionId}/${interactionToken}/callback`, {
+    async createInteractionResponse(interactionId: string, interactionToken: string, response: { type: number; data?: unknown }): Promise<void> {
+        return this.request<void>(`/interactions/${interactionId}/${interactionToken}/callback`, {
             method: 'POST',
             body: response,
         });
     }
 
     /** 获取原始 Interaction 回复 */
-    async getOriginalInteractionResponse(applicationId: string, interactionToken: string) {
-        return this.request(`/webhooks/${applicationId}/${interactionToken}/messages/@original`);
+    async getOriginalInteractionResponse(applicationId: string, interactionToken: string): Promise<DiscordApiMessage> {
+        return this.request<DiscordApiMessage>(`/webhooks/${applicationId}/${interactionToken}/messages/@original`);
     }
 
     /** 编辑原始 Interaction 回复 */
-    async editOriginalInteractionResponse(applicationId: string, interactionToken: string, content: any) {
-        return this.request(`/webhooks/${applicationId}/${interactionToken}/messages/@original`, {
+    async editOriginalInteractionResponse(applicationId: string, interactionToken: string, content: EditMessageBody): Promise<DiscordApiMessage> {
+        return this.request<DiscordApiMessage>(`/webhooks/${applicationId}/${interactionToken}/messages/@original`, {
             method: 'PATCH',
             body: content,
         });
     }
 
     /** 创建后续消息 */
-    async createFollowupMessage(applicationId: string, interactionToken: string, content: any) {
-        return this.request(`/webhooks/${applicationId}/${interactionToken}`, {
+    async createFollowupMessage(applicationId: string, interactionToken: string, content: CreateMessageBody): Promise<DiscordApiMessage> {
+        return this.request<DiscordApiMessage>(`/webhooks/${applicationId}/${interactionToken}`, {
             method: 'POST',
             body: content,
         });
@@ -353,12 +376,12 @@ export class DiscordREST {
     // ============================================
 
     /** 获取 Gateway URL */
-    async getGateway() {
-        return this.request('/gateway');
+    async getGateway(): Promise<{ url: string }> {
+        return this.request<{ url: string }>('/gateway');
     }
 
     /** 获取 Gateway Bot URL（带分片信息） */
-    async getGatewayBot() {
+    async getGatewayBot(): Promise<{ url: string; shards: number; session_start_limit: { total: number; remaining: number; reset_after: number; max_concurrency: number } }> {
         return this.request('/gateway/bot');
     }
 }

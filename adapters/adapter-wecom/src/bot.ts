@@ -4,14 +4,17 @@
  */
 import { EventEmitter } from 'events';
 import type { RouterContext, Next } from 'onebots';
-import type { 
-    WeComConfig, 
-    WeComTokenResponse, 
+import type {
+    WeComConfig,
+    WeComTokenResponse,
     WeComSendMessageRequest,
     WeComSendMessageResponse,
     WeComEvent,
     WeComUser,
-    WeComDepartment
+    WeComDepartment,
+    WeComUserResponse,
+    WeComDepartmentListResponse,
+    WeComDepartmentMembersResponse,
 } from './types.js';
 
 const WECOM_API_BASE = 'https://qyapi.weixin.qq.com';
@@ -22,7 +25,7 @@ const WECOM_API_BASE = 'https://qyapi.weixin.qq.com';
 interface RequestOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
     headers?: Record<string, string>;
-    body?: any;
+    body?: Record<string, unknown>;
     params?: Record<string, string | number | boolean>;
     skipAuth?: boolean;
 }
@@ -41,7 +44,7 @@ export class WeComBot extends EventEmitter {
     /**
      * 发送 HTTP 请求
      */
-    private async request<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
+    private async request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
         const { method = 'GET', headers = {}, body, params, skipAuth = false } = options;
         
         // 构建 URL
@@ -79,7 +82,7 @@ export class WeComBot extends EventEmitter {
     /**
      * GET 请求
      */
-    async get<T = any>(path: string, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
+    async get<T = unknown>(path: string, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
         const data = await this.request<T>(path, { params });
         return { data };
     }
@@ -87,7 +90,7 @@ export class WeComBot extends EventEmitter {
     /**
      * POST 请求
      */
-    async post<T = any>(path: string, body?: any, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
+    async post<T = unknown>(path: string, body?: Record<string, unknown>, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
         const data = await this.request<T>(path, { method: 'POST', body, params });
         return { data };
     }
@@ -150,7 +153,7 @@ export class WeComBot extends EventEmitter {
      * 处理 Webhook 请求（事件回调）
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        const body = ctx.request.body as any;
+        const body = ctx.request.body as Record<string, unknown> | undefined;
         const query = ctx.query;
         
         // 处理 URL 验证（企业微信首次配置 webhook 时会发送验证请求）
@@ -161,8 +164,8 @@ export class WeComBot extends EventEmitter {
         }
 
         // 处理事件
-        if (body.EventType) {
-            const event: WeComEvent = body;
+        if (body && typeof body.EventType === 'string') {
+            const event = body as unknown as WeComEvent;
             this.emit('event', event);
         }
 
@@ -197,7 +200,7 @@ export class WeComBot extends EventEmitter {
      * 获取用户信息
      */
     async getUserInfo(userId: string): Promise<WeComUser> {
-        const response = await this.get<any>('/cgi-bin/user/get', { userid: userId });
+        const response = await this.get<WeComUserResponse>('/cgi-bin/user/get', { userid: userId });
 
         if (response.data.errcode !== 0) {
             throw new Error(`获取用户信息失败: ${response.data.errmsg}`);
@@ -215,7 +218,7 @@ export class WeComBot extends EventEmitter {
             params.id = departmentId;
         }
         
-        const response = await this.get<any>('/cgi-bin/department/list', params);
+        const response = await this.get<WeComDepartmentListResponse>('/cgi-bin/department/list', params);
 
         if (response.data.errcode !== 0) {
             throw new Error(`获取部门列表失败: ${response.data.errmsg}`);
@@ -228,7 +231,7 @@ export class WeComBot extends EventEmitter {
      * 获取部门成员列表
      */
     async getDepartmentMembers(departmentId: number, fetchChild?: boolean): Promise<WeComUser[]> {
-        const response = await this.get<any>('/cgi-bin/user/list', {
+        const response = await this.get<WeComDepartmentMembersResponse>('/cgi-bin/user/list', {
             department_id: departmentId,
             fetch_child: fetchChild ? 1 : 0,
         });

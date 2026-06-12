@@ -29,10 +29,34 @@ export interface WeComUser {
     is_leader_in_dept?: number[];
     telephone?: string;
     address?: string;
-    extattr?: any;
+    extattr?: WeComExtAttr;
     to_invite?: boolean;
     external_position?: string;
-    external_profile?: any;
+    external_profile?: WeComExternalProfile;
+}
+
+/**
+ * 企业微信用户扩展属性
+ */
+export interface WeComExtAttr {
+    attrs?: Array<{
+        type: number;
+        name: string;
+        text?: { value: string };
+        web?: { url: string; title: string };
+    }>;
+}
+
+/**
+ * 企业微信用户外部资料
+ */
+export interface WeComExternalProfile {
+    external_corp_name?: string;
+    external_attr?: WeComExtAttr;
+    wechat_channels?: {
+        nickname?: string;
+        status?: number;
+    };
 }
 
 // 企业微信部门类型
@@ -82,7 +106,9 @@ export interface WeComMessage {
         filesize: number;
         sdkfileid: string;
     };
-    [key: string]: any;
+    /** 扩展字段 */
+    location?: string;
+    button?: Array<{ type: string; name: string; value?: string }>;
 }
 
 // 企业微信事件类型
@@ -93,7 +119,15 @@ export interface WeComEvent {
     FromUserName?: string;
     ToUserName?: string;
     AgentID?: string;
-    [key: string]: any;
+}
+
+/**
+ * 企业微信通讯录变更事件
+ */
+export interface WeComChangeEvent extends WeComEvent {
+    EventType: 'change_contact';
+    ChangeType: 'create_user' | 'update_user' | 'delete_user';
+    UserID: string;
 }
 
 // 访问令牌响应
@@ -155,7 +189,6 @@ export interface WeComSendMessageRequest {
     markdown?: {
         content: string;
     };
-    [key: string]: any;
 }
 
 // 发送消息响应
@@ -167,5 +200,42 @@ export interface WeComSendMessageResponse {
     invalidtag?: string;
     msgid?: string;
     response_code?: string;
+}
+
+// API 基础响应
+export interface WeComAPIResponse {
+    errcode: number;
+    errmsg: string;
+}
+
+// 获取用户信息响应
+export interface WeComUserResponse extends WeComAPIResponse {
+    userid: string;
+    name: string;
+    alias?: string;
+    mobile?: string;
+    department?: number[];
+    order?: number[];
+    position?: string;
+    gender?: string;
+    email?: string;
+    avatar?: string;
+    status?: number;
+    is_leader_in_dept?: number[];
+    telephone?: string;
+    address?: string;
+    extattr?: WeComExtAttr;
+    external_position?: string;
+    external_profile?: WeComExternalProfile;
+}
+
+// 获取部门列表响应
+export interface WeComDepartmentListResponse extends WeComAPIResponse {
+    department?: WeComDepartment[];
+}
+
+// 获取部门成员列表响应
+export interface WeComDepartmentMembersResponse extends WeComAPIResponse {
+    userlist?: WeComUser[];
 }
 
