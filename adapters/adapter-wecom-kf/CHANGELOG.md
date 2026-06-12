@@ -1,5 +1,12 @@
 # @onebots/adapter-wecom-kf
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [d9fdbd5]
+  - onebots@1.1.0
+
 ## 0.2.3
 
 ### Patch Changes
