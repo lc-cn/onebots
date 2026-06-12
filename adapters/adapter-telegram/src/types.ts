@@ -1,4 +1,14 @@
 import type { Update } from 'grammy/types';
+import type {
+    PhotoSize,
+    Audio,
+    Document,
+    Video,
+    Sticker,
+    Location,
+    Contact,
+    MessageEntity,
+} from 'grammy/types';
 /**
  * Telegram Bot API 类型定义
  * 基于 Telegram Bot API 官方文档
@@ -56,6 +66,36 @@ export interface TelegramChat {
     last_name?: string;
 }
 
+// Telegram 回调查询类型
+export interface TelegramCallbackQuery {
+    id: string;
+    from: TelegramUser;
+    message?: TelegramMessage;
+    inline_message_id?: string;
+    chat_instance: string;
+    data?: string;
+    game_short_name?: string;
+}
+
+// Telegram 内联查询类型
+export interface TelegramInlineQuery {
+    id: string;
+    from: TelegramUser;
+    query: string;
+    offset: string;
+    chat_type?: string;
+    location?: Location;
+}
+
+// Telegram 选择的内联结果类型
+export interface TelegramChosenInlineResult {
+    result_id: string;
+    from: TelegramUser;
+    query: string;
+    inline_message_id?: string;
+    location?: Location;
+}
+
 // Telegram 消息类型
 export interface TelegramMessage {
     message_id: number;
@@ -64,17 +104,17 @@ export interface TelegramMessage {
     chat: TelegramChat;
     text?: string;
     caption?: string;
-    photo?: any[];
-    video?: any;
-    audio?: any;
-    document?: any;
-    sticker?: any;
-    location?: any;
-    contact?: any;
+    photo?: PhotoSize[];
+    video?: Video;
+    audio?: Audio;
+    document?: Document;
+    sticker?: Sticker;
+    location?: Location;
+    contact?: Contact;
     reply_to_message?: TelegramMessage;
-    entities?: any[];
-    caption_entities?: any[];
-    [key: string]: any;
+    entities?: MessageEntity[];
+    caption_entities?: MessageEntity[];
+    [key: string]: unknown;
 }
 
 // Telegram 更新类型
@@ -84,9 +124,9 @@ export interface TelegramUpdate {
     edited_message?: TelegramMessage;
     channel_post?: TelegramMessage;
     edited_channel_post?: TelegramMessage;
-    callback_query?: any;
-    inline_query?: any;
-    chosen_inline_result?: any;
-    [key: string]: any;
+    callback_query?: TelegramCallbackQuery;
+    inline_query?: TelegramInlineQuery;
+    chosen_inline_result?: TelegramChosenInlineResult;
+    [key: string]: unknown;
 }
 

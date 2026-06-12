@@ -7,7 +7,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TelegramBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { TelegramConfig } from "./types.js";
+import type { TelegramConfig, TelegramMessage } from "./types.js";
 
 export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     constructor(app: BaseApp) {
@@ -32,7 +32,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
 
         // 解析消息内容
         let text = '';
-        const options: any = {};
+        const options: Record<string, unknown> = {};
 
         for (const seg of message) {
             if (typeof seg === 'string') {
@@ -257,7 +257,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         const chatId = params.group_id.string;
         const administrators = await bot.getChatAdministrators(chatId);
 
-        return administrators.map((admin: any) => ({
+        return administrators.map((admin) => ({
             group_id: params.group_id,
             user_id: this.createId(admin.user.id.toString()),
             user_name: admin.user.username || '',
@@ -383,7 +383,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         });
 
         // 监听私聊消息
-        bot.on('private_message', (event: any) => {
+        bot.on('private_message', (event: TelegramMessage) => {
             try {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
@@ -398,7 +398,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: { type: string; data: Record<string, unknown> }[] = [];
             
             if (event.text) {
                 messageSegments.push({
@@ -465,7 +465,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         });
 
         // 监听群组消息
-        bot.on('group_message', (event: any) => {
+        bot.on('group_message', (event: TelegramMessage) => {
             try {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
@@ -481,7 +481,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             );
 
             // 构建消息段（与私聊相同逻辑）
-            const messageSegments: any[] = [];
+            const messageSegments: { type: string; data: Record<string, unknown> }[] = [];
             
             if (event.text) {
                 messageSegments.push({

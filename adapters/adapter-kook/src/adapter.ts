@@ -11,7 +11,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { KookBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { KookConfig, KookEvent, KookMessageType } from "./types.js";
+import type { KookConfig, KookMessageType, KookTransformedChannelEvent, KookTransformedPrivateEvent, KookEvent } from "./types.js";
 import { parseKMarkdown, mentionUser, mentionAll, mentionHere } from "./utils.js";
 
 export class KookAdapter extends Adapter<KookBot, "kook"> {
@@ -625,7 +625,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         });
 
         // 监听频道消息
-        bot.on('channel_message', (event: KookEvent) => {
+        bot.on('channel_message', (event: KookTransformedChannelEvent) => {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
             if (me && event.author_id === me.id) return;
@@ -633,17 +633,15 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             // 打印消息接收日志
             const content = event.content || '';
             const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
-            const channelId = (event as any).channel_id || '';
+            const channelId = event.channel_id || '';
             this.logger.info(
                 `[KOOK] 收到频道消息 | 消息ID: ${event.msg_id} | 频道: ${channelId} | ` +
                 `发送者: ${event.extra?.author?.username || event.author_id} | 内容: ${contentPreview}`
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             const rawContent = event.content || '';
-            
-            // 根据消息类型处理
             switch (event.type) {
                 case 1:  // 文字消息
                 case 9:  // KMarkdown
@@ -713,7 +711,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
                     avatar: event.extra?.author?.avatar,
                 },
                 group: {
-                    id: this.createId(event.extra?.guild_id || (event as any).channel_id || ''),
+                    id: this.createId(event.extra?.guild_id || event.channel_id || ''),
                     name: '',
                 },
                 message_id: this.createId(event.msg_id),
@@ -726,7 +724,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         });
 
         // 监听私聊消息
-        bot.on('direct_message', (event: KookEvent) => {
+        bot.on('direct_message', (event: KookTransformedPrivateEvent) => {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
             if (me && event.author_id === me.id) return;
@@ -740,9 +738,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             );
 
             // 构建消息段
-            const messageSegments: any[] = [];
+            const messageSegments: CommonTypes.Segment[] = [];
             const rawContent = event.content || '';
-            
+
+
             switch (event.type) {
                 case 1:
                 case 9:

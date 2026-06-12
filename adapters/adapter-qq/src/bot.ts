@@ -12,6 +12,9 @@ import {
     type QQConfig,
     type QQIntent,
     type WSPayload,
+    type WSHelloData,
+    type WSResumeData,
+    type WSIdentifyData,
     type GatewayResponse,
     type ReadyEvent,
     type QQUser,
@@ -27,6 +30,15 @@ import {
     type WebhookPayload,
     type WebhookValidation,
     type WebhookValidationResponse,
+    type QQGuildRolesResult,
+    type QQCreateRoleResult,
+    type QQAnnounceResult,
+    type QQPinResult,
+    type QQSchedule,
+    type QQApiResponse,
+    type AccessTokenResponse,
+    type WSEventData,
+    QQApiError,
 } from './types.js';
 
 export class QQBot extends EventEmitter {
@@ -131,7 +143,7 @@ export class QQBot extends EventEmitter {
                 throw new Error(`获取Access Token失败: ${response.status}`);
             }
             
-            const data = await response.json();
+            const data: AccessTokenResponse = await response.json() as AccessTokenResponse;
             
             if (!data.access_token) {
                 throw new Error(`获取Access Token失败: ${JSON.stringify(data)}`);
@@ -142,8 +154,9 @@ export class QQBot extends EventEmitter {
             
             this.emit('token_refreshed', this.accessToken);
             return this.accessToken;
-        } catch (error: any) {
-            this.emit('error', new Error(`获取Access Token失败: ${error.message}`));
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.emit('error', new Error(`获取Access Token失败: ${message}`));
             throw error;
         }
     }
@@ -167,49 +180,54 @@ export class QQBot extends EventEmitter {
     /**
      * 调用QQ API
      */
-    private async callApi<T = any>(
+    private async callApi<T = unknown>(
         method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
         path: string,
-        body?: any,
+        body?: object,
         formData?: FormData
     ): Promise<T> {
         const headers = await this.getHeaders();
         const url = `${this.baseURL}${path}`;
-        
+
         try {
+            const requestHeaders: Record<string, string | undefined> = formData
+                ? { ...headers, 'Content-Type': undefined }
+                : headers;
             const options: RequestInit = {
                 method,
-                headers: formData ? { ...headers, 'Content-Type': undefined as any } : headers,
+                headers: requestHeaders as Record<string, string>,
             };
-            
+
             if (body && !formData) {
                 options.body = JSON.stringify(body);
             }
             if (formData) {
                 options.body = formData;
-                delete (options.headers as any)['Content-Type'];
+                delete requestHeaders['Content-Type'];
             }
-            
+
             const response = await fetch(url, options);
             const text = await response.text();
-            
-            let data: any;
+
+            let data: QQApiResponse;
             try {
-                data = text ? JSON.parse(text) : {};
+                data = text ? JSON.parse(text) as QQApiResponse : {};
             } catch {
-                data = { raw: text };
+                data = { raw: text } as QQApiResponse & { raw: string };
             }
-            
+
             if (!response.ok) {
-                const error = new Error(`QQ API错误 [${response.status}]: ${data.message || text}`);
-                (error as any).code = data.code;
-                (error as any).status = response.status;
+                const error = new QQApiError(
+                    `QQ API错误 [${response.status}]: ${data.message || text}`,
+                    data.code,
+                    response.status,
+                );
                 throw error;
             }
-            
-            return data as T;
-        } catch (error: any) {
-            this.emit('error', error);
+
+            return data as unknown as T;
+        } catch (error: unknown) {
+            this.emit('error', error instanceof Error ? error : new Error(String(error)));
             throw error;
         }
     }
@@ -303,7 +321,7 @@ export class QQBot extends EventEmitter {
             
             switch (payload.op) {
                 case 10: // HELLO
-                    this.handleHello(payload.d);
+                    this.handleHello(payload.d as WSHelloData);
                     break;
                 case 0: // DISPATCH
                     this.handleDispatch(payload);
@@ -315,7 +333,7 @@ export class QQBot extends EventEmitter {
                     this.handleReconnect();
                     break;
                 case 9: // INVALID_SESSION
-                    this.handleInvalidSession(payload.d);
+                    this.handleInvalidSession(payload.d as boolean);
                     break;
             }
         } catch (error) {
@@ -326,7 +344,7 @@ export class QQBot extends EventEmitter {
     /**
      * 处理Hello消息
      */
-    private handleHello(d: { heartbeat_interval: number }): void {
+    private handleHello(d: WSHelloData): void {
         this.startHeartbeat(d.heartbeat_interval);
         
         if (this.isResuming && this.sessionId) {
@@ -343,7 +361,7 @@ export class QQBot extends EventEmitter {
      */
     private async sendIdentify(): Promise<void> {
         const token = await this.getAccessToken();
-        
+
         const payload: WSPayload = {
             op: 2,
             d: {
@@ -355,9 +373,9 @@ export class QQBot extends EventEmitter {
                     $browser: 'onebots',
                     $device: 'onebots',
                 },
-            },
+            } as WSIdentifyData,
         };
-        
+
         this.send(payload);
     }
     
@@ -371,9 +389,9 @@ export class QQBot extends EventEmitter {
                 token: `QQBot ${this.accessToken}`,
                 session_id: this.sessionId,
                 seq: this.lastSeq,
-            },
+            } as WSResumeData,
         };
-        
+
         this.send(payload);
     }
     
@@ -383,12 +401,12 @@ export class QQBot extends EventEmitter {
     private handleDispatch(payload: WSPayload): void {
         const eventType = payload.t;
         const data = payload.d;
-        
+
         if (eventType === 'READY') {
-            this.handleReady(data);
+            this.handleReady(data as ReadyEvent);
             return;
         }
-        
+
         if (eventType === 'RESUMED') {
             this.isResuming = false;
             this.connectionManager.resetAttempts();
@@ -396,25 +414,28 @@ export class QQBot extends EventEmitter {
             this.emit('resumed');
             return;
         }
-        
+
+        // Dispatch 事件的 d 字段始终是 Record<string, unknown>
+        const eventData = data as Record<string, unknown> | undefined;
+
         // 移除@机器人内容
-        if (this.config.removeAt && data?.content) {
-            data.content = this.removeAtBot(data.content);
+        if (this.config.removeAt && eventData && typeof eventData.content === 'string') {
+            eventData.content = this.removeAtBot(eventData.content);
         }
-        
+
         // 发出事件
-        this.emit('dispatch', eventType, data);
-        this.emit(eventType || 'unknown', data);
-        
+        this.emit('dispatch', eventType, eventData);
+        this.emit(eventType || 'unknown', eventData);
+
         // 消息类事件
         if (eventType === 'AT_MESSAGE_CREATE' || eventType === 'MESSAGE_CREATE') {
-            this.emit('message.guild', data);
+            this.emit('message.guild', eventData);
         } else if (eventType === 'DIRECT_MESSAGE_CREATE') {
-            this.emit('message.direct', data);
+            this.emit('message.direct', eventData);
         } else if (eventType === 'GROUP_AT_MESSAGE_CREATE') {
-            this.emit('message.group', data);
+            this.emit('message.group', eventData);
         } else if (eventType === 'C2C_MESSAGE_CREATE') {
-            this.emit('message.private', data);
+            this.emit('message.private', eventData);
         }
     }
     
@@ -480,7 +501,7 @@ export class QQBot extends EventEmitter {
         this.heartbeatInterval = setInterval(() => {
             this.send({
                 op: 1,
-                d: this.lastSeq || null,
+                d: (this.lastSeq || null) as unknown as WSEventData,
             });
         }, interval);
     }
@@ -727,15 +748,15 @@ export class QQBot extends EventEmitter {
     /**
      * 获取频道身份组列表
      */
-    async getGuildRoles(guildId: string): Promise<{ guild_id: string; roles: any[]; role_num_limit: string }> {
-        return this.callApi('GET', `/guilds/${guildId}/roles`);
+    async getGuildRoles(guildId: string): Promise<QQGuildRolesResult> {
+        return this.callApi<QQGuildRolesResult>('GET', `/guilds/${guildId}/roles`);
     }
     
     /**
      * 创建频道身份组
      */
-    async createGuildRole(guildId: string, name: string, color?: number, hoist?: boolean): Promise<{ role_id: string; role: any }> {
-        return this.callApi('POST', `/guilds/${guildId}/roles`, {
+    async createGuildRole(guildId: string, name: string, color?: number, hoist?: boolean): Promise<QQCreateRoleResult> {
+        return this.callApi<QQCreateRoleResult>('POST', `/guilds/${guildId}/roles`, {
             name,
             color,
             hoist: hoist ? 1 : 0,
@@ -772,8 +793,8 @@ export class QQBot extends EventEmitter {
     /**
      * 创建频道公告
      */
-    async createAnnounce(guildId: string, messageId: string, channelId: string): Promise<any> {
-        return this.callApi('POST', `/guilds/${guildId}/announces`, {
+    async createAnnounce(guildId: string, messageId: string, channelId: string): Promise<QQAnnounceResult> {
+        return this.callApi<QQAnnounceResult>('POST', `/guilds/${guildId}/announces`, {
             message_id: messageId,
             channel_id: channelId,
         });
@@ -793,8 +814,8 @@ export class QQBot extends EventEmitter {
     /**
      * 添加精华消息
      */
-    async addPin(channelId: string, messageId: string): Promise<any> {
-        return this.callApi('PUT', `/channels/${channelId}/pins/${messageId}`);
+    async addPin(channelId: string, messageId: string): Promise<QQPinResult> {
+        return this.callApi<QQPinResult>('PUT', `/channels/${channelId}/pins/${messageId}`);
     }
     
     /**
@@ -818,30 +839,30 @@ export class QQBot extends EventEmitter {
     /**
      * 获取日程列表
      */
-    async getSchedules(channelId: string, since?: number): Promise<any[]> {
+    async getSchedules(channelId: string, since?: number): Promise<QQSchedule[]> {
         const params = since ? `?since=${since}` : '';
-        return this.callApi('GET', `/channels/${channelId}/schedules${params}`);
+        return this.callApi<QQSchedule[]>('GET', `/channels/${channelId}/schedules${params}`);
     }
-    
+
     /**
      * 获取日程详情
      */
-    async getSchedule(channelId: string, scheduleId: string): Promise<any> {
-        return this.callApi('GET', `/channels/${channelId}/schedules/${scheduleId}`);
+    async getSchedule(channelId: string, scheduleId: string): Promise<QQSchedule> {
+        return this.callApi<QQSchedule>('GET', `/channels/${channelId}/schedules/${scheduleId}`);
     }
-    
+
     /**
      * 创建日程
      */
-    async createSchedule(channelId: string, schedule: any): Promise<any> {
-        return this.callApi('POST', `/channels/${channelId}/schedules`, { schedule });
+    async createSchedule(channelId: string, schedule: Partial<QQSchedule>): Promise<QQSchedule> {
+        return this.callApi<QQSchedule>('POST', `/channels/${channelId}/schedules`, { schedule });
     }
-    
+
     /**
      * 修改日程
      */
-    async updateSchedule(channelId: string, scheduleId: string, schedule: any): Promise<any> {
-        return this.callApi('PATCH', `/channels/${channelId}/schedules/${scheduleId}`, { schedule });
+    async updateSchedule(channelId: string, scheduleId: string, schedule: Partial<QQSchedule>): Promise<QQSchedule> {
+        return this.callApi<QQSchedule>('PATCH', `/channels/${channelId}/schedules/${scheduleId}`, { schedule });
     }
     
     /**
@@ -991,7 +1012,7 @@ export class QQBot extends EventEmitter {
             // 处理URL验证请求 (op=13)
             // QQ官方会发送验证请求，需要返回签名
             if (payload.op === 13) {
-                const validation = payload.d as WebhookValidation;
+                const validation = payload.d as unknown as WebhookValidation;
                 
                 // 生成签名：对 event_ts + plain_token 进行 Ed25519 签名
                 const signature = this.generateSignature(validation.event_ts, validation.plain_token);
@@ -1043,10 +1064,10 @@ export class QQBot extends EventEmitter {
             ctx.status = 200;
             ctx.body = { code: 0, message: 'ignored' };
             
-        } catch (error: any) {
-            this.emit('error', error);
+        } catch (error: unknown) {
+            this.emit('error', error instanceof Error ? error : new Error(String(error)));
             ctx.status = 500;
-            ctx.body = { error: error.message };
+            ctx.body = { error: error instanceof Error ? error.message : String(error) };
         }
     }
     
@@ -1055,26 +1076,26 @@ export class QQBot extends EventEmitter {
      */
     private handleWebhookEvent(payload: WebhookPayload): void {
         const eventType = payload.t;
-        const data = payload.d;
-        
+        const eventData = payload.d as Record<string, unknown> | undefined;
+
         // 移除@机器人内容
-        if (this.config.removeAt && data?.content) {
-            data.content = this.removeAtBot(data.content);
+        if (this.config.removeAt && eventData && typeof eventData.content === 'string') {
+            eventData.content = this.removeAtBot(eventData.content);
         }
-        
+
         // 发出事件（与WebSocket模式相同的处理方式）
-        this.emit('dispatch', eventType, data);
-        this.emit(eventType || 'unknown', data);
-        
+        this.emit('dispatch', eventType, eventData);
+        this.emit(eventType || 'unknown', eventData);
+
         // 消息类事件
         if (eventType === 'AT_MESSAGE_CREATE' || eventType === 'MESSAGE_CREATE') {
-            this.emit('message.guild', data);
+            this.emit('message.guild', eventData);
         } else if (eventType === 'DIRECT_MESSAGE_CREATE') {
-            this.emit('message.direct', data);
+            this.emit('message.direct', eventData);
         } else if (eventType === 'GROUP_AT_MESSAGE_CREATE') {
-            this.emit('message.group', data);
+            this.emit('message.group', eventData);
         } else if (eventType === 'C2C_MESSAGE_CREATE') {
-            this.emit('message.private', data);
+            this.emit('message.private', eventData);
         }
     }
     

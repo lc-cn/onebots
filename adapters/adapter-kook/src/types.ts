@@ -60,9 +60,59 @@ export interface KookChannel {
     slow_mode: number;         // 慢速模式下限制发言的时间间隔（秒）
     type: number;              // 频道类型 1=文字 2=语音
     permission_overwrites?: KookPermissionOverwrite[];
-    permission_users?: any[];
+    permission_users?: KookPermissionUser[];
     permission_sync: number;   // 权限设置是否与分组同步
     has_password: boolean;     // 是否有密码
+}
+
+// 权限用户
+export interface KookPermissionUser {
+    user: KookUser;
+    allow: number;
+    deny: number;
+}
+
+// 嵌入内容
+export interface KookEmbed {
+    type: string;
+    url?: string;
+    origin_url?: string;
+    av_no?: string;
+    iframe_path?: string;
+    duration?: number;
+    title?: string;
+    pic?: string;
+}
+
+// @提及信息
+export interface KookMentionInfo {
+    mention_part?: KookUser[];
+    mention_role_part?: KookRole[];
+}
+
+// 卡片消息模块
+export interface KookCardModule {
+    type: string;
+    text?: { type: string; content: string };
+    elements?: KookCardModule[];
+    src?: string;
+}
+
+// 卡片消息
+export interface KookCard {
+    type: 'card';
+    theme?: string;
+    size?: 'sm' | 'lg';
+    modules: KookCardModule[];
+}
+
+// 系统消息 body
+export interface KookSystemMessageBody {
+    user_id?: string;
+    msg_id?: string;
+    content?: string;
+    emoji?: KookEmoji;
+    [key: string]: string | number | boolean | KookEmoji | undefined;
 }
 
 // 角色类型
@@ -96,7 +146,7 @@ export interface KookChannelMessage {
     mention_all: boolean;
     mention_roles: number[];    // @角色 ID 列表
     mention_here: boolean;
-    embeds: any[];
+    embeds: KookEmbed[];
     attachments: KookAttachment[];
     create_at: number;
     updated_at: number;
@@ -105,7 +155,7 @@ export interface KookChannelMessage {
     image_name?: string;
     read_status?: boolean;
     quote?: KookChannelMessage;
-    mention_info?: any;
+    mention_info?: KookMentionInfo;
 }
 
 // 私聊消息
@@ -113,7 +163,7 @@ export interface KookDirectMessage {
     id: string;
     type: KookMessageType;
     content: string;
-    embeds: any[];
+    embeds: KookEmbed[];
     attachments: KookAttachment[];
     create_at: number;
     updated_at: number;
@@ -187,7 +237,7 @@ export interface KookGame {
 }
 
 // API 响应
-export interface KookApiResponse<T = any> {
+export interface KookApiResponse<T = unknown> {
     code: number;              // 0 表示成功
     message: string;
     data: T;
@@ -196,19 +246,64 @@ export interface KookApiResponse<T = any> {
 // 分页响应
 export interface KookListResponse<T> {
     items: T[];
-    meta: {
-        page: number;
-        page_total: number;
-        page_size: number;
-        total: number;
-    };
+    meta: KookPageMeta;
     sort?: Record<string, number>;
 }
+
+// 分页元数据
+export interface KookPageMeta {
+    page: number;
+    page_total: number;
+    page_size: number;
+    total: number;
+}
+
+// 分页简元数据（Bot API 返回用）
+export interface KookSimplePageMeta {
+    page_total: number;
+}
+
+// Bot 转换后的频道事件
+export interface KookTransformedChannelEvent {
+    type: number;
+    channel_type: 'GROUP';
+    author_id: string;
+    content: string;
+    msg_id: string;
+    msg_timestamp: number;
+    channel_id: string;
+    guild_id: string;
+    extra: KookEventExtra;
+    _original: ChannelMessageEvent;
+}
+
+// Bot 转换后的私聊事件
+export interface KookTransformedPrivateEvent {
+    type: number;
+    channel_type: 'PERSON';
+    author_id: string;
+    content: string;
+    msg_id: string;
+    msg_timestamp: number;
+    code: string;
+    extra: KookEventExtra;
+    _original: PrivateMessageEvent;
+}
+
+// 频道更新数据
+export interface KookChannelUpdateData {
+    name?: string;
+    topic?: string;
+    slow_mode?: number;
+}
+
+// 导入用于交叉类型（避免循环依赖，在 bot.ts 中使用）
+import type { ChannelMessageEvent, PrivateMessageEvent } from 'kook-client';
 
 // WebSocket 信令
 export interface KookSignal {
     s: number;                 // 信令类型
-    d: any;                    // 数据
+    d: KookEvent | KookWebhookChallenge['d'];  // 数据
     sn?: number;               // 序列号 (仅 s=0 时有)
 }
 
@@ -286,9 +381,9 @@ export interface KookEventExtra {
     mention_roles?: number[];          // @角色
     mention_here?: boolean;            // @在线成员
     author?: KookUser;                 // 发送者信息
-    body?: any;                        // 系统消息具体内容
+    body?: KookSystemMessageBody;   // 系统消息具体内容
     code?: string;                     // 私聊会话 Code
-    [key: string]: any;
+    [key: string]: string | number | boolean | string[] | number[] | KookUser | KookSystemMessageBody | undefined;
 }
 
 // Webhook 验证请求

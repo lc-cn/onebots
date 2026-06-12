@@ -4,6 +4,7 @@
  */
 import { EventEmitter } from 'events';
 import {Client,ChannelMessageEvent,PrivateMessageEvent} from 'kook-client';
+import type { User, Guild, Channel, Message } from 'kook-client';
 import type { RouterContext, Next } from 'onebots';
 import type {
     KookConfig,
@@ -11,6 +12,15 @@ import type {
     KookGuild,
     KookChannel,
     KookApiResponse,
+    KookEvent,
+    KookEventExtra,
+    KookTransformedChannelEvent,
+    KookTransformedPrivateEvent,
+    KookSimplePageMeta,
+    KookChannelUpdateData,
+    KookChannelMessage,
+    KookUserChat,
+    KookRole,
 } from './types.js';
 
 export class KookBot extends EventEmitter {
@@ -72,11 +82,11 @@ export class KookBot extends EventEmitter {
     /**
      * 转换频道消息事件为内部格式
      */
-    private transformChannelEvent(event: ChannelMessageEvent): any {
-        const payload = (event as any).payload || {};
-        const extra = payload.extra || {};
+    private transformChannelEvent(event: ChannelMessageEvent): KookTransformedChannelEvent {
+        const payload = (event as { payload?: { extra?: KookEventExtra; type?: number; content?: string; msg_id?: string; msg_timestamp?: number } }).payload || {};
+        const extra = payload.extra || {} as KookEventExtra;
         return {
-            type: payload.type || extra.type || 9,
+            type: (payload.type as number) || (extra.type as number) || 9,
             channel_type: 'GROUP',
             author_id: event.author_id,
             content: event.raw_message || payload.content || '',
@@ -93,11 +103,11 @@ export class KookBot extends EventEmitter {
     /**
      * 转换私聊消息事件为内部格式
      */
-    private transformPrivateEvent(event: PrivateMessageEvent): any {
-        const payload = (event as any).payload || {};
-        const extra = payload.extra || {};
+    private transformPrivateEvent(event: PrivateMessageEvent): KookTransformedPrivateEvent {
+        const payload = (event as { payload?: { extra?: KookEventExtra; type?: number; content?: string; msg_id?: string; msg_timestamp?: number } }).payload || {};
+        const extra = payload.extra || {} as KookEventExtra;
         return {
-            type: payload.type || extra.type || 9,
+            type: (payload.type as number) || (extra.type as number) || 9,
             channel_type: 'PERSON',
             author_id: event.author_id,
             content: event.raw_message || payload.content || '',
@@ -188,7 +198,7 @@ export class KookBot extends EventEmitter {
     /**
      * 获取服务器列表
      */
-    async getGuildList(page?: number, pageSize?: number): Promise<{ items: KookGuild[]; meta: any }> {
+    async getGuildList(page?: number, pageSize?: number): Promise<{ items: KookGuild[]; meta: KookSimplePageMeta }> {
         const guilds = await this.client.getGuildList();
         return {
             items: guilds.map(g => this.transformGuild(g)),
@@ -207,7 +217,7 @@ export class KookBot extends EventEmitter {
     /**
      * 获取频道列表
      */
-    async getChannelList(guildId: string, type?: 1 | 2, page?: number, pageSize?: number): Promise<{ items: KookChannel[]; meta: any }> {
+    async getChannelList(guildId: string, type?: 1 | 2, page?: number, pageSize?: number): Promise<{ items: KookChannel[]; meta: KookSimplePageMeta }> {
         const channels = await this.client.getChannelList(guildId);
         return {
             items: channels.map(c => this.transformChannel(c)),
@@ -226,7 +236,7 @@ export class KookBot extends EventEmitter {
     /**
      * 发送频道消息
      */
-    async sendChannelMessage(channelId: string, content: string, quoteId?: string): Promise<any> {
+    async sendChannelMessage(channelId: string, content: string, quoteId?: string): Promise<Message.Ret> {
         const channel = this.client.pickChannel(channelId);
         const quote = quoteId ? { message_id: quoteId } : undefined;
         return await channel.sendMsg(content, quote);
@@ -235,7 +245,7 @@ export class KookBot extends EventEmitter {
     /**
      * 发送私聊消息
      */
-    async sendDirectMessage(userId: string, content: string, quoteId?: string): Promise<any> {
+    async sendDirectMessage(userId: string, content: string, quoteId?: string): Promise<Message.Ret> {
         const user = this.client.pickUser(userId);
         const quote = quoteId ? { message_id: quoteId } : undefined;
         return await user.sendMsg(content, quote);
@@ -291,7 +301,7 @@ export class KookBot extends EventEmitter {
     /**
      * 获取消息
      */
-    async getMessage(channelId: string, messageId: string): Promise<any> {
+    async getMessage(channelId: string, messageId: string): Promise<Message> {
         const channel = this.client.pickChannel(channelId);
         return await channel.getMsg(messageId);
     }
@@ -299,7 +309,7 @@ export class KookBot extends EventEmitter {
     /**
      * 获取聊天历史
      */
-    async getChatHistory(channelId: string, messageId?: string, limit: number = 50): Promise<any[]> {
+    async getChatHistory(channelId: string, messageId?: string, limit: number = 50): Promise<Message[]> {
         const channel = this.client.pickChannel(channelId);
         return await channel.getChatHistory(messageId, limit);
     }
@@ -307,7 +317,7 @@ export class KookBot extends EventEmitter {
     /**
      * 获取用户私聊会话列表（KOOK 不支持，返回空数组）
      */
-    async getUserChatList(page: number = 1, pageSize: number = 50): Promise<{ items: any[]; meta: any }> {
+    async getUserChatList(page: number = 1, pageSize: number = 50): Promise<{ items: KookUserChat[]; meta: KookSimplePageMeta }> {
         // KOOK 不提供私聊会话列表 API，返回空数组
         return { items: [], meta: { page_total: 1 } };
     }
@@ -315,7 +325,7 @@ export class KookBot extends EventEmitter {
     /**
      * 获取频道用户列表
      */
-    async getChannelUserList(channelId: string): Promise<{ items: KookUser[]; meta: any }> {
+    async getChannelUserList(channelId: string): Promise<{ items: KookUser[]; meta: KookSimplePageMeta }> {
         const channel = this.client.pickChannel(channelId);
         const users = await channel.getUserList();
         return {
@@ -343,10 +353,10 @@ export class KookBot extends EventEmitter {
      */
     async updateChannel(channelId: string, name?: string, topic?: string, slowMode?: number): Promise<KookChannel> {
         const channel = this.client.pickChannel(channelId);
-        const updateData: any = {};
+        const updateData = {} as Omit<Channel.Info, 'id'> & { slow_mode?: number };
         if (name !== undefined) updateData.name = name;
         if (slowMode !== undefined) updateData.slow_mode = slowMode;
-        await channel.update(updateData);
+        await channel.update(updateData as Omit<Channel.Info, 'id'>);
         return this.transformChannel(channel.info);
     }
 
@@ -371,7 +381,7 @@ export class KookBot extends EventEmitter {
         joinedAt?: number,
         page?: number,
         pageSize?: number
-    ): Promise<{ items: KookUser[]; meta: any }> {
+    ): Promise<{ items: KookUser[]; meta: KookSimplePageMeta }> {
         const users = await this.client.getGuildUserList(guildId, channelId);
         return {
             items: users.map(u => this.transformUser(u)),
@@ -425,58 +435,61 @@ export class KookBot extends EventEmitter {
     // 类型转换方法
     // ============================================
 
-    private transformUser(user: any): KookUser {
+    private transformUser(user: Partial<User.Info> & { id: string }): KookUser {
+        const ext = user as Partial<User.Info> & { id: string; joined_at?: number; active_time?: number };
         return {
-            id: user.id,
-            username: user.username || '',
-            nickname: user.nickname,
-            identify_num: user.identify_num || '',
-            online: user.online || false,
-            bot: user.bot || false,
-            status: user.status || 0,
-            avatar: user.avatar || '',
-            vip_avatar: user.vip_avatar,
-            mobile_verified: user.mobile_verified,
-            roles: user.roles,
-            joined_at: user.joined_at,
-            active_time: user.active_time,
+            id: ext.id,
+            username: ext.username || '',
+            nickname: ext.nickname,
+            identify_num: ext.identify_num || '',
+            online: ext.online || false,
+            bot: ext.bot || false,
+            status: ext.status || 0,
+            avatar: ext.avatar || '',
+            vip_avatar: ext.vip_avatar,
+            mobile_verified: ext.mobile_verified,
+            roles: ext.roles,
+            joined_at: ext.joined_at,
+            active_time: ext.active_time,
         };
     }
 
-    private transformGuild(guild: any): KookGuild {
+    private transformGuild(guild: Partial<Guild.Info> & { id: string; name: string }): KookGuild {
+        const ext = guild as Partial<Guild.Info> & { id: string; name: string; roles?: KookRole[]; channels?: KookChannel[] };
         return {
-            id: guild.id,
-            name: guild.name,
-            topic: guild.topic || '',
-            user_id: guild.user_id || '',
-            icon: guild.icon || '',
-            notify_type: guild.notify_type || 0,
-            region: guild.region || '',
-            enable_open: guild.enable_open || false,
-            open_id: guild.open_id || '',
-            default_channel_id: guild.default_channel_id || '',
-            welcome_channel_id: guild.welcome_channel_id || '',
-            roles: guild.roles,
-            channels: guild.channels,
+            id: ext.id,
+            name: ext.name,
+            topic: ext.topic || '',
+            user_id: ext.user_id || '',
+            icon: ext.icon || '',
+            notify_type: (ext.notify_type as number) || 0,
+            region: ext.region || '',
+            enable_open: Boolean(ext.enable_open),
+            open_id: String(ext.open_id ?? ''),
+            default_channel_id: ext.default_channel_id || '',
+            welcome_channel_id: ext.welcome_channel_id || '',
+            roles: ext.roles,
+            channels: ext.channels,
         };
     }
 
-    private transformChannel(channel: any): KookChannel {
+    private transformChannel(channel: Partial<Channel.Info> & { id: string; name: string }): KookChannel {
+        const ext = channel as Partial<Channel.Info> & { id: string; name: string; guild_id?: string; topic?: string; slow_mode?: number; permission_overwrites?: KookChannel['permission_overwrites']; permission_users?: KookChannel['permission_users']; permission_sync?: number; has_password?: boolean };
         return {
-            id: channel.id,
-            name: channel.name,
-            user_id: channel.user_id || '',
-            guild_id: channel.guild_id || '',
-            topic: channel.topic || '',
-            is_category: channel.is_category || false,
-            parent_id: channel.parent_id || '',
-            level: channel.level || 0,
-            slow_mode: channel.slow_mode || 0,
-            type: channel.type || 1,
-            permission_overwrites: channel.permission_overwrites || [],
-            permission_users: channel.permission_users || [],
-            permission_sync: channel.permission_sync || 0,
-            has_password: channel.has_password || false,
+            id: ext.id,
+            name: ext.name,
+            user_id: ext.user_id || '',
+            guild_id: ext.guild_id || '',
+            topic: ext.topic || '',
+            is_category: ext.is_category || false,
+            parent_id: ext.parent_id || '',
+            level: ext.level || 0,
+            slow_mode: ext.slow_mode || 0,
+            type: (ext.type as unknown as number) || 1,
+            permission_overwrites: ext.permission_overwrites || [],
+            permission_users: ext.permission_users || [],
+            permission_sync: ext.permission_sync || 0,
+            has_password: ext.has_password || false,
         };
     }
 

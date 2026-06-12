@@ -18,8 +18,10 @@ import type {
     QQGuildMemberEvent,
     QQReactionEvent,
     QQInteractionEvent,
+    QQAttachment,
     SendMessageParams,
     ReceiverMode,
+    MessageSendResult,
 } from "./types.js";
 
 export class QQAdapter extends Adapter<QQBot, "qq"> {
@@ -54,7 +56,7 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
             sendParams.image = attachments.image;
         }
 
-        let result: any;
+        let result: MessageSendResult;
         
         switch (scene_type) {
             case "group":
@@ -385,22 +387,22 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
     /**
      * 构建消息内容
      */
-    private buildMessageContent(message: any[]): string {
+    private buildMessageContent(message: CommonTypes.Segment[]): string {
         const textParts: string[] = [];
 
         for (const seg of message) {
             if (typeof seg === 'string') {
                 textParts.push(seg);
             } else if (seg.type === 'text') {
-                textParts.push(seg.data.text || '');
+                textParts.push((seg.data.text as string) || '');
             } else if (seg.type === 'at') {
                 if (seg.data.qq === 'all') {
                     textParts.push('@everyone');
                 } else {
-                    textParts.push(`<@${seg.data.qq || seg.data.id}>`);
+                    textParts.push(`<@${(seg.data.qq as string) || (seg.data.id as string)}>`);
                 }
             } else if (seg.type === 'face') {
-                textParts.push(`<emoji:${seg.data.id}>`);
+                textParts.push(`<emoji:${seg.data.id as string}>`);
             }
         }
 
@@ -410,14 +412,14 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
     /**
      * 提取附件
      */
-    private extractAttachments(message: any[]): { image?: string; file?: string } {
+    private extractAttachments(message: CommonTypes.Segment[]): { image?: string; file?: string } {
         const attachments: { image?: string; file?: string } = {};
 
         for (const seg of message) {
             if (seg.type === 'image') {
-                attachments.image = seg.data.url || seg.data.file;
+                attachments.image = (seg.data.url as string) || (seg.data.file as string);
             } else if (seg.type === 'file') {
-                attachments.file = seg.data.url || seg.data.file;
+                attachments.file = (seg.data.url as string) || (seg.data.file as string);
             }
         }
 
@@ -427,8 +429,8 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
     /**
      * 解析消息内容为消息段
      */
-    private parseMessageContent(content: string, attachments?: any[]): any[] {
-        const segments: any[] = [];
+    private parseMessageContent(content: string, attachments?: QQAttachment[]): CommonTypes.Segment[] {
+        const segments: CommonTypes.Segment[] = [];
 
         // 解析@
         let text = content.replace(/<@!?(\d+)>/g, (_, id) => {
