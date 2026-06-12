@@ -7,7 +7,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { FeishuBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import { FeishuEndpoint, type FeishuConfig, type FeishuEvent } from "./types.js";
+import { FeishuEndpoint, type FeishuConfig, type FeishuEvent, type FeishuMessageReceiveEventPayload } from "./types.js";
 
 export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     constructor(app: BaseApp) {
@@ -475,7 +475,8 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         // 处理消息事件
         if (eventType === 'im.message.receive_v1') {
-            const message = event.event.message;
+            const payload = event.event as FeishuMessageReceiveEventPayload;
+            const message = payload.message;
             if (!message) return;
 
             // 忽略自己发送的消息

@@ -105,14 +105,14 @@ export class SlackBot extends EventEmitter {
         const result = await this.client.chat.postMessage({
             channel,
             text,
-            ...options,
+            ...(options as Record<string, unknown>),
         });
 
         if (!result.ok) {
             throw new Error(`发送消息失败: ${result.error}`);
         }
 
-        return result;
+        return result as unknown as SlackChatResult;
     }
 
     /**
@@ -129,7 +129,7 @@ export class SlackBot extends EventEmitter {
             throw new Error(`发送消息失败: ${result.error}`);
         }
 
-        return result;
+        return result as unknown as SlackChatResult;
     }
 
     /**
@@ -140,14 +140,14 @@ export class SlackBot extends EventEmitter {
             channel,
             ts,
             text,
-            ...options,
+            ...(options as Record<string, unknown>),
         });
 
         if (!result.ok) {
             throw new Error(`更新消息失败: ${result.error}`);
         }
 
-        return result;
+        return result as unknown as SlackChatResult;
     }
 
     /**

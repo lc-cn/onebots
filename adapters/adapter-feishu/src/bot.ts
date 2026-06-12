@@ -188,7 +188,7 @@ export class FeishuBot extends EventEmitter {
         }
 
         // 处理事件
-        const event: FeishuEvent = body;
+        const event = body as unknown as FeishuEvent;
         this.emit('event', event);
 
         ctx.body = { code: 0 };
@@ -231,7 +231,7 @@ export class FeishuBot extends EventEmitter {
             content: typeof content === 'string' ? JSON.stringify({ text: content }) : JSON.stringify(content),
         };
 
-        const response = await this.post<FeishuSendMessageResponse>('/im/v1/messages', request, {
+        const response = await this.post<FeishuSendMessageResponse>('/im/v1/messages', request as unknown as Record<string, unknown>, {
             receive_id_type: receiveIdType,
         });
 

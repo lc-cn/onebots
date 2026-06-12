@@ -13,6 +13,8 @@ import type {
     WhatsAppMessageEvent,
     WhatsAppSendMessageParams,
     WhatsAppMessageStatus,
+    WhatsAppWebhookMetadata,
+    WhatsAppMessageStatusEvent,
 } from "./types.js";
 
 export class WhatsAppAdapter extends Adapter<WhatsAppBot, "whatsapp"> {
