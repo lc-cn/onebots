@@ -7,7 +7,7 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { FeishuBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import { FeishuEndpoint, type FeishuConfig, type FeishuEvent, type FeishuMessageReceiveEventPayload } from "./types.js";
+import { FeishuEndpoint, type FeishuConfig, type FeishuEvent, type FeishuMessageReceiveEventPayload, type FeishuAPIResponse, type FeishuMessage } from "./types.js";
 
 export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     constructor(app: BaseApp) {
@@ -136,13 +136,14 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         // 飞书获取消息 API
         const http = bot.getHttpClient();
-        const response = await http.get(`/im/v1/messages/${msgId}`);
+        const response = await http.get<FeishuAPIResponse>(`/im/v1/messages/${msgId}`);
 
         if (response.data.code !== 0) {
             throw new Error(`获取消息失败: ${response.data.msg}`);
         }
 
-        const items = response.data.data?.items;
+        const dataPayload = response.data.data as { items?: FeishuMessage[] } | undefined;
+        const items = dataPayload?.items;
         const msg = Array.isArray(items) && items.length > 0 ? items[0] : undefined;
         if (!msg) {
             throw new Error('获取消息失败: 响应中无消息内容');
