@@ -4,6 +4,7 @@
  */
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from '@onebots/core';
 
 export interface RESTOptions {
     token: string;
@@ -41,10 +42,7 @@ export class DiscordREST {
         this.token = options.token;
         
         if (options.proxy?.url) {
-            const proxyUrl = new URL(options.proxy.url);
-            if (options.proxy.username) proxyUrl.username = options.proxy.username;
-            if (options.proxy.password) proxyUrl.password = options.proxy.password;
-            this.proxyUrl = proxyUrl.toString();
+            this.proxyUrl = buildProxyUrl(options.proxy);
         }
     }
 
@@ -57,12 +55,11 @@ export class DiscordREST {
 
         if (!this.proxyUrl || !isNode()) return;
 
-        try {
-            // @ts-ignore - https-proxy-agent 是可选依赖
-            const { HttpsProxyAgent } = await import('https-proxy-agent');
-            this.agent = new HttpsProxyAgent(this.proxyUrl);
-            console.log(`[DiscordREST] 已配置代理: ${this.proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
-        } catch {
+        const agent = await createHttpsProxyAgent({ url: this.proxyUrl });
+        if (agent) {
+            this.agent = agent;
+            console.log(`[DiscordREST] 已配置代理: ${maskProxyUrl(this.proxyUrl)}`);
+        } else {
             console.warn('[DiscordREST] https-proxy-agent 未安装，将直接连接');
         }
     }

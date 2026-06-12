@@ -14,6 +14,7 @@ import type {
     ZulipMessageEvent,
     ProxyConfig,
 } from './types.js';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent, ConnectionManager, RetryPresets } from '@onebots/core';
 
 const require = createRequire(import.meta.url);
 
@@ -21,8 +22,7 @@ export class ZulipBot extends EventEmitter {
     private config: ZulipConfig;
     private apiClient: AxiosInstance;
     private ws: WebSocket | null = null;
-    private wsReconnectTimer?: NodeJS.Timeout;
-    private reconnectAttempts: number = 0;
+    private connectionManager: ConnectionManager;
     private isConnected: boolean = false;
     private agent: any = null;
     private initialized: boolean = false;
@@ -31,6 +31,10 @@ export class ZulipBot extends EventEmitter {
         super();
         this.config = config;
         this.apiClient = this.createAPIClient();
+        this.connectionManager = new ConnectionManager(
+            () => this.connectWebSocket(),
+            RetryPresets.websocket,
+        );
     }
 
     /**
@@ -63,26 +67,16 @@ export class ZulipBot extends EventEmitter {
         if (!this.config.proxy?.url) return;
 
         try {
-            const proxyUrl = this.buildProxyUrl(this.config.proxy);
-            const { HttpsProxyAgent } = await import('https-proxy-agent');
-            this.agent = new HttpsProxyAgent(proxyUrl);
-            console.log(`[Zulip] 已配置代理: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
+            const agent = await createHttpsProxyAgent(this.config.proxy);
+            if (agent) {
+                this.agent = agent;
+                console.log(`[Zulip] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+            } else {
+                console.warn('[Zulip] 创建代理失败，将直接连接');
+            }
         } catch (error) {
             console.warn('[Zulip] 创建代理失败，将直接连接:', error);
         }
-    }
-
-    /**
-     * 构建代理 URL
-     */
-    private buildProxyUrl(proxy: ProxyConfig): string {
-        let url = proxy.url;
-        if (proxy.username && proxy.password) {
-            const protocol = url.split('://')[0];
-            const rest = url.split('://')[1];
-            url = `${protocol}://${proxy.username}:${proxy.password}@${rest}`;
-        }
-        return url;
     }
 
     /**
@@ -135,7 +129,6 @@ export class ZulipBot extends EventEmitter {
                 this.ws.on('open', () => {
                     console.log('[Zulip] WebSocket 连接成功');
                     this.isConnected = true;
-                    this.reconnectAttempts = 0;
                     resolve();
                 });
 
@@ -151,15 +144,13 @@ export class ZulipBot extends EventEmitter {
                 this.ws.on('error', (error) => {
                     console.error('[Zulip] WebSocket 错误:', error);
                     this.isConnected = false;
-                    if (this.reconnectAttempts === 0) {
-                        reject(error);
-                    }
+                    reject(error);
                 });
 
                 this.ws.on('close', () => {
                     console.log('[Zulip] WebSocket 连接已关闭');
                     this.isConnected = false;
-                    this.scheduleReconnect();
+                    this.connectionManager.scheduleReconnect();
                 });
 
             } catch (error) {
@@ -185,31 +176,6 @@ export class ZulipBot extends EventEmitter {
         } else {
             this.emit('event', event);
         }
-    }
-
-    /**
-     * 安排重连
-     */
-    private scheduleReconnect(): void {
-        if (this.config.websocket?.enabled === false) return;
-
-        const maxAttempts = this.config.websocket?.maxReconnectAttempts || 10;
-        if (this.reconnectAttempts >= maxAttempts) {
-            console.error('[Zulip] 达到最大重连次数，停止重连');
-            return;
-        }
-
-        this.reconnectAttempts++;
-        const interval = this.config.websocket?.reconnectInterval || 3000;
-
-        this.wsReconnectTimer = setTimeout(async () => {
-            console.log(`[Zulip] 尝试重连 (${this.reconnectAttempts}/${maxAttempts})...`);
-            try {
-                await this.connectWebSocket();
-            } catch (error) {
-                console.error('[Zulip] 重连失败:', error);
-            }
-        }, interval);
     }
 
     /**
@@ -347,10 +313,7 @@ export class ZulipBot extends EventEmitter {
      * 停止 Bot
      */
     async stop(): Promise<void> {
-        if (this.wsReconnectTimer) {
-            clearTimeout(this.wsReconnectTimer);
-            this.wsReconnectTimer = undefined;
-        }
+        this.connectionManager.stop();
 
         if (this.ws) {
             this.ws.close();

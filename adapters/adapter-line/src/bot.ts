@@ -5,11 +5,10 @@
  */
 
 import { EventEmitter } from 'events';
-import { createRequire } from 'module';
 import { createHmac } from 'crypto';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from '@onebots/core';
 import type {
     LineConfig,
-    ProxyConfig,
     WebhookEvent,
     MessageEvent,
     UserProfile,
@@ -19,7 +18,6 @@ import type {
     SendMessage,
     SendMessageResponse,
 } from './types.js';
-const require = createRequire(import.meta.url);
 const LINE_API_BASE = 'https://api.line.me/v2';
 const LINE_API_DATA = 'https://api-data.line.me/v2';
 
@@ -46,27 +44,19 @@ export class LineBot extends EventEmitter {
     /**
      * 初始化代理 Agent
      */
-    private initAgent(): void {
+    private async initAgent(): Promise<void> {
         if (this.initialized) return;
         this.initialized = true;
 
         if (!this.config.proxy?.url || !isNode()) return;
 
-        try {
-            const proxyUrl = this.buildProxyUrl(this.config.proxy);
-            const { HttpsProxyAgent } = require('https-proxy-agent');
-            this.agent = new HttpsProxyAgent(proxyUrl);
-            console.log(`[LineBot] 已配置代理: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
-        } catch {
+        const agent = await createHttpsProxyAgent(this.config.proxy);
+        if (agent) {
+            this.agent = agent;
+            console.log(`[LineBot] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+        } else {
             console.warn('[LineBot] https-proxy-agent 未安装，将直接连接');
         }
-    }
-
-    private buildProxyUrl(proxy: ProxyConfig): string {
-        const proxyUrl = new URL(proxy.url);
-        if (proxy.username) proxyUrl.username = proxy.username;
-        if (proxy.password) proxyUrl.password = proxy.password;
-        return proxyUrl.toString();
     }
 
     // ============================================
@@ -177,7 +167,7 @@ export class LineBot extends EventEmitter {
             baseUrl?: string;
         } = {}
     ): Promise<T> {
-        this.initAgent();
+        await this.initAgent();
 
         const { method = 'GET', body, baseUrl = LINE_API_BASE } = options;
         const url = `${baseUrl}${endpoint}`;

@@ -13,6 +13,7 @@ import type {
     WhatsAppMessageEvent,
     ProxyConfig,
 } from './types.js';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from '@onebots/core';
 
 const require = createRequire(import.meta.url);
 
@@ -55,27 +56,13 @@ export class WhatsAppBot extends EventEmitter {
 
         if (!this.config.proxy?.url) return;
 
-        try {
-            const proxyUrl = this.buildProxyUrl(this.config.proxy);
-            const { HttpsProxyAgent } = await import('https-proxy-agent');
-            this.agent = new HttpsProxyAgent(proxyUrl);
-            console.log(`[WhatsApp] 已配置代理: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
-        } catch (error) {
-            console.warn('[WhatsApp] 创建代理失败，将直接连接:', error);
+        const agent = await createHttpsProxyAgent(this.config.proxy);
+        if (agent) {
+            this.agent = agent;
+            console.log(`[WhatsApp] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+        } else {
+            console.warn('[WhatsApp] 创建代理失败，将直接连接');
         }
-    }
-
-    /**
-     * 构建代理 URL
-     */
-    private buildProxyUrl(proxy: ProxyConfig): string {
-        let url = proxy.url;
-        if (proxy.username && proxy.password) {
-            const protocol = url.split('://')[0];
-            const rest = url.split('://')[1];
-            url = `${protocol}://${proxy.username}:${proxy.password}@${rest}`;
-        }
-        return url;
     }
 
     /**

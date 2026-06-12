@@ -249,7 +249,7 @@ export class App extends BaseApp {
                 writeFileSync(this.logCacheFile, '', 'utf-8');
             }
         } catch (e) {
-            console.error('清空日志缓存失败:', e);
+            this.logger.error('清空日志缓存失败:', e);
         }
     }
 
@@ -493,6 +493,7 @@ export class App extends BaseApp {
                 try {
                     payload = JSON.parse(raw.toString());
                 } catch {
+                    // 无效的消息数据，忽略该条消息
                     return;
                 }
                 switch (payload.action) {
@@ -673,7 +674,9 @@ export class App extends BaseApp {
                     this.terminalClients.forEach(c => {
                         try {
                             c.send(JSON.stringify({ type: 'exit' }));
-                        } catch (e) { }
+                        } catch {
+                            // 客户端可能已断开，将在后续连接清理中移除
+                        }
                     });
                     this.terminalClients.clear();
                 });
@@ -695,12 +698,14 @@ export class App extends BaseApp {
                         this.terminalClients.forEach(c => {
                             try {
                                 c.send(JSON.stringify({ type: 'output', data: '\r\n\x1b[33m[服务即将重启]\x1b[0m' }));
-                            } catch (e) { }
+                            } catch {
+                                // 客户端可能已断开，忽略
+                            }
                         });
                         setTimeout(() => process.exit(100), 500);
                     }
                 } catch (e) {
-                    console.error('终端消息处理失败:', e);
+                    this.logger.error('终端消息处理失败:', e);
                 }
             });
 
@@ -746,7 +751,7 @@ export class App extends BaseApp {
                     }
                 }
             } catch (error) {
-                console.error('读取日志缓存失败:', error);
+                this.logger.error('读取日志缓存失败:', error);
             }
             // 定时发送心跳
             const heartbeat = setInterval(() => {
@@ -1112,7 +1117,9 @@ export namespace App {
     async function safeImport(name: string) {
         try {
             return await import(name);
-        } catch { }
+        } catch {
+            // 模块不存在，返回 undefined 表示加载失败
+        }
     }
     export async function loadAdapterFactory(platform: string,maybeNames=[
         `@onebots/adapter-${platform}`,
@@ -1125,7 +1132,7 @@ export namespace App {
             require(modName);
             return true;
         }catch (e) {
-            console.warn(`[onebots] Failed to load adapter ${modName}: ${e}`);
+            console.warn(`[onebots] 加载适配器 ${modName} 失败: ${e}`);
             return loadAdapterFactory(platform,maybeNames);
         }
     }
@@ -1140,7 +1147,7 @@ export namespace App {
             require(modName);
             return true;
         }catch (e) {
-            console.warn(`[onebots] Failed to load protocol ${modName}: ${e}`);
+            console.warn(`[onebots] 加载协议 ${modName} 失败: ${e}`);
             return loadProtocolFactory(name,maybeNames);
         }
     }
@@ -1161,11 +1168,11 @@ export function createOnebots(
     }
     if (!isStartWithConfigFile) {
         writeFileSync(BaseApp.configPath, yaml.dump(config));
-        console.log(`已自动保存配置到：${BaseApp.configPath}`);
+        console.log("[onebots] 已自动保存配置到:", BaseApp.configPath);
     }
     if (!existsSync(BaseApp.dataDir)) {
         mkdirSync(BaseApp.dataDir);
-        console.log("已为你创建数据存储目录", BaseApp.dataDir);
+        console.log("[onebots] 已创建数据存储目录:", BaseApp.dataDir);
     }
     config = yaml.load(readFileSync(BaseApp.configPath, "utf8")) as BaseApp.Config;
     const hasAccessToken = !!(config as { access_token?: string }).access_token?.trim();

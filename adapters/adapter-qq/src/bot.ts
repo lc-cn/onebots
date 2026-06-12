@@ -5,6 +5,7 @@
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
 import type { RouterContext,Next } from 'onebots';
+import { ConnectionManager, RetryPresets } from 'onebots';
 import { Ed25519 } from './ed25519.js';
 import {
     IntentBits,
@@ -36,7 +37,7 @@ export class QQBot extends EventEmitter {
     private sessionId: string = '';
     private lastSeq: number = 0;
     private heartbeatInterval: NodeJS.Timeout | null = null;
-    private reconnectAttempts: number = 0;
+    private connectionManager: ConnectionManager;
     private isResuming: boolean = false;
     private resumeFailCount: number = 0; // RESUME 失败次数
     private user: QQUser | null = null;
@@ -76,6 +77,19 @@ export class QQBot extends EventEmitter {
         if (this.config.mode === 'webhook' && this.config.secret) {
             this.ed25519 = new Ed25519(this.config.secret);
         }
+
+        this.connectionManager = new ConnectionManager(
+            () => this.connect(),
+            RetryPresets.websocket,
+            {
+                onConnected: () => {
+                    // 连接成功后的初始化逻辑（READY/RESUMED 中也会处理）
+                },
+                onMaxRetriesReached: () => {
+                    this.emit('error', new Error('重连次数超过最大限制'));
+                },
+            }
+        );
     }
     
     /**
@@ -369,7 +383,7 @@ export class QQBot extends EventEmitter {
         
         if (eventType === 'RESUMED') {
             this.isResuming = false;
-            this.reconnectAttempts = 0;
+            this.connectionManager.resetAttempts();
             this.resumeFailCount = 0; // RESUME 成功，重置失败计数
             this.emit('resumed');
             return;
@@ -402,7 +416,7 @@ export class QQBot extends EventEmitter {
     private handleReady(data: ReadyEvent): void {
         this.sessionId = data.session_id;
         this.user = data.user;
-        this.reconnectAttempts = 0;
+        this.connectionManager.resetAttempts();
         this.isResuming = false;
         this.resumeFailCount = 0; // 连接成功，重置 RESUME 失败计数
         
@@ -415,24 +429,17 @@ export class QQBot extends EventEmitter {
     private handleInvalidSession(resumable: boolean): void {
         if (resumable) {
             this.isResuming = true;
-            setTimeout(() => this.connect(), 1000);
         } else {
             this.sessionId = '';
             this.lastSeq = 0;
-            setTimeout(() => this.connect(), 5000);
         }
+        this.connectionManager.scheduleReconnect();
     }
     
     /**
      * 处理重连
      */
     private handleReconnect(): void {
-        if (this.reconnectAttempts >= (this.config.maxRetry || 10)) {
-            this.emit('error', new Error('重连次数超过最大限制'));
-            return;
-        }
-        
-        this.reconnectAttempts++;
         // 只有在有 sessionId 且 isResuming 标志为 true 时才尝试 RESUME
         // 如果 isResuming 已经被清除（比如 4902 错误），则使用 IDENTIFY
         // 注意：不要覆盖已经在 close 事件中设置的 isResuming 值
@@ -442,12 +449,8 @@ export class QQBot extends EventEmitter {
             // 如果没有 sessionId 或 isResuming 为 false，使用 IDENTIFY
             this.isResuming = false;
         }
-        
-        const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-        
-        setTimeout(() => {
-            this.connect();
-        }, delay);
+
+        this.connectionManager.scheduleReconnect();
     }
     
     /**
@@ -874,7 +877,8 @@ export class QQBot extends EventEmitter {
      */
     async stop(): Promise<void> {
         this.stopHeartbeat();
-        
+        this.connectionManager.stop();
+
         if (this.ws) {
             this.ws.close(1000, 'Normal closure');
             this.ws = null;

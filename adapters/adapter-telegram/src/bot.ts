@@ -4,10 +4,8 @@
  */
 import { EventEmitter } from 'events';
 import { Bot, Context, InputFile } from 'grammy';
-import { createRequire } from 'module';
+import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from '@onebots/core';
 import type { TelegramConfig, ProxyConfig } from './types.js';
-
-const require = createRequire(import.meta.url);
 
 export class TelegramBot extends EventEmitter {
     private bot!: Bot;
@@ -30,45 +28,22 @@ export class TelegramBot extends EventEmitter {
         
         const botConfig: ConstructorParameters<typeof Bot>[1] = {};
         
-        // 配置代理 - grammy 使用 node-fetch，需要配置 agent
-        if (this.config.proxy?.url) {
-            try {
-                const { HttpsProxyAgent } = require('https-proxy-agent');
-                
-                const proxyUrl = this.buildProxyUrl(this.config.proxy);
-                const agent = new HttpsProxyAgent(proxyUrl);
-                
-                // 通过 baseFetchConfig 传递 agent 给 node-fetch
-                botConfig.client = {
-                    baseFetchConfig: {
-                        agent: agent,
-                        compress: true,
-                    },
-                };
-                
-                console.log(`[Telegram] 已配置代理: ${this.config.proxy.url}`);
-            } catch (error) {
-                console.warn('[Telegram] 创建代理失败，将直接连接:', error);
-            }
+        const agent = await createHttpsProxyAgent(this.config.proxy);
+        if (agent) {
+            botConfig.client = {
+                baseFetchConfig: {
+                    agent: agent,
+                    compress: true,
+                },
+            };
+            console.log(`[Telegram] 已配置代理: ${this.config.proxy.url}`);
+        } else {
+            console.warn('[Telegram] 创建代理失败，将直接连接');
         }
         
         this.bot = new Bot(this.config.token, botConfig);
         this.setupEventHandlers();
         this.initialized = true;
-    }
-
-    /**
-     * 构建代理 URL（包含认证信息）
-     */
-    private buildProxyUrl(proxy: ProxyConfig): string {
-        const proxyUrl = new URL(proxy.url);
-        if (proxy.username) {
-            proxyUrl.username = proxy.username;
-        }
-        if (proxy.password) {
-            proxyUrl.password = proxy.password;
-        }
-        return proxyUrl.toString();
     }
 
     /**

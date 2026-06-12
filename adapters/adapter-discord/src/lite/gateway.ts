@@ -5,6 +5,7 @@
 
 import { EventEmitter } from 'events';
 import { DiscordREST } from './rest.js';
+import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from '@onebots/core';
 
 // Gateway Opcodes
 export enum GatewayOpcodes {
@@ -65,31 +66,44 @@ export class DiscordGateway extends EventEmitter {
     private resumeGatewayUrl: string | null = null;
     private rest: DiscordREST;
     private isReady = false;
+    private connectionManager: ConnectionManager;
 
     constructor(options: GatewayOptions) {
         super();
         this.token = options.token;
         this.intents = options.intents;
-        
+
         if (options.proxy?.url) {
-            const proxyUrl = new URL(options.proxy.url);
-            if (options.proxy.username) proxyUrl.username = options.proxy.username;
-            if (options.proxy.password) proxyUrl.password = options.proxy.password;
-            this.proxyUrl = proxyUrl.toString();
+            this.proxyUrl = buildProxyUrl(options.proxy);
         }
 
         this.rest = new DiscordREST({ token: options.token, proxy: options.proxy });
+
+        // 使用 ConnectionManager 管理重连，支持指数退避
+        this.connectionManager = new ConnectionManager(
+            async () => {
+                if (this.resumeGatewayUrl && this.sessionId) {
+                    try {
+                        await this.connectToGateway(`${this.resumeGatewayUrl}?v=10&encoding=json`);
+                        this.resume();
+                        return;
+                    } catch {
+                        // 恢复失败，降级到完整连接
+                    }
+                }
+                const { url } = await this.rest.getGatewayBot();
+                await this.connectToGateway(`${url}?v=10&encoding=json`);
+            },
+            RetryPresets.websocket,
+            { logger: console }
+        );
     }
 
     /**
      * 连接 Gateway
      */
     async connect(): Promise<void> {
-        // 获取 Gateway URL
-        const { url } = await this.rest.getGatewayBot();
-        const gatewayUrl = `${url}?v=10&encoding=json`;
-
-        return this.connectToGateway(gatewayUrl);
+        await this.connectionManager.start();
     }
 
     /**
@@ -99,27 +113,15 @@ export class DiscordGateway extends EventEmitter {
         // 动态导入 ws
         const { WebSocket } = await import('ws');
         
-        // 如果有代理，使用 socks-proxy-agent (WebSocket 更稳定)
+        // 如果有代理，使用共享代理工具
         let wsOptions: any = {};
         if (this.proxyUrl) {
-            try {
-                // 优先使用 SOCKS5 代理 (对 WebSocket 支持更好)
-                // 将 http:// 代理转换为 socks5:// (Clash 混合端口同时支持)
-                const socksUrl = this.proxyUrl.replace(/^https?:\/\//, 'socks5://');
-                // @ts-ignore - socks-proxy-agent 是可选依赖
-                const { SocksProxyAgent } = await import('socks-proxy-agent');
-                wsOptions.agent = new SocksProxyAgent(socksUrl);
-                console.log(`[Gateway] 使用 SOCKS5 代理: ${socksUrl}`);
-            } catch {
-                // 回退到 https-proxy-agent
-                try {
-                    // @ts-ignore - https-proxy-agent 是可选依赖
-                    const { HttpsProxyAgent } = await import('https-proxy-agent');
-                    wsOptions.agent = new HttpsProxyAgent(this.proxyUrl);
-                    console.log(`[Gateway] 使用 HTTP 代理: ${this.proxyUrl}`);
-                } catch {
-                    console.warn('[Gateway] 代理 agent 未安装，将直接连接');
-                }
+            const agent = await createProxyAgent({ url: this.proxyUrl }, true);
+            if (agent) {
+                wsOptions.agent = agent;
+                console.log(`[Gateway] 已配置代理`);
+            } else {
+                console.warn('[Gateway] 代理 agent 未安装，将直接连接');
             }
         }
 
@@ -138,10 +140,10 @@ export class DiscordGateway extends EventEmitter {
                 console.log(`[Gateway] WebSocket 关闭: ${code} - ${reason.toString()}`);
                 this.cleanup();
                 this.emit('close', code, reason.toString());
-                
-                // 自动重连
+
+                // 使用 ConnectionManager 管理重连，支持指数退避
                 if (code !== 1000 && code !== 4004) {
-                    setTimeout(() => this.reconnect(), 5000);
+                    this.connectionManager.scheduleReconnect(new Error(`WebSocket closed with code ${code}`));
                 }
             });
 
@@ -196,7 +198,8 @@ export class DiscordGateway extends EventEmitter {
 
             case GatewayOpcodes.Reconnect:
                 console.log('[Gateway] 收到重连请求');
-                this.reconnect();
+                this.cleanup();
+                this.connectionManager.scheduleReconnect(new Error('Discord requested reconnect'));
                 break;
 
             case GatewayOpcodes.InvalidSession:
@@ -349,27 +352,6 @@ export class DiscordGateway extends EventEmitter {
     }
 
     /**
-     * 重连
-     */
-    private async reconnect() {
-        this.cleanup();
-        
-        if (this.resumeGatewayUrl && this.sessionId) {
-            // 尝试恢复
-            try {
-                await this.connectToGateway(`${this.resumeGatewayUrl}?v=10&encoding=json`);
-                this.resume();
-                return;
-            } catch {
-                // 恢复失败，重新连接
-            }
-        }
-
-        // 重新连接
-        await this.connect();
-    }
-
-    /**
      * 清理资源
      */
     private cleanup() {
@@ -389,6 +371,7 @@ export class DiscordGateway extends EventEmitter {
      * 断开连接
      */
     disconnect() {
+        this.connectionManager.stop();
         this.sessionId = null;
         this.resumeGatewayUrl = null;
         this.cleanup();
