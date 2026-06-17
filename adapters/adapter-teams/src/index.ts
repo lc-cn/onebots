@@ -6,7 +6,6 @@ import type { Schema } from 'onebots';
  * @onebots/adapter-teams
  */
 export { TeamsAdapter } from './adapter.js';
-export { TeamsBot } from './bot.js';
 export type { TeamsConfig, TeamsUser, TeamsChannel, TeamsMessage, TeamsActivity, TeamsEvent, TeamsChannelData, TeamsChannelDataTenant, TeamsEntity, SendMessageOptions } from './types.js';
 
 const teamsSchema: Schema = {

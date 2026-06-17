@@ -2,13 +2,10 @@
  * 邮件适配器入口文件
  */
 export { EmailAdapter } from './adapter.js';
-export { EmailBot } from './bot.js';
 import { AdapterRegistry } from 'onebots';
 import type { Schema } from 'onebots';
 
 export type { EmailConfig, SMTPConfig, IMAPConfig, EmailMessage, ProxyConfig } from './types.js';
-export * from './adapter.js';
-export * from './bot.js';
 
 const emailSchema: Schema = {
 	account_id: { type: 'string', required: true, label: '账号标识' },

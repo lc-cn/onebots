@@ -4,7 +4,6 @@ import type { Schema } from 'onebots';
 
 export { FeishuEndpoint, type FeishuConfig, type FeishuEndpointType } from './types.js';
 export * from './adapter.js';
-export * from './bot.js';
 
 const feishuSchema: Schema = {
 	account_id: { type: 'string', required: true, label: '账号标识' },

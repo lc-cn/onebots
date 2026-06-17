@@ -3,7 +3,6 @@ import type { Schema } from "onebots";
 
 export type { WechatIlinkConfig } from "./types.js";
 export * from "./adapter.js";
-export * from "./bot.js";
 export {
     ensureWechatClawbotContextTokenTable,
     SqliteClawbotContextTokenStore,

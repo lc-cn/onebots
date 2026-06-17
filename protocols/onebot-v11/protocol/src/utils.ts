@@ -1,3 +1,6 @@
+import { createRequire } from "module";
+const _require = createRequire(import.meta.url);
+
 /**
  * OneBot protocol utilities
  * Provides reusable helper methods for OneBot protocols
@@ -35,12 +38,12 @@ export namespace OneBotUtils {
      */
     export function getPackageVersion(packageName: string): string {
         try {
-            const path = require("path");
+            const path = _require("path");
             const pkgPath = path.resolve(
-                path.dirname(require.resolve(packageName)),
+                _require.resolve(packageName),
                 "../package.json",
             );
-            const pkg = require(pkgPath);
+            const pkg = _require(pkgPath);
             return pkg.version;
         } catch (e) {
             return "unknown";
