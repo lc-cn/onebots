@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-slack",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "onebots Slack适配器",
   "type": "module",
   "main": "lib/index.js",

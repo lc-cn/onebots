@@ -1,6 +1,6 @@
 {
   "name": "@onebots/protocol-onebot-v11",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "onebots OneBot 11 协议实现",
   "type": "module",
   "main": "lib/index.js",
