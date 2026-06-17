@@ -92,6 +92,7 @@ export default defineConfig({
   
   resolve: {
     alias: {
+      '@': resolve(__dirname, './packages/core/src'),
       '@onebots/core': resolve(__dirname, './packages/core/src'),
       '@onebots/protocol-onebot-v11': resolve(__dirname, './packages/protocol-onebot-v11/src'),
       '@onebots/protocol-onebot-v12': resolve(__dirname, './packages/protocol-onebot-v12/src'),
