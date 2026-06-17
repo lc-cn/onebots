@@ -6,6 +6,7 @@
 **/config.yaml
 onebots.log
 **/tsconfig.tsbuildinfo
+
 # Dependencies
 node_modules
 
@@ -13,11 +14,41 @@ node_modules
 **/lib
 **/dist
 
+# Accidental tsc output at project roots (config files, scripts)
+/vitest.config.js
+/vitest.config.js.map
+/vitest.config.d.ts
+/vitest.config.d.ts.map
+/vitest.config.d.mts
+/vitest.config.d.mts.map
+**/vitest.config.js
+**/vitest.config.js.map
+**/vitest.config.d.ts
+**/vitest.config.d.ts.map
+**/vitest.config.d.mts
+**/vitest.config.d.mts.map
+**/vite.config.mjs
+**/vite.config.mjs.map
+**/vite.config.d.mts
+**/vite.config.d.mts.map
+
+# VitePress compiled output
+**/vite.config.mts.js
+**/vite.config.mts.js.map
+**/vite.config.mts.d.ts
+**/vite.config.mts.d.ts.map
+
 # Accidental tsc output in src/ (tsconfig outDir should be ./lib)
 **/src/**/*.js
 **/src/**/*.js.map
 **/src/**/*.d.ts
 **/src/**/*.d.ts.map
+
+# Compiled test artifacts
+__tests__/**/*.js
+__tests__/**/*.js.map
+__tests__/**/*.d.ts
+__tests__/**/*.d.ts.map
 
 # Auto-generated
 **/auto-imports.d.ts
@@ -27,6 +58,13 @@ node_modules
 .vscode/
 .idea/
 
+# OS
+.DS_Store
+
 # Docs cache
 /docs/.vitepress/cache/
 /.vitepress/cache
+/docs/vite.config.mts.js
+/docs/vite.config.mts.js.map
+/docs/vite.config.mts.d.ts
+/docs/vite.config.mts.d.ts.map
