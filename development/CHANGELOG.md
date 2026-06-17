@@ -1,5 +1,28 @@
 # onebots-dev
 
+## 1.1.12
+
+### Patch Changes
+
+- Updated dependencies [4564d68]
+  - onebots@1.2.0
+  - @onebots/adapter-dingtalk@3.0.0
+  - @onebots/adapter-discord@3.0.0
+  - @onebots/adapter-feishu@3.0.0
+  - @onebots/adapter-kook@3.0.0
+  - @onebots/adapter-qq@3.0.0
+  - @onebots/adapter-slack@3.0.0
+  - @onebots/adapter-teams@3.0.0
+  - @onebots/adapter-telegram@3.0.0
+  - @onebots/adapter-wechat@3.0.0
+  - @onebots/adapter-wechat-clawbot@3.0.0
+  - @onebots/adapter-wecom@3.0.0
+  - @onebots/adapter-wecom-kf@2.0.0
+  - @onebots/protocol-milky-v1@3.0.0
+  - @onebots/protocol-onebot-v11@3.0.0
+  - @onebots/protocol-onebot-v12@3.0.0
+  - @onebots/protocol-satori-v1@3.0.0
+
 ## 1.1.11
 
 ### Patch Changes
