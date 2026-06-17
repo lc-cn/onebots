@@ -13,6 +13,12 @@ node_modules
 **/lib
 **/dist
 
+# Accidental tsc output in src/ (tsconfig outDir should be ./lib)
+**/src/**/*.js
+**/src/**/*.js.map
+**/src/**/*.d.ts
+**/src/**/*.d.ts.map
+
 # Auto-generated
 **/auto-imports.d.ts
 **/components.d.ts
