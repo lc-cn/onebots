@@ -2,7 +2,6 @@ import { AdapterRegistry } from 'onebots';
 import type { Schema } from 'onebots';
 
 export { WhatsAppAdapter } from './adapter.js';
-export { WhatsAppBot } from './bot.js';
 export type {
     WhatsAppConfig,
     WhatsAppMessageEvent,

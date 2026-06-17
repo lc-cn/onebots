@@ -26,8 +26,7 @@ export type {
 // 导出适配器
 export * from './adapter.js';
 
-// 导出 Bot
-export { DiscordBot } from './bot.js';
+// 导出 Bot 类型（Bot 类为内部实现）
 export type { DiscordUser, DiscordMessage, DiscordGuild, DiscordChannel, DiscordMember, DiscordAttachment } from './bot.js';
 
 // 导出轻量版客户端（用于独立使用或 Serverless）

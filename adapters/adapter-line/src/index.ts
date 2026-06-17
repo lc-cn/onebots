@@ -30,9 +30,6 @@ export type {
 // 导出适配器
 export * from './adapter.js';
 
-// 导出 Bot
-export { LineBot } from './bot.js';
-
 const lineSchema: Schema = {
     account_id: { type: 'string', required: true, label: '账号标识' },
     channel_access_token: { type: 'string', required: true, label: 'Channel Access Token' },

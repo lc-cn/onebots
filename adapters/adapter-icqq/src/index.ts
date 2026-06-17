@@ -3,7 +3,6 @@ import type { Schema } from 'onebots';
 
 export type { ICQQConfig, ICQQProtocol, Platform } from './types.js';
 export * from './adapter.js';
-export * from './bot.js';
 
 const icqqSchema: Schema = {
 	account_id: { type: 'string', required: true, label: 'QQ 号' },

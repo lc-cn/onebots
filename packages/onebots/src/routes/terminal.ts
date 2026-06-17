@@ -4,6 +4,12 @@ import * as pty from "@karinjs/node-pty";
 import { existsSync, readFileSync } from "fs";
 import type { App } from "../app.js";
 
+/** SSE 心跳间隔（毫秒） */
+const SSE_HEARTBEAT_INTERVAL_MS = 30000;
+
+/** 终端重启延迟（毫秒） */
+const TERMINAL_RESTART_DELAY_MS = 500;
+
 /**
  * Register terminal and log-streaming endpoints.
  *
@@ -104,7 +110,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
                             // 客户端可能已断开，忽略
                         }
                     });
-                    setTimeout(() => process.exit(100), 500);
+                    setTimeout(() => process.exit(100), TERMINAL_RESTART_DELAY_MS);
                 }
             } catch (e) {
                 app.logger.error('终端消息处理失败:', e);
@@ -162,7 +168,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
                 clearInterval(heartbeat);
                 app.logClients.delete(ctx.res);
             }
-        }, 30000);
+        }, SSE_HEARTBEAT_INTERVAL_MS);
 
         // 监听连接关闭
         ctx.req.on('close', () => {

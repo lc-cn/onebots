@@ -5,7 +5,6 @@ import type { Schema } from 'onebots';
 
 export type { KookConfig } from './types.js';
 export * from './adapter.js';
-export * from './bot.js';
 
 const kookSchema: Schema = {
 	account_id: { type: 'string', required: true, label: '账号标识' },
