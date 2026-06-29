@@ -342,6 +342,20 @@ kook.zhin:
 
 详细配置请参考：[Kook 适配器配置](/config/adapter/kook)
 
+## 黑盒语音平台
+
+```yaml
+heychat.my_bot:
+  token: 'your_bot_token'
+  chat_version: '1.30.0'
+
+  onebot.v11:
+    use_http: true
+    use_ws: true
+```
+
+详细配置请参考：[黑盒语音适配器配置](/config/adapter/heychat)
+
 ## 多账号配置
 
 可以配置同一平台的多个账号：
@@ -492,6 +506,7 @@ wechat.prod:
 - [QQ 平台](/platform/qq)
 - [Discord 平台](/platform/discord)
 - [Kook 平台](/platform/kook)
+- [黑盒语音平台](/platform/heychat)
 - [钉钉平台](/platform/dingtalk)
 - [Telegram 平台](/platform/telegram)
 - [飞书平台](/platform/feishu)

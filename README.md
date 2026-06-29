@@ -94,7 +94,7 @@ flowchart LR
 
 ## 核心特性（摘要）
 
-- **15+ 平台适配器**：QQ 官方、ICQQ、微信、钉钉、飞书、企业微信、Telegram、Slack、Discord、Kook、Teams、Line、邮件、WhatsApp、Zulip 等（详见下文列表）
+- **15+ 平台适配器**：QQ 官方、ICQQ、微信、钉钉、飞书、企业微信、Telegram、Slack、Discord、Kook、黑盒语音、Teams、Line、邮件、WhatsApp、Zulip 等（详见下文列表）
 - **多协议**：OneBot v11 / v12、Satori v1、Milky v1
 - **Monorepo**：`pnpm workspace` — `packages/*`、`adapters/*`、`protocols/*`
 - **可选 Web 管理界面**：`@onebots/web`
@@ -228,6 +228,7 @@ pnpm add imhelper @imhelper/onebot-v11
 | QQ 官方机器人 | `@onebots/adapter-qq` |
 | ICQQ | `@onebots/adapter-icqq`（私有源配置见文档） |
 | Kook | `@onebots/adapter-kook` |
+| 黑盒语音 | `@onebots/adapter-heychat` |
 | 微信公众号 | `@onebots/adapter-wechat` |
 | Discord / Telegram / Slack / … | `@onebots/adapter-discord` 等 |
 | 飞书 / 钉钉 / 企业微信 | `@onebots/adapter-feishu` 等 |

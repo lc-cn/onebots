@@ -15,6 +15,7 @@ onebots 目前支持以下平台适配器：
 | **QQ官方机器人** | ✅ 已实现 | `@onebots/adapter-qq` | 支持QQ频道、群聊、私聊 |
 | **ICQQ** | ✅ 已实现 | `@onebots/adapter-icqq` | 支持QQ非官方协议，功能更完整 |
 | **Kook** | ✅ 已实现 | `@onebots/adapter-kook` | 支持频道、私聊、服务器管理 |
+| **黑盒语音** | ✅ Beta | `@onebots/adapter-heychat` | 支持斜杠命令、频道消息、WebSocket |
 | **微信** | ✅ 已实现 | `@onebots/adapter-wechat` | 支持微信公众号 |
 | **微信 ClawBot (iLink)** | ✅ 已实现 | `@onebots/adapter-wechat-clawbot` | 微信 iLink Bot HTTP，扫码登录与长轮询 |
 | **Discord** | ✅ 已实现 | `@onebots/adapter-discord` | 支持Discord机器人 |
@@ -34,6 +35,7 @@ onebots 目前支持以下平台适配器：
 - [QQ 适配器文档](/platform/qq)
 - [ICQQ 适配器文档](/platform/icqq)
 - [Kook 适配器文档](/platform/kook)
+- [黑盒语音适配器文档](/platform/heychat)
 - [微信适配器文档](/platform/wechat)
 - [微信 ClawBot (iLink) 文档](/platform/wechat-clawbot)
 - [Discord 适配器文档](/platform/discord)
