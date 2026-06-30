@@ -59,10 +59,10 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             this.config.ws_reverse.forEach(url => this.startWsReverse(url));
         }
 
-        // Send connect meta event
-        this.dispatchMetaEvent("connect", {
-            version: this.getVersionInfo(),
-        });
+        // 正向/反向 WebSocket 均需要心跳，不能只在 startWebSocket 里启动
+        if (this.config.use_ws || this.config.ws_reverse?.length > 0) {
+            this.setupHeartbeat();
+        }
     }
 
     /**
@@ -631,6 +631,23 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     }
 
     /**
+     * 启动心跳定时器（每个协议实例仅一次）
+     */
+    private setupHeartbeat(): void {
+        if (!this.config.heartbeat_interval || this.heartbeatTimer) {
+            return;
+        }
+
+        // 配置为秒，转换为毫秒；至少 1 秒
+        const intervalMs = Math.max(Number(this.config.heartbeat_interval) || 1, 1) * 1000;
+        this.heartbeatTimer = setInterval(() => {
+            this.dispatchMetaEvent("heartbeat", {
+                interval: intervalMs,
+            });
+        }, intervalMs);
+    }
+
+    /**
      * Dispatch meta event
      */
     private dispatchMetaEvent(detailType: string, extra: any = {}): void {
@@ -713,18 +730,18 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
 
             this.logger.info(`WebSocket client connected: ${this.path}`);
 
-            // Send connect meta event
-            this.dispatchMetaEvent("connect", {
-                version: this.getVersionInfo(),
-            });
-
-            // Listen for dispatch events and send to client
+            // 必须先注册监听器，再发送 connect，否则客户端收不到
             const onDispatch = (data: string) => {
                 if (ws.readyState === WebSocket.OPEN) {
                     ws.send(data);
                 }
             };
             this.on("dispatch", onDispatch);
+
+            // Send connect meta event
+            this.dispatchMetaEvent("connect", {
+                version: this.getVersionInfo(),
+            });
 
             // Handle incoming API calls
             ws.on("message", async (data) => {
@@ -757,17 +774,6 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 this.logger.error("WebSocket error:", error);
             });
         });
-
-        // Setup heartbeat (only once per protocol instance)
-        if (this.config.heartbeat_interval && !this.heartbeatTimer) {
-            // 配置为秒，转换为毫秒；至少 1 秒
-            const intervalMs = Math.max(Number(this.config.heartbeat_interval) || 1, 1) * 1000;
-            this.heartbeatTimer = setInterval(() => {
-                this.dispatchMetaEvent("heartbeat", {
-                    interval: intervalMs,
-                });
-            }, intervalMs);
-        }
 
         this.logger.info(`WebSocket server listening on ${this.path}`);
     }
