@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import * as path from "node:path";
 import { prepareCliInvocation } from "./cli-invocation.js";
 
 describe("OneBots CLI v2", () => {
@@ -64,5 +66,16 @@ describe("OneBots CLI v2", () => {
             kind: "invalid",
             message: "-c 缺少参数",
         });
+    });
+
+    it("can load the built core package in a plain Node process", () => {
+        expect(() => execFileSync(process.execPath, [
+            "--input-type=module",
+            "-e",
+            "await import('@onebots/core'); process.exit(0)",
+        ], {
+            cwd: path.resolve("packages/onebots"),
+            stdio: "pipe",
+        })).not.toThrow();
     });
 });

@@ -1,5 +1,5 @@
 import * as crypto from "crypto";
-import { Dict } from "@/types.js";
+import { Dict } from "./types.js";
 import * as fs from "fs";
 import * as readline from "readline";
 import packageJson from "../package.json" with { type: "json" };

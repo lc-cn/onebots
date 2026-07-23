@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import { deepClone, deepMerge } from "./utils.js";
-import { Adapter } from "@/adapter.js";
+import { Adapter } from "./adapter.js";
 import { Logger } from "log4js";
 import { ProtocolRegistry } from "./registry.js";
 import { Protocol } from "./protocol.js";

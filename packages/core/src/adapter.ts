@@ -1,7 +1,7 @@
 import { EventEmitter } from "events";
 import { BaseApp } from "./base-app.js";
 import { CommonTypes, CommonEvent } from "./types.js";
-import { Account } from "@/account.js";
+import { Account } from "./account.js";
 import { Logger } from "log4js";
 import { SqliteDB } from "./db.js";
 import { buildTableName, createId, resolveId, coerceId } from "./adapter-id-manager.js";
