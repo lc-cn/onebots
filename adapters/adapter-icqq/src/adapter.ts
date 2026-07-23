@@ -18,6 +18,7 @@ import type {
 import type {
     ICQQOfflineEvent,
     ICQQQRCodeEvent,
+    ICQQAuthEvent,
     ICQQSliderEvent,
     ICQQDeviceEvent,
     ICQQLoginErrorEvent,
@@ -375,8 +376,26 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
                 platform: 'icqq',
                 account_id: config.account_id,
                 type: 'qrcode',
-                hint: '请使用手机 QQ 扫描下方二维码登录',
+                hint: '请使用手机 QQ 扫描下方二维码，在手机上确认登录后点击下方「继续登录」按钮',
+                confirmable: true,
                 options: { blocks: [{ type: 'image', base64: imageBase64, alt: '登录二维码' }] },
+            } as unknown as Adapter.VerificationRequest);
+        });
+
+        bot.on('auth', (event: ICQQAuthEvent) => {
+            this.logger.warn(`ICQQ 需要身份验证:`, event);
+            const blocks: Adapter.VerificationBlock[] = [];
+            if (typeof event?.url === 'string' && event.url) {
+                blocks.push({ type: 'link', url: event.url, label: event.url });
+            }
+            blocks.push({ type: 'text', content: '请按提示完成身份验证，完成后点击下方「继续登录」按钮' });
+            this.emit('verification:request', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'auth',
+                hint: 'ICQQ 要求完成身份验证后才能继续登录',
+                confirmable: true,
+                options: { blocks },
             } as unknown as Adapter.VerificationRequest);
         });
 
@@ -584,6 +603,9 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         } else if (type === 'sms') {
             const code = (data.code ?? value) as string | undefined;
             if (typeof code === 'string') bot.submitSmsCode(code);
+        } else if (type === 'qrcode' || type === 'auth') {
+            // 新版 ICQQ 流程：扫码确认 / 身份验证完成后需显式调用 login() 继续
+            bot.continueLogin();
         } else {
             this.logger.debug(`submitVerification: 忽略类型 ${type} 或缺少参数`);
         }

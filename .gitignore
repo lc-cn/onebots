@@ -6,7 +6,8 @@
 **/config.yaml
 onebots.log
 **/tsconfig.tsbuildinfo
-
+/docs/.vitepress/cache
+/docs/.vitepress/.temp
 # Dependencies
 node_modules
 

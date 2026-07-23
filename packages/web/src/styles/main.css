@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ===== 设计令牌（运行时变量，.dark 下覆盖） ===== */
+:root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-raised: #f4f4f5;
+    --border: #e4e4e7;
+    --border-strong: #d4d4d8;
+    --fg: #18181b;
+    --fg-secondary: #52525b;
+    --fg-tertiary: #a1a1aa;
+
+    --accent: #059669;
+    --accent-hover: #047857;
+    --accent-fg: #ffffff;
+    --accent-soft: rgba(5, 150, 105, 0.1);
+
+    --success: #059669;
+    --success-soft: rgba(5, 150, 105, 0.1);
+    --warning: #d97706;
+    --warning-soft: rgba(217, 119, 6, 0.12);
+    --danger: #dc2626;
+    --danger-soft: rgba(220, 38, 38, 0.1);
+    --info: #0284c7;
+    --info-soft: rgba(2, 132, 199, 0.1);
+
+    --ring: rgba(5, 150, 105, 0.35);
+}
+
+.dark {
+    --bg: #0c0d0f;
+    --surface: #141619;
+    --surface-raised: #1c1f24;
+    --border: #26292f;
+    --border-strong: #3a3e46;
+    --fg: #e4e4e7;
+    --fg-secondary: #a1a1aa;
+    --fg-tertiary: #63636b;
+
+    --accent: #10b981;
+    --accent-hover: #34d399;
+    --accent-fg: #06281c;
+    --accent-soft: rgba(16, 185, 129, 0.14);
+
+    --success: #34d399;
+    --success-soft: rgba(52, 211, 153, 0.14);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.14);
+    --danger: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.14);
+    --info: #38bdf8;
+    --info-soft: rgba(56, 189, 248, 0.14);
+
+    --ring: rgba(16, 185, 129, 0.45);
+}
+
+/* ===== 映射为 Tailwind 工具类 ===== */
+@theme inline {
+    --color-bg: var(--bg);
+    --color-surface: var(--surface);
+    --color-surface-raised: var(--surface-raised);
+    --color-border: var(--border);
+    --color-border-strong: var(--border-strong);
+    --color-fg: var(--fg);
+    --color-fg-secondary: var(--fg-secondary);
+    --color-fg-tertiary: var(--fg-tertiary);
+    --color-accent: var(--accent);
+    --color-accent-hover: var(--accent-hover);
+    --color-accent-fg: var(--accent-fg);
+    --color-accent-soft: var(--accent-soft);
+    --color-success: var(--success);
+    --color-success-soft: var(--success-soft);
+    --color-warning: var(--warning);
+    --color-warning-soft: var(--warning-soft);
+    --color-danger: var(--danger);
+    --color-danger-soft: var(--danger-soft);
+    --color-info: var(--info);
+    --color-info-soft: var(--info-soft);
+    --color-ring: var(--ring);
+
+    --font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas,
+        "Courier New", monospace;
+
+    --radius-control: 0.5rem;
+    --radius-card: 0.75rem;
+}
+
+/* ===== 基础样式 ===== */
+html,
+body,
+#app {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+    background: var(--accent-soft);
+    color: var(--fg);
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--fg-tertiary);
+}
+
+/* 统一聚焦环 */
+:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-control);
+}
+
+/* 过渡只动 transform/opacity；尊重减少动态偏好 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

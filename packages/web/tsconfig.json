@@ -3,7 +3,6 @@
     "target": "ES2022",
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
     "moduleResolution": "bundler",
     "declaration": true,
     "declarationMap": true,

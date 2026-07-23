@@ -42,6 +42,7 @@ IM 平台原始事件 → Adapter（适配器）→ Account + id_map（统一 Co
 - 文档：VitePress（`docs/`）。
 - 版本管理：Changesets（`.changeset/`）。
 - Web 网关基于 Koa（`koa`、`@koa/router`、`koa-body`、`koa-static`、`koa-basic-auth`），WebSocket 用 `ws`，日志用 `log4js`。
+- Web 管理端（`packages/web`）：Vue 3 + Vite + Tailwind CSS v4 + 自研组件库（`packages/web/src/ui/`，禁止重新引入 Element Plus），图标用 `@tabler/icons-vue`，设计令牌集中在 `packages/web/src/styles/main.css`（明暗双主题，`.dark` class 切换）。
 
 ---
 

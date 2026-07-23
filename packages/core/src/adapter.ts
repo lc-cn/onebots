@@ -217,6 +217,7 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
         for (const account of startAccounts) {
             await account.start();
         }
+        this.logger.info(`Adapter for platform ${this.platform} started`);
     }
 
     async stop(account_id?: string): Promise<any> {
@@ -240,6 +241,7 @@ export namespace Adapter {
     export type VerificationBlock =
         | { type: 'image'; base64: string; alt?: string }
         | { type: 'image_url'; url: string; alt?: string }
+        | { type: 'qrcode'; content: string; alt?: string }
         | { type: 'link'; url: string; label?: string }
         | { type: 'text'; content: string }
         | { type: 'input'; key: string; placeholder?: string; maxLength?: number; secret?: boolean };
@@ -249,6 +251,8 @@ export namespace Adapter {
     export interface VerificationRequest {
         platform: string; account_id: string; type: string; hint: string;
         options?: VerificationRequestOptions; requestSmsAvailable?: boolean;
+        /** 为 true 时前端显示「确认」按钮（无需输入的验证，如扫码/身份验证后继续登录） */
+        confirmable?: boolean;
         data?: Record<string, unknown>; request_id?: string;
     }
 

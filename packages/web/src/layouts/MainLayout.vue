@@ -1,260 +1,178 @@
 <template>
-  <el-container class="onebots-container">
-    <!-- 顶部导航栏 -->
-    <el-header class="header">
-      <div class="header-content">
-        <div class="logo">
-          <el-icon :size="28"><Monitor /></el-icon>
-          <span class="title">onebots 管理平台</span>
-        </div>
-        <div class="header-actions">
-          <el-badge :value="onlineBotCount" :hidden="onlineBotCount === 0" type="success">
-            <el-button :icon="Connection" circle />
-          </el-badge>
-          <el-badge :value="verificationPending.length" :hidden="verificationPending.length === 0" type="warning">
-            <el-button :icon="Warning" circle @click="verification.requestOpenDrawer()" title="待处理验证" />
-          </el-badge>
-          <el-switch
-            v-model="isDark"
-            inline-prompt
-            :active-icon="Moon"
-            :inactive-icon="Sunny"
-            @change="toggleTheme"
-          />
-          <el-button :icon="SwitchButton" circle @click="handleLogout" />
-        </div>
-      </div>
-    </el-header>
+    <div class="flex h-screen overflow-hidden bg-bg">
+        <!-- 侧边栏 -->
+        <aside
+            class="flex flex-col border-r border-border bg-surface transition-[width] duration-200"
+            :class="isCollapse ? 'w-16' : 'w-[232px]'">
+            <!-- 品牌区 -->
+            <div class="flex h-14 items-center gap-2 border-b border-border px-4">
+                <IconRobot :size="22" class="shrink-0 text-accent" aria-hidden="true" />
+                <span v-if="!isCollapse" class="truncate font-semibold text-fg">onebots</span>
+            </div>
 
-    <el-container class="main-container">
-      <!-- 侧边栏 -->
-      <el-aside :width="isCollapse ? '64px' : '200px'" class="sidebar">
-        <el-menu
-          :default-active="currentRoute"
-          :collapse="isCollapse"
-          router
-        >
-          <el-menu-item index="/bots">
-            <el-icon><Monitor /></el-icon>
-            <template #title>机器人管理</template>
-          </el-menu-item>
-          <el-menu-item index="/config">
-            <el-icon><Setting /></el-icon>
-            <template #title>配置管理</template>
-          </el-menu-item>
-          <el-menu-item index="/system">
-            <el-icon><DataAnalysis /></el-icon>
-            <template #title>系统信息</template>
-          </el-menu-item>
-          <el-menu-item index="/terminal">
-            <el-icon><Monitor /></el-icon>
-            <template #title>Web 控制台</template>
-          </el-menu-item>
-          <el-menu-item index="/logs">
-            <el-icon><Document /></el-icon>
-            <template #title>系统日志</template>
-          </el-menu-item>
-        </el-menu>
-        <div class="collapse-btn">
-          <el-button
-            :icon="isCollapse ? Expand : Fold"
-            circle
-            @click="isCollapse = !isCollapse"
-          />
+            <!-- 导航区 -->
+            <nav class="flex-1 space-y-0.5 overflow-y-auto p-2">
+                <RouterLink
+                    v-for="item in menuItems"
+                    :key="item.to"
+                    :to="item.to"
+                    :title="isCollapse ? item.label : undefined"
+                    class="flex h-9 items-center gap-2.5 rounded-control px-3 text-sm transition-colors"
+                    :class="[
+                        isActive(item.to)
+                            ? 'bg-accent-soft font-medium text-accent'
+                            : 'text-fg-secondary hover:bg-surface-raised hover:text-fg',
+                        isCollapse ? 'justify-center px-0' : '',
+                    ]">
+                    <component :is="item.icon" :size="18" class="shrink-0" aria-hidden="true" />
+                    <span v-if="!isCollapse" class="truncate">{{ item.label }}</span>
+                </RouterLink>
+            </nav>
+
+            <!-- 底部操作区 -->
+            <div
+                class="flex items-center gap-1 border-t border-border p-2"
+                :class="isCollapse ? 'flex-col' : ''">
+                <button
+                    type="button"
+                    :title="isCollapse ? '展开侧边栏' : '折叠侧边栏'"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-control text-fg-secondary transition-colors hover:bg-surface-raised hover:text-fg"
+                    @click="isCollapse = !isCollapse">
+                    <IconLayoutSidebarLeftExpand v-if="isCollapse" :size="18" aria-hidden="true" />
+                    <IconLayoutSidebarLeftCollapse v-else :size="18" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    :title="isDark ? '切换为浅色模式' : '切换为深色模式'"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-control text-fg-secondary transition-colors hover:bg-surface-raised hover:text-fg"
+                    @click="toggleTheme(!isDark)">
+                    <IconSun v-if="isDark" :size="18" aria-hidden="true" />
+                    <IconMoon v-else :size="18" aria-hidden="true" />
+                </button>
+                <button
+                    type="button"
+                    title="退出登录"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-control text-fg-secondary transition-colors hover:bg-surface-raised hover:text-fg"
+                    @click="handleLogout">
+                    <IconLogout :size="18" aria-hidden="true" />
+                </button>
+            </div>
+        </aside>
+
+        <!-- 主区 -->
+        <div class="flex min-w-0 flex-1 flex-col">
+            <!-- 顶栏 -->
+            <header
+                class="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-6">
+                <h1 class="text-sm font-medium text-fg">{{ route.meta.title }}</h1>
+                <div class="flex items-center gap-3">
+                    <UiBadge variant="success" dot>在线 {{ onlineBotCount }}</UiBadge>
+                    <button
+                        type="button"
+                        title="待处理验证"
+                        class="relative inline-flex h-9 w-9 items-center justify-center rounded-control text-fg-secondary transition-colors hover:bg-surface-raised hover:text-fg"
+                        @click="verification.requestOpenDrawer()">
+                        <IconBell :size="18" aria-hidden="true" />
+                        <span
+                            v-if="verificationPending.length > 0"
+                            class="absolute top-0.5 right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] leading-none font-medium text-white">
+                            {{ verificationPending.length }}
+                        </span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 内容区 -->
+            <main class="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <UiAlert
+                    v-if="systemInfo?.isDefaultCredentials"
+                    variant="warning"
+                    title="安全提示"
+                    class="mx-6 mt-4 shrink-0">
+                    当前使用自动生成的默认账号，存在安全风险，请尽快前往
+                    <RouterLink to="/config" class="font-medium text-warning underline"
+                        >配置管理</RouterLink
+                    >
+                    修改「管理端用户名」与「管理端密码」。
+                </UiAlert>
+                <div class="min-h-0 flex-1">
+                    <router-view v-slot="{ Component }">
+                        <Transition
+                            mode="out-in"
+                            enter-active-class="transition-opacity duration-[120ms]"
+                            enter-from-class="opacity-0"
+                            enter-to-class="opacity-100"
+                            leave-active-class="transition-opacity duration-[120ms]"
+                            leave-from-class="opacity-100"
+                            leave-to-class="opacity-0">
+                            <div :key="route.path" class="h-full">
+                                <component :is="Component" />
+                            </div>
+                        </Transition>
+                    </router-view>
+                </div>
+            </main>
         </div>
-      </el-aside>
 
-      <!-- 主内容区 -->
-      <el-main class="content">
-        <el-alert
-          v-if="systemInfo?.isDefaultCredentials"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="security-banner"
-        >
-          <template #title>安全提示</template>
-          当前使用自动生成的默认账号，存在安全风险，请尽快前往
-          <router-link to="/config">配置管理</router-link>
-          修改「管理端用户名」与「管理端密码」。
-        </el-alert>
-        <router-view v-slot="{ Component }">
-          <transition name="fade-slide" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
-      </el-main>
-    </el-container>
-
-    <!-- 登录验证（滑块/扫码/设备锁/短信等） -->
-    <VerificationPanel
-      :pending="verificationPending"
-      :on-approve="(req, data) => verification.submit(req.platform, req.account_id, req.type, data)"
-      :on-reject="verification.dismiss"
-      :request-sms="verification.requestSms"
-      :should-open-drawer="verificationShouldOpen"
-      :reset-open-drawer="verification.resetOpenDrawer"
-    />
-  </el-container>
+        <!-- 登录验证（滑块/扫码/设备锁/短信等） -->
+        <VerificationPanel
+            :pending="verificationPending"
+            :on-approve="
+                (req, data) => verification.submit(req.platform, req.account_id, req.type, data)
+            "
+            :on-reject="verification.dismiss"
+            :request-sms="verification.requestSms"
+            :should-open-drawer="verificationShouldOpen"
+            :reset-open-drawer="verification.resetOpenDrawer" />
+    </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Monitor, Setting, DataAnalysis, Document, Connection, Moon, Sunny, Expand, Fold, SwitchButton, Warning } from '@element-plus/icons-vue'
-import { useTheme } from '../composables/useTheme'
-import { useApi } from '../composables/useApi'
-import { useVerification } from '../composables/useVerification'
-import { logout } from '../composables/useAuth'
-import VerificationPanel from '../components/VerificationPanel.vue'
+import { ref, computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import {
+    IconRobot,
+    IconSettings,
+    IconChartBar,
+    IconTerminal2,
+    IconFileText,
+    IconBell,
+    IconSun,
+    IconMoon,
+    IconLogout,
+    IconLayoutSidebarLeftCollapse,
+    IconLayoutSidebarLeftExpand,
+} from '@tabler/icons-vue';
+import { useTheme } from '../composables/useTheme';
+import { useApi } from '../composables/useApi';
+import { useVerification } from '../composables/useVerification';
+import { logout } from '../composables/useAuth';
+import UiBadge from '../ui/UiBadge.vue';
+import UiAlert from '../ui/UiAlert.vue';
+import VerificationPanel from '../components/VerificationPanel.vue';
 
-const route = useRoute()
-const router = useRouter()
-const currentRoute = computed(() => route.path)
+const route = useRoute();
+const router = useRouter();
 
-const { isDark, toggleTheme } = useTheme()
-const { onlineBotCount, systemInfo } = useApi()
-const verification = useVerification()
-const verificationPending = computed(() => verification.pending.value)
-const verificationShouldOpen = computed(() => verification.shouldOpenDrawer.value)
-const isCollapse = ref(false)
+const { isDark, toggleTheme } = useTheme();
+const { onlineBotCount, systemInfo } = useApi();
+const verification = useVerification();
+const verificationPending = computed(() => verification.pending.value);
+const verificationShouldOpen = computed(() => verification.shouldOpenDrawer.value);
+const isCollapse = ref(false);
+
+const menuItems = [
+    { to: '/bots', label: '机器人管理', icon: IconRobot },
+    { to: '/config', label: '配置管理', icon: IconSettings },
+    { to: '/system', label: '系统信息', icon: IconChartBar },
+    { to: '/terminal', label: 'Web 控制台', icon: IconTerminal2 },
+    { to: '/logs', label: '系统日志', icon: IconFileText },
+];
+
+const isActive = (path: string) => route.path === path || route.path.startsWith(`${path}/`);
 
 const handleLogout = async () => {
-  await logout()
-  router.replace('/login')
-}
+    await logout();
+    router.replace('/login');
+};
 </script>
-
-<style lang="scss" scoped>
-.onebots-container {
-  height: 100vh;
-  background: var(--bg-color);
-  overflow: hidden;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  background: var(--card-bg);
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-
-  .header-content {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-
-    .el-icon {
-      color: var(--text-primary);
-    }
-  }
-
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-}
-
-.main-container {
-  height: calc(100vh - 60px);
-  overflow: hidden;
-}
-
-.sidebar {
-  background: var(--card-bg);
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  transition: width 0.2s ease;
-
-  :deep(.el-menu) {
-    flex: 1;
-    background: transparent;
-    border: none;
-    overflow-y: auto;
-    overflow-x: hidden;
-
-    .el-menu-item {
-      margin: 4px 8px;
-      border-radius: 4px;
-      transition: all 0.2s ease;
-      color: var(--text-secondary);
-      border: 1px solid transparent;
-
-      &:hover {
-        background: var(--hover-bg);
-        color: var(--text-primary);
-        border-color: var(--border-color);
-      }
-
-      &.is-active {
-        background: var(--text-primary);
-        color: var(--bg-color);
-        border-color: var(--text-primary);
-        font-weight: 500;
-      }
-    }
-  }
-
-  .collapse-btn {
-    padding: 12px;
-    text-align: center;
-    border-top: 1px solid var(--border-color);
-
-    .el-button {
-      background: transparent;
-      border: 1px solid var(--border-color);
-      color: var(--text-secondary);
-
-      &:hover {
-        background: var(--hover-bg);
-        border-color: var(--text-primary);
-        color: var(--text-primary);
-      }
-    }
-  }
-}
-
-.security-banner {
-  margin: 12px 16px;
-  flex-shrink: 0;
-}
-
-.security-banner a {
-  color: var(--el-color-warning);
-  font-weight: 500;
-}
-
-.content {
-  background: var(--bg-color);
-  overflow: hidden;
-  padding: 0;
-}
-
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.2s ease;
-}
-
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateX(10px);
-}
-
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-10px);
-}
-</style>

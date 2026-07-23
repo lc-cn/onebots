@@ -456,7 +456,6 @@ export class BaseApp extends Koa {
             for (const [platform, adapter] of this.adapters) {
                 try {
                     await adapter.start();
-                    this.enhancedLogger.info(`Adapter started`, { platform });
                 } catch (error) {
                     const wrappedError = ErrorHandler.wrap(error, { platform });
                     this.enhancedLogger.error(wrappedError, { platform });

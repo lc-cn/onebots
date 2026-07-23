@@ -29,7 +29,7 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=an
     }
 
     get logger() {
-        return (this.#logger ||= this.app.getLogger(this.account_id));
+        return (this.#logger ||= this.app.getLogger(String(this.platform)));
     }
 
     get info() {
