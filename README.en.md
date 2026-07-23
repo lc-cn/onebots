@@ -131,13 +131,22 @@ pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
 npx onebots -r mock -p onebot-v11 -c config.yaml
 ```
 
-With an explicit subcommand, put **`-r` / `-p` / `-c` before `gateway`** (they attach to the root command):
+With an explicit command, use `run`; `-r` / `-p` / `-c` may appear before or after it:
 
 ```bash
-npx onebots -r mock -p onebot-v11 -c config.yaml gateway start
+npx onebots run -r mock -p onebot-v11 -c config.yaml
 ```
 
-Invoking `npx onebots` **with no subcommand** starts the gateway in the foreground.
+Invoking `npx onebots` **with no subcommand** starts the bridge in the foreground. To install the user-level supervised service:
+
+```bash
+npx onebots install -r mock -p onebot-v11 -c config.yaml
+npx onebots start
+npx onebots status
+npx onebots logs --follow
+```
+
+Add `--system` to the same lifecycle commands for the system-level service. `setup`, `ui`, `doctor`, and `update` provide configuration, terminal/Web management, diagnostics, and coordinated package updates.
 
 **CLI flags** (see `App.loadAdapterFactory` / `App.loadProtocolFactory` in source):
 
@@ -156,7 +165,7 @@ pnpm dev
 pnpm build && pnpm test
 ```
 
-**Requires Node.js ≥ 22.**
+**Requires Node.js ≥ 24.**
 
 ---
 

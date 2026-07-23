@@ -140,11 +140,22 @@ pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
 npx onebots -r mock -p onebot-v11 -c config.yaml
 ```
 
-无子命令时，上述命令即 **前台启动网关**。若要写子命令，请把 **`-r` / `-p` / `-c` 放在 `gateway` 之前**（Commander 把它们挂在根命令上），例如：
+无子命令时，上述命令即 **前台启动桥接服务**。也可使用显式的 `run`；`-r` / `-p` / `-c` 可放在命令前后：
 
 ```bash
-npx onebots -r mock -p onebot-v11 -c config.yaml gateway start
+npx onebots run -r mock -p onebot-v11 -c config.yaml
 ```
+
+安装用户级守护服务（安装后手动启动）：
+
+```bash
+npx onebots install -r mock -p onebot-v11 -c config.yaml
+npx onebots start
+npx onebots status
+npx onebots logs --follow
+```
+
+同样的命令加 `--system` 即操作系统级服务。`setup` 创建配置，`ui` 打开终端/Web 管理界面，`doctor` 诊断环境，`update` 更新主程序与已用插件。
 
 **CLI `-r` / `-p` 与包名对应关系**（源码：`App.loadAdapterFactory` / `App.loadProtocolFactory`）：
 

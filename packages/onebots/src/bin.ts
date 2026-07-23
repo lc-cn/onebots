@@ -2,4 +2,4 @@
 "use strict";
 import { runCli } from "./cli.js";
 
-runCli();
+await runCli();

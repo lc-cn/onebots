@@ -12,6 +12,7 @@
     "outDir": "lib",
     "rootDir": "src",
     "composite": true,
+    "jsx": "react-jsx",
     "types": ["node"],
     "paths": {
       "@/*": ["./src/*"]

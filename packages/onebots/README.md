@@ -123,7 +123,21 @@ await app.start();
 ## 命令行参数
 
 ```bash
-onebots [options]
+onebots [options]                 # 前台运行
+onebots run [options]             # 显式前台运行
+onebots install [options]         # 安装用户级服务
+onebots start|stop|restart        # 控制用户级服务
+onebots status|logs|uninstall
+
+# 添加 --system 后操作系统级服务
+onebots install --system [options]
+onebots start --system
+
+# 辅助命令
+onebots setup
+onebots ui [--web]
+onebots doctor [--fix] [--json]
+onebots update [--check] [--yes]
 
 选项:
   -c, --config <path>        配置文件路径 (默认: config.yaml)
@@ -131,6 +145,21 @@ onebots [options]
   -p, --protocol <protocol>  注册协议 (可多次使用)
   -h, --help                 显示帮助信息
 ```
+
+`install` 会记录当前 `-r` / `-p` / `-c` 和运行路径，设置开机或登录自启，但不立即启动。重复执行会更新固定的 `onebots-gateway` 服务。`uninstall` 不会删除配置、数据库或日志。
+
+### v2 CLI 迁移
+
+| v1 命令 | v2 命令 |
+|---|---|
+| `onebots gateway start` | `onebots run` |
+| `onebots gateway daemon` | `onebots install` 后执行 `onebots start` |
+| `onebots gateway stop` | `onebots stop` |
+| `onebots gateway service install` | `onebots install` |
+| `onebots gateway service status` | `onebots status` |
+| `onebots gateway service uninstall` | `onebots uninstall` |
+
+v2 不再接受 `gateway` / `service` / `daemon` 命令层级。默认命令操作用户级服务，需要系统级服务时添加 `--system`。
 
 ## 配置说明
 

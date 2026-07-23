@@ -38,6 +38,7 @@
     "@types/koa": "^3.0.1",
     "@types/koa-static": "^4.0.4",
     "@types/node": "^24.0.0",
+    "@types/react": "^19.1.10",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "tsx": "latest",
@@ -48,7 +49,13 @@
     "@onebots/core": "workspace:*",
     "@onebots/web": "workspace:*",
     "commander": "^14.0.3",
-    "koa-static": "^5.0.0"
+    "ink": "^6.3.1",
+    "js-yaml": "^4.1.0",
+    "koa-static": "^5.0.0",
+    "react": "^19.1.1"
+  },
+  "optionalDependencies": {
+    "node-windows": "^1.0.0-beta.8"
   },
   "repository": {
     "type": "git",

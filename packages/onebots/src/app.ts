@@ -92,14 +92,7 @@ export class App extends BaseApp {
         process.on('exit', () => {
             this.cleanupLogCache();
         });
-        process.on('SIGINT', () => {
-            this.cleanupLogCache();
-            process.exit();
-        });
-        process.on('SIGTERM', () => {
-            this.cleanupLogCache();
-            process.exit();
-        });
+        this.once('close', () => this.cleanupLogCache());
     }
 
     private initLogCache() {

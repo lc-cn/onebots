@@ -1,327 +1,264 @@
-/**
- * OneBots CLI：gateway 网关控制、config、setup、onboard、send
- */
+/** OneBots v2 单层命令行入口。 */
 import { Command } from "commander";
-import * as path from "path";
-import * as fs from "fs";
-import { createOnebots, App } from "./app.js";
-import { BaseApp, yaml } from "@onebots/core";
-import {
-    getPidPath,
-    readPid,
-    writePid,
-    removePidFile,
-    isProcessRunning,
-    stopProcess,
-    daemonStart,
-} from "./daemon.js";
-import {
-    serviceInstall,
-    serviceUninstall,
-    serviceStatus,
-} from "./service-manager.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { createRequire } from "node:module";
+import yaml from "js-yaml";
+import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
 
-const program = new Command();
+const packageVersion = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
 
-program
-    .name("onebots")
-    .description("OneBots CLI - 网关控制与配置管理")
-    .version("1.0.1")
-    .option("-c, --config <path>", "配置文件路径", "config.yaml")
-    .option("-r, --register <adapter>", "注册适配器（可多次）", collect, [])
-    .option("-p, --protocol <protocol>", "注册协议（可多次）", collect, []);
-
-function collect(val: string, prev: string[]): string[] {
-    return (prev || []).concat([val]);
+interface RuntimeCliOptions {
+    config: string;
+    register: string[];
+    protocol: string[];
 }
 
-function getConfigPath(configOption: string): string {
-    return path.resolve(process.cwd(), configOption);
+type CommandOptions = Partial<RuntimeCliOptions> & { system?: boolean };
+
+function collect(value: string, previous: string[]): string[] {
+    return [...(previous || []), value];
 }
 
-async function loadAdaptersAndProtocols(adapters: string[], protocols: string[]): Promise<void> {
-    for (const adapter of adapters) {
-        const ok = await App.loadAdapterFactory(adapter);
-        if (!ok) {
-            console.warn(`[onebots] 加载适配器 ${adapter} 失败，请检查是否已安装`);
-        }
+function addRuntimeOptions(command: Command, defaults = false): Command {
+    command.option("-c, --config <path>", "配置文件路径", defaults ? "config.yaml" : undefined);
+    command.option("-r, --register <adapter>", "注册适配器（可多次）", collect, defaults ? [] : undefined);
+    command.option("-p, --protocol <protocol>", "注册协议（可多次）", collect, defaults ? [] : undefined);
+    return command;
+}
+
+function normalizedOptions(program: Command, command?: Command): RuntimeCliOptions {
+    const root = program.opts<RuntimeCliOptions>();
+    const local = command?.opts<CommandOptions>() ?? {};
+    return {
+        config: local.config ?? root.config ?? "config.yaml",
+        register: [...(root.register ?? []), ...(local.register ?? [])],
+        protocol: [...(root.protocol ?? []), ...(local.protocol ?? [])],
+    };
+}
+
+function scopeFor(command: Command): ServiceScope {
+    return command.opts<{ system?: boolean }>().system ? "system" : "user";
+}
+
+function configPathForServiceCommand(program: Command, command: Command): string {
+    const options = normalizedOptions(program, command);
+    const explicitlyConfigured = program.getOptionValueSource("config") === "cli" || command.getOptionValueSource("config") === "cli";
+    if (!explicitlyConfigured) {
+        const installed = new ServiceController(scopeFor(command)).readSpec();
+        if (installed) return installed.configPath;
     }
-    for (const protocol of protocols) {
-        await App.loadProtocolFactory(protocol);
-    }
+    return path.resolve(options.config);
 }
 
-async function runGatewayStart(configPath: string, adapters: string[], protocols: string[]): Promise<void> {
-    await loadAdaptersAndProtocols(adapters, protocols);
-    createOnebots(configPath).start();
+function serviceCommand(program: Command, name: string, description: string, action: (controller: ServiceController, command: Command) => Promise<void> | void): Command {
+    const command = program.command(name).description(description).option("--system", "操作系统级服务");
+    command.action(async () => action(new ServiceController(scopeFor(command)), command));
+    return command;
 }
 
-// ---------- gateway 子命令 ----------
-const gateway = program.command("gateway").description("网关服务（start/daemon/stop/service）");
+export function createCli(): Command {
+    const program = addRuntimeOptions(new Command(), true)
+        .name("onebots")
+        .description("OneBots - 平台 Bot 与框架协议的轻量桥接服务")
+        .version(packageVersion)
+        .allowExcessArguments(true);
 
-gateway
-    .command("start")
-    .description("前台启动网关")
-    .action(async () => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        await runGatewayStart(configPath, opts.register || [], opts.protocol || []);
-    });
-
-gateway
-    .command("daemon")
-    .description("后台启动网关")
-    .action(async () => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        await loadAdaptersAndProtocols(opts.register || [], opts.protocol || []);
-        const pid = daemonStart({
-            configPath,
-            adapters: opts.register || [],
-            protocols: opts.protocol || [],
-            nodePath: process.execPath,
-            binPath: process.argv[1],
+    const run = addRuntimeOptions(program.command("run").description("前台运行 OneBots 桥接服务"));
+    run.action(async () => {
+        const options = normalizedOptions(program, run);
+        const { runBridge } = await import("./runtime.js");
+        await runBridge({
+            configPath: path.resolve(options.config),
+            adapters: options.register,
+            protocols: options.protocol,
         });
-        writePid(configPath, pid);
-        console.log(`网关已在后台启动，PID: ${pid}`);
-        console.log(`PID 文件: ${getPidPath(configPath)}`);
-        process.exit(0);
     });
 
-gateway
-    .command("stop")
-    .description("停止网关")
-    .action(async () => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        const pid = readPid(configPath);
-        if (pid === null) {
-            console.error("[onebots] 未找到 PID 文件，网关可能未以后台方式运行");
-            process.exit(2);
-        }
-        if (!isProcessRunning(pid)) {
-            console.warn("[onebots] 进程已不存在，清理 PID 文件");
-            removePidFile(configPath);
-            process.exit(0);
-        }
-        stopProcess(pid);
-        removePidFile(configPath);
-        console.log("网关已停止");
-        process.exit(0);
-    });
-
-const gatewayService = gateway.command("service").description("系统服务（install/uninstall/status）");
-
-gatewayService
-    .command("install")
-    .description("安装网关为系统服务")
-    .action(async () => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        await serviceInstall(configPath);
-    });
-
-gatewayService
-    .command("uninstall")
-    .description("卸载网关系统服务")
-    .action(async () => {
-        await serviceUninstall();
-    });
-
-gatewayService
-    .command("status")
-    .description("查看网关服务状态")
-    .action(async () => {
-        await serviceStatus();
-    });
-
-// ---------- config 子命令 ----------
-const configCmd = program.command("config").description("命令式修改配置（get/set/list）");
-
-configCmd
-    .command("get <key>")
-    .description("获取配置项")
-    .action(async (key: string) => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        if (!fs.existsSync(configPath)) {
-            console.error("[onebots] 配置文件不存在，请先运行 onebots setup");
-            process.exit(1);
-        }
-        const raw = fs.readFileSync(configPath, "utf8");
-        const config: Record<string, unknown> = (yaml.load(raw) as Record<string, unknown>) || {};
-        const keys = key.split(".");
-        let cur: unknown = config;
-        for (const k of keys) {
-            cur = (cur as Record<string, unknown>)?.[k];
-            if (cur === undefined) break;
-        }
-        console.log(cur === undefined ? "" : String(cur));
-    });
-
-configCmd
-    .command("set <key> <value>")
-    .description("设置配置项")
-    .action(async (key: string, value: string) => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        if (!fs.existsSync(configPath)) {
-            console.error("[onebots] 配置文件不存在，请先运行 onebots setup");
-            process.exit(1);
-        }
-        const raw = fs.readFileSync(configPath, "utf8");
-        const config: Record<string, unknown> = (yaml.load(raw) as Record<string, unknown>) || {};
-        const keys = key.split(".");
-        let cur: Record<string, unknown> = config;
-        for (let i = 0; i < keys.length - 1; i++) {
-            const k = keys[i];
-            if (!(cur[k] instanceof Object)) cur[k] = {};
-            cur = cur[k] as Record<string, unknown>;
-        }
-        const last = keys[keys.length - 1];
-        const num = Number(value);
-        cur[last] = value === "true" ? true : value === "false" ? false : Number.isNaN(num) ? value : num;
-        fs.writeFileSync(configPath, yaml.dump(config), "utf8");
-        console.log(`已设置 ${key} = ${value}`);
-    });
-
-configCmd
-    .command("list")
-    .description("列出全部配置")
-    .action(async () => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        if (!fs.existsSync(configPath)) {
-            console.error("[onebots] 配置文件不存在，请先运行 onebots setup");
-            process.exit(1);
-        }
-        const raw = fs.readFileSync(configPath, "utf8");
-        const config: Record<string, unknown> = (yaml.load(raw) as Record<string, unknown>) || {};
-        console.log(yaml.dump(config));
-    });
-
-// ---------- setup ----------
-program
-    .command("setup")
-    .description("初始化 OneBots（创建配置目录与默认配置）")
-    .action(async () => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        const configDir = path.dirname(configPath);
-        if (fs.existsSync(configPath)) {
-            console.log("配置文件已存在:", configPath);
-            process.exit(0);
-        }
-        if (!fs.existsSync(configDir)) {
-            fs.mkdirSync(configDir, { recursive: true });
-        }
-        const samplePath = path.resolve(import.meta.dirname, "./config.sample.yaml");
-        fs.copyFileSync(samplePath, configPath);
-        const dataDir = path.join(configDir, "data");
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir, { recursive: true });
-        }
-        console.log("已初始化，配置文件:", configPath);
-        console.log("请修改配置后使用 onebots gateway start 启动");
-        process.exit(0);
-    });
-
-// ---------- onboard ----------
-program
-    .command("onboard")
-    .description("引导式调整配置")
-    .action(async () => {
-        const opts = program.opts();
-        const configPath = getConfigPath(opts.config);
-        if (!fs.existsSync(configPath)) {
-            console.error("[onebots] 请先运行 onebots setup");
-            process.exit(1);
-        }
-        const readline = await import("readline");
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        const ask = (q: string): Promise<string> =>
-            new Promise((resolve) => rl.question(q, resolve));
-        let config: Record<string, unknown> = (yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {};
-        const port = await ask("HTTP 端口 [6727]: ");
-        if (port) (config as Record<string, unknown>).port = parseInt(port, 10) || 6727;
-        const logLevel = await ask("日志级别 (trace/debug/info/warn/error) [info]: ");
-        if (logLevel) (config as Record<string, unknown>).log_level = logLevel || "info";
-        fs.writeFileSync(configPath, yaml.dump(config), "utf8");
-        console.log("配置已更新:", configPath);
-        rl.close();
-        process.exit(0);
-    });
-
-// ---------- send ----------
-program
-    .command("send <target_id> <message>")
-    .description("通过已运行的网关发送消息")
-    .requiredOption("--target_type <type>", "private | group | channel")
-    .requiredOption("--channel <channel>", "发信 bot，格式 platform.account_id（如 qq.my_bot）")
-    .option("--url <baseUrl>", "网关 base URL（默认从 -c 读取 port/path 构造）")
-    .action(async (target_id: string, message: string, options: { target_type: string; channel: string; url?: string }) => {
-        const opts = program.opts();
-        let baseUrl = options.url;
-        let auth: Record<string, string> = {};
-        if (!baseUrl) {
-            const configPath = getConfigPath(opts.config);
-            if (!fs.existsSync(configPath)) {
-                console.error("[onebots] 配置文件不存在，请指定 -c 或 --url");
-                process.exit(1);
-            }
-            const config = yaml.load(fs.readFileSync(configPath, "utf8")) as {
-                port?: number;
-                path?: string;
-                username?: string;
-                password?: string;
-                access_token?: string;
-            };
-            const port = config?.port ?? 6727;
-            const pathPrefix = config?.path ?? "";
-            baseUrl = `http://127.0.0.1:${port}${pathPrefix}`;
-            if (config?.access_token) {
-                auth = { Authorization: `Bearer ${config.access_token}` };
-            } else if (config?.username && config?.password) {
-                auth = {
-                    Authorization: "Basic " + Buffer.from(`${config.username}:${config.password}`).toString("base64"),
-                };
-            }
-        }
-        const body = {
-            channel: options.channel,
-            target_id,
-            target_type: options.target_type,
-            message: message || "",
+    const install = addRuntimeOptions(program.command("install").description("安装 OneBots 守护服务"))
+        .option("--system", "安装系统级服务");
+    install.action(async () => {
+        const options = normalizedOptions(program, install);
+        const configPath = path.resolve(options.config);
+        if (!fs.existsSync(configPath)) throw new CliError(`配置文件不存在: ${configPath}`, 2);
+        const missing = findMissingPlugins(options.register, options.protocol, process.cwd());
+        if (missing.length) throw new CliError(`插件未安装: ${missing.join(", ")}`, 2);
+        const spec: ServiceSpec = {
+            scope: scopeFor(install),
+            configPath,
+            adapters: options.register,
+            protocols: options.protocol,
+            nodePath: process.execPath,
+            binPath: path.resolve(process.argv[1]),
+            workingDirectory: process.cwd(),
         };
-        try {
-            const res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/send`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...auth },
-                body: JSON.stringify(body),
-            });
-            const text = await res.text();
-            if (!res.ok) {
-                console.error("[onebots] 发送失败:", res.status, text);
-                process.exit(2);
-            }
-            console.log(text || "发送成功");
-        } catch (e) {
-            console.error("[onebots] 请求失败，请确认网关已启动（onebots gateway start 或 onebots gateway daemon）:", e);
-            process.exit(2);
-        }
-        process.exit(0);
+        await new ServiceController(spec.scope).install(spec);
+        console.log(`已安装${spec.scope === "system" ? "系统级" : "用户级"} OneBots 服务（未立即启动）`);
+        console.log(`启动: onebots start${spec.scope === "system" ? " --system" : ""}`);
     });
 
-// 无子命令时默认执行 gateway start（仅当没有未被选项消耗的剩余参数时）
-program.action(async () => {
-    // 使用 program.args：Commander 解析后只包含未被 -r/-p/-c 等消耗的剩余参数。
-    // 用 process.argv 会把 -r/-p 的值（如 kook、config.yaml）误判为位置参数导致不启动。
-    if (program.args.length > 0) return; // 有剩余位置参数则交给 Commander 显示 unknown command
-    const opts = program.opts();
-    const configPath = getConfigPath(opts.config);
-    await runGatewayStart(configPath, opts.register || [], opts.protocol || []);
-});
+    serviceCommand(program, "start", "启动已安装的 OneBots 服务", async controller => {
+        await controller.start();
+        console.log("OneBots 服务已启动");
+    });
+    serviceCommand(program, "stop", "停止 OneBots 服务", async controller => {
+        await controller.stop();
+        console.log("OneBots 服务已停止");
+    });
+    serviceCommand(program, "restart", "重启 OneBots 服务", async controller => {
+        await controller.restart();
+        console.log("OneBots 服务已重启");
+    });
+    serviceCommand(program, "status", "查看 OneBots 服务状态", controller => {
+        const status = controller.status();
+        console.log(status.installed ? (status.running ? "运行中" : "已安装，未运行") : "未安装");
+        if (status.detail) console.log(status.detail);
+        if (!status.installed) process.exitCode = 2;
+    });
+    const logs = serviceCommand(program, "logs", "查看 OneBots 服务日志", async (controller, command) => {
+        const options = command.opts<{ follow?: boolean; lines?: string }>();
+        const output = await controller.logs({ follow: options.follow, lines: Number(options.lines ?? 100) });
+        if (output) console.log(output);
+    });
+    logs.option("-f, --follow", "持续跟随日志").option("-n, --lines <n>", "显示最近行数", "100");
+    serviceCommand(program, "uninstall", "卸载 OneBots 服务（保留用户数据）", async controller => {
+        await controller.uninstall();
+        console.log("OneBots 服务已卸载，配置和数据已保留");
+    });
 
-export function runCli(): void {
-    program.parse();
+    const setup = addRuntimeOptions(program.command("setup").description("引导创建或更新 OneBots 配置"))
+        .option("--force", "备份后覆盖已有配置");
+    setup.action(async () => {
+        const { runSetup } = await import("./setup.js");
+        const options = normalizedOptions(program, setup);
+        await runSetup(path.resolve(options.config), { force: setup.opts().force, adapters: options.register, protocols: options.protocol });
+    });
+
+    const ui = addRuntimeOptions(program.command("ui").description("打开 OneBots 终端运维面板"))
+        .option("--system", "查看系统级服务")
+        .option("--web", "直接打开 Web 管理端");
+    ui.action(async () => {
+        const { runUi } = await import("./ui.js");
+        await runUi({ configPath: configPathForServiceCommand(program, ui), scope: scopeFor(ui), webOnly: Boolean(ui.opts().web) });
+    });
+
+    const doctor = addRuntimeOptions(program.command("doctor").description("诊断 OneBots 配置与服务"))
+        .option("--system", "检查系统级服务")
+        .option("--fix", "修复安全且无破坏性的问题")
+        .option("--json", "输出 JSON");
+    doctor.action(async () => {
+        const options = normalizedOptions(program, doctor);
+        const { runDoctor, printDoctorReport } = await import("./doctor.js");
+        const report = await runDoctor({
+            configPath: configPathForServiceCommand(program, doctor), adapters: options.register, protocols: options.protocol,
+            scope: scopeFor(doctor), fix: Boolean(doctor.opts().fix),
+        });
+        printDoctorReport(report, Boolean(doctor.opts().json));
+        if (!report.ok) process.exitCode = 1;
+    });
+
+    const update = addRuntimeOptions(program.command("update").description("检查并更新 OneBots 与已用插件"))
+        .option("--system", "更新系统级服务定义")
+        .option("--check", "仅检查可用更新")
+        .option("--yes", "非交互确认更新");
+    update.action(async () => {
+        const options = normalizedOptions(program, update);
+        const { runUpdate } = await import("./updater.js");
+        await runUpdate({ adapters: options.register, protocols: options.protocol, scope: scopeFor(update), check: Boolean(update.opts().check), yes: Boolean(update.opts().yes) });
+    });
+
+    registerConfigCommands(program);
+    registerSendCommand(program);
+
+    program.action(async () => {
+        if (program.args.length) throw new CliError(`未知命令: ${program.args[0]}`, 2);
+        const options = normalizedOptions(program);
+        const { runBridge } = await import("./runtime.js");
+        await runBridge({ configPath: path.resolve(options.config), adapters: options.register, protocols: options.protocol });
+    });
+    return program;
+}
+
+function findMissingPlugins(adapters: string[], protocols: string[], cwd: string): string[] {
+    const require = createRequire(path.join(cwd, "package.json"));
+    const groups = [
+        ...adapters.map(name => [`@onebots/adapter-${name}`, `onebots-adapter-${name}`, name]),
+        ...protocols.map(name => [`@onebots/protocol-${name}`, `onebots-protocol-${name}`, name]),
+    ];
+    return groups.filter(candidates => !candidates.some(candidate => {
+        try { require.resolve(candidate); return true; } catch { return false; }
+    })).map(candidates => candidates[0]);
+}
+
+function registerConfigCommands(program: Command): void {
+    const config = addRuntimeOptions(program.command("config").description("查询或修改配置"));
+    config.command("get <key>").action((key: string) => {
+        const file = path.resolve(normalizedOptions(program, config).config);
+        const value = key.split(".").reduce<unknown>((current, part) => (current as Record<string, unknown>)?.[part], readConfig(file));
+        console.log(value === undefined ? "" : String(value));
+    });
+    config.command("set <key> <value>").action((key: string, value: string) => {
+        const file = path.resolve(normalizedOptions(program, config).config);
+        const data = readConfig(file);
+        const keys = key.split(".");
+        let current = data;
+        for (const part of keys.slice(0, -1)) {
+            if (!current[part] || typeof current[part] !== "object") current[part] = {};
+            current = current[part] as Record<string, unknown>;
+        }
+        const numeric = Number(value);
+        current[keys.at(-1)!] = value === "true" ? true : value === "false" ? false : Number.isNaN(numeric) ? value : numeric;
+        backupAndWriteConfig(file, data);
+        console.log(`已设置 ${key}`);
+    });
+    config.command("list").action(() => console.log(yaml.dump(readConfig(path.resolve(normalizedOptions(program, config).config)))));
+}
+
+function readConfig(file: string): Record<string, unknown> {
+    if (!fs.existsSync(file)) throw new CliError(`配置文件不存在: ${file}`, 2);
+    return (yaml.load(fs.readFileSync(file, "utf8")) as Record<string, unknown>) || {};
+}
+
+function backupAndWriteConfig(file: string, data: Record<string, unknown>): void {
+    if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak`);
+    const temporary = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(temporary, yaml.dump(data), "utf8");
+    fs.renameSync(temporary, file);
+}
+
+function registerSendCommand(program: Command): void {
+    const send = addRuntimeOptions(program.command("send <target_id> <message>").description("通过运行中的网关发送消息"))
+        .requiredOption("--target_type <type>", "private | group | channel")
+        .requiredOption("--channel <channel>", "发信 bot，格式 platform.account_id")
+        .option("--url <baseUrl>", "网关 base URL");
+    send.action(async (targetId: string, message: string) => {
+        const options = normalizedOptions(program, send);
+        const local = send.opts<{ target_type: string; channel: string; url?: string }>();
+        const config = readConfig(path.resolve(options.config));
+        const baseUrl = local.url || `http://127.0.0.1:${config.port ?? 6727}${config.path ?? ""}`;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (config.access_token) headers.Authorization = `Bearer ${config.access_token}`;
+        else if (config.username && config.password) headers.Authorization = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`;
+        const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/send`, {
+            method: "POST", headers,
+            body: JSON.stringify({ channel: local.channel, target_id: targetId, target_type: local.target_type, message }),
+        });
+        const text = await response.text();
+        if (!response.ok) throw new CliError(`发送失败 (${response.status}): ${text}`, 2);
+        console.log(text || "发送成功");
+    });
+}
+
+export class CliError extends Error {
+    constructor(message: string, public readonly exitCode = 1) { super(message); }
+}
+
+export async function runCli(argv = process.argv): Promise<void> {
+    try {
+        await createCli().parseAsync(argv);
+    } catch (error) {
+        const code = error instanceof CliError ? error.exitCode : 1;
+        console.error(`[onebots] ${(error as Error).message}`);
+        process.exitCode = code;
+    }
 }
