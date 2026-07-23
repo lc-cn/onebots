@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-zulip",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "onebots Zulip 适配器",
   "type": "module",
   "main": "lib/index.js",

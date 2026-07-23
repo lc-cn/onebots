@@ -1,5 +1,15 @@
 # @onebots/protocol-milky-v1
 
+## 3.0.1
+
+### Patch Changes
+
+- 0ef9ed5: 修复反向 WebSocket 断线重连时 `dispatch` 事件监听器泄漏的问题：每次重连都会新增监听且旧监听不移除，多个监听器共享同一个 `ws` 闭包变量，导致重连成功后 connect/heartbeat/消息等事件被重复发送 N 次（N=重连次数）。现已在连接关闭时移除对应监听器。
+- Updated dependencies [0519d6d]
+- Updated dependencies [d9e67a0]
+- Updated dependencies [fa90690]
+  - onebots@1.2.1
+
 ## 3.0.0
 
 ### Patch Changes

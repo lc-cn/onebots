@@ -1,5 +1,23 @@
 # onebots
 
+## 1.2.1
+
+### Patch Changes
+
+- 0519d6d: Replace the nested gateway/service CLI with a Pastel-powered flat single-service interface, add setup, UI, doctor, and update commands, and delegate process supervision to native operating-system service managers.
+- d9e67a0: feat(adapter-heychat): 新增黑盒语音官方机器人适配器
+  - WebSocket 长连接、心跳与自动重连
+  - 斜杠命令 (type=50) 与普通频道消息 (type=5，实验性)
+  - 频道消息发送/删除与房间信息查询
+
+- fa90690: Build development workspace dependencies before startup, deduplicate repeated plugin flags, and report missing plugin build output as one actionable diagnostic.
+- Updated dependencies [922a341]
+- Updated dependencies [15b2540]
+- Updated dependencies [15b2540]
+- Updated dependencies [15b2540]
+  - @onebots/core@1.2.1
+  - @onebots/web@1.0.8
+
 ## 1.2.0
 
 ### Minor Changes
