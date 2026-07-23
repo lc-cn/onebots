@@ -6,15 +6,23 @@
 import { ValidationError, ConfigError } from './errors.js';
 
 export { ValidationError };
-
+export interface Choice<T = any> {
+    label: string;
+    value: T;
+}
 export interface ValidationRule<T = any> {
     required?: boolean;
     type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
     min?: number;
     max?: number;
     pattern?: RegExp;
-    enum?: any[];
-    validator?: (value: T) => boolean | string;
+    /** 带展示文案的枚举选项（Web 下拉据此渲染） */
+    choices?: Array<Choice<T>>;
+    /**
+     * 自定义校验：返回 true / null / undefined 表示通过；
+     * 返回 false 或错误文案表示失败
+     */
+    validator?: (value: T) => boolean | string | null | undefined;
     default?: T | (() => T);
     transform?: (value: any) => T;
     /** 用于表单展示的标签 */
@@ -25,9 +33,9 @@ export interface ValidationRule<T = any> {
     placeholder?: string;
 }
 
-export interface Schema {
+export type Schema = {
     [key: string]: ValidationRule | Schema;
-}
+};
 
 /**
  * 配置验证器
@@ -131,16 +139,23 @@ export class ConfigValidator {
                 }
             }
 
-            // 枚举检查
-            if (validationRule.enum && !validationRule.enum.includes(finalValue)) {
-                errors.push(`${currentPath} must be one of: ${validationRule.enum.join(', ')}`);
+            // choices 取值校验
+            const allowed = validationRule.choices?.map(c => c.value);
+            if (allowed && allowed.length > 0 && !allowed.includes(finalValue)) {
+                errors.push(`${currentPath} must be one of: ${allowed.join(', ')}`);
             }
 
-            // 自定义验证器
+            // 自定义验证器：true / null / undefined 通过；false 或 string 为失败
             if (validationRule.validator) {
                 const validationResult = validationRule.validator(finalValue);
-                if (validationResult !== true) {
-                    errors.push(`${currentPath}: ${validationResult || 'validation failed'}`);
+                if (validationResult === false || typeof validationResult === 'string') {
+                    errors.push(
+                        `${currentPath}: ${
+                            typeof validationResult === 'string'
+                                ? validationResult
+                                : 'validation failed'
+                        }`,
+                    );
                 }
             }
         }
@@ -172,7 +187,16 @@ export class ConfigValidator {
      * 判断是否为嵌套schema
      */
     private static isSchema(rule: ValidationRule | Schema): rule is Schema {
-        return !('required' in rule) && !('type' in rule) && typeof rule === 'object';
+        if (typeof rule !== 'object' || rule === null) return false;
+        return !(
+            'required' in rule ||
+            'type' in rule ||
+            'choices' in rule ||
+            'default' in rule ||
+            'validator' in rule ||
+            'transform' in rule ||
+            'label' in rule
+        );
     }
 
     /**
@@ -223,8 +247,18 @@ export const BaseAppConfigSchema: Schema = {
     },
     log_level: {
         type: 'string',
-        enum: ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'mark', 'off'],
+        choices: [
+            { value: 'trace', label: 'trace' },
+            { value: 'debug', label: 'debug' },
+            { value: 'info', label: 'info' },
+            { value: 'warn', label: 'warn' },
+            { value: 'error', label: 'error' },
+            { value: 'fatal', label: 'fatal' },
+            { value: 'mark', label: 'mark' },
+            { value: 'off', label: 'off' },
+        ],
         default: 'info',
+        label: '日志等级',
     },
     /** 站点根静态文件目录（相对 BaseApp.configDir 或绝对路径），用于可信域名校验文件等 */
     public_static_dir: {

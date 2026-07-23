@@ -15,7 +15,15 @@ const qqSchema: Schema = {
 	removeAt: { type: 'boolean', label: '移除 @' },
 	maxRetry: { type: 'number', label: '最大重试次数' },
 	logLevel: { type: 'string', label: '日志等级' },
-	mode: { type: 'string', enum: ['websocket', 'webhook'], default: 'websocket', label: '接收模式' },
+	mode: {
+		type: 'string',
+		default: 'websocket',
+		label: '接收模式',
+		choices: [
+			{ value: 'websocket', label: 'WebSocket' },
+			{ value: 'webhook', label: 'Webhook' },
+		],
+	},
 };
 
 AdapterRegistry.registerSchema('qq', qqSchema);

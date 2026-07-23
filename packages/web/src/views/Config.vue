@@ -38,7 +38,7 @@ type ValidationRule = {
     min?: number;
     max?: number;
     pattern?: RegExp;
-    enum?: any[];
+    choices?: Array<{ label: string; value: string | number | boolean }>;
     default?: any;
     label?: string;
     description?: string;
@@ -176,7 +176,10 @@ const notifyStaticHfBackup = (hf: StaticApiHfBackup | undefined, primaryOk: stri
 const isRule = (rule: ValidationRule | Schema): rule is ValidationRule => {
     return (
         typeof rule === 'object' &&
-        ('type' in rule || 'required' in rule || 'enum' in rule || 'default' in rule)
+        ('type' in rule ||
+            'required' in rule ||
+            'choices' in rule ||
+            'default' in rule)
     );
 };
 
@@ -191,7 +194,11 @@ const setValueByPath = (data: Record<string, any>, path: string[], value: any) =
     let current = data;
     keys.forEach((key, index) => {
         if (index === keys.length - 1) {
-            current[key] = value;
+            if (value === undefined) {
+                delete current[key];
+            } else {
+                current[key] = value;
+            }
             return;
         }
         if (!current[key] || typeof current[key] !== 'object') {
@@ -199,6 +206,36 @@ const setValueByPath = (data: Record<string, any>, path: string[], value: any) =
         }
         current = current[key];
     });
+};
+
+/** object/array 字段：空输入表示未配置（undefined），不要默认写成 {} */
+const resolveJsonFieldDisplay = (
+    currentValue: unknown,
+    rule: ValidationRule
+): string => {
+    if (currentValue !== undefined && currentValue !== null) {
+        return JSON.stringify(currentValue, null, 2);
+    }
+    if (rule.default !== undefined) {
+        return JSON.stringify(rule.default, null, 2);
+    }
+    return '';
+};
+
+const parseJsonFieldValue = (
+    raw: unknown,
+    rule: ValidationRule,
+    label: string
+): { ok: true; value: unknown } | { ok: false; message: string } => {
+    const text = typeof raw === 'string' ? raw.trim() : '';
+    if (!text) {
+        return { ok: true, value: rule.default !== undefined ? rule.default : undefined };
+    }
+    try {
+        return { ok: true, value: JSON.parse(text) };
+    } catch {
+        return { ok: false, message: `字段 ${label} 不是有效 JSON` };
+    }
 };
 
 const buildSchemaFields = (schemaData: Schema, basePath: string[] = []): SchemaFieldDef[] => {
@@ -227,9 +264,7 @@ const syncFormModel = (configObject: Record<string, any>) => {
         group.fields.forEach(field => {
             const currentValue = getValueByPath(configObject, field.path);
             if (field.rule.type === 'object' || field.rule.type === 'array') {
-                const baseValue =
-                    currentValue ?? field.rule.default ?? (field.rule.type === 'array' ? [] : {});
-                formModel[field.key] = JSON.stringify(baseValue, null, 2);
+                formModel[field.key] = resolveJsonFieldDisplay(currentValue, field.rule);
                 return;
             }
             formModel[field.key] =
@@ -245,9 +280,7 @@ const syncAccountFormModel = (configObject: Record<string, any>) => {
         group.fields.forEach(field => {
             const currentValue = getValueByPath(configObject, field.path);
             if (field.rule.type === 'object' || field.rule.type === 'array') {
-                const baseValue =
-                    currentValue ?? field.rule.default ?? (field.rule.type === 'array' ? [] : {});
-                accountFormModel[field.key] = JSON.stringify(baseValue, null, 2);
+                accountFormModel[field.key] = resolveJsonFieldDisplay(currentValue, field.rule);
                 return;
             }
             accountFormModel[field.key] =
@@ -258,9 +291,7 @@ const syncAccountFormModel = (configObject: Record<string, any>) => {
     accountAdapterFields.value.forEach(field => {
         const currentValue = getValueByPath(configObject, field.path);
         if (field.rule.type === 'object' || field.rule.type === 'array') {
-            const baseValue =
-                currentValue ?? field.rule.default ?? (field.rule.type === 'array' ? [] : {});
-            accountFormModel[field.key] = JSON.stringify(baseValue, null, 2);
+            accountFormModel[field.key] = resolveJsonFieldDisplay(currentValue, field.rule);
             return;
         }
         accountFormModel[field.key] =
@@ -476,16 +507,12 @@ const handleSave = async () => {
                 for (const field of group.fields) {
                     let value = formModel[field.key];
                     if (field.rule.type === 'object' || field.rule.type === 'array') {
-                        try {
-                            value = value
-                                ? JSON.parse(value)
-                                : field.rule.type === 'array'
-                                  ? []
-                                  : {};
-                        } catch (error) {
-                            toast.error(`字段 ${field.label} 不是有效 JSON`);
+                        const parsed = parseJsonFieldValue(value, field.rule, field.label);
+                        if (!parsed.ok) {
+                            toast.error(parsed.message);
                             return;
                         }
+                        value = parsed.value;
                     }
                     setValueByPath(configObject, field.path, value);
                 }
@@ -654,12 +681,12 @@ const handleSubmitAccount = async () => {
         for (const field of group.fields) {
             let value = accountFormModel[field.key];
             if (field.rule.type === 'object' || field.rule.type === 'array') {
-                try {
-                    value = value ? JSON.parse(value) : field.rule.type === 'array' ? [] : {};
-                } catch {
-                    toast.error(`字段 ${field.label} 不是有效 JSON`);
+                const parsed = parseJsonFieldValue(value, field.rule, field.label);
+                if (!parsed.ok) {
+                    toast.error(parsed.message);
                     return;
                 }
+                value = parsed.value;
             }
             setValueByPath(configObject, field.path, value);
         }
@@ -668,12 +695,12 @@ const handleSubmitAccount = async () => {
     for (const field of accountAdapterFields.value) {
         let value = accountFormModel[field.key];
         if (field.rule.type === 'object' || field.rule.type === 'array') {
-            try {
-                value = value ? JSON.parse(value) : field.rule.type === 'array' ? [] : {};
-            } catch {
-                toast.error(`字段 ${field.label} 不是有效 JSON`);
+            const parsed = parseJsonFieldValue(value, field.rule, field.label);
+            if (!parsed.ok) {
+                toast.error(parsed.message);
                 return;
             }
+            value = parsed.value;
         }
         setValueByPath(configObject, field.path, value);
     }

@@ -7,7 +7,7 @@
   "main": "index.js",
   "scripts": {
     "predev": "pnpm --filter='onebots-dev^...' --workspace-concurrency=1 build",
-    "dev": "onebots -r wechat-clawbot -r kook -r qq -r telegram -r feishu -r slack -r teams -r wecom -r wecom-kf -r kook -r discord -r dingtalk -r wechat -r heychat -p milky-v1 -p satori-v1 -p onebot-v12 -p onebot-v11 -c config.yaml",
+    "dev": "onebots -r wechat-clawbot -r kook -r icqq -r qq -r telegram -r feishu -r slack -r teams -r wecom -r wecom-kf -r kook -r discord -r dingtalk -r wechat -r heychat -p milky-v1 -p satori-v1 -p onebot-v12 -p onebot-v11 -c config.yaml",
     "test:ws": "node test-ws.js",
     "test:dev": "npx onebots -v",
     "sdk:dev": "node --watch test-client.js"
@@ -23,6 +23,7 @@
     "@onebots/protocol-satori-v1": "workspace:*",
     "@onebots/adapter-qq": "workspace:*",
     "@onebots/adapter-kook": "workspace:*",
+    "@onebots/adapter-icqq": "workspace:*",
     "@onebots/adapter-discord": "workspace:*",
     "@onebots/adapter-dingtalk": "workspace:*",
     "@onebots/adapter-wecom": "workspace:*",

@@ -85,9 +85,16 @@ describe('Config Validator', () => {
             }).not.toThrow();
         });
 
-        it('should validate enum values', () => {
+        it('should validate choices values', () => {
             const schema = {
-                level: { type: 'string' as const, enum: ['low', 'medium', 'high'] },
+                level: {
+                    type: 'string' as const,
+                    choices: [
+                        { value: 'low', label: '低' },
+                        { value: 'medium', label: '中' },
+                        { value: 'high', label: '高' },
+                    ],
+                },
             };
 
             expect(() => {

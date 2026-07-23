@@ -17,7 +17,15 @@ const onebotV11Schema: Schema = {
     access_token: { type: 'string', label: 'Access Token' },
     secret: { type: 'string', label: 'Secret' },
     post_timeout: { type: 'number', label: 'POST 超时(秒)' },
-    post_message_format: { type: 'string', enum: ['string', 'array'], default: 'array', label: '消息格式' },
+    post_message_format: {
+        type: 'string',
+        default: 'array',
+        label: '消息格式',
+        choices: [
+            { value: 'array', label: '数组 (array)' },
+            { value: 'string', label: '字符串 (string / CQ 码)' },
+        ],
+    },
     serve_data_files: { type: 'boolean', label: '静态文件服务' },
     heartbeat_interval: { type: 'number', label: '心跳间隔(秒)' },
 };

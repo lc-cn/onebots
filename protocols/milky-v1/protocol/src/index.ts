@@ -13,7 +13,14 @@ const milkySchema: Schema = {
     access_token: { type: 'string', label: 'Access Token' },
     secret: { type: 'string', label: 'Secret' },
     heartbeat: { type: 'number', label: '心跳间隔(秒)' },
-    post_message_format: { type: 'string', enum: ['string', 'array'], label: '消息格式' },
+    post_message_format: {
+        type: 'string',
+        label: '消息格式',
+        choices: [
+            { value: 'array', label: '数组 (array)' },
+            { value: 'string', label: '字符串 (string)' },
+        ],
+    },
     filters: { type: 'object', label: '事件过滤器' },
 };
 

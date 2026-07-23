@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import type { VerificationRequest } from '../types'
+import type { VerificationRequest, VerificationClearEvent } from '../types'
 import { buildApiUrl } from '../config'
 import { authFetch, appendAuthQuery } from './useAuth'
 
@@ -11,6 +11,16 @@ function mergePending(list: VerificationRequest[], item: VerificationRequest): V
     ),
     item,
   ]
+}
+
+function isClearEvent(payload: unknown): payload is VerificationClearEvent {
+  return (
+    !!payload &&
+    typeof payload === 'object' &&
+    (payload as VerificationClearEvent).event === 'clear' &&
+    typeof (payload as VerificationClearEvent).platform === 'string' &&
+    typeof (payload as VerificationClearEvent).account_id === 'string'
+  )
 }
 
 export function useVerification() {
@@ -38,17 +48,29 @@ export function useVerification() {
     }
   }
 
+  const applyClear = (payload: VerificationClearEvent) => {
+    pending.value = pending.value.filter((r) => {
+      if (r.platform !== payload.platform || r.account_id !== payload.account_id) return true
+      if (!payload.type) return false
+      return r.type !== payload.type
+    })
+  }
+
   const connect = () => {
     const url = appendAuthQuery(buildApiUrl('/api/verification/stream'))
     verificationEventSource = new EventSource(url)
 
     verificationEventSource.onmessage = (e) => {
       try {
-        const payload = JSON.parse(e.data) as VerificationRequest
+        const payload = JSON.parse(e.data) as VerificationRequest | VerificationClearEvent
+        if (isClearEvent(payload)) {
+          applyClear(payload)
+          return
+        }
         if (payload.platform && payload.account_id && payload.type) {
-          const prevLen = pending.value.length
+          // 新请求与同 key 刷新（如二维码过期换码）都打开抽屉并更新 UI
           pending.value = mergePending(pending.value, payload)
-          if (pending.value.length > prevLen) shouldOpenDrawer.value = true
+          shouldOpenDrawer.value = true
         }
       } catch (err) {
         console.error('解析验证事件失败:', err)

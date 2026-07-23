@@ -65,6 +65,13 @@ export type VerificationBlock =
     | { type: 'text'; content: string }
     | { type: 'input'; key: string; placeholder?: string; maxLength?: number; secret?: boolean }
 
+/** 验证面板快捷操作 */
+export interface VerificationAction {
+    id: string;
+    label: string;
+    variant?: 'primary' | 'secondary';
+}
+
 /** 验证请求展示配置 */
 export interface VerificationRequestOptions {
     blocks?: VerificationBlock[]
@@ -81,6 +88,18 @@ export interface VerificationRequest {
     requestSmsAvailable?: boolean;
     /** 为 true 时显示「继续」确认按钮（无需输入的验证，如扫码/身份验证后继续登录） */
     confirmable?: boolean;
+    /** 「确认」按钮文案，默认「已完成，继续登录」 */
+    confirmLabel?: string;
+    /** 额外快捷操作（如「重新登录」） */
+    actions?: VerificationAction[];
     data?: Record<string, unknown>;
     request_id?: string;
+}
+
+/** SSE 清除事件 */
+export interface VerificationClearEvent {
+    event: 'clear';
+    platform: string;
+    account_id: string;
+    type?: string;
 }

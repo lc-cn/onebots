@@ -65,6 +65,10 @@ export class WechatIlinkBot extends IlinkBot {
         const result = await this.waitForLogin(loginSession.sessionKey, {
             timeoutMs: this.cfg.qr_login_timeout_ms ?? 480_000,
             refreshExpiredQr: true,
+            // 过期换码后再次推送到适配器 / Web，避免前端仍展示旧二维码
+            onQrRefresh: ({ qrcode, qrCodeUrl }) => {
+                this.emit("qr", { qrCodeUrl, qrcode, refreshed: true });
+            },
         });
         if (!result.connected || !result.session) {
             throw new Error(result.message || "扫码登录失败");

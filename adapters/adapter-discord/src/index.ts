@@ -42,7 +42,16 @@ const discordSchema: Schema = {
 	},
 	intents: { type: 'array', label: 'Gateway Intents' },
 	presence: {
-		status: { type: 'string', enum: ['online', 'idle', 'dnd', 'invisible'], label: '状态' },
+		status: {
+			type: 'string',
+			label: '状态',
+			choices: [
+				{ value: 'online', label: '在线' },
+				{ value: 'idle', label: '闲置' },
+				{ value: 'dnd', label: '请勿打扰' },
+				{ value: 'invisible', label: '隐身' },
+			],
+		},
 		activities: { type: 'array', label: '活动列表' },
 	},
 };

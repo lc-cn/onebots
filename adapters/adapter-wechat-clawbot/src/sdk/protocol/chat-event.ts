@@ -125,6 +125,8 @@ export interface WaitForLoginOptions {
     timeoutMs?: number;
     refreshExpiredQr?: boolean;
     signal?: AbortSignal;
+    /** 二维码过期后自动换发新码时回调，便于推送到 Web 更新 UI */
+    onQrRefresh?: (ticket: Pick<LoginTicket, "qrcode" | "qrCodeUrl">) => void;
 }
 
 export interface LoginOutcome {

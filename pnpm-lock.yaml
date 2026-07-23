@@ -490,6 +490,9 @@ importers:
       '@onebots/adapter-heychat':
         specifier: workspace:*
         version: link:../adapters/adapter-heychat
+      '@onebots/adapter-icqq':
+        specifier: workspace:*
+        version: link:../adapters/adapter-icqq
       '@onebots/adapter-kook':
         specifier: workspace:*
         version: link:../adapters/adapter-kook

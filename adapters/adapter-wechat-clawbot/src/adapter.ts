@@ -227,17 +227,20 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         const bot = new WechatIlinkBot(wc, { contextTokenStore });
         const account = new Account<"wechat-clawbot", WechatIlinkBot>(this, bot, config);
 
-        bot.on("qr", (payload: { qrCodeUrl: string; qrcode: string }) => {
+        bot.on("qr", (payload: { qrCodeUrl: string; qrcode: string; refreshed?: boolean }) => {
             this.logger.info(
-                `[${this.platform}] ${config.account_id} 请使用微信扫描登录: ${payload.qrCodeUrl} (qrcode=${payload.qrcode.slice(0, 16)}...)`,
+                `[${this.platform}] ${config.account_id} 请使用微信扫描登录: ${payload.qrCodeUrl} (qrcode=${payload.qrcode.slice(0, 16)}...)` +
+                    (payload.refreshed ? " [已刷新]" : ""),
             );
             this.emit("verification:request", {
                 platform: this.platform,
                 account_id: config.account_id,
                 type: "qrcode",
-                hint: "请使用微信扫描下方二维码完成 iLink 扩展登录",
+                hint: payload.refreshed
+                    ? "二维码已过期并自动刷新，请使用微信重新扫描"
+                    : "请使用微信扫描下方二维码完成 iLink 扩展登录",
                 options: { blocks: buildWechatClawbotQrBlocks(payload.qrCodeUrl, payload.qrcode) },
-                data: { qrcode: payload.qrcode },
+                data: { qrcode: payload.qrcode, refreshed: !!payload.refreshed },
             } as unknown as Adapter.VerificationRequest);
         });
 
@@ -245,6 +248,10 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             account.nickname = session.accountId;
             account.avatar = this.icon;
             this.logger.info(`[${this.platform}] ${config.account_id} 扫码登录成功，ilink_bot_id=${session.accountId}`);
+            this.emit("verification:clear", {
+                platform: this.platform,
+                account_id: config.account_id,
+            } as Adapter.VerificationClear);
         });
 
         bot.on("credential_stale", (err: StaleCredentialFault) => {

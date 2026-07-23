@@ -86,6 +86,7 @@ export async function awaitLoginTicketResolution(
             const next = await transport.openLoginBitmap({ botType: ticket.botType, signal: options.signal });
             ticket.qrcode = next.qrcode;
             ticket.qrCodeUrl = next.qrcode_img_content;
+            options.onQrRefresh?.({ qrcode: ticket.qrcode, qrCodeUrl: ticket.qrCodeUrl });
         }
 
         await delay(1_000, options.signal);

@@ -12,7 +12,7 @@ interface SchemaFieldRule {
     type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
     min?: number;
     max?: number;
-    enum?: unknown[];
+    choices?: Array<{ label: string; value: string | number | boolean }>;
     description?: string;
     placeholder?: string;
 }
@@ -41,18 +41,18 @@ type WidgetKind = 'input' | 'number' | 'switch' | 'select' | 'textarea';
 
 const widget = computed<WidgetKind>(() => {
     const rule = props.field.rule;
-    if (rule.type === 'string' && !rule.enum) return 'input';
+    if (rule.choices && rule.choices.length > 0) return 'select';
+    if (rule.type === 'string') return 'input';
     if (rule.type === 'number') return 'number';
     if (rule.type === 'boolean') return 'switch';
-    if (rule.enum) return 'select';
     if (rule.type === 'object' || rule.type === 'array') return 'textarea';
     return 'input';
 });
 
-const enumOptions = computed(() =>
-    (props.field.rule.enum || []).map(value => ({
-        label: String(value),
-        value: value as string | number | boolean
+const choiceOptions = computed(() =>
+    (props.field.rule.choices || []).map(c => ({
+        label: c.label,
+        value: c.value
     }))
 );
 
@@ -77,7 +77,7 @@ const booleanModel = computed<boolean>({
     }
 });
 
-const enumModel = computed<string | number | boolean | undefined>({
+const choiceModel = computed<string | number | boolean | undefined>({
     get: () => {
         const value = model.value;
         return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
@@ -106,8 +106,8 @@ const enumModel = computed<string | number | boolean | undefined>({
         <UiSwitch v-else-if="widget === 'switch'" v-model="booleanModel" :disabled="disabled" />
         <UiSelect
             v-else-if="widget === 'select'"
-            v-model="enumModel"
-            :options="enumOptions"
+            v-model="choiceModel"
+            :options="choiceOptions"
             :placeholder="field.placeholder || '请选择'"
             :disabled="disabled" />
         <UiTextarea

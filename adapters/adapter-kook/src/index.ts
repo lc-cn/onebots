@@ -11,7 +11,15 @@ const kookSchema: Schema = {
 	token: { type: 'string', required: true, label: 'Bot Token' },
 	verifyToken: { type: 'string', label: 'Webhook 验证 Token' },
 	encryptKey: { type: 'string', label: '消息加密 Key' },
-	mode: { type: 'string', enum: ['webhook', 'websocket'], default: 'websocket', label: '连接模式' },
+	mode: {
+		type: 'string',
+		default: 'websocket',
+		label: '连接模式',
+		choices: [
+			{ value: 'websocket', label: 'WebSocket' },
+			{ value: 'webhook', label: 'Webhook' },
+		],
+	},
 	maxRetry: { type: 'number', default: 10, label: '最大重连次数' },
 };
 

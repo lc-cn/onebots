@@ -214,6 +214,36 @@ export class App extends BaseApp {
         adapter.on('verification:request', (payload: Record<string, unknown>) => {
             this.storeAndBroadcastVerification(payload);
         });
+        adapter.on('verification:clear', (payload: Record<string, unknown>) => {
+            this.clearAndBroadcastVerification(payload);
+        });
+    }
+
+    /**
+     * 清除待处理验证并通知 Web（登录成功、失败后重新登录前等）。
+     * payload.type 省略时清除该账号下全部验证。
+     */
+    private clearAndBroadcastVerification(payload: Record<string, unknown>) {
+        const platform = String(payload.platform ?? '');
+        const account_id = String(payload.account_id ?? '');
+        const type = payload.type != null ? String(payload.type) : '';
+        if (!platform || !account_id) return;
+
+        if (type) {
+            this.pendingVerifications.delete(`${platform}:${account_id}:${type}`);
+        } else {
+            for (const key of [...this.pendingVerifications.keys()]) {
+                if (key.startsWith(`${platform}:${account_id}:`)) {
+                    this.pendingVerifications.delete(key);
+                }
+            }
+        }
+        this.broadcastVerification({
+            event: 'clear',
+            platform,
+            account_id,
+            ...(type ? { type } : {}),
+        });
     }
 
     private cleanupLogCache() {
@@ -421,6 +451,11 @@ export class App extends BaseApp {
             if (!adapter.listenerCount('verification:request')) {
                 adapter.on('verification:request', (payload: Record<string, unknown>) => {
                     this.storeAndBroadcastVerification(payload);
+                });
+            }
+            if (!adapter.listenerCount('verification:clear')) {
+                adapter.on('verification:clear', (payload: Record<string, unknown>) => {
+                    this.clearAndBroadcastVerification(payload);
                 });
             }
         }

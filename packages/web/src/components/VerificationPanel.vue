@@ -3,7 +3,7 @@
         <div class="space-y-3 overflow-y-auto p-4">
             <UiCard
                 v-for="(req, index) in pending"
-                :key="`${req.platform}-${req.account_id}-${req.type}-${index}`">
+                :key="verificationCardKey(req, index)">
                 <template #header>
                     <div class="flex w-full items-center justify-between gap-2">
                         <span class="font-medium"
@@ -56,7 +56,7 @@
                             class="mt-3 mb-2 block max-w-[320px]" />
                     </template>
                 </template>
-                <div class="mt-3 flex items-center gap-2">
+                <div class="mt-3 flex flex-wrap items-center gap-2">
                     <UiButton
                         v-if="req.requestSmsAvailable && requestSms"
                         variant="secondary"
@@ -72,11 +72,19 @@
                         提交
                     </UiButton>
                     <UiButton
-                        v-else-if="req.confirmable"
+                        v-if="req.confirmable"
                         variant="primary"
                         :loading="submitting[reqKey(req)]"
                         @click="handleApprove(req)">
-                        继续登录
+                        {{ req.confirmLabel || '已完成，继续登录' }}
+                    </UiButton>
+                    <UiButton
+                        v-for="action in req.actions ?? []"
+                        :key="action.id"
+                        :variant="action.variant === 'primary' ? 'primary' : 'secondary'"
+                        :loading="actionLoading[actionKey(req, action.id)]"
+                        @click="handleAction(req, action.id)">
+                        {{ action.label }}
                     </UiButton>
                     <UiButton variant="ghost" @click="onReject(req)">关闭</UiButton>
                 </div>
@@ -121,6 +129,7 @@ const visible = ref(false);
 const inputValues = ref<Record<string, string>>({});
 const submitting = ref<Record<string, boolean>>({});
 const requestSmsLoading = ref<Record<string, boolean>>({});
+const actionLoading = ref<Record<string, boolean>>({});
 
 watch(
     () => props.shouldOpenDrawer,
@@ -141,7 +150,25 @@ watch(
 );
 
 const reqKey = (req: VerificationRequest) => `${req.platform}:${req.account_id}:${req.type}`;
+const actionKey = (req: VerificationRequest, actionId: string) => `${reqKey(req)}:${actionId}`;
 const inputKey = (req: VerificationRequest, key: string) => `${reqKey(req)}:${key}`;
+
+/** 二维码刷新等场景下让卡片 remount，避免仍显示旧图 */
+function verificationCardKey(req: VerificationRequest, index: number): string {
+    const qr =
+        typeof req.data?.qrcode === 'string'
+            ? req.data.qrcode
+            : req.options?.blocks?.find(b => b.type === 'qrcode' || b.type === 'image');
+    const stamp =
+        typeof qr === 'string'
+            ? qr.slice(0, 24)
+            : qr && typeof qr === 'object' && 'content' in qr
+              ? String((qr as { content?: string }).content ?? '').slice(0, 24)
+              : qr && typeof qr === 'object' && 'base64' in qr
+                ? String((qr as { base64?: string }).base64 ?? '').slice(0, 24)
+                : req.hint;
+    return `${req.platform}-${req.account_id}-${req.type}-${stamp}-${index}`;
+}
 
 function hasInputBlocks(req: VerificationRequest): boolean {
     return (
@@ -174,6 +201,20 @@ async function handleRequestSms(req: VerificationRequest) {
         toast.error((error as Error)?.message ?? '发送失败');
     } finally {
         requestSmsLoading.value[key] = false;
+    }
+}
+
+async function handleAction(req: VerificationRequest, actionId: string) {
+    const key = actionKey(req, actionId);
+    actionLoading.value[key] = true;
+    try {
+        const result = await props.onApprove(req, { action: actionId });
+        if (result?.success) toast.success(actionId === 'relogin' ? '已触发重新登录' : '已提交，请等待结果');
+        else toast.error(result?.message ?? '操作失败');
+    } catch (error) {
+        toast.error((error as Error)?.message ?? '操作失败');
+    } finally {
+        actionLoading.value[key] = false;
     }
 }
 

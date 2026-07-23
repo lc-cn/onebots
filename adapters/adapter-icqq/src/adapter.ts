@@ -361,14 +361,43 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             account.status = AccountStatus.Online;
             account.nickname = user.nickname;
             account.avatar = user.avatar;
+            this.emit('verification:clear', {
+                platform: 'icqq',
+                account_id: config.account_id,
+            } as Adapter.VerificationClear);
         });
 
         bot.on('offline', (event: ICQQOfflineEvent) => {
-            this.logger.warn(`ICQQ Bot 离线: ${event.message}`);
+            const message = event.message || '账号已离线';
+            this.logger.warn(`ICQQ Bot 离线: ${message}`);
             account.status = AccountStatus.OffLine;
+            this.emit('verification:request', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'offline',
+                hint: message,
+                options: {
+                    blocks: [{ type: 'text', content: message }],
+                },
+                actions: [{ id: 'relogin', label: '重新登录', variant: 'primary' }],
+            } as unknown as Adapter.VerificationRequest);
         });
 
+        const clearStatusCards = () => {
+            this.emit('verification:clear', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'offline',
+            } as Adapter.VerificationClear);
+            this.emit('verification:clear', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'login_error',
+            } as Adapter.VerificationClear);
+        };
+
         bot.on('qrcode', (event: ICQQQRCodeEvent) => {
+            clearStatusCards();
             this.logger.info(`ICQQ 请扫描二维码登录`);
             this.emit('qrcode', { account_id: config.account_id, image: event.image });
             const imageBase64 = event.image instanceof Buffer ? event.image.toString('base64') : event.image;
@@ -376,47 +405,57 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
                 platform: 'icqq',
                 account_id: config.account_id,
                 type: 'qrcode',
-                hint: '请使用手机 QQ 扫描下方二维码，在手机上确认登录后点击下方「继续登录」按钮',
+                hint: '请使用手机 QQ 扫描下方二维码，在手机上确认后点击「已完成，继续登录」',
                 confirmable: true,
+                confirmLabel: '已完成，继续登录',
                 options: { blocks: [{ type: 'image', base64: imageBase64, alt: '登录二维码' }] },
             } as unknown as Adapter.VerificationRequest);
         });
 
         bot.on('auth', (event: ICQQAuthEvent) => {
+            clearStatusCards();
             this.logger.warn(`ICQQ 需要身份验证:`, event);
             const blocks: Adapter.VerificationBlock[] = [];
             if (typeof event?.url === 'string' && event.url) {
                 blocks.push({ type: 'link', url: event.url, label: event.url });
             }
-            blocks.push({ type: 'text', content: '请按提示完成身份验证，完成后点击下方「继续登录」按钮' });
+            blocks.push({ type: 'text', content: '请按提示完成身份验证，完成后点击下方「已完成，继续登录」' });
             this.emit('verification:request', {
                 platform: 'icqq',
                 account_id: config.account_id,
                 type: 'auth',
                 hint: 'ICQQ 要求完成身份验证后才能继续登录',
                 confirmable: true,
+                confirmLabel: '已完成，继续登录',
                 options: { blocks },
             } as unknown as Adapter.VerificationRequest);
         });
 
         bot.on('slider', (event: ICQQSliderEvent) => {
+            clearStatusCards();
             this.logger.info(`ICQQ 需要滑块验证: ${event.url}`);
             this.emit('slider', { account_id: config.account_id, url: event.url });
             this.emit('verification:request', {
                 platform: 'icqq',
                 account_id: config.account_id,
                 type: 'slider',
-                hint: '请在浏览器中打开下方链接完成滑块验证，完成后将获取的 ticket 填入并提交',
+                hint: '请在浏览器中打开下方链接完成滑块验证；完成后从网络响应取出 ticket 与 randstr，用英文逗号拼接后填入并提交',
                 options: {
                     blocks: [
-                        { type: 'link', url: event.url, label: event.url },
-                        { type: 'input', key: 'ticket', placeholder: '粘贴 ticket' },
+                        { type: 'link', url: event.url, label: '打开滑块验证页面' },
+                        { type: 'text', content: '格式示例：ticket值,randstr值' },
+                        {
+                            type: 'input',
+                            key: 'ticket',
+                            placeholder: 'ticket,randstr（英文逗号拼接）',
+                        },
                     ],
                 },
             } as unknown as Adapter.VerificationRequest);
         });
 
         bot.on('device', (event: ICQQDeviceEvent) => {
+            clearStatusCards();
             this.logger.info(`ICQQ 需要设备锁验证: ${event.url}`);
             this.emit('device', { account_id: config.account_id, url: event.url, phone: event.phone });
             const blocks: Array<{ type: 'link'; url: string; label?: string } | { type: 'text'; content: string }> = [
@@ -427,7 +466,9 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
                 platform: 'icqq',
                 account_id: config.account_id,
                 type: 'device',
-                hint: '请在浏览器中打开下方链接完成设备锁验证',
+                hint: '请在浏览器中打开下方链接完成设备锁验证，完成后点击「已完成，继续登录」',
+                confirmable: true,
+                confirmLabel: '已完成，继续登录',
                 options: { blocks },
             } as unknown as Adapter.VerificationRequest);
             if (event.phone) {
@@ -447,8 +488,30 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         });
 
         bot.on('login_error', (event: ICQQLoginErrorEvent) => {
+            this.emit('verification:clear', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'offline',
+            } as Adapter.VerificationClear);
+            const message = event.message || '登录失败';
             this.logger.error(`ICQQ 登录失败:`, event);
             account.status = AccountStatus.OffLine;
+            this.emit('verification:request', {
+                platform: 'icqq',
+                account_id: config.account_id,
+                type: 'login_error',
+                hint: message,
+                options: {
+                    blocks: [
+                        { type: 'text', content: message },
+                        ...(event.code != null
+                            ? [{ type: 'text' as const, content: `错误码：${event.code}` }]
+                            : []),
+                    ],
+                },
+                actions: [{ id: 'relogin', label: '重新登录', variant: 'primary' }],
+                data: { code: event.code, message },
+            } as unknown as Adapter.VerificationRequest);
         });
 
         // 监听私聊消息
@@ -587,9 +650,13 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
 
     /**
      * Web 验证提交：将前端提交的滑块 ticket 或短信验证码转交给 ICQQ Bot
-     * 支持 data.ticket / data.code（兼容）或通用 data.value
+     * 支持 data.ticket / data.code（兼容）或通用 data.value；data.action=relogin 触发重新登录
      */
-    override submitVerification(accountId: string, type: string, data: Record<string, unknown>): void {
+    override async submitVerification(
+        accountId: string,
+        type: string,
+        data: Record<string, unknown>,
+    ): Promise<void> {
         const account = this.getAccount(accountId);
         if (!account) {
             this.logger.warn(`submitVerification: 账号不存在 ${accountId}`);
@@ -597,14 +664,21 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         }
         const bot = account.client;
         const value = typeof data.value === 'string' ? data.value : undefined;
+        const action = typeof data.action === 'string' ? data.action : undefined;
+
+        if (action === 'relogin' || type === 'login_error' || type === 'offline') {
+            await this.setOnline(accountId);
+            return;
+        }
+
         if (type === 'slider') {
             const ticket = (data.ticket ?? value) as string | undefined;
             if (typeof ticket === 'string') bot.submitSlider(ticket);
         } else if (type === 'sms') {
             const code = (data.code ?? value) as string | undefined;
             if (typeof code === 'string') bot.submitSmsCode(code);
-        } else if (type === 'qrcode' || type === 'auth') {
-            // 新版 ICQQ 流程：扫码确认 / 身份验证完成后需显式调用 login() 继续
+        } else if (type === 'qrcode' || type === 'auth' || type === 'device') {
+            // 扫码确认 / 身份验证 / 设备锁网页验证完成后需显式调用 login() 继续
             bot.continueLogin();
         } else {
             this.logger.debug(`submitVerification: 忽略类型 ${type} 或缺少参数`);
@@ -619,6 +693,44 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             return Promise.resolve();
         }
         return account.client.sendSmsCode();
+    }
+
+    /** 重新登录：停止后再次 start，触发二维码/滑块等验证流程 */
+    override async setOnline(uin: string): Promise<void> {
+        const account = this.getAccount(uin);
+        if (!account) {
+            throw new Error(`未找到账号 ${uin}`);
+        }
+        this.emit('verification:clear', {
+            platform: 'icqq',
+            account_id: uin,
+        } as Adapter.VerificationClear);
+        account.status = AccountStatus.Pending;
+        try {
+            await account.client.stop();
+        } catch (error) {
+            this.logger.warn(`ICQQ 停止账号 ${uin} 时出错（将继续尝试登录）:`, error);
+        }
+        try {
+            await account.client.start();
+        } catch (error) {
+            this.logger.error(`ICQQ 重新登录失败 ${uin}:`, error);
+            account.status = AccountStatus.OffLine;
+            throw error;
+        }
+    }
+
+    override async setOffline(uin: string): Promise<void> {
+        const account = this.getAccount(uin);
+        if (!account) {
+            throw new Error(`未找到账号 ${uin}`);
+        }
+        await account.client.stop();
+        account.status = AccountStatus.OffLine;
+        this.emit('verification:clear', {
+            platform: 'icqq',
+            account_id: uin,
+        } as Adapter.VerificationClear);
     }
 
     // ============================================
