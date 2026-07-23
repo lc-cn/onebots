@@ -19,13 +19,13 @@ import UiCard from '../ui/UiCard.vue';
 import UiTabs from '../ui/UiTabs.vue';
 import UiCollapse from '../ui/UiCollapse.vue';
 import UiCollapseItem from '../ui/UiCollapseItem.vue';
-import UiDivider from '../ui/UiDivider.vue';
 import UiField from '../ui/UiField.vue';
 import UiInput from '../ui/UiInput.vue';
 import UiTextarea from '../ui/UiTextarea.vue';
 import UiSelect from '../ui/UiSelect.vue';
 import UiSwitch from '../ui/UiSwitch.vue';
 import UiModal from '../ui/UiModal.vue';
+import UiSteps from '../ui/UiSteps.vue';
 import UiEmpty from '../ui/UiEmpty.vue';
 import UiAlert from '../ui/UiAlert.vue';
 import UiSpinner from '../ui/UiSpinner.vue';
@@ -101,9 +101,43 @@ const accountOriginalConfig = ref<Record<string, any>>({});
 const accountFormModel = reactive<Record<string, any>>({});
 const accountProtocolGroups = ref<SchemaGroup[]>([]);
 const accountAdapterFields = ref<SchemaFieldDef[]>([]);
-const accountActiveProtocolGroups = ref<string[]>([]);
 const accountProtocolEnabled = reactive<Record<string, boolean>>({});
 const isAccountEdit = ref(false);
+
+/** 新增/编辑账号向导：步骤与协议页签 */
+const accountSteps = [
+    { key: 'basic', label: '基本信息' },
+    { key: 'adapter', label: '平台配置' },
+    { key: 'protocol', label: '协议配置' }
+];
+const accountStep = ref(0);
+const activeProtocolTab = ref('');
+const protocolTabs = computed(() =>
+    accountProtocolGroups.value.map(group => ({ key: group.key, label: group.title }))
+);
+
+const goNextStep = () => {
+    if (accountStep.value === 0) {
+        if (!accountForm.value.platform) {
+            toast.warning('请先选择平台');
+            return;
+        }
+        if (!accountForm.value.account_id?.trim()) {
+            toast.warning('请填写账号ID');
+            return;
+        }
+    }
+    if (accountStep.value < accountSteps.length - 1) accountStep.value += 1;
+};
+
+const goPrevStep = () => {
+    if (accountStep.value > 0) accountStep.value -= 1;
+};
+
+const onSelectStep = (index: number) => {
+    // 仅编辑模式允许跳步；新增按线性流程走
+    if (isAccountEdit.value) accountStep.value = index;
+};
 
 /** 站点根静态文件（public_static_dir） */
 const staticFiles = ref<{ name: string }[]>([]);
@@ -335,7 +369,6 @@ const buildAccountProtocolGroups = () => {
         }
     });
     accountProtocolGroups.value = groups;
-    accountActiveProtocolGroups.value = groups.map(group => group.key);
 };
 
 const buildAccountAdapterFields = (platform: string) => {
@@ -588,6 +621,8 @@ const openAddAccount = () => {
     accountForm.value = { platform: '', account_id: '' };
     buildAccountAdapterFields('');
     syncAccountFormModel({});
+    accountStep.value = 0;
+    activeProtocolTab.value = accountProtocolGroups.value[0]?.key ?? '';
     accountDialogVisible.value = true;
 };
 
@@ -598,6 +633,8 @@ const openEditAccount = (row: AccountRow) => {
     accountForm.value = { platform: row.platform, account_id: row.account_id };
     buildAccountAdapterFields(row.platform);
     syncAccountFormModel(row.config || {});
+    accountStep.value = 0;
+    activeProtocolTab.value = accountProtocolGroups.value[0]?.key ?? '';
     accountDialogVisible.value = true;
 };
 
@@ -698,7 +735,7 @@ watch(
 
 <template>
     <div class="h-full overflow-y-auto">
-        <div class="mx-auto max-w-[1400px] px-6 py-6">
+        <div class="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
             <header class="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
                 <h2 class="flex items-center gap-2 text-lg font-semibold text-fg">
                     <IconSettings :size="20" aria-hidden="true" />
@@ -884,34 +921,58 @@ watch(
         </div>
     </div>
 
-    <!-- 账号新增/编辑弹窗 -->
+    <!-- 账号新增/编辑向导 -->
     <UiModal v-model="accountDialogVisible" :title="accountDialogTitle" width="720px">
-        <div class="flex flex-col gap-4">
-            <UiField label="平台" required>
-                <UiSelect
-                    v-model="accountForm.platform"
-                    :options="platformOptions"
-                    placeholder="选择平台" />
-            </UiField>
-            <UiField label="账号ID" required>
-                <UiInput v-model="accountForm.account_id" placeholder="例如: my_bot" />
-            </UiField>
+        <div class="flex flex-col gap-5">
+            <UiSteps
+                :steps="accountSteps"
+                :current="accountStep"
+                :clickable="isAccountEdit"
+                @select="onSelectStep" />
 
-            <UiDivider>协议配置</UiDivider>
-            <UiCollapse v-model="accountActiveProtocolGroups">
-                <UiCollapseItem
-                    v-for="group in accountProtocolGroups"
-                    :key="group.key"
-                    :name="group.key">
-                    <template #title>
-                        <span class="flex items-center gap-2">
-                            <UiSwitch
-                                v-model="accountProtocolEnabled[group.key]"
-                                @click.stop />
-                            <span>{{ group.title }}</span>
-                        </span>
-                    </template>
-                    <div class="flex flex-col gap-4">
+            <!-- 第一步：平台与账号ID -->
+            <div v-show="accountStep === 0" class="flex flex-col gap-4">
+                <UiField label="平台" required hint="选择要接入的 IM 平台，下一步会展示该平台所需的配置项">
+                    <UiSelect
+                        v-model="accountForm.platform"
+                        :options="platformOptions"
+                        placeholder="选择平台"
+                        :disabled="isAccountEdit" />
+                </UiField>
+                <UiField label="账号ID" required hint="账号在本网关中的唯一标识，如 my_bot">
+                    <UiInput
+                        v-model="accountForm.account_id"
+                        placeholder="例如: my_bot"
+                        :disabled="isAccountEdit" />
+                </UiField>
+            </div>
+
+            <!-- 第二步：平台配置 -->
+            <div v-show="accountStep === 1" class="flex flex-col gap-4">
+                <template v-if="accountAdapterFields.length">
+                    <SchemaField
+                        v-for="field in accountAdapterFields"
+                        :key="field.key"
+                        v-model="accountFormModel[field.key]"
+                        :field="field" />
+                </template>
+                <UiEmpty v-else title="该平台无需额外配置" description="可直接进入下一步配置协议" />
+            </div>
+
+            <!-- 第三步：协议配置（页签） -->
+            <div v-show="accountStep === 2" class="flex flex-col gap-3">
+                <template v-if="accountProtocolGroups.length">
+                    <UiTabs v-model="activeProtocolTab" :tabs="protocolTabs" />
+                    <div
+                        v-for="group in accountProtocolGroups"
+                        v-show="activeProtocolTab === group.key"
+                        :key="group.key"
+                        class="flex flex-col gap-4 pt-2">
+                        <div
+                            class="flex items-center justify-between rounded-control bg-surface-raised px-3 py-2">
+                            <span class="text-sm text-fg-secondary">启用 {{ group.title }}</span>
+                            <UiSwitch v-model="accountProtocolEnabled[group.key]" />
+                        </div>
                         <SchemaField
                             v-for="field in group.fields"
                             :key="field.key"
@@ -919,23 +980,27 @@ watch(
                             :field="field"
                             :disabled="!accountProtocolEnabled[group.key]" />
                     </div>
-                </UiCollapseItem>
-            </UiCollapse>
-
-            <UiDivider>平台配置</UiDivider>
-            <div v-if="accountAdapterFields.length" class="flex flex-col gap-4">
-                <SchemaField
-                    v-for="field in accountAdapterFields"
-                    :key="field.key"
-                    v-model="accountFormModel[field.key]"
-                    :field="field" />
+                </template>
+                <UiEmpty v-else title="暂无协议 Schema" />
             </div>
-            <UiEmpty v-else title="暂无平台 Schema" />
         </div>
 
         <template #footer>
-            <UiButton variant="secondary" @click="accountDialogVisible = false">取消</UiButton>
-            <UiButton variant="primary" @click="handleSubmitAccount">保存</UiButton>
+            <div class="flex w-full items-center justify-between gap-2">
+                <UiButton variant="ghost" @click="accountDialogVisible = false">取消</UiButton>
+                <div class="flex items-center gap-2">
+                    <UiButton v-if="accountStep > 0" variant="secondary" @click="goPrevStep">
+                        上一步
+                    </UiButton>
+                    <UiButton
+                        v-if="accountStep < accountSteps.length - 1"
+                        variant="primary"
+                        @click="goNextStep">
+                        下一步
+                    </UiButton>
+                    <UiButton v-else variant="primary" @click="handleSubmitAccount">保存</UiButton>
+                </div>
+            </div>
         </template>
     </UiModal>
 </template>

@@ -1038,6 +1038,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 });
 
                 ws.on('close', () => {
+                    // 移除派发监听，避免重连后监听器累积导致事件重复发送
+                    this.off("dispatch", onDispatch);
                     this.logger.warn(`WebSocket reverse disconnected from ${url}, reconnecting in 5s...`);
                     reconnectTimer = setTimeout(connect, 5000);
                 });

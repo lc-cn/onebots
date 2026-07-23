@@ -1,6 +1,6 @@
 <template>
     <div class="h-full overflow-y-auto">
-        <div class="mx-auto max-w-[1400px] px-6 py-6">
+        <div class="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
             <!-- 页头 -->
             <header class="mb-6 flex items-center justify-between gap-4 border-b border-border pb-4">
                 <h2 class="flex items-center gap-2 text-xl font-semibold text-fg">

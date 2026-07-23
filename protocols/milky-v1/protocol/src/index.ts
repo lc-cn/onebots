@@ -643,6 +643,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 });
 
                 ws.on('close', () => {
+                    // 移除派发监听，避免重连后监听器累积导致事件重复发送
+                    this.off("dispatch", onDispatch);
                     const interval = (config.reconnect_interval || 5) * 1000;
                     this.logger.warn(`Milky WebSocket reverse disconnected from ${config.url}, reconnecting in ${config.reconnect_interval || 5}s...`);
                     reconnectTimer = setTimeout(connect, interval);

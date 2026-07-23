@@ -63,9 +63,9 @@
         <div class="flex min-w-0 flex-1 flex-col">
             <!-- 顶栏 -->
             <header
-                class="flex h-14 shrink-0 items-center justify-between border-b border-border bg-surface px-6">
-                <h1 class="text-sm font-medium text-fg">{{ route.meta.title }}</h1>
-                <div class="flex items-center gap-3">
+                class="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 sm:px-6">
+                <h1 class="truncate text-sm font-medium text-fg">{{ route.meta.title }}</h1>
+                <div class="flex shrink-0 items-center gap-3">
                     <UiBadge variant="success" dot>在线 {{ onlineBotCount }}</UiBadge>
                     <button
                         type="button"
@@ -159,7 +159,7 @@ const { onlineBotCount, systemInfo } = useApi();
 const verification = useVerification();
 const verificationPending = computed(() => verification.pending.value);
 const verificationShouldOpen = computed(() => verification.shouldOpenDrawer.value);
-const isCollapse = ref(false);
+const isCollapse = ref(typeof window !== 'undefined' && window.innerWidth < 768);
 
 const menuItems = [
     { to: '/bots', label: '机器人管理', icon: IconRobot },

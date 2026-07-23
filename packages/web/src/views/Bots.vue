@@ -1,6 +1,6 @@
 <template>
     <div class="h-full overflow-y-auto bg-bg">
-        <div class="mx-auto max-w-[1400px] px-6 py-6">
+        <div class="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
             <div class="mb-6 flex items-center justify-between border-b border-border pb-4">
                 <h2 class="flex items-center gap-2 text-xl font-semibold text-fg">
                     <IconRobot :size="22" :stroke="1.5" class="text-fg-secondary" />
@@ -10,7 +10,7 @@
             </div>
 
             <UiEmpty v-if="adapters.length === 0" title="暂无机器人" />
-            <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-4">
+            <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
                 <template v-for="adapter of adapters" :key="adapter.platform">
                     <BotCard
                         v-for="bot of adapter.accounts"

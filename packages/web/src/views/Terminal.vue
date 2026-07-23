@@ -1,5 +1,5 @@
 <template>
-    <div class="mx-auto flex h-full w-full max-w-[1400px] flex-col px-6 py-6">
+    <div class="mx-auto flex h-full w-full max-w-[1400px] flex-col px-4 py-4 sm:px-6 sm:py-6">
         <!-- 工具栏 -->
         <header class="mb-4 flex items-center justify-between gap-4">
             <h2 class="flex items-center gap-2 text-xl font-semibold text-fg">

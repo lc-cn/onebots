@@ -89,9 +89,9 @@ onUnmounted(() => {
                 role="dialog"
                 aria-modal="true"
                 tabindex="-1"
-                class="fixed inset-0 z-[91] m-auto flex h-fit max-h-[85vh] w-full max-w-[calc(100vw-2rem)] flex-col rounded-card border border-border bg-surface shadow-xl focus:outline-none"
-                :style="{ width: props.width }">
-                <div class="flex items-center justify-between border-b border-border px-4 py-3">
+                class="fixed inset-0 z-[91] m-auto flex h-full w-full flex-col bg-surface focus:outline-none sm:h-fit sm:max-h-[85vh] sm:w-[var(--modal-width)] sm:max-w-[calc(100vw-2rem)] sm:rounded-card sm:border sm:border-border sm:shadow-xl"
+                :style="{ '--modal-width': props.width }">
+                <div class="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
                     <h2 class="truncate text-base font-medium text-fg">{{ props.title }}</h2>
                     <button
                         type="button"
@@ -101,10 +101,12 @@ onUnmounted(() => {
                         <IconX :size="18" />
                     </button>
                 </div>
-                <div class="overflow-y-auto p-4">
+                <div class="min-h-0 flex-1 overflow-y-auto p-4">
                     <slot />
                 </div>
-                <div v-if="$slots.footer" class="flex justify-end gap-2 border-t border-border p-3">
+                <div
+                    v-if="$slots.footer"
+                    class="flex shrink-0 justify-end gap-2 border-t border-border p-3">
                     <slot name="footer" />
                 </div>
             </div>
