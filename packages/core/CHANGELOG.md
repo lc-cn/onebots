@@ -1,5 +1,11 @@
 # @onebots/core
 
+## 1.2.1
+
+### Patch Changes
+
+- 922a341: Use native relative ESM imports in core runtime sources so plain TypeScript builds remain directly loadable without a later alias-rewrite step.
+
 ## 1.2.0
 
 ### Minor Changes

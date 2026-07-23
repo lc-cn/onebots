@@ -1,5 +1,17 @@
 # onebots
 
+## 2.0.0
+
+### Major Changes
+
+- 0519d6d: Replace the nested gateway/service CLI with a Pastel-powered flat single-service interface, add setup, UI, doctor, and update commands, and delegate process supervision to native operating-system service managers.
+
+### Patch Changes
+
+- fa90690: Build development workspace dependencies before startup, deduplicate repeated plugin flags, and report missing plugin build output as one actionable diagnostic.
+- Updated dependencies [922a341]
+  - @onebots/core@1.2.1
+
 ## 1.2.0
 
 ### Minor Changes
