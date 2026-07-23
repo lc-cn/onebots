@@ -464,3 +464,13 @@ export interface ICQQQRCodeEvent {
     image: Buffer;
 }
 
+/**
+ * 身份验证事件（新版 ICQQ 的 system.login.auth）
+ * 事件结构依版本可能不同，仅做防御性取值
+ */
+export interface ICQQAuthEvent {
+    /** 身份验证链接（如有） */
+    url?: string;
+    [key: string]: unknown;
+}
+

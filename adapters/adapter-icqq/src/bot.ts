@@ -152,6 +152,10 @@ export class ICQQBot extends EventEmitter {
             this.emit('device', event);
         });
 
+        this.client.on('system.login.auth', (event) => {
+            this.emit('auth', event);
+        });
+
         this.client.on('system.login.error', (event) => {
             this.emit('login_error', event);
         });
@@ -657,9 +661,17 @@ export class ICQQBot extends EventEmitter {
     }
 
     /**
-     * 扫码登录
+     * 扫码登录 / 验证完成后继续登录流程（新版 ICQQ 需在 qrcode、auth 事件后显式调用 login）
      */
     qrcodeLogin(): void {
+        if (!this.client) throw new Error('Bot not connected');
+        this.client.login();
+    }
+
+    /**
+     * 继续登录流程（扫码确认、身份验证完成后调用，等价于 client.login()）
+     */
+    continueLogin(): void {
         if (!this.client) throw new Error('Bot not connected');
         this.client.login();
     }

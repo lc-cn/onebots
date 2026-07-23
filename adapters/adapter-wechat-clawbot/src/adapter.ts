@@ -23,11 +23,10 @@ function buildWechatClawbotQrBlocks(qrCodeUrl: string, _qrcode: string): Adapter
     const blocks: Adapter.VerificationBlock[] = [];
     const img = qrCodeUrl.trim();
     if (img.startsWith("http://") || img.startsWith("https://")) {
-        blocks.push({
-            type: "image_url",
-            url: img,
-            alt: "ClawBot / iLink 登录二维码",
-        });
+        // iLink 的 qrcode_img_content 是二维码页面 URL 而非图片，<img> 无法直接展示；
+        // 发 qrcode 内容块由前端本地渲染二维码，并附链接兜底（不支持 qrcode 块的客户端可点链接打开）
+        blocks.push({ type: "qrcode", content: img, alt: "ClawBot / iLink 登录二维码" });
+        blocks.push({ type: "link", url: img, label: "无法显示二维码？点击打开二维码页面" });
     } else if (img.startsWith("data:image")) {
         const comma = img.indexOf(",");
         const base64 = comma >= 0 ? img.slice(comma + 1) : img;

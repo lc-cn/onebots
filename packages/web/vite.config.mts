@@ -1,36 +1,20 @@
-import {defineConfig} from "vite";
-import AutoImport from 'unplugin-auto-import/vite'
-import Components from 'unplugin-vue-components/vite'
-import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
-import vue from '@vitejs/plugin-vue'
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
+import tailwindcss from "@tailwindcss/vite";
+
 export default defineConfig({
-    server:{
-        strictPort:false,
-        port:6728,
+    server: {
+        strictPort: false,
+        port: 6728,
         proxy: {
-            '/api': {
-                target: 'http://localhost:6727',
-                changeOrigin: true
-            }
-        }
+            "/api": {
+                target: "http://localhost:6727",
+                changeOrigin: true,
+            },
+        },
     },
-    css: {
-        preprocessorOptions: {
-            scss: {
-                api: 'modern-compiler'
-            }
-        }
+    plugins: [vue(), tailwindcss()],
+    build: {
+        outDir: "dist",
     },
-    plugins:[
-        vue(),
-        AutoImport({
-            resolvers: [ElementPlusResolver()],
-        }),
-        Components({
-            resolvers: [ElementPlusResolver()],
-        }),
-    ],
-    build:{
-        outDir:'dist'
-    }
-})
+});

@@ -60,6 +60,7 @@ export interface ProtocolInfo {
 export type VerificationBlock =
     | { type: 'image'; base64: string; alt?: string }
     | { type: 'image_url'; url: string; alt?: string }
+    | { type: 'qrcode'; content: string; alt?: string }
     | { type: 'link'; url: string; label?: string }
     | { type: 'text'; content: string }
     | { type: 'input'; key: string; placeholder?: string; maxLength?: number; secret?: boolean }
@@ -78,6 +79,8 @@ export interface VerificationRequest {
     options?: VerificationRequestOptions;
     /** 为 true 时显示「发送验证码」按钮（如 ICQQ 设备锁短信验证） */
     requestSmsAvailable?: boolean;
+    /** 为 true 时显示「继续」确认按钮（无需输入的验证，如扫码/身份验证后继续登录） */
+    confirmable?: boolean;
     data?: Record<string, unknown>;
     request_id?: string;
 }
