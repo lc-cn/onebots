@@ -121,12 +121,18 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
 
 /** 以人类可读或 JSON 格式输出诊断结果。 */
 export function printDoctorReport(report: DoctorReport, json = false): void {
-    if (json) return void console.log(JSON.stringify(report, null, 2));
-    for (const check of report.checks) {
+    console.log(formatDoctorReport(report, json));
+}
+
+/** 将诊断结果格式化，供 CLI、TUI 和机器输出共享。 */
+export function formatDoctorReport(report: DoctorReport, json = false): string {
+    if (json) return JSON.stringify(report, null, 2);
+    const lines = report.checks.map(check => {
         const mark = check.level === "ok" ? "✓" : check.level === "warning" ? "!" : "✗";
-        console.log(`${mark} ${check.name}: ${check.message}${check.fixed ? " [fixed]" : ""}`);
-    }
-    console.log(report.ok ? "OneBots 诊断通过" : "OneBots 存在需要处理的问题");
+        return `${mark} ${check.name}: ${check.message}${check.fixed ? " [fixed]" : ""}`;
+    });
+    lines.push(report.ok ? "OneBots 诊断通过" : "OneBots 存在需要处理的问题");
+    return lines.join("\n");
 }
 
 function canResolve(candidates: string[], cwd: string): boolean {

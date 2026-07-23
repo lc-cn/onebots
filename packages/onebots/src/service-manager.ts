@@ -85,6 +85,7 @@ function windowsIsElevated(): boolean {
 export function buildServiceArgs(spec: ServiceSpec): string[] {
     return [
         spec.binPath,
+        "--service-runtime",
         "run",
         "-c",
         spec.configPath,

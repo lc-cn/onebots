@@ -161,6 +161,12 @@ onebots update [--check] [--yes]
 
 v2 不再接受 `gateway` / `service` / `daemon` 命令层级。默认命令操作用户级服务，需要系统级服务时添加 `--system`。
 
+### CLI 架构
+
+CLI 使用 Pastel 的文件路由：`src/commands` 中的文件名就是公开命令，Zod schema 统一负责参数类型和帮助信息。路由组件只承担交互展示，实际行为位于 `src/cli/command-application.ts`、runtime 和 service controller 等无 UI 模块中。
+
+裸 `onebots` 会在进程入口规范化为 `onebots run`，因此两种写法经过同一个路由。系统服务仍记录公开 CLI 入口，但通过内部的无 TTY runtime 通道启动，守护进程不会加载 Pastel/Ink。新增公开命令时应增加独立路由文件，而不是修改中央命令注册表。
+
 ## 配置说明
 
 ### 配置文件结构

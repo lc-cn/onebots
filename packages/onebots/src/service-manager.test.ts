@@ -31,6 +31,7 @@ describe("service definition", () => {
     it("runs the same bridge arguments that the user installed", () => {
         expect(buildServiceArgs(spec)).toEqual([
             "/opt/onebots/bin.js",
+            "--service-runtime",
             "run",
             "-c",
             "/tmp/one bots/配置.yaml",
@@ -45,7 +46,7 @@ describe("service definition", () => {
 
     it("quotes systemd paths without losing arguments", () => {
         const unit = renderSystemdUnit(spec);
-        expect(unit).toContain('ExecStart="/opt/node js/bin/node" "/opt/onebots/bin.js" "run" "-c" "/tmp/one bots/配置.yaml"');
+        expect(unit).toContain('ExecStart="/opt/node js/bin/node" "/opt/onebots/bin.js" "--service-runtime" "run" "-c" "/tmp/one bots/配置.yaml"');
         expect(unit).toContain("Restart=on-failure");
         expect(unit).toContain("TimeoutStopSec=30");
     });

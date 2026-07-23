@@ -38,11 +38,12 @@ export async function runUi(options: UiOptions): Promise<void> {
         return;
     }
     if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("onebots ui 需要交互式终端；可使用 onebots ui --web");
-    const instance = render(<Dashboard {...options} url={url} />);
+    const instance = render(<OneBotsDashboard {...options} url={url} />);
     await instance.waitUntilExit();
 }
 
-function Dashboard({ configPath, scope, url }: UiOptions & { url: string }) {
+/** Pastel `ui` 路由直接复用的仪表盘，避免嵌套 Ink renderer。 */
+export function OneBotsDashboard({ configPath, scope, url }: UiOptions & { url: string }) {
     const controller = useMemo(() => new ServiceController(scope), [scope]);
     const { exit } = useApp();
     const [status, setStatus] = useState<ServiceStatus>(() => controller.status());
