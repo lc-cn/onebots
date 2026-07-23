@@ -141,6 +141,43 @@ kook.bot_id:
   # Kook 平台配置
   token: '' # Kook Bot Token (从开发者中心获取)
 
+# 黑盒语音 (Heychat) 机器人
+heychat.my_bot:
+  onebot.v11:
+    use_http: true
+    use_ws: true
+    access_token: 'heychat_v11_token'
+    secret: ''
+    heartbeat_interval: 5
+    http_reverse: []
+    ws_reverse: []
+
+  onebot.v12:
+    use_http: true
+    use_ws: true
+    access_token: 'heychat_v12_token'
+    secret: ''
+    heartbeat_interval: 5
+    webhooks: []
+    ws_reverse: []
+
+  satori.v1:
+    use_http: true
+    use_ws: true
+    token: 'heychat_satori_token'
+    platform: 'heychat'
+    webhooks: []
+
+  milky.v1:
+    use_http: true
+    use_ws: true
+    access_token: 'heychat_milky_token'
+    secret: ''
+    heartbeat: 5
+
+  # 黑盒语音平台配置（Token 从 https://bot.xiaoheihe.cn 获取）
+  token: ''
+
 # ============================================
 # 配置说明
 # ============================================

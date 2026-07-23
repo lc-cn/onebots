@@ -1,0 +1,45 @@
+{
+  "name": "@onebots/adapter-heychat",
+  "version": "3.0.0",
+  "description": "onebots 黑盒语音 (Heychat) 适配器",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo"
+  },
+  "keywords": [
+    "onebots",
+    "heychat",
+    "heybox",
+    "黑盒语音",
+    "adapter"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.5.13",
+    "tsc-alias": "latest",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "onebots": "workspace:*"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/onebots.git"
+  }
+}
