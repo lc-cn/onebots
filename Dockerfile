@@ -18,7 +18,19 @@ COPY protocols ./protocols
 COPY docs ./docs
 COPY development ./development
 
-# 安装依赖并构建（.dockerignore 已排除 adapter-icqq，无需 GitHub Packages token；锁文件与完整仓库可能不一致，故不用 --frozen-lockfile）
+# .dockerignore 已排除 adapters/adapter-icqq，但 development 仍声明了该 workspace 依赖；
+# 安装前从 package.json 去掉，否则 pnpm 会报 workspace 包找不到。
+RUN node --input-type=module -e "
+import fs from 'node:fs';
+const path = 'development/package.json';
+const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+if (pkg.dependencies?.['@onebots/adapter-icqq']) {
+  delete pkg.dependencies['@onebots/adapter-icqq'];
+  fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+}
+"
+
+# 安装依赖并构建（无 adapter-icqq，无需 GitHub Packages token；锁文件与镜像上下文可能不一致，故不用 --frozen-lockfile）
 RUN pnpm install --no-frozen-lockfile
 # 仅构建网关所需包（跳过 docs：VitePress 需 git，Alpine 镜像未安装且运行时不需要文档）
 RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' build
