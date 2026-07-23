@@ -1,5 +1,14 @@
 # @onebots/adapter-kook
 
+## 3.0.1
+
+### Patch Changes
+
+- Updated dependencies [0519d6d]
+- Updated dependencies [d9e67a0]
+- Updated dependencies [fa90690]
+  - onebots@1.2.1
+
 ## 3.0.0
 
 ### Patch Changes
