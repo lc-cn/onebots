@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 import { prepareCliInvocation } from "./cli-invocation.js";
+import { normalizeRuntimeOptions } from "./cli/command-application.js";
 
 describe("OneBots CLI v2", () => {
     it("accepts runtime options before a flat Pastel route", () => {
@@ -77,5 +78,16 @@ describe("OneBots CLI v2", () => {
             cwd: path.resolve("packages/onebots"),
             stdio: "pipe",
         })).not.toThrow();
+    });
+
+    it("loads repeated adapters and protocols only once", () => {
+        expect(normalizeRuntimeOptions({
+            config: "config.yaml",
+            register: ["kook", "qq", "kook"],
+            protocol: ["onebot-v11", "onebot-v11"],
+        })).toMatchObject({
+            adapters: ["kook", "qq"],
+            protocols: ["onebot-v11"],
+        });
     });
 });

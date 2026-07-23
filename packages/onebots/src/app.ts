@@ -23,6 +23,7 @@ import { copyFileSync, existsSync, writeFileSync, mkdirSync, readFileSync } from
 import type { WsServer, Dict } from "@onebots/core";
 import { randomBytes } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { loadPlugin } from "./plugin-loader.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), 'node_modules')));
 
@@ -464,35 +465,19 @@ export namespace App {
             // 模块不存在，返回 undefined 表示加载失败
         }
     }
-    export async function loadAdapterFactory(platform: string,maybeNames=[
+    export async function loadAdapterFactory(platform: string, maybeNames=[
         `@onebots/adapter-${platform}`,
         `onebots-adapter-${platform}`,
         platform
     ]):Promise<boolean>{
-        if(!maybeNames.length) return false;
-        const modName=maybeNames.shift()!;
-        try{
-            require(modName);
-            return true;
-        }catch (e) {
-            console.warn(`[onebots] 加载适配器 ${modName} 失败: ${e}`);
-            return loadAdapterFactory(platform,maybeNames);
-        }
+        return loadPlugin("适配器", platform, maybeNames, require);
     }
     export async function loadProtocolFactory(name: string, maybeNames=[
         `@onebots/protocol-${name}`,
         `onebots-protocol-${name}`,
         `${name}`
         ]):Promise<boolean>{
-        if(!maybeNames.length) return false;
-        const modName=maybeNames.shift()!;
-        try{
-            require(modName);
-            return true;
-        }catch (e) {
-            console.warn(`[onebots] 加载协议 ${modName} 失败: ${e}`);
-            return loadProtocolFactory(name,maybeNames);
-        }
+        return loadPlugin("协议", name, maybeNames, require);
     }
 }
 export function createOnebots(

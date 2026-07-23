@@ -24,8 +24,8 @@ export class CliError extends Error {
 export function normalizeRuntimeOptions(options: RuntimeOptions) {
     return {
         configPath: path.resolve(options.config ?? "config.yaml"),
-        adapters: [...options.register],
-        protocols: [...options.protocol],
+        adapters: [...new Set(options.register)],
+        protocols: [...new Set(options.protocol)],
     };
 }
 
