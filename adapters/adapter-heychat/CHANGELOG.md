@@ -1,5 +1,12 @@
 # @onebots/adapter-heychat
 
+## 4.0.1
+
+### Patch Changes
+
+- Updated dependencies [4fd55a6]
+  - onebots@1.2.2
+
 ## 4.0.0
 
 ### Major Changes
