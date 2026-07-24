@@ -307,7 +307,7 @@
 - onebots@0.5.1
 - @onebots/adapter-wechat@1.0.1
 - @onebots/protocol-milky-v1@1.0.1
-- @onebots/protocol-satori-v1-v1@1.0.1
+- @onebots/protocol-satori-v1@1.0.1
 
 ## 1.1.0
 
@@ -323,4 +323,4 @@
   - @onebots/adapter-wechat@1.0.0
   - onebots@0.5.0
   - @onebots/protocol-milky-v1@1.0.0
-  - @onebots/protocol-satori-v1-v1@1.0.0
+  - @onebots/protocol-satori-v1@1.0.0

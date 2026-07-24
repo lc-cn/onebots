@@ -1,4 +1,4 @@
-# @onebots/protocol-satori-v1-v1
+# @onebots/protocol-satori-v1
 
 ## 3.0.2
 

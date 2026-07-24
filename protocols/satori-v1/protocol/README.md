@@ -1,10 +1,10 @@
-# @onebots/protocol-satori-v1-v1
+# @onebots/protocol-satori-v1
 
 onebots Satori V1 协议实现 - 支持 Satori 协议的插件
 
 ## 简介
 
-`@onebots/protocol-satori-v1-v1` 是 onebots 框架的官方 Satori 协议实现。Satori 是一个现代化的跨平台机器人协议，专注于提供统一的消息格式和事件系统。
+`@onebots/protocol-satori-v1` 是 onebots 框架的官方 Satori 协议实现。Satori 是一个现代化的跨平台机器人协议，专注于提供统一的消息格式和事件系统。
 
 ## 特性
 
@@ -18,9 +18,9 @@ onebots Satori V1 协议实现 - 支持 Satori 协议的插件
 ## 安装
 
 ```bash
-npm install @onebots/protocol-satori-v1-v1
+npm install @onebots/protocol-satori-v1
 # 或
-pnpm add @onebots/protocol-satori-v1-v1
+pnpm add @onebots/protocol-satori-v1
 ```
 
 ## 使用方法
@@ -43,7 +43,7 @@ onebots -r wechat -p satori-v1 -c config.yaml
 ```
 
 协议会自动从以下位置加载：
-- `@onebots/protocol-satori-v1-v1` (官方包)
+- `@onebots/protocol-satori-v1` (官方包)
 - `onebots-protocol-satori-v1` (社区包)
 - `satori-v1` (直接包名)
 
@@ -72,7 +72,7 @@ accounts:
 
 ```typescript
 import { App } from 'onebots';
-import { SatoriV1 } from '@onebots/protocol-satori-v1-v1';
+import { SatoriV1 } from '@onebots/protocol-satori-v1';
 
 // 注册协议
 await App.registerProtocol('satori', SatoriV1, 'v1');
