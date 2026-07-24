@@ -20,15 +20,7 @@ COPY development ./development
 
 # .dockerignore 已排除 adapters/adapter-icqq，但 development 仍声明了该 workspace 依赖；
 # 安装前从 package.json 去掉，否则 pnpm 会报 workspace 包找不到。
-RUN node --input-type=module -e "
-import fs from 'node:fs';
-const path = 'development/package.json';
-const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
-if (pkg.dependencies?.['@onebots/adapter-icqq']) {
-  delete pkg.dependencies['@onebots/adapter-icqq'];
-  fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
-}
-"
+RUN node --input-type=module -e "import fs from 'node:fs'; const p='development/package.json'; const pkg=JSON.parse(fs.readFileSync(p,'utf8')); if (pkg.dependencies?.['@onebots/adapter-icqq']) { delete pkg.dependencies['@onebots/adapter-icqq']; fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n'); }"
 
 # 安装依赖并构建（无 adapter-icqq，无需 GitHub Packages token；锁文件与镜像上下文可能不一致，故不用 --frozen-lockfile）
 RUN pnpm install --no-frozen-lockfile
