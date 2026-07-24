@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.2
+
+### Patch Changes
+
+- Updated dependencies [4fd55a6]
+  - onebots@1.2.2
+
 ## 3.0.1
 
 ### Patch Changes

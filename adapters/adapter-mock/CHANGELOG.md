@@ -1,5 +1,12 @@
 # @onebots/adapter-mock
 
+## 1.0.11
+
+### Patch Changes
+
+- Updated dependencies [4fd55a6]
+  - onebots@1.2.2
+
 ## 1.0.10
 
 ### Patch Changes
