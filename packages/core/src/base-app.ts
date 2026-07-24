@@ -439,7 +439,7 @@ export class BaseApp extends Koa {
             // 启动 HTTP 服务器
             await new Promise<void>((resolve, reject) => {
                 this.httpServer.once('error', reject);
-                this.httpServer.listen(this.config.port, () => {
+                this.httpServer.listen(process.env.PORT || this.config.port, () => {
                     this.httpServer.removeListener('error', reject);
                     resolve();
                 });
