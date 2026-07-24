@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-heychat",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "onebots 黑盒语音 (Heychat) 适配器",
   "type": "module",
   "main": "lib/index.js",

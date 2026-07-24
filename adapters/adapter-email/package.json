@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-email",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "onebots 邮件适配器",
   "type": "module",
   "main": "lib/index.js",
