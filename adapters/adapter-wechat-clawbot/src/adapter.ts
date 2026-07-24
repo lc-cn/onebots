@@ -19,6 +19,63 @@ import {
     SqliteClawbotContextTokenStore,
 } from "./context-token-store.js";
 
+/** DNS / 超时等可恢复网络错误，轮询循环会自动重试 */
+function isTransientNetworkError(err: unknown): boolean {
+    const codes = new Set([
+        "ENOTFOUND",
+        "EAI_AGAIN",
+        "ECONNRESET",
+        "ECONNREFUSED",
+        "ETIMEDOUT",
+        "EPIPE",
+        "ENETUNREACH",
+        "UND_ERR_CONNECT_TIMEOUT",
+        "UND_ERR_HEADERS_TIMEOUT",
+        "UND_ERR_BODY_TIMEOUT",
+        "ABORT_ERR",
+    ]);
+    const walk = (value: unknown, depth = 0): boolean => {
+        if (!value || depth > 4) return false;
+        if (typeof value === "string") {
+            const lower = value.toLowerCase();
+            return (
+                lower.includes("timeout") ||
+                lower.includes("enotfound") ||
+                lower.includes("fetch failed") ||
+                lower.includes("network")
+            );
+        }
+        if (value instanceof Error) {
+            const code = (value as Error & { code?: string }).code;
+            if (code && codes.has(code)) return true;
+            if (value.name === "TimeoutError" || value.name === "AbortError") return true;
+            if (walk(value.message, depth + 1)) return true;
+            return walk((value as Error & { cause?: unknown }).cause, depth + 1);
+        }
+        if (typeof value === "object") {
+            const obj = value as { code?: string; message?: string; cause?: unknown; name?: string };
+            if (obj.code && codes.has(obj.code)) return true;
+            if (obj.name === "TimeoutError" || obj.name === "AbortError") return true;
+            if (obj.message && walk(obj.message, depth + 1)) return true;
+            return walk(obj.cause, depth + 1);
+        }
+        return false;
+    };
+    return walk(err);
+}
+
+function summarizeNetworkError(err: unknown): string {
+    if (err instanceof Error) {
+        const cause = (err as Error & { cause?: unknown }).cause;
+        if (cause instanceof Error) {
+            const code = (cause as Error & { code?: string }).code;
+            return code ? `${err.message} (${code}: ${cause.message})` : `${err.message} (${cause.message})`;
+        }
+        return err.message;
+    }
+    return String(err);
+}
+
 function buildWechatClawbotQrBlocks(qrCodeUrl: string, _qrcode: string): Adapter.VerificationBlock[] {
     const blocks: Adapter.VerificationBlock[] = [];
     const img = qrCodeUrl.trim();
@@ -278,6 +335,12 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
 
         bot.on("polling_error", (err: unknown) => {
             if (err instanceof StaleCredentialFault) return;
+            if (isTransientNetworkError(err)) {
+                this.logger.warn(
+                    `[${this.platform}] ${config.account_id} 轮询网络异常（将自动重试）: ${summarizeNetworkError(err)}`,
+                );
+                return;
+            }
             this.logger.error(`[${this.platform}] ${config.account_id} 轮询错误:`, err);
         });
 

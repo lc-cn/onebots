@@ -383,6 +383,18 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             } as unknown as Adapter.VerificationRequest);
         });
 
+        // 网络闪断：icqq 会按 reconn_interval 自动重连，勿推「重新登录」打断恢复
+        bot.on('offline_network', (event: ICQQOfflineEvent) => {
+            const message = event.message || '网络连接中断';
+            this.logger.warn(`ICQQ Bot 网络离线（将自动重连）: ${message}`);
+            account.status = AccountStatus.Pending;
+        });
+
+        bot.on('heartbeat_error', (error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.warn(`ICQQ SSO 心跳异常（已吞掉，继续运行）: ${message}`);
+        });
+
         const clearStatusCards = () => {
             this.emit('verification:clear', {
                 platform: 'icqq',

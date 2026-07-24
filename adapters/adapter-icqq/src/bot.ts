@@ -106,18 +106,59 @@ export class ICQQBot extends EventEmitter {
 
         // 创建客户端
         this.client = createClient(clientConfig);
+        // icqq 内部 setTimeout 调用 sendSsoHeartBeat 未 catch，超时会变成 UnhandledPromiseRejection 并拖垮进程
+        this.patchSsoHeartBeat(this.client);
 
         // 绑定事件
         this.setupEventListeners();
 
-        // 登录
-        if (this.config.password) {
-            // 密码登录
-            this.client.login(uin, this.config.password);
-        } else {
-            // 扫码登录
-            this.client.login(uin);
-        }
+        // 登录（login 返回 Promise，必须吞掉 rejection，避免未处理导致进程退出）
+        const loginResult = this.config.password
+            ? this.client.login(uin, this.config.password)
+            : this.client.login(uin);
+        void Promise.resolve(loginResult).catch((error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            this.emit('login_error', { code: -1, message: message || '登录 Promise 被拒绝' });
+        });
+    }
+
+    /**
+     * 包裹 SSO 心跳：超时后记录并继续下一轮，避免未处理 rejection 导致进程退出
+     */
+    private patchSsoHeartBeat(client: Client): void {
+        type HeartbeatClient = Client & {
+            sendSsoHeartBeat?: () => boolean | Promise<boolean>;
+            startSsoHeartBeat?: () => void;
+        };
+        const hb = client as HeartbeatClient;
+        const original = hb.sendSsoHeartBeat?.bind(hb);
+        if (!original) return;
+
+        hb.sendSsoHeartBeat = () => {
+            try {
+                const result = original();
+                if (result && typeof (result as Promise<boolean>).then === 'function') {
+                    return (result as Promise<boolean>).catch((error: unknown) => {
+                        this.emit('heartbeat_error', error);
+                        try {
+                            hb.startSsoHeartBeat?.();
+                        } catch {
+                            // 忽略重启心跳失败
+                        }
+                        return false;
+                    });
+                }
+                return result;
+            } catch (error) {
+                this.emit('heartbeat_error', error);
+                try {
+                    hb.startSsoHeartBeat?.();
+                } catch {
+                    // 忽略重启心跳失败
+                }
+                return false;
+            }
+        };
     }
 
     /**
@@ -125,7 +166,11 @@ export class ICQQBot extends EventEmitter {
      */
     async stop(): Promise<void> {
         if (this.client) {
-            this.client.logout();
+            try {
+                await Promise.resolve(this.client.logout());
+            } catch {
+                // 登出失败不影响清理
+            }
             this.client = null;
         }
         this.ready = false;
@@ -170,7 +215,26 @@ export class ICQQBot extends EventEmitter {
             this.emit('ready', this.loginInfo);
         });
 
+        // network / kickoff 会经 em() 冒泡到 system.offline；用标志区分，避免误推「重新登录」
+        let offlineLeafHandled = false;
+        this.client.on('system.offline.network', (event) => {
+            offlineLeafHandled = true;
+            this.ready = false;
+            this.emit('offline_network', event);
+            queueMicrotask(() => {
+                offlineLeafHandled = false;
+            });
+        });
+        this.client.on('system.offline.kickoff', (event) => {
+            offlineLeafHandled = true;
+            this.ready = false;
+            this.emit('offline', event);
+            queueMicrotask(() => {
+                offlineLeafHandled = false;
+            });
+        });
         this.client.on('system.offline', (event) => {
+            if (offlineLeafHandled) return;
             this.ready = false;
             this.emit('offline', event);
         });
