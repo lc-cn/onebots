@@ -1,6 +1,6 @@
 # QQ Adapter
 
-The QQ adapter supports connecting to onebots service through QQ Official API.
+The QQ adapter connects onebots to the QQ Official Bot platform. Since v4, it has been refactored into a thin wrapper around [`qq-official-bot`](https://www.npmjs.com/package/qq-official-bot).
 
 ## Status
 
@@ -8,15 +8,14 @@ The QQ adapter supports connecting to onebots service through QQ Official API.
 
 ## Features
 
-- ✅ QQ Channel Messages (Public/Private)
-- ✅ QQ Group Messages
-- ✅ Private Chat Messages (C2C)
-- ✅ Channel Direct Messages (DMS)
-- ✅ Channel Management
-- ✅ Member Management
-- ✅ Message Reactions
-- ✅ Interactive Buttons
-- ✅ WebSocket and Webhook Dual Mode Support
+- ✅ QQ channel messages (private / public)
+- ✅ QQ group messages
+- ✅ C2C private messages
+- ✅ channel direct messages
+- ✅ channel management
+- ✅ member management
+- ✅ reactions and interaction notices
+- ✅ WebSocket and Webhook receiver modes
 
 ## Installation
 
@@ -26,96 +25,74 @@ npm install @onebots/adapter-qq
 pnpm add @onebots/adapter-qq
 ```
 
-## Receiving Modes
+## v4 Migration Notes
 
-The adapter supports two modes for receiving events, selectable via the `mode` configuration:
-
-### WebSocket Mode (Default)
-
-The bot actively connects to QQ servers to receive real-time event pushes. Suitable for most scenarios.
-
-### Webhook Mode
-
-QQ servers actively push events to your server. Suitable for scenarios requiring public network access or Serverless.
-
-In Webhook mode, the event push URL is: `http://your-server:port/qq/{account_id}/webhook`
-
-You need to configure this URL as the callback address in the QQ Open Platform.
+- `appId` was renamed to `appid`
+- `token`, `maxRetry`, and `logLevel` were removed
+- webhook mode now starts its own HTTP server inside the SDK, so `port` is required
+- legacy intent names are auto-mapped, but should be updated in config files
 
 ## Configuration Example
 
+### WebSocket mode
+
 ```yaml
 qq.my_bot:
-  # OneBot V11 protocol configuration
-  onebot.v11:
-    use_http: true
-    use_ws: true
-    access_token: 'your_token'
-    heartbeat_interval: 5
-  
-  # QQ platform configuration
-  appId: 'your_app_id'       # QQ Bot AppID
-  secret: 'your_app_secret'  # QQ Bot Secret
-  mode: 'websocket'          # Receiving mode: 'websocket' (default) or 'webhook'
-  sandbox: false             # Whether sandbox environment
-  removeAt: true             # Whether to automatically remove @bot content
-  maxRetry: 10               # Maximum reconnection attempts (WebSocket mode only)
-  intents:                   # Events to listen to (WebSocket mode only)
-    - 'GROUP_AT_MESSAGE_CREATE'     # Group @ message event
-    - 'C2C_MESSAGE_CREATE'          # Private chat message event
-    - 'DIRECT_MESSAGE'              # Channel direct message event
-    - 'GUILDS'                      # Channel change event
-    - 'GUILD_MEMBERS'               # Channel member change event
-    - 'GUILD_MESSAGE_REACTIONS'     # Channel message reaction event
-    - 'INTERACTION'                 # Interaction event
-    - 'PUBLIC_GUILD_MESSAGES'       # Public bot channel message event
+  appid: 'your_app_id'
+  secret: 'your_app_secret'
+  mode: 'websocket'
+  sandbox: false
+  intents:
+    - 'GROUP_AND_C2C_EVENT'
+    - 'DIRECT_MESSAGE'
+    - 'GUILDS'
+    - 'GUILD_MEMBERS'
+    - 'GUILD_MESSAGE_REACTIONS'
+    - 'INTERACTION'
+    - 'PUBLIC_GUILD_MESSAGES'
+    - 'FORUMS_EVENT'
 ```
 
+### Webhook mode
+
+```yaml
+qq.my_bot:
+  appid: 'your_app_id'
+  secret: 'your_app_secret'
+  mode: 'webhook'
+  port: 18080
+  path: '/qq/webhook'
+```
+
+In v4, webhook callbacks must point to the SDK-owned HTTP server, for example:
+
+`http://your-server:18080/qq/webhook`
+
 ## Supported Intents
+
+Prefer the SDK names:
 
 | Intent | Description |
 |--------|-------------|
 | `GUILDS` | Channel change events |
 | `GUILD_MEMBERS` | Channel member change events |
-| `GUILD_MESSAGES` | Channel message events (private) |
+| `GUILD_MESSAGES` | Private bot channel message events |
+| `PUBLIC_GUILD_MESSAGES` | Public bot channel message events |
 | `GUILD_MESSAGE_REACTIONS` | Channel message reaction events |
 | `DIRECT_MESSAGE` | Channel direct message events |
-| `INTERACTION` | Interaction events |
+| `GROUP_AND_C2C_EVENT` | Group @ and C2C private message events |
 | `MESSAGE_AUDIT` | Message audit events |
-| `FORUMS` | Forum events |
+| `INTERACTION` | Interaction events |
+| `FORUMS_EVENT` | Forum events |
 | `AUDIO_ACTION` | Audio action events |
-| `AT_MESSAGES` | @ message events |
-| `PUBLIC_GUILD_MESSAGES` | Public bot channel message events |
 
-## Client SDK Usage
+Legacy names still accepted with a warning:
 
-```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
-
-const client = new ImHelper();
-
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'qq',
-  account_id: 'my_bot',
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/qq/my_bot/onebot/v11/ws',
-  access_token: 'your_access_token',
-});
-
-// Listen for messages
-client.on('message', (message) => {
-  console.log(`Received message: ${message.content}`);
-  // Auto reply
-  if (message.content === 'Hello') {
-    message.reply('Hello, I am a bot!');
-  }
-});
-```
+| Legacy | New |
+|--------|-----|
+| `GROUP_AT_MESSAGE_CREATE` | `GROUP_AND_C2C_EVENT` |
+| `C2C_MESSAGE_CREATE` | `GROUP_AND_C2C_EVENT` |
+| `OPEN_FORUMS_EVENT` | `FORUMS_EVENT` |
 
 ## Related Links
 

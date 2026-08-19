@@ -97,23 +97,17 @@ http://bot.example.com:6727/wechat/my_official_account/webhook
 
 ### 配置项
 
-#### appId
+#### appid
 
 - **类型**: `string`
 - **必填**: ✅
-- **说明**: QQ机器人AppID
+- **说明**: QQ 机器人 AppID（v4 起字段名为 `appid`）
 
 #### secret
 
 - **类型**: `string`
 - **必填**: ✅
 - **说明**: QQ机器人Secret
-
-#### token
-
-- **类型**: `string`
-- **必填**: ✅
-- **说明**: QQ机器人Token
 
 #### mode
 
@@ -128,36 +122,41 @@ http://bot.example.com:6727/wechat/my_official_account/webhook
 - **默认值**: `false`
 - **说明**: 是否沙箱环境
 
-#### removeAt
-
-- **类型**: `boolean`
-- **默认值**: `true`
-- **说明**: 是否自动移除@机器人内容
-
-#### maxRetry
-
-- **类型**: `number`
-- **默认值**: `10`
-- **说明**: 最大重连次数（仅WebSocket模式）
-
 #### intents
 
 - **类型**: `string[]`
 - **默认值**: `[]`
 - **说明**: 需要监听的事件（仅WebSocket模式需要）
 
+#### apiBaseUrl
+
+- **类型**: `string`
+- **必填**: ❌
+- **说明**: 自定义 API 根地址（高级，优先级高于 `sandbox`）
+
+#### port
+
+- **类型**: `number`
+- **必填**: `webhook` 模式必填
+- **说明**: SDK 独立监听的 Webhook 端口，不再复用 OneBots 主 HTTP 路由
+
+#### path
+
+- **类型**: `string`
+- **默认值**: `/`
+- **说明**: Webhook 路径
+
 ### 配置示例
 
 ```yaml
 qq.my_bot:
   # QQ 平台配置
-  appId: 'your_app_id'
-  token: 'your_token'
+  appid: 'your_app_id'
   secret: 'your_secret'
+  mode: 'websocket'
   sandbox: false
   intents:
-    - 'GROUP_AT_MESSAGE_CREATE'
-    - 'C2C_MESSAGE_CREATE'
+    - 'GROUP_AND_C2C_EVENT'
     - 'PUBLIC_GUILD_MESSAGES'
   
   # 协议配置
@@ -165,6 +164,19 @@ qq.my_bot:
     use_http: true
     use_ws: true
 ```
+
+### Webhook 模式说明
+
+```yaml
+qq.my_bot:
+  appid: 'your_app_id'
+  secret: 'your_secret'
+  mode: 'webhook'
+  port: 18080
+  path: '/qq/webhook'
+```
+
+> v4 起 QQ Webhook 不再挂载到 OneBots 主路由，QQ 开放平台回调地址应改为 `http://host:18080/qq/webhook`。
 
 详细配置请参考：[QQ 适配器配置](/config/adapter/qq)
 

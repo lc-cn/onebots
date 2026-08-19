@@ -65,12 +65,13 @@ qq.my_bot:
     access_token: 'your_token'
   
   # QQ 平台配置
-  token: ''               # QQ 机器人 token
+  appid: ''               # QQ 机器人 AppID（v4 起字段名为 appid）
   secret: ''              # QQ 机器人 secret
+  mode: websocket         # websocket（默认）或 webhook
   sandbox: false          # 是否沙箱环境
   intents:
-    - 'GROUP_AT_MESSAGE_CREATE'
-    - 'C2C_MESSAGE_CREATE'
+    - 'GROUP_AND_C2C_EVENT'
+    - 'PUBLIC_GUILD_MESSAGES'
 
 wechat.my_wechat_mp:
   # OneBot V11 协议配置
@@ -270,12 +271,13 @@ qq.my_bot:
     platform: 'qq'
   
   # QQ 平台配置
-  token: ''                     # QQ 机器人 token
+  appid: ''                     # QQ 机器人 AppID（v4 起字段名为 appid）
   secret: ''                    # QQ 机器人 secret
+  mode: websocket               # websocket（默认）或 webhook
   sandbox: false                # 是否沙箱环境
   intents:                      # 需要监听的 intents
-    - 'GROUP_AT_MESSAGE_CREATE'
-    - 'C2C_MESSAGE_CREATE'
+    - 'GROUP_AND_C2C_EVENT'
+    - 'PUBLIC_GUILD_MESSAGES'
 
 # 微信公众号示例
 wechat.my_wechat_mp:

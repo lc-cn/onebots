@@ -65,18 +65,22 @@ qq.my_bot:
     platform: 'qq'
   
   # QQ 平台配置
-  token: '' # QQ 机器人 token
+  appid: '' # QQ 机器人 AppID（v4 起字段名为 appid，小写 d）
   secret: '' # QQ 机器人 secret
+  mode: websocket # websocket（默认）或 webhook
   sandbox: false # 是否沙箱环境
+  # apiBaseUrl: '' # 可选：自定义 API 根地址（高级），优先级高于 sandbox
+  # port: 18080 # webhook 模式必填：SDK 独立监听端口，不再复用 OneBots 主 HTTP 路由
+  # path: '/qq/webhook' # webhook 路径，默认 '/'
   intents: # 需要监听的 intents
-    - 'GROUP_AT_MESSAGE_CREATE' # 群聊@事件
-    - 'C2C_MESSAGE_CREATE' # 私聊事件
+    - 'GROUP_AND_C2C_EVENT' # 群聊@事件 + 私聊事件（SDK 新名）
     - 'DIRECT_MESSAGE' # 频道私信事件
     - 'GUILDS' # 频道变更事件
     - 'GUILD_MEMBERS' # 频道成员变更事件
     - 'GUILD_MESSAGE_REACTIONS' # 频道消息表态事件
     - 'INTERACTION' # 互动事件
     - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件
+    - 'FORUMS_EVENT' # 论坛事件
 
 # 钉钉机器人
 dingtalk.client_id:

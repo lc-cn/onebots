@@ -1,102 +1,81 @@
 /**
- * QQ官方机器人适配器
- * 继承Adapter基类，实现QQ官方机器人的消息收发和管理功能
+ * QQ 官方机器人适配器
+ *
+ * v4 重大变更：不再自带 bot 实现，直接依赖 `qq-official-bot` SDK。
+ * SDK Bot 实例直接作为 Account.client 暴露给上层；adapter 只负责：
+ *   1. 把用户配置转换为 SDK BotConfig
+ *   2. 监听 SDK 事件并翻译为 CommonEvent.Message / CommonEvent.Notice
+ *   3. 把 OneBot/Satori 协议层的 sendMessage/deleteMessage 等调用路由到 SDK
  */
-import { Account, AdapterRegistry, AccountStatus, dateLikeToEventMs } from "onebots";
-import { Adapter } from "onebots";
-import { BaseApp } from "onebots";
-import { QQBot } from "./bot.js";
-import { CommonEvent, type CommonTypes } from "onebots";
-import type {
-    QQConfig,
-    QQMessageEvent,
-    QQGroupMessageEvent,
-    QQC2CMessageEvent,
-    QQDirectMessageEvent,
-    QQGuildEvent,
-    QQChannelEvent,
-    QQGuildMemberEvent,
-    QQReactionEvent,
-    QQInteractionEvent,
-    QQAttachment,
-    SendMessageParams,
+import {
+    Bot,
     ReceiverMode,
-    MessageSendResult,
-} from "./types.js";
+    segment,
+    type Sendable,
+    type MessageElem,
+    type GuildMessageEvent,
+    type GroupMessageEvent,
+    type PrivateMessageEvent,
+    type GuildChangeNoticeEvent,
+    type ChannelChangeNoticeEvent,
+    type GuildMemberChangeNoticeEvent,
+    type MessageReactionNoticeEvent,
+    type GuildActionNoticeEvent,
+    type GroupActionNoticeEvent,
+    type GroupJoinRequestNoticeEvent,
+} from 'qq-official-bot';
+import { Account, AdapterRegistry, AccountStatus, dateLikeToEventMs } from 'onebots';
+import { Adapter } from 'onebots';
+import { BaseApp } from 'onebots';
+import { CommonEvent, type CommonTypes } from 'onebots';
+import type { QQConfig } from './types.js';
+import { mapIntents } from './intents.js';
 
-export class QQAdapter extends Adapter<QQBot, "qq"> {
+/** 默认 API 根地址（与 SDK 默认对齐） */
+const DEFAULT_API_BASE_URL = 'https://api.bot.qq.com';
+const SANDBOX_API_BASE_URL = 'https://sandbox.api.sgroup.qq.com';
+
+export class QQAdapter extends Adapter<Bot, 'qq'> {
     constructor(app: BaseApp) {
-        super(app, "qq");
-        this.icon = "https://q.qq.com/favicon.ico";
+        super(app, 'qq');
+        this.icon = 'https://q.qq.com/favicon.ico';
     }
 
     // ============================================
-    // 消息相关方法
+    // 消息发送 / 撤回
     // ============================================
 
-    /**
-     * 发送消息
-     * 支持群聊、私聊、频道和频道私信
-     */
     async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_type, message } = params;
-        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number).string;
+        const sendable = this.buildSendable(params.message);
 
-        // 构建消息内容
-        const content = this.buildMessageContent(message);
-        const sendParams: SendMessageParams = { content };
-
-        // 提取图片等附件
-        const attachments = this.extractAttachments(message);
-        if (attachments.image) {
-            sendParams.image = attachments.image;
-        }
-
-        let result: MessageSendResult;
-        
-        switch (scene_type) {
-            case "group":
-                // QQ群消息
-                result = await bot.sendGroupMessage(sceneId.string, {
-                    ...sendParams,
-                    msg_type: 0, // 文本消息
-                });
+        let res: { id?: string } | undefined;
+        switch (params.scene_type) {
+            case 'group':
+                res = await bot.group(sceneId).send(sendable);
                 break;
-                
-            case "private":
-                // 单聊消息 (C2C)
-                result = await bot.sendC2CMessage(sceneId.string, {
-                    ...sendParams,
-                    msg_type: 0,
-                });
+            case 'private':
+                res = await bot.user(sceneId).send(sendable);
                 break;
-                
-            case "channel":
-                // 频道消息
-                result = await bot.sendChannelMessage(sceneId.string, sendParams);
+            case 'channel':
+                res = await bot.channel(sceneId).send(sendable);
                 break;
-                
-            case "direct":
-                // 频道私信
-                result = await bot.sendDMSMessage(sceneId.string, sendParams);
+            case 'direct':
+                res = await bot.direct(sceneId).send(sendable);
                 break;
-                
             default:
-                throw new Error(`不支持的消息场景类型: ${scene_type}`);
+                throw new Error(`不支持的消息场景类型: ${params.scene_type}`);
         }
 
         return {
-            message_id: this.createId(result.id || result.message_id || Date.now().toString()),
+            message_id: this.createId(res?.id ?? Date.now().toString()),
         };
     }
 
-    /**
-     * 删除/撤回消息
-     */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
@@ -104,19 +83,26 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
         const bot = account.client;
         const messageId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
         const sceneType = params.scene_type;
-        const sceneId =
-            params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : undefined;
+        const sceneId = params.scene_id != null
+            ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
+            : undefined;
 
         if (!sceneId || !sceneType) {
-            throw new Error("删除消息需要提供 scene_type 和 scene_id");
+            throw new Error('删除消息需要提供 scene_type 和 scene_id');
         }
 
         switch (sceneType) {
-            case "channel":
-                await bot.recallChannelMessage(sceneId, messageId);
+            case 'channel':
+                await bot.channel(sceneId).recall(messageId);
                 break;
-            case "direct":
-                await bot.recallDMSMessage(sceneId, messageId);
+            case 'direct':
+                await bot.direct(sceneId).recall(messageId);
+                break;
+            case 'group':
+                await bot.group(sceneId).recall(messageId);
+                break;
+            case 'private':
+                await bot.user(sceneId).recall(messageId);
                 break;
             default:
                 throw new Error(`QQ官方API暂不支持撤回 ${sceneType} 类型的消息`);
@@ -124,19 +110,13 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
     }
 
     // ============================================
-    // 用户相关方法
+    // 用户/频道查询
     // ============================================
 
-    /**
-     * 获取机器人信息
-     */
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const info = await bot.getSelfInfo();
-
+        const info = await account.client.getSelfInfo();
         return {
             user_id: this.createId(info.id),
             user_name: info.username,
@@ -144,462 +124,300 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
         };
     }
 
-    // ============================================
-    // 频道相关方法 (Guild/Channel)
-    // ============================================
-
-    /**
-     * 获取频道列表
-     */
     async getGuildList(uin: string): Promise<Adapter.GuildInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const guilds = await bot.getGuilds();
-
-        return guilds.map(guild => ({
-            guild_id: this.createId(guild.id),
-            guild_name: guild.name,
-            guild_display_name: guild.name,
+        const guilds = await account.client.getGuildList();
+        return guilds.map((g) => ({
+            guild_id: this.createId(g.guild_id),
+            guild_name: g.guild_name,
+            guild_display_name: g.guild_name,
         }));
     }
 
-    /**
-     * 获取频道信息
-     */
     async getGuildInfo(uin: string, params: Adapter.GetGuildInfoParams): Promise<Adapter.GuildInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const guild = await bot.getGuild(params.guild_id.string);
-
+        const g = await account.client.guild(params.guild_id.string).info();
         return {
-            guild_id: this.createId(guild.id),
-            guild_name: guild.name,
-            guild_display_name: guild.name,
+            guild_id: this.createId(g.guild_id),
+            guild_name: g.guild_name,
+            guild_display_name: g.guild_name,
         };
     }
 
-    /**
-     * 获取子频道列表
-     */
     async getChannelList(uin: string, params?: Adapter.GetChannelListParams): Promise<Adapter.ChannelInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        if (!params?.guild_id) {
-            throw new Error("获取子频道列表需要提供 guild_id");
-        }
-
-        const bot = account.client;
-        const channels = await bot.getChannels(params.guild_id.string);
-
-        return channels.map(channel => ({
-            channel_id: this.createId(channel.id),
-            channel_name: channel.name,
-            channel_type: channel.type,
-            parent_id: channel.parent_id ? this.createId(channel.parent_id) : undefined,
+        if (!params?.guild_id) throw new Error('获取子频道列表需要提供 guild_id');
+        const list = await account.client.getChannelList(params.guild_id.string);
+        return list.map((c) => ({
+            channel_id: this.createId(c.channel_id),
+            channel_name: c.channel_name,
+            channel_type: c.channel_type,
         }));
     }
 
-    /**
-     * 获取子频道信息
-     */
     async getChannelInfo(uin: string, params: Adapter.GetChannelInfoParams): Promise<Adapter.ChannelInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const channel = await bot.getChannel(params.channel_id.string);
-
+        const c = await account.client.getChannelInfo(params.channel_id.string);
         return {
-            channel_id: this.createId(channel.id),
-            channel_name: channel.name,
-            channel_type: channel.type,
-            parent_id: channel.parent_id ? this.createId(channel.parent_id) : undefined,
+            channel_id: this.createId(c.channel_id),
+            channel_name: c.channel_name,
+            channel_type: c.channel_type,
         };
     }
 
-    /**
-     * 创建子频道
-     */
     async createChannel(uin: string, params: Adapter.CreateChannelParams): Promise<Adapter.ChannelInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const channel = await bot.createChannel(params.guild_id.string, {
+        const ch = await account.client.createChannel(params.guild_id.string, {
             name: params.channel_name,
-            type: params.channel_type || 0,
+            type: params.channel_type ?? 0,
             parent_id: params.parent_id?.string,
-        });
-
+        } as any);
         return {
-            channel_id: this.createId(channel.id),
-            channel_name: channel.name,
-            channel_type: channel.type,
-            parent_id: channel.parent_id ? this.createId(channel.parent_id) : undefined,
+            channel_id: this.createId(ch.id),
+            channel_name: ch.name,
+            channel_type: ch.type as number,
+            parent_id: ch.parent_id ? this.createId(ch.parent_id) : undefined,
         };
     }
 
-    /**
-     * 更新子频道
-     */
     async updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.updateChannel(params.channel_id.string, {
+        await account.client.updateChannel(params.channel_id.string, {
             name: params.channel_name,
             parent_id: params.parent_id?.string,
-        });
+        } as any);
     }
 
-    /**
-     * 删除子频道
-     */
     async deleteChannel(uin: string, params: Adapter.DeleteChannelParams): Promise<void> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.deleteChannel(params.channel_id.string);
+        await account.client.deleteChannel(params.channel_id.string);
     }
 
-    // ============================================
-    // 频道成员相关方法
-    // ============================================
-
-    /**
-     * 获取频道成员信息
-     */
-    async getGuildMemberInfo(uin: string, params: Adapter.GetGuildMemberInfoParams): Promise<Adapter.GuildMemberInfo> {
+    async getGuildMemberInfo(
+        uin: string,
+        params: Adapter.GetGuildMemberInfoParams,
+    ): Promise<Adapter.GuildMemberInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const member = await bot.getGuildMember(params.guild_id.string, params.user_id.string);
-
+        const m = await account.client.getGuildMemberInfo(params.guild_id.string, params.user_id.string);
         return {
             guild_id: params.guild_id,
-            user_id: this.createId(member.user?.id || params.user_id.string),
-            user_name: member.user?.username || '',
-            nickname: member.nick,
-            role: member.roles?.[0],
+            user_id: this.createId(m.member_id),
+            user_name: m.username,
+            nickname: m.card,
+            role: m.roles?.[0],
         };
     }
 
-    /**
-     * 踢出频道成员
-     */
-    async kickChannelMember(uin: string, params: Adapter.KickChannelMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        // 由于QQ API需要guild_id，这里需要从某处获取
-        // 暂时抛出错误
-        throw new Error("踢出频道成员需要提供 guild_id，请使用 kickGuildMember 方法");
+    async kickChannelMember(uin: string, _params: Adapter.KickChannelMemberParams): Promise<void> {
+        // 需要 guild_id；保留与旧实现一致的错误，引导调用方使用扩展方法 kickGuildMember
+        void this.getAccount(uin);
+        throw new Error('踢出频道成员需要提供 guild_id，请使用 kickGuildMember 方法');
     }
 
-    /**
-     * 设置频道成员禁言
-     */
-    async setChannelMemberMute(uin: string, params: Adapter.SetChannelMemberMuteParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        // 由于QQ API需要guild_id，这里需要从某处获取
-        throw new Error("设置频道成员禁言需要提供 guild_id，请使用 muteGuildMember 方法");
+    async setChannelMemberMute(uin: string, _params: Adapter.SetChannelMemberMuteParams): Promise<void> {
+        void this.getAccount(uin);
+        throw new Error('设置频道成员禁言需要提供 guild_id，请使用 muteGuildMember 方法');
     }
 
-    // ============================================
-    // 扩展方法：频道成员管理（需要guild_id）
-    // ============================================
-
-    /**
-     * 踢出频道成员（扩展）
-     */
-    async kickGuildMember(uin: string, guildId: string, userId: string, addBlacklist?: boolean): Promise<void> {
+    async kickGuildMember(
+        uin: string,
+        guildId: string,
+        userId: string,
+        addBlacklist?: boolean,
+    ): Promise<void> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.kickGuildMember(guildId, userId, addBlacklist);
+        await account.client.kickGuildMember(guildId, userId, undefined, addBlacklist);
     }
 
-    /**
-     * 禁言频道成员（扩展）
-     */
-    async muteGuildMember(uin: string, guildId: string, userId: string, duration: number): Promise<void> {
+    async muteGuildMember(
+        uin: string,
+        guildId: string,
+        userId: string,
+        duration: number,
+    ): Promise<void> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.muteGuildMember(guildId, userId, undefined, duration.toString());
+        await account.client.muteGuildMember(guildId, userId, duration);
     }
 
-    /**
-     * 全员禁言（扩展）
-     */
     async muteGuild(uin: string, guildId: string, duration: number): Promise<void> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.muteGuild(guildId, undefined, duration.toString());
+        await account.client.muteGuild(guildId, duration);
     }
 
     // ============================================
-    // 系统相关方法
+    // 系统
     // ============================================
 
-    /**
-     * 获取版本信息
-     */
     async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
-            app_name: "onebots-qq-adapter",
-            app_version: "1.0.0",
-            impl: "onebots",
-            version: "1.0.0",
-            onebot_version: "12",
+            app_name: 'onebots-adapter-qq',
+            app_version: '4.0.0',
+            impl: 'onebots',
+            version: '4.0.0',
+            onebot_version: '12',
         };
     }
 
-    /**
-     * 获取运行状态
-     */
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const account = this.getAccount(uin);
         return {
             online: account?.status === AccountStatus.Online,
-            good: !!account,
+            good: account?.status === AccountStatus.Online,
         };
     }
 
     // ============================================
-    // 辅助方法
+    // 账号创建（核心）
     // ============================================
 
-    /**
-     * 构建消息内容
-     */
-    private buildMessageContent(message: CommonTypes.Segment[]): string {
-        const textParts: string[] = [];
-
-        for (const seg of message) {
-            if (typeof seg === 'string') {
-                textParts.push(seg);
-            } else if (seg.type === 'text') {
-                textParts.push((seg.data.text as string) || '');
-            } else if (seg.type === 'at') {
-                if (seg.data.qq === 'all') {
-                    textParts.push('@everyone');
-                } else {
-                    textParts.push(`<@${(seg.data.qq as string) || (seg.data.id as string)}>`);
-                }
-            } else if (seg.type === 'face') {
-                textParts.push(`<emoji:${seg.data.id as string}>`);
-            }
-        }
-
-        return textParts.join('');
-    }
-
-    /**
-     * 提取附件
-     */
-    private extractAttachments(message: CommonTypes.Segment[]): { image?: string; file?: string } {
-        const attachments: { image?: string; file?: string } = {};
-
-        for (const seg of message) {
-            if (seg.type === 'image') {
-                attachments.image = (seg.data.url as string) || (seg.data.file as string);
-            } else if (seg.type === 'file') {
-                attachments.file = (seg.data.url as string) || (seg.data.file as string);
-            }
-        }
-
-        return attachments;
-    }
-
-    /**
-     * 解析消息内容为消息段
-     */
-    private parseMessageContent(content: string, attachments?: QQAttachment[]): CommonTypes.Segment[] {
-        const segments: CommonTypes.Segment[] = [];
-
-        // 解析@
-        let text = content.replace(/<@!?(\d+)>/g, (_, id) => {
-            segments.push({ type: 'at', data: { qq: id } });
-            return '';
-        });
-
-        // 解析emoji
-        text = text.replace(/<emoji:(\d+)>/g, (_, id) => {
-            segments.push({ type: 'face', data: { id } });
-            return '';
-        });
-
-        // 剩余文本
-        if (text.trim()) {
-            segments.unshift({ type: 'text', data: { text: text.trim() } });
-        }
-
-        // 处理附件
-        if (attachments) {
-            for (const att of attachments) {
-                if (att.content_type?.startsWith('image/')) {
-                    segments.push({ type: 'image', data: { url: att.url } });
-                }
-            }
-        }
-
-        return segments;
-    }
-
-    // ============================================
-    // 账号创建
-    // ============================================
-
-    createAccount(config: Account.Config<'qq'>): Account<'qq', QQBot> {
+    createAccount(config: Account.Config<'qq'>): Account<'qq', Bot> {
         const qqConfig: QQConfig = {
             account_id: config.account_id,
-            appId: config.appId,
+            appid: config.appid,
             secret: config.secret,
-            token: config.token,
             sandbox: config.sandbox,
             intents: config.intents,
-            removeAt: config.removeAt ?? true,
-            maxRetry: config.maxRetry ?? 10,
-            mode: config.mode ?? 'websocket',  // 默认使用WebSocket模式
+            mode: config.mode ?? 'websocket',
+            apiBaseUrl: config.apiBaseUrl,
+            port: config.port,
+            path: config.path,
         };
 
-        const bot = new QQBot(qqConfig);
-        const account = new Account<'qq', QQBot>(this, bot, config);
-
-        // 如果是Webhook模式，注册Webhook路由
-        if (qqConfig.mode === 'webhook') {
-            this.app.router.all(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
-            this.logger.info(`QQ机器人 ${config.account_id} Webhook路径: ${account.path}/webhook`);
+        if (qqConfig.mode === 'webhook' && !qqConfig.port) {
+            throw new Error(`[QQ] ${config.account_id} webhook 模式必须配置 port`);
         }
 
-        // 监听Bot事件
-        bot.on('ready', (data) => {
+        const sdkIntents = mapIntents(qqConfig.intents, (m) => this.logger.warn(m));
+        const apiBaseUrl = qqConfig.apiBaseUrl
+            ?? (qqConfig.sandbox ? SANDBOX_API_BASE_URL : DEFAULT_API_BASE_URL);
+
+        // SDK Config 是严格泛型 — 在边界统一 as any
+        const sdkConfig: any = {
+            appid: qqConfig.appid,
+            secret: qqConfig.secret,
+            mode: qqConfig.mode === 'webhook' ? ReceiverMode.WEBHOOK : ReceiverMode.WEBSOCKET,
+            intents: sdkIntents,
+            removeAt: true,
+            apiBaseUrl,
+        };
+        if (qqConfig.mode === 'webhook') {
+            sdkConfig.port = qqConfig.port;
+            sdkConfig.path = qqConfig.path ?? '/';
+        }
+
+        const bot = new Bot(sdkConfig);
+        const account = new Account<'qq', Bot>(this, bot, config);
+
+        // ---- 生命周期 ----
+        // SDK 的 ready/error 事件由 BaseReceiver 透过 Client EventEmitter 暴露
+        bot.on('ready', () => {
             const modeText = qqConfig.mode === 'webhook' ? '(Webhook模式)' : '(WebSocket模式)';
-            this.logger.info(`QQ机器人 ${config.account_id} 已连接 ${modeText}`);
+            this.logger.info(`[QQ] ${config.account_id} 已连接 ${modeText}`);
             account.status = AccountStatus.Online;
-            account.nickname = data.user?.username || 'QQ机器人';
-            account.avatar = data.user?.avatar || this.icon;
         });
-
-        bot.on('error', (error) => {
-            this.logger.error(`QQ机器人 ${config.account_id} 错误:`, error);
+        bot.on('error', (err: Error) => {
+            this.logger.error(`[QQ] ${config.account_id} 错误:`, err);
         });
-
-        bot.on('ws_close', (code, reason) => {
-            this.logger.warn(`QQ机器人 ${config.account_id} 连接关闭: ${code} - ${reason}`);
-            account.status = AccountStatus.OffLine;
-        });
-
-        bot.on('token_refreshed', () => {
-            this.logger.debug(`Access Token 已刷新`);
-        });
-
-        // 监听频道消息事件
-        bot.on('message.guild', (message: QQMessageEvent) => {
-            try { this.handleGuildMessage(account, message, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道消息事件异常:`, e); }
-        });
-
-        // 监听频道私信事件
-        bot.on('message.direct', (message: QQDirectMessageEvent) => {
-            try { this.handleDirectMessage(account, message, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道私信事件异常:`, e); }
-        });
-
-        // 监听群消息事件
-        bot.on('message.group', (message: QQGroupMessageEvent) => {
-            try { this.handleGroupMessage(account, message, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理群消息事件异常:`, e); }
-        });
-
-        // 监听私聊消息事件
-        bot.on('message.private', (message: QQC2CMessageEvent) => {
-            try { this.handleC2CMessage(account, message, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理私聊消息事件异常:`, e); }
-        });
-
-        // 监听频道创建事件
-        bot.on('GUILD_CREATE', (event: QQGuildEvent) => {
-            try { this.handleGuildEvent(account, 'create', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道创建事件异常:`, e); }
-        });
-
-        // 监听频道更新事件
-        bot.on('GUILD_UPDATE', (event: QQGuildEvent) => {
-            try { this.handleGuildEvent(account, 'update', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道更新事件异常:`, e); }
-        });
-
-        // 监听频道删除事件
-        bot.on('GUILD_DELETE', (event: QQGuildEvent) => {
-            try { this.handleGuildEvent(account, 'delete', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理频道删除事件异常:`, e); }
-        });
-
-        // 监听子频道创建事件
-        bot.on('CHANNEL_CREATE', (event: QQChannelEvent) => {
-            try { this.handleChannelEvent(account, 'create', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理子频道创建事件异常:`, e); }
-        });
-
-        // 监听子频道更新事件
-        bot.on('CHANNEL_UPDATE', (event: QQChannelEvent) => {
-            try { this.handleChannelEvent(account, 'update', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理子频道更新事件异常:`, e); }
-        });
-
-        // 监听子频道删除事件
-        bot.on('CHANNEL_DELETE', (event: QQChannelEvent) => {
-            try { this.handleChannelEvent(account, 'delete', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理子频道删除事件异常:`, e); }
-        });
-
-        // 监听成员增加事件
-        bot.on('GUILD_MEMBER_ADD', (event: QQGuildMemberEvent) => {
-            try { this.handleMemberEvent(account, 'add', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理成员增加事件异常:`, e); }
-        });
-
-        // 监听成员更新事件
-        bot.on('GUILD_MEMBER_UPDATE', (event: QQGuildMemberEvent) => {
-            try { this.handleMemberEvent(account, 'update', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理成员更新事件异常:`, e); }
-        });
-
-        // 监听成员移除事件
-        bot.on('GUILD_MEMBER_REMOVE', (event: QQGuildMemberEvent) => {
-            try { this.handleMemberEvent(account, 'remove', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理成员移除事件异常:`, e); }
-        });
-
-        // 监听表态事件
-        bot.on('MESSAGE_REACTION_ADD', (event: QQReactionEvent) => {
-            try { this.handleReactionEvent(account, 'add', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理表态事件异常:`, e); }
-        });
-
-        bot.on('MESSAGE_REACTION_REMOVE', (event: QQReactionEvent) => {
-            try { this.handleReactionEvent(account, 'remove', event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理取消表态事件异常:`, e); }
-        });
-
-        // 监听互动事件
-        bot.on('INTERACTION_CREATE', (event: QQInteractionEvent) => {
-            try { this.handleInteractionEvent(account, event, config.account_id); } catch (e) { this.logger.error(`[QQ] 处理互动事件异常:`, e); }
-        });
-
-        // 账号生命周期
-        account.on('start', async () => {
-            try {
-                await bot.start();
-            } catch (error) {
-                this.logger.error(`启动QQ机器人失败:`, error);
+        bot.on('close', () => {
+            if (account.status !== AccountStatus.OffLine) {
+                this.logger.warn(`[QQ] ${config.account_id} 连接关闭`);
                 account.status = AccountStatus.OffLine;
             }
         });
 
+        // ---- 消息事件 ----
+        const safe = (fn: () => void) => {
+            try {
+                fn();
+            } catch (e) {
+                this.logger.error(`[QQ] ${config.account_id} 事件处理异常:`, e);
+            }
+        };
+
+        bot.on('message.guild', (e: GuildMessageEvent) =>
+            safe(() => this.handleGuildMessage(account, e, config.account_id)),
+        );
+        bot.on('message.private.direct', (e: PrivateMessageEvent) =>
+            safe(() => this.handleDirectMessage(account, e, config.account_id)),
+        );
+        bot.on('message.group', (e: GroupMessageEvent) =>
+            safe(() => this.handleGroupMessage(account, e, config.account_id)),
+        );
+        bot.on('message.private', (e: PrivateMessageEvent) =>
+            safe(() => this.handleC2CMessage(account, e, config.account_id)),
+        );
+
+        // ---- 通知事件 ----
+        bot.on('notice.guild.increase', (e: GuildChangeNoticeEvent) =>
+            safe(() => this.handleGuildEvent(account, 'create', e, config.account_id)),
+        );
+        bot.on('notice.guild.update', (e: GuildChangeNoticeEvent) =>
+            safe(() => this.handleGuildEvent(account, 'update', e, config.account_id)),
+        );
+        bot.on('notice.guild.decrease', (e: GuildChangeNoticeEvent) =>
+            safe(() => this.handleGuildEvent(account, 'delete', e, config.account_id)),
+        );
+        bot.on('notice.channel.increase', (e: ChannelChangeNoticeEvent) =>
+            safe(() => this.handleChannelEvent(account, 'create', e, config.account_id)),
+        );
+        bot.on('notice.channel.update', (e: ChannelChangeNoticeEvent) =>
+            safe(() => this.handleChannelEvent(account, 'update', e, config.account_id)),
+        );
+        bot.on('notice.channel.decrease', (e: ChannelChangeNoticeEvent) =>
+            safe(() => this.handleChannelEvent(account, 'delete', e, config.account_id)),
+        );
+        bot.on('notice.guild.member.increase', (e: GuildMemberChangeNoticeEvent) =>
+            safe(() => this.handleMemberEvent(account, 'add', e, config.account_id)),
+        );
+        bot.on('notice.guild.member.update', (e: GuildMemberChangeNoticeEvent) =>
+            safe(() => this.handleMemberEvent(account, 'update', e, config.account_id)),
+        );
+        bot.on('notice.guild.member.decrease', (e: GuildMemberChangeNoticeEvent) =>
+            safe(() => this.handleMemberEvent(account, 'remove', e, config.account_id)),
+        );
+        bot.on('notice.reaction.add', (e: MessageReactionNoticeEvent) =>
+            safe(() => this.handleReactionEvent(account, 'add', e, config.account_id)),
+        );
+        bot.on('notice.reaction.remove', (e: MessageReactionNoticeEvent) =>
+            safe(() => this.handleReactionEvent(account, 'remove', e, config.account_id)),
+        );
+        // 互动 / 加好友 / 加群请求
+        bot.on('notice.guild.action', (e: GuildActionNoticeEvent) =>
+            safe(() => this.handleInteractionEvent(account, e, config.account_id)),
+        );
+        bot.on('notice.group.action', (e: GroupActionNoticeEvent) =>
+            safe(() => this.handleGroupActionEvent(account, e, config.account_id)),
+        );
+        bot.on('notice.group.join_request', (e: GroupJoinRequestNoticeEvent) =>
+            safe(() => this.handleGroupJoinRequestEvent(account, e, config.account_id)),
+        );
+
+        // ---- 账号生命周期 ----
+        account.on('start', async () => {
+            try {
+                await bot.start();
+            } catch (error) {
+                this.logger.error(`[QQ] ${config.account_id} 启动失败:`, error);
+                account.status = AccountStatus.OffLine;
+            }
+        });
         account.on('stop', async () => {
-            await bot.stop();
+            try {
+                await bot.stop();
+            } catch (error) {
+                this.logger.error(`[QQ] ${config.account_id} 停止失败:`, error);
+            }
             account.status = AccountStatus.OffLine;
         });
 
@@ -607,303 +425,398 @@ export class QQAdapter extends Adapter<QQBot, "qq"> {
     }
 
     // ============================================
-    // 事件处理方法
+    // 事件翻译
     // ============================================
 
-    /**
-     * 处理频道消息
-     */
-    private handleGuildMessage(account: Account<'qq', QQBot>, message: QQMessageEvent, accountId: string): void {
-        // 打印消息接收日志
-        const content = message.content || '';
-        const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+    private handleGuildMessage(
+        account: Account<'qq', Bot>,
+        e: GuildMessageEvent,
+        accountId: string,
+    ): void {
+        const content = typeof e.raw_message === 'string' ? e.raw_message : '';
+        const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
         this.logger.info(
-            `[QQ] 收到频道消息 | 消息ID: ${message.id} | 频道: ${message.channel_id} | ` +
-            `发送者: ${message.author.username}(${message.author.id}) | 内容: ${contentPreview}`
+            `[QQ] 频道消息 | 消息ID: ${e.message_id} | 频道: ${e.channel_id} | ` +
+            `发送者: ${e.sender.user_name}(${e.sender.user_id}) | 内容: ${preview}`,
         );
 
-        const messageSegments = this.parseMessageContent(message.content || '', message.attachments);
-
-        const commonEvent: CommonEvent.Message = {
-            id: this.createId(message.id),
-            timestamp: dateLikeToEventMs(message.timestamp),
+        account.dispatch({
+            id: this.createId(e.message_id),
+            timestamp: dateLikeToEventMs((e as any).timestamp ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'message',
             message_type: 'channel',
             sender: {
-                id: this.createId(message.author.id),
-                name: message.author.username,
-                avatar: message.author.avatar,
+                id: this.createId(e.sender.user_id),
+                name: e.sender.user_name,
             },
-            group: message.guild_id ? {
-                id: this.createId(message.guild_id),
-                name: '',
-            } : undefined,
-            message_id: this.createId(message.id),
-            raw_message: message.content || '',
-            message: messageSegments,
-        };
-
-        account.dispatch(commonEvent);
+            group: e.guild_id ? { id: this.createId(e.guild_id), name: e.guild_name } : undefined,
+            message_id: this.createId(e.message_id),
+            raw_message: content,
+            message: this.parseSdkMessage(e.message),
+        } as CommonEvent.Message);
     }
 
-    /**
-     * 处理频道私信
-     */
-    private handleDirectMessage(account: Account<'qq', QQBot>, message: QQDirectMessageEvent, accountId: string): void {
-        // 打印消息接收日志
-        const content = message.content || '';
-        const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+    private handleDirectMessage(
+        account: Account<'qq', Bot>,
+        e: PrivateMessageEvent,
+        accountId: string,
+    ): void {
+        const content = typeof e.raw_message === 'string' ? e.raw_message : '';
+        const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
         this.logger.info(
-            `[QQ] 收到频道私信 | 消息ID: ${message.id} | ` +
-            `发送者: ${message.author?.username || ''}(${message.author?.id || ''}) | 内容: ${contentPreview}`
+            `[QQ] 频道私信 | 消息ID: ${e.message_id} | ` +
+            `发送者: ${e.sender.user_name}(${e.sender.user_id}) | 内容: ${preview}`,
         );
 
-        const messageSegments = this.parseMessageContent(message.content || '', message.attachments);
-
-        const commonEvent: CommonEvent.Message = {
-            id: this.createId(message.id),
-            timestamp: dateLikeToEventMs(message.timestamp),
+        account.dispatch({
+            id: this.createId(e.message_id),
+            timestamp: dateLikeToEventMs((e as any).timestamp ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'message',
             message_type: 'direct',
             sender: {
-                id: this.createId(message.author?.id || ''),
-                name: message.author?.username || '',
-                avatar: message.author?.avatar,
+                id: this.createId(e.sender.user_id),
+                name: e.sender.user_name,
             },
-            message_id: this.createId(message.id),
-            raw_message: message.content || '',
-            message: messageSegments,
-        };
-
-        account.dispatch(commonEvent);
+            message_id: this.createId(e.message_id),
+            raw_message: content,
+            message: this.parseSdkMessage(e.message),
+        } as CommonEvent.Message);
     }
 
-    /**
-     * 处理群消息
-     */
-    private handleGroupMessage(account: Account<'qq', QQBot>, message: QQGroupMessageEvent, accountId: string): void {
-        // 打印消息接收日志
-        const content = message.content || '';
-        const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+    private handleGroupMessage(
+        account: Account<'qq', Bot>,
+        e: GroupMessageEvent,
+        accountId: string,
+    ): void {
+        const content = typeof e.raw_message === 'string' ? e.raw_message : '';
+        const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
         this.logger.info(
-            `[QQ] 收到群消息 | 消息ID: ${message.id} | 群: ${message.group_openid} | ` +
-            `发送者: ${message.author.member_openid || message.author.id} | 内容: ${contentPreview}`
+            `[QQ] 群消息 | 消息ID: ${e.message_id} | 群: ${e.group_id} | ` +
+            `发送者: ${e.sender.user_name}(${e.sender.user_id}) | 内容: ${preview}`,
         );
 
-        const messageSegments = this.parseMessageContent(message.content || '', message.attachments);
-
-        const commonEvent: CommonEvent.Message = {
-            id: this.createId(message.id),
-            timestamp: dateLikeToEventMs(message.timestamp),
+        account.dispatch({
+            id: this.createId(e.message_id),
+            timestamp: dateLikeToEventMs((e as any).timestamp ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'message',
             message_type: 'group',
             sender: {
-                id: this.createId(message.author.member_openid || message.author.id),
-                name: message.author.member_openid || message.author.id,
+                id: this.createId(e.sender.user_id),
+                name: e.sender.user_name,
             },
-            group: {
-                id: this.createId(message.group_openid),
-                name: '',
-            },
-            message_id: this.createId(message.id),
-            raw_message: message.content || '',
-            message: messageSegments,
-        };
-
-        account.dispatch(commonEvent);
+            group: { id: this.createId(e.group_id), name: e.group_name },
+            message_id: this.createId(e.message_id),
+            raw_message: content,
+            message: this.parseSdkMessage(e.message),
+        } as CommonEvent.Message);
     }
 
-    /**
-     * 处理私聊消息 (C2C)
-     */
-    private handleC2CMessage(account: Account<'qq', QQBot>, message: QQC2CMessageEvent, accountId: string): void {
-        // 打印消息接收日志
-        const content = message.content || '';
-        const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+    private handleC2CMessage(
+        account: Account<'qq', Bot>,
+        e: PrivateMessageEvent,
+        accountId: string,
+    ): void {
+        const content = typeof e.raw_message === 'string' ? e.raw_message : '';
+        const preview = content.length > 100 ? content.slice(0, 100) + '...' : content;
         this.logger.info(
-            `[QQ] 收到私聊消息 | 消息ID: ${message.id} | ` +
-            `发送者: ${message.author.user_openid || message.author.id} | 内容: ${contentPreview}`
+            `[QQ] 私聊消息 | 消息ID: ${e.message_id} | ` +
+            `发送者: ${e.sender.user_name}(${e.sender.user_id}) | 内容: ${preview}`,
         );
 
-        const messageSegments = this.parseMessageContent(message.content || '', message.attachments);
-
-        const commonEvent: CommonEvent.Message = {
-            id: this.createId(message.id),
-            timestamp: dateLikeToEventMs(message.timestamp),
+        account.dispatch({
+            id: this.createId(e.message_id),
+            timestamp: dateLikeToEventMs((e as any).timestamp ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'message',
             message_type: 'private',
             sender: {
-                id: this.createId(message.author.user_openid || message.author.id),
-                name: message.author.user_openid || message.author.id,
+                id: this.createId(e.sender.user_id),
+                name: e.sender.user_name,
             },
-            message_id: this.createId(message.id),
-            raw_message: message.content || '',
-            message: messageSegments,
-        };
-
-        account.dispatch(commonEvent);
+            message_id: this.createId(e.message_id),
+            raw_message: content,
+            message: this.parseSdkMessage(e.message),
+        } as CommonEvent.Message);
     }
 
-    /**
-     * 处理频道事件
-     */
-    private handleGuildEvent(account: Account<'qq', QQBot>, action: string, event: QQGuildEvent, accountId: string): void {
-        const commonEvent: CommonEvent.Notice = {
-            id: this.createId(event.id),
-            timestamp: Date.now(),
+    private handleGuildEvent(
+        account: Account<'qq', Bot>,
+        action: 'create' | 'update' | 'delete',
+        e: GuildChangeNoticeEvent,
+        accountId: string,
+    ): void {
+        account.dispatch({
+            id: this.createId(e.event_id ?? Date.now().toString()),
+            timestamp: dateLikeToEventMs((e as any).time ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'notice',
             notice_type: 'custom',
             sub_type: `guild_${action}`,
-            group: {
-                id: this.createId(event.id),
-                name: event.name,
-            },
-        };
-
-        account.dispatch(commonEvent);
+            group: e.guild_id ? { id: this.createId(e.guild_id), name: e.guild_name } : undefined,
+        } as CommonEvent.Notice);
     }
 
-    /**
-     * 处理子频道事件
-     */
-    private handleChannelEvent(account: Account<'qq', QQBot>, action: string, event: QQChannelEvent, accountId: string): void {
-        const commonEvent: CommonEvent.Notice = {
-            id: this.createId(event.id),
-            timestamp: Date.now(),
+    private handleChannelEvent(
+        account: Account<'qq', Bot>,
+        action: 'create' | 'update' | 'delete',
+        e: ChannelChangeNoticeEvent,
+        accountId: string,
+    ): void {
+        account.dispatch({
+            id: this.createId(e.event_id ?? Date.now().toString()),
+            timestamp: dateLikeToEventMs((e as any).time ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'notice',
             notice_type: 'custom',
             sub_type: `channel_${action}`,
-            group: {
-                id: this.createId(event.guild_id),
-                name: '',
-            },
-            channel_id: event.id,
-            channel_name: event.name,
-        };
-
-        account.dispatch(commonEvent);
+            group: e.guild_id ? { id: this.createId(e.guild_id), name: '' } : undefined,
+            channel_id: e.channel_id,
+            channel_name: e.channel_name,
+        } as CommonEvent.Notice);
     }
 
-    /**
-     * 处理成员事件
-     */
-    private handleMemberEvent(account: Account<'qq', QQBot>, action: string, event: QQGuildMemberEvent, accountId: string): void {
-        let noticeType: CommonEvent.NoticeType = 'custom';
-        
-        if (action === 'add') {
-            noticeType = 'group_increase';
-        } else if (action === 'remove') {
-            noticeType = 'group_decrease';
-        }
+    private handleMemberEvent(
+        account: Account<'qq', Bot>,
+        action: 'add' | 'update' | 'remove',
+        e: GuildMemberChangeNoticeEvent,
+        accountId: string,
+    ): void {
+        const noticeType: CommonEvent.NoticeType =
+            action === 'add' ? 'group_increase'
+                : action === 'remove' ? 'group_decrease'
+                : 'custom';
 
-        const commonEvent: CommonEvent.Notice = {
-            id: this.createId(Date.now().toString()),
-            timestamp: dateLikeToEventMs(event.joined_at),
+        account.dispatch({
+            id: this.createId(e.event_id ?? Date.now().toString()),
+            timestamp: dateLikeToEventMs((e as any).time ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'notice',
             notice_type: noticeType,
             sub_type: action,
-            user: {
-                id: this.createId(event.user.id),
-                name: event.user.username,
-                avatar: event.user.avatar,
-            },
-            group: {
-                id: this.createId(event.guild_id),
-                name: '',
-            },
-        };
-
-        if (event.op_user_id) {
-            commonEvent.operator = {
-                id: this.createId(event.op_user_id),
-                name: '',
-            };
-        }
-
-        account.dispatch(commonEvent);
+            user: { id: this.createId(e.user_id), name: e.user_name },
+            group: { id: this.createId(e.guild_id), name: '' },
+            operator: e.operator_id ? { id: this.createId(e.operator_id), name: '' } : undefined,
+        } as CommonEvent.Notice);
     }
 
-    /**
-     * 处理表态事件
-     */
-    private handleReactionEvent(account: Account<'qq', QQBot>, action: string, event: QQReactionEvent, accountId: string): void {
-        const commonEvent: CommonEvent.Notice = {
-            id: this.createId(Date.now().toString()),
-            timestamp: Date.now(),
+    private handleReactionEvent(
+        account: Account<'qq', Bot>,
+        action: 'add' | 'remove',
+        e: MessageReactionNoticeEvent,
+        accountId: string,
+    ): void {
+        account.dispatch({
+            id: this.createId(e.event_id ?? Date.now().toString()),
+            timestamp: dateLikeToEventMs((e as any).time ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'notice',
             notice_type: 'custom',
             sub_type: `reaction_${action}`,
-            user: {
-                id: this.createId(event.user_id),
-                name: '',
-            },
-            group: {
-                id: this.createId(event.guild_id),
-                name: '',
-            },
-            message_id: event.target.id,
-            emoji_id: event.emoji.id,
-            emoji_type: event.emoji.type,
-        };
-
-        account.dispatch(commonEvent);
+            user: { id: this.createId(e.user_id), name: '' },
+            group: { id: this.createId(e.guild_id), name: '' },
+            channel_id: e.channel_id,
+            message_id: e.message_id,
+            emoji_id: e.emoji?.id,
+            emoji_type: e.emoji?.type,
+        } as CommonEvent.Notice);
     }
 
-    /**
-     * 处理互动事件
-     */
-    private handleInteractionEvent(account: Account<'qq', QQBot>, event: QQInteractionEvent, accountId: string): void {
-        const commonEvent: CommonEvent.Notice = {
-            id: this.createId(event.id),
-            timestamp: dateLikeToEventMs(event.timestamp),
+    private handleInteractionEvent(
+        account: Account<'qq', Bot>,
+        e: GuildActionNoticeEvent,
+        accountId: string,
+    ): void {
+        const resolved = (e as any).data?.resolved as { button_id?: string; button_data?: string } | undefined;
+        account.dispatch({
+            id: this.createId((e as any).event_id ?? Date.now().toString()),
+            timestamp: dateLikeToEventMs((e as any).time ?? Date.now()),
             platform: 'qq',
             bot_id: this.createId(accountId),
             type: 'notice',
             notice_type: 'custom',
             sub_type: 'interaction',
-            interaction_type: event.type,
-            scene: event.scene,
-            chat_type: event.chat_type,
-            button_id: event.data?.resolved?.button_id,
-            button_data: event.data?.resolved?.button_data,
-        };
+            interaction_type: (e as any).type,
+            chat_type: (e as any).chat_type,
+            button_id: resolved?.button_id,
+            button_data: resolved?.button_data,
+            user: (e as any).user_openid
+                ? { id: this.createId((e as any).user_openid), name: '' } : undefined,
+            group: e.guild_id ? { id: this.createId(e.guild_id), name: '' } : undefined,
+        } as CommonEvent.Notice);
+    }
 
-        if (event.user_openid) {
-            commonEvent.user = {
-                id: this.createId(event.user_openid),
-                name: '',
-            };
+    private handleGroupActionEvent(
+        account: Account<'qq', Bot>,
+        e: GroupActionNoticeEvent,
+        accountId: string,
+    ): void {
+        const resolved = (e as any).data?.resolved as { button_id?: string; button_data?: string } | undefined;
+        account.dispatch({
+            id: this.createId((e as any).event_id ?? Date.now().toString()),
+            timestamp: dateLikeToEventMs((e as any).time ?? Date.now()),
+            platform: 'qq',
+            bot_id: this.createId(accountId),
+            type: 'notice',
+            notice_type: 'custom',
+            sub_type: 'group_action',
+            interaction_type: (e as any).type,
+            button_id: resolved?.button_id,
+            button_data: resolved?.button_data,
+            user: (e as any).user_openid
+                ? { id: this.createId((e as any).user_openid), name: '' } : undefined,
+            group: e.group_id ? { id: this.createId(e.group_id), name: '' } : undefined,
+        } as CommonEvent.Notice);
+    }
+
+    private handleGroupJoinRequestEvent(
+        account: Account<'qq', Bot>,
+        e: GroupJoinRequestNoticeEvent,
+        accountId: string,
+    ): void {
+        account.dispatch({
+            id: this.createId((e as any).event_id ?? e.join_request_id ?? Date.now().toString()),
+            timestamp: dateLikeToEventMs((e.apply_at as any) ?? Date.now()),
+            platform: 'qq',
+            bot_id: this.createId(accountId),
+            type: 'notice',
+            notice_type: 'custom',
+            sub_type: 'group_join_request',
+            user: { id: this.createId(e.user_id), name: e.username },
+            group: { id: this.createId(e.group_id), name: '' },
+            request_id: e.join_request_id,
+            apply_source: e.apply_source,
+            invited_by: e.invited_by,
+            flag: e.join_request_id,
+        } as CommonEvent.Notice);
+    }
+
+    // ============================================
+    // 消息段转换
+    // ============================================
+
+    /**
+     * OneBot / Satori 通用消息段 → SDK Sendable
+     */
+    private buildSendable(message: CommonTypes.Segment[]): Sendable {
+        const elems: MessageElem[] = [];
+        for (const seg of message) {
+            if (typeof seg === 'string') {
+                elems.push(segment.text(seg));
+                continue;
+            }
+            switch (seg.type) {
+                case 'text':
+                    elems.push(segment.text(String(seg.data.text ?? '')));
+                    break;
+                case 'at':
+                    if (seg.data.qq === 'all') {
+                        elems.push(segment.at('all'));
+                    } else {
+                        elems.push(segment.at(String(seg.data.qq ?? seg.data.id ?? '')));
+                    }
+                    break;
+                case 'face':
+                    elems.push(segment.face(Number(seg.data.id), seg.data.text as any));
+                    break;
+                case 'image': {
+                    const src = String(seg.data.url ?? seg.data.file ?? '');
+                    elems.push(segment.image(src, { url: src }));
+                    break;
+                }
+                case 'reply':
+                    elems.push(segment.reply(String(seg.data.id ?? seg.data.message_id)));
+                    break;
+                case 'video':
+                    elems.push(segment.video(String(seg.data.url ?? seg.data.file)));
+                    break;
+                case 'audio':
+                    elems.push(segment.audio(String(seg.data.url ?? seg.data.file)));
+                    break;
+                case 'markdown':
+                    elems.push(segment.markdown(seg.data as any));
+                    break;
+                default:
+                    if (seg.data?.text) {
+                        elems.push(segment.text(String(seg.data.text)));
+                    } else if (seg.data?.url) {
+                        elems.push(segment.image(String(seg.data.url)));
+                    }
+                    break;
+            }
         }
+        return elems.length === 1 ? elems[0] : elems;
+    }
 
-        if (event.group_openid) {
-            commonEvent.group = {
-                id: this.createId(event.group_openid),
-                name: '',
-            };
+    /**
+     * SDK Sendable → OneBot 通用消息段
+     */
+    private parseSdkMessage(sendable: Sendable): CommonTypes.Segment[] {
+        const arr = Array.isArray(sendable) ? sendable : [sendable];
+        const out: CommonTypes.Segment[] = [];
+        for (const el of arr) {
+            if (!el || typeof el !== 'object') continue;
+            switch (el.type) {
+                case 'text':
+                    out.push({ type: 'text', data: { text: (el as any).data.text } });
+                    break;
+                case 'at':
+                    out.push({
+                        type: 'at',
+                        data: {
+                            qq: (el as any).data.id === 'all' ? 'all' : String((el as any).data.id),
+                        },
+                    });
+                    break;
+                case 'face':
+                    out.push({ type: 'face', data: { id: String((el as any).data.id), text: (el as any).data.text } });
+                    break;
+                case 'image':
+                    out.push({
+                        type: 'image',
+                        data: { url: (el as any).data.url, file: (el as any).data.file },
+                    });
+                    break;
+                case 'reply':
+                    out.push({
+                        type: 'reply',
+                        data: { id: (el as any).data.id, message_id: (el as any).data.id },
+                    });
+                    break;
+                case 'video':
+                    out.push({
+                        type: 'video',
+                        data: { url: (el as any).data.url, file: (el as any).data.file },
+                    });
+                    break;
+                case 'audio':
+                    out.push({
+                        type: 'audio',
+                        data: { url: (el as any).data.url, file: (el as any).data.file },
+                    });
+                    break;
+                case 'markdown':
+                    out.push({ type: 'markdown', data: (el as any).data });
+                    break;
+                // ark/embed/link/button/keyboard 在通用段中没有对应类型，直接丢弃
+            }
         }
-
-        account.dispatch(commonEvent);
+        return out;
     }
 }
 
 // 声明模块扩展
-declare module "onebots" {
+declare module 'onebots' {
     export namespace Adapter {
         export interface Configs {
             qq: QQConfig;
@@ -915,7 +828,7 @@ declare module "onebots" {
 AdapterRegistry.register('qq', QQAdapter, {
     name: 'qq',
     displayName: 'QQ官方机器人',
-    description: 'QQ官方机器人适配器，支持频道、群聊和私聊',
+    description: 'QQ官方机器人适配器（基于 qq-official-bot），支持频道、群聊和私聊',
     icon: 'https://q.qq.com/favicon.ico',
     homepage: 'https://bot.q.qq.com/wiki',
     author: '凉菜',

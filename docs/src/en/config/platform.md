@@ -97,11 +97,11 @@ http://bot.example.com:6727/wechat/my_official_account/webhook
 
 ### Configuration Fields
 
-#### appId
+#### appid
 
 - **Type**: `string`
 - **Required**: ✅
-- **Description**: QQ Bot AppID
+- **Description**: QQ Bot AppID (renamed to `appid` in v4)
 
 #### secret
 
@@ -122,6 +122,29 @@ http://bot.example.com:6727/wechat/my_official_account/webhook
 - **Default**: `false`
 - **Description**: Whether to use sandbox environment
 
+#### intents
+
+- **Type**: `string[]`
+- **Default**: `[]`
+- **Description**: Events to subscribe to (mainly relevant in websocket mode)
+
+#### apiBaseUrl
+
+- **Type**: `string`
+- **Required**: ❌
+- **Description**: Override API base URL (advanced, takes precedence over `sandbox`)
+
+#### port
+
+- **Type**: `number`
+- **Required**: Required in `webhook` mode
+- **Description**: Webhook listening port owned by the SDK; no longer reuses the onebots main HTTP route
+
+#### path
+
+- **Type**: `string`
+- **Default**: `/`
+- **Description**: Webhook path
 ### Configuration Example
 
 ```yaml
@@ -132,11 +155,27 @@ qq.my_bot:
     use_ws: true
   
   # QQ platform configuration
-  appId: your_app_id
+  appid: your_app_id
   secret: your_app_secret
   mode: websocket
   sandbox: false
+  intents:
+    - GROUP_AND_C2C_EVENT
+    - PUBLIC_GUILD_MESSAGES
 ```
+
+### Webhook Mode
+
+```yaml
+qq.my_bot:
+  appid: your_app_id
+  secret: your_app_secret
+  mode: webhook
+  port: 18080
+  path: /qq/webhook
+```
+
+> Since v4, QQ webhook callbacks are handled by the SDK's own HTTP server. Configure the callback URL in the QQ Open Platform as `http://host:18080/qq/webhook`.
 
 ## Other Platforms
 

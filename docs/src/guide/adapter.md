@@ -159,13 +159,12 @@ general:
 # QQ 官方机器人账号配置
 qq.3889001676:
   # QQ 平台配置
-  appId: 'your_app_id'
-  token: 'your_token'
+  appid: 'your_app_id'
   secret: 'your_secret'
+  mode: 'websocket'
   sandbox: false
   intents:
-    - 'GROUP_AT_MESSAGE_CREATE'
-    - 'C2C_MESSAGE_CREATE'
+    - 'GROUP_AND_C2C_EVENT'
     - 'PUBLIC_GUILD_MESSAGES'
   
   # OneBot V11 协议配置
@@ -273,7 +272,7 @@ discord.bot1:
 账号配置的格式为：`{platform}.{account_id}`
 
 - `platform`: 平台名称（如 `qq`、`kook`、`wechat`、`discord`）
-- `account_id`: 账号唯一标识（如 QQ 的 appId、Kook 的机器人名称等）
+- `account_id`: 账号唯一标识（如 QQ 的机器人实例名、Kook 的机器人名称等）
 
 ### 协议配置
 
