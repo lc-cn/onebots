@@ -4,6 +4,7 @@ import type { Schema } from 'onebots';
 // 导出类型
 export type { QQConfig, QQIntent, ReceiverMode } from './types.js';
 export type { Intent, MessageElem, Sendable } from 'qq-official-bot';
+export { segment, ReceiverMode as SdkReceiverMode } from 'qq-official-bot';
 export * from './adapter.js';
 
 const qqSchema: Schema = {
