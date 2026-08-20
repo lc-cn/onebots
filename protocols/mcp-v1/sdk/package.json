@@ -1,0 +1,38 @@
+{
+  "name": "@onebots/mcp-client",
+  "version": "0.1.0",
+  "description": "OneBots MCP v1 客户端 SDK — 支持 stdio 和 SSE 传输",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo"
+  },
+  "keywords": [
+    "onebots",
+    "mcp",
+    "model-context-protocol",
+    "client",
+    "sdk",
+    "agent"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "devDependencies": {
+    "tsc-alias": "latest",
+    "typescript": "catalog:"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/onebots.git"
+  }
+}

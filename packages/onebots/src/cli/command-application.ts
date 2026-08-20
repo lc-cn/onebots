@@ -180,6 +180,81 @@ export async function sendMessage(options: RuntimeOptions & { target_type: strin
     return { output: text || "发送成功" };
 }
 
+/** 以 stdio 模式运行 MCP 服务，通过 stdin/stdout 进行 JSON-RPC 通信。 */
+export async function runMcpStdio(options: RuntimeOptions & { account?: string }): Promise<CommandResult> {
+    const runtime = normalizeRuntimeOptions(options);
+    const { loadPlugins } = await import("../runtime.js");
+    const failures = await loadPlugins(runtime.adapters, runtime.protocols);
+    if (failures.length) throw new CliError(`无法加载插件: ${failures.join(", ")}`, 2);
+
+    const { createOnebots } = await import("../app.js");
+    const app = createOnebots(runtime.configPath);
+
+    await app.start();
+
+    // 查找目标 account
+    let targetAdapter: any = undefined;
+    let targetAccount: any = undefined;
+
+    if (options.account) {
+        const [platform, accountId] = options.account.split("/");
+        if (!platform || !accountId) throw new CliError("--account 格式: platform/account_id（如 qq/my-bot）", 2);
+        for (const adapter of app.adapters.values()) {
+            if (String(adapter.platform) === platform) {
+                targetAdapter = adapter;
+                targetAccount = adapter.getAccount(accountId);
+                if (targetAccount) break;
+            }
+        }
+        if (!targetAccount) throw new CliError(`找不到账号 ${options.account}`, 2);
+    } else {
+        // 没指定 account 时取第一个
+        for (const adapter of app.adapters.values()) {
+            for (const account of adapter.accounts.values()) {
+                targetAdapter = adapter;
+                targetAccount = account;
+                break;
+            }
+            if (targetAccount) break;
+        }
+        if (!targetAccount) throw new CliError("没有可用的账号，请在配置中添加至少一个适配器账号", 2);
+    }
+
+    // 查找该 account 上的 MCP 协议实例
+    const mcpProtocol = targetAccount.protocols?.find(
+        (p: any) => p.name === 'mcp' && p.version === 'v1',
+    );
+    if (!mcpProtocol) {
+        throw new CliError(
+            `账号 ${targetAccount.platform}/${targetAccount.account_id} 未配置 mcp.v1 协议。\n` +
+            `请在 config.yaml 对应账号下添加:\n  mcp.v1: {}`,
+            2,
+        );
+    }
+
+    // 动态导入 stdio 传输（协议包作为插件加载，不是编译时依赖）
+    const mcpModName = "@onebots/protocol-mcp-v1";
+    let startStdioTransport: (options: any) => void;
+    try {
+        const mod = await import(/* webpackIgnore: true */ mcpModName);
+        startStdioTransport = mod.startStdioTransport;
+    } catch {
+        throw new CliError(
+            "无法加载 @onebots/protocol-mcp-v1，请确保已安装:\n  pnpm add @onebots/protocol-mcp-v1",
+            2,
+        );
+    }
+    startStdioTransport({
+        protocol: mcpProtocol,
+        onClose: async () => {
+            await app.stop();
+        },
+    });
+
+    // stdio 模式下不退出，等待输入
+    return new Promise(() => {});
+}
+
 function findMissingPlugins(adapters: string[], protocols: string[], cwd: string): string[] {
     const require = createRequire(path.join(cwd, "package.json"));
     const groups = [

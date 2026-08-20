@@ -780,6 +780,27 @@ importers:
         specifier: ^5.0.10
         version: 5.4.21(@types/node@25.5.0)(lightningcss@1.32.0)(sass@1.98.0)
 
+  protocols/mcp-v1/protocol:
+    devDependencies:
+      onebots:
+        specifier: workspace:*
+        version: link:../../../packages/onebots
+      tsc-alias:
+        specifier: latest
+        version: 1.9.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  protocols/mcp-v1/sdk:
+    devDependencies:
+      tsc-alias:
+        specifier: latest
+        version: 1.9.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   protocols/milky-v1/protocol:
     dependencies:
       koa-static:
@@ -5170,6 +5191,11 @@ packages:
 
   tsc-alias@1.9.1:
     resolution: {integrity: sha512-sFZdVFthH8uvdplPJrOYGOHcxu6UPtcAcY678JPwEQiMzgLZYFO7Qc/rzELp7ingTc+OxtzH6n+8Pn2eVQep6w==}
+    engines: {node: '>=16.20.2'}
+    hasBin: true
+
+  tsc-alias@1.9.2:
+    resolution: {integrity: sha512-VTWQGMv0xXCEyHDLpmV2DEvGYHMxwsyx87dZeou2ynkM0+WOFdHe+KWiRucavMPUEdQysr7xSu60Y/WY0R4YKA==}
     engines: {node: '>=16.20.2'}
     hasBin: true
 
@@ -10188,6 +10214,16 @@ snapshots:
   ts-dedent@2.2.0: {}
 
   tsc-alias@1.9.1:
+    dependencies:
+      chokidar: 3.6.0
+      commander: 9.5.0
+      get-tsconfig: 4.13.7
+      globby: 11.1.0
+      mylas: 2.1.14
+      normalize-path: 3.0.0
+      plimit-lit: 1.6.1
+
+  tsc-alias@1.9.2:
     dependencies:
       chokidar: 3.6.0
       commander: 9.5.0
