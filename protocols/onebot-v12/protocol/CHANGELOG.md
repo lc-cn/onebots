@@ -1,5 +1,12 @@
 # @onebots/protocol-onebot-v12
 
+## 3.0.4
+
+### Patch Changes
+
+- Updated dependencies [f472ebf]
+  - onebots@1.2.4
+
 ## 3.0.3
 
 ### Patch Changes
