@@ -202,7 +202,8 @@ const baseConfig = defineConfig({
                             { text: "OneBot V11", link: "/en/protocol/onebot-v11" },
                             { text: "OneBot V12", link: "/en/protocol/onebot-v12" },
                             { text: "Satori", link: "/en/protocol/satori" },
-                            { text: "Milky", link: "/en/protocol/milky" }
+                            { text: "Milky", link: "/en/protocol/milky" },
+                            { text: "MCP", link: "/en/protocol/mcp" }
                         ]
                     },
                     {
@@ -271,7 +272,8 @@ const baseConfig = defineConfig({
                         { text: "OneBot V11", link: "/en/protocol/onebot-v11" },
                         { text: "OneBot V12", link: "/en/protocol/onebot-v12" },
                         { text: "Satori", link: "/en/protocol/satori" },
-                        { text: "Milky", link: "/en/protocol/milky" }
+                        { text: "Milky", link: "/en/protocol/milky" },
+                        { text: "MCP", link: "/en/protocol/mcp" }
                     ]
                 },
                 footer: {

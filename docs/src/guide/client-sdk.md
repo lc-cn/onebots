@@ -1,29 +1,47 @@
-# 客户端SDK使用指南
+# 客户端 SDK 使用指南
 
-imhelper 是 onebots 的客户端SDK，提供统一的接口来连接标准协议（OneBot V11/V12、Satori、Milky）和机器人框架，抹平不同协议的差异。
+OneBots 提供两套客户端 SDK，面向不同使用场景：
 
-## 什么是 imhelper？
+- **imhelper**：通用机器人框架 SDK，通过 OneBot/Satori/Milky 协议连接，提供统一的消息收发和事件监听接口
+- **@onebots/mcp-client**：AI Agent 专用 SDK，通过 MCP 协议连接，提供标准化的工具调用接口
 
-imhelper 是 onebots 项目的客户端SDK核心，提供：
+## 选择客户端
 
-- **统一接口**：无论使用哪种协议（OneBot V11/V12、Satori、Milky），都使用相同的 API
-- **多种接收方式**：支持 WebSocket、Webhook、SSE 等多种事件接收方式
-- **类型安全**：完整的 TypeScript 类型支持
-- **事件驱动**：基于 EventEmitter 的事件系统
+| | imhelper | @onebots/mcp-client |
+| --- | --- | --- |
+| **适用场景** | 机器人框架开发 | AI Agent / 自动化脚本 |
+| **交互模式** | 事件驱动 + API 调用 | 工具调用（JSON-RPC） |
+| **支持协议** | OneBot V11/V12, Satori, Milky | MCP |
+| **典型用户** | NoneBot、Koishi 等框架 | Cursor、Claude Code、自定义 Agent |
 
 ## 架构位置
 
 ```
 平台 API (微信、QQ、钉钉...)
-        ↓
-    onebots (服务端) ← 本项目服务端
-        ↓
-标准协议 (OneBot、Satori...)
-        ↓
-    imhelper (客户端SDK) ← 本项目客户端
-        ↓
-机器人框架 (Koishi、NoneBot...)
+          ↓
+      onebots (服务端)
+          ↓
+    ┌─────┴──────┐
+    ↓            ↓
+标准协议       MCP 协议
+(OneBot/Satori/Milky)
+    ↓            ↓
+ imhelper    @onebots/mcp-client
+    ↓            ↓
+机器人框架    AI Agent
+(Koishi等)   (Cursor等)
 ```
+
+---
+
+## imhelper（通用机器人 SDK）
+
+imhelper 是 OneBots 的通用客户端 SDK，提供：
+
+- **统一接口**：无论使用哪种协议，都使用相同的 API
+- **多种接收方式**：WebSocket、Webhook、SSE
+- **类型安全**：完整的 TypeScript 类型支持
+- **事件驱动**：基于 EventEmitter 的事件系统
 
 ## 安装
 
@@ -287,16 +305,96 @@ await adapter.connect();
 
 - `sendMessage(message)` - 发送消息到该频道
 
-## 支持的协议
+### imhelper 支持的协议
 
-- ✅ **OneBot V11** - 通过 `@imhelper/onebot-v11`
-- ✅ **OneBot V12** - 通过 `@imhelper/onebot-v12`
-- ✅ **Satori** - 通过 `@imhelper/satori-v1`
-- ✅ **Milky** - 通过 `@imhelper/milky-v1`
+- ✅ **OneBot V11** — `@imhelper/onebot-v11`
+- ✅ **OneBot V12** — `@imhelper/onebot-v12`
+- ✅ **Satori** — `@imhelper/satori-v1`
+- ✅ **Milky** — `@imhelper/milky-v1`
+
+---
+
+## MCP 客户端
+
+`@onebots/mcp-client` 独立于 imhelper 体系，专为 AI Agent 和自动化脚本设计。交互模式不同于 imhelper 的事件驱动——MCP 客户端通过 `callTool()` 主动调用工具并获取结果。
+
+> 如果你使用 Cursor / Claude Code / Cline 等 AI Agent，不需要安装此包。Agent 会通过 stdio 自动连接 `onebots mcp` 命令。此 SDK 用于自己编写代码调用 MCP 工具的场景。
+
+### 安装
+
+```bash
+npm install @onebots/mcp-client
+```
+
+### stdio 客户端
+
+用于 Cursor、Claude Code 等本地 AI Agent：
+
+```typescript
+import { McpStdioClient } from '@onebots/mcp-client';
+
+const client = new McpStdioClient({
+  command: 'onebots',
+  args: ['mcp', '--config', 'config.yaml', '--account', 'qq/my-bot'],
+});
+
+await client.connect();
+
+// 列出可用工具
+const tools = await client.listTools();
+console.log('可用工具:', tools.map(t => t.name));
+
+// 调用工具
+const result = await client.callTool('send_message', {
+  scene_type: 'group',
+  scene_id: '123456',
+  message: 'Hello from MCP!',
+});
+
+await client.close();
+```
+
+### SSE 客户端
+
+用于远程连接到运行中的 OneBots 服务：
+
+```typescript
+import { McpSseClient } from '@onebots/mcp-client';
+
+const client = new McpSseClient({
+  url: 'http://localhost:6727/qq/my-bot/mcp/v1',
+  accessToken: 'your-token',
+});
+
+await client.connect();
+
+// 监听实时消息
+client.on('notifications/message', (params) => {
+  console.log('收到消息:', params);
+});
+
+const groups = await client.callTool('get_group_list');
+console.log(groups);
+```
+
+### API
+
+| 方法 | 说明 |
+| --- | --- |
+| `connect()` | 连接并初始化 |
+| `close()` | 断开连接 |
+| `listTools()` | 获取可用工具列表 |
+| `callTool(name, args)` | 调用工具 |
+| `ping()` | 心跳检测 |
+| `getServerInfo()` | 获取服务端信息 |
+| `isConnected()` | 是否已连接 |
+
+更多信息请参考 [MCP 协议文档](/protocol/mcp)。
 
 ## 下一步
 
 - 📚 [服务端快速开始](/guide/start)
 - 🔌 [适配器开发指南](/guide/adapter)
 - 📡 [协议说明](/protocol/onebot-v11)
+- 🤖 [MCP 协议](/protocol/mcp)
 

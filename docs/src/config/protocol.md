@@ -22,6 +22,7 @@ general:
 - `onebot.v12` - OneBot V12 协议
 - `satori.v1` - Satori 协议
 - `milky.v1` - Milky 协议
+- `mcp.v1` - MCP (Model Context Protocol) 协议
 
 ## OneBot V11
 
@@ -207,6 +208,34 @@ milky.v1:
   use_ws: true
 ```
 
+## MCP (Model Context Protocol)
+
+MCP 协议让 AI Agent（Cursor、Claude Code、Cline 等）通过标准化工具调用操作 IM 平台。支持 stdio（本地直连）和 HTTP/SSE（远程访问）两种传输方式。
+
+### 配置项
+
+```yaml
+mcp.v1:
+  access_token: "your_token"     # 访问令牌（可选，留空则不鉴权）
+  tools_whitelist: []            # 工具白名单（留空 = 全部启用）
+  tools_blacklist: []            # 工具黑名单
+```
+
+### 传输方式
+
+**stdio（推荐）**：AI Agent 自动启动命令并通过管道通信，无需网络配置。
+
+```bash
+onebots mcp --config config.yaml --account qq/my-bot
+```
+
+**HTTP/SSE**：随 OneBots 服务启动，适用于远程访问。
+
+- SSE 连接: `GET http://localhost:6727/{platform}/{account_id}/mcp/v1/sse`
+- 消息端点: `POST http://localhost:6727/{platform}/{account_id}/mcp/v1/message`
+
+完整的工具列表、Agent 配置示例和使用说明请参考 [MCP 协议文档](/protocol/mcp)。
+
 ## 多协议配置
 
 一个账号可以同时提供多个协议接口：
@@ -217,7 +246,7 @@ wechat.my_account:
   appsecret: secret
   token: token
   
-  # 同时启用 3 个协议
+  # 同时启用多个协议
   onebot.v11:
     use_http: true
     use_ws: true
@@ -228,6 +257,9 @@ wechat.my_account:
     
   milky.v1:
     use_http: true
+
+  mcp.v1:
+    access_token: agent_token
 ```
 
 访问地址：
@@ -235,6 +267,7 @@ wechat.my_account:
 - OneBot V11 WS: `ws://localhost:6727/wechat/my_account/onebot/v11`
 - Satori: `ws://localhost:6727/wechat/my_account/satori`
 - Milky: `http://localhost:6727/wechat/my_account/milky/v1/...`
+- MCP SSE: `http://localhost:6727/wechat/my_account/mcp/v1/sse`
 
 ## 协议选择指南
 
@@ -295,6 +328,23 @@ milky.v1:
   use_ws: true
 ```
 
+### MCP
+
+**适合场景**:
+- 使用 Cursor、Claude Code、Cline 等 AI Agent
+- 通过自然语言操作 IM 平台
+- 需要标准化的工具调用接口
+
+**推荐配置**:
+```yaml
+mcp.v1:
+  access_token: "your_secure_token"
+  tools_blacklist:          # 建议禁用高危操作
+    - kick_group_member
+    - delete_friend
+    - leave_group
+```
+
 ## 完整配置示例
 
 ```yaml
@@ -335,6 +385,15 @@ wechat.for_nonebot:
     use_ws: true
     access_token: nonebot_token
 
+# QQ 账号 - 为 AI Agent 提供服务
+qq.my-bot:
+  appid: "xxx"
+  secret: "xxx"
+  
+  # AI Agent 使用 MCP
+  mcp.v1:
+    access_token: agent_token
+
 # 微信账号 - 多框架同时使用
 wechat.multi_framework:
   appid: wx333
@@ -368,3 +427,4 @@ wechat.multi_framework:
 - [OneBot V12 协议](/protocol/onebot-v12)
 - [Satori 协议](/protocol/satori)
 - [Milky 协议](/protocol/milky)
+- [MCP 协议](/protocol/mcp)
