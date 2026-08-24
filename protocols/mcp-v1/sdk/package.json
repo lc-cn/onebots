@@ -1,6 +1,6 @@
 {
   "name": "@onebots/mcp-client",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OneBots MCP v1 客户端 SDK — 支持 stdio 和 SSE 传输",
   "type": "module",
   "main": "lib/index.js",

@@ -1,5 +1,11 @@
 # imhelper
 
+## 1.0.5
+
+### Patch Changes
+
+- 41f4bcc: 新增宿主管理的事件入口：`ingest(rawEvent)`、`acceptHttp(request, response?)` 和接收已升级 socket 的 `acceptWebSocket(socket)`，并同步更新 README。
+
 ## 1.0.4
 
 ### Patch Changes
