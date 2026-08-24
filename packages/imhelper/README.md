@@ -30,7 +30,9 @@ client.on("message.private", async message => {
 await client.start();
 ```
 
-`receiveMode` 支持 `ws`、`wss`、`webhook` 和 `sse`。调用 `start()` 后，由对应协议适配器建立连接；`webhook` 与 `wss` 模式会启动 HTTP 服务，可向 `start(port)` 传入端口。结束时调用 `client.stop()`。
+`receiveMode` 支持 `ws`、`wss`、`webhook`、`sse` 和 `manual`。`manual` 不创建连接或监听端口，仅通过 `ingest()`、`acceptHttp()` 或 `acceptWebSocket()` 接收宿主交付的事件。其他模式调用 `start()` 后由协议适配器建立连接；`webhook` 与 `wss` 模式会启动 HTTP 服务，可向 `start(port)` 传入端口。结束时调用 `client.stop()`。
+
+HTTP 传输或协议调用失败会抛出 `ProtocolError`，其中包含 `protocol`、`operation`、`kind`、`httpStatus`、`code` 和原始 `response/cause` 等结构化上下文。
 
 四个协议包均导出具体 Client 和 factory：
 

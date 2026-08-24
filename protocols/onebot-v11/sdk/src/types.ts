@@ -11,8 +11,8 @@ export interface OneBotV11ClientConfig {
     resolveActionUrl?: OneBotV11ActionUrlResolver;
     call?: OneBotV11Call;
     fetch?: typeof globalThis.fetch;
-    /** 接收方式：websocket | webhook | sse */
-    receiveMode?: "websocket" | "webhook" | "sse";
+    /** 接收方式；manual 仅通过 ingest/acceptHttp/acceptWebSocket 接收。 */
+    receiveMode?: "websocket" | "ws" | "wss" | "webhook" | "sse" | "manual";
     /** Webhook 接收地址（当 receiveMode 为 webhook 时使用） */
     webhookUrl?: string;
     /** Webhook 端口（当 receiveMode 为 webhook 时使用） */
@@ -30,8 +30,14 @@ export interface OneBotV11Event {
     user_id?: number;
     message_id?: number;
     group_id?: number;
+    operator_id?: number;
     message?: unknown[];
     raw_message?: string;
+    sub_type?: string;
+    flag?: string;
+    comment?: string;
+    interval?: number;
+    status?: { online: boolean; good: boolean };
     [key: string]: unknown;
 }
 

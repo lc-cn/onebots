@@ -26,7 +26,7 @@ export interface OneBotV11AdapterConfig {
     apiBaseUrl?: string;
     selfId: string;
     accessToken?: string;
-    receiveMode: "ws" | "wss" | "webhook" | "sse";
+    receiveMode: "ws" | "wss" | "webhook" | "sse" | "manual";
     path?: string; // webhook 路径
     wsUrl?: string; // WebSocket URL（可选，自动构建）
     platform?: string; // 平台名称（可选，用于构建 HTTP 路径）
@@ -79,6 +79,10 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
         private readonly accessToken?: string;
         private readonly path: string;
         private readonly baseUrl: string;
+        private readonly requestFlags = new Map<number, string>();
+        private readonly requestIds = new Map<string, number>();
+        private readonly requestSubTypes = new Map<number, "add" | "invite">();
+        private nextRequestId = -1;
 
         constructor() {
             super();
@@ -165,10 +169,146 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
                     };
                     this.emit("message.group", messageData);
                 }
+            } else if (event.post_type === "notice") {
+                const base = { timestamp: event.time, bot_id: event.self_id };
+                switch (event.notice_type) {
+                    case "group_increase":
+                        this.emit("notice.group_member_increase", {
+                            ...base,
+                            notice_type: "group_member_increase",
+                            sub_type: event.sub_type === "invite" ? "invite" : "approve",
+                            group_id: event.group_id!,
+                            user_id: event.user_id!,
+                            operator_id: event.operator_id,
+                        });
+                        break;
+                    case "group_decrease":
+                        this.emit("notice.group_member_decrease", {
+                            ...base,
+                            notice_type: "group_member_decrease",
+                            sub_type:
+                                event.sub_type === "kick" || event.sub_type === "kick_me"
+                                    ? event.sub_type
+                                    : "leave",
+                            group_id: event.group_id!,
+                            user_id: event.user_id!,
+                            operator_id: event.operator_id,
+                        });
+                        break;
+                    case "group_recall":
+                        this.emit("notice.group_message_delete", {
+                            ...base,
+                            notice_type: "group_message_delete",
+                            sub_type: "delete",
+                            group_id: event.group_id!,
+                            message_id: event.message_id!,
+                            operator_id: event.operator_id,
+                        });
+                        break;
+                    case "friend_recall":
+                        this.emit("notice.private_message_delete", {
+                            ...base,
+                            notice_type: "private_message_delete",
+                            sub_type: "delete",
+                            user_id: event.user_id!,
+                            message_id: event.message_id!,
+                        });
+                        break;
+                    case "friend_add":
+                        this.emit("notice.friend_increase", {
+                            ...base,
+                            notice_type: "friend_increase",
+                            sub_type: "add",
+                            user_id: event.user_id!,
+                        });
+                        break;
+                    case "friend_delete":
+                        this.emit("notice.friend_decrease", {
+                            ...base,
+                            notice_type: "friend_decrease",
+                            sub_type: "delete",
+                            user_id: event.user_id!,
+                        });
+                        break;
+                }
+            } else if (event.post_type === "request" && event.flag) {
+                const requestId = this.resolveRequestId(event.flag);
+                if (event.request_type === "friend") {
+                    this.emit("request.friend", {
+                        timestamp: event.time,
+                        bot_id: event.self_id,
+                        request_id: requestId,
+                        user_id: event.user_id!,
+                        comment: event.comment,
+                        flag: event.flag,
+                    });
+                } else if (event.request_type === "group") {
+                    const subType = event.sub_type === "invite" ? "invite" : "add";
+                    this.requestSubTypes.set(requestId, subType);
+                    this.emit("request.group", {
+                        timestamp: event.time,
+                        bot_id: event.self_id,
+                        request_id: requestId,
+                        group_id: event.group_id!,
+                        user_id: event.user_id!,
+                        comment: event.comment,
+                        flag: event.flag,
+                        sub_type: subType,
+                    });
+                }
+            } else if (event.post_type === "meta_event") {
+                if (event.meta_event_type === "lifecycle") {
+                    this.emit("meta.lifecycle", {
+                        timestamp: event.time,
+                        bot_id: event.self_id,
+                        meta_type: "lifecycle",
+                        sub_type:
+                            event.sub_type === "enable" || event.sub_type === "disable"
+                                ? event.sub_type
+                                : "connect",
+                    });
+                } else if (event.meta_event_type === "heartbeat") {
+                    this.emit("meta.heartbeat", {
+                        timestamp: event.time,
+                        bot_id: event.self_id,
+                        meta_type: "heartbeat",
+                        interval: event.interval,
+                    });
+                    if (event.status) {
+                        this.emit("meta.status_update", {
+                            timestamp: event.time,
+                            bot_id: event.self_id,
+                            meta_type: "status_update",
+                            status: event.status,
+                        });
+                    }
+                } else if (event.meta_event_type === "status_update" && event.status) {
+                    this.emit("meta.status_update", {
+                        timestamp: event.time,
+                        bot_id: event.self_id,
+                        meta_type: "status_update",
+                        status: event.status,
+                    });
+                }
             }
 
             // 转发原始事件
             (this as EventEmitter).emit("event", event);
+        }
+
+        private resolveRequestId(flag: string): number {
+            const numeric = Number(flag);
+            if (Number.isFinite(numeric)) {
+                this.requestFlags.set(numeric, flag);
+                return numeric;
+            }
+            const existing = this.requestIds.get(flag);
+            if (existing !== undefined) return existing;
+            const requestId = this.nextRequestId;
+            this.nextRequestId -= 1;
+            this.requestIds.set(flag, requestId);
+            this.requestFlags.set(requestId, flag);
+            return requestId;
         }
 
         async sendMessage(options: Adapter.SendMessageOptions<number>): Promise<OneBotV11Response> {
@@ -350,7 +490,7 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
             comment?: string,
         ): Promise<void> {
             await this.httpClient.post("/set_friend_add_request", {
-                flag: String(request_id),
+                flag: this.requestFlags.get(request_id) ?? String(request_id),
                 approve,
                 remark: comment,
             });
@@ -362,8 +502,8 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
             reason?: string,
         ): Promise<void> {
             await this.httpClient.post("/set_group_add_request", {
-                flag: String(request_id),
-                sub_type: "add",
+                flag: this.requestFlags.get(request_id) ?? String(request_id),
+                sub_type: this.requestSubTypes.get(request_id) ?? "add",
                 approve,
                 reason,
             });

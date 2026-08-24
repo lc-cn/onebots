@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createMilkyAdapter } from "./adapter.js";
 import { createMilkyClient } from "./client.js";
+import { ProtocolError } from "./index.js";
 import type { MilkyV1Event, MilkyV1Response } from "./types.js";
 
 const event: MilkyV1Event = {
@@ -152,5 +153,22 @@ describe("Milky V1 SDK", () => {
             "https://gateway.example/kook/10001/milky/v1/get_login_info",
             expect.any(Object),
         );
+    });
+
+    test("throws ProtocolError for a failed Milky response", async () => {
+        const client = createMilkyClient({
+            baseUrl: "https://milky.example",
+            selfId: "10001",
+            receiveMode: "manual",
+            call: async () => ({ status: "failed", retcode: 1200, message: "bad request" }),
+        });
+
+        await expect(client.call("send_private_message")).rejects.toMatchObject({
+            name: "ProtocolError",
+            kind: "protocol",
+            protocol: "milky-v1",
+            operation: "send_private_message",
+            code: 1200,
+        } satisfies Partial<ProtocolError>);
     });
 });

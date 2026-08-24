@@ -29,7 +29,7 @@ export interface MilkyAdapterConfig {
     apiBaseUrl?: string;
     selfId: string;
     accessToken?: string;
-    receiveMode: "ws" | "wss" | "webhook" | "sse";
+    receiveMode: "ws" | "wss" | "webhook" | "sse" | "manual";
     path?: string;
     wsUrl?: string;
     /** @deprecated API 地址不再由平台路由拼接，请改用 apiBaseUrl。 */
@@ -44,6 +44,21 @@ interface SendMessageResult {
     message_seq: number;
     time: number;
 }
+
+interface FriendRequestContext {
+    initiatorUid: string;
+    isFiltered: boolean;
+}
+
+type GroupRequestContext =
+    | {
+          kind: "request";
+          notificationSeq: number;
+          notificationType: "join_request" | "invited_join_request";
+          groupId: number;
+          isFiltered: boolean;
+      }
+    | { kind: "invitation"; invitationSeq: number; groupId: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
@@ -101,6 +116,8 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
     readonly selfId: string;
     readonly #config: MilkyAdapterConfig;
     readonly #httpClient: HttpClient;
+    readonly #friendRequests = new Map<string, FriendRequestContext>();
+    readonly #groupRequests = new Map<string, GroupRequestContext>();
     #receiver?:
         | WebSocketReceiver<string>
         | WSSReceiver<string>
@@ -175,8 +192,117 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
             this.#emitMessage(event, event.data);
         } else if (event.event_type === "message_recall" && isRecallData(event.data)) {
             this.#emitRecall(event, event.data);
+        } else if (isRecord(event.data)) {
+            this.#emitCanonicalEvent(event, event.data);
         }
         this.emit("event", event);
+    }
+
+    #emitCanonicalEvent(event: MilkyV1Event, data: Record<string, unknown>): void {
+        const base = { timestamp: event.time, bot_id: String(event.self_id) };
+        const groupId = String(data.group_id ?? data.peer_id ?? "");
+        const userId = String(data.user_id ?? "");
+        const operatorId = data.operator_id === undefined ? undefined : String(data.operator_id);
+        switch (event.event_type) {
+            case "group_member_increase":
+                this.emit("notice.group_member_increase", {
+                    ...base,
+                    notice_type: "group_member_increase",
+                    sub_type: data.invitor_id === undefined ? "approve" : "invite",
+                    group_id: groupId,
+                    user_id: userId,
+                    operator_id: operatorId,
+                });
+                break;
+            case "group_member_decrease":
+                this.emit("notice.group_member_decrease", {
+                    ...base,
+                    notice_type: "group_member_decrease",
+                    sub_type:
+                        data.operator_id === undefined
+                            ? "leave"
+                            : String(data.user_id) === String(event.self_id)
+                              ? "kick_me"
+                              : "kick",
+                    group_id: groupId,
+                    user_id: userId,
+                    operator_id: operatorId,
+                });
+                break;
+            case "friend_request": {
+                const initiatorUid = String(data.initiator_uid ?? "");
+                const requestId = `friend:${initiatorUid}:${data.is_filtered === true ? 1 : 0}`;
+                this.#friendRequests.set(requestId, {
+                    initiatorUid,
+                    isFiltered: data.is_filtered === true,
+                });
+                this.emit("request.friend", {
+                    ...base,
+                    request_id: requestId,
+                    user_id: String(data.initiator_id ?? ""),
+                    comment: typeof data.comment === "string" ? data.comment : undefined,
+                    flag: requestId,
+                });
+                break;
+            }
+            case "group_join_request":
+            case "group_invited_join_request": {
+                const notificationType =
+                    event.event_type === "group_invited_join_request"
+                        ? "invited_join_request"
+                        : "join_request";
+                const notificationSeq = Number(data.notification_seq);
+                const groupIdValue = Number(data.group_id);
+                const requestId = `group:${notificationType}:${groupIdValue}:${notificationSeq}:${data.is_filtered === true ? 1 : 0}`;
+                this.#groupRequests.set(requestId, {
+                    kind: "request",
+                    notificationSeq,
+                    notificationType,
+                    groupId: groupIdValue,
+                    isFiltered: data.is_filtered === true,
+                });
+                this.emit("request.group", {
+                    ...base,
+                    request_id: requestId,
+                    group_id: groupId,
+                    user_id: String(
+                        event.event_type === "group_invited_join_request"
+                            ? (data.target_user_id ?? "")
+                            : (data.initiator_id ?? ""),
+                    ),
+                    comment: typeof data.comment === "string" ? data.comment : undefined,
+                    flag: requestId,
+                    sub_type: event.event_type === "group_invited_join_request" ? "invite" : "add",
+                });
+                break;
+            }
+            case "group_invitation": {
+                const groupIdValue = Number(data.group_id);
+                const invitationSeq = Number(data.invitation_seq);
+                const requestId = `invitation:${groupIdValue}:${invitationSeq}`;
+                this.#groupRequests.set(requestId, {
+                    kind: "invitation",
+                    invitationSeq,
+                    groupId: groupIdValue,
+                });
+                this.emit("request.group", {
+                    ...base,
+                    request_id: requestId,
+                    group_id: String(groupIdValue),
+                    user_id: String(data.initiator_id ?? ""),
+                    flag: requestId,
+                    sub_type: "invite",
+                });
+                break;
+            }
+            case "bot_offline":
+                this.emit("meta.lifecycle", {
+                    ...base,
+                    meta_type: "lifecycle",
+                    sub_type: "disable",
+                });
+                break;
+        }
     }
 
     #emitMessage(event: MilkyV1Event, message: MilkyIncomingMessage): void {
@@ -449,14 +575,29 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
     }
 
     async approveFriendRequest(requestId: string, approve: boolean): Promise<void> {
+        const context = this.#friendRequests.get(requestId);
+        if (!context) throw new TypeError(`未知的 Milky 好友请求：${requestId}`);
         await this.call(approve ? "accept_friend_request" : "reject_friend_request", {
-            request_id: requestId,
+            initiator_uid: context.initiatorUid,
+            is_filtered: context.isFiltered,
         });
     }
 
     async approveGroupRequest(requestId: string, approve: boolean, reason?: string): Promise<void> {
+        const context = this.#groupRequests.get(requestId);
+        if (!context) throw new TypeError(`未知的 Milky 群请求：${requestId}`);
+        if (context.kind === "invitation") {
+            await this.call(approve ? "accept_group_invitation" : "reject_group_invitation", {
+                group_id: context.groupId,
+                invitation_seq: context.invitationSeq,
+            });
+            return;
+        }
         await this.call(approve ? "accept_group_request" : "reject_group_request", {
-            request_id: requestId,
+            notification_seq: context.notificationSeq,
+            notification_type: context.notificationType,
+            group_id: context.groupId,
+            is_filtered: context.isFiltered,
             ...(approve ? {} : { reason }),
         });
     }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createOnebot12Client } from "./client.js";
+import { ProtocolError } from "./index.js";
 import type { OneBotV12Event } from "./types.js";
 
 afterEach(() => {
@@ -7,6 +8,68 @@ afterEach(() => {
 });
 
 describe("OneBot V12 client", () => {
+    test("supports manual ingress and exposes response echo", async () => {
+        const createWebSocket = vi.fn(() => {
+            throw new Error("manual mode must not create a socket");
+        });
+        const fetchMock = vi.fn(
+            async () =>
+                new Response(
+                    JSON.stringify({ status: "ok", retcode: 0, data: {}, echo: "request-1" }),
+                ),
+        );
+        const client = createOnebot12Client({
+            baseUrl: "https://gateway.example",
+            apiBaseUrl: "https://api.example",
+            selfId: "bot",
+            receiveMode: "manual",
+            fetch: fetchMock,
+            webSocket: { createWebSocket },
+        });
+
+        await client.start();
+        expect(createWebSocket).not.toHaveBeenCalled();
+        const response = await client.call("get_self_info");
+
+        expect(response.echo).toBe("request-1");
+    });
+
+    test("throws a structured protocol error for HTTP failures", async () => {
+        const client = createOnebot12Client({
+            baseUrl: "https://gateway.example",
+            apiBaseUrl: "https://api.example",
+            selfId: "bot",
+            receiveMode: "manual",
+            fetch: async () => new Response("upstream unavailable", { status: 503 }),
+        });
+
+        const request = client.call("get_self_info");
+        await expect(request).rejects.toBeInstanceOf(ProtocolError);
+        await expect(request).rejects.toMatchObject({
+            name: "ProtocolError",
+            protocol: "onebot-v12",
+            operation: "get_self_info",
+            kind: "transport",
+            httpStatus: 503,
+        });
+    });
+
+    test("wraps invalid JSON as a structured protocol error", async () => {
+        const client = createOnebot12Client({
+            baseUrl: "https://gateway.example",
+            selfId: "bot",
+            receiveMode: "manual",
+            fetch: async () => new Response("not-json"),
+        });
+
+        await expect(client.call("get_self_info")).rejects.toMatchObject({
+            name: "ProtocolError",
+            protocol: "onebot-v12",
+            operation: "get_self_info",
+            kind: "protocol",
+        });
+    });
+
     test("keeps raw event type and supports a custom action URL resolver", async () => {
         const fetchMock = vi.fn(
             async () => new Response(JSON.stringify({ status: "ok", retcode: 0, data: {} })),

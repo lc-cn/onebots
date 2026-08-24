@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createSatoriClient } from "./client.js";
+import { ProtocolError } from "./index.js";
 import type { SatoriV1Event } from "./types.js";
 
 afterEach(() => {
@@ -64,5 +65,21 @@ describe("Satori V1 client", () => {
             "https://gateway.example/kook/bot/satori/v1/login.get",
             expect.any(Object),
         );
+    });
+
+    test("wraps invalid JSON as a structured protocol error", async () => {
+        const client = createSatoriClient({
+            baseUrl: "https://api.example/v1",
+            selfId: "bot",
+            receiveMode: "manual",
+            fetch: async () => new Response("not-json"),
+        });
+
+        await expect(client.call("login", "get")).rejects.toMatchObject({
+            name: "ProtocolError",
+            protocol: "satori-v1",
+            operation: "login.get",
+            kind: "protocol",
+        } satisfies Partial<ProtocolError>);
     });
 });

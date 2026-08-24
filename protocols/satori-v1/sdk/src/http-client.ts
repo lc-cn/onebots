@@ -1,3 +1,4 @@
+import { ProtocolError } from "imhelper";
 import type { SatoriActionUrlResolver, SatoriCall } from "./types.js";
 
 export interface HttpClientConfig {
@@ -23,8 +24,20 @@ export class HttpClient {
         method: string,
         params: Record<string, unknown> = {},
     ): Promise<T> {
+        const operation = `${resource}.${method}`;
         if (this.#config.call) {
-            return this.#config.call(resource, method, params) as Promise<T>;
+            try {
+                return (await this.#config.call(resource, method, params)) as T;
+            } catch (error) {
+                if (error instanceof ProtocolError) throw error;
+                throw new ProtocolError({
+                    protocol: "satori-v1",
+                    operation,
+                    kind: "protocol",
+                    message: `Satori 调用失败：${operation}`,
+                    cause: error,
+                });
+            }
         }
         const resolved = this.#config.resolveActionUrl
             ? this.#config.resolveActionUrl(resource, method, this.#config.apiBaseUrl)
@@ -35,15 +48,43 @@ export class HttpClient {
         }
         headers["Satori-Platform"] = this.#config.platform;
         headers["Satori-User-ID"] = this.#config.userId;
-        const response = await (this.#config.fetch ?? globalThis.fetch)(String(resolved), {
-            method: "POST",
-            headers,
-            body: JSON.stringify(params),
-        });
-        if (!response.ok) {
-            throw new Error(`Satori HTTP 请求失败，状态码：${response.status}`);
+        let response: Response;
+        try {
+            response = await (this.#config.fetch ?? globalThis.fetch)(String(resolved), {
+                method: "POST",
+                headers,
+                body: JSON.stringify(params),
+            });
+        } catch (error) {
+            throw new ProtocolError({
+                protocol: "satori-v1",
+                operation,
+                kind: "transport",
+                message: `Satori 请求失败：${operation}`,
+                cause: error,
+            });
         }
-        const body = (await response.json()) as unknown;
+        if (!response.ok) {
+            throw new ProtocolError({
+                protocol: "satori-v1",
+                operation,
+                kind: "transport",
+                message: `Satori HTTP 请求失败，状态码：${response.status}`,
+                httpStatus: response.status,
+            });
+        }
+        let body: unknown;
+        try {
+            body = (await response.json()) as unknown;
+        } catch (error) {
+            throw new ProtocolError({
+                protocol: "satori-v1",
+                operation,
+                kind: "protocol",
+                message: `Satori 响应解析失败：${operation}`,
+                cause: error,
+            });
+        }
         if (!this.#config.unwrapLegacyResponse) return body as T;
         if (typeof body === "object" && body !== null && "data" in body) {
             return (body as { data: T }).data;
@@ -52,14 +93,25 @@ export class HttpClient {
             typeof body === "object" && body !== null && "message" in body
                 ? String((body as { message: unknown }).message)
                 : "未知错误";
-        throw new Error(`Satori API 调用失败：${message}`);
+        throw new ProtocolError({
+            protocol: "satori-v1",
+            operation,
+            kind: "protocol",
+            message: `Satori API 调用失败：${message}`,
+            response: body,
+        });
     }
 
     post<T = unknown>(action: string, params?: Record<string, unknown>): Promise<T> {
         const [resource, ...methodParts] = action.replace(/^\/+/, "").split(".");
         const method = methodParts.join(".");
         if (!resource || !method) {
-            throw new TypeError(`Satori action 必须使用 resource.method 格式：${action}`);
+            throw new ProtocolError({
+                protocol: "satori-v1",
+                operation: action,
+                kind: "validation",
+                message: `Satori action 必须使用 resource.method 格式：${action}`,
+            });
         }
         return this.call<T>(resource, method, params);
     }

@@ -68,7 +68,7 @@ export interface MilkyV1ClientConfig {
     resolveActionUrl?: MilkyActionUrlResolver;
     call?: MilkyCall;
     fetch?: typeof globalThis.fetch;
-    receiveMode?: "ws" | "wss" | "webhook" | "sse";
+    receiveMode?: "websocket" | "ws" | "wss" | "webhook" | "sse" | "manual";
     wsUrl?: string;
     webhookUrl?: string;
     webhookPort?: number;

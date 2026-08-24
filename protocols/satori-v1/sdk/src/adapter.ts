@@ -21,7 +21,7 @@ export interface SatoriAdapterConfig {
     apiBaseUrl?: string;
     selfId: string;
     accessToken?: string;
-    receiveMode: "ws" | "wss" | "webhook" | "sse";
+    receiveMode: "ws" | "wss" | "webhook" | "sse" | "manual";
     path?: string; // webhook 路径
     wsUrl?: string; // WebSocket URL（可选，自动构建）
     platform?: string; // 平台名称（可选，用于构建 HTTP 路径）

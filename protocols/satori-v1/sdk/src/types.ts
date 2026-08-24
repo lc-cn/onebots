@@ -11,8 +11,8 @@ export interface SatoriV1ClientConfig {
     resolveActionUrl?: SatoriActionUrlResolver;
     call?: SatoriCall;
     fetch?: typeof globalThis.fetch;
-    /** 接收方式：websocket | webhook | sse */
-    receiveMode?: "websocket" | "webhook" | "sse";
+    /** 接收方式；manual 仅通过 ingest/acceptHttp/acceptWebSocket 接收。 */
+    receiveMode?: "websocket" | "ws" | "wss" | "webhook" | "sse" | "manual";
     /** Webhook 接收地址（当 receiveMode 为 webhook 时使用） */
     webhookUrl?: string;
     /** Webhook 端口（当 receiveMode 为 webhook 时使用） */

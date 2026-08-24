@@ -9,6 +9,7 @@ export * from "./instances/groupMember.js";
 export * from "./instances/channelMember.js";
 export * from "./receiver.js";
 export * from "./ingress.js";
+export * from "./protocol-error.js";
 export * from "./types.js";
 export * from "./receivers/ws.js";
 export * from "./receivers/wss.js";

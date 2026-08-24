@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createOnebot11Client } from "./client.js";
+import { ProtocolError } from "./index.js";
 import type { OneBotV11Event, OneBotV11Response } from "./types.js";
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -53,5 +54,22 @@ describe("OneBot V11 client", () => {
             "https://gateway.example/kook/bot/onebot/v11/get_login_info",
             expect.any(Object),
         );
+    });
+
+    test("throws ProtocolError for a failed protocol response", async () => {
+        const client = createOnebot11Client({
+            baseUrl: "https://example.test",
+            selfId: "1",
+            receiveMode: "manual",
+            call: async () => ({ status: "failed", retcode: 1404, message: "missing" }),
+        });
+
+        await expect(client.call("get_msg")).rejects.toMatchObject({
+            name: "ProtocolError",
+            kind: "protocol",
+            protocol: "onebot-v11",
+            operation: "get_msg",
+            code: 1404,
+        } satisfies Partial<ProtocolError>);
     });
 });

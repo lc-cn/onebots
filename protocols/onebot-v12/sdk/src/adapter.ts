@@ -27,7 +27,7 @@ export interface OneBotV12AdapterConfig {
     apiBaseUrl?: string;
     selfId: string;
     accessToken?: string;
-    receiveMode: "ws" | "wss" | "webhook" | "sse";
+    receiveMode: "ws" | "wss" | "webhook" | "sse" | "manual";
     wsUrl?: string; // WebSocket URL（可选，自动构建）
     platform?: string; // 平台名称（可选，用于构建 HTTP 路径）
     resolveActionUrl?: OneBotV12ActionUrlResolver;
@@ -121,6 +121,7 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
         }
 
         private transformAndEmit(event: OneBotV12Event): void {
+            const eventBotId = event.self?.user_id ?? selfId;
             if (event.type === "message") {
                 const detailType = event.detail_type as "private" | "group" | "channel";
                 const userId = event.user_id!;
@@ -130,7 +131,7 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                 if (detailType === "private") {
                     const messageData: PrivateMessageEvent.Data<string> = {
                         timestamp,
-                        bot_id: event.self.user_id,
+                        bot_id: eventBotId,
                         message_id: messageId,
                         user_id: userId,
                         content: (event.message || []) as Message.Content,
@@ -140,7 +141,7 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                 } else if (detailType === "group") {
                     const messageData: GroupMessageEvent.Data<string> = {
                         timestamp,
-                        bot_id: event.self.user_id,
+                        bot_id: eventBotId,
                         message_id: messageId,
                         user_id: userId,
                         group_id: event.group_id!,
@@ -151,7 +152,7 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                 } else if (detailType === "channel") {
                     const messageData: ChannelMessageEvent.Data<string> = {
                         timestamp,
-                        bot_id: event.self.user_id,
+                        bot_id: eventBotId,
                         message_id: messageId,
                         user_id: userId,
                         channel_id: event.channel_id!,
@@ -159,6 +160,138 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                         message_type: "channel",
                     };
                     this.emit("message.channel", messageData);
+                }
+            } else if (event.type === "notice") {
+                const base = { timestamp: event.time, bot_id: eventBotId };
+                switch (event.detail_type) {
+                    case "group_member_increase":
+                        this.emit("notice.group_member_increase", {
+                            ...base,
+                            notice_type: "group_member_increase",
+                            sub_type: event.sub_type === "invite" ? "invite" : "approve",
+                            group_id: event.group_id!,
+                            user_id: event.user_id!,
+                            operator_id: event.operator_id,
+                        });
+                        break;
+                    case "group_member_decrease":
+                        this.emit("notice.group_member_decrease", {
+                            ...base,
+                            notice_type: "group_member_decrease",
+                            sub_type:
+                                event.sub_type === "kick" || event.sub_type === "kick_me"
+                                    ? event.sub_type
+                                    : "leave",
+                            group_id: event.group_id!,
+                            user_id: event.user_id!,
+                            operator_id: event.operator_id,
+                        });
+                        break;
+                    case "group_message_delete":
+                        this.emit("notice.group_message_delete", {
+                            ...base,
+                            notice_type: "group_message_delete",
+                            sub_type: "delete",
+                            group_id: event.group_id!,
+                            message_id: event.message_id!,
+                            operator_id: event.operator_id,
+                        });
+                        break;
+                    case "private_message_delete":
+                        this.emit("notice.private_message_delete", {
+                            ...base,
+                            notice_type: "private_message_delete",
+                            sub_type: "delete",
+                            user_id: event.user_id!,
+                            message_id: event.message_id!,
+                        });
+                        break;
+                    case "friend_increase":
+                        this.emit("notice.friend_increase", {
+                            ...base,
+                            notice_type: "friend_increase",
+                            sub_type: "add",
+                            user_id: event.user_id!,
+                        });
+                        break;
+                    case "friend_decrease":
+                        this.emit("notice.friend_decrease", {
+                            ...base,
+                            notice_type: "friend_decrease",
+                            sub_type: "delete",
+                            user_id: event.user_id!,
+                        });
+                        break;
+                }
+            } else if (event.type === "request") {
+                if (event.detail_type === "friend" || event.detail_type === "friend_request") {
+                    const requestId = event.request_id ?? event.id;
+                    this.emit("request.friend", {
+                        timestamp: event.time,
+                        bot_id: eventBotId,
+                        request_id: requestId,
+                        user_id: event.user_id!,
+                        comment: typeof event.message === "string" ? event.message : event.comment,
+                        flag: requestId,
+                    });
+                } else if (event.detail_type === "group" || event.detail_type === "group_request") {
+                    const requestId = event.request_id ?? event.id;
+                    this.emit("request.group", {
+                        timestamp: event.time,
+                        bot_id: eventBotId,
+                        request_id: requestId,
+                        group_id: event.group_id!,
+                        user_id: event.user_id!,
+                        comment: typeof event.message === "string" ? event.message : event.comment,
+                        flag: requestId,
+                        sub_type: event.sub_type === "invite" ? "invite" : "add",
+                    });
+                }
+            } else if (event.type === "meta") {
+                if (event.detail_type === "connect" || event.detail_type === "lifecycle") {
+                    this.emit("meta.lifecycle", {
+                        timestamp: event.time,
+                        bot_id: eventBotId,
+                        meta_type: "lifecycle",
+                        sub_type:
+                            event.sub_type === "enable" || event.sub_type === "disable"
+                                ? event.sub_type
+                                : "connect",
+                    });
+                } else if (event.detail_type === "heartbeat") {
+                    this.emit("meta.heartbeat", {
+                        timestamp: event.time,
+                        bot_id: eventBotId,
+                        meta_type: "heartbeat",
+                        interval: event.interval,
+                    });
+                    if (event.status) {
+                        const platform = event.self?.platform ?? config.platform;
+                        const bot = event.status.bots.find(
+                            item =>
+                                item.self.user_id === eventBotId &&
+                                (platform === undefined || item.self.platform === platform),
+                        );
+                        this.emit("meta.status_update", {
+                            timestamp: event.time,
+                            bot_id: eventBotId,
+                            meta_type: "status_update",
+                            status: { online: bot?.online ?? false, good: event.status.good },
+                        });
+                    }
+                } else if (event.detail_type === "status_update" && event.status) {
+                    const platform = event.self?.platform ?? config.platform;
+                    const bot = event.status.bots.find(
+                        item =>
+                            item.self.user_id === eventBotId &&
+                            (platform === undefined || item.self.platform === platform),
+                    );
+                    this.emit("meta.status_update", {
+                        timestamp: event.time,
+                        bot_id: eventBotId,
+                        meta_type: "status_update",
+                        status: { online: bot?.online ?? false, good: event.status.good },
+                    });
                 }
             }
             (this as EventEmitter).emit("event", event);

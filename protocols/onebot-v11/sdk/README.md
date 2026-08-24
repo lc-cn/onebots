@@ -77,6 +77,8 @@ const client = createOnebot11Client({
 });
 ```
 
+宿主已经管理 HTTP/WS 连接时可设置 `receiveMode: "manual"`，再调用 `ingest()`、`acceptHttp()` 或 `acceptWebSocket()`；此模式不会自行连接或监听端口。协议调用失败会抛出带 `protocol`、`operation`、`kind` 和 HTTP 状态等字段的 `ProtocolError`。
+
 ## WebSocket 恢复策略
 
 `ws` 默认无限重连。可以通过 `webSocket` 配置 AbortSignal、退避和日志：
