@@ -1,5 +1,13 @@
 # @onebots/adapter-line
 
+## 3.0.5
+
+### Patch Changes
+
+- 41f4bcc: 改进 Web 配置、日志与验证管理，补充 MCP 和协议格式测试，并收紧核心、适配器及协议实现的公开类型。四个客户端 SDK 的事件扩展字段和默认响应数据由 `any` 收紧为 `unknown`，调用方需先进行类型收窄。
+- Updated dependencies [41f4bcc]
+  - onebots@1.2.5
+
 ## 3.0.4
 
 ### Patch Changes

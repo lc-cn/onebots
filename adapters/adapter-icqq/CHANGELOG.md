@@ -1,5 +1,12 @@
 # @onebots/adapter-icqq
 
+## 3.0.5
+
+### Patch Changes
+
+- Updated dependencies [41f4bcc]
+  - onebots@1.2.5
+
 ## 3.0.4
 
 ### Patch Changes
