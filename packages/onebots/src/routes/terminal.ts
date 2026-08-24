@@ -67,10 +67,10 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             // 监听 PTY 输出
             app.ptyTerminal.onData((data: string) => {
                 // 广播到所有连接的客户端
-                app.terminalClients.forEach((c: any) => {
+                app.terminalClients.forEach(c => {
                     try {
                         c.send(JSON.stringify({ type: 'output', data }));
-                    } catch (e) {
+                    } catch {
                         app.terminalClients.delete(c);
                     }
                 });
@@ -79,7 +79,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             // 监听 PTY 退出
             app.ptyTerminal.onExit(() => {
                 app.ptyTerminal = null;
-                app.terminalClients.forEach((c: any) => {
+                app.terminalClients.forEach(c => {
                     try {
                         c.send(JSON.stringify({ type: 'exit' }));
                     } catch {
@@ -103,7 +103,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
                     app.ptyTerminal.resize(payload.cols, payload.rows);
                 } else if (payload.type === 'restart') {
                     // 通知所有客户端
-                    app.terminalClients.forEach((c: any) => {
+                    app.terminalClients.forEach(c => {
                         try {
                             c.send(JSON.stringify({ type: 'output', data: '\r\n\x1b[33m[服务即将重启]\x1b[0m' }));
                         } catch {

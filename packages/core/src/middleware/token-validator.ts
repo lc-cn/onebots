@@ -83,9 +83,9 @@ export function createTokenValidator(config: TokenConfig = {}) {
         if (validator) {
             try {
                 isValid = await validator(token, ctx);
-            } catch (error: any) {
+            } catch (error: unknown) {
                 logger.error('Token validation error', {
-                    error: error.message,
+                    error: error instanceof Error ? error.message : String(error),
                     path: ctx.path,
                 });
                 isValid = false;

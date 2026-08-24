@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import type { CommonEvent } from "onebots";
 
 vi.mock("onebots", () => {
   class Protocol {
@@ -11,9 +12,9 @@ vi.mock("onebots", () => {
     };
 
     constructor(
-      public adapter: any,
-      public account: any,
-      public config: any,
+      public adapter: unknown,
+      public account: unknown,
+      public config: unknown,
     ) {}
   }
 
@@ -56,21 +57,21 @@ function createProtocol() {
         ({
           ...resolvedId,
           number: typeof id === "number" ? id : resolvedId.number,
-        }) as any,
+        }),
     ),
   };
 
   const protocol = new OneBotV11Protocol(
-    adapter as any,
-    { account_id: "bot" } as any,
-    { protocol: "onebot", version: "v11" } as any,
+    adapter as never,
+    { account_id: "bot" } as never,
+    { protocol: "onebot", version: "v11" } as never,
   );
 
   return { adapter, protocol, resolvedId };
 }
 
 // Helper to build realistic CommonEvent.Message objects
-function textMsgEvent(overrides: Record<string, any> = {}) {
+function textMsgEvent(overrides: Record<string, unknown> = {}) {
   return {
     id: { number: 1, string: "e1", source: "e1" },
     timestamp: 1700000000000,
@@ -89,11 +90,13 @@ function textMsgEvent(overrides: Record<string, any> = {}) {
   };
 }
 
+type V11Result = Record<string, unknown> & { sender: Record<string, unknown>; message: unknown[] };
+
 describe("OneBot V11 message format conversion", () => {
   test("converts a private text message", () => {
     const { protocol } = createProtocol();
     const event = textMsgEvent();
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result).not.toBeNull();
     expect(result).toMatchObject({
@@ -112,8 +115,8 @@ describe("OneBot V11 message format conversion", () => {
         nickname: "Alice",
       },
     });
-    // The spread from event.sender (excluding id) adds name:"Alice"
-    expect(result.sender.name).toBe("Alice");
+    const r = result as V11Result;
+    expect(r.sender.name).toBe("Alice");
   });
 
   test("converts a group text message with group_id", () => {
@@ -125,7 +128,7 @@ describe("OneBot V11 message format conversion", () => {
         name: "Test Group",
       },
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result).toMatchObject({
       post_type: "message",
@@ -146,7 +149,7 @@ describe("OneBot V11 message format conversion", () => {
         name: "Channel",
       },
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result.message_type).toBe("group");
     expect(result.sub_type).toBe("normal");
@@ -162,7 +165,7 @@ describe("OneBot V11 message format conversion", () => {
         name: "Direct",
       },
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result.message_type).toBe("group");
     expect(result.sub_type).toBe("normal");
@@ -185,7 +188,7 @@ describe("OneBot V11 message format conversion", () => {
       ],
       raw_message: "[CQ:image,file=abc.jpg]",
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result.message).toEqual([
       {
@@ -206,7 +209,7 @@ describe("OneBot V11 message format conversion", () => {
       ],
       raw_message: "[CQ:at,qq=12345] hello",
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result.message).toEqual([
       { type: "at", data: { qq: "12345" } },
@@ -223,7 +226,7 @@ describe("OneBot V11 message format conversion", () => {
       ],
       raw_message: "[CQ:reply,id=99999] replied message",
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result.message).toEqual([
       { type: "reply", data: { id: "99999" } },
@@ -239,7 +242,7 @@ describe("OneBot V11 message format conversion", () => {
       message: [{ type: "face", data: { id: "123" } }],
       raw_message: "[CQ:face,id=123]",
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result.message).toEqual([
       { type: "face", data: { id: "123" } },
@@ -260,12 +263,13 @@ describe("OneBot V11 message format conversion", () => {
       ],
       raw_message: "Hey [CQ:at,qq=10001], check this: [CQ:image,file=pic.jpg][CQ:face,id=14]",
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
-    expect(result.message).toHaveLength(5);
-    expect(result.message[1]).toEqual({ type: "at", data: { qq: "10001" } });
-    expect(result.message[3]).toEqual({ type: "image", data: { file: "pic.jpg" } });
-    expect(result.message[4]).toEqual({ type: "face", data: { id: "14" } });
+    const msg = result.message as unknown[];
+    expect(msg).toHaveLength(5);
+    expect(msg[1]).toEqual({ type: "at", data: { qq: "10001" } });
+    expect(msg[3]).toEqual({ type: "image", data: { file: "pic.jpg" } });
+    expect(msg[4]).toEqual({ type: "face", data: { id: "14" } });
   });
 
   test("falls back to segmentsToString when raw_message is missing", () => {
@@ -276,7 +280,7 @@ describe("OneBot V11 message format conversion", () => {
         { type: "text", data: { text: "Hello" } },
       ],
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result.raw_message).toBe("Hello");
   });
@@ -289,10 +293,11 @@ describe("OneBot V11 message format conversion", () => {
         name: "Bob",
       },
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
-    expect(result.sender.nickname).toBe("Bob");
-    expect(result.sender.name).toBe("Bob"); // from spread
+    const r = result as V11Result;
+    expect(r.sender.nickname).toBe("Bob");
+    expect(r.sender.name).toBe("Bob");
   });
 
   test("returns empty nickname when sender.name is missing", () => {
@@ -302,9 +307,10 @@ describe("OneBot V11 message format conversion", () => {
         id: { number: 10001, string: "u10001", source: "u10001" },
       },
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
-    expect(result.sender.nickname).toBe("");
+    const r = result as V11Result;
+    expect(r.sender.nickname).toBe("");
   });
 
   test("passes through extra sender fields via spread", () => {
@@ -317,13 +323,12 @@ describe("OneBot V11 message format conversion", () => {
         age: 25,
       },
     });
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
-    // sender has user_id, nickname AND the spread fields (minus id)
-    expect(result.sender.sex).toBe("female");
-    expect(result.sender.age).toBe(25);
-    // id should NOT leak into V11 sender
-    expect(result.sender.id).toBeUndefined();
+    const r = result as V11Result;
+    expect(r.sender.sex).toBe("female");
+    expect(r.sender.age).toBe(25);
+    expect(r.sender.id).toBeUndefined();
   });
 
   test("notice events are converted with user_id / operator_id / group_id", () => {
@@ -339,7 +344,7 @@ describe("OneBot V11 message format conversion", () => {
       operator: { id: { number: 10001 } },
       group: { id: { number: 20001 } },
     };
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result).toMatchObject({
       time: 1700000000,
@@ -365,7 +370,7 @@ describe("OneBot V11 message format conversion", () => {
       comment: "hello",
       flag: "req-flag-001",
     };
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result).toMatchObject({
       time: 1700000000,
@@ -389,7 +394,7 @@ describe("OneBot V11 message format conversion", () => {
       meta_type: "heartbeat",
       sub_type: "dummy",
     };
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result).toMatchObject({
       time: 1700000000,
@@ -409,7 +414,7 @@ describe("OneBot V11 message format conversion", () => {
       platform: "qq",
       bot_id: { number: 12345678, string: "bot", source: "bot" },
     };
-    const result = protocol["convertToV11Format"](event as any);
+    const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result).toBeNull();
   });

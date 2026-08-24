@@ -27,15 +27,20 @@ export interface OneBotV11Event {
   meta_event_type?: string;
   time: number;
   self_id: number;
-  [key: string]: any;
+  user_id?: number;
+  message_id?: number;
+  group_id?: number;
+  message?: unknown[];
+  raw_message?: string;
+  [key: string]: unknown;
 }
 
-export interface OneBotV11Response<T = any> {
+export interface OneBotV11Response<T = unknown> {
   status: 'ok' | 'failed';
   retcode: number;
   data?: T;
   message?: string;
-  echo?: any;
+  echo?: unknown;
 }
 
 export type EventHandler = (event: OneBotV11Event) => void | Promise<void>;

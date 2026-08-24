@@ -21,7 +21,7 @@ const require = createRequire(import.meta.url);
 export class WhatsAppBot extends EventEmitter {
     private config: WhatsAppConfig;
     private apiClient: AxiosInstance;
-    private agent: object | null = null;
+    private agent: unknown | null = null;
     private initialized: boolean = false;
 
     constructor(config: WhatsAppConfig) {
@@ -60,7 +60,7 @@ export class WhatsAppBot extends EventEmitter {
         const agent = await createHttpsProxyAgent(this.config.proxy);
         if (agent) {
             this.agent = agent;
-            console.log(`[WhatsApp] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+            console.debug(`[WhatsApp] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
         } else {
             console.warn('[WhatsApp] 创建代理失败，将直接连接');
         }
@@ -75,7 +75,7 @@ export class WhatsAppBot extends EventEmitter {
         // 验证连接
         try {
             await this.apiClient.get('/');
-            console.log('[WhatsApp] 连接验证成功');
+            console.debug('[WhatsApp] 连接验证成功');
             this.emit('ready');
         } catch (error) {
             const axiosError = error as AxiosError;
@@ -213,4 +213,3 @@ export class WhatsAppBot extends EventEmitter {
         }
     }
 }
-

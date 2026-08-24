@@ -29,8 +29,8 @@ describe('Config Validator', () => {
             };
 
             const result = ConfigValidator.validate({}, schema);
-            expect((result as any).port).toBe(8080);
-            expect((result as any).enabled).toBe(true);
+            expect((result as Record<string, unknown>).port).toBe(8080);
+            expect((result as Record<string, unknown>).enabled).toBe(true);
         });
 
         it('should validate type', () => {
@@ -124,8 +124,8 @@ describe('Config Validator', () => {
             const schema = {
                 password: {
                     type: 'string' as const,
-                    validator: (value: string) => {
-                        if (value.length < 8) {
+                    validator: (value: unknown) => {
+                        if (String(value).length < 8) {
                             return 'Password must be at least 8 characters';
                         }
                         return true;
@@ -157,8 +157,9 @@ describe('Config Validator', () => {
             }).toThrow(ValidationError);
 
             const result = ConfigValidator.validate({ server: { host: 'localhost' } }, schema);
-            expect((result as any).server.host).toBe('localhost');
-            expect((result as any).server.port).toBe(8080);
+            const server = (result as Record<string, unknown>).server as Record<string, unknown>;
+            expect(server.host).toBe('localhost');
+            expect(server.port).toBe(8080);
         });
     });
 
@@ -167,13 +168,13 @@ describe('Config Validator', () => {
             const schema = {
                 port: {
                     type: 'number' as const,
-                    transform: (value: any) => parseInt(value, 10),
+                    transform: (value: unknown) => parseInt(String(value), 10),
                 },
             };
 
             const result = ConfigValidator.validate({ port: '8080' }, schema);
-            expect((result as any).port).toBe(8080);
-            expect(typeof (result as any).port).toBe('number');
+            expect((result as Record<string, unknown>).port).toBe(8080);
+            expect(typeof (result as Record<string, unknown>).port).toBe('number');
         });
     });
 
@@ -185,8 +186,8 @@ describe('Config Validator', () => {
             };
 
             const result = ConfigValidator.validateWithDefaults({}, schema);
-            expect((result as any).port).toBe(8080);
-            expect((result as any).host).toBe('localhost');
+            expect((result as Record<string, unknown>).port).toBe(8080);
+            expect((result as Record<string, unknown>).host).toBe('localhost');
         });
     });
 });

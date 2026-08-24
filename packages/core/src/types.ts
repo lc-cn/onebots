@@ -2,10 +2,11 @@ import type { ScalarOrArrayFiles } from 'koa-body';
 import type { Request } from 'koa';
 // 导入 koa-body 的类型定义，它会自动扩展 Request 接口
 import 'koa-body';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dict default must remain `any` for backward compatibility; changing it cascades hundreds of errors across all adapters and protocols
 export type Dict<T = any,K extends string|symbol=string> = Record<K,T>;
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off";
-export type Dispose = () => any;
-export type MayBeArray<T extends any> = T | T[];
+export type Dispose = () => unknown;
+export type MayBeArray<T> = T | T[];
 export namespace CommonTypes {
     export type Id = {
         string: string
@@ -24,7 +25,7 @@ export namespace CommonTypes {
         /** User avatar URL */
         avatar?: string;
         /** Additional user data */
-        [key: string]: any;
+        [key: string]: unknown;
     }
 
     /**
@@ -36,7 +37,7 @@ export namespace CommonTypes {
         /** Group name */
         name?: string;
         /** Additional group data */
-        [key: string]: any;
+        [key: string]: unknown;
     }
 
     /**
@@ -107,7 +108,7 @@ export namespace CommonEvent {
         /** Group involved in the notice */
         group?: CommonTypes.Group;
         /** Additional notice data */
-        [key: string]: any;
+        [key: string]: unknown;
     }
 
     /**
@@ -147,7 +148,7 @@ export namespace CommonEvent {
         /** Sub type */
         sub_type?: string;
         /** Additional meta data */
-        [key: string]: any;
+        [key: string]: unknown;
     }
 
     /**

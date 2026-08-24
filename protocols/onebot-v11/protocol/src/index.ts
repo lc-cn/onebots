@@ -102,8 +102,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Dispatch event to OneBot V11 format
      */
-    dispatch(event: any): void {
-        this.logger.debug(`[OneBot V11] Received event:`, event.type, event.message_type || '');
+    dispatch(event: CommonEvent.Event): void {
+        this.logger.debug(`[OneBot V11] Received event:`, event.type, (event as Record<string, unknown>).message_type || '');
         
         // 检查 filterFn
         let filterResult: boolean;
@@ -142,7 +142,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Format event data to OneBot V11 specification
      */
-    format(event: string, payload: any): any {
+    format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
         return {
             time: Math.floor(Date.now() / 1000),
             self_id: this.adapter.resolveId(this.account.account_id).number,
@@ -154,7 +154,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Apply OneBot V11 API action
      */
-    async apply(action: string, params?: any): Promise<any> {
+    async apply(action: string, params?: Record<string, unknown>): Promise<Record<string, unknown>> {
         this.logger.debug(`OneBot V11 action: ${action}`, params);
         
         try {
@@ -177,7 +177,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Execute OneBot V11 action
      */
-    private async executeAction(action: string, params: any = {}): Promise<any> {
+    private async executeAction(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
         switch (action) {
             // Message API
             case "send_private_msg":
@@ -268,8 +268,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
     // ============ Message API Implementations ============
     
-    private async sendPrivateMsg(params: any): Promise<any> {
-        const { user_id, message, auto_escape = false } = params;
+    private async sendPrivateMsg(params: Record<string, unknown>): Promise<{ message_id: number }> {
+        const { user_id, message, auto_escape = false } = params as { user_id: string | number; message: string | CommonTypes.Segment[]; auto_escape?: boolean };
         const segments = this.parseMessage(message, auto_escape);
 
         const result = await this.adapter.sendMessage(this.account.account_id, {
@@ -282,8 +282,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async sendGroupMsg(params: any): Promise<any> {
-        const { group_id, message, auto_escape = false } = params;
+    private async sendGroupMsg(params: Record<string, unknown>): Promise<{ message_id: number }> {
+        const { group_id, message, auto_escape = false } = params as { group_id: string | number; message: string | CommonTypes.Segment[]; auto_escape?: boolean };
         const segments = this.parseMessage(message, auto_escape);
 
         const result = await this.adapter.sendMessage(this.account.account_id, {
@@ -297,8 +297,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async sendMsg(params: any): Promise<any> {
-        const { message_type, user_id, group_id, message, auto_escape = false } = params;
+    private async sendMsg(params: Record<string, unknown>): Promise<{ message_id: number }> {
+        const { message_type, user_id, group_id, message, auto_escape = false } = params as { message_type: string; user_id?: string | number; group_id?: string | number; message: string | CommonTypes.Segment[]; auto_escape?: boolean };
         
         if (message_type === "private") {
             return this.sendPrivateMsg({ user_id, message, auto_escape });
@@ -309,16 +309,16 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         throw new Error("Invalid message_type");
     }
 
-    private async deleteMsg(params: any): Promise<void> {
-        const { message_id } = params;
+    private async deleteMsg(params: Record<string, unknown>): Promise<void> {
+        const { message_id } = params as { message_id: string | number };
 
         await this.adapter.deleteMessage(this.account.account_id, {
             message_id: this.resolveV11Id(message_id),
         });
     }
 
-    private async getMsg(params: any): Promise<any> {
-        const { message_id } = params;
+    private async getMsg(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const { message_id } = params as { message_id: string | number };
 
         const msg = await this.adapter.getMessage(this.account.account_id, {
             message_id: this.resolveV11Id(message_id),
@@ -327,102 +327,91 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         return this.convertMessageInfoToV11(msg);
     }
 
-    private async getForwardMsg(params: any): Promise<any> {
+    private async getForwardMsg(_params: Record<string, unknown>): Promise<unknown> {
         // Forward message retrieval - implementation depends on platform support
         throw new Error("get_forward_msg not implemented");
     }
 
-    private async sendLike(params: any): Promise<void> {
+    private async sendLike(_params: Record<string, unknown>): Promise<void> {
         // Send like/thumbs up - implementation depends on platform support
         throw new Error("send_like not implemented");
     }
 
     // ============ Group Management API Implementations ============
     
-    private async setGroupKick(params: any): Promise<void> {
-        const { group_id, user_id, reject_add_request = false } = params;
+    private async setGroupKick(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_kick not implemented");
     }
 
-    private async setGroupBan(params: any): Promise<void> {
-        const { group_id, user_id, duration = 30 * 60 } = params;
+    private async setGroupBan(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_ban not implemented");
     }
 
-    private async setGroupAnonymousBan(params: any): Promise<void> {
+    private async setGroupAnonymousBan(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on platform support
         throw new Error("set_group_anonymous_ban not implemented");
     }
 
-    private async setGroupWholeBan(params: any): Promise<void> {
-        const { group_id, enable = true } = params;
+    private async setGroupWholeBan(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_whole_ban not implemented");
     }
 
-    private async setGroupAdmin(params: any): Promise<void> {
-        const { group_id, user_id, enable = true } = params;
+    private async setGroupAdmin(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_admin not implemented");
     }
 
-    private async setGroupAnonymous(params: any): Promise<void> {
-        const { group_id, enable = true } = params;
+    private async setGroupAnonymous(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_anonymous not implemented");
     }
 
-    private async setGroupCard(params: any): Promise<void> {
-        const { group_id, user_id, card = "" } = params;
+    private async setGroupCard(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_card not implemented");
     }
 
-    private async setGroupName(params: any): Promise<void> {
-        const { group_id, group_name } = params;
+    private async setGroupName(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_name not implemented");
     }
 
-    private async setGroupLeave(params: any): Promise<void> {
-        const { group_id, is_dismiss = false } = params;
+    private async setGroupLeave(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_leave not implemented");
     }
 
-    private async setGroupSpecialTitle(params: any): Promise<void> {
-        const { group_id, user_id, special_title = "", duration = -1 } = params;
+    private async setGroupSpecialTitle(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_special_title not implemented");
     }
 
     // ============ Request Handling API Implementations ============
     
-    private async setFriendAddRequest(params: any): Promise<void> {
-        const { flag, approve = true, remark = "" } = params;
+    private async setFriendAddRequest(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_friend_add_request not implemented");
     }
 
-    private async setGroupAddRequest(params: any): Promise<void> {
-        const { flag, sub_type, approve = true, reason = "" } = params;
+    private async setGroupAddRequest(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_add_request not implemented");
     }
 
     // ============ Info API Implementations ============
     
-    private async getLoginInfo(params: any): Promise<any> {
+    private async getLoginInfo(_params: Record<string, unknown>): Promise<{ user_id: number; nickname: string }> {
         return {
             user_id: this.adapter.resolveId(this.account.account_id).number,
             nickname: this.account.account_id,
         };
     }
 
-    private async getStrangerInfo(params: any): Promise<any> {
-        const { user_id, no_cache = false } = params;
+    private async getStrangerInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const { user_id, no_cache = false } = params as { user_id: string | number; no_cache?: boolean };
 
         const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
             user_id: this.resolveV11Id(user_id),
@@ -436,7 +425,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async getFriendList(params: any): Promise<any> {
+    private async getFriendList(_params: Record<string, unknown>): Promise<Record<string, unknown>[]> {
         const friends = await this.adapter.getFriendList(this.account.account_id);
         
         return friends.map(friend => ({
@@ -446,8 +435,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         }));
     }
 
-    private async getGroupInfo(params: any): Promise<any> {
-        const { group_id, no_cache = false } = params;
+    private async getGroupInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const { group_id, no_cache = false } = params as { group_id: string | number; no_cache?: boolean };
 
         const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: this.resolveV11Id(group_id),
@@ -461,7 +450,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async getGroupList(params: any): Promise<any> {
+    private async getGroupList(_params: Record<string, unknown>): Promise<Record<string, unknown>[]> {
         const groups = await this.adapter.getGroupList(this.account.account_id);
         
         return groups.map(group => ({
@@ -472,8 +461,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         }));
     }
 
-    private async getGroupMemberInfo(params: any): Promise<any> {
-        const { group_id, user_id, no_cache = false } = params;
+    private async getGroupMemberInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const { group_id, user_id, no_cache = false } = params as { group_id: string | number; user_id: string | number; no_cache?: boolean };
 
         const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: this.resolveV11Id(group_id),
@@ -499,8 +488,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async getGroupMemberList(params: any): Promise<any> {
-        const { group_id } = params;
+    private async getGroupMemberList(params: Record<string, unknown>): Promise<Record<string, unknown>[]> {
+        const { group_id } = params as { group_id: string | number };
 
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: this.resolveV11Id(group_id),
@@ -525,59 +514,54 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         }));
     }
 
-    private async getGroupHonorInfo(params: any): Promise<any> {
-        const { group_id, type } = params;
+    private async getGroupHonorInfo(_params: Record<string, unknown>): Promise<unknown> {
         // Implementation depends on platform support
         throw new Error("get_group_honor_info not implemented");
     }
 
     // ============ Other API Implementations ============
     
-    private async getCookies(params: any): Promise<any> {
-        const { domain = "" } = params;
+    private async getCookies(_params: Record<string, unknown>): Promise<unknown> {
         // Implementation depends on platform support
         throw new Error("get_cookies not implemented");
     }
 
-    private async getCsrfToken(params: any): Promise<any> {
+    private async getCsrfToken(_params: Record<string, unknown>): Promise<unknown> {
         // Implementation depends on platform support
         throw new Error("get_csrf_token not implemented");
     }
 
-    private async getCredentials(params: any): Promise<any> {
-        const { domain = "" } = params;
+    private async getCredentials(_params: Record<string, unknown>): Promise<unknown> {
         // Implementation depends on platform support
         throw new Error("get_credentials not implemented");
     }
 
-    private async getRecord(params: any): Promise<any> {
-        const { file, out_format } = params;
+    private async getRecord(_params: Record<string, unknown>): Promise<unknown> {
         // Implementation depends on platform support
         throw new Error("get_record not implemented");
     }
 
-    private async getImage(params: any): Promise<any> {
-        const { file } = params;
+    private async getImage(_params: Record<string, unknown>): Promise<unknown> {
         // Implementation depends on platform support
         throw new Error("get_image not implemented");
     }
 
-    private async canSendImage(params: any): Promise<any> {
+    private async canSendImage(_params: Record<string, unknown>): Promise<{ yes: boolean }> {
         return { yes: true };
     }
 
-    private async canSendRecord(params: any): Promise<any> {
+    private async canSendRecord(_params: Record<string, unknown>): Promise<{ yes: boolean }> {
         return { yes: true };
     }
 
-    private async getStatus(params: any): Promise<any> {
+    private async getStatus(_params: Record<string, unknown>): Promise<{ online: boolean; good: boolean }> {
         return {
             online: true,
             good: true,
         };
     }
 
-    private async getVersionInfo(params: any): Promise<any> {
+    private async getVersionInfo(_params: Record<string, unknown>): Promise<{ app_name: string; app_version: string; protocol_version: string }> {
         return {
             app_name: "onebots",
             app_version: "1.0.0",
@@ -585,13 +569,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async setRestart(params: any): Promise<void> {
-        const { delay = 0 } = params;
+    private async setRestart(_params: Record<string, unknown>): Promise<void> {
         // Implementation for restarting
         throw new Error("set_restart not implemented");
     }
 
-    private async cleanCache(params: any): Promise<void> {
+    private async cleanCache(_params: Record<string, unknown>): Promise<void> {
         // Clear caches
         this.messageIdMap.clear();
         this.reverseMessageIdMap.clear();
@@ -602,7 +585,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Convert common event to OneBot V11 format
      */
-    private convertToV11Format(event: CommonEvent.Event): any {
+    private convertToV11Format(event: CommonEvent.Event): Record<string, unknown> | null {
         try {
             const base = {
                 time: Math.floor(event.timestamp / 1000),
@@ -682,14 +665,14 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 };
             }
             
-            this.logger.warn(`[OneBot V11] Unknown event type:`, (event as any).type);
+            this.logger.warn(`[OneBot V11] Unknown event type:`, (event as Record<string, unknown>).type);
             return null;
         } catch (error) {
             this.logger.error(`[OneBot V11] Error in convertToV11Format:`, error, {
-                eventType: (event as any).type,
-                messageType: (event as any).message_type,
-                hasMessageId: !!(event as any).message_id,
-                hasSender: !!(event as any).sender,
+                eventType: (event as Record<string, unknown>).type,
+                messageType: (event as Record<string, unknown>).message_type,
+                hasMessageId: !!(event as Record<string, unknown>).message_id,
+                hasSender: !!(event as Record<string, unknown>).sender,
             });
             throw error;
         }
@@ -698,7 +681,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Convert message segments to V11 format
      */
-    private convertSegmentsToV11(segments: CommonTypes.Segment[]): any[] {
+    private convertSegmentsToV11(segments: CommonTypes.Segment[]): { type: string; data: unknown }[] {
         return segments.map(seg => ({
             type: seg.type,
             data: seg.data,
@@ -708,7 +691,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Parse message (string or array) to segments
      */
-    private parseMessage(message: string | any[], auto_escape: boolean): CommonTypes.Segment[] {
+    private parseMessage(message: string | CommonTypes.Segment[], auto_escape: boolean): CommonTypes.Segment[] {
         if (Array.isArray(message)) {
             return message.map(seg => ({
                 type: seg.type,
@@ -778,7 +761,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Convert message info to V11 format
      */
-    private convertMessageInfoToV11(msg: Adapter.MessageInfo): any {
+    private convertMessageInfoToV11(msg: Adapter.MessageInfo): Record<string, unknown> {
         return {
             time: msg.time,
             message_type: msg.sender.scene_type,
@@ -834,7 +817,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
             }
 
             const action = ctx.params.action;
-            const params = (ctx.request as any).body ?? {};
+            const params = ((ctx.request as unknown as Record<string, unknown>).body ?? {}) as Record<string, unknown>;
 
             this.logger.debug(`[OneBot V11] Processing action: ${action}`, params);
 
@@ -955,7 +938,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
-                const headers: any = {
+                const headers: Record<string, string> = {
                     'Content-Type': 'application/json',
                     'User-Agent': 'OneBot/11',
                     'X-Self-ID': this.account.account_id,
@@ -996,8 +979,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
      */
     private startWsReverse(url: string): void {
         this.logger.info(`Starting WebSocket reverse to ${url}`);
-        let ws: any = null;
-        let reconnectTimer: any = null;
+        let ws: WebSocket | null = null;
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
         const connect = () => {
             try {

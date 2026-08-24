@@ -246,7 +246,7 @@ export class CircuitBreakerOpenError extends Error {
 /**
  * 创建带熔断器的函数包装器
  */
-export function withCircuitBreaker<T extends (...args: any[]) => Promise<any>>(
+export function withCircuitBreaker<T extends (...args: unknown[]) => Promise<unknown>>(
     fn: T,
     breaker: CircuitBreaker
 ): T {

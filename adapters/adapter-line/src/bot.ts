@@ -55,7 +55,7 @@ export class LineBot extends EventEmitter {
         const agent = await createHttpsProxyAgent(this.config.proxy);
         if (agent) {
             this.agent = agent as HttpAgent;
-            console.log(`[LineBot] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+            console.debug(`[LineBot] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
         } else {
             console.warn('[LineBot] https-proxy-agent 未安装，将直接连接');
         }

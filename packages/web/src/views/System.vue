@@ -8,6 +8,12 @@
                     系统信息
                 </h2>
                 <div class="flex items-center gap-2">
+                    <label
+                        class="flex cursor-pointer items-center gap-1.5 text-sm text-fg-secondary"
+                        title="每 10 秒自动刷新系统信息">
+                        <UiSwitch v-model="autoRefresh" />
+                        <span class="hidden sm:inline">自动刷新</span>
+                    </label>
                     <UiButton variant="primary" :loading="backupLoading" @click="handleBackup">
                         <IconUpload v-if="!backupLoading" :size="16" />
                         备份到仓库
@@ -186,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import {
     IconDashboard,
     IconClock,
@@ -199,6 +205,7 @@ import {
     IconUpload,
 } from '@tabler/icons-vue';
 import { UiButton, UiCard, UiBadge } from '../ui/index';
+import UiSwitch from '../ui/UiSwitch.vue';
 import UiTooltip from '../ui/UiTooltip.vue';
 import { useToast } from '../ui/toast';
 import { useConfirm } from '../ui/confirm';
@@ -207,7 +214,7 @@ import { authFetch } from '../composables/useAuth';
 import { formatSize, formatTime } from '../utils';
 import { buildApiUrl } from '../config';
 
-const { systemInfo } = useApi();
+const { systemInfo, fetchSystemInfo } = useApi();
 const toast = useToast();
 const { confirm } = useConfirm();
 
@@ -217,10 +224,33 @@ const healthLoading = ref(false);
 const restartLoading = ref(false);
 const backupLoading = ref(false);
 
+const AUTO_REFRESH_INTERVAL = 10_000;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+const autoRefresh = ref(true);
+
 const memoryUsagePercent = computed(() => {
     const info = systemInfo.value;
     if (!info || !info.total_memory) return '0.0';
     return (((info.total_memory - info.free_memory) / info.total_memory) * 100).toFixed(1);
+});
+
+const startAutoRefresh = () => {
+    stopAutoRefresh();
+    refreshTimer = setInterval(() => {
+        fetchSystemInfo();
+    }, AUTO_REFRESH_INTERVAL);
+};
+
+const stopAutoRefresh = () => {
+    if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+    }
+};
+
+watch(autoRefresh, (val) => {
+    if (val) startAutoRefresh();
+    else stopAutoRefresh();
 });
 
 async function handleBackup() {
@@ -289,5 +319,10 @@ async function handleRestart() {
 
 onMounted(() => {
     checkHealth();
+    if (autoRefresh.value) startAutoRefresh();
+});
+
+onUnmounted(() => {
+    stopAutoRefresh();
 });
 </script>

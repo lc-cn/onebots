@@ -1,5 +1,23 @@
 import { Protocol, ProtocolRegistry, Account, Adapter, CommonEvent } from 'onebots';
 import type { Schema } from 'onebots';
+
+/** verifyToken 所需的 Koa context 最小子集 */
+interface TokenContext {
+    headers?: Record<string, string | string[] | undefined>;
+    query: Record<string, string | string[] | undefined>;
+}
+
+interface McpHttpContext extends TokenContext {
+    request: {
+        body?: unknown;
+    };
+}
+
+function isJsonRpcRequest(value: unknown): value is JsonRpcRequest {
+    if (!value || typeof value !== 'object') return false;
+    const request = value as Record<string, unknown>;
+    return request.jsonrpc === '2.0' && typeof request.method === 'string';
+}
 import type {
     McpV1Config,
     JsonRpcRequest,
@@ -57,7 +75,7 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
 
     // ============ 事件分发 ============
 
-    dispatch(event: any): void {
+    dispatch(event: CommonEvent.Event): void {
         if (!this.filterFn(event)) return;
 
         const notification = this.convertToMcpNotification(event);
@@ -71,11 +89,11 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
         }
     }
 
-    format(event: string, payload: any): any {
+    format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
         return { event, ...payload };
     }
 
-    async apply(action: string, params?: any): Promise<any> {
+    async apply(action: string, params?: Record<string, unknown>): Promise<JsonRpcResponse> {
         return this.handleJsonRpc({
             jsonrpc: '2.0',
             id: Date.now(),
@@ -130,11 +148,12 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
             }
 
             return { jsonrpc: '2.0', id, result };
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
             return {
                 jsonrpc: '2.0',
                 id,
-                error: { code: -32603, message: err.message || String(err) },
+                error: { code: -32603, message },
             };
         }
     }
@@ -249,14 +268,14 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
             const sessionId = ctx.query.session_id as string;
             const client = sessionId ? this.sseClients.get(sessionId) : undefined;
 
-            const body = (ctx.request as any).body;
-            if (!body || body.jsonrpc !== '2.0') {
+            const body = (ctx as McpHttpContext).request.body;
+            if (!isJsonRpcRequest(body)) {
                 ctx.status = 400;
                 ctx.body = { error: '请求必须是 JSON-RPC 2.0 格式' };
                 return;
             }
 
-            const request = body as JsonRpcRequest;
+            const request = body;
 
             // 标记客户端已初始化（收到 initialized 通知后开始推送事件）
             if (request.method === 'initialized' && client) {
@@ -374,7 +393,7 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
 
     // ============ 鉴权 ============
 
-    private verifyToken(ctx: any): boolean {
+    private verifyToken(ctx: TokenContext): boolean {
         if (!this.config.access_token) return true;
         const authHeader = ctx.headers?.authorization;
         const token = (typeof authHeader === 'string'

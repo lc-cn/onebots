@@ -99,7 +99,7 @@ export namespace Satori {
      */
     export interface Element {
         type: ElementType;
-        attrs?: Record<string, any>;
+        attrs?: Record<string, unknown>;
         children?: (Element | string)[];
     }
 
@@ -162,8 +162,8 @@ export namespace Satori {
         platform: Platform;
         self_id: string;
         timestamp: number;
-        argv?: any;
-        button?: any;
+        argv?: Record<string, unknown>;
+        button?: Record<string, unknown>;
         channel?: Channel;
         guild?: Guild;
         login?: Login;
@@ -177,7 +177,7 @@ export namespace Satori {
     /**
      * Paginated list
      */
-    export interface List<T = any> {
+    export interface List<T = unknown> {
         data: T[];
         next?: string;
     }
@@ -185,7 +185,7 @@ export namespace Satori {
     /**
      * Bidirectional paginated list
      */
-    export interface BidiList<T = any> {
+    export interface BidiList<T = unknown> {
         data: T[];
         prev?: string;
         next?: string;
@@ -269,7 +269,7 @@ export namespace Satori {
     /**
      * API Response
      */
-    export interface Response<T = any> {
+    export interface Response<T = unknown> {
         data?: T;
         message?: string;
     }

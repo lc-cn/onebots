@@ -1,4 +1,4 @@
-import type { Adapter } from 'onebots';
+import type { Adapter, CommonTypes } from 'onebots';
 import type { McpTool, McpToolCallResult } from './types.js';
 
 interface ToolEntry {
@@ -26,7 +26,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
         },
         async handler(adapter, uin, args) {
             const result = await adapter.sendMessage(uin, {
-                scene_type: String(args.scene_type) as any,
+                scene_type: String(args.scene_type) as CommonTypes.Scene,
                 scene_id: adapter.resolveId(String(args.scene_id)),
                 message: [{ type: 'text', data: { text: String(args.message ?? '') } }],
             });
@@ -48,7 +48,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
         async handler(adapter, uin, args) {
             await adapter.deleteMessage(uin, {
                 message_id: adapter.resolveId(String(args.message_id)),
-                scene_type: args.scene_type as any,
+                scene_type: args.scene_type as CommonTypes.Scene | undefined,
                 scene_id: args.scene_id ? adapter.resolveId(String(args.scene_id)) : undefined,
             });
             return { ok: true };
@@ -69,7 +69,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
         async handler(adapter, uin, args) {
             const info = await adapter.getMessage(uin, {
                 message_id: adapter.resolveId(String(args.message_id)),
-                scene_type: args.scene_type as any,
+                scene_type: args.scene_type as CommonTypes.Scene | undefined,
                 scene_id: args.scene_id ? adapter.resolveId(String(args.scene_id)) : undefined,
             });
             return { message_id: info.message_id.string, time: info.time, message: info.message };
@@ -138,7 +138,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
                 flag: String(args.flag),
                 approve: toBool(args.approve),
                 remark: args.remark ? String(args.remark) : undefined,
-            } as any);
+            });
             return { ok: true };
         },
     },
@@ -364,7 +364,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
                 type: String(args.type) as 'request' | 'invitation',
                 approve: toBool(args.approve),
                 reason: args.reason ? String(args.reason) : undefined,
-            } as any);
+            });
             return { ok: true };
         },
     },
@@ -465,7 +465,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
         },
         async handler(adapter, uin, args) {
             const info = await adapter.uploadFile(uin, {
-                scene_type: String(args.scene_type) as any,
+                scene_type: String(args.scene_type) as CommonTypes.Scene,
                 scene_id: adapter.resolveId(String(args.scene_id)),
                 name: String(args.name),
                 url: String(args.url),
@@ -524,8 +524,9 @@ export async function executeTool(
     try {
         const result = await entry.handler(adapter, accountId, args);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-    } catch (err: any) {
-        return { content: [{ type: 'text', text: `错误: ${err.message || String(err)}` }], isError: true };
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: `错误: ${message}` }], isError: true };
     }
 }
 

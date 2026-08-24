@@ -29,10 +29,15 @@ export interface OneBotV12Event {
     platform: string;
     user_id: string;
   };
-  [key: string]: any;
+  user_id?: string;
+  message_id?: string;
+  message?: unknown[];
+  group_id?: string;
+  channel_id?: string;
+  [key: string]: unknown;
 }
 
-export interface OneBotV12Response<T = any> {
+export interface OneBotV12Response<T = unknown> {
   status: 'ok' | 'failed';
   retcode: number;
   data?: T;
@@ -41,7 +46,7 @@ export interface OneBotV12Response<T = any> {
 
 export interface OneBotV12Segment {
   type: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 export type EventHandler = (event: OneBotV12Event) => void | Promise<void>;

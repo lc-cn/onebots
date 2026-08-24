@@ -8,7 +8,7 @@ import * as path from "path";
  */
 export class SqliteDB {
     private db: DatabaseSync;
-    static getType(data: any): string {
+    static getType(data: unknown): string {
         if (data === null) return "null";
         if (Array.isArray(data)) return "array";
         return typeof data;
@@ -103,7 +103,7 @@ export namespace SqliteDB {
         }
     }
     /** 将值格式化为 SQL 字面量（字符串加单引号并转义，数字等直接返回，null/undefined 返回 NULL） */
-    export function formatValue(value: any): string {
+    export function formatValue(value: unknown): string {
         if (value === undefined || value === null) return 'NULL';
         if (typeof value === 'number') return String(value);
         const s = typeof value === 'string' ? value : JSON.stringify(value);
@@ -127,14 +127,15 @@ export namespace SqliteDB {
         const clauses:string[] = [];
         for(const condition of conditions){
             const subClauses:string[] = [];
-            for(const key in condition){
-                const value=condition[key];
+            const conditionRecord = condition as Record<string, unknown>;
+            for(const key in conditionRecord){
+                const value=conditionRecord[key];
                 if(key==="$and" && typeof value==="object"){
-                    subClauses.push(`(${generateWhereClause([value],"AND")})`);
+                    subClauses.push(`(${generateWhereClause([value as QueryCondition],"AND")})`);
                 }else if(key==="$or" && typeof value==="object"){
-                    subClauses.push(`(${generateWhereClause([value],"OR")})`);
+                    subClauses.push(`(${generateWhereClause([value as QueryCondition],"OR")})`);
                 }else if(key==="$not" && typeof value==="object"){
-                    subClauses.push(`NOT (${generateWhereClause([value],"AND")})`);
+                    subClauses.push(`NOT (${generateWhereClause([value as QueryCondition],"AND")})`);
                 }else if(key==="$like" && typeof value==="string"){
                     subClauses.push(`LIKE ${formatValue(value)}`);
                 }else if(key==="$regexp" && typeof value==="string"){
@@ -174,7 +175,7 @@ export class Selection{
         this.tableName=tableName;
         return this;
     }
-    where<T extends {}=Record<string, any>>(condition:SqliteDB.QueryCondition<T>){
+    where<T extends {}=Record<string, unknown>>(condition:SqliteDB.QueryCondition<T>){
         this.whereClauses.push(condition);
         return this;
     }
@@ -200,10 +201,10 @@ export class Selection{
 }
 export class Insertion{
     private columns: string[] = [];
-    #values: (any[])[] = [];
+    #values: (unknown[])[] = [];
     constructor(private db:DatabaseSync,private tableName:string){
     }
-    values<T extends object>(first:T,...rest:T[]){
+    values<T extends Record<string, unknown>>(first:T,...rest:T[]){
         const columns=Object.keys(first);
         this.columns=columns;
         this.#values.push(columns.map(col=>first[col]));
@@ -226,13 +227,13 @@ export class Updation{
     private whereClauses: SqliteDB.QueryCondition[] = [];
     constructor(private db:DatabaseSync,private tableName:string){
     }
-    set<T extends object>(value:T){
+    set<T extends Record<string, unknown>>(value:T){
         for(const key in value){
             this.setClauses.push(`${key} = ${SqliteDB.formatValue(value[key])}`);
         }
         return this;
     }
-    where<T extends {}=Record<string, any>>(condition:SqliteDB.QueryCondition<T>){
+    where<T extends {}=Record<string, unknown>>(condition:SqliteDB.QueryCondition<T>){
         this.whereClauses.push(condition);
         return this;
     }
@@ -250,7 +251,7 @@ export class Deletion{
     private whereClauses: SqliteDB.QueryCondition[] = [];
     constructor(private db:DatabaseSync,private tableName:string){
     }
-    where<T extends {}=Record<string, any>>(condition:SqliteDB.QueryCondition<T>){
+    where<T extends {}=Record<string, unknown>>(condition:SqliteDB.QueryCondition<T>){
         this.whereClauses.push(condition);
         return this;
     }

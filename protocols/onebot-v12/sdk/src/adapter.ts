@@ -1,4 +1,5 @@
-import { Adapter, WebSocketReceiver, WSSReceiver, WebhookReceiver, SSEReceiver, Message, type PrivateMessageEvent, type GroupMessageEvent, type ChannelMessageEvent } from 'imhelper';
+import { EventEmitter } from 'events';
+import { Adapter, WebSocketReceiver, WSSReceiver, WebhookReceiver, SSEReceiver, Message, type User, type Group, type Friend, type PrivateMessageEvent, type GroupMessageEvent, type ChannelMessageEvent } from 'imhelper';
 import { OneBotV12Event, OneBotV12Response, OneBotV12Segment } from './types.js';
 import { HttpClient } from './http-client.js';
 
@@ -89,8 +90,8 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): Adapter<s
     private transformAndEmit(event: OneBotV12Event): void {
       if (event.type === 'message') {
         const detailType = event.detail_type as 'private' | 'group' | 'channel';
-        const userId = event.user_id;
-        const messageId = event.message_id;
+        const userId = event.user_id!;
+        const messageId = event.message_id!;
         const timestamp = event.time;
         
         if (detailType === 'private') {
@@ -102,32 +103,32 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): Adapter<s
             content: (event.message || []) as Message.Content,
             message_type: 'private',
           };
-          (this as any).emit('message.private', messageData);
+          this.emit('message.private', messageData);
         } else if (detailType === 'group') {
           const messageData: GroupMessageEvent.Data<string> = {
             timestamp,
             bot_id: event.self.user_id,
             message_id: messageId,
             user_id: userId,
-            group_id: (event as any).group_id,
+            group_id: event.group_id!,
             content: (event.message || []) as Message.Content,
             message_type: 'group',
           };
-          (this as any).emit('message.group', messageData);
+          this.emit('message.group', messageData);
         } else if (detailType === 'channel') {
           const messageData: ChannelMessageEvent.Data<string> = {
             timestamp,
             bot_id: event.self.user_id,
             message_id: messageId,
             user_id: userId,
-            channel_id: (event as any).channel_id,
+            channel_id: event.channel_id!,
             content: (event.message || []) as Message.Content,
             message_type: 'channel',
           };
-          (this as any).emit('message.channel', messageData);
+          this.emit('message.channel', messageData);
         }
       }
-      (this as any).emit('event', event);
+      (this as EventEmitter).emit('event', event);
     }
 
     async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<OneBotV12Response> {
@@ -152,94 +153,97 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): Adapter<s
       return response.status === 'ok';
     }
 
-    async getUserInfo(user_id: string): Promise<import('imhelper').User<string>> {
+    async getUserInfo(user_id: string): Promise<User<string>> {
       const response = await this.httpClient.post('/get_user_info', {
         user_id,
       });
       if (response.status === 'ok' && response.data) {
-        const userData: import('imhelper').User.Data<string> = {
-          user_id: response.data.user_id,
-          user_name: response.data.user_name || response.data.nickname || '',
-          avatar: response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const userData: User.Data<string> = {
+          user_id: (data.user_id as string) || user_id,
+          user_name: (data.user_name as string) || (data.nickname as string) || '',
+          avatar: (data.avatar as string) || '',
         };
-        return { info: userData } as any;
+        return { info: userData } as unknown as User<string>;
       }
       throw new Error('Failed to get user info');
     }
 
-    async getFriendInfo(user_id: string): Promise<import('imhelper').Friend<string>> {
+    async getFriendInfo(user_id: string): Promise<Friend<string>> {
       // OneBot V12 没有单独的 get_friend_info，使用 get_user_info
       const user = await this.getUserInfo(user_id);
-      const friendData: import('imhelper').Friend.Data<string> = {
+      const friendData: Friend.Data<string> = {
         ...user.info,
         remark: '',
       };
-      return { info: friendData } as any;
+      return { info: friendData } as unknown as Friend<string>;
     }
 
-    async getUserList(): Promise<import('imhelper').User<string>[]> {
+    async getUserList(): Promise<User<string>[]> {
       // OneBot V12 没有 getUserList，返回空数组
       return [];
     }
 
-    async getGroupInfo(group_id: string): Promise<import('imhelper').Group<string>> {
+    async getGroupInfo(group_id: string): Promise<Group<string>> {
       const response = await this.httpClient.post('/get_group_info', {
         group_id,
       });
       if (response.status === 'ok' && response.data) {
-        const groupData: import('imhelper').Group.Data<string> = {
-          group_id: response.data.group_id,
-          group_name: response.data.group_name || '',
-          avatar: response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const groupData: Group.Data<string> = {
+          group_id: (data.group_id as string) || group_id,
+          group_name: (data.group_name as string) || '',
+          avatar: (data.avatar as string) || '',
         };
-        return { info: groupData } as any;
+        return { info: groupData } as unknown as Group<string>;
       }
       throw new Error('Failed to get group info');
     }
 
-    async getGroupList(): Promise<import('imhelper').Group<string>[]> {
+    async getGroupList(): Promise<Group<string>[]> {
       const response = await this.httpClient.post('/get_group_list', {});
       if (response.status === 'ok' && Array.isArray(response.data)) {
-        return response.data.map((item: any) => {
-          const groupData: import('imhelper').Group.Data<string> = {
-            group_id: item.group_id,
-            group_name: item.group_name || '',
-            avatar: item.avatar || '',
+        return (response.data as Array<Record<string, unknown>>).map((item) => {
+          const groupData: Group.Data<string> = {
+            group_id: item.group_id as string,
+            group_name: (item.group_name as string) || '',
+            avatar: (item.avatar as string) || '',
           };
-          return { info: groupData } as any;
+          return { info: groupData } as unknown as Group<string>;
         });
       }
       return [];
     }
 
-    async getGroupMemberInfo(group_id: string, user_id: string): Promise<import('imhelper').User<string>> {
+    async getGroupMemberInfo(group_id: string, user_id: string): Promise<User<string>> {
       const response = await this.httpClient.post('/get_group_member_info', {
         group_id,
         user_id,
       });
       if (response.status === 'ok' && response.data) {
-        const userData: import('imhelper').User.Data<string> = {
-          user_id: response.data.user_id,
-          user_name: response.data.user_name || response.data.nickname || '',
-          avatar: response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const userData: User.Data<string> = {
+          user_id: (data.user_id as string) || user_id,
+          user_name: (data.user_name as string) || (data.nickname as string) || '',
+          avatar: (data.avatar as string) || '',
         };
-        return { info: userData } as any;
+        return { info: userData } as unknown as User<string>;
       }
       throw new Error('Failed to get group member info');
     }
 
-    async getGroupMemberList(group_id: string): Promise<import('imhelper').User<string>[]> {
+    async getGroupMemberList(group_id: string): Promise<User<string>[]> {
       const response = await this.httpClient.post('/get_group_member_list', {
         group_id,
       });
       if (response.status === 'ok' && Array.isArray(response.data)) {
-        return response.data.map((item: any) => {
-          const userData: import('imhelper').User.Data<string> = {
-            user_id: item.user_id,
-            user_name: item.user_name || item.nickname || '',
-            avatar: item.avatar || '',
+        return (response.data as Array<Record<string, unknown>>).map((item) => {
+          const userData: User.Data<string> = {
+            user_id: item.user_id as string,
+            user_name: (item.user_name as string) || (item.nickname as string) || '',
+            avatar: (item.avatar as string) || '',
           };
-          return { info: userData } as any;
+          return { info: userData } as unknown as User<string>;
         });
       }
       return [];

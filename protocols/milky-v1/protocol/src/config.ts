@@ -89,7 +89,7 @@ export namespace MilkyConfig {
         /** POST message format */
         post_message_format?: "string" | "array";
         /** Event filters */
-        filters?: any;
+        filters?: Record<string, unknown>;
     }
 }
 App.registerGeneral('milky.v1', {

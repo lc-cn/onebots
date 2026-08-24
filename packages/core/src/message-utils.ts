@@ -22,9 +22,10 @@ export namespace MessageUtils {
      * Ensures user_id is extracted from sender object if needed
      */
     export function normalizeSender(data: Dict): Dict {
+        const rawSender = (data?.sender || {}) as Record<string, unknown>;
         const sender = {
-            ...(data?.sender || {}),
-            user_id: data?.sender?.user_id || data?.sender?.tiny_id,
+            ...rawSender,
+            user_id: rawSender.user_id || rawSender.tiny_id,
         };
         return {
             ...data,
@@ -48,11 +49,11 @@ export namespace MessageUtils {
      * Handles both V11 and V12 formats
      */
     export function addReplyToMessage<V extends string>(
-        message: any[],
+        message: Dict[],
         messageId: string | number,
         version: V,
         detailType?: string,
-    ): any[] {
+    ): Dict[] {
         const replyEl = {
             type: "reply",
             id: messageId,
@@ -88,7 +89,7 @@ export namespace MessageUtils {
      * Extract message content as plain text
      * Recursively extracts text from message segments
      */
-    export function extractPlainText(message: any): string {
+    export function extractPlainText(message: unknown): string {
         if (typeof message === "string") {
             return message;
         }
@@ -98,8 +99,10 @@ export namespace MessageUtils {
         }
 
         if (message && typeof message === "object") {
-            if (message.type === "text") {
-                return message.data?.text || message.text || "";
+            const msg = message as Record<string, unknown>;
+            if (msg.type === "text") {
+                const data = msg.data as Record<string, unknown> | undefined;
+                return (data?.text as string) || (msg.text as string) || "";
             }
             // For other types, return empty string or you could format them
             return "";
@@ -111,7 +114,7 @@ export namespace MessageUtils {
     /**
      * Validate message format
      */
-    export function isValidMessage(message: any): boolean {
+    export function isValidMessage(message: unknown): boolean {
         if (!message) return false;
         if (typeof message === "string") return message.length > 0;
         if (Array.isArray(message)) return message.length > 0;

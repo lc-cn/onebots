@@ -1,4 +1,5 @@
-import { Adapter, WebSocketReceiver, WSSReceiver, WebhookReceiver, SSEReceiver, Message, type PrivateMessageEvent, type GroupMessageEvent } from 'imhelper';
+import { EventEmitter } from 'events';
+import { Adapter, WebSocketReceiver, WSSReceiver, WebhookReceiver, SSEReceiver, Message, type User, type Group, type Friend, type PrivateMessageEvent, type GroupMessageEvent } from 'imhelper';
 import { MilkyV1Event, MilkyV1Response } from './types.js';
 import { HttpClient } from './http-client.js';
 
@@ -112,7 +113,7 @@ export function createMilkyAdapter(config: MilkyAdapterConfig): Adapter<string> 
             message_type: 'private',
             raw_message: event.raw_message,
           };
-          (this as any).emit('message.private', messageData);
+          this.emit('message.private', messageData);
         } else {
           const messageData: GroupMessageEvent.Data<string> = {
             timestamp: event.time,
@@ -124,12 +125,12 @@ export function createMilkyAdapter(config: MilkyAdapterConfig): Adapter<string> 
             message_type: 'group',
             raw_message: event.raw_message,
           };
-          (this as any).emit('message.group', messageData);
+          this.emit('message.group', messageData);
         }
     } else if (event.post_type === 'notice') {
       // 转换通知事件
       const noticeType = event.notice_type || '';
-      const noticeData: any = {
+      const noticeData: Record<string, unknown> = {
         timestamp: event.time,
         bot_id: String(event.self_id),
         notice_type: noticeType,
@@ -142,14 +143,14 @@ export function createMilkyAdapter(config: MilkyAdapterConfig): Adapter<string> 
       if (event.group_id) {
         noticeData.group_id = String(event.group_id);
       }
-      if ((event as any).operator_id) {
-        noticeData.operator_id = String((event as any).operator_id);
+      if (event.operator_id) {
+        noticeData.operator_id = String(event.operator_id);
       }
       if (event.message_id) {
         noticeData.message_id = String(event.message_id);
       }
-      if ((event as any).duration !== undefined) {
-        noticeData.duration = (event as any).duration;
+      if (event.duration !== undefined) {
+        noticeData.duration = event.duration;
       }
 
       // 映射 Milky 通知类型到 imhelper 通知类型
@@ -162,17 +163,17 @@ export function createMilkyAdapter(config: MilkyAdapterConfig): Adapter<string> 
       };
 
       const mappedType = noticeTypeMap[noticeType] || noticeType;
-      (this as any).emit(`notice.${mappedType}`, noticeData);
+      (this as EventEmitter).emit(`notice.${mappedType}`, noticeData);
     } else if (event.post_type === 'request') {
       // 转换请求事件
       const requestType = event.request_type || '';
-      const requestData: any = {
+      const requestData: Record<string, unknown> = {
         timestamp: event.time,
         bot_id: String(event.self_id),
-        request_id: (event as any).flag || String(Date.now()),
+        request_id: event.flag || String(Date.now()),
         user_id: String(event.user_id || ''),
-        comment: (event as any).comment || '',
-        flag: (event as any).flag || '',
+        comment: event.comment || '',
+        flag: event.flag || '',
       };
 
       if (event.group_id) {
@@ -182,11 +183,11 @@ export function createMilkyAdapter(config: MilkyAdapterConfig): Adapter<string> 
         requestData.sub_type = event.sub_type;
       }
 
-      (this as any).emit(`request.${requestType}`, requestData);
+      (this as EventEmitter).emit(`request.${requestType}`, requestData);
     } else if (event.post_type === 'meta_event') {
       // 转换元事件
       const metaType = event.meta_event_type || '';
-      const metaData: any = {
+      const metaData: Record<string, unknown> = {
         timestamp: event.time,
         bot_id: String(event.self_id),
         meta_type: metaType,
@@ -195,21 +196,21 @@ export function createMilkyAdapter(config: MilkyAdapterConfig): Adapter<string> 
       if (event.sub_type) {
         metaData.sub_type = event.sub_type;
       }
-      if (metaType === 'heartbeat' && (event as any).interval !== undefined) {
-        metaData.interval = (event as any).interval;
+      if (metaType === 'heartbeat' && event.interval !== undefined) {
+        metaData.interval = event.interval;
       }
       if (metaType === 'lifecycle' && event.sub_type) {
         metaData.sub_type = event.sub_type;
       }
-      if ((event as any).status) {
-        metaData.status = (event as any).status;
+      if (event.status) {
+        metaData.status = event.status;
       }
 
-      (this as any).emit(`meta.${metaType}`, metaData);
+      (this as EventEmitter).emit(`meta.${metaType}`, metaData);
     }
-    
+
     // 转发原始事件
-    (this as any).emit('event', event);
+    (this as EventEmitter).emit('event', event);
   }
 
     async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<MilkyV1Response> {
@@ -236,92 +237,95 @@ export function createMilkyAdapter(config: MilkyAdapterConfig): Adapter<string> 
       return response.status === 'ok';
     }
 
-    async getUserInfo(user_id: string): Promise<import('imhelper').User<string>> {
+    async getUserInfo(user_id: string): Promise<User<string>> {
       const response = await this.httpClient.post('/get_stranger_info', {
         user_id,
       });
       if (response.status === 'ok' && response.data) {
-        const userData: import('imhelper').User.Data<string> = {
-          user_id: response.data.user_id || user_id,
-          user_name: response.data.nickname || response.data.user_name || '',
-          avatar: response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const userData: User.Data<string> = {
+          user_id: (data.user_id as string) || user_id,
+          user_name: (data.nickname as string) || (data.user_name as string) || '',
+          avatar: (data.avatar as string) || '',
         };
-        return { info: userData } as any;
+        return { info: userData } as unknown as User<string>;
       }
       throw new Error('Failed to get user info');
     }
 
-    async getFriendInfo(user_id: string): Promise<import('imhelper').Friend<string>> {
+    async getFriendInfo(user_id: string): Promise<Friend<string>> {
       const user = await this.getUserInfo(user_id);
-      const friendData: import('imhelper').Friend.Data<string> = {
+      const friendData: Friend.Data<string> = {
         ...user.info,
         remark: '',
       };
-      return { info: friendData } as any;
+      return { info: friendData } as unknown as Friend<string>;
     }
 
-    async getUserList(): Promise<import('imhelper').User<string>[]> {
+    async getUserList(): Promise<User<string>[]> {
       return [];
     }
 
-    async getGroupInfo(group_id: string): Promise<import('imhelper').Group<string>> {
+    async getGroupInfo(group_id: string): Promise<Group<string>> {
       const response = await this.httpClient.post('/get_group_info', {
         group_id,
       });
       if (response.status === 'ok' && response.data) {
-        const groupData: import('imhelper').Group.Data<string> = {
-          group_id: response.data.group_id || group_id,
-          group_name: response.data.group_name || '',
-          avatar: response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const groupData: Group.Data<string> = {
+          group_id: (data.group_id as string) || group_id,
+          group_name: (data.group_name as string) || '',
+          avatar: (data.avatar as string) || '',
         };
-        return { info: groupData } as any;
+        return { info: groupData } as unknown as Group<string>;
       }
       throw new Error('Failed to get group info');
     }
 
-    async getGroupList(): Promise<import('imhelper').Group<string>[]> {
+    async getGroupList(): Promise<Group<string>[]> {
       const response = await this.httpClient.post('/get_group_list', {});
       if (response.status === 'ok' && Array.isArray(response.data)) {
-        return response.data.map((item: any) => {
-          const groupData: import('imhelper').Group.Data<string> = {
-            group_id: item.group_id,
-            group_name: item.group_name || '',
-            avatar: item.avatar || '',
+        return (response.data as Array<Record<string, unknown>>).map((item) => {
+          const groupData: Group.Data<string> = {
+            group_id: item.group_id as string,
+            group_name: (item.group_name as string) || '',
+            avatar: (item.avatar as string) || '',
           };
-          return { info: groupData } as any;
+          return { info: groupData } as unknown as Group<string>;
         });
       }
       return [];
     }
 
-    async getGroupMemberInfo(group_id: string, user_id: string): Promise<import('imhelper').User<string>> {
+    async getGroupMemberInfo(group_id: string, user_id: string): Promise<User<string>> {
       const response = await this.httpClient.post('/get_group_member_info', {
         group_id,
         user_id,
       });
       if (response.status === 'ok' && response.data) {
-        const userData: import('imhelper').User.Data<string> = {
-          user_id: response.data.user_id || user_id,
-          user_name: response.data.nickname || response.data.card || response.data.user_name || '',
-          avatar: response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const userData: User.Data<string> = {
+          user_id: (data.user_id as string) || user_id,
+          user_name: (data.nickname as string) || (data.card as string) || (data.user_name as string) || '',
+          avatar: (data.avatar as string) || '',
         };
-        return { info: userData } as any;
+        return { info: userData } as unknown as User<string>;
       }
       throw new Error('Failed to get group member info');
     }
 
-    async getGroupMemberList(group_id: string): Promise<import('imhelper').User<string>[]> {
+    async getGroupMemberList(group_id: string): Promise<User<string>[]> {
       const response = await this.httpClient.post('/get_group_member_list', {
         group_id,
       });
       if (response.status === 'ok' && Array.isArray(response.data)) {
-        return response.data.map((item: any) => {
-          const userData: import('imhelper').User.Data<string> = {
-            user_id: item.user_id,
-            user_name: item.nickname || item.card || item.user_name || '',
-            avatar: item.avatar || '',
+        return (response.data as Array<Record<string, unknown>>).map((item) => {
+          const userData: User.Data<string> = {
+            user_id: item.user_id as string,
+            user_name: (item.nickname as string) || (item.card as string) || (item.user_name as string) || '',
+            avatar: (item.avatar as string) || '',
           };
-          return { info: userData } as any;
+          return { info: userData } as unknown as User<string>;
         });
       }
       return [];

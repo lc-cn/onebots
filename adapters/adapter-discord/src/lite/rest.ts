@@ -84,7 +84,7 @@ export class DiscordREST {
         const agent = await createHttpsProxyAgent({ url: this.proxyUrl });
         if (agent) {
             this.agent = agent as Agent;
-            console.log(`[DiscordREST] 已配置代理: ${maskProxyUrl(this.proxyUrl)}`);
+            console.debug(`[DiscordREST] 已配置代理: ${maskProxyUrl(this.proxyUrl)}`);
         } else {
             console.warn('[DiscordREST] https-proxy-agent 未安装，将直接连接');
         }

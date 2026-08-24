@@ -93,7 +93,7 @@ export class BaseApp extends Koa {
         // 合并配置并验证
         const mergedConfig = deepMerge(deepClone(BaseApp.defaultConfig), config);
         try {
-            this.config = ConfigValidator.validateWithDefaults(mergedConfig, BaseAppConfigSchema);
+            this.config = ConfigValidator.validateWithDefaults(mergedConfig as Partial<Required<BaseApp.Config>>, BaseAppConfigSchema);
         } catch (error) {
             const configError = ErrorHandler.wrap(error, { config: mergedConfig });
             throw new ConfigError('Configuration validation failed', {
@@ -473,7 +473,7 @@ export class BaseApp extends Koa {
     }
     async reload(config: BaseApp.Config) {
         await this.stop();
-        this.config = deepMerge(deepClone(BaseApp.defaultConfig), config);
+        this.config = deepMerge(deepClone(BaseApp.defaultConfig), config) as Required<BaseApp.Config>;
         this.initAdapters();
         await this.start();
     }

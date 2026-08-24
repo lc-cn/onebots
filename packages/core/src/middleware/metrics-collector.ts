@@ -49,10 +49,10 @@ export function metricsCollector() {
                     status: String(status),
                 });
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             const duration = Date.now() - startTime;
             const status = ctx.status || 500;
-            
+
             // 记录错误响应时间
             metrics.observe('http_request_duration_ms', duration, {
                 method,
@@ -60,13 +60,13 @@ export function metricsCollector() {
                 status: String(status),
                 error: 'true',
             });
-            
+
             // 记录错误
             metrics.increment('http_errors_total', 1, {
                 method,
                 path: path.split('?')[0],
                 status: String(status),
-                error_type: error.name || 'Unknown',
+                error_type: error instanceof Error ? error.name : 'Unknown',
             });
             
             throw error;

@@ -22,7 +22,7 @@ export function readLine(maxLen: number, ...params: Parameters<typeof fs.createR
     });
 }
 // 合并对象/数组
-export function deepMerge(base, ...from) {
+export function deepMerge(base: Record<string, unknown> | unknown[] | unknown, ...from: unknown[]): unknown {
     if (base === null || base === undefined) base = from.shift();
     if (from.length === 0) {
         return base;
@@ -31,37 +31,40 @@ export function deepMerge(base, ...from) {
         return base;
     }
     if (Array.isArray(base)) {
-        return Array.from(new Set(base.concat(...from)));
+        return Array.from(new Set(base.concat(...(from as unknown[][]))));
     }
+    const baseObj = base as Record<string, unknown>;
     for (const item of from) {
-        for (const key in item) {
-            if (base.hasOwnProperty(key)) {
-                if (typeof base[key] === "object") {
-                    base[key] = deepMerge(base[key], item[key]);
+        const itemObj = item as Record<string, unknown>;
+        for (const key in itemObj) {
+            if (baseObj.hasOwnProperty(key)) {
+                if (typeof baseObj[key] === "object") {
+                    baseObj[key] = deepMerge(baseObj[key] as Record<string, unknown>, itemObj[key]);
                 } else {
-                    base[key] = item[key];
+                    baseObj[key] = itemObj[key];
                 }
             } else {
-                base[key] = item[key];
+                baseObj[key] = itemObj[key];
             }
         }
     }
-    return base;
+    return baseObj;
 }
 
-export function transformObj(obj, callback) {
+export function transformObj(obj: unknown, callback: (key: string, value: unknown) => unknown): unknown {
     if (!obj) return obj;
     if (Array.isArray(obj)) return obj.map(item => transformObj(item, callback));
     if (typeof obj !== "object") return obj;
+    const record = obj as Record<string, unknown>;
     return Object.fromEntries(
-        Object.keys(obj).map(key => {
-            return [key, callback(key, obj[key])];
+        Object.keys(record).map(key => {
+            return [key, callback(key, record[key])];
         }),
     );
 }
 
 // 深拷贝
-export function deepClone<T extends any>(obj: T): T {
+export function deepClone<T>(obj: T): T {
     try {
         return structuredClone(obj);
     } catch {
@@ -105,8 +108,9 @@ export function toUnderLine(name: string): string {
 export function toLine<T extends string>(name: T): string {
     return toUnderLine(name);
 }
-export interface Class<T = any> {
-    new (...args: any[]): T;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Constructor signatures require `any[]` for correct variance
+export interface Class<T = unknown> {
+    new (...args: any[]): T; // bivariant constructor args required for class compatibility
 }
 
 export function Mixin(base: Class, ...classes: Class[]) {
@@ -130,7 +134,7 @@ export function remove<T>(list: T[], item: T) {
     if (idx !== -1) list.splice(idx, 1);
 }
 
-export function toBool(v: any) {
+export function toBool(v: unknown) {
     if (v === "0" || v === "false") v = false;
     return Boolean(v);
 }
@@ -158,10 +162,10 @@ export function randomInt(...args: number[]) {
     return Math.floor(Math.random() * (max - min) + min);
 }
 export function protectedFields<T>(source: T, ...keys: (keyof T | string)[]): T {
-    const protocolValue = value => {
+    const protocolValue = (value: unknown): unknown => {
         if (value && typeof value === "object")
             return Object.fromEntries(
-                Object.entries(value).map(([key, value]) => {
+                Object.entries(value as Record<string, unknown>).map(([key, value]) => {
                     return [key, protocolValue(value)];
                 }),
             );
@@ -178,46 +182,46 @@ export function protectedFields<T>(source: T, ...keys: (keyof T | string)[]): T 
     ) as T;
 }
 
-export function getProperties(obj) {
-    if (obj.__proto__ === null) {
+export function getProperties(obj: object): string[] {
+    if (Object.getPrototypeOf(obj) === null) {
         //说明该对象已经是最顶层的对象
         return [];
     }
-    return Object.getOwnPropertyNames(obj).concat(getProperties(obj.__proto__));
+    return Object.getOwnPropertyNames(obj).concat(getProperties(Object.getPrototypeOf(obj)));
 }
 
-export function setValueToObj(obj: Dict, keys: string[], value: any): boolean;
-export function setValueToObj(obj: Dict, key: string, value: any): boolean;
-export function setValueToObj(obj: Dict, key: string | string[], value: any) {
+export function setValueToObj(obj: Dict, keys: string[], value: unknown): boolean;
+export function setValueToObj(obj: Dict, key: string, value: unknown): boolean;
+export function setValueToObj(obj: Dict, key: string | string[], value: unknown) {
     const keys = Array.isArray(key) ? key : key.split(".").filter(Boolean);
     const lastKey = keys.pop();
     if (!lastKey) throw new SyntaxError(`key is empty`);
     while (keys.length) {
         const k = keys.shift() as string;
-        obj = Reflect.get(obj, k);
+        obj = Reflect.get(obj, k) as Dict;
         if (!obj) throw new SyntaxError(`can't set ${lastKey} to undefined`);
     }
     return Reflect.set(obj, lastKey, value);
 }
-export function getValueOfObj<T = any>(obj: Dict, key: string[]): T;
-export function getValueOfObj<T = any>(obj: Dict, key: string): T;
+export function getValueOfObj<T = unknown>(obj: Dict, key: string[]): T;
+export function getValueOfObj<T = unknown>(obj: Dict, key: string): T;
 export function getValueOfObj(obj: Dict, key: string | string[]) {
     const keys = Array.isArray(key) ? key : key.split(".").filter(Boolean);
     const lastKey = keys.pop();
     if (!lastKey) throw new SyntaxError(`key is empty`);
     while (keys.length) {
         const k = keys.shift() as string;
-        obj = Reflect.get(obj, k);
+        obj = Reflect.get(obj, k) as Dict;
         if (!obj) throw new SyntaxError(`can't set ${lastKey} to undefined`);
     }
     return Reflect.get(obj, lastKey);
 }
-export function getDataKeyOfObj(data: any, obj: Dict) {
-    const _get = (data: any, obj: Dict, prefix: string[]): string | undefined => {
+export function getDataKeyOfObj(data: unknown, obj: Dict) {
+    const _get = (data: unknown, obj: Dict, prefix: string[]): string | undefined => {
         for (const [key, value] of Object.entries(obj)) {
             if (value === data) return [...prefix, key].join(".");
             if (!value || typeof value !== "object") continue;
-            const result = _get(data, value, prefix);
+            const result = _get(data, value as Dict, prefix);
             if (result) return result;
         }
     };
@@ -225,11 +229,11 @@ export function getDataKeyOfObj(data: any, obj: Dict) {
 }
 export function parseObjFromStr(str: string) {
     const result = JSON.parse(str);
-    const format = (data: any, keys: string[]): any => {
+    const format = (data: unknown, keys: string[]): unknown => {
         if (!data) return;
         if (typeof data !== "object" && typeof data !== "string") return;
         if (typeof data === "object")
-            return Object.entries(data).map(([k, v]) => format(v, [...keys, k]));
+            return Object.entries(data as Record<string, unknown>).map(([k, v]) => format(v, [...keys, k]));
         if (/\[Function:.+]/.test(data))
             return setValueToObj(
                 result,
@@ -242,11 +246,11 @@ export function parseObjFromStr(str: string) {
     format(result, []);
     return result;
 }
-export function stringifyObj(value: any): string {
-    if (!value || typeof value !== "object") return value;
+export function stringifyObj(value: unknown): string {
+    if (!value || typeof value !== "object") return String(value);
     if (Array.isArray(value)) return `[${value.map(stringifyObj).join()}]`;
-    let result: Dict = { ...value },
-        cache: WeakMap<object, any> = new WeakMap<object, any>();
+    let result: Dict = { ...(value as Dict) },
+        cache: WeakMap<object, unknown> = new WeakMap<object, unknown>();
     const _stringify = (obj: object, prefix: string[]) => {
         for (const key of Reflect.ownKeys(obj)) {
             if (typeof key === "symbol") continue;
@@ -267,11 +271,11 @@ export function stringifyObj(value: any): string {
                 setValueToObj(
                     result,
                     [...prefix, String(key)],
-                    `[Circular:${getDataKeyOfObj(val, value)}]`,
+                    `[Circular:${getDataKeyOfObj(val, value as Dict)}]`,
                 );
                 continue;
             }
-            cache.set(val, getValueOfObj(value, [...prefix, String(key)]));
+            cache.set(val, getValueOfObj(value as Dict, [...prefix, String(key)]));
             _stringify(val, [...prefix, String(key)]);
         }
     };

@@ -53,7 +53,7 @@ export class EmailBot extends EventEmitter {
         
         // 验证连接
         await this.transporter.verify();
-        console.log('[Email] SMTP 连接验证成功');
+        console.debug('[Email] SMTP 连接验证成功');
     }
 
     /**
@@ -77,7 +77,7 @@ export class EmailBot extends EventEmitter {
             this.imap = new Imap(imapOptions);
 
             this.imap.once('ready', () => {
-                console.log('[Email] IMAP 连接成功');
+                console.debug('[Email] IMAP 连接成功');
                 this.isConnected = true;
                 resolve();
             });
@@ -89,7 +89,7 @@ export class EmailBot extends EventEmitter {
             });
 
             this.imap.once('end', () => {
-                console.log('[Email] IMAP 连接已关闭');
+                console.debug('[Email] IMAP 连接已关闭');
                 this.isConnected = false;
             });
 
@@ -123,7 +123,7 @@ export class EmailBot extends EventEmitter {
                 if (err) {
                     reject(err);
                 } else {
-                    console.log(`[Email] 已打开邮箱: ${mailbox}`);
+                    console.debug(`[Email] 已打开邮箱: ${mailbox}`);
                     resolve();
                 }
             });

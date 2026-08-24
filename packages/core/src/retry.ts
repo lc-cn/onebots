@@ -119,7 +119,7 @@ export async function retry<T>(
  * const response = await fetchWithRetry('https://api.example.com/data');
  * ```
  */
-export function withRetry<T extends (...args: any[]) => Promise<any>>(
+export function withRetry<T extends (...args: unknown[]) => Promise<unknown>>(
     fn: T,
     options: RetryOptions = {}
 ): T {

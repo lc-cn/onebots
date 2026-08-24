@@ -83,7 +83,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     /**
      * Dispatch event to OneBot V12 format
      */
-    dispatch(event: any): void {
+    dispatch(event: CommonEvent.Event): void {
         if (!this.filterFn(event)) {
             return;
         }
@@ -98,7 +98,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     /**
      * Format event data to OneBot V12 specification
      */
-    format(event: string, payload: any): any {
+    format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
         return {
             id: this.generateEventId(),
             time: Math.floor(Date.now() / 1000),
@@ -111,7 +111,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     /**
      * Apply OneBot V12 API action
      */
-    async apply(action: string, params?: any): Promise<OneBotV12.Response> {
+    async apply(action: string, params?: Record<string, unknown>): Promise<OneBotV12.Response> {
         this.logger.debug(`OneBot V12 action: ${action}`, params);
 
         try {
@@ -136,13 +136,13 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     /**
      * Execute OneBot V12 action
      */
-    private async executeAction(action: string, params: any = {}): Promise<any> {
+    private async executeAction(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
         switch (action) {
             // Message API
             case "send_message":
-                return this.sendMessage(params);
+                return this.sendMessage(params as unknown as OneBotV12.SendMessageParams);
             case "delete_message":
-                return this.deleteMessage(params);
+                return this.deleteMessage(params as unknown as OneBotV12.DeleteMessageParams);
 
             // Bot self API
             case "get_self_info":
@@ -156,67 +156,67 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
 
             // User API
             case "get_user_info":
-                return this.getUserInfo(params);
+                return this.getUserInfo(params as unknown as OneBotV12.GetUserInfoParams);
             case "get_friend_list":
                 return this.getFriendList();
 
             // Group API
             case "get_group_info":
-                return this.getGroupInfo(params);
+                return this.getGroupInfo(params as unknown as OneBotV12.GetGroupInfoParams);
             case "get_group_list":
                 return this.getGroupList();
             case "get_group_member_info":
-                return this.getGroupMemberInfo(params);
+                return this.getGroupMemberInfo(params as unknown as OneBotV12.GetGroupMemberInfoParams);
             case "get_group_member_list":
-                return this.getGroupMemberList(params);
+                return this.getGroupMemberList(params as unknown as OneBotV12.GetGroupMemberListParams);
             case "set_group_name":
-                return this.setGroupName(params);
+                return this.setGroupName(params as unknown as OneBotV12.SetGroupNameParams);
             case "leave_group":
-                return this.leaveGroup(params);
+                return this.leaveGroup(params as unknown as OneBotV12.LeaveGroupParams);
 
             // Guild API
             case "get_guild_info":
-                return this.getGuildInfo(params);
+                return this.getGuildInfo(params as unknown as OneBotV12.GetGuildInfoParams);
             case "get_guild_list":
                 return this.getGuildList();
             case "set_guild_name":
-                return this.setGuildName(params);
+                return this.setGuildName(params as unknown as OneBotV12.SetGuildNameParams);
             case "get_guild_member_info":
-                return this.getGuildMemberInfo(params);
+                return this.getGuildMemberInfo(params as unknown as OneBotV12.GetGuildMemberInfoParams);
             case "get_guild_member_list":
-                return this.getGuildMemberList(params);
+                return this.getGuildMemberList(params as unknown as OneBotV12.GetGuildMemberListParams);
             case "leave_guild":
-                return this.leaveGuild(params);
+                return this.leaveGuild(params as unknown as OneBotV12.LeaveGuildParams);
 
             // Channel API
             case "get_channel_info":
-                return this.getChannelInfo(params);
+                return this.getChannelInfo(params as unknown as OneBotV12.GetChannelInfoParams);
             case "get_channel_list":
-                return this.getChannelList(params);
+                return this.getChannelList(params as unknown as OneBotV12.GetChannelListParams);
             case "set_channel_name":
-                return this.setChannelName(params);
+                return this.setChannelName(params as unknown as OneBotV12.SetChannelNameParams);
             case "get_channel_member_info":
-                return this.getChannelMemberInfo(params);
+                return this.getChannelMemberInfo(params as unknown as OneBotV12.GetChannelMemberInfoParams);
             case "get_channel_member_list":
-                return this.getChannelMemberList(params);
+                return this.getChannelMemberList(params as unknown as OneBotV12.GetChannelMemberListParams);
             case "leave_channel":
-                return this.leaveChannel(params);
+                return this.leaveChannel(params as unknown as OneBotV12.LeaveChannelParams);
 
             // File API
             case "upload_file":
-                return this.uploadFile(params);
+                return this.uploadFile(params as unknown as OneBotV12.UploadFileParams);
             case "upload_file_fragmented_prepare":
-                return this.uploadFileFragmentedPrepare(params);
+                return this.uploadFileFragmentedPrepare(params as unknown as OneBotV12.UploadFileFragmentedPrepareParams);
             case "upload_file_fragmented_transfer":
-                return this.uploadFileFragmentedTransfer(params);
+                return this.uploadFileFragmentedTransfer(params as unknown as OneBotV12.UploadFileFragmentedTransferParams);
             case "upload_file_fragmented_finish":
-                return this.uploadFileFragmentedFinish(params);
+                return this.uploadFileFragmentedFinish(params as unknown as OneBotV12.UploadFileFragmentedFinishParams);
             case "get_file":
-                return this.getFile(params);
+                return this.getFile(params as unknown as OneBotV12.GetFileParams);
             case "get_file_fragmented_prepare":
-                return this.getFileFragmentedPrepare(params);
+                return this.getFileFragmentedPrepare(params as unknown as OneBotV12.GetFileFragmentedPrepareParams);
             case "get_file_fragmented_transfer":
-                return this.getFileFragmentedTransfer(params);
+                return this.getFileFragmentedTransfer(params as unknown as OneBotV12.GetFileFragmentedTransferParams);
 
             default:
                 throw new Error(`Unknown action: ${action}`);
@@ -510,7 +510,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     /**
      * Convert common event to OneBot V12 format
      */
-    private convertToV12Format(event: CommonEvent.Event): OneBotV12.BaseEvent | null {
+    private convertToV12Format(event: CommonEvent.Event): OneBotV12.Event | null {
         const base = {
             id: event.id.string,
             time: Math.floor(event.timestamp / 1000),
@@ -537,10 +537,10 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
 
             return messageEvent;
         } else if (event.type === "notice") {
-            const noticeEvent: any = {
+            const noticeEvent: Record<string, unknown> = {
                 ...base,
                 type: "notice",
-                detail_type: event.notice_type as any,
+                detail_type: event.notice_type as string,
                 sub_type: "",
             };
             
@@ -555,29 +555,29 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 noticeEvent.group_id = event.group.id.string;
             }
             
-            return noticeEvent;
+            return noticeEvent as unknown as OneBotV12.NoticeEvent;
         } else if (event.type === "request") {
-            const requestEvent: any = {
+            const requestEvent: Record<string, unknown> = {
                 ...base,
                 type: "request",
-                detail_type: event.request_type as any,
+                detail_type: event.request_type as string,
                 sub_type: "",
                 user_id: event.user.id.string,
                 comment: event.comment || "",
                 flag: event.flag,
             };
-            
+
             // 添加 request 事件的必要字段
             if (event.group) {
                 requestEvent.group_id = event.group.id.string;
             }
-            
-            return requestEvent;
+
+            return requestEvent as unknown as OneBotV12.RequestEvent;
         } else if (event.type === "meta") {
             return {
                 ...base,
                 type: "meta",
-                detail_type: event.meta_type as any,
+                detail_type: event.meta_type as string,
                 sub_type: event.sub_type || "",
             };
         }
@@ -650,7 +650,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     /**
      * Dispatch meta event
      */
-    private dispatchMetaEvent(detailType: string, extra: any = {}): void {
+    private dispatchMetaEvent(detailType: string, extra: Record<string, unknown> = {}): void {
         const event: OneBotV12.MetaEvent = {
             id: this.generateEventId(),
             time: Math.floor(Date.now() / 1000),
@@ -690,7 +690,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             }
 
             const action = ctx.params.action;
-            const params = (ctx.request as any).body ?? {};
+            const params = ((ctx.request as unknown as Record<string, unknown>).body ?? {}) as Record<string, unknown>;
 
             try {
                 const result = await this.apply(action, params);
@@ -787,7 +787,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
-                const headers: any = {
+                const headers: Record<string, string> = {
                     'Content-Type': 'application/json',
                     'User-Agent': 'OneBot/12',
                     'X-OneBot-Version': '12',
@@ -824,8 +824,8 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     private startWsReverse(url: string): void {
         this.logger.info(`Starting WebSocket reverse to ${url}`);
 
-        let ws: any = null;
-        let reconnectTimer: any = null;
+        let ws: WebSocket | null = null;
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
         const connect = () => {
             try {

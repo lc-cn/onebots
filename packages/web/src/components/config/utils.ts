@@ -1,0 +1,191 @@
+import type { ValidationRule, Schema, SchemaBundle, SchemaFieldDef, SchemaGroup, AccountRow } from './types';
+
+export const isRule = (rule: ValidationRule | Schema): rule is ValidationRule => {
+    return (
+        typeof rule === 'object' &&
+        ('type' in rule ||
+            'required' in rule ||
+            'choices' in rule ||
+            'default' in rule)
+    );
+};
+
+export const makeKey = (path: string[]) => path.join('::');
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+export const getValueByPath = (data: Record<string, unknown>, path: string[]): unknown => {
+    let current: unknown = data;
+    for (const key of path) {
+        if (!isRecord(current)) return undefined;
+        current = current[key];
+    }
+    return current;
+};
+
+export const setValueByPath = (data: Record<string, unknown>, path: string[], value: unknown) => {
+    const keys = path;
+    let current = data;
+    keys.forEach((key, index) => {
+        if (index === keys.length - 1) {
+            if (value === undefined) {
+                delete current[key];
+            } else {
+                current[key] = value;
+            }
+            return;
+        }
+        if (!isRecord(current[key])) {
+            current[key] = {};
+        }
+        current = current[key] as Record<string, unknown>;
+    });
+};
+
+/** object/array 字段：空输入表示未配置（undefined），不要默认写成 {} */
+export const resolveJsonFieldDisplay = (
+    currentValue: unknown,
+    rule: ValidationRule
+): string => {
+    if (currentValue !== undefined && currentValue !== null) {
+        return JSON.stringify(currentValue, null, 2);
+    }
+    if (rule.default !== undefined) {
+        return JSON.stringify(rule.default, null, 2);
+    }
+    return '';
+};
+
+export const parseJsonFieldValue = (
+    raw: unknown,
+    rule: ValidationRule,
+    label: string
+): { ok: true; value: unknown } | { ok: false; message: string } => {
+    const text = typeof raw === 'string' ? raw.trim() : '';
+    if (!text) {
+        return { ok: true, value: rule.default !== undefined ? rule.default : undefined };
+    }
+    try {
+        return { ok: true, value: JSON.parse(text) };
+    } catch {
+        return { ok: false, message: `字段 ${label} 不是有效 JSON` };
+    }
+};
+
+export const buildSchemaFields = (schemaData: Schema, basePath: string[] = []): SchemaFieldDef[] => {
+    const fields: SchemaFieldDef[] = [];
+    Object.entries(schemaData).forEach(([key, rule]) => {
+        const currentPath = [...basePath, key];
+        if (isRule(rule)) {
+            fields.push({
+                path: currentPath,
+                key: makeKey(currentPath),
+                label: rule.label || currentPath.join('.'),
+                rule,
+                placeholder:
+                    rule.placeholder ||
+                    (rule.default !== undefined ? `默认：${String(rule.default)}` : '')
+            });
+        } else {
+            fields.push(...buildSchemaFields(rule as Schema, currentPath));
+        }
+    });
+    return fields;
+};
+
+export const normalizeSchema = (data: Schema | SchemaBundle): SchemaBundle => {
+    if ('base' in data || 'general' in data || 'protocols' in data || 'adapters' in data) {
+        return data as SchemaBundle;
+    }
+    return { base: data as Schema };
+};
+
+/** 配置文件中保留给全局设置的键名，不是账号 */
+export const BASE_CONFIG_KEYS = new Set([
+    'port',
+    'path',
+    'database',
+    'timeout',
+    'username',
+    'password',
+    'log_level',
+    'general'
+]);
+
+/** 根据 SchemaBundle 和已解析配置对象，构建表单分组 */
+export const buildConfigGroups = (
+    bundle: SchemaBundle,
+    configObject: Record<string, unknown>
+): SchemaGroup[] => {
+    const groups: SchemaGroup[] = [];
+
+    if (bundle.base) {
+        groups.push({
+            key: 'base',
+            title: '基础配置',
+            fields: buildSchemaFields(bundle.base)
+        });
+    }
+
+    if (bundle.general) {
+        groups.push({
+            key: 'general',
+            title: '全局协议配置',
+            fields: buildSchemaFields(bundle.general, ['general'])
+        });
+    }
+
+    const accountKeys = Object.keys(configObject).filter(
+        key => key.includes('.') && !BASE_CONFIG_KEYS.has(key)
+    );
+
+    if (accountKeys.length && (bundle.protocols || bundle.adapters)) {
+        accountKeys.forEach(accountKey => {
+            const fields: SchemaFieldDef[] = [];
+            if (bundle.protocols) {
+                Object.entries(bundle.protocols).forEach(([protocolKey, protocolSchema]) => {
+                    fields.push(...buildSchemaFields(protocolSchema, [accountKey, protocolKey]));
+                });
+            }
+            if (bundle.adapters) {
+                const platform = accountKey.split('.')[0];
+                const adapterSchema = bundle.adapters[platform];
+                if (adapterSchema) {
+                    const adapterFields = buildSchemaFields(adapterSchema, [accountKey]).filter(
+                        field => field.path.join('.') !== `${accountKey}.account_id`
+                    );
+                    fields.push(...adapterFields);
+                }
+            }
+            if (fields.length) {
+                groups.push({
+                    key: `account:${accountKey}`,
+                    title: `账号配置：${accountKey}`,
+                    fields
+                });
+            }
+        });
+    }
+
+    return groups;
+};
+
+/** 从已解析配置对象中提取账号行 */
+export const extractAccountRows = (configObject: Record<string, unknown>): AccountRow[] => {
+    const rows: AccountRow[] = [];
+    Object.entries(configObject).forEach(([key, value]) => {
+        if (!key.includes('.') || BASE_CONFIG_KEYS.has(key)) return;
+        const [platform, ...rest] = key.split('.');
+        const account_id = rest.join('.');
+        rows.push({
+            key,
+            platform,
+            account_id,
+            config: isRecord(value) ? value : {},
+            preview: JSON.stringify(value, null, 2)
+        });
+    });
+    return rows;
+};

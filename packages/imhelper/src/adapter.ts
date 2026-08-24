@@ -155,7 +155,7 @@ export abstract class Adapter<Id extends string | number = string | number> exte
         throw new Error('Not implemented');
     }
     /** 转换事件（可选，用于接收器） */
-    transformEvent?(event: unknown): void {
+    transformEvent(event: unknown): void {
         // 默认实现：直接触发原始事件
         // 使用 EventEmitter 的原始 emit 方法，因为 'event' 不在 EventMap 中
         (this as EventEmitter).emit('event', event);
@@ -169,6 +169,7 @@ export abstract class Adapter<Id extends string | number = string | number> exte
 }
 export namespace Adapter {
     export interface EventMap<Id extends string | number>{
+        'event': [unknown]
         'message.private': [PrivateMessageEvent.Data<Id>]
         'message.group': [GroupMessageEvent.Data<Id>]
         'message.channel': [ChannelMessageEvent.Data<Id>]

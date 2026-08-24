@@ -1,4 +1,5 @@
-import { Adapter, WebSocketReceiver, WSSReceiver, WebhookReceiver, SSEReceiver, Message, type PrivateMessageEvent, type ChannelMessageEvent } from 'imhelper';
+import { EventEmitter } from 'events';
+import { Adapter, WebSocketReceiver, WSSReceiver, WebhookReceiver, SSEReceiver, Message, type User, type Group, type Friend, type PrivateMessageEvent, type ChannelMessageEvent } from 'imhelper';
 import { SatoriV1Event, SatoriV1Response } from './types.js';
 import { HttpClient } from './http-client.js';
 
@@ -117,12 +118,12 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): Adapter<string
               message_id: messageId,
               user_id: userId,
               channel_id: channel.id,
-              content: (typeof event.message.content === 'string' 
-                ? event.message.content 
+              content: (typeof event.message.content === 'string'
+                ? event.message.content
                 : event.message.content || []) as Message.Content,
               message_type: 'channel',
             };
-            (this as any).emit('message.channel', messageData);
+            this.emit('message.channel', messageData);
           } else {
             // 私聊消息
             const messageData: PrivateMessageEvent.Data<string> = {
@@ -130,22 +131,23 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): Adapter<string
               bot_id: event.self_id,
               message_id: messageId,
               user_id: userId,
-              content: (typeof event.message.content === 'string' 
-                ? event.message.content 
+              content: (typeof event.message.content === 'string'
+                ? event.message.content
                 : event.message.content || []) as Message.Content,
               message_type: 'private',
             };
-            (this as any).emit('message.private', messageData);
+            this.emit('message.private', messageData);
           }
         } else if (eventType === 'message-deleted' && event.message) {
           // 消息删除通知
-          const noticeData: any = {
+          const noticeType = event.channel ? 'group_message_delete' : 'private_message_delete';
+          const noticeData: Record<string, unknown> = {
             timestamp: Math.floor(event.timestamp / 1000),
             bot_id: event.self_id,
-            notice_type: event.channel ? 'group_message_delete' : 'private_message_delete',
+            notice_type: noticeType,
             message_id: event.message.id,
           };
-          
+
           if (event.channel) {
             noticeData.channel_id = event.channel.id;
           }
@@ -155,18 +157,19 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): Adapter<string
           if (event.operator) {
             noticeData.operator_id = event.operator.id;
           }
-          
-          (this as any).emit(`notice.${noticeData.notice_type}`, noticeData);
+
+          (this as EventEmitter).emit(`notice.${noticeType}`, noticeData);
         }
       }
       // 群组成员事件
       else if (eventType.startsWith('guild-member-')) {
-        const noticeData: any = {
+        const noticeType = eventType === 'guild-member-added' ? 'group_member_increase' : 'group_member_decrease';
+        const noticeData: Record<string, unknown> = {
           timestamp: Math.floor(event.timestamp / 1000),
           bot_id: event.self_id,
-          notice_type: eventType === 'guild-member-added' ? 'group_member_increase' : 'group_member_decrease',
+          notice_type: noticeType,
         };
-        
+
         if (event.guild) {
           noticeData.group_id = event.guild.id;
         }
@@ -176,41 +179,41 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): Adapter<string
         if (event.operator) {
           noticeData.operator_id = event.operator.id;
         }
-        
-        (this as any).emit(`notice.${noticeData.notice_type}`, noticeData);
+
+        (this as EventEmitter).emit(`notice.${noticeType}`, noticeData);
       }
       // 好友请求事件
       else if (eventType === 'friend-request') {
-        const requestData: any = {
+        const requestData: Record<string, unknown> = {
           timestamp: Math.floor(event.timestamp / 1000),
           bot_id: event.self_id,
           request_type: 'friend',
           request_id: String(event.id || Date.now()),
           user_id: event.user?.id || '',
-          comment: event.message?.content || '',
+          comment: (event.message?.content as string) || '',
           flag: String(event.id || Date.now()),
         };
-        
-        (this as any).emit('request.friend', requestData);
+
+        (this as EventEmitter).emit('request.friend', requestData);
       }
       // 群组请求事件
       else if (eventType === 'guild-request') {
-        const requestData: any = {
+        const requestData: Record<string, unknown> = {
           timestamp: Math.floor(event.timestamp / 1000),
           bot_id: event.self_id,
           request_type: 'group',
           request_id: String(event.id || Date.now()),
           user_id: event.user?.id || '',
           group_id: event.guild?.id || '',
-          comment: event.message?.content || '',
+          comment: (event.message?.content as string) || '',
           flag: String(event.id || Date.now()),
         };
-        
-        (this as any).emit('request.group', requestData);
+
+        (this as EventEmitter).emit('request.group', requestData);
       }
-      
+
       // 转发原始事件
-      (this as any).emit('event', event);
+      (this as EventEmitter).emit('event', event);
     }
 
     async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<SatoriV1Response> {
@@ -229,95 +232,100 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): Adapter<string
       throw new Error('recallMessage requires channel_id in Satori, use deleteMessage instead');
     }
 
-    async getUserInfo(user_id: string): Promise<import('imhelper').User<string>> {
+    async getUserInfo(user_id: string): Promise<User<string>> {
       const response = await this.httpClient.post('/user.get', {
         user_id,
       });
       if ((response.code === undefined || response.code === 0) && response.data) {
-        const userData: import('imhelper').User.Data<string> = {
-          user_id: response.data.id || user_id,
-          user_name: response.data.name || response.data.username || '',
-          avatar: response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const userData: User.Data<string> = {
+          user_id: (data.id as string) || user_id,
+          user_name: (data.name as string) || (data.username as string) || '',
+          avatar: (data.avatar as string) || '',
         };
-        return { info: userData } as any;
+        return { info: userData } as unknown as User<string>;
       }
       throw new Error('Failed to get user info');
     }
 
-    async getFriendInfo(user_id: string): Promise<import('imhelper').Friend<string>> {
+    async getFriendInfo(user_id: string): Promise<Friend<string>> {
       // Satori 没有单独的 get_friend_info，使用 get_user_info
       const user = await this.getUserInfo(user_id);
-      const friendData: import('imhelper').Friend.Data<string> = {
+      const friendData: Friend.Data<string> = {
         ...user.info,
         remark: '',
       };
-      return { info: friendData } as any;
+      return { info: friendData } as unknown as Friend<string>;
     }
 
-    async getUserList(): Promise<import('imhelper').User<string>[]> {
+    async getUserList(): Promise<User<string>[]> {
       // Satori 没有 getUserList，返回空数组
       return [];
     }
 
-    async getGroupInfo(group_id: string): Promise<import('imhelper').Group<string>> {
+    async getGroupInfo(group_id: string): Promise<Group<string>> {
       // Satori 使用 guild.get API
       const response = await this.httpClient.post('/guild.get', {
         guild_id: group_id,
       });
       if ((response.code === undefined || response.code === 0) && response.data) {
-        const groupData: import('imhelper').Group.Data<string> = {
-          group_id: response.data.id || group_id,
-          group_name: response.data.name || '',
-          avatar: response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const groupData: Group.Data<string> = {
+          group_id: (data.id as string) || group_id,
+          group_name: (data.name as string) || '',
+          avatar: (data.avatar as string) || '',
         };
-        return { info: groupData } as any;
+        return { info: groupData } as unknown as Group<string>;
       }
       throw new Error('Failed to get group info');
     }
 
-    async getGroupList(): Promise<import('imhelper').Group<string>[]> {
+    async getGroupList(): Promise<Group<string>[]> {
       const response = await this.httpClient.post('/guild.list', {});
       if ((response.code === undefined || response.code === 0) && Array.isArray(response.data)) {
-        return response.data.map((item: any) => {
-          const groupData: import('imhelper').Group.Data<string> = {
-            group_id: item.id,
-            group_name: item.name || '',
-            avatar: item.avatar || '',
+        return (response.data as Array<Record<string, unknown>>).map((item) => {
+          const groupData: Group.Data<string> = {
+            group_id: item.id as string,
+            group_name: (item.name as string) || '',
+            avatar: (item.avatar as string) || '',
           };
-          return { info: groupData } as any;
+          return { info: groupData } as unknown as Group<string>;
         });
       }
       return [];
     }
 
-    async getGroupMemberInfo(group_id: string, user_id: string): Promise<import('imhelper').User<string>> {
+    async getGroupMemberInfo(group_id: string, user_id: string): Promise<User<string>> {
       const response = await this.httpClient.post('/guild.member.get', {
         guild_id: group_id,
         user_id,
       });
       if ((response.code === undefined || response.code === 0) && response.data) {
-        const userData: import('imhelper').User.Data<string> = {
-          user_id: response.data.user?.id || response.data.user_id || user_id,
-          user_name: response.data.user?.name || response.data.nickname || '',
-          avatar: response.data.user?.avatar || response.data.avatar || '',
+        const data = response.data as Record<string, unknown>;
+        const userObj = data.user as Record<string, unknown> | undefined;
+        const userData: User.Data<string> = {
+          user_id: (userObj?.id as string) || (data.user_id as string) || user_id,
+          user_name: (userObj?.name as string) || (data.nickname as string) || '',
+          avatar: (userObj?.avatar as string) || (data.avatar as string) || '',
         };
-        return { info: userData } as any;
+        return { info: userData } as unknown as User<string>;
       }
       throw new Error('Failed to get group member info');
     }
 
-    async getGroupMemberList(group_id: string): Promise<import('imhelper').User<string>[]> {
+    async getGroupMemberList(group_id: string): Promise<User<string>[]> {
       const response = await this.httpClient.post('/guild.member.list', {
         guild_id: group_id,
       });
       if ((response.code === undefined || response.code === 0) && Array.isArray(response.data)) {
-        return response.data.map((item: any) => {
-          const userData: import('imhelper').User.Data<string> = {
-            user_id: item.user?.id || item.user_id,
-            user_name: item.user?.name || item.nickname || '',
-            avatar: item.user?.avatar || item.avatar || '',
+        return (response.data as Array<Record<string, unknown>>).map((item) => {
+          const userObj = item.user as Record<string, unknown> | undefined;
+          const userData: User.Data<string> = {
+            user_id: (userObj?.id as string) || (item.user_id as string),
+            user_name: (userObj?.name as string) || (item.nickname as string) || '',
+            avatar: (userObj?.avatar as string) || (item.avatar as string) || '',
           };
-          return { info: userData } as any;
+          return { info: userData } as unknown as User<string>;
         });
       }
       return [];

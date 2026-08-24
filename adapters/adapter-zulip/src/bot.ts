@@ -74,7 +74,7 @@ export class ZulipBot extends EventEmitter {
             const agent = await createHttpsProxyAgent(this.config.proxy);
             if (agent) {
                 this.agent = agent as HttpAgent;
-                console.log(`[Zulip] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
+                console.debug(`[Zulip] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
             } else {
                 console.warn('[Zulip] 创建代理失败，将直接连接');
             }
@@ -94,7 +94,7 @@ export class ZulipBot extends EventEmitter {
             const response = await this.apiClient.get('/users/me', {
                 httpsAgent: this.agent,
             });
-            console.log(`[Zulip] REST API 连接成功，用户: ${response.data.email}`);
+            console.debug(`[Zulip] REST API 连接成功，用户: ${response.data.email}`);
         } catch (error: unknown) {
             const err = error instanceof Error ? error : new Error(String(error));
             console.error('[Zulip] REST API 连接失败:', (error as { response?: { data?: unknown } }).response?.data || err.message);
@@ -132,7 +132,7 @@ export class ZulipBot extends EventEmitter {
                 this.ws = new WebSocket(wsUrl, wsOptions);
 
                 this.ws.on('open', () => {
-                    console.log('[Zulip] WebSocket 连接成功');
+                    console.debug('[Zulip] WebSocket 连接成功');
                     this.isConnected = true;
                     resolve();
                 });
@@ -153,7 +153,7 @@ export class ZulipBot extends EventEmitter {
                 });
 
                 this.ws.on('close', () => {
-                    console.log('[Zulip] WebSocket 连接已关闭');
+                    console.debug('[Zulip] WebSocket 连接已关闭');
                     this.isConnected = false;
                     this.connectionManager.scheduleReconnect();
                 });

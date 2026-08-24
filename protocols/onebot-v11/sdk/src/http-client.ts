@@ -31,7 +31,7 @@ export class HttpClient {
   /**
    * 发送 POST 请求
    */
-  async post(action: string, params?: any): Promise<OneBotV11Response> {
+  async post(action: string, params?: Record<string, unknown>): Promise<OneBotV11Response> {
     // 确保 action 不以 / 开头
     const actionPath = action.startsWith('/') ? action.substring(1) : action;
     

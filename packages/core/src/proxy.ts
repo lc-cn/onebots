@@ -39,7 +39,7 @@ export function maskProxyUrl(url: string): string {
  * @param proxy 代理配置
  * @returns HttpsProxyAgent 实例，如果 https-proxy-agent 未安装则返回 null
  */
-export async function createHttpsProxyAgent(proxy: ProxyConfig): Promise<InstanceType<any> | null> {
+export async function createHttpsProxyAgent(proxy: ProxyConfig): Promise<unknown | null> {
     if (!proxy?.url) return null;
     try {
         const proxyUrl = buildProxyUrl(proxy);
@@ -56,7 +56,7 @@ export async function createHttpsProxyAgent(proxy: ProxyConfig): Promise<Instanc
  * @param proxy 代理配置
  * @returns SocksProxyAgent 实例，如果 socks-proxy-agent 未安装则返回 null
  */
-export async function createSocksProxyAgent(proxy: ProxyConfig): Promise<InstanceType<any> | null> {
+export async function createSocksProxyAgent(proxy: ProxyConfig): Promise<unknown | null> {
     if (!proxy?.url) return null;
     try {
         const proxyUrl = buildProxyUrl(proxy);
@@ -86,7 +86,7 @@ export async function createSocksProxyAgent(proxy: ProxyConfig): Promise<Instanc
 export async function createProxyAgent(
     proxy: ProxyConfig | undefined,
     preferSocks = false
-): Promise<InstanceType<any> | null> {
+): Promise<unknown | null> {
     if (!proxy?.url) return null;
 
     const isSocksUrl = proxy.url.startsWith('socks');

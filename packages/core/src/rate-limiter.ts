@@ -31,7 +31,7 @@ interface QueuedRequest<T> {
 export class RateLimiter {
     private tokens: number;
     private lastRefill: number;
-    private queue: QueuedRequest<any>[] = [];
+    private queue: QueuedRequest<unknown>[] = [];
     private processing = false;
     private lastRequest = 0;
     
@@ -124,7 +124,7 @@ export class RateLimiter {
         
         // 加入队列
         return new Promise((resolve, reject) => {
-            this.queue.push({ execute: fn, resolve, reject, enqueueTime: Date.now() });
+            this.queue.push({ execute: fn, resolve: resolve as (value: unknown) => void, reject, enqueueTime: Date.now() });
             this.processQueue();
         });
     }
@@ -257,7 +257,7 @@ export const RateLimitPresets = {
 /**
  * 创建带速率限制的函数包装器
  */
-export function withRateLimit<T extends (...args: any[]) => Promise<any>>(
+export function withRateLimit<T extends (...args: unknown[]) => Promise<unknown>>(
     fn: T,
     limiter: RateLimiter
 ): T {

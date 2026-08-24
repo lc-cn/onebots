@@ -272,6 +272,8 @@ export namespace OneBotV12 {
         type: "meta";
     }
 
+    export type Event = MessageEvent | NoticeEvent | RequestEvent | MetaEvent;
+
     /**
      * Connect meta event
      */
@@ -304,7 +306,7 @@ export namespace OneBotV12 {
     /**
      * Standard API response
      */
-    export interface Response<T = any> {
+    export interface Response<T = unknown> {
         status: ResponseStatus;
         retcode: number;
         data: T;
@@ -654,4 +656,3 @@ export namespace OneBotV12 {
         size: number;
     }
 }
-

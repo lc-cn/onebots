@@ -33,7 +33,7 @@ export class HttpClient {
   /**
    * 发送 POST 请求
    */
-  async post(action: string, params?: any): Promise<OneBotV12Response> {
+  async post(action: string, params?: Record<string, unknown>): Promise<OneBotV12Response> {
     // 确保 baseUrl 和 basePath 正确拼接
     const baseUrl = this.config.baseUrl.replace(/\/$/, '');
     const basePath = this.basePath.startsWith('/') ? this.basePath : `/${this.basePath}`;

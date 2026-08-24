@@ -30,7 +30,7 @@ export interface MilkyV1Event {
   message_id?: string;
   user_id?: string | number;
   group_id?: string | number;
-  message?: string | any[];
+  message?: string | unknown[];
   raw_message?: string;
   sub_type?: string;
   sender?: {
@@ -38,10 +38,16 @@ export interface MilkyV1Event {
     nickname?: string;
     avatar?: string;
   };
-  [key: string]: any;
+  operator_id?: string | number;
+  duration?: number;
+  flag?: string;
+  comment?: string;
+  interval?: number;
+  status?: unknown;
+  [key: string]: unknown;
 }
 
-export interface MilkyV1Response<T = any> {
+export interface MilkyV1Response<T = unknown> {
   status: 'ok' | 'failed';
   retcode: number;
   data?: T;

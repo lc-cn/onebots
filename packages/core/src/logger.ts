@@ -9,7 +9,7 @@ import { OneBotsError, ErrorHandler } from './errors.js';
 import type { LogLevel } from './types.js';
 const { getLogger } = log4js;
 export interface LogContext {
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 
@@ -84,8 +84,8 @@ export class Logger {
      */
     error(message: string | Error | OneBotsError, context?: LogContext): void {
         if (typeof message === 'object' && message !== null) {
-            if (message instanceof Error || (message as any).category !== undefined) {
-                const error = ErrorHandler.wrap(message as Error | OneBotsError, context);
+            if (message instanceof Error) {
+                const error = ErrorHandler.wrap(message, context);
                 this.log('error', error.message, {
                     ...context,
                     error: error.toJSON(),
@@ -101,8 +101,8 @@ export class Logger {
      */
     fatal(message: string | Error | OneBotsError, context?: LogContext): void {
         if (typeof message === 'object' && message !== null) {
-            if (message instanceof Error || (message as any).category !== undefined) {
-                const error = ErrorHandler.wrap(message as Error | OneBotsError, context);
+            if (message instanceof Error) {
+                const error = ErrorHandler.wrap(message, context);
                 this.log('fatal', error.message, {
                     ...context,
                     error: error.toJSON(),

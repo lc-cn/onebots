@@ -96,13 +96,30 @@ export function useApi() {
     }
   }
 
+  const ADAPTER_POLL_INTERVAL = 5_000
+  let adapterPollTimer: ReturnType<typeof setInterval> | null = null
+
+  const startAdapterPolling = () => {
+    stopAdapterPolling()
+    adapterPollTimer = setInterval(fetchAdapters, ADAPTER_POLL_INTERVAL)
+  }
+
+  const stopAdapterPolling = () => {
+    if (adapterPollTimer) {
+      clearInterval(adapterPollTimer)
+      adapterPollTimer = null
+    }
+  }
+
   const cleanup = () => {
     logsEventSource?.close()
+    stopAdapterPolling()
   }
 
   onMounted(() => {
     fetchAdapters()
     fetchSystemInfo()
+    startAdapterPolling()
   })
 
   onUnmounted(() => {

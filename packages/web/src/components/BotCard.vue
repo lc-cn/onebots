@@ -50,30 +50,46 @@
         </div>
 
         <template #footer>
-            <div class="flex justify-end">
-                <UiButton
-                    v-if="bot.status === 'offline'"
-                    variant="primary"
-                    :loading="props.loading"
-                    :disabled="props.loading"
-                    class="w-28"
-                    @click="emit('start', bot)">
-                    <IconPlayerPlay v-if="!props.loading" :size="14" />
-                    上线
-                </UiButton>
-                <UiButton
-                    v-else-if="bot.status === 'online'"
-                    variant="danger"
-                    :loading="props.loading"
-                    :disabled="props.loading"
-                    class="w-28"
-                    @click="emit('stop', bot)">
-                    <IconPlayerPause v-if="!props.loading" :size="14" />
-                    下线
-                </UiButton>
-                <UiButton v-else variant="secondary" loading disabled class="w-28">
-                    连接中
-                </UiButton>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1">
+                    <RouterLink
+                        :to="{ path: '/config', query: { tab: 'accounts', highlight: `${bot.platform}.${bot.uin}` } }"
+                        title="编辑配置"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-control text-fg-tertiary transition-colors hover:bg-surface-raised hover:text-fg">
+                        <IconSettings :size="15" />
+                    </RouterLink>
+                    <RouterLink
+                        :to="{ path: '/logs', query: { search: bot.uin } }"
+                        title="查看日志"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-control text-fg-tertiary transition-colors hover:bg-surface-raised hover:text-fg">
+                        <IconFileText :size="15" />
+                    </RouterLink>
+                </div>
+                <div>
+                    <UiButton
+                        v-if="bot.status === 'offline'"
+                        variant="primary"
+                        :loading="props.loading"
+                        :disabled="props.loading"
+                        class="w-28"
+                        @click="emit('start', bot)">
+                        <IconPlayerPlay v-if="!props.loading" :size="14" />
+                        上线
+                    </UiButton>
+                    <UiButton
+                        v-else-if="bot.status === 'online'"
+                        variant="danger"
+                        :loading="props.loading"
+                        :disabled="props.loading"
+                        class="w-28"
+                        @click="emit('stop', bot)">
+                        <IconPlayerPause v-if="!props.loading" :size="14" />
+                        下线
+                    </UiButton>
+                    <UiButton v-else variant="secondary" loading disabled class="w-28">
+                        连接中
+                    </UiButton>
+                </div>
             </div>
         </template>
     </UiCard>
@@ -81,7 +97,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { IconLink, IconPlayerPlay, IconPlayerPause } from '@tabler/icons-vue';
+import { RouterLink } from 'vue-router';
+import { IconLink, IconPlayerPlay, IconPlayerPause, IconSettings, IconFileText } from '@tabler/icons-vue';
 import UiAvatar from '../ui/UiAvatar.vue';
 import UiBadge from '../ui/UiBadge.vue';
 import UiButton from '../ui/UiButton.vue';

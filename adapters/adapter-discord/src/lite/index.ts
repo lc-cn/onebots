@@ -169,7 +169,7 @@ export class DiscordLite extends EventEmitter {
             this.mode = options.mode;
         }
 
-        console.log(`[DiscordLite] 运行时: ${this.runtime}, 模式: ${this.mode}`);
+        console.debug(`[DiscordLite] 运行时: ${this.runtime}, 模式: ${this.mode}`);
     }
 
     /**

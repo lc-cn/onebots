@@ -7,7 +7,7 @@
 
 export interface JsonRpcRequest {
     jsonrpc: '2.0';
-    id: string | number;
+    id?: string | number | null;
     method: string;
     params?: Record<string, unknown>;
 }
@@ -123,7 +123,7 @@ export interface McpV1Config {
 
 export interface SseClient {
     id: string;
-    res: any;
+    res: import('node:http').ServerResponse;
     initialized: boolean;
     write(event: string, data: string): void;
     close(): void;

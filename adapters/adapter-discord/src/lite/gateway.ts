@@ -150,8 +150,8 @@ export class DiscordGateway extends EventEmitter {
         if (this.proxyUrl) {
             const agent = await createProxyAgent({ url: this.proxyUrl }, true);
             if (agent) {
-                wsOptions.agent = agent;
-                console.log(`[Gateway] 已配置代理`);
+                wsOptions.agent = agent as Agent;
+                console.debug(`[Gateway] 已配置代理`);
             } else {
                 console.warn('[Gateway] 代理 agent 未安装，将直接连接');
             }
@@ -161,7 +161,7 @@ export class DiscordGateway extends EventEmitter {
             this.ws = new WebSocket(url, wsOptions) as unknown as WsWebSocket;
 
             this.ws.on('open', () => {
-                console.log('[Gateway] WebSocket 已连接');
+                console.debug('[Gateway] WebSocket 已连接');
             });
 
             this.ws.on('message', (data: unknown) => {
@@ -172,7 +172,7 @@ export class DiscordGateway extends EventEmitter {
             this.ws.on('close', (code: unknown, reason: unknown) => {
                 const closeCode = code as number;
                 const closeReason = (reason as Buffer).toString();
-                console.log(`[Gateway] WebSocket 关闭: ${closeCode} - ${closeReason}`);
+                console.debug(`[Gateway] WebSocket 关闭: ${closeCode} - ${closeReason}`);
                 this.cleanup();
                 this.emit('close', closeCode, closeReason);
 
@@ -236,13 +236,13 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case GatewayOpcodes.Reconnect:
-                console.log('[Gateway] 收到重连请求');
+                console.debug('[Gateway] 收到重连请求');
                 this.cleanup();
                 this.connectionManager.scheduleReconnect(new Error('Discord requested reconnect'));
                 break;
 
             case GatewayOpcodes.InvalidSession: {
-                console.log('[Gateway] 会话无效，重新识别');
+                console.warn('[Gateway] 会话无效，重新识别');
                 const isResumable = d as boolean;
                 if (isResumable) {
                     // 可恢复，尝试 resume
@@ -272,7 +272,7 @@ export class DiscordGateway extends EventEmitter {
             }
 
             case 'RESUMED':
-                console.log('[Gateway] 会话已恢复');
+                console.debug('[Gateway] 会话已恢复');
                 this.emit('resumed');
                 break;
 

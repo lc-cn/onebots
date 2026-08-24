@@ -8,6 +8,7 @@ export * from './instances/friend.js';
 export * from './instances/groupMember.js';
 export * from './instances/channelMember.js';
 export * from './receiver.js';
+export * from './ingress.js';
 export * from './receivers/ws.js';
 export * from './receivers/wss.js';
 export * from './receivers/webhook.js';
@@ -25,4 +26,3 @@ export function createImHelper<Id extends string | number>(
 ): ImHelper<Id> {
   return new ImHelper<Id>(adapter);
 }
-

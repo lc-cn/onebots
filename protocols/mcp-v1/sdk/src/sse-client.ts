@@ -78,8 +78,8 @@ export class McpSseClient extends McpClient {
                     processLine(line);
                 }
             }
-        } catch (err: any) {
-            if (err.name !== 'AbortError') {
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name !== 'AbortError') {
                 this.emit('error', err);
             }
         } finally {

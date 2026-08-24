@@ -10,7 +10,7 @@ import { Router } from "./router.js";
  */
 export abstract class Protocol<
     V extends string = string,
-    C =any,
+    C =unknown,
 > extends EventEmitter {
     public abstract readonly name: string;
     public abstract readonly version: V;
@@ -58,27 +58,27 @@ export abstract class Protocol<
     /**
      * Dispatch an event through this protocol
      */
-    abstract dispatch(event: any): void | Promise<void>;
+    abstract dispatch(event: unknown): void | Promise<void>;
 
     /**
      * Format event data according to protocol specifications
      */
-    abstract format(event: string, payload: any): any;
+    abstract format(event: string, payload: unknown): unknown;
 
     /**
      * Apply an action (call an API method)
      */
-    abstract apply(action: string, params?: any): Promise<any>;
+    abstract apply(action: string, params?: unknown): Promise<unknown>;
 }
 
 export namespace Protocol {
     /**
      * Base configuration for protocols
      */
-    export type Config<T extends unknown = Record<string, any>> = T & {
+    export type Config<T extends unknown = Record<string, unknown>> = T & {
         filters?: Filters;
     }
-    export type FullConfig<T extends unknown = Record<string, any>> = Config<T> & {
+    export type FullConfig<T extends unknown = Record<string, unknown>> = Config<T> & {
         protocol: string
         version: string;
     }
@@ -91,7 +91,7 @@ export namespace Protocol {
      */
     export type Filters = AttrFilter | WithFilter | UnionFilter | ExcludeFilter;
 
-    type MaybeArray<T = any> = T | T[];
+    type MaybeArray<T = unknown> = T | T[];
 
     type AttrFilter = {
         [P in keyof Dict]?: MaybeArray | boolean;
@@ -121,13 +121,13 @@ export namespace Protocol {
     export type Creator<T extends Protocol = Protocol> = (
         adapter: Adapter,
         account: Account,
-        config: any,
+        config: Record<string, unknown>,
     ) => T;
     export type Construct<T extends Protocol = Protocol> = {
         new (
             adapter: Adapter,
             account: Account,
-            config: any,
+            config: Record<string, unknown>,
         ): T;
     }
     /**
@@ -160,7 +160,7 @@ export namespace Protocol {
             ].includes(key);
         };
         
-        const filterFn = (event: Dict, key: string, value: any) => {
+        const filterFn = (event: Dict, key: string, value: unknown): boolean => {
             // If key is $and, $or, $not, $nor, recursively call
             if (key === "$and" || key === "$or" || key === "$not" || key === "$nor") {
                 if (!value || typeof value !== "object") throw new Error("invalid filter");
@@ -214,7 +214,7 @@ export namespace Protocol {
                 return value.includes(event[key]);
             }
             
-            return createFilter(value)(isLogicKey(key) ? event : event[key]);
+            return createFilter(value as Filters)(isLogicKey(key) ? event : event[key] as Dict);
         };
         
         return (event: Dict) => {

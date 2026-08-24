@@ -11,7 +11,7 @@ import { buildTableName, createId, resolveId, coerceId } from "./adapter-id-mana
  * 统一定义所有协议需要的 72 个 API 方法
  * 平台适配器继承此类，重写支持的方法，其他方法自动抛出"未实现"异常
  */
-export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof Adapter.Configs, I extends BaseApp = BaseApp> extends EventEmitter {
+export abstract class Adapter<C = unknown, T extends keyof Adapter.Configs = keyof Adapter.Configs, I extends BaseApp = BaseApp> extends EventEmitter {
     accounts: Map<string, Account<T, C>> = new Map<string, Account<T, C>>();
     #logger: Logger;
     icon: string;
@@ -209,7 +209,7 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
 
     abstract createAccount(config: Account.Config<T>): Account<T, C>;
 
-    async start(account_id?: string): Promise<any> {
+    async start(account_id?: string): Promise<void> {
         this.logger.info(`Starting adapter for platform ${this.platform}`);
         const startAccounts = [...this.accounts.values()].filter(account => {
             return account_id ? account.account_id === account_id : true;
@@ -220,7 +220,7 @@ export abstract class Adapter<C = any, T extends keyof Adapter.Configs = keyof A
         this.logger.info(`Adapter for platform ${this.platform} started`);
     }
 
-    async stop(account_id?: string): Promise<any> {
+    async stop(account_id?: string): Promise<void> {
         const stopAccounts = [...this.accounts.values()].filter(account => {
             return account_id ? account.account_id === account_id : true;
         });
@@ -236,6 +236,7 @@ export type AdapterClient<T extends Adapter = Adapter> = T extends Adapter<infer
 // Adapter 命名空间 — API 参数 / 返回值类型
 // ============================================
 export namespace Adapter {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Registry interface augmented by each adapter; `any` required to allow dynamic config property access
     export interface Configs extends Record<string, any> { }
 
     export type VerificationBlock =
@@ -394,10 +395,10 @@ export namespace Adapter {
     export interface CredentialsInfo { cookies: string; csrf_token: number; }
 
     // --- 工厂/注册类型 ---
-    export type Construct<T> = { new(...args: any[]): T; };
-    export type Creator<T> = (...args: any[]) => T;
+    export type Construct<T> = { new(...args: unknown[]): T; };
+    export type Creator<T> = (...args: unknown[]) => T;
     export type Factory<T extends Adapter = Adapter> = Construct<T> | Creator<T>;
-    export function isClassAdapter<T extends Adapter = Adapter>(obj: any): obj is Construct<T> {
+    export function isClassAdapter<T extends Adapter = Adapter>(obj: unknown): obj is Construct<T> {
         return typeof obj === 'function' && /^class\s/.test(Function.prototype.toString.call(obj));
     }
 

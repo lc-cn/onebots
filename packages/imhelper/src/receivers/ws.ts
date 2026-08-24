@@ -19,12 +19,12 @@ export class WebSocketReceiver<Id extends string | number = string | number> ext
                 }
 
                 const wsUrl = url.toString();
-                console.log('[WebSocketReceiver] Connecting to:', wsUrl);
+                console.debug('[WebSocketReceiver] Connecting to:', wsUrl);
                 this.ws = new WebSocket(wsUrl);
 
                 this.ws.on('open', () => {
                     this.reconnectAttempts = 0;
-                    console.log('[WebSocketReceiver] WebSocket connected successfully');
+                    console.debug('[WebSocketReceiver] WebSocket connected successfully');
                     this.isDisconnecting = false; // 重置断开标志
                     resolve();
                 });
@@ -32,7 +32,7 @@ export class WebSocketReceiver<Id extends string | number = string | number> ext
                 this.ws.on('message', (data: Buffer) => {
                     try {
                         const event = JSON.parse(data.toString());
-                        console.log('[WebSocketReceiver] Received message:',event);
+                        console.debug('[WebSocketReceiver] Received message:',event);
                         this.handleEvent(event);
                     } catch (error) {
                         console.error('[WebSocketReceiver] Failed to parse message:', error);
@@ -48,12 +48,12 @@ export class WebSocketReceiver<Id extends string | number = string | number> ext
 
                 this.ws.on('close', (code: number, reason: Buffer) => {
                     const reasonStr = reason.toString();
-                    console.log(`[WebSocketReceiver] WebSocket closed: code=${code}, reason=${reasonStr || 'none'}, isDisconnecting=${this.isDisconnecting}`);
+                    console.debug(`[WebSocketReceiver] WebSocket closed: code=${code}, reason=${reasonStr || 'none'}, isDisconnecting=${this.isDisconnecting}`);
                     if (!this.isDisconnecting) {
-                        console.log('[WebSocketReceiver] Connection closed unexpectedly, will attempt to reconnect');
+                        console.debug('[WebSocketReceiver] Connection closed unexpectedly, will attempt to reconnect');
                         this.scheduleReconnect();
                     } else {
-                        console.log('[WebSocketReceiver] Connection closed intentionally, no reconnect');
+                        console.debug('[WebSocketReceiver] Connection closed intentionally, no reconnect');
                     }
                 });
             } catch (error) {
@@ -63,13 +63,13 @@ export class WebSocketReceiver<Id extends string | number = string | number> ext
     }
 
     async disconnect(): Promise<void> {
-        console.log('[WebSocketReceiver] Disconnecting...');
+        console.debug('[WebSocketReceiver] Disconnecting...');
         this.isDisconnecting = true;
         
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = undefined;
-            console.log('[WebSocketReceiver] Reconnect timer cleared');
+            console.debug('[WebSocketReceiver] Reconnect timer cleared');
         }
 
         if (this.ws) {
@@ -77,7 +77,7 @@ export class WebSocketReceiver<Id extends string | number = string | number> ext
             this.ws.removeAllListeners('close');
             this.ws.close();
             this.ws = undefined;
-            console.log('[WebSocketReceiver] WebSocket closed');
+            console.debug('[WebSocketReceiver] WebSocket closed');
         }
         
         // 不重置 isDisconnecting，因为已经断开连接了
@@ -92,9 +92,9 @@ export class WebSocketReceiver<Id extends string | number = string | number> ext
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
         this.reconnectAttempts++;
 
-        console.log(`[WebSocketReceiver] Scheduling reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        console.debug(`[WebSocketReceiver] Scheduling reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
         this.reconnectTimer = setTimeout(() => {
-            console.log('[WebSocketReceiver] Attempting to reconnect...');
+            console.debug('[WebSocketReceiver] Attempting to reconnect...');
             this.connect().catch((error) => {
                 console.error('[WebSocketReceiver] Reconnection failed:', error);
             });

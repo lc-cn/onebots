@@ -7,7 +7,17 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TelegramBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
+import type { Update } from "grammy/types";
 import type { TelegramConfig, TelegramMessage } from "./types.js";
+
+function isTelegramUpdate(value: unknown): value is Update {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "update_id" in value &&
+        typeof value.update_id === "number"
+    );
+}
 
 export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     constructor(app: BaseApp) {
@@ -353,11 +363,16 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
                     return;
                 }
                 try {
+                    if (!isTelegramUpdate(ctx.request.body)) {
+                        ctx.status = 400;
+                        ctx.body = { ok: false };
+                        return;
+                    }
                     await bot.handleWebhookUpdate(ctx.request.body);
                     ctx.status = 200;
                     ctx.body = { ok: true };
-                } catch (e) {
-                    this.logger.error(`Telegram webhook ${config.account_id} 处理失败:`, e);
+                } catch (error) {
+                    this.logger.error(`Telegram webhook ${config.account_id} 处理失败:`, error);
                     ctx.status = 500;
                     ctx.body = { ok: false };
                 }
@@ -582,4 +597,3 @@ AdapterRegistry.register('telegram', TelegramAdapter, {
     homepage: 'https://telegram.org/',
     author: '凉菜',
 });
-

@@ -5,9 +5,9 @@
 
 import type { Class } from './utils.js';
 
-export type Token<T = any> = string | symbol | Class<T>;
-export type Factory<T = any> = (container: Container) => T;
-export type Provider<T = any> = Class<T> | Factory<T>;
+export type Token<T = unknown> = string | symbol | Class<T>;
+export type Factory<T = unknown> = (container: Container) => T;
+export type Provider<T = unknown> = Class<T> | Factory<T>;
 
 export interface ServiceOptions {
     /** 是否单例 */
@@ -22,7 +22,7 @@ export interface ServiceOptions {
 export class Container {
     private services = new Map<Token, {
         provider: Provider;
-        instance?: any;
+        instance?: unknown;
         options: ServiceOptions;
     }>();
 
@@ -82,7 +82,7 @@ export class Container {
 
         // 如果是单例且已有实例，直接返回
         if (service.options.singleton && service.instance !== undefined) {
-            return service.instance;
+            return service.instance as T;
         }
 
         // 创建实例
@@ -90,10 +90,10 @@ export class Container {
         if (this.isClass(service.provider)) {
             // 类构造函数
             const deps = this.resolveDependencies(service.options.deps || []);
-            instance = new service.provider(...deps);
+            instance = new service.provider(...deps) as T;
         } else {
             // 工厂函数
-            instance = service.provider(this);
+            instance = service.provider(this) as T;
         }
 
         // 如果是单例，保存实例
@@ -114,7 +114,7 @@ export class Container {
     /**
      * 解析依赖
      */
-    private resolveDependencies(tokens: Token[]): any[] {
+    private resolveDependencies(tokens: Token[]): unknown[] {
         return tokens.map(token => this.get(token));
     }
 

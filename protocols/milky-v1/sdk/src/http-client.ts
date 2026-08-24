@@ -22,7 +22,7 @@ export class HttpClient {
   /**
    * 发送 POST 请求
    */
-  async post(action: string, params?: any): Promise<MilkyV1Response> {
+  async post(action: string, params?: Record<string, unknown>): Promise<MilkyV1Response> {
     const url = `${this.config.baseUrl}${this.basePath}/${action}`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',

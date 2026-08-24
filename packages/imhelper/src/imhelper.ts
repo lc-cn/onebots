@@ -9,9 +9,17 @@ import { ChannelMember } from './instances/channelMember.js';
 import { Message } from './message.js';
 import { EventMap } from './types.js';
 import { EventFactory } from './events/factory.js';
+import {
+    acceptHttpIngress,
+    acceptWebSocketIngress,
+    type HttpIngressRequest,
+    type HttpIngressResponseWriter,
+    type HttpIngressResult,
+    type UpgradedWebSocket,
+} from './ingress.js';
 type GroupMemberMap<Id extends string | number> = Map<Id, GroupMember.Data<Id>>;
 type ChannelMemberMap<Id extends string | number> = Map<Id, ChannelMember.Data<Id>>;
-export class ImHelper<Id extends string | number=string|number> extends EventEmitter<EventMap<Id>> {
+export class ImHelper<Id extends string | number=string|number> extends EventEmitter<EventMap<Id> & { event: [unknown] }> {
     #adapter: Adapter<Id>;
     $userMap: Map<Id, User.Data<Id>> = new Map<Id, User.Data<Id>>();
     $friendMap: Map<Id, Friend.Data<Id>> = new Map<Id, Friend.Data<Id>>();
@@ -45,9 +53,9 @@ export class ImHelper<Id extends string | number=string|number> extends EventEmi
             });
         }
         
-        // 转发 adapter 的原始事件（使用类型断言，因为 'event' 不在 EventMap 中）
-        adapter.on('event' as keyof Adapter.EventMap<Id>, (event: unknown) => {
-            this.emit('event' as keyof EventMap<Id>, event as any);
+        // 转发 adapter 的原始事件
+        adapter.on('event', (event: unknown) => {
+            this.emit('event', event);
         });
     }
     get adapter() {
@@ -80,6 +88,24 @@ export class ImHelper<Id extends string | number=string|number> extends EventEmi
 
     async stop(): Promise<void> {
         return this.#adapter.stop?.();
+    }
+
+    /** 将宿主已经接收到的协议原始事件交给当前客户端。 */
+    ingest(rawEvent: unknown): void {
+        this.#adapter.transformEvent(rawEvent);
+    }
+
+    /** 接收已有 HTTP 服务上的事件请求；response 可省略以获取结构化响应。 */
+    acceptHttp(
+        request: HttpIngressRequest,
+        response?: HttpIngressResponseWriter,
+    ): Promise<HttpIngressResult> {
+        return acceptHttpIngress(request, response, rawEvent => this.ingest(rawEvent));
+    }
+
+    /** 接收宿主已经完成 HTTP Upgrade 的 WebSocket。返回函数用于解除监听。 */
+    acceptWebSocket(socket: UpgradedWebSocket): () => void {
+        return acceptWebSocketIngress(socket, rawEvent => this.ingest(rawEvent));
     }
     
     // ============================================

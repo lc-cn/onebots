@@ -6,7 +6,7 @@ import type { Request } from 'koa';
 
 export type RouterContext = KoaRouterContext & {
     request: Request & {
-        body: any;
+        body: unknown;
     };
 };
 export type {Next} from "koa";
@@ -19,7 +19,7 @@ export class WsServer<
     constructor(options: WsServer.Options<T, U>) {
         super(options);
         // 设置 path（基类可能不会自动设置，因为使用了 noServer: true）
-        (this as any).path = options.path;
+        (this as unknown as { path: string }).path = options.path;
     }
 }
 
@@ -34,7 +34,7 @@ export namespace WsServer {
 
 export class Router extends KoaRouter {
     private wsMap: Map<string, WsServer> = new Map();
-    private upgradeHandler?: (request: IncomingMessage, socket: any, head: Buffer) => void;
+    private upgradeHandler?: (request: IncomingMessage, socket: import('stream').Duplex, head: Buffer) => void;
     private readonly server: Server;
 
     constructor(server: Server, options?: ConstructorParameters<typeof KoaRouter>[0]) {
@@ -47,7 +47,7 @@ export class Router extends KoaRouter {
      * 设置 WebSocket upgrade 处理器
      */
     private setupUpgradeHandler(): void {
-        this.upgradeHandler = (request: IncomingMessage, socket: any, head: Buffer) => {
+        this.upgradeHandler = (request: IncomingMessage, socket: import('stream').Duplex, head: Buffer) => {
             try {
                 const url = new URL(request.url || "/", `http://localhost`);
                 const pathname = url.pathname;

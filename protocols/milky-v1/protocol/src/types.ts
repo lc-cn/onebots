@@ -33,7 +33,7 @@ export namespace Milky {
      */
     export interface Segment {
         type: SegmentType;
-        data: Record<string, any>;
+        data: Record<string, unknown>;
     }
 
     /**
@@ -106,7 +106,7 @@ export namespace Milky {
         group_id?: string;
         operator_id?: string;
         duration?: number;
-        file?: any;
+        file?: Record<string, unknown>;
         message_id?: string;
     }
 
@@ -145,7 +145,7 @@ export namespace Milky {
         meta_event_type: MetaEventType;
         sub_type?: string;
         interval?: number;
-        status?: any;
+        status?: Record<string, unknown>;
     }
 
     /**
@@ -156,7 +156,7 @@ export namespace Milky {
     /**
      * API Response
      */
-    export interface Response<T = any> {
+    export interface Response<T = unknown> {
         status: "ok" | "failed";
         retcode: number;
         data?: T;

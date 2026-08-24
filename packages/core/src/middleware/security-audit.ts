@@ -15,7 +15,7 @@ interface SecurityEvent {
     path: string;
     method: string;
     userAgent?: string;
-    details?: Record<string, any>;
+    details?: Record<string, unknown>;
 }
 
 class SecurityAuditLogger {
@@ -208,7 +208,7 @@ export function logInvalidToken(ctx: Context, token?: string): void {
 /**
  * 记录可疑请求
  */
-export function logSuspiciousRequest(ctx: Context, reason: string, details?: Record<string, any>): void {
+export function logSuspiciousRequest(ctx: Context, reason: string, details?: Record<string, unknown>): void {
     if (!auditLogger) return;
     
     auditLogger.log({

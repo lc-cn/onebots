@@ -47,7 +47,7 @@ export function startStdioTransport(options: StdioOptions): void {
     });
 
     // 事件推送到 stdout
-    const onDispatch = (event: any) => {
+    const onDispatch = (event: Record<string, unknown>) => {
         if (!initialized) return;
         const notification = protocol.sendStdioNotification({
             method: 'notifications/message',

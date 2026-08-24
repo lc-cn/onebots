@@ -13,7 +13,7 @@ export interface TokenInfo {
     expiresAt?: number; // 过期时间戳（毫秒）
     refreshToken?: string;
     refreshExpiresAt?: number;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
 }
 
 export interface TokenManagerOptions {
@@ -46,7 +46,7 @@ export class TokenManager {
     /**
      * 生成新令牌
      */
-    generateToken(metadata?: Record<string, any>): TokenInfo {
+    generateToken(metadata?: Record<string, unknown>): TokenInfo {
         const token = crypto.randomBytes(32).toString('hex');
         const refreshToken = crypto.randomBytes(32).toString('hex');
         const now = Date.now();

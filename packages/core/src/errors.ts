@@ -46,7 +46,7 @@ export class OneBotsError extends Error {
     public readonly category: ErrorCategory;
     public readonly severity: ErrorSeverity;
     public readonly code: string;
-    public readonly context?: Record<string, any>;
+    public readonly context?: Record<string, unknown>;
     public readonly timestamp: Date;
     public readonly cause?: Error;
 
@@ -56,7 +56,7 @@ export class OneBotsError extends Error {
             category?: ErrorCategory;
             severity?: ErrorSeverity;
             code?: string;
-            context?: Record<string, any>;
+            context?: Record<string, unknown>;
             cause?: Error;
         } = {},
     ) {
@@ -107,7 +107,7 @@ export class OneBotsError extends Error {
  * 网络错误
  */
 export class NetworkError extends OneBotsError {
-    constructor(message: string, options?: { context?: Record<string, any>; cause?: Error }) {
+    constructor(message: string, options?: { context?: Record<string, unknown>; cause?: Error }) {
         super(message, {
             category: ErrorCategory.NETWORK,
             severity: ErrorSeverity.MEDIUM,
@@ -122,7 +122,7 @@ export class NetworkError extends OneBotsError {
  * 配置错误
  */
 export class ConfigError extends OneBotsError {
-    constructor(message: string, options?: { context?: Record<string, any>; cause?: Error }) {
+    constructor(message: string, options?: { context?: Record<string, unknown>; cause?: Error }) {
         super(message, {
             category: ErrorCategory.CONFIG,
             severity: ErrorSeverity.HIGH,
@@ -137,7 +137,7 @@ export class ConfigError extends OneBotsError {
  * 验证错误
  */
 export class ValidationError extends OneBotsError {
-    constructor(message: string, options?: { context?: Record<string, any>; cause?: Error }) {
+    constructor(message: string, options?: { context?: Record<string, unknown>; cause?: Error }) {
         super(message, {
             category: ErrorCategory.VALIDATION,
             severity: ErrorSeverity.MEDIUM,
@@ -152,7 +152,7 @@ export class ValidationError extends OneBotsError {
  * 资源错误
  */
 export class ResourceError extends OneBotsError {
-    constructor(message: string, options?: { context?: Record<string, any>; cause?: Error }) {
+    constructor(message: string, options?: { context?: Record<string, unknown>; cause?: Error }) {
         super(message, {
             category: ErrorCategory.RESOURCE,
             severity: ErrorSeverity.HIGH,
@@ -167,7 +167,7 @@ export class ResourceError extends OneBotsError {
  * 协议错误
  */
 export class ProtocolError extends OneBotsError {
-    constructor(message: string, options?: { context?: Record<string, any>; cause?: Error }) {
+    constructor(message: string, options?: { context?: Record<string, unknown>; cause?: Error }) {
         super(message, {
             category: ErrorCategory.PROTOCOL,
             severity: ErrorSeverity.MEDIUM,
@@ -182,7 +182,7 @@ export class ProtocolError extends OneBotsError {
  * 适配器错误
  */
 export class AdapterError extends OneBotsError {
-    constructor(message: string, options?: { context?: Record<string, any>; cause?: Error }) {
+    constructor(message: string, options?: { context?: Record<string, unknown>; cause?: Error }) {
         super(message, {
             category: ErrorCategory.ADAPTER,
             severity: ErrorSeverity.HIGH,
@@ -197,7 +197,7 @@ export class AdapterError extends OneBotsError {
  * 运行时错误
  */
 export class RuntimeError extends OneBotsError {
-    constructor(message: string, options?: { context?: Record<string, any>; cause?: Error }) {
+    constructor(message: string, options?: { context?: Record<string, unknown>; cause?: Error }) {
         super(message, {
             category: ErrorCategory.RUNTIME,
             severity: ErrorSeverity.HIGH,
@@ -215,7 +215,7 @@ export class ErrorHandler {
     /**
      * 包装错误，转换为 OneBotsError
      */
-    static wrap(error: unknown, context?: Record<string, any>): OneBotsError {
+    static wrap(error: unknown, context?: Record<string, unknown>): OneBotsError {
         if (error instanceof OneBotsError) {
             if (context) {
                 return new OneBotsError(error.message, {

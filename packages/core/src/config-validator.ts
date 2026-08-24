@@ -6,11 +6,11 @@
 import { ValidationError, ConfigError } from './errors.js';
 
 export { ValidationError };
-export interface Choice<T = any> {
+export interface Choice<T = unknown> {
     label: string;
     value: T;
 }
-export interface ValidationRule<T = any> {
+export interface ValidationRule<T = unknown> {
     required?: boolean;
     type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
     min?: number;
@@ -24,7 +24,7 @@ export interface ValidationRule<T = any> {
      */
     validator?: (value: T) => boolean | string | null | undefined;
     default?: T | (() => T);
-    transform?: (value: any) => T;
+    transform?: (value: unknown) => T;
     /** 用于表单展示的标签 */
     label?: string;
     /** 用于表单展示的说明 */
@@ -44,12 +44,12 @@ export class ConfigValidator {
     /**
      * 验证配置对象
      */
-    static validate<T extends Record<string, any>>(
+    static validate<T extends Record<string, unknown>>(
         config: T,
         schema: Schema,
         path: string = '',
     ): T {
-        const result = { ...config } as any;
+        const result = { ...config } as Record<string, unknown>;
         const errors: string[] = [];
 
         for (const [key, rule] of Object.entries(schema)) {
@@ -59,7 +59,7 @@ export class ConfigValidator {
             // 如果是嵌套schema，递归验证
             if (this.isSchema(rule)) {
                 if (value !== undefined) {
-                    result[key] = this.validate(value || {}, rule as Schema, currentPath);
+                    result[key] = this.validate((value || {}) as Record<string, unknown>, rule as Schema, currentPath);
                 }
                 continue;
             }
@@ -80,7 +80,7 @@ export class ConfigValidator {
 
             // 如果值为undefined且有默认值，使用默认值
             if (value === undefined && validationRule.default !== undefined) {
-                (result as any)[key] = typeof validationRule.default === 'function'
+                result[key] = typeof validationRule.default === 'function'
                     ? validationRule.default()
                     : validationRule.default;
                 continue;
@@ -94,14 +94,14 @@ export class ConfigValidator {
             // 类型转换
             if (validationRule.transform) {
                 try {
-                    (result as any)[key] = validationRule.transform(value);
-                } catch (error: any) {
-                    errors.push(`${currentPath} transform failed: ${error.message}`);
+                    result[key] = validationRule.transform(value);
+                } catch (error: unknown) {
+                    errors.push(`${currentPath} transform failed: ${error instanceof Error ? error.message : String(error)}`);
                     continue;
                 }
             }
 
-            const finalValue = (result as any)[key];
+            const finalValue = result[key];
             // transform 可能将空字符串等转为 undefined，视为可选字段未填，跳过后续类型与范围检查
             if (finalValue === undefined) {
                 continue;
@@ -118,23 +118,25 @@ export class ConfigValidator {
 
             // 数值范围检查
             if (validationRule.type === 'number') {
-                if (validationRule.min !== undefined && finalValue < validationRule.min) {
+                const numValue = finalValue as number;
+                if (validationRule.min !== undefined && numValue < validationRule.min) {
                     errors.push(`${currentPath} must be >= ${validationRule.min}`);
                 }
-                if (validationRule.max !== undefined && finalValue > validationRule.max) {
+                if (validationRule.max !== undefined && numValue > validationRule.max) {
                     errors.push(`${currentPath} must be <= ${validationRule.max}`);
                 }
             }
 
             // 字符串长度检查
             if (validationRule.type === 'string') {
-                if (validationRule.min !== undefined && finalValue.length < validationRule.min) {
+                const strValue = finalValue as string;
+                if (validationRule.min !== undefined && strValue.length < validationRule.min) {
                     errors.push(`${currentPath} length must be >= ${validationRule.min}`);
                 }
-                if (validationRule.max !== undefined && finalValue.length > validationRule.max) {
+                if (validationRule.max !== undefined && strValue.length > validationRule.max) {
                     errors.push(`${currentPath} length must be <= ${validationRule.max}`);
                 }
-                if (validationRule.pattern && !validationRule.pattern.test(finalValue)) {
+                if (validationRule.pattern && !validationRule.pattern.test(strValue)) {
                     errors.push(`${currentPath} does not match pattern ${validationRule.pattern}`);
                 }
             }
@@ -175,7 +177,7 @@ export class ConfigValidator {
     /**
      * 检查类型
      */
-    private static checkType(value: any, expectedType: string, path: string): string | null {
+    private static checkType(value: unknown, expectedType: string, path: string): string | null {
         const actualType = Array.isArray(value) ? 'array' : typeof value;
         if (actualType !== expectedType) {
             return `${path} must be ${expectedType}, got ${actualType}`;
@@ -202,7 +204,7 @@ export class ConfigValidator {
     /**
      * 验证并应用默认值
      */
-    static validateWithDefaults<T extends Record<string, any>>(
+    static validateWithDefaults<T extends Record<string, unknown>>(
         config: Partial<T>,
         schema: Schema,
     ): T {

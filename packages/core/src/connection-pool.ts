@@ -18,15 +18,15 @@ export interface PoolConfig {
     /** 空闲连接超时时间（毫秒） */
     idleTimeout?: number;
     /** 连接创建函数 */
-    create: () => Promise<any>;
+    create: () => Promise<unknown>;
     /** 连接销毁函数 */
-    destroy: (connection: any) => Promise<void>;
+    destroy: (connection: unknown) => Promise<void>;
     /** 连接验证函数 */
-    validate?: (connection: any) => boolean | Promise<boolean>;
+    validate?: (connection: unknown) => boolean | Promise<boolean>;
 }
 
 interface PooledConnection {
-    connection: any;
+    connection: unknown;
     createdAt: number;
     lastUsedAt: number;
     inUse: boolean;
@@ -38,7 +38,7 @@ interface PooledConnection {
 export class ConnectionPool extends EventEmitter {
     private pool: PooledConnection[] = [];
     private waiting: Array<{
-        resolve: (connection: any) => void;
+        resolve: (connection: unknown) => void;
         reject: (error: Error) => void;
     }> = [];
     private config: Required<PoolConfig>;
@@ -64,7 +64,7 @@ export class ConnectionPool extends EventEmitter {
     /**
      * 获取连接
      */
-    async acquire(): Promise<any> {
+    async acquire(): Promise<unknown> {
         // 尝试从池中获取可用连接
         const available = this.pool.find(c => !c.inUse);
         
@@ -127,7 +127,7 @@ export class ConnectionPool extends EventEmitter {
     /**
      * 释放连接
      */
-    async release(connection: any): Promise<void> {
+    async release(connection: unknown): Promise<void> {
         const pooled = this.pool.find(c => c.connection === connection);
         
         if (!pooled) {
@@ -155,7 +155,7 @@ export class ConnectionPool extends EventEmitter {
     /**
      * 销毁连接
      */
-    async destroy(connection: any): Promise<void> {
+    async destroy(connection: unknown): Promise<void> {
         const pooled = this.pool.find(c => c.connection === connection);
         
         if (!pooled) {

@@ -69,7 +69,7 @@ export namespace SatoriConfig {
         /** Platform name */
         platform?: string;
         /** Event filters */
-        filters?: any;
+        filters?: Record<string, unknown>;
     }
 }
 

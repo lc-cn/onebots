@@ -10,7 +10,7 @@ export class NotFoundError extends Error {
     message = "不支持的API";
 }
 
-export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=any> extends EventEmitter {
+export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=unknown> extends EventEmitter {
     status: AccountStatus;
     avatar: string;
     nickname: string;
@@ -50,11 +50,12 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=an
             if(ProtocolRegistry.has(protocol,version)){
                 const config= this.config[key]||{};
                 const general = this.app.config.general[key]||{};
+                const merged = deepMerge(deepClone(general),config) as Record<string, unknown>;
                 result.push({
-                    ...deepMerge(deepClone(general),config),
+                    ...merged,
                     protocol,
                     version
-                })
+                } as Protocol.FullConfig<C>)
             }
         });
         return result;

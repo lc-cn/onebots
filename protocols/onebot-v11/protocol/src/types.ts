@@ -453,13 +453,13 @@ export namespace OneBotV11 {
     /**
      * Standard API response
      */
-    export interface Response<T = any> {
+    export interface Response<T = unknown> {
         status: "ok" | "async" | "failed";
         retcode: number;
         data?: T;
         msg?: string;
         wording?: string;
-        echo?: any;
+        echo?: unknown;
     }
 
     /**

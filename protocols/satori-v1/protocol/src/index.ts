@@ -93,7 +93,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         this.dispatch(commonEvent);
     }
 
-    format(event: string, payload: any): any {
+    format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
         // Format event according to Satori specification
         return {
             type: event,
@@ -101,7 +101,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         };
     }
 
-    async apply(action: string, params?: any): Promise<Satori.Response> {
+    async apply(action: string, params?: Record<string, unknown>): Promise<Satori.Response> {
         // Execute Satori API action
         this.logger.debug(`Satori action: ${action}`, params);
         
@@ -121,7 +121,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * Execute Satori protocol action
      */
-    private async executeAction(action: string, params: any): Promise<any> {
+    private async executeAction(action: string, params: Record<string, unknown>): Promise<unknown> {
         // Map Satori method names to implementations
         switch (action) {
             // Message methods
@@ -325,8 +325,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * message.create - Send a message to a channel
      */
-    private async createMessage(params: any): Promise<Satori.Message[]> {
-        const { channel_id, content } = params;
+    private async createMessage(params: Record<string, unknown>): Promise<Satori.Message[]> {
+        const { channel_id, content } = params as { channel_id: string; content: string | Satori.Element[] };
         
         // Determine scene type: check if channel_id looks like a DM channel (dm_xxx or just user_id)
         const isDM = channel_id.startsWith('dm_') || !channel_id.includes('_');
@@ -348,8 +348,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * message.get - Get a message by ID
      */
-    private async getMessage(params: any): Promise<Satori.Message> {
-        const { message_id } = params;
+    private async getMessage(params: Record<string, unknown>): Promise<Satori.Message> {
+        const { message_id } = params as { message_id: string };
         
         const msg = await this.adapter.getMessage(this.account.account_id, {
             message_id: this.adapter.resolveId(message_id),
@@ -365,8 +365,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * message.delete - Delete a message
      */
-    private async deleteMessage(params: any): Promise<void> {
-        const { message_id } = params;
+    private async deleteMessage(params: Record<string, unknown>): Promise<void> {
+        const { message_id } = params as { message_id: string };
         
         await this.adapter.deleteMessage(this.account.account_id, {
             message_id: this.adapter.resolveId(message_id),
@@ -376,8 +376,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * message.update - Update/edit a message
      */
-    private async updateMessage(params: any): Promise<void> {
-        const { message_id, content } = params;
+    private async updateMessage(params: Record<string, unknown>): Promise<void> {
+        const { message_id, content } = params as { message_id: string; content: string | Satori.Element[] };
         
         await this.adapter.updateMessage(this.account.account_id, {
             message_id: this.adapter.resolveId(message_id),
@@ -388,8 +388,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * message.list - Get message history
      */
-    private async getMessageList(params: any): Promise<Satori.BidiList<Satori.Message>> {
-        const { channel_id, limit, direction, order } = params;
+    private async getMessageList(params: Record<string, unknown>): Promise<Satori.BidiList<Satori.Message>> {
+        const { channel_id, limit, direction, order } = params as { channel_id: string; limit?: number; direction?: Satori.Direction; order?: Satori.Order };
         
         // Determine scene type
         const isDM = channel_id.startsWith('dm_') || !channel_id.includes('_');
@@ -415,8 +415,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
      * channel.get - Get channel information
      * Maps to group/guild info in most platforms
      */
-    private async getChannel(params: any): Promise<Satori.Channel> {
-        const { channel_id } = params;
+    private async getChannel(params: Record<string, unknown>): Promise<Satori.Channel> {
+        const { channel_id } = params as { channel_id: string };
         
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: this.adapter.resolveId(channel_id),
@@ -433,7 +433,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
      * channel.list - Get channel list
      * Returns group list as channels
      */
-    private async getChannelList(params: any): Promise<Satori.List<Satori.Channel>> {
+    private async getChannelList(_params: Record<string, unknown>): Promise<Satori.List<Satori.Channel>> {
         const groups = await this.adapter.getGroupList(this.account.account_id);
         
         return {
@@ -448,8 +448,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * channel.create - Create a new channel
      */
-    private async createChannel(params: any): Promise<Satori.Channel> {
-        const { guild_id, name, type, parent_id } = params;
+    private async createChannel(params: Record<string, unknown>): Promise<Satori.Channel> {
+        const { guild_id, name, type, parent_id } = params as { guild_id?: string; name?: string; type?: Satori.ChannelType; parent_id?: string };
         
         const channel = await this.adapter.createChannel(this.account.account_id, {
             guild_id: guild_id ? this.adapter.resolveId(guild_id) : undefined,
@@ -469,8 +469,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * channel.update - Update channel information
      */
-    private async updateChannel(params: any): Promise<void> {
-        const { channel_id, name, parent_id } = params;
+    private async updateChannel(params: Record<string, unknown>): Promise<void> {
+        const { channel_id, name, parent_id } = params as { channel_id: string; name?: string; parent_id?: string };
         
         await this.adapter.updateChannel(this.account.account_id, {
             channel_id: this.adapter.resolveId(channel_id),
@@ -482,8 +482,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * channel.delete - Delete a channel
      */
-    private async deleteChannel(params: any): Promise<void> {
-        const { channel_id } = params;
+    private async deleteChannel(params: Record<string, unknown>): Promise<void> {
+        const { channel_id } = params as { channel_id: string };
         
         await this.adapter.deleteChannel(this.account.account_id, {
             channel_id: this.adapter.resolveId(channel_id),
@@ -494,8 +494,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
      * guild.get - Get guild information
      * Maps to group info in most platforms
      */
-    private async getGuild(params: any): Promise<Satori.Guild> {
-        const { guild_id } = params;
+    private async getGuild(params: Record<string, unknown>): Promise<Satori.Guild> {
+        const { guild_id } = params as { guild_id: string };
         
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: this.adapter.resolveId(guild_id),
@@ -511,7 +511,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
      * guild.list - Get guild list
      * Returns group list as guilds
      */
-    private async getGuildList(params: any): Promise<Satori.List<Satori.Guild>> {
+    private async getGuildList(_params: Record<string, unknown>): Promise<Satori.List<Satori.Guild>> {
         const groups = await this.adapter.getGroupList(this.account.account_id);
         
         return {
@@ -525,8 +525,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * guild.member.get - Get guild member information
      */
-    private async getGuildMember(params: any): Promise<Satori.GuildMember> {
-        const { guild_id, user_id } = params;
+    private async getGuildMember(params: Record<string, unknown>): Promise<Satori.GuildMember> {
+        const { guild_id, user_id } = params as { guild_id: string; user_id: string };
         
         const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: this.adapter.resolveId(guild_id),
@@ -545,8 +545,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * guild.member.list - Get guild member list
      */
-    private async getGuildMemberList(params: any): Promise<Satori.List<Satori.GuildMember>> {
-        const { guild_id } = params;
+    private async getGuildMemberList(params: Record<string, unknown>): Promise<Satori.List<Satori.GuildMember>> {
+        const { guild_id } = params as { guild_id: string };
         
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: this.adapter.resolveId(guild_id),
@@ -566,8 +566,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * guild.member.kick - Kick a member from guild
      */
-    private async kickGuildMember(params: any): Promise<void> {
-        const { guild_id, user_id } = params;
+    private async kickGuildMember(params: Record<string, unknown>): Promise<void> {
+        const { guild_id, user_id } = params as { guild_id: string; user_id: string };
         
         await this.adapter.kickChannelMember(this.account.account_id, {
             channel_id: this.adapter.resolveId(guild_id),
@@ -578,8 +578,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * guild.member.mute - Mute a guild member
      */
-    private async muteGuildMember(params: any): Promise<void> {
-        const { guild_id, user_id, duration } = params;
+    private async muteGuildMember(params: Record<string, unknown>): Promise<void> {
+        const { guild_id, user_id, duration } = params as { guild_id: string; user_id: string; duration: number };
         
         await this.adapter.setChannelMemberMute(this.account.account_id, {
             channel_id: this.adapter.resolveId(guild_id),
@@ -591,8 +591,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * user.get - Get user information
      */
-    private async getUser(params: any): Promise<Satori.User> {
-        const { user_id } = params;
+    private async getUser(params: Record<string, unknown>): Promise<Satori.User> {
+        const { user_id } = params as { user_id: string };
         
         const info = await this.adapter.getUserInfo(this.account.account_id, {
             user_id: this.adapter.resolveId(user_id),
@@ -607,8 +607,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * user.channel.create - Create a direct message channel with a user
      */
-    private async createDirectChannel(params: any): Promise<Satori.Channel> {
-        const { user_id, guild_id } = params;
+    private async createDirectChannel(params: Record<string, unknown>): Promise<Satori.Channel> {
+        const { user_id, guild_id } = params as { user_id: string; guild_id?: string };
         
         const channel = await this.adapter.createUserChannel(this.account.account_id, {
             user_id: this.adapter.resolveId(user_id),
@@ -625,7 +625,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * friend.list - Get friend list
      */
-    private async getFriendList(params: any): Promise<Satori.List<Satori.User>> {
+    private async getFriendList(_params: Record<string, unknown>): Promise<Satori.List<Satori.User>> {
         const friends = await this.adapter.getFriendList(this.account.account_id);
         
         return {
@@ -639,8 +639,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * friend.delete - Delete a friend
      */
-    private async deleteFriend(params: any): Promise<void> {
-        const { user_id } = params;
+    private async deleteFriend(params: Record<string, unknown>): Promise<void> {
+        const { user_id } = params as { user_id: string };
         
         await this.adapter.deleteFriend(this.account.account_id, {
             user_id: this.adapter.resolveId(user_id),
@@ -667,7 +667,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * Parse Satori message content (string or elements) to segments
      */
-    private parseMessageContent(content: string | Satori.Element[]): any[] {
+    private parseMessageContent(content: string | Satori.Element[]): CommonTypes.Segment[] {
         if (typeof content === "string") {
             // Simple text message
             return [{ type: "text", data: { text: content } }];
@@ -712,7 +712,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             }
 
             const method = ctx.params.method;
-            const params = (ctx.request as any).body ?? {};
+            const params = ((ctx.request as unknown as Record<string, unknown>).body ?? {}) as Record<string, unknown>;
 
             try {
                 const result = await this.apply(method, params);
@@ -830,11 +830,11 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
-                const headers: any = {
+                const headers: Record<string, string> = {
                     'Content-Type': 'application/json',
                     'User-Agent': 'Satori/1.0',
-                    'X-Platform': this.config.platform || this.account.platform,
-                    'X-Self-ID': this.account.account_id,
+                    'X-Platform': String(this.config.platform || this.account.platform),
+                    'X-Self-ID': String(this.account.account_id),
                 };
 
                 // Add access token if configured

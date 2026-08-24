@@ -15,7 +15,19 @@ import type {
     WhatsAppMessageStatus,
     WhatsAppWebhookMetadata,
     WhatsAppMessageStatusEvent,
+    WhatsAppWebhookEvent,
 } from "./types.js";
+
+function isWhatsAppWebhookEvent(value: unknown): value is WhatsAppWebhookEvent {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "object" in value &&
+        value.object === "whatsapp_business_account" &&
+        "entry" in value &&
+        Array.isArray(value.entry)
+    );
+}
 
 export class WhatsAppAdapter extends Adapter<WhatsAppBot, "whatsapp"> {
     constructor(app: BaseApp) {
@@ -449,6 +461,11 @@ export class WhatsAppAdapter extends Adapter<WhatsAppBot, "whatsapp"> {
             router.post(`/whatsapp/${config.account_id}/webhook`, async (ctx: RouterContext, next: Next) => {
                 try {
                     const event = ctx.request.body;
+                    if (!isWhatsAppWebhookEvent(event)) {
+                        ctx.status = 400;
+                        ctx.body = { error: "Invalid webhook event" };
+                        return;
+                    }
                     bot.handleWebhook(event);
                     ctx.body = { success: true };
                 } catch (error) {
@@ -497,4 +514,3 @@ AdapterRegistry.register('whatsapp', WhatsAppAdapter, {
     homepage: 'https://developers.facebook.com/docs/whatsapp',
     author: '凉菜',
 });
-

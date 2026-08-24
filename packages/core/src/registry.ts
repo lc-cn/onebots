@@ -120,7 +120,7 @@ export class ProtocolRegistry {
     /**
      * Create a protocol instance
      */
-    static create(name: string, version: string, adapter: Adapter, account: Account, config: any): Protocol {
+    static create(name: string, version: string, adapter: Adapter, account: Account, config: Record<string, unknown>): Protocol {
         const factory = this.get(name, version);
         if (!factory) {
             throw new Error(`Protocol ${name}/${version} not registered`);
@@ -263,8 +263,8 @@ export class AdapterRegistry {
     /**
      * Create an adapter instance
      */
-    static create<T extends BaseApp>(name: string, app: T): Adapter<any,keyof Adapter.Configs,T> {
-        const factory = this.get(name) as Adapter.Factory<Adapter<any,keyof Adapter.Configs,T>>;
+    static create<T extends BaseApp>(name: string, app: T): Adapter<unknown,keyof Adapter.Configs,T> {
+        const factory = this.get(name) as Adapter.Factory<Adapter<unknown,keyof Adapter.Configs,T>>;
         if (!factory) {
             throw new Error(`Adapter ${name} not registered`);
         }

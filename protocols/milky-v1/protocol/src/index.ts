@@ -124,7 +124,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         this.dispatch(commonEvent);
     }
 
-    format(event: string, payload: any): any {
+    format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
         // Format event according to Milky specification
         return {
             ...payload,
@@ -132,7 +132,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         };
     }
 
-    async apply(action: string, params?: any): Promise<Milky.Response> {
+    async apply(action: string, params?: Record<string, unknown>): Promise<Milky.Response> {
         // Execute Milky API action
         this.logger.debug(`Milky action: ${action}`, params);
         
@@ -156,7 +156,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     /**
      * Execute Milky action
      */
-    private async executeAction(action: string, params: any): Promise<any> {
+    private async executeAction(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
         switch (action) {
             case "send_private_msg":
                 return this.sendPrivateMessage(params);
@@ -216,7 +216,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             message_id: event.message_id.string,
             user_id: event.sender.id.string,
             message: event.message.map(seg => ({
-                type: seg.type as any,
+                type: seg.type as Milky.SegmentType,
                 data: seg.data,
             })),
             raw_message: event.raw_message || this.extractPlainText(event.message),
@@ -234,7 +234,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             time: Math.floor(event.timestamp / 1000),
             self_id: event.bot_id.string,
             post_type: "notice",
-            notice_type: event.notice_type as any,
+            notice_type: event.notice_type as Milky.NoticeType,
             user_id: event.user?.id.string,
             group_id: event.group?.id.string,
             operator_id: event.operator?.id.string,
@@ -246,7 +246,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             time: Math.floor(event.timestamp / 1000),
             self_id: event.bot_id.string,
             post_type: "request",
-            request_type: event.request_type as any,
+            request_type: event.request_type as Milky.RequestType,
             user_id: event.user.id.string,
             comment: event.comment || "",
             flag: event.flag,
@@ -259,7 +259,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             time: Math.floor(event.timestamp / 1000),
             self_id: event.bot_id.string,
             post_type: "meta_event",
-            meta_event_type: event.meta_type as any,
+            meta_event_type: event.meta_type as Milky.MetaEventType,
         };
     }
 
@@ -271,41 +271,45 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     // Action implementations
-    private async sendPrivateMessage(params: any): Promise<Milky.SendMessageResult> {
+    private async sendPrivateMessage(params: Record<string, unknown>): Promise<Milky.SendMessageResult> {
+        const { user_id, message } = params as { user_id: string; message: Milky.Segment[] };
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
-            scene_id: this.adapter.resolveId(params.user_id),
-            message: params.message,
+            scene_id: this.adapter.resolveId(user_id),
+            message,
         });
         return { message_id: result.message_id.string };
     }
 
-    private async sendGroupMessage(params: any): Promise<Milky.SendMessageResult> {
+    private async sendGroupMessage(params: Record<string, unknown>): Promise<Milky.SendMessageResult> {
+        const { group_id, message } = params as { group_id: string; message: Milky.Segment[] };
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
-            scene_id: this.adapter.resolveId(params.group_id),
-            message: params.message,
+            scene_id: this.adapter.resolveId(group_id),
+            message,
         });
         return { message_id: result.message_id.string };
     }
 
-    private async sendMessage(params: any): Promise<Milky.SendMessageResult> {
-        if (params.message_type === "private") {
+    private async sendMessage(params: Record<string, unknown>): Promise<Milky.SendMessageResult> {
+        if ((params as { message_type: string }).message_type === "private") {
             return this.sendPrivateMessage(params);
         } else {
             return this.sendGroupMessage(params);
         }
     }
 
-    private async deleteMessage(params: any): Promise<void> {
+    private async deleteMessage(params: Record<string, unknown>): Promise<void> {
+        const { message_id } = params as { message_id: string };
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(params.message_id),
+            message_id: this.adapter.resolveId(message_id),
         });
     }
 
-    private async getMessage(params: any): Promise<Milky.MessageInfo> {
+    private async getMessage(params: Record<string, unknown>): Promise<Milky.MessageInfo> {
+        const { message_id } = params as { message_id: string };
         const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(params.message_id),
+            message_id: this.adapter.resolveId(message_id),
         });
         return {
             time: msg.time || Math.floor(Date.now() / 1000),
@@ -316,11 +320,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 user_id: msg.sender.sender_id.string,
                 nickname: msg.sender.sender_name,
             },
-            message: msg.message as any,
+            message: msg.message as unknown as Milky.Segment[],
         };
     }
 
-    private async getForwardMessage(params: any): Promise<any> {
+    private async getForwardMessage(_params: Record<string, unknown>): Promise<unknown> {
         // Forward message handling - platform specific
         throw new Error("Forward message not supported by this adapter");
     }
@@ -333,9 +337,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         };
     }
 
-    private async getStrangerInfo(params: any): Promise<Milky.User> {
+    private async getStrangerInfo(params: Record<string, unknown>): Promise<Milky.User> {
+        const { user_id } = params as { user_id: string };
         const info = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: this.adapter.resolveId(params.user_id),
+            user_id: this.adapter.resolveId(user_id),
         });
         return {
             user_id: info.user_id.string,
@@ -352,9 +357,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         }));
     }
 
-    private async getGroupInfo(params: any): Promise<Milky.GroupInfo> {
+    private async getGroupInfo(params: Record<string, unknown>): Promise<Milky.GroupInfo> {
+        const { group_id } = params as { group_id: string };
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(params.group_id),
+            group_id: this.adapter.resolveId(group_id),
         });
         return {
             group_id: info.group_id.string,
@@ -374,10 +380,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         }));
     }
 
-    private async getGroupMemberInfo(params: any): Promise<Milky.GroupMemberInfo> {
+    private async getGroupMemberInfo(params: Record<string, unknown>): Promise<Milky.GroupMemberInfo> {
+        const { group_id, user_id } = params as { group_id: string; user_id: string };
         const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(params.group_id),
-            user_id: this.adapter.resolveId(params.user_id),
+            group_id: this.adapter.resolveId(group_id),
+            user_id: this.adapter.resolveId(user_id),
         });
         return {
             group_id: info.group_id.string,
@@ -398,9 +405,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         };
     }
 
-    private async getGroupMemberList(params: any): Promise<Milky.GroupMemberInfo[]> {
+    private async getGroupMemberList(params: Record<string, unknown>): Promise<Milky.GroupMemberInfo[]> {
+        const { group_id } = params as { group_id: string };
         const list = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: this.adapter.resolveId(params.group_id),
+            group_id: this.adapter.resolveId(group_id),
         });
         return list.map(info => ({
             group_id: info.group_id.string,
@@ -465,7 +473,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             }
 
             const action = ctx.params.action;
-            const params = (ctx.request as any).body ?? {};
+            const params = ((ctx.request as unknown as Record<string, unknown>).body ?? {}) as Record<string, unknown>;
 
             try {
                 const result = await this.apply(action, params);
@@ -555,7 +563,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
-                const headers: any = {
+                const headers: Record<string, string> = {
                     'Content-Type': 'application/json',
                     'User-Agent': 'Milky/1.0',
                     'X-Self-ID': this.account.account_id,
@@ -597,7 +605,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         this.logger.info(`Starting Milky WebSocket reverse: ${config.url}`);
         
         let ws: WebSocket | null = null;
-        let reconnectTimer: any = null;
+        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
         const connect = () => {
             try {
