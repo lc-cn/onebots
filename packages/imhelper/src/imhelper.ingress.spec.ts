@@ -5,6 +5,7 @@ import type WebSocket from "ws";
 import { describe, expect, it, vi } from "vitest";
 import { Adapter } from "./adapter.js";
 import { createImHelper } from "./index.js";
+import type { ImHelper } from "./imhelper.js";
 
 class TestAdapter extends Adapter<string> {
     readonly selfId = "bot";
@@ -33,7 +34,7 @@ function createHttpRequest(
 
 describe("ImHelper host-managed ingress", () => {
     function acceptsNodeHttpTypes(
-        client: ReturnType<typeof createImHelper<string>>,
+        client: ImHelper<string>,
         request: IncomingMessage,
         response: ServerResponse,
     ): void {
@@ -42,10 +43,7 @@ describe("ImHelper host-managed ingress", () => {
 
     void acceptsNodeHttpTypes;
 
-    function acceptsWsType(
-        client: ReturnType<typeof createImHelper<string>>,
-        socket: WebSocket,
-    ): void {
+    function acceptsWsType(client: ImHelper<string>, socket: WebSocket): void {
         client.acceptWebSocket(socket);
     }
 

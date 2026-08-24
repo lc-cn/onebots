@@ -1,123 +1,193 @@
-import { Receiver } from '../receiver.js';
-import { Adapter } from '../adapter.js';
-import WebSocket from 'ws';
+import WebSocket from "ws";
+import { Receiver } from "../receiver.js";
+import type { Adapter } from "../adapter.js";
 
-export class WebSocketReceiver<Id extends string | number = string | number> extends Receiver<Id> {
-    private ws?: WebSocket;
-    private reconnectTimer?: NodeJS.Timeout;
-    private reconnectAttempts = 0;
-    private maxReconnectAttempts = 10;
-    private accessToken?: string;
-    private isDisconnecting = false;
+export interface WebSocketLike {
+    on(event: "open", listener: () => void): unknown;
+    on(event: "message", listener: (data: Buffer) => void): unknown;
+    on(event: "error", listener: (error: Error) => void): unknown;
+    on(event: "close", listener: (code: number, reason: Buffer) => void): unknown;
+    removeAllListeners(event?: string): unknown;
+    close(): void;
+}
+
+export interface WebSocketReceiverLogger {
+    debug(message: string, context?: unknown): void;
+    error(message: string, error?: unknown): void;
+}
+
+export interface WebSocketReconnectOptions {
+    /** 默认无限重试。 */
+    maxAttempts?: number;
+    initialDelayMs?: number;
+    maxDelayMs?: number;
+    factor?: number;
+    delay?: (attempt: number) => number;
+}
+
+export interface WebSocketReceiverOptions {
+    accessToken?: string;
+    signal?: AbortSignal;
+    reconnect?: WebSocketReconnectOptions;
+    logger?: WebSocketReceiverLogger;
+    createWebSocket?: (url: string) => WebSocketLike;
+}
+
+const silentLogger: WebSocketReceiverLogger = {
+    debug: () => undefined,
+    error: () => undefined,
+};
+
+function abortError(): Error {
+    const error = new Error("WebSocket 连接已取消");
+    error.name = "AbortError";
+    return error;
+}
+
+export class WebSocketReceiver<
+    Id extends string | number = string | number,
+    TRawEvent = unknown,
+> extends Receiver<Id, TRawEvent> {
+    #socket?: WebSocketLike;
+    #reconnectTimer?: NodeJS.Timeout;
+    #reconnectAttempts = 0;
+    #generation = 0;
+    #stopped = true;
+    readonly #options: WebSocketReceiverOptions;
+    readonly #logger: WebSocketReceiverLogger;
+    readonly #abortListener = (): void => {
+        void this.disconnect();
+    };
+
+    constructor(
+        adapter: Adapter<Id, TRawEvent>,
+        public readonly url: string,
+        accessTokenOrOptions?: string | WebSocketReceiverOptions,
+    ) {
+        super(adapter);
+        this.#options =
+            typeof accessTokenOrOptions === "string"
+                ? { accessToken: accessTokenOrOptions }
+                : (accessTokenOrOptions ?? {});
+        this.#logger = this.#options.logger ?? silentLogger;
+    }
+
+    get generation(): number {
+        return this.#generation;
+    }
 
     async connect(_port?: number): Promise<void> {
-        return new Promise((resolve, reject) => {
-            try {
-                const url = new URL(this.url);
-                if (this.accessToken) {
-                    url.searchParams.set('access_token', this.accessToken);
-                }
-
-                const wsUrl = url.toString();
-                console.debug('[WebSocketReceiver] Connecting to:', wsUrl);
-                this.ws = new WebSocket(wsUrl);
-
-                this.ws.on('open', () => {
-                    this.reconnectAttempts = 0;
-                    console.debug('[WebSocketReceiver] WebSocket connected successfully');
-                    this.isDisconnecting = false; // 重置断开标志
-                    resolve();
-                });
-
-                this.ws.on('message', (data: Buffer) => {
-                    try {
-                        const event = JSON.parse(data.toString());
-                        console.debug('[WebSocketReceiver] Received message:',event);
-                        this.handleEvent(event);
-                    } catch (error) {
-                        console.error('[WebSocketReceiver] Failed to parse message:', error);
-                    }
-                });
-
-                this.ws.on('error', (error) => {
-                    console.error('[WebSocketReceiver] WebSocket error:', error);
-                    if (this.reconnectAttempts === 0) {
-                        reject(error);
-                    }
-                });
-
-                this.ws.on('close', (code: number, reason: Buffer) => {
-                    const reasonStr = reason.toString();
-                    console.debug(`[WebSocketReceiver] WebSocket closed: code=${code}, reason=${reasonStr || 'none'}, isDisconnecting=${this.isDisconnecting}`);
-                    if (!this.isDisconnecting) {
-                        console.debug('[WebSocketReceiver] Connection closed unexpectedly, will attempt to reconnect');
-                        this.scheduleReconnect();
-                    } else {
-                        console.debug('[WebSocketReceiver] Connection closed intentionally, no reconnect');
-                    }
-                });
-            } catch (error) {
-                reject(error);
-            }
-        });
+        if (this.#options.signal?.aborted) throw abortError();
+        this.#stopped = false;
+        this.#options.signal?.addEventListener("abort", this.#abortListener, { once: true });
+        return this.#openConnection();
     }
 
     async disconnect(): Promise<void> {
-        console.debug('[WebSocketReceiver] Disconnecting...');
-        this.isDisconnecting = true;
-        
-        if (this.reconnectTimer) {
-            clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = undefined;
-            console.debug('[WebSocketReceiver] Reconnect timer cleared');
+        this.#stopped = true;
+        this.#generation += 1;
+        this.#options.signal?.removeEventListener("abort", this.#abortListener);
+        if (this.#reconnectTimer) {
+            clearTimeout(this.#reconnectTimer);
+            this.#reconnectTimer = undefined;
         }
-
-        if (this.ws) {
-            // 移除 close 事件监听器，防止触发重连逻辑
-            this.ws.removeAllListeners('close');
-            this.ws.close();
-            this.ws = undefined;
-            console.debug('[WebSocketReceiver] WebSocket closed');
+        const socket = this.#socket;
+        this.#socket = undefined;
+        if (socket) {
+            socket.removeAllListeners();
+            socket.close();
         }
-        
-        // 不重置 isDisconnecting，因为已经断开连接了
     }
 
-    private scheduleReconnect(): void {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('[WebSocketReceiver] Max reconnection attempts reached');
+    #openConnection(): Promise<void> {
+        const generation = ++this.#generation;
+        const url = new URL(this.url);
+        if (this.#options.accessToken) {
+            url.searchParams.set("access_token", this.#options.accessToken);
+        }
+        const logUrl = new URL(url);
+        if (logUrl.searchParams.has("access_token")) {
+            logUrl.searchParams.set("access_token", "***");
+        }
+        this.#logger.debug("正在连接 WebSocket", { url: logUrl.toString(), generation });
+
+        return new Promise((resolve, reject) => {
+            let opened = false;
+            let socket: WebSocketLike;
+            try {
+                socket = (this.#options.createWebSocket ?? (value => new WebSocket(value)))(
+                    url.toString(),
+                );
+            } catch (error) {
+                this.#scheduleReconnect(generation);
+                reject(error);
+                return;
+            }
+            this.#socket = socket;
+
+            socket.on("open", () => {
+                if (!this.#isCurrent(generation)) return;
+                opened = true;
+                this.#reconnectAttempts = 0;
+                this.#logger.debug("WebSocket 已连接", { generation });
+                resolve();
+            });
+            socket.on("message", data => {
+                if (!this.#isCurrent(generation)) return;
+                try {
+                    this.adapter.transformEvent(JSON.parse(data.toString()) as TRawEvent);
+                } catch (error) {
+                    this.#logger.error("解析 WebSocket 事件失败", error);
+                }
+            });
+            socket.on("error", error => {
+                if (!this.#isCurrent(generation)) return;
+                this.#logger.error("WebSocket 连接错误", error);
+                this.#scheduleReconnect(generation);
+                if (!opened) reject(error);
+            });
+            socket.on("close", (code, reason) => {
+                if (!this.#isCurrent(generation)) return;
+                this.#logger.debug("WebSocket 已关闭", {
+                    code,
+                    reason: reason.toString(),
+                    generation,
+                });
+                this.#scheduleReconnect(generation);
+            });
+        });
+    }
+
+    #isCurrent(generation: number): boolean {
+        return !this.#stopped && !this.#options.signal?.aborted && generation === this.#generation;
+    }
+
+    #scheduleReconnect(generation: number): void {
+        if (!this.#isCurrent(generation) || this.#reconnectTimer) return;
+        const reconnect = this.#options.reconnect ?? {};
+        const maxAttempts = reconnect.maxAttempts ?? Number.POSITIVE_INFINITY;
+        if (this.#reconnectAttempts >= maxAttempts) {
+            this.#logger.error("WebSocket 已达到配置的最大重连次数");
             return;
         }
-
-        const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-        this.reconnectAttempts++;
-
-        console.debug(`[WebSocketReceiver] Scheduling reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-        this.reconnectTimer = setTimeout(() => {
-            console.debug('[WebSocketReceiver] Attempting to reconnect...');
-            this.connect().catch((error) => {
-                console.error('[WebSocketReceiver] Reconnection failed:', error);
-            });
-        }, delay);
-    }
-
-    private handleEvent(event: any): void {
-        // 直接调用 adapter 的 transformEvent 方法进行转换
-        // transformEvent 会负责 emit 所有需要的事件（包括 'event' 和 'message.*'）
-        this.transformToMessage(event);
-    }
-
-    private transformToMessage(event: unknown): void {
-        // 如果 adapter 有 transformEvent 方法，使用它
-        if (this.adapter.transformEvent) {
-            this.adapter.transformEvent(event);
-        }else{
-            throw new Error('Adapter does not have transformEvent method');
-        }
-    }
-
-    constructor(adapter: Adapter<Id>, public url: string, accessToken?: string) {
-        super(adapter);
-        this.accessToken = accessToken;
+        const attempt = this.#reconnectAttempts;
+        const delay = reconnect.delay
+            ? reconnect.delay(attempt)
+            : Math.min(
+                  (reconnect.initialDelayMs ?? 1_000) * Math.pow(reconnect.factor ?? 2, attempt),
+                  reconnect.maxDelayMs ?? 30_000,
+              );
+        this.#reconnectAttempts += 1;
+        this.#logger.debug("WebSocket 等待重连", { attempt: attempt + 1, delay, generation });
+        this.#reconnectTimer = setTimeout(
+            () => {
+                this.#reconnectTimer = undefined;
+                if (!this.#isCurrent(generation)) return;
+                void this.#openConnection().catch(error => {
+                    this.#logger.error("WebSocket 重连失败", error);
+                });
+            },
+            Math.max(0, delay),
+        );
     }
 }

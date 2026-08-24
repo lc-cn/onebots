@@ -10,26 +10,25 @@
 pnpm changeset
 ```
 
-选择要发布的包和版本类型:
-- `patch` (0.0.x) - Bug 修复
-- `minor` (0.x.0) - 新功能（向后兼容）
-- `major` (x.0.0) - 破坏性变更
+选择要发布的包，版本类型必须全部选择 `patch` (0.0.x)。这是项目的硬性发布策略，功能新增和破坏性变更也不得使用 `minor` 或 `major`。
 
 ### 2. Changeset 文件格式
 
 ```markdown
 ---
-"@onebots/core": minor
+"@onebots/core": patch
 "@onebots/adapter-xxx": patch
 ---
 
 ## 更新内容
 
 ### @onebots/core
+
 - 新增 xxx 功能
 - 修复 xxx 问题
 
 ### @onebots/adapter-xxx
+
 - 修复 xxx bug
 ```
 
@@ -63,11 +62,9 @@ git push origin master
 
 ## 版本号规范
 
-| 类型 | 版本 | 何时使用 |
-|------|------|---------|
-| Major | 1.0.0 → 2.0.0 | 破坏性 API 变更 |
-| Minor | 1.0.0 → 1.1.0 | 新功能（向后兼容） |
-| Patch | 1.0.0 → 1.0.1 | Bug 修复 |
+所有包只允许发布 Patch（例如 1.0.0 → 1.0.1）。这是项目发布约定，创建和审查 changeset 时必须遵守。
+
+版本来源只认 `.changeset/*.md` 和 Changesets 生成的 Version PR；commit message 仅用于 Git 历史可读性，不参与版本级别推导。
 
 ## 包发布顺序
 
@@ -107,7 +104,7 @@ pnpm changeset
 ### 撤销发布
 
 npm 包发布后 72 小时内可以撤销:
+
 ```bash
 npm unpublish @onebots/xxx@version
 ```
-

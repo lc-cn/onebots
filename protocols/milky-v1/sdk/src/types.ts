@@ -1,56 +1,75 @@
-/**
- * Milky V1 Client Types
- */
+/** Milky V1 客户端类型。 */
 
-export interface MilkyV1ClientConfig {
-  /** 服务器地址，例如 http://localhost:6727 */
-  baseUrl: string;
-  /** 访问令牌 */
-  accessToken?: string;
-  /** 平台标识，例如 qq */
-  platform: string;
-  /** 账号ID */
-  accountId: string;
-  /** 接收方式：websocket | webhook | sse */
-  receiveMode?: 'websocket' | 'webhook' | 'sse';
-  /** Webhook 接收地址（当 receiveMode 为 webhook 时使用） */
-  webhookUrl?: string;
-  /** Webhook 端口（当 receiveMode 为 webhook 时使用） */
-  webhookPort?: number;
+export type MilkyMessageScene = "friend" | "group" | "temp";
+export type MilkyMessageId = `milky:${MilkyMessageScene}:${number}:${number}`;
+
+export interface MilkySegment {
+    type: string;
+    data: Record<string, unknown>;
 }
 
-export interface MilkyV1Event {
-  post_type: 'message' | 'notice' | 'request' | 'meta_event';
-  message_type?: 'private' | 'group';
-  notice_type?: string;
-  request_type?: string;
-  meta_event_type?: string;
-  time: number;
-  self_id: string | number; // Milky 协议中 self_id 可能是 string 或 number
-  message_id?: string;
-  user_id?: string | number;
-  group_id?: string | number;
-  message?: string | unknown[];
-  raw_message?: string;
-  sub_type?: string;
-  sender?: {
-    user_id: string | number;
-    nickname?: string;
-    avatar?: string;
-  };
-  operator_id?: string | number;
-  duration?: number;
-  flag?: string;
-  comment?: string;
-  interval?: number;
-  status?: unknown;
-  [key: string]: unknown;
+export interface MilkyIncomingMessage {
+    message_scene: MilkyMessageScene;
+    peer_id: number;
+    message_seq: number;
+    sender_id: number;
+    time: number;
+    segments: MilkySegment[];
+    friend?: { user_id: number; nickname?: string; [key: string]: unknown };
+    group?: { group_id: number; group_name?: string; [key: string]: unknown };
+    group_member?: { user_id: number; nickname?: string; card?: string; [key: string]: unknown };
+    [key: string]: unknown;
 }
+
+export interface MilkyMessageRecallData {
+    message_scene: MilkyMessageScene;
+    peer_id: number;
+    message_seq: number;
+    sender_id: number;
+    operator_id: number;
+    display_suffix: string;
+}
+
+export interface MilkyV1Event<TData = unknown> {
+    event_type: string;
+    time: number;
+    self_id: number;
+    data: TData;
+}
+
+export type MilkyMessageReceiveEvent = MilkyV1Event<MilkyIncomingMessage> & {
+    event_type: "message_receive";
+};
+
+export type MilkyMessageRecallEvent = MilkyV1Event<MilkyMessageRecallData> & {
+    event_type: "message_recall";
+};
 
 export interface MilkyV1Response<T = unknown> {
-  status: 'ok' | 'failed';
-  retcode: number;
-  data?: T;
-  message?: string;
+    status: "ok" | "failed";
+    retcode: number;
+    data?: T;
+    message?: string;
 }
 
+export type MilkyCall = (
+    action: string,
+    params?: Record<string, unknown>,
+) => Promise<MilkyV1Response>;
+
+export type MilkyActionUrlResolver = (action: string, apiBaseUrl: string) => string | URL;
+
+export interface MilkyV1ClientConfig {
+    /** Milky 服务根地址，例如 http://localhost:3000。 */
+    baseUrl: string;
+    /** API 根地址；默认使用 baseUrl，并请求 /api/{action}。 */
+    apiBaseUrl?: string;
+    accessToken?: string;
+    resolveActionUrl?: MilkyActionUrlResolver;
+    call?: MilkyCall;
+    fetch?: typeof globalThis.fetch;
+    receiveMode?: "ws" | "wss" | "webhook" | "sse";
+    wsUrl?: string;
+    webhookUrl?: string;
+    webhookPort?: number;
+}

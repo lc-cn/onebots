@@ -140,10 +140,10 @@ function writeHttpResult(
     response.end(JSON.stringify(result.body));
 }
 
-export async function acceptHttpIngress(
+export async function acceptHttpIngress<TRawEvent = unknown>(
     request: HttpIngressRequest,
     response: HttpIngressResponseWriter | undefined,
-    ingest: (rawEvent: unknown) => void,
+    ingest: (rawEvent: TRawEvent) => void,
 ): Promise<HttpIngressResult> {
     let result: HttpIngressResult;
 
@@ -164,7 +164,7 @@ export async function acceptHttpIngress(
         }
 
         try {
-            ingest(rawEvent);
+            ingest(rawEvent as TRawEvent);
             result = createHttpResult(200, { status: "ok" });
         } catch {
             result = createHttpResult(500, {
@@ -204,13 +204,13 @@ function parseWebSocketData(data: unknown): unknown {
     throw new TypeError("WebSocket 事件必须是 JSON 文本或二进制数据");
 }
 
-export function acceptWebSocketIngress(
+export function acceptWebSocketIngress<TRawEvent = unknown>(
     socket: UpgradedWebSocket,
-    ingest: (rawEvent: unknown) => void,
+    ingest: (rawEvent: TRawEvent) => void,
 ): () => void {
     const listener = (data: unknown): void => {
         try {
-            ingest(parseWebSocketData(data));
+            ingest(parseWebSocketData(data) as TRawEvent);
         } catch (error) {
             if (error instanceof PayloadTooLargeError) {
                 socket.close?.(1009, "事件载荷过大");

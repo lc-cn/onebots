@@ -1,146 +1,124 @@
 # @imhelper/onebot-v11
 
-OneBot V11 协议客户端 SDK，提供快速连接和消息收发功能。
-
-## 功能特性
-
-- ✅ HTTP API 调用（发送消息、获取信息等）
-- ✅ WebSocket 事件接收
-- ✅ Webhook 事件接收
-- ✅ SSE 事件接收（浏览器环境）
-- ✅ 自动重连机制
-- ✅ TypeScript 支持
+OneBot V11 客户端 SDK。包内导出具体 `OneBotV11Client`、`OneBotV11Adapter`、对应 factory，以及完整的协议事件和响应类型。
 
 ## 安装
 
 ```bash
-npm install @imhelper/onebot-v11
-# 或
-pnpm add @imhelper/onebot-v11
+pnpm add imhelper @imhelper/onebot-v11
 ```
 
-## 使用示例
+## 创建客户端
 
-### WebSocket 模式（推荐）
+推荐直接使用 `createOnebot11Client()`：
 
 ```typescript
-import { OneBotV11Client } from '@imhelper/onebot-v11';
+import { createOnebot11Client } from "@imhelper/onebot-v11";
 
-const client = new OneBotV11Client({
-  baseUrl: 'http://localhost:6727',
-  platform: 'kook',
-  accountId: 'zhin',
-  accessToken: 'your_token',
-  receiveMode: 'websocket', // 默认
+const client = createOnebot11Client({
+  // 事件连接地址；完整 OneBots 路由也可以直接放在这里。
+  baseUrl: "http://localhost:6700/onebot/v11",
+  // API 地址可与事件地址不同；不设置时使用 baseUrl。
+  apiBaseUrl: "http://localhost:6700/onebot/v11",
+  selfId: "123456789",
+  accessToken: "your-token",
+  receiveMode: "ws",
 });
 
-// 监听事件
-client.onEvent((event) => {
-  if (event.post_type === 'message') {
-    console.log('收到消息:', event);
+client.on("event", event => {
+  // event 的类型是 OneBotV11Event，不是 unknown。
+  if (event.post_type === "message") {
+    // 处理 OneBot 原始事件
   }
 });
 
-// 连接
-await client.connect();
-
-// 发送私聊消息
-await client.sendPrivateMsg(123456, 'Hello!');
-
-// 发送群消息
-await client.sendGroupMsg(789012, 'Hello Group!');
-```
-
-### Webhook 模式
-
-```typescript
-const client = new OneBotV11Client({
-  baseUrl: 'http://localhost:6727',
-  platform: 'kook',
-  accountId: 'zhin',
-  receiveMode: 'webhook',
-  webhookPort: 8080, // Webhook 服务器端口
+client.on("message.private", async message => {
+  await message.reply("收到");
 });
 
-await client.connect();
-// 现在客户端会在 http://localhost:8080/onebot/v11 接收事件
+await client.start();
 ```
 
-### SSE 模式（浏览器环境）
+也可以显式构造，或只创建 adapter：
 
 ```typescript
-const client = new OneBotV11Client({
-  baseUrl: 'http://localhost:6727',
-  platform: 'kook',
-  accountId: 'zhin',
-  receiveMode: 'sse',
+import { OneBotV11Client, createOnebot11Adapter } from "@imhelper/onebot-v11";
+import { createImHelper } from "imhelper";
+
+const directClient = new OneBotV11Client(config);
+const adapter = createOnebot11Adapter(config);
+const genericClient = createImHelper(adapter);
+
+// genericClient.adapter 仍保留 OneBotV11Adapter 具体类型。
+await genericClient.adapter.call("get_login_info");
+```
+
+## API 调用
+
+```typescript
+const result = await client.call<{ user_id: number; nickname: string }>("get_login_info");
+
+await client.sendPrivateMessage(123456789, "你好");
+await client.sendGroupMessage(987654321, "大家好");
+```
+
+显式提供 `apiBaseUrl` 时请求 `${apiBaseUrl}/{action}`，不会自动拼接 OneBots 路由。为兼容旧配置，省略 `apiBaseUrl` 且提供 `platform` 时仍使用 `/{platform}/{selfId}/onebot/v11`；新代码建议始终传入完整 API 根地址。
+
+特殊部署可注入 URL 解析器或整个调用实现：
+
+```typescript
+const client = createOnebot11Client({
+  baseUrl: "ws://events.example/onebot/v11",
+  apiBaseUrl: "https://api.example",
+  selfId: "123456789",
+  receiveMode: "ws",
+  resolveActionUrl: action => `https://gateway.example/actions/${action}`,
+  // 也可传入 call(action, params)，完全接管 HTTP 调用。
+});
+```
+
+## WebSocket 恢复策略
+
+`ws` 默认无限重连。可以通过 `webSocket` 配置 AbortSignal、退避和日志：
+
+```typescript
+const controller = new AbortController();
+
+const client = createOnebot11Client({
+  baseUrl: "ws://localhost:6700/onebot/v11",
+  selfId: "123456789",
+  receiveMode: "ws",
+  webSocket: {
+    signal: controller.signal,
+    reconnect: {
+      initialDelayMs: 1000,
+      maxDelayMs: 30_000,
+      factor: 2,
+    },
+    logger,
+  },
 });
 
-await client.connect();
+controller.abort();
 ```
 
-## API
+## 接入已有宿主
 
-### 构造函数
+继承自 `ImHelper` 的入口均可直接使用，不需要 SDK 另开端口：
 
 ```typescript
-new OneBotV11Client(config: OneBotV11ClientConfig)
+client.ingest(oneBotEvent);
+await client.acceptHttp(request, response);
+const detach = client.acceptWebSocket(upgradedSocket);
 ```
 
-### 配置选项
+## 实际导出
 
-- `baseUrl`: 服务器地址（必需）
-- `platform`: 平台标识（必需）
-- `accountId`: 账号ID（必需）
-- `accessToken`: 访问令牌（可选）
-- `receiveMode`: 接收方式，可选值：`'websocket'` | `'webhook'` | `'sse'`（默认：`'websocket'`）
-- `webhookUrl`: Webhook 接收地址（webhook 模式）
-- `webhookPort`: Webhook 端口（webhook 模式，默认：8080）
+- `OneBotV11Client` / `createOnebot11Client()`
+- `OneBotV11Adapter` / `createOnebot11Adapter()`
+- `OneBotV11Event`
+- `OneBotV11Response<T>`
+- `OneBotV11AdapterConfig`
+- `OneBotV11ActionUrlResolver` / `OneBotV11Call`
 
-### 方法
-
-#### 连接和断开
-
-- `connect()`: 连接并开始接收事件
-- `disconnect()`: 断开连接
-- `onEvent(handler)`: 监听事件
-
-#### 消息 API
-
-- `sendPrivateMsg(userId, message)`: 发送私聊消息
-- `sendGroupMsg(groupId, message)`: 发送群消息
-- `deleteMsg(messageId)`: 撤回消息
-- `getMsg(messageId)`: 获取消息
-
-#### 用户和群组 API
-
-- `getLoginInfo()`: 获取登录信息
-- `getUserInfo(userId, noCache?)`: 获取用户信息
-- `getFriendList()`: 获取好友列表
-- `getGroupInfo(groupId, noCache?)`: 获取群信息
-- `getGroupList()`: 获取群列表
-- `getGroupMemberInfo(groupId, userId, noCache?)`: 获取群成员信息
-- `getGroupMemberList(groupId)`: 获取群成员列表
-
-#### 自定义 API
-
-- `call(action, params?)`: 调用自定义 API
-
-## 事件类型
-
-事件对象遵循 OneBot V11 标准：
-
-```typescript
-interface OneBotV11Event {
-  post_type: 'message' | 'notice' | 'request' | 'meta_event';
-  message_type?: 'private' | 'group';
-  time: number;
-  self_id: number;
-  // ... 其他字段
-}
-```
-
-## License
-
-MIT
-
+许可证：MIT

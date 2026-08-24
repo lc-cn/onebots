@@ -13,17 +13,15 @@ pnpm add imhelper @imhelper/onebot-v11
 ## 创建客户端
 
 ```typescript
-import { createImHelper } from "imhelper";
-import { createOnebot11Adapter } from "@imhelper/onebot-v11";
+import { createOnebot11Client } from "@imhelper/onebot-v11";
 
-const adapter = createOnebot11Adapter({
+const client = createOnebot11Client({
   baseUrl: "http://localhost:6727/kook/zhin/onebot/v11",
+  apiBaseUrl: "http://localhost:6727/kook/zhin/onebot/v11",
   selfId: "zhin",
   accessToken: "your_token",
   receiveMode: "ws",
 });
-
-const client = createImHelper(adapter);
 
 client.on("message.private", async message => {
   await message.reply("收到！");
@@ -33,6 +31,15 @@ await client.start();
 ```
 
 `receiveMode` 支持 `ws`、`wss`、`webhook` 和 `sse`。调用 `start()` 后，由对应协议适配器建立连接；`webhook` 与 `wss` 模式会启动 HTTP 服务，可向 `start(port)` 传入端口。结束时调用 `client.stop()`。
+
+四个协议包均导出具体 Client 和 factory：
+
+- `OneBotV11Client` / `createOnebot11Client()`
+- `OneBotV12Client` / `createOnebot12Client()`
+- `SatoriV1Client` / `createSatoriClient()`
+- `MilkyV1Client` / `createMilkyClient()`
+
+具体 Client 会保留协议 adapter、原始事件和 `call()` 的完整类型。`client.adapter` 不再被擦除为基础 `Adapter`，`client.on("event", event => ...)` 也会推断出对应协议事件。
 
 ## 接入已有宿主
 
@@ -94,6 +101,10 @@ webSocketServer.on("connection", socket => {
 
 ## 常用 API
 
+### 协议 API 地址
+
+显式提供 `apiBaseUrl` 时，协议 SDK 会把它视为 API 根地址，不再拼接 OneBots 的 `/{platform}/{accountId}/{protocol}` 路由。连接 OneBots 时传入完整协议路径；连接其他兼容实现时传入其标准 API 根地址。Milky 未提供 `apiBaseUrl` 和 `platform` 时默认请求 `/api/{action}`。旧版 `platform` 配置的 OneBots 路由仍保留兼容。也可以通过 `resolveActionUrl` 改写 action URL，或注入 `call` 完全接管请求。
+
 ### 消息
 
 ```typescript
@@ -138,15 +149,46 @@ const member = client.pickGroupMember(groupId, userId);
 ```typescript
 import { Adapter, createImHelper } from "imhelper";
 
-class CustomAdapter extends Adapter<string> {
+interface CustomRawEvent {
+  type: string;
+}
+
+class CustomAdapter extends Adapter<string, CustomRawEvent> {
   readonly selfId = "bot";
 
-  transformEvent(rawEvent: unknown): void {
+  transformEvent(rawEvent: CustomRawEvent): void {
     // 校验并转换 rawEvent，然后调用 this.emit('message.private', data) 等。
   }
 }
 
 const client = createImHelper(new CustomAdapter());
+
+// CustomAdapter、CustomRawEvent 会保留在 client.adapter、ingest() 和 event 事件中。
+```
+
+## WebSocket 恢复
+
+主动 WebSocket 默认无限重连，并使用 generation 隔离旧连接回调。协议配置中的 `webSocket` 可传入 `signal`、`reconnect` 和 `logger`：
+
+```typescript
+const controller = new AbortController();
+
+const client = createOnebot11Client({
+  baseUrl: "ws://localhost:6727/kook/zhin/onebot/v11",
+  selfId: "zhin",
+  receiveMode: "ws",
+  webSocket: {
+    signal: controller.signal,
+    reconnect: {
+      initialDelayMs: 1000,
+      maxDelayMs: 30_000,
+      factor: 2,
+    },
+    logger,
+  },
+});
+
+controller.abort();
 ```
 
 ## 支持的协议

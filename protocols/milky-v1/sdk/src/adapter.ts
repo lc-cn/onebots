@@ -1,415 +1,480 @@
-import { EventEmitter } from 'events';
-import { Adapter, WebSocketReceiver, WSSReceiver, WebhookReceiver, SSEReceiver, Message, type User, type Group, type Friend, type PrivateMessageEvent, type GroupMessageEvent } from 'imhelper';
-import { MilkyV1Event, MilkyV1Response } from './types.js';
-import { HttpClient } from './http-client.js';
+import {
+    Adapter,
+    Message,
+    SSEReceiver,
+    WebhookReceiver,
+    WebSocketReceiver,
+    WSSReceiver,
+    type Friend,
+    type Group,
+    type GroupMessageEvent,
+    type PrivateMessageEvent,
+    type User,
+    type WebSocketReceiverOptions,
+} from "imhelper";
+import { HttpClient } from "./http-client.js";
+import type {
+    MilkyActionUrlResolver,
+    MilkyCall,
+    MilkyIncomingMessage,
+    MilkyMessageId,
+    MilkyMessageRecallData,
+    MilkyMessageScene,
+    MilkyV1Event,
+    MilkyV1Response,
+} from "./types.js";
 
 export interface MilkyAdapterConfig {
-  baseUrl: string;
-  selfId: string;
-  accessToken?: string;
-  receiveMode: 'ws' | 'wss' | 'webhook' | 'sse';
-  path?: string; // webhook 路径
-  wsUrl?: string; // WebSocket URL（可选，自动构建）
-  platform?: string; // 平台名称（可选，用于构建 HTTP 路径）
+    baseUrl: string;
+    apiBaseUrl?: string;
+    selfId: string;
+    accessToken?: string;
+    receiveMode: "ws" | "wss" | "webhook" | "sse";
+    path?: string;
+    wsUrl?: string;
+    /** @deprecated API 地址不再由平台路由拼接，请改用 apiBaseUrl。 */
+    platform?: string;
+    resolveActionUrl?: MilkyActionUrlResolver;
+    call?: MilkyCall;
+    fetch?: typeof globalThis.fetch;
+    webSocket?: Omit<WebSocketReceiverOptions, "accessToken">;
 }
 
-/**
- * 创建 Milky V1 适配器
- */
-export function createMilkyAdapter(config: MilkyAdapterConfig): Adapter<string> {
-  const { baseUrl, selfId, accessToken, receiveMode, path = '/milky/v1', wsUrl, platform } = config;
+interface SendMessageResult {
+    message_seq: number;
+    time: number;
+}
 
-  // 解析 baseUrl 获取协议和主机
-  const url = new URL(baseUrl);
-  const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = url.host;
-  
-  // 构建 WebSocket URL
-  const defaultWsUrl = wsUrl || `${protocol}//${host}${url.pathname}`;
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+}
 
-  class MilkyV1AdapterImpl extends Adapter<string> {
-    public readonly selfId: string = selfId;
-    private httpClient: HttpClient;
-    private receiver?: WebSocketReceiver<string> | 
-                       WSSReceiver<string> | 
-                       WebhookReceiver<string> | 
-                       SSEReceiver<string>;
-    private readonly receiveMode: typeof receiveMode;
-    private readonly defaultWsUrl: string;
-    private readonly accessToken?: string;
-    private readonly path: string;
-    private readonly baseUrl: string;
+function isIncomingMessage(value: unknown): value is MilkyIncomingMessage {
+    if (!isRecord(value)) return false;
+    return (
+        (value.message_scene === "friend" ||
+            value.message_scene === "group" ||
+            value.message_scene === "temp") &&
+        typeof value.peer_id === "number" &&
+        typeof value.message_seq === "number" &&
+        typeof value.sender_id === "number" &&
+        typeof value.time === "number" &&
+        Array.isArray(value.segments)
+    );
+}
 
-    constructor() {
-      super();
-      
-      this.receiveMode = receiveMode;
-      this.defaultWsUrl = defaultWsUrl;
-      this.accessToken = accessToken;
-      this.path = path;
-      this.baseUrl = baseUrl;
-      
-      // 优先使用传入的 platform，否则从 baseUrl 解析，最后使用默认值
-      let resolvedPlatform = platform || 'unknown';
-      let accountId = selfId;
-      
-      // 如果 baseUrl 包含路径且没有传入 platform，尝试解析
-      if (!platform && url.pathname && url.pathname !== '/') {
-        const parts = url.pathname.split('/').filter((p: string) => p);
-        if (parts.length >= 2) {
-          resolvedPlatform = parts[0];
-          accountId = parts[1];
+function isRecallData(value: unknown): value is MilkyMessageRecallData {
+    if (!isRecord(value)) return false;
+    return (
+        (value.message_scene === "friend" ||
+            value.message_scene === "group" ||
+            value.message_scene === "temp") &&
+        typeof value.peer_id === "number" &&
+        typeof value.message_seq === "number"
+    );
+}
+
+function createMessageId(
+    scene: MilkyMessageScene,
+    peerId: number,
+    messageSeq: number,
+): MilkyMessageId {
+    return `milky:${scene}:${peerId}:${messageSeq}`;
+}
+
+function parseMessageId(messageId: string): {
+    scene: MilkyMessageScene;
+    peerId: number;
+    messageSeq: number;
+} {
+    const match = /^milky:(friend|group|temp):(-?\d+):(-?\d+)$/.exec(messageId);
+    if (!match) throw new TypeError(`无效的 Milky 消息 ID：${messageId}`);
+    return {
+        scene: match[1] as MilkyMessageScene,
+        peerId: Number(match[2]),
+        messageSeq: Number(match[3]),
+    };
+}
+
+/** Milky V1 协议适配器。 */
+export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
+    readonly selfId: string;
+    readonly #config: MilkyAdapterConfig;
+    readonly #httpClient: HttpClient;
+    #receiver?:
+        | WebSocketReceiver<string>
+        | WSSReceiver<string>
+        | WebhookReceiver<string>
+        | SSEReceiver<string>;
+
+    constructor(config: MilkyAdapterConfig) {
+        super();
+        this.#config = config;
+        this.selfId = config.selfId;
+        const baseUrl = new URL(config.baseUrl);
+        const usesLegacyOneBotsRoutes =
+            config.apiBaseUrl === undefined && config.platform !== undefined;
+        const legacyApiBaseUrl = `${baseUrl.origin}/${config.platform ?? "unknown"}/${config.selfId}/milky/v1`;
+        this.#httpClient = new HttpClient({
+            apiBaseUrl:
+                config.apiBaseUrl ?? (usesLegacyOneBotsRoutes ? legacyApiBaseUrl : config.baseUrl),
+            accessToken: config.accessToken,
+            resolveActionUrl:
+                config.resolveActionUrl ??
+                (usesLegacyOneBotsRoutes
+                    ? action => new URL(action, `${legacyApiBaseUrl}/`)
+                    : undefined),
+            call: config.call,
+            fetch: config.fetch,
+        });
+        this.#setupReceiver();
+    }
+
+    #setupReceiver(): void {
+        const { baseUrl, receiveMode, accessToken, path = "/milky/v1" } = this.#config;
+        const usesNativeEndpoints =
+            this.#config.apiBaseUrl !== undefined || this.#config.platform === undefined;
+        const eventUrl = new URL(this.#config.wsUrl ?? baseUrl);
+        eventUrl.protocol = eventUrl.protocol === "https:" ? "wss:" : "ws:";
+        if (!this.#config.wsUrl && usesNativeEndpoints) eventUrl.pathname = "/event";
+
+        switch (receiveMode) {
+            case "ws":
+                this.#receiver = new WebSocketReceiver(this, eventUrl.toString(), {
+                    ...this.#config.webSocket,
+                    accessToken,
+                });
+                break;
+            case "wss":
+                this.#receiver = new WSSReceiver(
+                    this,
+                    usesNativeEndpoints ? path : eventUrl.pathname,
+                    accessToken,
+                );
+                break;
+            case "webhook":
+                this.#receiver = new WebhookReceiver(
+                    this,
+                    usesNativeEndpoints ? path : `/${this.selfId}${path}`,
+                    accessToken,
+                );
+                break;
+            case "sse": {
+                const sseUrl = new URL(baseUrl);
+                sseUrl.pathname = usesNativeEndpoints
+                    ? "/event"
+                    : `${sseUrl.pathname.replace(/\/$/, "")}/events`;
+                this.#receiver = new SSEReceiver(this, sseUrl.toString(), accessToken);
+                break;
+            }
         }
-      }
-      
-      this.httpClient = new HttpClient({
-        baseUrl,
-        accessToken,
-        platform: resolvedPlatform,
-        accountId,
-      });
-
-      this.setupReceiver();
     }
 
-    private setupReceiver(): void {
-      switch (this.receiveMode) {
-        case 'ws':
-          this.receiver = new WebSocketReceiver(this, this.defaultWsUrl, this.accessToken);
-          break;
-        case 'wss':
-          const wssPath = new URL(this.defaultWsUrl).pathname;
-          this.receiver = new WSSReceiver(this, wssPath, this.accessToken);
-          break;
-        case 'webhook':
-          const webhookPath = `/${this.selfId}${this.path}`;
-          this.receiver = new WebhookReceiver(this, webhookPath, this.accessToken);
-          break;
-        case 'sse':
-          const sseUrl = `${this.baseUrl.replace(/\/$/, '')}/events`;
-          this.receiver = new SSEReceiver(this, sseUrl, this.accessToken);
-          break;
-      }
-    }
-
-  transformEvent(event: MilkyV1Event): void {
-    this.transformAndEmit(event);
-  }
-
-  private transformAndEmit(event: MilkyV1Event): void {
-      // 转换为统一的事件格式
-      if (event.post_type === 'message') {
-        const messageType = event.message_type || 'private';
-        const userId = String(event.user_id || '');
-        const messageId = event.message_id || String(Date.now());
-        
-        if (messageType === 'private') {
-          const messageData: PrivateMessageEvent.Data<string> = {
-            timestamp: event.time,
-            bot_id: String(event.self_id),
-            message_id: messageId,
-            user_id: userId,
-            content: (event.message || []) as Message.Content,
-            message_type: 'private',
-            raw_message: event.raw_message,
-          };
-          this.emit('message.private', messageData);
-        } else {
-          const messageData: GroupMessageEvent.Data<string> = {
-            timestamp: event.time,
-            bot_id: String(event.self_id),
-            message_id: messageId,
-            user_id: userId,
-            group_id: String(event.group_id || ''),
-            content: (event.message || []) as Message.Content,
-            message_type: 'group',
-            raw_message: event.raw_message,
-          };
-          this.emit('message.group', messageData);
+    transformEvent(event: MilkyV1Event): void {
+        if (event.event_type === "message_receive" && isIncomingMessage(event.data)) {
+            this.#emitMessage(event, event.data);
+        } else if (event.event_type === "message_recall" && isRecallData(event.data)) {
+            this.#emitRecall(event, event.data);
         }
-    } else if (event.post_type === 'notice') {
-      // 转换通知事件
-      const noticeType = event.notice_type || '';
-      const noticeData: Record<string, unknown> = {
-        timestamp: event.time,
-        bot_id: String(event.self_id),
-        notice_type: noticeType,
-        sub_type: event.sub_type || '',
-      };
-
-      if (event.user_id) {
-        noticeData.user_id = String(event.user_id);
-      }
-      if (event.group_id) {
-        noticeData.group_id = String(event.group_id);
-      }
-      if (event.operator_id) {
-        noticeData.operator_id = String(event.operator_id);
-      }
-      if (event.message_id) {
-        noticeData.message_id = String(event.message_id);
-      }
-      if (event.duration !== undefined) {
-        noticeData.duration = event.duration;
-      }
-
-      // 映射 Milky 通知类型到 imhelper 通知类型
-      const noticeTypeMap: Record<string, string> = {
-        'group_increase': 'group_member_increase',
-        'group_decrease': 'group_member_decrease',
-        'group_recall': 'group_message_delete',
-        'friend_recall': 'private_message_delete',
-        'friend_add': 'friend_increase',
-      };
-
-      const mappedType = noticeTypeMap[noticeType] || noticeType;
-      (this as EventEmitter).emit(`notice.${mappedType}`, noticeData);
-    } else if (event.post_type === 'request') {
-      // 转换请求事件
-      const requestType = event.request_type || '';
-      const requestData: Record<string, unknown> = {
-        timestamp: event.time,
-        bot_id: String(event.self_id),
-        request_id: event.flag || String(Date.now()),
-        user_id: String(event.user_id || ''),
-        comment: event.comment || '',
-        flag: event.flag || '',
-      };
-
-      if (event.group_id) {
-        requestData.group_id = String(event.group_id);
-      }
-      if (event.sub_type) {
-        requestData.sub_type = event.sub_type;
-      }
-
-      (this as EventEmitter).emit(`request.${requestType}`, requestData);
-    } else if (event.post_type === 'meta_event') {
-      // 转换元事件
-      const metaType = event.meta_event_type || '';
-      const metaData: Record<string, unknown> = {
-        timestamp: event.time,
-        bot_id: String(event.self_id),
-        meta_type: metaType,
-      };
-
-      if (event.sub_type) {
-        metaData.sub_type = event.sub_type;
-      }
-      if (metaType === 'heartbeat' && event.interval !== undefined) {
-        metaData.interval = event.interval;
-      }
-      if (metaType === 'lifecycle' && event.sub_type) {
-        metaData.sub_type = event.sub_type;
-      }
-      if (event.status) {
-        metaData.status = event.status;
-      }
-
-      (this as EventEmitter).emit(`meta.${metaType}`, metaData);
+        this.emit("event", event);
     }
 
-    // 转发原始事件
-    (this as EventEmitter).emit('event', event);
-  }
-
-    async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<MilkyV1Response> {
-      const { scene_type, scene_id, message } = options;
-    
-    if (scene_type === 'private') {
-      return this.httpClient.post('/send_private_msg', {
-        user_id: scene_id,
-        message,
-      });
-    } else {
-      // group 或 channel（Milky 中频道映射为群）
-      return this.httpClient.post('/send_group_msg', {
-        group_id: scene_id,
-        message,
-      });
-    }
-  }
-
-    async recallMessage(message_id: string): Promise<boolean> {
-      const response = await this.httpClient.post('/delete_msg', {
-        message_id,
-      });
-      return response.status === 'ok';
-    }
-
-    async getUserInfo(user_id: string): Promise<User<string>> {
-      const response = await this.httpClient.post('/get_stranger_info', {
-        user_id,
-      });
-      if (response.status === 'ok' && response.data) {
-        const data = response.data as Record<string, unknown>;
-        const userData: User.Data<string> = {
-          user_id: (data.user_id as string) || user_id,
-          user_name: (data.nickname as string) || (data.user_name as string) || '',
-          avatar: (data.avatar as string) || '',
+    #emitMessage(event: MilkyV1Event, message: MilkyIncomingMessage): void {
+        if (message.message_scene === "group") {
+            const data: GroupMessageEvent.Data<string> = {
+                timestamp: message.time,
+                bot_id: String(event.self_id),
+                message_id: createMessageId("group", message.peer_id, message.message_seq),
+                user_id: String(message.sender_id),
+                group_id: String(message.peer_id),
+                content: message.segments as Message.Content,
+                message_type: "group",
+            };
+            this.emit("message.group", data);
+            return;
+        }
+        const data: PrivateMessageEvent.Data<string> = {
+            timestamp: message.time,
+            bot_id: String(event.self_id),
+            message_id: createMessageId(
+                message.message_scene,
+                message.peer_id,
+                message.message_seq,
+            ),
+            user_id: String(message.sender_id),
+            content: message.segments as Message.Content,
+            message_type: "private",
         };
-        return { info: userData } as unknown as User<string>;
-      }
-      throw new Error('Failed to get user info');
+        this.emit("message.private", data);
     }
 
-    async getFriendInfo(user_id: string): Promise<Friend<string>> {
-      const user = await this.getUserInfo(user_id);
-      const friendData: Friend.Data<string> = {
-        ...user.info,
-        remark: '',
-      };
-      return { info: friendData } as unknown as Friend<string>;
+    #emitRecall(event: MilkyV1Event, recall: MilkyMessageRecallData): void {
+        if (recall.message_scene === "group") {
+            this.emit("notice.group_message_delete", {
+                timestamp: event.time,
+                bot_id: String(event.self_id),
+                notice_type: "group_message_delete",
+                sub_type: "delete",
+                message_id: createMessageId("group", recall.peer_id, recall.message_seq),
+                group_id: String(recall.peer_id),
+                operator_id: String(recall.operator_id),
+            });
+        } else {
+            this.emit("notice.private_message_delete", {
+                timestamp: event.time,
+                bot_id: String(event.self_id),
+                notice_type: "private_message_delete",
+                sub_type: "delete",
+                message_id: createMessageId(
+                    recall.message_scene,
+                    recall.peer_id,
+                    recall.message_seq,
+                ),
+                user_id: String(recall.sender_id),
+            });
+        }
+    }
+
+    call<T = unknown>(
+        action: string,
+        params?: Record<string, unknown>,
+    ): Promise<MilkyV1Response<T>> {
+        return this.#httpClient.post<T>(action, params);
+    }
+
+    async sendMessage(
+        options: Adapter.SendMessageOptions<string>,
+    ): Promise<MilkyV1Response<SendMessageResult>> {
+        const { scene_type, scene_id, message } = options;
+        const isPrivate = scene_type === "private";
+        const response = await this.call<SendMessageResult>(
+            isPrivate ? "send_private_message" : "send_group_message",
+            isPrivate
+                ? { user_id: Number(scene_id), message }
+                : { group_id: Number(scene_id), message },
+        );
+        return response;
+    }
+
+    async recallMessage(messageId: string): Promise<boolean> {
+        const { scene, peerId, messageSeq } = parseMessageId(messageId);
+        return this.recallMessageIn(scene, peerId, messageSeq);
+    }
+
+    async recallMessageIn(
+        scene: MilkyMessageScene,
+        peerId: number,
+        messageSeq: number,
+    ): Promise<boolean> {
+        if (scene === "temp") {
+            throw new Error("Milky 临时会话不支持通用撤回，请直接调用协议 action");
+        }
+        const response = await this.call(
+            scene === "group" ? "recall_group_message" : "recall_private_message",
+            scene === "group"
+                ? { group_id: peerId, message_seq: messageSeq }
+                : { user_id: peerId, message_seq: messageSeq },
+        );
+        return response.status === "ok";
+    }
+
+    async getUserInfo(userId: string): Promise<User<string>> {
+        const response = await this.call<Record<string, unknown>>("get_user_profile", {
+            user_id: Number(userId),
+        });
+        if (response.status !== "ok" || !response.data) {
+            throw new Error("获取 Milky 用户信息失败");
+        }
+        return {
+            info: {
+                user_id: String(response.data.user_id ?? userId),
+                user_name: (response.data.nickname as string) ?? "",
+                avatar: (response.data.avatar_url as string) ?? "",
+            },
+        } as unknown as User<string>;
+    }
+
+    async getFriendInfo(userId: string): Promise<Friend<string>> {
+        const response = await this.call<Record<string, unknown>>("get_friend_info", {
+            user_id: Number(userId),
+        });
+        if (response.status !== "ok" || !response.data) {
+            throw new Error("获取 Milky 好友信息失败");
+        }
+        const friend = isRecord(response.data.friend) ? response.data.friend : response.data;
+        return {
+            info: {
+                user_id: String(friend.user_id ?? userId),
+                user_name: (friend.nickname as string) ?? "",
+                avatar: (friend.avatar_url as string) ?? "",
+                remark: (friend.remark as string) ?? "",
+            },
+        } as unknown as Friend<string>;
     }
 
     async getUserList(): Promise<User<string>[]> {
-      return [];
+        const response = await this.call<unknown>("get_friend_list", { no_cache: false });
+        if (response.status !== "ok") return [];
+        const data = response.data;
+        const friends = Array.isArray(data)
+            ? data
+            : isRecord(data) && Array.isArray(data.friends)
+              ? data.friends
+              : [];
+        return friends.filter(isRecord).map(
+            friend =>
+                ({
+                    info: {
+                        user_id: String(friend.user_id),
+                        user_name: (friend.nickname as string) ?? "",
+                        avatar: (friend.avatar_url as string) ?? "",
+                    },
+                }) as unknown as User<string>,
+        );
     }
 
-    async getGroupInfo(group_id: string): Promise<Group<string>> {
-      const response = await this.httpClient.post('/get_group_info', {
-        group_id,
-      });
-      if (response.status === 'ok' && response.data) {
-        const data = response.data as Record<string, unknown>;
-        const groupData: Group.Data<string> = {
-          group_id: (data.group_id as string) || group_id,
-          group_name: (data.group_name as string) || '',
-          avatar: (data.avatar as string) || '',
-        };
-        return { info: groupData } as unknown as Group<string>;
-      }
-      throw new Error('Failed to get group info');
+    async getGroupInfo(groupId: string): Promise<Group<string>> {
+        const response = await this.call<Record<string, unknown>>("get_group_info", {
+            group_id: Number(groupId),
+            no_cache: false,
+        });
+        if (response.status !== "ok" || !response.data) {
+            throw new Error("获取 Milky 群信息失败");
+        }
+        return {
+            info: {
+                group_id: String(response.data.group_id ?? groupId),
+                group_name: (response.data.group_name as string) ?? "",
+                avatar: (response.data.avatar_url as string) ?? "",
+            },
+        } as unknown as Group<string>;
     }
 
     async getGroupList(): Promise<Group<string>[]> {
-      const response = await this.httpClient.post('/get_group_list', {});
-      if (response.status === 'ok' && Array.isArray(response.data)) {
-        return (response.data as Array<Record<string, unknown>>).map((item) => {
-          const groupData: Group.Data<string> = {
-            group_id: item.group_id as string,
-            group_name: (item.group_name as string) || '',
-            avatar: (item.avatar as string) || '',
-          };
-          return { info: groupData } as unknown as Group<string>;
+        const response = await this.call<unknown>("get_group_list", { no_cache: false });
+        if (response.status !== "ok") return [];
+        const data = response.data;
+        const groups = Array.isArray(data)
+            ? data
+            : isRecord(data) && Array.isArray(data.groups)
+              ? data.groups
+              : [];
+        return groups.filter(isRecord).map(
+            group =>
+                ({
+                    info: {
+                        group_id: String(group.group_id),
+                        group_name: (group.group_name as string) ?? "",
+                        avatar: (group.avatar_url as string) ?? "",
+                    },
+                }) as unknown as Group<string>,
+        );
+    }
+
+    async getGroupMemberInfo(groupId: string, userId: string): Promise<User<string>> {
+        const response = await this.call<Record<string, unknown>>("get_group_member_info", {
+            group_id: Number(groupId),
+            user_id: Number(userId),
+            no_cache: false,
         });
-      }
-      return [];
+        if (response.status !== "ok" || !response.data) {
+            throw new Error("获取 Milky 群成员信息失败");
+        }
+        const member = isRecord(response.data.member) ? response.data.member : response.data;
+        return {
+            info: {
+                user_id: String(member.user_id ?? userId),
+                user_name: (member.card as string) ?? (member.nickname as string) ?? "",
+                avatar: (member.avatar_url as string) ?? "",
+            },
+        } as unknown as User<string>;
     }
 
-    async getGroupMemberInfo(group_id: string, user_id: string): Promise<User<string>> {
-      const response = await this.httpClient.post('/get_group_member_info', {
-        group_id,
-        user_id,
-      });
-      if (response.status === 'ok' && response.data) {
-        const data = response.data as Record<string, unknown>;
-        const userData: User.Data<string> = {
-          user_id: (data.user_id as string) || user_id,
-          user_name: (data.nickname as string) || (data.card as string) || (data.user_name as string) || '',
-          avatar: (data.avatar as string) || '',
-        };
-        return { info: userData } as unknown as User<string>;
-      }
-      throw new Error('Failed to get group member info');
-    }
-
-    async getGroupMemberList(group_id: string): Promise<User<string>[]> {
-      const response = await this.httpClient.post('/get_group_member_list', {
-        group_id,
-      });
-      if (response.status === 'ok' && Array.isArray(response.data)) {
-        return (response.data as Array<Record<string, unknown>>).map((item) => {
-          const userData: User.Data<string> = {
-            user_id: item.user_id as string,
-            user_name: (item.nickname as string) || (item.card as string) || (item.user_name as string) || '',
-            avatar: (item.avatar as string) || '',
-          };
-          return { info: userData } as unknown as User<string>;
+    async getGroupMemberList(groupId: string): Promise<User<string>[]> {
+        const response = await this.call<unknown>("get_group_member_list", {
+            group_id: Number(groupId),
+            no_cache: false,
         });
-      }
-      return [];
+        if (response.status !== "ok" || !Array.isArray(response.data)) return [];
+        return response.data.filter(isRecord).map(
+            member =>
+                ({
+                    info: {
+                        user_id: String(member.user_id),
+                        user_name: (member.card as string) ?? (member.nickname as string) ?? "",
+                        avatar: (member.avatar_url as string) ?? "",
+                    },
+                }) as unknown as User<string>,
+        );
     }
 
-    async kickGroupMember(group_id: string, user_id: string): Promise<void> {
-      await this.httpClient.post('/set_group_kick', {
-        group_id,
-        user_id,
-      });
+    async kickGroupMember(groupId: string, userId: string): Promise<void> {
+        await this.call("kick_group_member", {
+            group_id: Number(groupId),
+            user_id: Number(userId),
+            reject_add_request: false,
+        });
     }
 
-    async setGroupMemberMute(group_id: string, user_id: string, duration: number): Promise<void> {
-      await this.httpClient.post('/set_group_ban', {
-        group_id,
-        user_id,
-        duration,
-      });
+    async setGroupMemberMute(groupId: string, userId: string, duration: number): Promise<void> {
+        await this.call("set_group_member_mute", {
+            group_id: Number(groupId),
+            user_id: Number(userId),
+            duration,
+        });
     }
 
-    async setGroupMemberAdmin(group_id: string, user_id: string, admin: boolean = true): Promise<void> {
-      await this.httpClient.post('/set_group_admin', {
-        group_id,
-        user_id,
-        enable: admin,
-      });
+    async setGroupMemberAdmin(groupId: string, userId: string, admin = true): Promise<void> {
+        await this.call("set_group_member_admin", {
+            group_id: Number(groupId),
+            user_id: Number(userId),
+            enable: admin,
+        });
     }
 
-    async setGroupMemberCard(group_id: string, user_id: string, card: string): Promise<void> {
-      await this.httpClient.post('/set_group_card', {
-        group_id,
-        user_id,
-        card,
-      });
+    async setGroupMemberCard(groupId: string, userId: string, card: string): Promise<void> {
+        await this.call("set_group_member_card", {
+            group_id: Number(groupId),
+            user_id: Number(userId),
+            card,
+        });
     }
 
-    async setGroupName(group_id: string, name: string): Promise<void> {
-      await this.httpClient.post('/set_group_name', {
-        group_id,
-        group_name: name,
-      });
+    async setGroupName(groupId: string, name: string): Promise<void> {
+        await this.call("set_group_name", { group_id: Number(groupId), new_group_name: name });
     }
 
-    async leaveGroup(group_id: string): Promise<void> {
-      await this.httpClient.post('/set_group_leave', {
-        group_id,
-      });
+    async leaveGroup(groupId: string): Promise<void> {
+        await this.call("quit_group", { group_id: Number(groupId), is_dismiss: false });
     }
 
-    async approveFriendRequest(request_id: string, approve: boolean, comment?: string): Promise<void> {
-      await this.httpClient.post('/set_friend_add_request', {
-        flag: request_id,
-        approve,
-        remark: comment,
-      });
+    async approveFriendRequest(requestId: string, approve: boolean): Promise<void> {
+        await this.call(approve ? "accept_friend_request" : "reject_friend_request", {
+            request_id: requestId,
+        });
     }
 
-    async approveGroupRequest(request_id: string, approve: boolean, reason?: string): Promise<void> {
-      await this.httpClient.post('/set_group_add_request', {
-        flag: request_id,
-        sub_type: 'add',
-        approve,
-        reason,
-      });
+    async approveGroupRequest(requestId: string, approve: boolean, reason?: string): Promise<void> {
+        await this.call(approve ? "accept_group_request" : "reject_group_request", {
+            request_id: requestId,
+            ...(approve ? {} : { reason }),
+        });
     }
 
     async start(port?: number): Promise<void> {
-      if (this.receiver) {
-        if (this.receiveMode === 'wss' || this.receiveMode === 'webhook') {
-          await this.receiver.connect(port || 8080);
-        } else {
-          // ws 和 sse 模式不需要 port 参数
-          await this.receiver.connect();
+        if (!this.#receiver) return;
+        if (this.#config.receiveMode === "wss" || this.#config.receiveMode === "webhook") {
+            await this.#receiver.connect(port ?? 8080);
+            return;
         }
-      }
+        await this.#receiver.connect();
     }
 
     async stop(): Promise<void> {
-      if (this.receiver) {
-        await this.receiver.disconnect();
-      }
+        await this.#receiver?.disconnect();
     }
-  }
-
-  return new MilkyV1AdapterImpl();
 }
 
+export function createMilkyAdapter(config: MilkyAdapterConfig): MilkyV1Adapter {
+    return new MilkyV1Adapter(config);
+}
