@@ -1,5 +1,14 @@
 # onebots-dev
 
+## 1.1.21
+
+### Patch Changes
+
+- Updated dependencies [4d94852]
+  - imhelper@1.0.7
+  - @imhelper/onebot-v11@1.0.7
+  - @imhelper/onebot-v12@1.0.7
+
 ## 1.1.20
 
 ### Patch Changes
