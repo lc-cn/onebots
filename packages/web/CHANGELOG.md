@@ -1,4 +1,4 @@
-# imhelper
+# @onebots/web
 
 ## 1.0.10
 
