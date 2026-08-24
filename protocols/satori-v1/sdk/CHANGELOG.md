@@ -1,5 +1,13 @@
 # @imhelper/satori-v1
 
+## 1.0.7
+
+### Patch Changes
+
+- 4d94852: 补齐 OneBot 与 Milky 的 canonical notice、request、meta 事件投影，增加结构化协议错误、手动接收模式，并补充 OneBot V12 响应 echo 类型。
+- Updated dependencies [4d94852]
+  - imhelper@1.0.7
+
 ## 1.0.6
 
 ### Patch Changes
