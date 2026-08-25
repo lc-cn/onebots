@@ -59,6 +59,10 @@ __tests__/**/*.d.ts.map
 .vscode/
 .idea/
 
+# Claude Code local session state (keep .claude/launch.json — shared dev-server config)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
 # OS
 .DS_Store
 

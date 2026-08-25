@@ -24,6 +24,7 @@
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "create:adapter": "node scripts/create-adapter.mjs",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",
@@ -67,8 +68,8 @@
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.59.4",
     "@typescript-eslint/parser": "^8.59.4",
-    "@vitest/coverage-v8": "^1.6.1",
-    "@vitest/ui": "^1.6.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/ui": "^4.1.11",
     "d3-sankey": "^0.12.3",
     "eslint": "^10.5.0",
     "koa-static": "^5.0.0",
@@ -76,13 +77,41 @@
     "socks-proxy-agent": "^8.0.5",
     "typescript": "catalog:",
     "vitepress": "^1.6.4",
-    "vitest": "^1.6.1",
+    "vitest": "^4.1.11",
     "ws": "^8.20.0"
   },
   "pnpm": {
     "overrides": {
       "glob": "^10.0.0",
-      "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@^1.5.0"
-    }
+      "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@^1.5.0",
+      "axios": "^1.19.0",
+      "ws": "^8.21.3",
+      "nodemailer": "^9.0.5",
+      "form-data": "^4.0.6",
+      "lodash": "^4.18.1",
+      "lodash-es": "^4.18.1",
+      "semver": "^7.8.5",
+      "path-to-regexp": "^8.4.2",
+      "linkify-it": "^5.0.1",
+      "js-yaml": "^4.3.1",
+      "qs": "^6.15.2",
+      "uuid": "^11.1.1",
+      "ip-address": "^10.3.1",
+      "brace-expansion": "^5.0.9",
+      "immutable": "^5.1.9",
+      "nanoid": "^3.3.18",
+      "@protobufjs/utf8": "^1.1.2",
+      "protobufjs": "^7.6.3",
+      "dompurify": "^3.4.14",
+      "esbuild": "^0.25.0",
+      "mermaid": "^11.17.0",
+      "postcss": "^8.5.26",
+      "vitepress>vite": "^7.3.6",
+      "vitepress>@vitejs/plugin-vue": "^6.0.8"
+    },
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "protobufjs"
+    ]
   }
 }

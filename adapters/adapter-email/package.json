@@ -35,7 +35,7 @@
     "onebots": "workspace:*"
   },
   "dependencies": {
-    "nodemailer": "^6.9.16",
+    "nodemailer": "^9.0.5",
     "imap": "^0.8.19",
     "mailparser": "^3.6.5"
   },

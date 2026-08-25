@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Logs',
         component: () => import('../views/Logs.vue'),
         meta: { title: '系统日志', icon: 'Document' }
+      },
+      {
+        path: 'message-debug',
+        name: 'MessageDebug',
+        component: () => import('../views/MessageDebug.vue'),
+        meta: { title: '消息调试', icon: 'Bug' }
       }
     ]
   }

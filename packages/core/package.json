@@ -44,8 +44,7 @@
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "tsx": "latest",
-    "typescript": "catalog:",
-    "wechat": "latest"
+    "typescript": "catalog:"
   },
   "files": [
     "/lib/**/*.js",
@@ -53,7 +52,7 @@
   ],
   "dependencies": {
     "@koa/router": "^15.1.0",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.3.1",
     "koa": "^3.1.1",
     "koa-basic-auth": "^4.0.0",
     "koa-body": "^7.0.0",

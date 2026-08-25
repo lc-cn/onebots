@@ -9,7 +9,7 @@ import type { ImHelper } from "./imhelper.js";
 
 class TestAdapter extends Adapter<string> {
     readonly selfId = "bot";
-    readonly transform = vi.fn<[unknown], void>();
+    readonly transform = vi.fn<(event: unknown) => void>();
 
     transformEvent(event: unknown): void {
         this.transform(event);
@@ -153,8 +153,8 @@ describe("ImHelper host-managed ingress", () => {
     it("acceptWebSocket 以 1009 关闭超过默认上限的消息", () => {
         const adapter = new TestAdapter();
         const client = createImHelper(adapter);
-        const socket = new EventEmitter() as EventEmitter & { close: ReturnType<typeof vi.fn> };
-        socket.close = vi.fn();
+        const socket = new EventEmitter() as EventEmitter & { close: (code?: number, reason?: string) => unknown };
+        socket.close = vi.fn<(code?: number, reason?: string) => unknown>();
         client.acceptWebSocket(socket);
 
         socket.emit("message", Buffer.alloc(1024 * 1024 + 1));

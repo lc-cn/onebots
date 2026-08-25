@@ -78,12 +78,7 @@ export default defineConfig({
     
     // 并行运行测试
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: false
-      }
-    },
-    
+
     // 设置默认环境变量
     env: {
       NODE_ENV: 'test'

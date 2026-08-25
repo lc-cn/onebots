@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter=@onebots/web", "dev"],
+      "port": 6728
+    },
+    {
+      "name": "docs-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter=@onebots/docs", "exec", "vitepress", "dev", "--port", "8989"],
+      "port": 8989
+    }
+  ]
+}

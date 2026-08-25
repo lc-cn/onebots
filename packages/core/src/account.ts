@@ -67,7 +67,23 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=un
     ) {
         super();
         this.protocols = this.protocolConfigs.map(({protocol,version,...config}:Protocol.FullConfig<C>) => {
-            return ProtocolRegistry.create(protocol, version,this.adapter, this, config);
+            const instance = ProtocolRegistry.create(protocol, version,this.adapter, this, config);
+            // 调试观测用的旁路监听器：绝不能抛出，否则会阻断在它之后注册的同一 "dispatch" 事件的
+            // 其它监听器（比如协议自身真正向客户端广播的监听器）。
+            instance.on("dispatch", (data: unknown) => {
+                try {
+                    this.adapter.emit("message:protocol-dispatch", {
+                        platform: this.platform,
+                        account_id: this.account_id,
+                        protocol: instance.name,
+                        version: instance.version,
+                        data,
+                    });
+                } catch (error) {
+                    this.logger.debug(`message:protocol-dispatch 旁路监听器异常（已忽略）:`, error);
+                }
+            });
+            return instance;
         });
         this.status = AccountStatus.Pending;
     }
@@ -104,6 +120,16 @@ export class Account<P extends keyof Adapter.Configs= keyof Adapter.Configs,C=un
      */
     dispatch(commonEvent: CommonEvent.Base): void {
         this.logger.debug(`Dispatching event: ${commonEvent.type} to ${this.protocols.length} protocol(s)`);
+        // 调试观测用的旁路 emit：绝不能抛出并阻断下面真正的协议分发循环。
+        try {
+            this.adapter.emit("message:dispatch", {
+                platform: this.platform,
+                account_id: this.account_id,
+                event: commonEvent,
+            });
+        } catch (error) {
+            this.logger.debug(`message:dispatch 旁路监听器异常（已忽略）:`, error);
+        }
         for (const protocol of this.protocols) {
             this.logger.debug(`Dispatching to protocol: ${protocol.name}/${protocol.version}`);
             protocol.dispatch(commonEvent);

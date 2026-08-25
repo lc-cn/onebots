@@ -419,7 +419,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
    分支命名参考：`feat/adapter-xxx`、`fix/xxx-bug`、`refactor/xxx`。
 
-2. **开发**：在分支上完成代码修改，确保通过 `pnpm lint` 和 `pnpm test`。
+2. **开发**：在分支上完成代码修改，确保通过 `pnpm build`、`pnpm lint` 和 `pnpm test`（与 CI 门禁一致）。
 
 3. **变更集**：如果涉及包版本变更（新功能或修复），使用 `pnpm changeset` 生成变更集（选择变动的包和版本类型）。
 
@@ -452,9 +452,12 @@ pnpm changeset:publish      # 发布到 npm
 | `pnpm build` | `build:packages` + `build:rest` |
 | `pnpm clean` | 清理所有包的构建产物 |
 | `pnpm dev` | 启动开发环境（onebots-dev 的调试网关） |
-| `pnpm lint` | Prettier 格式检查 |
-| `pnpm lint:fix` | Prettier 自动修复格式 |
+| `pnpm lint` | ESLint 检查 |
+| `pnpm lint:fix` | ESLint 自动修复 |
+| `pnpm format` | Prettier 格式检查 |
+| `pnpm format:fix` | Prettier 自动修复格式 |
 | `pnpm test` | 运行所有测试（vitest run --passWithNoTests） |
+| `pnpm create:adapter <platform>` | 生成新适配器包骨架，见下方「添加适配器」 |
 | `pnpm test:watch` | vitest 监听模式 |
 | `pnpm test:ui` | vitest UI 模式 |
 | `pnpm test:coverage` | 带覆盖率报告的测试 |
@@ -467,6 +470,8 @@ pnpm changeset:publish      # 发布到 npm
 ## 添加适配器
 
 添加新平台适配器（以 `adapter-foo` 为例）：
+
+> **快速开始**：`pnpm create:adapter foo --display "Foo" --description "描述文字"` 会自动生成下面第 1-4 步的完整包结构（含一个可直接跑通的 `sendMessage`/`getLoginInfo`/消息派发示例和基础测试），生成后按文件里的 `TODO` 注释替换成真实平台逻辑即可，跳到第 5 步补充测试。
 
 ### 1. 创建包结构
 

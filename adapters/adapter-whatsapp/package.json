@@ -33,7 +33,7 @@
     "onebots": "workspace:*"
   },
   "dependencies": {
-    "axios": "^1.7.9"
+    "axios": "^1.19.0"
   },
   "optionalDependencies": {
     "https-proxy-agent": "^7.0.6",

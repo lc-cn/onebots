@@ -218,6 +218,7 @@ import {
     IconChartBar,
     IconTerminal2,
     IconFileText,
+    IconBug,
     IconBell,
     IconSun,
     IconMoon,
@@ -278,6 +279,7 @@ const menuItems = [
     { to: '/system', label: '系统信息', icon: IconChartBar },
     { to: '/terminal', label: 'Web 控制台', icon: IconTerminal2 },
     { to: '/logs', label: '系统日志', icon: IconFileText },
+    { to: '/message-debug', label: '消息调试', icon: IconBug },
 ];
 
 const isActive = (path: string) => route.path === path || route.path.startsWith(`${path}/`);
