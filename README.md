@@ -12,7 +12,6 @@
 [![Node](https://img.shields.io/node/v/onebots?color=339933&logo=Node.js)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Flc--cn%2Fonebots-blue?logo=docker)](https://github.com/lc-cn/onebots/pkgs/container/onebots)
-[![Powered by OrcaRouter](https://img.shields.io/badge/Powered_by-OrcaRouter-2563eb)](https://www.orcarouter.ai/ref/ref_c84471a8a01398e7c383)
 
 [![OneBot V11](https://img.shields.io/badge/OneBot-v11-black)](https://onebot.dev/)
 [![OneBot V12](https://img.shields.io/badge/OneBot-v12-black)](https://12.onebot.dev/)
