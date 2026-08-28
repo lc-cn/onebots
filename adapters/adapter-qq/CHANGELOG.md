@@ -1,5 +1,12 @@
 # @onebots/adapter-qq
 
+## 3.0.8
+
+### Patch Changes
+
+- Updated dependencies [7891a2e]
+  - onebots@1.2.6
+
 ## 3.0.7
 
 ### Patch Changes

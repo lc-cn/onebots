@@ -1,5 +1,12 @@
 # @onebots/adapter-slack
 
+## 3.0.6
+
+### Patch Changes
+
+- Updated dependencies [7891a2e]
+  - onebots@1.2.6
+
 ## 3.0.5
 
 ### Patch Changes
