@@ -1,5 +1,11 @@
 # @onebots/web
 
+## 1.0.11
+
+### Patch Changes
+
+- 7891a2e: 丰富协议配置 Schema 的表单元数据，在 Web 管理端为 Webhook 与反向 WebSocket 提供动态增删和单项高级设置，并移除全局表单中的账号重复配置。
+
 ## 1.0.10
 
 ### Patch Changes
