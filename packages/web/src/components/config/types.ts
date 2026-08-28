@@ -1,37 +1,6 @@
-export type ValidationRule = {
-    required?: boolean;
-    type?: "string" | "number" | "boolean" | "object" | "array";
-    min?: number;
-    max?: number;
-    pattern?: RegExp;
-    choices?: Array<{ label: string; value: string | number | boolean }>;
-    default?: unknown;
-    label?: string;
-    description?: string;
-    placeholder?: string;
-    ui?: {
-        widget?: "endpoint-list" | "event-filter";
-        section?: "transport" | "delivery" | "credentials" | "filter" | "advanced";
-        itemLabel?: string;
-        addLabel?: string;
-        schemes?: string[];
-        fields?: Array<{
-            key: string;
-            label: string;
-            type?: "string" | "number" | "boolean";
-            placeholder?: string;
-            description?: string;
-            sensitive?: boolean;
-        }>;
-        eventFields?: Array<{
-            path: string;
-            label: string;
-            choices?: Array<{ label: string; value: string | number | boolean }>;
-        }>;
-    };
-};
+import type { Schema, ValidationRule } from "@onebots/core";
 
-export type Schema = Record<string, ValidationRule | Schema>;
+export type { Schema, ValidationRule };
 
 export type SchemaBundle = {
     base?: Schema;

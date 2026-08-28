@@ -1,10 +1,7 @@
 import { EventEmitter } from "events";
 import {
     Adapter,
-    WebSocketReceiver,
-    WSSReceiver,
-    WebhookReceiver,
-    SSEReceiver,
+    ReceiveTransport,
     Message,
     type User,
     type Group,
@@ -71,25 +68,10 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
     class SatoriV1AdapterImpl extends Adapter<string, SatoriV1Event> implements SatoriAdapter {
         public readonly selfId: string = selfId;
         private httpClient: HttpClient;
-        private receiver?:
-            | WebSocketReceiver<string>
-            | WSSReceiver<string>
-            | WebhookReceiver<string>
-            | SSEReceiver<string>;
-        private readonly receiveMode: typeof receiveMode;
-        private readonly defaultWsUrl: string;
-        private readonly accessToken?: string;
-        private readonly path: string;
-        private readonly baseUrl: string;
+        private readonly receiveTransport: ReceiveTransport<string, SatoriV1Event>;
 
         constructor() {
             super();
-
-            this.receiveMode = receiveMode;
-            this.defaultWsUrl = defaultWsUrl;
-            this.accessToken = accessToken;
-            this.path = path;
-            this.baseUrl = baseUrl;
 
             this.httpClient = new HttpClient({
                 apiBaseUrl: config.apiBaseUrl ?? baseUrl,
@@ -101,38 +83,27 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                 fetch: config.fetch,
             });
 
-            this.setupReceiver();
-        }
-
-        private setupReceiver(): void {
-            switch (this.receiveMode) {
-                case "ws":
-                    this.receiver = new WebSocketReceiver(this, this.defaultWsUrl, {
-                        ...config.webSocket,
-                        accessToken: this.accessToken,
-                        onOpen: socket => {
-                            socket.send(
-                                JSON.stringify({
-                                    op: 3,
-                                    body: this.accessToken ? { token: this.accessToken } : {},
-                                }),
-                            );
-                        },
-                    });
-                    break;
-                case "wss":
-                    const wssPath = new URL(this.defaultWsUrl).pathname;
-                    this.receiver = new WSSReceiver(this, wssPath, this.accessToken);
-                    break;
-                case "webhook":
-                    const webhookPath = `/${this.selfId}${this.path}`;
-                    this.receiver = new WebhookReceiver(this, webhookPath, this.accessToken);
-                    break;
-                case "sse":
-                    const sseUrl = `${this.baseUrl.replace(/\/$/, "")}/events`;
-                    this.receiver = new SSEReceiver(this, sseUrl, this.accessToken);
-                    break;
-            }
+            this.receiveTransport = new ReceiveTransport(this, {
+                mode: receiveMode,
+                endpoints: {
+                    ws: defaultWsUrl,
+                    wss: new URL(defaultWsUrl).pathname,
+                    webhook: `/${selfId}${path}`,
+                    sse: `${baseUrl.replace(/\/$/, "")}/events`,
+                },
+                accessToken,
+                webSocket: {
+                    ...config.webSocket,
+                    onOpen: socket => {
+                        socket.send(
+                            JSON.stringify({
+                                op: 3,
+                                body: accessToken ? { token: accessToken } : {},
+                            }),
+                        );
+                    },
+                },
+            });
         }
 
         transformEvent(event: SatoriV1Event | SatoriGatewayPayload): void {
@@ -409,20 +380,11 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
         }
 
         async start(port?: number): Promise<void> {
-            if (this.receiver) {
-                if (this.receiveMode === "wss" || this.receiveMode === "webhook") {
-                    await this.receiver.connect(port || 8080);
-                } else {
-                    // ws 和 sse 模式不需要 port 参数
-                    await this.receiver.connect();
-                }
-            }
+            await this.receiveTransport.connect(port);
         }
 
         async stop(): Promise<void> {
-            if (this.receiver) {
-                await this.receiver.disconnect();
-            }
+            await this.receiveTransport.disconnect();
         }
     }
 

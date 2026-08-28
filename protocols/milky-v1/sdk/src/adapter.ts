@@ -1,10 +1,7 @@
 import {
     Adapter,
     Message,
-    SSEReceiver,
-    WebhookReceiver,
-    WebSocketReceiver,
-    WSSReceiver,
+    ReceiveTransport,
     type Friend,
     type Group,
     type GroupMessageEvent,
@@ -109,6 +106,29 @@ function parseMessageId(messageId: string): {
     };
 }
 
+function resolveReceiveEndpoints(config: MilkyAdapterConfig): {
+    ws: string;
+    wss: string;
+    webhook: string;
+    sse: string;
+} {
+    const { baseUrl, path = "/milky/v1" } = config;
+    const eventUrl = new URL(config.wsUrl ?? baseUrl);
+    eventUrl.protocol = eventUrl.protocol === "https:" ? "wss:" : "ws:";
+    if (!config.wsUrl) {
+        eventUrl.pathname = `${eventUrl.pathname.replace(/\/+$/, "")}/event`;
+    }
+
+    const sseUrl = new URL(baseUrl);
+    sseUrl.pathname = `${sseUrl.pathname.replace(/\/+$/, "")}/event`;
+    return {
+        ws: eventUrl.toString(),
+        wss: eventUrl.pathname || path,
+        webhook: path,
+        sse: sseUrl.toString(),
+    };
+}
+
 /** Milky V1 协议适配器。 */
 export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
     readonly selfId: string;
@@ -116,11 +136,7 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
     readonly #httpClient: HttpClient;
     readonly #friendRequests = new Map<string, FriendRequestContext>();
     readonly #groupRequests = new Map<string, GroupRequestContext>();
-    #receiver?:
-        | WebSocketReceiver<string>
-        | WSSReceiver<string>
-        | WebhookReceiver<string>
-        | SSEReceiver<string>;
+    readonly #receiveTransport: ReceiveTransport<string, MilkyV1Event>;
 
     constructor(config: MilkyAdapterConfig) {
         super();
@@ -133,45 +149,12 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
             call: config.call,
             fetch: config.fetch,
         });
-        this.#setupReceiver();
-    }
-
-    #setupReceiver(): void {
-        const { baseUrl, receiveMode, accessToken, path = "/milky/v1" } = this.#config;
-        const eventUrl = new URL(this.#config.wsUrl ?? baseUrl);
-        eventUrl.protocol = eventUrl.protocol === "https:" ? "wss:" : "ws:";
-        if (!this.#config.wsUrl) {
-            eventUrl.pathname = `${eventUrl.pathname.replace(/\/+$/, "")}/event`;
-        }
-
-        switch (receiveMode) {
-            case "ws":
-                this.#receiver = new WebSocketReceiver(this, eventUrl.toString(), {
-                    ...this.#config.webSocket,
-                    accessToken,
-                });
-                break;
-            case "wss":
-                this.#receiver = new WSSReceiver(
-                    this,
-                    eventUrl.pathname || path,
-                    accessToken,
-                );
-                break;
-            case "webhook":
-                this.#receiver = new WebhookReceiver(
-                    this,
-                    path,
-                    accessToken,
-                );
-                break;
-            case "sse": {
-                const sseUrl = new URL(baseUrl);
-                sseUrl.pathname = `${sseUrl.pathname.replace(/\/+$/, "")}/event`;
-                this.#receiver = new SSEReceiver(this, sseUrl.toString(), accessToken);
-                break;
-            }
-        }
+        this.#receiveTransport = new ReceiveTransport(this, {
+            mode: config.receiveMode,
+            endpoints: resolveReceiveEndpoints(config),
+            accessToken: config.accessToken,
+            webSocket: config.webSocket,
+        });
     }
 
     transformEvent(event: MilkyV1Event): void {
@@ -590,16 +573,11 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
     }
 
     async start(port?: number): Promise<void> {
-        if (!this.#receiver) return;
-        if (this.#config.receiveMode === "wss" || this.#config.receiveMode === "webhook") {
-            await this.#receiver.connect(port ?? 8080);
-            return;
-        }
-        await this.#receiver.connect();
+        await this.#receiveTransport.connect(port);
     }
 
     async stop(): Promise<void> {
-        await this.#receiver?.disconnect();
+        await this.#receiveTransport.disconnect();
     }
 }
 

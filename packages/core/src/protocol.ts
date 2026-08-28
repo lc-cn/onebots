@@ -4,12 +4,18 @@ import { Adapter } from "./adapter.js";
 import { Dict } from "./types.js";
 import { Router } from "./router.js";
 import type { ValidationRule } from "./config-validator.js";
+import {
+    compileEventFilter,
+    type EventFilterPredicate,
+    type EventFilters,
+} from "./event-filter.js";
 
 /**
  * Base Protocol class
  * Represents a communication protocol (e.g., OneBot, Milky, Satori)
  */
 export abstract class Protocol<V extends string = string, C = unknown> extends EventEmitter {
+    readonly #eventFilter: EventFilterPredicate;
     public abstract readonly name: string;
     public abstract readonly version: V;
     get app() {
@@ -27,6 +33,7 @@ export abstract class Protocol<V extends string = string, C = unknown> extends E
         public config: Protocol.FullConfig<C>,
     ) {
         super();
+        this.#eventFilter = compileEventFilter(config.filters);
     }
 
     /**
@@ -40,7 +47,7 @@ export abstract class Protocol<V extends string = string, C = unknown> extends E
      * Filter function to determine if event should be processed
      */
     filterFn(event: Dict): boolean {
-        return Protocol.createFilter(this.config.filters)(event);
+        return this.#eventFilter(event);
     }
 
     /**
@@ -85,25 +92,7 @@ export namespace Protocol {
     /**
      * Filter configuration
      */
-    export type Filters = AttrFilter | WithFilter | UnionFilter | ExcludeFilter;
-
-    type MaybeArray<T = unknown> = T | T[];
-
-    type AttrFilter = {
-        [P in keyof Dict]?: MaybeArray | boolean;
-    };
-
-    export type WithFilter = {
-        $and: Filters;
-    };
-
-    export type UnionFilter = {
-        $or: Filters;
-    };
-
-    export type ExcludeFilter = {
-        $not: Filters;
-    };
+    export type Filters = EventFilters;
 
     /** 所有协议共享的事件过滤器表单契约。 */
     export const FilterSchema = {
@@ -175,89 +164,5 @@ export namespace Protocol {
             typeof factory === "function" &&
             /^class\s/.test(Function.prototype.toString.call(factory))
         );
-    }
-
-    export function createFilter(filters?: Filters) {
-        // 如果没有 filters，返回始终为 true 的过滤器
-        if (!filters || Object.keys(filters).length === 0) {
-            return () => true;
-        }
-
-        const isLogicKey = (key: string) => {
-            return [
-                "$and",
-                "$or",
-                "$not",
-                "$nor",
-                "$regexp",
-                "$like",
-                "$gt",
-                "$gte",
-                "$lt",
-                "$lte",
-                "$between",
-            ].includes(key);
-        };
-
-        const filterFn = (event: Dict, key: string, value: unknown): boolean => {
-            // If key is $and, $or, $not, $nor, recursively call
-            if (key === "$and" || key === "$or" || key === "$not" || key === "$nor") {
-                if (!value || typeof value !== "object") throw new Error("invalid filter");
-                switch (key) {
-                    case "$and":
-                        return Array.isArray(value)
-                            ? value.every(item => filterFn(event, key, item))
-                            : Object.entries(value).every(([key, value]) =>
-                                  filterFn(event, key, value),
-                              );
-                    case "$or":
-                        return Array.isArray(value)
-                            ? value.some(item => filterFn(event, key, item))
-                            : Object.entries(value).some(([key, value]) =>
-                                  filterFn(event, key, value),
-                              );
-                    case "$nor":
-                        return !filterFn(event, "$or", value);
-                    case "$not":
-                        return !filterFn(event, "$and", value);
-                }
-            }
-
-            if (typeof value === "boolean" && typeof event[key] !== "boolean") {
-                return value;
-            }
-
-            if (typeof value !== "object") {
-                if (key === "$regex" && typeof value === "string")
-                    return new RegExp(value).test(String(event));
-                if (key === "$like" && typeof value === "string")
-                    return String(event).includes(value);
-                if (key === "$gt" && typeof value === "number") return Number(event) > value;
-                if (key === "$gte" && typeof value === "number") return Number(event) >= value;
-                if (key === "$lt" && typeof value === "number") return Number(event) < value;
-                if (key === "$lte" && typeof value === "number") return Number(event) <= value;
-                return value === event[key];
-            }
-
-            if (
-                key === "$between" &&
-                Array.isArray(value) &&
-                value.length === 2 &&
-                value.every(item => typeof item === "number")
-            ) {
-                const [start, end] = value as [number, number];
-                return Number(event) >= start && Number(event) <= end;
-            }
-
-            if (Array.isArray(value)) {
-                return value.includes(event[key]);
-            }
-
-            return createFilter(value as Filters)(isLogicKey(key) ? event : (event[key] as Dict));
-        };
-
-        return (event: Dict) => {
-            return Object.entries(filters).every(([key, value]) => filterFn(event, key, value));
-        };
     }
 }

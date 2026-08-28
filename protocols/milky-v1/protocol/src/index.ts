@@ -1,9 +1,10 @@
 import { Protocol, ProtocolRegistry, Account, Adapter } from "onebots";
-import type { CommonEvent, CommonTypes, Schema } from "onebots";
+import type { CommonEvent, Schema } from "onebots";
 import { Milky } from "./types.js";
 import { MilkyConfig } from "./config.js";
 import { createHmac } from "crypto";
 import { WebSocket } from "ws";
+import { projectMilkyEvent } from "./event-projector.js";
 
 const milkySchema: Schema = {
     use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
@@ -136,7 +137,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         if (this.isMilkyShapedEvent(event)) {
             milkyEvent = event;
         } else {
-            milkyEvent = this.convertToMilkyFormat(event as CommonEvent.Event);
+            milkyEvent = projectMilkyEvent(event as CommonEvent.Event);
         }
         if (milkyEvent) {
             this.logger.debug(`Milky dispatch:`, milkyEvent);
@@ -252,128 +253,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
-    }
-
-    /**
-     * Convert CommonEvent to Milky-specific format
-     */
-    private convertToMilkyFormat(event: CommonEvent.Event): Milky.Event | null {
-        switch (event.type) {
-            case "message":
-                return this.formatMilkyMessage(event);
-            case "notice":
-                return this.formatMilkyNotice(event);
-            case "request":
-                return this.formatMilkyRequest(event);
-            case "meta":
-                return this.formatMilkyMeta(event);
-            default:
-                return null;
-        }
-    }
-
-    private formatMilkyMessage(event: CommonEvent.Message): Milky.MessageEvent {
-        const isGroup = event.message_type === "group" && event.group !== undefined;
-        const sender = event.sender.id.number;
-        const peer = isGroup ? event.group!.id.number : sender;
-        return {
-            time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id.number,
-            event_type: "message_receive",
-            data: {
-                message_scene: isGroup ? "group" : "friend",
-                peer_id: peer,
-                message_seq: event.message_id.number,
-                sender_id: sender,
-                time: Math.floor(event.timestamp / 1000),
-                segments: event.message.map(seg => ({
-                    type: seg.type as Milky.SegmentType,
-                    data: seg.data,
-                })),
-                ...(isGroup
-                    ? {
-                          group: {
-                              group_id: peer,
-                              group_name: event.group?.name,
-                          },
-                          group_member: {
-                              user_id: sender,
-                              nickname: event.sender.name,
-                          },
-                      }
-                    : {
-                          friend: {
-                              user_id: sender,
-                              nickname: event.sender.name,
-                          },
-                      }),
-            },
-        };
-    }
-
-    private formatMilkyNotice(event: CommonEvent.Notice): Milky.NoticeEvent {
-        const eventTypes: Partial<Record<CommonEvent.NoticeType, string>> = {
-            group_increase: "group_member_increase",
-            group_decrease: "group_member_decrease",
-            group_admin: "group_admin_change",
-            group_ban: "group_member_mute",
-            friend_add: "friend_increase",
-        };
-        return {
-            time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id.number,
-            event_type: eventTypes[event.notice_type] ?? "custom_notice",
-            data: {
-                ...(event.user ? { user_id: event.user.id.number } : {}),
-                ...(event.group ? { group_id: event.group.id.number } : {}),
-                ...(event.operator ? { operator_id: event.operator.id.number } : {}),
-            },
-        };
-    }
-
-    private formatMilkyRequest(event: CommonEvent.Request): Milky.RequestEvent {
-        const subType = (event as CommonEvent.Request & { sub_type?: string }).sub_type;
-        const isGroup = event.request_type === "group";
-        return {
-            time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id.number,
-            event_type: isGroup
-                ? subType === "invite"
-                    ? "group_invited_join_request"
-                    : "group_join_request"
-                : "friend_request",
-            data: isGroup
-                ? {
-                      group_id: event.group?.id.number,
-                      initiator_id: event.user.id.number,
-                      notification_seq: event.id.number,
-                      comment: event.comment ?? "",
-                      is_filtered: false,
-                  }
-                : {
-                      initiator_id: event.user.id.number,
-                      initiator_uid: event.flag,
-                      comment: event.comment ?? "",
-                      is_filtered: false,
-                  },
-        };
-    }
-
-    private formatMilkyMeta(event: CommonEvent.Meta): Milky.MetaEvent | null {
-        if (event.meta_type !== "lifecycle" || event.sub_type !== "disable") return null;
-        return {
-            time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id.number,
-            event_type: "bot_offline",
-            data: { reason: "adapter offline" },
-        };
-    }
-
-    private extractPlainText(segments: CommonTypes.Segment[]): string {
-        return segments
-            .filter(seg => seg.type === "text")
-            .map(seg => seg.data.text || "")
-            .join("");
     }
 
     // Action implementations

@@ -1,10 +1,7 @@
 import { EventEmitter } from "events";
 import {
     Adapter,
-    WebSocketReceiver,
-    WSSReceiver,
-    WebhookReceiver,
-    SSEReceiver,
+    ReceiveTransport,
     Message,
     type User,
     type Group,
@@ -62,16 +59,7 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
     class OneBotV11AdapterImpl extends Adapter<number, OneBotV11Event> implements OneBotV11Adapter {
         public readonly selfId: string = selfId;
         private httpClient: HttpClient;
-        private receiver?:
-            | WebSocketReceiver<number>
-            | WSSReceiver<number>
-            | WebhookReceiver<number>
-            | SSEReceiver<number>;
-        private readonly receiveMode: typeof receiveMode;
-        private readonly defaultWsUrl: string;
-        private readonly accessToken?: string;
-        private readonly path: string;
-        private readonly baseUrl: string;
+        private readonly receiveTransport: ReceiveTransport<number, OneBotV11Event>;
         private readonly requestFlags = new Map<number, string>();
         private readonly requestIds = new Map<string, number>();
         private readonly requestSubTypes = new Map<number, "add" | "invite">();
@@ -79,12 +67,6 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
 
         constructor() {
             super();
-
-            this.receiveMode = receiveMode;
-            this.defaultWsUrl = defaultWsUrl;
-            this.accessToken = accessToken;
-            this.path = path;
-            this.baseUrl = baseUrl;
 
             this.httpClient = new HttpClient({
                 apiBaseUrl: config.apiBaseUrl ?? baseUrl,
@@ -94,30 +76,17 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
                 fetch: config.fetch,
             });
 
-            this.setupReceiver();
-        }
-
-        private setupReceiver(): void {
-            switch (this.receiveMode) {
-                case "ws":
-                    this.receiver = new WebSocketReceiver(this, this.defaultWsUrl, {
-                        ...config.webSocket,
-                        accessToken: this.accessToken,
-                    });
-                    break;
-                case "wss":
-                    const wssPath = new URL(this.defaultWsUrl).pathname;
-                    this.receiver = new WSSReceiver(this, wssPath, this.accessToken);
-                    break;
-                case "webhook":
-                    const webhookPath = `/${this.selfId}${this.path}`;
-                    this.receiver = new WebhookReceiver(this, webhookPath, this.accessToken);
-                    break;
-                case "sse":
-                    const sseUrl = `${this.baseUrl.replace(/\/$/, "")}/events`;
-                    this.receiver = new SSEReceiver(this, sseUrl, this.accessToken);
-                    break;
-            }
+            this.receiveTransport = new ReceiveTransport(this, {
+                mode: receiveMode,
+                endpoints: {
+                    ws: defaultWsUrl,
+                    wss: new URL(defaultWsUrl).pathname,
+                    webhook: `/${selfId}${path}`,
+                    sse: `${baseUrl.replace(/\/$/, "")}/events`,
+                },
+                accessToken,
+                webSocket: config.webSocket,
+            });
         }
 
         transformEvent(event: OneBotV11Event): void {
@@ -517,20 +486,11 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
         }
 
         async start(port?: number): Promise<void> {
-            if (this.receiver) {
-                if (this.receiveMode === "wss" || this.receiveMode === "webhook") {
-                    await this.receiver.connect(port || 8080);
-                } else {
-                    // ws 和 sse 模式不需要 port 参数
-                    await this.receiver.connect();
-                }
-            }
+            await this.receiveTransport.connect(port);
         }
 
         async stop(): Promise<void> {
-            if (this.receiver) {
-                await this.receiver.disconnect();
-            }
+            await this.receiveTransport.disconnect();
         }
     }
 

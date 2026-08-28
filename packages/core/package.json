@@ -21,6 +21,10 @@
     "./types": {
       "types": "./lib/types.d.ts",
       "import": "./lib/types.js"
+    },
+    "./event-filter": {
+      "types": "./lib/event-filter.d.ts",
+      "import": "./lib/event-filter.js"
     }
   },
   "keywords": [

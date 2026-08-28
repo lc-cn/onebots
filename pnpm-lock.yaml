@@ -754,6 +754,9 @@ importers:
       '@fontsource-variable/geist-mono':
         specifier: ^5.3.0
         version: 5.3.0
+      '@onebots/core':
+        specifier: workspace:*
+        version: link:../core
       '@tabler/icons-vue':
         specifier: ^3.45.0
         version: 3.45.0(vue@3.5.30(typescript@5.9.3))

@@ -8,6 +8,7 @@ export * from "./instances/friend.js";
 export * from "./instances/groupMember.js";
 export * from "./instances/channelMember.js";
 export * from "./receiver.js";
+export * from "./receive-transport.js";
 export * from "./ingress.js";
 export * from "./protocol-error.js";
 export * from "./types.js";

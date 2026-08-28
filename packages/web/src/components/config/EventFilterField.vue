@@ -7,20 +7,19 @@ import UiSelect from "../../ui/UiSelect.vue";
 import UiTextarea from "../../ui/UiTextarea.vue";
 import type { ValidationRule } from "./types";
 import {
-    editorToFilters,
-    filtersToEditor,
+    editorToEventFilters,
+    eventFiltersToEditor,
     type EventFilterOperator,
     type EventFilterRow,
-    type EventFilterState,
-} from "./event-filter";
+    type EventFilterEditorState,
+} from "@onebots/core/event-filter";
 
-const props = withDefaults(
-    defineProps<{ rule: ValidationRule; disabled?: boolean }>(),
-    { disabled: false },
-);
+const props = withDefaults(defineProps<{ rule: ValidationRule; disabled?: boolean }>(), {
+    disabled: false,
+});
 const model = defineModel<unknown>();
 
-const state = ref<EventFilterState>({ match: "all", rules: [] });
+const state = ref<EventFilterEditorState>({ match: "all", rules: [] });
 const advanced = ref(false);
 const advancedText = ref("");
 const advancedError = ref("");
@@ -53,7 +52,7 @@ const syncFromModel = (value: unknown) => {
         advancedError.value = "";
         return;
     }
-    const parsed = filtersToEditor(value ?? {});
+    const parsed = eventFiltersToEditor(value ?? {});
     if (parsed) {
         state.value = parsed;
         if (!advanced.value) advancedText.value = JSON.stringify(value ?? {}, null, 2);
@@ -67,7 +66,7 @@ const syncFromModel = (value: unknown) => {
 watch(model, syncFromModel, { immediate: true, deep: true });
 
 const commitVisual = () => {
-    model.value = editorToFilters(state.value);
+    model.value = editorToEventFilters(state.value);
 };
 
 const addRule = () => {
@@ -126,7 +125,7 @@ const toggleAdvanced = () => {
     }
     try {
         const value = advancedText.value.trim() ? JSON.parse(advancedText.value) : {};
-        const parsed = filtersToEditor(value);
+        const parsed = eventFiltersToEditor(value);
         if (!parsed) return;
         state.value = parsed;
         model.value = value;
@@ -155,7 +154,8 @@ const updateAdvanced = (value: string) => {
             v-if="!advanced && state.rules.length === 0"
             class="flex items-center justify-between gap-4 rounded-card border border-dashed border-border-strong bg-surface-raised/45 px-4 py-3">
             <div class="flex min-w-0 items-center gap-3">
-                <span class="grid size-8 shrink-0 place-items-center rounded-control bg-surface text-fg-tertiary">
+                <span
+                    class="grid size-8 shrink-0 place-items-center rounded-control bg-surface text-fg-tertiary">
                     <IconFilter :size="16" aria-hidden="true" />
                 </span>
                 <div>
@@ -208,9 +208,14 @@ const updateAdvanced = (value: string) => {
                     :model-value="ruleItem.operator"
                     :options="operatorOptions"
                     :disabled="disabled"
-                    @update:model-value="updateRule(index, { operator: $event as EventFilterOperator })" />
+                    @update:model-value="
+                        updateRule(index, { operator: $event as EventFilterOperator })
+                    " />
                 <UiSelect
-                    v-if="fieldChoices(ruleItem.path).length && ['eq', 'neq'].includes(ruleItem.operator)"
+                    v-if="
+                        fieldChoices(ruleItem.path).length &&
+                        ['eq', 'neq'].includes(ruleItem.operator)
+                    "
                     :model-value="ruleItem.value as string"
                     :options="fieldChoices(ruleItem.path)"
                     :disabled="disabled"
@@ -237,7 +242,7 @@ const updateAdvanced = (value: string) => {
             :model-value="advancedText"
             mono
             :rows="8"
-            placeholder="输入 Protocol.createFilter 支持的过滤对象"
+            placeholder="输入 compileEventFilter 支持的过滤对象"
             :disabled="disabled"
             @update:model-value="updateAdvanced" />
         <p v-if="advanced && advancedError" class="text-xs text-danger">

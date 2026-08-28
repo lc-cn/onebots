@@ -9,6 +9,7 @@ export * from "./utils.js";
 export * from "./timestamp.js";
 export * from "./message-utils.js";
 export * from "./protocol.js";
+export * from "./event-filter.js";
 export * from "./registry.js";
 export * from "./db.js";
 
