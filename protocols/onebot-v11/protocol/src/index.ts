@@ -36,6 +36,7 @@ const onebotV11Schema: Schema = {
     },
     serve_data_files: { type: 'boolean', label: '静态文件服务' },
     heartbeat_interval: { type: 'number', label: '心跳间隔(秒)' },
+    filters: Protocol.FilterSchema,
 };
 
 ProtocolRegistry.registerSchema('onebot.v11', onebotV11Schema);

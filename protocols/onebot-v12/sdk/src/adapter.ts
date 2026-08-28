@@ -29,7 +29,8 @@ export interface OneBotV12AdapterConfig {
     accessToken?: string;
     receiveMode: "ws" | "wss" | "webhook" | "sse" | "manual";
     wsUrl?: string; // WebSocket URL（可选，自动构建）
-    platform?: string; // 平台名称（可选，用于构建 HTTP 路径）
+    /** 事件缺少 self 时用于定位机器人状态，不参与地址拼接。 */
+    platform?: string;
     resolveActionUrl?: OneBotV12ActionUrlResolver;
     call?: OneBotV12Call;
     fetch?: typeof globalThis.fetch;
@@ -48,14 +49,8 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
     const { baseUrl, selfId, accessToken, receiveMode, wsUrl } = config;
     const url = new URL(baseUrl);
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const nativeBaseUrl = `${url.origin}${url.pathname}`;
-    const usesLegacyOneBotsRoutes =
-        config.apiBaseUrl === undefined &&
-        config.platform !== undefined &&
-        (!url.pathname || url.pathname === "/");
-    const legacyApiBaseUrl = `${url.origin}/${config.platform ?? "unknown"}/${selfId}/onebot/v12`;
-    const eventBaseUrl = usesLegacyOneBotsRoutes ? legacyApiBaseUrl : nativeBaseUrl;
-    const defaultWsUrl = wsUrl || `${protocol}//${url.host}${new URL(eventBaseUrl).pathname}`;
+    url.protocol = protocol;
+    const defaultWsUrl = wsUrl || url.toString();
 
     class OneBotV12AdapterImpl extends Adapter<string, OneBotV12Event> implements OneBotV12Adapter {
         public readonly selfId: string = selfId;
@@ -79,8 +74,7 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
             this.baseUrl = baseUrl;
 
             this.httpClient = new HttpClient({
-                apiBaseUrl:
-                    config.apiBaseUrl ?? (usesLegacyOneBotsRoutes ? legacyApiBaseUrl : nativeBaseUrl),
+                apiBaseUrl: config.apiBaseUrl ?? baseUrl,
                 accessToken,
                 resolveActionUrl: config.resolveActionUrl,
                 call: config.call,

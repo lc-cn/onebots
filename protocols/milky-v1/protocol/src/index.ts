@@ -1,5 +1,5 @@
 import { Protocol,ProtocolRegistry,Account,Adapter } from "onebots";
-import type { CommonEvent, CommonTypes,Dict, Schema } from "onebots";
+import type { CommonEvent, CommonTypes, Schema } from "onebots";
 import { Milky } from "./types.js";
 import { MilkyConfig } from "./config.js";
 import { createHmac } from "crypto";
@@ -33,7 +33,7 @@ const milkySchema: Schema = {
     },
     access_token: { type: 'string', label: 'Access Token' },
     secret: { type: 'string', label: 'Secret' },
-    filters: { type: 'object', label: '事件过滤器' },
+    filters: Protocol.FilterSchema,
 };
 
 ProtocolRegistry.registerSchema('milky.v1', milkySchema);
@@ -57,12 +57,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             protocol: "milky",
             version: "v1",
         });
-    }
-
-    filterFn(event: Dict): boolean {
-        // Implement Milky-specific event filtering
-        // For now, accept all events
-        return true;
     }
 
     start(): void {
@@ -100,7 +94,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
      * Account.dispatch 传入的是 CommonEvent；内部调用也可以传入已构造的 Milky event_type 事件。
      */
     dispatch(event: unknown): void {
-        if (!this.filterFn(event as Dict)) {
+        if (!this.filterFn(event as Record<string, unknown>)) {
             return;
         }
         let milkyEvent: Milky.Event | null = null;

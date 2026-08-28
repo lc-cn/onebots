@@ -93,11 +93,10 @@ describe("OneBot V12 client", () => {
         );
     });
 
-    test("preserves the legacy OneBots route when apiBaseUrl is omitted", async () => {
+    test("uses baseUrl verbatim as the protocol API root", async () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: "ok" })));
         const client = createOnebot12Client({
-            baseUrl: "https://gateway.example",
-            platform: "kook",
+            baseUrl: "https://gateway.example/kook/bot/onebot/v12",
             selfId: "bot",
             receiveMode: "ws",
             fetch: fetchMock,
@@ -111,15 +110,14 @@ describe("OneBot V12 client", () => {
         );
     });
 
-    test("connects legacy OneBots WebSocket at the account protocol path", async () => {
+    test("uses baseUrl as the WebSocket endpoint without guessing routes", async () => {
         const socket = new EventEmitter() as EventEmitter & {
             close: ReturnType<typeof vi.fn>;
         };
         socket.close = vi.fn();
         const createWebSocket = vi.fn(() => socket as never);
         const client = createOnebot12Client({
-            baseUrl: "https://gateway.example",
-            platform: "kook",
+            baseUrl: "https://gateway.example/kook/bot/onebot/v12",
             selfId: "bot",
             receiveMode: "ws",
             webSocket: { createWebSocket },
@@ -129,9 +127,7 @@ describe("OneBot V12 client", () => {
         socket.emit("open");
         await started;
 
-        expect(createWebSocket).toHaveBeenCalledWith(
-            "wss://gateway.example/kook/bot/onebot/v12",
-        );
+        expect(createWebSocket).toHaveBeenCalledWith("wss://gateway.example/kook/bot/onebot/v12");
         await client.stop();
     });
 });

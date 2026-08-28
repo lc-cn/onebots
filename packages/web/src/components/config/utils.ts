@@ -61,6 +61,9 @@ export const resolveJsonFieldDisplay = (
 export const usesEndpointListEditor = (rule: ValidationRule): boolean =>
     rule.type === 'array' && rule.ui?.widget === 'endpoint-list';
 
+export const usesEventFilterEditor = (rule: ValidationRule): boolean =>
+    rule.type === 'object' && rule.ui?.widget === 'event-filter';
+
 const cloneConfigValue = (value: unknown, seen = new WeakMap<object, unknown>()): unknown => {
     if (typeof value !== 'object' || value === null) return value;
 
@@ -90,6 +93,9 @@ export const resolveStructuredFieldDisplay = (
         const value = currentValue ?? rule.default;
         return Array.isArray(value) ? cloneConfigValue(value) : [];
     }
+    if (usesEventFilterEditor(rule)) {
+        return cloneConfigValue(currentValue ?? rule.default ?? {});
+    }
     return resolveJsonFieldDisplay(currentValue, rule);
 };
 
@@ -98,6 +104,10 @@ export const parseStructuredFieldValue = (
     rule: ValidationRule,
     label: string
 ): { ok: true; value: unknown } | { ok: false; message: string } => {
+    if (usesEventFilterEditor(rule)) {
+        if (isRecord(raw)) return { ok: true, value: cloneConfigValue(raw) };
+        return parseJsonFieldValue(raw, rule, label);
+    }
     if (!usesEndpointListEditor(rule)) return parseJsonFieldValue(raw, rule, label);
     if (!Array.isArray(raw)) return { ok: false, message: `字段 ${label} 必须是地址列表` };
 

@@ -21,9 +21,8 @@ const satoriSchema: Schema = {
         },
     },
     token: { type: 'string', label: 'Token' },
-    self_id: { type: 'string', label: 'Self ID' },
     platform: { type: 'string', label: '平台标识' },
-    filters: { type: 'object', label: '事件过滤器' },
+    filters: Protocol.FilterSchema,
 };
 
 ProtocolRegistry.registerSchema('satori.v1', satoriSchema);

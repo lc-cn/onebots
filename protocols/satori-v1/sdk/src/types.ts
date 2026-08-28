@@ -5,6 +5,8 @@
 export interface SatoriV1ClientConfig {
     /** 服务器地址，例如 http://localhost:6727 */
     baseUrl: string;
+    /** Satori-Platform 请求头。 */
+    platform: string;
     /** 访问令牌 */
     accessToken?: string;
     apiBaseUrl?: string;

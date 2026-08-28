@@ -7,6 +7,7 @@ import UiSwitch from '../ui/UiSwitch.vue';
 import UiSelect from '../ui/UiSelect.vue';
 import UiTextarea from '../ui/UiTextarea.vue';
 import EndpointListField from './config/EndpointListField.vue';
+import EventFilterField from './config/EventFilterField.vue';
 
 interface SchemaFieldRule {
     required?: boolean;
@@ -17,7 +18,7 @@ interface SchemaFieldRule {
     description?: string;
     placeholder?: string;
     ui?: {
-        widget?: 'endpoint-list';
+        widget?: 'endpoint-list' | 'event-filter';
         itemLabel?: string;
         addLabel?: string;
         schemes?: string[];
@@ -28,6 +29,11 @@ interface SchemaFieldRule {
             placeholder?: string;
             description?: string;
             sensitive?: boolean;
+        }>;
+        eventFields?: Array<{
+            path: string;
+            label: string;
+            choices?: Array<{ label: string; value: string | number | boolean }>;
         }>;
     };
 }
@@ -52,11 +58,12 @@ const props = withDefaults(defineProps<Props>(), {
 
 const model = defineModel<unknown>();
 
-type WidgetKind = 'input' | 'number' | 'switch' | 'select' | 'textarea' | 'endpoint-list';
+type WidgetKind = 'input' | 'number' | 'switch' | 'select' | 'textarea' | 'endpoint-list' | 'event-filter';
 
 const widget = computed<WidgetKind>(() => {
     const rule = props.field.rule;
     if (rule.type === 'array' && rule.ui?.widget === 'endpoint-list') return 'endpoint-list';
+    if (rule.type === 'object' && rule.ui?.widget === 'event-filter') return 'event-filter';
     if (rule.choices && rule.choices.length > 0) return 'select';
     if (rule.type === 'string') return 'input';
     if (rule.type === 'number') return 'number';
@@ -128,6 +135,11 @@ const choiceModel = computed<string | number | boolean | undefined>({
             :disabled="disabled" />
         <EndpointListField
             v-else-if="widget === 'endpoint-list'"
+            v-model="model"
+            :rule="field.rule"
+            :disabled="disabled" />
+        <EventFilterField
+            v-else-if="widget === 'event-filter'"
             v-model="model"
             :rule="field.rule"
             :disabled="disabled" />

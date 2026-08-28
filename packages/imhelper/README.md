@@ -105,7 +105,7 @@ webSocketServer.on("connection", socket => {
 
 ### 协议 API 地址
 
-显式提供 `apiBaseUrl` 时，协议 SDK 会把它视为 API 根地址，不再拼接 OneBots 的 `/{platform}/{accountId}/{protocol}` 路由。连接 OneBots 时传入完整协议路径；连接其他兼容实现时传入其标准 API 根地址。Milky 未提供 `apiBaseUrl` 和 `platform` 时默认请求 `/api/{action}`。旧版 `platform` 配置的 OneBots 路由仍保留兼容。也可以通过 `resolveActionUrl` 改写 action URL，或注入 `call` 完全接管请求。
+`baseUrl` 始终表示协议服务根地址，不会根据 `platform` 或 `selfId` 猜测网关路由。连接 OneBots 时直接传入完整账号协议路径；连接其他实现时传入其标准协议地址。`apiBaseUrl` 仅用于 API 与事件位于不同地址的部署。OneBot action 直接追加到 API 根地址，Milky 使用 `/api/{action}`，Satori 使用 `/{resource}.{method}`。特殊部署也可以通过 `resolveActionUrl` 改写 URL，或注入 `call` 完全接管请求。
 
 ### 消息
 

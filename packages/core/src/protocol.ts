@@ -3,6 +3,7 @@ import { Account } from "./account.js";
 import { Adapter } from "./adapter.js";
 import { Dict } from "./types.js";
 import { Router } from "./router.js";
+import type { ValidationRule } from "./config-validator.js";
 
 /**
  * Base Protocol class
@@ -108,6 +109,47 @@ export namespace Protocol {
     export type ExcludeFilter = {
         $not: Filters;
     };
+
+    /** 所有协议共享的事件过滤器表单契约。 */
+    export const FilterSchema = {
+        type: "object",
+        default: {},
+        label: "事件过滤",
+        description: "默认转发全部事件；添加规则后，只转发符合条件的事件。",
+        ui: {
+            widget: "event-filter",
+            eventFields: [
+                {
+                    path: "type",
+                    label: "事件类别",
+                    choices: [
+                        { value: "message", label: "消息" },
+                        { value: "notice", label: "通知" },
+                        { value: "request", label: "请求" },
+                        { value: "meta", label: "元事件" },
+                    ],
+                },
+                {
+                    path: "message_type",
+                    label: "消息场景",
+                    choices: [
+                        { value: "private", label: "私聊" },
+                        { value: "group", label: "群聊" },
+                        { value: "channel", label: "频道" },
+                        { value: "direct", label: "频道私信" },
+                    ],
+                },
+                { path: "notice_type", label: "通知类型" },
+                { path: "request_type", label: "请求类型" },
+                { path: "meta_type", label: "元事件类型" },
+                { path: "platform", label: "平台" },
+                { path: "bot_id.string", label: "机器人 ID" },
+                { path: "sender.id.string", label: "发送者 ID" },
+                { path: "group.id.string", label: "群组 / 频道 ID" },
+                { path: "raw_message", label: "消息文本" },
+            ],
+        },
+    } satisfies ValidationRule;
 
     /**
      * Protocol metadata

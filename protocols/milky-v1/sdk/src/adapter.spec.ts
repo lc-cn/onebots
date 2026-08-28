@@ -136,13 +136,12 @@ describe("Milky V1 SDK", () => {
         });
     });
 
-    test("preserves the legacy OneBots route when apiBaseUrl is omitted", async () => {
+    test("appends the native API route to baseUrl without guessing gateway routes", async () => {
         const fetchMock = vi.fn(
             async () => new Response(JSON.stringify({ status: "ok", retcode: 0, data: {} })),
         );
         const adapter = createMilkyAdapter({
-            baseUrl: "https://gateway.example",
-            platform: "kook",
+            baseUrl: "https://gateway.example/kook/10001/milky/v1",
             selfId: "10001",
             receiveMode: "ws",
             fetch: fetchMock,
@@ -156,15 +155,14 @@ describe("Milky V1 SDK", () => {
         );
     });
 
-    test("connects legacy OneBots WebSocket at the Milky event path", async () => {
+    test("appends the native event route to baseUrl", async () => {
         const socket = new EventEmitter() as EventEmitter & {
             close: ReturnType<typeof vi.fn>;
         };
         socket.close = vi.fn();
         const createWebSocket = vi.fn(() => socket as never);
         const client = createMilkyClient({
-            baseUrl: "https://gateway.example",
-            platform: "kook",
+            baseUrl: "https://gateway.example/kook/10001/milky/v1",
             selfId: "10001",
             receiveMode: "ws",
             webSocket: { createWebSocket },

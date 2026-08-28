@@ -29,7 +29,6 @@ export interface OneBotV11AdapterConfig {
     receiveMode: "ws" | "wss" | "webhook" | "sse" | "manual";
     path?: string; // webhook 路径
     wsUrl?: string; // WebSocket URL（可选，自动构建）
-    platform?: string; // 平台名称（可选，用于构建 HTTP 路径）
     resolveActionUrl?: OneBotV11ActionUrlResolver;
     call?: OneBotV11Call;
     fetch?: typeof globalThis.fetch;
@@ -57,16 +56,8 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
     // 解析 baseUrl 获取协议和主机
     const url = new URL(baseUrl);
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const host = url.host;
-
-    const nativeBaseUrl = `${url.origin}${url.pathname}`;
-    const usesLegacyOneBotsRoutes =
-        config.apiBaseUrl === undefined &&
-        config.platform !== undefined &&
-        (!url.pathname || url.pathname === "/");
-    const legacyApiBaseUrl = `${url.origin}/${config.platform ?? "unknown"}/${selfId}/onebot/v11`;
-    const eventBaseUrl = usesLegacyOneBotsRoutes ? legacyApiBaseUrl : nativeBaseUrl;
-    const defaultWsUrl = wsUrl || `${protocol}//${host}${new URL(eventBaseUrl).pathname}`;
+    url.protocol = protocol;
+    const defaultWsUrl = wsUrl || url.toString();
 
     class OneBotV11AdapterImpl extends Adapter<number, OneBotV11Event> implements OneBotV11Adapter {
         public readonly selfId: string = selfId;
@@ -96,8 +87,7 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
             this.baseUrl = baseUrl;
 
             this.httpClient = new HttpClient({
-                apiBaseUrl:
-                    config.apiBaseUrl ?? (usesLegacyOneBotsRoutes ? legacyApiBaseUrl : nativeBaseUrl),
+                apiBaseUrl: config.apiBaseUrl ?? baseUrl,
                 accessToken,
                 resolveActionUrl: config.resolveActionUrl,
                 call: config.call,

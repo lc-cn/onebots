@@ -6,7 +6,6 @@ export interface HttpClientConfig {
     accessToken?: string;
     platform: string;
     userId: string;
-    unwrapLegacyResponse?: boolean;
     resolveActionUrl?: SatoriActionUrlResolver;
     call?: SatoriCall;
     fetch?: typeof globalThis.fetch;
@@ -85,21 +84,7 @@ export class HttpClient {
                 cause: error,
             });
         }
-        if (!this.#config.unwrapLegacyResponse) return body as T;
-        if (typeof body === "object" && body !== null && "data" in body) {
-            return (body as { data: T }).data;
-        }
-        const message =
-            typeof body === "object" && body !== null && "message" in body
-                ? String((body as { message: unknown }).message)
-                : "未知错误";
-        throw new ProtocolError({
-            protocol: "satori-v1",
-            operation,
-            kind: "protocol",
-            message: `Satori API 调用失败：${message}`,
-            response: body,
-        });
+        return body as T;
     }
 
     post<T = unknown>(action: string, params?: Record<string, unknown>): Promise<T> {

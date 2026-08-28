@@ -24,6 +24,7 @@ const onebotV12Schema: Schema = {
     access_token: { type: 'string', label: 'Access Token' },
     heartbeat_interval: { type: 'number', label: '心跳间隔(秒)' },
     enable_cors: { type: 'boolean', label: '启用 CORS' },
+    filters: Protocol.FilterSchema,
 };
 
 ProtocolRegistry.registerSchema('onebot.v12', onebotV12Schema);

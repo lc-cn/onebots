@@ -62,7 +62,7 @@ await client.sendPrivateMessage(123456789, "你好");
 await client.sendGroupMessage(987654321, "大家好");
 ```
 
-显式提供 `apiBaseUrl` 时请求 `${apiBaseUrl}/{action}`，不会自动拼接 OneBots 路由。为兼容旧配置，省略 `apiBaseUrl` 且提供 `platform` 时仍使用 `/{platform}/{selfId}/onebot/v11`；新代码建议始终传入完整 API 根地址。
+`baseUrl` 是完整的协议服务地址，SDK 不会根据平台或账号猜测 OneBots 路由。未提供 `apiBaseUrl` 时，API 与 WebSocket 共用 `baseUrl`；分离部署时显式传入 `apiBaseUrl` 和 `wsUrl`。
 
 特殊部署可注入 URL 解析器或整个调用实现：
 

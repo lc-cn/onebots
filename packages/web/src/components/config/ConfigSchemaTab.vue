@@ -13,7 +13,7 @@ defineProps<{
 const activeGroups = defineModel<string[]>('activeGroups', { required: true });
 
 const isEndpointField = (field: SchemaGroup['fields'][number]) =>
-    field.rule.type === 'array' && field.rule.ui?.widget === 'endpoint-list';
+    field.rule.ui?.widget === 'endpoint-list' || field.rule.ui?.widget === 'event-filter';
 </script>
 
 <template>

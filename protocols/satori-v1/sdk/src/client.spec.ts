@@ -15,6 +15,7 @@ describe("Satori V1 client", () => {
         const client = createSatoriClient({
             baseUrl: "https://events.example/v1",
             apiBaseUrl: "https://api.example/v1",
+            platform: "test",
             selfId: "configured-fallback",
             receiveMode: "ws",
         });
@@ -44,7 +45,7 @@ describe("Satori V1 client", () => {
                 method: "POST",
                 body: JSON.stringify({ channel_id: "channel-1", content: "你好" }),
                 headers: expect.objectContaining({
-                    "Satori-Platform": "unknown",
+                    "Satori-Platform": "test",
                     "Satori-User-ID": "configured-fallback",
                 }),
             }),
@@ -55,6 +56,7 @@ describe("Satori V1 client", () => {
         const client = createSatoriClient({
             baseUrl: "https://events.example/v1/events",
             apiBaseUrl: "https://api.example/v1",
+            platform: "test",
             selfId: "bot",
             receiveMode: "manual",
         });
@@ -77,27 +79,28 @@ describe("Satori V1 client", () => {
         expect(projected).toHaveBeenCalledWith(expect.objectContaining({ message_id: "msg-1" }));
     });
 
-    test("unwraps the legacy OneBots response when apiBaseUrl is omitted", async () => {
+    test("returns the native response without legacy envelope guessing", async () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: { id: "bot" } })));
         const client = createSatoriClient({
-            baseUrl: "https://gateway.example",
+            baseUrl: "https://satori.example/v1",
             platform: "kook",
             selfId: "bot",
             receiveMode: "ws",
             fetch: fetchMock,
         });
 
-        await expect(client.call("login", "get")).resolves.toEqual({ id: "bot" });
+        await expect(client.call("login", "get")).resolves.toEqual({ data: { id: "bot" } });
         expect(fetchMock).toHaveBeenCalledWith(
-            "https://gateway.example/kook/bot/satori/v1/login.get",
+            "https://satori.example/v1/login.get",
             expect.any(Object),
         );
     });
 
-    test("uses baseUrl as the native Satori API root when platform is omitted", async () => {
+    test("uses baseUrl as the native Satori API root", async () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: "bot" })));
         const client = createSatoriClient({
             baseUrl: "https://satori.example/v1",
+            platform: "kook",
             selfId: "bot",
             receiveMode: "manual",
             fetch: fetchMock,
@@ -111,7 +114,7 @@ describe("Satori V1 client", () => {
         );
     });
 
-    test("connects legacy OneBots WebSocket at the Satori events path", async () => {
+    test("appends the Satori events path to baseUrl", async () => {
         const socket = new EventEmitter() as EventEmitter & {
             close: ReturnType<typeof vi.fn>;
             send: ReturnType<typeof vi.fn>;
@@ -120,7 +123,7 @@ describe("Satori V1 client", () => {
         socket.send = vi.fn();
         const createWebSocket = vi.fn(() => socket as never);
         const client = createSatoriClient({
-            baseUrl: "https://gateway.example",
+            baseUrl: "https://gateway.example/kook/bot/satori/v1",
             platform: "kook",
             selfId: "bot",
             receiveMode: "ws",
@@ -141,6 +144,7 @@ describe("Satori V1 client", () => {
     test("wraps invalid JSON as a structured protocol error", async () => {
         const client = createSatoriClient({
             baseUrl: "https://api.example/v1",
+            platform: "test",
             selfId: "bot",
             receiveMode: "manual",
             fetch: async () => new Response("not-json"),

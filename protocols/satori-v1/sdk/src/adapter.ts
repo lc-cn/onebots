@@ -29,7 +29,7 @@ export interface SatoriAdapterConfig {
     receiveMode: "ws" | "wss" | "webhook" | "sse" | "manual";
     path?: string; // webhook 路径
     wsUrl?: string; // WebSocket URL（可选，自动构建）
-    platform?: string; // 平台名称（可选，用于构建 HTTP 路径）
+    platform: string;
     resolveActionUrl?: SatoriActionUrlResolver;
     call?: SatoriCall;
     fetch?: typeof globalThis.fetch;
@@ -61,10 +61,7 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
     const url = new URL(baseUrl);
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
 
-    const legacyApiBaseUrl = `${url.origin}/${config.platform ?? "unknown"}/${selfId}/satori/v1`;
-    const usesLegacyOneBotsRoutes =
-        config.apiBaseUrl === undefined && config.platform !== undefined;
-    const eventUrl = new URL(usesLegacyOneBotsRoutes ? legacyApiBaseUrl : baseUrl);
+    const eventUrl = new URL(baseUrl);
     eventUrl.protocol = protocol;
     if (!eventUrl.pathname.endsWith("/events")) {
         eventUrl.pathname = `${eventUrl.pathname.replace(/\/+$/, "")}/events`;
@@ -95,12 +92,10 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
             this.baseUrl = baseUrl;
 
             this.httpClient = new HttpClient({
-                apiBaseUrl:
-                    config.apiBaseUrl ?? (usesLegacyOneBotsRoutes ? legacyApiBaseUrl : baseUrl),
+                apiBaseUrl: config.apiBaseUrl ?? baseUrl,
                 accessToken,
-                platform: config.platform ?? "unknown",
+                platform: config.platform,
                 userId: selfId,
-                unwrapLegacyResponse: usesLegacyOneBotsRoutes,
                 resolveActionUrl: config.resolveActionUrl,
                 call: config.call,
                 fetch: config.fetch,

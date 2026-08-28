@@ -10,7 +10,7 @@ export type ValidationRule = {
     description?: string;
     placeholder?: string;
     ui?: {
-        widget?: 'endpoint-list';
+        widget?: 'endpoint-list' | 'event-filter';
         itemLabel?: string;
         addLabel?: string;
         schemes?: string[];
@@ -21,6 +21,11 @@ export type ValidationRule = {
             placeholder?: string;
             description?: string;
             sensitive?: boolean;
+        }>;
+        eventFields?: Array<{
+            path: string;
+            label: string;
+            choices?: Array<{ label: string; value: string | number | boolean }>;
         }>;
     };
 };

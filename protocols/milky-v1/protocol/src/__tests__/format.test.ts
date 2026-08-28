@@ -424,14 +424,6 @@ describe("Milky V1 protocol", () => {
     expect(result.message).toContain("Unknown action");
   });
 
-  test("filterFn always returns true", () => {
-    const { protocol } = createProtocol();
-
-    expect(protocol.filterFn({})).toBe(true);
-    expect(protocol.filterFn({ post_type: "message" })).toBe(true);
-    expect(protocol.filterFn({ anything: "at all" })).toBe(true);
-  });
-
   test("isMilkyShapedEvent detects objects with string event_type", () => {
     const { protocol } = createProtocol();
 

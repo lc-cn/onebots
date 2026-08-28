@@ -33,7 +33,7 @@ export interface ValidationRule<T = unknown> {
     placeholder?: string;
     /** Web 表单展示元数据，不参与运行时校验。 */
     ui?: {
-        widget?: 'endpoint-list';
+        widget?: 'endpoint-list' | 'event-filter';
         itemLabel?: string;
         addLabel?: string;
         schemes?: string[];
@@ -44,6 +44,11 @@ export interface ValidationRule<T = unknown> {
             placeholder?: string;
             description?: string;
             sensitive?: boolean;
+        }>;
+        eventFields?: Array<{
+            path: string;
+            label: string;
+            choices?: Array<Choice>;
         }>;
     };
 }

@@ -1,5 +1,5 @@
 import type { Schema, ValidationRule } from '@onebots/core';
-import { BaseAppConfigSchema, AdapterRegistry, ProtocolRegistry } from '@onebots/core';
+import { BaseAppConfigSchema, AdapterRegistry, Protocol, ProtocolRegistry } from '@onebots/core';
 import { ADAPTER_SCHEMA_PRESETS } from './adapter-schema-presets.js';
 
 /**
@@ -46,17 +46,18 @@ const general: Schema = {
         heartbeat_interval: { type: 'number', default: 5, min: 1, label: '心跳间隔(秒)' },
         http_reverse: endpointList('HTTP 反向上报', '将事件 POST 到已有的 HTTP 服务，可配置多个目标。', ['http:', 'https:']),
         ws_reverse: endpointList('反向 WebSocket', '由 OneBots 主动连接下游 WebSocket 服务，可配置多个目标。', ['ws:', 'wss:']),
+        filters: Protocol.FilterSchema,
     },
     'onebot.v12': {
         use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
         use_ws: { type: 'boolean', default: true, label: '启用 WebSocket' },
         access_token: { type: 'string', default: '', label: 'Access Token' },
-        secret: { type: 'string', default: '', label: 'Secret' },
         enable_cors: { type: 'boolean', default: true, label: '启用 CORS' },
         heartbeat_interval: { type: 'number', default: 5, min: 1, label: '心跳间隔(秒)' },
         http_webhook: endpointList('HTTP Webhook', '将事件 POST 到已有的 HTTP 服务，可配置多个目标。', ['http:', 'https:']),
         ws_reverse: endpointList('反向 WebSocket', '由 OneBots 主动连接下游 WebSocket 服务，可配置多个目标。', ['ws:', 'wss:']),
         request_timeout: { type: 'number', default: 15, min: 1, label: '请求超时(秒)' },
+        filters: Protocol.FilterSchema,
     },
     'satori.v1': {
         use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
@@ -66,13 +67,13 @@ const general: Schema = {
         webhooks: endpointList('Webhook', '将事件推送到下游 HTTP 服务。展开单项可覆盖 Token。', ['http:', 'https:'], [
             { key: 'token', label: 'Token', sensitive: true, placeholder: '留空则使用全局 Token' }
         ]),
+        filters: Protocol.FilterSchema,
     },
     'milky.v1': {
         use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
         use_ws: { type: 'boolean', default: true, label: '启用 WebSocket' },
         access_token: { type: 'string', default: '', label: 'Access Token' },
         secret: { type: 'string', default: '', label: 'Secret' },
-        heartbeat: { type: 'number', default: 5, min: 1, label: '心跳间隔(秒)' },
         http_reverse: endpointList('HTTP 反向上报', '将事件 POST 到下游服务。展开单项可覆盖鉴权与超时。', ['http:', 'https:'], [
             { key: 'access_token', label: 'Access Token', sensitive: true, placeholder: '留空则使用全局 Token' },
             { key: 'secret', label: '签名 Secret', sensitive: true, placeholder: '留空则使用全局 Secret' },
@@ -82,6 +83,7 @@ const general: Schema = {
             { key: 'access_token', label: 'Access Token', sensitive: true, placeholder: '留空则使用全局 Token' },
             { key: 'reconnect_interval', label: '重连间隔（秒）', type: 'number', placeholder: '例如 5' }
         ]),
+        filters: Protocol.FilterSchema,
     },
 };
 

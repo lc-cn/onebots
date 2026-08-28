@@ -32,8 +32,6 @@ export interface MilkyAdapterConfig {
     receiveMode: "ws" | "wss" | "webhook" | "sse" | "manual";
     path?: string;
     wsUrl?: string;
-    /** @deprecated API 地址不再由平台路由拼接，请改用 apiBaseUrl。 */
-    platform?: string;
     resolveActionUrl?: MilkyActionUrlResolver;
     call?: MilkyCall;
     fetch?: typeof globalThis.fetch;
@@ -128,19 +126,10 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
         super();
         this.#config = config;
         this.selfId = config.selfId;
-        const baseUrl = new URL(config.baseUrl);
-        const usesLegacyOneBotsRoutes =
-            config.apiBaseUrl === undefined && config.platform !== undefined;
-        const legacyApiBaseUrl = `${baseUrl.origin}/${config.platform ?? "unknown"}/${config.selfId}/milky/v1`;
         this.#httpClient = new HttpClient({
-            apiBaseUrl:
-                config.apiBaseUrl ?? (usesLegacyOneBotsRoutes ? legacyApiBaseUrl : config.baseUrl),
+            apiBaseUrl: config.apiBaseUrl ?? config.baseUrl,
             accessToken: config.accessToken,
-            resolveActionUrl:
-                config.resolveActionUrl ??
-                (usesLegacyOneBotsRoutes
-                    ? action => new URL(`api/${action}`, `${legacyApiBaseUrl}/`)
-                    : undefined),
+            resolveActionUrl: config.resolveActionUrl,
             call: config.call,
             fetch: config.fetch,
         });
@@ -149,14 +138,10 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
 
     #setupReceiver(): void {
         const { baseUrl, receiveMode, accessToken, path = "/milky/v1" } = this.#config;
-        const usesNativeEndpoints =
-            this.#config.apiBaseUrl !== undefined || this.#config.platform === undefined;
         const eventUrl = new URL(this.#config.wsUrl ?? baseUrl);
         eventUrl.protocol = eventUrl.protocol === "https:" ? "wss:" : "ws:";
         if (!this.#config.wsUrl) {
-            eventUrl.pathname = usesNativeEndpoints
-                ? "/event"
-                : `/${this.#config.platform ?? "unknown"}/${this.selfId}/milky/v1/event`;
+            eventUrl.pathname = `${eventUrl.pathname.replace(/\/+$/, "")}/event`;
         }
 
         switch (receiveMode) {
@@ -169,22 +154,20 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
             case "wss":
                 this.#receiver = new WSSReceiver(
                     this,
-                    usesNativeEndpoints ? path : eventUrl.pathname,
+                    eventUrl.pathname || path,
                     accessToken,
                 );
                 break;
             case "webhook":
                 this.#receiver = new WebhookReceiver(
                     this,
-                    usesNativeEndpoints ? path : `/${this.selfId}${path}`,
+                    path,
                     accessToken,
                 );
                 break;
             case "sse": {
                 const sseUrl = new URL(baseUrl);
-                sseUrl.pathname = usesNativeEndpoints
-                    ? "/event"
-                    : `${sseUrl.pathname.replace(/\/$/, "")}/events`;
+                sseUrl.pathname = `${sseUrl.pathname.replace(/\/+$/, "")}/event`;
                 this.#receiver = new SSEReceiver(this, sseUrl.toString(), accessToken);
                 break;
             }

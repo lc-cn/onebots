@@ -18,6 +18,13 @@ const endpointRule: ValidationRule = {
     },
 };
 
+const filterRule: ValidationRule = {
+    type: "object",
+    default: {},
+    label: "事件过滤",
+    ui: { widget: "event-filter" },
+};
+
 describe("config form generation", () => {
     test("splits protocol defaults and does not repeat account fields", () => {
         const bundle: SchemaBundle = {
@@ -61,6 +68,19 @@ describe("config form generation", () => {
         expect(resolveStructuredFieldDisplay(value, endpointRule)).toEqual([
             { url: "wss://events.example", access_token: "secret" },
         ]);
+    });
+
+    test("keeps event filters structured and accepts advanced JSON", () => {
+        const value = reactive({ $and: [{ type: "message" }] });
+
+        expect(resolveStructuredFieldDisplay(value, filterRule)).toEqual(value);
+        expect(parseStructuredFieldValue(value, filterRule, "事件过滤")).toEqual({
+            ok: true,
+            value: { $and: [{ type: "message" }] },
+        });
+        expect(
+            parseStructuredFieldValue('{"type":"request"}', filterRule, "事件过滤"),
+        ).toEqual({ ok: true, value: { type: "request" } });
     });
 
     test("removes blank rows and rejects the wrong URL scheme", () => {

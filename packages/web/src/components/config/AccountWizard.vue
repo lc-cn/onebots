@@ -60,6 +60,9 @@ const endpointFields = (group: SchemaGroup) =>
         field => field.rule.type === 'array' && field.rule.ui?.widget === 'endpoint-list'
     );
 
+const filterFields = (group: SchemaGroup) =>
+    group.fields.filter(field => field.rule.ui?.widget === 'event-filter');
+
 const transportFields = (group: SchemaGroup) =>
     group.fields.filter(field => ['use_http', 'use_ws'].includes(field.path.at(-1) ?? ''));
 
@@ -72,7 +75,7 @@ const credentialFields = (group: SchemaGroup) =>
 
 const advancedFields = (group: SchemaGroup) => {
     const prominent = new Set(
-        [...endpointFields(group), ...transportFields(group), ...credentialFields(group)].map(
+        [...endpointFields(group), ...filterFields(group), ...transportFields(group), ...credentialFields(group)].map(
             field => field.key
         )
     );
@@ -376,6 +379,15 @@ defineExpose({ openAdd, openEdit });
                                     :field="field"
                                     :disabled="!protocolEnabled[group.key]" />
                             </div>
+                        </section>
+
+                        <section v-if="filterFields(group).length" class="space-y-3">
+                            <SchemaField
+                                v-for="field in filterFields(group)"
+                                :key="field.key"
+                                v-model="accountFormModel[field.key]"
+                                :field="field"
+                                :disabled="!protocolEnabled[group.key]" />
                         </section>
 
                         <details

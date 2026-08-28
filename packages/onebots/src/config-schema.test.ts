@@ -32,6 +32,20 @@ describe("protocol config schema", () => {
         expect(schema.http_webhook).toBeDefined();
         expect(schema.webhooks).toBeUndefined();
     });
+
+    test("publishes a visual event filter contract for every event protocol", () => {
+        for (const protocol of ["onebot.v11", "onebot.v12", "milky.v1", "satori.v1"]) {
+            expect(ruleAt(schemaFor(protocol), "filters")).toMatchObject({
+                type: "object",
+                ui: {
+                    widget: "event-filter",
+                    eventFields: expect.arrayContaining([
+                        expect.objectContaining({ path: "type", label: "事件类别" }),
+                    ]),
+                },
+            });
+        }
+    });
 });
 
 const schemaFor = (protocol: string): Schema => {
