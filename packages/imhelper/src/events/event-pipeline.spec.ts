@@ -32,6 +32,8 @@ describe("typed event pipeline", () => {
             type: "message",
         });
         expect(event.toJSON()).not.toHaveProperty("helper");
+        expect(event.toJSON()).not.toHaveProperty("sub_type");
+        expect(event.toJSON()).not.toHaveProperty("raw_message");
         expect(event).not.toHaveProperty("injected");
         expect(event.helper).toBe(client);
     });

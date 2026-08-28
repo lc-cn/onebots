@@ -29,6 +29,11 @@ export class WSSReceiver<
         this.#server = server;
         this.#webSocketServer = webSocketServer;
 
+        // ws 会转发底层 HTTP Server 的监听错误；必须始终消费，避免 bind 失败升级为未捕获异常。
+        webSocketServer.on("error", error => {
+            this.logger.error("反向 WebSocket 服务错误", error);
+        });
+
         webSocketServer.on("connection", (socket, request) => {
             if (
                 this.options.accessToken &&
@@ -43,13 +48,19 @@ export class WSSReceiver<
             socket.on("error", error => this.logger.error("反向 WebSocket 连接错误", error));
         });
 
-        await new Promise<void>((resolve, reject) => {
-            server.once("error", reject);
-            server.listen(port, () => {
-                server.off("error", reject);
-                resolve();
+        try {
+            await new Promise<void>((resolve, reject) => {
+                server.once("error", reject);
+                server.listen(port, () => {
+                    server.off("error", reject);
+                    resolve();
+                });
             });
-        });
+        } catch (error) {
+            if (this.#server === server) this.#server = undefined;
+            if (this.#webSocketServer === webSocketServer) this.#webSocketServer = undefined;
+            throw error;
+        }
     }
 
     async disconnect(): Promise<void> {

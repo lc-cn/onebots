@@ -267,8 +267,7 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
 
         async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<OneBotV12Response> {
             const { scene_type, scene_id, message } = options;
-            const segments =
-                typeof message === "string" ? [{ type: "text", data: { text: message } }] : message;
+            const segments = Message.toSegments(message);
 
             return this.httpClient.post("/send_message", {
                 detail_type: scene_type,

@@ -89,7 +89,7 @@ describe("Milky V1 SDK", () => {
         await adapter.sendMessage({
             scene_type: "private",
             scene_id: "20002",
-            message: [{ type: "text", data: { text: "你好" } }],
+            message: "你好",
         });
         adapter.transformEvent(event);
         await adapter.recallMessage("milky:friend:20002:30003");

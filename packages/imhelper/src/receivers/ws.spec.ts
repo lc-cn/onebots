@@ -89,6 +89,41 @@ describe("WebSocketReceiver recovery", () => {
         expect(sockets[0].close).toHaveBeenCalled();
     });
 
+    test("AbortSignal rejects a connection that has not opened yet", async () => {
+        const controller = new AbortController();
+        const socket = new FakeSocket();
+        const receiver = new WebSocketReceiver(new TestAdapter(), "ws://example.test/events", {
+            signal: controller.signal,
+            createWebSocket: () => socket,
+        });
+        const connected = receiver.connect();
+
+        controller.abort();
+
+        await expect(connected).rejects.toMatchObject({ name: "AbortError" });
+        expect(socket.close).toHaveBeenCalled();
+    });
+
+    test("rejects an initial socket that closes before opening and keeps reconnecting", async () => {
+        vi.useFakeTimers();
+        const sockets: FakeSocket[] = [];
+        const receiver = new WebSocketReceiver(new TestAdapter(), "ws://example.test/events", {
+            createWebSocket: () => {
+                const socket = new FakeSocket();
+                sockets.push(socket);
+                return socket;
+            },
+            reconnect: { initialDelayMs: 1, maxDelayMs: 1 },
+        });
+        const connected = receiver.connect();
+
+        sockets[0].emit("close", 1006, Buffer.alloc(0));
+
+        await expect(connected).rejects.toThrow("建立连接前关闭");
+        await vi.advanceTimersByTimeAsync(1);
+        expect(sockets).toHaveLength(2);
+    });
+
     test("ignores close events from an obsolete connection generation", async () => {
         vi.useFakeTimers();
         const sockets: FakeSocket[] = [];
@@ -111,6 +146,33 @@ describe("WebSocketReceiver recovery", () => {
         await vi.advanceTimersByTimeAsync(10);
 
         expect(sockets).toHaveLength(2);
+    });
+
+    test("resets a finite retry budget for each explicit lifecycle", async () => {
+        vi.useFakeTimers();
+        const sockets: FakeSocket[] = [];
+        const receiver = new WebSocketReceiver(new TestAdapter(), "ws://example.test/events", {
+            createWebSocket: () => {
+                const socket = new FakeSocket();
+                sockets.push(socket);
+                return socket;
+            },
+            reconnect: { maxAttempts: 1, initialDelayMs: 1 },
+        });
+
+        const firstConnection = receiver.connect();
+        sockets[0].emit("open");
+        await firstConnection;
+        sockets[0].emit("close", 1006, Buffer.alloc(0));
+        await receiver.disconnect();
+
+        const secondConnection = receiver.connect();
+        sockets[1].emit("open");
+        await secondConnection;
+        sockets[1].emit("close", 1006, Buffer.alloc(0));
+        await vi.advanceTimersByTimeAsync(1);
+
+        expect(sockets).toHaveLength(3);
     });
 
     test("redacts the access token from logger context", async () => {

@@ -109,4 +109,23 @@ describe("ReceiveTransport", () => {
         await transport.disconnect();
         expect(eventSource.closed).toBe(true);
     });
+
+    test("cancels an SSE connection that has not opened yet", async () => {
+        const eventSource = new FakeEventSource();
+        const controller = new AbortController();
+        const transport = new ReceiveTransport(new TestAdapter(), {
+            mode: "sse",
+            endpoints: { sse: "https://events.example/v1" },
+            sse: {
+                signal: controller.signal,
+                createEventSource: () => eventSource,
+            },
+        });
+        const connected = transport.connect();
+
+        controller.abort();
+
+        await expect(connected).rejects.toMatchObject({ name: "AbortError" });
+        expect(eventSource.closed).toBe(true);
+    });
 });

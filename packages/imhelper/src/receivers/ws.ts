@@ -49,6 +49,7 @@ export class WebSocketReceiver<
     #reconnectAttempts = 0;
     #generation = 0;
     #stopped = true;
+    #pendingConnectReject?: (error: Error) => void;
     readonly #options: WebSocketReceiverOptions;
     readonly #abortListener = (): void => {
         void this.disconnect();
@@ -73,7 +74,9 @@ export class WebSocketReceiver<
 
     async connect(_port?: number): Promise<void> {
         if (this.#options.signal?.aborted) throw abortError();
+        if (!this.#stopped) throw new Error("WebSocket Receiver 已启动");
         this.#stopped = false;
+        this.#reconnectAttempts = 0;
         this.#options.signal?.addEventListener("abort", this.#abortListener, { once: true });
         return this.#openConnection();
     }
@@ -92,6 +95,8 @@ export class WebSocketReceiver<
             socket.removeAllListeners();
             socket.close();
         }
+        const rejectConnect = this.#pendingConnectReject;
+        rejectConnect?.(abortError());
     }
 
     #openConnection(): Promise<void> {
@@ -108,6 +113,12 @@ export class WebSocketReceiver<
 
         return new Promise((resolve, reject) => {
             let opened = false;
+            const rejectConnect = (error: Error): void => {
+                if (this.#pendingConnectReject !== rejectConnect) return;
+                this.#pendingConnectReject = undefined;
+                reject(error);
+            };
+            this.#pendingConnectReject = rejectConnect;
             let socket: WebSocketLike;
             try {
                 socket = (this.#options.createWebSocket ?? (value => new WebSocket(value)))(
@@ -115,7 +126,7 @@ export class WebSocketReceiver<
                 );
             } catch (error) {
                 this.#scheduleReconnect(generation);
-                reject(error);
+                rejectConnect(error instanceof Error ? error : new Error(String(error)));
                 return;
             }
             this.#socket = socket;
@@ -126,12 +137,15 @@ export class WebSocketReceiver<
                     this.#options.onOpen?.(socket);
                     opened = true;
                     this.#reconnectAttempts = 0;
+                    if (this.#pendingConnectReject === rejectConnect) {
+                        this.#pendingConnectReject = undefined;
+                    }
                     this.logger.debug("WebSocket 已连接", { generation });
                     resolve();
                 } catch (error) {
                     this.logger.error("WebSocket 协议握手失败", error);
                     socket.close();
-                    reject(error);
+                    rejectConnect(error instanceof Error ? error : new Error(String(error)));
                 }
             });
             socket.on("message", data => {
@@ -146,7 +160,7 @@ export class WebSocketReceiver<
                 if (!this.#isCurrent(generation)) return;
                 this.logger.error("WebSocket 连接错误", error);
                 this.#scheduleReconnect(generation);
-                if (!opened) reject(error);
+                if (!opened) rejectConnect(error);
             });
             socket.on("close", (code, reason) => {
                 if (!this.#isCurrent(generation)) return;
@@ -156,6 +170,9 @@ export class WebSocketReceiver<
                     generation,
                 });
                 this.#scheduleReconnect(generation);
+                if (!opened) {
+                    rejectConnect(new Error(`WebSocket 在建立连接前关闭（${code}）`));
+                }
             });
         });
     }
@@ -185,6 +202,10 @@ export class WebSocketReceiver<
             () => {
                 this.#reconnectTimer = undefined;
                 if (!this.#isCurrent(generation)) return;
+                const previousSocket = this.#socket;
+                this.#socket = undefined;
+                previousSocket?.removeAllListeners();
+                previousSocket?.close();
                 void this.#openConnection().catch(error => {
                     this.logger.error("WebSocket 重连失败", error);
                 });

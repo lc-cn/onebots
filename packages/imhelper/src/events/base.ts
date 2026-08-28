@@ -18,9 +18,9 @@ export abstract class BaseEvent<Id extends string | number = string | number> {
 
     /** 序列化事件自身数据；helper 和 #private 缓存不属于协议事件。 */
     toJSON(): Record<string, unknown> {
-        const result = { ...this } as Record<string, unknown>;
-        delete result.helper;
-        return result;
+        return Object.fromEntries(
+            Object.entries(this).filter(([key, value]) => key !== "helper" && value !== undefined),
+        );
     }
 }
 

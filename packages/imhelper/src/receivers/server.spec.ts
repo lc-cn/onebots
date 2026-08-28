@@ -1,4 +1,4 @@
-import { createServer } from "node:net";
+import { createServer, type Server } from "node:net";
 import WebSocket from "ws";
 import { afterEach, describe, expect, test } from "vitest";
 import { Adapter } from "../adapter.js";
@@ -40,6 +40,22 @@ async function reservePort(): Promise<number> {
         server.close(error => (error ? reject(error) : resolve()));
     });
     return address.port;
+}
+
+async function listenOnRandomPort(server: Server): Promise<number> {
+    await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, resolve);
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("无法分配测试端口");
+    return address.port;
+}
+
+async function closeServer(server: Server): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+        server.close(error => (error ? reject(error) : resolve()));
+    });
 }
 
 describe("server receivers", () => {
@@ -95,5 +111,19 @@ describe("server receivers", () => {
 
         expect(adapter.events).toEqual([{ value: "wss" }]);
         socket.close();
+    });
+
+    test.each([
+        ["Webhook", (adapter: TestAdapter) => new WebhookReceiver(adapter, "/events")],
+        ["reverse WebSocket", (adapter: TestAdapter) => new WSSReceiver(adapter, "/events")],
+    ])("%s receiver can retry after its first port bind fails", async (_name, createReceiver) => {
+        const blocker = createServer();
+        const port = await listenOnRandomPort(blocker);
+        const receiver = createReceiver(new TestAdapter());
+        activeReceivers.push(receiver);
+
+        await expect(receiver.connect(port)).rejects.toMatchObject({ code: "EADDRINUSE" });
+        await closeServer(blocker);
+        await expect(receiver.connect(port)).resolves.toBeUndefined();
     });
 });

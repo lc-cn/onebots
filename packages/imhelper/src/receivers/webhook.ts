@@ -44,13 +44,18 @@ export class WebhookReceiver<
         });
         this.#server = server;
 
-        await new Promise<void>((resolve, reject) => {
-            server.once("error", reject);
-            server.listen(port, () => {
-                server.off("error", reject);
-                resolve();
+        try {
+            await new Promise<void>((resolve, reject) => {
+                server.once("error", reject);
+                server.listen(port, () => {
+                    server.off("error", reject);
+                    resolve();
+                });
             });
-        });
+        } catch (error) {
+            if (this.#server === server) this.#server = undefined;
+            throw error;
+        }
     }
 
     async disconnect(): Promise<void> {

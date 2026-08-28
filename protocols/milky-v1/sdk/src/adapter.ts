@@ -343,11 +343,12 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
     ): Promise<MilkyV1Response<SendMessageResult>> {
         const { scene_type, scene_id, message } = options;
         const isPrivate = scene_type === "private";
+        const segments = Message.toSegments(message);
         const response = await this.call<SendMessageResult>(
             isPrivate ? "send_private_message" : "send_group_message",
             isPrivate
-                ? { user_id: Number(scene_id), message }
-                : { group_id: Number(scene_id), message },
+                ? { user_id: Number(scene_id), message: segments }
+                : { group_id: Number(scene_id), message: segments },
         );
         return response;
     }
