@@ -56,6 +56,23 @@ describe("OneBot V11 client", () => {
         );
     });
 
+    test("calls the friend-to-group invitation extension", async () => {
+        const call = vi.fn(async () => ({ status: "ok" as const, retcode: 0, data: {} }));
+        const client = createOnebot11Client({
+            baseUrl: "https://example.test",
+            selfId: "1",
+            receiveMode: "manual",
+            call,
+        });
+
+        await client.inviteFriendToGroup(30003, 20002);
+
+        expect(call).toHaveBeenCalledWith("invite_friend_to_group", {
+            group_id: 30003,
+            user_id: 20002,
+        });
+    });
+
     test("uses baseUrl as the WebSocket endpoint without guessing routes", async () => {
         const socket = new EventEmitter() as EventEmitter & {
             close: ReturnType<typeof vi.fn>;

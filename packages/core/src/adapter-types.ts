@@ -202,6 +202,10 @@ declare module "./adapter.js" {
             user_id: CommonTypes.Id;
             reject_add_request?: boolean;
         }
+        export interface InviteGroupMemberParams {
+            group_id: CommonTypes.Id;
+            user_id: CommonTypes.Id;
+        }
         export interface MuteGroupMemberParams {
             group_id: CommonTypes.Id;
             user_id: CommonTypes.Id;

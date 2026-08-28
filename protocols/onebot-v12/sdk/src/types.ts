@@ -38,6 +38,12 @@ export interface OneBotV12Response<T = unknown> {
     echo?: unknown;
 }
 
+/** OneBots 扩展：邀请好友加入群的参数。 */
+export interface OneBotV12InviteFriendToGroupParams {
+    group_id: string;
+    user_id: string;
+}
+
 export interface OneBotV12Segment {
     type: string;
     data?: Record<string, unknown>;

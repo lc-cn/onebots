@@ -32,6 +32,11 @@ vi.mock("onebots", () => {
         Adapter: class {},
         CommonEvent: {},
         CommonTypes: {},
+        requirePositiveIntegerParam: (params: Record<string, unknown>, key: string) => {
+            const value = Number(params[key]);
+            if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError("invalid id");
+            return value;
+        },
     };
 });
 
@@ -60,6 +65,7 @@ function createProtocol() {
         sendMessage: vi.fn(),
         deleteMessage: vi.fn(),
         kickGroupMember: vi.fn(),
+        inviteGroupMember: vi.fn(),
         muteGroupMember: vi.fn(),
         setGroupAdmin: vi.fn(),
         setGroupCard: vi.fn(),
@@ -331,6 +337,12 @@ describe("Milky V1 protocol", () => {
             }),
         ).resolves.toMatchObject({ status: "ok" });
         await expect(
+            protocol.apply("invite_friend_to_group", {
+                group_id: 20001,
+                user_id: 10001,
+            }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+        await expect(
             protocol.apply("set_group_member_mute", {
                 group_id: 20001,
                 user_id: 10001,
@@ -351,12 +363,25 @@ describe("Milky V1 protocol", () => {
                 reject_add_request: true,
             }),
         );
+        expect(adapter.inviteGroupMember).toHaveBeenCalledWith("bot", {
+            group_id: expect.objectContaining({ number: 20001 }),
+            user_id: expect.objectContaining({ number: 10001 }),
+        });
         expect(adapter.muteGroupMember).toHaveBeenCalledWith(
             "bot",
             expect.objectContaining({
                 duration: 60,
             }),
         );
+    });
+
+    test("invite_friend_to_group rejects invalid IDs before reaching the adapter", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await expect(
+            protocol.apply("invite_friend_to_group", { group_id: 0, user_id: "not-a-number" }),
+        ).resolves.toMatchObject({ status: "failed", retcode: -1 });
+        expect(adapter.inviteGroupMember).not.toHaveBeenCalled();
     });
 
     test("apply returns native Milky wrappers for login and list actions", async () => {

@@ -1,4 +1,4 @@
-import { Protocol, ProtocolRegistry } from "onebots";
+import { Protocol, ProtocolRegistry, requirePositiveIntegerParam } from "onebots";
 import type { Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
@@ -209,6 +209,8 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 return this.setGroupName(params as unknown as OneBotV12.SetGroupNameParams);
             case "leave_group":
                 return this.leaveGroup(params as unknown as OneBotV12.LeaveGroupParams);
+            case "invite_friend_to_group":
+                return this.inviteFriendToGroup(params);
 
             // Guild API
             case "get_guild_info":
@@ -352,6 +354,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             "get_group_member_list",
             "set_group_name",
             "leave_group",
+            "invite_friend_to_group",
             "get_status",
             "get_version",
             "get_supported_actions",
@@ -458,6 +461,19 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     private async leaveGroup(params: OneBotV12.LeaveGroupParams): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("leave_group not implemented");
+    }
+
+    /** OneBots 扩展：邀请机器人好友加入指定群。 */
+    private async inviteFriendToGroup(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, never>> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        const userId = requirePositiveIntegerParam(params, "user_id");
+        await this.adapter.inviteGroupMember(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            user_id: this.adapter.resolveId(userId),
+        });
+        return {};
     }
 
     // ============ Guild API Implementations ============

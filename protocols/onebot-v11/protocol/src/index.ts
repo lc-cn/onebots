@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { Protocol, ProtocolRegistry } from "onebots";
+import { Protocol, ProtocolRegistry, requirePositiveIntegerParam } from "onebots";
 import type { Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
@@ -250,6 +250,8 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                 return this.sendLike(params);
             case "set_group_kick":
                 return this.setGroupKick(params);
+            case "invite_friend_to_group":
+                return this.inviteFriendToGroup(params);
             case "set_group_ban":
                 return this.setGroupBan(params);
             case "set_group_anonymous_ban":
@@ -424,6 +426,19 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     private async setGroupKick(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_kick not implemented");
+    }
+
+    /** OneBots 扩展：邀请机器人好友加入指定群。 */
+    private async inviteFriendToGroup(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, never>> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        const userId = requirePositiveIntegerParam(params, "user_id");
+        await this.adapter.inviteGroupMember(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            user_id: this.adapter.resolveId(userId),
+        });
+        return {};
     }
 
     private async setGroupBan(_params: Record<string, unknown>): Promise<void> {

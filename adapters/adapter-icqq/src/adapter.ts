@@ -301,6 +301,20 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         await bot.kickGroupMember(groupId, userId, params.reject_add_request);
     }
 
+    /** 邀请好友加入指定群。 */
+    async inviteGroupMember(uin: string, params: Adapter.InviteGroupMemberParams): Promise<void> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+
+        const accepted = await account.client.inviteFriendToGroup(
+            Number(params.group_id.string),
+            Number(params.user_id.string),
+        );
+        if (!accepted) {
+            throw new Error(`邀请好友 ${params.user_id.string} 加入群 ${params.group_id.string} 失败`);
+        }
+    }
+
     /**
      * 设置群名片
      */
@@ -899,4 +913,3 @@ AdapterRegistry.register('icqq', ICQQAdapter, {
     homepage: 'https://github.com/icqqjs/icqq',
     author: '凉菜',
 });
-

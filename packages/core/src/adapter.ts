@@ -179,6 +179,9 @@ export abstract class Adapter<
     kickGroupMember(_uin: string, _params: Adapter.KickGroupMemberParams): Promise<void> {
         return this.unsupported("kick_group_member");
     }
+    inviteGroupMember(_uin: string, _params: Adapter.InviteGroupMemberParams): Promise<void> {
+        return this.unsupported("invite_group_member");
+    }
     muteGroupMember(_uin: string, _params: Adapter.MuteGroupMemberParams): Promise<void> {
         return this.unsupported("mute_group_member");
     }
@@ -424,7 +427,6 @@ export abstract class Adapter<
         return this.unsupported("clean_cache");
     }
 
-    // 具体方法
     getAccount(uin: string) {
         return this.accounts.get(uin);
     }
@@ -479,7 +481,6 @@ export type AdapterClient<T extends Adapter = Adapter> =
     T extends Adapter<infer C, keyof Adapter.Configs, BaseApp> ? C : never;
 
 export namespace Adapter {
-    // --- 工厂/注册类型 ---
     export type Construct<T> = { new (...args: unknown[]): T };
     export type Creator<T> = (...args: unknown[]) => T;
     export type Factory<T extends Adapter = Adapter> = Construct<T> | Creator<T>;

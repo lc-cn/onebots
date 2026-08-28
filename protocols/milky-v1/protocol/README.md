@@ -45,6 +45,7 @@ onebots -r qq -p milky-v1 -c config.yaml
 ```
 
 协议会自动从以下位置加载：
+
 - `@onebots/protocol-milky-v1` (官方包)
 - `onebots-protocol-milky-v1` (社区包)
 - `milky-v1` (直接包名)
@@ -56,18 +57,18 @@ accounts:
   - platform: qq
     account_id: my_qq
     protocol: milky.v1
-    
+
     # Milky V1 配置
-    use_http: true              # 启用 HTTP API
-    use_ws: false               # 启用 WebSocket
-    access_token: your_token    # 访问令牌
-    secret: your_secret         # HMAC 签名密钥
-    
+    use_http: true # 启用 HTTP API
+    use_ws: false # 启用 WebSocket
+    access_token: your_token # 访问令牌
+    secret: your_secret # HMAC 签名密钥
+
     # HTTP Reverse
     http_reverse:
       - url: http://localhost:5702/milky
         timeout: 5000
-    
+
     # WebSocket Reverse
     ws_reverse:
       - ws://localhost:6702/milky
@@ -76,11 +77,11 @@ accounts:
 ### 3. 代码方式
 
 ```typescript
-import { App } from 'onebots';
-import { MilkyV1 } from '@onebots/protocol-milky-v1';
+import { App } from "onebots";
+import { MilkyV1 } from "@onebots/protocol-milky-v1";
 
 // 注册协议
-await App.registerProtocol('milky', MilkyV1, 'v1');
+await App.registerProtocol("milky", MilkyV1, "v1");
 
 // 创建应用
 const app = new App();
@@ -91,19 +92,19 @@ await app.start();
 
 ### 通信方式
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `use_http` | boolean | true | 启用 HTTP API |
-| `use_ws` | boolean | false | 启用 WebSocket |
-| `http_reverse` | array | [] | HTTP 反向推送配置 |
-| `ws_reverse` | array | [] | WebSocket 反向连接配置 |
+| 参数           | 类型    | 默认值 | 说明                   |
+| -------------- | ------- | ------ | ---------------------- |
+| `use_http`     | boolean | true   | 启用 HTTP API          |
+| `use_ws`       | boolean | false  | 启用 WebSocket         |
+| `http_reverse` | array   | []     | HTTP 反向推送配置      |
+| `ws_reverse`   | array   | []     | WebSocket 反向连接配置 |
 
 ### 安全配置
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `access_token` | string | - | 访问令牌(全局) |
-| `secret` | string | - | HMAC 签名密钥(全局) |
+| 参数           | 类型   | 默认值 | 说明                |
+| -------------- | ------ | ------ | ------------------- |
+| `access_token` | string | -      | 访问令牌(全局)      |
+| `secret`       | string | -      | HMAC 签名密钥(全局) |
 
 ### HTTP Reverse 配置
 
@@ -121,11 +122,13 @@ await app.start();
 ### HTTP API
 
 访问地址：
+
 ```
 http://host:port/{platform}/{account_id}/milky/v1/api/{action}
 ```
 
 请求示例：
+
 ```bash
 curl -X POST http://localhost:6727/qq/my_qq/milky/v1/api/send_private_message \
   -H "Content-Type: application/json" \
@@ -139,6 +142,7 @@ curl -X POST http://localhost:6727/qq/my_qq/milky/v1/api/send_private_message \
 ### WebSocket
 
 连接地址：
+
 ```
 ws://host:port/{platform}/{account_id}/milky/v1/event
 ```
@@ -148,6 +152,7 @@ ws://host:port/{platform}/{account_id}/milky/v1/event
 onebots 主动推送事件到配置的 HTTP 地址，支持 HMAC 签名验证。
 
 签名计算：
+
 ```
 HMAC-SHA1(secret, body)
 ```
@@ -169,11 +174,23 @@ onebots 主动连接到配置的 WebSocket 地址。
 ### 群组管理 API
 
 - `kick_group_member` - 群组踢人
+- `invite_friend_to_group` - 邀请机器人好友加入群（OneBots 扩展，当前由支持该能力的适配器实现）
 - `set_group_member_mute` - 群组成员禁言
 - `set_group_member_admin` - 设置群管理员
 - `set_group_member_card` - 设置群名片
 - `set_group_name` - 设置群名
 - `quit_group` - 退出群组
+
+邀请好友入群：
+
+```bash
+curl -X POST http://localhost:6727/icqq/my_qq/milky/v1/api/invite_friend_to_group \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_token" \
+  -d '{"group_id": 123456789, "user_id": 987654321}'
+```
+
+`group_id` 和 `user_id` 必须为正整数。机器人需要是目标群成员，并具有 QQ 侧允许邀请好友的权限；平台拒绝或触发风控时返回 Milky 失败响应。
 
 ### 获取信息 API
 
@@ -336,17 +353,16 @@ onebots 主动连接到配置的 WebSocket 地址。
 HTTP Reverse 支持 HMAC-SHA1 签名验证：
 
 请求头：
+
 ```
 X-Signature: sha1=<signature>
 ```
 
 签名计算：
+
 ```javascript
-const crypto = require('crypto');
-const signature = crypto
-  .createHmac('sha1', secret)
-  .update(body)
-  .digest('hex');
+const crypto = require("crypto");
+const signature = crypto.createHmac("sha1", secret).update(body).digest("hex");
 ```
 
 ## 开发

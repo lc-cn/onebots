@@ -52,6 +52,12 @@ export interface MilkyV1Response<T = unknown> {
     message?: string;
 }
 
+/** OneBots Milky 扩展：邀请好友加入群的参数。 */
+export interface MilkyInviteFriendToGroupParams {
+    group_id: number;
+    user_id: number;
+}
+
 export type MilkyCall = (
     action: string,
     params?: Record<string, unknown>,

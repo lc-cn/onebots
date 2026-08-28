@@ -22,6 +22,10 @@ export class OneBotV11Client extends ImHelper<
     ): Promise<OneBotV11Response<T>> {
         return this.adapter.call<T>(action, params);
     }
+
+    inviteFriendToGroup(groupId: number, userId: number): Promise<void> {
+        return this.adapter.inviteFriendToGroup(groupId, userId);
+    }
 }
 
 export function createOnebot11Client(config: OneBotV11AdapterConfig): OneBotV11Client {

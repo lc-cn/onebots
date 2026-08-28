@@ -136,6 +136,23 @@ describe("Milky V1 SDK", () => {
         });
     });
 
+    test("calls the OneBots friend-to-group invitation extension", async () => {
+        const call = vi.fn(async () => ({ status: "ok" as const, retcode: 0, data: {} }));
+        const client = createMilkyClient({
+            baseUrl: "https://milky.example",
+            selfId: "10001",
+            receiveMode: "manual",
+            call,
+        });
+
+        await client.inviteFriendToGroup("30003", "20002");
+
+        expect(call).toHaveBeenCalledWith("invite_friend_to_group", {
+            group_id: 30003,
+            user_id: 20002,
+        });
+    });
+
     test("appends the native API route to baseUrl without guessing gateway routes", async () => {
         const fetchMock = vi.fn(
             async () => new Response(JSON.stringify({ status: "ok", retcode: 0, data: {} })),

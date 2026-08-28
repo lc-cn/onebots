@@ -32,6 +32,12 @@ export interface OneBotV11Response<T = unknown> {
     echo?: unknown;
 }
 
+/** OneBots 扩展：邀请好友加入群的参数。 */
+export interface OneBotV11InviteFriendToGroupParams {
+    group_id: number;
+    user_id: number;
+}
+
 export type EventHandler = (event: OneBotV11Event) => void | Promise<void>;
 
 export type OneBotV11Call = (

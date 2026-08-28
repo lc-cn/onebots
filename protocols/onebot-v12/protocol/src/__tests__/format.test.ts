@@ -31,6 +31,11 @@ vi.mock("onebots", () => {
     Adapter: class {},
     CommonEvent: {},
     CommonTypes: {},
+    requirePositiveIntegerParam: (params: Record<string, unknown>, key: string) => {
+      const value = Number(params[key]);
+      if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError("invalid id");
+      return value;
+    },
   };
 });
 
@@ -59,6 +64,7 @@ function createProtocol() {
           number: typeof id === "number" ? id : resolvedId.number,
         }),
     ),
+    inviteGroupMember: vi.fn(),
   };
 
   const protocol = new OneBotV12Protocol(
@@ -337,6 +343,24 @@ describe("OneBot V12 protocol", () => {
       data: null,
     });
     expect(result.message).toContain("Unknown action");
+  });
+
+  test("invite_friend_to_group is advertised and delegates to the adapter", async () => {
+    const { protocol, adapter } = createProtocol();
+
+    const result = await protocol.apply("invite_friend_to_group", {
+      group_id: "20001",
+      user_id: "10001",
+    });
+
+    expect(result).toMatchObject({ status: "ok", retcode: 0, data: {} });
+    expect(adapter.inviteGroupMember).toHaveBeenCalledWith("bot", {
+      group_id: expect.objectContaining({ number: 20001 }),
+      user_id: expect.objectContaining({ number: 10001 }),
+    });
+    await expect(protocol.apply("get_supported_actions")).resolves.toMatchObject({
+      data: expect.arrayContaining(["invite_friend_to_group"]),
+    });
   });
 
   test("converts non-at segments through unchanged", () => {

@@ -6,7 +6,7 @@ import { Dict } from "onebots";
  */
 export namespace OneBotV11 {
     // ============ Message Types ============
-    
+
     /**
      * Message segment (CQ code)
      */
@@ -211,7 +211,7 @@ export namespace OneBotV11 {
     }
 
     // ============ Event Types ============
-    
+
     /**
      * Base event
      */
@@ -449,7 +449,7 @@ export namespace OneBotV11 {
     }
 
     // ============ API Response Types ============
-    
+
     /**
      * Standard API response
      */
@@ -539,6 +539,12 @@ export namespace OneBotV11 {
         card_changeable: boolean;
     }
 
+    /** OneBots 扩展：邀请好友加入群。 */
+    export interface InviteFriendToGroupParams {
+        group_id: number;
+        user_id: number;
+    }
+
     /**
      * Version info
      */
@@ -574,4 +580,3 @@ export namespace OneBotV11 {
         };
     }
 }
-

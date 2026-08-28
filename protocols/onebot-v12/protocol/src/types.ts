@@ -6,7 +6,7 @@ import { Dict } from "onebots";
  */
 export namespace OneBotV12 {
     // ============ Basic Types ============
-    
+
     /**
      * Bot self information
      */
@@ -28,7 +28,7 @@ export namespace OneBotV12 {
     }
 
     // ============ Message Types ============
-    
+
     /**
      * Message segment
      */
@@ -140,7 +140,7 @@ export namespace OneBotV12 {
     }
 
     // ============ Event Types ============
-    
+
     /**
      * Base event
      */
@@ -302,7 +302,7 @@ export namespace OneBotV12 {
     }
 
     // ============ API Request/Response Types ============
-    
+
     /**
      * Standard API response
      */
@@ -428,7 +428,7 @@ export namespace OneBotV12 {
     }
 
     // ============ Action Parameters ============
-    
+
     /**
      * Send message params
      */
@@ -500,6 +500,12 @@ export namespace OneBotV12 {
      */
     export interface LeaveGroupParams {
         group_id: string;
+    }
+
+    /** OneBots 扩展：邀请好友加入群。 */
+    export interface InviteFriendToGroupParams {
+        group_id: string;
+        user_id: string;
     }
 
     /**

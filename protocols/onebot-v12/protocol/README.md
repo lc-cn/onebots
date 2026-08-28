@@ -43,6 +43,7 @@ onebots -r wechat -p onebot-v12 -c config.yaml
 ```
 
 协议会自动从以下位置加载：
+
 - `@onebots/protocol-onebot-v12` (官方包)
 - `onebots-protocol-onebot-v12` (社区包)
 - `onebot-v12` (直接包名)
@@ -54,19 +55,19 @@ accounts:
   - platform: wechat
     account_id: my_account
     protocol: onebot.v12
-    
+
     # OneBot V12 配置
-    use_http: true                # 启用 HTTP API
-    use_ws: true                  # 启用 WebSocket
-    access_token: your_token      # 访问令牌
-    heartbeat_interval: 15000     # 心跳间隔(ms)
-    request_timeout: 15000        # 请求超时(ms)
-    enable_cors: false            # 启用 CORS
-    
+    use_http: true # 启用 HTTP API
+    use_ws: true # 启用 WebSocket
+    access_token: your_token # 访问令牌
+    heartbeat_interval: 15000 # 心跳间隔(ms)
+    request_timeout: 15000 # 请求超时(ms)
+    enable_cors: false # 启用 CORS
+
     # HTTP Webhook
     http_webhook:
       - http://localhost:5701/onebot/v12
-    
+
     # WebSocket Reverse
     ws_reverse:
       - ws://localhost:6701/onebot/v12
@@ -75,11 +76,11 @@ accounts:
 ### 3. 代码方式
 
 ```typescript
-import { App } from 'onebots';
-import { OneBotV12Protocol } from '@onebots/protocol-onebot-v12';
+import { App } from "onebots";
+import { OneBotV12Protocol } from "@onebots/protocol-onebot-v12";
 
 // 注册协议
-await App.registerProtocol('onebot', OneBotV12Protocol, 'v12');
+await App.registerProtocol("onebot", OneBotV12Protocol, "v12");
 
 // 创建应用
 const app = new App();
@@ -90,37 +91,39 @@ await app.start();
 
 ### 通信方式
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `use_http` | boolean | true | 启用 HTTP API |
-| `use_ws` | boolean | false | 启用 WebSocket |
-| `http_webhook` | string[] | [] | HTTP Webhook 推送地址 |
-| `ws_reverse` | string[] | [] | WebSocket 反向连接地址 |
+| 参数           | 类型     | 默认值 | 说明                   |
+| -------------- | -------- | ------ | ---------------------- |
+| `use_http`     | boolean  | true   | 启用 HTTP API          |
+| `use_ws`       | boolean  | false  | 启用 WebSocket         |
+| `http_webhook` | string[] | []     | HTTP Webhook 推送地址  |
+| `ws_reverse`   | string[] | []     | WebSocket 反向连接地址 |
 
 ### 安全配置
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `access_token` | string | - | 访问令牌 |
-| `enable_cors` | boolean | false | 启用 CORS |
+| 参数           | 类型    | 默认值 | 说明      |
+| -------------- | ------- | ------ | --------- |
+| `access_token` | string  | -      | 访问令牌  |
+| `enable_cors`  | boolean | false  | 启用 CORS |
 
 ### 其他配置
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `heartbeat_interval` | number | - | 心跳间隔(ms) |
-| `request_timeout` | number | 15000 | 请求超时(ms) |
+| 参数                 | 类型   | 默认值 | 说明         |
+| -------------------- | ------ | ------ | ------------ |
+| `heartbeat_interval` | number | -      | 心跳间隔(ms) |
+| `request_timeout`    | number | 15000  | 请求超时(ms) |
 
 ## 通信方式
 
 ### HTTP API
 
 访问地址：
+
 ```
 http://host:port/{platform}/{account_id}/onebot/v12/{action}
 ```
 
 请求示例：
+
 ```bash
 curl -X POST http://localhost:6727/wechat/my_account/onebot/v12/send_message \
   -H "Content-Type: application/json" \
@@ -135,6 +138,7 @@ curl -X POST http://localhost:6727/wechat/my_account/onebot/v12/send_message \
 ```
 
 响应格式：
+
 ```json
 {
   "status": "ok",
@@ -150,6 +154,7 @@ curl -X POST http://localhost:6727/wechat/my_account/onebot/v12/send_message \
 ### WebSocket
 
 连接地址：
+
 ```
 ws://host:port/{platform}/{account_id}/onebot/v12
 ```
@@ -192,10 +197,22 @@ onebots 主动连接到配置的 WebSocket 地址。
 
 ### 扩展 API
 
+- `invite_friend_to_group` - 邀请机器人好友加入群（OneBots 扩展）
 - `get_latest_events` - 获取最新事件列表
 - `get_supported_actions` - 获取支持的动作列表
 - `get_status` - 获取运行状态
 - `get_version` - 获取版本信息
+
+三个协议中的邀请扩展均使用相同参数：
+
+```json
+{
+  "group_id": 123456789,
+  "user_id": 987654321
+}
+```
+
+两个字段必须为正整数。机器人需要是目标群成员，并具有平台侧允许邀请好友的权限。
 
 ## 消息段(Segment)
 
@@ -316,9 +333,7 @@ OneBot 12 使用消息段代替 CQ 码：
     "user_id": "bot_id"
   },
   "message_id": "msg_123",
-  "message": [
-    {"type": "text", "data": {"text": "Hello"}}
-  ],
+  "message": [{ "type": "text", "data": { "text": "Hello" } }],
   "alt_message": "Hello",
   "user_id": "user_123"
 }
@@ -381,13 +396,13 @@ OneBot 12 使用消息段代替 CQ 码：
 
 ## OneBot 11 vs 12 对比
 
-| 特性 | OneBot 11 | OneBot 12 |
-|------|-----------|-----------|
-| 消息格式 | CQ 码 | 消息段(Segment) |
+| 特性     | OneBot 11     | OneBot 12                  |
+| -------- | ------------- | -------------------------- |
+| 消息格式 | CQ 码         | 消息段(Segment)            |
 | 平台标识 | user_id(数字) | platform + user_id(字符串) |
-| 事件格式 | post_type | type + detail_type |
-| API 命名 | 下划线分隔 | 下划线分隔(更规范) |
-| 跨平台 | 主要支持 QQ | 设计用于多平台 |
+| 事件格式 | post_type     | type + detail_type         |
+| API 命名 | 下划线分隔    | 下划线分隔(更规范)         |
+| 跨平台   | 主要支持 QQ   | 设计用于多平台             |
 
 ## 开发
 

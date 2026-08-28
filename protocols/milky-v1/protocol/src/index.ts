@@ -1,4 +1,4 @@
-import { Protocol, ProtocolRegistry, Account, Adapter } from "onebots";
+import { Protocol, ProtocolRegistry, Account, Adapter, requirePositiveIntegerParam } from "onebots";
 import type { CommonEvent, Schema } from "onebots";
 import { Milky } from "./types.js";
 import { MilkyConfig } from "./config.js";
@@ -230,6 +230,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.getGroupMemberList(params);
             case "kick_group_member":
                 return this.kickGroupMember(params);
+            case "invite_friend_to_group":
+                return this.inviteFriendToGroup(params);
             case "set_group_member_mute":
                 return this.setGroupMemberMute(params);
             case "set_group_member_admin":
@@ -462,6 +464,19 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             user_id: this.adapter.resolveId(user_id),
             reject_add_request,
         });
+    }
+
+    /** OneBots 扩展：邀请机器人好友加入指定群。 */
+    private async inviteFriendToGroup(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, never>> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        const userId = requirePositiveIntegerParam(params, "user_id");
+        await this.adapter.inviteGroupMember(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            user_id: this.adapter.resolveId(userId),
+        });
+        return {};
     }
 
     private async setGroupMemberMute(params: Record<string, unknown>): Promise<void> {
@@ -801,6 +816,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         connect();
     }
 }
+
 ProtocolRegistry.register("milky", "v1", MilkyV1);
 export * from "./types.js";
 export * from "./config.js";

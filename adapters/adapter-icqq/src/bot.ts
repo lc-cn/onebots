@@ -474,6 +474,12 @@ export class ICQQBot extends EventEmitter {
         return this.client.sendGroupMsg(groupId, message);
     }
 
+    /** 邀请好友加入群；是否允许邀请仍由 QQ 权限和风控决定。 */
+    async inviteFriendToGroup(groupId: number, userId: number): Promise<boolean> {
+        if (!this.client) throw new Error("Bot not connected");
+        return this.client.inviteFriend(groupId, userId);
+    }
+
     /**
      * 撤回消息
      */
@@ -750,4 +756,3 @@ export class ICQQBot extends EventEmitter {
 
 // 导出消息段构造器
 export { Segment as segment };
-

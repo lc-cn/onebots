@@ -36,6 +36,7 @@ export interface OneBotV12AdapterConfig {
 
 export interface OneBotV12Adapter extends Adapter<string, OneBotV12Event> {
     sendMessage(options: Adapter.SendMessageOptions<string>): Promise<OneBotV12Response>;
+    inviteFriendToGroup(groupId: string, userId: string): Promise<void>;
     call<T = unknown>(
         action: string,
         params?: Record<string, unknown>,
@@ -384,6 +385,14 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
         async kickGroupMember(group_id: string, user_id: string): Promise<void> {
             // OneBot V12 没有直接的 kick 方法，可能需要使用其他 API
             throw new Error("kickGroupMember not supported in OneBot V12");
+        }
+
+        /** OneBots 扩展：邀请机器人好友加入指定群。 */
+        async inviteFriendToGroup(groupId: string, userId: string): Promise<void> {
+            await this.httpClient.post("/invite_friend_to_group", {
+                group_id: groupId,
+                user_id: userId,
+            });
         }
 
         async setGroupMemberMute(

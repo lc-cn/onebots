@@ -513,6 +513,14 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
         });
     }
 
+    /** OneBots 扩展：邀请机器人好友加入指定群。 */
+    async inviteFriendToGroup(groupId: string, userId: string): Promise<void> {
+        await this.call("invite_friend_to_group", {
+            group_id: Number(groupId),
+            user_id: Number(userId),
+        });
+    }
+
     async setGroupMemberMute(groupId: string, userId: string, duration: number): Promise<void> {
         await this.call("set_group_member_mute", {
             group_id: Number(groupId),

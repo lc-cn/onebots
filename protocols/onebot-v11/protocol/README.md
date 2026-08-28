@@ -43,6 +43,7 @@ onebots -r wechat -p onebot-v11 -c config.yaml
 ```
 
 协议会自动从以下位置加载：
+
 - `@onebots/protocol-onebot-v11` (官方包)
 - `onebots-protocol-onebot-v11` (社区包)
 - `onebot-v11` (直接包名)
@@ -54,18 +55,18 @@ accounts:
   - platform: wechat
     account_id: my_account
     protocol: onebot.v11
-    
+
     # OneBot V11 配置
-    use_http: true              # 启用 HTTP
-    use_ws: true                # 启用 WebSocket
-    access_token: your_token    # 访问令牌
-    secret: your_secret         # 签名密钥
-    heartbeat_interval: 15000   # 心跳间隔(ms)
-    
+    use_http: true # 启用 HTTP
+    use_ws: true # 启用 WebSocket
+    access_token: your_token # 访问令牌
+    secret: your_secret # 签名密钥
+    heartbeat_interval: 15000 # 心跳间隔(ms)
+
     # HTTP Reverse
     http_reverse:
       - http://localhost:5700/onebot/v11
-    
+
     # WebSocket Reverse
     ws_reverse:
       - ws://localhost:6700/onebot/v11
@@ -74,11 +75,11 @@ accounts:
 ### 3. 代码方式
 
 ```typescript
-import { App } from 'onebots';
-import { OneBotV11Protocol } from '@onebots/protocol-onebot-v11';
+import { App } from "onebots";
+import { OneBotV11Protocol } from "@onebots/protocol-onebot-v11";
 
 // 注册协议
-await App.registerProtocol('onebot', OneBotV11Protocol, 'v11');
+await App.registerProtocol("onebot", OneBotV11Protocol, "v11");
 
 // 创建应用
 const app = new App();
@@ -89,39 +90,41 @@ await app.start();
 
 ### 通信方式
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `use_http` | boolean | true | 启用 HTTP API |
-| `use_ws` | boolean | false | 启用 WebSocket |
-| `http_reverse` | string[] | [] | HTTP 反向推送地址 |
-| `ws_reverse` | string[] | [] | WebSocket 反向连接地址 |
+| 参数           | 类型     | 默认值 | 说明                   |
+| -------------- | -------- | ------ | ---------------------- |
+| `use_http`     | boolean  | true   | 启用 HTTP API          |
+| `use_ws`       | boolean  | false  | 启用 WebSocket         |
+| `http_reverse` | string[] | []     | HTTP 反向推送地址      |
+| `ws_reverse`   | string[] | []     | WebSocket 反向连接地址 |
 
 ### 安全配置
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `access_token` | string | - | 访问令牌 |
-| `secret` | string | - | 签名密钥 |
-| `enable_cors` | boolean | false | 启用 CORS |
+| 参数           | 类型    | 默认值 | 说明      |
+| -------------- | ------- | ------ | --------- |
+| `access_token` | string  | -      | 访问令牌  |
+| `secret`       | string  | -      | 签名密钥  |
+| `enable_cors`  | boolean | false  | 启用 CORS |
 
 ### 消息配置
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `post_message_format` | "string" \| "array" | "array" | 消息格式 |
-| `heartbeat_interval` | number | - | 心跳间隔(ms) |
-| `post_timeout` | number | 5000 | 推送超时(ms) |
+| 参数                  | 类型                | 默认值  | 说明         |
+| --------------------- | ------------------- | ------- | ------------ |
+| `post_message_format` | "string" \| "array" | "array" | 消息格式     |
+| `heartbeat_interval`  | number              | -       | 心跳间隔(ms) |
+| `post_timeout`        | number              | 5000    | 推送超时(ms) |
 
 ## 通信方式
 
 ### HTTP API
 
 访问地址：
+
 ```
 http://host:port/{platform}/{account_id}/onebot/v11/{action}
 ```
 
 示例：
+
 ```bash
 curl -X POST http://localhost:6727/wechat/my_account/onebot/v11/send_private_msg \
   -H "Content-Type: application/json" \
@@ -132,6 +135,7 @@ curl -X POST http://localhost:6727/wechat/my_account/onebot/v11/send_private_msg
 ### WebSocket
 
 连接地址：
+
 ```
 ws://host:port/{platform}/{account_id}/onebot/v11
 ```
@@ -156,6 +160,7 @@ onebots 主动连接到配置的 WebSocket 地址。
 - `get_forward_msg` - 获取合并转发消息
 - `send_like` - 发送好友赞
 - `set_group_kick` - 群组踢人
+- `invite_friend_to_group` - 邀请机器人好友加入群（OneBots 扩展）
 - `set_group_ban` - 群组单人禁言
 - `set_group_anonymous_ban` - 群组匿名用户禁言
 - `set_group_whole_ban` - 群组全员禁言

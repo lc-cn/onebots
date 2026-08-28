@@ -31,6 +31,11 @@ vi.mock("onebots", () => {
     Adapter: class {},
     CommonEvent: {},
     CommonTypes: {},
+    requirePositiveIntegerParam: (params: Record<string, unknown>, key: string) => {
+      const value = Number(params[key]);
+      if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError("invalid id");
+      return value;
+    },
   };
 });
 
@@ -59,6 +64,7 @@ function createProtocol() {
           number: typeof id === "number" ? id : resolvedId.number,
         }),
     ),
+    inviteGroupMember: vi.fn(),
   };
 
   const protocol = new OneBotV11Protocol(
@@ -417,5 +423,20 @@ describe("OneBot V11 message format conversion", () => {
     const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
     expect(result).toBeNull();
+  });
+
+  test("invite_friend_to_group delegates to the common adapter capability", async () => {
+    const { protocol, adapter } = createProtocol();
+
+    const result = await protocol.apply("invite_friend_to_group", {
+      group_id: 20001,
+      user_id: 10001,
+    });
+
+    expect(result).toMatchObject({ status: "ok", retcode: 0, data: {} });
+    expect(adapter.inviteGroupMember).toHaveBeenCalledWith("bot", {
+      group_id: expect.objectContaining({ number: 20001 }),
+      user_id: expect.objectContaining({ number: 10001 }),
+    });
   });
 });

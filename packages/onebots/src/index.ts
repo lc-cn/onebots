@@ -37,6 +37,7 @@ export {
     unixSecondsToEventMs,
     unixMillisToEventMs,
     coerceUnixToEventMs,
+    requirePositiveIntegerParam,
     defineAdapterCapabilities,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,

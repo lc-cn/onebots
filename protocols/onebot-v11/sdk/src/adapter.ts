@@ -41,6 +41,7 @@ export type Segment = {
  */
 export interface OneBotV11Adapter extends Adapter<number, OneBotV11Event> {
     sendMessage(options: Adapter.SendMessageOptions<number>): Promise<OneBotV11Response>;
+    inviteFriendToGroup(groupId: number, userId: number): Promise<void>;
     call<T = unknown>(
         action: string,
         params?: Record<string, unknown>,
@@ -398,6 +399,14 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
             await this.httpClient.post("/set_group_kick", {
                 group_id,
                 user_id,
+            });
+        }
+
+        /** OneBots 扩展：邀请机器人好友加入指定群。 */
+        async inviteFriendToGroup(groupId: number, userId: number): Promise<void> {
+            await this.httpClient.post("/invite_friend_to_group", {
+                group_id: groupId,
+                user_id: userId,
             });
         }
 
