@@ -1,5 +1,5 @@
-import { RequestEvent } from './base.js';
-import type { ImHelper } from '../../imhelper.js';
+import { RequestEvent } from "./base.js";
+import type { ImHelper } from "../../imhelper.js";
 
 /**
  * 加群请求事件
@@ -7,23 +7,20 @@ import type { ImHelper } from '../../imhelper.js';
 export class GroupRequestEvent<
     Id extends string | number = string | number,
 > extends RequestEvent<Id> {
-    readonly type = 'request' as const;
-    readonly request_type = 'group' as const;
+    readonly type = "request" as const;
+    readonly request_type = "group" as const;
     readonly group_id: Id;
     readonly user_id: Id;
     readonly flag: string;
-    readonly sub_type: 'add' | 'invite';
+    readonly sub_type: "add" | "invite";
 
-    #user?: import('../../instances/user.js').User<Id>;
-    #group?: import('../../instances/group.js').Group<Id>;
+    #user?: import("../../instances/user.js").User<Id>;
+    #group?: import("../../instances/group.js").Group<Id>;
 
-    constructor(
-        helper: ImHelper<Id>,
-        data: GroupRequestEvent.Data<Id>
-    ) {
+    constructor(helper: ImHelper<Id>, data: GroupRequestEvent.Data<Id>) {
         super(helper, {
             ...data,
-            request_type: 'group',
+            request_type: "group",
         });
         this.group_id = data.group_id;
         this.user_id = data.user_id;
@@ -55,10 +52,12 @@ export class GroupRequestEvent<
 }
 
 export namespace GroupRequestEvent {
-    export interface Data<Id extends string | number = string | number> extends RequestEvent.Data<Id> {
+    export interface Data<
+        Id extends string | number = string | number,
+    > extends RequestEvent.Data<Id> {
         group_id: Id;
         user_id: Id;
         flag: string;
-        sub_type: 'add' | 'invite';
+        sub_type: "add" | "invite";
     }
 }

@@ -1,6 +1,6 @@
-import { BaseEvent } from '../base.js';
-import type { ImHelper } from '../../imhelper.js';
-import type { Message } from '../../message.js';
+import { BaseEvent } from "../base.js";
+import type { ImHelper } from "../../imhelper.js";
+import type { Message } from "../../message.js";
 
 /**
  * 消息事件抽象基类
@@ -8,24 +8,21 @@ import type { Message } from '../../message.js';
 export abstract class MessageEvent<
     Id extends string | number = string | number,
 > extends BaseEvent<Id> {
-    abstract readonly type: 'message';
+    abstract readonly type: "message";
     readonly message_type: Message.SceneType;
     readonly sub_type?: string;
     readonly message_id: Id;
     readonly user_id: Id;
     readonly content: Message.Content;
     readonly raw_message?: string;
-    #sender?: import('../../instances/user.js').User<Id>;
-    get sender(){
+    #sender?: import("../../instances/user.js").User<Id>;
+    get sender() {
         if (!this.#sender) {
             this.#sender = this.helper.pickUser(this.user_id);
         }
         return this.#sender;
     }
-    constructor(
-        helper: ImHelper<Id>,
-        data: MessageEvent.Data<Id>
-    ) {
+    constructor(helper: ImHelper<Id>, data: MessageEvent.Data<Id>) {
         super(helper, data);
         this.message_type = data.message_type;
         this.sub_type = data.sub_type;

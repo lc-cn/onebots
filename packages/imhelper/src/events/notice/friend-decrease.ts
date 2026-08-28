@@ -1,5 +1,5 @@
-import { NoticeEvent } from './base.js';
-import type { ImHelper } from '../../imhelper.js';
+import { NoticeEvent } from "./base.js";
+import type { ImHelper } from "../../imhelper.js";
 
 /**
  * 好友减少通知事件
@@ -7,15 +7,12 @@ import type { ImHelper } from '../../imhelper.js';
 export class FriendDecreaseNoticeEvent<
     Id extends string | number = string | number,
 > extends NoticeEvent<Id> {
-    readonly type = 'notice' as const;
+    readonly type = "notice" as const;
     readonly user_id: Id;
 
-    #user?: import('../../instances/user.js').User<Id>;
+    #user?: import("../../instances/user.js").User<Id>;
 
-    constructor(
-        helper: ImHelper<Id>,
-        data: FriendDecreaseNoticeEvent.Data<Id>
-    ) {
+    constructor(helper: ImHelper<Id>, data: FriendDecreaseNoticeEvent.Data<Id>) {
         super(helper, data);
         this.user_id = data.user_id;
     }
@@ -28,10 +25,11 @@ export class FriendDecreaseNoticeEvent<
     }
 }
 export namespace FriendDecreaseNoticeEvent {
-    export interface Data<Id extends string | number = string | number> extends NoticeEvent.Data<Id> {
+    export interface Data<
+        Id extends string | number = string | number,
+    > extends NoticeEvent.Data<Id> {
         user_id: Id;
-        notice_type: 'friend_decrease';
-        sub_type: 'delete' | 'remove';
+        notice_type: "friend_decrease";
+        sub_type: "delete" | "remove";
     }
 }
-

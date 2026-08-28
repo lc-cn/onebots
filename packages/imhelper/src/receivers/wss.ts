@@ -1,109 +1,73 @@
-import { Receiver } from "../receiver.js";
-import { Adapter } from "../adapter.js";
-import { WebSocketServer, WebSocket } from "ws";
-import http from "http";
+import http from "node:http";
+import { WebSocketServer } from "ws";
+import type { Adapter } from "../adapter.js";
+import { acceptWebSocketIngress } from "../ingress.js";
+import { Receiver, type AuthenticatedReceiverOptions } from "../receiver.js";
+import { readReceiverToken } from "./auth.js";
 
+/** 在独立 HTTP 端口上接收反向 WebSocket；已有 Upgrade 宿主应使用 Client.acceptWebSocket。 */
 export class WSSReceiver<
     Id extends string | number = string | number,
     TRawEvent = unknown,
 > extends Receiver<Id, TRawEvent> {
-    private server?: http.Server;
-    private wss?: WebSocketServer;
-    private accessToken?: string;
+    #server?: http.Server;
+    #webSocketServer?: WebSocketServer;
 
-    async connect(port?: number): Promise<void> {
-        return new Promise((resolve, reject) => {
-            this.server = http.createServer();
-            this.wss = new WebSocketServer({
-                server: this.server,
-                path: this.path,
-            });
+    constructor(
+        adapter: Adapter<Id, TRawEvent>,
+        public readonly path: string,
+        private readonly options: AuthenticatedReceiverOptions = {},
+    ) {
+        super(adapter, options.logger);
+    }
 
-            this.wss.on("connection", (ws: WebSocket, request: http.IncomingMessage) => {
-                // 验证 access_token
-                if (this.accessToken) {
-                    const url = new URL(request.url || "", `http://localhost`);
-                    const token =
-                        url.searchParams.get("access_token") ||
-                        request.headers.authorization?.replace("Bearer ", "");
+    async connect(port = 8080): Promise<void> {
+        if (this.#server) throw new Error("反向 WebSocket Receiver 已启动");
 
-                    if (token !== this.accessToken) {
-                        ws.close(1008, "Unauthorized");
-                        return;
-                    }
-                }
+        const server = http.createServer();
+        const webSocketServer = new WebSocketServer({ server, path: this.path });
+        this.#server = server;
+        this.#webSocketServer = webSocketServer;
 
-                ws.on("message", (data: Buffer) => {
-                    try {
-                        const event = JSON.parse(data.toString());
-                        this.handleEvent(event);
-                    } catch (error) {
-                        console.error("[WSSReceiver] Failed to parse message:", error);
-                    }
-                });
+        webSocketServer.on("connection", (socket, request) => {
+            if (
+                this.options.accessToken &&
+                readReceiverToken(request.url, request.headers) !== this.options.accessToken
+            ) {
+                socket.close(1008, "鉴权失败");
+                return;
+            }
 
-                ws.on("error", error => {
-                    console.error("[WSSReceiver] WebSocket error:", error);
-                });
+            const detach = acceptWebSocketIngress<TRawEvent>(socket, event => this.ingest(event));
+            socket.once("close", detach);
+            socket.on("error", error => this.logger.error("反向 WebSocket 连接错误", error));
+        });
 
-                ws.on("close", () => {
-                    // Connection closed
-                });
-            });
-
-            this.server.listen(port || 8080, (error?: Error) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    resolve();
-                }
+        await new Promise<void>((resolve, reject) => {
+            server.once("error", reject);
+            server.listen(port, () => {
+                server.off("error", reject);
+                resolve();
             });
         });
     }
 
     async disconnect(): Promise<void> {
-        return new Promise(resolve => {
-            if (this.wss) {
-                this.wss.close(() => {
-                    if (this.server) {
-                        this.server.close(() => {
-                            resolve();
-                        });
-                    } else {
-                        resolve();
-                    }
-                });
-            } else if (this.server) {
-                this.server.close(() => {
-                    resolve();
-                });
-            } else {
-                resolve();
-            }
-        });
-    }
+        const webSocketServer = this.#webSocketServer;
+        const server = this.#server;
+        this.#webSocketServer = undefined;
+        this.#server = undefined;
 
-    private handleEvent(event: TRawEvent): void {
-        // 直接调用 adapter 的 transformEvent 方法进行转换
-        // transformEvent 会负责 emit 所有需要的事件（包括 'event' 和 'message.*'）
-        this.transformToMessage(event);
-    }
-
-    private transformToMessage(event: TRawEvent): void {
-        // 如果 adapter 有 transformEvent 方法，使用它
-        if (this.adapter.transformEvent) {
-            this.adapter.transformEvent(event);
-        } else {
-            throw new Error("Adapter does not have transformEvent method");
+        if (webSocketServer) {
+            for (const socket of webSocketServer.clients) socket.close(1001, "Receiver 已停止");
+            await new Promise<void>((resolve, reject) => {
+                webSocketServer.close(error => (error ? reject(error) : resolve()));
+            });
         }
-    }
-
-    constructor(
-        adapter: Adapter<Id, TRawEvent>,
-        public path: string,
-        accessToken?: string,
-    ) {
-        super(adapter);
-        this.accessToken = accessToken;
+        if (server?.listening) {
+            await new Promise<void>((resolve, reject) => {
+                server.close(error => (error ? reject(error) : resolve()));
+            });
+        }
     }
 }

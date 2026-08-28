@@ -1,25 +1,24 @@
-import { MessageEvent } from './base.js';
-import type { ImHelper } from '../../imhelper.js';
-import type { Message } from '../../message.js';
+import { MessageEvent } from "./base.js";
+import type { ImHelper } from "../../imhelper.js";
 /**
  * 群聊消息事件
  */
 export class GroupMessageEvent<
     Id extends string | number = string | number,
 > extends MessageEvent<Id> {
-    readonly type = 'message' as const;
-    readonly message_type = 'group' as const;
+    readonly type = "message" as const;
+    readonly message_type = "group" as const;
     readonly group_id: Id;
-    readonly sub_type?: 'normal' | 'anonymous' | 'notice';
-    #group?: import('../../instances/group.js').Group<Id>;
-    #member?: import('../../instances/groupMember.js').GroupMember<Id>;
-    get group(){
+    readonly sub_type?: "normal" | "anonymous" | "notice";
+    #group?: import("../../instances/group.js").Group<Id>;
+    #member?: import("../../instances/groupMember.js").GroupMember<Id>;
+    get group() {
         if (!this.#group) {
             this.#group = this.helper.pickGroup(this.group_id);
         }
         return this.#group;
     }
-    get member(){
+    get member() {
         if (!this.#member) {
             this.#member = this.helper.pickGroupMember(this.group_id, this.user_id);
         }
@@ -31,10 +30,7 @@ export class GroupMessageEvent<
         flag: string;
     };
 
-    constructor(
-        helper: ImHelper<Id>,
-        data: GroupMessageEvent.Data<Id>
-    ) {
+    constructor(helper: ImHelper<Id>, data: GroupMessageEvent.Data<Id>) {
         super(helper, data);
         this.group_id = data.group_id;
         this.sub_type = data.sub_type;
@@ -47,9 +43,11 @@ export class GroupMessageEvent<
 }
 
 export namespace GroupMessageEvent {
-    export interface Data<Id extends string | number = string | number> extends MessageEvent.Data<Id> {
+    export interface Data<
+        Id extends string | number = string | number,
+    > extends MessageEvent.Data<Id> {
         group_id: Id;
-        sub_type?: 'normal' | 'anonymous' | 'notice';
+        sub_type?: "normal" | "anonymous" | "notice";
         anonymous?: {
             id: Id;
             name: string;

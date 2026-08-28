@@ -1,5 +1,5 @@
-import { MetaEvent } from './base.js';
-import type { ImHelper } from '../../imhelper.js';
+import { MetaEvent } from "./base.js";
+import type { ImHelper } from "../../imhelper.js";
 
 /**
  * 心跳元事件
@@ -7,17 +7,14 @@ import type { ImHelper } from '../../imhelper.js';
 export class HeartbeatMetaEvent<
     Id extends string | number = string | number,
 > extends MetaEvent<Id> {
-    readonly type = 'meta' as const;
-    readonly meta_type = 'heartbeat' as const;
+    readonly type = "meta" as const;
+    readonly meta_type = "heartbeat" as const;
     readonly interval?: number;
 
-    constructor(
-        helper: ImHelper<Id>,
-        data: HeartbeatMetaEvent.Data<Id>
-    ) {
+    constructor(helper: ImHelper<Id>, data: HeartbeatMetaEvent.Data<Id>) {
         super(helper, {
             ...data,
-            meta_type: 'heartbeat',
+            meta_type: "heartbeat",
         });
         this.interval = data.interval;
     }

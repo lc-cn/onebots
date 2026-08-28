@@ -89,7 +89,7 @@ export class ImHelper<
         for (const eventType of eventTypes) {
             (adapter as EventEmitter).on(eventType, (data: unknown) => {
                 try {
-                    const event = EventFactory.create(eventType, data, this);
+                    const event = EventFactory.createFromUnknown(eventType, data, this);
                     (this as EventEmitter).emit(eventType, event);
                 } catch (error) {
                     this.#logger.error(`创建事件 ${String(eventType)} 失败`, error);

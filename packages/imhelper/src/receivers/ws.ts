@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { Receiver } from "../receiver.js";
+import { Receiver, type ReceiverLogger } from "../receiver.js";
 import type { Adapter } from "../adapter.js";
 
 export interface WebSocketLike {
@@ -12,10 +12,8 @@ export interface WebSocketLike {
     close(): void;
 }
 
-export interface WebSocketReceiverLogger {
-    debug(message: string, context?: unknown): void;
-    error(message: string, error?: unknown): void;
-}
+/** @deprecated 请使用通用的 ReceiverLogger。 */
+export type WebSocketReceiverLogger = ReceiverLogger;
 
 export interface WebSocketReconnectOptions {
     /** 默认无限重试。 */
@@ -36,11 +34,6 @@ export interface WebSocketReceiverOptions {
     onOpen?: (socket: WebSocketLike) => void;
 }
 
-const silentLogger: WebSocketReceiverLogger = {
-    debug: () => undefined,
-    error: () => undefined,
-};
-
 function abortError(): Error {
     const error = new Error("WebSocket 连接已取消");
     error.name = "AbortError";
@@ -57,7 +50,6 @@ export class WebSocketReceiver<
     #generation = 0;
     #stopped = true;
     readonly #options: WebSocketReceiverOptions;
-    readonly #logger: WebSocketReceiverLogger;
     readonly #abortListener = (): void => {
         void this.disconnect();
     };
@@ -67,12 +59,12 @@ export class WebSocketReceiver<
         public readonly url: string,
         accessTokenOrOptions?: string | WebSocketReceiverOptions,
     ) {
-        super(adapter);
-        this.#options =
+        const options =
             typeof accessTokenOrOptions === "string"
                 ? { accessToken: accessTokenOrOptions }
                 : (accessTokenOrOptions ?? {});
-        this.#logger = this.#options.logger ?? silentLogger;
+        super(adapter, options.logger);
+        this.#options = options;
     }
 
     get generation(): number {
@@ -112,7 +104,7 @@ export class WebSocketReceiver<
         if (logUrl.searchParams.has("access_token")) {
             logUrl.searchParams.set("access_token", "***");
         }
-        this.#logger.debug("正在连接 WebSocket", { url: logUrl.toString(), generation });
+        this.logger.debug("正在连接 WebSocket", { url: logUrl.toString(), generation });
 
         return new Promise((resolve, reject) => {
             let opened = false;
@@ -134,10 +126,10 @@ export class WebSocketReceiver<
                     this.#options.onOpen?.(socket);
                     opened = true;
                     this.#reconnectAttempts = 0;
-                    this.#logger.debug("WebSocket 已连接", { generation });
+                    this.logger.debug("WebSocket 已连接", { generation });
                     resolve();
                 } catch (error) {
-                    this.#logger.error("WebSocket 协议握手失败", error);
+                    this.logger.error("WebSocket 协议握手失败", error);
                     socket.close();
                     reject(error);
                 }
@@ -145,20 +137,20 @@ export class WebSocketReceiver<
             socket.on("message", data => {
                 if (!this.#isCurrent(generation)) return;
                 try {
-                    this.adapter.transformEvent(JSON.parse(data.toString()) as TRawEvent);
+                    this.ingestPayload(data);
                 } catch (error) {
-                    this.#logger.error("解析 WebSocket 事件失败", error);
+                    this.logger.error("解析 WebSocket 事件失败", error);
                 }
             });
             socket.on("error", error => {
                 if (!this.#isCurrent(generation)) return;
-                this.#logger.error("WebSocket 连接错误", error);
+                this.logger.error("WebSocket 连接错误", error);
                 this.#scheduleReconnect(generation);
                 if (!opened) reject(error);
             });
             socket.on("close", (code, reason) => {
                 if (!this.#isCurrent(generation)) return;
-                this.#logger.debug("WebSocket 已关闭", {
+                this.logger.debug("WebSocket 已关闭", {
                     code,
                     reason: reason.toString(),
                     generation,
@@ -177,7 +169,7 @@ export class WebSocketReceiver<
         const reconnect = this.#options.reconnect ?? {};
         const maxAttempts = reconnect.maxAttempts ?? Number.POSITIVE_INFINITY;
         if (this.#reconnectAttempts >= maxAttempts) {
-            this.#logger.error("WebSocket 已达到配置的最大重连次数");
+            this.logger.error("WebSocket 已达到配置的最大重连次数");
             return;
         }
         const attempt = this.#reconnectAttempts;
@@ -188,13 +180,13 @@ export class WebSocketReceiver<
                   reconnect.maxDelayMs ?? 30_000,
               );
         this.#reconnectAttempts += 1;
-        this.#logger.debug("WebSocket 等待重连", { attempt: attempt + 1, delay, generation });
+        this.logger.debug("WebSocket 等待重连", { attempt: attempt + 1, delay, generation });
         this.#reconnectTimer = setTimeout(
             () => {
                 this.#reconnectTimer = undefined;
                 if (!this.#isCurrent(generation)) return;
                 void this.#openConnection().catch(error => {
-                    this.#logger.error("WebSocket 重连失败", error);
+                    this.logger.error("WebSocket 重连失败", error);
                 });
             },
             Math.max(0, delay),

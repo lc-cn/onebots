@@ -1,101 +1,64 @@
-import { Receiver } from "../receiver.js";
-import { Adapter } from "../adapter.js";
-import http from "http";
+import http from "node:http";
+import type { Adapter } from "../adapter.js";
+import { acceptHttpIngress } from "../ingress.js";
+import { Receiver, type AuthenticatedReceiverOptions } from "../receiver.js";
+import { readReceiverToken } from "./auth.js";
 
+/** 在独立 HTTP 端口上接收 Webhook；已有 HTTP 宿主应优先使用 Client.acceptHttp。 */
 export class WebhookReceiver<
     Id extends string | number = string | number,
     TRawEvent = unknown,
 > extends Receiver<Id, TRawEvent> {
-    private server?: http.Server;
-    private accessToken?: string;
+    #server?: http.Server;
 
-    async connect(port?: number): Promise<void> {
-        return new Promise((resolve, reject) => {
-            this.server = http.createServer((req, res) => {
-                if (req.url === this.path && req.method === "POST") {
-                    // 验证 access_token
-                    if (this.accessToken) {
-                        const token =
-                            req.headers.authorization?.replace("Bearer ", "") ||
-                            new URL(req.url || "", `http://localhost`).searchParams.get(
-                                "access_token",
-                            );
+    constructor(
+        adapter: Adapter<Id, TRawEvent>,
+        public readonly path: string,
+        private readonly options: AuthenticatedReceiverOptions = {},
+    ) {
+        super(adapter, options.logger);
+    }
 
-                        if (token !== this.accessToken) {
-                            res.writeHead(401, { "Content-Type": "application/json" });
-                            res.end(JSON.stringify({ status: "error", message: "Unauthorized" }));
-                            return;
-                        }
-                    }
+    async connect(port = 8080): Promise<void> {
+        if (this.#server) throw new Error("Webhook Receiver 已启动");
 
-                    let body = "";
+        const server = http.createServer((request, response) => {
+            const requestUrl = new URL(request.url ?? "/", "http://localhost");
+            if (requestUrl.pathname !== this.path) {
+                response.writeHead(404);
+                response.end();
+                return;
+            }
+            if (
+                this.options.accessToken &&
+                readReceiverToken(request.url, request.headers) !== this.options.accessToken
+            ) {
+                response.writeHead(401, { "content-type": "application/json; charset=utf-8" });
+                response.end(JSON.stringify({ status: "error", message: "鉴权失败" }));
+                return;
+            }
 
-                    req.on("data", chunk => {
-                        body += chunk.toString();
-                    });
+            void acceptHttpIngress<TRawEvent>(request, response, event => this.ingest(event)).catch(
+                error => this.logger.error("处理 Webhook 请求失败", error),
+            );
+        });
+        this.#server = server;
 
-                    req.on("end", () => {
-                        try {
-                            const event = JSON.parse(body);
-                            this.handleEvent(event);
-
-                            res.writeHead(200, { "Content-Type": "application/json" });
-                            res.end(JSON.stringify({ status: "ok" }));
-                        } catch (error) {
-                            console.error("[WebhookReceiver] Failed to parse payload:", error);
-                            res.writeHead(400, { "Content-Type": "application/json" });
-                            res.end(JSON.stringify({ status: "error", message: "Invalid JSON" }));
-                        }
-                    });
-                } else {
-                    res.writeHead(404);
-                    res.end();
-                }
-            });
-
-            this.server.listen(port || 8080, (error?: Error) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    resolve();
-                }
+        await new Promise<void>((resolve, reject) => {
+            server.once("error", reject);
+            server.listen(port, () => {
+                server.off("error", reject);
+                resolve();
             });
         });
     }
 
     async disconnect(): Promise<void> {
-        return new Promise(resolve => {
-            if (this.server) {
-                this.server.close(() => {
-                    resolve();
-                });
-            } else {
-                resolve();
-            }
+        const server = this.#server;
+        this.#server = undefined;
+        if (!server) return;
+        await new Promise<void>((resolve, reject) => {
+            server.close(error => (error ? reject(error) : resolve()));
         });
-    }
-
-    private handleEvent(event: TRawEvent): void {
-        // 直接调用 adapter 的 transformEvent 方法进行转换
-        // transformEvent 会负责 emit 所有需要的事件（包括 'event' 和 'message.*'）
-        this.transformToMessage(event);
-    }
-
-    private transformToMessage(event: TRawEvent): void {
-        // 如果 adapter 有 transformEvent 方法，使用它
-        if (this.adapter.transformEvent) {
-            this.adapter.transformEvent!(event);
-        } else {
-            throw new Error("Adapter does not have transformEvent method");
-        }
-    }
-
-    constructor(
-        adapter: Adapter<Id, TRawEvent>,
-        public path: string,
-        accessToken?: string,
-    ) {
-        super(adapter);
-        this.accessToken = accessToken;
     }
 }

@@ -1,5 +1,5 @@
-import { NoticeEvent } from './base.js';
-import type { ImHelper } from '../../imhelper.js';
+import { NoticeEvent } from "./base.js";
+import type { ImHelper } from "../../imhelper.js";
 
 /**
  * 群成员增加通知事件
@@ -7,19 +7,16 @@ import type { ImHelper } from '../../imhelper.js';
 export class GroupMemberIncreaseNoticeEvent<
     Id extends string | number = string | number,
 > extends NoticeEvent<Id> {
-    readonly type = 'notice' as const;
+    readonly type = "notice" as const;
     readonly group_id: Id;
     readonly user_id: Id;
     readonly operator_id?: Id;
 
-    #user?: import('../../instances/user.js').User<Id>;
-    #group?: import('../../instances/group.js').Group<Id>;
-    #operator?: import('../../instances/user.js').User<Id>;
+    #user?: import("../../instances/user.js").User<Id>;
+    #group?: import("../../instances/group.js").Group<Id>;
+    #operator?: import("../../instances/user.js").User<Id>;
 
-    constructor(
-        helper: ImHelper<Id>,
-        data: GroupMemberIncreaseNoticeEvent.Data<Id>
-    ) {
+    constructor(helper: ImHelper<Id>, data: GroupMemberIncreaseNoticeEvent.Data<Id>) {
         super(helper, data);
         this.group_id = data.group_id;
         this.user_id = data.user_id;
@@ -52,11 +49,13 @@ export class GroupMemberIncreaseNoticeEvent<
 }
 
 export namespace GroupMemberIncreaseNoticeEvent {
-    export interface Data<Id extends string | number = string | number> extends NoticeEvent.Data<Id> {
+    export interface Data<
+        Id extends string | number = string | number,
+    > extends NoticeEvent.Data<Id> {
         group_id: Id;
         user_id: Id;
         operator_id?: Id;
-        notice_type: 'group_member_increase';
-        sub_type: 'approve' | 'invite';
+        notice_type: "group_member_increase";
+        sub_type: "approve" | "invite";
     }
 }

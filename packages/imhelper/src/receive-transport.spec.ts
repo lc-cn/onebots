@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { Adapter } from "./adapter.js";
 import { ReceiveTransport } from "./receive-transport.js";
 import type { WebSocketLike } from "./receivers/ws.js";
+import type { SSEConnection } from "./receivers/sse.js";
 
 interface RawEvent {
     value: string;
@@ -44,6 +45,18 @@ class FakeSocket implements WebSocketLike {
     close(): void {}
 }
 
+class FakeEventSource implements SSEConnection {
+    readonly readyState = 1;
+    onopen: ((event: Event) => unknown) | null = null;
+    onmessage: ((event: MessageEvent<string>) => unknown) | null = null;
+    onerror: ((event: Event) => unknown) | null = null;
+    closed = false;
+
+    close(): void {
+        this.closed = true;
+    }
+}
+
 describe("ReceiveTransport", () => {
     test("owns WebSocket receiver creation, ingestion and lifecycle", async () => {
         const adapter = new TestAdapter();
@@ -68,5 +81,32 @@ describe("ReceiveTransport", () => {
         const transport = new ReceiveTransport(new TestAdapter(), { mode: "manual" });
         await expect(transport.connect()).resolves.toBeUndefined();
         await expect(transport.disconnect()).resolves.toBeUndefined();
+    });
+
+    test("owns SSE dependency injection, authentication and ingestion", async () => {
+        const adapter = new TestAdapter();
+        const eventSource = new FakeEventSource();
+        let openedUrl: URL | undefined;
+        const transport = new ReceiveTransport(adapter, {
+            mode: "sse",
+            endpoints: { sse: "https://events.example/v1" },
+            accessToken: "secret",
+            sse: {
+                createEventSource: url => {
+                    openedUrl = url;
+                    return eventSource;
+                },
+            },
+        });
+
+        const connected = transport.connect();
+        eventSource.onopen?.(new Event("open"));
+        await connected;
+        eventSource.onmessage?.(new MessageEvent("message", { data: '{"value":"sse"}' }));
+
+        expect(openedUrl?.searchParams.get("access_token")).toBe("secret");
+        expect(adapter.events).toEqual([{ value: "sse" }]);
+        await transport.disconnect();
+        expect(eventSource.closed).toBe(true);
     });
 });

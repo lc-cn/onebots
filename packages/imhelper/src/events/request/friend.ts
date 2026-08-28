@@ -1,5 +1,5 @@
-import { RequestEvent } from './base.js';
-import type { ImHelper } from '../../imhelper.js';
+import { RequestEvent } from "./base.js";
+import type { ImHelper } from "../../imhelper.js";
 
 /**
  * 加好友请求事件
@@ -7,20 +7,17 @@ import type { ImHelper } from '../../imhelper.js';
 export class FriendRequestEvent<
     Id extends string | number = string | number,
 > extends RequestEvent<Id> {
-    readonly type = 'request' as const;
-    readonly request_type = 'friend' as const;
+    readonly type = "request" as const;
+    readonly request_type = "friend" as const;
     readonly user_id: Id;
     readonly flag: string;
 
-    #user?: import('../../instances/user.js').User<Id>;
+    #user?: import("../../instances/user.js").User<Id>;
 
-    constructor(
-        helper: ImHelper<Id>,
-        data: FriendRequestEvent.Data<Id>
-    ) {
+    constructor(helper: ImHelper<Id>, data: FriendRequestEvent.Data<Id>) {
         super(helper, {
             ...data,
-            request_type: 'friend',
+            request_type: "friend",
         });
         this.user_id = data.user_id;
         this.flag = data.flag;
@@ -43,7 +40,9 @@ export class FriendRequestEvent<
 }
 
 export namespace FriendRequestEvent {
-    export interface Data<Id extends string | number = string | number> extends RequestEvent.Data<Id> {
+    export interface Data<
+        Id extends string | number = string | number,
+    > extends RequestEvent.Data<Id> {
         user_id: Id;
         flag: string;
     }

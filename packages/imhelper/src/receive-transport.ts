@@ -1,6 +1,6 @@
 import type { Adapter } from "./adapter.js";
-import type { Receiver } from "./receiver.js";
-import { SSEReceiver } from "./receivers/sse.js";
+import type { Receiver, ReceiverLogger } from "./receiver.js";
+import { SSEReceiver, type SSEReceiverOptions } from "./receivers/sse.js";
 import { WebhookReceiver } from "./receivers/webhook.js";
 import { WebSocketReceiver, type WebSocketReceiverOptions } from "./receivers/ws.js";
 import { WSSReceiver } from "./receivers/wss.js";
@@ -14,7 +14,10 @@ export interface ReceiveTransportOptions {
     /** 各接收方式对应的事件 URL 或本地监听路径。manual 模式不需要。 */
     endpoints?: ReceiveEndpoints;
     accessToken?: string;
+    /** 所有接收方式共用的日志出口；未提供时保持静默。 */
+    logger?: ReceiverLogger;
     webSocket?: Omit<WebSocketReceiverOptions, "accessToken">;
+    sse?: Omit<SSEReceiverOptions, "accessToken" | "logger">;
 }
 
 /**
@@ -30,22 +33,34 @@ export class ReceiveTransport<Id extends string | number = string | number, TRaw
         if (options.mode === "manual") return;
         const endpoint = options.endpoints?.[options.mode];
         if (!endpoint) throw new TypeError(`${options.mode} 接收模式缺少事件端点`);
+        const logger = options.logger ?? options.webSocket?.logger;
 
         switch (options.mode) {
             case "ws":
                 this.#receiver = new WebSocketReceiver(adapter, endpoint, {
                     ...options.webSocket,
                     accessToken: options.accessToken,
+                    logger,
                 });
                 break;
             case "wss":
-                this.#receiver = new WSSReceiver(adapter, endpoint, options.accessToken);
+                this.#receiver = new WSSReceiver(adapter, endpoint, {
+                    accessToken: options.accessToken,
+                    logger,
+                });
                 break;
             case "webhook":
-                this.#receiver = new WebhookReceiver(adapter, endpoint, options.accessToken);
+                this.#receiver = new WebhookReceiver(adapter, endpoint, {
+                    accessToken: options.accessToken,
+                    logger,
+                });
                 break;
             case "sse":
-                this.#receiver = new SSEReceiver(adapter, endpoint, options.accessToken);
+                this.#receiver = new SSEReceiver(adapter, endpoint, {
+                    ...options.sse,
+                    accessToken: options.accessToken,
+                    logger,
+                });
                 break;
         }
     }

@@ -1,3 +1,10 @@
+import {
+    assertIngressObjectSize,
+    decodeIngressPayload,
+    DEFAULT_MAX_INGRESS_BYTES,
+    PayloadTooLargeError,
+} from "./ingress-payload.js";
+
 export interface BufferedHttpIngressRequest {
     readonly method?: string;
     readonly body: unknown;
@@ -32,36 +39,20 @@ export interface UpgradedWebSocket {
     close?(code?: number, reason?: string): unknown;
 }
 
-export const DEFAULT_MAX_INGRESS_BYTES = 1024 * 1024;
+export { DEFAULT_MAX_INGRESS_BYTES } from "./ingress-payload.js";
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8" };
 
-class PayloadTooLargeError extends Error {}
-
-function assertPayloadSize(byteLength: number): void {
-    if (byteLength > DEFAULT_MAX_INGRESS_BYTES) {
-        throw new PayloadTooLargeError("事件载荷过大");
-    }
-}
-
-function parseJson(value: string): unknown {
-    return JSON.parse(value) as unknown;
-}
-
 function parseBufferedBody(body: unknown): unknown {
-    if (typeof body === "string") {
-        assertPayloadSize(Buffer.byteLength(body));
-        return parseJson(body);
+    if (
+        typeof body === "string" ||
+        Buffer.isBuffer(body) ||
+        body instanceof ArrayBuffer ||
+        ArrayBuffer.isView(body)
+    ) {
+        return decodeIngressPayload(body);
     }
-    if (Buffer.isBuffer(body)) {
-        assertPayloadSize(body.byteLength);
-        return parseJson(body.toString("utf8"));
-    }
-    if (body instanceof Uint8Array) {
-        assertPayloadSize(body.byteLength);
-        return parseJson(Buffer.from(body).toString("utf8"));
-    }
-    assertPayloadSize(Buffer.byteLength(JSON.stringify(body)));
+    assertIngressObjectSize(body);
     return body;
 }
 
@@ -86,13 +77,13 @@ async function readWebStream(stream: ReadableStream<Uint8Array>): Promise<unknow
                 throw new TypeError("HTTP 事件请求体必须是二进制数据");
             }
             byteLength += value.byteLength;
-            assertPayloadSize(byteLength);
+            if (byteLength > DEFAULT_MAX_INGRESS_BYTES) throw new PayloadTooLargeError();
             chunks.push(Buffer.from(value));
         }
     } finally {
         reader.releaseLock();
     }
-    return parseJson(Buffer.concat(chunks).toString("utf8"));
+    return decodeIngressPayload(Buffer.concat(chunks));
 }
 
 async function readRequestBody(request: HttpIngressRequest): Promise<unknown> {
@@ -119,10 +110,10 @@ async function readRequestBody(request: HttpIngressRequest): Promise<unknown> {
             throw new TypeError("HTTP 事件请求体必须是字符串或二进制数据");
         }
         byteLength += buffer.byteLength;
-        assertPayloadSize(byteLength);
+        if (byteLength > DEFAULT_MAX_INGRESS_BYTES) throw new PayloadTooLargeError();
         chunks.push(buffer);
     }
-    return parseJson(Buffer.concat(chunks).toString("utf8"));
+    return decodeIngressPayload(Buffer.concat(chunks));
 }
 
 function createHttpResult(status: number, body: HttpIngressResult["body"]): HttpIngressResult {
@@ -178,39 +169,13 @@ export async function acceptHttpIngress<TRawEvent = unknown>(
     return result;
 }
 
-function parseWebSocketData(data: unknown): unknown {
-    if (typeof data === "string") {
-        assertPayloadSize(Buffer.byteLength(data));
-        return parseJson(data);
-    }
-    if (Buffer.isBuffer(data)) {
-        assertPayloadSize(data.byteLength);
-        return parseJson(data.toString("utf8"));
-    }
-    if (data instanceof ArrayBuffer) {
-        assertPayloadSize(data.byteLength);
-        return parseJson(Buffer.from(data).toString("utf8"));
-    }
-    if (ArrayBuffer.isView(data)) {
-        assertPayloadSize(data.byteLength);
-        return parseJson(
-            Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf8"),
-        );
-    }
-    if (Array.isArray(data) && data.every(Buffer.isBuffer)) {
-        assertPayloadSize(data.reduce((total, item) => total + item.byteLength, 0));
-        return parseJson(Buffer.concat(data).toString("utf8"));
-    }
-    throw new TypeError("WebSocket 事件必须是 JSON 文本或二进制数据");
-}
-
 export function acceptWebSocketIngress<TRawEvent = unknown>(
     socket: UpgradedWebSocket,
     ingest: (rawEvent: TRawEvent) => void,
 ): () => void {
     const listener = (data: unknown): void => {
         try {
-            ingest(parseWebSocketData(data) as TRawEvent);
+            ingest(decodeIngressPayload(data) as TRawEvent);
         } catch (error) {
             if (error instanceof PayloadTooLargeError) {
                 socket.close?.(1009, "事件载荷过大");
