@@ -110,13 +110,11 @@ export type ConfigSchemaBundle = {
 
 export const getAppConfigSchema = (): ConfigSchemaBundle => {
     const registeredProtocols = ProtocolRegistry.getAllSchemas();
-    const protocolKeys = new Set([...Object.keys(registeredProtocols), ...Object.keys(general)]);
-    const protocols = Object.fromEntries(
-        [...protocolKeys].map(key => [key, {
-            ...(registeredProtocols[key] ?? {}),
-            ...((general[key] as Schema | undefined) ?? {})
-        }])
-    ) as Record<string, Schema>;
+    // 未加载的协议使用 Web fallback；协议已加载时，其自身 Schema 是唯一权威来源。
+    const protocols = {
+        ...general,
+        ...registeredProtocols,
+    } as Record<string, Schema>;
 
     // 预设补全未 -r 加载的适配器 schema，供 Web 配置页使用；已加载时以 Registry 为准（覆盖预设）
     const adapters = {
@@ -126,7 +124,7 @@ export const getAppConfigSchema = (): ConfigSchemaBundle => {
 
     return {
         base: baseWithLabels,
-        general,
+        general: protocols,
         protocols,
         adapters,
     };

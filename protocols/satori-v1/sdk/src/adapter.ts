@@ -13,7 +13,12 @@ import {
     type ChannelMessageEvent,
     type WebSocketReceiverOptions,
 } from "imhelper";
-import { SatoriV1Event, type SatoriActionUrlResolver, type SatoriCall } from "./types.js";
+import {
+    SatoriV1Event,
+    type SatoriActionUrlResolver,
+    type SatoriCall,
+    type SatoriGatewayPayload,
+} from "./types.js";
 import { HttpClient } from "./http-client.js";
 
 export interface SatoriAdapterConfig {
@@ -43,17 +48,28 @@ export interface SatoriAdapter extends Adapter<string, SatoriV1Event> {
     ): Promise<T>;
 }
 
+function isGatewayPayload(
+    event: SatoriV1Event | SatoriGatewayPayload,
+): event is SatoriGatewayPayload {
+    return typeof (event as { op?: unknown }).op === "number" && "body" in event;
+}
+
 export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter {
     const { baseUrl, selfId, accessToken, receiveMode, path = "/satori/v1", wsUrl } = config;
 
     // 解析 baseUrl 获取协议和主机
     const url = new URL(baseUrl);
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const host = url.host;
 
-    // 构建 WebSocket URL
-    const defaultWsUrl = wsUrl || `${protocol}//${host}${url.pathname}`;
     const legacyApiBaseUrl = `${url.origin}/${config.platform ?? "unknown"}/${selfId}/satori/v1`;
+    const usesLegacyOneBotsRoutes =
+        config.apiBaseUrl === undefined && config.platform !== undefined;
+    const eventUrl = new URL(usesLegacyOneBotsRoutes ? legacyApiBaseUrl : baseUrl);
+    eventUrl.protocol = protocol;
+    if (!eventUrl.pathname.endsWith("/events")) {
+        eventUrl.pathname = `${eventUrl.pathname.replace(/\/+$/, "")}/events`;
+    }
+    const defaultWsUrl = wsUrl || eventUrl.toString();
 
     class SatoriV1AdapterImpl extends Adapter<string, SatoriV1Event> implements SatoriAdapter {
         public readonly selfId: string = selfId;
@@ -79,11 +95,12 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
             this.baseUrl = baseUrl;
 
             this.httpClient = new HttpClient({
-                apiBaseUrl: config.apiBaseUrl ?? legacyApiBaseUrl,
+                apiBaseUrl:
+                    config.apiBaseUrl ?? (usesLegacyOneBotsRoutes ? legacyApiBaseUrl : baseUrl),
                 accessToken,
                 platform: config.platform ?? "unknown",
                 userId: selfId,
-                unwrapLegacyResponse: config.apiBaseUrl === undefined,
+                unwrapLegacyResponse: usesLegacyOneBotsRoutes,
                 resolveActionUrl: config.resolveActionUrl,
                 call: config.call,
                 fetch: config.fetch,
@@ -98,6 +115,12 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                     this.receiver = new WebSocketReceiver(this, this.defaultWsUrl, {
                         ...config.webSocket,
                         accessToken: this.accessToken,
+                        onOpen: socket => {
+                            socket.send(JSON.stringify({
+                                op: 3,
+                                body: this.accessToken ? { token: this.accessToken } : {},
+                            }));
+                        },
                     });
                     break;
                 case "wss":
@@ -115,7 +138,11 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
             }
         }
 
-        transformEvent(event: SatoriV1Event): void {
+        transformEvent(event: SatoriV1Event | SatoriGatewayPayload): void {
+            if (isGatewayPayload(event)) {
+                if (event.op === 0) this.transformAndEmit(event.body);
+                return;
+            }
             this.transformAndEmit(event);
         }
 

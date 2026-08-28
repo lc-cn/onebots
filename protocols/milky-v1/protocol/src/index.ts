@@ -33,15 +33,6 @@ const milkySchema: Schema = {
     },
     access_token: { type: 'string', label: 'Access Token' },
     secret: { type: 'string', label: 'Secret' },
-    heartbeat: { type: 'number', label: '心跳间隔(秒)' },
-    post_message_format: {
-        type: 'string',
-        label: '消息格式',
-        choices: [
-            { value: 'array', label: '数组 (array)' },
-            { value: 'string', label: '字符串 (string)' },
-        ],
-    },
     filters: { type: 'object', label: '事件过滤器' },
 };
 
@@ -96,10 +87,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             });
         }
 
-        // Start heartbeat
-        if (this.config.heartbeat) {
-            this.startHeartbeat();
-        }
     }
 
     async stop(force?: boolean): Promise<void> {
@@ -110,7 +97,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     /**
      * 上报事件到 Milky 客户端（HTTP 反连 / WebSocket 等）。
-     * Account.dispatch 传入的是 CommonEvent；心跳等内部调用传入的已是 Milky 事件（含 post_type）。
+     * Account.dispatch 传入的是 CommonEvent；内部调用也可以传入已构造的 Milky event_type 事件。
      */
     dispatch(event: unknown): void {
         if (!this.filterFn(event as Dict)) {
@@ -128,13 +115,13 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         }
     }
 
-    /** 协议内部构造的事件（post_type）无需从 CommonEvent 转换 */
+    /** 协议内部构造的事件（event_type）无需从 CommonEvent 转换 */
     private isMilkyShapedEvent(e: unknown): e is Milky.Event {
         return (
             typeof e === "object" &&
             e !== null &&
-            "post_type" in e &&
-            typeof (e as { post_type: unknown }).post_type === "string"
+            "event_type" in e &&
+            typeof (e as { event_type: unknown }).event_type === "string"
         );
     }
 
@@ -146,10 +133,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
-        // Format event according to Milky specification
         return {
-            ...payload,
-            post_type: event,
+            time: Math.floor(Date.now() / 1000),
+            self_id: Number(this.account.account_id) || 0,
+            event_type: event,
+            data: payload,
         };
     }
 
@@ -179,22 +167,24 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
      */
     private async executeAction(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
         switch (action) {
-            case "send_private_msg":
+            case "send_private_message":
                 return this.sendPrivateMessage(params);
-            case "send_group_msg":
+            case "send_group_message":
                 return this.sendGroupMessage(params);
-            case "send_msg":
-                return this.sendMessage(params);
-            case "delete_msg":
-                return this.deleteMessage(params);
-            case "get_msg":
+            case "recall_private_message":
+                return this.recallMessage("friend", params);
+            case "recall_group_message":
+                return this.recallMessage("group", params);
+            case "get_message":
                 return this.getMessage(params);
-            case "get_forward_msg":
+            case "get_forwarded_messages":
                 return this.getForwardMessage(params);
             case "get_login_info":
                 return this.getLoginInfo();
-            case "get_stranger_info":
+            case "get_user_profile":
                 return this.getStrangerInfo(params);
+            case "get_friend_info":
+                return this.getFriendInfo(params);
             case "get_friend_list":
                 return this.getFriendList();
             case "get_group_info":
@@ -205,6 +195,28 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.getGroupMemberInfo(params);
             case "get_group_member_list":
                 return this.getGroupMemberList(params);
+            case "kick_group_member":
+                return this.kickGroupMember(params);
+            case "set_group_member_mute":
+                return this.setGroupMemberMute(params);
+            case "set_group_member_admin":
+                return this.setGroupMemberAdmin(params);
+            case "set_group_member_card":
+                return this.setGroupMemberCard(params);
+            case "set_group_name":
+                return this.setGroupName(params);
+            case "quit_group":
+                return this.quitGroup(params);
+            case "accept_friend_request":
+                return this.handleFriendRequest(params, true);
+            case "reject_friend_request":
+                return this.handleFriendRequest(params, false);
+            case "accept_group_request":
+            case "accept_group_invitation":
+                return this.handleGroupRequest(action, params, true);
+            case "reject_group_request":
+            case "reject_group_invitation":
+                return this.handleGroupRequest(action, params, false);
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
@@ -229,58 +241,99 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private formatMilkyMessage(event: CommonEvent.Message): Milky.MessageEvent {
+        const isGroup = event.message_type === "group" && event.group !== undefined;
+        const sender = event.sender.id.number;
+        const peer = isGroup ? event.group!.id.number : sender;
         return {
             time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id.string,
-            post_type: "message",
-            message_type: event.message_type as "private" | "group",
-            message_id: event.message_id.string,
-            user_id: event.sender.id.string,
-            message: event.message.map(seg => ({
-                type: seg.type as Milky.SegmentType,
-                data: seg.data,
-            })),
-            raw_message: event.raw_message || this.extractPlainText(event.message),
-            font: 0,
-            sender: {
-                user_id: event.sender.id.string,
-                nickname: event.sender.name,
+            self_id: event.bot_id.number,
+            event_type: "message_receive",
+            data: {
+                message_scene: isGroup ? "group" : "friend",
+                peer_id: peer,
+                message_seq: event.message_id.number,
+                sender_id: sender,
+                time: Math.floor(event.timestamp / 1000),
+                segments: event.message.map(seg => ({
+                    type: seg.type as Milky.SegmentType,
+                    data: seg.data,
+                })),
+                ...(isGroup
+                    ? {
+                          group: {
+                              group_id: peer,
+                              group_name: event.group?.name,
+                          },
+                          group_member: {
+                              user_id: sender,
+                              nickname: event.sender.name,
+                          },
+                      }
+                    : {
+                          friend: {
+                              user_id: sender,
+                              nickname: event.sender.name,
+                          },
+                      }),
             },
-            ...(event.group ? { group_id: event.group.id.string } : {}),
         };
     }
 
     private formatMilkyNotice(event: CommonEvent.Notice): Milky.NoticeEvent {
+        const eventTypes: Partial<Record<CommonEvent.NoticeType, string>> = {
+            group_increase: "group_member_increase",
+            group_decrease: "group_member_decrease",
+            group_admin: "group_admin_change",
+            group_ban: "group_member_mute",
+            friend_add: "friend_increase",
+        };
         return {
             time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id.string,
-            post_type: "notice",
-            notice_type: event.notice_type as Milky.NoticeType,
-            user_id: event.user?.id.string,
-            group_id: event.group?.id.string,
-            operator_id: event.operator?.id.string,
+            self_id: event.bot_id.number,
+            event_type: eventTypes[event.notice_type] ?? "custom_notice",
+            data: {
+                ...(event.user ? { user_id: event.user.id.number } : {}),
+                ...(event.group ? { group_id: event.group.id.number } : {}),
+                ...(event.operator ? { operator_id: event.operator.id.number } : {}),
+            },
         };
     }
 
     private formatMilkyRequest(event: CommonEvent.Request): Milky.RequestEvent {
+        const subType = (event as CommonEvent.Request & { sub_type?: string }).sub_type;
+        const isGroup = event.request_type === "group";
         return {
             time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id.string,
-            post_type: "request",
-            request_type: event.request_type as Milky.RequestType,
-            user_id: event.user.id.string,
-            comment: event.comment || "",
-            flag: event.flag,
-            group_id: event.group?.id.string,
+            self_id: event.bot_id.number,
+            event_type: isGroup
+                ? subType === "invite"
+                    ? "group_invited_join_request"
+                    : "group_join_request"
+                : "friend_request",
+            data: isGroup
+                ? {
+                      group_id: event.group?.id.number,
+                      initiator_id: event.user.id.number,
+                      notification_seq: event.id.number,
+                      comment: event.comment ?? "",
+                      is_filtered: false,
+                  }
+                : {
+                      initiator_id: event.user.id.number,
+                      initiator_uid: event.flag,
+                      comment: event.comment ?? "",
+                      is_filtered: false,
+                  },
         };
     }
 
-    private formatMilkyMeta(event: CommonEvent.Meta): Milky.MetaEvent {
+    private formatMilkyMeta(event: CommonEvent.Meta): Milky.MetaEvent | null {
+        if (event.meta_type !== "lifecycle" || event.sub_type !== "disable") return null;
         return {
             time: Math.floor(event.timestamp / 1000),
-            self_id: event.bot_id.string,
-            post_type: "meta_event",
-            meta_event_type: event.meta_type as Milky.MetaEventType,
+            self_id: event.bot_id.number,
+            event_type: "bot_offline",
+            data: { reason: "adapter offline" },
         };
     }
 
@@ -299,7 +352,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             scene_id: this.adapter.resolveId(user_id),
             message,
         });
-        return { message_id: result.message_id.string };
+        return { message_seq: result.message_id.number, time: Math.floor(Date.now() / 1000) };
     }
 
     private async sendGroupMessage(params: Record<string, unknown>): Promise<Milky.SendMessageResult> {
@@ -309,21 +362,22 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             scene_id: this.adapter.resolveId(group_id),
             message,
         });
-        return { message_id: result.message_id.string };
+        return { message_seq: result.message_id.number, time: Math.floor(Date.now() / 1000) };
     }
 
-    private async sendMessage(params: Record<string, unknown>): Promise<Milky.SendMessageResult> {
-        if ((params as { message_type: string }).message_type === "private") {
-            return this.sendPrivateMessage(params);
-        } else {
-            return this.sendGroupMessage(params);
-        }
-    }
-
-    private async deleteMessage(params: Record<string, unknown>): Promise<void> {
-        const { message_id } = params as { message_id: string };
+    private async recallMessage(
+        scene: "friend" | "group",
+        params: Record<string, unknown>,
+    ): Promise<void> {
+        const { message_seq, user_id, group_id } = params as {
+            message_seq: number;
+            user_id?: number;
+            group_id?: number;
+        };
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
+            message_id: this.adapter.resolveId(message_seq),
+            scene_type: scene === "friend" ? "private" : "group",
+            scene_id: this.adapter.resolveId(scene === "friend" ? user_id! : group_id!),
         });
     }
 
@@ -353,7 +407,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async getLoginInfo(): Promise<Milky.LoginInfo> {
         const info = await this.adapter.getLoginInfo(this.account.account_id);
         return {
-            user_id: info.user_id.string,
+            uin: info.user_id.number,
             nickname: info.user_name,
         };
     }
@@ -369,47 +423,59 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         };
     }
 
-    private async getFriendList(): Promise<Milky.FriendInfo[]> {
-        const result = await this.adapter.getFriendList(this.account.account_id);
-        return result.map(info => ({
-            user_id: info.user_id.string,
+    private async getFriendInfo(params: Record<string, unknown>): Promise<{ friend: Milky.FriendInfo }> {
+        const { user_id } = params as { user_id: string };
+        const info = await this.adapter.getFriendInfo(this.account.account_id, {
+            user_id: this.adapter.resolveId(user_id),
+        });
+        return { friend: {
+            user_id: info.user_id.number,
             nickname: info.user_name,
-            remark: info.remark || "",
-        }));
+            remark: info.remark ?? "",
+        } };
     }
 
-    private async getGroupInfo(params: Record<string, unknown>): Promise<Milky.GroupInfo> {
+    private async getFriendList(): Promise<{ friends: Milky.FriendInfo[] }> {
+        const result = await this.adapter.getFriendList(this.account.account_id);
+        return { friends: result.map(info => ({
+            user_id: info.user_id.number,
+            nickname: info.user_name,
+            remark: info.remark || "",
+        })) };
+    }
+
+    private async getGroupInfo(params: Record<string, unknown>): Promise<{ group: Milky.GroupInfo }> {
         const { group_id } = params as { group_id: string };
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
         });
-        return {
-            group_id: info.group_id.string,
+        return { group: {
+            group_id: info.group_id.number,
             group_name: info.group_name,
             member_count: info.member_count || 0,
             max_member_count: info.max_member_count || 0,
-        };
+        } };
     }
 
-    private async getGroupList(): Promise<Milky.GroupInfo[]> {
+    private async getGroupList(): Promise<{ groups: Milky.GroupInfo[] }> {
         const result = await this.adapter.getGroupList(this.account.account_id);
-        return result.map(info => ({
-            group_id: info.group_id.string,
+        return { groups: result.map(info => ({
+            group_id: info.group_id.number,
             group_name: info.group_name,
             member_count: info.member_count || 0,
             max_member_count: info.max_member_count || 0,
-        }));
+        })) };
     }
 
-    private async getGroupMemberInfo(params: Record<string, unknown>): Promise<Milky.GroupMemberInfo> {
+    private async getGroupMemberInfo(params: Record<string, unknown>): Promise<{ member: Milky.GroupMemberInfo }> {
         const { group_id, user_id } = params as { group_id: string; user_id: string };
         const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
             user_id: this.adapter.resolveId(user_id),
         });
-        return {
-            group_id: info.group_id.string,
-            user_id: info.user_id.string,
+        return { member: {
+            group_id: info.group_id.number,
+            user_id: info.user_id.number,
             nickname: info.user_name,
             card: info.card || "",
             sex: "unknown",
@@ -423,17 +489,17 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             title: "",
             title_expire_time: 0,
             card_changeable: false,
-        };
+        } };
     }
 
-    private async getGroupMemberList(params: Record<string, unknown>): Promise<Milky.GroupMemberInfo[]> {
+    private async getGroupMemberList(params: Record<string, unknown>): Promise<{ members: Milky.GroupMemberInfo[] }> {
         const { group_id } = params as { group_id: string };
         const list = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
         });
-        return list.map(info => ({
-            group_id: info.group_id.string,
-            user_id: info.user_id.string,
+        return { members: list.map(info => ({
+            group_id: info.group_id.number,
+            user_id: info.user_id.number,
             nickname: info.user_name,
             card: info.card || "",
             sex: "unknown",
@@ -447,7 +513,106 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             title: "",
             title_expire_time: 0,
             card_changeable: false,
-        }));
+        })) };
+    }
+
+    private async kickGroupMember(params: Record<string, unknown>): Promise<void> {
+        const { group_id, user_id, reject_add_request } = params as {
+            group_id: number;
+            user_id: number;
+            reject_add_request?: boolean;
+        };
+        await this.adapter.kickGroupMember(this.account.account_id, {
+            group_id: this.adapter.resolveId(group_id),
+            user_id: this.adapter.resolveId(user_id),
+            reject_add_request,
+        });
+    }
+
+    private async setGroupMemberMute(params: Record<string, unknown>): Promise<void> {
+        const { group_id, user_id, duration } = params as {
+            group_id: number;
+            user_id: number;
+            duration: number;
+        };
+        await this.adapter.muteGroupMember(this.account.account_id, {
+            group_id: this.adapter.resolveId(group_id),
+            user_id: this.adapter.resolveId(user_id),
+            duration,
+        });
+    }
+
+    private async setGroupMemberAdmin(params: Record<string, unknown>): Promise<void> {
+        const { group_id, user_id, enable } = params as {
+            group_id: number;
+            user_id: number;
+            enable: boolean;
+        };
+        await this.adapter.setGroupAdmin(this.account.account_id, {
+            group_id: this.adapter.resolveId(group_id),
+            user_id: this.adapter.resolveId(user_id),
+            enable,
+        });
+    }
+
+    private async setGroupMemberCard(params: Record<string, unknown>): Promise<void> {
+        const { group_id, user_id, card } = params as {
+            group_id: number;
+            user_id: number;
+            card: string;
+        };
+        await this.adapter.setGroupCard(this.account.account_id, {
+            group_id: this.adapter.resolveId(group_id),
+            user_id: this.adapter.resolveId(user_id),
+            card,
+        });
+    }
+
+    private async setGroupName(params: Record<string, unknown>): Promise<void> {
+        const { group_id, new_group_name } = params as {
+            group_id: number;
+            new_group_name: string;
+        };
+        await this.adapter.setGroupName(this.account.account_id, {
+            group_id: this.adapter.resolveId(group_id),
+            group_name: new_group_name,
+        });
+    }
+
+    private async quitGroup(params: Record<string, unknown>): Promise<void> {
+        const { group_id, is_dismiss } = params as { group_id: number; is_dismiss?: boolean };
+        await this.adapter.leaveGroup(this.account.account_id, {
+            group_id: this.adapter.resolveId(group_id),
+            is_dismiss,
+        });
+    }
+
+    private async handleFriendRequest(
+        params: Record<string, unknown>,
+        approve: boolean,
+    ): Promise<void> {
+        await this.adapter.handleFriendRequest(this.account.account_id, {
+            flag: String(params.initiator_uid ?? ""),
+            approve,
+        });
+    }
+
+    private async handleGroupRequest(
+        action: string,
+        params: Record<string, unknown>,
+        approve: boolean,
+    ): Promise<void> {
+        const invitation = action.includes("invitation");
+        const flag = invitation
+            ? `${params.group_id}:${params.invitation_seq}`
+            : `${params.group_id}:${params.notification_type}:${params.notification_seq}`;
+        await this.adapter.handleGroupRequest(this.account.account_id, {
+            flag,
+            type: invitation ? "invitation" : "request",
+            sub_type: invitation ? "invite" : params.notification_type === "join_request" ? "add" : "invite",
+            approve,
+            reason: typeof params.reason === "string" ? params.reason : undefined,
+        });
     }
 
     /**
@@ -528,16 +693,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             }
 
             this.logger.info(`Milky WebSocket client connected: ${this.path}`);
-
-            // Send meta event: lifecycle.connect
-            const connectEvent = {
-                time: Math.floor(Date.now() / 1000),
-                self_id: this.account.account_id,
-                post_type: "meta_event",
-                meta_event_type: "lifecycle",
-                sub_type: "connect",
-            };
-            ws.send(JSON.stringify(connectEvent));
 
             // Listen for dispatch events and send to client
             const onDispatch = (data: string) => {
@@ -649,16 +804,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 ws.on('open', () => {
                     this.logger.info(`Milky WebSocket reverse connected to ${config.url}`);
                     
-                    // Send meta event: lifecycle.connect
-                    const connectEvent = {
-                        time: Math.floor(Date.now() / 1000),
-                        self_id: this.account.account_id,
-                        post_type: "meta_event",
-                        meta_event_type: "lifecycle",
-                        sub_type: "connect",
-                    };
-                    ws.send(JSON.stringify(connectEvent));
-
                     // Clear reconnect timer
                     if (reconnectTimer) {
                         clearTimeout(reconnectTimer);
@@ -708,19 +853,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         connect();
     }
 
-    private startHeartbeat(): void {
-        const interval = (this.config.heartbeat || 5) * 1000;
-        setInterval(() => {
-            const heartbeatEvent: Milky.MetaEvent = {
-                time: Math.floor(Date.now() / 1000),
-                self_id: this.account.account_id,
-                post_type: "meta_event",
-                meta_event_type: "heartbeat",
-                interval: this.config.heartbeat || 5,
-            };
-            this.dispatch(heartbeatEvent);
-        }, interval);
-    }
 }
 ProtocolRegistry.register("milky", "v1", MilkyV1);
 export * from "./types.js";

@@ -84,9 +84,9 @@ export namespace MilkyConfig {
         access_token?: string;
         /** Secret (global) */
         secret?: string;
-        /** Heartbeat interval in seconds */
+        /** @deprecated Milky does not define heartbeat events. */
         heartbeat?: number;
-        /** POST message format */
+        /** @deprecated Milky messages always use segment arrays. */
         post_message_format?: "string" | "array";
         /** Event filters */
         filters?: Record<string, unknown>;

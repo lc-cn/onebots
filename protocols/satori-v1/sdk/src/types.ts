@@ -50,6 +50,11 @@ export interface SatoriV1Event {
     [key: string]: unknown;
 }
 
+export type SatoriGatewayPayload =
+    | { op: 0; body: SatoriV1Event }
+    | { op: 2; body?: unknown }
+    | { op: 4; body: { logins: Array<Record<string, unknown>> } };
+
 /** @deprecated Satori 原生 API 直接返回资源；请直接使用响应类型 T。 */
 export type SatoriV1Response<T = unknown> = T;
 

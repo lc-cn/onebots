@@ -153,7 +153,11 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
             this.#config.apiBaseUrl !== undefined || this.#config.platform === undefined;
         const eventUrl = new URL(this.#config.wsUrl ?? baseUrl);
         eventUrl.protocol = eventUrl.protocol === "https:" ? "wss:" : "ws:";
-        if (!this.#config.wsUrl && usesNativeEndpoints) eventUrl.pathname = "/event";
+        if (!this.#config.wsUrl) {
+            eventUrl.pathname = usesNativeEndpoints
+                ? "/event"
+                : `/${this.#config.platform ?? "unknown"}/${this.selfId}/milky/v1/event`;
+        }
 
         switch (receiveMode) {
             case "ws":

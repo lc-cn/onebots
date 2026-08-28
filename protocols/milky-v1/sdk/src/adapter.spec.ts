@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import { EventEmitter } from "node:events";
 import { createMilkyAdapter } from "./adapter.js";
 import { createMilkyClient } from "./client.js";
 import { ProtocolError } from "./index.js";
@@ -153,6 +154,30 @@ describe("Milky V1 SDK", () => {
             "https://gateway.example/kook/10001/milky/v1/api/get_login_info",
             expect.any(Object),
         );
+    });
+
+    test("connects legacy OneBots WebSocket at the Milky event path", async () => {
+        const socket = new EventEmitter() as EventEmitter & {
+            close: ReturnType<typeof vi.fn>;
+        };
+        socket.close = vi.fn();
+        const createWebSocket = vi.fn(() => socket as never);
+        const client = createMilkyClient({
+            baseUrl: "https://gateway.example",
+            platform: "kook",
+            selfId: "10001",
+            receiveMode: "ws",
+            webSocket: { createWebSocket },
+        });
+
+        const started = client.start();
+        socket.emit("open");
+        await started;
+
+        expect(createWebSocket).toHaveBeenCalledWith(
+            "wss://gateway.example/kook/10001/milky/v1/event",
+        );
+        await client.stop();
     });
 
     test("throws ProtocolError for a failed Milky response", async () => {

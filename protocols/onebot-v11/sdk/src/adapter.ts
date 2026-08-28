@@ -59,12 +59,14 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const host = url.host;
 
-    // 构建 WebSocket URL
-    const defaultWsUrl = wsUrl || `${protocol}//${host}${url.pathname}`;
-    const legacyApiBaseUrl =
-        url.pathname && url.pathname !== "/"
-            ? `${url.origin}${url.pathname}`
-            : `${url.origin}/${config.platform ?? "unknown"}/${selfId}/onebot/v11`;
+    const nativeBaseUrl = `${url.origin}${url.pathname}`;
+    const usesLegacyOneBotsRoutes =
+        config.apiBaseUrl === undefined &&
+        config.platform !== undefined &&
+        (!url.pathname || url.pathname === "/");
+    const legacyApiBaseUrl = `${url.origin}/${config.platform ?? "unknown"}/${selfId}/onebot/v11`;
+    const eventBaseUrl = usesLegacyOneBotsRoutes ? legacyApiBaseUrl : nativeBaseUrl;
+    const defaultWsUrl = wsUrl || `${protocol}//${host}${new URL(eventBaseUrl).pathname}`;
 
     class OneBotV11AdapterImpl extends Adapter<number, OneBotV11Event> implements OneBotV11Adapter {
         public readonly selfId: string = selfId;
@@ -94,7 +96,8 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
             this.baseUrl = baseUrl;
 
             this.httpClient = new HttpClient({
-                apiBaseUrl: config.apiBaseUrl ?? legacyApiBaseUrl,
+                apiBaseUrl:
+                    config.apiBaseUrl ?? (usesLegacyOneBotsRoutes ? legacyApiBaseUrl : nativeBaseUrl),
                 accessToken,
                 resolveActionUrl: config.resolveActionUrl,
                 call: config.call,

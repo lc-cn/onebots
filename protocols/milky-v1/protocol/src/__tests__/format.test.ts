@@ -60,6 +60,17 @@ function createProtocol() {
         }),
     ),
     sendMessage: vi.fn(),
+    deleteMessage: vi.fn(),
+    kickGroupMember: vi.fn(),
+    muteGroupMember: vi.fn(),
+    setGroupAdmin: vi.fn(),
+    setGroupCard: vi.fn(),
+    setGroupName: vi.fn(),
+    leaveGroup: vi.fn(),
+    getLoginInfo: vi.fn(),
+    getFriendList: vi.fn(),
+    getGroupList: vi.fn(),
+    getGroupMemberList: vi.fn(),
   };
 
   const protocol = new MilkyV1(
@@ -92,7 +103,7 @@ function textMsgEvent(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Milky V1 protocol", () => {
-  test("converts a private text message with string IDs", () => {
+  test("converts a private message to native message_receive", () => {
     const { protocol } = createProtocol();
     const event = textMsgEvent();
     const result = protocol["convertToMilkyFormat"](event as unknown as CommonEvent.Event)!;
@@ -100,22 +111,24 @@ describe("Milky V1 protocol", () => {
     expect(result).not.toBeNull();
     expect(result).toMatchObject({
       time: 1700000000,
-      self_id: "bot",
-      post_type: "message",
-      message_type: "private",
-      message_id: "m50001",
-      user_id: "u10001",
-      message: [{ type: "text", data: { text: "Hello, world!" } }],
-      raw_message: "Hello, world!",
-      font: 0,
-      sender: {
-        user_id: "u10001",
-        nickname: "Alice",
+      self_id: 12345678,
+      event_type: "message_receive",
+      data: {
+        message_scene: "friend",
+        peer_id: 10001,
+        message_seq: 50001,
+        sender_id: 10001,
+        time: 1700000000,
+        segments: [{ type: "text", data: { text: "Hello, world!" } }],
+        friend: {
+          user_id: 10001,
+          nickname: "Alice",
+        },
       },
     });
   });
 
-  test("converts a group text message with group_id string", () => {
+  test("converts a group message with native scene data", () => {
     const { protocol } = createProtocol();
     const event = textMsgEvent({
       message_type: "group",
@@ -127,15 +140,18 @@ describe("Milky V1 protocol", () => {
     const result = protocol["convertToMilkyFormat"](event as unknown as CommonEvent.Event)!;
 
     expect(result).toMatchObject({
-      post_type: "message",
-      message_type: "group",
-      group_id: "g20001",
-      message_id: "m50001",
-      user_id: "u10001",
+      event_type: "message_receive",
+      data: {
+        message_scene: "group",
+        peer_id: 20001,
+        message_seq: 50001,
+        sender_id: 10001,
+        group: { group_id: 20001, group_name: "Test Group" },
+      },
     });
   });
 
-  test("falls back to extractPlainText when raw_message is missing", () => {
+  test("preserves all message segments when raw_message is missing", () => {
     const { protocol } = createProtocol();
     const event = textMsgEvent({
       raw_message: undefined,
@@ -147,13 +163,17 @@ describe("Milky V1 protocol", () => {
     });
     const result = protocol["convertToMilkyFormat"](event as unknown as CommonEvent.Event)!;
 
-    if (result.post_type !== "message") {
+    if (result.event_type !== "message_receive") {
       throw new Error("期望转换为消息事件");
     }
-    expect(result.raw_message).toBe("Hello World");
+    expect(result.data.segments).toEqual([
+      { type: "text", data: { text: "Hello" } },
+      { type: "image", data: { url: "http://example.com/img.png" } },
+      { type: "text", data: { text: " World" } },
+    ]);
   });
 
-  test("converts notice event with user_id / group_id / operator_id strings", () => {
+  test("converts a group increase notice to native event data", () => {
     const { protocol } = createProtocol();
     const event = {
       id: { number: 2, string: "e2", source: "e2" },
@@ -170,16 +190,17 @@ describe("Milky V1 protocol", () => {
 
     expect(result).toMatchObject({
       time: 1700000000,
-      self_id: "bot",
-      post_type: "notice",
-      notice_type: "group_increase",
-      user_id: "u10005",
-      operator_id: "op10001",
-      group_id: "g20001",
+      self_id: 12345678,
+      event_type: "group_member_increase",
+      data: {
+        user_id: 10005,
+        operator_id: 10001,
+        group_id: 20001,
+      },
     });
   });
 
-  test("converts request event with user_id / comment / flag / group_id strings", () => {
+  test("converts a friend request to native friend_request", () => {
     const { protocol } = createProtocol();
     const event = {
       id: { number: 3, string: "e3", source: "e3" },
@@ -196,16 +217,18 @@ describe("Milky V1 protocol", () => {
 
     expect(result).toMatchObject({
       time: 1700000000,
-      self_id: "bot",
-      post_type: "request",
-      request_type: "friend",
-      user_id: "u20002",
-      comment: "hello",
-      flag: "req-flag-001",
+      self_id: 12345678,
+      event_type: "friend_request",
+      data: {
+        initiator_id: 20002,
+        initiator_uid: "req-flag-001",
+        comment: "hello",
+        is_filtered: false,
+      },
     });
   });
 
-  test("converts meta event with meta_event_type", () => {
+  test("converts lifecycle meta event to native bot event", () => {
     const { protocol } = createProtocol();
     const event = {
       id: { number: 4, string: "e4", source: "e4" },
@@ -213,16 +236,38 @@ describe("Milky V1 protocol", () => {
       type: "meta",
       platform: "qq",
       bot_id: { number: 12345678, string: "bot", source: "bot" },
-      meta_type: "heartbeat",
+      meta_type: "lifecycle",
+      sub_type: "disable",
     };
     const result = protocol["convertToMilkyFormat"](event as unknown as CommonEvent.Event)!;
 
     expect(result).toMatchObject({
       time: 1700000000,
-      self_id: "bot",
-      post_type: "meta_event",
-      meta_event_type: "heartbeat",
+      self_id: 12345678,
+      event_type: "bot_offline",
+      data: {},
     });
+  });
+
+  test("does not invent Milky events for online lifecycle or heartbeat metadata", () => {
+    const { protocol } = createProtocol();
+    const base = {
+      id: { number: 4, string: "e4", source: "e4" },
+      timestamp: 1700000000000,
+      type: "meta",
+      platform: "qq",
+      bot_id: { number: 12345678, string: "bot", source: "bot" },
+    };
+
+    expect(protocol["convertToMilkyFormat"]({
+      ...base,
+      meta_type: "lifecycle",
+      sub_type: "connect",
+    } as unknown as CommonEvent.Event)).toBeNull();
+    expect(protocol["convertToMilkyFormat"]({
+      ...base,
+      meta_type: "heartbeat",
+    } as unknown as CommonEvent.Event)).toBeNull();
   });
 
   test("returns null for unknown event type", () => {
@@ -263,34 +308,109 @@ describe("Milky V1 protocol", () => {
     expect(result).toBe("");
   });
 
-  test("format wraps payload with post_type", () => {
+  test("format wraps payload as a native event", () => {
     const { protocol } = createProtocol();
     const payload = { foo: "bar", count: 42 };
     const result = protocol.format("message", payload);
 
     expect(result).toEqual({
-      foo: "bar",
-      count: 42,
-      post_type: "message",
+      time: expect.any(Number),
+      self_id: 0,
+      event_type: "message",
+      data: { foo: "bar", count: 42 },
     });
   });
 
-  test("apply returns success response structure", async () => {
+  test("apply supports native send_private_message", async () => {
     const { protocol, adapter } = createProtocol();
     adapter.sendMessage = vi.fn().mockResolvedValue({
-      message_id: { string: "msg-001" },
+      message_id: { string: "msg-001", number: 9001 },
     });
 
-    const result = await protocol.apply("send_private_msg", {
-      user_id: "u10001",
+    const result = await protocol.apply("send_private_message", {
+      user_id: 10001,
       message: [{ type: "text", data: { text: "hi" } }],
     });
 
     expect(result).toMatchObject({
       status: "ok",
       retcode: 0,
+      data: { message_seq: 9001, time: expect.any(Number) },
     });
-    expect(result.data).toBeDefined();
+    expect(adapter.sendMessage).toHaveBeenCalledWith("bot", {
+      scene_type: "private",
+      scene_id: expect.objectContaining({ number: 10001 }),
+      message: [{ type: "text", data: { text: "hi" } }],
+    });
+  });
+
+  test("apply maps native recall and group administration actions", async () => {
+    const { protocol, adapter } = createProtocol();
+
+    await expect(protocol.apply("recall_group_message", {
+      group_id: 20001,
+      message_seq: 9001,
+    })).resolves.toMatchObject({ status: "ok" });
+    await expect(protocol.apply("kick_group_member", {
+      group_id: 20001,
+      user_id: 10001,
+      reject_add_request: true,
+    })).resolves.toMatchObject({ status: "ok" });
+    await expect(protocol.apply("set_group_member_mute", {
+      group_id: 20001,
+      user_id: 10001,
+      duration: 60,
+    })).resolves.toMatchObject({ status: "ok" });
+
+    expect(adapter.deleteMessage).toHaveBeenCalledWith("bot", expect.objectContaining({
+      scene_type: "group",
+      message_id: expect.objectContaining({ number: 9001 }),
+    }));
+    expect(adapter.kickGroupMember).toHaveBeenCalledWith("bot", expect.objectContaining({
+      reject_add_request: true,
+    }));
+    expect(adapter.muteGroupMember).toHaveBeenCalledWith("bot", expect.objectContaining({
+      duration: 60,
+    }));
+  });
+
+  test("apply returns native Milky wrappers for login and list actions", async () => {
+    const { protocol, adapter } = createProtocol();
+    adapter.getLoginInfo.mockResolvedValue({
+      user_id: { string: "bot", number: 12345678 },
+      user_name: "Milky Bot",
+    });
+    adapter.getFriendList.mockResolvedValue([{
+      user_id: { string: "friend", number: 10001 },
+      user_name: "Alice",
+      remark: "A",
+    }]);
+    adapter.getGroupList.mockResolvedValue([{
+      group_id: { string: "group", number: 20001 },
+      group_name: "Test Group",
+      member_count: 2,
+      max_member_count: 500,
+    }]);
+    adapter.getGroupMemberList.mockResolvedValue([{
+      group_id: { string: "group", number: 20001 },
+      user_id: { string: "friend", number: 10001 },
+      user_name: "Alice",
+      card: "Admin",
+      role: "admin",
+    }]);
+
+    await expect(protocol.apply("get_login_info", {})).resolves.toMatchObject({
+      data: { uin: 12345678, nickname: "Milky Bot" },
+    });
+    await expect(protocol.apply("get_friend_list", {})).resolves.toMatchObject({
+      data: { friends: [{ user_id: 10001 }] },
+    });
+    await expect(protocol.apply("get_group_list", {})).resolves.toMatchObject({
+      data: { groups: [{ group_id: 20001 }] },
+    });
+    await expect(protocol.apply("get_group_member_list", { group_id: 20001 })).resolves.toMatchObject({
+      data: { members: [{ group_id: 20001, user_id: 10001 }] },
+    });
   });
 
   test("apply returns failure for unknown action", async () => {
@@ -312,14 +432,14 @@ describe("Milky V1 protocol", () => {
     expect(protocol.filterFn({ anything: "at all" })).toBe(true);
   });
 
-  test("isMilkyShapedEvent detects objects with string post_type", () => {
+  test("isMilkyShapedEvent detects objects with string event_type", () => {
     const { protocol } = createProtocol();
 
-    expect(protocol["isMilkyShapedEvent"]({ post_type: "message" })).toBe(true);
-    expect(protocol["isMilkyShapedEvent"]({ post_type: "notice", extra: 1 })).toBe(true);
+    expect(protocol["isMilkyShapedEvent"]({ event_type: "message_receive" })).toBe(true);
+    expect(protocol["isMilkyShapedEvent"]({ event_type: "bot_offline", data: {} })).toBe(true);
   });
 
-  test("isMilkyShapedEvent rejects non-objects and objects without post_type", () => {
+  test("isMilkyShapedEvent rejects non-objects and objects without event_type", () => {
     const { protocol } = createProtocol();
 
     expect(protocol["isMilkyShapedEvent"](null)).toBe(false);
@@ -327,6 +447,6 @@ describe("Milky V1 protocol", () => {
     expect(protocol["isMilkyShapedEvent"]("string")).toBe(false);
     expect(protocol["isMilkyShapedEvent"](42)).toBe(false);
     expect(protocol["isMilkyShapedEvent"]({})).toBe(false);
-    expect(protocol["isMilkyShapedEvent"]({ post_type: 123 })).toBe(false);
+    expect(protocol["isMilkyShapedEvent"]({ event_type: 123 })).toBe(false);
   });
 });

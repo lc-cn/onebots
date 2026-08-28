@@ -14,6 +14,7 @@ class TestAdapter extends Adapter<string, { value: number }> {
 
 class FakeSocket extends EventEmitter implements WebSocketLike {
     readonly close = vi.fn(() => this.emit("close", 1000, Buffer.alloc(0)));
+    readonly send = vi.fn();
 }
 
 afterEach(() => {
@@ -21,6 +22,22 @@ afterEach(() => {
 });
 
 describe("WebSocketReceiver recovery", () => {
+    test("runs the protocol handshake callback for every opened connection", async () => {
+        const socket = new FakeSocket();
+        const onOpen = vi.fn(current => current.send("identify"));
+        const receiver = new WebSocketReceiver(new TestAdapter(), "ws://example.test/events", {
+            createWebSocket: () => socket,
+            onOpen,
+        });
+
+        const connected = receiver.connect();
+        socket.emit("open");
+        await connected;
+
+        expect(onOpen).toHaveBeenCalledWith(socket);
+        expect(socket.send).toHaveBeenCalledWith("identify");
+    });
+
     test("reconnects indefinitely with configurable backoff", async () => {
         vi.useFakeTimers();
         const adapter = new TestAdapter();

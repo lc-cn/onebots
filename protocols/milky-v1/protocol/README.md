@@ -62,8 +62,6 @@ accounts:
     use_ws: false               # 启用 WebSocket
     access_token: your_token    # 访问令牌
     secret: your_secret         # HMAC 签名密钥
-    heartbeat: 15000            # 心跳间隔(ms)
-    post_message_format: array  # 消息格式: string | array
     
     # HTTP Reverse
     http_reverse:
@@ -107,13 +105,6 @@ await app.start();
 | `access_token` | string | - | 访问令牌(全局) |
 | `secret` | string | - | HMAC 签名密钥(全局) |
 
-### 消息配置
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `post_message_format` | "string" \| "array" | "string" | 消息格式 |
-| `heartbeat` | number | - | 心跳间隔(秒) |
-
 ### HTTP Reverse 配置
 
 ```typescript
@@ -131,18 +122,17 @@ await app.start();
 
 访问地址：
 ```
-http://host:port/{platform}/{account_id}/milky/v1/{action}
+http://host:port/{platform}/{account_id}/milky/v1/api/{action}
 ```
 
 请求示例：
 ```bash
-curl -X POST http://localhost:6727/qq/my_qq/milky/v1/send_msg \
+curl -X POST http://localhost:6727/qq/my_qq/milky/v1/api/send_private_message \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your_token" \
   -d '{
-    "message_type": "private",
     "user_id": 123456,
-    "message": "Hello"
+    "message": [{ "type": "text", "data": { "text": "Hello" } }]
   }'
 ```
 
@@ -150,7 +140,7 @@ curl -X POST http://localhost:6727/qq/my_qq/milky/v1/send_msg \
 
 连接地址：
 ```
-ws://host:port/{platform}/{account_id}/milky/v1
+ws://host:port/{platform}/{account_id}/milky/v1/event
 ```
 
 ### HTTP Reverse
@@ -170,26 +160,26 @@ onebots 主动连接到配置的 WebSocket 地址。
 
 ### 消息 API
 
-- `send_private_msg` - 发送私聊消息
-- `send_group_msg` - 发送群消息
-- `send_msg` - 发送消息
-- `delete_msg` - 撤回消息
-- `get_msg` - 获取消息
+- `send_private_message` - 发送私聊消息
+- `send_group_message` - 发送群消息
+- `recall_private_message` - 撤回私聊消息
+- `recall_group_message` - 撤回群消息
+- `get_message` - 获取消息
 
 ### 群组管理 API
 
-- `set_group_kick` - 群组踢人
-- `set_group_ban` - 群组单人禁言
-- `set_group_whole_ban` - 群组全员禁言
-- `set_group_admin` - 群组设置管理员
-- `set_group_card` - 设置群名片
+- `kick_group_member` - 群组踢人
+- `set_group_member_mute` - 群组成员禁言
+- `set_group_member_admin` - 设置群管理员
+- `set_group_member_card` - 设置群名片
 - `set_group_name` - 设置群名
-- `set_group_leave` - 退出群组
+- `quit_group` - 退出群组
 
 ### 获取信息 API
 
 - `get_login_info` - 获取登录号信息
-- `get_stranger_info` - 获取陌生人信息
+- `get_user_profile` - 获取用户资料
+- `get_friend_info` - 获取好友信息
 - `get_friend_list` - 获取好友列表
 - `get_group_info` - 获取群信息
 - `get_group_list` - 获取群列表
@@ -297,17 +287,15 @@ onebots 主动连接到配置的 WebSocket 地址。
 {
   "time": 1234567890,
   "self_id": 123456,
-  "post_type": "message",
-  "message_type": "private",
-  "sub_type": "friend",
-  "message_id": "msg_123",
-  "user_id": 789012,
-  "message": "Hello",
-  "raw_message": "Hello",
-  "font": 0,
-  "sender": {
-    "user_id": 789012,
-    "nickname": "张三"
+  "event_type": "message_receive",
+  "data": {
+    "message_scene": "friend",
+    "peer_id": 789012,
+    "message_seq": 123,
+    "sender_id": 789012,
+    "time": 1234567890,
+    "segments": [{ "type": "text", "data": { "text": "Hello" } }],
+    "friend": { "user_id": 789012, "nickname": "张三" }
   }
 }
 ```
@@ -318,12 +306,12 @@ onebots 主动连接到配置的 WebSocket 地址。
 {
   "time": 1234567890,
   "self_id": 123456,
-  "post_type": "notice",
-  "notice_type": "group_increase",
-  "sub_type": "approve",
-  "group_id": 456789,
-  "operator_id": 789012,
-  "user_id": 345678
+  "event_type": "group_member_increase",
+  "data": {
+    "group_id": 456789,
+    "operator_id": 789012,
+    "user_id": 345678
+  }
 }
 ```
 
@@ -333,27 +321,13 @@ onebots 主动连接到配置的 WebSocket 地址。
 {
   "time": 1234567890,
   "self_id": 123456,
-  "post_type": "request",
-  "request_type": "friend",
-  "user_id": 789012,
-  "comment": "我是xxx",
-  "flag": "flag_123"
-}
-```
-
-### 元事件
-
-```json
-{
-  "time": 1234567890,
-  "self_id": 123456,
-  "post_type": "meta_event",
-  "meta_event_type": "heartbeat",
-  "status": {
-    "online": true,
-    "good": true
-  },
-  "interval": 15000
+  "event_type": "friend_request",
+  "data": {
+    "initiator_id": 789012,
+    "initiator_uid": "uid_123",
+    "comment": "我是xxx",
+    "is_filtered": false
+  }
 }
 ```
 

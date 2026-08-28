@@ -762,40 +762,15 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     private startWs(): void {
         this.logger.info("Starting Satori WebSocket server");
         
-        const wss = this.router.ws(`${this.path}//events`);
+        const wss = this.router.ws(`${this.path}/events`);
         
-        wss.on("connection", (ws, request) => {
-            // Verify access token
-            const authHeader = request.headers['authorization'];
-            const token = typeof authHeader === 'string' ? authHeader.replace('Bearer ', '') : undefined;
-            
-            if (!this.verifyToken(token)) {
-                ws.close(1008, "Unauthorized");
-                return;
-            }
-
+        wss.on("connection", ws => {
             this.logger.info(`Satori WebSocket client connected: ${this.path}/events`);
-
-            // Send ready event
-            const readyPayload = {
-                op: 0, // READY
-                body: {
-                    logins: [{
-                        user: {
-                            id: this.account.account_id,
-                            name: this.account.account_id,
-                        },
-                        self_id: this.account.account_id,
-                        platform: this.config.platform || this.account.platform,
-                        status: 1, // ONLINE
-                    }],
-                },
-            };
-            ws.send(JSON.stringify(readyPayload));
+            let identified = false;
 
             // Listen for dispatch events and send to client
             const onDispatch = (data: string) => {
-                if (ws.readyState === WebSocket.OPEN) {
+                if (identified && ws.readyState === WebSocket.OPEN) {
                     const event = JSON.parse(data);
                     const eventPayload = {
                         op: 0, // EVENT
@@ -811,7 +786,29 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
                 try {
                     const message = JSON.parse(data.toString());
                     
-                    if (message.op === 1) { // PING
+                    if (message.op === 3) { // IDENTIFY
+                        const token = message.body?.token;
+                        if (!this.verifyToken(typeof token === "string" ? token : undefined)) {
+                            ws.close(1008, "Unauthorized");
+                            return;
+                        }
+                        identified = true;
+                        ws.send(JSON.stringify({
+                            op: 4, // READY
+                            body: {
+                                logins: [{
+                                    user: {
+                                        id: this.account.account_id,
+                                        name: this.account.account_id,
+                                    },
+                                    self_id: this.account.account_id,
+                                    platform: this.config.platform || this.account.platform,
+                                    status: 1, // ONLINE
+                                }],
+                                proxy_urls: [],
+                            },
+                        }));
+                    } else if (message.op === 1) { // PING
                         // Respond with PONG
                         ws.send(JSON.stringify({ op: 2 })); // PONG
                     }

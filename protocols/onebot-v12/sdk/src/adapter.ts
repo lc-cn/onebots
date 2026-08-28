@@ -48,11 +48,14 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
     const { baseUrl, selfId, accessToken, receiveMode, wsUrl } = config;
     const url = new URL(baseUrl);
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const defaultWsUrl = wsUrl || `${protocol}//${url.host}${url.pathname}`;
-    const legacyApiBaseUrl =
-        url.pathname && url.pathname !== "/"
-            ? `${url.origin}${url.pathname}`
-            : `${url.origin}/${config.platform ?? "unknown"}/${selfId}/onebot/v12`;
+    const nativeBaseUrl = `${url.origin}${url.pathname}`;
+    const usesLegacyOneBotsRoutes =
+        config.apiBaseUrl === undefined &&
+        config.platform !== undefined &&
+        (!url.pathname || url.pathname === "/");
+    const legacyApiBaseUrl = `${url.origin}/${config.platform ?? "unknown"}/${selfId}/onebot/v12`;
+    const eventBaseUrl = usesLegacyOneBotsRoutes ? legacyApiBaseUrl : nativeBaseUrl;
+    const defaultWsUrl = wsUrl || `${protocol}//${url.host}${new URL(eventBaseUrl).pathname}`;
 
     class OneBotV12AdapterImpl extends Adapter<string, OneBotV12Event> implements OneBotV12Adapter {
         public readonly selfId: string = selfId;
@@ -76,7 +79,8 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
             this.baseUrl = baseUrl;
 
             this.httpClient = new HttpClient({
-                apiBaseUrl: config.apiBaseUrl ?? legacyApiBaseUrl,
+                apiBaseUrl:
+                    config.apiBaseUrl ?? (usesLegacyOneBotsRoutes ? legacyApiBaseUrl : nativeBaseUrl),
                 accessToken,
                 resolveActionUrl: config.resolveActionUrl,
                 call: config.call,

@@ -66,17 +66,19 @@ export namespace Milky {
      */
     export interface MessageEvent {
         time: number;
-        self_id: string;
-        post_type: "message";
-        message_type: "private" | "group";
-        sub_type?: string;
-        message_id: string;
-        user_id: string;
-        message: Segment[];
-        raw_message: string;
-        font: number;
-        sender: User;
-        group_id?: string;
+        self_id: number;
+        event_type: "message_receive";
+        data: {
+            message_scene: "friend" | "group" | "temp";
+            peer_id: number;
+            message_seq: number;
+            sender_id: number;
+            time: number;
+            segments: Segment[];
+            friend?: { user_id: number; nickname?: string };
+            group?: { group_id: number; group_name?: string };
+            group_member?: { user_id: number; nickname?: string; card?: string };
+        };
     }
 
     /**
@@ -98,16 +100,9 @@ export namespace Milky {
      */
     export interface NoticeEvent {
         time: number;
-        self_id: string;
-        post_type: "notice";
-        notice_type: NoticeType;
-        sub_type?: string;
-        user_id?: string;
-        group_id?: string;
-        operator_id?: string;
-        duration?: number;
-        file?: Record<string, unknown>;
-        message_id?: string;
+        self_id: number;
+        event_type: string;
+        data: Record<string, unknown>;
     }
 
     /**
@@ -120,14 +115,9 @@ export namespace Milky {
      */
     export interface RequestEvent {
         time: number;
-        self_id: string;
-        post_type: "request";
-        request_type: RequestType;
-        sub_type?: string;
-        user_id: string;
-        comment: string;
-        flag: string;
-        group_id?: string;
+        self_id: number;
+        event_type: "friend_request" | "group_join_request" | "group_invited_join_request";
+        data: Record<string, unknown>;
     }
 
     /**
@@ -140,12 +130,9 @@ export namespace Milky {
      */
     export interface MetaEvent {
         time: number;
-        self_id: string;
-        post_type: "meta_event";
-        meta_event_type: MetaEventType;
-        sub_type?: string;
-        interval?: number;
-        status?: Record<string, unknown>;
+        self_id: number;
+        event_type: "bot_offline";
+        data: { reason: string };
     }
 
     /**
@@ -168,7 +155,8 @@ export namespace Milky {
      * Send message result
      */
     export interface SendMessageResult {
-        message_id: string;
+        message_seq: number;
+        time: number;
     }
 
     /**
@@ -199,8 +187,8 @@ export namespace Milky {
      * Group member info
      */
     export interface GroupMemberInfo {
-        group_id: string;
-        user_id: string;
+        group_id: number;
+        user_id: number;
         nickname: string;
         card: string;
         sex: "male" | "female" | "unknown";
@@ -220,7 +208,7 @@ export namespace Milky {
      * Group info
      */
     export interface GroupInfo {
-        group_id: string;
+        group_id: number;
         group_name: string;
         member_count: number;
         max_member_count: number;
@@ -230,7 +218,7 @@ export namespace Milky {
      * Friend info
      */
     export interface FriendInfo {
-        user_id: string;
+        user_id: number;
         nickname: string;
         remark: string;
     }
@@ -239,7 +227,7 @@ export namespace Milky {
      * Login info
      */
     export interface LoginInfo {
-        user_id: string;
+        uin: number;
         nickname: string;
     }
 

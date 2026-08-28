@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import { EventEmitter } from "node:events";
 import { createOnebot12Client } from "./client.js";
 import { ProtocolError } from "./index.js";
 import type { OneBotV12Event } from "./types.js";
@@ -108,5 +109,29 @@ describe("OneBot V12 client", () => {
             "https://gateway.example/kook/bot/onebot/v12/get_self_info",
             expect.any(Object),
         );
+    });
+
+    test("connects legacy OneBots WebSocket at the account protocol path", async () => {
+        const socket = new EventEmitter() as EventEmitter & {
+            close: ReturnType<typeof vi.fn>;
+        };
+        socket.close = vi.fn();
+        const createWebSocket = vi.fn(() => socket as never);
+        const client = createOnebot12Client({
+            baseUrl: "https://gateway.example",
+            platform: "kook",
+            selfId: "bot",
+            receiveMode: "ws",
+            webSocket: { createWebSocket },
+        });
+
+        const started = client.start();
+        socket.emit("open");
+        await started;
+
+        expect(createWebSocket).toHaveBeenCalledWith(
+            "wss://gateway.example/kook/bot/onebot/v12",
+        );
+        await client.stop();
     });
 });

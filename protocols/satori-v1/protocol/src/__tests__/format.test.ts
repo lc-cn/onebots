@@ -3,6 +3,8 @@ import type { CommonEvent } from "onebots";
 
 vi.mock("onebots", () => {
   class Protocol {
+    public on = vi.fn();
+    public off = vi.fn();
     public logger = {
       debug: vi.fn(),
       info: vi.fn(),
@@ -16,6 +18,16 @@ vi.mock("onebots", () => {
       public account: unknown,
       public config: unknown,
     ) {}
+
+    get router() {
+      return (this.adapter as { app: { router: unknown } }).app.router;
+    }
+
+    get path() {
+      const account = this.account as { path: string };
+      const config = this.config as { protocol: string; version: string };
+      return `${account.path}/${config.protocol}/${config.version}`;
+    }
   }
 
   return {
@@ -43,8 +55,15 @@ function createProtocol() {
     source: "openid-123",
   };
 
+  const wsServer = { on: vi.fn() };
+  const router = {
+    post: vi.fn(),
+    get: vi.fn(),
+    ws: vi.fn(() => wsServer),
+  };
   const adapter = {
     app: {
+      router,
       getLogger: vi.fn().mockReturnValue({
         debug: vi.fn(),
         info: vi.fn(),
@@ -64,11 +83,11 @@ function createProtocol() {
 
   const protocol = new SatoriV1(
     adapter as never,
-    { account_id: "bot" } as never,
-    { protocol: "satori", version: "v1", platform: "qq" } as never,
+    { account_id: "bot", path: "/qq/bot", platform: "qq" } as never,
+    { protocol: "satori", version: "v1", platform: "qq", use_ws: true } as never,
   );
 
-  return { adapter, protocol, resolvedId };
+  return { adapter, protocol, resolvedId, router, wsServer };
 }
 
 // Helper to build realistic CommonEvent.Message objects
@@ -93,6 +112,35 @@ function textMsgEvent(overrides: Record<string, unknown> = {}) {
 }
 
 describe("Satori V1 protocol", () => {
+  test("registers the public WebSocket endpoint at a single-slash events path", () => {
+    const { protocol, router } = createProtocol();
+
+    protocol.start();
+
+    expect(router.ws).toHaveBeenCalledWith("/qq/bot/satori/v1/events");
+  });
+
+  test("waits for IDENTIFY before READY and responds to PING", () => {
+    const { protocol, wsServer } = createProtocol();
+    protocol.start();
+
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    const ws = {
+      readyState: 1,
+      send: vi.fn(),
+      close: vi.fn(),
+      on: vi.fn((name: string, handler: (...args: unknown[]) => void) => handlers.set(name, handler)),
+    };
+    const connection = wsServer.on.mock.calls.find(([name]) => name === "connection")?.[1];
+    connection(ws, { headers: {} });
+
+    expect(ws.send).not.toHaveBeenCalled();
+    handlers.get("message")?.(Buffer.from(JSON.stringify({ op: 3, body: {} })));
+    expect(JSON.parse(ws.send.mock.calls[0][0])).toMatchObject({ op: 4, body: { logins: expect.any(Array) } });
+    handlers.get("message")?.(Buffer.from(JSON.stringify({ op: 1 })));
+    expect(JSON.parse(ws.send.mock.calls[1][0])).toEqual({ op: 2 });
+  });
+
   test("converts a private message to message-created event", () => {
     const { protocol } = createProtocol();
     const event = textMsgEvent();

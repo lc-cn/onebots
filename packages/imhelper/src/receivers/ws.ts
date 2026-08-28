@@ -8,6 +8,7 @@ export interface WebSocketLike {
     on(event: "error", listener: (error: Error) => void): unknown;
     on(event: "close", listener: (code: number, reason: Buffer) => void): unknown;
     removeAllListeners(event?: string): unknown;
+    send(data: string | Buffer): unknown;
     close(): void;
 }
 
@@ -31,6 +32,8 @@ export interface WebSocketReceiverOptions {
     reconnect?: WebSocketReconnectOptions;
     logger?: WebSocketReceiverLogger;
     createWebSocket?: (url: string) => WebSocketLike;
+    /** 每次连接建立后执行协议握手，例如发送 Satori IDENTIFY。 */
+    onOpen?: (socket: WebSocketLike) => void;
 }
 
 const silentLogger: WebSocketReceiverLogger = {
@@ -127,10 +130,17 @@ export class WebSocketReceiver<
 
             socket.on("open", () => {
                 if (!this.#isCurrent(generation)) return;
-                opened = true;
-                this.#reconnectAttempts = 0;
-                this.#logger.debug("WebSocket 已连接", { generation });
-                resolve();
+                try {
+                    this.#options.onOpen?.(socket);
+                    opened = true;
+                    this.#reconnectAttempts = 0;
+                    this.#logger.debug("WebSocket 已连接", { generation });
+                    resolve();
+                } catch (error) {
+                    this.#logger.error("WebSocket 协议握手失败", error);
+                    socket.close();
+                    reject(error);
+                }
             });
             socket.on("message", data => {
                 if (!this.#isCurrent(generation)) return;
