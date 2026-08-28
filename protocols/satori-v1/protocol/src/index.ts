@@ -10,7 +10,16 @@ import { SatoriConfig } from "./config.js";
 const satoriSchema: Schema = {
     use_http: { type: 'boolean', label: '启用 HTTP' },
     use_ws: { type: 'boolean', label: '启用 WebSocket' },
-    webhooks: { type: 'array', label: 'Webhook 地址' },
+    webhooks: {
+        type: 'array', default: [], label: 'Webhook',
+        description: '将事件推送到下游 HTTP 服务。展开单项可覆盖 Token。',
+        ui: {
+            widget: 'endpoint-list', itemLabel: 'Webhook', addLabel: '添加 Webhook', schemes: ['http:', 'https:'],
+            fields: [
+                { key: 'token', label: 'Token', sensitive: true, placeholder: '留空则使用全局 Token' },
+            ],
+        },
+    },
     token: { type: 'string', label: 'Token' },
     self_id: { type: 'string', label: 'Self ID' },
     platform: { type: 'string', label: '平台标识' },

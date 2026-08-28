@@ -18,8 +18,9 @@ import {
     buildSchemaFields,
     getValueByPath,
     setValueByPath,
-    resolveJsonFieldDisplay,
-    parseJsonFieldValue
+    resolveStructuredFieldDisplay,
+    parseStructuredFieldValue,
+    protocolTitle
 } from './utils';
 
 const props = defineProps<{
@@ -54,6 +55,30 @@ const protocolTabs = computed(() =>
     protocolGroups.value.map(group => ({ key: group.key, label: group.title }))
 );
 
+const endpointFields = (group: SchemaGroup) =>
+    group.fields.filter(
+        field => field.rule.type === 'array' && field.rule.ui?.widget === 'endpoint-list'
+    );
+
+const transportFields = (group: SchemaGroup) =>
+    group.fields.filter(field => ['use_http', 'use_ws'].includes(field.path.at(-1) ?? ''));
+
+const credentialFields = (group: SchemaGroup) =>
+    group.fields.filter(field =>
+        ['access_token', 'token', 'secret', 'platform', 'self_id'].includes(
+            field.path.at(-1) ?? ''
+        )
+    );
+
+const advancedFields = (group: SchemaGroup) => {
+    const prominent = new Set(
+        [...endpointFields(group), ...transportFields(group), ...credentialFields(group)].map(
+            field => field.key
+        )
+    );
+    return group.fields.filter(field => !prominent.has(field.key));
+};
+
 const platformOptions = computed(() =>
     Object.keys(props.schema?.adapters || {}).map(name => ({ label: name, value: name }))
 );
@@ -67,7 +92,7 @@ const buildProtocolGroups = () => {
     Object.entries(props.schema.protocols).forEach(([protocolKey, protocolSchema]) => {
         groups.push({
             key: protocolKey,
-            title: protocolKey,
+            title: protocolTitle(protocolKey),
             fields: buildSchemaFields(protocolSchema, [protocolKey])
         });
         if (protocolEnabled[protocolKey] === undefined) {
@@ -95,7 +120,10 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
         group.fields.forEach(field => {
             const currentValue = getValueByPath(configObject, field.path);
             if (field.rule.type === 'object' || field.rule.type === 'array') {
-                accountFormModel[field.key] = resolveJsonFieldDisplay(currentValue, field.rule);
+                accountFormModel[field.key] = resolveStructuredFieldDisplay(
+                    currentValue,
+                    field.rule
+                );
                 return;
             }
             accountFormModel[field.key] =
@@ -106,7 +134,7 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
     adapterFields.value.forEach(field => {
         const currentValue = getValueByPath(configObject, field.path);
         if (field.rule.type === 'object' || field.rule.type === 'array') {
-            accountFormModel[field.key] = resolveJsonFieldDisplay(currentValue, field.rule);
+            accountFormModel[field.key] = resolveStructuredFieldDisplay(currentValue, field.rule);
             return;
         }
         accountFormModel[field.key] =
@@ -155,7 +183,7 @@ const handleSubmit = async () => {
         for (const field of group.fields) {
             let value = accountFormModel[field.key];
             if (field.rule.type === 'object' || field.rule.type === 'array') {
-                const parsed = parseJsonFieldValue(value, field.rule, field.label);
+                const parsed = parseStructuredFieldValue(value, field.rule, field.label);
                 if (!parsed.ok) {
                     toast.error(parsed.message);
                     return;
@@ -169,7 +197,7 @@ const handleSubmit = async () => {
     for (const field of adapterFields.value) {
         let value = accountFormModel[field.key];
         if (field.rule.type === 'object' || field.rule.type === 'array') {
-            const parsed = parseJsonFieldValue(value, field.rule, field.label);
+            const parsed = parseStructuredFieldValue(value, field.rule, field.label);
             if (!parsed.ok) {
                 toast.error(parsed.message);
                 return;
@@ -296,16 +324,79 @@ defineExpose({ openAdd, openEdit });
                         :key="group.key"
                         class="flex flex-col gap-4 pt-2">
                         <div
-                            class="flex items-center justify-between rounded-control bg-surface-raised px-3 py-2">
-                            <span class="text-sm text-fg-secondary">启用 {{ group.title }}</span>
+                            class="flex items-center justify-between rounded-card bg-accent-soft px-4 py-3">
+                            <div>
+                                <div class="text-sm font-semibold text-fg">{{ group.title }}</div>
+                                <div class="mt-0.5 text-xs text-fg-secondary">
+                                    开启后可为当前账号覆盖全局协议默认值
+                                </div>
+                            </div>
                             <UiSwitch v-model="protocolEnabled[group.key]" />
                         </div>
-                        <SchemaField
-                            v-for="field in group.fields"
-                            :key="field.key"
-                            v-model="accountFormModel[field.key]"
-                            :field="field"
-                            :disabled="!protocolEnabled[group.key]" />
+
+                        <section v-if="transportFields(group).length" class="space-y-3">
+                            <div>
+                                <h4 class="text-sm font-semibold text-fg">服务入口</h4>
+                                <p class="mt-0.5 text-xs text-fg-tertiary">
+                                    选择需要对外提供的正向连接方式
+                                </p>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <SchemaField
+                                    v-for="field in transportFields(group)"
+                                    :key="field.key"
+                                    v-model="accountFormModel[field.key]"
+                                    :field="field"
+                                    :disabled="!protocolEnabled[group.key]" />
+                            </div>
+                        </section>
+
+                        <section v-if="endpointFields(group).length" class="space-y-3">
+                            <div>
+                                <h4 class="text-sm font-semibold text-fg">事件推送</h4>
+                                <p class="mt-0.5 text-xs text-fg-tertiary">
+                                    Webhook 与反向 WebSocket 可分别添加多个目标
+                                </p>
+                            </div>
+                            <SchemaField
+                                v-for="field in endpointFields(group)"
+                                :key="field.key"
+                                v-model="accountFormModel[field.key]"
+                                :field="field"
+                                :disabled="!protocolEnabled[group.key]" />
+                        </section>
+
+                        <section v-if="credentialFields(group).length" class="space-y-3">
+                            <h4 class="text-sm font-semibold text-fg">身份与鉴权</h4>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <SchemaField
+                                    v-for="field in credentialFields(group)"
+                                    :key="field.key"
+                                    v-model="accountFormModel[field.key]"
+                                    :field="field"
+                                    :disabled="!protocolEnabled[group.key]" />
+                            </div>
+                        </section>
+
+                        <details
+                            v-if="advancedFields(group).length"
+                            class="group rounded-card border border-border px-4 py-3">
+                            <summary
+                                class="cursor-pointer text-sm font-medium text-fg-secondary marker:text-fg-tertiary">
+                                高级设置
+                                <span class="ml-1 text-xs font-normal text-fg-tertiary">
+                                    {{ advancedFields(group).length }} 项
+                                </span>
+                            </summary>
+                            <div class="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+                                <SchemaField
+                                    v-for="field in advancedFields(group)"
+                                    :key="field.key"
+                                    v-model="accountFormModel[field.key]"
+                                    :field="field"
+                                    :disabled="!protocolEnabled[group.key]" />
+                            </div>
+                        </details>
                     </div>
                 </template>
                 <UiEmpty v-else title="暂无协议 Schema" />

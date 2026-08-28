@@ -11,6 +11,9 @@ defineProps<{
 }>();
 
 const activeGroups = defineModel<string[]>('activeGroups', { required: true });
+
+const isEndpointField = (field: SchemaGroup['fields'][number]) =>
+    field.rule.type === 'array' && field.rule.ui?.widget === 'endpoint-list';
 </script>
 
 <template>
@@ -21,12 +24,21 @@ const activeGroups = defineModel<string[]>('activeGroups', { required: true });
                 :key="group.key"
                 :name="group.key"
                 :title="group.title">
-                <div class="flex flex-col gap-4">
+                <template #title>
+                    <div class="min-w-0">
+                        <div class="font-medium text-fg">{{ group.title }}</div>
+                        <div v-if="group.description" class="mt-0.5 text-xs font-normal text-fg-tertiary">
+                            {{ group.description }}
+                        </div>
+                    </div>
+                </template>
+                <div class="grid gap-4 sm:grid-cols-2">
                     <SchemaField
                         v-for="field in group.fields"
                         :key="field.key"
                         v-model="formModel[field.key]"
-                        :field="field" />
+                        :field="field"
+                        :class="isEndpointField(field) ? 'sm:col-span-2' : ''" />
                 </div>
             </UiCollapseItem>
         </UiCollapse>

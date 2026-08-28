@@ -9,6 +9,20 @@ export type ValidationRule = {
     label?: string;
     description?: string;
     placeholder?: string;
+    ui?: {
+        widget?: 'endpoint-list';
+        itemLabel?: string;
+        addLabel?: string;
+        schemes?: string[];
+        fields?: Array<{
+            key: string;
+            label: string;
+            type?: 'string' | 'number' | 'boolean';
+            placeholder?: string;
+            description?: string;
+            sensitive?: boolean;
+        }>;
+    };
 };
 
 export type Schema = Record<string, ValidationRule | Schema>;
@@ -31,6 +45,7 @@ export type SchemaFieldDef = {
 export type SchemaGroup = {
     key: string;
     title: string;
+    description?: string;
     fields: SchemaFieldDef[];
 };
 

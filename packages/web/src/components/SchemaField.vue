@@ -6,6 +6,7 @@ import UiNumberInput from '../ui/UiNumberInput.vue';
 import UiSwitch from '../ui/UiSwitch.vue';
 import UiSelect from '../ui/UiSelect.vue';
 import UiTextarea from '../ui/UiTextarea.vue';
+import EndpointListField from './config/EndpointListField.vue';
 
 interface SchemaFieldRule {
     required?: boolean;
@@ -15,6 +16,20 @@ interface SchemaFieldRule {
     choices?: Array<{ label: string; value: string | number | boolean }>;
     description?: string;
     placeholder?: string;
+    ui?: {
+        widget?: 'endpoint-list';
+        itemLabel?: string;
+        addLabel?: string;
+        schemes?: string[];
+        fields?: Array<{
+            key: string;
+            label: string;
+            type?: 'string' | 'number' | 'boolean';
+            placeholder?: string;
+            description?: string;
+            sensitive?: boolean;
+        }>;
+    };
 }
 
 interface SchemaFieldDef {
@@ -37,10 +52,11 @@ const props = withDefaults(defineProps<Props>(), {
 
 const model = defineModel<unknown>();
 
-type WidgetKind = 'input' | 'number' | 'switch' | 'select' | 'textarea';
+type WidgetKind = 'input' | 'number' | 'switch' | 'select' | 'textarea' | 'endpoint-list';
 
 const widget = computed<WidgetKind>(() => {
     const rule = props.field.rule;
+    if (rule.type === 'array' && rule.ui?.widget === 'endpoint-list') return 'endpoint-list';
     if (rule.choices && rule.choices.length > 0) return 'select';
     if (rule.type === 'string') return 'input';
     if (rule.type === 'number') return 'number';
@@ -109,6 +125,11 @@ const choiceModel = computed<string | number | boolean | undefined>({
             v-model="choiceModel"
             :options="choiceOptions"
             :placeholder="field.placeholder || '请选择'"
+            :disabled="disabled" />
+        <EndpointListField
+            v-else-if="widget === 'endpoint-list'"
+            v-model="model"
+            :rule="field.rule"
             :disabled="disabled" />
         <UiTextarea
             v-else

@@ -24,7 +24,7 @@ general:
     secret: ''
     enable_cors: true
     heartbeat_interval: 5
-    webhooks: []
+    http_webhook: []
     ws_reverse: []
     request_timeout: 15
   

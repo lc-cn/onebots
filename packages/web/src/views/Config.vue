@@ -26,8 +26,8 @@ import type { SchemaBundle, SchemaGroup, AccountRow } from '../components/config
 import {
     getValueByPath,
     setValueByPath,
-    resolveJsonFieldDisplay,
-    parseJsonFieldValue,
+    resolveStructuredFieldDisplay,
+    parseStructuredFieldValue,
     normalizeSchema,
     buildConfigGroups,
     extractAccountRows
@@ -61,7 +61,7 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
         group.fields.forEach(field => {
             const currentValue = getValueByPath(configObject, field.path);
             if (field.rule.type === 'object' || field.rule.type === 'array') {
-                formModel[field.key] = resolveJsonFieldDisplay(currentValue, field.rule);
+                formModel[field.key] = resolveStructuredFieldDisplay(currentValue, field.rule);
                 return;
             }
             formModel[field.key] =
@@ -75,9 +75,9 @@ const rebuildGroups = (configObject: Record<string, unknown>) => {
         schemaGroups.value = [];
         return;
     }
-    const groups = buildConfigGroups(schema.value, configObject);
+    const groups = buildConfigGroups(schema.value);
     schemaGroups.value = groups;
-    activeGroups.value = groups.map(group => group.key);
+    activeGroups.value = groups.filter(group => group.key === 'base').map(group => group.key);
 };
 
 const refreshAccounts = () => {
@@ -149,7 +149,7 @@ const handleSave = async () => {
                 for (const field of group.fields) {
                     let value = formModel[field.key];
                     if (field.rule.type === 'object' || field.rule.type === 'array') {
-                        const parsed = parseJsonFieldValue(value, field.rule, field.label);
+                        const parsed = parseStructuredFieldValue(value, field.rule, field.label);
                         if (!parsed.ok) {
                             toast.error(parsed.message);
                             return;

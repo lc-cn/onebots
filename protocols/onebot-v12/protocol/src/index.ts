@@ -10,8 +10,16 @@ import { OneBotV12Config } from "./config.js";
 const onebotV12Schema: Schema = {
     use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
     use_ws: { type: 'boolean', default: false, label: '启用 WebSocket' },
-    http_webhook: { type: 'array', label: 'HTTP Webhook 地址' },
-    ws_reverse: { type: 'array', label: 'WS 反向连接地址' },
+    http_webhook: {
+        type: 'array', default: [], label: 'HTTP Webhook',
+        description: '将事件 POST 到已有的 HTTP 服务，可配置多个目标。',
+        ui: { widget: 'endpoint-list', itemLabel: 'Webhook', addLabel: '添加 Webhook', schemes: ['http:', 'https:'] },
+    },
+    ws_reverse: {
+        type: 'array', default: [], label: '反向 WebSocket',
+        description: '由 OneBots 主动连接下游 WebSocket 服务，可配置多个目标。',
+        ui: { widget: 'endpoint-list', itemLabel: '连接', addLabel: '添加连接', schemes: ['ws:', 'wss:'] },
+    },
     request_timeout: { type: 'number', label: '请求超时(秒)' },
     access_token: { type: 'string', label: 'Access Token' },
     heartbeat_interval: { type: 'number', label: '心跳间隔(秒)' },

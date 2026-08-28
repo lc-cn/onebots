@@ -1,4 +1,4 @@
-import type { Schema } from '@onebots/core';
+import type { Schema, ValidationRule } from '@onebots/core';
 import { BaseAppConfigSchema, AdapterRegistry, ProtocolRegistry } from '@onebots/core';
 import { ADAPTER_SCHEMA_PRESETS } from './adapter-schema-presets.js';
 
@@ -15,6 +15,27 @@ const withLabel = (key: keyof typeof base, label: string, description?: string) 
     } as (typeof base)[typeof key];
 };
 
+type EndpointField = NonNullable<NonNullable<ValidationRule['ui']>['fields']>[number];
+
+const endpointList = (
+    label: string,
+    description: string,
+    schemes: string[],
+    fields: EndpointField[] = []
+): ValidationRule => ({
+    type: 'array',
+    default: [],
+    label,
+    description,
+    ui: {
+        widget: 'endpoint-list',
+        itemLabel: label.includes('WebSocket') ? '连接' : 'Webhook',
+        addLabel: label.includes('WebSocket') ? '添加连接' : '添加 Webhook',
+        schemes,
+        fields
+    }
+});
+
 const general: Schema = {
     'onebot.v11': {
         use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
@@ -23,8 +44,8 @@ const general: Schema = {
         secret: { type: 'string', default: '', label: 'Secret' },
         enable_cors: { type: 'boolean', default: true, label: '启用 CORS' },
         heartbeat_interval: { type: 'number', default: 5, min: 1, label: '心跳间隔(秒)' },
-        http_reverse: { type: 'array', default: [], label: 'HTTP 反向上报地址' },
-        ws_reverse: { type: 'array', default: [], label: 'WS 反向连接地址' },
+        http_reverse: endpointList('HTTP 反向上报', '将事件 POST 到已有的 HTTP 服务，可配置多个目标。', ['http:', 'https:']),
+        ws_reverse: endpointList('反向 WebSocket', '由 OneBots 主动连接下游 WebSocket 服务，可配置多个目标。', ['ws:', 'wss:']),
     },
     'onebot.v12': {
         use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
@@ -33,8 +54,8 @@ const general: Schema = {
         secret: { type: 'string', default: '', label: 'Secret' },
         enable_cors: { type: 'boolean', default: true, label: '启用 CORS' },
         heartbeat_interval: { type: 'number', default: 5, min: 1, label: '心跳间隔(秒)' },
-        webhooks: { type: 'array', default: [], label: 'Webhook 上报地址' },
-        ws_reverse: { type: 'array', default: [], label: 'WS 反向连接地址' },
+        http_webhook: endpointList('HTTP Webhook', '将事件 POST 到已有的 HTTP 服务，可配置多个目标。', ['http:', 'https:']),
+        ws_reverse: endpointList('反向 WebSocket', '由 OneBots 主动连接下游 WebSocket 服务，可配置多个目标。', ['ws:', 'wss:']),
         request_timeout: { type: 'number', default: 15, min: 1, label: '请求超时(秒)' },
     },
     'satori.v1': {
@@ -42,7 +63,9 @@ const general: Schema = {
         use_ws: { type: 'boolean', default: true, label: '启用 WebSocket' },
         token: { type: 'string', default: '', label: 'Token' },
         platform: { type: 'string', default: 'unknown', label: '平台标识' },
-        webhooks: { type: 'array', default: [], label: 'Webhook 上报地址' },
+        webhooks: endpointList('Webhook', '将事件推送到下游 HTTP 服务。展开单项可覆盖 Token。', ['http:', 'https:'], [
+            { key: 'token', label: 'Token', sensitive: true, placeholder: '留空则使用全局 Token' }
+        ]),
     },
     'milky.v1': {
         use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
@@ -50,8 +73,15 @@ const general: Schema = {
         access_token: { type: 'string', default: '', label: 'Access Token' },
         secret: { type: 'string', default: '', label: 'Secret' },
         heartbeat: { type: 'number', default: 5, min: 1, label: '心跳间隔(秒)' },
-        http_reverse: { type: 'array', default: [], label: 'HTTP 反向上报地址' },
-        ws_reverse: { type: 'array', default: [], label: 'WS 反向连接地址' },
+        http_reverse: endpointList('HTTP 反向上报', '将事件 POST 到下游服务。展开单项可覆盖鉴权与超时。', ['http:', 'https:'], [
+            { key: 'access_token', label: 'Access Token', sensitive: true, placeholder: '留空则使用全局 Token' },
+            { key: 'secret', label: '签名 Secret', sensitive: true, placeholder: '留空则使用全局 Secret' },
+            { key: 'post_timeout', label: '超时（秒）', type: 'number', placeholder: '例如 15' }
+        ]),
+        ws_reverse: endpointList('反向 WebSocket', '由 OneBots 主动连接下游服务。展开单项可覆盖鉴权与重连间隔。', ['ws:', 'wss:'], [
+            { key: 'access_token', label: 'Access Token', sensitive: true, placeholder: '留空则使用全局 Token' },
+            { key: 'reconnect_interval', label: '重连间隔（秒）', type: 'number', placeholder: '例如 5' }
+        ]),
     },
 };
 
@@ -79,10 +109,14 @@ export type ConfigSchemaBundle = {
 };
 
 export const getAppConfigSchema = (): ConfigSchemaBundle => {
-    const protocols = {
-        ...general,
-        ...ProtocolRegistry.getAllSchemas(),
-    } as Record<string, Schema>;
+    const registeredProtocols = ProtocolRegistry.getAllSchemas();
+    const protocolKeys = new Set([...Object.keys(registeredProtocols), ...Object.keys(general)]);
+    const protocols = Object.fromEntries(
+        [...protocolKeys].map(key => [key, {
+            ...(registeredProtocols[key] ?? {}),
+            ...((general[key] as Schema | undefined) ?? {})
+        }])
+    ) as Record<string, Schema>;
 
     // 预设补全未 -r 加载的适配器 schema，供 Web 配置页使用；已加载时以 Registry 为准（覆盖预设）
     const adapters = {

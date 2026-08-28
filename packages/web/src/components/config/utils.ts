@@ -58,6 +58,53 @@ export const resolveJsonFieldDisplay = (
     return '';
 };
 
+export const usesEndpointListEditor = (rule: ValidationRule): boolean =>
+    rule.type === 'array' && rule.ui?.widget === 'endpoint-list';
+
+export const resolveStructuredFieldDisplay = (
+    currentValue: unknown,
+    rule: ValidationRule
+): unknown => {
+    if (usesEndpointListEditor(rule)) {
+        const value = currentValue ?? rule.default;
+        return Array.isArray(value) ? structuredClone(value) : [];
+    }
+    return resolveJsonFieldDisplay(currentValue, rule);
+};
+
+export const parseStructuredFieldValue = (
+    raw: unknown,
+    rule: ValidationRule,
+    label: string
+): { ok: true; value: unknown } | { ok: false; message: string } => {
+    if (!usesEndpointListEditor(rule)) return parseJsonFieldValue(raw, rule, label);
+    if (!Array.isArray(raw)) return { ok: false, message: `字段 ${label} 必须是地址列表` };
+
+    const entries: unknown[] = [];
+    for (const item of raw) {
+        const value = typeof item === 'string' ? item.trim() : item;
+        const urlValue = isRecord(value) && typeof value.url === 'string' ? value.url.trim() : value;
+        if (urlValue === '') continue;
+        if (typeof urlValue !== 'string') {
+            return { ok: false, message: `字段 ${label} 中存在无效地址` };
+        }
+        try {
+            const url = new URL(urlValue);
+            const schemes = rule.ui?.schemes;
+            if (schemes?.length && !schemes.includes(url.protocol)) {
+                return {
+                    ok: false,
+                    message: `字段 ${label} 仅支持 ${schemes.map(item => item.replace(':', '')).join(' / ')}`
+                };
+            }
+        } catch {
+            return { ok: false, message: `字段 ${label} 中存在无效 URL：${urlValue}` };
+        }
+        entries.push(isRecord(value) ? { ...value, url: urlValue } : urlValue);
+    }
+    return { ok: true, value: entries };
+};
+
 export const parseJsonFieldValue = (
     raw: unknown,
     rule: ValidationRule,
@@ -116,8 +163,7 @@ export const BASE_CONFIG_KEYS = new Set([
 
 /** 根据 SchemaBundle 和已解析配置对象，构建表单分组 */
 export const buildConfigGroups = (
-    bundle: SchemaBundle,
-    configObject: Record<string, unknown>
+    bundle: SchemaBundle
 ): SchemaGroup[] => {
     const groups: SchemaGroup[] = [];
 
@@ -130,47 +176,27 @@ export const buildConfigGroups = (
     }
 
     if (bundle.general) {
-        groups.push({
-            key: 'general',
-            title: '全局协议配置',
-            fields: buildSchemaFields(bundle.general, ['general'])
-        });
-    }
-
-    const accountKeys = Object.keys(configObject).filter(
-        key => key.includes('.') && !BASE_CONFIG_KEYS.has(key)
-    );
-
-    if (accountKeys.length && (bundle.protocols || bundle.adapters)) {
-        accountKeys.forEach(accountKey => {
-            const fields: SchemaFieldDef[] = [];
-            if (bundle.protocols) {
-                Object.entries(bundle.protocols).forEach(([protocolKey, protocolSchema]) => {
-                    fields.push(...buildSchemaFields(protocolSchema, [accountKey, protocolKey]));
-                });
-            }
-            if (bundle.adapters) {
-                const platform = accountKey.split('.')[0];
-                const adapterSchema = bundle.adapters[platform];
-                if (adapterSchema) {
-                    const adapterFields = buildSchemaFields(adapterSchema, [accountKey]).filter(
-                        field => field.path.join('.') !== `${accountKey}.account_id`
-                    );
-                    fields.push(...adapterFields);
-                }
-            }
-            if (fields.length) {
-                groups.push({
-                    key: `account:${accountKey}`,
-                    title: `账号配置：${accountKey}`,
-                    fields
-                });
-            }
+        Object.entries(bundle.general).forEach(([protocolKey, protocolSchema]) => {
+            groups.push({
+                key: `general:${protocolKey}`,
+                title: `协议默认值 · ${protocolTitle(protocolKey)}`,
+                description: `应用于未在账号中单独覆盖的 ${protocolTitle(protocolKey)} 配置。`,
+                fields: buildSchemaFields(protocolSchema as Schema, ['general', protocolKey])
+            });
         });
     }
 
     return groups;
 };
+
+const PROTOCOL_TITLES: Record<string, string> = {
+    'onebot.v11': 'OneBot 11',
+    'onebot.v12': 'OneBot 12',
+    'milky.v1': 'Milky',
+    'satori.v1': 'Satori'
+};
+
+export const protocolTitle = (key: string): string => PROTOCOL_TITLES[key] ?? key;
 
 /** 从已解析配置对象中提取账号行 */
 export const extractAccountRows = (configObject: Record<string, unknown>): AccountRow[] => {

@@ -31,6 +31,21 @@ export interface ValidationRule<T = unknown> {
     description?: string;
     /** 用于表单展示的占位提示 */
     placeholder?: string;
+    /** Web 表单展示元数据，不参与运行时校验。 */
+    ui?: {
+        widget?: 'endpoint-list';
+        itemLabel?: string;
+        addLabel?: string;
+        schemes?: string[];
+        fields?: Array<{
+            key: string;
+            label: string;
+            type?: 'string' | 'number' | 'boolean';
+            placeholder?: string;
+            description?: string;
+            sensitive?: boolean;
+        }>;
+    };
 }
 
 export type Schema = {
@@ -268,4 +283,3 @@ export const BaseAppConfigSchema: Schema = {
         transform: (v: unknown) => (v != null && String(v).trim() !== '' ? String(v).trim() : undefined),
     },
 };
-

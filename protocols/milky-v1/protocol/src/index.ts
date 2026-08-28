@@ -8,8 +8,29 @@ import { WebSocket } from "ws";
 const milkySchema: Schema = {
     use_http: { type: 'boolean', label: '启用 HTTP' },
     use_ws: { type: 'boolean', label: '启用 WebSocket' },
-    http_reverse: { type: 'array', label: 'HTTP 反向上报地址' },
-    ws_reverse: { type: 'array', label: 'WS 反向连接地址' },
+    http_reverse: {
+        type: 'array', default: [], label: 'HTTP 反向上报',
+        description: '将事件 POST 到下游服务。展开单项可覆盖鉴权与超时。',
+        ui: {
+            widget: 'endpoint-list', itemLabel: 'Webhook', addLabel: '添加 Webhook', schemes: ['http:', 'https:'],
+            fields: [
+                { key: 'access_token', label: 'Access Token', sensitive: true, placeholder: '留空则使用全局 Token' },
+                { key: 'secret', label: '签名 Secret', sensitive: true, placeholder: '留空则使用全局 Secret' },
+                { key: 'post_timeout', label: '超时（秒）', type: 'number', placeholder: '例如 15' },
+            ],
+        },
+    },
+    ws_reverse: {
+        type: 'array', default: [], label: '反向 WebSocket',
+        description: '由 OneBots 主动连接下游服务。展开单项可覆盖鉴权与重连间隔。',
+        ui: {
+            widget: 'endpoint-list', itemLabel: '连接', addLabel: '添加连接', schemes: ['ws:', 'wss:'],
+            fields: [
+                { key: 'access_token', label: 'Access Token', sensitive: true, placeholder: '留空则使用全局 Token' },
+                { key: 'reconnect_interval', label: '重连间隔（秒）', type: 'number', placeholder: '例如 5' },
+            ],
+        },
+    },
     access_token: { type: 'string', label: 'Access Token' },
     secret: { type: 'string', label: 'Secret' },
     heartbeat: { type: 'number', label: '心跳间隔(秒)' },
