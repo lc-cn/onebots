@@ -43,6 +43,7 @@ onebots -r wechat -p satori-v1 -c config.yaml
 ```
 
 协议会自动从以下位置加载：
+
 - `@onebots/protocol-satori-v1` (官方包)
 - `onebots-protocol-satori-v1` (社区包)
 - `satori-v1` (直接包名)
@@ -54,14 +55,13 @@ accounts:
   - platform: wechat
     account_id: my_account
     protocol: satori.v1
-    
+
     # Satori V1 配置
     use_http: false             # 启用 HTTP API
     use_ws: true                # 启用 WebSocket
     token: your_token           # 访问令牌
-    self_id: bot_123            # 机器人 ID
     platform: wechat            # 平台名称
-    
+
     # Webhook 配置
     webhooks:
       - url: http://localhost:5703/satori
@@ -71,11 +71,11 @@ accounts:
 ### 3. 代码方式
 
 ```typescript
-import { App } from 'onebots';
-import { SatoriV1 } from '@onebots/protocol-satori-v1';
+import { App } from "onebots";
+import { SatoriV1 } from "@onebots/protocol-satori-v1";
 
 // 注册协议
-await App.registerProtocol('satori', SatoriV1, 'v1');
+await App.registerProtocol("satori", SatoriV1, "v1");
 
 // 创建应用
 const app = new App();
@@ -86,19 +86,18 @@ await app.start();
 
 ### 通信方式
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `use_http` | boolean \| HttpConfig | false | HTTP 配置 |
-| `use_ws` | boolean \| WsConfig | true | WebSocket 配置 |
-| `webhooks` | array | [] | Webhook 配置 |
+| 参数       | 类型                  | 默认值 | 说明           |
+| ---------- | --------------------- | ------ | -------------- |
+| `use_http` | boolean \| HttpConfig | false  | HTTP 配置      |
+| `use_ws`   | boolean \| WsConfig   | true   | WebSocket 配置 |
+| `webhooks` | array                 | []     | Webhook 配置   |
 
 ### 认证配置
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `token` | string | - | 访问令牌(全局) |
-| `self_id` | string | - | 机器人 ID |
-| `platform` | string | "satori" | 平台名称 |
+| 参数       | 类型   | 默认值   | 说明           |
+| ---------- | ------ | -------- | -------------- |
+| `token`    | string | -        | 访问令牌(全局) |
+| `platform` | string | "satori" | 平台名称       |
 
 ### HTTP 配置
 
@@ -138,11 +137,13 @@ await app.start();
 ### HTTP API
 
 访问地址：
+
 ```
 http://host:port/{platform}/{account_id}/satori/v1/{endpoint}
 ```
 
 请求示例：
+
 ```bash
 curl -X POST http://localhost:6727/wechat/my_account/satori/v1/message.create \
   -H "Content-Type: application/json" \
@@ -156,11 +157,13 @@ curl -X POST http://localhost:6727/wechat/my_account/satori/v1/message.create \
 ### WebSocket
 
 连接地址：
+
 ```
 ws://host:port/{platform}/{account_id}/satori/v1
 ```
 
 认证：
+
 ```json
 {
   "op": 3,
@@ -240,55 +243,55 @@ Hello, World!
 ### 提及用户
 
 ```html
-<at id="123456"/>
+<at id="123456" />
 ```
 
 ### 提及所有人
 
 ```html
-<at type="all"/>
+<at type="all" />
 ```
 
 ### 提及频道
 
 ```html
-<sharp id="channel_id"/>
+<sharp id="channel_id" />
 ```
 
 ### 图片
 
 ```html
-<img src="http://example.com/image.jpg"/>
+<img src="http://example.com/image.jpg" />
 ```
 
 ### 语音
 
 ```html
-<audio src="http://example.com/audio.mp3"/>
+<audio src="http://example.com/audio.mp3" />
 ```
 
 ### 视频
 
 ```html
-<video src="http://example.com/video.mp4"/>
+<video src="http://example.com/video.mp4" />
 ```
 
 ### 文件
 
 ```html
-<file src="http://example.com/file.pdf"/>
+<file src="http://example.com/file.pdf" />
 ```
 
 ### 引用消息
 
 ```html
-<quote id="message_id"/>
+<quote id="message_id" />
 ```
 
 ### 作者信息
 
 ```html
-<author id="user_id" name="Username"/>
+<author id="user_id" name="Username" />
 ```
 
 ### 按钮

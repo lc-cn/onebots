@@ -200,13 +200,6 @@ export namespace Adapter {
         "meta.status_update": [StatusUpdateMetaEvent.Data<Id>];
     }
 
-    // 为了向后兼容，保留这些类型别名
-    export type NoticeEvent<Id extends string | number = string | number> =
-        import("./events/notice/base.js").NoticeEvent<Id>;
-    export type RequestEvent<Id extends string | number = string | number> =
-        import("./events/request/base.js").RequestEvent<Id>;
-    export type MetaEvent<Id extends string | number = string | number> =
-        import("./events/meta/base.js").MetaEvent<Id>;
     export interface RecallMessageOptions<Id extends string | number = string | number> {
         id: Id;
     }

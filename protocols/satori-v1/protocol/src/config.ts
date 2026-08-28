@@ -1,7 +1,7 @@
-import { App } from 'onebots'
+import { App } from "onebots";
 
 // Satori Protocol Configuration
-declare module 'onebots' {
+declare module "onebots" {
     namespace Protocol {
         interface Configs {
             "satori.v1": SatoriConfig.Config;
@@ -64,8 +64,6 @@ export namespace SatoriConfig {
         webhooks?: (string | WebhookConfig)[];
         /** Access token (global) */
         token?: string;
-        /** Self ID */
-        self_id?: string;
         /** Platform name */
         platform?: string;
         /** Event filters */
@@ -73,9 +71,9 @@ export namespace SatoriConfig {
     }
 }
 
-App.registerGeneral('satori.v1', {
+App.registerGeneral("satori.v1", {
     use_http: false,
     use_ws: true,
     webhooks: [],
-    platform: 'satori',
+    platform: "satori",
 });

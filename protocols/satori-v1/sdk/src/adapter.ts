@@ -111,10 +111,12 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                         ...config.webSocket,
                         accessToken: this.accessToken,
                         onOpen: socket => {
-                            socket.send(JSON.stringify({
-                                op: 3,
-                                body: this.accessToken ? { token: this.accessToken } : {},
-                            }));
+                            socket.send(
+                                JSON.stringify({
+                                    op: 3,
+                                    body: this.accessToken ? { token: this.accessToken } : {},
+                                }),
+                            );
                         },
                     });
                     break;
@@ -152,8 +154,7 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
         private transformAndEmit(event: SatoriV1Event): void {
             // Satori 事件格式转换
             const eventType = event.type || "";
-            const botId =
-                event.login?.user?.id ?? event.login?.self_id ?? event.self_id ?? this.selfId;
+            const botId = event.login?.user?.id ?? this.selfId;
 
             // 消息事件
             if (eventType.startsWith("message-")) {

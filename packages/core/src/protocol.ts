@@ -9,10 +9,7 @@ import type { ValidationRule } from "./config-validator.js";
  * Base Protocol class
  * Represents a communication protocol (e.g., OneBot, Milky, Satori)
  */
-export abstract class Protocol<
-    V extends string = string,
-    C =unknown,
-> extends EventEmitter {
+export abstract class Protocol<V extends string = string, C = unknown> extends EventEmitter {
     public abstract readonly name: string;
     public abstract readonly version: V;
     get app() {
@@ -21,8 +18,8 @@ export abstract class Protocol<
     get router(): Router {
         return this.adapter.app.router;
     }
-    get logger(){
-        return this.app.getLogger(`${this.name}/${this.version}`)
+    get logger() {
+        return this.app.getLogger(`${this.name}/${this.version}`);
     }
     constructor(
         public adapter: Adapter,
@@ -42,7 +39,7 @@ export abstract class Protocol<
     /**
      * Filter function to determine if event should be processed
      */
-    filterFn(event: Dict): boolean{
+    filterFn(event: Dict): boolean {
         return Protocol.createFilter(this.config.filters)(event);
     }
 
@@ -78,14 +75,12 @@ export namespace Protocol {
      */
     export type Config<T extends unknown = Record<string, unknown>> = T & {
         filters?: Filters;
-    }
+    };
     export type FullConfig<T extends unknown = Record<string, unknown>> = Config<T> & {
-        protocol: string
+        protocol: string;
         version: string;
-    }
-    export interface Configs{
-        
-    }
+    };
+    export interface Configs {}
 
     /**
      * Filter configuration
@@ -118,6 +113,7 @@ export namespace Protocol {
         description: "默认转发全部事件；添加规则后，只转发符合条件的事件。",
         ui: {
             widget: "event-filter",
+            section: "filter",
             eventFields: [
                 {
                     path: "type",
@@ -166,18 +162,19 @@ export namespace Protocol {
         config: Record<string, unknown>,
     ) => T;
     export type Construct<T extends Protocol = Protocol> = {
-        new (
-            adapter: Adapter,
-            account: Account,
-            config: Record<string, unknown>,
-        ): T;
-    }
+        new (adapter: Adapter, account: Account, config: Record<string, unknown>): T;
+    };
     /**
      * Protocol factory function
      */
     export type Factory<T extends Protocol = Protocol> = Creator<T> | Construct<T>;
-    export function isClassFactory<T extends Protocol = Protocol>(factory: Factory<T>): factory is Construct<T> {
-        return typeof factory === "function" && /^class\s/.test(Function.prototype.toString.call(factory));
+    export function isClassFactory<T extends Protocol = Protocol>(
+        factory: Factory<T>,
+    ): factory is Construct<T> {
+        return (
+            typeof factory === "function" &&
+            /^class\s/.test(Function.prototype.toString.call(factory))
+        );
     }
 
     export function createFilter(filters?: Filters) {
@@ -185,7 +182,7 @@ export namespace Protocol {
         if (!filters || Object.keys(filters).length === 0) {
             return () => true;
         }
-        
+
         const isLogicKey = (key: string) => {
             return [
                 "$and",
@@ -201,7 +198,7 @@ export namespace Protocol {
                 "$between",
             ].includes(key);
         };
-        
+
         const filterFn = (event: Dict, key: string, value: unknown): boolean => {
             // If key is $and, $or, $not, $nor, recursively call
             if (key === "$and" || key === "$or" || key === "$not" || key === "$nor") {
@@ -225,11 +222,11 @@ export namespace Protocol {
                         return !filterFn(event, "$and", value);
                 }
             }
-            
+
             if (typeof value === "boolean" && typeof event[key] !== "boolean") {
                 return value;
             }
-            
+
             if (typeof value !== "object") {
                 if (key === "$regex" && typeof value === "string")
                     return new RegExp(value).test(String(event));
@@ -241,7 +238,7 @@ export namespace Protocol {
                 if (key === "$lte" && typeof value === "number") return Number(event) <= value;
                 return value === event[key];
             }
-            
+
             if (
                 key === "$between" &&
                 Array.isArray(value) &&
@@ -251,14 +248,14 @@ export namespace Protocol {
                 const [start, end] = value as [number, number];
                 return Number(event) >= start && Number(event) <= end;
             }
-            
+
             if (Array.isArray(value)) {
                 return value.includes(event[key]);
             }
-            
-            return createFilter(value as Filters)(isLogicKey(key) ? event : event[key] as Dict);
+
+            return createFilter(value as Filters)(isLogicKey(key) ? event : (event[key] as Dict));
         };
-        
+
         return (event: Dict) => {
             return Object.entries(filters).every(([key, value]) => filterFn(event, key, value));
         };

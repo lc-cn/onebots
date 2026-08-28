@@ -1,6 +1,6 @@
 export type ValidationRule = {
     required?: boolean;
-    type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
+    type?: "string" | "number" | "boolean" | "object" | "array";
     min?: number;
     max?: number;
     pattern?: RegExp;
@@ -10,14 +10,15 @@ export type ValidationRule = {
     description?: string;
     placeholder?: string;
     ui?: {
-        widget?: 'endpoint-list' | 'event-filter';
+        widget?: "endpoint-list" | "event-filter";
+        section?: "transport" | "delivery" | "credentials" | "filter" | "advanced";
         itemLabel?: string;
         addLabel?: string;
         schemes?: string[];
         fields?: Array<{
             key: string;
             label: string;
-            type?: 'string' | 'number' | 'boolean';
+            type?: "string" | "number" | "boolean";
             placeholder?: string;
             description?: string;
             sensitive?: boolean;

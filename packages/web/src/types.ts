@@ -8,9 +8,6 @@ export interface AccountInfo {
     urls: string[];
 }
 
-// 保持向后兼容
-export type BotInfo = AccountInfo;
-
 export type CPUInfo = {
     model: string;
     speed: number;
@@ -58,23 +55,23 @@ export interface ProtocolInfo {
 
 /** 验证请求展示块（Web 按 type 通用渲染） */
 export type VerificationBlock =
-    | { type: 'image'; base64: string; alt?: string }
-    | { type: 'image_url'; url: string; alt?: string }
-    | { type: 'qrcode'; content: string; alt?: string }
-    | { type: 'link'; url: string; label?: string }
-    | { type: 'text'; content: string }
-    | { type: 'input'; key: string; placeholder?: string; maxLength?: number; secret?: boolean }
+    | { type: "image"; base64: string; alt?: string }
+    | { type: "image_url"; url: string; alt?: string }
+    | { type: "qrcode"; content: string; alt?: string }
+    | { type: "link"; url: string; label?: string }
+    | { type: "text"; content: string }
+    | { type: "input"; key: string; placeholder?: string; maxLength?: number; secret?: boolean };
 
 /** 验证面板快捷操作 */
 export interface VerificationAction {
     id: string;
     label: string;
-    variant?: 'primary' | 'secondary';
+    variant?: "primary" | "secondary";
 }
 
 /** 验证请求展示配置 */
 export interface VerificationRequestOptions {
-    blocks?: VerificationBlock[]
+    blocks?: VerificationBlock[];
 }
 
 /** 登录验证请求（hint、options 由适配器提供，全平台通用） */
@@ -98,7 +95,7 @@ export interface VerificationRequest {
 
 /** SSE 清除事件 */
 export interface VerificationClearEvent {
-    event: 'clear';
+    event: "clear";
     platform: string;
     account_id: string;
     type?: string;

@@ -1,4 +1,4 @@
-import { Protocol,ProtocolRegistry,Account,Adapter } from "onebots";
+import { Protocol, ProtocolRegistry, Account, Adapter } from "onebots";
 import type { CommonEvent, CommonTypes, Schema } from "onebots";
 import { Milky } from "./types.js";
 import { MilkyConfig } from "./config.js";
@@ -6,37 +6,74 @@ import { createHmac } from "crypto";
 import { WebSocket } from "ws";
 
 const milkySchema: Schema = {
-    use_http: { type: 'boolean', label: '启用 HTTP' },
-    use_ws: { type: 'boolean', label: '启用 WebSocket' },
+    use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
+    use_ws: { type: "boolean", label: "启用 WebSocket", ui: { section: "transport" } },
     http_reverse: {
-        type: 'array', default: [], label: 'HTTP 反向上报',
-        description: '将事件 POST 到下游服务。展开单项可覆盖鉴权与超时。',
+        type: "array",
+        default: [],
+        label: "HTTP 反向上报",
+        description: "将事件 POST 到下游服务。展开单项可覆盖鉴权与超时。",
         ui: {
-            widget: 'endpoint-list', itemLabel: 'Webhook', addLabel: '添加 Webhook', schemes: ['http:', 'https:'],
+            widget: "endpoint-list",
+            section: "delivery",
+            itemLabel: "Webhook",
+            addLabel: "添加 Webhook",
+            schemes: ["http:", "https:"],
             fields: [
-                { key: 'access_token', label: 'Access Token', sensitive: true, placeholder: '留空则使用全局 Token' },
-                { key: 'secret', label: '签名 Secret', sensitive: true, placeholder: '留空则使用全局 Secret' },
-                { key: 'post_timeout', label: '超时（秒）', type: 'number', placeholder: '例如 15' },
+                {
+                    key: "access_token",
+                    label: "Access Token",
+                    sensitive: true,
+                    placeholder: "留空则使用全局 Token",
+                },
+                {
+                    key: "secret",
+                    label: "签名 Secret",
+                    sensitive: true,
+                    placeholder: "留空则使用全局 Secret",
+                },
+                {
+                    key: "post_timeout",
+                    label: "超时（秒）",
+                    type: "number",
+                    placeholder: "例如 15",
+                },
             ],
         },
     },
     ws_reverse: {
-        type: 'array', default: [], label: '反向 WebSocket',
-        description: '由 OneBots 主动连接下游服务。展开单项可覆盖鉴权与重连间隔。',
+        type: "array",
+        default: [],
+        label: "反向 WebSocket",
+        description: "由 OneBots 主动连接下游服务。展开单项可覆盖鉴权与重连间隔。",
         ui: {
-            widget: 'endpoint-list', itemLabel: '连接', addLabel: '添加连接', schemes: ['ws:', 'wss:'],
+            widget: "endpoint-list",
+            section: "delivery",
+            itemLabel: "连接",
+            addLabel: "添加连接",
+            schemes: ["ws:", "wss:"],
             fields: [
-                { key: 'access_token', label: 'Access Token', sensitive: true, placeholder: '留空则使用全局 Token' },
-                { key: 'reconnect_interval', label: '重连间隔（秒）', type: 'number', placeholder: '例如 5' },
+                {
+                    key: "access_token",
+                    label: "Access Token",
+                    sensitive: true,
+                    placeholder: "留空则使用全局 Token",
+                },
+                {
+                    key: "reconnect_interval",
+                    label: "重连间隔（秒）",
+                    type: "number",
+                    placeholder: "例如 5",
+                },
             ],
         },
     },
-    access_token: { type: 'string', label: 'Access Token' },
-    secret: { type: 'string', label: 'Secret' },
+    access_token: { type: "string", label: "Access Token", ui: { section: "credentials" } },
+    secret: { type: "string", label: "Secret", ui: { section: "credentials" } },
     filters: Protocol.FilterSchema,
 };
 
-ProtocolRegistry.registerSchema('milky.v1', milkySchema);
+ProtocolRegistry.registerSchema("milky.v1", milkySchema);
 
 /**
  * Milky Protocol V1 Implementation
@@ -52,7 +89,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         public account: Account,
         config: Protocol.Config,
     ) {
-        super(adapter,account,{
+        super(adapter, account, {
             ...config,
             protocol: "milky",
             version: "v1",
@@ -60,7 +97,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     start(): void {
-        
         // Initialize Milky protocol services
         if (this.config.use_http) {
             this.startHttp();
@@ -80,7 +116,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 this.startWsReverse(config);
             });
         }
-
     }
 
     async stop(force?: boolean): Promise<void> {
@@ -138,7 +173,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     async apply(action: string, params?: Record<string, unknown>): Promise<Milky.Response> {
         // Execute Milky API action
         this.logger.debug(`Milky action: ${action}`, params);
-        
+
         try {
             const result = await this.executeAction(action, params);
             return {
@@ -159,7 +194,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     /**
      * Execute Milky action
      */
-    private async executeAction(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+    private async executeAction(
+        action: string,
+        params: Record<string, unknown> = {},
+    ): Promise<unknown> {
         switch (action) {
             case "send_private_message":
                 return this.sendPrivateMessage(params);
@@ -339,7 +377,9 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     // Action implementations
-    private async sendPrivateMessage(params: Record<string, unknown>): Promise<Milky.SendMessageResult> {
+    private async sendPrivateMessage(
+        params: Record<string, unknown>,
+    ): Promise<Milky.SendMessageResult> {
         const { user_id, message } = params as { user_id: string; message: Milky.Segment[] };
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
@@ -349,7 +389,9 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         return { message_seq: result.message_id.number, time: Math.floor(Date.now() / 1000) };
     }
 
-    private async sendGroupMessage(params: Record<string, unknown>): Promise<Milky.SendMessageResult> {
+    private async sendGroupMessage(
+        params: Record<string, unknown>,
+    ): Promise<Milky.SendMessageResult> {
         const { group_id, message } = params as { group_id: string; message: Milky.Segment[] };
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
@@ -382,7 +424,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         });
         return {
             time: msg.time || Math.floor(Date.now() / 1000),
-            message_type: (msg.sender.scene_type as "private" | "group"),
+            message_type: msg.sender.scene_type as "private" | "group",
             message_id: msg.message_id.string,
             real_id: 0,
             sender: {
@@ -417,97 +459,117 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         };
     }
 
-    private async getFriendInfo(params: Record<string, unknown>): Promise<{ friend: Milky.FriendInfo }> {
+    private async getFriendInfo(
+        params: Record<string, unknown>,
+    ): Promise<{ friend: Milky.FriendInfo }> {
         const { user_id } = params as { user_id: string };
         const info = await this.adapter.getFriendInfo(this.account.account_id, {
             user_id: this.adapter.resolveId(user_id),
         });
-        return { friend: {
-            user_id: info.user_id.number,
-            nickname: info.user_name,
-            remark: info.remark ?? "",
-        } };
+        return {
+            friend: {
+                user_id: info.user_id.number,
+                nickname: info.user_name,
+                remark: info.remark ?? "",
+            },
+        };
     }
 
     private async getFriendList(): Promise<{ friends: Milky.FriendInfo[] }> {
         const result = await this.adapter.getFriendList(this.account.account_id);
-        return { friends: result.map(info => ({
-            user_id: info.user_id.number,
-            nickname: info.user_name,
-            remark: info.remark || "",
-        })) };
+        return {
+            friends: result.map(info => ({
+                user_id: info.user_id.number,
+                nickname: info.user_name,
+                remark: info.remark || "",
+            })),
+        };
     }
 
-    private async getGroupInfo(params: Record<string, unknown>): Promise<{ group: Milky.GroupInfo }> {
+    private async getGroupInfo(
+        params: Record<string, unknown>,
+    ): Promise<{ group: Milky.GroupInfo }> {
         const { group_id } = params as { group_id: string };
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
         });
-        return { group: {
-            group_id: info.group_id.number,
-            group_name: info.group_name,
-            member_count: info.member_count || 0,
-            max_member_count: info.max_member_count || 0,
-        } };
+        return {
+            group: {
+                group_id: info.group_id.number,
+                group_name: info.group_name,
+                member_count: info.member_count || 0,
+                max_member_count: info.max_member_count || 0,
+            },
+        };
     }
 
     private async getGroupList(): Promise<{ groups: Milky.GroupInfo[] }> {
         const result = await this.adapter.getGroupList(this.account.account_id);
-        return { groups: result.map(info => ({
-            group_id: info.group_id.number,
-            group_name: info.group_name,
-            member_count: info.member_count || 0,
-            max_member_count: info.max_member_count || 0,
-        })) };
+        return {
+            groups: result.map(info => ({
+                group_id: info.group_id.number,
+                group_name: info.group_name,
+                member_count: info.member_count || 0,
+                max_member_count: info.max_member_count || 0,
+            })),
+        };
     }
 
-    private async getGroupMemberInfo(params: Record<string, unknown>): Promise<{ member: Milky.GroupMemberInfo }> {
+    private async getGroupMemberInfo(
+        params: Record<string, unknown>,
+    ): Promise<{ member: Milky.GroupMemberInfo }> {
         const { group_id, user_id } = params as { group_id: string; user_id: string };
         const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
             user_id: this.adapter.resolveId(user_id),
         });
-        return { member: {
-            group_id: info.group_id.number,
-            user_id: info.user_id.number,
-            nickname: info.user_name,
-            card: info.card || "",
-            sex: "unknown",
-            age: 0,
-            area: "",
-            join_time: 0,
-            last_sent_time: 0,
-            level: "",
-            role: info.role || "member",
-            unfriendly: false,
-            title: "",
-            title_expire_time: 0,
-            card_changeable: false,
-        } };
+        return {
+            member: {
+                group_id: info.group_id.number,
+                user_id: info.user_id.number,
+                nickname: info.user_name,
+                card: info.card || "",
+                sex: "unknown",
+                age: 0,
+                area: "",
+                join_time: 0,
+                last_sent_time: 0,
+                level: "",
+                role: info.role || "member",
+                unfriendly: false,
+                title: "",
+                title_expire_time: 0,
+                card_changeable: false,
+            },
+        };
     }
 
-    private async getGroupMemberList(params: Record<string, unknown>): Promise<{ members: Milky.GroupMemberInfo[] }> {
+    private async getGroupMemberList(
+        params: Record<string, unknown>,
+    ): Promise<{ members: Milky.GroupMemberInfo[] }> {
         const { group_id } = params as { group_id: string };
         const list = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
         });
-        return { members: list.map(info => ({
-            group_id: info.group_id.number,
-            user_id: info.user_id.number,
-            nickname: info.user_name,
-            card: info.card || "",
-            sex: "unknown",
-            age: 0,
-            area: "",
-            join_time: 0,
-            last_sent_time: 0,
-            level: "",
-            role: info.role || "member",
-            unfriendly: false,
-            title: "",
-            title_expire_time: 0,
-            card_changeable: false,
-        })) };
+        return {
+            members: list.map(info => ({
+                group_id: info.group_id.number,
+                user_id: info.user_id.number,
+                nickname: info.user_name,
+                card: info.card || "",
+                sex: "unknown",
+                age: 0,
+                area: "",
+                join_time: 0,
+                last_sent_time: 0,
+                level: "",
+                role: info.role || "member",
+                unfriendly: false,
+                title: "",
+                title_expire_time: 0,
+                card_changeable: false,
+            })),
+        };
     }
 
     private async kickGroupMember(params: Record<string, unknown>): Promise<void> {
@@ -603,7 +665,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         await this.adapter.handleGroupRequest(this.account.account_id, {
             flag,
             type: invitation ? "invitation" : "request",
-            sub_type: invitation ? "invite" : params.notification_type === "join_request" ? "add" : "invite",
+            sub_type: invitation
+                ? "invite"
+                : params.notification_type === "join_request"
+                  ? "add"
+                  : "invite",
             approve,
             reason: typeof params.reason === "string" ? params.reason : undefined,
         });
@@ -625,27 +691,30 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const secret = this.config.secret;
         if (!secret) return true;
         if (!signature) return false;
-        
-        const hmac = createHmac('sha1', secret);
-        const expected = 'sha1=' + hmac.update(body).digest('hex');
+
+        const hmac = createHmac("sha1", secret);
+        const expected = "sha1=" + hmac.update(body).digest("hex");
         return signature === expected;
     }
 
     // Service implementations
     private startHttp(): void {
         this.logger.info("Starting Milky HTTP server");
-        
+
         // Register HTTP POST endpoint for API calls
-        this.router.post(`${this.path}/api/:action`, async (ctx) => {
+        this.router.post(`${this.path}/api/:action`, async ctx => {
             // Milky 通信规范：不支持的 Content-Type 返回 415
-            const contentType = ctx.headers['content-type'] || '';
-            if (!contentType.toLowerCase().includes('application/json')) {
+            const contentType = ctx.headers["content-type"] || "";
+            if (!contentType.toLowerCase().includes("application/json")) {
                 ctx.status = 415;
                 return;
             }
             // Verify access token（Authorization: Bearer 优先，再 Query）
             const authHeader = ctx.headers.authorization;
-            const token = (typeof authHeader === 'string' ? authHeader.replace(/^Bearer\s+/i, '').trim() : undefined) || ctx.query.access_token;
+            const token =
+                (typeof authHeader === "string"
+                    ? authHeader.replace(/^Bearer\s+/i, "").trim()
+                    : undefined) || ctx.query.access_token;
             if (!this.verifyToken(token as string)) {
                 ctx.status = 401;
                 ctx.body = { status: "failed", retcode: 1403, message: "Unauthorized" };
@@ -653,7 +722,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             }
 
             const action = ctx.params.action;
-            const params = ((ctx.request as unknown as Record<string, unknown>).body ?? {}) as Record<string, unknown>;
+            const params = ((ctx.request as unknown as Record<string, unknown>).body ??
+                {}) as Record<string, unknown>;
 
             try {
                 const result = await this.apply(action, params);
@@ -673,14 +743,16 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private startWs(): void {
         this.logger.info("Starting Milky WebSocket server");
-        
-        const wss = this.router.ws(this.path+'/event');
-        
+
+        const wss = this.router.ws(this.path + "/event");
+
         wss.on("connection", (ws, request) => {
             // Verify access token
             const url = new URL(request.url!, `ws://localhost`);
-            const token = url.searchParams.get('access_token') || request.headers.authorization?.replace('Bearer ', '');
-            
+            const token =
+                url.searchParams.get("access_token") ||
+                request.headers.authorization?.replace("Bearer ", "");
+
             if (!this.verifyToken(token as string)) {
                 ws.close(1008, "Unauthorized");
                 return;
@@ -697,7 +769,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             this.on("dispatch", onDispatch);
 
             // Handle incoming API calls
-            ws.on("message", async (data) => {
+            ws.on("message", async data => {
                 try {
                     const request = JSON.parse(data.toString());
                     const { action, params, echo } = request;
@@ -706,11 +778,13 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     ws.send(JSON.stringify({ ...result, echo }));
                 } catch (error) {
                     this.logger.error("WebSocket message error:", error);
-                    ws.send(JSON.stringify({
-                        status: "failed",
-                        retcode: -1,
-                        message: error.message,
-                    }));
+                    ws.send(
+                        JSON.stringify({
+                            status: "failed",
+                            retcode: -1,
+                            message: error.message,
+                        }),
+                    );
                 }
             });
 
@@ -719,7 +793,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 this.off("dispatch", onDispatch);
             });
 
-            ws.on("error", (error) => {
+            ws.on("error", error => {
                 this.logger.error("WebSocket error:", error);
             });
         });
@@ -729,31 +803,31 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private startHttpReverse(config: MilkyConfig.HttpReverseConfig): void {
         this.logger.info(`Starting Milky HTTP reverse: ${config.url}`);
-        
+
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
                 const headers: Record<string, string> = {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Milky/1.0',
-                    'X-Self-ID': this.account.account_id,
+                    "Content-Type": "application/json",
+                    "User-Agent": "Milky/1.0",
+                    "X-Self-ID": this.account.account_id,
                 };
 
                 // Add access token if configured
                 const token = config.access_token || this.config.access_token;
                 if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
+                    headers["Authorization"] = `Bearer ${token}`;
                 }
 
                 // Add signature if secret is configured
                 const secret = config.secret || this.config.secret;
                 if (secret) {
-                    const hmac = createHmac('sha1', secret);
-                    headers['X-Signature'] = 'sha1=' + hmac.update(data).digest('hex');
+                    const hmac = createHmac("sha1", secret);
+                    headers["X-Signature"] = "sha1=" + hmac.update(data).digest("hex");
                 }
 
                 const response = await fetch(config.url, {
-                    method: 'POST',
+                    method: "POST",
                     headers,
                     body: data,
                     signal: AbortSignal.timeout((config.post_timeout || 5) * 1000),
@@ -773,7 +847,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private startWsReverse(config: MilkyConfig.WsReverseConfig): void {
         this.logger.info(`Starting Milky WebSocket reverse: ${config.url}`);
-        
+
         let ws: WebSocket | null = null;
         let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -783,21 +857,21 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 let wsUrl = config.url;
                 const token = config.access_token || this.config.access_token;
                 if (token) {
-                    const separator = wsUrl.includes('?') ? '&' : '?';
+                    const separator = wsUrl.includes("?") ? "&" : "?";
                     wsUrl = `${wsUrl}${separator}access_token=${token}`;
                 }
 
                 ws = new WebSocket(wsUrl, {
                     headers: {
-                        'User-Agent': 'Milky/1.0',
-                        'X-Self-ID': this.account.account_id,
-                        'X-Client-Role': 'Universal',
+                        "User-Agent": "Milky/1.0",
+                        "X-Self-ID": this.account.account_id,
+                        "X-Client-Role": "Universal",
                     },
                 });
 
-                ws.on('open', () => {
+                ws.on("open", () => {
                     this.logger.info(`Milky WebSocket reverse connected to ${config.url}`);
-                    
+
                     // Clear reconnect timer
                     if (reconnectTimer) {
                         clearTimeout(reconnectTimer);
@@ -805,7 +879,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     }
                 });
 
-                ws.on('message', async (data: Buffer) => {
+                ws.on("message", async (data: Buffer) => {
                     try {
                         const request = JSON.parse(data.toString());
                         const { action, params, echo } = request;
@@ -817,15 +891,17 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     }
                 });
 
-                ws.on('close', () => {
+                ws.on("close", () => {
                     // 移除派发监听，避免重连后监听器累积导致事件重复发送
                     this.off("dispatch", onDispatch);
                     const interval = (config.reconnect_interval || 5) * 1000;
-                    this.logger.warn(`Milky WebSocket reverse disconnected from ${config.url}, reconnecting in ${config.reconnect_interval || 5}s...`);
+                    this.logger.warn(
+                        `Milky WebSocket reverse disconnected from ${config.url}, reconnecting in ${config.reconnect_interval || 5}s...`,
+                    );
                     reconnectTimer = setTimeout(connect, interval);
                 });
 
-                ws.on('error', (error: Error) => {
+                ws.on("error", (error: Error) => {
                     this.logger.error("Milky WebSocket reverse error:", error);
                 });
 
@@ -836,7 +912,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     }
                 };
                 this.on("dispatch", onDispatch);
-
             } catch (error) {
                 this.logger.error(`Milky WebSocket reverse connection failed:`, error);
                 const interval = (config.reconnect_interval || 5) * 1000;
@@ -846,7 +921,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
         connect();
     }
-
 }
 ProtocolRegistry.register("milky", "v1", MilkyV1);
 export * from "./types.js";

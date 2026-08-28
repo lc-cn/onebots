@@ -7,42 +7,41 @@ timeout: 30 # 登录超时时间(秒)
 
 # 全局默认配置
 general:
-  onebot.v11:
-    use_http: true
-    use_ws: true
-    access_token: ''
-    secret: ''
-    enable_cors: true
-    heartbeat_interval: 5
-    http_reverse: []
-    ws_reverse: []
+    onebot.v11:
+        use_http: true
+        use_ws: true
+        access_token: ""
+        secret: ""
+        enable_cors: true
+        heartbeat_interval: 5
+        http_reverse: []
+        ws_reverse: []
 
-  onebot.v12:
-    use_http: true
-    use_ws: true
-    access_token: ''
-    secret: ''
-    enable_cors: true
-    heartbeat_interval: 5
-    http_webhook: []
-    ws_reverse: []
-    request_timeout: 15
-  
-  satori.v1:
-    use_http: true
-    use_ws: true
-    token: ''
-    platform: 'unknown'
-    webhooks: []
-  
-  milky.v1:
-    use_http: true
-    use_ws: true
-    access_token: ''
-    secret: ''
-    heartbeat: 5
-    http_reverse: []
-    ws_reverse: []
+    onebot.v12:
+        use_http: true
+        use_ws: true
+        access_token: ""
+        secret: ""
+        enable_cors: true
+        heartbeat_interval: 5
+        http_webhook: []
+        ws_reverse: []
+        request_timeout: 15
+
+    satori.v1:
+        use_http: true
+        use_ws: true
+        token: ""
+        platform: "unknown"
+        webhooks: []
+
+    milky.v1:
+        use_http: true
+        use_ws: true
+        access_token: ""
+        secret: ""
+        http_reverse: []
+        ws_reverse: []
 
 # ============================================
 # 账号配置示例
@@ -50,146 +49,144 @@ general:
 
 # QQ 官方机器人
 qq.my_bot:
-  # OneBot V11 协议配置
-  onebot.v11:
-    use_http: true
-    use_ws: true
-    access_token: 'qq_v11_token'
-    heartbeat_interval: 5
-  
-  # Satori V1 协议配置（可选）
-  satori.v1:
-    use_http: true
-    use_ws: true
-    token: 'qq_satori_token'
-    platform: 'qq'
-  
-  # QQ 平台配置
-  appid: '' # QQ 机器人 AppID（v4 起字段名为 appid，小写 d）
-  secret: '' # QQ 机器人 secret
-  mode: websocket # websocket（默认）或 webhook
-  sandbox: false # 是否沙箱环境
-  # apiBaseUrl: '' # 可选：自定义 API 根地址（高级），优先级高于 sandbox
-  # port: 18080 # webhook 模式必填：SDK 独立监听端口，不再复用 OneBots 主 HTTP 路由
-  # path: '/qq/webhook' # webhook 路径，默认 '/'
-  intents: # 需要监听的 intents
-    - 'GROUP_AND_C2C_EVENT' # 群聊@事件 + 私聊事件（SDK 新名）
-    - 'DIRECT_MESSAGE' # 频道私信事件
-    - 'GUILDS' # 频道变更事件
-    - 'GUILD_MEMBERS' # 频道成员变更事件
-    - 'GUILD_MESSAGE_REACTIONS' # 频道消息表态事件
-    - 'INTERACTION' # 互动事件
-    - 'PUBLIC_GUILD_MESSAGES' # 公域机器人频道消息事件
-    - 'FORUMS_EVENT' # 论坛事件
+    # OneBot V11 协议配置
+    onebot.v11:
+        use_http: true
+        use_ws: true
+        access_token: "qq_v11_token"
+        heartbeat_interval: 5
+
+    # Satori V1 协议配置（可选）
+    satori.v1:
+        use_http: true
+        use_ws: true
+        token: "qq_satori_token"
+        platform: "qq"
+
+    # QQ 平台配置
+    appid: "" # QQ 机器人 AppID（v4 起字段名为 appid，小写 d）
+    secret: "" # QQ 机器人 secret
+    mode: websocket # websocket（默认）或 webhook
+    sandbox: false # 是否沙箱环境
+    # apiBaseUrl: '' # 可选：自定义 API 根地址（高级），优先级高于 sandbox
+    # port: 18080 # webhook 模式必填：SDK 独立监听端口，不再复用 OneBots 主 HTTP 路由
+    # path: '/qq/webhook' # webhook 路径，默认 '/'
+    intents: # 需要监听的 intents
+        - "GROUP_AND_C2C_EVENT" # 群聊@事件 + 私聊事件（SDK 新名）
+        - "DIRECT_MESSAGE" # 频道私信事件
+        - "GUILDS" # 频道变更事件
+        - "GUILD_MEMBERS" # 频道成员变更事件
+        - "GUILD_MESSAGE_REACTIONS" # 频道消息表态事件
+        - "INTERACTION" # 互动事件
+        - "PUBLIC_GUILD_MESSAGES" # 公域机器人频道消息事件
+        - "FORUMS_EVENT" # 论坛事件
 
 # 钉钉机器人
 dingtalk.client_id:
-  onebot.v11:
-    use_http: true
-    use_ws: true
-  
-  onebot.v12:
-    use_http: true
-    use_ws: true
-  
-  # 钉钉平台配置
-  clientSecret: '' # 钉钉机器人密钥(必填)
-  username: '钉钉机器人' # 机器人名称
-  avatar: '' # 机器人头像
+    onebot.v11:
+        use_http: true
+        use_ws: true
+
+    onebot.v12:
+        use_http: true
+        use_ws: true
+
+    # 钉钉平台配置
+    clientSecret: "" # 钉钉机器人密钥(必填)
+    username: "钉钉机器人" # 机器人名称
+    avatar: "" # 机器人头像
 
 # 企业微信机器人
 wechat.bot_id:
-  onebot.v11:
-    use_http: true
-    use_ws: true
-  
-  onebot.v12:
-    use_http: true
-    use_ws: true
+    onebot.v11:
+        use_http: true
+        use_ws: true
+
+    onebot.v12:
+        use_http: true
+        use_ws: true
 
 # Kook (开黑啦) 机器人
 kook.bot_id:
-  # 可以同时启用多个协议
-  onebot.v11:
-    use_http: true
-    use_ws: true
-    access_token: 'kook_v11_token'
-    secret: ''
-    heartbeat_interval: 5
-    http_reverse: []
-    ws_reverse: []
-  
-  onebot.v12:
-    use_http: true
-    use_ws: true
-    access_token: 'kook_v12_token'
-    secret: ''
-    heartbeat_interval: 5
-    webhooks: []
-    ws_reverse: []
-  
-  satori.v1:
-    use_http: true
-    use_ws: true
-    token: 'kook_satori_token'
-    platform: 'kook'
-    webhooks: []
-  
-  milky.v1:
-    use_http: true
-    use_ws: true
-    access_token: 'kook_milky_token'
-    secret: ''
-    heartbeat: 5
-  
-  # Kook 平台配置
-  token: '' # Kook Bot Token (从开发者中心获取)
+    # 可以同时启用多个协议
+    onebot.v11:
+        use_http: true
+        use_ws: true
+        access_token: "kook_v11_token"
+        secret: ""
+        heartbeat_interval: 5
+        http_reverse: []
+        ws_reverse: []
+
+    onebot.v12:
+        use_http: true
+        use_ws: true
+        access_token: "kook_v12_token"
+        secret: ""
+        heartbeat_interval: 5
+        webhooks: []
+        ws_reverse: []
+
+    satori.v1:
+        use_http: true
+        use_ws: true
+        token: "kook_satori_token"
+        platform: "kook"
+        webhooks: []
+
+    milky.v1:
+        use_http: true
+        use_ws: true
+        access_token: "kook_milky_token"
+        secret: ""
+
+    # Kook 平台配置
+    token: "" # Kook Bot Token (从开发者中心获取)
 
 # 黑盒语音 (Heychat) 机器人
 heychat.my_bot:
-  onebot.v11:
-    use_http: true
-    use_ws: true
-    access_token: 'heychat_v11_token'
-    secret: ''
-    heartbeat_interval: 5
-    http_reverse: []
-    ws_reverse: []
+    onebot.v11:
+        use_http: true
+        use_ws: true
+        access_token: "heychat_v11_token"
+        secret: ""
+        heartbeat_interval: 5
+        http_reverse: []
+        ws_reverse: []
 
-  onebot.v12:
-    use_http: true
-    use_ws: true
-    access_token: 'heychat_v12_token'
-    secret: ''
-    heartbeat_interval: 5
-    webhooks: []
-    ws_reverse: []
+    onebot.v12:
+        use_http: true
+        use_ws: true
+        access_token: "heychat_v12_token"
+        secret: ""
+        heartbeat_interval: 5
+        webhooks: []
+        ws_reverse: []
 
-  satori.v1:
-    use_http: true
-    use_ws: true
-    token: 'heychat_satori_token'
-    platform: 'heychat'
-    webhooks: []
+    satori.v1:
+        use_http: true
+        use_ws: true
+        token: "heychat_satori_token"
+        platform: "heychat"
+        webhooks: []
 
-  milky.v1:
-    use_http: true
-    use_ws: true
-    access_token: 'heychat_milky_token'
-    secret: ''
-    heartbeat: 5
+    milky.v1:
+        use_http: true
+        use_ws: true
+        access_token: "heychat_milky_token"
+        secret: ""
 
-  # 黑盒语音平台配置（Token 从 https://bot.xiaoheihe.cn 获取）
-  token: ''
+    # 黑盒语音平台配置（Token 从 https://bot.xiaoheihe.cn 获取）
+    token: ""
 
 # ============================================
 # 配置说明
 # ============================================
-# 
+#
 # 1. 账号标识格式：{platform}.{account_id}
 #    - platform: 平台名称 (qq, kook, dingtalk, wechat 等)
 #    - account_id: 账号唯一标识
-# 
+#
 # 2. 协议配置：{protocol}.{version}
 #    - onebot.v11: OneBot V11 协议
 #    - onebot.v12: OneBot V12 协议
@@ -197,10 +194,10 @@ heychat.my_bot:
 #    - milky.v1: Milky V1 协议
 #    - 可以同时配置多个协议
 #    - 未指定的配置项会使用 general 中的默认值
-# 
+#
 # 3. 平台配置：直接在账号下配置
 #    - 不以协议名开头的配置项都是平台特定配置
 #    - 每个平台的配置项不同
-# 
+#
 # 4. 配置优先级：
 #    账号配置 > general 默认配置

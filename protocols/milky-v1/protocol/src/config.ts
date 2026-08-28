@@ -1,9 +1,8 @@
-
-import {App} from 'onebots'
+import { App } from "onebots";
 // Milky Protocol Configuration
 // This file only exports configuration types
-declare module 'onebots'{
-    namespace Protocol{
+declare module "onebots" {
+    namespace Protocol {
         interface Configs {
             "milky.v1": MilkyConfig.Config;
         }
@@ -84,16 +83,11 @@ export namespace MilkyConfig {
         access_token?: string;
         /** Secret (global) */
         secret?: string;
-        /** @deprecated Milky does not define heartbeat events. */
-        heartbeat?: number;
-        /** @deprecated Milky messages always use segment arrays. */
-        post_message_format?: "string" | "array";
         /** Event filters */
         filters?: Record<string, unknown>;
     }
 }
-App.registerGeneral('milky.v1', {
+App.registerGeneral("milky.v1", {
     use_http: true,
     use_ws: false,
-
 });

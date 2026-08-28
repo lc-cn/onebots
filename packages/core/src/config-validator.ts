@@ -3,7 +3,7 @@
  * 提供配置schema验证和默认值处理
  */
 
-import { ValidationError, ConfigError } from './errors.js';
+import { ValidationError, ConfigError } from "./errors.js";
 
 export { ValidationError };
 export interface Choice<T = unknown> {
@@ -12,7 +12,7 @@ export interface Choice<T = unknown> {
 }
 export interface ValidationRule<T = unknown> {
     required?: boolean;
-    type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
+    type?: "string" | "number" | "boolean" | "object" | "array";
     min?: number;
     max?: number;
     pattern?: RegExp;
@@ -33,14 +33,16 @@ export interface ValidationRule<T = unknown> {
     placeholder?: string;
     /** Web 表单展示元数据，不参与运行时校验。 */
     ui?: {
-        widget?: 'endpoint-list' | 'event-filter';
+        widget?: "endpoint-list" | "event-filter";
+        /** Web 配置页中的语义分区；布局由消费端统一决定。 */
+        section?: "transport" | "delivery" | "credentials" | "filter" | "advanced";
         itemLabel?: string;
         addLabel?: string;
         schemes?: string[];
         fields?: Array<{
             key: string;
             label: string;
-            type?: 'string' | 'number' | 'boolean';
+            type?: "string" | "number" | "boolean";
             placeholder?: string;
             description?: string;
             sensitive?: boolean;
@@ -67,7 +69,7 @@ export class ConfigValidator {
     static validate<T extends Record<string, unknown>>(
         config: T,
         schema: Schema,
-        path: string = '',
+        path: string = "",
     ): T {
         const result = { ...config } as Record<string, unknown>;
         const errors: string[] = [];
@@ -79,7 +81,11 @@ export class ConfigValidator {
             // 如果是嵌套schema，递归验证
             if (this.isSchema(rule)) {
                 if (value !== undefined) {
-                    result[key] = this.validate((value || {}) as Record<string, unknown>, rule as Schema, currentPath);
+                    result[key] = this.validate(
+                        (value || {}) as Record<string, unknown>,
+                        rule as Schema,
+                        currentPath,
+                    );
                 }
                 continue;
             }
@@ -89,9 +95,10 @@ export class ConfigValidator {
             // 检查必填字段
             if (validationRule.required && (value === undefined || value === null)) {
                 if (validationRule.default !== undefined) {
-                    result[key] = typeof validationRule.default === 'function'
-                        ? validationRule.default()
-                        : validationRule.default;
+                    result[key] =
+                        typeof validationRule.default === "function"
+                            ? validationRule.default()
+                            : validationRule.default;
                     continue;
                 }
                 errors.push(`${currentPath} is required`);
@@ -100,9 +107,10 @@ export class ConfigValidator {
 
             // 如果值为undefined且有默认值，使用默认值
             if (value === undefined && validationRule.default !== undefined) {
-                result[key] = typeof validationRule.default === 'function'
-                    ? validationRule.default()
-                    : validationRule.default;
+                result[key] =
+                    typeof validationRule.default === "function"
+                        ? validationRule.default()
+                        : validationRule.default;
                 continue;
             }
 
@@ -116,7 +124,9 @@ export class ConfigValidator {
                 try {
                     result[key] = validationRule.transform(value);
                 } catch (error: unknown) {
-                    errors.push(`${currentPath} transform failed: ${error instanceof Error ? error.message : String(error)}`);
+                    errors.push(
+                        `${currentPath} transform failed: ${error instanceof Error ? error.message : String(error)}`,
+                    );
                     continue;
                 }
             }
@@ -137,7 +147,7 @@ export class ConfigValidator {
             }
 
             // 数值范围检查
-            if (validationRule.type === 'number') {
+            if (validationRule.type === "number") {
                 const numValue = finalValue as number;
                 if (validationRule.min !== undefined && numValue < validationRule.min) {
                     errors.push(`${currentPath} must be >= ${validationRule.min}`);
@@ -148,7 +158,7 @@ export class ConfigValidator {
             }
 
             // 字符串长度检查
-            if (validationRule.type === 'string') {
+            if (validationRule.type === "string") {
                 const strValue = finalValue as string;
                 if (validationRule.min !== undefined && strValue.length < validationRule.min) {
                     errors.push(`${currentPath} length must be >= ${validationRule.min}`);
@@ -164,18 +174,18 @@ export class ConfigValidator {
             // choices 取值校验
             const allowed = validationRule.choices?.map(c => c.value);
             if (allowed && allowed.length > 0 && !allowed.includes(finalValue)) {
-                errors.push(`${currentPath} must be one of: ${allowed.join(', ')}`);
+                errors.push(`${currentPath} must be one of: ${allowed.join(", ")}`);
             }
 
             // 自定义验证器：true / null / undefined 通过；false 或 string 为失败
             if (validationRule.validator) {
                 const validationResult = validationRule.validator(finalValue);
-                if (validationResult === false || typeof validationResult === 'string') {
+                if (validationResult === false || typeof validationResult === "string") {
                     errors.push(
                         `${currentPath}: ${
-                            typeof validationResult === 'string'
+                            typeof validationResult === "string"
                                 ? validationResult
-                                : 'validation failed'
+                                : "validation failed"
                         }`,
                     );
                 }
@@ -183,7 +193,7 @@ export class ConfigValidator {
         }
 
         if (errors.length > 0) {
-            throw new ValidationError('Configuration validation failed', {
+            throw new ValidationError("Configuration validation failed", {
                 context: {
                     errors,
                     path,
@@ -198,7 +208,7 @@ export class ConfigValidator {
      * 检查类型
      */
     private static checkType(value: unknown, expectedType: string, path: string): string | null {
-        const actualType = Array.isArray(value) ? 'array' : typeof value;
+        const actualType = Array.isArray(value) ? "array" : typeof value;
         if (actualType !== expectedType) {
             return `${path} must be ${expectedType}, got ${actualType}`;
         }
@@ -209,15 +219,15 @@ export class ConfigValidator {
      * 判断是否为嵌套schema
      */
     private static isSchema(rule: ValidationRule | Schema): rule is Schema {
-        if (typeof rule !== 'object' || rule === null) return false;
+        if (typeof rule !== "object" || rule === null) return false;
         return !(
-            'required' in rule ||
-            'type' in rule ||
-            'choices' in rule ||
-            'default' in rule ||
-            'validator' in rule ||
-            'transform' in rule ||
-            'label' in rule
+            "required" in rule ||
+            "type" in rule ||
+            "choices" in rule ||
+            "default" in rule ||
+            "validator" in rule ||
+            "transform" in rule ||
+            "label" in rule
         );
     }
 
@@ -237,54 +247,55 @@ export class ConfigValidator {
  */
 export const BaseAppConfigSchema: Schema = {
     port: {
-        type: 'number',
+        type: "number",
         min: 1,
         max: 65535,
         default: 6727,
     },
     path: {
-        type: 'string',
-        default: '',
+        type: "string",
+        default: "",
     },
     database: {
-        type: 'string',
-        default: 'onebots.db',
+        type: "string",
+        default: "onebots.db",
     },
     timeout: {
-        type: 'number',
+        type: "number",
         min: 1,
         default: 30,
     },
     username: {
-        type: 'string',
-        transform: (v: unknown) => (v != null && String(v).trim() !== '' ? String(v) : undefined),
+        type: "string",
+        transform: (v: unknown) => (v != null && String(v).trim() !== "" ? String(v) : undefined),
     },
     password: {
-        type: 'string',
-        transform: (v: unknown) => (v != null && String(v).trim() !== '' ? String(v) : undefined),
+        type: "string",
+        transform: (v: unknown) => (v != null && String(v).trim() !== "" ? String(v) : undefined),
     },
     access_token: {
-        type: 'string',
-        transform: (v: unknown) => (v != null && String(v).trim() !== '' ? String(v) : undefined),
+        type: "string",
+        transform: (v: unknown) => (v != null && String(v).trim() !== "" ? String(v) : undefined),
     },
     log_level: {
-        type: 'string',
+        type: "string",
         choices: [
-            { value: 'trace', label: 'trace' },
-            { value: 'debug', label: 'debug' },
-            { value: 'info', label: 'info' },
-            { value: 'warn', label: 'warn' },
-            { value: 'error', label: 'error' },
-            { value: 'fatal', label: 'fatal' },
-            { value: 'mark', label: 'mark' },
-            { value: 'off', label: 'off' },
+            { value: "trace", label: "trace" },
+            { value: "debug", label: "debug" },
+            { value: "info", label: "info" },
+            { value: "warn", label: "warn" },
+            { value: "error", label: "error" },
+            { value: "fatal", label: "fatal" },
+            { value: "mark", label: "mark" },
+            { value: "off", label: "off" },
         ],
-        default: 'info',
-        label: '日志等级',
+        default: "info",
+        label: "日志等级",
     },
     /** 站点根静态文件目录（相对 BaseApp.configDir 或绝对路径），用于可信域名校验文件等 */
     public_static_dir: {
-        type: 'string',
-        transform: (v: unknown) => (v != null && String(v).trim() !== '' ? String(v).trim() : undefined),
+        type: "string",
+        transform: (v: unknown) =>
+            v != null && String(v).trim() !== "" ? String(v).trim() : undefined,
     },
 };

@@ -1,27 +1,28 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue';
-import SchemaField from '../SchemaField.vue';
-import UiButton from '../../ui/UiButton.vue';
-import UiField from '../../ui/UiField.vue';
-import UiInput from '../../ui/UiInput.vue';
-import UiSelect from '../../ui/UiSelect.vue';
-import UiSwitch from '../../ui/UiSwitch.vue';
-import UiModal from '../../ui/UiModal.vue';
-import UiSteps from '../../ui/UiSteps.vue';
-import UiTabs from '../../ui/UiTabs.vue';
-import UiEmpty from '../../ui/UiEmpty.vue';
-import { buildApiUrl } from '../../config';
-import { authFetch } from '../../composables/useAuth';
-import { useToast } from '../../ui/toast.js';
-import type { SchemaBundle, SchemaGroup, SchemaFieldDef, AccountRow } from './types';
+import { ref, reactive, computed, watch } from "vue";
+import SchemaField from "../SchemaField.vue";
+import UiButton from "../../ui/UiButton.vue";
+import UiField from "../../ui/UiField.vue";
+import UiInput from "../../ui/UiInput.vue";
+import UiSelect from "../../ui/UiSelect.vue";
+import UiSwitch from "../../ui/UiSwitch.vue";
+import UiModal from "../../ui/UiModal.vue";
+import UiSteps from "../../ui/UiSteps.vue";
+import UiTabs from "../../ui/UiTabs.vue";
+import UiEmpty from "../../ui/UiEmpty.vue";
+import { buildApiUrl } from "../../config";
+import { authFetch } from "../../composables/useAuth";
+import { useToast } from "../../ui/toast.js";
+import type { SchemaBundle, SchemaGroup, SchemaFieldDef, AccountRow } from "./types";
 import {
     buildSchemaFields,
     getValueByPath,
     setValueByPath,
     resolveStructuredFieldDisplay,
     parseStructuredFieldValue,
-    protocolTitle
-} from './utils';
+    protocolTitle,
+} from "./utils";
+import { buildProtocolFieldLayout } from "./protocol-layout";
 
 const props = defineProps<{
     schema: SchemaBundle | null;
@@ -34,9 +35,9 @@ const emit = defineEmits<{
 const toast = useToast();
 
 const dialogVisible = ref(false);
-const dialogTitle = ref('新增账号');
+const dialogTitle = ref("新增账号");
 const isEdit = ref(false);
-const accountForm = ref({ platform: '', account_id: '' });
+const accountForm = ref({ platform: "", account_id: "" });
 const accountOriginalConfig = ref<Record<string, unknown>>({});
 const accountFormModel = reactive<Record<string, unknown>>({});
 const protocolGroups = ref<SchemaGroup[]>([]);
@@ -44,46 +45,25 @@ const adapterFields = ref<SchemaFieldDef[]>([]);
 const protocolEnabled = reactive<Record<string, boolean>>({});
 
 const steps = [
-    { key: 'basic', label: '基本信息' },
-    { key: 'adapter', label: '平台配置' },
-    { key: 'protocol', label: '协议配置' }
+    { key: "basic", label: "基本信息" },
+    { key: "adapter", label: "平台配置" },
+    { key: "protocol", label: "协议配置" },
 ];
 const currentStep = ref(0);
-const activeProtocolTab = ref('');
+const activeProtocolTab = ref("");
 
 const protocolTabs = computed(() =>
-    protocolGroups.value.map(group => ({ key: group.key, label: group.title }))
+    protocolGroups.value.map(group => ({ key: group.key, label: group.title })),
 );
 
-const endpointFields = (group: SchemaGroup) =>
-    group.fields.filter(
-        field => field.rule.type === 'array' && field.rule.ui?.widget === 'endpoint-list'
-    );
-
-const filterFields = (group: SchemaGroup) =>
-    group.fields.filter(field => field.rule.ui?.widget === 'event-filter');
-
-const transportFields = (group: SchemaGroup) =>
-    group.fields.filter(field => ['use_http', 'use_ws'].includes(field.path.at(-1) ?? ''));
-
-const credentialFields = (group: SchemaGroup) =>
-    group.fields.filter(field =>
-        ['access_token', 'token', 'secret', 'platform', 'self_id'].includes(
-            field.path.at(-1) ?? ''
-        )
-    );
-
-const advancedFields = (group: SchemaGroup) => {
-    const prominent = new Set(
-        [...endpointFields(group), ...filterFields(group), ...transportFields(group), ...credentialFields(group)].map(
-            field => field.key
-        )
-    );
-    return group.fields.filter(field => !prominent.has(field.key));
-};
+const protocolLayouts = computed(() =>
+    Object.fromEntries(
+        protocolGroups.value.map(group => [group.key, buildProtocolFieldLayout(group)]),
+    ),
+);
 
 const platformOptions = computed(() =>
-    Object.keys(props.schema?.adapters || {}).map(name => ({ label: name, value: name }))
+    Object.keys(props.schema?.adapters || {}).map(name => ({ label: name, value: name })),
 );
 
 const buildProtocolGroups = () => {
@@ -96,7 +76,7 @@ const buildProtocolGroups = () => {
         groups.push({
             key: protocolKey,
             title: protocolTitle(protocolKey),
-            fields: buildSchemaFields(protocolSchema, [protocolKey])
+            fields: buildSchemaFields(protocolSchema, [protocolKey]),
         });
         if (protocolEnabled[protocolKey] === undefined) {
             protocolEnabled[protocolKey] = false;
@@ -112,7 +92,7 @@ const buildAdapterFields = (platform: string) => {
         return;
     }
     adapterFields.value = buildSchemaFields(adapterSchema, []).filter(
-        field => field.path.join('.') !== 'account_id'
+        field => field.path.join(".") !== "account_id",
     );
 };
 
@@ -122,37 +102,37 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
         protocolEnabled[group.key] = enabled;
         group.fields.forEach(field => {
             const currentValue = getValueByPath(configObject, field.path);
-            if (field.rule.type === 'object' || field.rule.type === 'array') {
+            if (field.rule.type === "object" || field.rule.type === "array") {
                 accountFormModel[field.key] = resolveStructuredFieldDisplay(
                     currentValue,
-                    field.rule
+                    field.rule,
                 );
                 return;
             }
             accountFormModel[field.key] =
-                currentValue ?? field.rule.default ?? (field.rule.type === 'boolean' ? false : '');
+                currentValue ?? field.rule.default ?? (field.rule.type === "boolean" ? false : "");
         });
     });
 
     adapterFields.value.forEach(field => {
         const currentValue = getValueByPath(configObject, field.path);
-        if (field.rule.type === 'object' || field.rule.type === 'array') {
+        if (field.rule.type === "object" || field.rule.type === "array") {
             accountFormModel[field.key] = resolveStructuredFieldDisplay(currentValue, field.rule);
             return;
         }
         accountFormModel[field.key] =
-            currentValue ?? field.rule.default ?? (field.rule.type === 'boolean' ? false : '');
+            currentValue ?? field.rule.default ?? (field.rule.type === "boolean" ? false : "");
     });
 };
 
 const goNextStep = () => {
     if (currentStep.value === 0) {
         if (!accountForm.value.platform) {
-            toast.warning('请先选择平台');
+            toast.warning("请先选择平台");
             return;
         }
         if (!accountForm.value.account_id?.trim()) {
-            toast.warning('请填写账号ID');
+            toast.warning("请填写账号ID");
             return;
         }
     }
@@ -170,13 +150,14 @@ const onSelectStep = (index: number) => {
 
 const handleSubmit = async () => {
     if (!accountForm.value.platform || !accountForm.value.account_id) {
-        toast.warning('请填写平台与账号ID');
+        toast.warning("请填写平台与账号ID");
         return;
     }
 
-    const configObject = JSON.parse(
-        JSON.stringify(accountOriginalConfig.value || {})
-    ) as Record<string, unknown>;
+    const configObject = JSON.parse(JSON.stringify(accountOriginalConfig.value || {})) as Record<
+        string,
+        unknown
+    >;
 
     for (const group of protocolGroups.value) {
         if (!protocolEnabled[group.key]) {
@@ -185,7 +166,7 @@ const handleSubmit = async () => {
         }
         for (const field of group.fields) {
             let value = accountFormModel[field.key];
-            if (field.rule.type === 'object' || field.rule.type === 'array') {
+            if (field.rule.type === "object" || field.rule.type === "array") {
                 const parsed = parseStructuredFieldValue(value, field.rule, field.label);
                 if (!parsed.ok) {
                     toast.error(parsed.message);
@@ -199,7 +180,7 @@ const handleSubmit = async () => {
 
     for (const field of adapterFields.value) {
         let value = accountFormModel[field.key];
-        if (field.rule.type === 'object' || field.rule.type === 'array') {
+        if (field.rule.type === "object" || field.rule.type === "array") {
             const parsed = parseStructuredFieldValue(value, field.rule, field.label);
             if (!parsed.ok) {
                 toast.error(parsed.message);
@@ -213,49 +194,50 @@ const handleSubmit = async () => {
     const payload = {
         ...configObject,
         platform: accountForm.value.platform,
-        account_id: accountForm.value.account_id
+        account_id: accountForm.value.account_id,
     };
 
-    const url = isEdit.value ? '/api/edit' : '/api/add';
+    const url = isEdit.value ? "/api/edit" : "/api/add";
     const response = await authFetch(buildApiUrl(url), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
     });
 
     if (response.ok) {
-        toast.success('保存成功');
+        toast.success("保存成功");
         dialogVisible.value = false;
-        emit('saved');
+        emit("saved");
     } else {
         const result = await response.json().catch(() => ({}));
-        toast.error(result.message || '保存失败');
+        toast.error(result.message || "保存失败");
     }
 };
 
 const openAdd = () => {
-    dialogTitle.value = '新增账号';
+    dialogTitle.value = "新增账号";
     isEdit.value = false;
     accountOriginalConfig.value = {};
-    accountForm.value = { platform: '', account_id: '' };
-    buildAdapterFields('');
+    accountForm.value = { platform: "", account_id: "" };
+    buildAdapterFields("");
     syncFormModel({});
     currentStep.value = 0;
-    activeProtocolTab.value = protocolGroups.value[0]?.key ?? '';
+    activeProtocolTab.value = protocolGroups.value[0]?.key ?? "";
     dialogVisible.value = true;
 };
 
 const openEdit = (row: AccountRow) => {
-    dialogTitle.value = '编辑账号';
+    dialogTitle.value = "编辑账号";
     isEdit.value = true;
-    accountOriginalConfig.value = JSON.parse(
-        JSON.stringify(row.config || {})
-    ) as Record<string, unknown>;
+    accountOriginalConfig.value = JSON.parse(JSON.stringify(row.config || {})) as Record<
+        string,
+        unknown
+    >;
     accountForm.value = { platform: row.platform, account_id: row.account_id };
     buildAdapterFields(row.platform);
     syncFormModel(row.config || {});
     currentStep.value = 0;
-    activeProtocolTab.value = protocolGroups.value[0]?.key ?? '';
+    activeProtocolTab.value = protocolGroups.value[0]?.key ?? "";
     dialogVisible.value = true;
 };
 
@@ -264,7 +246,7 @@ watch(
     () => {
         buildProtocolGroups();
     },
-    { immediate: true }
+    { immediate: true },
 );
 
 watch(
@@ -273,7 +255,7 @@ watch(
         if (!platform) return;
         buildAdapterFields(platform);
         syncFormModel(accountOriginalConfig.value || {});
-    }
+    },
 );
 
 defineExpose({ openAdd, openEdit });
@@ -290,7 +272,10 @@ defineExpose({ openAdd, openEdit });
 
             <!-- 第一步：平台与账号ID -->
             <div v-show="currentStep === 0" class="flex flex-col gap-4">
-                <UiField label="平台" required hint="选择要接入的 IM 平台，下一步会展示该平台所需的配置项">
+                <UiField
+                    label="平台"
+                    required
+                    hint="选择要接入的 IM 平台，下一步会展示该平台所需的配置项">
                     <UiSelect
                         v-model="accountForm.platform"
                         :options="platformOptions"
@@ -337,72 +322,44 @@ defineExpose({ openAdd, openEdit });
                             <UiSwitch v-model="protocolEnabled[group.key]" />
                         </div>
 
-                        <section v-if="transportFields(group).length" class="space-y-3">
-                            <div>
-                                <h4 class="text-sm font-semibold text-fg">服务入口</h4>
-                                <p class="mt-0.5 text-xs text-fg-tertiary">
-                                    选择需要对外提供的正向连接方式
+                        <section
+                            v-for="section in protocolLayouts[group.key]?.sections || []"
+                            :key="section.key"
+                            class="space-y-3">
+                            <div v-if="section.title">
+                                <h4 class="text-sm font-semibold text-fg">{{ section.title }}</h4>
+                                <p
+                                    v-if="section.description"
+                                    class="mt-0.5 text-xs text-fg-tertiary">
+                                    {{ section.description }}
                                 </p>
                             </div>
-                            <div class="grid gap-3 sm:grid-cols-2">
+                            <div
+                                :class="
+                                    section.columns ? 'grid gap-3 sm:grid-cols-2' : 'space-y-3'
+                                ">
                                 <SchemaField
-                                    v-for="field in transportFields(group)"
+                                    v-for="field in section.fields"
                                     :key="field.key"
                                     v-model="accountFormModel[field.key]"
                                     :field="field"
                                     :disabled="!protocolEnabled[group.key]" />
                             </div>
-                        </section>
-
-                        <section v-if="endpointFields(group).length" class="space-y-3">
-                            <div>
-                                <h4 class="text-sm font-semibold text-fg">事件推送</h4>
-                                <p class="mt-0.5 text-xs text-fg-tertiary">
-                                    Webhook 与反向 WebSocket 可分别添加多个目标
-                                </p>
-                            </div>
-                            <SchemaField
-                                v-for="field in endpointFields(group)"
-                                :key="field.key"
-                                v-model="accountFormModel[field.key]"
-                                :field="field"
-                                :disabled="!protocolEnabled[group.key]" />
-                        </section>
-
-                        <section v-if="credentialFields(group).length" class="space-y-3">
-                            <h4 class="text-sm font-semibold text-fg">身份与鉴权</h4>
-                            <div class="grid gap-3 sm:grid-cols-2">
-                                <SchemaField
-                                    v-for="field in credentialFields(group)"
-                                    :key="field.key"
-                                    v-model="accountFormModel[field.key]"
-                                    :field="field"
-                                    :disabled="!protocolEnabled[group.key]" />
-                            </div>
-                        </section>
-
-                        <section v-if="filterFields(group).length" class="space-y-3">
-                            <SchemaField
-                                v-for="field in filterFields(group)"
-                                :key="field.key"
-                                v-model="accountFormModel[field.key]"
-                                :field="field"
-                                :disabled="!protocolEnabled[group.key]" />
                         </section>
 
                         <details
-                            v-if="advancedFields(group).length"
+                            v-if="protocolLayouts[group.key]?.advanced.length"
                             class="group rounded-card border border-border px-4 py-3">
                             <summary
                                 class="cursor-pointer text-sm font-medium text-fg-secondary marker:text-fg-tertiary">
                                 高级设置
                                 <span class="ml-1 text-xs font-normal text-fg-tertiary">
-                                    {{ advancedFields(group).length }} 项
+                                    {{ protocolLayouts[group.key]?.advanced.length }} 项
                                 </span>
                             </summary>
                             <div class="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
                                 <SchemaField
-                                    v-for="field in advancedFields(group)"
+                                    v-for="field in protocolLayouts[group.key]?.advanced || []"
                                     :key="field.key"
                                     v-model="accountFormModel[field.key]"
                                     :field="field"

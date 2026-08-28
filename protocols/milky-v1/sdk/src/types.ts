@@ -58,18 +58,3 @@ export type MilkyCall = (
 ) => Promise<MilkyV1Response>;
 
 export type MilkyActionUrlResolver = (action: string, apiBaseUrl: string) => string | URL;
-
-export interface MilkyV1ClientConfig {
-    /** Milky 服务根地址，例如 http://localhost:3000。 */
-    baseUrl: string;
-    /** API 根地址；默认使用 baseUrl，并请求 /api/{action}。 */
-    apiBaseUrl?: string;
-    accessToken?: string;
-    resolveActionUrl?: MilkyActionUrlResolver;
-    call?: MilkyCall;
-    fetch?: typeof globalThis.fetch;
-    receiveMode?: "websocket" | "ws" | "wss" | "webhook" | "sse" | "manual";
-    wsUrl?: string;
-    webhookUrl?: string;
-    webhookPort?: number;
-}

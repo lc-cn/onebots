@@ -9,54 +9,75 @@ import { CQCode } from "./cqcode.js";
 import { OneBotV11Config } from "./config.js";
 
 const onebotV11Schema: Schema = {
-    use_http: { type: 'boolean', default: true, label: '启用 HTTP' },
-    use_ws: { type: 'boolean', default: false, label: '启用 WebSocket' },
+    use_http: { type: "boolean", default: true, label: "启用 HTTP", ui: { section: "transport" } },
+    use_ws: {
+        type: "boolean",
+        default: false,
+        label: "启用 WebSocket",
+        ui: { section: "transport" },
+    },
     http_reverse: {
-        type: 'array', default: [], label: 'HTTP 反向上报',
-        description: '将事件 POST 到已有的 HTTP 服务，可配置多个目标。',
-        ui: { widget: 'endpoint-list', itemLabel: 'Webhook', addLabel: '添加 Webhook', schemes: ['http:', 'https:'] },
+        type: "array",
+        default: [],
+        label: "HTTP 反向上报",
+        description: "将事件 POST 到已有的 HTTP 服务，可配置多个目标。",
+        ui: {
+            widget: "endpoint-list",
+            section: "delivery",
+            itemLabel: "Webhook",
+            addLabel: "添加 Webhook",
+            schemes: ["http:", "https:"],
+        },
     },
     ws_reverse: {
-        type: 'array', default: [], label: '反向 WebSocket',
-        description: '由 OneBots 主动连接下游 WebSocket 服务，可配置多个目标。',
-        ui: { widget: 'endpoint-list', itemLabel: '连接', addLabel: '添加连接', schemes: ['ws:', 'wss:'] },
+        type: "array",
+        default: [],
+        label: "反向 WebSocket",
+        description: "由 OneBots 主动连接下游 WebSocket 服务，可配置多个目标。",
+        ui: {
+            widget: "endpoint-list",
+            section: "delivery",
+            itemLabel: "连接",
+            addLabel: "添加连接",
+            schemes: ["ws:", "wss:"],
+        },
     },
-    enable_cors: { type: 'boolean', label: '启用 CORS' },
-    access_token: { type: 'string', label: 'Access Token' },
-    secret: { type: 'string', label: 'Secret' },
-    post_timeout: { type: 'number', label: 'POST 超时(秒)' },
+    enable_cors: { type: "boolean", label: "启用 CORS" },
+    access_token: { type: "string", label: "Access Token", ui: { section: "credentials" } },
+    secret: { type: "string", label: "Secret", ui: { section: "credentials" } },
+    post_timeout: { type: "number", label: "POST 超时(秒)" },
     post_message_format: {
-        type: 'string',
-        default: 'array',
-        label: '消息格式',
+        type: "string",
+        default: "array",
+        label: "消息格式",
         choices: [
-            { value: 'array', label: '数组 (array)' },
-            { value: 'string', label: '字符串 (string / CQ 码)' },
+            { value: "array", label: "数组 (array)" },
+            { value: "string", label: "字符串 (string / CQ 码)" },
         ],
     },
-    serve_data_files: { type: 'boolean', label: '静态文件服务' },
-    heartbeat_interval: { type: 'number', label: '心跳间隔(秒)' },
+    serve_data_files: { type: "boolean", label: "静态文件服务" },
+    heartbeat_interval: { type: "number", label: "心跳间隔(秒)" },
     filters: Protocol.FilterSchema,
 };
 
-ProtocolRegistry.registerSchema('onebot.v11', onebotV11Schema);
+ProtocolRegistry.registerSchema("onebot.v11", onebotV11Schema);
 
 /**
  * OneBot V11 Protocol Implementation
  * Implements the OneBot 11 standard
  * Reference: https://github.com/botuniverse/onebot-v11
  */
-export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
+export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     public readonly name = "onebot";
     public readonly version = "v11" as const;
-    
+
     // Message ID transformation maps (V11 requires integer message IDs)
     private messageIdMap = new Map<number, string>();
     private reverseMessageIdMap = new Map<string, number>();
     private messageIdCounter = 0;
     private static readonly MAX_MESSAGE_ID_MAP_SIZE = 10000;
     private static readonly EVICTION_RATIO = 0.2;
-    
+
     // Heartbeat timer
     private heartbeatTimer?: NodeJS.Timeout;
 
@@ -67,10 +88,10 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
             version: "v11",
         });
     }
-    get db(){
+    get db() {
         return this.adapter.app.db;
     }
-    
+
     /**
      * Start the OneBot V11 protocol service
      */
@@ -95,13 +116,13 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
      */
     async stop(force?: boolean): Promise<void> {
         this.logger.info(`Stopping OneBot V11 protocol`);
-        
+
         // Clear heartbeat timer
         if (this.heartbeatTimer) {
             clearInterval(this.heartbeatTimer);
             this.heartbeatTimer = undefined;
         }
-        
+
         // Clean up resources
         this.messageIdMap.clear();
         this.reverseMessageIdMap.clear();
@@ -112,8 +133,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
      * Dispatch event to OneBot V11 format
      */
     dispatch(event: CommonEvent.Event): void {
-        this.logger.debug(`[OneBot V11] Received event:`, event.type, (event as Record<string, unknown>).message_type || '');
-        
+        this.logger.debug(
+            `[OneBot V11] Received event:`,
+            event.type,
+            (event as Record<string, unknown>).message_type || "",
+        );
+
         // 检查 filterFn
         let filterResult: boolean;
         try {
@@ -123,29 +148,43 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
             this.logger.error(`[OneBot V11] Filter error:`, error);
             return;
         }
-        
+
         if (!filterResult) {
             this.logger.debug(`[OneBot V11] Event filtered out:`, event.type);
             return;
         }
-        
+
         this.logger.debug(`[OneBot V11] Event passed filter, converting...`);
-        
+
         try {
             const v11Event = this.convertToV11Format(event);
-            this.logger.debug(`[OneBot V11] Conversion completed, result:`, v11Event ? 'success' : 'null');
-            
+            this.logger.debug(
+                `[OneBot V11] Conversion completed, result:`,
+                v11Event ? "success" : "null",
+            );
+
             if (v11Event) {
                 const eventData = JSON.stringify(v11Event);
                 this.logger.debug(`[OneBot V11] Converted event:`, eventData.substring(0, 200));
-                this.logger.debug(`[OneBot V11] Emitting dispatch event, listener count:`, this.listenerCount("dispatch"));
+                this.logger.debug(
+                    `[OneBot V11] Emitting dispatch event, listener count:`,
+                    this.listenerCount("dispatch"),
+                );
                 this.emit("dispatch", eventData);
                 this.logger.debug(`[OneBot V11] Event dispatched to WebSocket clients`);
             } else {
-                this.logger.warn(`[OneBot V11] Failed to convert event to V11 format:`, event.type, JSON.stringify(event).substring(0, 200));
+                this.logger.warn(
+                    `[OneBot V11] Failed to convert event to V11 format:`,
+                    event.type,
+                    JSON.stringify(event).substring(0, 200),
+                );
             }
         } catch (error) {
-            this.logger.error(`[OneBot V11] Error converting event to V11 format:`, error, JSON.stringify(event).substring(0, 200));
+            this.logger.error(
+                `[OneBot V11] Error converting event to V11 format:`,
+                error,
+                JSON.stringify(event).substring(0, 200),
+            );
         }
     }
     /**
@@ -163,9 +202,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Apply OneBot V11 API action
      */
-    async apply(action: string, params?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    async apply(
+        action: string,
+        params?: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> {
         this.logger.debug(`OneBot V11 action: ${action}`, params);
-        
+
         try {
             const result = await this.executeAction(action, params);
             return {
@@ -186,7 +228,10 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Execute OneBot V11 action
      */
-    private async executeAction(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
+    private async executeAction(
+        action: string,
+        params: Record<string, unknown> = {},
+    ): Promise<unknown> {
         switch (action) {
             // Message API
             case "send_private_msg":
@@ -227,7 +272,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 return this.setFriendAddRequest(params);
             case "set_group_add_request":
                 return this.setGroupAddRequest(params);
-            
+
             // Info API
             case "get_login_info":
                 return this.getLoginInfo(params);
@@ -245,7 +290,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 return this.getGroupMemberList(params);
             case "get_group_honor_info":
                 return this.getGroupHonorInfo(params);
-            
+
             // Other API
             case "get_cookies":
                 return this.getCookies(params);
@@ -269,16 +314,24 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 return this.setRestart(params);
             case "clean_cache":
                 return this.cleanCache(params);
-            
+
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
     }
 
     // ============ Message API Implementations ============
-    
+
     private async sendPrivateMsg(params: Record<string, unknown>): Promise<{ message_id: number }> {
-        const { user_id, message, auto_escape = false } = params as { user_id: string | number; message: string | CommonTypes.Segment[]; auto_escape?: boolean };
+        const {
+            user_id,
+            message,
+            auto_escape = false,
+        } = params as {
+            user_id: string | number;
+            message: string | CommonTypes.Segment[];
+            auto_escape?: boolean;
+        };
         const segments = this.parseMessage(message, auto_escape);
 
         const result = await this.adapter.sendMessage(this.account.account_id, {
@@ -292,7 +345,15 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     }
 
     private async sendGroupMsg(params: Record<string, unknown>): Promise<{ message_id: number }> {
-        const { group_id, message, auto_escape = false } = params as { group_id: string | number; message: string | CommonTypes.Segment[]; auto_escape?: boolean };
+        const {
+            group_id,
+            message,
+            auto_escape = false,
+        } = params as {
+            group_id: string | number;
+            message: string | CommonTypes.Segment[];
+            auto_escape?: boolean;
+        };
         const segments = this.parseMessage(message, auto_escape);
 
         const result = await this.adapter.sendMessage(this.account.account_id, {
@@ -307,14 +368,26 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     }
 
     private async sendMsg(params: Record<string, unknown>): Promise<{ message_id: number }> {
-        const { message_type, user_id, group_id, message, auto_escape = false } = params as { message_type: string; user_id?: string | number; group_id?: string | number; message: string | CommonTypes.Segment[]; auto_escape?: boolean };
-        
+        const {
+            message_type,
+            user_id,
+            group_id,
+            message,
+            auto_escape = false,
+        } = params as {
+            message_type: string;
+            user_id?: string | number;
+            group_id?: string | number;
+            message: string | CommonTypes.Segment[];
+            auto_escape?: boolean;
+        };
+
         if (message_type === "private") {
             return this.sendPrivateMsg({ user_id, message, auto_escape });
         } else if (message_type === "group") {
             return this.sendGroupMsg({ group_id, message, auto_escape });
         }
-        
+
         throw new Error("Invalid message_type");
     }
 
@@ -347,7 +420,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     }
 
     // ============ Group Management API Implementations ============
-    
+
     private async setGroupKick(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_group_kick not implemented");
@@ -399,7 +472,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     }
 
     // ============ Request Handling API Implementations ============
-    
+
     private async setFriendAddRequest(_params: Record<string, unknown>): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_friend_add_request not implemented");
@@ -411,16 +484,23 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     }
 
     // ============ Info API Implementations ============
-    
-    private async getLoginInfo(_params: Record<string, unknown>): Promise<{ user_id: number; nickname: string }> {
+
+    private async getLoginInfo(
+        _params: Record<string, unknown>,
+    ): Promise<{ user_id: number; nickname: string }> {
         return {
             user_id: this.adapter.resolveId(this.account.account_id).number,
             nickname: this.account.account_id,
         };
     }
 
-    private async getStrangerInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-        const { user_id, no_cache = false } = params as { user_id: string | number; no_cache?: boolean };
+    private async getStrangerInfo(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> {
+        const { user_id, no_cache = false } = params as {
+            user_id: string | number;
+            no_cache?: boolean;
+        };
 
         const userInfo = await this.adapter.getUserInfo(this.account.account_id, {
             user_id: this.resolveV11Id(user_id),
@@ -434,9 +514,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async getFriendList(_params: Record<string, unknown>): Promise<Record<string, unknown>[]> {
+    private async getFriendList(
+        _params: Record<string, unknown>,
+    ): Promise<Record<string, unknown>[]> {
         const friends = await this.adapter.getFriendList(this.account.account_id);
-        
+
         return friends.map(friend => ({
             user_id: friend.user_id.number,
             nickname: friend.user_name,
@@ -445,7 +527,10 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     }
 
     private async getGroupInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-        const { group_id, no_cache = false } = params as { group_id: string | number; no_cache?: boolean };
+        const { group_id, no_cache = false } = params as {
+            group_id: string | number;
+            no_cache?: boolean;
+        };
 
         const groupInfo = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: this.resolveV11Id(group_id),
@@ -459,9 +544,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async getGroupList(_params: Record<string, unknown>): Promise<Record<string, unknown>[]> {
+    private async getGroupList(
+        _params: Record<string, unknown>,
+    ): Promise<Record<string, unknown>[]> {
         const groups = await this.adapter.getGroupList(this.account.account_id);
-        
+
         return groups.map(group => ({
             group_id: group.group_id.number,
             group_name: group.group_name,
@@ -470,8 +557,14 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         }));
     }
 
-    private async getGroupMemberInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-        const { group_id, user_id, no_cache = false } = params as { group_id: string | number; user_id: string | number; no_cache?: boolean };
+    private async getGroupMemberInfo(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> {
+        const {
+            group_id,
+            user_id,
+            no_cache = false,
+        } = params as { group_id: string | number; user_id: string | number; no_cache?: boolean };
 
         const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: this.resolveV11Id(group_id),
@@ -497,7 +590,9 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         };
     }
 
-    private async getGroupMemberList(params: Record<string, unknown>): Promise<Record<string, unknown>[]> {
+    private async getGroupMemberList(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, unknown>[]> {
         const { group_id } = params as { group_id: string | number };
 
         const members = await this.adapter.getGroupMemberList(this.account.account_id, {
@@ -529,7 +624,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     }
 
     // ============ Other API Implementations ============
-    
+
     private async getCookies(_params: Record<string, unknown>): Promise<unknown> {
         // Implementation depends on platform support
         throw new Error("get_cookies not implemented");
@@ -563,14 +658,18 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
         return { yes: true };
     }
 
-    private async getStatus(_params: Record<string, unknown>): Promise<{ online: boolean; good: boolean }> {
+    private async getStatus(
+        _params: Record<string, unknown>,
+    ): Promise<{ online: boolean; good: boolean }> {
         return {
             online: true,
             good: true,
         };
     }
 
-    private async getVersionInfo(_params: Record<string, unknown>): Promise<{ app_name: string; app_version: string; protocol_version: string }> {
+    private async getVersionInfo(
+        _params: Record<string, unknown>,
+    ): Promise<{ app_name: string; app_version: string; protocol_version: string }> {
         return {
             app_name: "onebots",
             app_version: "1.0.0",
@@ -590,7 +689,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     }
 
     // ============ Utility Methods ============
-    
+
     /**
      * Convert common event to OneBot V11 format
      */
@@ -607,14 +706,22 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 if (messageType === "channel" || messageType === "direct") {
                     messageType = "group";
                 }
-                
+
                 // 确保 message_id 和 sender.id 输出为框架层 Id.number（与 V11 数值 ID 对齐）
                 const messageIdObj = event.message_id as CommonTypes.Id;
                 const senderIdObj = event.sender?.id as CommonTypes.Id;
-                
-                const messageId = messageIdObj?.number ?? this.transformToInt(messageIdObj?.string || String(messageIdObj || event.message_id));
-                const userId = senderIdObj?.number ?? this.transformToInt(senderIdObj?.string || String(senderIdObj || event.sender?.id));
-                
+
+                const messageId =
+                    messageIdObj?.number ??
+                    this.transformToInt(
+                        messageIdObj?.string || String(messageIdObj || event.message_id),
+                    );
+                const userId =
+                    senderIdObj?.number ??
+                    this.transformToInt(
+                        senderIdObj?.string || String(senderIdObj || event.sender?.id),
+                    );
+
                 const result = {
                     ...base,
                     post_type: "message",
@@ -629,22 +736,30 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                         user_id: userId,
                         nickname: event.sender?.name || "",
                         // 只展开 event.sender 中非 id 的字段，避免将 Id 对象混入
-                        ...(event.sender ? Object.fromEntries(
-                            Object.entries(event.sender).filter(([key]) => key !== 'id')
-                        ) : {}),
+                        ...(event.sender
+                            ? Object.fromEntries(
+                                  Object.entries(event.sender).filter(([key]) => key !== "id"),
+                              )
+                            : {}),
                     },
-                    ...(event.group ? {
-                        group_id: Number((event.group.id as CommonTypes.Id)?.number ?? (event.group.id as CommonTypes.Id)?.string ?? event.group.id),
-                    } : {}),
+                    ...(event.group
+                        ? {
+                              group_id: Number(
+                                  (event.group.id as CommonTypes.Id)?.number ??
+                                      (event.group.id as CommonTypes.Id)?.string ??
+                                      event.group.id,
+                              ),
+                          }
+                        : {}),
                 };
-                
+
                 this.logger.debug(`[OneBot V11] Conversion successful:`, {
                     messageType,
                     messageId,
                     userId,
                     hasGroup: !!event.group,
                 });
-                
+
                 return result;
             } else if (event.type === "notice") {
                 return {
@@ -652,8 +767,12 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                     post_type: "notice",
                     notice_type: event.notice_type,
                     ...(event.user ? { user_id: (event.user.id as CommonTypes.Id)?.number } : {}),
-                    ...(event.operator ? { operator_id: (event.operator.id as CommonTypes.Id)?.number } : {}),
-                    ...(event.group ? { group_id: (event.group.id as CommonTypes.Id)?.number } : {}),
+                    ...(event.operator
+                        ? { operator_id: (event.operator.id as CommonTypes.Id)?.number }
+                        : {}),
+                    ...(event.group
+                        ? { group_id: (event.group.id as CommonTypes.Id)?.number }
+                        : {}),
                 };
             } else if (event.type === "request") {
                 return {
@@ -663,7 +782,9 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                     user_id: (event.user.id as CommonTypes.Id)?.number,
                     comment: event.comment || "",
                     flag: event.flag,
-                    ...(event.group ? { group_id: (event.group.id as CommonTypes.Id)?.number } : {}),
+                    ...(event.group
+                        ? { group_id: (event.group.id as CommonTypes.Id)?.number }
+                        : {}),
                 };
             } else if (event.type === "meta") {
                 return {
@@ -673,8 +794,11 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                     sub_type: event.sub_type,
                 };
             }
-            
-            this.logger.warn(`[OneBot V11] Unknown event type:`, (event as Record<string, unknown>).type);
+
+            this.logger.warn(
+                `[OneBot V11] Unknown event type:`,
+                (event as Record<string, unknown>).type,
+            );
             return null;
         } catch (error) {
             this.logger.error(`[OneBot V11] Error in convertToV11Format:`, error, {
@@ -690,7 +814,9 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Convert message segments to V11 format
      */
-    private convertSegmentsToV11(segments: CommonTypes.Segment[]): { type: string; data: unknown }[] {
+    private convertSegmentsToV11(
+        segments: CommonTypes.Segment[],
+    ): { type: string; data: unknown }[] {
         return segments.map(seg => ({
             type: seg.type,
             data: seg.data,
@@ -700,18 +826,21 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     /**
      * Parse message (string or array) to segments
      */
-    private parseMessage(message: string | CommonTypes.Segment[], auto_escape: boolean): CommonTypes.Segment[] {
+    private parseMessage(
+        message: string | CommonTypes.Segment[],
+        auto_escape: boolean,
+    ): CommonTypes.Segment[] {
         if (Array.isArray(message)) {
             return message.map(seg => ({
                 type: seg.type,
                 data: seg.data,
             }));
         }
-        
+
         if (auto_escape) {
             return [{ type: "text", data: { text: message } }];
         }
-        
+
         // Parse CQ code format
         return CQCode.parse(message);
     }
@@ -728,22 +857,24 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
      */
     private transformToInt(messageId: string | number | CommonTypes.Id): number {
         // 若已是框架层 Id，优先使用其 number（与 id_map / V11 数值域一致）
-        if (messageId && typeof messageId === 'object' && 'number' in messageId) {
+        if (messageId && typeof messageId === "object" && "number" in messageId) {
             return (messageId as CommonTypes.Id).number;
         }
-        
+
         if (typeof messageId === "number") {
             return messageId;
         }
-        
+
         const idString = String(messageId);
         if (this.reverseMessageIdMap.has(idString)) {
             return this.reverseMessageIdMap.get(idString)!;
         }
-        
+
         // Evict oldest entries when map exceeds max size
         if (this.messageIdMap.size >= OneBotV11Protocol.MAX_MESSAGE_ID_MAP_SIZE) {
-            const entriesToDelete = Math.floor(OneBotV11Protocol.MAX_MESSAGE_ID_MAP_SIZE * OneBotV11Protocol.EVICTION_RATIO);
+            const entriesToDelete = Math.floor(
+                OneBotV11Protocol.MAX_MESSAGE_ID_MAP_SIZE * OneBotV11Protocol.EVICTION_RATIO,
+            );
             const iter = this.messageIdMap.entries();
             for (let i = 0; i < entriesToDelete; i++) {
                 const entry = iter.next();
@@ -753,7 +884,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 this.reverseMessageIdMap.delete(val);
             }
         }
-        
+
         const intId = ++this.messageIdCounter;
         this.messageIdMap.set(intId, idString);
         this.reverseMessageIdMap.set(idString, intId);
@@ -798,9 +929,9 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
     private verifySignature(body: string, signature?: string): boolean {
         if (!this.config.secret) return true;
         if (!signature) return false;
-        
-        const hmac = crypto.createHmac('sha1', this.config.secret);
-        const expected = 'sha1=' + hmac.update(body).digest('hex');
+
+        const hmac = crypto.createHmac("sha1", this.config.secret);
+        const expected = "sha1=" + hmac.update(body).digest("hex");
         return signature === expected;
     }
 
@@ -809,16 +940,17 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
      */
     private startHttp(): void {
         this.logger.info("Starting HTTP server");
-        
+
         const routePath = `${this.path}/:action`;
         this.logger.info(`[OneBot V11] About to call router.post(${routePath})`);
-        this.router.post(routePath, async (ctx) => {
+        this.router.post(routePath, async ctx => {
             // Verify access token
-            const token = ctx.query.access_token || ctx.headers.authorization?.replace('Bearer ', '');
+            const token =
+                ctx.query.access_token || ctx.headers.authorization?.replace("Bearer ", "");
             if (!this.verifyToken(token as string)) {
                 this.logger.warn(`[OneBot V11] Unauthorized request: ${ctx.path}`, {
-                    token: token ? 'present' : 'missing',
-                    expectedToken: this.config.access_token ? 'configured' : 'not configured',
+                    token: token ? "present" : "missing",
+                    expectedToken: this.config.access_token ? "configured" : "not configured",
                 });
                 ctx.status = 401;
                 ctx.body = { status: "failed", retcode: 1403, msg: "Unauthorized" };
@@ -826,7 +958,8 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
             }
 
             const action = ctx.params.action;
-            const params = ((ctx.request as unknown as Record<string, unknown>).body ?? {}) as Record<string, unknown>;
+            const params = ((ctx.request as unknown as Record<string, unknown>).body ??
+                {}) as Record<string, unknown>;
 
             this.logger.debug(`[OneBot V11] Processing action: ${action}`, params);
 
@@ -850,14 +983,16 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
      */
     private startWebSocket(): void {
         this.logger.info("Starting WebSocket server");
-        
+
         const wss = this.router.ws(this.path);
-        
+
         wss.on("connection", (ws, request) => {
             // Verify access token
             const url = new URL(request.url!, `ws://localhost`);
-            const token = url.searchParams.get('access_token') || request.headers.authorization?.replace('Bearer ', '');
-            
+            const token =
+                url.searchParams.get("access_token") ||
+                request.headers.authorization?.replace("Bearer ", "");
+
             if (!this.verifyToken(token as string)) {
                 ws.close(1008, "Unauthorized");
                 return;
@@ -874,23 +1009,34 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
 
             // Listen for dispatch events and send to client
             const onDispatch = (data: string) => {
-                this.logger.debug(`[OneBot V11] onDispatch called, ws.readyState:`, ws.readyState, `data length:`, data.length);
+                this.logger.debug(
+                    `[OneBot V11] onDispatch called, ws.readyState:`,
+                    ws.readyState,
+                    `data length:`,
+                    data.length,
+                );
                 if (ws.readyState === WebSocket.OPEN) {
                     try {
                         ws.send(data);
                         this.logger.debug(`[OneBot V11] Message sent to WebSocket client`);
                     } catch (error) {
-                        this.logger.error(`[OneBot V11] Error sending message to WebSocket:`, error);
+                        this.logger.error(
+                            `[OneBot V11] Error sending message to WebSocket:`,
+                            error,
+                        );
                     }
                 } else {
                     this.logger.warn(`[OneBot V11] WebSocket not open, readyState:`, ws.readyState);
                 }
             };
             this.on("dispatch", onDispatch);
-            this.logger.debug(`[OneBot V11] Dispatch listener registered, listener count:`, this.listenerCount("dispatch"));
+            this.logger.debug(
+                `[OneBot V11] Dispatch listener registered, listener count:`,
+                this.listenerCount("dispatch"),
+            );
 
             // Handle incoming API calls
-            ws.on("message", async (data) => {
+            ws.on("message", async data => {
                 try {
                     const request = JSON.parse(data.toString());
                     const { action, params, echo } = request;
@@ -899,11 +1045,13 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                     ws.send(JSON.stringify({ ...result, echo }));
                 } catch (error) {
                     this.logger.error("WebSocket message error:", error);
-                    ws.send(JSON.stringify({
-                        status: "failed",
-                        retcode: -1,
-                        msg: error.message,
-                    }));
+                    ws.send(
+                        JSON.stringify({
+                            status: "failed",
+                            retcode: -1,
+                            msg: error.message,
+                        }),
+                    );
                 }
             });
 
@@ -912,7 +1060,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 this.off("dispatch", onDispatch);
             });
 
-            ws.on("error", (error) => {
+            ws.on("error", error => {
                 this.logger.error("WebSocket error:", error);
             });
         });
@@ -942,30 +1090,29 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
      */
     private startHttpReverse(url: string): void {
         this.logger.info(`Starting HTTP reverse to ${url}`);
-        
 
         // Listen for dispatch events and POST to external server
         const onDispatch = async (data: string) => {
             try {
                 const headers: Record<string, string> = {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'OneBot/11',
-                    'X-Self-ID': this.account.account_id,
+                    "Content-Type": "application/json",
+                    "User-Agent": "OneBot/11",
+                    "X-Self-ID": this.account.account_id,
                 };
 
                 // Add access token if configured
                 if (this.config.access_token) {
-                    headers['Authorization'] = `Bearer ${this.config.access_token}`;
+                    headers["Authorization"] = `Bearer ${this.config.access_token}`;
                 }
 
                 // Add signature if secret is configured
                 if (this.config.secret) {
-                    const hmac = crypto.createHmac('sha1', this.config.secret);
-                    headers['X-Signature'] = 'sha1=' + hmac.update(data).digest('hex');
+                    const hmac = crypto.createHmac("sha1", this.config.secret);
+                    headers["X-Signature"] = "sha1=" + hmac.update(data).digest("hex");
                 }
 
                 const response = await fetch(url, {
-                    method: 'POST',
+                    method: "POST",
                     headers,
                     body: data,
                     signal: AbortSignal.timeout(this.config.post_timeout || 5000),
@@ -996,21 +1143,21 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                 // Add access token to URL if configured
                 let wsUrl = url;
                 if (this.config.access_token) {
-                    const separator = url.includes('?') ? '&' : '?';
+                    const separator = url.includes("?") ? "&" : "?";
                     wsUrl = `${url}${separator}access_token=${this.config.access_token}`;
                 }
 
                 ws = new WebSocket(wsUrl, {
                     headers: {
-                        'User-Agent': 'OneBot/11',
-                        'X-Self-ID': this.account.account_id,
-                        'X-Client-Role': 'Universal',
+                        "User-Agent": "OneBot/11",
+                        "X-Self-ID": this.account.account_id,
+                        "X-Client-Role": "Universal",
                     },
                 });
 
-                ws.on('open', () => {
+                ws.on("open", () => {
                     this.logger.info(`WebSocket reverse connected to ${url}`);
-                    
+
                     // Send meta event: lifecycle.connect
                     const connectEvent = this.format("meta_event", {
                         meta_event_type: "lifecycle",
@@ -1025,7 +1172,7 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                     }
                 });
 
-                ws.on('message', async (data: Buffer) => {
+                ws.on("message", async (data: Buffer) => {
                     try {
                         const request = JSON.parse(data.toString());
                         const { action, params, echo } = request;
@@ -1037,14 +1184,16 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                     }
                 });
 
-                ws.on('close', () => {
+                ws.on("close", () => {
                     // 移除派发监听，避免重连后监听器累积导致事件重复发送
                     this.off("dispatch", onDispatch);
-                    this.logger.warn(`WebSocket reverse disconnected from ${url}, reconnecting in 5s...`);
+                    this.logger.warn(
+                        `WebSocket reverse disconnected from ${url}, reconnecting in 5s...`,
+                    );
                     reconnectTimer = setTimeout(connect, 5000);
                 });
 
-                ws.on('error', (error: Error) => {
+                ws.on("error", (error: Error) => {
                     this.logger.error("WebSocket reverse error:", error);
                 });
 
@@ -1055,7 +1204,6 @@ export class OneBotV11Protocol extends Protocol<"v11",OneBotV11Config.Config> {
                     }
                 };
                 this.on("dispatch", onDispatch);
-
             } catch (error) {
                 this.logger.error(`WebSocket reverse connection failed:`, error);
                 reconnectTimer = setTimeout(connect, 5000);

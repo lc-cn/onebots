@@ -1,49 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import UiField from '../ui/UiField.vue';
-import UiInput from '../ui/UiInput.vue';
-import UiNumberInput from '../ui/UiNumberInput.vue';
-import UiSwitch from '../ui/UiSwitch.vue';
-import UiSelect from '../ui/UiSelect.vue';
-import UiTextarea from '../ui/UiTextarea.vue';
-import EndpointListField from './config/EndpointListField.vue';
-import EventFilterField from './config/EventFilterField.vue';
-
-interface SchemaFieldRule {
-    required?: boolean;
-    type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
-    min?: number;
-    max?: number;
-    choices?: Array<{ label: string; value: string | number | boolean }>;
-    description?: string;
-    placeholder?: string;
-    ui?: {
-        widget?: 'endpoint-list' | 'event-filter';
-        itemLabel?: string;
-        addLabel?: string;
-        schemes?: string[];
-        fields?: Array<{
-            key: string;
-            label: string;
-            type?: 'string' | 'number' | 'boolean';
-            placeholder?: string;
-            description?: string;
-            sensitive?: boolean;
-        }>;
-        eventFields?: Array<{
-            path: string;
-            label: string;
-            choices?: Array<{ label: string; value: string | number | boolean }>;
-        }>;
-    };
-}
-
-interface SchemaFieldDef {
-    key: string;
-    label: string;
-    rule: SchemaFieldRule;
-    placeholder: string;
-}
+import { computed } from "vue";
+import UiField from "../ui/UiField.vue";
+import UiInput from "../ui/UiInput.vue";
+import UiNumberInput from "../ui/UiNumberInput.vue";
+import UiSwitch from "../ui/UiSwitch.vue";
+import UiSelect from "../ui/UiSelect.vue";
+import UiTextarea from "../ui/UiTextarea.vue";
+import EndpointListField from "./config/EndpointListField.vue";
+import EventFilterField from "./config/EventFilterField.vue";
+import type { SchemaFieldDef } from "./config/types";
 
 interface Props {
     /** 字段定义（来自配置 Schema） */
@@ -53,63 +18,70 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-    disabled: false
+    disabled: false,
 });
 
 const model = defineModel<unknown>();
 
-type WidgetKind = 'input' | 'number' | 'switch' | 'select' | 'textarea' | 'endpoint-list' | 'event-filter';
+type WidgetKind =
+    | "input"
+    | "number"
+    | "switch"
+    | "select"
+    | "textarea"
+    | "endpoint-list"
+    | "event-filter";
 
 const widget = computed<WidgetKind>(() => {
     const rule = props.field.rule;
-    if (rule.type === 'array' && rule.ui?.widget === 'endpoint-list') return 'endpoint-list';
-    if (rule.type === 'object' && rule.ui?.widget === 'event-filter') return 'event-filter';
-    if (rule.choices && rule.choices.length > 0) return 'select';
-    if (rule.type === 'string') return 'input';
-    if (rule.type === 'number') return 'number';
-    if (rule.type === 'boolean') return 'switch';
-    if (rule.type === 'object' || rule.type === 'array') return 'textarea';
-    return 'input';
+    if (rule.type === "array" && rule.ui?.widget === "endpoint-list") return "endpoint-list";
+    if (rule.type === "object" && rule.ui?.widget === "event-filter") return "event-filter";
+    if (rule.choices && rule.choices.length > 0) return "select";
+    if (rule.type === "string") return "input";
+    if (rule.type === "number") return "number";
+    if (rule.type === "boolean") return "switch";
+    if (rule.type === "object" || rule.type === "array") return "textarea";
+    return "input";
 });
 
 const choiceOptions = computed(() =>
     (props.field.rule.choices || []).map(c => ({
         label: c.label,
-        value: c.value
-    }))
+        value: c.value,
+    })),
 );
 
 const stringModel = computed<string>({
-    get: () => (typeof model.value === 'string' ? model.value : ''),
+    get: () => (typeof model.value === "string" ? model.value : ""),
     set: value => {
         model.value = value;
-    }
+    },
 });
 
 const numberModel = computed<number | undefined>({
-    get: () => (typeof model.value === 'number' ? model.value : undefined),
+    get: () => (typeof model.value === "number" ? model.value : undefined),
     set: value => {
         model.value = value;
-    }
+    },
 });
 
 const booleanModel = computed<boolean>({
     get: () => model.value === true,
     set: value => {
         model.value = value;
-    }
+    },
 });
 
 const choiceModel = computed<string | number | boolean | undefined>({
     get: () => {
         const value = model.value;
-        return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+        return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
             ? value
             : undefined;
     },
     set: value => {
         model.value = value;
-    }
+    },
 });
 </script>
 
