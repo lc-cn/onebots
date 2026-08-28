@@ -1,5 +1,11 @@
 # @onebots/protocol-mcp-v1
 
+## 0.1.4
+
+### Patch Changes
+
+- onebots@1.2.7
+
 ## 0.1.3
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # onebots
 
+## 1.2.7
+
+### Patch Changes
+
+- Updated dependencies [25ac8a4]
+  - @onebots/web@1.0.12
+
 ## 1.2.6
 
 ### Patch Changes

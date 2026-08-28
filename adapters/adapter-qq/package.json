@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-qq",
-  "version": "3.0.8",
+  "version": "3.0.9",
   "description": "IMHelper QQ官方机器人适配器（基于 qq-official-bot）",
   "type": "module",
   "main": "lib/index.js",
