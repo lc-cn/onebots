@@ -145,6 +145,8 @@ export namespace CommonEvent {
         type: "request";
         /** Request type */
         request_type: RequestType;
+        /** 平台请求子类型，例如入群申请或邀请。 */
+        sub_type?: string;
         /** User making the request */
         user: CommonTypes.User;
         /** Group involved in the request */

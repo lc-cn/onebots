@@ -3,13 +3,26 @@
  * 继承 Adapter 基类，实现 ICQQ 平台功能
  */
 import { Buffer } from "node:buffer";
+import { readFile } from "node:fs/promises";
 import { Account, AdapterRegistry, AccountStatus, unixSecondsToEventMs } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { ICQQBot, segment } from "./bot.js";
 import { CommonEvent, CommonTypes } from "onebots";
-import type { Sendable, MessageElem } from "@icqqjs/icqq/lib/message";
-import type { MessageRet } from "@icqqjs/icqq/lib/events";
+import type { Client } from "@icqqjs/icqq";
+import type {
+    MessageElem,
+    PrivateMessage,
+    GroupMessage,
+    ForwardMessage,
+} from "@icqqjs/icqq/lib/message";
+import type {
+    FriendRequestEvent,
+    GroupInviteEvent,
+    GroupRequestEvent,
+} from "@icqqjs/icqq/lib/events";
+import type { GfsDirStat, GfsFileStat } from "@icqqjs/icqq/lib/gfs";
+import { icqqCapabilities } from "./capabilities.js";
 import type {
     ICQQOfflineEvent,
     ICQQQRCodeEvent,
@@ -18,12 +31,26 @@ import type {
     ICQQDeviceEvent,
     ICQQLoginErrorEvent,
 } from "./types.js";
+
+async function readPackageVersion(url: URL): Promise<string> {
+    const metadata: unknown = JSON.parse(await readFile(url, "utf8"));
+    if (
+        typeof metadata !== "object" ||
+        metadata === null ||
+        !("version" in metadata) ||
+        typeof metadata.version !== "string"
+    ) {
+        throw new TypeError(`包元数据缺少 version: ${url.pathname}`);
+    }
+    return metadata.version;
+}
 import type {
     ICQQConfig,
     ICQQUser,
     ICQQPrivateMessageEvent,
     ICQQGroupMessageEvent,
     ICQQFriendRequestEvent,
+    ICQQGroupRequestEvent,
     ICQQGroupIncreaseEvent,
     ICQQGroupDecreaseEvent,
     ICQQMessageElement,
@@ -31,7 +58,7 @@ import type {
 
 export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     constructor(app: BaseApp) {
-        super(app, "icqq");
+        super(app, "icqq", icqqCapabilities);
         this.icon = "https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png";
     }
 
@@ -55,19 +82,31 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
 
         // 转换消息格式
         const icqqMessage = this.buildICQQMessage(message);
-        const targetId = parseInt(sceneId.string);
 
-        let result: MessageRet;
+        let messageId: string;
         if (scene_type === "private") {
-            result = await bot.sendPrivateMessage(targetId, icqqMessage as never);
+            const result = await bot.sendPrivateMessage(Number(sceneId.string), icqqMessage);
+            messageId = result.message_id || result.seq?.toString() || "";
         } else if (scene_type === "group") {
-            result = await bot.sendGroupMessage(targetId, icqqMessage as never);
+            const result = await bot.sendGroupMessage(Number(sceneId.string), icqqMessage);
+            messageId = result.message_id || result.seq?.toString() || "";
+        } else if (scene_type === "channel") {
+            const [guildId, channelId, ...rest] = sceneId.string.split(":");
+            if (!guildId || !channelId || rest.length > 0) {
+                throw new TypeError("ICQQ 频道 scene_id 必须为 {guild_id}:{channel_id}");
+            }
+            const result = await this.requireNativeClient(uin).sendGuildMsg(
+                guildId,
+                channelId,
+                icqqMessage,
+            );
+            messageId = `${guildId}:${channelId}:${result.seq}:${result.rand}:${result.time}`;
         } else {
             throw new Error(`不支持的消息类型: ${scene_type}`);
         }
 
         return {
-            message_id: this.createId(result.message_id || result.seq?.toString() || ""),
+            message_id: this.createId(messageId),
         };
     }
 
@@ -96,26 +135,48 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
         );
 
-        const isGroup = !!(msg as { group_id?: unknown }).group_id;
-        return {
-            message_id: this.createId(msg.message_id),
-            // MessageInfo.time 约定为 Unix 秒（与 OneBot get_msg 等一致）
-            time: msg.time,
-            sender: {
-                scene_type: isGroup ? "group" : "private",
-                sender_id: this.createId(msg.user_id.toString()),
-                scene_id: this.createId(
-                    isGroup
-                        ? String((msg as { group_id?: unknown }).group_id)
-                        : msg.user_id.toString(),
-                ),
-                sender_name: msg.sender?.nickname || "",
-                scene_name: "",
-            },
-            message: this.convertICQQMessageToSegments(
-                (msg as { message?: ICQQMessageElement[] }).message || [],
-            ),
-        };
+        return this.convertNativeMessage(msg);
+    }
+
+    async getMessageHistory(
+        uin: string,
+        params: Adapter.GetMessageHistoryParams,
+    ): Promise<Adapter.MessageInfo[]> {
+        const client = this.requireNativeClient(uin);
+        const sceneId = Number(params.scene_id.string);
+        const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
+        const messages =
+            params.scene_type === "group"
+                ? await client.pickGroup(sceneId).getChatHistory(params.offset, limit)
+                : await client.pickUser(sceneId).getChatHistory(params.offset, limit);
+        return messages.map(message => this.convertNativeMessage(message));
+    }
+
+    async getForwardMessage(
+        uin: string,
+        params: Adapter.GetForwardMessageParams,
+    ): Promise<Adapter.MessageInfo[]> {
+        const client = this.requireNativeClient(uin);
+        const resourceId = params.resource_id ?? params.message_id?.string;
+        if (!resourceId) throw new TypeError("获取合并转发消息需要 resource_id 或 message_id");
+        const messages = await client.getForwardMsg(resourceId);
+        return messages.map((message, index) =>
+            this.convertNativeMessage(message, `${resourceId}:${index}`),
+        );
+    }
+
+    async markMessageAsRead(uin: string, params: Adapter.MarkMessageAsReadParams): Promise<void> {
+        const client = this.requireNativeClient(uin);
+        if (params.message_id) {
+            await client.reportReaded(params.message_id.string);
+            return;
+        }
+        const sceneId = Number(params.scene_id.string);
+        if (params.scene_type === "group") {
+            await client.pickGroup(sceneId).markRead();
+        } else {
+            await client.pickUser(sceneId).markRead();
+        }
     }
 
     // ============================================
@@ -170,7 +231,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
      */
     async getFriendList(
         uin: string,
-        params?: Adapter.GetFriendListParams,
+        _params?: Adapter.GetFriendListParams,
     ): Promise<Adapter.FriendInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
@@ -224,6 +285,45 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         }
     }
 
+    async deleteFriend(uin: string, params: Adapter.DeleteFriendParams): Promise<void> {
+        const accepted = await this.requireNativeClient(uin).deleteFriend(
+            Number(params.user_id.string),
+        );
+        this.assertNativeAccepted(accepted, "删除好友");
+    }
+
+    async sendFriendNudge(uin: string, params: Adapter.SendFriendNudgeParams): Promise<void> {
+        const accepted = await this.requireNativeClient(uin)
+            .pickFriend(Number(params.user_id.string))
+            .poke(params.is_self);
+        this.assertNativeAccepted(accepted, "发送好友戳一戳");
+    }
+
+    async sendLike(uin: string, params: Adapter.SendLikeParams): Promise<void> {
+        const times = params.times ?? params.count ?? 1;
+        const accepted = await this.requireNativeClient(uin)
+            .pickUser(Number(params.user_id.string))
+            .thumbUp(times);
+        this.assertNativeAccepted(accepted, "发送好友赞");
+    }
+
+    async getFriendRequests(
+        uin: string,
+        params?: Adapter.GetFriendRequestsParams,
+    ): Promise<Adapter.FriendRequest[]> {
+        const requests = (await this.requireNativeClient(uin).getSystemMsg()).filter(
+            (event): event is FriendRequestEvent => event.request_type === "friend",
+        );
+        const selected = params?.limit === undefined ? requests : requests.slice(0, params.limit);
+        return selected.map(event => ({
+            request_id: this.createId(event.flag),
+            user_id: this.createId(event.user_id),
+            user_name: event.nickname,
+            message: event.comment,
+            time: event.time,
+        }));
+    }
+
     // ============================================
     // 群组相关方法
     // ============================================
@@ -233,7 +333,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
      */
     async getGroupList(
         uin: string,
-        params?: Adapter.GetGroupListParams,
+        _params?: Adapter.GetGroupListParams,
     ): Promise<Adapter.GroupInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
@@ -283,6 +383,14 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         const bot = account.client;
         const groupId = parseInt(params.group_id.string);
         await bot.leaveGroup(groupId);
+    }
+
+    async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
+        const accepted = await this.requireNativeClient(uin).setGroupName(
+            Number(params.group_id.string),
+            params.group_name,
+        );
+        this.assertNativeAccepted(accepted, "设置群名称");
     }
 
     /**
@@ -363,6 +471,48 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         }
     }
 
+    async muteGroupMember(uin: string, params: Adapter.MuteGroupMemberParams): Promise<void> {
+        const accepted = await this.requireNativeClient(uin).setGroupBan(
+            Number(params.group_id.string),
+            Number(params.user_id.string),
+            params.duration,
+        );
+        this.assertNativeAccepted(accepted, "设置群成员禁言");
+    }
+
+    async muteGroupAll(uin: string, params: Adapter.MuteGroupAllParams): Promise<void> {
+        const accepted = await this.requireNativeClient(uin).setGroupWholeBan(
+            Number(params.group_id.string),
+            params.enable,
+        );
+        this.assertNativeAccepted(accepted, "设置全员禁言");
+    }
+
+    async muteGroupAnonymous(uin: string, params: Adapter.MuteGroupAnonymousParams): Promise<void> {
+        await this.requireNativeClient(uin).setGroupAnonymousBan(
+            Number(params.group_id.string),
+            params.flag,
+            params.duration,
+        );
+    }
+
+    async setGroupAnonymous(uin: string, params: Adapter.SetGroupAnonymousParams): Promise<void> {
+        const accepted = await this.requireNativeClient(uin).setGroupAnonymous(
+            Number(params.group_id.string),
+            params.enable,
+        );
+        this.assertNativeAccepted(accepted, "设置群匿名");
+    }
+
+    async setGroupAdmin(uin: string, params: Adapter.SetGroupAdminParams): Promise<void> {
+        const accepted = await this.requireNativeClient(uin).setGroupAdmin(
+            Number(params.group_id.string),
+            Number(params.user_id.string),
+            params.enable,
+        );
+        this.assertNativeAccepted(accepted, "设置群管理员");
+    }
+
     /**
      * 设置群名片
      */
@@ -376,6 +526,315 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         await bot.setGroupCard(groupId, userId, params.card);
     }
 
+    async setGroupSpecialTitle(
+        uin: string,
+        params: Adapter.SetGroupSpecialTitleParams,
+    ): Promise<void> {
+        const accepted = await this.requireNativeClient(uin).setGroupSpecialTitle(
+            Number(params.group_id.string),
+            Number(params.user_id.string),
+            params.special_title,
+            params.duration,
+        );
+        this.assertNativeAccepted(accepted, "设置群专属头衔");
+    }
+
+    async sendGroupNudge(uin: string, params: Adapter.SendGroupNudgeParams): Promise<void> {
+        const accepted = await this.requireNativeClient(uin).sendGroupPoke(
+            Number(params.group_id.string),
+            Number(params.user_id.string),
+        );
+        this.assertNativeAccepted(accepted, "发送群戳一戳");
+    }
+
+    async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
+        const flag = params.flag ?? params.request_id?.string;
+        if (!flag) throw new TypeError("处理 ICQQ 群申请需要 request_id 或原始 flag");
+        const accepted = await this.requireNativeClient(uin).setGroupAddRequest(
+            flag,
+            params.approve,
+            params.reason,
+        );
+        this.assertNativeAccepted(accepted, `${params.approve ? "同意" : "拒绝"}群申请`);
+    }
+
+    async getGroupNotifications(
+        uin: string,
+        params?: Adapter.GetGroupNotificationsParams,
+    ): Promise<Adapter.GroupNotification[]> {
+        const requests = (await this.requireNativeClient(uin).getSystemMsg()).filter(
+            (event): event is GroupRequestEvent | GroupInviteEvent =>
+                event.request_type === "group",
+        );
+        const selected = params?.limit === undefined ? requests : requests.slice(0, params.limit);
+        return selected.map(event => ({
+            notification_id: this.createId(event.flag),
+            group_id: this.createId(event.group_id),
+            user_id: this.createId(event.user_id),
+            type: event.sub_type,
+            time: event.time,
+        }));
+    }
+
+    async setGroupAvatar(uin: string, params: Adapter.SetGroupAvatarParams): Promise<void> {
+        await this.requireNativeClient(uin).setGroupPortrait(
+            Number(params.group_id.string),
+            this.processFileData(params.file),
+        );
+    }
+
+    async sendGroupMessageReaction(
+        uin: string,
+        params: Adapter.SendGroupMessageReactionParams,
+    ): Promise<void> {
+        const client = this.requireNativeClient(uin);
+        const message = await client.getMsg(params.message_id.string);
+        if (!message || message.message_type !== "group") {
+            throw new TypeError("群消息表态需要有效的群消息 ID");
+        }
+        if (message.group_id !== Number(params.group_id.string)) {
+            throw new TypeError("消息不属于指定群");
+        }
+        await client.pickGroup(message.group_id).setReaction(message.seq, String(params.face_id));
+    }
+
+    async sendGroupAnnouncement(
+        uin: string,
+        params: Adapter.SendGroupAnnouncementParams,
+    ): Promise<void> {
+        const accepted = await this.requireNativeClient(uin)
+            .pickGroup(Number(params.group_id.string))
+            .announce(params.content);
+        this.assertNativeAccepted(accepted, "发送群公告");
+    }
+
+    async setGroupEssenceMessage(
+        uin: string,
+        params: Adapter.SetGroupEssenceMessageParams,
+    ): Promise<void> {
+        await this.requireNativeClient(uin).setEssenceMessage(params.message_id.string);
+    }
+
+    async deleteGroupEssenceMessage(
+        uin: string,
+        params: Adapter.DeleteGroupEssenceMessageParams,
+    ): Promise<void> {
+        await this.requireNativeClient(uin).removeEssenceMessage(params.message_id.string);
+    }
+
+    async getGuildList(uin: string): Promise<Adapter.GuildInfo[]> {
+        return this.requireNativeClient(uin)
+            .getGuildList()
+            .map(guild => ({
+                guild_id: this.createId(guild.guild_id),
+                guild_name: guild.guild_name,
+            }));
+    }
+
+    async getGuildInfo(
+        uin: string,
+        params: Adapter.GetGuildInfoParams,
+    ): Promise<Adapter.GuildInfo> {
+        const guild = this.requireNativeClient(uin).getGuildInfo(params.guild_id.string);
+        if (!guild) throw new Error(`Guild ${params.guild_id.string} not found`);
+        return {
+            guild_id: this.createId(guild.guild_id),
+            guild_name: guild.guild_name,
+        };
+    }
+
+    async getGuildMemberInfo(
+        uin: string,
+        params: Adapter.GetGuildMemberInfoParams,
+    ): Promise<Adapter.GuildMemberInfo> {
+        const members = await this.requireNativeClient(uin)
+            .pickGuild(params.guild_id.string)
+            .getMemberList();
+        const member = members.find(item => item.tiny_id === params.user_id.string);
+        if (!member) throw new Error(`Guild member ${params.user_id.string} not found`);
+        return {
+            guild_id: params.guild_id,
+            user_id: this.createId(member.tiny_id),
+            user_name: member.nickname,
+            nickname: member.card || member.nickname,
+            role: String(member.role),
+        };
+    }
+
+    async getGuildMemberList(
+        uin: string,
+        params: Adapter.GetGuildMemberListParams,
+    ): Promise<Adapter.GuildMemberInfo[]> {
+        const members = await this.requireNativeClient(uin)
+            .pickGuild(params.guild_id.string)
+            .getMemberList();
+        return members.map(member => ({
+            guild_id: params.guild_id,
+            user_id: this.createId(member.tiny_id),
+            user_name: member.nickname,
+            nickname: member.card || member.nickname,
+            role: String(member.role),
+        }));
+    }
+
+    async getChannelList(
+        uin: string,
+        params?: Adapter.GetChannelListParams,
+    ): Promise<Adapter.ChannelInfo[]> {
+        if (!params) throw new TypeError("获取 ICQQ 子频道列表需要 guild_id");
+        return this.requireNativeClient(uin)
+            .getChannelList(params.guild_id.string)
+            .map(channel => ({
+                channel_id: this.createId(channel.channel_id),
+                channel_name: channel.channel_name,
+                channel_type: channel.channel_type,
+            }));
+    }
+
+    async getChannelInfo(
+        uin: string,
+        params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
+        const client = this.requireNativeClient(uin);
+        const guildIds = params.guild_id ? [params.guild_id.string] : [...client.guilds.keys()];
+        for (const guildId of guildIds) {
+            const channel = client.getChannelInfo(guildId, params.channel_id.string);
+            if (channel) {
+                return {
+                    channel_id: this.createId(channel.channel_id),
+                    channel_name: channel.channel_name,
+                    channel_type: channel.channel_type,
+                };
+            }
+        }
+        throw new Error(`Channel ${params.channel_id.string} not found`);
+    }
+
+    async uploadFile(uin: string, params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> {
+        const client = this.requireNativeClient(uin);
+        const source = this.resolveUploadSource(params);
+        if (params.scene_type === "group") {
+            const file = await client
+                .acquireGfs(Number(params.scene_id.string))
+                .upload(source, params.folder_id?.string, params.name);
+            return this.convertFileInfo(file);
+        }
+        if (params.scene_type === "private" || params.scene_type === "direct") {
+            const file = await client
+                .pickFriend(Number(params.scene_id.string))
+                .uploadFile(source, params.name);
+            return {
+                file_id: this.createId(file.fid ?? params.name),
+                file_name: file.name ?? params.name,
+                file_size: file.size,
+                url: file.url,
+            };
+        }
+        throw new TypeError(`ICQQ 不支持在 ${params.scene_type} 场景上传文件`);
+    }
+
+    async deleteFile(uin: string, params: Adapter.DeleteFileParams): Promise<void> {
+        if (!params.scene_id) throw new TypeError("删除 ICQQ 文件需要 scene_id");
+        const client = this.requireNativeClient(uin);
+        if (params.scene_type === "group") {
+            await client.acquireGfs(Number(params.scene_id.string)).rm(params.file_id.string);
+            return;
+        }
+        if (params.scene_type === "private" || params.scene_type === "direct") {
+            const accepted = await client
+                .pickFriend(Number(params.scene_id.string))
+                .recallFile(params.file_id.string);
+            this.assertNativeAccepted(accepted, "撤回私聊文件");
+            return;
+        }
+        throw new TypeError("删除 ICQQ 文件需要 private、direct 或 group 场景");
+    }
+
+    async getGroupFiles(
+        uin: string,
+        params: Adapter.GetGroupFilesParams,
+    ): Promise<Adapter.GroupFilesResult> {
+        const entries = await this.requireNativeClient(uin)
+            .acquireGfs(Number(params.group_id.string))
+            .dir(params.parent_folder_id?.string ?? "/");
+        return {
+            files: entries.filter(this.isGfsFile).map(file => this.convertFileInfo(file)),
+            folders: entries.filter(this.isGfsDirectory).map(folder => ({
+                folder_id: this.createId(folder.fid),
+                folder_name: folder.name,
+            })),
+        };
+    }
+
+    async createGroupFolder(
+        uin: string,
+        params: Adapter.CreateGroupFolderParams,
+    ): Promise<Adapter.FolderInfo> {
+        if (params.parent_folder_id && params.parent_folder_id.string !== "/") {
+            throw new TypeError("ICQQ 仅支持在群文件根目录创建文件夹");
+        }
+        const folder = await this.requireNativeClient(uin)
+            .acquireGfs(Number(params.group_id.string))
+            .mkdir(params.folder_name);
+        return {
+            folder_id: this.createId(folder.fid),
+            folder_name: folder.name,
+        };
+    }
+
+    async getFileDownloadUrl(
+        uin: string,
+        params: Adapter.GetFileDownloadUrlParams,
+    ): Promise<string> {
+        const client = this.requireNativeClient(uin);
+        if (params.scene_type === "group") {
+            const file = await client
+                .acquireGfs(Number(params.scene_id.string))
+                .download(params.file_id.string);
+            return file.url;
+        }
+        if (params.scene_type === "private" || params.scene_type === "direct") {
+            return client
+                .pickUser(Number(params.scene_id.string))
+                .getFileUrl(params.file_id.string);
+        }
+        throw new TypeError(`ICQQ 不支持获取 ${params.scene_type} 场景的文件地址`);
+    }
+
+    async moveGroupFile(uin: string, params: Adapter.MoveGroupFileParams): Promise<void> {
+        await this.requireNativeClient(uin)
+            .acquireGfs(Number(params.group_id.string))
+            .mv(params.file_id.string, params.parent_folder_id.string);
+    }
+
+    async renameGroupFile(uin: string, params: Adapter.RenameGroupFileParams): Promise<void> {
+        await this.requireNativeClient(uin)
+            .acquireGfs(Number(params.group_id.string))
+            .rename(params.file_id.string, params.new_name);
+    }
+
+    async renameGroupFolder(uin: string, params: Adapter.RenameGroupFolderParams): Promise<void> {
+        await this.requireNativeClient(uin)
+            .acquireGfs(Number(params.group_id.string))
+            .rename(params.folder_id.string, params.new_name);
+    }
+
+    async deleteGroupFolder(uin: string, params: Adapter.DeleteGroupFolderParams): Promise<void> {
+        await this.requireNativeClient(uin)
+            .acquireGfs(Number(params.group_id.string))
+            .rm(params.folder_id.string);
+    }
+
+    async canSendImage(uin: string): Promise<boolean> {
+        this.requireNativeClient(uin);
+        return true;
+    }
+
+    async canSendRecord(uin: string): Promise<boolean> {
+        this.requireNativeClient(uin);
+        return true;
+    }
+
     // ============================================
     // 系统相关方法
     // ============================================
@@ -383,12 +842,17 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 获取版本信息
      */
-    async getVersion(uin: string): Promise<Adapter.VersionInfo> {
+    async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+        const [adapterVersion, icqqVersion] = await Promise.all([
+            readPackageVersion(new URL("../package.json", import.meta.url)),
+            readPackageVersion(new URL("../package.json", import.meta.resolve("@icqqjs/icqq"))),
+        ]);
         return {
             app_name: "onebots ICQQ Adapter",
-            app_version: "1.0.0",
+            app_version: adapterVersion,
             impl: "icqq",
-            version: "1.0.0",
+            version: icqqVersion,
+            impl_version: icqqVersion,
         };
     }
 
@@ -401,6 +865,30 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             online: account?.status === AccountStatus.Online,
             good: account?.status === AccountStatus.Online,
         };
+    }
+
+    async getCookies(uin: string, params?: Adapter.GetCookiesParams): Promise<string> {
+        const client = this.requireNativeClient(uin);
+        const domain = params?.domain as Parameters<Client["getCookies"]>[0];
+        return client.getCookies(domain);
+    }
+
+    async getCsrfToken(uin: string): Promise<number> {
+        return this.requireNativeClient(uin).getCsrfToken();
+    }
+
+    async getCredentials(
+        uin: string,
+        params?: Adapter.GetCredentialsParams,
+    ): Promise<Adapter.CredentialsInfo> {
+        return {
+            cookies: await this.getCookies(uin, params),
+            csrf_token: await this.getCsrfToken(uin),
+        };
+    }
+
+    async cleanCache(uin: string): Promise<void> {
+        this.requireNativeClient(uin).cleanCache();
     }
 
     // ============================================
@@ -693,6 +1181,30 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             account.dispatch(requestEvent);
         });
 
+        // request_id 是 ICQQ 的 opaque flag；统一 ID 映射让各协议可安全往返该值。
+        bot.on("group_request", (event: ICQQGroupRequestEvent) => {
+            const requestEvent: CommonEvent.Request<ICQQGroupRequestEvent> = {
+                id: this.createId(event.request_id),
+                timestamp: unixSecondsToEventMs(event.time),
+                platform: "icqq",
+                bot_id: this.createId(config.account_id),
+                type: "request",
+                request_type: "group",
+                sub_type: event.sub_type,
+                user: {
+                    id: this.createId(event.user_id.toString()),
+                    name: event.nickname,
+                },
+                group: {
+                    id: this.createId(event.group_id.toString()),
+                },
+                comment: event.comment,
+                flag: event.request_id,
+                raw_event: event,
+            };
+            account.dispatch(requestEvent);
+        });
+
         // 监听群成员增加
         bot.on("group_increase", (event: ICQQGroupIncreaseEvent) => {
             const noticeEvent: CommonEvent.Notice = {
@@ -877,11 +1389,73 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         return file;
     }
 
+    /** ICQQ 原生客户端只在适配器实现内部可见，不越过通用 Adapter seam。 */
+    private requireNativeClient(uin: string): Client {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        const client = account.client.getClient();
+        if (!client) throw new Error(`Account ${uin} is not connected`);
+        return client;
+    }
+
+    private assertNativeAccepted(accepted: boolean, operation: string): void {
+        if (!accepted) throw new Error(`${operation}失败`);
+    }
+
+    private convertNativeMessage(
+        message: PrivateMessage | GroupMessage | ForwardMessage,
+        fallbackMessageId?: string,
+    ): Adapter.MessageInfo {
+        const isGroup = message.message_type === "group" && message.group_id !== undefined;
+        const messageId = "message_id" in message ? message.message_id : fallbackMessageId;
+        if (!messageId) throw new TypeError("ICQQ 消息缺少可用的 message_id");
+        const senderName = "sender" in message ? message.sender?.nickname : message.nickname;
+        return {
+            message_id: this.createId(messageId),
+            time: message.time,
+            sender: {
+                scene_type: isGroup ? "group" : "private",
+                sender_id: this.createId(message.user_id),
+                scene_id: this.createId(isGroup ? message.group_id : message.user_id),
+                sender_name: senderName ?? "",
+                scene_name: isGroup && "group_name" in message ? message.group_name : "",
+            },
+            message: this.convertICQQMessageToSegments(message.message),
+        };
+    }
+
+    private resolveUploadSource(params: Adapter.UploadFileParams): string | Buffer {
+        if (params.data) return Buffer.from(params.data, "base64");
+        if (params.path) return params.path;
+        if (params.url) {
+            throw new TypeError(
+                "ICQQ 文件上传不直接接受 URL，请先下载为本地路径或传入 base64 data",
+            );
+        }
+        throw new TypeError("上传文件需要 path 或 base64 data");
+    }
+
+    private convertFileInfo(file: GfsFileStat): Adapter.FileInfo {
+        return {
+            file_id: this.createId(file.fid),
+            file_name: file.name,
+            file_size: file.size,
+        };
+    }
+
+    private isGfsFile(entry: GfsFileStat | GfsDirStat): entry is GfsFileStat {
+        return !entry.is_dir;
+    }
+
+    private isGfsDirectory(entry: GfsFileStat | GfsDirStat): entry is GfsDirStat {
+        return entry.is_dir;
+    }
+
     /**
      * 构建 ICQQ 消息
      */
-    private buildICQQMessage(message: CommonTypes.Segment[]): Sendable[] {
-        const result: Sendable[] = [];
+    private buildICQQMessage(message: CommonTypes.Segment[]): Array<string | MessageElem> {
+        const result: Array<string | MessageElem> = [];
 
         for (const seg of message) {
             if (typeof seg === "string") {
@@ -942,7 +1516,9 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 转换 ICQQ 消息到 Segment
      */
-    private convertICQQMessageToSegments(message: ICQQMessageElement[]): CommonTypes.Segment[] {
+    private convertICQQMessageToSegments(
+        message: ReadonlyArray<ICQQMessageElement | MessageElem>,
+    ): CommonTypes.Segment[] {
         const result: CommonTypes.Segment[] = [];
 
         for (const elem of message) {
@@ -968,7 +1544,10 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
                 case "video":
                     result.push({
                         type: "video",
-                        data: { url: elem.url || elem.file, file: elem.file },
+                        data: {
+                            url: ("url" in elem ? elem.url : undefined) || elem.file,
+                            file: elem.file,
+                        },
                     });
                     break;
                 case "at":
@@ -1021,4 +1600,5 @@ AdapterRegistry.register("icqq", ICQQAdapter, {
     icon: "https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png",
     homepage: "https://github.com/icqqjs/icqq",
     author: "凉菜",
+    capabilities: icqqCapabilities,
 });

@@ -8,7 +8,7 @@ onebots OneBot V11 协议实现 - 支持 OneBot 11 标准的协议插件
 
 ## 特性
 
-- ✅ **完整支持** - 实现 OneBot 11 全部标准 API
+- ✅ **能力感知** - 标准 API 通过统一 Adapter 能力调用，不伪造平台未支持的结果
 - 🔌 **多通信方式** - HTTP、WebSocket、HTTP Reverse、WebSocket Reverse
 - 🔐 **安全认证** - 支持 Access Token 和签名验证
 - 📨 **消息格式** - 支持 CQ 码和数组格式
@@ -175,6 +175,8 @@ onebots 主动连接到配置的 WebSocket 地址。
 - `set_group_add_request` - 处理加群请求/邀请
 
 两个好友申请 API 的 `flag` 都必须原样取自对应 `request.friend` 事件，不能使用好友 QQ 号或自行生成的请求 ID 代替。标准 API 可通过 `approve` 同意或拒绝；便捷扩展固定为同意。
+
+`set_group_anonymous` 与 `set_group_anonymous_ban` 会在 ICQQ 等原生支持的平台调用真实能力；`enable` 只接受布尔值，避免字符串等 truthy 值被错误转换。
 
 ### 获取信息 API
 

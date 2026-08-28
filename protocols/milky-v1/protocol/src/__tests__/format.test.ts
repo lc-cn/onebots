@@ -44,6 +44,11 @@ vi.mock("onebots", () => {
             }
             return value;
         },
+        requireBooleanParam: (params: Record<string, unknown>, key: string) => {
+            const value = params[key];
+            if (typeof value !== "boolean") throw new TypeError("invalid boolean");
+            return value;
+        },
     };
 });
 
@@ -83,6 +88,22 @@ function createProtocol() {
         getFriendList: vi.fn(),
         getGroupList: vi.fn(),
         getGroupMemberList: vi.fn(),
+        getMessage: vi.fn(),
+        getMessageHistory: vi.fn(),
+        markMessageAsRead: vi.fn(),
+        getVersion: vi.fn(),
+        getStatus: vi.fn(),
+        setGroupSpecialTitle: vi.fn(),
+        handleGroupRequest: vi.fn(),
+        sendFriendNudge: vi.fn(),
+        sendLike: vi.fn(),
+        getFriendRequests: vi.fn(),
+        sendGroupNudge: vi.fn(),
+        getGroupNotifications: vi.fn(),
+        muteGroupAll: vi.fn(),
+        sendGroupAnnouncement: vi.fn(),
+        getGroupFiles: vi.fn(),
+        uploadFile: vi.fn(),
     };
 
     const protocol = new MilkyV1(
@@ -235,6 +256,27 @@ describe("Milky V1 protocol", () => {
         });
     });
 
+    test("converts a group invitation while retaining its mapped request sequence", () => {
+        const result = projectMilkyEvent({
+            id: { number: 701, string: "opaque-group-flag", source: "opaque-group-flag" },
+            timestamp: 1700000000000,
+            type: "request",
+            platform: "qq",
+            bot_id: { number: 12345678, string: "bot", source: "bot" },
+            request_type: "group",
+            sub_type: "invite",
+            user: { id: { number: 10001, string: "u10001", source: "u10001" } },
+            group: { id: { number: 20001, string: "g20001", source: "g20001" } },
+            comment: "invite",
+            flag: "opaque-group-flag",
+        } as CommonEvent.Request);
+
+        expect(result).toMatchObject({
+            event_type: "group_invited_join_request",
+            data: { group_id: 20001, notification_seq: 701 },
+        });
+    });
+
     test("converts lifecycle meta event to native bot event", () => {
         const event = {
             id: { number: 4, string: "e4", source: "e4" },
@@ -328,6 +370,53 @@ describe("Milky V1 protocol", () => {
         });
     });
 
+    test("message lookup, history, and read state use mapped Milky sequences", async () => {
+        const { protocol, adapter } = createProtocol();
+        const message = {
+            message_id: { string: "native-message", number: 9001 },
+            time: 1_700_000_000,
+            sender: {
+                scene_type: "private",
+                sender_id: { string: "friend", number: 10001 },
+                scene_id: { string: "friend", number: 10001 },
+                sender_name: "Alice",
+                scene_name: "",
+            },
+            message: [{ type: "text", data: { text: "hello" } }],
+        };
+        adapter.getMessage.mockResolvedValue(message);
+        adapter.getMessageHistory.mockResolvedValue([message]);
+
+        await expect(
+            protocol.apply("get_message", {
+                message_scene: "friend",
+                peer_id: 10001,
+                message_seq: 9001,
+            }),
+        ).resolves.toMatchObject({ data: { message_id: "native-message" } });
+        await expect(
+            protocol.apply("get_history_messages", {
+                message_scene: "friend",
+                peer_id: 10001,
+                limit: 20,
+            }),
+        ).resolves.toMatchObject({ data: { messages: [{ message_id: "native-message" }] } });
+        await expect(
+            protocol.apply("mark_message_as_read", {
+                message_scene: "friend",
+                peer_id: 10001,
+                message_seq: 9001,
+            }),
+        ).resolves.toMatchObject({ status: "ok" });
+        expect(adapter.markMessageAsRead).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({
+                scene_type: "private",
+                message_id: expect.objectContaining({ number: 9001 }),
+            }),
+        );
+    });
+
     test("apply maps native recall and group administration actions", async () => {
         const { protocol, adapter } = createProtocol();
 
@@ -412,6 +501,94 @@ describe("Milky V1 protocol", () => {
             protocol.apply("accept_friend_request", { initiator_uid: " " }),
         ).resolves.toMatchObject({ status: "failed", retcode: -1 });
         expect(adapter.handleFriendRequest).toHaveBeenCalledTimes(1);
+    });
+
+    test("group request actions resolve the opaque ICQQ flag from the mapped sequence", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await expect(
+            protocol.apply("accept_group_invitation", {
+                group_id: 20001,
+                invitation_seq: 701,
+            }),
+        ).resolves.toMatchObject({ status: "ok", retcode: 0 });
+        expect(adapter.handleGroupRequest).toHaveBeenCalledWith("bot", {
+            request_id: expect.objectContaining({ number: 701 }),
+            type: "invitation",
+            sub_type: "invite",
+            approve: true,
+            reason: undefined,
+        });
+    });
+
+    test("delegates ICQQ friend, group, and file extensions through Adapter", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getFriendRequests.mockResolvedValue([]);
+        adapter.getGroupNotifications.mockResolvedValue([]);
+        adapter.getGroupFiles.mockResolvedValue({ files: [], folders: [] });
+        adapter.uploadFile.mockResolvedValue({
+            file_id: { string: "fid", number: 801, source: "fid" },
+            file_name: "demo.txt",
+        });
+
+        await expect(
+            protocol.apply("send_profile_like", { user_id: 10001, count: 2 }),
+        ).resolves.toMatchObject({ status: "ok" });
+        await expect(
+            protocol.apply("set_group_whole_mute", { group_id: 20001, enable: false }),
+        ).resolves.toMatchObject({ status: "ok" });
+        await expect(
+            protocol.apply("get_group_files", { group_id: 20001, parent_folder_id: "/" }),
+        ).resolves.toMatchObject({ data: { files: [], folders: [] } });
+        await expect(
+            protocol.apply("upload_private_file", {
+                user_id: 10001,
+                file: "base64://aGVsbG8=",
+                name: "demo.txt",
+            }),
+        ).resolves.toMatchObject({ data: { file_id: "fid" } });
+
+        expect(adapter.sendLike).toHaveBeenCalledWith("bot", expect.objectContaining({ count: 2 }));
+        expect(adapter.muteGroupAll).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ enable: false }),
+        );
+        expect(adapter.uploadFile).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ data: "aGVsbG8=", scene_type: "private" }),
+        );
+    });
+
+    test("returns implementation status and delegates special titles", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getVersion.mockResolvedValue({
+            app_name: "onebots ICQQ Adapter",
+            app_version: "3.0.7",
+        });
+        adapter.getStatus.mockResolvedValue({ online: true, good: true });
+
+        await expect(protocol.apply("get_impl_info", {})).resolves.toMatchObject({
+            data: {
+                impl_name: "onebots ICQQ Adapter",
+                impl_version: "3.0.7",
+                milky_version: "1.0",
+            },
+        });
+        await expect(protocol.apply("get_status", {})).resolves.toMatchObject({
+            data: { online: true, good: true },
+        });
+        await expect(
+            protocol.apply("set_group_member_special_title", {
+                group_id: 20001,
+                user_id: 10001,
+                special_title: "VIP",
+                duration: -1,
+            }),
+        ).resolves.toMatchObject({ status: "ok" });
+        expect(adapter.setGroupSpecialTitle).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ special_title: "VIP", duration: -1 }),
+        );
     });
 
     test("apply returns native Milky wrappers for login and list actions", async () => {

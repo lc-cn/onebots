@@ -215,6 +215,15 @@ declare module "./adapter.js" {
             group_id: CommonTypes.Id;
             enable: boolean;
         }
+        export interface MuteGroupAnonymousParams {
+            group_id: CommonTypes.Id;
+            flag: string;
+            duration: number;
+        }
+        export interface SetGroupAnonymousParams {
+            group_id: CommonTypes.Id;
+            enable: boolean;
+        }
         export interface SetGroupAdminParams {
             group_id: CommonTypes.Id;
             user_id: CommonTypes.Id;

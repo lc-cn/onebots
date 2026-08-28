@@ -43,6 +43,11 @@ vi.mock("onebots", () => {
             }
             return value;
         },
+        requireBooleanParam: (params: Record<string, unknown>, key: string) => {
+            const value = params[key];
+            if (typeof value !== "boolean") throw new TypeError("invalid boolean");
+            return value;
+        },
     };
 });
 
@@ -70,6 +75,8 @@ function createProtocol() {
         })),
         inviteGroupMember: vi.fn(),
         handleFriendRequest: vi.fn(),
+        muteGroupAnonymous: vi.fn(),
+        setGroupAnonymous: vi.fn(),
     };
 
     const protocol = new OneBotV11Protocol(
@@ -465,5 +472,28 @@ describe("OneBot V11 message format conversion", () => {
             approve: true,
             remark: undefined,
         });
+    });
+
+    test("anonymous group actions delegate without truthy coercion", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await expect(
+            protocol.apply("set_group_anonymous_ban", {
+                group_id: 20001,
+                anonymous_flag: "opaque-anonymous-flag",
+                duration: 60,
+            }),
+        ).resolves.toMatchObject({ status: "ok" });
+        await expect(
+            protocol.apply("set_group_anonymous", { group_id: 20001, enable: false }),
+        ).resolves.toMatchObject({ status: "ok" });
+        expect(adapter.muteGroupAnonymous).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ flag: "opaque-anonymous-flag", duration: 60 }),
+        );
+        expect(adapter.setGroupAnonymous).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ enable: false }),
+        );
     });
 });

@@ -39,6 +39,7 @@ export {
     coerceUnixToEventMs,
     requirePositiveIntegerParam,
     requireNonEmptyStringParam,
+    requireBooleanParam,
     defineAdapterCapabilities,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,

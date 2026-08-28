@@ -44,6 +44,9 @@ declare module "./adapter.js" {
             guild_id: CommonTypes.Id;
             user_id: CommonTypes.Id;
         }
+        export interface GetGuildMemberListParams {
+            guild_id: CommonTypes.Id;
+        }
         export interface GetChannelInfoParams {
             channel_id: CommonTypes.Id;
             guild_id?: CommonTypes.Id;

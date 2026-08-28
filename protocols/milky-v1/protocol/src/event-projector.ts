@@ -61,13 +61,12 @@ const projectNotice = (event: CommonEvent.Notice): Milky.NoticeEvent => {
 };
 
 const projectRequest = (event: CommonEvent.Request): Milky.RequestEvent => {
-    const subType = (event as CommonEvent.Request & { sub_type?: string }).sub_type;
     const isGroup = event.request_type === "group";
     return {
         time: Math.floor(event.timestamp / 1000),
         self_id: event.bot_id.number,
         event_type: isGroup
-            ? subType === "invite"
+            ? event.sub_type === "invite"
                 ? "group_invited_join_request"
                 : "group_join_request"
             : "friend_request",

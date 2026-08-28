@@ -3,6 +3,7 @@ import {
     ProtocolRegistry,
     Account,
     Adapter,
+    requireBooleanParam,
     requireNonEmptyStringParam,
     requirePositiveIntegerParam,
 } from "onebots";
@@ -217,16 +218,34 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.recallMessage("group", params);
             case "get_message":
                 return this.getMessage(params);
+            case "get_history_messages":
+                return this.getHistoryMessages(params);
+            case "mark_message_as_read":
+                return this.markMessageAsRead(params);
             case "get_forwarded_messages":
                 return this.getForwardMessage(params);
             case "get_login_info":
                 return this.getLoginInfo();
+            case "get_impl_info":
+                return this.getImplInfo();
+            case "get_status":
+                return this.getStatus();
             case "get_user_profile":
                 return this.getStrangerInfo(params);
             case "get_friend_info":
                 return this.getFriendInfo(params);
             case "get_friend_list":
                 return this.getFriendList();
+            case "get_cookies":
+                return this.getCookies(params);
+            case "get_csrf_token":
+                return this.getCsrfToken();
+            case "send_friend_nudge":
+                return this.sendFriendNudge(params);
+            case "send_profile_like":
+                return this.sendProfileLike(params);
+            case "get_friend_requests":
+                return this.getFriendRequests(params);
             case "get_group_info":
                 return this.getGroupInfo(params);
             case "get_group_list":
@@ -245,10 +264,28 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.setGroupMemberAdmin(params);
             case "set_group_member_card":
                 return this.setGroupMemberCard(params);
+            case "set_group_member_special_title":
+                return this.setGroupMemberSpecialTitle(params);
             case "set_group_name":
                 return this.setGroupName(params);
             case "quit_group":
                 return this.quitGroup(params);
+            case "send_group_nudge":
+                return this.sendGroupNudge(params);
+            case "get_group_notifications":
+                return this.getGroupNotifications(params);
+            case "set_group_avatar":
+                return this.setGroupAvatar(params);
+            case "set_group_whole_mute":
+                return this.setGroupWholeMute(params);
+            case "send_group_announcement":
+                return this.sendGroupAnnouncement(params);
+            case "set_group_essence_message":
+                return this.setGroupEssenceMessage(params, false);
+            case "delete_group_essence_message":
+                return this.setGroupEssenceMessage(params, true);
+            case "send_group_message_reaction":
+                return this.sendGroupMessageReaction(params);
             case "accept_friend_request":
                 return this.handleFriendRequest(params, true);
             case "reject_friend_request":
@@ -259,6 +296,28 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             case "reject_group_request":
             case "reject_group_invitation":
                 return this.handleGroupRequest(action, params, false);
+            case "get_group_files":
+                return this.getGroupFiles(params);
+            case "create_group_folder":
+                return this.createGroupFolder(params);
+            case "upload_private_file":
+                return this.uploadFile("private", params);
+            case "upload_group_file":
+                return this.uploadFile("group", params);
+            case "get_private_file_download_url":
+                return this.getFileDownloadUrl("private", params);
+            case "get_group_file_download_url":
+                return this.getFileDownloadUrl("group", params);
+            case "move_group_file":
+                return this.moveGroupFile(params);
+            case "rename_group_file":
+                return this.renameGroupFile(params);
+            case "delete_group_file":
+                return this.deleteGroupFile(params);
+            case "rename_group_folder":
+                return this.renameGroupFolder(params);
+            case "delete_group_folder":
+                return this.deleteGroupFolder(params);
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
@@ -306,10 +365,48 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     }
 
     private async getMessage(params: Record<string, unknown>): Promise<Milky.MessageInfo> {
-        const { message_id } = params as { message_id: string };
+        const messageId =
+            typeof params.message_id === "string"
+                ? this.adapter.resolveId(params.message_id)
+                : this.adapter.resolveId(requirePositiveIntegerParam(params, "message_seq"));
         const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
+            message_id: messageId,
         });
+        return this.toMilkyMessageInfo(msg);
+    }
+
+    private async getHistoryMessages(
+        params: Record<string, unknown>,
+    ): Promise<{ messages: Milky.MessageInfo[] }> {
+        const scene = this.requireMilkyMessageScene(params);
+        const messages = await this.adapter.getMessageHistory(this.account.account_id, {
+            scene_type: scene,
+            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "peer_id")),
+            limit:
+                params.limit === undefined
+                    ? undefined
+                    : requirePositiveIntegerParam(params, "limit"),
+            offset:
+                params.start_message_seq === undefined
+                    ? undefined
+                    : requirePositiveIntegerParam(params, "start_message_seq"),
+        });
+        return { messages: messages.map(message => this.toMilkyMessageInfo(message)) };
+    }
+
+    private async markMessageAsRead(params: Record<string, unknown>): Promise<void> {
+        const scene = this.requireMilkyMessageScene(params);
+        await this.adapter.markMessageAsRead(this.account.account_id, {
+            scene_type: scene,
+            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "peer_id")),
+            message_id:
+                params.message_seq === undefined
+                    ? undefined
+                    : this.adapter.resolveId(requirePositiveIntegerParam(params, "message_seq")),
+        });
+    }
+
+    private toMilkyMessageInfo(msg: Adapter.MessageInfo): Milky.MessageInfo {
         return {
             time: msg.time || Math.floor(Date.now() / 1000),
             message_type: msg.sender.scene_type as "private" | "group",
@@ -323,9 +420,27 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         };
     }
 
-    private async getForwardMessage(_params: Record<string, unknown>): Promise<unknown> {
-        // Forward message handling - platform specific
-        throw new Error("Forward message not supported by this adapter");
+    private requireMilkyMessageScene(params: Record<string, unknown>): "private" | "group" {
+        if (params.message_scene === "friend") return "private";
+        if (params.message_scene === "group") return "group";
+        throw new TypeError("message_scene 必须是 friend 或 group");
+    }
+
+    private async getForwardMessage(
+        params: Record<string, unknown>,
+    ): Promise<{ messages: Record<string, unknown>[] }> {
+        const resourceId = requireNonEmptyStringParam(params, "resource_id");
+        const messages = await this.adapter.getForwardMessage(this.account.account_id, {
+            resource_id: resourceId,
+        });
+        return {
+            messages: messages.map(message => ({
+                sender_id: message.sender.sender_id.number,
+                sender_name: message.sender.sender_name,
+                time: message.time,
+                segments: message.message,
+            })),
+        };
     }
 
     private async getLoginInfo(): Promise<Milky.LoginInfo> {
@@ -334,6 +449,20 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             uin: info.user_id.number,
             nickname: info.user_name,
         };
+    }
+
+    private async getImplInfo(): Promise<Record<string, string>> {
+        const version = await this.adapter.getVersion(this.account.account_id);
+        return {
+            impl_name: version.app_name ?? version.impl ?? "onebots",
+            impl_version:
+                version.app_version ?? version.impl_version ?? version.version ?? "unknown",
+            milky_version: "1.0",
+        };
+    }
+
+    private async getStatus(): Promise<Adapter.StatusInfo> {
+        return this.adapter.getStatus(this.account.account_id);
     }
 
     private async getStrangerInfo(params: Record<string, unknown>): Promise<Milky.User> {
@@ -370,6 +499,64 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 user_id: info.user_id.number,
                 nickname: info.user_name,
                 remark: info.remark || "",
+            })),
+        };
+    }
+
+    private async getCookies(params: Record<string, unknown>): Promise<{ cookies: string }> {
+        const domain =
+            typeof params.domain === "string" && params.domain.trim() !== ""
+                ? params.domain
+                : undefined;
+        return {
+            cookies: await this.adapter.getCookies(this.account.account_id, { domain }),
+        };
+    }
+
+    private async getCsrfToken(): Promise<{ csrf_token: number }> {
+        return {
+            csrf_token: await this.adapter.getCsrfToken(this.account.account_id),
+        };
+    }
+
+    private async sendFriendNudge(params: Record<string, unknown>): Promise<void> {
+        const userId = requirePositiveIntegerParam(params, "user_id");
+        await this.adapter.sendFriendNudge(this.account.account_id, {
+            user_id: this.adapter.resolveId(userId),
+            is_self:
+                params.is_self === undefined ? undefined : requireBooleanParam(params, "is_self"),
+        });
+    }
+
+    private async sendProfileLike(params: Record<string, unknown>): Promise<void> {
+        const userId = requirePositiveIntegerParam(params, "user_id");
+        const count = requirePositiveIntegerParam(params, "count");
+        await this.adapter.sendLike(this.account.account_id, {
+            user_id: this.adapter.resolveId(userId),
+            count,
+        });
+    }
+
+    private async getFriendRequests(
+        params: Record<string, unknown>,
+    ): Promise<{ requests: Record<string, unknown>[] }> {
+        const requests = await this.adapter.getFriendRequests(this.account.account_id, {
+            limit:
+                params.limit === undefined
+                    ? undefined
+                    : requirePositiveIntegerParam(params, "limit"),
+            is_filtered:
+                params.is_filtered === undefined
+                    ? undefined
+                    : requireBooleanParam(params, "is_filtered"),
+        });
+        return {
+            requests: requests.map(request => ({
+                initiator_id: request.user_id.number,
+                initiator_uid: request.request_id.string,
+                comment: request.message ?? "",
+                time: request.time,
+                is_filtered: false,
             })),
         };
     }
@@ -525,6 +712,19 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         });
     }
 
+    private async setGroupMemberSpecialTitle(params: Record<string, unknown>): Promise<void> {
+        const duration = params.duration === undefined ? -1 : Number(params.duration);
+        if (!Number.isSafeInteger(duration) || duration < -1) {
+            throw new TypeError("duration 必须是 -1 或非负整数");
+        }
+        await this.adapter.setGroupSpecialTitle(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            user_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
+            special_title: requireNonEmptyStringParam(params, "special_title"),
+            duration,
+        });
+    }
+
     private async setGroupName(params: Record<string, unknown>): Promise<void> {
         const { group_id, new_group_name } = params as {
             group_id: number;
@@ -541,6 +741,203 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         await this.adapter.leaveGroup(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
             is_dismiss,
+        });
+    }
+
+    private async sendGroupNudge(params: Record<string, unknown>): Promise<void> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        const userId = requirePositiveIntegerParam(params, "user_id");
+        await this.adapter.sendGroupNudge(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            user_id: this.adapter.resolveId(userId),
+        });
+    }
+
+    private async getGroupNotifications(
+        params: Record<string, unknown>,
+    ): Promise<{ notifications: Record<string, unknown>[] }> {
+        const notifications = await this.adapter.getGroupNotifications(this.account.account_id, {
+            limit:
+                params.limit === undefined
+                    ? undefined
+                    : requirePositiveIntegerParam(params, "limit"),
+            is_filtered:
+                params.is_filtered === undefined
+                    ? undefined
+                    : requireBooleanParam(params, "is_filtered"),
+        });
+        return {
+            notifications: notifications.map(notification => ({
+                notification_seq: notification.notification_id.number,
+                group_id: notification.group_id.number,
+                initiator_id: notification.user_id.number,
+                notification_type: notification.type,
+                time: notification.time,
+                is_filtered: false,
+            })),
+        };
+    }
+
+    private async setGroupAvatar(params: Record<string, unknown>): Promise<void> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        await this.adapter.setGroupAvatar(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            file: requireNonEmptyStringParam(params, "file"),
+        });
+    }
+
+    private async setGroupWholeMute(params: Record<string, unknown>): Promise<void> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        await this.adapter.muteGroupAll(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            enable: requireBooleanParam(params, "enable"),
+        });
+    }
+
+    private async sendGroupAnnouncement(params: Record<string, unknown>): Promise<void> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        await this.adapter.sendGroupAnnouncement(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            content: requireNonEmptyStringParam(params, "content"),
+        });
+    }
+
+    private async setGroupEssenceMessage(
+        params: Record<string, unknown>,
+        remove: boolean,
+    ): Promise<void> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        const messageSequence = requirePositiveIntegerParam(params, "message_seq");
+        const action = remove
+            ? this.adapter.deleteGroupEssenceMessage.bind(this.adapter)
+            : this.adapter.setGroupEssenceMessage.bind(this.adapter);
+        await action(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            message_id: this.adapter.resolveId(messageSequence),
+        });
+    }
+
+    private async sendGroupMessageReaction(params: Record<string, unknown>): Promise<void> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        const messageSequence = requirePositiveIntegerParam(params, "message_seq");
+        const faceId = requirePositiveIntegerParam(params, "face_id");
+        await this.adapter.sendGroupMessageReaction(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            message_id: this.adapter.resolveId(messageSequence),
+            face_id: faceId,
+        });
+    }
+
+    private async getGroupFiles(params: Record<string, unknown>): Promise<unknown> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        const result = await this.adapter.getGroupFiles(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            parent_folder_id:
+                typeof params.parent_folder_id === "string"
+                    ? this.adapter.resolveId(params.parent_folder_id)
+                    : undefined,
+        });
+        return {
+            files: result.files.map(file => ({
+                file_id: file.file_id.string,
+                file_name: file.file_name,
+                file_size: file.file_size ?? 0,
+            })),
+            folders: result.folders.map(folder => ({
+                folder_id: folder.folder_id.string,
+                folder_name: folder.folder_name,
+            })),
+        };
+    }
+
+    private async createGroupFolder(
+        params: Record<string, unknown>,
+    ): Promise<{ folder_id: string }> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        const folder = await this.adapter.createGroupFolder(this.account.account_id, {
+            group_id: this.adapter.resolveId(groupId),
+            folder_name: requireNonEmptyStringParam(params, "folder_name"),
+        });
+        return { folder_id: folder.folder_id.string };
+    }
+
+    private async uploadFile(
+        scene: "private" | "group",
+        params: Record<string, unknown>,
+    ): Promise<{ file_id: string }> {
+        const sceneKey = scene === "private" ? "user_id" : "group_id";
+        const sceneId = requirePositiveIntegerParam(params, sceneKey);
+        const file = requireNonEmptyStringParam(params, "file");
+        const upload = await this.adapter.uploadFile(this.account.account_id, {
+            scene_type: scene,
+            scene_id: this.adapter.resolveId(sceneId),
+            name: requireNonEmptyStringParam(params, "name"),
+            ...(file.startsWith("base64://")
+                ? { data: file.slice("base64://".length) }
+                : file.startsWith("http://") || file.startsWith("https://")
+                  ? { url: file }
+                  : { path: file }),
+            folder_id:
+                scene === "group" && typeof params.folder_id === "string"
+                    ? this.adapter.resolveId(params.folder_id)
+                    : undefined,
+        });
+        return { file_id: upload.file_id.string };
+    }
+
+    private async getFileDownloadUrl(
+        scene: "private" | "group",
+        params: Record<string, unknown>,
+    ): Promise<{ url: string }> {
+        const sceneKey = scene === "private" ? "user_id" : "group_id";
+        const sceneId = requirePositiveIntegerParam(params, sceneKey);
+        const url = await this.adapter.getFileDownloadUrl(this.account.account_id, {
+            scene_type: scene,
+            scene_id: this.adapter.resolveId(sceneId),
+            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
+        });
+        return { url };
+    }
+
+    private async moveGroupFile(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.moveGroupFile(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
+            parent_folder_id: this.adapter.resolveId(
+                requireNonEmptyStringParam(params, "parent_folder_id"),
+            ),
+        });
+    }
+
+    private async renameGroupFile(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.renameGroupFile(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
+            new_name: requireNonEmptyStringParam(params, "new_name"),
+        });
+    }
+
+    private async deleteGroupFile(params: Record<string, unknown>): Promise<void> {
+        const groupId = requirePositiveIntegerParam(params, "group_id");
+        await this.adapter.deleteFile(this.account.account_id, {
+            scene_type: "group",
+            scene_id: this.adapter.resolveId(groupId),
+            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
+        });
+    }
+
+    private async renameGroupFolder(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.renameGroupFolder(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            folder_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "folder_id")),
+            new_name: requireNonEmptyStringParam(params, "new_name"),
+        });
+    }
+
+    private async deleteGroupFolder(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.deleteGroupFolder(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            folder_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "folder_id")),
         });
     }
 
@@ -562,11 +959,12 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         approve: boolean,
     ): Promise<void> {
         const invitation = action.includes("invitation");
-        const flag = invitation
-            ? `${params.group_id}:${params.invitation_seq}`
-            : `${params.group_id}:${params.notification_type}:${params.notification_seq}`;
+        const sequence = requirePositiveIntegerParam(
+            params,
+            invitation ? "invitation_seq" : "notification_seq",
+        );
         await this.adapter.handleGroupRequest(this.account.account_id, {
-            flag,
+            request_id: this.adapter.resolveId(sequence),
             type: invitation ? "invitation" : "request",
             sub_type: invitation
                 ? "invite"

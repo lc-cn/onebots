@@ -183,6 +183,9 @@ onebots 主动连接到配置的 WebSocket 地址。
 - `get_group_list` - 获取群列表
 - `get_group_member_info` - 获取群成员信息
 - `get_group_member_list` - 获取群成员列表
+- `get_guild_info` / `get_guild_list` - 获取频道服务器资料与列表
+- `get_guild_member_info` / `get_guild_member_list` - 获取频道服务器成员
+- `get_channel_info` / `get_channel_list` - 获取子频道资料与列表
 
 ### 文件 API
 

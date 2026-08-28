@@ -188,6 +188,12 @@ export abstract class Adapter<
     muteGroupAll(_uin: string, _params: Adapter.MuteGroupAllParams): Promise<void> {
         return this.unsupported("mute_group_all");
     }
+    muteGroupAnonymous(_uin: string, _params: Adapter.MuteGroupAnonymousParams): Promise<void> {
+        return this.unsupported("mute_group_anonymous");
+    }
+    setGroupAnonymous(_uin: string, _params: Adapter.SetGroupAnonymousParams): Promise<void> {
+        return this.unsupported("set_group_anonymous");
+    }
     setGroupAdmin(_uin: string, _params: Adapter.SetGroupAdminParams): Promise<void> {
         return this.unsupported("set_group_admin");
     }
@@ -277,6 +283,12 @@ export abstract class Adapter<
         _params: Adapter.GetGuildMemberInfoParams,
     ): Promise<Adapter.GuildMemberInfo> {
         return this.unsupported("get_guild_member_info");
+    }
+    getGuildMemberList(
+        _uin: string,
+        _params: Adapter.GetGuildMemberListParams,
+    ): Promise<Adapter.GuildMemberInfo[]> {
+        return this.unsupported("get_guild_member_list");
     }
     getChannelInfo(
         _uin: string,

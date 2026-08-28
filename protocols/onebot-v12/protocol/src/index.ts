@@ -363,6 +363,11 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             "leave_group",
             "invite_friend_to_group",
             "accept_friend_request",
+            "get_guild_info",
+            "get_guild_list",
+            "get_guild_member_info",
+            "get_channel_info",
+            "get_channel_list",
             "get_status",
             "get_version",
             "get_supported_actions",
@@ -370,21 +375,23 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     }
 
     private async getStatus(): Promise<OneBotV12.Status> {
+        const status = await this.adapter.getStatus(this.account.account_id);
         return {
-            good: true,
+            good: status.good,
             bots: [
                 {
                     self: this.getSelfInfo(),
-                    online: true,
+                    online: status.online ?? status.good,
                 },
             ],
         };
     }
 
-    private getVersionInfo(): OneBotV12.VersionInfo {
+    private async getVersionInfo(): Promise<OneBotV12.VersionInfo> {
+        const version = await this.adapter.getVersion(this.account.account_id);
         return {
-            impl: "onebots",
-            version: "1.0.0",
+            impl: version.impl ?? version.app_name ?? "onebots",
+            version: version.version ?? version.app_version ?? "unknown",
             onebot_version: "12",
         };
     }
@@ -462,13 +469,16 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     }
 
     private async setGroupName(params: OneBotV12.SetGroupNameParams): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_name not implemented");
+        await this.adapter.setGroupName(this.account.account_id, {
+            group_id: this.adapter.resolveId(params.group_id),
+            group_name: params.group_name,
+        });
     }
 
     private async leaveGroup(params: OneBotV12.LeaveGroupParams): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("leave_group not implemented");
+        await this.adapter.leaveGroup(this.account.account_id, {
+            group_id: this.adapter.resolveId(params.group_id),
+        });
     }
 
     /** OneBots 扩展：邀请机器人好友加入指定群。 */
@@ -500,13 +510,18 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     // ============ Guild API Implementations ============
 
     private async getGuildInfo(params: OneBotV12.GetGuildInfoParams): Promise<OneBotV12.GuildInfo> {
-        // Implementation depends on adapter support
-        throw new Error("get_guild_info not implemented");
+        const guild = await this.adapter.getGuildInfo(this.account.account_id, {
+            guild_id: this.adapter.resolveId(params.guild_id),
+        });
+        return { guild_id: guild.guild_id.string, guild_name: guild.guild_name };
     }
 
     private async getGuildList(): Promise<OneBotV12.GuildInfo[]> {
-        // Implementation depends on adapter support
-        throw new Error("get_guild_list not implemented");
+        const guilds = await this.adapter.getGuildList(this.account.account_id);
+        return guilds.map(guild => ({
+            guild_id: guild.guild_id.string,
+            guild_name: guild.guild_name,
+        }));
     }
 
     private async setGuildName(params: OneBotV12.SetGuildNameParams): Promise<void> {
@@ -517,15 +532,28 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     private async getGuildMemberInfo(
         params: OneBotV12.GetGuildMemberInfoParams,
     ): Promise<OneBotV12.GuildMemberInfo> {
-        // Implementation depends on adapter support
-        throw new Error("get_guild_member_info not implemented");
+        const member = await this.adapter.getGuildMemberInfo(this.account.account_id, {
+            guild_id: this.adapter.resolveId(params.guild_id),
+            user_id: this.adapter.resolveId(params.user_id),
+        });
+        return {
+            user_id: member.user_id.string,
+            user_name: member.user_name,
+            user_displayname: member.nickname,
+        };
     }
 
     private async getGuildMemberList(
         params: OneBotV12.GetGuildMemberListParams,
     ): Promise<OneBotV12.GuildMemberInfo[]> {
-        // Implementation depends on adapter support
-        throw new Error("get_guild_member_list not implemented");
+        const members = await this.adapter.getGuildMemberList(this.account.account_id, {
+            guild_id: this.adapter.resolveId(params.guild_id),
+        });
+        return members.map(member => ({
+            user_id: member.user_id.string,
+            user_name: member.user_name,
+            user_displayname: member.nickname,
+        }));
     }
 
     private async leaveGuild(params: OneBotV12.LeaveGuildParams): Promise<void> {
@@ -540,6 +568,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     ): Promise<OneBotV12.ChannelInfo> {
         const channelInfo = await this.adapter.getChannelInfo(this.account.account_id, {
             channel_id: this.adapter.resolveId(params.channel_id),
+            guild_id: this.adapter.resolveId(params.guild_id),
         });
 
         return {
@@ -551,8 +580,13 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     private async getChannelList(
         params: OneBotV12.GetChannelListParams,
     ): Promise<OneBotV12.ChannelInfo[]> {
-        // Implementation depends on adapter support
-        throw new Error("get_channel_list not implemented");
+        const channels = await this.adapter.getChannelList(this.account.account_id, {
+            guild_id: this.adapter.resolveId(params.guild_id),
+        });
+        return channels.map(channel => ({
+            channel_id: channel.channel_id.string,
+            channel_name: channel.channel_name,
+        }));
     }
 
     private async setChannelName(params: OneBotV12.SetChannelNameParams): Promise<void> {

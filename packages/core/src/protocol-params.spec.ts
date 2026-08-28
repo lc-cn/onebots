@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { requireNonEmptyStringParam, requirePositiveIntegerParam } from "./protocol-params.js";
+import {
+    requireBooleanParam,
+    requireNonEmptyStringParam,
+    requirePositiveIntegerParam,
+} from "./protocol-params.js";
 
 describe("requirePositiveIntegerParam", () => {
     it("accepts positive safe integers and numeric strings", () => {
@@ -27,6 +31,19 @@ describe("requireNonEmptyStringParam", () => {
     it.each([undefined, null, "", "   ", 123])("rejects invalid flags: %s", value => {
         expect(() => requireNonEmptyStringParam({ flag: value }, "flag")).toThrow(
             "flag 必须是非空字符串",
+        );
+    });
+});
+
+describe("requireBooleanParam", () => {
+    it("preserves explicit booleans", () => {
+        expect(requireBooleanParam({ enable: true }, "enable")).toBe(true);
+        expect(requireBooleanParam({ enable: false }, "enable")).toBe(false);
+    });
+
+    it.each([undefined, null, 0, 1, "true", "false"])("rejects implicit booleans: %s", value => {
+        expect(() => requireBooleanParam({ enable: value }, "enable")).toThrow(
+            "enable 必须是布尔值",
         );
     });
 });

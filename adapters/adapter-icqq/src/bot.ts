@@ -2,27 +2,16 @@
  * ICQQ Bot 封装
  * 基于 @icqqjs/icqq 库封装的机器人客户端
  */
-import { EventEmitter } from 'events';
-import { createClient, Client, segment as Segment } from '@icqqjs/icqq';
+import { EventEmitter } from "events";
+import { createClient, Client, segment as Segment } from "@icqqjs/icqq";
 import type {
     Config as ICQQClientConfig,
     PrivateMessageEvent,
     GroupMessageEvent,
-} from '@icqqjs/icqq';
-import type {
-    FriendInfo,
-    GroupInfo,
-    MemberInfo,
-} from '@icqqjs/icqq/lib/entities';
-import type {
-    MessageElem,
-    Sendable,
-    PrivateMessage,
-    GroupMessage,
-} from '@icqqjs/icqq/lib/message';
-import type {
-    MessageRet,
-} from '@icqqjs/icqq/lib/events';
+} from "@icqqjs/icqq";
+import type { FriendInfo, GroupInfo, MemberInfo } from "@icqqjs/icqq/lib/entities";
+import type { MessageElem, Sendable, PrivateMessage, GroupMessage } from "@icqqjs/icqq/lib/message";
+import type { MessageRet } from "@icqqjs/icqq/lib/events";
 import type {
     ICQQConfig,
     ICQQProtocol,
@@ -35,7 +24,7 @@ import type {
     ICQQPrivateMessageEvent,
     ICQQGroupMessageEvent,
     Platform,
-} from './types.js';
+} from "./types.js";
 
 export class ICQQBot extends EventEmitter {
     private config: ICQQConfig;
@@ -75,13 +64,13 @@ export class ICQQBot extends EventEmitter {
     async start(): Promise<void> {
         const uin = parseInt(this.config.account_id);
         if (isNaN(uin)) {
-            throw new Error('account_id 必须是有效的 QQ 号');
+            throw new Error("account_id 必须是有效的 QQ 号");
         }
 
         // 构建 ICQQ 配置
         const protocol = this.config.protocol || {};
         const clientConfig: ICQQClientConfig = {
-            platform: (protocol.platform ?? 2) as ICQQClientConfig['platform'],
+            platform: (protocol.platform ?? 2) as ICQQClientConfig["platform"],
             sign_api_addr: protocol.sign_api_addr,
             data_dir: protocol.data_dir,
             ignore_self: protocol.ignore_self !== false,
@@ -95,7 +84,7 @@ export class ICQQBot extends EventEmitter {
             clientConfig.ver = protocol.ver;
         }
         if (protocol.log_config) {
-            clientConfig.log_config = protocol.log_config as ICQQClientConfig['log_config'];
+            clientConfig.log_config = protocol.log_config as ICQQClientConfig["log_config"];
         }
         if (protocol.ffmpeg_path) {
             clientConfig.ffmpeg_path = protocol.ffmpeg_path;
@@ -118,7 +107,7 @@ export class ICQQBot extends EventEmitter {
             : this.client.login(uin);
         void Promise.resolve(loginResult).catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
-            this.emit('login_error', { code: -1, message: message || '登录 Promise 被拒绝' });
+            this.emit("login_error", { code: -1, message: message || "登录 Promise 被拒绝" });
         });
     }
 
@@ -137,9 +126,9 @@ export class ICQQBot extends EventEmitter {
         hb.sendSsoHeartBeat = () => {
             try {
                 const result = original();
-                if (result && typeof (result as Promise<boolean>).then === 'function') {
+                if (result && typeof (result as Promise<boolean>).then === "function") {
                     return (result as Promise<boolean>).catch((error: unknown) => {
-                        this.emit('heartbeat_error', error);
+                        this.emit("heartbeat_error", error);
                         try {
                             hb.startSsoHeartBeat?.();
                         } catch {
@@ -150,7 +139,7 @@ export class ICQQBot extends EventEmitter {
                 }
                 return result;
             } catch (error) {
-                this.emit('heartbeat_error', error);
+                this.emit("heartbeat_error", error);
                 try {
                     hb.startSsoHeartBeat?.();
                 } catch {
@@ -175,7 +164,7 @@ export class ICQQBot extends EventEmitter {
         }
         this.ready = false;
         this.loginInfo = null;
-        this.emit('stop');
+        this.emit("stop");
     }
 
     /**
@@ -185,73 +174,73 @@ export class ICQQBot extends EventEmitter {
         if (!this.client) return;
 
         // 登录成功
-        this.client.on('system.login.qrcode', (event) => {
-            this.emit('qrcode', event);
+        this.client.on("system.login.qrcode", event => {
+            this.emit("qrcode", event);
         });
 
-        this.client.on('system.login.slider', (event) => {
-            this.emit('slider', event);
+        this.client.on("system.login.slider", event => {
+            this.emit("slider", event);
         });
 
-        this.client.on('system.login.device', (event) => {
-            this.emit('device', event);
+        this.client.on("system.login.device", event => {
+            this.emit("device", event);
         });
 
-        this.client.on('system.login.auth', (event) => {
-            this.emit('auth', event);
+        this.client.on("system.login.auth", event => {
+            this.emit("auth", event);
         });
 
-        this.client.on('system.login.error', (event) => {
-            this.emit('login_error', event);
+        this.client.on("system.login.error", event => {
+            this.emit("login_error", event);
         });
 
-        this.client.on('system.online', () => {
+        this.client.on("system.online", () => {
             this.ready = true;
             this.loginInfo = {
                 user_id: this.client!.uin,
                 nickname: this.client!.nickname,
                 avatar: `https://q1.qlogo.cn/g?b=qq&nk=${this.client!.uin}&s=640`,
             };
-            this.emit('ready', this.loginInfo);
+            this.emit("ready", this.loginInfo);
         });
 
         // network / kickoff 会经 em() 冒泡到 system.offline；用标志区分，避免误推「重新登录」
         let offlineLeafHandled = false;
-        this.client.on('system.offline.network', (event) => {
+        this.client.on("system.offline.network", event => {
             offlineLeafHandled = true;
             this.ready = false;
-            this.emit('offline_network', event);
+            this.emit("offline_network", event);
             queueMicrotask(() => {
                 offlineLeafHandled = false;
             });
         });
-        this.client.on('system.offline.kickoff', (event) => {
+        this.client.on("system.offline.kickoff", event => {
             offlineLeafHandled = true;
             this.ready = false;
-            this.emit('offline', event);
+            this.emit("offline", event);
             queueMicrotask(() => {
                 offlineLeafHandled = false;
             });
         });
-        this.client.on('system.offline', (event) => {
+        this.client.on("system.offline", event => {
             if (offlineLeafHandled) return;
             this.ready = false;
-            this.emit('offline', event);
+            this.emit("offline", event);
         });
 
         // 私聊消息
-        this.client.on('message.private', (event) => {
-            this.emit('private_message', this.convertPrivateMessage(event));
+        this.client.on("message.private", event => {
+            this.emit("private_message", this.convertPrivateMessage(event));
         });
 
         // 群消息
-        this.client.on('message.group', (event) => {
-            this.emit('group_message', this.convertGroupMessage(event));
+        this.client.on("message.group", event => {
+            this.emit("group_message", this.convertGroupMessage(event));
         });
 
         // 好友申请
-        this.client.on('request.friend', (event) => {
-            this.emit('friend_request', {
+        this.client.on("request.friend", event => {
+            this.emit("friend_request", {
                 request_id: event.flag,
                 user_id: event.user_id,
                 nickname: event.nickname,
@@ -262,21 +251,21 @@ export class ICQQBot extends EventEmitter {
         });
 
         // 群申请/邀请
-        this.client.on('request.group', (event) => {
-            this.emit('group_request', {
+        this.client.on("request.group", event => {
+            this.emit("group_request", {
                 request_id: event.flag,
                 group_id: event.group_id,
                 user_id: event.user_id,
                 nickname: event.nickname,
                 sub_type: event.sub_type,
-                comment: 'comment' in event ? event.comment : '',
+                comment: "comment" in event ? event.comment : "",
                 time: event.time,
             });
         });
 
         // 群成员增加
-        this.client.on('notice.group.increase', (event) => {
-            this.emit('group_increase', {
+        this.client.on("notice.group.increase", event => {
+            this.emit("group_increase", {
                 group_id: event.group_id,
                 user_id: event.user_id,
                 operator_id: undefined,
@@ -285,19 +274,19 @@ export class ICQQBot extends EventEmitter {
         });
 
         // 群成员减少
-        this.client.on('notice.group.decrease', (event) => {
-            this.emit('group_decrease', {
+        this.client.on("notice.group.decrease", event => {
+            this.emit("group_decrease", {
                 group_id: event.group_id,
                 user_id: event.user_id,
                 operator_id: event.operator_id,
-                sub_type: event.dismiss ? 'dismiss' : 'leave',
+                sub_type: event.dismiss ? "dismiss" : "leave",
                 time: Date.now() / 1000,
             });
         });
 
         // 群禁言
-        this.client.on('notice.group.ban', (event) => {
-            this.emit('group_mute', {
+        this.client.on("notice.group.ban", event => {
+            this.emit("group_mute", {
                 group_id: event.group_id,
                 user_id: event.user_id,
                 operator_id: event.operator_id,
@@ -307,18 +296,18 @@ export class ICQQBot extends EventEmitter {
         });
 
         // 群管理员变动
-        this.client.on('notice.group.admin', (event) => {
-            this.emit('group_admin', {
+        this.client.on("notice.group.admin", event => {
+            this.emit("group_admin", {
                 group_id: event.group_id,
                 user_id: event.user_id,
-                sub_type: event.set ? 'set' : 'unset',
+                sub_type: event.set ? "set" : "unset",
                 time: Date.now() / 1000,
             });
         });
 
         // 好友消息撤回
-        this.client.on('notice.friend.recall', (event) => {
-            this.emit('friend_recall', {
+        this.client.on("notice.friend.recall", event => {
+            this.emit("friend_recall", {
                 message_id: event.message_id,
                 user_id: event.user_id,
                 time: event.time,
@@ -326,8 +315,8 @@ export class ICQQBot extends EventEmitter {
         });
 
         // 群消息撤回
-        this.client.on('notice.group.recall', (event) => {
-            this.emit('group_recall', {
+        this.client.on("notice.group.recall", event => {
+            this.emit("group_recall", {
                 message_id: event.message_id,
                 group_id: event.group_id,
                 user_id: event.user_id,
@@ -337,8 +326,8 @@ export class ICQQBot extends EventEmitter {
         });
 
         // 戳一戳
-        this.client.on('notice.friend.poke', (event) => {
-            this.emit('poke', {
+        this.client.on("notice.friend.poke", event => {
+            this.emit("poke", {
                 operator_id: event.operator_id,
                 target_id: event.target_id,
                 action: event.action,
@@ -347,8 +336,8 @@ export class ICQQBot extends EventEmitter {
             });
         });
 
-        this.client.on('notice.group.poke', (event) => {
-            this.emit('poke', {
+        this.client.on("notice.group.poke", event => {
+            this.emit("poke", {
                 group_id: event.group_id,
                 operator_id: event.operator_id,
                 target_id: event.target_id,
@@ -426,30 +415,36 @@ export class ICQQBot extends EventEmitter {
     private convertMessage(message: MessageElem[]): ICQQMessageElement[] {
         return message.map((elem: MessageElem) => {
             switch (elem.type) {
-                case 'text':
-                    return { type: 'text', text: elem.text };
-                case 'face':
-                    return { type: 'face', id: elem.id };
-                case 'image':
-                    return { type: 'image', file: String(elem.file), url: elem.url };
-                case 'record':
-                    return { type: 'record', file: String(elem.file), url: elem.url };
-                case 'video':
-                    return { type: 'video', file: String(elem.file), url: undefined };
-                case 'at':
-                    return { type: 'at', qq: elem.qq };
-                case 'share':
-                    return { type: 'share', url: elem.url, title: elem.title, content: elem.content, image: elem.image };
-                case 'json':
-                    return { type: 'json', data: elem.data };
-                case 'xml':
-                    return { type: 'xml', data: elem.data };
-                case 'poke':
-                    return { type: 'poke', id: elem.id };
-                case 'reply':
-                    return { type: 'reply', id: elem.id };
+                case "text":
+                    return { type: "text", text: elem.text };
+                case "face":
+                    return { type: "face", id: elem.id };
+                case "image":
+                    return { type: "image", file: String(elem.file), url: elem.url };
+                case "record":
+                    return { type: "record", file: String(elem.file), url: elem.url };
+                case "video":
+                    return { type: "video", file: String(elem.file), url: undefined };
+                case "at":
+                    return { type: "at", qq: elem.qq };
+                case "share":
+                    return {
+                        type: "share",
+                        url: elem.url,
+                        title: elem.title,
+                        content: elem.content,
+                        image: elem.image,
+                    };
+                case "json":
+                    return { type: "json", data: elem.data };
+                case "xml":
+                    return { type: "xml", data: elem.data };
+                case "poke":
+                    return { type: "poke", id: elem.id };
+                case "reply":
+                    return { type: "reply", id: elem.id };
                 default:
-                    return { type: 'text', text: `[${elem.type}]` };
+                    return { type: "text", text: `[${elem.type}]` };
             }
         });
     }
@@ -461,16 +456,16 @@ export class ICQQBot extends EventEmitter {
     /**
      * 发送私聊消息
      */
-    async sendPrivateMessage(userId: number, message: string | MessageElem[]): Promise<MessageRet> {
-        if (!this.client) throw new Error('Bot not connected');
+    async sendPrivateMessage(userId: number, message: Sendable): Promise<MessageRet> {
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.sendPrivateMsg(userId, message);
     }
 
     /**
      * 发送群消息
      */
-    async sendGroupMessage(groupId: number, message: string | MessageElem[]): Promise<MessageRet> {
-        if (!this.client) throw new Error('Bot not connected');
+    async sendGroupMessage(groupId: number, message: Sendable): Promise<MessageRet> {
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.sendGroupMsg(groupId, message);
     }
 
@@ -484,7 +479,7 @@ export class ICQQBot extends EventEmitter {
      * 撤回消息
      */
     async recallMessage(messageId: string): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.deleteMsg(messageId);
     }
 
@@ -492,7 +487,7 @@ export class ICQQBot extends EventEmitter {
      * 获取消息
      */
     async getMessage(messageId: string): Promise<PrivateMessage | GroupMessage | undefined> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.getMsg(messageId);
     }
 
@@ -504,7 +499,7 @@ export class ICQQBot extends EventEmitter {
      * 获取好友列表
      */
     async getFriendList(): Promise<ICQQFriend[]> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         const friends = this.client.fl;
         return Array.from(friends.values()).map((friend: FriendInfo) => ({
             user_id: friend.user_id,
@@ -519,7 +514,7 @@ export class ICQQBot extends EventEmitter {
      * 获取陌生人信息
      */
     async getStrangerInfo(userId: number): Promise<ICQQUser> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         const info = await this.client.getStrangerInfo(userId);
         return {
             user_id: info.user_id,
@@ -534,7 +529,7 @@ export class ICQQBot extends EventEmitter {
      * 处理好友申请
      */
     async handleFriendRequest(flag: string, approve: boolean, remark?: string): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.setFriendAddRequest(flag, approve, remark);
     }
 
@@ -542,7 +537,7 @@ export class ICQQBot extends EventEmitter {
      * 删除好友
      */
     async deleteFriend(userId: number): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.deleteFriend(userId);
     }
 
@@ -554,7 +549,7 @@ export class ICQQBot extends EventEmitter {
      * 获取群列表
      */
     async getGroupList(): Promise<ICQQGroup[]> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         const groups = this.client.gl;
         return Array.from(groups.values()).map((group: GroupInfo) => ({
             group_id: group.group_id,
@@ -569,7 +564,7 @@ export class ICQQBot extends EventEmitter {
      * 获取群信息
      */
     async getGroupInfo(groupId: number): Promise<ICQQGroup | undefined> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         const group = this.client.gl.get(groupId);
         if (!group) return undefined;
         return {
@@ -585,7 +580,7 @@ export class ICQQBot extends EventEmitter {
      * 获取群成员列表
      */
     async getGroupMemberList(groupId: number): Promise<ICQQGroupMember[]> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         const members = await this.client.getGroupMemberList(groupId);
         return Array.from(members.values()).map((member: MemberInfo) => ({
             group_id: groupId,
@@ -607,8 +602,11 @@ export class ICQQBot extends EventEmitter {
     /**
      * 获取群成员信息
      */
-    async getGroupMemberInfo(groupId: number, userId: number): Promise<ICQQGroupMember | undefined> {
-        if (!this.client) throw new Error('Bot not connected');
+    async getGroupMemberInfo(
+        groupId: number,
+        userId: number,
+    ): Promise<ICQQGroupMember | undefined> {
+        if (!this.client) throw new Error("Bot not connected");
         const member = await this.client.getGroupMemberInfo(groupId, userId);
         if (!member) return undefined;
         return {
@@ -632,7 +630,7 @@ export class ICQQBot extends EventEmitter {
      * 处理群申请/邀请
      */
     async handleGroupRequest(flag: string, approve: boolean, reason?: string): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         await this.client.setGroupAddRequest(flag, approve, reason);
         return true;
     }
@@ -641,15 +639,19 @@ export class ICQQBot extends EventEmitter {
      * 设置群名片
      */
     async setGroupCard(groupId: number, userId: number, card: string): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.setGroupCard(groupId, userId, card);
     }
 
     /**
      * 踢出群成员
      */
-    async kickGroupMember(groupId: number, userId: number, rejectAddRequest?: boolean): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+    async kickGroupMember(
+        groupId: number,
+        userId: number,
+        rejectAddRequest?: boolean,
+    ): Promise<boolean> {
+        if (!this.client) throw new Error("Bot not connected");
         await this.client.setGroupKick(groupId, userId, rejectAddRequest);
         return true;
     }
@@ -658,7 +660,7 @@ export class ICQQBot extends EventEmitter {
      * 禁言群成员
      */
     async muteGroupMember(groupId: number, userId: number, duration: number): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.setGroupBan(groupId, userId, duration);
     }
 
@@ -666,7 +668,7 @@ export class ICQQBot extends EventEmitter {
      * 全员禁言
      */
     async muteGroupAll(groupId: number, enable: boolean): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.setGroupWholeBan(groupId, enable);
     }
 
@@ -674,7 +676,7 @@ export class ICQQBot extends EventEmitter {
      * 设置群管理员
      */
     async setGroupAdmin(groupId: number, userId: number, enable: boolean): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.setGroupAdmin(groupId, userId, enable);
     }
 
@@ -682,7 +684,7 @@ export class ICQQBot extends EventEmitter {
      * 退出群
      */
     async leaveGroup(groupId: number, dismiss?: boolean): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.setGroupLeave(groupId);
     }
 
@@ -690,7 +692,7 @@ export class ICQQBot extends EventEmitter {
      * 设置群名
      */
     async setGroupName(groupId: number, name: string): Promise<boolean> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.setGroupName(groupId, name);
     }
 
@@ -698,7 +700,7 @@ export class ICQQBot extends EventEmitter {
      * 设置群头像
      */
     async setGroupAvatar(groupId: number, file: string): Promise<void> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         await this.client.setGroupPortrait(groupId, file);
     }
 
@@ -710,7 +712,7 @@ export class ICQQBot extends EventEmitter {
      * 提交滑块 ticket
      */
     submitSlider(ticket: string): void {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         this.client.submitSlider(ticket);
     }
 
@@ -718,7 +720,7 @@ export class ICQQBot extends EventEmitter {
      * 请求发送短信验证码（设备锁时可选，先调用此方法再提交验证码）
      */
     sendSmsCode(): Promise<void> {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         return this.client.sendSmsCode();
     }
 
@@ -726,7 +728,7 @@ export class ICQQBot extends EventEmitter {
      * 提交短信验证码
      */
     submitSmsCode(code: string): void {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         this.client.submitSmsCode(code);
     }
 
@@ -734,7 +736,7 @@ export class ICQQBot extends EventEmitter {
      * 扫码登录 / 验证完成后继续登录流程（新版 ICQQ 需在 qrcode、auth 事件后显式调用 login）
      */
     qrcodeLogin(): void {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         this.client.login();
     }
 
@@ -742,7 +744,7 @@ export class ICQQBot extends EventEmitter {
      * 继续登录流程（扫码确认、身份验证完成后调用，等价于 client.login()）
      */
     continueLogin(): void {
-        if (!this.client) throw new Error('Bot not connected');
+        if (!this.client) throw new Error("Bot not connected");
         this.client.login();
     }
 

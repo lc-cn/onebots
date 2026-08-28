@@ -70,6 +70,7 @@ function createProtocol() {
         })),
         inviteGroupMember: vi.fn(),
         handleFriendRequest: vi.fn(),
+        getGuildMemberList: vi.fn(),
     };
 
     const protocol = new OneBotV12Protocol(
@@ -382,6 +383,31 @@ describe("OneBot V12 protocol", () => {
         });
         await expect(protocol.apply("get_supported_actions")).resolves.toMatchObject({
             data: expect.arrayContaining(["accept_friend_request"]),
+        });
+    });
+
+    test("get_guild_member_list delegates to the adapter", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getGuildMemberList.mockResolvedValue([
+            {
+                guild_id: { string: "guild", number: 20001 },
+                user_id: { string: "tiny-id", number: 10001 },
+                user_name: "Alice",
+                nickname: "Moderator",
+            },
+        ]);
+
+        await expect(
+            protocol.apply("get_guild_member_list", { guild_id: "guild" }),
+        ).resolves.toMatchObject({
+            status: "ok",
+            data: [
+                {
+                    user_id: "tiny-id",
+                    user_name: "Alice",
+                    user_displayname: "Moderator",
+                },
+            ],
         });
     });
 

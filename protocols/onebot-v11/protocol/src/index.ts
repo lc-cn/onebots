@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import {
     Protocol,
     ProtocolRegistry,
+    requireBooleanParam,
     requireNonEmptyStringParam,
     requirePositiveIntegerParam,
 } from "onebots";
@@ -418,21 +419,34 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
         return this.convertMessageInfoToV11(msg);
     }
 
-    private async getForwardMsg(_params: Record<string, unknown>): Promise<unknown> {
-        // Forward message retrieval - implementation depends on platform support
-        throw new Error("get_forward_msg not implemented");
+    private async getForwardMsg(params: Record<string, unknown>): Promise<unknown> {
+        const id = requireNonEmptyStringParam(params, "id");
+        const messages = await this.adapter.getForwardMessage(this.account.account_id, {
+            resource_id: id,
+        });
+        return { messages: messages.map(message => this.convertSegmentsToV11(message.message)) };
     }
 
-    private async sendLike(_params: Record<string, unknown>): Promise<void> {
-        // Send like/thumbs up - implementation depends on platform support
-        throw new Error("send_like not implemented");
+    private async sendLike(params: Record<string, unknown>): Promise<void> {
+        const userId = requirePositiveIntegerParam(params, "user_id");
+        const times = params.times === undefined ? 1 : requirePositiveIntegerParam(params, "times");
+        await this.adapter.sendLike(this.account.account_id, {
+            user_id: this.adapter.resolveId(userId),
+            times,
+        });
     }
 
     // ============ Group Management API Implementations ============
 
-    private async setGroupKick(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_kick not implemented");
+    private async setGroupKick(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.kickGroupMember(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            user_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
+            reject_add_request:
+                params.reject_add_request === undefined
+                    ? false
+                    : requireBooleanParam(params, "reject_add_request"),
+        });
     }
 
     /** OneBots 扩展：邀请机器人好友加入指定群。 */
@@ -448,49 +462,94 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
         return {};
     }
 
-    private async setGroupBan(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_ban not implemented");
+    private async setGroupBan(params: Record<string, unknown>): Promise<void> {
+        const duration = params.duration === undefined ? 1800 : Number(params.duration);
+        if (!Number.isSafeInteger(duration) || duration < 0) {
+            throw new TypeError("duration 必须是非负整数");
+        }
+        await this.adapter.muteGroupMember(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            user_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
+            duration,
+        });
     }
 
-    private async setGroupAnonymousBan(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on platform support
-        throw new Error("set_group_anonymous_ban not implemented");
+    private async setGroupAnonymousBan(params: Record<string, unknown>): Promise<void> {
+        const anonymous = params.anonymous;
+        const flag =
+            typeof params.anonymous_flag === "string"
+                ? params.anonymous_flag
+                : anonymous && typeof anonymous === "object" && "flag" in anonymous
+                  ? String(anonymous.flag)
+                  : "";
+        if (!flag) throw new TypeError("anonymous_flag 或 anonymous.flag 必须是非空字符串");
+        const duration = params.duration === undefined ? 1800 : Number(params.duration);
+        if (!Number.isSafeInteger(duration) || duration < 0) {
+            throw new TypeError("duration 必须是非负整数");
+        }
+        await this.adapter.muteGroupAnonymous(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            flag,
+            duration,
+        });
     }
 
-    private async setGroupWholeBan(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_whole_ban not implemented");
+    private async setGroupWholeBan(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.muteGroupAll(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            enable: params.enable === undefined ? true : requireBooleanParam(params, "enable"),
+        });
     }
 
-    private async setGroupAdmin(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_admin not implemented");
+    private async setGroupAdmin(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.setGroupAdmin(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            user_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
+            enable: params.enable === undefined ? true : requireBooleanParam(params, "enable"),
+        });
     }
 
-    private async setGroupAnonymous(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_anonymous not implemented");
+    private async setGroupAnonymous(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.setGroupAnonymous(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            enable: params.enable === undefined ? true : requireBooleanParam(params, "enable"),
+        });
     }
 
-    private async setGroupCard(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_card not implemented");
+    private async setGroupCard(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.setGroupCard(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            user_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
+            card: typeof params.card === "string" ? params.card : "",
+        });
     }
 
-    private async setGroupName(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_name not implemented");
+    private async setGroupName(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.setGroupName(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            group_name: requireNonEmptyStringParam(params, "group_name"),
+        });
     }
 
-    private async setGroupLeave(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_leave not implemented");
+    private async setGroupLeave(params: Record<string, unknown>): Promise<void> {
+        await this.adapter.leaveGroup(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            is_dismiss:
+                params.is_dismiss === undefined ? false : requireBooleanParam(params, "is_dismiss"),
+        });
     }
 
-    private async setGroupSpecialTitle(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_special_title not implemented");
+    private async setGroupSpecialTitle(params: Record<string, unknown>): Promise<void> {
+        const duration = params.duration === undefined ? -1 : Number(params.duration);
+        if (!Number.isSafeInteger(duration) || duration < -1) {
+            throw new TypeError("duration 必须是 -1 或非负整数");
+        }
+        await this.adapter.setGroupSpecialTitle(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            user_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
+            special_title: typeof params.special_title === "string" ? params.special_title : "",
+            duration,
+        });
     }
 
     // ============ Request Handling API Implementations ============
@@ -510,9 +569,17 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
         return {};
     }
 
-    private async setGroupAddRequest(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_group_add_request not implemented");
+    private async setGroupAddRequest(params: Record<string, unknown>): Promise<void> {
+        const subType = params.sub_type === "invite" ? "invite" : "add";
+        const approve = params.approve === undefined ? true : params.approve;
+        if (typeof approve !== "boolean") throw new TypeError("approve 必须是布尔值");
+        await this.adapter.handleGroupRequest(this.account.account_id, {
+            flag: requireNonEmptyStringParam(params, "flag"),
+            type: subType === "invite" ? "invitation" : "request",
+            sub_type: subType,
+            approve,
+            reason: typeof params.reason === "string" ? params.reason : undefined,
+        });
     }
 
     // ============ Info API Implementations ============
@@ -657,19 +724,24 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
 
     // ============ Other API Implementations ============
 
-    private async getCookies(_params: Record<string, unknown>): Promise<unknown> {
-        // Implementation depends on platform support
-        throw new Error("get_cookies not implemented");
+    private async getCookies(params: Record<string, unknown>): Promise<{ cookies: string }> {
+        return {
+            cookies: await this.adapter.getCookies(this.account.account_id, {
+                domain: typeof params.domain === "string" ? params.domain : undefined,
+            }),
+        };
     }
 
-    private async getCsrfToken(_params: Record<string, unknown>): Promise<unknown> {
-        // Implementation depends on platform support
-        throw new Error("get_csrf_token not implemented");
+    private async getCsrfToken(_params: Record<string, unknown>): Promise<{ token: number }> {
+        return { token: await this.adapter.getCsrfToken(this.account.account_id) };
     }
 
-    private async getCredentials(_params: Record<string, unknown>): Promise<unknown> {
-        // Implementation depends on platform support
-        throw new Error("get_credentials not implemented");
+    private async getCredentials(
+        params: Record<string, unknown>,
+    ): Promise<{ cookies: string; csrf_token: number }> {
+        return this.adapter.getCredentials(this.account.account_id, {
+            domain: typeof params.domain === "string" ? params.domain : undefined,
+        });
     }
 
     private async getRecord(_params: Record<string, unknown>): Promise<unknown> {
@@ -683,28 +755,27 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     }
 
     private async canSendImage(_params: Record<string, unknown>): Promise<{ yes: boolean }> {
-        return { yes: true };
+        return { yes: await this.adapter.canSendImage(this.account.account_id) };
     }
 
     private async canSendRecord(_params: Record<string, unknown>): Promise<{ yes: boolean }> {
-        return { yes: true };
+        return { yes: await this.adapter.canSendRecord(this.account.account_id) };
     }
 
     private async getStatus(
         _params: Record<string, unknown>,
     ): Promise<{ online: boolean; good: boolean }> {
-        return {
-            online: true,
-            good: true,
-        };
+        const status = await this.adapter.getStatus(this.account.account_id);
+        return { online: status.online ?? status.good, good: status.good };
     }
 
     private async getVersionInfo(
         _params: Record<string, unknown>,
     ): Promise<{ app_name: string; app_version: string; protocol_version: string }> {
+        const version = await this.adapter.getVersion(this.account.account_id);
         return {
-            app_name: "onebots",
-            app_version: "1.0.0",
+            app_name: version.app_name ?? version.impl ?? "onebots",
+            app_version: version.app_version ?? version.version ?? "unknown",
             protocol_version: "v11",
         };
     }
@@ -715,7 +786,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     }
 
     private async cleanCache(_params: Record<string, unknown>): Promise<void> {
-        // Clear caches
+        await this.adapter.cleanCache(this.account.account_id);
         this.messageIdMap.clear();
         this.reverseMessageIdMap.clear();
     }

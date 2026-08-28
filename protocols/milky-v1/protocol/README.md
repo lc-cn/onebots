@@ -170,6 +170,9 @@ onebots 主动连接到配置的 WebSocket 地址。
 - `recall_private_message` - 撤回私聊消息
 - `recall_group_message` - 撤回群消息
 - `get_message` - 获取消息
+- `get_history_messages` - 获取历史消息
+- `mark_message_as_read` - 标记会话消息已读
+- `get_forwarded_messages` - 获取合并转发消息
 
 ### 群组管理 API
 
@@ -180,6 +183,13 @@ onebots 主动连接到配置的 WebSocket 地址。
 - `set_group_member_card` - 设置群名片
 - `set_group_name` - 设置群名
 - `quit_group` - 退出群组
+- `send_group_nudge` - 发送群戳一戳
+- `get_group_notifications` - 获取群通知
+- `set_group_avatar` - 设置群头像
+- `set_group_whole_mute` - 设置全员禁言
+- `send_group_announcement` - 发送群公告
+- `set_group_essence_message` / `delete_group_essence_message` - 管理精华消息
+- `send_group_message_reaction` - 发送群消息表态
 
 邀请好友入群：
 
@@ -202,11 +212,23 @@ curl -X POST http://localhost:6727/icqq/my_qq/milky/v1/api/invite_friend_to_grou
 - `get_group_list` - 获取群列表
 - `get_group_member_info` - 获取群成员信息
 - `get_group_member_list` - 获取群成员列表
+- `get_friend_requests` - 获取好友申请列表
+- `get_cookies` / `get_csrf_token` - 获取 QQ Web 凭据
+
+### 文件 API
+
+- `get_group_files` / `create_group_folder` - 浏览群文件与创建目录
+- `upload_private_file` / `upload_group_file` - 上传私聊或群文件
+- `get_private_file_download_url` / `get_group_file_download_url` - 获取下载地址
+- `move_group_file` / `rename_group_file` / `delete_group_file` - 管理群文件
+- `rename_group_folder` / `delete_group_folder` - 管理群文件夹
 
 ### 其他 API
 
 - `accept_friend_request` - 同意好友申请
 - `reject_friend_request` - 拒绝好友申请
+- `send_friend_nudge` - 发送好友戳一戳
+- `send_profile_like` - 发送名片赞
 - `get_status` - 获取运行状态
 - `get_version_info` - 获取版本信息
 

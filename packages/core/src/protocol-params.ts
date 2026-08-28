@@ -22,3 +22,15 @@ export function requireNonEmptyStringParam(
     }
     return value;
 }
+
+/** 从协议入站参数中读取布尔值，不接受 truthy/falsy 隐式转换。 */
+export function requireBooleanParam(
+    params: Readonly<Record<string, unknown>>,
+    key: string,
+): boolean {
+    const value = params[key];
+    if (typeof value !== "boolean") {
+        throw new TypeError(`${key} 必须是布尔值`);
+    }
+    return value;
+}
