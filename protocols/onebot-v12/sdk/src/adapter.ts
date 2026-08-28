@@ -37,6 +37,7 @@ export interface OneBotV12AdapterConfig {
 export interface OneBotV12Adapter extends Adapter<string, OneBotV12Event> {
     sendMessage(options: Adapter.SendMessageOptions<string>): Promise<OneBotV12Response>;
     inviteFriendToGroup(groupId: string, userId: string): Promise<void>;
+    acceptFriendRequest(flag: string, remark?: string): Promise<void>;
     call<T = unknown>(
         action: string,
         params?: Record<string, unknown>,
@@ -54,6 +55,7 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
         public readonly selfId: string = selfId;
         private httpClient: HttpClient;
         private readonly receiveTransport: ReceiveTransport<string, OneBotV12Event>;
+        private readonly friendRequestFlags = new Map<string, string>();
 
         constructor() {
             super();
@@ -195,13 +197,14 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
             } else if (event.type === "request") {
                 if (event.detail_type === "friend" || event.detail_type === "friend_request") {
                     const requestId = event.request_id ?? event.id;
+                    this.friendRequestFlags.set(requestId, event.flag ?? requestId);
                     this.emit("request.friend", {
                         timestamp: event.time,
                         bot_id: eventBotId,
                         request_id: requestId,
                         user_id: event.user_id!,
                         comment: typeof event.message === "string" ? event.message : event.comment,
-                        flag: requestId,
+                        flag: event.flag ?? requestId,
                     });
                 } else if (event.detail_type === "group" || event.detail_type === "group_request") {
                     const requestId = event.request_id ?? event.id;
@@ -393,6 +396,17 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                 group_id: groupId,
                 user_id: userId,
             });
+        }
+
+        /** 使用申请事件中的 opaque flag 直接同意好友申请。 */
+        async acceptFriendRequest(flag: string, remark?: string): Promise<void> {
+            await this.httpClient.post("/accept_friend_request", { flag, remark });
+        }
+
+        async approveFriendRequest(requestId: string, approve: boolean): Promise<void> {
+            if (!approve) throw new Error("OneBot V12 当前仅支持同意好友申请");
+            await this.acceptFriendRequest(this.friendRequestFlags.get(requestId) ?? requestId);
+            this.friendRequestFlags.delete(requestId);
         }
 
         async setGroupMemberMute(

@@ -10,3 +10,15 @@ export function requirePositiveIntegerParam(
     }
     return numeric;
 }
+
+/** 从协议入站参数中读取一个非空字符串。 */
+export function requireNonEmptyStringParam(
+    params: Readonly<Record<string, unknown>>,
+    key: string,
+): string {
+    const value = params[key];
+    if (typeof value !== "string" || value.trim() === "") {
+        throw new TypeError(`${key} 必须是非空字符串`);
+    }
+    return value;
+}

@@ -198,6 +198,7 @@ onebots 主动连接到配置的 WebSocket 地址。
 ### 扩展 API
 
 - `invite_friend_to_group` - 邀请机器人好友加入群（OneBots 扩展）
+- `accept_friend_request` - 同意好友申请（OneBots 扩展）
 - `get_latest_events` - 获取最新事件列表
 - `get_supported_actions` - 获取支持的动作列表
 - `get_status` - 获取运行状态
@@ -213,6 +214,8 @@ onebots 主动连接到配置的 WebSocket 地址。
 ```
 
 两个字段必须为正整数。机器人需要是目标群成员，并具有平台侧允许邀请好友的权限。
+
+同意好友申请时传入 `{ "flag": "..." }`，可选传入 `remark`。`flag` 必须原样取自对应好友申请事件，不能使用用户 ID 或自行生成的请求 ID 代替。
 
 ## 消息段(Segment)
 

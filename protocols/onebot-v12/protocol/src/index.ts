@@ -1,4 +1,9 @@
-import { Protocol, ProtocolRegistry, requirePositiveIntegerParam } from "onebots";
+import {
+    Protocol,
+    ProtocolRegistry,
+    requireNonEmptyStringParam,
+    requirePositiveIntegerParam,
+} from "onebots";
 import type { Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
@@ -211,6 +216,8 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 return this.leaveGroup(params as unknown as OneBotV12.LeaveGroupParams);
             case "invite_friend_to_group":
                 return this.inviteFriendToGroup(params);
+            case "accept_friend_request":
+                return this.acceptFriendRequest(params);
 
             // Guild API
             case "get_guild_info":
@@ -355,6 +362,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             "set_group_name",
             "leave_group",
             "invite_friend_to_group",
+            "accept_friend_request",
             "get_status",
             "get_version",
             "get_supported_actions",
@@ -472,6 +480,19 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         await this.adapter.inviteGroupMember(this.account.account_id, {
             group_id: this.adapter.resolveId(groupId),
             user_id: this.adapter.resolveId(userId),
+        });
+        return {};
+    }
+
+    /** OneBots 扩展：同意好友申请。 */
+    private async acceptFriendRequest(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, never>> {
+        const flag = requireNonEmptyStringParam(params, "flag");
+        await this.adapter.handleFriendRequest(this.account.account_id, {
+            flag,
+            approve: true,
+            remark: typeof params.remark === "string" ? params.remark : undefined,
         });
         return {};
     }

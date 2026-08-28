@@ -1,5 +1,10 @@
 import WebSocket from "ws";
-import { Protocol, ProtocolRegistry, requirePositiveIntegerParam } from "onebots";
+import {
+    Protocol,
+    ProtocolRegistry,
+    requireNonEmptyStringParam,
+    requirePositiveIntegerParam,
+} from "onebots";
 import type { Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
@@ -272,6 +277,8 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                 return this.setGroupSpecialTitle(params);
             case "set_friend_add_request":
                 return this.setFriendAddRequest(params);
+            case "accept_friend_request":
+                return this.setFriendAddRequest(params, true);
             case "set_group_add_request":
                 return this.setGroupAddRequest(params);
 
@@ -488,9 +495,19 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
 
     // ============ Request Handling API Implementations ============
 
-    private async setFriendAddRequest(_params: Record<string, unknown>): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_friend_add_request not implemented");
+    private async setFriendAddRequest(
+        params: Record<string, unknown>,
+        forcedApprove?: boolean,
+    ): Promise<Record<string, never>> {
+        const flag = requireNonEmptyStringParam(params, "flag");
+        const approve = forcedApprove ?? params.approve ?? true;
+        if (typeof approve !== "boolean") throw new TypeError("approve 必须是布尔值");
+        await this.adapter.handleFriendRequest(this.account.account_id, {
+            flag,
+            approve,
+            remark: typeof params.remark === "string" ? params.remark : undefined,
+        });
+        return {};
     }
 
     private async setGroupAddRequest(_params: Record<string, unknown>): Promise<void> {

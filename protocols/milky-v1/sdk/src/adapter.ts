@@ -560,6 +560,20 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
             initiator_uid: context.initiatorUid,
             is_filtered: context.isFiltered,
         });
+        this.#friendRequests.delete(requestId);
+    }
+
+    /** 直接同意好友申请；initiatorUid 来自 friend_request 事件。 */
+    async acceptFriendRequest(
+        initiatorUid: string,
+        isFiltered = false,
+        remark?: string,
+    ): Promise<void> {
+        await this.call("accept_friend_request", {
+            initiator_uid: initiatorUid,
+            is_filtered: isFiltered,
+            ...(remark === undefined ? {} : { remark }),
+        });
     }
 
     async approveGroupRequest(requestId: string, approve: boolean, reason?: string): Promise<void> {
@@ -570,6 +584,7 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
                 group_id: context.groupId,
                 invitation_seq: context.invitationSeq,
             });
+            this.#groupRequests.delete(requestId);
             return;
         }
         await this.call(approve ? "accept_group_request" : "reject_group_request", {
@@ -579,6 +594,7 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
             is_filtered: context.isFiltered,
             ...(approve ? {} : { reason }),
         });
+        this.#groupRequests.delete(requestId);
     }
 
     async start(port?: number): Promise<void> {

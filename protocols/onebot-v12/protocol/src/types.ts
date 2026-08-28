@@ -508,6 +508,11 @@ export namespace OneBotV12 {
         user_id: string;
     }
 
+    export interface AcceptFriendRequestParams {
+        flag: string;
+        remark?: string;
+    }
+
     /**
      * Get guild info params
      */

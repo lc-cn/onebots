@@ -545,6 +545,11 @@ export namespace OneBotV11 {
         user_id: number;
     }
 
+    export interface AcceptFriendRequestParams {
+        flag: string;
+        remark?: string;
+    }
+
     /**
      * Version info
      */

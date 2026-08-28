@@ -1,4 +1,11 @@
-import { Protocol, ProtocolRegistry, Account, Adapter, requirePositiveIntegerParam } from "onebots";
+import {
+    Protocol,
+    ProtocolRegistry,
+    Account,
+    Adapter,
+    requireNonEmptyStringParam,
+    requirePositiveIntegerParam,
+} from "onebots";
 import type { CommonEvent, Schema } from "onebots";
 import { Milky } from "./types.js";
 import { MilkyConfig } from "./config.js";
@@ -541,9 +548,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         params: Record<string, unknown>,
         approve: boolean,
     ): Promise<void> {
+        const flag = requireNonEmptyStringParam(params, "initiator_uid");
         await this.adapter.handleFriendRequest(this.account.account_id, {
-            flag: String(params.initiator_uid ?? ""),
+            flag,
             approve,
+            remark: typeof params.remark === "string" ? params.remark : undefined,
         });
     }
 

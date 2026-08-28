@@ -72,6 +72,23 @@ describe("OneBot V12 client", () => {
         });
     });
 
+    test("accepts a friend request with its opaque flag", async () => {
+        const call = vi.fn(async () => ({ status: "ok" as const, retcode: 0, data: {} }));
+        const client = createOnebot12Client({
+            baseUrl: "https://example.test",
+            selfId: "bot",
+            receiveMode: "manual",
+            call,
+        });
+
+        await client.acceptFriendRequest("opaque-request-flag", "已验证");
+
+        expect(call).toHaveBeenCalledWith("accept_friend_request", {
+            flag: "opaque-request-flag",
+            remark: "已验证",
+        });
+    });
+
     test("wraps invalid JSON as a structured protocol error", async () => {
         const client = createOnebot12Client({
             baseUrl: "https://gateway.example",

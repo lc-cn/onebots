@@ -68,7 +68,8 @@ OneBot V11 是基于 OneBot 11 标准的实现，完全兼容 CQHTTP 接口。
 
 ##### 请求处理
 
-- `set_friend_add_request` - 处理加好友请求
+- `set_friend_add_request` - 处理加好友请求（`flag` 必须来自好友申请事件）
+- `accept_friend_request` - 同意好友申请（OneBots 便捷扩展）
 - `set_group_add_request` - 处理加群请求/邀请
 
 ##### 信息获取

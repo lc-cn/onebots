@@ -112,11 +112,13 @@ describe("OneBot V12 canonical event projection", () => {
         );
     });
 
-    test("uses protocol request_id and projects the current bot status", () => {
+    test("uses protocol request_id, preserves its opaque flag, and projects bot status", async () => {
+        const call = vi.fn(async () => ({ status: "ok" as const, retcode: 0, data: {} }));
         const client = createOnebot12Client({
             baseUrl: "https://example.test",
             selfId: "bot",
             receiveMode: "manual",
+            call,
         });
         const requestHandler = vi.fn();
         const statusHandler = vi.fn();
@@ -133,6 +135,7 @@ describe("OneBot V12 canonical event projection", () => {
             self: { platform: "test", user_id: "bot" },
             user_id: "2",
             message: "hello",
+            flag: "opaque-request-flag",
         });
         client.ingest({
             id: "event-2",
@@ -147,8 +150,17 @@ describe("OneBot V12 canonical event projection", () => {
         });
 
         expect(requestHandler).toHaveBeenCalledWith(
-            expect.objectContaining({ request_id: "request-1", comment: "hello" }),
+            expect.objectContaining({
+                request_id: "request-1",
+                comment: "hello",
+                flag: "opaque-request-flag",
+            }),
         );
+        await client.approveFriendRequest("request-1", true);
+        expect(call).toHaveBeenCalledWith("accept_friend_request", {
+            flag: "opaque-request-flag",
+            remark: undefined,
+        });
         expect(statusHandler).toHaveBeenCalledWith(
             expect.objectContaining({ status: { online: true, good: true } }),
         );

@@ -205,8 +205,19 @@ curl -X POST http://localhost:6727/icqq/my_qq/milky/v1/api/invite_friend_to_grou
 
 ### 其他 API
 
+- `accept_friend_request` - 同意好友申请
+- `reject_friend_request` - 拒绝好友申请
 - `get_status` - 获取运行状态
 - `get_version_info` - 获取版本信息
+
+处理好友申请时，`initiator_uid` 必须原样取自对应 `friend_request` 事件，不能使用好友 QQ 号或自行生成的请求 ID 代替：
+
+```bash
+curl -X POST http://localhost:6727/icqq/my_qq/milky/v1/api/accept_friend_request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your_token" \
+  -d '{"initiator_uid":"opaque-request-flag","is_filtered":false,"remark":"已验证"}'
+```
 
 ## 消息格式
 

@@ -38,6 +38,11 @@ export interface OneBotV11InviteFriendToGroupParams {
     user_id: number;
 }
 
+export interface OneBotV11AcceptFriendRequestParams {
+    flag: string;
+    remark?: string;
+}
+
 export type EventHandler = (event: OneBotV11Event) => void | Promise<void>;
 
 export type OneBotV11Call = (

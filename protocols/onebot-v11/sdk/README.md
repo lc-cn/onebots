@@ -61,7 +61,10 @@ const result = await client.call<{ user_id: number; nickname: string }>("get_log
 await client.sendPrivateMessage(123456789, "你好");
 await client.sendGroupMessage(987654321, "大家好");
 await client.inviteFriendToGroup(987654321, 123456789);
+await client.acceptFriendRequest("opaque-flag-from-request-event", "已验证");
 ```
+
+`acceptFriendRequest()` 的 `flag` 必须原样取自 `request.friend` 事件，不能传好友 QQ 号。
 
 `baseUrl` 是完整的协议服务地址，SDK 不会根据平台或账号猜测 OneBots 路由。未提供 `apiBaseUrl` 时，API 与 WebSocket 共用 `baseUrl`；分离部署时显式传入 `apiBaseUrl` 和 `wsUrl`。
 

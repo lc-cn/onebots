@@ -21,6 +21,8 @@ export interface OneBotV12Event {
     channel_id?: string;
     operator_id?: string;
     request_id?: string;
+    /** OneBots 扩展：处理申请时必须原样回传的 opaque flag。 */
+    flag?: string;
     comment?: string;
     interval?: number;
     status?: {
@@ -42,6 +44,11 @@ export interface OneBotV12Response<T = unknown> {
 export interface OneBotV12InviteFriendToGroupParams {
     group_id: string;
     user_id: string;
+}
+
+export interface OneBotV12AcceptFriendRequestParams {
+    flag: string;
+    remark?: string;
 }
 
 export interface OneBotV12Segment {

@@ -8,13 +8,8 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { ICQQBot, segment } from "./bot.js";
 import { CommonEvent, CommonTypes } from "onebots";
-import type {
-    Sendable,
-    MessageElem,
-} from '@icqqjs/icqq/lib/message';
-import type {
-    MessageRet,
-} from '@icqqjs/icqq/lib/events';
+import type { Sendable, MessageElem } from "@icqqjs/icqq/lib/message";
+import type { MessageRet } from "@icqqjs/icqq/lib/events";
 import type {
     ICQQOfflineEvent,
     ICQQQRCodeEvent,
@@ -22,12 +17,13 @@ import type {
     ICQQSliderEvent,
     ICQQDeviceEvent,
     ICQQLoginErrorEvent,
-} from './types.js';
+} from "./types.js";
 import type {
     ICQQConfig,
     ICQQUser,
     ICQQPrivateMessageEvent,
     ICQQGroupMessageEvent,
+    ICQQFriendRequestEvent,
     ICQQGroupIncreaseEvent,
     ICQQGroupDecreaseEvent,
     ICQQMessageElement,
@@ -46,7 +42,10 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 发送消息
      */
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -59,16 +58,16 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         const targetId = parseInt(sceneId.string);
 
         let result: MessageRet;
-        if (scene_type === 'private') {
+        if (scene_type === "private") {
             result = await bot.sendPrivateMessage(targetId, icqqMessage as never);
-        } else if (scene_type === 'group') {
+        } else if (scene_type === "group") {
             result = await bot.sendGroupMessage(targetId, icqqMessage as never);
         } else {
             throw new Error(`不支持的消息类型: ${scene_type}`);
         }
 
         return {
-            message_id: this.createId(result.message_id || result.seq?.toString() || ''),
+            message_id: this.createId(result.message_id || result.seq?.toString() || ""),
         };
     }
 
@@ -80,7 +79,9 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        await bot.recallMessage(this.coerceId(params.message_id as CommonTypes.Id | string | number).string);
+        await bot.recallMessage(
+            this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
+        );
     }
 
     /**
@@ -91,7 +92,9 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const msg = await bot.getMessage(this.coerceId(params.message_id as CommonTypes.Id | string | number).string);
+        const msg = await bot.getMessage(
+            this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
+        );
 
         const isGroup = !!(msg as { group_id?: unknown }).group_id;
         return {
@@ -99,13 +102,19 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             // MessageInfo.time 约定为 Unix 秒（与 OneBot get_msg 等一致）
             time: msg.time,
             sender: {
-                scene_type: isGroup ? 'group' : 'private',
+                scene_type: isGroup ? "group" : "private",
                 sender_id: this.createId(msg.user_id.toString()),
-                scene_id: this.createId(isGroup ? String((msg as { group_id?: unknown }).group_id) : msg.user_id.toString()),
-                sender_name: msg.sender?.nickname || '',
-                scene_name: '',
+                scene_id: this.createId(
+                    isGroup
+                        ? String((msg as { group_id?: unknown }).group_id)
+                        : msg.user_id.toString(),
+                ),
+                sender_name: msg.sender?.nickname || "",
+                scene_name: "",
             },
-            message: this.convertICQQMessageToSegments((msg as { message?: ICQQMessageElement[] }).message || []),
+            message: this.convertICQQMessageToSegments(
+                (msg as { message?: ICQQMessageElement[] }).message || [],
+            ),
         };
     }
 
@@ -123,7 +132,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         const bot = account.client;
         const info = bot.getLoginInfo();
 
-        if (!info) throw new Error('Bot not ready');
+        if (!info) throw new Error("Bot not ready");
 
         return {
             user_id: this.createId(info.user_id.toString()),
@@ -159,7 +168,10 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 获取好友列表
      */
-    async getFriendList(uin: string, params?: Adapter.GetFriendListParams): Promise<Adapter.FriendInfo[]> {
+    async getFriendList(
+        uin: string,
+        params?: Adapter.GetFriendListParams,
+    ): Promise<Adapter.FriendInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -176,7 +188,10 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 获取好友信息
      */
-    async getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -190,6 +205,25 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         };
     }
 
+    /** 同意或拒绝好友申请；flag 必须来自原始申请事件。 */
+    async handleFriendRequest(
+        uin: string,
+        params: Adapter.HandleFriendRequestParams,
+    ): Promise<void> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        if (!params.flag) throw new TypeError("处理 ICQQ 好友申请需要原始 flag");
+
+        const accepted = await account.client.handleFriendRequest(
+            params.flag,
+            params.approve,
+            params.remark,
+        );
+        if (!accepted) {
+            throw new Error(`${params.approve ? "同意" : "拒绝"}好友申请失败`);
+        }
+    }
+
     // ============================================
     // 群组相关方法
     // ============================================
@@ -197,7 +231,10 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 获取群列表
      */
-    async getGroupList(uin: string, params?: Adapter.GetGroupListParams): Promise<Adapter.GroupInfo[]> {
+    async getGroupList(
+        uin: string,
+        params?: Adapter.GetGroupListParams,
+    ): Promise<Adapter.GroupInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -215,7 +252,10 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 获取群信息
      */
-    async getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -248,7 +288,10 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     /**
      * 获取群成员列表
      */
-    async getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -260,15 +303,18 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             group_id: params.group_id,
             user_id: this.createId(member.user_id.toString()),
             user_name: member.nickname,
-            card: member.card || '',
-            role: member.role || 'member',
+            card: member.card || "",
+            role: member.role || "member",
         }));
     }
 
     /**
      * 获取群成员信息
      */
-    async getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -283,8 +329,8 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             group_id: params.group_id,
             user_id: params.user_id,
             user_name: member.nickname,
-            card: member.card || '',
-            role: member.role || 'member',
+            card: member.card || "",
+            role: member.role || "member",
         };
     }
 
@@ -311,7 +357,9 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             Number(params.user_id.string),
         );
         if (!accepted) {
-            throw new Error(`邀请好友 ${params.user_id.string} 加入群 ${params.group_id.string} 失败`);
+            throw new Error(
+                `邀请好友 ${params.user_id.string} 加入群 ${params.group_id.string} 失败`,
+            );
         }
     }
 
@@ -337,10 +385,10 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
      */
     async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
-            app_name: 'onebots ICQQ Adapter',
-            app_version: '1.0.0',
-            impl: 'icqq',
-            version: '1.0.0',
+            app_name: "onebots ICQQ Adapter",
+            app_version: "1.0.0",
+            impl: "icqq",
+            version: "1.0.0",
         };
     }
 
@@ -359,7 +407,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
     // 账号创建
     // ============================================
 
-    createAccount(config: Account.Config<'icqq'>): Account<'icqq', ICQQBot> {
+    createAccount(config: Account.Config<"icqq">): Account<"icqq", ICQQBot> {
         const icqqConfig: ICQQConfig = {
             account_id: config.account_id,
             password: config.password,
@@ -367,198 +415,212 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         };
 
         const bot = new ICQQBot(icqqConfig);
-        const account = new Account<'icqq', ICQQBot>(this, bot, config);
+        const account = new Account<"icqq", ICQQBot>(this, bot, config);
 
         // 监听 Bot 事件
-        bot.on('ready', (user: ICQQUser) => {
+        bot.on("ready", (user: ICQQUser) => {
             this.logger.info(`ICQQ Bot ${user.nickname} (${user.user_id}) 已就绪`);
             account.status = AccountStatus.Online;
             account.nickname = user.nickname;
             account.avatar = user.avatar;
-            this.emit('verification:clear', {
-                platform: 'icqq',
+            this.emit("verification:clear", {
+                platform: "icqq",
                 account_id: config.account_id,
             } as Adapter.VerificationClear);
         });
 
-        bot.on('offline', (event: ICQQOfflineEvent) => {
-            const message = event.message || '账号已离线';
+        bot.on("offline", (event: ICQQOfflineEvent) => {
+            const message = event.message || "账号已离线";
             this.logger.warn(`ICQQ Bot 离线: ${message}`);
             account.status = AccountStatus.OffLine;
-            this.emit('verification:request', {
-                platform: 'icqq',
+            this.emit("verification:request", {
+                platform: "icqq",
                 account_id: config.account_id,
-                type: 'offline',
+                type: "offline",
                 hint: message,
                 options: {
-                    blocks: [{ type: 'text', content: message }],
+                    blocks: [{ type: "text", content: message }],
                 },
-                actions: [{ id: 'relogin', label: '重新登录', variant: 'primary' }],
+                actions: [{ id: "relogin", label: "重新登录", variant: "primary" }],
             } as unknown as Adapter.VerificationRequest);
         });
 
         // 网络闪断：icqq 会按 reconn_interval 自动重连，勿推「重新登录」打断恢复
-        bot.on('offline_network', (event: ICQQOfflineEvent) => {
-            const message = event.message || '网络连接中断';
+        bot.on("offline_network", (event: ICQQOfflineEvent) => {
+            const message = event.message || "网络连接中断";
             this.logger.warn(`ICQQ Bot 网络离线（将自动重连）: ${message}`);
             account.status = AccountStatus.Pending;
         });
 
-        bot.on('heartbeat_error', (error: unknown) => {
+        bot.on("heartbeat_error", (error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             this.logger.warn(`ICQQ SSO 心跳异常（已吞掉，继续运行）: ${message}`);
         });
 
         const clearStatusCards = () => {
-            this.emit('verification:clear', {
-                platform: 'icqq',
+            this.emit("verification:clear", {
+                platform: "icqq",
                 account_id: config.account_id,
-                type: 'offline',
+                type: "offline",
             } as Adapter.VerificationClear);
-            this.emit('verification:clear', {
-                platform: 'icqq',
+            this.emit("verification:clear", {
+                platform: "icqq",
                 account_id: config.account_id,
-                type: 'login_error',
+                type: "login_error",
             } as Adapter.VerificationClear);
         };
 
-        bot.on('qrcode', (event: ICQQQRCodeEvent) => {
+        bot.on("qrcode", (event: ICQQQRCodeEvent) => {
             clearStatusCards();
             this.logger.info(`ICQQ 请扫描二维码登录`);
-            this.emit('qrcode', { account_id: config.account_id, image: event.image });
-            const imageBase64 = event.image instanceof Buffer ? event.image.toString('base64') : event.image;
-            this.emit('verification:request', {
-                platform: 'icqq',
+            this.emit("qrcode", { account_id: config.account_id, image: event.image });
+            const imageBase64 =
+                event.image instanceof Buffer ? event.image.toString("base64") : event.image;
+            this.emit("verification:request", {
+                platform: "icqq",
                 account_id: config.account_id,
-                type: 'qrcode',
-                hint: '请使用手机 QQ 扫描下方二维码，在手机上确认后点击「已完成，继续登录」',
+                type: "qrcode",
+                hint: "请使用手机 QQ 扫描下方二维码，在手机上确认后点击「已完成，继续登录」",
                 confirmable: true,
-                confirmLabel: '已完成，继续登录',
-                options: { blocks: [{ type: 'image', base64: imageBase64, alt: '登录二维码' }] },
+                confirmLabel: "已完成，继续登录",
+                options: { blocks: [{ type: "image", base64: imageBase64, alt: "登录二维码" }] },
             } as unknown as Adapter.VerificationRequest);
         });
 
-        bot.on('auth', (event: ICQQAuthEvent) => {
+        bot.on("auth", (event: ICQQAuthEvent) => {
             clearStatusCards();
             this.logger.warn(`ICQQ 需要身份验证:`, event);
             const blocks: Adapter.VerificationBlock[] = [];
-            if (typeof event?.url === 'string' && event.url) {
-                blocks.push({ type: 'link', url: event.url, label: event.url });
+            if (typeof event?.url === "string" && event.url) {
+                blocks.push({ type: "link", url: event.url, label: event.url });
             }
-            blocks.push({ type: 'text', content: '请按提示完成身份验证，完成后点击下方「已完成，继续登录」' });
-            this.emit('verification:request', {
-                platform: 'icqq',
+            blocks.push({
+                type: "text",
+                content: "请按提示完成身份验证，完成后点击下方「已完成，继续登录」",
+            });
+            this.emit("verification:request", {
+                platform: "icqq",
                 account_id: config.account_id,
-                type: 'auth',
-                hint: 'ICQQ 要求完成身份验证后才能继续登录',
+                type: "auth",
+                hint: "ICQQ 要求完成身份验证后才能继续登录",
                 confirmable: true,
-                confirmLabel: '已完成，继续登录',
+                confirmLabel: "已完成，继续登录",
                 options: { blocks },
             } as unknown as Adapter.VerificationRequest);
         });
 
-        bot.on('slider', (event: ICQQSliderEvent) => {
+        bot.on("slider", (event: ICQQSliderEvent) => {
             clearStatusCards();
             this.logger.info(`ICQQ 需要滑块验证: ${event.url}`);
-            this.emit('slider', { account_id: config.account_id, url: event.url });
-            this.emit('verification:request', {
-                platform: 'icqq',
+            this.emit("slider", { account_id: config.account_id, url: event.url });
+            this.emit("verification:request", {
+                platform: "icqq",
                 account_id: config.account_id,
-                type: 'slider',
-                hint: '请在浏览器中打开下方链接完成滑块验证；完成后从网络响应取出 ticket 与 randstr，用英文逗号拼接后填入并提交',
+                type: "slider",
+                hint: "请在浏览器中打开下方链接完成滑块验证；完成后从网络响应取出 ticket 与 randstr，用英文逗号拼接后填入并提交",
                 options: {
                     blocks: [
-                        { type: 'link', url: event.url, label: '打开滑块验证页面' },
-                        { type: 'text', content: '格式示例：ticket值,randstr值' },
+                        { type: "link", url: event.url, label: "打开滑块验证页面" },
+                        { type: "text", content: "格式示例：ticket值,randstr值" },
                         {
-                            type: 'input',
-                            key: 'ticket',
-                            placeholder: 'ticket,randstr（英文逗号拼接）',
+                            type: "input",
+                            key: "ticket",
+                            placeholder: "ticket,randstr（英文逗号拼接）",
                         },
                     ],
                 },
             } as unknown as Adapter.VerificationRequest);
         });
 
-        bot.on('device', (event: ICQQDeviceEvent) => {
+        bot.on("device", (event: ICQQDeviceEvent) => {
             clearStatusCards();
             this.logger.info(`ICQQ 需要设备锁验证: ${event.url}`);
-            this.emit('device', { account_id: config.account_id, url: event.url, phone: event.phone });
-            const blocks: Array<{ type: 'link'; url: string; label?: string } | { type: 'text'; content: string }> = [
-                { type: 'link', url: event.url, label: event.url },
-            ];
-            if (event.phone) blocks.push({ type: 'text', content: `手机号：${event.phone}` });
-            this.emit('verification:request', {
-                platform: 'icqq',
+            this.emit("device", {
                 account_id: config.account_id,
-                type: 'device',
-                hint: '请在浏览器中打开下方链接完成设备锁验证，完成后点击「已完成，继续登录」',
+                url: event.url,
+                phone: event.phone,
+            });
+            const blocks: Array<
+                { type: "link"; url: string; label?: string } | { type: "text"; content: string }
+            > = [{ type: "link", url: event.url, label: event.url }];
+            if (event.phone) blocks.push({ type: "text", content: `手机号：${event.phone}` });
+            this.emit("verification:request", {
+                platform: "icqq",
+                account_id: config.account_id,
+                type: "device",
+                hint: "请在浏览器中打开下方链接完成设备锁验证，完成后点击「已完成，继续登录」",
                 confirmable: true,
-                confirmLabel: '已完成，继续登录',
+                confirmLabel: "已完成，继续登录",
                 options: { blocks },
             } as unknown as Adapter.VerificationRequest);
             if (event.phone) {
-                this.emit('verification:request', {
-                    platform: 'icqq',
+                this.emit("verification:request", {
+                    platform: "icqq",
                     account_id: config.account_id,
-                    type: 'sms',
-                    hint: '使用短信验证：请先点击「发送验证码」，收到后填入 6 位验证码并提交',
+                    type: "sms",
+                    hint: "使用短信验证：请先点击「发送验证码」，收到后填入 6 位验证码并提交",
                     requestSmsAvailable: true,
                     options: {
                         blocks: [
-                            { type: 'input', key: 'code', placeholder: '6 位短信验证码', maxLength: 6 },
+                            {
+                                type: "input",
+                                key: "code",
+                                placeholder: "6 位短信验证码",
+                                maxLength: 6,
+                            },
                         ],
                     },
                 } as unknown as Adapter.VerificationRequest);
             }
         });
 
-        bot.on('login_error', (event: ICQQLoginErrorEvent) => {
-            this.emit('verification:clear', {
-                platform: 'icqq',
+        bot.on("login_error", (event: ICQQLoginErrorEvent) => {
+            this.emit("verification:clear", {
+                platform: "icqq",
                 account_id: config.account_id,
-                type: 'offline',
+                type: "offline",
             } as Adapter.VerificationClear);
-            const message = event.message || '登录失败';
+            const message = event.message || "登录失败";
             this.logger.error(`ICQQ 登录失败:`, event);
             account.status = AccountStatus.OffLine;
-            this.emit('verification:request', {
-                platform: 'icqq',
+            this.emit("verification:request", {
+                platform: "icqq",
                 account_id: config.account_id,
-                type: 'login_error',
+                type: "login_error",
                 hint: message,
                 options: {
                     blocks: [
-                        { type: 'text', content: message },
+                        { type: "text", content: message },
                         ...(event.code != null
-                            ? [{ type: 'text' as const, content: `错误码：${event.code}` }]
+                            ? [{ type: "text" as const, content: `错误码：${event.code}` }]
                             : []),
                     ],
                 },
-                actions: [{ id: 'relogin', label: '重新登录', variant: 'primary' }],
+                actions: [{ id: "relogin", label: "重新登录", variant: "primary" }],
                 data: { code: event.code, message },
             } as unknown as Adapter.VerificationRequest);
         });
 
         // 监听私聊消息
-        bot.on('private_message', (event: ICQQPrivateMessageEvent) => {
+        bot.on("private_message", (event: ICQQPrivateMessageEvent) => {
             // 打印消息接收日志
-            const contentPreview = event.raw_message.length > 100 
-                ? event.raw_message.substring(0, 100) + '...' 
-                : event.raw_message;
+            const contentPreview =
+                event.raw_message.length > 100
+                    ? event.raw_message.substring(0, 100) + "..."
+                    : event.raw_message;
             this.logger.info(
                 `[ICQQ] 收到私聊消息 | 消息ID: ${event.message_id} | ` +
-                `发送者: ${event.sender.nickname} (${event.user_id}) | 内容: ${contentPreview}`
+                    `发送者: ${event.sender.nickname} (${event.user_id}) | 内容: ${contentPreview}`,
             );
 
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.message_id),
                 timestamp: unixSecondsToEventMs(event.time),
-                platform: 'icqq',
+                platform: "icqq",
                 bot_id: this.createId(config.account_id),
-                type: 'message',
-                message_type: 'private',
+                type: "message",
+                message_type: "private",
                 sender: {
                     id: this.createId(event.user_id.toString()),
                     name: event.sender.nickname,
@@ -574,24 +636,25 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         });
 
         // 监听群消息
-        bot.on('group_message', (event: ICQQGroupMessageEvent) => {
+        bot.on("group_message", (event: ICQQGroupMessageEvent) => {
             // 打印消息接收日志
-            const contentPreview = event.raw_message.length > 100 
-                ? event.raw_message.substring(0, 100) + '...' 
-                : event.raw_message;
+            const contentPreview =
+                event.raw_message.length > 100
+                    ? event.raw_message.substring(0, 100) + "..."
+                    : event.raw_message;
             this.logger.info(
                 `[ICQQ] 收到群消息 | 消息ID: ${event.message_id} | 群: ${event.group.group_name} (${event.group_id}) | ` +
-                `发送者: ${event.sender.nickname} (${event.user_id}) | 内容: ${contentPreview}`
+                    `发送者: ${event.sender.nickname} (${event.user_id}) | 内容: ${contentPreview}`,
             );
 
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.message_id),
                 timestamp: unixSecondsToEventMs(event.time),
-                platform: 'icqq',
+                platform: "icqq",
                 bot_id: this.createId(config.account_id),
-                type: 'message',
-                message_type: 'group',
+                type: "message",
+                message_type: "group",
                 sender: {
                     id: this.createId(event.user_id.toString()),
                     name: event.sender.nickname,
@@ -610,38 +673,60 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             account.dispatch(commonEvent);
         });
 
+        // 好友申请的 opaque flag 必须原样保留，后续同意/拒绝动作依赖它。
+        bot.on("friend_request", (event: ICQQFriendRequestEvent) => {
+            const requestEvent: CommonEvent.Request<ICQQFriendRequestEvent> = {
+                id: this.createId(event.request_id),
+                timestamp: unixSecondsToEventMs(event.time),
+                platform: "icqq",
+                bot_id: this.createId(config.account_id),
+                type: "request",
+                request_type: "friend",
+                user: {
+                    id: this.createId(event.user_id.toString()),
+                    name: event.nickname,
+                },
+                comment: event.comment,
+                flag: event.request_id,
+                raw_event: event,
+            };
+            account.dispatch(requestEvent);
+        });
+
         // 监听群成员增加
-        bot.on('group_increase', (event: ICQQGroupIncreaseEvent) => {
+        bot.on("group_increase", (event: ICQQGroupIncreaseEvent) => {
             const noticeEvent: CommonEvent.Notice = {
                 id: this.createId(`${event.group_id}_${event.user_id}_${event.time}`),
                 timestamp: unixSecondsToEventMs(event.time),
-                platform: 'icqq',
+                platform: "icqq",
                 bot_id: this.createId(config.account_id),
-                type: 'notice',
-                notice_type: 'group_increase',
-                sub_type: event.operator_id === event.user_id ? 'approve' : 'invite',
+                type: "notice",
+                notice_type: "group_increase",
+                sub_type: event.operator_id === event.user_id ? "approve" : "invite",
                 group: {
                     id: this.createId(event.group_id.toString()),
                 },
                 user: {
                     id: this.createId(event.user_id.toString()),
                 },
-                operator: event.operator_id ? {
-                    id: this.createId(event.operator_id.toString()),
-                } : undefined,
+                operator: event.operator_id
+                    ? {
+                          id: this.createId(event.operator_id.toString()),
+                      }
+                    : undefined,
             };
             account.dispatch(noticeEvent);
         });
 
         // 监听群成员减少
-        bot.on('group_decrease', (event: ICQQGroupDecreaseEvent) => {
+        bot.on("group_decrease", (event: ICQQGroupDecreaseEvent) => {
             const noticeEvent: CommonEvent.Notice = {
                 id: this.createId(`${event.group_id}_${event.user_id}_${event.time}`),
                 timestamp: unixSecondsToEventMs(event.time),
-                platform: 'icqq',
+                platform: "icqq",
                 bot_id: this.createId(config.account_id),
-                type: 'notice',
-                notice_type: 'group_decrease',
+                type: "notice",
+                notice_type: "group_decrease",
                 sub_type: event.sub_type,
                 group: {
                     id: this.createId(event.group_id.toString()),
@@ -649,15 +734,17 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
                 user: {
                     id: this.createId(event.user_id.toString()),
                 },
-                operator: event.operator_id ? {
-                    id: this.createId(event.operator_id.toString()),
-                } : undefined,
+                operator: event.operator_id
+                    ? {
+                          id: this.createId(event.operator_id.toString()),
+                      }
+                    : undefined,
             };
             account.dispatch(noticeEvent);
         });
 
         // 启动时初始化 Bot
-        account.on('start', async () => {
+        account.on("start", async () => {
             try {
                 await bot.start();
             } catch (error) {
@@ -666,7 +753,7 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             }
         });
 
-        account.on('stop', async () => {
+        account.on("stop", async () => {
             await bot.stop();
             account.status = AccountStatus.OffLine;
         });
@@ -689,21 +776,21 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
             return;
         }
         const bot = account.client;
-        const value = typeof data.value === 'string' ? data.value : undefined;
-        const action = typeof data.action === 'string' ? data.action : undefined;
+        const value = typeof data.value === "string" ? data.value : undefined;
+        const action = typeof data.action === "string" ? data.action : undefined;
 
-        if (action === 'relogin' || type === 'login_error' || type === 'offline') {
+        if (action === "relogin" || type === "login_error" || type === "offline") {
             await this.setOnline(accountId);
             return;
         }
 
-        if (type === 'slider') {
+        if (type === "slider") {
             const ticket = (data.ticket ?? value) as string | undefined;
-            if (typeof ticket === 'string') bot.submitSlider(ticket);
-        } else if (type === 'sms') {
+            if (typeof ticket === "string") bot.submitSlider(ticket);
+        } else if (type === "sms") {
             const code = (data.code ?? value) as string | undefined;
-            if (typeof code === 'string') bot.submitSmsCode(code);
-        } else if (type === 'qrcode' || type === 'auth' || type === 'device') {
+            if (typeof code === "string") bot.submitSmsCode(code);
+        } else if (type === "qrcode" || type === "auth" || type === "device") {
             // 扫码确认 / 身份验证 / 设备锁网页验证完成后需显式调用 login() 继续
             bot.continueLogin();
         } else {
@@ -727,8 +814,8 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         if (!account) {
             throw new Error(`未找到账号 ${uin}`);
         }
-        this.emit('verification:clear', {
-            platform: 'icqq',
+        this.emit("verification:clear", {
+            platform: "icqq",
             account_id: uin,
         } as Adapter.VerificationClear);
         account.status = AccountStatus.Pending;
@@ -753,8 +840,8 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         }
         await account.client.stop();
         account.status = AccountStatus.OffLine;
-        this.emit('verification:clear', {
-            platform: 'icqq',
+        this.emit("verification:clear", {
+            platform: "icqq",
             account_id: uin,
         } as Adapter.VerificationClear);
     }
@@ -768,20 +855,20 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
      * 如果是 base64 格式，转换为 Buffer；否则返回原始数据
      */
     private processFileData(file: string): string | Buffer {
-        if (typeof file === 'string' && file.startsWith('base64://')) {
-            const base64Data = file.replace(/^base64:\/\//, '');
-            
+        if (typeof file === "string" && file.startsWith("base64://")) {
+            const base64Data = file.replace(/^base64:\/\//, "");
+
             // Strip whitespace (RFC 4648 allows whitespace in base64)
-            const cleanedData = base64Data.replace(/\s/g, '');
-            
+            const cleanedData = base64Data.replace(/\s/g, "");
+
             // Validate base64 format (basic validation)
             if (!/^[A-Za-z0-9+/]*={0,2}$/.test(cleanedData)) {
                 this.logger.warn(`Invalid base64 data format (length: ${cleanedData.length})`);
                 return file; // Return original if invalid
             }
-            
+
             try {
-                return Buffer.from(cleanedData, 'base64');
+                return Buffer.from(cleanedData, "base64");
             } catch (error) {
                 this.logger.error(`Failed to convert base64 to Buffer:`, error);
                 return file; // Return original on error
@@ -797,53 +884,55 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
         const result: Sendable[] = [];
 
         for (const seg of message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 result.push(seg);
-            } else if (seg.type === 'text') {
-                result.push(seg.data.text || '');
-            } else if (seg.type === 'at') {
+            } else if (seg.type === "text") {
+                result.push(seg.data.text || "");
+            } else if (seg.type === "at") {
                 const qq = seg.data.qq || seg.data.id || seg.data.user_id;
-                if (qq === 'all') {
-                    result.push(segment.at('all'));
+                if (qq === "all") {
+                    result.push(segment.at("all"));
                 } else {
                     result.push(segment.at(parseInt(qq as string)));
                 }
-            } else if (seg.type === 'image') {
+            } else if (seg.type === "image") {
                 const file = seg.data.url || seg.data.file;
                 if (file) {
                     result.push(segment.image(this.processFileData(file)));
                 }
-            } else if (seg.type === 'face') {
+            } else if (seg.type === "face") {
                 const id = seg.data.id;
                 if (id !== undefined) {
                     result.push(segment.face(parseInt(id as string)));
                 }
-            } else if (seg.type === 'record' || seg.type === 'audio') {
+            } else if (seg.type === "record" || seg.type === "audio") {
                 const file = seg.data.url || seg.data.file;
                 if (file) {
                     result.push(segment.record(this.processFileData(file)));
                 }
-            } else if (seg.type === 'video') {
+            } else if (seg.type === "video") {
                 const file = seg.data.url || seg.data.file;
                 if (file) {
                     result.push(segment.video(this.processFileData(file)));
                 }
-            } else if (seg.type === 'reply') {
+            } else if (seg.type === "reply") {
                 const id = seg.data.id;
                 if (id) {
-                    result.push({ type: 'reply', id } as MessageElem);
+                    result.push({ type: "reply", id } as MessageElem);
                 }
-            } else if (seg.type === 'share') {
-                result.push(segment.share(
-                    seg.data.url || '',
-                    seg.data.title || '',
-                    seg.data.content,
-                    seg.data.image
-                ));
-            } else if (seg.type === 'json') {
-                result.push(segment.json(seg.data.data || ''));
-            } else if (seg.type === 'xml') {
-                result.push(segment.xml(seg.data.data || ''));
+            } else if (seg.type === "share") {
+                result.push(
+                    segment.share(
+                        seg.data.url || "",
+                        seg.data.title || "",
+                        seg.data.content,
+                        seg.data.image,
+                    ),
+                );
+            } else if (seg.type === "json") {
+                result.push(segment.json(seg.data.data || ""));
+            } else if (seg.type === "xml") {
+                result.push(segment.xml(seg.data.data || ""));
             }
         }
 
@@ -858,38 +947,58 @@ export class ICQQAdapter extends Adapter<ICQQBot, "icqq"> {
 
         for (const elem of message) {
             switch (elem.type) {
-                case 'text':
-                    result.push({ type: 'text', data: { text: elem.text } });
+                case "text":
+                    result.push({ type: "text", data: { text: elem.text } });
                     break;
-                case 'face':
-                    result.push({ type: 'face', data: { id: elem.id.toString() } });
+                case "face":
+                    result.push({ type: "face", data: { id: elem.id.toString() } });
                     break;
-                case 'image':
-                    result.push({ type: 'image', data: { url: elem.url || elem.file, file: elem.file } });
+                case "image":
+                    result.push({
+                        type: "image",
+                        data: { url: elem.url || elem.file, file: elem.file },
+                    });
                     break;
-                case 'record':
-                    result.push({ type: 'record', data: { url: elem.url || elem.file, file: elem.file } });
+                case "record":
+                    result.push({
+                        type: "record",
+                        data: { url: elem.url || elem.file, file: elem.file },
+                    });
                     break;
-                case 'video':
-                    result.push({ type: 'video', data: { url: elem.url || elem.file, file: elem.file } });
+                case "video":
+                    result.push({
+                        type: "video",
+                        data: { url: elem.url || elem.file, file: elem.file },
+                    });
                     break;
-                case 'at':
-                    result.push({ type: 'at', data: { qq: elem.qq.toString() } });
+                case "at":
+                    result.push({ type: "at", data: { qq: elem.qq.toString() } });
                     break;
-                case 'share':
-                    result.push({ type: 'share', data: { url: elem.url, title: elem.title, content: elem.content, image: elem.image } });
+                case "share":
+                    result.push({
+                        type: "share",
+                        data: {
+                            url: elem.url,
+                            title: elem.title,
+                            content: elem.content,
+                            image: elem.image,
+                        },
+                    });
                     break;
-                case 'json':
-                    result.push({ type: 'json', data: { data: elem.data } });
+                case "json":
+                    result.push({ type: "json", data: { data: elem.data } });
                     break;
-                case 'xml':
-                    result.push({ type: 'xml', data: { data: elem.data } });
+                case "xml":
+                    result.push({ type: "xml", data: { data: elem.data } });
                     break;
-                case 'reply':
-                    result.push({ type: 'reply', data: { id: elem.id } });
+                case "reply":
+                    result.push({ type: "reply", data: { id: elem.id } });
                     break;
                 default:
-                    result.push({ type: 'text', data: { text: `[${(elem as ICQQMessageElement).type}]` } });
+                    result.push({
+                        type: "text",
+                        data: { text: `[${(elem as ICQQMessageElement).type}]` },
+                    });
             }
         }
 
@@ -905,11 +1014,11 @@ declare module "onebots" {
     }
 }
 
-AdapterRegistry.register('icqq', ICQQAdapter, {
-    name: 'icqq',
-    displayName: 'ICQQ 机器人',
-    description: '基于 ICQQ 协议的 QQ 机器人适配器，支持扫码登录和密码登录',
-    icon: 'https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png',
-    homepage: 'https://github.com/icqqjs/icqq',
-    author: '凉菜',
+AdapterRegistry.register("icqq", ICQQAdapter, {
+    name: "icqq",
+    displayName: "ICQQ 机器人",
+    description: "基于 ICQQ 协议的 QQ 机器人适配器，支持扫码登录和密码登录",
+    icon: "https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png",
+    homepage: "https://github.com/icqqjs/icqq",
+    author: "凉菜",
 });

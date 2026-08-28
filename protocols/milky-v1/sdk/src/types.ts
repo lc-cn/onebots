@@ -58,6 +58,12 @@ export interface MilkyInviteFriendToGroupParams {
     user_id: number;
 }
 
+export interface MilkyAcceptFriendRequestParams {
+    initiator_uid: string;
+    is_filtered: boolean;
+    remark?: string;
+}
+
 export type MilkyCall = (
     action: string,
     params?: Record<string, unknown>,

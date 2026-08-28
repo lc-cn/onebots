@@ -153,6 +153,24 @@ describe("Milky V1 SDK", () => {
         });
     });
 
+    test("accepts a friend request with the native opaque initiator UID", async () => {
+        const call = vi.fn(async () => ({ status: "ok" as const, retcode: 0, data: {} }));
+        const client = createMilkyClient({
+            baseUrl: "https://milky.example",
+            selfId: "10001",
+            receiveMode: "manual",
+            call,
+        });
+
+        await client.acceptFriendRequest("opaque-request-flag", true, "已验证");
+
+        expect(call).toHaveBeenCalledWith("accept_friend_request", {
+            initiator_uid: "opaque-request-flag",
+            is_filtered: true,
+            remark: "已验证",
+        });
+    });
+
     test("appends the native API route to baseUrl without guessing gateway routes", async () => {
         const fetchMock = vi.fn(
             async () => new Response(JSON.stringify({ status: "ok", retcode: 0, data: {} })),

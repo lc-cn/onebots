@@ -73,6 +73,23 @@ describe("OneBot V11 client", () => {
         });
     });
 
+    test("accepts a friend request with its opaque flag", async () => {
+        const call = vi.fn(async () => ({ status: "ok" as const, retcode: 0, data: {} }));
+        const client = createOnebot11Client({
+            baseUrl: "https://example.test",
+            selfId: "1",
+            receiveMode: "manual",
+            call,
+        });
+
+        await client.acceptFriendRequest("opaque-request-flag", "已验证");
+
+        expect(call).toHaveBeenCalledWith("accept_friend_request", {
+            flag: "opaque-request-flag",
+            remark: "已验证",
+        });
+    });
+
     test("uses baseUrl as the WebSocket endpoint without guessing routes", async () => {
         const socket = new EventEmitter() as EventEmitter & {
             close: ReturnType<typeof vi.fn>;

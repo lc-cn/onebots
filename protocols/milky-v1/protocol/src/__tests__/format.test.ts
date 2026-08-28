@@ -37,6 +37,13 @@ vi.mock("onebots", () => {
             if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError("invalid id");
             return value;
         },
+        requireNonEmptyStringParam: (params: Record<string, unknown>, key: string) => {
+            const value = params[key];
+            if (typeof value !== "string" || value.trim() === "") {
+                throw new TypeError("invalid string");
+            }
+            return value;
+        },
     };
 });
 
@@ -66,6 +73,7 @@ function createProtocol() {
         deleteMessage: vi.fn(),
         kickGroupMember: vi.fn(),
         inviteGroupMember: vi.fn(),
+        handleFriendRequest: vi.fn(),
         muteGroupMember: vi.fn(),
         setGroupAdmin: vi.fn(),
         setGroupCard: vi.fn(),
@@ -382,6 +390,28 @@ describe("Milky V1 protocol", () => {
             protocol.apply("invite_friend_to_group", { group_id: 0, user_id: "not-a-number" }),
         ).resolves.toMatchObject({ status: "failed", retcode: -1 });
         expect(adapter.inviteGroupMember).not.toHaveBeenCalled();
+    });
+
+    test("accept_friend_request preserves the opaque request flag", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await expect(
+            protocol.apply("accept_friend_request", {
+                initiator_uid: "opaque-request-flag",
+                is_filtered: true,
+                remark: "已验证",
+            }),
+        ).resolves.toMatchObject({ status: "ok", retcode: 0, data: {} });
+        expect(adapter.handleFriendRequest).toHaveBeenCalledWith("bot", {
+            flag: "opaque-request-flag",
+            approve: true,
+            remark: "已验证",
+        });
+
+        await expect(
+            protocol.apply("accept_friend_request", { initiator_uid: " " }),
+        ).resolves.toMatchObject({ status: "failed", retcode: -1 });
+        expect(adapter.handleFriendRequest).toHaveBeenCalledTimes(1);
     });
 
     test("apply returns native Milky wrappers for login and list actions", async () => {

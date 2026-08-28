@@ -170,8 +170,11 @@ onebots 主动连接到配置的 WebSocket 地址。
 - `set_group_name` - 设置群名
 - `set_group_leave` - 退出群组
 - `set_group_special_title` - 设置群组专属头衔
-- `set_friend_add_request` - 处理加好友请求
+- `set_friend_add_request` - 处理加好友请求（OneBot 11 标准）
+- `accept_friend_request` - 同意好友申请（OneBots 便捷扩展）
 - `set_group_add_request` - 处理加群请求/邀请
+
+两个好友申请 API 的 `flag` 都必须原样取自对应 `request.friend` 事件，不能使用好友 QQ 号或自行生成的请求 ID 代替。标准 API 可通过 `approve` 同意或拒绝；便捷扩展固定为同意。
 
 ### 获取信息 API
 

@@ -22,6 +22,10 @@ export class MilkyV1Client extends ImHelper<
     inviteFriendToGroup(groupId: string, userId: string): Promise<void> {
         return this.adapter.inviteFriendToGroup(groupId, userId);
     }
+
+    acceptFriendRequest(initiatorUid: string, isFiltered = false, remark?: string): Promise<void> {
+        return this.adapter.acceptFriendRequest(initiatorUid, isFiltered, remark);
+    }
 }
 
 export function createMilkyClient(config: MilkyAdapterConfig): MilkyV1Client {

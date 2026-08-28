@@ -42,6 +42,7 @@ export type Segment = {
 export interface OneBotV11Adapter extends Adapter<number, OneBotV11Event> {
     sendMessage(options: Adapter.SendMessageOptions<number>): Promise<OneBotV11Response>;
     inviteFriendToGroup(groupId: number, userId: number): Promise<void>;
+    acceptFriendRequest(flag: string, remark?: string): Promise<void>;
     call<T = unknown>(
         action: string,
         params?: Record<string, unknown>,
@@ -465,6 +466,12 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
                 approve,
                 remark: comment,
             });
+            this.requestFlags.delete(request_id);
+        }
+
+        /** 使用申请事件中的 opaque flag 直接同意好友申请。 */
+        async acceptFriendRequest(flag: string, remark?: string): Promise<void> {
+            await this.httpClient.post("/accept_friend_request", { flag, remark });
         }
 
         async approveGroupRequest(
@@ -478,6 +485,8 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
                 approve,
                 reason,
             });
+            this.requestFlags.delete(request_id);
+            this.requestSubTypes.delete(request_id);
         }
 
         async getMessage(message_id: number): Promise<import("imhelper").MessageEvent<number>> {
