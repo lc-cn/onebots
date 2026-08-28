@@ -1,5 +1,18 @@
 # @onebots/adapter-wecom-kf
 
+## 2.0.8
+
+### Patch Changes
+
+- c9e876c: 建立统一的 Adapter 能力清单与结构化能力错误，修复 Teams、Mock 和企业微信事件投递，并复用微信生态回调验签、解密与 XML 解析实现。
+- Updated dependencies [9cc0622]
+- Updated dependencies [c9e876c]
+- Updated dependencies [a87f07a]
+- Updated dependencies [f1493f6]
+- Updated dependencies [78c1e50]
+- Updated dependencies [03cc74d]
+  - onebots@1.2.8
+
 ## 2.0.7
 
 ### Patch Changes
