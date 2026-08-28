@@ -61,13 +61,34 @@ export const resolveJsonFieldDisplay = (
 export const usesEndpointListEditor = (rule: ValidationRule): boolean =>
     rule.type === 'array' && rule.ui?.widget === 'endpoint-list';
 
+const cloneConfigValue = (value: unknown, seen = new WeakMap<object, unknown>()): unknown => {
+    if (typeof value !== 'object' || value === null) return value;
+
+    const cached = seen.get(value);
+    if (cached !== undefined) return cached;
+
+    if (Array.isArray(value)) {
+        const result: unknown[] = [];
+        seen.set(value, result);
+        value.forEach(item => result.push(cloneConfigValue(item, seen)));
+        return result;
+    }
+
+    const result: Record<string, unknown> = {};
+    seen.set(value, result);
+    Object.entries(value).forEach(([key, item]) => {
+        result[key] = cloneConfigValue(item, seen);
+    });
+    return result;
+};
+
 export const resolveStructuredFieldDisplay = (
     currentValue: unknown,
     rule: ValidationRule
 ): unknown => {
     if (usesEndpointListEditor(rule)) {
         const value = currentValue ?? rule.default;
-        return Array.isArray(value) ? structuredClone(value) : [];
+        return Array.isArray(value) ? cloneConfigValue(value) : [];
     }
     return resolveJsonFieldDisplay(currentValue, rule);
 };

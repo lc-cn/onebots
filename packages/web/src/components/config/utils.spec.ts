@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { reactive } from "vue";
 import {
     buildConfigGroups,
     parseStructuredFieldValue,
@@ -50,6 +51,16 @@ describe("config form generation", () => {
             ok: true,
             value,
         });
+    });
+
+    test("copies reactive endpoint arrays without cloning Vue proxies", () => {
+        const value = reactive([
+            { url: "wss://events.example", access_token: "secret" },
+        ]);
+
+        expect(resolveStructuredFieldDisplay(value, endpointRule)).toEqual([
+            { url: "wss://events.example", access_token: "secret" },
+        ]);
     });
 
     test("removes blank rows and rejects the wrong URL scheme", () => {
