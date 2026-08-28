@@ -1,5 +1,11 @@
 # @onebots/adapter-qq
 
+## 3.0.9
+
+### Patch Changes
+
+- onebots@1.2.7
+
 ## 3.0.8
 
 ### Patch Changes
