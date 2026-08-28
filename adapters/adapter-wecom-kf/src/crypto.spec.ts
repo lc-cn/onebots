@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { describe, it, expect } from "vitest";
-import { parseSimpleXml, verifyWeComSignature } from "./crypto.js";
+import { parseWechatXml, verifyWechatCallbackSignature } from "onebots";
 
-describe("parseSimpleXml", () => {
+describe("parseWechatXml", () => {
     it("解析微信客服回调明文 XML", () => {
         const xml = `<?xml version="1.0"?><xml>
    <ToUserName><![CDATA[ww123]]></ToUserName>
@@ -12,7 +12,7 @@ describe("parseSimpleXml", () => {
    <Token><![CDATA[ENCtoken]]></Token>
    <OpenKfId><![CDATA[wktest]]></OpenKfId>
 </xml>`;
-        const o = parseSimpleXml(xml);
+        const o = parseWechatXml(xml);
         expect(o.ToUserName).toBe("ww123");
         expect(o.CreateTime).toBe(1348831860);
         expect(o.Event).toBe("kf_msg_or_event");
@@ -21,7 +21,7 @@ describe("parseSimpleXml", () => {
     });
 });
 
-describe("verifyWeComSignature", () => {
+describe("verifyWechatCallbackSignature", () => {
     it("合法签名通过", () => {
         const token = "test";
         const timestamp = "123";
@@ -29,7 +29,9 @@ describe("verifyWeComSignature", () => {
         const encrypt = "cipher";
         const arr = [token, timestamp, nonce, encrypt].sort().join("");
         const msg_signature = createHash("sha1").update(arr).digest("hex");
-        expect(verifyWeComSignature(token, msg_signature, timestamp, nonce, encrypt)).toBe(true);
-        expect(verifyWeComSignature(token, "bad", timestamp, nonce, encrypt)).toBe(false);
+        expect(verifyWechatCallbackSignature(token, msg_signature, timestamp, nonce, encrypt)).toBe(
+            true,
+        );
+        expect(verifyWechatCallbackSignature(token, "bad", timestamp, nonce, encrypt)).toBe(false);
     });
 });

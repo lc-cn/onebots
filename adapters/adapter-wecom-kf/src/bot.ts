@@ -5,11 +5,11 @@ import { EventEmitter } from "node:events";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { RouterContext, Next } from "onebots";
 import {
-    decryptWeComPayload,
-    extractEncryptFromXml,
-    parseSimpleXml,
-    verifyWeComSignature,
-} from "./crypto.js";
+    decryptWechatCallback,
+    extractWechatEncryptedPayload,
+    parseWechatXml,
+    verifyWechatCallbackSignature,
+} from "onebots";
 import type {
     WeComKfConfig,
     WeComTokenResponse,
@@ -73,7 +73,7 @@ export class WeComKfBot extends EventEmitter {
         if (this.seenMsgIds.size <= 4000) return;
         const arr = [...this.seenMsgIds];
         this.seenMsgIds.clear();
-        arr.slice(-2000).forEach((id) => this.seenMsgIds.add(id));
+        arr.slice(-2000).forEach(id => this.seenMsgIds.add(id));
     }
 
     private async requestJson<T>(path: string, body?: unknown): Promise<T> {
@@ -182,14 +182,20 @@ export class WeComKfBot extends EventEmitter {
         return this.requestJson<KfSendMsgResponse>("/cgi-bin/kf/send_msg", body);
     }
 
-    async customerBatchGet(externalUserIds: string[], needContext = 0): Promise<KfCustomerBatchGetResponse> {
+    async customerBatchGet(
+        externalUserIds: string[],
+        needContext = 0,
+    ): Promise<KfCustomerBatchGetResponse> {
         return this.requestJson<KfCustomerBatchGetResponse>("/cgi-bin/kf/customer/batchget", {
             external_userid_list: externalUserIds,
             need_enter_session_context: needContext,
         });
     }
 
-    async serviceStateGet(openKfid: string, externalUserid: string): Promise<KfServiceStateGetResponse> {
+    async serviceStateGet(
+        openKfid: string,
+        externalUserid: string,
+    ): Promise<KfServiceStateGetResponse> {
         return this.requestJson<KfServiceStateGetResponse>("/cgi-bin/kf/service_state/get", {
             open_kfid: openKfid,
             external_userid: externalUserid,
@@ -231,7 +237,7 @@ export class WeComKfBot extends EventEmitter {
         if (this.config.enable_sync_poll && this.config.open_kfid) {
             const ms = this.config.sync_poll_interval_ms ?? 30000;
             this.pollTimer = setInterval(() => {
-                void this.pullPollOnce(this.config.open_kfid!).then((items) => {
+                void this.pullPollOnce(this.config.open_kfid!).then(items => {
                     if (items.length) {
                         this.emit("kf_messages", { open_kfid: this.config.open_kfid, items });
                     }
@@ -298,13 +304,19 @@ export class WeComKfBot extends EventEmitter {
             return;
         }
         if (
-            !verifyWeComSignature(this.config.token, msgSignature, timestamp, nonce, echostr)
+            !verifyWechatCallbackSignature(
+                this.config.token,
+                msgSignature,
+                timestamp,
+                nonce,
+                echostr,
+            )
         ) {
             ctx.status = 403;
             ctx.body = "签名校验失败";
             return;
         }
-        const plain = decryptWeComPayload(echostr, this.config.encoding_aes_key);
+        const plain = decryptWechatCallback(echostr, this.config.encoding_aes_key).xml;
         ctx.status = 200;
         ctx.body = plain;
     }
@@ -333,7 +345,7 @@ export class WeComKfBot extends EventEmitter {
             }
         }
         if (!encrypt) {
-            encrypt = extractEncryptFromXml(raw);
+            encrypt = extractWechatEncryptedPayload(raw) ?? null;
         }
         if (!encrypt) {
             ctx.status = 400;
@@ -349,13 +361,21 @@ export class WeComKfBot extends EventEmitter {
         const msgSignature = decodeURIComponent(String(q.msg_signature || ""));
         const timestamp = decodeURIComponent(String(q.timestamp || ""));
         const nonce = decodeURIComponent(String(q.nonce || ""));
-        if (!verifyWeComSignature(this.config.token, msgSignature, timestamp, nonce, encrypt)) {
+        if (
+            !verifyWechatCallbackSignature(
+                this.config.token,
+                msgSignature,
+                timestamp,
+                nonce,
+                encrypt,
+            )
+        ) {
             ctx.status = 403;
             ctx.body = "";
             return;
         }
-        const innerXml = decryptWeComPayload(encrypt, this.config.encoding_aes_key);
-        const inner = parseSimpleXml(innerXml);
+        const innerXml = decryptWechatCallback(encrypt, this.config.encoding_aes_key).xml;
+        const inner = parseWechatXml(innerXml);
         const msgType = String(inner.MsgType || "");
         const event = String(inner.Event || "");
 

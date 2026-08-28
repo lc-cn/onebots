@@ -3,17 +3,76 @@
  * 用于测试和开发环境，不需要真实的外部服务
  */
 
-import { Account, AdapterRegistry, AccountStatus, BaseApp, Adapter, CommonTypes } from "onebots";
+import {
+    Account,
+    AccountStatus,
+    Adapter,
+    AdapterRegistry,
+    BaseApp,
+    CommonTypes,
+    defineAdapterCapabilities,
+    unixSecondsToEventMs,
+    type AdapterCapabilityManifest,
+    type CommonEvent,
+} from "onebots";
 import { MockBot } from "./bot.js";
 import type { MockConfig, MockUser, MockGroup } from "./types.js";
 
+export const mockCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
+    actions: {
+        send_message: { support: "native", scenes: ["private", "group"] },
+        delete_message: { support: "native", scenes: ["private", "group"] },
+        get_login_info: { support: "native" },
+        get_user_info: { support: "native" },
+        get_friend_list: { support: "native" },
+        get_group_list: { support: "native" },
+        get_group_info: { support: "native" },
+        get_status: { support: "native" },
+        get_version: { support: "native" },
+        get_supported_actions: { support: "native" },
+    },
+    events: {
+        message: { support: "native", scenes: ["private", "group"] },
+        request: { support: "native" },
+        heartbeat: { support: "native" },
+    },
+    segments: {
+        text: { support: "native", direction: "both" },
+    },
+    transports: {
+        native: { support: "native", mode: "native" },
+    },
+});
+
+interface MockIncomingMessage {
+    type: "private" | "group";
+    message_id: string;
+    user_id: string;
+    nickname?: string;
+    group_id?: string;
+    group_name?: string;
+    content: string;
+    time: number;
+}
+
+interface MockFriendRequest {
+    type: "friend";
+    user_id: string;
+    nickname?: string;
+    comment?: string;
+    flag: string;
+}
+
 export class MockAdapter extends Adapter<MockBot, "mock"> {
     constructor(app: BaseApp) {
-        super(app, "mock");
+        super(app, "mock", mockCapabilities);
         this.icon = "https://via.placeholder.com/100?text=Mock";
     }
 
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -35,7 +94,9 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        await bot.deleteMessage(this.coerceId(params.message_id as CommonTypes.Id | string | number).string);
+        await bot.deleteMessage(
+            this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
+        );
     }
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
@@ -98,7 +159,10 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         }));
     }
 
-    async getGroupInfo(uin: string, params: { group_id: CommonTypes.Id }): Promise<Adapter.GroupInfo> {
+    async getGroupInfo(
+        uin: string,
+        params: { group_id: CommonTypes.Id },
+    ): Promise<Adapter.GroupInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -117,7 +181,22 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         };
     }
 
-    createAccount(config: Account.Config<'mock'>): Account<'mock', MockBot> {
+    async getStatus(uin: string): Promise<Adapter.StatusInfo> {
+        const account = this.getAccount(uin);
+        return {
+            online: account?.status === AccountStatus.Online,
+            good: account?.status === AccountStatus.Online,
+        };
+    }
+
+    async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+        return {
+            app_name: "onebots Mock Adapter",
+            impl: "mock",
+        };
+    }
+
+    createAccount(config: Account.Config<"mock">): Account<"mock", MockBot> {
         const mockConfig: MockConfig = {
             account_id: config.account_id,
             nickname: config.nickname,
@@ -130,21 +209,79 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         };
 
         const bot = new MockBot(mockConfig);
-        const account = new Account<'mock', MockBot>(this, bot, config);
+        const account = new Account<"mock", MockBot>(this, bot, config);
 
         // 监听事件
-        bot.on('ready', (user: { user_id: string; nickname: string; avatar?: string }) => {
+        bot.on("ready", (user: { user_id: string; nickname: string; avatar?: string }) => {
             this.logger.info(`Mock Bot ${user.nickname} (${user.user_id}) 已就绪`);
             account.status = AccountStatus.Online;
             account.nickname = user.nickname;
             account.avatar = user.avatar;
         });
 
-        bot.on('stopped', () => {
+        bot.on("stopped", () => {
             account.status = AccountStatus.OffLine;
         });
 
-        account.on('start', async () => {
+        bot.on("message", (event: MockIncomingMessage) => {
+            const commonEvent: CommonEvent.Message<MockIncomingMessage> = {
+                id: this.createId(event.message_id),
+                timestamp: unixSecondsToEventMs(event.time),
+                platform: "mock",
+                bot_id: this.createId(config.account_id),
+                type: "message",
+                message_type: event.type,
+                sender: {
+                    id: this.createId(event.user_id),
+                    name: event.nickname,
+                },
+                group: event.group_id
+                    ? {
+                          id: this.createId(event.group_id),
+                          name: event.group_name,
+                      }
+                    : undefined,
+                message_id: this.createId(event.message_id),
+                raw_message: event.content,
+                message: [{ type: "text", data: { text: event.content } }],
+                raw_event: event,
+            };
+            account.dispatch(commonEvent);
+        });
+
+        bot.on("request", (event: MockFriendRequest) => {
+            const commonEvent: CommonEvent.Request<MockFriendRequest> = {
+                id: this.createId(event.flag),
+                timestamp: Date.now(),
+                platform: "mock",
+                bot_id: this.createId(config.account_id),
+                type: "request",
+                request_type: "friend",
+                user: {
+                    id: this.createId(event.user_id),
+                    name: event.nickname,
+                },
+                comment: event.comment,
+                flag: event.flag,
+                raw_event: event,
+            };
+            account.dispatch(commonEvent);
+        });
+
+        bot.on("heartbeat", (event: { time: number }) => {
+            const commonEvent: CommonEvent.Meta<typeof event> = {
+                id: this.createId(`heartbeat:${event.time}`),
+                timestamp: event.time,
+                platform: "mock",
+                bot_id: this.createId(config.account_id),
+                type: "meta",
+                meta_type: "heartbeat",
+                raw_event: event,
+            };
+            account.dispatch(commonEvent);
+        });
+
+        account.on("start", async () => {
             try {
                 await bot.start();
             } catch (error) {
@@ -153,7 +290,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
             }
         });
 
-        account.on('stop', async () => {
+        account.on("stop", async () => {
             await bot.stop();
             account.status = AccountStatus.OffLine;
         });
@@ -164,12 +301,12 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
     private buildMessageContent(message: CommonTypes.Segment[]): string {
         return message
             .map(seg => {
-                if (seg.type === 'text') {
+                if (seg.type === "text") {
                     return seg.data.text;
                 }
                 return `[${seg.type}]`;
             })
-            .join('');
+            .join("");
     }
 }
 
@@ -183,11 +320,12 @@ declare module "onebots" {
 }
 
 // 注册适配器
-AdapterRegistry.register('mock', MockAdapter, {
-    name: 'mock',
-    displayName: 'Mock 测试适配器',
-    description: '用于测试和开发的模拟适配器，不需要真实的外部服务',
-    icon: 'https://via.placeholder.com/100?text=Mock',
-    homepage: 'https://github.com/lc-cn/onebots',
-    author: '凉菜',
+AdapterRegistry.register("mock", MockAdapter, {
+    name: "mock",
+    displayName: "Mock 测试适配器",
+    description: "用于测试和开发的模拟适配器，不需要真实的外部服务",
+    icon: "https://via.placeholder.com/100?text=Mock",
+    homepage: "https://github.com/lc-cn/onebots",
+    author: "凉菜",
+    capabilities: mockCapabilities,
 });

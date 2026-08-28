@@ -6,15 +6,15 @@
 // 配置类型
 export interface TeamsConfig {
     account_id: string;
-    app_id: string;              // Microsoft App ID
-    app_password: string;         // Microsoft App Password
+    app_id: string; // Microsoft App ID
+    app_password: string; // Microsoft App Password
     webhook?: {
-        url?: string;             // Webhook URL（可选）
-        port?: number;            // Webhook 端口
+        url?: string; // Webhook URL（可选）
+        port?: number; // Webhook 端口
     };
     // Bot Framework 配置
-    channel_service?: string;     // Channel Service URL（可选，用于政府云等）
-    open_id_metadata?: string;    // OpenID Metadata URL（可选）
+    channel_service?: string; // Channel Service URL（可选，用于政府云等）
+    open_id_metadata?: string; // OpenID Metadata URL（可选）
 }
 
 // Teams 用户类型
@@ -30,7 +30,7 @@ export interface TeamsUser {
 export interface TeamsChannel {
     id: string;
     name?: string;
-    type: 'standard' | 'private' | 'shared';
+    type: "standard" | "private" | "shared";
     teamId?: string;
 }
 
@@ -59,8 +59,10 @@ export interface TeamsMessage {
     id: string;
     timestamp: string;
     text?: string;
-    textFormat?: 'plain' | 'markdown' | 'xml';
+    textFormat?: "plain" | "markdown" | "xml";
     attachments?: TeamsAttachment[];
+    membersAdded?: TeamsUser[];
+    membersRemoved?: TeamsUser[];
     from: TeamsUser;
     channelAccount?: TeamsUser;
     conversation?: {
@@ -97,13 +99,23 @@ export interface TeamsActivity {
     channelData?: TeamsChannelData;
     text?: string;
     attachments?: TeamsAttachment[];
+    membersAdded?: TeamsUser[];
+    membersRemoved?: TeamsUser[];
     value?: Record<string, unknown>;
     [key: string]: unknown;
 }
 
 // Teams 事件类型
 export interface TeamsEvent {
-    type: 'message' | 'messageUpdate' | 'messageDelete' | 'conversationUpdate' | 'typing' | 'endOfConversation' | 'event' | 'invoke';
+    type:
+        | "message"
+        | "messageUpdate"
+        | "messageDelete"
+        | "conversationUpdate"
+        | "typing"
+        | "endOfConversation"
+        | "event"
+        | "invoke";
     activity: TeamsActivity;
 }
 
@@ -113,4 +125,3 @@ export interface SendMessageOptions {
     conversationName?: string;
     reply_to_message_id?: string;
 }
-

@@ -6,11 +6,11 @@
 // 配置类型
 export interface WeComConfig {
     account_id: string;
-    corp_id: string;           // 企业 ID
-    corp_secret: string;        // 应用 Secret
-    agent_id: string;           // 应用 AgentId
-    token?: string;             // 回调验证 Token（可选）
-    encoding_aes_key?: string;  // 消息加解密密钥（可选）
+    corp_id: string; // 企业 ID
+    corp_secret: string; // 应用 Secret
+    agent_id: string; // 应用 AgentId
+    token?: string; // 回调验证 Token（可选）
+    encoding_aes_key?: string; // 消息加解密密钥（可选）
 }
 
 // 企业微信用户类型
@@ -113,20 +113,41 @@ export interface WeComMessage {
 
 // 企业微信事件类型
 export interface WeComEvent {
-    EventType: string;
-    EventId: string;
-    TimeStamp: number;
+    /** OneBots 旧结构或第三方转发器提供的事件类型。 */
+    EventType?: string;
+    EventId?: string;
+    TimeStamp?: number;
+    /** 企业微信原生回调字段。 */
+    MsgType?: string;
+    MsgId?: string;
+    CreateTime?: number;
+    Event?: string;
+    ChangeType?: string;
     FromUserName?: string;
     ToUserName?: string;
     AgentID?: string;
+    Content?: string;
+    PicUrl?: string;
+    MediaId?: string;
+    Format?: string;
+    Recognition?: string;
+    Location_X?: number;
+    Location_Y?: number;
+    Scale?: number;
+    Label?: string;
+    Title?: string;
+    Description?: string;
+    Url?: string;
+    UserID?: string;
 }
 
 /**
  * 企业微信通讯录变更事件
  */
 export interface WeComChangeEvent extends WeComEvent {
-    EventType: 'change_contact';
-    ChangeType: 'create_user' | 'update_user' | 'delete_user';
+    EventType?: "change_contact";
+    Event?: "change_contact";
+    ChangeType: "create_user" | "update_user" | "delete_user";
     UserID: string;
 }
 
@@ -238,4 +259,3 @@ export interface WeComDepartmentListResponse extends WeComAPIResponse {
 export interface WeComDepartmentMembersResponse extends WeComAPIResponse {
     userlist?: WeComUser[];
 }
-

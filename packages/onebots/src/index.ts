@@ -1,6 +1,6 @@
 // App exports
-export { App, createOnebots, defineConfig } from './app.js';
-export { getAppConfigSchema } from './config-schema.js';
+export { App, createOnebots, defineConfig } from "./app.js";
+export { getAppConfigSchema } from "./config-schema.js";
 
 // Re-export core symbols that adapters and protocols depend on
 // (avoids requiring consumers to add @onebots/core as a direct dependency)
@@ -24,6 +24,7 @@ export {
     type Next,
     type Dict,
     type WsServer,
+    type AdapterCapabilityManifest,
     // Infrastructure
     ConnectionManager,
     RetryPresets,
@@ -35,6 +36,16 @@ export {
     toUnixSeconds,
     unixSecondsToEventMs,
     unixMillisToEventMs,
+    coerceUnixToEventMs,
+    defineAdapterCapabilities,
+    assertAdapterCapabilities,
+    assertAdapterCapabilityContract,
+    listSupportedActions,
+    decryptWechatCallback,
+    decryptWechatCallbackFor,
+    extractWechatEncryptedPayload,
+    parseWechatXml,
+    verifyWechatCallbackSignature,
     // Proxy
     buildProxyUrl,
     maskProxyUrl,
@@ -46,4 +57,4 @@ export {
     initTokenManager,
     // Config
     ConfigValidator,
-} from '@onebots/core';
+} from "@onebots/core";

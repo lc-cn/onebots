@@ -2,10 +2,26 @@
  * Microsoft Teams Bot 客户端
  * 基于 Bot Framework SDK
  */
-import { EventEmitter } from 'events';
-import { BotFrameworkAdapter, type BotFrameworkAdapterSettings, type Attachment, Activity, TurnContext, MessageFactory, ConversationReference, ConversationAccount, ResourceResponse } from 'botbuilder';
-import type { RouterContext, Next } from 'onebots';
-import type { TeamsConfig, TeamsActivity, TeamsChannelData, TeamsEvent, SendMessageOptions } from './types.js';
+import { EventEmitter } from "events";
+import {
+    BotFrameworkAdapter,
+    type BotFrameworkAdapterSettings,
+    type Attachment,
+    Activity,
+    TurnContext,
+    MessageFactory,
+    ConversationReference,
+    ConversationAccount,
+    ResourceResponse,
+} from "botbuilder";
+import type { RouterContext, Next } from "onebots";
+import type {
+    TeamsConfig,
+    TeamsActivity,
+    TeamsChannelData,
+    TeamsEvent,
+    SendMessageOptions,
+} from "./types.js";
 
 /** Bot 缓存的自身信息 */
 interface CachedBotInfo {
@@ -41,14 +57,13 @@ export class TeamsBot extends EventEmitter {
 
         // 设置错误处理
         this.adapter.onTurnError = async (context: TurnContext, error: Error) => {
-            console.error(`Teams Bot Error: ${error.message}`, error);
-            this.emit('error', error);
-            
+            this.emit("error", error);
+
             // 发送错误消息给用户
             try {
-                await context.sendActivity('抱歉，发生了错误。');
-            } catch (e) {
-                console.error('Failed to send error message:', e);
+                await context.sendActivity("抱歉，发生了错误。");
+            } catch (error) {
+                this.emit("error", error);
             }
         };
     }
@@ -59,22 +74,22 @@ export class TeamsBot extends EventEmitter {
     private transformActivity(activity: Activity): TeamsActivity {
         const channelData = activity.channelData as TeamsChannelData | undefined;
         return {
-            type: activity.type || 'message',
-            id: activity.id || '',
+            type: activity.type || "message",
+            id: activity.id || "",
             timestamp: activity.timestamp?.toISOString() || new Date().toISOString(),
             from: {
-                id: activity.from?.id || '',
-                name: activity.from?.name || '',
+                id: activity.from?.id || "",
+                name: activity.from?.name || "",
                 aadObjectId: activity.from?.aadObjectId,
                 role: activity.from?.role,
                 tenantId: channelData?.tenant?.id,
             },
             conversation: {
-                id: activity.conversation?.id || '',
+                id: activity.conversation?.id || "",
                 name: activity.conversation?.name,
-                isGroup: activity.conversation?.conversationType === 'channel',
+                isGroup: activity.conversation?.conversationType === "channel",
             },
-            channelId: activity.channelId || '',
+            channelId: activity.channelId || "",
             channelData: channelData,
             text: activity.text,
             attachments: activity.attachments?.map(att => ({
@@ -83,6 +98,18 @@ export class TeamsBot extends EventEmitter {
                 content: att.content,
                 name: att.name,
                 thumbnailUrl: att.thumbnailUrl,
+            })),
+            membersAdded: activity.membersAdded?.map(member => ({
+                id: member.id,
+                name: member.name || "",
+                aadObjectId: member.aadObjectId,
+                role: member.role,
+            })),
+            membersRemoved: activity.membersRemoved?.map(member => ({
+                id: member.id,
+                name: member.name || "",
+                aadObjectId: member.aadObjectId,
+                role: member.role,
             })),
             value: activity.value as Record<string, unknown> | undefined,
         };
@@ -95,9 +122,9 @@ export class TeamsBot extends EventEmitter {
         try {
             // Bot Framework 通过 Webhook 接收消息，不需要主动连接
             // 这里可以获取 Bot 信息（如果支持）
-            this.emit('ready');
+            this.emit("ready");
         } catch (error) {
-            this.emit('error', error);
+            this.emit("error", error);
             throw error;
         }
     }
@@ -108,9 +135,9 @@ export class TeamsBot extends EventEmitter {
     async stop(): Promise<void> {
         try {
             // Bot Framework 不需要特殊停止逻辑
-            this.emit('stopped');
+            this.emit("stopped");
         } catch (error) {
-            this.emit('error', error);
+            this.emit("error", error);
             throw error;
         }
     }
@@ -118,13 +145,13 @@ export class TeamsBot extends EventEmitter {
     /**
      * 处理 Webhook 请求
      */
-    async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
+    async handleWebhook(ctx: RouterContext, _next: Next): Promise<void> {
         try {
             // Bot Framework Adapter 需要 Express 风格的 req/res
             // Koa 的 req/res 兼容 WebRequest/WebResponse 接口，此处使用 unknown 中转断言
             await this.adapter.processActivity(
-                ctx.req as unknown as import('botbuilder').WebRequest,
-                ctx.res as unknown as import('botbuilder').WebResponse,
+                ctx.req as unknown as import("botbuilder").WebRequest,
+                ctx.res as unknown as import("botbuilder").WebResponse,
                 async (turnContext: TurnContext) => {
                     const activity = turnContext.activity;
 
@@ -132,63 +159,63 @@ export class TeamsBot extends EventEmitter {
                     const teamsActivity = this.transformActivity(activity);
 
                     // 根据活动类型触发不同事件
-                    if (activity.type === 'message') {
+                    if (activity.type === "message") {
                         // 判断是私聊还是群聊
-                        const isGroup = activity.conversation?.conversationType === 'channel';
+                        const isGroup = activity.conversation?.conversationType === "channel";
                         if (isGroup) {
-                            this.emit('group_message', {
-                                type: 'message',
+                            this.emit("group_message", {
+                                type: "message",
                                 activity: teamsActivity,
                             });
                         } else {
-                            this.emit('private_message', {
-                                type: 'message',
+                            this.emit("private_message", {
+                                type: "message",
                                 activity: teamsActivity,
                             });
                         }
-                    } else if (activity.type === 'messageUpdate') {
-                        this.emit('message_edited', {
-                            type: 'messageUpdate',
+                    } else if (activity.type === "messageUpdate") {
+                        this.emit("message_edited", {
+                            type: "messageUpdate",
                             activity: teamsActivity,
                         });
-                    } else if (activity.type === 'messageDelete') {
-                        this.emit('message_deleted', {
-                            type: 'messageDelete',
+                    } else if (activity.type === "messageDelete") {
+                        this.emit("message_deleted", {
+                            type: "messageDelete",
                             activity: teamsActivity,
                         });
-                    } else if (activity.type === 'conversationUpdate') {
-                        // 处理成员加入/离开
-                        if (activity.membersAdded && activity.membersAdded.length > 0) {
-                            this.emit('member_joined', {
-                                type: 'conversationUpdate',
-                                activity: teamsActivity,
+                    } else if (activity.type === "conversationUpdate") {
+                        // 一个 Activity 可能携带多名成员，逐人派发以免事件投影丢失成员。
+                        for (const member of teamsActivity.membersAdded ?? []) {
+                            this.emit("member_joined", {
+                                type: "conversationUpdate",
+                                activity: { ...teamsActivity, membersAdded: [member] },
                             });
                         }
-                        if (activity.membersRemoved && activity.membersRemoved.length > 0) {
-                            this.emit('member_left', {
-                                type: 'conversationUpdate',
-                                activity: teamsActivity,
+                        for (const member of teamsActivity.membersRemoved ?? []) {
+                            this.emit("member_left", {
+                                type: "conversationUpdate",
+                                activity: { ...teamsActivity, membersRemoved: [member] },
                             });
                         }
-                    } else if (activity.type === 'typing') {
-                        this.emit('typing', {
-                            type: 'typing',
+                    } else if (activity.type === "typing") {
+                        this.emit("typing", {
+                            type: "typing",
                             activity: teamsActivity,
                         });
                     } else {
                         // 其他类型的事件（activity.type 在 Bot Framework 中为 string，
                         // 但 TeamsEvent.type 限定了特定值，此处已知非标准类型）
-                        this.emit('event', {
-                            type: activity.type as TeamsEvent['type'],
+                        this.emit("event", {
+                            type: activity.type as TeamsEvent["type"],
                             activity: teamsActivity,
                         });
                     }
-                }
+                },
             );
         } catch (error) {
-            console.error('Teams Webhook 处理错误:', error);
+            this.emit("error", error);
             ctx.status = 500;
-            ctx.body = { error: 'Internal server error' };
+            ctx.body = { error: "Internal server error" };
         }
     }
 
@@ -202,17 +229,21 @@ export class TeamsBot extends EventEmitter {
     /**
      * 发送消息
      */
-    async sendMessage(conversationId: string, text: string, options?: SendMessageOptions): Promise<ResourceResponse> {
+    async sendMessage(
+        conversationId: string,
+        text: string,
+        options?: SendMessageOptions,
+    ): Promise<ResourceResponse> {
         const conversation: ConversationAccount = {
             id: conversationId,
-            conversationType: options?.isGroup ? 'channel' : 'personal',
+            conversationType: options?.isGroup ? "channel" : "personal",
             isGroup: options?.isGroup || false,
             name: options?.conversationName,
         };
 
         const reference: Partial<ConversationReference> = {
             activityId: options?.reply_to_message_id,
-            channelId: 'msteams',
+            channelId: "msteams",
             conversation,
         };
 
@@ -221,12 +252,12 @@ export class TeamsBot extends EventEmitter {
             activity.replyToId = options.reply_to_message_id;
         }
 
-        let result: ResourceResponse = { id: '' };
+        let result: ResourceResponse = { id: "" };
         await this.adapter.continueConversation(
             reference as ConversationReference,
             async (turnContext: TurnContext) => {
-                result = await turnContext.sendActivity(activity) as ResourceResponse;
-            }
+                result = (await turnContext.sendActivity(activity)) as ResourceResponse;
+            },
         );
         return result;
     }
@@ -234,27 +265,31 @@ export class TeamsBot extends EventEmitter {
     /**
      * 发送自适应卡片
      */
-    async sendCard(conversationId: string, card: Attachment, options?: SendMessageOptions): Promise<ResourceResponse> {
+    async sendCard(
+        conversationId: string,
+        card: Attachment,
+        options?: SendMessageOptions,
+    ): Promise<ResourceResponse> {
         const conversation: ConversationAccount = {
             id: conversationId,
-            conversationType: options?.isGroup ? 'channel' : 'personal',
+            conversationType: options?.isGroup ? "channel" : "personal",
             isGroup: options?.isGroup || false,
             name: options?.conversationName,
         };
 
         const reference: Partial<ConversationReference> = {
-            channelId: 'msteams',
+            channelId: "msteams",
             conversation,
         };
 
         const activity = MessageFactory.attachment(card);
 
-        let result: ResourceResponse = { id: '' };
+        let result: ResourceResponse = { id: "" };
         await this.adapter.continueConversation(
             reference as ConversationReference,
             async (turnContext: TurnContext) => {
-                result = await turnContext.sendActivity(activity) as ResourceResponse;
-            }
+                result = (await turnContext.sendActivity(activity)) as ResourceResponse;
+            },
         );
         return result;
     }
@@ -262,17 +297,22 @@ export class TeamsBot extends EventEmitter {
     /**
      * 更新消息
      */
-    async updateMessage(conversationId: string, activityId: string, text: string, options?: SendMessageOptions): Promise<void> {
+    async updateMessage(
+        conversationId: string,
+        activityId: string,
+        text: string,
+        options?: SendMessageOptions,
+    ): Promise<void> {
         const conversation: ConversationAccount = {
             id: conversationId,
-            conversationType: options?.isGroup ? 'channel' : 'personal',
+            conversationType: options?.isGroup ? "channel" : "personal",
             isGroup: options?.isGroup || false,
             name: options?.conversationName,
         };
 
         const reference: Partial<ConversationReference> = {
             activityId,
-            channelId: 'msteams',
+            channelId: "msteams",
             conversation,
         };
 
@@ -283,24 +323,28 @@ export class TeamsBot extends EventEmitter {
             reference as ConversationReference,
             async (turnContext: TurnContext) => {
                 await turnContext.updateActivity(activity);
-            }
+            },
         );
     }
 
     /**
      * 删除消息
      */
-    async deleteMessage(conversationId: string, activityId: string, options?: SendMessageOptions): Promise<void> {
+    async deleteMessage(
+        conversationId: string,
+        activityId: string,
+        options?: SendMessageOptions,
+    ): Promise<void> {
         const conversation: ConversationAccount = {
             id: conversationId,
-            conversationType: options?.isGroup ? 'channel' : 'personal',
+            conversationType: options?.isGroup ? "channel" : "personal",
             isGroup: options?.isGroup || false,
             name: options?.conversationName,
         };
 
         const reference: Partial<ConversationReference> = {
             activityId,
-            channelId: 'msteams',
+            channelId: "msteams",
             conversation,
         };
 
@@ -308,7 +352,7 @@ export class TeamsBot extends EventEmitter {
             reference as ConversationReference,
             async (turnContext: TurnContext) => {
                 await turnContext.deleteActivity(activityId);
-            }
+            },
         );
     }
 
@@ -319,4 +363,3 @@ export class TeamsBot extends EventEmitter {
         return this.adapter;
     }
 }
-

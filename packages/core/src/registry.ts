@@ -120,12 +120,18 @@ export class ProtocolRegistry {
     /**
      * Create a protocol instance
      */
-    static create(name: string, version: string, adapter: Adapter, account: Account, config: Record<string, unknown>): Protocol {
+    static create(
+        name: string,
+        version: string,
+        adapter: Adapter,
+        account: Account,
+        config: Record<string, unknown>,
+    ): Protocol {
         const factory = this.get(name, version);
         if (!factory) {
             throw new Error(`Protocol ${name}/${version} not registered`);
         }
-        if(Protocol.isClassFactory(factory)){
+        if (Protocol.isClassFactory(factory)) {
             return new factory(adapter, account, config);
         }
         return factory(adapter, account, config);
@@ -199,6 +205,7 @@ export class AdapterRegistry {
                 icon: metadata?.icon || "",
                 homepage: metadata?.homepage,
                 author: metadata?.author,
+                capabilities: metadata?.capabilities,
             });
         }
     }
@@ -263,12 +270,17 @@ export class AdapterRegistry {
     /**
      * Create an adapter instance
      */
-    static create<T extends BaseApp>(name: string, app: T): Adapter<unknown,keyof Adapter.Configs,T> {
-        const factory = this.get(name) as Adapter.Factory<Adapter<unknown,keyof Adapter.Configs,T>>;
+    static create<T extends BaseApp>(
+        name: string,
+        app: T,
+    ): Adapter<unknown, keyof Adapter.Configs, T> {
+        const factory = this.get(name) as Adapter.Factory<
+            Adapter<unknown, keyof Adapter.Configs, T>
+        >;
         if (!factory) {
             throw new Error(`Adapter ${name} not registered`);
         }
-        if(Adapter.isClassAdapter(factory)){
+        if (Adapter.isClassAdapter(factory)) {
             return new factory(app);
         }
         return factory(app);

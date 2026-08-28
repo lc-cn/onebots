@@ -30,7 +30,7 @@ vi.mock('node:sqlite', () => {
 });
 
 import { MockAdapter } from '../adapter.js';
-import { AccountStatus } from 'onebots';
+import { AccountStatus, assertAdapterCapabilityContract } from 'onebots';
 
 // ============================================================
 // 内存 Mock SqliteDB —— 满足 Adapter 基类对 db 的全部要求：
@@ -153,6 +153,13 @@ describe('MockAdapter', () => {
 
     afterEach(() => {
         adapter.removeAllListeners();
+    });
+
+    describe('capabilities', () => {
+        it('keeps getSupportedActions consistent with the declared manifest', async () => {
+            await expect(assertAdapterCapabilityContract(adapter)).resolves.toBeUndefined();
+            await expect(adapter.getSupportedActions('contract-test')).resolves.toContain('send_message');
+        });
     });
 
     // ==========================================================

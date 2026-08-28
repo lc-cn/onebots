@@ -1,19 +1,17 @@
-import type { ScalarOrArrayFiles } from 'koa-body';
-import type { Request } from 'koa';
-// 导入 koa-body 的类型定义，它会自动扩展 Request 接口
-import 'koa-body';
+// 导入 koa-body 的类型定义，使 Koa Request 获得 body/rawBody 扩展。
+import "koa-body";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dict default must remain `any` for backward compatibility; changing it cascades hundreds of errors across all adapters and protocols
-export type Dict<T = any,K extends string|symbol=string> = Record<K,T>;
+export type Dict<T = any, K extends string | symbol = string> = Record<K, T>;
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "mark" | "off";
 export type Dispose = () => unknown;
 export type MayBeArray<T> = T | T[];
 export namespace CommonTypes {
     export type Id = {
-        string: string
-        source: string | number
-        number: number
-    }
-    export type Scene="private" | "group" | "channel"|"direct";
+        string: string;
+        source: string | number;
+        number: number;
+    };
+    export type Scene = "private" | "group" | "channel" | "direct";
     /**
      * User information
      */
@@ -55,26 +53,30 @@ export namespace CommonTypes {
  * This provides a unified interface for different protocols to consume
  */
 export namespace CommonEvent {
-    export type MessageScene="private" | "group" | "channel"|"direct";
+    export type MessageScene = "private" | "group" | "channel" | "direct";
     /**
      * Base event structure
      */
-    export interface Base {
+    export interface Base<TRawEvent = unknown> {
         /** Event ID */
         id: CommonTypes.Id;
         /** Timestamp in milliseconds */
         timestamp: number;
-        type:string
+        type: string;
         /** Platform identifier (qq, wechat, dingtalk, etc.) */
         platform: string;
         /** Bot identifier */
         bot_id: CommonTypes.Id;
+        /** 平台原始事件。标准投影不完整时仍可无损访问平台字段。 */
+        raw_event?: TRawEvent;
+        /** 平台扩展字段；命名应使用平台或功能 namespace，避免污染标准字段。 */
+        extensions?: Record<string, unknown>;
     }
 
     /**
      * Message event
      */
-    export interface Message extends Base {
+    export interface Message<TRawEvent = unknown> extends Base<TRawEvent> {
         type: "message";
         message_type: MessageScene;
         /** Sender information */
@@ -92,12 +94,28 @@ export namespace CommonEvent {
     /**
      * Notice event types
      */
-    export type NoticeType = "group_increase" | "group_decrease" | "group_admin" | "group_ban" | "friend_add" | "custom";
+    export type NoticeType =
+        | "group_increase"
+        | "group_decrease"
+        | "group_admin"
+        | "group_ban"
+        | "friend_add"
+        | "message_updated"
+        | "message_deleted"
+        | "reaction_added"
+        | "reaction_removed"
+        | "member_joined"
+        | "member_left"
+        | "user_added"
+        | "user_updated"
+        | "user_removed"
+        | "interaction"
+        | "custom";
 
     /**
      * Notice event
      */
-    export interface Notice extends Base {
+    export interface Notice<TRawEvent = unknown> extends Base<TRawEvent> {
         type: "notice";
         /** Notice type */
         notice_type: NoticeType;
@@ -107,6 +125,10 @@ export namespace CommonEvent {
         operator?: CommonTypes.User;
         /** Group involved in the notice */
         group?: CommonTypes.Group;
+        /** Message involved in message/reaction notices. */
+        message_id?: CommonTypes.Id;
+        /** Updated message content when supplied by the platform. */
+        message?: CommonTypes.Segment[];
         /** Additional notice data */
         [key: string]: unknown;
     }
@@ -119,7 +141,7 @@ export namespace CommonEvent {
     /**
      * Request event
      */
-    export interface Request extends Base {
+    export interface Request<TRawEvent = unknown> extends Base<TRawEvent> {
         type: "request";
         /** Request type */
         request_type: RequestType;
@@ -141,7 +163,7 @@ export namespace CommonEvent {
     /**
      * Meta event
      */
-    export interface Meta extends Base {
+    export interface Meta<TRawEvent = unknown> extends Base<TRawEvent> {
         type: "meta";
         /** Meta event type */
         meta_type: MetaType;
@@ -154,7 +176,11 @@ export namespace CommonEvent {
     /**
      * Union type of all events
      */
-    export type Event = Message | Notice | Request | Meta;
+    export type Event<TRawEvent = unknown> =
+        | Message<TRawEvent>
+        | Notice<TRawEvent>
+        | Request<TRawEvent>
+        | Meta<TRawEvent>;
 }
 
 /**

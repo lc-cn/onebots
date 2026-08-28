@@ -1,41 +1,51 @@
 import { EventEmitter } from "events";
 import { BaseApp } from "./base-app.js";
-import { CommonTypes, CommonEvent } from "./types.js";
+import { CommonTypes } from "./types.js";
 import { Account } from "./account.js";
 import { Logger } from "log4js";
 import { SqliteDB } from "./db.js";
 import { buildTableName, createId, resolveId, coerceId } from "./adapter-id-manager.js";
+import {
+    EMPTY_ADAPTER_CAPABILITIES,
+    listSupportedActions,
+    type AdapterCapabilityManifest,
+} from "./adapter-capability.js";
+import { UnsupportedCapabilityError, type UnsupportedCapabilityReason } from "./errors.js";
+import "./adapter-types.js";
+import "./adapter-types-extended.js";
 
-/**
- * 通用适配器基类
- * 统一定义所有协议需要的 72 个 API 方法
- * 平台适配器继承此类，重写支持的方法，其他方法自动抛出"未实现"异常
- */
-export abstract class Adapter<C = unknown, T extends keyof Adapter.Configs = keyof Adapter.Configs, I extends BaseApp = BaseApp> extends EventEmitter {
+/** 通用适配器基类：提供稳定动作接口，以能力清单明确平台差异。 */
+export abstract class Adapter<
+    C = unknown,
+    T extends keyof Adapter.Configs = keyof Adapter.Configs,
+    I extends BaseApp = BaseApp,
+> extends EventEmitter {
     accounts: Map<string, Account<T, C>> = new Map<string, Account<T, C>>();
     #logger: Logger;
     icon: string;
 
-    get db(): SqliteDB { return this.app.db; }
+    get db(): SqliteDB {
+        return this.app.db;
+    }
 
-    get tableName() { return buildTableName(String(this.platform)); }
+    get tableName() {
+        return buildTableName(String(this.platform));
+    }
 
     protected constructor(
         public app: I,
-        public platform: T
+        public platform: T,
+        private readonly capabilityManifest: AdapterCapabilityManifest = EMPTY_ADAPTER_CAPABILITIES,
     ) {
         super();
         this.db.create(this.tableName, {
             string: SqliteDB.Column("TEXT"),
             number: SqliteDB.Column("INTEGER", { unique: true }),
-            source: SqliteDB.Column("TEXT")
+            source: SqliteDB.Column("TEXT"),
         });
     }
 
-    // ============================================
     // ID 管理方法
-    // ============================================
-
     createId(id: string | number, _retries: number = 0): CommonTypes.Id {
         return createId(id, this.tableName, this.db, _retries);
     }
@@ -44,150 +54,380 @@ export abstract class Adapter<C = unknown, T extends keyof Adapter.Configs = key
         return resolveId(id, this.tableName, this.db);
     }
 
-    protected coerceId(value: CommonTypes.Id | string | number): CommonTypes.Id {
+    coerceId(value: CommonTypes.Id | string | number): CommonTypes.Id {
         return coerceId(value, this.tableName, this.db);
     }
 
-    // ============================================
+    /** 返回当前适配器对外声明的能力；账号级动态能力可由子类覆写。 */
+    describeCapabilities(_uin?: string): AdapterCapabilityManifest {
+        return this.capabilityManifest;
+    }
+
+    unsupported(
+        capability: string,
+        reason: UnsupportedCapabilityReason = "not_implemented",
+        message?: string,
+    ): never {
+        throw new UnsupportedCapabilityError({
+            platform: String(this.platform),
+            capability,
+            reason,
+            message,
+        });
+    }
+
     // 消息相关方法 (Message - 7个)
-    // ============================================
+    sendMessage(
+        _uin: string,
+        _params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
+        return this.unsupported("send_message");
+    }
+    deleteMessage(_uin: string, _params: Adapter.DeleteMessageParams): Promise<void> {
+        return this.unsupported("delete_message");
+    }
+    getMessage(_uin: string, _params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
+        return this.unsupported("get_message");
+    }
+    getMessageHistory(
+        _uin: string,
+        _params: Adapter.GetMessageHistoryParams,
+    ): Promise<Adapter.MessageInfo[]> {
+        return this.unsupported("get_message_history");
+    }
+    updateMessage(_uin: string, _params: Adapter.UpdateMessageParams): Promise<void> {
+        return this.unsupported("update_message");
+    }
+    getForwardMessage(
+        _uin: string,
+        _params: Adapter.GetForwardMessageParams,
+    ): Promise<Adapter.MessageInfo[]> {
+        return this.unsupported("get_forward_message");
+    }
+    markMessageAsRead(_uin: string, _params: Adapter.MarkMessageAsReadParams): Promise<void> {
+        return this.unsupported("mark_message_as_read");
+    }
 
-    sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> { throw new Error(`${this.platform} adapter: sendMessage not implemented`); }
-    deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> { throw new Error(`${this.platform} adapter: deleteMessage not implemented`); }
-    getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> { throw new Error(`${this.platform} adapter: getMessage not implemented`); }
-    getMessageHistory(uin: string, params: Adapter.GetMessageHistoryParams): Promise<Adapter.MessageInfo[]> { throw new Error(`${this.platform} adapter: getMessageHistory not implemented`); }
-    updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> { throw new Error(`${this.platform} adapter: updateMessage not implemented`); }
-    getForwardMessage(uin: string, params: Adapter.GetForwardMessageParams): Promise<Adapter.MessageInfo[]> { throw new Error(`${this.platform} adapter: getForwardMessage not implemented`); }
-    markMessageAsRead(uin: string, params: Adapter.MarkMessageAsReadParams): Promise<void> { throw new Error(`${this.platform} adapter: markMessageAsRead not implemented`); }
-
-    // ============================================
     // 用户相关方法 (User - 3个)
-    // ============================================
+    getLoginInfo(_uin: string): Promise<Adapter.UserInfo> {
+        return this.unsupported("get_login_info");
+    }
+    getUserInfo(_uin: string, _params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
+        return this.unsupported("get_user_info");
+    }
+    createUserChannel(
+        _uin: string,
+        _params: Adapter.CreateUserChannelParams,
+    ): Promise<Adapter.ChannelInfo> {
+        return this.unsupported("create_user_channel");
+    }
 
-    getLoginInfo(uin: string): Promise<Adapter.UserInfo> { throw new Error(`${this.platform} adapter: getLoginInfo not implemented`); }
-    getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> { throw new Error(`${this.platform} adapter: getUserInfo not implemented`); }
-    createUserChannel(uin: string, params: Adapter.CreateUserChannelParams): Promise<Adapter.ChannelInfo> { throw new Error(`${this.platform} adapter: createUserChannel not implemented`); }
-
-    // ============================================
     // 好友相关方法 (Friend - 7个)
-    // ============================================
+    getFriendList(
+        _uin: string,
+        _params?: Adapter.GetFriendListParams,
+    ): Promise<Adapter.FriendInfo[]> {
+        return this.unsupported("get_friend_list");
+    }
+    getFriendInfo(_uin: string, _params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+        return this.unsupported("get_friend_info");
+    }
+    deleteFriend(_uin: string, _params: Adapter.DeleteFriendParams): Promise<void> {
+        return this.unsupported("delete_friend");
+    }
+    sendFriendNudge(_uin: string, _params: Adapter.SendFriendNudgeParams): Promise<void> {
+        return this.unsupported("send_friend_nudge");
+    }
+    sendLike(_uin: string, _params: Adapter.SendLikeParams): Promise<void> {
+        return this.unsupported("send_like");
+    }
+    getFriendRequests(
+        _uin: string,
+        _params?: Adapter.GetFriendRequestsParams,
+    ): Promise<Adapter.FriendRequest[]> {
+        return this.unsupported("get_friend_requests");
+    }
+    handleFriendRequest(_uin: string, _params: Adapter.HandleFriendRequestParams): Promise<void> {
+        return this.unsupported("handle_friend_request");
+    }
 
-    getFriendList(uin: string, params?: Adapter.GetFriendListParams): Promise<Adapter.FriendInfo[]> { throw new Error(`${this.platform} adapter: getFriendList not implemented`); }
-    getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> { throw new Error(`${this.platform} adapter: getFriendInfo not implemented`); }
-    deleteFriend(uin: string, params: Adapter.DeleteFriendParams): Promise<void> { throw new Error(`${this.platform} adapter: deleteFriend not implemented`); }
-    sendFriendNudge(uin: string, params: Adapter.SendFriendNudgeParams): Promise<void> { throw new Error(`${this.platform} adapter: sendFriendNudge not implemented`); }
-    sendLike(uin: string, params: Adapter.SendLikeParams): Promise<void> { throw new Error(`${this.platform} adapter: sendLike not implemented`); }
-    getFriendRequests(uin: string, params?: Adapter.GetFriendRequestsParams): Promise<Adapter.FriendRequest[]> { throw new Error(`${this.platform} adapter: getFriendRequests not implemented`); }
-    handleFriendRequest(uin: string, params: Adapter.HandleFriendRequestParams): Promise<void> { throw new Error(`${this.platform} adapter: handleFriendRequest not implemented`); }
-
-    // ============================================
     // 群组相关方法 (Group - 18个)
-    // ============================================
+    getGroupList(_uin: string, _params?: Adapter.GetGroupListParams): Promise<Adapter.GroupInfo[]> {
+        return this.unsupported("get_group_list");
+    }
+    getGroupInfo(_uin: string, _params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+        return this.unsupported("get_group_info");
+    }
+    setGroupName(_uin: string, _params: Adapter.SetGroupNameParams): Promise<void> {
+        return this.unsupported("set_group_name");
+    }
+    leaveGroup(_uin: string, _params: Adapter.LeaveGroupParams): Promise<void> {
+        return this.unsupported("leave_group");
+    }
+    getGroupMemberList(
+        _uin: string,
+        _params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
+        return this.unsupported("get_group_member_list");
+    }
+    getGroupMemberInfo(
+        _uin: string,
+        _params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
+        return this.unsupported("get_group_member_info");
+    }
+    kickGroupMember(_uin: string, _params: Adapter.KickGroupMemberParams): Promise<void> {
+        return this.unsupported("kick_group_member");
+    }
+    muteGroupMember(_uin: string, _params: Adapter.MuteGroupMemberParams): Promise<void> {
+        return this.unsupported("mute_group_member");
+    }
+    muteGroupAll(_uin: string, _params: Adapter.MuteGroupAllParams): Promise<void> {
+        return this.unsupported("mute_group_all");
+    }
+    setGroupAdmin(_uin: string, _params: Adapter.SetGroupAdminParams): Promise<void> {
+        return this.unsupported("set_group_admin");
+    }
+    setGroupCard(_uin: string, _params: Adapter.SetGroupCardParams): Promise<void> {
+        return this.unsupported("set_group_card");
+    }
+    setGroupSpecialTitle(_uin: string, _params: Adapter.SetGroupSpecialTitleParams): Promise<void> {
+        return this.unsupported("set_group_special_title");
+    }
+    getGroupHonorInfo(
+        _uin: string,
+        _params: Adapter.GetGroupHonorInfoParams,
+    ): Promise<Adapter.GroupHonorInfo> {
+        return this.unsupported("get_group_honor_info");
+    }
+    sendGroupNudge(_uin: string, _params: Adapter.SendGroupNudgeParams): Promise<void> {
+        return this.unsupported("send_group_nudge");
+    }
+    handleGroupRequest(_uin: string, _params: Adapter.HandleGroupRequestParams): Promise<void> {
+        return this.unsupported("handle_group_request");
+    }
+    getGroupNotifications(
+        _uin: string,
+        _params?: Adapter.GetGroupNotificationsParams,
+    ): Promise<Adapter.GroupNotification[]> {
+        return this.unsupported("get_group_notifications");
+    }
+    setGroupAvatar(_uin: string, _params: Adapter.SetGroupAvatarParams): Promise<void> {
+        return this.unsupported("set_group_avatar");
+    }
+    sendGroupMessageReaction(
+        _uin: string,
+        _params: Adapter.SendGroupMessageReactionParams,
+    ): Promise<void> {
+        return this.unsupported("send_group_message_reaction");
+    }
 
-    getGroupList(uin: string, params?: Adapter.GetGroupListParams): Promise<Adapter.GroupInfo[]> { throw new Error(`${this.platform} adapter: getGroupList not implemented`); }
-    getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> { throw new Error(`${this.platform} adapter: getGroupInfo not implemented`); }
-    setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> { throw new Error(`${this.platform} adapter: setGroupName not implemented`); }
-    leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> { throw new Error(`${this.platform} adapter: leaveGroup not implemented`); }
-    getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> { throw new Error(`${this.platform} adapter: getGroupMemberList not implemented`); }
-    getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> { throw new Error(`${this.platform} adapter: getGroupMemberInfo not implemented`); }
-    kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> { throw new Error(`${this.platform} adapter: kickGroupMember not implemented`); }
-    muteGroupMember(uin: string, params: Adapter.MuteGroupMemberParams): Promise<void> { throw new Error(`${this.platform} adapter: muteGroupMember not implemented`); }
-    muteGroupAll(uin: string, params: Adapter.MuteGroupAllParams): Promise<void> { throw new Error(`${this.platform} adapter: muteGroupAll not implemented`); }
-    setGroupAdmin(uin: string, params: Adapter.SetGroupAdminParams): Promise<void> { throw new Error(`${this.platform} adapter: setGroupAdmin not implemented`); }
-    setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> { throw new Error(`${this.platform} adapter: setGroupCard not implemented`); }
-    setGroupSpecialTitle(uin: string, params: Adapter.SetGroupSpecialTitleParams): Promise<void> { throw new Error(`${this.platform} adapter: setGroupSpecialTitle not implemented`); }
-    getGroupHonorInfo(uin: string, params: Adapter.GetGroupHonorInfoParams): Promise<Adapter.GroupHonorInfo> { throw new Error(`${this.platform} adapter: getGroupHonorInfo not implemented`); }
-    sendGroupNudge(uin: string, params: Adapter.SendGroupNudgeParams): Promise<void> { throw new Error(`${this.platform} adapter: sendGroupNudge not implemented`); }
-    handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> { throw new Error(`${this.platform} adapter: handleGroupRequest not implemented`); }
-    getGroupNotifications(uin: string, params?: Adapter.GetGroupNotificationsParams): Promise<Adapter.GroupNotification[]> { throw new Error(`${this.platform} adapter: getGroupNotifications not implemented`); }
-    setGroupAvatar(uin: string, params: Adapter.SetGroupAvatarParams): Promise<void> { throw new Error(`${this.platform} adapter: setGroupAvatar not implemented`); }
-    sendGroupMessageReaction(uin: string, params: Adapter.SendGroupMessageReactionParams): Promise<void> { throw new Error(`${this.platform} adapter: sendGroupMessageReaction not implemented`); }
-
-    // ============================================
     // 群公告相关方法 (Announcement - 3个)
-    // ============================================
+    getGroupAnnouncements(
+        _uin: string,
+        _params: Adapter.GetGroupAnnouncementsParams,
+    ): Promise<Adapter.GroupAnnouncement[]> {
+        return this.unsupported("get_group_announcements");
+    }
+    sendGroupAnnouncement(
+        _uin: string,
+        _params: Adapter.SendGroupAnnouncementParams,
+    ): Promise<void> {
+        return this.unsupported("send_group_announcement");
+    }
+    deleteGroupAnnouncement(
+        _uin: string,
+        _params: Adapter.DeleteGroupAnnouncementParams,
+    ): Promise<void> {
+        return this.unsupported("delete_group_announcement");
+    }
 
-    getGroupAnnouncements(uin: string, params: Adapter.GetGroupAnnouncementsParams): Promise<Adapter.GroupAnnouncement[]> { throw new Error(`${this.platform} adapter: getGroupAnnouncements not implemented`); }
-    sendGroupAnnouncement(uin: string, params: Adapter.SendGroupAnnouncementParams): Promise<void> { throw new Error(`${this.platform} adapter: sendGroupAnnouncement not implemented`); }
-    deleteGroupAnnouncement(uin: string, params: Adapter.DeleteGroupAnnouncementParams): Promise<void> { throw new Error(`${this.platform} adapter: deleteGroupAnnouncement not implemented`); }
-
-    // ============================================
     // 群精华消息相关方法 (Essence - 3个)
-    // ============================================
+    getGroupEssenceMessages(
+        _uin: string,
+        _params: Adapter.GetGroupEssenceMessagesParams,
+    ): Promise<Adapter.MessageInfo[]> {
+        return this.unsupported("get_group_essence_messages");
+    }
+    setGroupEssenceMessage(
+        _uin: string,
+        _params: Adapter.SetGroupEssenceMessageParams,
+    ): Promise<void> {
+        return this.unsupported("set_group_essence_message");
+    }
+    deleteGroupEssenceMessage(
+        _uin: string,
+        _params: Adapter.DeleteGroupEssenceMessageParams,
+    ): Promise<void> {
+        return this.unsupported("delete_group_essence_message");
+    }
 
-    getGroupEssenceMessages(uin: string, params: Adapter.GetGroupEssenceMessagesParams): Promise<Adapter.MessageInfo[]> { throw new Error(`${this.platform} adapter: getGroupEssenceMessages not implemented`); }
-    setGroupEssenceMessage(uin: string, params: Adapter.SetGroupEssenceMessageParams): Promise<void> { throw new Error(`${this.platform} adapter: setGroupEssenceMessage not implemented`); }
-    deleteGroupEssenceMessage(uin: string, params: Adapter.DeleteGroupEssenceMessageParams): Promise<void> { throw new Error(`${this.platform} adapter: deleteGroupEssenceMessage not implemented`); }
-
-    // ============================================
     // 频道相关方法 (Channel/Guild - 8个)
-    // ============================================
+    getGuildInfo(_uin: string, _params: Adapter.GetGuildInfoParams): Promise<Adapter.GuildInfo> {
+        return this.unsupported("get_guild_info");
+    }
+    getGuildList(_uin: string): Promise<Adapter.GuildInfo[]> {
+        return this.unsupported("get_guild_list");
+    }
+    getGuildMemberInfo(
+        _uin: string,
+        _params: Adapter.GetGuildMemberInfoParams,
+    ): Promise<Adapter.GuildMemberInfo> {
+        return this.unsupported("get_guild_member_info");
+    }
+    getChannelInfo(
+        _uin: string,
+        _params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
+        return this.unsupported("get_channel_info");
+    }
+    getChannelList(
+        _uin: string,
+        _params?: Adapter.GetChannelListParams,
+    ): Promise<Adapter.ChannelInfo[]> {
+        return this.unsupported("get_channel_list");
+    }
+    createChannel(
+        _uin: string,
+        _params: Adapter.CreateChannelParams,
+    ): Promise<Adapter.ChannelInfo> {
+        return this.unsupported("create_channel");
+    }
+    updateChannel(_uin: string, _params: Adapter.UpdateChannelParams): Promise<void> {
+        return this.unsupported("update_channel");
+    }
+    deleteChannel(_uin: string, _params: Adapter.DeleteChannelParams): Promise<void> {
+        return this.unsupported("delete_channel");
+    }
 
-    getGuildInfo(uin: string, params: Adapter.GetGuildInfoParams): Promise<Adapter.GuildInfo> { throw new Error(`${this.platform} adapter: getGuildInfo not implemented`); }
-    getGuildList(uin: string): Promise<Adapter.GuildInfo[]> { throw new Error(`${this.platform} adapter: getGuildList not implemented`); }
-    getGuildMemberInfo(uin: string, params: Adapter.GetGuildMemberInfoParams): Promise<Adapter.GuildMemberInfo> { throw new Error(`${this.platform} adapter: getGuildMemberInfo not implemented`); }
-    getChannelInfo(uin: string, params: Adapter.GetChannelInfoParams): Promise<Adapter.ChannelInfo> { throw new Error(`${this.platform} adapter: getChannelInfo not implemented`); }
-    getChannelList(uin: string, params?: Adapter.GetChannelListParams): Promise<Adapter.ChannelInfo[]> { throw new Error(`${this.platform} adapter: getChannelList not implemented`); }
-    createChannel(uin: string, params: Adapter.CreateChannelParams): Promise<Adapter.ChannelInfo> { throw new Error(`${this.platform} adapter: createChannel not implemented`); }
-    updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> { throw new Error(`${this.platform} adapter: updateChannel not implemented`); }
-    deleteChannel(uin: string, params: Adapter.DeleteChannelParams): Promise<void> { throw new Error(`${this.platform} adapter: deleteChannel not implemented`); }
-
-    // ============================================
     // 频道成员相关方法 (Channel Member - 8个)
-    // ============================================
+    getChannelMemberInfo(
+        _uin: string,
+        _params: Adapter.GetChannelMemberInfoParams,
+    ): Promise<Adapter.ChannelMemberInfo> {
+        return this.unsupported("get_channel_member_info");
+    }
+    getChannelMemberList(
+        _uin: string,
+        _params: Adapter.GetChannelMemberListParams,
+    ): Promise<Adapter.ChannelMemberInfo[]> {
+        return this.unsupported("get_channel_member_list");
+    }
+    setChannelMemberCard(_uin: string, _params: Adapter.SetChannelMemberCardParams): Promise<void> {
+        return this.unsupported("set_channel_member_card");
+    }
+    setChannelMemberRole(_uin: string, _params: Adapter.SetChannelMemberRoleParams): Promise<void> {
+        return this.unsupported("set_channel_member_role");
+    }
+    setChannelMute(_uin: string, _params: Adapter.SetChannelMuteParams): Promise<void> {
+        return this.unsupported("set_channel_mute");
+    }
+    inviteChannelMember(_uin: string, _params: Adapter.InviteChannelMemberParams): Promise<void> {
+        return this.unsupported("invite_channel_member");
+    }
+    kickChannelMember(_uin: string, _params: Adapter.KickChannelMemberParams): Promise<void> {
+        return this.unsupported("kick_channel_member");
+    }
+    setChannelMemberMute(_uin: string, _params: Adapter.SetChannelMemberMuteParams): Promise<void> {
+        return this.unsupported("set_channel_member_mute");
+    }
 
-    getChannelMemberInfo(uin: string, params: Adapter.GetChannelMemberInfoParams): Promise<Adapter.ChannelMemberInfo> { throw new Error(`${this.platform} adapter: getChannelMemberInfo not implemented`); }
-    getChannelMemberList(uin: string, params: Adapter.GetChannelMemberListParams): Promise<Adapter.ChannelMemberInfo[]> { throw new Error(`${this.platform} adapter: getChannelMemberList not implemented`); }
-    setChannelMemberCard(uin: string, params: Adapter.SetChannelMemberCardParams): Promise<void> { throw new Error(`${this.platform} adapter: setChannelMemberCard not implemented`); }
-    setChannelMemberRole(uin: string, params: Adapter.SetChannelMemberRoleParams): Promise<void> { throw new Error(`${this.platform} adapter: setChannelMemberRole not implemented`); }
-    setChannelMute(uin: string, params: Adapter.SetChannelMuteParams): Promise<void> { throw new Error(`${this.platform} adapter: setChannelMute not implemented`); }
-    inviteChannelMember(uin: string, params: Adapter.InviteChannelMemberParams): Promise<void> { throw new Error(`${this.platform} adapter: inviteChannelMember not implemented`); }
-    kickChannelMember(uin: string, params: Adapter.KickChannelMemberParams): Promise<void> { throw new Error(`${this.platform} adapter: kickChannelMember not implemented`); }
-    setChannelMemberMute(uin: string, params: Adapter.SetChannelMemberMuteParams): Promise<void> { throw new Error(`${this.platform} adapter: setChannelMemberMute not implemented`); }
-
-    // ============================================
     // 文件相关方法 (File - 10个)
-    // ============================================
+    uploadFile(_uin: string, _params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> {
+        return this.unsupported("upload_file");
+    }
+    getFile(_uin: string, _params: Adapter.GetFileParams): Promise<Adapter.FileInfo> {
+        return this.unsupported("get_file");
+    }
+    deleteFile(_uin: string, _params: Adapter.DeleteFileParams): Promise<void> {
+        return this.unsupported("delete_file");
+    }
+    getGroupFiles(
+        _uin: string,
+        _params: Adapter.GetGroupFilesParams,
+    ): Promise<Adapter.GroupFilesResult> {
+        return this.unsupported("get_group_files");
+    }
+    createGroupFolder(
+        _uin: string,
+        _params: Adapter.CreateGroupFolderParams,
+    ): Promise<Adapter.FolderInfo> {
+        return this.unsupported("create_group_folder");
+    }
+    getFileDownloadUrl(_uin: string, _params: Adapter.GetFileDownloadUrlParams): Promise<string> {
+        return this.unsupported("get_file_download_url");
+    }
+    moveGroupFile(_uin: string, _params: Adapter.MoveGroupFileParams): Promise<void> {
+        return this.unsupported("move_group_file");
+    }
+    renameGroupFile(_uin: string, _params: Adapter.RenameGroupFileParams): Promise<void> {
+        return this.unsupported("rename_group_file");
+    }
+    renameGroupFolder(_uin: string, _params: Adapter.RenameGroupFolderParams): Promise<void> {
+        return this.unsupported("rename_group_folder");
+    }
+    deleteGroupFolder(_uin: string, _params: Adapter.DeleteGroupFolderParams): Promise<void> {
+        return this.unsupported("delete_group_folder");
+    }
 
-    uploadFile(uin: string, params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> { throw new Error(`${this.platform} adapter: uploadFile not implemented`); }
-    getFile(uin: string, params: Adapter.GetFileParams): Promise<Adapter.FileInfo> { throw new Error(`${this.platform} adapter: getFile not implemented`); }
-    deleteFile(uin: string, params: Adapter.DeleteFileParams): Promise<void> { throw new Error(`${this.platform} adapter: deleteFile not implemented`); }
-    getGroupFiles(uin: string, params: Adapter.GetGroupFilesParams): Promise<Adapter.GroupFilesResult> { throw new Error(`${this.platform} adapter: getGroupFiles not implemented`); }
-    createGroupFolder(uin: string, params: Adapter.CreateGroupFolderParams): Promise<Adapter.FolderInfo> { throw new Error(`${this.platform} adapter: createGroupFolder not implemented`); }
-    getFileDownloadUrl(uin: string, params: Adapter.GetFileDownloadUrlParams): Promise<string> { throw new Error(`${this.platform} adapter: getFileDownloadUrl not implemented`); }
-    moveGroupFile(uin: string, params: Adapter.MoveGroupFileParams): Promise<void> { throw new Error(`${this.platform} adapter: moveGroupFile not implemented`); }
-    renameGroupFile(uin: string, params: Adapter.RenameGroupFileParams): Promise<void> { throw new Error(`${this.platform} adapter: renameGroupFile not implemented`); }
-    renameGroupFolder(uin: string, params: Adapter.RenameGroupFolderParams): Promise<void> { throw new Error(`${this.platform} adapter: renameGroupFolder not implemented`); }
-    deleteGroupFolder(uin: string, params: Adapter.DeleteGroupFolderParams): Promise<void> { throw new Error(`${this.platform} adapter: deleteGroupFolder not implemented`); }
-
-    // ============================================
     // 媒体资源相关方法 (Media - 5个)
-    // ============================================
+    getImage(_uin: string, _params: Adapter.GetImageParams): Promise<Adapter.ImageInfo> {
+        return this.unsupported("get_image");
+    }
+    getRecord(_uin: string, _params: Adapter.GetRecordParams): Promise<Adapter.RecordInfo> {
+        return this.unsupported("get_record");
+    }
+    getResourceTempUrl(_uin: string, _params: Adapter.GetResourceTempUrlParams): Promise<string> {
+        return this.unsupported("get_resource_temp_url");
+    }
+    canSendImage(_uin: string): Promise<boolean> {
+        return this.unsupported("can_send_image");
+    }
+    canSendRecord(_uin: string): Promise<boolean> {
+        return this.unsupported("can_send_record");
+    }
 
-    getImage(uin: string, params: Adapter.GetImageParams): Promise<Adapter.ImageInfo> { throw new Error(`${this.platform} adapter: getImage not implemented`); }
-    getRecord(uin: string, params: Adapter.GetRecordParams): Promise<Adapter.RecordInfo> { throw new Error(`${this.platform} adapter: getRecord not implemented`); }
-    getResourceTempUrl(uin: string, params: Adapter.GetResourceTempUrlParams): Promise<string> { throw new Error(`${this.platform} adapter: getResourceTempUrl not implemented`); }
-    canSendImage(uin: string): Promise<boolean> { throw new Error(`${this.platform} adapter: canSendImage not implemented`); }
-    canSendRecord(uin: string): Promise<boolean> { throw new Error(`${this.platform} adapter: canSendRecord not implemented`); }
-
-    // ============================================
     // 系统相关方法 (Meta/System - 8个)
-    // ============================================
+    getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+        return this.unsupported("get_version");
+    }
+    getStatus(_uin: string): Promise<Adapter.StatusInfo> {
+        return this.unsupported("get_status");
+    }
+    async getSupportedActions(uin: string): Promise<string[]> {
+        const manifest = this.describeCapabilities(uin);
+        if (manifest === EMPTY_ADAPTER_CAPABILITIES) {
+            return this.unsupported(
+                "get_supported_actions",
+                "not_implemented",
+                `${this.platform} 适配器尚未声明能力清单`,
+            );
+        }
+        return listSupportedActions(manifest);
+    }
+    getCookies(_uin: string, _params?: Adapter.GetCookiesParams): Promise<string> {
+        return this.unsupported("get_cookies");
+    }
+    getCsrfToken(_uin: string): Promise<number> {
+        return this.unsupported("get_csrf_token");
+    }
+    getCredentials(
+        _uin: string,
+        _params?: Adapter.GetCredentialsParams,
+    ): Promise<Adapter.CredentialsInfo> {
+        return this.unsupported("get_credentials");
+    }
+    setRestart(_uin: string, _params?: Adapter.SetRestartParams): Promise<void> {
+        return this.unsupported("set_restart");
+    }
+    cleanCache(_uin: string): Promise<void> {
+        return this.unsupported("clean_cache");
+    }
 
-    getVersion(uin: string): Promise<Adapter.VersionInfo> { throw new Error(`${this.platform} adapter: getVersion not implemented`); }
-    getStatus(uin: string): Promise<Adapter.StatusInfo> { throw new Error(`${this.platform} adapter: getStatus not implemented`); }
-    getSupportedActions(uin: string): Promise<string[]> { throw new Error(`${this.platform} adapter: getSupportedActions not implemented`); }
-    getCookies(uin: string, params?: Adapter.GetCookiesParams): Promise<string> { throw new Error(`${this.platform} adapter: getCookies not implemented`); }
-    getCsrfToken(uin: string): Promise<number> { throw new Error(`${this.platform} adapter: getCsrfToken not implemented`); }
-    getCredentials(uin: string, params?: Adapter.GetCredentialsParams): Promise<Adapter.CredentialsInfo> { throw new Error(`${this.platform} adapter: getCredentials not implemented`); }
-    setRestart(uin: string, params?: Adapter.SetRestartParams): Promise<void> { throw new Error(`${this.platform} adapter: setRestart not implemented`); }
-    cleanCache(uin: string): Promise<void> { throw new Error(`${this.platform} adapter: cleanCache not implemented`); }
-
-    // ============================================
     // 具体方法
-    // ============================================
-
-    getAccount(uin: string) { return this.accounts.get(uin); }
+    getAccount(uin: string) {
+        return this.accounts.get(uin);
+    }
 
     get logger() {
         return (this.#logger ||= this.app.getLogger(this.platform as string));
@@ -197,14 +437,19 @@ export abstract class Adapter<C = unknown, T extends keyof Adapter.Configs = key
         return {
             platform: this.platform,
             icon: this.icon,
+            capabilities: this.describeCapabilities(),
             accounts: [...this.accounts.values()].map(account => account.info),
         };
     }
 
-    async setOnline(uin: string) { }
-    async setOffline(uin: string) { }
+    async setOnline(_uin: string) {}
+    async setOffline(_uin: string) {}
 
-    submitVerification?(accountId: string, type: string, data: Record<string, unknown>): void | Promise<void>;
+    submitVerification?(
+        accountId: string,
+        type: string,
+        data: Record<string, unknown>,
+    ): void | Promise<void>;
     requestSmsCode?(accountId: string): void | Promise<void>;
 
     abstract createAccount(config: Account.Config<T>): Account<T, C>;
@@ -230,177 +475,25 @@ export abstract class Adapter<C = unknown, T extends keyof Adapter.Configs = key
     }
 }
 
-export type AdapterClient<T extends Adapter = Adapter> = T extends Adapter<infer C, infer _> ? C : never;
+export type AdapterClient<T extends Adapter = Adapter> =
+    T extends Adapter<infer C, keyof Adapter.Configs, BaseApp> ? C : never;
 
-// ============================================
-// Adapter 命名空间 — API 参数 / 返回值类型
-// ============================================
 export namespace Adapter {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Registry interface augmented by each adapter; `any` required to allow dynamic config property access
-    export interface Configs extends Record<string, any> { }
-
-    export type VerificationBlock =
-        | { type: 'image'; base64: string; alt?: string }
-        | { type: 'image_url'; url: string; alt?: string }
-        | { type: 'qrcode'; content: string; alt?: string }
-        | { type: 'link'; url: string; label?: string }
-        | { type: 'text'; content: string }
-        | { type: 'input'; key: string; placeholder?: string; maxLength?: number; secret?: boolean };
-
-    export interface VerificationRequestOptions { blocks?: VerificationBlock[]; }
-
-    /** 验证面板快捷操作按钮（如「重新登录」） */
-    export interface VerificationAction {
-        id: string;
-        label: string;
-        /** 默认 secondary；primary 使用主按钮样式 */
-        variant?: 'primary' | 'secondary';
-    }
-
-    export interface VerificationRequest {
-        platform: string; account_id: string; type: string; hint: string;
-        options?: VerificationRequestOptions; requestSmsAvailable?: boolean;
-        /** 为 true 时前端显示「确认」按钮（无需输入的验证，如扫码/身份验证后继续登录） */
-        confirmable?: boolean;
-    /** 「确认」按钮文案，默认「已完成，继续登录」 */
-    confirmLabel?: string;
-        /** 额外快捷操作；点击后经 submitVerification 提交 data.action = id */
-        actions?: VerificationAction[];
-        data?: Record<string, unknown>; request_id?: string;
-    }
-
-    /** 清除待处理验证（登录成功 / 重新登录前），type 省略则清除该账号全部 */
-    export interface VerificationClear {
-        platform: string;
-        account_id: string;
-        type?: string;
-    }
-
-    // --- 消息 (7个方法) ---
-    export interface SendMessageParams { scene_type: CommonTypes.Scene; scene_id: CommonTypes.Id; message: CommonTypes.Segment[]; }
-    export interface SendMessageResult { message_id: CommonTypes.Id; }
-    export interface DeleteMessageParams { message_id: CommonTypes.Id; scene_type?: CommonTypes.Scene; scene_id?: CommonTypes.Id; }
-    export interface GetMessageParams { message_id: CommonTypes.Id; scene_type?: CommonTypes.Scene; scene_id?: CommonTypes.Id; }
-    export interface GetMessageHistoryParams { scene_type: CommonTypes.Scene; scene_id: CommonTypes.Id; limit?: number; offset?: number; }
-    export interface UpdateMessageParams { message_id: CommonTypes.Id; message: CommonTypes.Segment[]; }
-    export interface GetForwardMessageParams { message_id?: CommonTypes.Id; resource_id?: string; }
-    export interface MarkMessageAsReadParams { scene_type: CommonTypes.Scene; scene_id: CommonTypes.Id; message_id?: CommonTypes.Id; }
-    export interface MessageSender { scene_type: CommonTypes.Scene; sender_id: CommonTypes.Id; scene_id: CommonTypes.Id; sender_name: string; scene_name: string; }
-    export interface MessageInfo { message_id: CommonTypes.Id; time: number; sender: MessageSender; message: CommonTypes.Segment[]; }
-
-    // --- 用户 (3个方法) ---
-    export interface GetUserInfoParams { user_id: CommonTypes.Id; no_cache?: boolean; }
-    export interface CreateUserChannelParams { user_id: CommonTypes.Id; guild_id?: CommonTypes.Id; }
-    export interface UserInfo { user_id: CommonTypes.Id; user_name: string; user_displayname?: string; avatar?: string; }
-
-    // --- 好友 (7个方法) ---
-    export interface GetFriendListParams { no_cache?: boolean; }
-    export interface GetFriendInfoParams { user_id: CommonTypes.Id; no_cache?: boolean; }
-    export interface DeleteFriendParams { user_id: CommonTypes.Id; }
-    export interface SendFriendNudgeParams { user_id: CommonTypes.Id; is_self?: boolean; }
-    export interface SendLikeParams { user_id: CommonTypes.Id; times?: number; count?: number; }
-    export interface GetFriendRequestsParams { limit?: number; is_filtered?: boolean; }
-    export interface HandleFriendRequestParams { request_id?: CommonTypes.Id; flag?: string; approve: boolean; remark?: string; }
-    export interface FriendInfo { user_id: CommonTypes.Id; user_name: string; remark?: string; }
-    export interface FriendRequest { request_id: CommonTypes.Id; user_id: CommonTypes.Id; user_name: string; message?: string; time: number; }
-
-    // --- 群组 (18个方法) ---
-    export interface GetGroupListParams { no_cache?: boolean; }
-    export interface GetGroupInfoParams { group_id: CommonTypes.Id; no_cache?: boolean; }
-    export interface SetGroupNameParams { group_id: CommonTypes.Id; group_name: string; }
-    export interface LeaveGroupParams { group_id: CommonTypes.Id; is_dismiss?: boolean; }
-    export interface GetGroupMemberListParams { group_id: CommonTypes.Id; no_cache?: boolean; }
-    export interface GetGroupMemberInfoParams { group_id: CommonTypes.Id; user_id: CommonTypes.Id; no_cache?: boolean; }
-    export interface KickGroupMemberParams { group_id: CommonTypes.Id; user_id: CommonTypes.Id; reject_add_request?: boolean; }
-    export interface MuteGroupMemberParams { group_id: CommonTypes.Id; user_id: CommonTypes.Id; duration: number; }
-    export interface MuteGroupAllParams { group_id: CommonTypes.Id; enable: boolean; }
-    export interface SetGroupAdminParams { group_id: CommonTypes.Id; user_id: CommonTypes.Id; enable: boolean; }
-    export interface SetGroupCardParams { group_id: CommonTypes.Id; user_id: CommonTypes.Id; card: string; }
-    export interface SetGroupSpecialTitleParams { group_id: CommonTypes.Id; user_id: CommonTypes.Id; special_title: string; duration?: number; }
-    export interface GetGroupHonorInfoParams { group_id: CommonTypes.Id; type: "talkative" | "performer" | "legend" | "strong_newbie" | "emotion" | "all"; }
-    export interface SendGroupNudgeParams { group_id: CommonTypes.Id; user_id: CommonTypes.Id; }
-    export interface HandleGroupRequestParams { request_id?: CommonTypes.Id; flag?: string; sub_type?: "add" | "invite"; type: "request" | "invitation"; approve: boolean; reason?: string; }
-    export interface GetGroupNotificationsParams { is_filtered?: boolean; limit?: number; }
-    export interface SetGroupAvatarParams { group_id: CommonTypes.Id; file: string; }
-    export interface SendGroupMessageReactionParams { group_id: CommonTypes.Id; message_id: CommonTypes.Id; face_id: number; }
-    export interface GroupInfo { group_id: CommonTypes.Id; group_name: string; member_count?: number; max_member_count?: number; }
-    export interface GroupMemberInfo { group_id: CommonTypes.Id; user_id: CommonTypes.Id; user_name: string; card?: string; role?: "owner" | "admin" | "member"; }
-    export interface HonorMember { user_id: CommonTypes.Id; user_name: string; avatar?: string; description?: string; }
-    export interface GroupHonorInfo { group_id: CommonTypes.Id; current_talkative?: HonorMember; talkative_list?: HonorMember[]; performer_list?: HonorMember[]; legend_list?: HonorMember[]; strong_newbie_list?: HonorMember[]; emotion_list?: HonorMember[]; }
-    export interface GroupNotification { notification_id: CommonTypes.Id; group_id: CommonTypes.Id; user_id: CommonTypes.Id; type: string; time: number; }
-
-    // --- 群公告 (3个方法) ---
-    export interface GetGroupAnnouncementsParams { group_id: CommonTypes.Id; }
-    export interface SendGroupAnnouncementParams { group_id: CommonTypes.Id; content: string; }
-    export interface DeleteGroupAnnouncementParams { group_id: CommonTypes.Id; announcement_id: CommonTypes.Id; }
-    export interface GroupAnnouncement { announcement_id: CommonTypes.Id; group_id: CommonTypes.Id; content: string; time: number; sender_id?: CommonTypes.Id; }
-
-    // --- 群精华消息 (3个方法) ---
-    export interface GetGroupEssenceMessagesParams { group_id: CommonTypes.Id; }
-    export interface SetGroupEssenceMessageParams { group_id: CommonTypes.Id; message_id: CommonTypes.Id; }
-    export interface DeleteGroupEssenceMessageParams { group_id: CommonTypes.Id; message_id: CommonTypes.Id; }
-
-    // --- 频道 (8个方法) ---
-    export interface GetGuildInfoParams { guild_id: CommonTypes.Id; }
-    export interface GetGuildMemberInfoParams { guild_id: CommonTypes.Id; user_id: CommonTypes.Id; }
-    export interface GetChannelInfoParams { channel_id: CommonTypes.Id; guild_id?: CommonTypes.Id; }
-    export interface GetChannelListParams { guild_id: CommonTypes.Id; }
-    export interface CreateChannelParams { guild_id: CommonTypes.Id; channel_name: string; channel_type?: number; parent_id?: CommonTypes.Id; }
-    export interface UpdateChannelParams { channel_id: CommonTypes.Id; channel_name?: string; parent_id?: CommonTypes.Id; }
-    export interface DeleteChannelParams { channel_id: CommonTypes.Id; }
-    export interface GuildInfo { guild_id: CommonTypes.Id; guild_name: string; guild_display_name?: string; }
-    export interface GuildMemberInfo { guild_id: CommonTypes.Id; user_id: CommonTypes.Id; user_name: string; nickname?: string; role?: string; }
-    export interface ChannelInfo { channel_id: CommonTypes.Id; channel_name: string; channel_type?: number; parent_id?: CommonTypes.Id; }
-
-    // --- 频道成员 ---
-    export interface GetChannelMemberInfoParams { channel_id: CommonTypes.Id; user_id: CommonTypes.Id; }
-    export interface GetChannelMemberListParams { channel_id: CommonTypes.Id; }
-    export interface SetChannelMemberCardParams { channel_id: CommonTypes.Id; user_id: CommonTypes.Id; card: string; }
-    export interface SetChannelMemberRoleParams { channel_id: CommonTypes.Id; user_id: CommonTypes.Id; role: "owner" | "admin" | "member"; }
-    export interface SetChannelMuteParams { channel_id: CommonTypes.Id; mute: boolean; }
-    export interface InviteChannelMemberParams { channel_id: CommonTypes.Id; user_id: CommonTypes.Id; }
-    export interface KickChannelMemberParams { channel_id: CommonTypes.Id; user_id: CommonTypes.Id; }
-    export interface SetChannelMemberMuteParams { channel_id: CommonTypes.Id; user_id: CommonTypes.Id; mute: boolean; }
-    export interface ChannelMemberInfo { channel_id: CommonTypes.Id; user_id: CommonTypes.Id; user_name: string; role?: "owner" | "admin" | "member"; }
-
-    // --- 文件 (10个方法) ---
-    export interface UploadFileParams { scene_type: CommonTypes.Scene; scene_id: CommonTypes.Id; name: string; url?: string; path?: string; data?: string; folder_id?: CommonTypes.Id; }
-    export interface GetFileParams { file_id: CommonTypes.Id; type?: string; }
-    export interface DeleteFileParams { file_id: CommonTypes.Id; scene_type?: CommonTypes.Scene; scene_id?: CommonTypes.Id; }
-    export interface GetGroupFilesParams { group_id: CommonTypes.Id; parent_folder_id?: CommonTypes.Id; }
-    export interface CreateGroupFolderParams { group_id: CommonTypes.Id; folder_name: string; parent_folder_id?: CommonTypes.Id; }
-    export interface GetFileDownloadUrlParams { scene_type: CommonTypes.Scene; scene_id: CommonTypes.Id; file_id: CommonTypes.Id; }
-    export interface MoveGroupFileParams { group_id: CommonTypes.Id; file_id: CommonTypes.Id; parent_folder_id: CommonTypes.Id; }
-    export interface RenameGroupFileParams { group_id: CommonTypes.Id; file_id: CommonTypes.Id; new_name: string; }
-    export interface RenameGroupFolderParams { group_id: CommonTypes.Id; folder_id: CommonTypes.Id; new_name: string; }
-    export interface DeleteGroupFolderParams { group_id: CommonTypes.Id; folder_id: CommonTypes.Id; }
-    export interface FileInfo { file_id: CommonTypes.Id; file_name: string; file_size?: number; url?: string; }
-    export interface FolderInfo { folder_id: CommonTypes.Id; folder_name: string; }
-    export interface GroupFilesResult { files: FileInfo[]; folders: FolderInfo[]; }
-
-    // --- 媒体 (5个方法) ---
-    export interface GetImageParams { file: string; }
-    export interface GetRecordParams { file: string; out_format?: string; }
-    export interface GetResourceTempUrlParams { resource_id: string; }
-    export interface ImageInfo { file: string; url?: string; file_size?: number; filename?: string; }
-    export interface RecordInfo { file: string; url?: string; file_size?: number; filename?: string; out_format?: string; }
-
-    // --- 系统 (8个方法) ---
-    export interface GetCookiesParams { domain?: string; }
-    export interface GetCredentialsParams { domain?: string; }
-    export interface SetRestartParams { delay?: number; }
-    export interface VersionInfo { app_name?: string; app_version?: string; impl?: string; version?: string; onebot_version?: string; milky_version?: string; impl_version?: string; }
-    export interface BotStatus { self: CommonTypes.Id; online: boolean; [key: string]: unknown; }
-    export interface StatusInfo { online?: boolean; good: boolean; bots?: BotStatus[]; }
-    export interface CredentialsInfo { cookies: string; csrf_token: number; }
-
     // --- 工厂/注册类型 ---
-    export type Construct<T> = { new(...args: unknown[]): T; };
+    export type Construct<T> = { new (...args: unknown[]): T };
     export type Creator<T> = (...args: unknown[]) => T;
     export type Factory<T extends Adapter = Adapter> = Construct<T> | Creator<T>;
     export function isClassAdapter<T extends Adapter = Adapter>(obj: unknown): obj is Construct<T> {
-        return typeof obj === 'function' && /^class\s/.test(Function.prototype.toString.call(obj));
+        return typeof obj === "function" && /^class\s/.test(Function.prototype.toString.call(obj));
     }
 
-    export interface Metadata { name: string; displayName: string; description: string; icon?: string; homepage?: string; author?: string; }
+    export interface Metadata {
+        name: string;
+        displayName: string;
+        description: string;
+        icon?: string;
+        homepage?: string;
+        author?: string;
+        capabilities?: AdapterCapabilityManifest;
+    }
 }

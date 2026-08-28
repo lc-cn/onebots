@@ -11,7 +11,13 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { KookBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
-import type { KookConfig, KookMessageType, KookTransformedChannelEvent, KookTransformedPrivateEvent, KookEvent } from "./types.js";
+import type {
+    KookConfig,
+    KookMessageType,
+    KookTransformedChannelEvent,
+    KookTransformedPrivateEvent,
+    KookEvent,
+} from "./types.js";
 import { parseKMarkdown, mentionUser, mentionAll, mentionHere } from "./utils.js";
 
 export class KookAdapter extends Adapter<KookBot, "kook"> {
@@ -28,7 +34,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
      * 发送消息
      * KOOK 支持频道消息和私聊消息
      */
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -37,44 +46,56 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
-        let content = '';
-        let messageType: KookMessageType = 9;  // 默认使用 KMarkdown
+        let content = "";
+        let messageType: KookMessageType = 9; // 默认使用 KMarkdown
 
         for (const seg of message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 content += seg;
-            } else if (seg.type === 'text') {
-                content += seg.data.text || '';
-            } else if (seg.type === 'at') {
-                if (seg.data.qq === 'all') {
+            } else if (seg.type === "text") {
+                content += seg.data.text || "";
+            } else if (seg.type === "at") {
+                if (seg.data.qq === "all") {
                     content += mentionAll();
-                } else if (seg.data.qq === 'here') {
+                } else if (seg.data.qq === "here") {
                     content += mentionHere();
                 } else {
-                    content += mentionUser(seg.data.qq || seg.data.id || '');
+                    content += mentionUser(seg.data.qq || seg.data.id || "");
                 }
-            } else if (seg.type === 'image') {
+            } else if (seg.type === "image") {
                 // 图片消息需要单独发送
                 if (seg.data.url) {
                     content += `[图片](${seg.data.url})`;
                 }
-            } else if (seg.type === 'face') {
+            } else if (seg.type === "face") {
                 // 表情
-                content += `:${seg.data.id || 'smile'}:`;
+                content += `:${seg.data.id || "smile"}:`;
             }
         }
 
         let result: { msg_id: string; msg_timestamp: number; nonce: string };
 
-        if (scene_type === 'private' || scene_type === 'direct') {
+        if (scene_type === "private" || scene_type === "direct") {
             // 私聊消息
-            result = (await bot.sendDirectMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
-        } else if (scene_type === 'channel') {
+            result = (await bot.sendDirectMessage(sceneId.string, content)) as unknown as {
+                msg_id: string;
+                msg_timestamp: number;
+                nonce: string;
+            };
+        } else if (scene_type === "channel") {
             // 频道消息
-            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
-        } else if (scene_type === 'group') {
+            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as {
+                msg_id: string;
+                msg_timestamp: number;
+                nonce: string;
+            };
+        } else if (scene_type === "group") {
             // 群组消息也发送到频道
-            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as { msg_id: string; msg_timestamp: number; nonce: string };
+            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as {
+                msg_id: string;
+                msg_timestamp: number;
+                nonce: string;
+            };
         } else {
             throw new Error(`KOOK 不支持的消息场景类型: ${scene_type}`);
         }
@@ -94,7 +115,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
-        const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
+        const channelId =
+            params.scene_id != null
+                ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
+                : "";
         if (channelId) {
             await bot.deleteMessage(channelId, msgId);
         } else {
@@ -112,25 +136,35 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
-        const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
+        const channelId =
+            params.scene_id != null
+                ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
+                : "";
 
         // getMessage returns kook-client's Message type which has message_id, timestamp, author, raw_message
-        const msg = await bot.getMessage(channelId, msgId) as unknown as { message_id: string; timestamp: number; author: { id: string; username: string }; raw_message: string };
+        const msg = (await bot.getMessage(channelId, msgId)) as unknown as {
+            message_id: string;
+            timestamp: number;
+            author: { id: string; username: string };
+            raw_message: string;
+        };
 
         return {
             message_id: this.createId(msg.message_id),
             time: msg.timestamp,
             sender: {
-                scene_type: 'channel',
+                scene_type: "channel",
                 sender_id: this.createId(msg.author.id),
                 scene_id: this.createId(msg.message_id),
                 sender_name: msg.author.username,
-                scene_name: '',
+                scene_name: "",
             },
-            message: [{
-                type: 'text',
-                data: { text: parseKMarkdown(msg.raw_message) },
-            }],
+            message: [
+                {
+                    type: "text",
+                    data: { text: parseKMarkdown(msg.raw_message) },
+                },
+            ],
         };
     }
 
@@ -145,21 +179,26 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         // 解析消息内容
-        let content = '';
+        let content = "";
         for (const seg of params.message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 content += seg;
-            } else if (seg.type === 'text') {
-                content += seg.data.text || '';
+            } else if (seg.type === "text") {
+                content += seg.data.text || "";
             }
         }
 
         // 更新消息需要 channelId，但参数中没有，尝试从消息中获取
         // 如果无法获取，则使用第一个可用的频道（简化处理）
-        const rawScene = (params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }).scene_id;
-        const channelId = rawScene != null ? this.coerceId(rawScene as CommonTypes.Id | string | number).string : '';
+        const rawScene = (
+            params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }
+        ).scene_id;
+        const channelId =
+            rawScene != null
+                ? this.coerceId(rawScene as CommonTypes.Id | string | number).string
+                : "";
         if (!channelId) {
-            throw new Error('更新消息需要 channel_id，但参数中未提供');
+            throw new Error("更新消息需要 channel_id，但参数中未提供");
         }
         await bot.updateMessage(channelId, msgId, content);
     }
@@ -176,7 +215,12 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const me = await bot.getMe() as unknown as { id: string; username: string; nickname: string; avatar: string };
+        const me = (await bot.getMe()) as unknown as {
+            id: string;
+            username: string;
+            nickname: string;
+            avatar: string;
+        };
 
         return {
             user_id: this.createId(me.id),
@@ -195,7 +239,12 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         const bot = account.client;
         const userId = params.user_id.string;
-        const user = await bot.getUser(userId) as unknown as { id: string; username: string; nickname: string; avatar: string };
+        const user = (await bot.getUser(userId)) as unknown as {
+            id: string;
+            username: string;
+            nickname: string;
+            avatar: string;
+        };
 
         return {
             user_id: this.createId(user.id),
@@ -212,7 +261,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取好友列表（私聊会话列表）
      */
-    async getFriendList(uin: string, params?: Adapter.GetFriendListParams): Promise<Adapter.FriendInfo[]> {
+    async getFriendList(
+        uin: string,
+        params?: Adapter.GetFriendListParams,
+    ): Promise<Adapter.FriendInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -230,7 +282,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取好友信息
      */
-    async getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -252,7 +307,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取群列表（服务器列表）
      */
-    async getGroupList(uin: string, params?: Adapter.GetGroupListParams): Promise<Adapter.GroupInfo[]> {
+    async getGroupList(
+        uin: string,
+        params?: Adapter.GetGroupListParams,
+    ): Promise<Adapter.GroupInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -262,7 +320,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         do {
             const result = await bot.getGuildList(page, 50);
-            
+
             for (const guild of result.items) {
                 groups.push({
                     group_id: this.createId(guild.id),
@@ -280,7 +338,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取群信息（服务器信息）
      */
-    async getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -310,7 +371,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取群成员列表（服务器成员列表）
      */
-    async getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -320,15 +384,25 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         let page = 1;
 
         do {
-            const result = await bot.getGuildMemberList(guildId, undefined, undefined, undefined, undefined, undefined, undefined, page, 50);
-            
+            const result = await bot.getGuildMemberList(
+                guildId,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                page,
+                50,
+            );
+
             for (const user of result.items) {
                 members.push({
                     group_id: params.group_id,
                     user_id: this.createId(user.id),
                     user_name: user.username,
                     card: user.nickname,
-                    role: 'member',
+                    role: "member",
                 });
             }
 
@@ -342,7 +416,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取群成员信息
      */
-    async getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -356,7 +433,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             user_id: this.createId(user.id),
             user_name: user.username,
             card: user.nickname,
-            role: 'member',
+            role: "member",
         };
     }
 
@@ -389,20 +466,23 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取频道列表
      */
-    async getChannelList(uin: string, params?: Adapter.GetChannelListParams): Promise<Adapter.ChannelInfo[]> {
+    async getChannelList(
+        uin: string,
+        params?: Adapter.GetChannelListParams,
+    ): Promise<Adapter.ChannelInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
         const guildId = params?.guild_id?.string;
-        if (!guildId) throw new Error('guild_id is required');
+        if (!guildId) throw new Error("guild_id is required");
 
         const channels: Adapter.ChannelInfo[] = [];
         let page = 1;
 
         do {
             const result = await bot.getChannelList(guildId, undefined, page, 50);
-            
+
             for (const channel of result.items) {
                 channels.push({
                     channel_id: this.createId(channel.id),
@@ -422,7 +502,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取频道信息
      */
-    async getChannelInfo(uin: string, params: Adapter.GetChannelInfoParams): Promise<Adapter.ChannelInfo> {
+    async getChannelInfo(
+        uin: string,
+        params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -440,7 +523,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 创建频道
      */
-    async createChannel(uin: string, params: Adapter.CreateChannelParams): Promise<Adapter.ChannelInfo> {
+    async createChannel(
+        uin: string,
+        params: Adapter.CreateChannelParams,
+    ): Promise<Adapter.ChannelInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -449,7 +535,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             params.guild_id.string,
             params.channel_name,
             params.channel_type as 1 | 2,
-            params.parent_id?.string
+            params.parent_id?.string,
         );
 
         return {
@@ -485,7 +571,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取频道成员列表
      */
-    async getChannelMemberList(uin: string, params: Adapter.GetChannelMemberListParams): Promise<Adapter.ChannelMemberInfo[]> {
+    async getChannelMemberList(
+        uin: string,
+        params: Adapter.GetChannelMemberListParams,
+    ): Promise<Adapter.ChannelMemberInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -496,7 +585,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             channel_id: params.channel_id,
             user_id: this.createId(user.id),
             user_name: user.username,
-            role: 'member' as const,
+            role: "member" as const,
         }));
     }
 
@@ -517,7 +606,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
         do {
             const result = await bot.getGuildList(page, 50);
-            
+
             for (const guild of result.items) {
                 guilds.push({
                     guild_id: this.createId(guild.id),
@@ -535,14 +624,19 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取服务器信息
      */
-    async getGuildInfo(uin: string, params: Adapter.GetGuildInfoParams): Promise<Adapter.GuildInfo> {
+    async getGuildInfo(
+        uin: string,
+        params: Adapter.GetGuildInfoParams,
+    ): Promise<Adapter.GuildInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
         const guild = await bot.getGuild(params.guild_id.string);
         if (!guild?.id) {
-            throw new Error(`获取服务器信息失败：无效的 guild 响应（guild_id=${params.guild_id.string}）`);
+            throw new Error(
+                `获取服务器信息失败：无效的 guild 响应（guild_id=${params.guild_id.string}）`,
+            );
         }
         return {
             guild_id: this.createId(guild.id),
@@ -553,7 +647,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     /**
      * 获取服务器成员信息
      */
-    async getGuildMemberInfo(uin: string, params: Adapter.GetGuildMemberInfoParams): Promise<Adapter.GuildMemberInfo> {
+    async getGuildMemberInfo(
+        uin: string,
+        params: Adapter.GetGuildMemberInfoParams,
+    ): Promise<Adapter.GuildMemberInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -577,10 +674,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
      */
     async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
-            app_name: 'onebots KOOK Adapter',
-            app_version: '1.0.0',
-            impl: 'kook',
-            version: '1.0.0',
+            app_name: "onebots KOOK Adapter",
+            app_version: "1.0.0",
+            impl: "kook",
+            version: "1.0.0",
         };
     }
 
@@ -599,91 +696,92 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     // 账号创建
     // ============================================
 
-    createAccount(config: Account.Config<'kook'>): Account<'kook', KookBot> {
+    createAccount(config: Account.Config<"kook">): Account<"kook", KookBot> {
         const kookConfig: KookConfig = {
             account_id: config.account_id,
             token: config.token,
             verifyToken: config.verifyToken,
             encryptKey: config.encryptKey,
-            mode: config.mode || 'websocket',
+            mode: config.mode || "websocket",
         };
 
         const bot = new KookBot(kookConfig);
-        const account = new Account<'kook', KookBot>(this, bot, config);
+        const account = new Account<"kook", KookBot>(this, bot, config);
 
         // Webhook 路由
-        if (kookConfig.mode === 'webhook') {
+        if (kookConfig.mode === "webhook") {
             this.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
         }
 
         // 监听 Bot 事件
-        bot.on('ready', () => {
+        bot.on("ready", () => {
             this.logger.info(`KOOK Bot ${config.account_id} 已就绪`);
         });
 
-        bot.on('error', (error) => {
+        bot.on("error", error => {
             this.logger.error(`KOOK Bot ${config.account_id} 错误:`, error);
         });
 
         // 监听频道消息
-        bot.on('channel_message', (event: KookTransformedChannelEvent) => {
+        bot.on("channel_message", (event: KookTransformedChannelEvent) => {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
             if (me && event.author_id === me.id) return;
 
             // 打印消息接收日志
-            const content = event.content || '';
-            const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
-            const channelId = event.channel_id || '';
+            const content = event.content || "";
+            const contentPreview =
+                content.length > 100 ? content.substring(0, 100) + "..." : content;
+            const channelId = event.channel_id || "";
             this.logger.info(
                 `[KOOK] 收到频道消息 | 消息ID: ${event.msg_id} | 频道: ${channelId} | ` +
-                `发送者: ${event.extra?.author?.username || event.author_id} | 内容: ${contentPreview}`
+                    `发送者: ${event.extra?.author?.username || event.author_id} | 内容: ${contentPreview}`,
             );
 
             // 构建消息段
             const messageSegments: CommonTypes.Segment[] = [];
-            const rawContent = event.content || '';
+            const rawContent = event.content || "";
             switch (event.type) {
-                case 1:  // 文字消息
-                case 9:  // KMarkdown
+                case 1: // 文字消息
+                case 9: // KMarkdown
                     messageSegments.push({
-                        type: 'text',
+                        type: "text",
                         data: { text: parseKMarkdown(rawContent) },
                     });
                     break;
-                case 2:  // 图片
+                case 2: // 图片
                     messageSegments.push({
-                        type: 'image',
+                        type: "image",
                         data: { url: rawContent },
                     });
                     break;
-                case 3:  // 视频
+                case 3: // 视频
                     messageSegments.push({
-                        type: 'video',
+                        type: "video",
                         data: { url: rawContent },
                     });
                     break;
-                case 4:  // 文件
+                case 4: // 文件
                     messageSegments.push({
-                        type: 'file',
+                        type: "file",
                         data: { url: rawContent },
                     });
                     break;
-                case 8:  // 音频
+                case 8: // 音频
                     messageSegments.push({
-                        type: 'audio',
+                        type: "audio",
                         data: { url: rawContent },
                     });
                     break;
-                case 10:  // 卡片消息
+                case 10: // 卡片消息
                     messageSegments.push({
-                        type: 'card',
+                        type: "card",
                         data: { content: rawContent },
                     });
                     break;
                 default:
                     messageSegments.push({
-                        type: 'text',
+                        type: "text",
                         data: { text: rawContent },
                     });
             }
@@ -692,7 +790,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             if (event.extra?.mention) {
                 for (const userId of event.extra.mention) {
                     messageSegments.unshift({
-                        type: 'at',
+                        type: "at",
                         data: { qq: userId },
                     });
                 }
@@ -702,18 +800,18 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.msg_id),
                 timestamp: event.msg_timestamp,
-                platform: 'kook',
+                platform: "kook",
                 bot_id: this.createId(config.account_id),
-                type: 'message',
-                message_type: 'channel',
+                type: "message",
+                message_type: "channel",
                 sender: {
                     id: this.createId(event.author_id),
                     name: event.extra?.author?.username || event.author_id,
                     avatar: event.extra?.author?.avatar,
                 },
                 group: {
-                    id: this.createId(event.extra?.guild_id || event.channel_id || ''),
-                    name: '',
+                    id: this.createId(event.extra?.guild_id || event.channel_id || ""),
+                    name: "",
                 },
                 message_id: this.createId(event.msg_id),
                 raw_message: rawContent,
@@ -725,41 +823,41 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         });
 
         // 监听私聊消息
-        bot.on('direct_message', (event: KookTransformedPrivateEvent) => {
+        bot.on("direct_message", (event: KookTransformedPrivateEvent) => {
             // 忽略自己发送的消息
             const me = bot.getCachedMe();
             if (me && event.author_id === me.id) return;
 
             // 打印消息接收日志
-            const content = event.content || '';
-            const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+            const content = event.content || "";
+            const contentPreview =
+                content.length > 100 ? content.substring(0, 100) + "..." : content;
             this.logger.info(
                 `[KOOK] 收到私聊消息 | 消息ID: ${event.msg_id} | ` +
-                `发送者: ${event.extra?.author?.username || event.author_id} | 内容: ${contentPreview}`
+                    `发送者: ${event.extra?.author?.username || event.author_id} | 内容: ${contentPreview}`,
             );
 
             // 构建消息段
             const messageSegments: CommonTypes.Segment[] = [];
-            const rawContent = event.content || '';
-
+            const rawContent = event.content || "";
 
             switch (event.type) {
                 case 1:
                 case 9:
                     messageSegments.push({
-                        type: 'text',
+                        type: "text",
                         data: { text: parseKMarkdown(rawContent) },
                     });
                     break;
                 case 2:
                     messageSegments.push({
-                        type: 'image',
+                        type: "image",
                         data: { url: rawContent },
                     });
                     break;
                 default:
                     messageSegments.push({
-                        type: 'text',
+                        type: "text",
                         data: { text: rawContent },
                     });
             }
@@ -768,10 +866,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.msg_id),
                 timestamp: event.msg_timestamp,
-                platform: 'kook',
+                platform: "kook",
                 bot_id: this.createId(config.account_id),
-                type: 'message',
-                message_type: 'private',
+                type: "message",
+                message_type: "private",
                 sender: {
                     id: this.createId(event.author_id),
                     name: event.extra?.author?.username || event.author_id,
@@ -787,23 +885,23 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         });
 
         // 监听成员加入服务器
-        bot.on('system.joined_guild', (event: KookEvent) => {
+        bot.on("system.joined_guild", (event: KookEvent) => {
             this.logger.info(`用户加入服务器: ${event.extra?.body?.user_id}`);
-            
+
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(event.msg_id),
                 timestamp: event.msg_timestamp,
-                platform: 'kook',
+                platform: "kook",
                 bot_id: this.createId(config.account_id),
-                type: 'notice',
-                notice_type: 'group_increase',
+                type: "notice",
+                notice_type: "group_increase",
                 user: {
-                    id: this.createId(event.extra?.body?.user_id || ''),
-                    name: '',
+                    id: this.createId(event.extra?.body?.user_id || ""),
+                    name: "",
                 },
                 group: {
                     id: this.createId(event.target_id),
-                    name: '',
+                    name: "",
                 },
             };
 
@@ -811,23 +909,23 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         });
 
         // 监听成员离开服务器
-        bot.on('system.exited_guild', (event: KookEvent) => {
+        bot.on("system.exited_guild", (event: KookEvent) => {
             this.logger.info(`用户离开服务器: ${event.extra?.body?.user_id}`);
-            
+
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(event.msg_id),
                 timestamp: event.msg_timestamp,
-                platform: 'kook',
+                platform: "kook",
                 bot_id: this.createId(config.account_id),
-                type: 'notice',
-                notice_type: 'group_decrease',
+                type: "notice",
+                notice_type: "group_decrease",
                 user: {
-                    id: this.createId(event.extra?.body?.user_id || ''),
-                    name: '',
+                    id: this.createId(event.extra?.body?.user_id || ""),
+                    name: "",
                 },
                 group: {
                     id: this.createId(event.target_id),
-                    name: '',
+                    name: "",
                 },
             };
 
@@ -835,72 +933,72 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         });
 
         // 监听表情回应
-        bot.on('system.added_reaction', (event: KookEvent) => {
+        bot.on("system.added_reaction", (event: KookEvent) => {
             this.logger.debug(`添加表情回应:`, event);
-            
+
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(event.msg_id),
                 timestamp: event.msg_timestamp,
-                platform: 'kook',
+                platform: "kook",
                 bot_id: this.createId(config.account_id),
-                type: 'notice',
-                notice_type: 'custom',
-                sub_type: 'reaction_add',
+                type: "notice",
+                notice_type: "reaction_added",
                 user: {
-                    id: this.createId(event.extra?.body?.user_id || ''),
-                    name: '',
+                    id: this.createId(event.extra?.body?.user_id || ""),
+                    name: "",
                 },
-                message_id: event.extra?.body?.msg_id,
+                message_id: this.createId(event.extra?.body?.msg_id || event.msg_id),
                 emoji: event.extra?.body?.emoji,
+                raw_event: event,
             };
 
             account.dispatch(commonEvent);
         });
 
         // 监听消息更新
-        bot.on('system.updated_message', (event: KookEvent) => {
+        bot.on("system.updated_message", (event: KookEvent) => {
             this.logger.debug(`消息更新:`, event);
-            
+
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(event.msg_id),
                 timestamp: event.msg_timestamp,
-                platform: 'kook',
+                platform: "kook",
                 bot_id: this.createId(config.account_id),
-                type: 'notice',
-                notice_type: 'custom',
-                sub_type: 'message_update',
-                message_id: event.extra?.body?.msg_id,
+                type: "notice",
+                notice_type: "message_updated",
+                message_id: this.createId(event.extra?.body?.msg_id || event.msg_id),
                 content: event.extra?.body?.content,
+                raw_event: event,
             };
 
             account.dispatch(commonEvent);
         });
 
         // 监听消息删除
-        bot.on('system.deleted_message', (event: KookEvent) => {
+        bot.on("system.deleted_message", (event: KookEvent) => {
             this.logger.debug(`消息删除:`, event);
-            
+
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(event.msg_id),
                 timestamp: event.msg_timestamp,
-                platform: 'kook',
+                platform: "kook",
                 bot_id: this.createId(config.account_id),
-                type: 'notice',
-                notice_type: 'custom',
-                sub_type: 'message_delete',
-                message_id: event.extra?.body?.msg_id,
+                type: "notice",
+                notice_type: "message_deleted",
+                message_id: this.createId(event.extra?.body?.msg_id || event.msg_id),
+                raw_event: event,
             };
 
             account.dispatch(commonEvent);
         });
 
         // 启动时初始化 Bot
-        account.on('start', async () => {
+        account.on("start", async () => {
             try {
                 await bot.start();
                 account.status = AccountStatus.Online;
                 const me = bot.getCachedMe();
-                account.nickname = me?.username || 'KOOK Bot';
+                account.nickname = me?.username || "KOOK Bot";
                 account.avatar = me?.avatar || this.icon;
             } catch (error) {
                 this.logger.error(`启动 KOOK Bot 失败:`, error);
@@ -908,7 +1006,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             }
         });
 
-        account.on('stop', async () => {
+        account.on("stop", async () => {
             await bot.stop();
             account.status = AccountStatus.OffLine;
         });
@@ -925,16 +1023,16 @@ declare module "onebots" {
     }
 }
 
-AdapterRegistry.register('kook', KookAdapter,{
-    name: 'kook',
-    displayName: 'KOOK官方机器人',
-    description: 'KOOK官方机器人适配器，支持频道、群聊和私聊',
-    icon: 'https://www.kookapp.cn/favicon.ico',
-    homepage: 'https://www.kookapp.cn/',
-    author: '凉菜',
+AdapterRegistry.register("kook", KookAdapter, {
+    name: "kook",
+    displayName: "KOOK官方机器人",
+    description: "KOOK官方机器人适配器，支持频道、群聊和私聊",
+    icon: "https://www.kookapp.cn/favicon.ico",
+    homepage: "https://www.kookapp.cn/",
+    author: "凉菜",
 });
 
-declare module '@/adapter.js' {
+declare module "@/adapter.js" {
     namespace Adapter {
         interface Configs {
             kook: KookConfig;
