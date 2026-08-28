@@ -509,7 +509,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             }
         });
 
-        this.logger.info(`Milky HTTP server listening on ${this.path}/:action`);
+        this.logger.info(`Milky HTTP server listening on ${this.path}/api/:action`);
     }
 
     private startWs(): void {

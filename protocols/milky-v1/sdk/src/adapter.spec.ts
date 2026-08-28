@@ -150,7 +150,7 @@ describe("Milky V1 SDK", () => {
         await adapter.call("get_login_info");
 
         expect(fetchMock).toHaveBeenCalledWith(
-            "https://gateway.example/kook/10001/milky/v1/get_login_info",
+            "https://gateway.example/kook/10001/milky/v1/api/get_login_info",
             expect.any(Object),
         );
     });

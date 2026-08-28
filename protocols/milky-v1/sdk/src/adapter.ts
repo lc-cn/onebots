@@ -139,7 +139,7 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
             resolveActionUrl:
                 config.resolveActionUrl ??
                 (usesLegacyOneBotsRoutes
-                    ? action => new URL(action, `${legacyApiBaseUrl}/`)
+                    ? action => new URL(`api/${action}`, `${legacyApiBaseUrl}/`)
                     : undefined),
             call: config.call,
             fetch: config.fetch,
