@@ -256,10 +256,23 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
     ): Promise<void> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-        if (!params.flag) throw new TypeError("处理 ICQQ 好友申请需要原始 flag");
+        if (params.is_filtered) throw new TypeError("ICQQ 不支持处理风险过滤好友申请");
+        if (!params.approve && params.reason) throw new TypeError("ICQQ 不支持发送好友拒绝理由");
+
+        let flag = params.flag ?? params.request_id?.string;
+        if (params.initiator_uid) {
+            const client = this.requireNativeClient(uin);
+            const requests = (await client.getSystemMsg()).filter(
+                (event): event is FriendRequestEvent => event.request_type === "friend",
+            );
+            const initiatorUids = await client.uin2uids(requests.map(event => event.user_id));
+            const index = initiatorUids.indexOf(params.initiator_uid);
+            flag = index < 0 ? undefined : requests[index]?.flag;
+        }
+        if (!flag) throw new TypeError("好友申请已失效或不在当前请求列表中");
 
         const accepted = await account.client.handleFriendRequest(
-            params.flag,
+            flag,
             params.approve,
             params.remark,
         );
@@ -294,16 +307,28 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         uin: string,
         params?: Adapter.GetFriendRequestsParams,
     ): Promise<Adapter.FriendRequest[]> {
-        const requests = (await this.requireNativeClient(uin).getSystemMsg()).filter(
+        if (params?.is_filtered) return [];
+        const client = this.requireNativeClient(uin);
+        const requests = (await client.getSystemMsg()).filter(
             (event): event is FriendRequestEvent => event.request_type === "friend",
         );
         const selected = params?.limit === undefined ? requests : requests.slice(0, params.limit);
-        return selected.map(event => ({
+        const [initiatorUids, targetUid] = await Promise.all([
+            client.uin2uids(selected.map(event => event.user_id)),
+            client.uin2uid(client.uin),
+        ]);
+        return selected.map((event, index) => ({
             request_id: this.createId(event.flag),
             user_id: this.createId(event.user_id),
             user_name: event.nickname,
             message: event.comment,
             time: event.time,
+            initiator_uid: initiatorUids[index],
+            target_user_id: this.createId(client.uin),
+            target_user_uid: targetUid,
+            state: "pending",
+            via: event.source,
+            is_filtered: false,
         }));
     }
 

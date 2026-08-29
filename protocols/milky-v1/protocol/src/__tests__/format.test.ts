@@ -506,26 +506,63 @@ describe("Milky V1 protocol", () => {
         expect(adapter.inviteGroupMember).not.toHaveBeenCalled();
     });
 
-    test("accept_friend_request preserves the opaque request flag", async () => {
+    test("好友请求动作使用真实发起者 UID，而不是平台 opaque flag", async () => {
         const { protocol, adapter } = createProtocol();
 
         await expect(
             protocol.apply("accept_friend_request", {
-                initiator_uid: "opaque-request-flag",
+                initiator_uid: "u_requester",
                 is_filtered: true,
-                remark: "已验证",
             }),
         ).resolves.toMatchObject({ status: "ok", retcode: 0, data: {} });
         expect(adapter.handleFriendRequest).toHaveBeenCalledWith("bot", {
-            flag: "opaque-request-flag",
+            initiator_uid: "u_requester",
+            is_filtered: true,
             approve: true,
-            remark: "已验证",
+            reason: undefined,
         });
 
         await expect(
             protocol.apply("accept_friend_request", { initiator_uid: " " }),
         ).resolves.toMatchObject({ status: "failed", retcode: -1 });
         expect(adapter.handleFriendRequest).toHaveBeenCalledTimes(1);
+    });
+
+    test("好友请求列表返回完整 canonical 实体", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getFriendRequests.mockResolvedValue([
+            {
+                request_id: { string: "opaque-flag", number: 701, source: "opaque-flag" },
+                user_id: { string: "10001", number: 10001, source: 10001 },
+                user_name: "Alice",
+                message: "申请好友",
+                time: 100,
+                initiator_uid: "u_requester",
+                target_user_id: { string: "99999", number: 99999, source: 99999 },
+                target_user_uid: "u_bot",
+                state: "pending",
+                via: "search",
+                is_filtered: false,
+            },
+        ]);
+
+        await expect(protocol.apply("get_friend_requests", {})).resolves.toMatchObject({
+            data: {
+                requests: [
+                    {
+                        time: 100,
+                        initiator_id: 10001,
+                        initiator_uid: "u_requester",
+                        target_user_id: 99999,
+                        target_user_uid: "u_bot",
+                        state: "pending",
+                        comment: "申请好友",
+                        via: "search",
+                        is_filtered: false,
+                    },
+                ],
+            },
+        });
     });
 
     test("group request actions resolve the opaque ICQQ flag from the mapped sequence", async () => {

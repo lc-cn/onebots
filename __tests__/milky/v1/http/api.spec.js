@@ -571,7 +571,8 @@ describe('Milky V1 - 好友 API', () => {
     }
 
     const { status, data } = await callMilkyAPI(CONFIG, 'accept_friend_request', {
-      request_id: 'test_request_id'
+      initiator_uid: 'u_test_requester',
+      is_filtered: false
     });
 
     if (status === 200) {
@@ -591,7 +592,8 @@ describe('Milky V1 - 好友 API', () => {
     }
 
     const { status, data } = await callMilkyAPI(CONFIG, 'reject_friend_request', {
-      request_id: 'test_request_id'
+      initiator_uid: 'u_test_requester',
+      is_filtered: false
     });
 
     if (status === 200) {

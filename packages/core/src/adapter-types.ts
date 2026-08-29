@@ -165,8 +165,11 @@ declare module "./adapter.js" {
         export interface HandleFriendRequestParams {
             request_id?: CommonTypes.Id;
             flag?: string;
+            initiator_uid?: string;
+            is_filtered?: boolean;
             approve: boolean;
             remark?: string;
+            reason?: string;
         }
         export interface FriendInfo {
             user_id: CommonTypes.Id;
@@ -179,6 +182,12 @@ declare module "./adapter.js" {
             user_name: string;
             message?: string;
             time: number;
+            initiator_uid?: string;
+            target_user_id?: CommonTypes.Id;
+            target_user_uid?: string;
+            state?: "pending" | "accepted" | "rejected" | "ignored";
+            via?: string;
+            is_filtered?: boolean;
         }
 
         // --- 群组 (18个方法) ---

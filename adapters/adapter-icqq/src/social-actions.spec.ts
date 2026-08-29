@@ -9,6 +9,53 @@ function createActions(client: Client): ICQQSocialActions {
 }
 
 describe("ICQQ 账号资料动作", () => {
+    it("以真实 QQ UID 列出并处理好友请求", async () => {
+        const request = {
+            request_type: "friend",
+            sub_type: "add",
+            flag: "opaque-flag",
+            user_id: 10001,
+            nickname: "Alice",
+            comment: "申请好友",
+            source: "search",
+            time: 100,
+        };
+        const client = {
+            uin: 99999,
+            getSystemMsg: vi.fn().mockResolvedValue([request]),
+            uin2uids: vi.fn().mockResolvedValue(["u_requester"]),
+            uin2uid: vi.fn().mockResolvedValue("u_bot"),
+        } as unknown as Client;
+        const handleFriendRequest = vi.fn().mockResolvedValue(true);
+        const actions = createActions(client);
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: { handleFriendRequest } }) },
+            createId: {
+                value: (value: string | number) => ({
+                    string: String(value),
+                    number: typeof value === "number" ? value : 701,
+                    source: value,
+                }),
+            },
+        });
+
+        await expect(actions.getFriendRequests("bot", { limit: 20 })).resolves.toEqual([
+            expect.objectContaining({
+                initiator_uid: "u_requester",
+                target_user_uid: "u_bot",
+                state: "pending",
+                via: "search",
+                is_filtered: false,
+            }),
+        ]);
+        await actions.handleFriendRequest("bot", {
+            initiator_uid: "u_requester",
+            is_filtered: false,
+            approve: true,
+        });
+        expect(handleFriendRequest).toHaveBeenCalledWith("opaque-flag", true, undefined);
+    });
+
     it("设置昵称与个性签名时校验原生结果", async () => {
         const client = {
             setNickname: vi.fn().mockResolvedValue(true),

@@ -22,6 +22,11 @@ import {
     getMilkyGroupNotifications,
     MILKY_GROUP_REQUEST_ACTIONS,
 } from "./group-requests.js";
+import {
+    executeMilkyFriendRequestAction,
+    getMilkyFriendRequests,
+    MILKY_FRIEND_REQUEST_ACTIONS,
+} from "./friend-requests.js";
 import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 
 const milkySchema: Schema = {
@@ -243,6 +248,14 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 params,
             );
         }
+        if (MILKY_FRIEND_REQUEST_ACTIONS.has(action)) {
+            return executeMilkyFriendRequestAction(
+                this.adapter,
+                this.account.account_id,
+                action,
+                params,
+            );
+        }
         switch (action) {
             case "send_private_message":
                 return this.sendPrivateMessage(params);
@@ -281,7 +294,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             case "send_profile_like":
                 return this.sendProfileLike(params);
             case "get_friend_requests":
-                return this.getFriendRequests(params);
+                return getMilkyFriendRequests(this.adapter, this.account.account_id, params);
             case "get_group_info":
                 return this.getGroupInfo(params);
             case "get_group_list":
@@ -292,10 +305,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.getGroupMemberList(params);
             case "get_group_notifications":
                 return getMilkyGroupNotifications(this.adapter, this.account.account_id, params);
-            case "accept_friend_request":
-                return this.handleFriendRequest(params, true);
-            case "reject_friend_request":
-                return this.handleFriendRequest(params, false);
             case "get_group_files":
                 return this.getGroupFiles(params);
             case "create_group_folder":
@@ -549,30 +558,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         });
     }
 
-    private async getFriendRequests(
-        params: Record<string, unknown>,
-    ): Promise<{ requests: Record<string, unknown>[] }> {
-        const requests = await this.adapter.getFriendRequests(this.account.account_id, {
-            limit:
-                params.limit === undefined
-                    ? undefined
-                    : requirePositiveIntegerParam(params, "limit"),
-            is_filtered:
-                params.is_filtered === undefined
-                    ? undefined
-                    : requireBooleanParam(params, "is_filtered"),
-        });
-        return {
-            requests: requests.map(request => ({
-                initiator_id: request.user_id.number,
-                initiator_uid: request.request_id.string,
-                comment: request.message ?? "",
-                time: request.time,
-                is_filtered: false,
-            })),
-        };
-    }
-
     private async getGroupInfo(
         params: Record<string, unknown>,
     ): Promise<{ group: Milky.GroupInfo }> {
@@ -747,18 +732,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         await this.adapter.deleteGroupFolder(this.account.account_id, {
             group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
             folder_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "folder_id")),
-        });
-    }
-
-    private async handleFriendRequest(
-        params: Record<string, unknown>,
-        approve: boolean,
-    ): Promise<void> {
-        const flag = requireNonEmptyStringParam(params, "initiator_uid");
-        await this.adapter.handleFriendRequest(this.account.account_id, {
-            flag,
-            approve,
-            remark: typeof params.remark === "string" ? params.remark : undefined,
         });
     }
 
