@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+    projectICQQDiscussMessage,
+    projectICQQFriendChange,
+    projectICQQGuildMessage,
     projectICQQMessage,
     projectICQQMembership,
     projectICQQMute,
     projectICQQPoke,
     projectICQQRecall,
     projectICQQReaction,
+    projectICQQReadSync,
 } from "./events.js";
 
 function id(value: string | number) {
@@ -124,6 +128,104 @@ describe("ICQQ 事件投影", () => {
             reaction_type: "face",
             is_add: false,
             message_id: { number: 42 },
+        });
+    });
+
+    it("投影讨论组与 QQ 频道消息，并为讨论组隔离 ID 命名空间", () => {
+        const discuss = projectICQQDiscussMessage(
+            {
+                raw_event: {},
+                message_id: "d1",
+                discuss_id: 20000,
+                discuss_name: "讨论组",
+                user_id: 30000,
+                message: [{ type: "text", text: "hello" }],
+                raw_message: "hello",
+                time: 100,
+                sender: { user_id: 30000, nickname: "Alice" },
+                atme: true,
+            },
+            context,
+        );
+        const guild = projectICQQGuildMessage(
+            {
+                raw_event: {},
+                guild_id: "guild",
+                guild_name: "频道",
+                channel_id: "channel",
+                channel_name: "子频道",
+                message_id: "g1",
+                user_id: "tiny",
+                message: [{ type: "text", text: "hello" }],
+                raw_message: "hello",
+                time: 100,
+                is_delete: false,
+                sender: { user_id: "tiny", nickname: "Alice" },
+            },
+            context,
+        );
+
+        expect(discuss).toMatchObject({
+            message_type: "group",
+            group: { id: { string: "discuss:20000" } },
+            extensions: { icqq: { scene_type: "discuss", at_me: true } },
+        });
+        expect(guild).toMatchObject({
+            message_type: "channel",
+            group: {
+                id: { string: "channel" },
+                guild_id: { string: "guild" },
+                channel_id: { string: "channel" },
+            },
+        });
+    });
+
+    it("频道删除、好友变更与已读同步进入 canonical notice", () => {
+        const deleted = projectICQQGuildMessage(
+            {
+                raw_event: {},
+                guild_id: "guild",
+                guild_name: "频道",
+                channel_id: "channel",
+                channel_name: "子频道",
+                message_id: "g1",
+                user_id: "tiny",
+                message: [],
+                raw_message: "",
+                time: 100,
+                is_delete: true,
+                sender: { user_id: "tiny", nickname: "Alice" },
+            },
+            context,
+        );
+        const friend = projectICQQFriendChange(
+            {
+                raw_event: {},
+                change_type: "increase",
+                user_id: 2,
+                nickname: "Alice",
+                time: 100,
+            },
+            context,
+        );
+        const read = projectICQQReadSync(
+            {
+                raw_event: {},
+                scene_type: "group",
+                scene_id: 1,
+                cursor: 42,
+                time: 100,
+            },
+            context,
+        );
+
+        expect(deleted).toMatchObject({ notice_type: "message_deleted", sub_type: "channel" });
+        expect(friend).toMatchObject({ notice_type: "friend_add", sub_type: "increase" });
+        expect(read).toMatchObject({
+            notice_type: "message_status",
+            sub_type: "read",
+            group: { id: { number: 1 } },
+            cursor: 42,
         });
     });
 });

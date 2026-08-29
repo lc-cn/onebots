@@ -1,4 +1,11 @@
-import type { Client, GroupMessageEvent, PrivateMessageEvent } from "@icqqjs/icqq";
+import type {
+    Client,
+    DiscussMessageEvent,
+    GroupMessageEvent,
+    PrivateMessage,
+    PrivateMessageEvent,
+} from "@icqqjs/icqq";
+import type { GuildMessageEvent } from "@icqqjs/icqq/lib/internal";
 import type { MessageElem } from "@icqqjs/icqq/lib/message";
 import { compileICQQReply } from "./messages.js";
 import type { ICQQBotEvents } from "./bot-events.js";
@@ -9,6 +16,7 @@ import type {
     ICQQPrivateMessageEvent,
     ICQQUser,
 } from "./types.js";
+import type { ICQQDiscussMessageEvent, ICQQGuildMessageEvent } from "./extended-event-types.js";
 
 export interface ICQQClientEventSink {
     emit<K extends keyof ICQQBotEvents>(event: K, ...args: ICQQBotEvents[K]): void;
@@ -78,6 +86,15 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
     });
     client.on("message.group", event => {
         sink.emit("group_message", projectGroupMessage(event));
+    });
+    client.on("message.discuss", event => {
+        sink.emit("discuss_message", projectDiscussMessage(event));
+    });
+    client.on("message.guild", event => {
+        sink.emit("guild_message", projectGuildMessage(event));
+    });
+    client.on("sync.message", event => {
+        sink.emit("synced_private_message", projectPrivateMessage(event));
     });
     client.on("request.friend", event => {
         sink.emit("friend_request", {
@@ -160,6 +177,43 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             time: Date.now() / 1000,
         });
     });
+    client.on("notice.friend.increase", event => {
+        sink.emit("friend_change", {
+            raw_event: event,
+            change_type: "increase",
+            user_id: event.user_id,
+            nickname: event.nickname,
+            time: nowSeconds(),
+        });
+    });
+    client.on("notice.friend.decrease", event => {
+        sink.emit("friend_change", {
+            raw_event: event,
+            change_type: "decrease",
+            user_id: event.user_id,
+            nickname: event.nickname,
+            time: nowSeconds(),
+        });
+    });
+    client.on("notice.group.sign", event => {
+        sink.emit("group_sign", {
+            raw_event: event,
+            group_id: event.group_id,
+            user_id: event.user_id,
+            nickname: event.nickname,
+            sign_text: event.sign_text,
+            time: nowSeconds(),
+        });
+    });
+    client.on("notice.group.transfer", event => {
+        sink.emit("group_transfer", {
+            raw_event: event,
+            group_id: event.group_id,
+            operator_id: event.operator_id,
+            user_id: event.user_id,
+            time: nowSeconds(),
+        });
+    });
     client.on("notice.friend.recall", event => {
         sink.emit("friend_recall", {
             raw_event: event,
@@ -199,13 +253,41 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             time: Date.now() / 1000,
         });
     });
+    client.on("sync.read.private", event => {
+        sink.emit("read_sync", {
+            raw_event: event,
+            scene_type: "private",
+            scene_id: event.user_id,
+            cursor: event.time,
+            time: nowSeconds(),
+        });
+    });
+    client.on("sync.read.group", event => {
+        sink.emit("read_sync", {
+            raw_event: event,
+            scene_type: "group",
+            scene_id: event.group_id,
+            cursor: event.seq,
+            time: nowSeconds(),
+        });
+    });
+    client.on("internal.input", event => {
+        sink.emit("typing", {
+            raw_event: event,
+            user_id: event.user_id,
+            end: event.end,
+            time: nowSeconds(),
+        });
+    });
 }
 
 function projectOffline(client: Client, event?: { message?: string }): ICQQOfflineEvent {
     return { uin: client.uin, message: event?.message ?? "账号已离线" };
 }
 
-function projectPrivateMessage(event: PrivateMessageEvent): ICQQPrivateMessageEvent {
+function projectPrivateMessage(
+    event: PrivateMessage | PrivateMessageEvent,
+): ICQQPrivateMessageEvent {
     return {
         raw_event: event,
         message_id: event.message_id,
@@ -217,13 +299,56 @@ function projectPrivateMessage(event: PrivateMessageEvent): ICQQPrivateMessageEv
             user_id: event.sender.user_id,
             nickname: event.sender.nickname,
         },
-        reply: (message, quote) =>
-            event.reply(compileICQQReply(message), quote).then(result => ({
-                message_id: result.message_id,
-                seq: result.seq,
-                rand: result.rand,
-                time: result.time,
-            })),
+        ...(typeof (event as Partial<PrivateMessageEvent>).reply === "function"
+            ? {
+                  reply: (message: string | ICQQMessageElement[], quote?: boolean) =>
+                      (event as PrivateMessageEvent)
+                          .reply(compileICQQReply(message), quote)
+                          .then(result => ({
+                              message_id: result.message_id,
+                              seq: result.seq,
+                              rand: result.rand,
+                              time: result.time,
+                          })),
+              }
+            : {}),
+    };
+}
+
+function projectDiscussMessage(event: DiscussMessageEvent): ICQQDiscussMessageEvent {
+    return {
+        raw_event: event,
+        message_id: event.message_id,
+        discuss_id: event.discuss_id,
+        discuss_name: event.discuss_name,
+        user_id: event.user_id,
+        message: projectMessage(event.message),
+        raw_message: event.raw_message,
+        time: event.time,
+        sender: {
+            user_id: event.sender.user_id,
+            nickname: event.sender.nickname,
+            card: event.sender.card,
+        },
+        atme: event.atme,
+    };
+}
+
+function projectGuildMessage(event: GuildMessageEvent): ICQQGuildMessageEvent {
+    const messageId = `${event.guild_id}:${event.channel_id}:${event.seq}:${event.rand}:${event.time}`;
+    return {
+        raw_event: event,
+        guild_id: event.guild_id,
+        guild_name: event.guild_name,
+        channel_id: event.channel_id,
+        channel_name: event.channel_name,
+        message_id: messageId,
+        user_id: event.sender.tiny_id,
+        message: projectMessage(event.message),
+        raw_message: event.raw_message,
+        time: event.time,
+        is_delete: event.is_delete === true,
+        sender: { user_id: event.sender.tiny_id, nickname: event.sender.nickname },
     };
 }
 
@@ -292,4 +417,8 @@ function projectMessage(message: MessageElem[]): ICQQMessageElement[] {
                 return { type: "icqq_raw", data: element };
         }
     });
+}
+
+function nowSeconds(): number {
+    return Math.floor(Date.now() / 1000);
 }

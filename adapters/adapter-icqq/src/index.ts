@@ -3,6 +3,7 @@ import type { Schema } from "onebots";
 import { Platform } from "./types.js";
 
 export type { ICQQConfig, ICQQProtocol, Platform } from "./types.js";
+export type * from "./extended-event-types.js";
 export * from "./adapter.js";
 export { icqqCapabilities } from "./capabilities.js";
 export * from "./events.js";

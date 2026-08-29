@@ -50,4 +50,12 @@ describe("ICQQ capability manifest", () => {
             expect(icqqCapabilities.actions[action]?.support, action).toBe("native");
         }
     });
+
+    test("declares the full native event surface", () => {
+        expect(icqqCapabilities.events.message?.scenes).toEqual(["private", "group", "channel"]);
+        expect(icqqCapabilities.events.friend_add?.support).toBe("native");
+        expect(icqqCapabilities.events.friend_remove?.support).toBe("native");
+        expect(icqqCapabilities.events.message_status?.support).toBe("native");
+        expect(icqqCapabilities.events.message_deleted?.scenes).toContain("channel");
+    });
 });

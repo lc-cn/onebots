@@ -1,5 +1,14 @@
 import type { ICQQError } from "./errors.js";
 import type {
+    ICQQDiscussMessageEvent,
+    ICQQFriendChangeEvent,
+    ICQQGroupSignEvent,
+    ICQQGroupTransferEvent,
+    ICQQGuildMessageEvent,
+    ICQQReadSyncEvent,
+    ICQQTypingEvent,
+} from "./extended-event-types.js";
+import type {
     ICQQAuthEvent,
     ICQQDeviceEvent,
     ICQQFriendRecallEvent,
@@ -36,6 +45,9 @@ export interface ICQQBotEvents {
     login_error: [event: ICQQLoginErrorEvent];
     private_message: [event: ICQQPrivateMessageEvent];
     group_message: [event: ICQQGroupMessageEvent];
+    discuss_message: [event: ICQQDiscussMessageEvent];
+    guild_message: [event: ICQQGuildMessageEvent];
+    synced_private_message: [event: ICQQPrivateMessageEvent];
     friend_request: [event: ICQQFriendRequestEvent];
     group_request: [event: ICQQGroupRequestEvent];
     group_increase: [event: ICQQGroupIncreaseEvent];
@@ -43,6 +55,11 @@ export interface ICQQBotEvents {
     group_mute: [event: ICQQGroupMuteEvent];
     group_admin: [event: ICQQGroupAdminEvent];
     group_reaction: [event: ICQQGroupReactionEvent];
+    friend_change: [event: ICQQFriendChangeEvent];
+    group_sign: [event: ICQQGroupSignEvent];
+    group_transfer: [event: ICQQGroupTransferEvent];
+    read_sync: [event: ICQQReadSyncEvent];
+    typing: [event: ICQQTypingEvent];
     friend_recall: [event: ICQQFriendRecallEvent];
     group_recall: [event: ICQQGroupRecallEvent];
     poke: [event: ICQQPokeEvent];

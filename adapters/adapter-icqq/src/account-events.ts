@@ -3,15 +3,32 @@ import { AccountStatus, type Account, type Adapter } from "onebots";
 import type { ICQQBot } from "./bot.js";
 import {
     projectICQQAdmin,
+    projectICQQDiscussMessage,
+    projectICQQFriendChange,
+    projectICQQGroupSign,
+    projectICQQGroupTransfer,
+    projectICQQGuildMessage,
     projectICQQMembership,
     projectICQQMessage,
     projectICQQMute,
     projectICQQPoke,
     projectICQQRecall,
     projectICQQReaction,
+    projectICQQReadSync,
     projectICQQRequest,
+    projectICQQSyncedMessage,
+    projectICQQTyping,
     type ICQQProjectionContext,
 } from "./events.js";
+import type {
+    ICQQDiscussMessageEvent,
+    ICQQFriendChangeEvent,
+    ICQQGroupSignEvent,
+    ICQQGroupTransferEvent,
+    ICQQGuildMessageEvent,
+    ICQQReadSyncEvent,
+    ICQQTypingEvent,
+} from "./extended-event-types.js";
 import type {
     ICQQAuthEvent,
     ICQQDeviceEvent,
@@ -177,6 +194,15 @@ function wireProjectedEvents(
     };
     bot.on("private_message", onMessage);
     bot.on("group_message", onMessage);
+    bot.on("synced_private_message", (event: ICQQPrivateMessageEvent) => {
+        account.dispatch(projectICQQSyncedMessage(event, projection()));
+    });
+    bot.on("discuss_message", (event: ICQQDiscussMessageEvent) => {
+        account.dispatch(projectICQQDiscussMessage(event, projection()));
+    });
+    bot.on("guild_message", (event: ICQQGuildMessageEvent) => {
+        account.dispatch(projectICQQGuildMessage(event, projection()));
+    });
     bot.on("friend_request", (event: ICQQFriendRequestEvent) => {
         account.dispatch(projectICQQRequest(event, projection()));
     });
@@ -201,6 +227,21 @@ function wireProjectedEvents(
     bot.on("group_recall", onRecall);
     bot.on("group_reaction", (event: ICQQGroupReactionEvent) => {
         account.dispatch(projectICQQReaction(event, projection()));
+    });
+    bot.on("friend_change", (event: ICQQFriendChangeEvent) => {
+        account.dispatch(projectICQQFriendChange(event, projection()));
+    });
+    bot.on("group_sign", (event: ICQQGroupSignEvent) => {
+        account.dispatch(projectICQQGroupSign(event, projection()));
+    });
+    bot.on("group_transfer", (event: ICQQGroupTransferEvent) => {
+        account.dispatch(projectICQQGroupTransfer(event, projection()));
+    });
+    bot.on("read_sync", (event: ICQQReadSyncEvent) => {
+        account.dispatch(projectICQQReadSync(event, projection()));
+    });
+    bot.on("typing", (event: ICQQTypingEvent) => {
+        account.dispatch(projectICQQTyping(event, projection()));
     });
     bot.on("poke", (event: ICQQPokeEvent) => {
         account.dispatch(projectICQQPoke(event, projection()));

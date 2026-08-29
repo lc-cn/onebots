@@ -1,6 +1,15 @@
 import { unixSecondsToEventMs, type CommonEvent, type CommonTypes } from "onebots";
 import { projectICQQMessageSegments } from "./messages.js";
 import type {
+    ICQQDiscussMessageEvent,
+    ICQQFriendChangeEvent,
+    ICQQGroupSignEvent,
+    ICQQGroupTransferEvent,
+    ICQQGuildMessageEvent,
+    ICQQReadSyncEvent,
+    ICQQTypingEvent,
+} from "./extended-event-types.js";
+import type {
     ICQQFriendRecallEvent,
     ICQQFriendRequestEvent,
     ICQQGroupAdminEvent,
@@ -46,6 +55,126 @@ export function projectICQQMessage(
         raw_event: event.raw_event,
         extensions: isGroup ? { icqq: { at_me: event.atme, sender: event.sender } } : undefined,
     };
+}
+
+export function projectICQQSyncedMessage(
+    event: ICQQPrivateMessageEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Message {
+    const projected = projectICQQMessage(event, context);
+    return {
+        ...projected,
+        extensions: { icqq: { synced: true } },
+    };
+}
+
+export function projectICQQDiscussMessage(
+    event: ICQQDiscussMessageEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Message {
+    const sceneId = `discuss:${event.discuss_id}`;
+    return {
+        ...messageBase(event, context),
+        type: "message",
+        message_type: "group",
+        sender: { id: context.createId(event.user_id), name: event.sender.nickname },
+        group: { id: context.createId(sceneId), name: event.discuss_name },
+        message_id: context.createId(event.message_id),
+        raw_message: event.raw_message,
+        message: projectICQQMessageSegments(event.message),
+        extensions: {
+            icqq: { scene_type: "discuss", discuss_id: event.discuss_id, at_me: event.atme },
+        },
+    };
+}
+
+export function projectICQQGuildMessage(
+    event: ICQQGuildMessageEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Message | CommonEvent.Notice {
+    if (event.is_delete) {
+        return {
+            ...messageBase(event, context),
+            type: "notice",
+            notice_type: "message_deleted",
+            sub_type: "channel",
+            message_id: context.createId(event.message_id),
+            user: { id: context.createId(event.user_id), name: event.sender.nickname },
+            group: channelGroup(event, context),
+        };
+    }
+    return {
+        ...messageBase(event, context),
+        type: "message",
+        message_type: "channel",
+        sender: { id: context.createId(event.user_id), name: event.sender.nickname },
+        group: channelGroup(event, context),
+        message_id: context.createId(event.message_id),
+        raw_message: event.raw_message,
+        message: projectICQQMessageSegments(event.message),
+    };
+}
+
+export function projectICQQFriendChange(
+    event: ICQQFriendChangeEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Notice {
+    return nativeNotice(
+        event,
+        context,
+        event.change_type === "increase" ? "friend_add" : "friend_remove",
+        {
+            sub_type: event.change_type,
+            user: { id: context.createId(event.user_id), name: event.nickname },
+        },
+    );
+}
+
+export function projectICQQGroupSign(
+    event: ICQQGroupSignEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Notice {
+    return nativeNotice(event, context, "custom", {
+        sub_type: "group_sign",
+        user: { id: context.createId(event.user_id), name: event.nickname },
+        sign_text: event.sign_text,
+    });
+}
+
+export function projectICQQGroupTransfer(
+    event: ICQQGroupTransferEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Notice {
+    return nativeNotice(event, context, "custom", {
+        sub_type: "group_transfer",
+        user: { id: context.createId(event.user_id) },
+        operator: { id: context.createId(event.operator_id) },
+    });
+}
+
+export function projectICQQReadSync(
+    event: ICQQReadSyncEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Notice {
+    return nativeNotice(event, context, "message_status", {
+        sub_type: "read",
+        ...(event.scene_type === "group"
+            ? { group: { id: context.createId(event.scene_id) } }
+            : { user: { id: context.createId(event.scene_id) } }),
+        cursor: event.cursor,
+        extensions: { icqq: { scene_type: event.scene_type } },
+    });
+}
+
+export function projectICQQTyping(
+    event: ICQQTypingEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Notice {
+    return nativeNotice(event, context, "interaction", {
+        sub_type: "typing",
+        user: { id: context.createId(event.user_id) },
+        end: event.end,
+    });
 }
 
 export function projectICQQRequest(
@@ -183,4 +312,39 @@ function noticeBase(
         raw_event: event.raw_event,
         ...fields,
     };
+}
+
+function messageBase(
+    event: { raw_event: unknown; message_id: string; time: number },
+    context: ICQQProjectionContext,
+): Pick<CommonEvent.Message, "id" | "timestamp" | "platform" | "bot_id" | "raw_event"> {
+    return {
+        id: context.createId(event.message_id),
+        timestamp: unixSecondsToEventMs(event.time),
+        platform: "icqq",
+        bot_id: context.botId,
+        raw_event: event.raw_event,
+    };
+}
+
+function channelGroup(
+    event: ICQQGuildMessageEvent,
+    context: ICQQProjectionContext,
+): CommonTypes.Group {
+    return {
+        id: context.createId(event.channel_id),
+        name: event.channel_name,
+        guild_id: context.createId(event.guild_id),
+        channel_id: context.createId(event.channel_id),
+    };
+}
+
+function nativeNotice(
+    event: { raw_event: unknown; time: number; group_id?: number },
+    context: ICQQProjectionContext,
+    noticeType: CommonEvent.NoticeType,
+    fields: Partial<CommonEvent.Notice>,
+): CommonEvent.Notice {
+    const subType = typeof fields.sub_type === "string" ? fields.sub_type : noticeType;
+    return noticeBase(event, context, noticeType, subType, fields);
 }
