@@ -8,6 +8,7 @@ import {
 } from "onebots";
 import { wechatCapabilities } from "./capabilities.js";
 import { WechatClient } from "./client.js";
+import { listWechatFollowers } from "./directory.js";
 import { WechatApiError } from "./errors.js";
 import { projectWechatEvent } from "./events.js";
 import { prepareWechatMediaSegments } from "./media.js";
@@ -81,17 +82,9 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
     }
 
     async getFriendList(uin: string): Promise<Adapter.FriendInfo[]> {
-        const client = this.requireClient(uin);
-        const result: Adapter.FriendInfo[] = [];
-        let cursor: string | undefined;
-        do {
-            const page = await client.getUserList(cursor);
-            for (const user of await client.batchGetUserInfo(page.data?.openid || [])) {
-                if (user.subscribe === 1) result.push(this.toFriendInfo(user));
-            }
-            cursor = page.next_openid || undefined;
-        } while (cursor);
-        return result;
+        return (await listWechatFollowers(this.requireClient(uin))).map(user =>
+            this.toFriendInfo(user),
+        );
     }
 
     async getFriendInfo(

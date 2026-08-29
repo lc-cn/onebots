@@ -238,8 +238,8 @@ export class WechatClient extends EventEmitter {
 
     private async performCall<T>(options: WechatApiCallOptions, retryToken: boolean): Promise<T> {
         const url = this.resolvePath(options.path, options.query);
-        if (options.token !== false)
-            url.searchParams.set("access_token", await this.getAccessToken());
+        const requestToken = options.token === false ? undefined : await this.getAccessToken();
+        if (requestToken) url.searchParams.set("access_token", requestToken);
         const headers = new Headers();
         let body: BodyInit | undefined;
         if (options.body instanceof FormData || typeof options.body === "string") {
@@ -270,8 +270,10 @@ export class WechatClient extends EventEmitter {
         const payload = await parseJson(response, options.path);
         const errorCode = apiErrorCode(payload);
         if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
-            this.accessToken = "";
-            await this.getAccessToken(true);
+            if (this.accessToken === requestToken) {
+                this.accessToken = "";
+                await this.getAccessToken(true);
+            }
             return this.performCall<T>(options, false);
         }
         if (!response.ok || errorCode !== 0) throw apiError(response, payload, options.path);
@@ -282,7 +284,7 @@ export class WechatClient extends EventEmitter {
         path: string,
         query?: Readonly<Record<string, string | number | boolean | undefined>>,
     ): URL {
-        if (!path.startsWith("/") || path.includes("..") || /%2e/iu.test(path)) {
+        if (!isSafeApiPath(path)) {
             throw new WechatApiError("微信公众号 API path 必须是安全的绝对路径", {
                 code: "WECHAT_INVALID_API_PATH",
                 path,
@@ -301,6 +303,35 @@ export class WechatClient extends EventEmitter {
             status: response.status,
             path,
         });
+    }
+}
+
+function isSafeApiPath(path: string): boolean {
+    if (
+        !path.startsWith("/") ||
+        path.startsWith("//") ||
+        path.includes("?") ||
+        path.includes("#") ||
+        path.includes("\\") ||
+        /[\u0000-\u001f\u007f]/u.test(path)
+    ) {
+        return false;
+    }
+    try {
+        return path
+            .slice(1)
+            .split("/")
+            .every(segment => {
+                const decoded = decodeURIComponent(segment);
+                return (
+                    decoded.length > 0 &&
+                    decoded !== "." &&
+                    decoded !== ".." &&
+                    !/[/?#\\\u0000-\u001f\u007f]/u.test(decoded)
+                );
+            });
+    } catch {
+        return false;
     }
 }
 
@@ -329,6 +360,7 @@ function validateIncomingMessage(message: WechatIncomingMessage): void {
 export function wechatEventId(message: WechatIncomingMessage): string {
     return (
         message.MsgId ||
+        message.MsgID ||
         [
             message.FromUserName,
             message.CreateTime,

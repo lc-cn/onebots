@@ -36,6 +36,8 @@ export interface WechatIncomingMessage extends Record<string, unknown> {
     CreateTime: number;
     MsgType: WechatMessageType | string;
     MsgId?: string;
+    /** 模板/群发状态事件使用的消息 ID 字段。 */
+    MsgID?: string;
     MsgDataId?: string;
     Idx?: string;
     Content?: string;

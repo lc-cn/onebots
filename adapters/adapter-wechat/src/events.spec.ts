@@ -45,4 +45,26 @@ describe("projectWechatEvent", () => {
             extensions: { wechat: { event_key: "qrscene_1" } },
         });
     });
+
+    it.each([
+        ["unsubscribe", "friend_remove"],
+        ["CLICK", "interaction"],
+        ["TEMPLATESENDJOBFINISH", "message_status"],
+    ])("将微信事件 %s 投影为统一通知 %s", (wechatEvent, noticeType) => {
+        const raw: WechatIncomingMessage = {
+            ToUserName: "bot",
+            FromUserName: "user",
+            CreateTime: 10,
+            MsgType: "event",
+            Event: wechatEvent,
+            MsgID: "status-message",
+            Status: "success",
+        };
+        expect(projectWechatEvent(raw, context)).toMatchObject({
+            type: "notice",
+            notice_type: noticeType,
+            sub_type: wechatEvent.toLowerCase(),
+            message_id: { string: "status-message" },
+        });
+    });
 });

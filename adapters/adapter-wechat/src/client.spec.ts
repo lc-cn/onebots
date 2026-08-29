@@ -29,14 +29,47 @@ describe("WechatClient", () => {
         expect(String(fetcher.mock.calls[3]?.[0])).toContain("access_token=new");
     });
 
-    it("拒绝绝对 URL 和路径穿越", async () => {
+    it.each([
+        "https://evil.example/token",
+        "//evil.example/token",
+        "/cgi-bin/../token",
+        "/cgi-bin/%2e%2e/token",
+        "/cgi-bin/user?openid=forged",
+        "/cgi-bin/user#fragment",
+    ])("拒绝不安全或夹带 URL 语义的 API 路径: %s", async path => {
         const client = new WechatClient(config);
-        await expect(client.call({ path: "https://evil.example/token" })).rejects.toMatchObject({
+        await expect(client.call({ path })).rejects.toMatchObject({
             code: "WECHAT_INVALID_API_PATH",
         });
-        await expect(client.call({ path: "/cgi-bin/../token" })).rejects.toMatchObject({
-            code: "WECHAT_INVALID_API_PATH",
+    });
+
+    it("迟到的旧 token 错误不会清空已经刷新的新 token", async () => {
+        const oldResponses: Array<(response: Response) => void> = [];
+        let tokenRequests = 0;
+        const fetcher = vi.fn<typeof fetch>(async input => {
+            const url = String(input);
+            if (url.includes("/cgi-bin/token")) {
+                tokenRequests += 1;
+                return json({
+                    access_token: tokenRequests === 1 ? "old" : "new",
+                    expires_in: 7200,
+                });
+            }
+            if (url.includes("access_token=old")) {
+                return new Promise(resolve => oldResponses.push(resolve));
+            }
+            return json({ openid: url.includes("openid=a") ? "a" : "b", subscribe: 1 });
         });
+        const client = new WechatClient(config, fetcher);
+        await client.getAccessToken();
+        const first = client.getUserInfo("a");
+        const second = client.getUserInfo("b");
+        await vi.waitFor(() => expect(oldResponses).toHaveLength(2));
+        oldResponses[0]!(json({ errcode: 40014, errmsg: "invalid token" }));
+        await expect(first).resolves.toMatchObject({ openid: "a" });
+        oldResponses[1]!(json({ errcode: 40014, errmsg: "invalid token" }));
+        await expect(second).resolves.toMatchObject({ openid: "b" });
+        expect(tokenRequests).toBe(2);
     });
 
     it("保留可注入 API Base URL 的路径前缀", async () => {

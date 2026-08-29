@@ -33,12 +33,10 @@ export const wechatCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
     events: {
         message: { support: "native", scenes: ["private"] },
         friend_add: { support: "native", scenes: ["private"] },
-        unsubscribe: { support: "native", scenes: ["private"] },
-        scan: { support: "native", scenes: ["private"] },
-        location: { support: "native", scenes: ["private"] },
-        menu: { support: "native", scenes: ["private"] },
-        template_status: { support: "native", scenes: ["private"] },
-        mass_send_status: { support: "native" },
+        friend_remove: { support: "native", scenes: ["private"] },
+        interaction: { support: "native", scenes: ["private"] },
+        message_status: { support: "native", scenes: ["private"] },
+        custom: { support: "native" },
         raw_event: { support: "native" },
     },
     segments: {

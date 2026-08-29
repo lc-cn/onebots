@@ -47,11 +47,13 @@ function projectNotice(
     context: WechatProjectionContext,
 ): CommonEvent.Notice<WechatIncomingMessage> {
     const event = (message.Event || "unknown").toLowerCase();
+    const messageId = message.MsgID || message.MsgId;
     return {
         ...base(wechatEventId(message), message, context),
         type: "notice",
-        notice_type: event === "subscribe" ? "friend_add" : "custom",
+        notice_type: noticeType(event),
         sub_type: event,
+        ...(messageId ? { message_id: context.createId(messageId) } : {}),
         user: { id: context.createId(message.FromUserName), name: message.FromUserName },
         extensions: {
             wechat: {
@@ -65,6 +67,31 @@ function projectNotice(
             },
         },
     };
+}
+
+function noticeType(event: string): CommonEvent.NoticeType {
+    if (event === "subscribe") return "friend_add";
+    if (event === "unsubscribe") return "friend_remove";
+    if (event === "templatesendjobfinish" || event === "masssendjobfinish") {
+        return "message_status";
+    }
+    if (
+        event === "scan" ||
+        [
+            "click",
+            "view",
+            "scancode_push",
+            "scancode_waitmsg",
+            "pic_sysphoto",
+            "pic_photo_or_album",
+            "pic_weixin",
+            "location_select",
+            "view_miniprogram",
+        ].includes(event)
+    ) {
+        return "interaction";
+    }
+    return "custom";
 }
 
 function projectSegments(message: WechatIncomingMessage): CommonTypes.Segment[] {
