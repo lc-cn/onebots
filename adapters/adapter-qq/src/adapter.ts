@@ -255,7 +255,7 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
     }
 
     isPlatformActionImplemented(action: string): boolean {
-        return QQ_PLATFORM_ACTIONS.includes(action as QQPlatformAction);
+        return QQ_PLATFORM_ACTIONS.has(action as QQPlatformAction);
     }
 
     executePlatformAction(
