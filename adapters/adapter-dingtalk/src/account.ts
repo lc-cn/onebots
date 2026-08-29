@@ -27,7 +27,7 @@ export function createDingTalkAccount(
     bot.on("error", error => {
         adapter.logger.error(`钉钉 Bot ${config.account_id} 错误:`, error);
     });
-    bot.on("robot_message", (message: DingTalkRobotMessage, raw: Record<string, unknown>) => {
+    bot.on("robot_message", (message: DingTalkRobotMessage, raw: unknown) => {
         const me = bot.getCachedMe();
         if (me && (message.senderId === me.userid || message.senderStaffId === me.userid)) return;
         const projected = projectDingTalkRobotMessage(message, rawRecord(raw), context);

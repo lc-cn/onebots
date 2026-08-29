@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ErrorCategory } from "onebots";
 import { DingTalkBot } from "./bot.js";
 import { DingTalkCallbackCrypto } from "./crypto.js";
+import { DingTalkApiError, DingTalkError } from "./errors.js";
 
 describe("DingTalkBot", () => {
     afterEach(() => vi.unstubAllGlobals());
@@ -175,6 +177,98 @@ describe("DingTalkBot", () => {
         ]);
         const [, secondPageRequest] = fetchMock.mock.calls[2] as [URL, RequestInit];
         expect(JSON.parse(String(secondPageRequest.body))).toMatchObject({ cursor: "next" });
+    });
+
+    it("并发启动只刷新一次令牌并只发出一次 ready", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ accessToken: "token" }));
+        vi.stubGlobal("fetch", fetchMock);
+        const bot = new DingTalkBot({
+            account_id: "bot",
+            receive_mode: "webhook",
+            app_key: "app-key",
+            app_secret: "secret",
+        });
+        const ready = vi.fn();
+        bot.on("ready", ready);
+
+        await Promise.all([bot.start(), bot.start()]);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(ready).toHaveBeenCalledTimes(1);
+    });
+
+    it("停止中的启动不会在异步令牌返回后重新上线", async () => {
+        let release!: (response: Response) => void;
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(
+                () =>
+                    new Promise<Response>(resolve => {
+                        release = resolve;
+                    }),
+            ),
+        );
+        const bot = new DingTalkBot({
+            account_id: "bot",
+            receive_mode: "webhook",
+            app_key: "app-key",
+            app_secret: "secret",
+        });
+        const ready = vi.fn();
+        bot.on("ready", ready);
+
+        const starting = bot.start();
+        await bot.stop();
+        release(jsonResponse({ accessToken: "token" }));
+        await starting;
+
+        expect(ready).not.toHaveBeenCalled();
+    });
+
+    it("保留钉钉业务码、请求 ID 与稳定错误分类", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        code: "InvalidParameter",
+                        message: "参数错误",
+                        requestId: "r1",
+                    }),
+                    { status: 400 },
+                ),
+            ),
+        );
+        const bot = new DingTalkBot({ account_id: "bot" });
+
+        const error = await bot
+            .callApi("/v1.0/test", { auth: "none" })
+            .catch((reason: unknown) => reason);
+
+        expect(error).toBeInstanceOf(DingTalkApiError);
+        expect(error).toMatchObject({
+            code: "DINGTALK_INVALIDPARAMETER",
+            category: ErrorCategory.VALIDATION,
+            status: 400,
+            platformCode: "InvalidParameter",
+            requestId: "r1",
+            path: "/v1.0/test",
+        });
+    });
+
+    it("网络失败统一投影为可判断的钉钉错误", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
+        const bot = new DingTalkBot({ account_id: "bot" });
+
+        const error = await bot
+            .callApi("/v1.0/test", { auth: "none" })
+            .catch((reason: unknown) => reason);
+
+        expect(error).toBeInstanceOf(DingTalkError);
+        expect(error).toMatchObject({
+            code: "DINGTALK_NETWORK_ERROR",
+            category: ErrorCategory.NETWORK,
+        });
     });
 });
 

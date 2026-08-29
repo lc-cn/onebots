@@ -1,4 +1,5 @@
 import type { DingTalkBot } from "./bot.js";
+import { DingTalkError } from "./errors.js";
 import type { DingTalkApiRequestOptions } from "./types.js";
 
 export const DINGTALK_PLATFORM_ACTIONS = new Set([
@@ -68,7 +69,11 @@ export async function executeDingTalkPlatformAction(
         case "remove_user_roles":
             return legacy(bot, "/topapi/role/removerolesforemps", params);
         default:
-            throw new Error(`未实现钉钉平台动作: ${action}`);
+            throw DingTalkError.invalid(
+                `未实现钉钉平台动作: ${action}`,
+                "DINGTALK_ACTION_UNSUPPORTED",
+                { action },
+            );
     }
 }
 
@@ -82,7 +87,11 @@ function legacy(
 
 function requirePath(value: unknown): string {
     if (typeof value !== "string" || !value.startsWith("/") || value.includes("..")) {
-        throw new Error("钉钉参数 path 必须为安全绝对路径");
+        throw DingTalkError.invalid(
+            "钉钉参数 path 必须为安全绝对路径",
+            "DINGTALK_ACTION_PATH_INVALID",
+            { path: value },
+        );
     }
     return value;
 }
@@ -90,7 +99,11 @@ function requirePath(value: unknown): string {
 function methodValue(value: unknown): DingTalkApiRequestOptions["method"] {
     const method = typeof value === "string" ? value.toUpperCase() : "GET";
     if (!["GET", "POST", "PUT", "DELETE"].includes(method)) {
-        throw new Error("钉钉参数 method 不是受支持的 HTTP 方法");
+        throw DingTalkError.invalid(
+            "钉钉参数 method 不是受支持的 HTTP 方法",
+            "DINGTALK_ACTION_METHOD_INVALID",
+            { method: value },
+        );
     }
     return method as DingTalkApiRequestOptions["method"];
 }
@@ -98,13 +111,17 @@ function methodValue(value: unknown): DingTalkApiRequestOptions["method"] {
 function authValue(value: unknown): DingTalkApiRequestOptions["auth"] {
     if (value == null) return undefined;
     if (value === "modern" || value === "legacy" || value === "none") return value;
-    throw new Error("钉钉参数 auth 必须为 modern、legacy 或 none");
+    throw DingTalkError.invalid(
+        "钉钉参数 auth 必须为 modern、legacy 或 none",
+        "DINGTALK_ACTION_AUTH_INVALID",
+        { auth: value },
+    );
 }
 
 function bodyValue(value: unknown): Record<string, unknown> | undefined {
     if (value == null) return undefined;
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("钉钉参数 body 必须为对象");
+        throw DingTalkError.invalid("钉钉参数 body 必须为对象", "DINGTALK_ACTION_BODY_INVALID");
     }
     return value as Record<string, unknown>;
 }
@@ -112,12 +129,16 @@ function bodyValue(value: unknown): Record<string, unknown> | undefined {
 function queryValue(value: unknown): Record<string, string | number | boolean> | undefined {
     if (value == null) return undefined;
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("钉钉参数 query 必须为对象");
+        throw DingTalkError.invalid("钉钉参数 query 必须为对象", "DINGTALK_ACTION_QUERY_INVALID");
     }
     const query: Record<string, string | number | boolean> = {};
     for (const [key, item] of Object.entries(value)) {
         if (!["string", "number", "boolean"].includes(typeof item)) {
-            throw new Error(`钉钉 query 参数 ${key} 必须为标量`);
+            throw DingTalkError.invalid(
+                `钉钉 query 参数 ${key} 必须为标量`,
+                "DINGTALK_ACTION_QUERY_VALUE_INVALID",
+                { key },
+            );
         }
         query[key] = item as string | number | boolean;
     }

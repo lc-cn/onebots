@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { ErrorCategory } from "onebots";
+import { DingTalkError } from "./errors.js";
 import { executeDingTalkPlatformAction } from "./platform-actions.js";
 
 describe("executeDingTalkPlatformAction", () => {
@@ -21,10 +23,18 @@ describe("executeDingTalkPlatformAction", () => {
     });
 
     it("底层入口拒绝目录穿越 path", async () => {
-        await expect(
-            executeDingTalkPlatformAction({ callApi: vi.fn() } as never, "call_dingtalk_api", {
+        const error = await executeDingTalkPlatformAction(
+            { callApi: vi.fn() } as never,
+            "call_dingtalk_api",
+            {
                 path: "/v1.0/robot/../oauth2/accessToken",
-            }),
-        ).rejects.toThrow("安全绝对路径");
+            },
+        ).catch((reason: unknown) => reason);
+
+        expect(error).toBeInstanceOf(DingTalkError);
+        expect(error).toMatchObject({
+            code: "DINGTALK_ACTION_PATH_INVALID",
+            category: ErrorCategory.VALIDATION,
+        });
     });
 });

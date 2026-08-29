@@ -10,6 +10,7 @@ import {
 import { createDingTalkAccount } from "./account.js";
 import { DingTalkBot } from "./bot.js";
 import { dingTalkCapabilities } from "./capabilities.js";
+import { DingTalkError } from "./errors.js";
 import { buildDingTalkOutboundMessage, dingtalkMessageId } from "./messages.js";
 import { DINGTALK_PLATFORM_ACTIONS, executeDingTalkPlatformAction } from "./platform-actions.js";
 import type { DingTalkUser } from "./types.js";
@@ -130,8 +131,10 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
             item => item.userId === params.user_id.string,
         );
         if (!member) {
-            throw new Error(
+            throw DingTalkError.resource(
                 `钉钉用户 ${params.user_id.string} 不是场景群 ${params.group_id.string} 的成员`,
+                "DINGTALK_GROUP_MEMBER_NOT_FOUND",
+                { group_id: params.group_id.string, user_id: params.user_id.string },
             );
         }
         const user = await bot.getUserInfo(member.userId);
@@ -207,7 +210,11 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
 
     private requireBot(uin: string): DingTalkBot {
         const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        if (!account) {
+            throw DingTalkError.resource(`钉钉账号 ${uin} 不存在`, "DINGTALK_ACCOUNT_NOT_FOUND", {
+                account_id: uin,
+            });
+        }
         return account.client;
     }
 

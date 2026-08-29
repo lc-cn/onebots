@@ -5,6 +5,7 @@ import {
     randomBytes,
     timingSafeEqual,
 } from "node:crypto";
+import { DingTalkError } from "./errors.js";
 
 const RANDOM_PREFIX_BYTES = 16;
 const PKCS7_BLOCK_SIZE = 32;
@@ -18,17 +19,33 @@ export class DingTalkCallbackCrypto {
         encodingAesKey: string,
         private readonly corpId?: string,
     ) {
-        if (!token) throw new Error("钉钉加密回调必须配置 token");
+        if (!token) {
+            throw DingTalkError.config(
+                "钉钉加密回调必须配置 token",
+                "DINGTALK_CALLBACK_TOKEN_REQUIRED",
+            );
+        }
         if (!/^[A-Za-z0-9+/]{43}$/.test(encodingAesKey)) {
-            throw new Error("钉钉 encrypt_key 必须为 43 字符 EncodingAESKey");
+            throw DingTalkError.config(
+                "钉钉 encrypt_key 必须为 43 字符 EncodingAESKey",
+                "DINGTALK_CALLBACK_AES_KEY_INVALID",
+            );
         }
         this.aesKey = Buffer.from(`${encodingAesKey}=`, "base64");
-        if (this.aesKey.length !== 32) throw new Error("钉钉 encrypt_key 解码后长度无效");
+        if (this.aesKey.length !== 32) {
+            throw DingTalkError.config(
+                "钉钉 encrypt_key 解码后长度无效",
+                "DINGTALK_CALLBACK_AES_KEY_INVALID",
+            );
+        }
     }
 
     decrypt(encrypted: string, signature: string, timestamp: string, nonce: string): string {
         if (!this.verify(signature, timestamp, nonce, encrypted)) {
-            throw new Error("钉钉回调签名验证失败");
+            throw DingTalkError.protocol(
+                "钉钉回调签名验证失败",
+                "DINGTALK_CALLBACK_SIGNATURE_INVALID",
+            );
         }
         const decipher = createDecipheriv("aes-256-cbc", this.aesKey, this.aesKey.subarray(0, 16));
         decipher.setAutoPadding(false);
@@ -37,14 +54,27 @@ export class DingTalkCallbackCrypto {
             decipher.final(),
         ]);
         const plain = removePadding(padded);
-        if (plain.length < RANDOM_PREFIX_BYTES + 4) throw new Error("钉钉回调密文结构无效");
+        if (plain.length < RANDOM_PREFIX_BYTES + 4) {
+            throw DingTalkError.protocol(
+                "钉钉回调密文结构无效",
+                "DINGTALK_CALLBACK_CIPHERTEXT_INVALID",
+            );
+        }
         const messageLength = plain.readUInt32BE(RANDOM_PREFIX_BYTES);
         const messageStart = RANDOM_PREFIX_BYTES + 4;
         const messageEnd = messageStart + messageLength;
-        if (messageEnd > plain.length) throw new Error("钉钉回调消息长度无效");
+        if (messageEnd > plain.length) {
+            throw DingTalkError.protocol(
+                "钉钉回调消息长度无效",
+                "DINGTALK_CALLBACK_MESSAGE_LENGTH_INVALID",
+            );
+        }
         const receivedCorpId = plain.subarray(messageEnd).toString("utf8");
         if (this.corpId && receivedCorpId && receivedCorpId !== this.corpId) {
-            throw new Error("钉钉回调 CorpId 不匹配");
+            throw DingTalkError.protocol(
+                "钉钉回调 CorpId 不匹配",
+                "DINGTALK_CALLBACK_CORP_ID_MISMATCH",
+            );
         }
         return plain.subarray(messageStart, messageEnd).toString("utf8");
     }
@@ -103,10 +133,18 @@ function addPadding(value: Buffer): Buffer {
 function removePadding(value: Buffer): Buffer {
     const paddingLength = value.at(-1) || 0;
     if (paddingLength < 1 || paddingLength > PKCS7_BLOCK_SIZE) {
-        throw new Error("钉钉回调 PKCS#7 填充无效");
+        throw DingTalkError.protocol(
+            "钉钉回调 PKCS#7 填充无效",
+            "DINGTALK_CALLBACK_PADDING_INVALID",
+        );
     }
     for (let index = value.length - paddingLength; index < value.length; index++) {
-        if (value[index] !== paddingLength) throw new Error("钉钉回调 PKCS#7 填充无效");
+        if (value[index] !== paddingLength) {
+            throw DingTalkError.protocol(
+                "钉钉回调 PKCS#7 填充无效",
+                "DINGTALK_CALLBACK_PADDING_INVALID",
+            );
+        }
     }
     return value.subarray(0, -paddingLength);
 }

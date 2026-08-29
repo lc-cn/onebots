@@ -22,6 +22,8 @@ dingtalk.my_bot:
 
 在开发者后台为企业内部应用添加机器人能力、选择 Stream 模式并发布。Stream 不需要公网回调地址，断线后由钉钉官方 SDK 持续重连。
 
+`DingTalkBot.start()` 是并发幂等的；启动期间调用 `stop()` 会使该代启动失效，延迟返回的令牌或连接不会再次触发 `ready`。Stream 首次连接失败会清理旧客户端，因此后续启动可以创建全新连接，而不会卡在未连接实例上。
+
 ## HTTP 加密回调
 
 ```yaml
@@ -76,6 +78,12 @@ dingtalk.my_bot:
 - `get_role_list`、`get_role_users`、用户角色增删。
 
 `auth` 可选 `modern`、`legacy`、`none`。路径必须是以 `/` 开头且不含目录穿越的开放平台路径。
+
+## SDK 错误与事件类型
+
+包入口导出 `DingTalkBot`、`DingTalkBotEvents`、`DingTalkError` 和 `DingTalkApiError`。Bot 的 `ready`、`stopped`、`robot_message`、`native_event`、`event`、`error` 均具有完整参数推断。
+
+所有配置、消息编译、回调协议、资源、网络与开放平台失败均继承 OneBots 的 `OneBotsError`，可以使用稳定的 `code` 与 `category` 判断。`DingTalkApiError` 另行保留 `status`、`platformCode`、`requestId` 和 `path`；钉钉原始业务码不再占用 OneBots 的字符串 `code` 字段。
 
 ## 相关链接
 

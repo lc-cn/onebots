@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { ErrorCategory } from "onebots";
+import { DingTalkError } from "./errors.js";
 import { buildDingTalkOutboundMessage } from "./messages.js";
 
 describe("buildDingTalkOutboundMessage", () => {
@@ -30,8 +32,9 @@ describe("buildDingTalkOutboundMessage", () => {
                 { resolveUserId: value => `raw-${value}` },
             ),
         ).toMatchObject({ msgParam: { content: "你好" }, atUserIds: ["raw-mapped"] });
-        expect(() => buildDingTalkOutboundMessage([{ type: "unknown", data: {} }])).toThrow(
-            "不支持消息段 unknown",
+        expectError(
+            () => buildDingTalkOutboundMessage([{ type: "unknown", data: {} }]),
+            "DINGTALK_MESSAGE_SEGMENT_UNSUPPORTED",
         );
         expect(() =>
             buildDingTalkOutboundMessage([
@@ -50,3 +53,13 @@ describe("buildDingTalkOutboundMessage", () => {
         );
     });
 });
+
+function expectError(run: () => unknown, code: string): void {
+    try {
+        run();
+        throw new Error("预期钉钉消息编译失败");
+    } catch (error) {
+        expect(error).toBeInstanceOf(DingTalkError);
+        expect(error).toMatchObject({ code, category: ErrorCategory.VALIDATION });
+    }
+}

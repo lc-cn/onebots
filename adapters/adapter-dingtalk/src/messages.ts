@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { CommonTypes } from "onebots";
 import type { DingTalkOutboundMessage } from "./bot.js";
+import { DingTalkError } from "./errors.js";
 
 /** 将统一消息段编译为钉钉企业机器人与自定义机器人共用的消息描述。 */
 export function buildDingTalkOutboundMessage(
@@ -16,20 +17,36 @@ export function buildDingTalkOutboundMessage(
         if (id === "all") isAtAll = true;
         else atUserIds.push(context.resolveUserId(id));
     }
-    if (!native.length) throw new Error("钉钉消息不能只包含 @");
+    if (!native.length) {
+        throw DingTalkError.invalid("钉钉消息不能只包含 @", "DINGTALK_MESSAGE_CONTENT_REQUIRED");
+    }
     const unsupported = native.find(
         segment => !["text", "markdown", "image", "link", "action_card"].includes(segment.type),
     );
-    if (unsupported) throw new Error(`钉钉不支持消息段 ${unsupported.type}`);
+    if (unsupported) {
+        throw DingTalkError.invalid(
+            `钉钉不支持消息段 ${unsupported.type}`,
+            "DINGTALK_MESSAGE_SEGMENT_UNSUPPORTED",
+            { type: unsupported.type },
+        );
+    }
     if (native.length > 1 && native.some(segment => segment.type !== "text")) {
-        throw new Error("钉钉无法在单条消息中无损混合这些消息段，请拆分发送");
+        throw DingTalkError.invalid(
+            "钉钉无法在单条消息中无损混合这些消息段，请拆分发送",
+            "DINGTALK_MESSAGE_SEGMENTS_INCOMPATIBLE",
+        );
     }
     const text = native.map(segment => stringValue(segment.data.text)).join("");
     const only = native.length === 1 ? native[0] : undefined;
     if (only?.type === "markdown") {
         const title = stringValue(only.data.title, "消息");
         const markdown = stringValue(only.data.text || only.data.content);
-        if (!markdown) throw new Error("钉钉 markdown 消息内容不能为空");
+        if (!markdown) {
+            throw DingTalkError.invalid(
+                "钉钉 markdown 消息内容不能为空",
+                "DINGTALK_MARKDOWN_CONTENT_REQUIRED",
+            );
+        }
         return withAt(
             {
                 msgKey: "sampleMarkdown",
@@ -75,7 +92,12 @@ export function buildDingTalkOutboundMessage(
     }
     if (only?.type === "action_card") {
         const card = { ...only.data };
-        if (!Object.keys(card).length) throw new Error("钉钉 action_card 内容不能为空");
+        if (!Object.keys(card).length) {
+            throw DingTalkError.invalid(
+                "钉钉 action_card 内容不能为空",
+                "DINGTALK_ACTION_CARD_CONTENT_REQUIRED",
+            );
+        }
         return withAt(
             {
                 msgKey: "sampleActionCard",
@@ -86,7 +108,9 @@ export function buildDingTalkOutboundMessage(
             isAtAll,
         );
     }
-    if (!text) throw new Error("钉钉文本消息内容不能为空");
+    if (!text) {
+        throw DingTalkError.invalid("钉钉文本消息内容不能为空", "DINGTALK_TEXT_CONTENT_REQUIRED");
+    }
     return withAt(
         {
             msgKey: "sampleText",
@@ -130,15 +154,25 @@ function idValue(value: unknown): string | number {
         const record = value as Record<string, unknown>;
         return idValue(record.string ?? record.source);
     }
-    throw new Error("钉钉 at 段缺少有效 user_id");
+    throw DingTalkError.invalid("钉钉 at 段缺少有效 user_id", "DINGTALK_AT_USER_ID_REQUIRED");
 }
 
 function publicUrl(value: unknown, name: string): string {
     const result = stringValue(value);
-    if (!URL.canParse(result)) throw new Error(`钉钉 ${name} 必须是 HTTP(S) URL`);
+    if (!URL.canParse(result)) {
+        throw DingTalkError.invalid(
+            `钉钉 ${name} 必须是 HTTP(S) URL`,
+            "DINGTALK_MESSAGE_URL_INVALID",
+            { field: name },
+        );
+    }
     const url = new URL(result);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
-        throw new Error(`钉钉 ${name} 必须是无凭据的 HTTP(S) URL`);
+        throw DingTalkError.invalid(
+            `钉钉 ${name} 必须是无凭据的 HTTP(S) URL`,
+            "DINGTALK_MESSAGE_URL_UNSAFE",
+            { field: name },
+        );
     }
     return url.toString();
 }

@@ -1,6 +1,7 @@
 import { AdapterRegistry, type Schema } from "onebots";
 
-export { DingTalkApiError, type DingTalkOutboundMessage } from "./bot.js";
+export { DingTalkBot, type DingTalkBotEvents, type DingTalkOutboundMessage } from "./bot.js";
+export * from "./errors.js";
 export type {
     DingTalkApiRequestOptions,
     DingTalkConfig,
