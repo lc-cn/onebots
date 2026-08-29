@@ -1,6 +1,7 @@
 import { compileTeamsActivity } from "./activity.js";
 import { Activity, ActivityTypes } from "@microsoft/agents-activity";
 import type { TeamsBot } from "./bot.js";
+import { TeamsApiError } from "./errors.js";
 import type { TeamsConversationReference } from "./types.js";
 
 export const TEAMS_PLATFORM_ACTIONS = new Set([
@@ -168,7 +169,7 @@ export async function executeTeamsPlatformAction(
                 objectValue(params.notification, "notification") as Parameters<typeof send>[1],
             );
         }
-        throw new Error(`未实现 Teams 平台动作: ${action}`);
+        throw TeamsApiError.invalid(`未实现 Teams 平台动作: ${action}`, "TEAMS_ACTION_UNSUPPORTED");
     });
 }
 
@@ -184,7 +185,10 @@ async function callGraph(
         | "PUT"
         | "DELETE";
     if (!["GET", "POST", "PATCH", "PUT", "DELETE"].includes(method)) {
-        throw new Error(`Teams Graph method 不受支持: ${method}`);
+        throw TeamsApiError.invalid(
+            `Teams Graph method 不受支持: ${method}`,
+            "TEAMS_GRAPH_METHOD_INVALID",
+        );
     }
     const query = params.query == null ? undefined : scalarObject(params.query, "query");
     const body = ["POST", "PATCH", "PUT"].includes(method)
@@ -197,7 +201,12 @@ async function callGraph(
 
 function messageValue(value: unknown): Array<{ type: string; data: Record<string, unknown> }> {
     if (typeof value === "string") return [{ type: "text", data: { text: value } }];
-    if (!Array.isArray(value)) throw new Error("Teams 参数 message 必须是字符串或消息段数组");
+    if (!Array.isArray(value)) {
+        throw TeamsApiError.invalid(
+            "Teams 参数 message 必须是字符串或消息段数组",
+            "TEAMS_MESSAGE_INVALID",
+        );
+    }
     return value.map((item, index) => {
         const segment = objectValue(item, `message[${index}]`);
         return {
@@ -210,7 +219,10 @@ function messageValue(value: unknown): Array<{ type: string; data: Record<string
 function requireGraphPath(value: unknown): string {
     const path = requireString(value, "path");
     if (!path.startsWith("/") || path.startsWith("//") || path.includes("..")) {
-        throw new Error("Teams Graph path 必须是安全的 API 相对路径");
+        throw TeamsApiError.invalid(
+            "Teams Graph path 必须是安全的 API 相对路径",
+            "TEAMS_GRAPH_PATH_INVALID",
+        );
     }
     return path;
 }
@@ -251,21 +263,40 @@ function optionalUser(value: unknown, name: string): TeamsConversationReference[
 
 function requireHttpsUrl(value: unknown, name: string): string {
     const result = requireString(value, name);
+    if (!URL.canParse(result)) {
+        throw TeamsApiError.invalid(
+            `Teams 参数 ${name} 必须使用 HTTPS`,
+            "TEAMS_HTTPS_URL_REQUIRED",
+            { name },
+        );
+    }
     const url = new URL(result);
-    if (url.protocol !== "https:") throw new Error(`Teams 参数 ${name} 必须使用 HTTPS`);
-    return url.toString();
+    if (url.protocol !== "https:" || url.username || url.password) {
+        throw TeamsApiError.invalid(
+            `Teams 参数 ${name} 必须使用 HTTPS`,
+            "TEAMS_HTTPS_URL_REQUIRED",
+            { name },
+        );
+    }
+    return result;
 }
 
 function objectValue(value: unknown, name: string): Record<string, unknown> {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error(`Teams 参数 ${name} 必须是对象`);
+        throw TeamsApiError.invalid(`Teams 参数 ${name} 必须是对象`, "TEAMS_PARAM_INVALID", {
+            name,
+        });
     }
     return value as Record<string, unknown>;
 }
 
 function requireString(value: unknown, name: string): string {
     const result = optionalString(value);
-    if (!result) throw new Error(`Teams 参数 ${name} 不能为空`);
+    if (!result) {
+        throw TeamsApiError.invalid(`Teams 参数 ${name} 不能为空`, "TEAMS_PARAM_REQUIRED", {
+            name,
+        });
+    }
     return result;
 }
 
@@ -279,7 +310,11 @@ function optionalNumber(value: unknown): number | undefined {
 
 function requireNumber(value: unknown, name: string): number {
     const result = optionalNumber(value);
-    if (result === undefined || result < 0) throw new Error(`Teams 参数 ${name} 必须是非负数字`);
+    if (result === undefined || result < 0) {
+        throw TeamsApiError.invalid(`Teams 参数 ${name} 必须是非负数字`, "TEAMS_PARAM_INVALID", {
+            name,
+        });
+    }
     return result;
 }
 
@@ -311,7 +346,11 @@ function scalarObject(value: unknown, name: string): Record<string, string | num
     const result: Record<string, string | number | boolean> = {};
     for (const [key, item] of Object.entries(input)) {
         if (!["string", "number", "boolean"].includes(typeof item)) {
-            throw new Error(`Teams 参数 ${name}.${key} 必须是标量`);
+            throw TeamsApiError.invalid(
+                `Teams 参数 ${name}.${key} 必须是标量`,
+                "TEAMS_PARAM_INVALID",
+                { name: `${name}.${key}` },
+            );
         }
         result[key] = item as string | number | boolean;
     }

@@ -66,6 +66,7 @@ describe("projectTeamsEvent", () => {
         raw.activity.membersAdded = [{ id: "joined", name: "Joined" }];
         const event = projectTeamsEvent("member_joined", raw, { botId: "bot", createId });
         expect(event).toMatchObject({
+            id: { string: "message-1:member_joined:joined" },
             type: "notice",
             notice_type: "member_joined",
             user: { id: { string: "joined" } },
@@ -76,6 +77,7 @@ describe("projectTeamsEvent", () => {
         const raw = createEvent();
         const event = projectTeamsEvent("message_updated", raw, { botId: "bot", createId });
         expect(event).toMatchObject({
+            id: { string: "message-1:message_updated:message-1" },
             type: "notice",
             notice_type: "message_updated",
             message_id: { string: "message-1" },
@@ -89,6 +91,7 @@ describe("projectTeamsEvent", () => {
         raw.activity.reactionsAdded = [{ type: "like" }];
         const event = projectTeamsEvent("reaction_added", raw, { botId: "bot", createId });
         expect(event).toMatchObject({
+            id: { string: "message-1:reaction_added:like" },
             type: "notice",
             notice_type: "reaction_added",
             message_id: { string: "target-message" },

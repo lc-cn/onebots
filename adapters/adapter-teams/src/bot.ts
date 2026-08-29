@@ -17,6 +17,7 @@ import {
     type ConversationReference,
 } from "@microsoft/agents-activity";
 import {
+    ErrorCategory,
     materializeMediaSource,
     type MediaSourceInput,
     type Next,
@@ -26,16 +27,12 @@ import { transformConversationReference, transformTeamsActivity } from "./activi
 import {
     allowedServiceUrlHosts,
     bodyValue,
-    graphErrorCode,
-    graphTokenAuthority,
     KoaAgentsResponse,
     normalizeHeaders,
-    recordString,
-    recordValue,
     requireHttpsConfigUrl,
-    responsePayload,
 } from "./bot-utils.js";
 import { TeamsApiError, TeamsConversationReferenceError } from "./errors.js";
+import { TeamsGraphClient, type TeamsGraphRequestOptions } from "./graph.js";
 import type { TeamsConfig, TeamsConversationReference, TeamsEvent, TeamsUser } from "./types.js";
 
 export interface TeamsReferenceRepository {
@@ -51,12 +48,29 @@ export interface TeamsContext {
 }
 
 /** 当前 Microsoft 365 Agents SDK 上的 Teams Connector 客户端。 */
-export class TeamsBot extends EventEmitter {
+export interface TeamsBotEvents {
+    ready: [];
+    stopped: [];
+    client_error: [error: TeamsApiError];
+    raw_activity: [activity: Activity];
+    private_message: [event: TeamsEvent];
+    group_message: [event: TeamsEvent];
+    message_edited: [event: TeamsEvent];
+    message_deleted: [event: TeamsEvent];
+    member_joined: [event: TeamsEvent];
+    member_left: [event: TeamsEvent];
+    reaction_added: [event: TeamsEvent];
+    reaction_removed: [event: TeamsEvent];
+    event: [event: TeamsEvent];
+}
+
+export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     private readonly adapter: CloudAdapter;
     private readonly botAudience: string;
-    private readonly graphBaseUrl: string;
+    private readonly graph: TeamsGraphClient;
     private me: TeamsUser;
-    private graphToken?: { value: string; expiresAt: number };
+    private running = false;
+    private readonly receivedActivityIds = new Map<string, number>();
 
     constructor(
         private readonly config: TeamsConfig,
@@ -67,10 +81,7 @@ export class TeamsBot extends EventEmitter {
             config.bot_audience || "https://api.botframework.com",
             "bot_audience",
         );
-        this.graphBaseUrl = requireHttpsConfigUrl(
-            config.graph_base_url || "https://graph.microsoft.com/v1.0",
-            "graph_base_url",
-        ).replace(/\/$/u, "");
+        this.graph = new TeamsGraphClient(config);
         const authConfig: AuthConfiguration = {
             authType: AuthType.ClientSecret,
             clientId: config.app_id,
@@ -95,29 +106,33 @@ export class TeamsBot extends EventEmitter {
         );
         this.adapter.onTurnError = async (_context, error) => {
             // 错误只交给网关日志/事件体系，不向最终用户注入隐藏消息。
-            this.emit("error", TeamsApiError.wrap(error, "TEAMS_TURN_ERROR"));
+            this.emit("client_error", TeamsApiError.wrap(error, "TEAMS_TURN_ERROR", "turn"));
         };
         this.me = { id: config.app_id, name: "Microsoft Teams Agent", role: "bot" };
     }
 
     async start(): Promise<void> {
+        if (this.running) return;
+        this.running = true;
         this.emit("ready");
     }
 
     async stop(): Promise<void> {
+        if (!this.running) return;
+        this.running = false;
         this.emit("stopped");
     }
 
     /** 在 OneBots 的 Koa 路由中完成 JWT 校验并处理 Activity。 */
     async handleWebhook(ctx: RouterContext, _next: Next): Promise<void> {
-        const request: Request = {
-            method: ctx.method,
-            headers: normalizeHeaders(ctx.headers),
-            body: bodyValue(ctx.request.body),
-        };
         const response = new KoaAgentsResponse(ctx);
         let processing: Promise<void> | undefined;
         try {
+            const request: Request = {
+                method: ctx.method,
+                headers: normalizeHeaders(ctx.headers),
+                body: bodyValue(ctx.request.body),
+            };
             await this.adapter.authorizeRequest(request, response, error => {
                 if (error) throw error;
                 processing = this.adapter.process(request, response, turnContext =>
@@ -127,9 +142,10 @@ export class TeamsBot extends EventEmitter {
             await processing;
         } catch (error) {
             const wrapped = TeamsApiError.wrap(error, "TEAMS_WEBHOOK_ERROR");
-            this.emit("error", wrapped);
+            this.emit("client_error", wrapped);
             if (!response.headersSent) {
-                ctx.status = wrapped.status || 500;
+                ctx.status =
+                    wrapped.status || (wrapped.category === ErrorCategory.VALIDATION ? 400 : 500);
                 ctx.body = { error: { code: wrapped.code, message: wrapped.message } };
             }
         }
@@ -269,7 +285,7 @@ export class TeamsBot extends EventEmitter {
                 this.botAudience,
                 conversation,
                 async context => {
-                    this.captureReference(context);
+                    this.captureReference(context.activity);
                     const conversationId = context.activity.conversation?.id;
                     if (conversationId) result = this.references.get(conversationId);
                 },
@@ -286,39 +302,11 @@ export class TeamsBot extends EventEmitter {
     }
 
     getGraphBaseUrl(): string {
-        return this.graphBaseUrl;
+        return this.graph.baseUrl;
     }
 
-    async callGraphApi(
-        path: string,
-        options: {
-            method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-            query?: Record<string, string | number | boolean>;
-            body?: Record<string, unknown>;
-        },
-    ): Promise<unknown> {
-        const token = await this.getGraphToken();
-        const url = new URL(`${this.graphBaseUrl}/${path.replace(/^\//u, "")}`);
-        for (const [key, value] of Object.entries(options.query || {})) {
-            url.searchParams.set(key, String(value));
-        }
-        const response = await fetch(url, {
-            method: options.method,
-            headers: {
-                authorization: `Bearer ${token}`,
-                ...(options.body ? { "content-type": "application/json" } : {}),
-            },
-            body: options.body ? JSON.stringify(options.body) : undefined,
-        });
-        const payload = await responsePayload(response);
-        if (!response.ok) {
-            throw new TeamsApiError(`Microsoft Graph 请求失败: ${response.status}`, {
-                code: graphErrorCode(payload),
-                status: response.status,
-                details: payload,
-            });
-        }
-        return payload;
+    async callGraphApi(path: string, options: TeamsGraphRequestOptions): Promise<unknown> {
+        return this.graph.call(path, options);
     }
 
     getAdapter(): CloudAdapter {
@@ -343,50 +331,11 @@ export class TeamsBot extends EventEmitter {
         };
     }
 
-    private async getGraphToken(): Promise<string> {
-        if (this.graphToken && this.graphToken.expiresAt > Date.now()) return this.graphToken.value;
-        const tenantId = this.config.graph_tenant_id || this.config.tenant_id;
-        if (!tenantId || ["botframework.com", "organizations", "common"].includes(tenantId)) {
-            throw new TeamsApiError("Graph 应用凭据流必须配置具体 tenant_id，不能使用多租户别名", {
-                code: "TEAMS_GRAPH_TENANT_REQUIRED",
-            });
-        }
-        const authority = graphTokenAuthority(
-            this.config.authority_endpoint || "https://login.microsoftonline.com",
-            tenantId,
-        );
-        const scope = `${new URL(this.getGraphBaseUrl()).origin}/.default`;
-        const body = new URLSearchParams({
-            client_id: this.config.app_id,
-            client_secret: this.config.app_password,
-            grant_type: "client_credentials",
-            scope,
-        });
-        const response = await fetch(`${authority}/oauth2/v2.0/token`, {
-            method: "POST",
-            headers: { "content-type": "application/x-www-form-urlencoded" },
-            body,
-        });
-        const payload = await responsePayload(response);
-        const accessToken = recordString(payload, "access_token");
-        if (!response.ok || !accessToken) {
-            throw new TeamsApiError("获取 Microsoft Graph access token 失败", {
-                code: recordString(payload, "error") || "TEAMS_GRAPH_AUTH_ERROR",
-                status: response.status,
-                details: payload,
-            });
-        }
-        const expiresIn = Number(recordValue(payload, "expires_in")) || 3600;
-        this.graphToken = {
-            value: accessToken,
-            expiresAt: Date.now() + Math.max(60, expiresIn - 60) * 1000,
-        };
-        return accessToken;
-    }
-
-    private async handleTurn(context: TurnContext): Promise<void> {
-        this.captureReference(context);
-        const activity = context.activity;
+    /** 将已认证或既有 Agents SDK 连接中的 Activity 汇入统一事件管线。 */
+    ingest(activity: Activity): TeamsEvent | undefined {
+        this.captureReference(activity);
+        this.emit("raw_activity", activity);
+        if (this.isDuplicateActivity(activity)) return undefined;
         const transformed = transformTeamsActivity(activity);
         if (transformed.recipient?.id) this.me = transformed.recipient;
         const event: TeamsEvent = { type: activity.type, activity: transformed };
@@ -399,15 +348,32 @@ export class TeamsBot extends EventEmitter {
         else if (activity.type === ActivityTypes.ConversationUpdate) this.emitMembers(event);
         else if (activity.type === ActivityTypes.MessageReaction) this.emitReactions(event);
         else this.emit("event", event);
+        return event;
     }
 
-    private captureReference(context: TurnContext): void {
-        const reference = transformConversationReference(
-            context.activity.getConversationReference(),
-        );
+    private async handleTurn(context: TurnContext): Promise<void> {
+        this.ingest(context.activity);
+    }
+
+    private captureReference(activity: Activity): void {
+        const reference = transformConversationReference(activity.getConversationReference());
         this.references.save(reference);
-        const activityId = context.activity.id;
+        const activityId = activity.id;
         if (activityId) this.references.saveMessage(activityId, reference.conversation.id);
+    }
+
+    /** Bot Connector 可能重试同一 Activity；原始输入保留，canonical 事件仅派发一次。 */
+    private isDuplicateActivity(activity: Activity): boolean {
+        if (!activity.id) return false;
+        const now = Date.now();
+        const previous = this.receivedActivityIds.get(activity.id);
+        this.receivedActivityIds.delete(activity.id);
+        this.receivedActivityIds.set(activity.id, now);
+        for (const [id, receivedAt] of this.receivedActivityIds) {
+            if (this.receivedActivityIds.size <= 4_096 && now - receivedAt <= 10 * 60_000) break;
+            this.receivedActivityIds.delete(id);
+        }
+        return previous !== undefined && now - previous <= 10 * 60_000;
     }
 
     private emitMembers(event: TeamsEvent): void {
@@ -429,8 +395,26 @@ export class TeamsBot extends EventEmitter {
     }
 
     private emitReactions(event: TeamsEvent): void {
-        if (event.activity.reactionsAdded?.length) this.emit("reaction_added", event);
-        if (event.activity.reactionsRemoved?.length) this.emit("reaction_removed", event);
+        for (const reaction of event.activity.reactionsAdded || []) {
+            this.emit("reaction_added", {
+                ...event,
+                activity: {
+                    ...event.activity,
+                    reactionsAdded: [reaction],
+                    reactionsRemoved: [],
+                },
+            });
+        }
+        for (const reaction of event.activity.reactionsRemoved || []) {
+            this.emit("reaction_removed", {
+                ...event,
+                activity: {
+                    ...event.activity,
+                    reactionsAdded: [],
+                    reactionsRemoved: [reaction],
+                },
+            });
+        }
         if (!event.activity.reactionsAdded?.length && !event.activity.reactionsRemoved?.length) {
             this.emit("event", event);
         }
@@ -456,7 +440,9 @@ function validateReference(reference: TeamsConversationReference): void {
     }
     if (
         !URL.canParse(reference.serviceUrl) ||
-        new URL(reference.serviceUrl).protocol !== "https:"
+        new URL(reference.serviceUrl).protocol !== "https:" ||
+        new URL(reference.serviceUrl).username ||
+        new URL(reference.serviceUrl).password
     ) {
         throw new TeamsApiError("Teams ConversationReference serviceUrl 必须是有效 HTTPS URL", {
             code: "TEAMS_INVALID_SERVICE_URL",

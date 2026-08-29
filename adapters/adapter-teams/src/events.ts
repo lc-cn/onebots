@@ -56,10 +56,7 @@ export function projectTeamsEvent(
               : activity.from;
     return {
         ...base,
-        id:
-            kind === "member_joined" || kind === "member_left"
-                ? context.createId(`${base.id.string}:${kind}:${member?.id || "unknown"}`)
-                : base.id,
+        id: context.createId(`${base.id.string}:${kind}:${noticeIdentity(kind, activity, member)}`),
         type: "notice",
         notice_type: noticeType,
         message_id: messageIdForNotice(kind, activity, context),
@@ -83,6 +80,17 @@ export function projectTeamsEvent(
             },
         },
     };
+}
+
+function noticeIdentity(
+    kind: TeamsProjectionKind,
+    activity: TeamsActivity,
+    member?: TeamsUser,
+): string {
+    if (kind === "member_joined" || kind === "member_left") return member?.id || "unknown";
+    if (kind === "reaction_added") return activity.reactionsAdded?.[0]?.type || "unknown";
+    if (kind === "reaction_removed") return activity.reactionsRemoved?.[0]?.type || "unknown";
+    return activity.name || activity.replyToId || activity.id || "event";
 }
 
 function createBase(

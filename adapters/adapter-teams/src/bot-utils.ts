@@ -49,10 +49,15 @@ export function normalizeHeaders(
     );
 }
 
-export function bodyValue(value: unknown): Record<string, unknown> | undefined {
-    return value && typeof value === "object" && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : undefined;
+export function bodyValue(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw TeamsApiError.invalid("Teams Activity 请求体必须是对象", "TEAMS_ACTIVITY_INVALID");
+    }
+    const body = value as Record<string, unknown>;
+    if (typeof body.type !== "string" || !body.type) {
+        throw TeamsApiError.invalid("Teams Activity 请求体缺少 type", "TEAMS_ACTIVITY_INVALID");
+    }
+    return body;
 }
 
 export async function responsePayload(response: Response): Promise<unknown> {
@@ -95,8 +100,15 @@ export function allowedServiceUrlHosts(entries: TeamsConfig["allowed_service_url
 }
 
 export function requireHttpsConfigUrl(value: string, name: string): string {
-    if (!URL.canParse(value) || new URL(value).protocol !== "https:") {
+    if (!URL.canParse(value)) {
         throw new TeamsApiError(`Teams 配置 ${name} 必须是有效 HTTPS URL`, {
+            code: "TEAMS_INVALID_CONFIG_URL",
+            details: value,
+        });
+    }
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+        throw new TeamsApiError(`Teams 配置 ${name} 必须是无凭据、query 和 fragment 的 HTTPS URL`, {
             code: "TEAMS_INVALID_CONFIG_URL",
             details: value,
         });

@@ -52,6 +52,8 @@ Teams 的“附件链接”和“真实文件上传”不是同一能力。个�
 
 入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；invoke 投影为 `interaction`；typing、installationUpdate、会议、read receipt 和其他 Activity 以 `custom` notice 无损交付。原始 Activity 始终位于 `raw_event`，Teams 上下文位于 `extensions.teams`。
 
+Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `TeamsBot.ingest(activity)` 入站管线。Connector 重试会继续触发 `raw_activity`，但同一 Activity ID 的 canonical 事件只投影一次；一个 Activity 携带多个 Reaction 时会逐项派发并生成不同事件 ID。
+
 ## 平台扩展动作
 
 会话与主动消息：
@@ -81,7 +83,9 @@ Microsoft Graph：
 
 - `call_graph_api`：安全相对 `path`、`method`、`query`、`body`
 
-Graph 使用应用凭据流，必须有具体 Tenant ID：单租户复用 `tenant_id`，多租户 Bot 单独填写 `graph_tenant_id`。它只能调用管理员已授予相应 application permission 的资源。普通发送聊天消息不能用 app-only Graph 权限冒充；消息发送仍通过 Teams Connector 完成。认证、Connector 和 Graph 错误统一抛出 `TeamsApiError`，包含稳定 `code`、HTTP `status` 与 `details`。
+Graph 使用应用凭据流，必须有具体 Tenant ID：单租户复用 `tenant_id`，多租户 Bot 单独填写 `graph_tenant_id`。并发请求复用同一次 token 获取，401 只刷新并重试一次；公开 Graph 入口在最底层拒绝 query、fragment、编码分隔符与路径穿越。它只能调用管理员已授予相应 application permission 的资源。普通发送聊天消息不能用 app-only Graph 权限冒充；消息发送仍通过 Teams Connector 完成。
+
+认证、Connector 和 Graph 错误统一抛出继承 OneBots 错误体系的 `TeamsApiError`，包含稳定 `code`、`category`、调用 `operation`、HTTP `status` 与 `details`；微软返回的动态错误码单独保存在 `platformCode`，不会污染稳定错误码。
 
 ## 官方参考
 

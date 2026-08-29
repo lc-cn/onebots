@@ -1,9 +1,19 @@
 import { AdapterRegistry, type Schema } from "onebots";
 
 export { TeamsAdapter } from "./adapter.js";
-export { TeamsBot, type TeamsContext, type TeamsReferenceRepository } from "./bot.js";
+export {
+    TeamsBot,
+    type TeamsBotEvents,
+    type TeamsContext,
+    type TeamsReferenceRepository,
+} from "./bot.js";
 export { teamsCapabilities } from "./capabilities.js";
-export { TeamsApiError, TeamsConversationReferenceError } from "./errors.js";
+export {
+    TeamsApiError,
+    TeamsConversationReferenceError,
+    type TeamsApiErrorOptions,
+} from "./errors.js";
+export { TeamsGraphClient, type TeamsGraphRequestOptions } from "./graph.js";
 export { compileTeamsActivity, projectTeamsSegments } from "./activity.js";
 export type {
     TeamsConfig,
@@ -21,7 +31,7 @@ export type {
     TeamsSendOptions,
 } from "./types.js";
 
-const teamsSchema: Schema = {
+export const teamsSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -63,6 +73,7 @@ const teamsSchema: Schema = {
         label: "Entra Authority",
         placeholder: "https://login.microsoftonline.com",
         description: "主权云或自定义 Entra 环境才需要覆盖",
+        pattern: /^https:\/\/[^\s?#]+$/,
         ui: { section: "advanced" },
     },
     graph_base_url: {
@@ -70,6 +81,7 @@ const teamsSchema: Schema = {
         label: "Graph API Base URL",
         default: "https://graph.microsoft.com/v1.0",
         description: "主权云可覆盖；普通 Microsoft 365 环境保持默认",
+        pattern: /^https:\/\/[^\s?#]+$/,
         ui: { section: "advanced" },
     },
     graph_tenant_id: {

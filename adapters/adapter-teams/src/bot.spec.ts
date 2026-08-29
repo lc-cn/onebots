@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Activity, ActivityTypes } from "@microsoft/agents-activity";
+import { ErrorCategory, OneBotsError } from "onebots";
 import { TeamsBot } from "./bot.js";
 import { allowedServiceUrlHosts } from "./bot-utils.js";
-import { TeamsConversationReferenceError } from "./errors.js";
+import { TeamsApiError, TeamsConversationReferenceError } from "./errors.js";
 import type { TeamsConversationReference } from "./types.js";
 
 describe("TeamsBot 会话引用契约", () => {
@@ -88,6 +90,80 @@ describe("TeamsBot 会话引用契约", () => {
             }),
         );
     });
+
+    it("生命周期启动与停止保持幂等", async () => {
+        const bot = createBot();
+        const ready = vi.fn();
+        const stopped = vi.fn();
+        bot.on("ready", ready);
+        bot.on("stopped", stopped);
+
+        await bot.start();
+        await bot.start();
+        await bot.stop();
+        await bot.stop();
+
+        expect(ready).toHaveBeenCalledOnce();
+        expect(stopped).toHaveBeenCalledOnce();
+    });
+
+    it("公开 ingest 汇入同一管线并去重 canonical Activity", () => {
+        const bot = createBot();
+        const message = vi.fn();
+        const rawActivity = vi.fn();
+        bot.on("private_message", message);
+        bot.on("raw_activity", rawActivity);
+        const activity = createActivity();
+
+        expect(bot.ingest(activity)).toMatchObject({ type: ActivityTypes.Message });
+        expect(bot.ingest(activity)).toBeUndefined();
+        expect(rawActivity).toHaveBeenCalledTimes(2);
+        expect(message).toHaveBeenCalledOnce();
+    });
+
+    it("逐个派发同一 Activity 中的原生 Reaction", () => {
+        const bot = createBot();
+        const reaction = vi.fn();
+        bot.on("reaction_added", reaction);
+        const activity = createActivity();
+        activity.type = ActivityTypes.MessageReaction;
+        activity.reactionsAdded = [{ type: "like" }, { type: "heart" }];
+
+        bot.ingest(activity);
+
+        expect(reaction).toHaveBeenCalledTimes(2);
+        expect(
+            reaction.mock.calls.map(([event]) => event.activity.reactionsAdded?.[0]?.type),
+        ).toEqual(["like", "heart"]);
+    });
+
+    it("Webhook 对非法 Activity 返回结构化 400", async () => {
+        const bot = createBot();
+        const clientError = vi.fn();
+        bot.on("client_error", clientError);
+        const context = {
+            method: "POST",
+            headers: {},
+            request: { body: [] },
+            status: 200,
+            body: undefined,
+            set: vi.fn(),
+        };
+
+        await bot.handleWebhook(context as never, vi.fn());
+
+        expect(context.status).toBe(400);
+        expect(context.body).toEqual({
+            error: {
+                code: "TEAMS_ACTIVITY_INVALID",
+                message: "Teams Activity 请求体必须是对象",
+            },
+        });
+        expect(clientError).toHaveBeenCalledWith(expect.any(TeamsApiError));
+        const error = clientError.mock.calls[0]?.[0];
+        expect(error).toBeInstanceOf(OneBotsError);
+        expect(error).toMatchObject({ category: ErrorCategory.VALIDATION });
+    });
 });
 
 function createBot(overrides: Partial<ConstructorParameters<typeof TeamsBot>[0]> = {}): TeamsBot {
@@ -107,4 +183,17 @@ function createBot(overrides: Partial<ConstructorParameters<typeof TeamsBot>[0]>
             saveMessage: () => undefined,
         },
     );
+}
+
+function createActivity(): Activity {
+    const activity = new Activity(ActivityTypes.Message);
+    activity.id = "activity-1";
+    activity.timestamp = new Date("2026-08-30T00:00:00.000Z");
+    activity.serviceUrl = "https://smba.trafficmanager.net/teams/";
+    activity.channelId = "msteams";
+    activity.from = { id: "user-1", name: "Ada" };
+    activity.recipient = { id: "bot-1", name: "Agent" };
+    activity.conversation = { id: "conversation-1", isGroup: false };
+    activity.text = "hello";
+    return activity;
 }

@@ -1,5 +1,6 @@
 import { Activity, ActivityTypes, type Attachment, type Entity } from "@microsoft/agents-activity";
 import type { CommonTypes } from "onebots";
+import { TeamsApiError } from "./errors.js";
 import type {
     TeamsActivity,
     TeamsAttachment,
@@ -28,7 +29,12 @@ export function compileTeamsActivity(
         }
         if (segment.type === "at") {
             const rawId = segment.data.id ?? segment.data.user_id ?? segment.data.qq;
-            if (rawId == null) throw new Error("Teams at 段缺少 id/user_id");
+            if (rawId == null) {
+                throw TeamsApiError.invalid(
+                    "Teams at 段缺少 id/user_id",
+                    "TEAMS_MENTION_ID_REQUIRED",
+                );
+            }
             if (rawId === "all") {
                 // Teams Bot Connector 没有通用 @all mention entity，明确退化为可见文本。
                 text += `@${stringValue(segment.data.name || "所有人")}`;
@@ -60,13 +66,19 @@ export function compileTeamsActivity(
             applyActivityOptions(output, segment.data);
             continue;
         }
-        throw new Error(`Teams 不支持消息段 ${segment.type}`);
+        throw TeamsApiError.invalid(
+            `Teams 不支持消息段 ${segment.type}`,
+            "TEAMS_SEGMENT_UNSUPPORTED",
+            { segment_type: segment.type },
+        );
     }
 
     if (text) output.text = text;
     if (attachments.length > 0) output.attachments = attachments;
     if (entities.length > 0) output.entities = entities;
-    if (!output.text && !output.attachments?.length) throw new Error("Teams 消息不包含可发送内容");
+    if (!output.text && !output.attachments?.length) {
+        throw TeamsApiError.invalid("Teams 消息不包含可发送内容", "TEAMS_MESSAGE_EMPTY");
+    }
 
     const activity = new Activity(ActivityTypes.Message);
     activity.text = output.text;
@@ -156,7 +168,10 @@ function compileAttachment(segment: CommonTypes.Segment): TeamsAttachment {
     const fileType = optionalString(segment.data.file_type);
     if (segment.type === "file" && (uniqueId || fileType)) {
         if (!uniqueId || !fileType) {
-            throw new Error("Teams file 段必须同时提供 unique_id 与 file_type");
+            throw TeamsApiError.invalid(
+                "Teams file 段必须同时提供 unique_id 与 file_type",
+                "TEAMS_FILE_INFO_INVALID",
+            );
         }
         return {
             contentType: "application/vnd.microsoft.teams.card.file.info",
@@ -237,20 +252,36 @@ function optionalString(value: unknown): string | undefined {
 
 function requiredString(value: unknown, name: string): string {
     const result = optionalString(value);
-    if (!result) throw new Error(`Teams ${name} 必须为非空字符串`);
+    if (!result) {
+        throw TeamsApiError.invalid(`Teams ${name} 必须为非空字符串`, "TEAMS_PARAM_REQUIRED", {
+            name,
+        });
+    }
     return result;
 }
 
 function requireObject(value: unknown, name: string): asserts value is Record<string, unknown> {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error(`Teams ${name} 必须是对象`);
+        throw TeamsApiError.invalid(`Teams ${name} 必须是对象`, "TEAMS_PARAM_INVALID", { name });
     }
 }
 
 function requireHttpsUrl(value: unknown, name: string): string {
     const result = requiredString(value, name);
-    if (!URL.canParse(result) || new URL(result).protocol !== "https:") {
-        throw new Error(`Teams ${name} 必须是可公开访问的 HTTPS URL`);
+    if (!URL.canParse(result)) {
+        throw TeamsApiError.invalid(
+            `Teams ${name} 必须是可公开访问的 HTTPS URL`,
+            "TEAMS_HTTPS_URL_REQUIRED",
+            { name },
+        );
+    }
+    const url = new URL(result);
+    if (url.protocol !== "https:" || url.username || url.password) {
+        throw TeamsApiError.invalid(
+            `Teams ${name} 必须是可公开访问的 HTTPS URL（且不得包含凭据）`,
+            "TEAMS_HTTPS_URL_REQUIRED",
+            { name },
+        );
     }
     return result;
 }

@@ -204,7 +204,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
             account.status = AccountStatus.Online;
             this.logger.info(`Teams Agent ${account.config.account_id} 已就绪`);
         });
-        bot.on("error", (error: Error) => {
+        bot.on("client_error", error => {
             // 单次 Webhook/API 错误不代表账号离线；Webhook 服务仍可继续接收下一事件。
             this.logger.error(`Teams Agent ${account.config.account_id} 错误`, error);
             this.emit("error", { account_id: account.config.account_id, error });
@@ -222,6 +222,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
             } catch (error) {
                 this.logger.error("启动 Teams Agent 失败", error);
                 account.status = AccountStatus.OffLine;
+                throw error;
             }
         });
         account.on("stop", async () => {
@@ -231,19 +232,24 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     }
 
     private bindEvents(account: Account<"teams", TeamsBot>, bot: TeamsBot): void {
-        const routes: Array<[string, TeamsProjectionKind]> = [
-            ["private_message", "private_message"],
-            ["group_message", "group_message"],
-            ["message_edited", "message_updated"],
-            ["message_deleted", "message_deleted"],
-            ["member_joined", "member_joined"],
-            ["member_left", "member_left"],
-            ["reaction_added", "reaction_added"],
-            ["reaction_removed", "reaction_removed"],
-        ];
-        for (const [eventName, kind] of routes) {
-            bot.on(eventName, (event: TeamsEvent) => this.dispatchTeamsEvent(account, kind, event));
-        }
+        bot.on("private_message", event =>
+            this.dispatchTeamsEvent(account, "private_message", event),
+        );
+        bot.on("group_message", event => this.dispatchTeamsEvent(account, "group_message", event));
+        bot.on("message_edited", event =>
+            this.dispatchTeamsEvent(account, "message_updated", event),
+        );
+        bot.on("message_deleted", event =>
+            this.dispatchTeamsEvent(account, "message_deleted", event),
+        );
+        bot.on("member_joined", event => this.dispatchTeamsEvent(account, "member_joined", event));
+        bot.on("member_left", event => this.dispatchTeamsEvent(account, "member_left", event));
+        bot.on("reaction_added", event =>
+            this.dispatchTeamsEvent(account, "reaction_added", event),
+        );
+        bot.on("reaction_removed", event =>
+            this.dispatchTeamsEvent(account, "reaction_removed", event),
+        );
         bot.on("event", (event: TeamsEvent) => {
             const kind = event.activity.type === "invoke" ? "interaction" : "custom";
             this.dispatchTeamsEvent(account, kind, event);
@@ -272,16 +278,20 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     private requireBot(uin: string): TeamsBot {
         const account = this.getAccount(uin);
         if (!account)
-            throw new TeamsApiError(`Teams 账号 ${uin} 不存在`, { code: "ACCOUNT_NOT_FOUND" });
+            throw TeamsApiError.resource(`Teams 账号 ${uin} 不存在`, "TEAMS_ACCOUNT_NOT_FOUND", {
+                account_id: uin,
+            });
         return account.client;
     }
 
     private requireMessageConversation(uin: string, messageId: string): string {
         const conversationId = this.conversationStore.findConversationByMessage(uin, messageId);
         if (!conversationId) {
-            throw new TeamsApiError(`未记录 Teams 消息 ${messageId} 所属会话`, {
-                code: "TEAMS_MESSAGE_CONTEXT_MISSING",
-            });
+            throw TeamsApiError.resource(
+                `未记录 Teams 消息 ${messageId} 所属会话`,
+                "TEAMS_MESSAGE_CONTEXT_MISSING",
+                { message_id: messageId },
+            );
         }
         return conversationId;
     }
