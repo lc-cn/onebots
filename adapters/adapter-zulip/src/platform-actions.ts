@@ -1,13 +1,9 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 import type { ZulipHttpMethod, ZulipParam, ZulipParams } from "./types.js";
 
-type ActionHandler = (
-    client: ZulipClient,
-    params: Readonly<Record<string, unknown>>,
-) => Promise<unknown>;
-
-const ACTION_HANDLERS: Readonly<Record<string, ActionHandler>> = {
+const ACTION_HANDLERS = {
     call_zulip_api: (client, params) =>
         client.call(
             requireString(params.path, "path"),
@@ -79,9 +75,17 @@ const ACTION_HANDLERS: Readonly<Record<string, ActionHandler>> = {
         resourceAction(client, "saved_snippets", "saved_snippet_id", "PATCH", params),
     delete_saved_snippet: (client, params) =>
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
-};
+} satisfies Readonly<Record<string, PlatformActionHandler<ZulipClient>>>;
 
-export const ZULIP_PLATFORM_ACTIONS: ReadonlySet<string> = new Set(Object.keys(ACTION_HANDLERS));
+const PLATFORM_ACTIONS = definePlatformActions(
+    ACTION_HANDLERS,
+    action =>
+        new ZulipError(`未实现 Zulip 平台动作: ${action}`, {
+            code: "ZULIP_ACTION_NOT_IMPLEMENTED",
+        }),
+);
+
+export const ZULIP_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 执行能力清单允许的 Zulip 原生动作。 */
 export async function executeZulipPlatformAction(
@@ -89,13 +93,7 @@ export async function executeZulipPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    const handler = ACTION_HANDLERS[action];
-    if (!handler) {
-        throw new ZulipError(`未实现 Zulip 平台动作: ${action}`, {
-            code: "ZULIP_ACTION_NOT_IMPLEMENTED",
-        });
-    }
-    return handler(client, params);
+    return PLATFORM_ACTIONS.execute(client, action, params);
 }
 
 function reaction(

@@ -1,14 +1,10 @@
 import type { SearchObject } from "imapflow";
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { EmailClient } from "./client.js";
 import { EmailError } from "./errors.js";
 import type { EmailOutgoingAttachment, EmailSendOptions } from "./types.js";
 
-type ActionHandler = (
-    client: EmailClient,
-    params: Readonly<Record<string, unknown>>,
-) => Promise<unknown>;
-
-const ACTION_HANDLERS: Readonly<Record<string, ActionHandler>> = {
+const ACTION_HANDLERS = {
     send_email: (client, params) => client.sendEmail(sendOptions(params)),
     get_email: (client, params) =>
         params.uid === undefined
@@ -49,9 +45,17 @@ const ACTION_HANDLERS: Readonly<Record<string, ActionHandler>> = {
         client.manageMailbox("subscribe", requireString(params.path, "path")),
     unsubscribe_mailbox: (client, params) =>
         client.manageMailbox("unsubscribe", requireString(params.path, "path")),
-};
+} satisfies Readonly<Record<string, PlatformActionHandler<EmailClient>>>;
 
-export const EMAIL_PLATFORM_ACTIONS: ReadonlySet<string> = new Set(Object.keys(ACTION_HANDLERS));
+const PLATFORM_ACTIONS = definePlatformActions(
+    ACTION_HANDLERS,
+    action =>
+        new EmailError(`未实现邮件平台动作: ${action}`, {
+            code: "EMAIL_ACTION_NOT_IMPLEMENTED",
+        }),
+);
+
+export const EMAIL_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 执行经过白名单和参数校验的 SMTP/IMAP 原生动作。 */
 export async function executeEmailPlatformAction(
@@ -59,13 +63,7 @@ export async function executeEmailPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    const handler = ACTION_HANDLERS[action];
-    if (!handler) {
-        throw new EmailError(`未实现邮件平台动作: ${action}`, {
-            code: "EMAIL_ACTION_NOT_IMPLEMENTED",
-        });
-    }
-    return handler(client, params);
+    return PLATFORM_ACTIONS.execute(client, action, params);
 }
 
 function updateFlag(

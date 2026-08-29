@@ -38,6 +38,9 @@ export {
     type ReverseWebSocketOptions,
     type MediaSourceInput,
     type MaterializedMedia,
+    type PlatformActionHandler,
+    type PlatformActionParams,
+    type PlatformActionRegistry,
     type RefreshableValueResult,
     // Infrastructure
     ConnectionManager,
@@ -58,6 +61,7 @@ export {
     readPackageVersion,
     readPackageVersionFile,
     materializeMediaSource,
+    definePlatformActions,
     isSafeAbsoluteApiPath,
     mapConcurrent,
     RefreshableValue,

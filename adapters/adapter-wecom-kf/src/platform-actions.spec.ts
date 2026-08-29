@@ -55,10 +55,10 @@ describe("微信客服平台动作", () => {
         ).rejects.toMatchObject({ code: "WECOM_KF_INVALID_PARAMETER" });
     });
 
-    it("拒绝空接待人员集合", () => {
+    it("拒绝空接待人员集合", async () => {
         const client = new WeComKfClient(config);
-        expect(() =>
+        await expect(
             executeWeComKfPlatformAction(client, "add_servicers", { open_kfid: "wk-1" }),
-        ).toThrowError(expect.objectContaining({ code: "WECOM_KF_INVALID_PARAMETER" }));
+        ).rejects.toMatchObject({ code: "WECOM_KF_INVALID_PARAMETER" });
     });
 });

@@ -1,15 +1,11 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { WeComKfClient } from "./client.js";
 import { WeComKfError } from "./errors.js";
 import { decodeKfBase64 } from "./media.js";
 import type { KfCallOptions } from "./types.js";
 
-type PlatformActionHandler = (
-    client: WeComKfClient,
-    params: Readonly<Record<string, unknown>>,
-) => Promise<unknown>;
-
 /** 单一动作注册表同时驱动能力发现与执行，避免动作名和实现分叉。 */
-const PLATFORM_ACTION_HANDLERS: Readonly<Record<string, PlatformActionHandler>> = {
+const PLATFORM_ACTION_HANDLERS = {
     wecom_kf_call: (client, params) => client.call(callOptions(params)),
     sync_messages: (client, params) =>
         client.synchronize(requireString(params, "open_kfid"), optionalString(params, "token")),
@@ -78,11 +74,17 @@ const PLATFORM_ACTION_HANDLERS: Readonly<Record<string, PlatformActionHandler>> 
             query: { media_id: requireString(params, "media_id") },
             response_type: "buffer",
         }),
-};
+} satisfies Readonly<Record<string, PlatformActionHandler<WeComKfClient>>>;
 
-export const WECOM_KF_PLATFORM_ACTIONS: ReadonlySet<string> = new Set(
-    Object.keys(PLATFORM_ACTION_HANDLERS),
+const PLATFORM_ACTIONS = definePlatformActions(
+    PLATFORM_ACTION_HANDLERS,
+    action =>
+        new WeComKfError(`未知微信客服平台动作: ${action}`, {
+            code: "WECOM_KF_UNKNOWN_ACTION",
+        }),
 );
+
+export const WECOM_KF_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 微信客服常用原生动作；wecom_kf_call 覆盖后续新增接口。 */
 export function executeWeComKfPlatformAction(
@@ -90,11 +92,7 @@ export function executeWeComKfPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    const handler = PLATFORM_ACTION_HANDLERS[action];
-    if (handler) return handler(client, params);
-    throw new WeComKfError(`未知微信客服平台动作: ${action}`, {
-        code: "WECOM_KF_UNKNOWN_ACTION",
-    });
+    return PLATFORM_ACTIONS.execute(client, action, params);
 }
 
 function callOptions(params: Readonly<Record<string, unknown>>): KfCallOptions {

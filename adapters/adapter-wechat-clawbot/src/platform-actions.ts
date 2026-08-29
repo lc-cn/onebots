@@ -1,12 +1,8 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { WechatIlinkBot } from "./bot.js";
 import { GatewayFault } from "./sdk/internal/errors.js";
 
-type ActionHandler = (
-    client: WechatIlinkBot,
-    params: Readonly<Record<string, unknown>>,
-) => Promise<unknown>;
-
-const ACTION_HANDLERS: Readonly<Record<string, ActionHandler>> = {
+const ACTION_HANDLERS = {
     send_typing: (client, params) =>
         client.sendTypingToUser(requireString(params.user_id, "user_id"), {
             contextToken: optionalString(params.context_token, "context_token"),
@@ -23,22 +19,21 @@ const ACTION_HANDLERS: Readonly<Record<string, ActionHandler>> = {
             file_name: result.fileName,
         };
     },
-};
+} satisfies Readonly<Record<string, PlatformActionHandler<WechatIlinkBot>>>;
 
-export const WECHAT_CLAWBOT_PLATFORM_ACTIONS: ReadonlySet<string> = new Set(
-    Object.keys(ACTION_HANDLERS),
+const PLATFORM_ACTIONS = definePlatformActions(
+    ACTION_HANDLERS,
+    action => new GatewayFault("ACTION_NOT_IMPLEMENTED", `未实现微信 ClawBot 平台动作: ${action}`),
 );
+
+export const WECHAT_CLAWBOT_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 export function executeWechatClawbotPlatformAction(
     client: WechatIlinkBot,
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    const handler = ACTION_HANDLERS[action];
-    if (!handler) {
-        throw new GatewayFault("ACTION_NOT_IMPLEMENTED", `未实现微信 ClawBot 平台动作: ${action}`);
-    }
-    return handler(client, params);
+    return PLATFORM_ACTIONS.execute(client, action, params);
 }
 
 function requireString(value: unknown, field: string): string {
