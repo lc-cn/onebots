@@ -1,79 +1,7 @@
-import { materializeMediaSource } from "onebots";
+import { definePlatformActions, materializeMediaSource, type PlatformActionHandler } from "onebots";
 import type { KookBot } from "./bot.js";
 import { KookError } from "./errors.js";
 import type { KookApiRequestOptions } from "./types.js";
-
-export const KOOK_PLATFORM_ACTIONS = new Set([
-    "call_kook_api",
-    "upload_asset",
-    "get_message_reactions",
-    "add_message_reaction",
-    "remove_message_reaction",
-    "get_direct_message_reactions",
-    "add_direct_message_reaction",
-    "remove_direct_message_reaction",
-    "pin_message",
-    "unpin_message",
-    "list_guild_roles",
-    "create_guild_role",
-    "update_guild_role",
-    "delete_guild_role",
-    "grant_guild_role",
-    "revoke_guild_role",
-    "get_channel_permissions",
-    "create_channel_permission",
-    "update_channel_permission",
-    "sync_channel_permissions",
-    "delete_channel_permission",
-    "list_blacklist",
-    "add_blacklist",
-    "remove_blacklist",
-    "list_guild_mutes",
-    "add_guild_mute",
-    "remove_guild_mute",
-    "get_guild_boost_history",
-    "list_invites",
-    "create_invite",
-    "delete_invite",
-    "list_invitees",
-    "list_channel_messages",
-    "send_pipe_message",
-    "list_direct_messages",
-    "list_user_chats",
-    "get_user_chat",
-    "create_user_chat",
-    "delete_user_chat",
-    "list_guild_emojis",
-    "create_guild_emoji",
-    "update_guild_emoji",
-    "delete_guild_emoji",
-    "get_intimacy",
-    "update_intimacy",
-    "list_games",
-    "create_game",
-    "update_game",
-    "delete_game",
-    "set_game_activity",
-    "delete_game_activity",
-    "list_message_templates",
-    "get_guild_badge",
-    "list_thread_categories",
-    "create_thread",
-    "reply_thread",
-    "get_thread",
-    "list_threads",
-    "delete_thread_item",
-    "list_thread_posts",
-    "move_voice_user",
-    "kick_voice_user",
-    "get_joined_voice_channel",
-    "set_bot_online",
-    "set_bot_offline",
-    "get_bot_online_status",
-    "leave_guild",
-    "kick_guild_member",
-    "set_guild_member_nickname",
-]);
 
 interface ActionRoute {
     path: string;
@@ -148,74 +76,89 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     set_guild_member_nickname: { path: "/v3/guild/nickname", method: "POST" },
 };
 
+const ROUTE_HANDLERS = Object.fromEntries(
+    Object.entries(ROUTES).map(([action, route]) => [
+        action,
+        (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
+            bot.callApi(
+                route.path,
+                route.method === "GET"
+                    ? { query: scalarParams(params) }
+                    : { method: "POST", body: { ...params } },
+            ),
+    ]),
+) satisfies Readonly<Record<string, PlatformActionHandler<KookBot>>>;
+
+const PLATFORM_ACTIONS = definePlatformActions(
+    {
+        call_kook_api: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
+            bot.callApi(requirePath(params.path), {
+                method: methodValue(params.method),
+                query: queryValue(params.query),
+                body: bodyValue(params.body),
+            }),
+        upload_asset: async (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
+            const media = await mediaFromParams(params);
+            return { url: await bot.uploadAsset(media.data, media.filename, media.contentType) };
+        },
+        create_guild_emoji: createGuildEmoji,
+        get_guild_badge: getGuildBadge,
+        ...ROUTE_HANDLERS,
+    },
+    action =>
+        KookError.invalid(`未实现 KOOK 平台动作: ${action}`, "KOOK_ACTION_UNKNOWN", {
+            action,
+        }),
+);
+
+export const KOOK_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+
 /** 执行 KOOK 官方扩展动作；命名参数直接沿用开放平台字段。 */
 export async function executeKookPlatformAction(
     bot: KookBot,
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    if (action === "call_kook_api") {
-        return bot.callApi(requirePath(params.path), {
-            method: methodValue(params.method),
-            query: queryValue(params.query),
-            body: bodyValue(params.body),
-        });
-    }
-    if (action === "upload_asset") {
-        const media = await mediaFromParams(params);
-        return {
-            url: await bot.uploadAsset(media.data, media.filename, media.contentType),
-        };
-    }
-    if (action === "create_guild_emoji") {
-        const guildId = requiredString(params.guild_id, "guild_id");
-        const media = await mediaFromParams(params, "emoji");
-        if (media.contentType !== "image/png" || media.data.byteLength > 256 * 1_024) {
-            throw KookError.invalid(
-                "KOOK 服务器表情必须是小于等于 256 KiB 的 PNG",
-                "KOOK_GUILD_EMOJI_INVALID",
-                { content_type: media.contentType, size: media.data.byteLength },
-            );
-        }
-        return bot.callMultipart(
-            "/v3/guild-emoji/create",
-            {
-                guild_id: guildId,
-                name: optionalString(params.name),
-            },
-            {
-                field: "emoji",
-                data: media.data,
-                filename: media.filename,
-                contentType: media.contentType,
-            },
+    return PLATFORM_ACTIONS.execute(bot, action, params);
+}
+
+async function createGuildEmoji(
+    bot: KookBot,
+    params: Readonly<Record<string, unknown>>,
+): Promise<unknown> {
+    const guildId = requiredString(params.guild_id, "guild_id");
+    const media = await mediaFromParams(params, "emoji");
+    if (media.contentType !== "image/png" || media.data.byteLength > 256 * 1_024) {
+        throw KookError.invalid(
+            "KOOK 服务器表情必须是小于等于 256 KiB 的 PNG",
+            "KOOK_GUILD_EMOJI_INVALID",
+            { content_type: media.contentType, size: media.data.byteLength },
         );
     }
-    if (action === "get_guild_badge") {
-        const result = await bot.download("/v3/badge/guild", {
-            guild_id: requiredString(params.guild_id, "guild_id"),
-            style: scalarValue(params.style, "style"),
-        });
-        return {
-            content_type: result.contentType,
-            data: `base64://${Buffer.from(result.data).toString("base64")}`,
-        };
-    }
-    const route = ROUTES[action];
-    if (!route) {
-        throw KookError.invalid(`未实现 KOOK 平台动作: ${action}`, "KOOK_ACTION_UNKNOWN", {
-            action,
-        });
-    }
-    return bot.callApi(
-        route.path,
-        route.method === "GET"
-            ? { query: scalarParams(params) }
-            : {
-                  method: "POST",
-                  body: { ...params },
-              },
+    return bot.callMultipart(
+        "/v3/guild-emoji/create",
+        { guild_id: guildId, name: optionalString(params.name) },
+        {
+            field: "emoji",
+            data: media.data,
+            filename: media.filename,
+            contentType: media.contentType,
+        },
     );
+}
+
+async function getGuildBadge(
+    bot: KookBot,
+    params: Readonly<Record<string, unknown>>,
+): Promise<unknown> {
+    const result = await bot.download("/v3/badge/guild", {
+        guild_id: requiredString(params.guild_id, "guild_id"),
+        style: scalarValue(params.style, "style"),
+    });
+    return {
+        content_type: result.contentType,
+        data: `base64://${Buffer.from(result.data).toString("base64")}`,
+    };
 }
 
 async function mediaFromParams(params: Readonly<Record<string, unknown>>, preferredKey = "file") {

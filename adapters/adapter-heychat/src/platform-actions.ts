@@ -1,3 +1,4 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { HeychatBot } from "./bot.js";
 import { HeychatApiError } from "./errors.js";
 import { normalizeBase64Source, uploadHeychatMedia } from "./media.js";
@@ -52,11 +53,43 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     stop_voice_stream: { path: "/chatroom/v3/channel/stream/stop", method: "POST" },
 };
 
-export const HEYCHAT_PLATFORM_ACTIONS = new Set([
-    "call_heychat_api",
-    "upload_media",
-    ...Object.keys(ROUTES),
-]);
+const ROUTE_HANDLERS = Object.fromEntries(
+    Object.entries(ROUTES).map(([action, route]) => [
+        action,
+        (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+            bot.callApi(
+                route.path,
+                route.method === "GET"
+                    ? { query: scalarParams(params) }
+                    : { method: "POST", body: { ...params } },
+            ),
+    ]),
+) satisfies Readonly<Record<string, PlatformActionHandler<HeychatBot>>>;
+
+const PLATFORM_ACTIONS = definePlatformActions(
+    {
+        call_heychat_api: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+            bot.callApi(requireApiPath(params.path), {
+                method: methodValue(params.method),
+                query: queryValue(params.query),
+                body: objectValue(params.body, "body"),
+            }),
+        upload_media: async (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => ({
+            url: await uploadHeychatMedia(bot, {
+                source: normalizeBase64Source(requiredString(params.data, "data")),
+                filename: requiredString(params.filename, "filename"),
+                contentType: optionalString(params.content_type, "content_type"),
+            }),
+        }),
+        ...ROUTE_HANDLERS,
+    },
+    action =>
+        HeychatApiError.resource(`未实现黑盒语音平台动作: ${action}`, "HEYCHAT_ACTION_NOT_FOUND", {
+            action,
+        }),
+);
+
+export const HEYCHAT_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 执行官方扩展动作；参数名原样沿用开放平台，避免重复维护影子 DTO。 */
 export async function executeHeychatPlatformAction(
@@ -64,39 +97,7 @@ export async function executeHeychatPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    if (action === "call_heychat_api") {
-        return bot.callApi(requireApiPath(params.path), {
-            method: methodValue(params.method),
-            query: queryValue(params.query),
-            body: objectValue(params.body, "body"),
-        });
-    }
-    if (action === "upload_media") {
-        const data = requiredString(params.data, "data");
-        const filename = requiredString(params.filename, "filename");
-        const contentType = optionalString(params.content_type, "content_type");
-        return {
-            url: await uploadHeychatMedia(bot, {
-                source: normalizeBase64Source(data),
-                filename,
-                contentType,
-            }),
-        };
-    }
-    const route = ROUTES[action];
-    if (!route) {
-        throw HeychatApiError.resource(
-            `未实现黑盒语音平台动作: ${action}`,
-            "HEYCHAT_ACTION_NOT_FOUND",
-            { action },
-        );
-    }
-    return bot.callApi(
-        route.path,
-        route.method === "GET"
-            ? { query: scalarParams(params) }
-            : { method: "POST", body: { ...params } },
-    );
+    return PLATFORM_ACTIONS.execute(bot, action, params);
 }
 
 function requireApiPath(value: unknown): string {
