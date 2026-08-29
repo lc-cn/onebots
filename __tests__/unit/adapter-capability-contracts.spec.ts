@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     Adapter,
+    adapterActionMethodName,
     assertAdapterCapabilities,
     listSupportedActions,
 } from "../../packages/core/src/index.js";
@@ -51,6 +52,12 @@ describe("adapter capability manifests", () => {
     const metadata = AdapterRegistry.getAllMetadata().sort((left, right) =>
         left.name.localeCompare(right.name),
     );
+    const standardActions = [
+        ...new Set(metadata.flatMap(item => Object.keys(item.capabilities?.actions ?? {}))),
+    ].filter(action => {
+        const method = Adapter.prototype[adapterActionMethodName(action) as keyof Adapter];
+        return typeof method === "function";
+    });
 
     it("所有已注册适配器都公开同一份能力清单", () => {
         expect(metadata.map(item => item.name)).toEqual(platforms);
@@ -69,6 +76,18 @@ describe("adapter capability manifests", () => {
         const prototype = factory.prototype;
         for (const action of listSupportedActions(item.capabilities)) {
             expect(prototype.isActionImplemented(action), `${item.name}.${action}`).toBe(true);
+        }
+    });
+
+    it.each(metadata)("$name 不保留能力清单之外的标准动作覆写", item => {
+        const factory = AdapterRegistry.get(item.name);
+        if (!factory || !Adapter.isClassAdapter(factory) || !item.capabilities) return;
+
+        const prototype = factory.prototype;
+        for (const action of standardActions) {
+            const supported = item.capabilities.actions[action]?.support !== undefined
+                && item.capabilities.actions[action]?.support !== "unsupported";
+            expect(prototype.isActionImplemented(action), `${item.name}.${action}`).toBe(supported);
         }
     });
 });

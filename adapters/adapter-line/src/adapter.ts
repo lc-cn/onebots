@@ -47,22 +47,6 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         return { message_id: this.createId(firstMessageId) };
     }
 
-    async deleteMessage(): Promise<void> {
-        this.unsupported(
-            "delete_message",
-            "platform_unsupported",
-            "LINE 不支持机器人撤回已发送消息",
-        );
-    }
-
-    async getMessage(): Promise<Adapter.MessageInfo> {
-        return this.unsupported(
-            "get_message",
-            "platform_unsupported",
-            "LINE 只允许按消息 ID 下载媒体内容，不提供消息查询接口",
-        );
-    }
-
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         const info = await this.requireBot(uin).getBotInfo();
         return {

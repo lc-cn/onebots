@@ -413,14 +413,6 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         await account.client.kickChannelMember(params.group_id.string, params.user_id.string);
     }
 
-    /**
-     * 设置群名片（Slack 不支持）
-     */
-    async setGroupCard(_uin: string, _params: Adapter.SetGroupCardParams): Promise<void> {
-        // Slack 不支持设置群名片
-        throw new Error("Slack 不支持设置群名片");
-    }
-
     // ============================================
     // 系统相关方法
     // ============================================

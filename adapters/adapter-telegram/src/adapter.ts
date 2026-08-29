@@ -59,15 +59,6 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     }
 
     /**
-     * 获取消息
-     */
-    async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
-        // Telegram Bot API 不直接支持获取消息，需要通过其他方式
-        // 这里返回一个占位实现
-        throw new Error("Telegram Bot API 不支持直接获取消息");
-    }
-
-    /**
      * 更新消息
      */
     async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
@@ -117,48 +108,6 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             user_displayname: me.first_name || "",
             avatar: undefined,
         };
-    }
-
-    /**
-     * 获取用户信息
-     */
-    async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
-        // Telegram Bot API 不直接支持获取用户信息
-        // 这里返回一个占位实现
-        throw new Error("Telegram Bot API 不支持直接获取用户信息");
-    }
-
-    /**
-     * 获取好友列表（Telegram 不支持）
-     */
-    async getFriendList(
-        uin: string,
-        params?: Adapter.GetFriendListParams,
-    ): Promise<Adapter.FriendInfo[]> {
-        // Telegram Bot API 不提供好友列表
-        return [];
-    }
-
-    /**
-     * 获取好友信息
-     */
-    async getFriendInfo(
-        uin: string,
-        params: Adapter.GetFriendInfoParams,
-    ): Promise<Adapter.FriendInfo> {
-        // Telegram Bot API 不直接支持获取好友信息
-        throw new Error("Telegram Bot API 不支持直接获取好友信息");
-    }
-
-    /**
-     * 获取群列表（Telegram 不支持）
-     */
-    async getGroupList(
-        uin: string,
-        params?: Adapter.GetGroupListParams,
-    ): Promise<Adapter.GroupInfo[]> {
-        // Telegram Bot API 不提供群列表
-        return [];
     }
 
     /**
@@ -341,14 +290,6 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         };
     }
 
-    /**
-     * 设置群名片（Telegram 不支持）
-     */
-    async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        // Telegram Bot API 不支持设置群名片
-        throw new Error("Telegram Bot API 不支持设置群名片");
-    }
-
     async executePlatformAction(
         uin: string,
         action: string,
@@ -374,12 +315,15 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
      * 获取版本信息
      */
     async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
-        const version = await readPackageVersion(import.meta.url);
+        const [appVersion, sdkVersion] = await Promise.all([
+            readPackageVersion(import.meta.url),
+            readPackageVersion(import.meta.resolve("grammy")),
+        ]);
         return {
             app_name: "onebots Telegram Adapter",
-            app_version: version,
+            app_version: appVersion,
             impl: "telegram",
-            version,
+            version: sdkVersion,
         };
     }
 

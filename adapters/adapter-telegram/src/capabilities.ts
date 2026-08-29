@@ -45,6 +45,11 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
             permissions: ["can_invite_users"],
         },
         get_file: { support: "native" },
+        call_telegram_api: {
+            support: "native",
+            availability: "context",
+            note: "受当前 Bot token 权限约束的完整 grammY raw Bot API 入口",
+        },
         send_poll: { support: "native", scenes: ["private", "group", "channel"] },
         forward_message: { support: "native" },
         copy_message: { support: "native" },
