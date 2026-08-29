@@ -1,32 +1,8 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { SlackBot } from "./bot.js";
 import { SlackError } from "./errors.js";
 
-export const SLACK_PLATFORM_ACTIONS = new Set([
-    "call_slack_api",
-    "add_reaction",
-    "remove_reaction",
-    "add_pin",
-    "remove_pin",
-    "get_thread_replies",
-    "open_conversation",
-    "archive_channel",
-    "unarchive_channel",
-    "rename_channel",
-    "set_channel_topic",
-    "set_channel_purpose",
-    "join_channel",
-    "invite_channel_members",
-    "leave_channel",
-    "schedule_message",
-    "delete_scheduled_message",
-    "list_scheduled_messages",
-    "add_bookmark",
-    "edit_bookmark",
-    "remove_bookmark",
-    "list_bookmarks",
-]);
-
-const METHOD_BY_ACTION: Readonly<Record<string, string>> = {
+const METHOD_BY_ACTION = {
     add_reaction: "reactions.add",
     remove_reaction: "reactions.remove",
     add_pin: "pins.add",
@@ -48,7 +24,26 @@ const METHOD_BY_ACTION: Readonly<Record<string, string>> = {
     edit_bookmark: "bookmarks.edit",
     remove_bookmark: "bookmarks.remove",
     list_bookmarks: "bookmarks.list",
-};
+} as const;
+
+const METHOD_HANDLERS = Object.fromEntries(
+    Object.entries(METHOD_BY_ACTION).map(([action, method]) => [
+        action,
+        (bot: SlackBot, params: Readonly<Record<string, unknown>>) =>
+            bot.call(method, { ...params }),
+    ]),
+) satisfies Readonly<Record<string, PlatformActionHandler<SlackBot>>>;
+
+const PLATFORM_ACTIONS = definePlatformActions(
+    {
+        call_slack_api: (bot: SlackBot, params: Readonly<Record<string, unknown>>) =>
+            bot.call(requireMethod(params.method), requireObject(params.params, "params", {})),
+        ...METHOD_HANDLERS,
+    },
+    action => SlackError.invalid(`未实现 Slack 平台动作: ${action}`, "SLACK_ACTION_UNSUPPORTED"),
+);
+
+export const SLACK_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 执行能力清单允许的 Slack Web API 扩展动作。 */
 export async function executeSlackPlatformAction(
@@ -56,15 +51,7 @@ export async function executeSlackPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    if (action === "call_slack_api") {
-        const method = requireMethod(params.method);
-        return bot.call(method, requireObject(params.params, "params", {}));
-    }
-    const method = METHOD_BY_ACTION[action];
-    if (!method) {
-        throw SlackError.invalid(`未实现 Slack 平台动作: ${action}`, "SLACK_ACTION_UNSUPPORTED");
-    }
-    return bot.call(method, { ...params });
+    return PLATFORM_ACTIONS.execute(bot, action, params);
 }
 
 function requireMethod(value: unknown): string {

@@ -1,27 +1,71 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { FeishuBot } from "./bot.js";
 import { FeishuError, invalidFeishuParam } from "./errors.js";
 
-export const FEISHU_PLATFORM_ACTIONS = new Set([
-    "call_feishu_api",
-    "reply_message",
-    "forward_message",
-    "add_reaction",
-    "delete_reaction",
-    "get_reactions",
-    "create_chat",
-    "update_chat",
-    "delete_chat",
-    "add_chat_members",
-    "remove_chat_members",
-    "send_app_urgent",
-    "send_sms_urgent",
-    "send_phone_urgent",
-    "create_pin",
-    "delete_pin",
-    "get_pin_list",
-]);
-
 type Method = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+
+const ACTION_HANDLERS = {
+    call_feishu_api: (bot, params) =>
+        bot.callApi(requirePath(params.path), {
+            method: requireMethod(params.method),
+            params: queryValue(params.query),
+            body: bodyValue(params.body),
+        }),
+    reply_message: (bot, params) =>
+        bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/reply`, {
+            method: "POST",
+            body: without(params, "message_id"),
+        }),
+    forward_message: (bot, params) =>
+        bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/forward`, {
+            method: "POST",
+            body: without(params, "message_id"),
+        }),
+    add_reaction: (bot, params) =>
+        bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/reactions`, {
+            method: "POST",
+            body: without(params, "message_id"),
+        }),
+    delete_reaction: (bot, params) =>
+        bot.callApi(
+            `/im/v1/messages/${segment(params, "message_id")}/reactions/${segment(params, "reaction_id")}`,
+            { method: "DELETE" },
+        ),
+    get_reactions: (bot, params) =>
+        bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/reactions`, {
+            params: queryValue(without(params, "message_id")),
+        }),
+    create_chat: (bot, params) =>
+        bot.callApi("/im/v1/chats", { method: "POST", body: { ...params } }),
+    update_chat: (bot, params) =>
+        bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}`, {
+            method: "PUT",
+            body: without(params, "chat_id"),
+        }),
+    delete_chat: (bot, params) =>
+        bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}`, { method: "DELETE" }),
+    add_chat_members: (bot, params) => chatMembers(bot, params, "POST"),
+    remove_chat_members: (bot, params) => chatMembers(bot, params, "DELETE"),
+    send_app_urgent: (bot, params) => urgent(bot, params, "urgent_app"),
+    send_sms_urgent: (bot, params) => urgent(bot, params, "urgent_sms"),
+    send_phone_urgent: (bot, params) => urgent(bot, params, "urgent_phone"),
+    create_pin: (bot, params) =>
+        bot.callApi("/im/v1/pins", { method: "POST", body: { ...params } }),
+    delete_pin: (bot, params) =>
+        bot.callApi(`/im/v1/pins/${segment(params, "message_id")}`, { method: "DELETE" }),
+    get_pin_list: (bot, params) => bot.callApi("/im/v1/pins", { params: queryValue(params) }),
+} satisfies Readonly<Record<string, PlatformActionHandler<FeishuBot>>>;
+
+const PLATFORM_ACTIONS = definePlatformActions(
+    ACTION_HANDLERS,
+    action =>
+        new FeishuError(`未实现飞书平台动作: ${action}`, {
+            code: "FEISHU_ACTION_NOT_IMPLEMENTED",
+            operation: action,
+        }),
+);
+
+export const FEISHU_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 执行飞书平台扩展动作；参数对象与开放平台 JSON 保持一致。 */
 export async function executeFeishuPlatformAction(
@@ -29,70 +73,7 @@ export async function executeFeishuPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    switch (action) {
-        case "call_feishu_api":
-            return bot.callApi(requirePath(params.path), {
-                method: requireMethod(params.method),
-                params: queryValue(params.query),
-                body: bodyValue(params.body),
-            });
-        case "reply_message":
-            return bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/reply`, {
-                method: "POST",
-                body: without(params, "message_id"),
-            });
-        case "forward_message":
-            return bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/forward`, {
-                method: "POST",
-                body: without(params, "message_id"),
-            });
-        case "add_reaction":
-            return bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/reactions`, {
-                method: "POST",
-                body: without(params, "message_id"),
-            });
-        case "delete_reaction":
-            return bot.callApi(
-                `/im/v1/messages/${segment(params, "message_id")}/reactions/${segment(params, "reaction_id")}`,
-                { method: "DELETE" },
-            );
-        case "get_reactions":
-            return bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/reactions`, {
-                params: queryValue(without(params, "message_id")),
-            });
-        case "create_chat":
-            return bot.callApi("/im/v1/chats", { method: "POST", body: { ...params } });
-        case "update_chat":
-            return bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}`, {
-                method: "PUT",
-                body: without(params, "chat_id"),
-            });
-        case "delete_chat":
-            return bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}`, { method: "DELETE" });
-        case "add_chat_members":
-            return chatMembers(bot, params, "POST");
-        case "remove_chat_members":
-            return chatMembers(bot, params, "DELETE");
-        case "send_app_urgent":
-            return urgent(bot, params, "urgent_app");
-        case "send_sms_urgent":
-            return urgent(bot, params, "urgent_sms");
-        case "send_phone_urgent":
-            return urgent(bot, params, "urgent_phone");
-        case "create_pin":
-            return bot.callApi("/im/v1/pins", { method: "POST", body: { ...params } });
-        case "delete_pin":
-            return bot.callApi(`/im/v1/pins/${segment(params, "message_id")}`, {
-                method: "DELETE",
-            });
-        case "get_pin_list":
-            return bot.callApi("/im/v1/pins", { params: queryValue(params) });
-        default:
-            throw new FeishuError(`未实现飞书平台动作: ${action}`, {
-                code: "FEISHU_ACTION_NOT_IMPLEMENTED",
-                operation: action,
-            });
-    }
+    return PLATFORM_ACTIONS.execute(bot, action, params);
 }
 
 function chatMembers(

@@ -1,24 +1,50 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { DingTalkBot } from "./bot.js";
 import { DingTalkError } from "./errors.js";
 import type { DingTalkApiRequestOptions } from "./types.js";
 
-export const DINGTALK_PLATFORM_ACTIONS = new Set([
-    "call_dingtalk_api",
-    "send_robot_private_message",
-    "send_robot_group_message",
-    "send_work_notification",
-    "get_work_notification_result",
-    "recall_work_notification",
-    "get_department_users",
-    "get_sub_departments",
-    "create_department",
-    "update_department",
-    "delete_department",
-    "get_role_list",
-    "get_role_users",
-    "add_user_roles",
-    "remove_user_roles",
-]);
+const ACTION_HANDLERS = {
+    call_dingtalk_api: (bot, params) =>
+        bot.callApi(requirePath(params.path), {
+            method: methodValue(params.method),
+            auth: authValue(params.auth),
+            query: queryValue(params.query),
+            body: bodyValue(params.body),
+        }),
+    send_robot_private_message: (bot, params) =>
+        bot.callApi("/v1.0/robot/oToMessages/batchSend", {
+            method: "POST",
+            body: { ...params },
+        }),
+    send_robot_group_message: (bot, params) =>
+        bot.callApi("/v1.0/robot/groupMessages/send", {
+            method: "POST",
+            body: { ...params },
+        }),
+    send_work_notification: (bot, params) =>
+        legacy(bot, "/topapi/message/corpconversation/asyncsend_v2", params),
+    get_work_notification_result: (bot, params) =>
+        legacy(bot, "/topapi/message/corpconversation/getsendresult", params),
+    recall_work_notification: (bot, params) =>
+        legacy(bot, "/topapi/message/corpconversation/recall", params),
+    get_department_users: (bot, params) => legacy(bot, "/topapi/v2/user/list", params),
+    get_sub_departments: (bot, params) => legacy(bot, "/topapi/v2/department/listsub", params),
+    create_department: (bot, params) => legacy(bot, "/topapi/v2/department/create", params),
+    update_department: (bot, params) => legacy(bot, "/topapi/v2/department/update", params),
+    delete_department: (bot, params) => legacy(bot, "/topapi/v2/department/delete", params),
+    get_role_list: (bot, params) => legacy(bot, "/topapi/role/list", params),
+    get_role_users: (bot, params) => legacy(bot, "/topapi/role/simplelist", params),
+    add_user_roles: (bot, params) => legacy(bot, "/topapi/role/addrolesforemps", params),
+    remove_user_roles: (bot, params) => legacy(bot, "/topapi/role/removerolesforemps", params),
+} satisfies Readonly<Record<string, PlatformActionHandler<DingTalkBot>>>;
+
+const PLATFORM_ACTIONS = definePlatformActions(ACTION_HANDLERS, action =>
+    DingTalkError.invalid(`未实现钉钉平台动作: ${action}`, "DINGTALK_ACTION_UNSUPPORTED", {
+        action,
+    }),
+);
+
+export const DINGTALK_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 执行结构化钉钉扩展动作；参数名称与开放平台保持一致。 */
 export async function executeDingTalkPlatformAction(
@@ -26,55 +52,7 @@ export async function executeDingTalkPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    switch (action) {
-        case "call_dingtalk_api":
-            return bot.callApi(requirePath(params.path), {
-                method: methodValue(params.method),
-                auth: authValue(params.auth),
-                query: queryValue(params.query),
-                body: bodyValue(params.body),
-            });
-        case "send_robot_private_message":
-            return bot.callApi("/v1.0/robot/oToMessages/batchSend", {
-                method: "POST",
-                body: { ...params },
-            });
-        case "send_robot_group_message":
-            return bot.callApi("/v1.0/robot/groupMessages/send", {
-                method: "POST",
-                body: { ...params },
-            });
-        case "send_work_notification":
-            return legacy(bot, "/topapi/message/corpconversation/asyncsend_v2", params);
-        case "get_work_notification_result":
-            return legacy(bot, "/topapi/message/corpconversation/getsendresult", params);
-        case "recall_work_notification":
-            return legacy(bot, "/topapi/message/corpconversation/recall", params);
-        case "get_department_users":
-            return legacy(bot, "/topapi/v2/user/list", params);
-        case "get_sub_departments":
-            return legacy(bot, "/topapi/v2/department/listsub", params);
-        case "create_department":
-            return legacy(bot, "/topapi/v2/department/create", params);
-        case "update_department":
-            return legacy(bot, "/topapi/v2/department/update", params);
-        case "delete_department":
-            return legacy(bot, "/topapi/v2/department/delete", params);
-        case "get_role_list":
-            return legacy(bot, "/topapi/role/list", params);
-        case "get_role_users":
-            return legacy(bot, "/topapi/role/simplelist", params);
-        case "add_user_roles":
-            return legacy(bot, "/topapi/role/addrolesforemps", params);
-        case "remove_user_roles":
-            return legacy(bot, "/topapi/role/removerolesforemps", params);
-        default:
-            throw DingTalkError.invalid(
-                `未实现钉钉平台动作: ${action}`,
-                "DINGTALK_ACTION_UNSUPPORTED",
-                { action },
-            );
-    }
+    return PLATFORM_ACTIONS.execute(bot, action, params);
 }
 
 function legacy(
