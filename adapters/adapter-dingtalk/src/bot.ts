@@ -1,7 +1,9 @@
 import { EventEmitter } from "node:events";
 import { DWClient, EventAck, TOPIC_CARD, TOPIC_ROBOT } from "dingtalk-stream";
 import { ErrorCategory, type Next, type RouterContext } from "onebots";
+import { requireDingTalkApiPath } from "./api-path.js";
 import { DingTalkCallbackCrypto } from "./crypto.js";
+import { assertDingTalkConfig } from "./config.js";
 import {
     getDingTalkDepartmentUsers,
     getDingTalkSceneGroupMembers,
@@ -70,6 +72,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
 
     constructor(readonly config: DingTalkConfig) {
         super();
+        assertDingTalkConfig(config);
         if (config.encrypt_key) {
             if (!config.corp_id) {
                 throw DingTalkError.config(
@@ -151,6 +154,8 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
             autoReconnect: true,
             keepAlive: true,
             debug: false,
+            maxPendingEventHandlers: this.config.max_pending_event_handlers,
+            maxPendingCallbackHandlers: this.config.max_pending_callback_handlers,
         });
         stream.registerCallbackListener(TOPIC_ROBOT, message => {
             if (!this.isCurrentStream(stream, generation)) return;
@@ -318,14 +323,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     }
 
     async callApi<T = unknown>(path: string, options: DingTalkApiRequestOptions = {}): Promise<T> {
-        if (!path.startsWith("/") || path.includes("..")) {
-            throw DingTalkError.invalid(
-                "钉钉 API path 必须为安全绝对路径",
-                "DINGTALK_API_PATH_INVALID",
-                { path },
-            );
-        }
-        return this.request<T>(path, options);
+        return this.request<T>(requireDingTalkApiPath(path), options);
     }
 
     private async request<T>(path: string, options: DingTalkApiRequestOptions): Promise<T> {

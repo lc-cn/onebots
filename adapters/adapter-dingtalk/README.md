@@ -24,6 +24,8 @@ dingtalk.my_bot:
 
 `DingTalkBot.start()` 是并发幂等的；启动期间调用 `stop()` 会使该代启动失效，延迟返回的令牌或连接不会再次触发 `ready`。Stream 首次连接失败会清理旧客户端，因此后续启动可以创建全新连接，而不会卡在未连接实例上。
 
+高吞吐场景可配置 `max_pending_event_handlers` 与 `max_pending_callback_handlers`。Web 表单只在 Stream 模式显示这两个背压上限，只在 Webhook 模式显示回调验签字段，避免无关配置淹没必要信息。
+
 ## HTTP 加密回调
 
 ```yaml
@@ -73,11 +75,15 @@ dingtalk.my_bot:
 
 - `call_dingtalk_api`：底层开放平台入口，参数为 `path`、`method`、`auth`、`query`、`body`。
 - `send_robot_private_message`、`send_robot_group_message`。
+- `recall_robot_private_messages`、`recall_robot_group_messages`：按 `processQueryKeys` 撤回企业机器人消息。
+- `get_robot_private_message_status`、`get_robot_group_message_status`：查询发送与已读状态。
 - `send_work_notification`、`get_work_notification_result`、`recall_work_notification`。
 - `get_department_users`、`get_sub_departments`、部门增删改。
 - `get_role_list`、`get_role_users`、用户角色增删。
 
 `auth` 可选 `modern`、`legacy`、`none`。路径必须是以 `/` 开头且不含目录穿越的开放平台路径。
+
+统一 `delete_message` 同样支持企业机器人单聊和群聊撤回。`message_id` 必须是主动发送返回的 `processQueryKey`；群消息还需携带 `scene_type: "group"` 与群 `scene_id`。自定义机器人 Webhook 不返回该键，因此不会伪造“撤回成功”。成员增删和通讯录批量回调会逐用户生成 canonical notice，避免同一回调中的后续成员被漏掉。
 
 ## SDK 错误与事件类型
 

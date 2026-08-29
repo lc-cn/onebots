@@ -11,6 +11,10 @@ export interface DingTalkConfig {
     robot_code?: string;
     corp_id?: string;
     receive_mode?: DingTalkReceiveMode;
+    /** Stream EVENT 并发处理上限；达到上限时 SDK 返回 LATER。 */
+    max_pending_event_handlers?: number;
+    /** Stream CALLBACK 并发处理上限；达到上限时等待服务端重投。 */
+    max_pending_callback_handlers?: number;
     /** HTTP 回调加密 AES Key（43 字符）。 */
     encrypt_key?: string;
     /** HTTP 回调签名 Token。 */

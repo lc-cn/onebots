@@ -1,11 +1,12 @@
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
+import { requireDingTalkApiPath } from "./api-path.js";
 import type { DingTalkBot } from "./bot.js";
 import { DingTalkError } from "./errors.js";
 import type { DingTalkApiRequestOptions } from "./types.js";
 
 const ACTION_HANDLERS = {
     call_dingtalk_api: (bot, params) =>
-        bot.callApi(requirePath(params.path), {
+        bot.callApi(requireDingTalkApiPath(params.path), {
             method: methodValue(params.method),
             auth: authValue(params.auth),
             query: queryValue(params.query),
@@ -18,6 +19,26 @@ const ACTION_HANDLERS = {
         }),
     send_robot_group_message: (bot, params) =>
         bot.callApi("/v1.0/robot/groupMessages/send", {
+            method: "POST",
+            body: { ...params },
+        }),
+    recall_robot_private_messages: (bot, params) =>
+        bot.callApi("/v1.0/robot/otoMessages/batchRecall", {
+            method: "POST",
+            body: { ...params },
+        }),
+    recall_robot_group_messages: (bot, params) =>
+        bot.callApi("/v1.0/robot/groupMessages/recall", {
+            method: "POST",
+            body: { ...params },
+        }),
+    get_robot_private_message_status: (bot, params) =>
+        bot.callApi("/v1.0/robot/oToMessages/readStatus", {
+            method: "GET",
+            query: queryValue(params),
+        }),
+    get_robot_group_message_status: (bot, params) =>
+        bot.callApi("/v1.0/robot/groupMessages/query", {
             method: "POST",
             body: { ...params },
         }),
@@ -63,17 +84,6 @@ function legacy(
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
     return bot.callApi(path, { method: "POST", body: { ...params }, auth: "legacy" });
-}
-
-function requirePath(value: unknown): string {
-    if (typeof value !== "string" || !value.startsWith("/") || value.includes("..")) {
-        throw DingTalkError.invalid(
-            "钉钉参数 path 必须为安全绝对路径",
-            "DINGTALK_ACTION_PATH_INVALID",
-            { path: value },
-        );
-    }
-    return value;
 }
 
 function methodValue(value: unknown): DingTalkApiRequestOptions["method"] {

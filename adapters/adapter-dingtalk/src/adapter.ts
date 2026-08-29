@@ -44,6 +44,49 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
         return { message_id: this.createId(dingtalkMessageId(result)) };
     }
 
+    async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
+        const scene = params.scene_type;
+        if (scene !== "private" && scene !== "direct" && scene !== "group") {
+            throw DingTalkError.invalid(
+                "撤回钉钉机器人消息必须提供 private、direct 或 group 场景",
+                "DINGTALK_RECALL_SCENE_REQUIRED",
+            );
+        }
+        if (params.message_id.string.startsWith("webhook:")) {
+            throw DingTalkError.invalid(
+                "自定义机器人 Webhook 不返回可撤回的 processQueryKey",
+                "DINGTALK_WEBHOOK_MESSAGE_NOT_RECALLABLE",
+            );
+        }
+        const bot = this.requireBot(uin);
+        const robotCode = bot.config.robot_code || bot.config.app_key;
+        if (!robotCode) {
+            throw DingTalkError.config(
+                "撤回钉钉机器人消息必须配置 robot_code 或 app_key",
+                "DINGTALK_ROBOT_CODE_REQUIRED",
+            );
+        }
+        const body: Record<string, unknown> = {
+            robotCode,
+            processQueryKeys: [params.message_id.string],
+        };
+        if (scene === "group") {
+            if (!params.scene_id) {
+                throw DingTalkError.invalid(
+                    "撤回钉钉群消息必须提供 scene_id",
+                    "DINGTALK_RECALL_GROUP_REQUIRED",
+                );
+            }
+            body.openConversationId = params.scene_id.string;
+        }
+        await bot.callApi(
+            scene === "group"
+                ? "/v1.0/robot/groupMessages/recall"
+                : "/v1.0/robot/otoMessages/batchRecall",
+            { method: "POST", body },
+        );
+    }
+
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         const me = this.requireBot(uin).getCachedMe();
         return {

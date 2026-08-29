@@ -9,6 +9,12 @@ export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapa
             availability: "context",
             note: "主动消息需要企业机器人权限；收到消息后优先使用有效 sessionWebhook",
         },
+        delete_message: {
+            support: "native",
+            scenes: ["private", "group"],
+            availability: "context",
+            note: "仅企业机器人 OpenAPI 返回的 processQueryKey 可撤回；群消息还需会话 ID",
+        },
         get_login_info: { support: "native" },
         get_user_info: {
             support: "native",
@@ -43,6 +49,10 @@ export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         call_dingtalk_api: { support: "native", availability: "permission" },
         send_robot_private_message: { support: "native", availability: "permission" },
         send_robot_group_message: { support: "native", availability: "permission" },
+        recall_robot_private_messages: { support: "native", availability: "permission" },
+        recall_robot_group_messages: { support: "native", availability: "permission" },
+        get_robot_private_message_status: { support: "native", availability: "permission" },
+        get_robot_group_message_status: { support: "native", availability: "permission" },
         send_work_notification: { support: "native", availability: "permission" },
         get_work_notification_result: { support: "native", availability: "permission" },
         recall_work_notification: { support: "native", availability: "permission" },

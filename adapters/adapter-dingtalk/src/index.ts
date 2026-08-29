@@ -65,21 +65,54 @@ export const dingtalkSchema: Schema = {
         type: "string",
         label: "Corp ID",
         description: "启用 HTTP 加密回调时用于校验回调归属",
-        ui: { section: "credentials" },
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     token: {
         type: "string",
         label: "回调 Token",
         sensitive: true,
         description: "HTTP 加密回调签名使用",
-        ui: { section: "credentials" },
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     encrypt_key: {
         type: "string",
         label: "EncodingAESKey",
         sensitive: true,
         description: "HTTP 加密回调使用的 43 字符 AES Key",
-        ui: { section: "credentials" },
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
+    },
+    max_pending_event_handlers: {
+        type: "number",
+        default: 100,
+        min: 1,
+        max: 10000,
+        label: "Stream 事件并发上限",
+        description: "达到上限时由官方 SDK 返回 LATER，让服务端稍后重投",
+        ui: {
+            section: "advanced",
+            visibleWhen: { path: "receive_mode", oneOf: ["stream"] },
+        },
+    },
+    max_pending_callback_handlers: {
+        type: "number",
+        default: 100,
+        min: 1,
+        max: 10000,
+        label: "Stream 回调并发上限",
+        description: "限制机器人与卡片回调的在途处理数量，防止慢处理耗尽内存",
+        ui: {
+            section: "advanced",
+            visibleWhen: { path: "receive_mode", oneOf: ["stream"] },
+        },
     },
     webhook_url: {
         type: "string",

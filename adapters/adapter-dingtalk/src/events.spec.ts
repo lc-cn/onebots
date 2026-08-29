@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectDingTalkEvent, projectDingTalkRobotMessage } from "./events.js";
+import { projectDingTalkEvents, projectDingTalkRobotMessage } from "./events.js";
 import type { DingTalkEvent, DingTalkRobotMessage } from "./types.js";
 
 const context = {
@@ -38,19 +38,45 @@ describe("DingTalk event projection", () => {
     });
 
     it("投影通讯录事件并无损保留未知事件", () => {
-        expect(projectDingTalkEvent(makeEvent("user_add_org"), context)).toMatchObject({
+        expect(projectDingTalkEvents(makeEvent("user_add_org"), context)[0]).toMatchObject({
             notice_type: "user_added",
             user: { id: { string: "user_1" } },
         });
-        expect(projectDingTalkEvent(makeEvent("bpms_instance_change"), context)).toMatchObject({
+        expect(projectDingTalkEvents(makeEvent("bpms_instance_change"), context)[0]).toMatchObject({
             notice_type: "custom",
             extensions: { dingtalk: { event_type: "bpms_instance_change" } },
         });
     });
+
+    it("将批量群成员回调逐成员投影并保留操作者", () => {
+        const event = makeEvent("chat_add_member", {
+            UserId: ["user_1", "user_2"],
+            OpenConversationId: "cid_group",
+            Title: "项目群",
+            Operator: "admin_1",
+        });
+        expect(projectDingTalkEvents(event, context)).toMatchObject([
+            {
+                id: { string: "event:chat_add_member:user_1" },
+                notice_type: "member_joined",
+                user: { id: { string: "user_1" } },
+                operator: { id: { string: "admin_1" } },
+                group: { id: { string: "cid_group" }, name: "项目群" },
+            },
+            {
+                id: { string: "event:chat_add_member:user_2" },
+                notice_type: "member_joined",
+                user: { id: { string: "user_2" } },
+            },
+        ]);
+    });
 });
 
-function makeEvent(eventType: string): DingTalkEvent {
-    const raw = { eventType, UserId: ["user_1"] };
+function makeEvent(
+    eventType: string,
+    eventData: Record<string, unknown> = { UserId: ["user_1"] },
+): DingTalkEvent {
+    const raw = { eventType, ...eventData };
     return {
         eventType,
         eventId: `event:${eventType}`,

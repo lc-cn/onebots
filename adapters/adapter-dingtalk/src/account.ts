@@ -1,7 +1,7 @@
 import { Account, AccountStatus } from "onebots";
 import type { DingTalkAdapter } from "./adapter.js";
 import { DingTalkBot } from "./bot.js";
-import { projectDingTalkEvent, projectDingTalkRobotMessage } from "./events.js";
+import { projectDingTalkEvents, projectDingTalkRobotMessage } from "./events.js";
 import type { DingTalkConfig, DingTalkEvent, DingTalkRobotMessage } from "./types.js";
 
 /** 创建钉钉账号，并把所有接收方式汇入同一条事件投影链路。 */
@@ -34,8 +34,7 @@ export function createDingTalkAccount(
         if (projected) account.dispatch(projected);
     });
     const dispatchEvent = (event: DingTalkEvent) => {
-        const projected = projectDingTalkEvent(event, context);
-        if (projected) account.dispatch(projected);
+        for (const projected of projectDingTalkEvents(event, context)) account.dispatch(projected);
     };
     bot.on("event", dispatchEvent);
     bot.on("native_event", dispatchEvent);

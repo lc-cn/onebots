@@ -27,6 +27,23 @@ describe("DingTalkBot", () => {
         expect(bot.getCachedMe()?.userid).toBe("bot-id");
     });
 
+    it("在创建传输前拒绝非法接收模式与 Stream 并发上限", () => {
+        expect(
+            () =>
+                new DingTalkBot({
+                    account_id: "bot",
+                    receive_mode: "invalid" as never,
+                }),
+        ).toThrowError(expect.objectContaining({ code: "DINGTALK_RECEIVE_MODE_INVALID" }));
+        expect(
+            () =>
+                new DingTalkBot({
+                    account_id: "bot",
+                    max_pending_event_handlers: 0,
+                }),
+        ).toThrowError(expect.objectContaining({ code: "DINGTALK_STREAM_CONCURRENCY_INVALID" }));
+    });
+
     it("群消息使用 openConversationId 的企业机器人 API", async () => {
         const fetchMock = vi
             .fn()

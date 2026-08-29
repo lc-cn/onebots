@@ -47,17 +47,18 @@ export function projectDingTalkRobotMessage(
 }
 
 /** 投影通讯录、群成员等开放平台事件；未知事件通过 custom notice 无损交付。 */
-export function projectDingTalkEvent(
+export function projectDingTalkEvents(
     event: DingTalkEvent,
     context: DingTalkProjectionContext,
-): CommonEvent.Event<Record<string, unknown>> | undefined {
+): CommonEvent.Event<Record<string, unknown>>[] {
     const nestedMessage = objectValue(event.eventData.msg);
     if (nestedMessage.msgId) {
-        return projectDingTalkRobotMessage(
+        const message = projectDingTalkRobotMessage(
             nestedMessage as DingTalkRobotMessage,
             event.raw,
             context,
         );
+        return message ? [message] : [];
     }
     const noticeType = noticeTypes[event.eventType] || "custom";
     const userIds = stringList(
@@ -72,24 +73,41 @@ export function projectDingTalkEvent(
         event.eventData.chatId,
         event.eventData.conversationId,
     );
-    return {
-        id: context.createId(event.eventId || `${event.eventType}:${event.eventTime}`),
-        timestamp: coerceUnixToEventMs(event.eventTime),
-        platform: "dingtalk",
-        bot_id: context.botId,
-        raw_event: event.raw,
-        type: "notice",
-        notice_type: noticeType,
-        user: userIds[0] ? { id: context.createId(userIds[0]), name: userIds[0] } : undefined,
-        group: groupId ? { id: context.createId(groupId), name: "" } : undefined,
-        extensions: {
-            dingtalk: {
-                event_type: event.eventType,
-                event_corp_id: event.eventCorpId,
-                user_ids: userIds,
+    const operatorId = firstString(
+        event.eventData.Operator,
+        event.eventData.operator,
+        event.eventData.operatorId,
+    );
+    const users = userIds.length ? userIds : [undefined];
+    return users.map(userId => {
+        const eventId = event.eventId || `${event.eventType}:${event.eventTime}`;
+        return {
+            id: context.createId(userIds.length > 1 ? `${eventId}:${userId}` : eventId),
+            timestamp: coerceUnixToEventMs(event.eventTime),
+            platform: "dingtalk",
+            bot_id: context.botId,
+            raw_event: event.raw,
+            type: "notice",
+            notice_type: noticeType,
+            user: userId ? { id: context.createId(userId), name: userId } : undefined,
+            operator: operatorId
+                ? { id: context.createId(operatorId), name: operatorId }
+                : undefined,
+            group: groupId
+                ? {
+                      id: context.createId(groupId),
+                      name: firstString(event.eventData.Title, event.eventData.title),
+                  }
+                : undefined,
+            extensions: {
+                dingtalk: {
+                    event_type: event.eventType,
+                    event_corp_id: event.eventCorpId,
+                    user_ids: userIds,
+                },
             },
-        },
-    };
+        } satisfies CommonEvent.Notice<Record<string, unknown>>;
+    });
 }
 
 export function projectDingTalkSegments(message: DingTalkRobotMessage): CommonTypes.Segment[] {
