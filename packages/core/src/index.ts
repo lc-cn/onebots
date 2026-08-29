@@ -3,6 +3,8 @@ export * from "./account.js";
 export * from "./adapter.js";
 export * from "./adapter-capability.js";
 export * from "./adapter-id-manager.js";
+export * from "./api-path.js";
+export * from "./async-utils.js";
 export * from "./base-app.js";
 export * from "./router.js";
 export * from "./types.js";

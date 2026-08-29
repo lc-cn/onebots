@@ -31,6 +31,7 @@ export {
     type ReverseWebSocketOptions,
     type MediaSourceInput,
     type MaterializedMedia,
+    type RefreshableValueResult,
     // Infrastructure
     ConnectionManager,
     ReverseWebSocketSession,
@@ -50,6 +51,9 @@ export {
     readPackageVersion,
     readPackageVersionFile,
     materializeMediaSource,
+    isSafeAbsoluteApiPath,
+    mapConcurrent,
+    RefreshableValue,
     defineAdapterCapabilities,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,

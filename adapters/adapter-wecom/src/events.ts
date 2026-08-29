@@ -52,6 +52,24 @@ export function projectWeComEvent(
         };
     }
 
+    if (eventType && interactionEvents.has(eventType.toLowerCase())) {
+        return {
+            ...base,
+            type: "notice",
+            notice_type: "interaction",
+            sub_type: eventType.toLowerCase(),
+            user: event.FromUserName ? { id: context.createId(event.FromUserName) } : undefined,
+            extensions: {
+                wecom: {
+                    event_type: eventType,
+                    event_key: event.EventKey,
+                    task_id: event.TaskId,
+                    response_code: event.ResponseCode,
+                },
+            },
+        };
+    }
+
     return {
         ...base,
         type: "notice",
@@ -121,3 +139,18 @@ const contactNoticeTypes: Record<string, CommonEvent.NoticeType> = {
     update_user: "user_updated",
     delete_user: "user_removed",
 };
+
+const interactionEvents = new Set([
+    "enter_agent",
+    "click",
+    "view",
+    "scancode_push",
+    "scancode_waitmsg",
+    "pic_sysphoto",
+    "pic_photo_or_album",
+    "pic_weixin",
+    "location_select",
+    "view_miniprogram",
+    "template_card_event",
+    "template_card_menu_event",
+]);

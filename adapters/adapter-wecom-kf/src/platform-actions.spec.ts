@@ -39,13 +39,24 @@ describe("微信客服平台动作", () => {
         });
     });
 
-    it("拒绝越权 URL 与空接待人员集合", async () => {
+    it.each([
+        "https://evil.example",
+        "//evil.example/path",
+        "/cgi-bin/kf/../gettoken",
+        "/cgi-bin/kf/%2e%2e/gettoken",
+        "/cgi-bin/kf/account/list?limit=1",
+        "/cgi-bin/kf/account/list#fragment",
+    ])("拒绝越权或夹带 URL 语义的路径: %s", async path => {
         const client = new WeComKfClient(config);
         await expect(
             executeWeComKfPlatformAction(client, "wecom_kf_call", {
-                path: "https://evil.example",
+                path,
             }),
         ).rejects.toMatchObject({ code: "WECOM_KF_INVALID_PARAMETER" });
+    });
+
+    it("拒绝空接待人员集合", () => {
+        const client = new WeComKfClient(config);
         expect(() =>
             executeWeComKfPlatformAction(client, "add_servicers", { open_kfid: "wk-1" }),
         ).toThrowError(expect.objectContaining({ code: "WECOM_KF_INVALID_PARAMETER" }));

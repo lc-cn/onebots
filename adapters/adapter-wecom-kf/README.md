@@ -72,7 +72,7 @@ await adapter.sendMessage("customer_service", {
 - 消息：原生发送、事件欢迎语/提示语、临时素材上传下载；
 - 数据：企业汇总、接待人员统计与视频号绑定状态。
 
-`wecom_kf_call` 为新增或低频接口提供统一 token、HTTPS Base URL、受限相对路径和结构化错误：
+`wecom_kf_call` 为新增或低频接口提供统一 token、HTTPS Base URL、受限 API 路径和结构化错误：
 
 ```ts
 await adapter.callAction("customer_service", "wecom_kf_call", {
@@ -81,6 +81,8 @@ await adapter.callAction("customer_service", "wecom_kf_call", {
   body: { open_kfid: "wk...", start_time: 1788105600, end_time: 1788192000 },
 });
 ```
+
+`path` 不得内嵌 query/fragment，查询参数应通过 `query` 提供。凭证刷新按请求实际使用的 token 代次失效，旧请求迟到时不会清空已经刷新的凭证。
 
 ## 底层接入
 

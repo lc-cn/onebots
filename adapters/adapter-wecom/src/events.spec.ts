@@ -54,4 +54,27 @@ describe("projectWeComEvent", () => {
             extensions: { wecom: { event_type: "batch_job_result" } },
         });
     });
+
+    it("将菜单与模板卡片回调投影为统一交互事件", () => {
+        const event = projectWeComEvent(
+            {
+                MsgType: "event",
+                Event: "template_card_event",
+                EventKey: "approve",
+                ResponseCode: "response-1",
+                CreateTime: 1_777_000_000,
+                FromUserName: "user-1",
+            },
+            { botId: "bot", createId },
+        );
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "interaction",
+            sub_type: "template_card_event",
+            user: { id: { string: "user-1" } },
+            extensions: {
+                wecom: { event_key: "approve", response_code: "response-1" },
+            },
+        });
+    });
 });

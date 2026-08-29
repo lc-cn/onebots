@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { isSafeAbsoluteApiPath, RefreshableValue } from "onebots";
 import { WeComApiError } from "./errors.js";
 import type {
     WeComAgent,
@@ -20,9 +21,7 @@ const INVALID_TOKEN_CODES = new Set([40014, 42001, 42007, 42009]);
 /** 企业微信自建应用 API 客户端与统一事件入口。 */
 export class WeComClient extends EventEmitter {
     readonly apiBaseUrl: string;
-    private accessToken = "";
-    private tokenExpiresAt = 0;
-    private tokenRequest?: Promise<string>;
+    private readonly tokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
     private agent?: WeComAgent;
 
     constructor(
@@ -46,9 +45,7 @@ export class WeComClient extends EventEmitter {
     }
 
     stop(): void {
-        this.accessToken = "";
-        this.tokenExpiresAt = 0;
-        this.tokenRequest = undefined;
+        this.tokens.clear();
         this.emit("stop");
     }
 
@@ -57,16 +54,7 @@ export class WeComClient extends EventEmitter {
     }
 
     async getAccessToken(force = false): Promise<string> {
-        if (!force && this.accessToken && Date.now() < this.tokenExpiresAt - TOKEN_MARGIN_MS)
-            return this.accessToken;
-        if (this.tokenRequest) return this.tokenRequest;
-        const request = this.fetchToken();
-        this.tokenRequest = request;
-        try {
-            return await request;
-        } finally {
-            if (this.tokenRequest === request) this.tokenRequest = undefined;
-        }
+        return this.tokens.get(() => this.fetchToken(), force);
     }
 
     call<T = unknown>(options: WeComCallOptions): Promise<T> {
@@ -166,7 +154,7 @@ export class WeComClient extends EventEmitter {
         if (name) this.emit(`event.${name.toLowerCase()}`, event);
     }
 
-    private async fetchToken(): Promise<string> {
+    private async fetchToken(): Promise<{ value: string; ttlMs: number }> {
         const result = await this.performCall<WeComTokenResponse>(
             {
                 path: "/cgi-bin/gettoken",
@@ -181,15 +169,13 @@ export class WeComClient extends EventEmitter {
                 details: result,
             });
         }
-        this.accessToken = result.access_token;
-        this.tokenExpiresAt = Date.now() + result.expires_in * 1000;
-        return result.access_token;
+        return { value: result.access_token, ttlMs: result.expires_in * 1000 };
     }
 
     private async performCall<T>(options: WeComCallOptions, retryToken: boolean): Promise<T> {
         const url = this.resolvePath(options.path, options.query);
-        if (options.token !== false)
-            url.searchParams.set("access_token", await this.getAccessToken());
+        const requestToken = options.token === false ? undefined : await this.getAccessToken();
+        if (requestToken) url.searchParams.set("access_token", requestToken);
         const headers = new Headers();
         let body: BodyInit | undefined;
         if (options.body instanceof FormData || typeof options.body === "string")
@@ -220,8 +206,9 @@ export class WeComClient extends EventEmitter {
         const payload = await parseJson(response, options.path);
         const errorCode = apiErrorCode(payload);
         if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
-            this.accessToken = "";
-            await this.getAccessToken(true);
+            if (requestToken && this.tokens.invalidate(requestToken)) {
+                await this.getAccessToken(true);
+            }
             return this.performCall<T>(options, false);
         }
         if (!response.ok || errorCode !== 0) throw apiError(response, payload, options.path);
@@ -232,7 +219,7 @@ export class WeComClient extends EventEmitter {
         path: string,
         query?: Readonly<Record<string, string | number | boolean | undefined>>,
     ): URL {
-        if (!path.startsWith("/") || path.includes("..") || /%2e/iu.test(path)) {
+        if (!isSafeAbsoluteApiPath(path)) {
             throw new WeComApiError("企业微信 API path 必须是安全的绝对路径", {
                 code: "WECOM_INVALID_API_PATH",
                 path,

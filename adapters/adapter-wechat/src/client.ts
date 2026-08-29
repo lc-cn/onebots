@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import { isSafeAbsoluteApiPath, RefreshableValue } from "onebots";
 import { WechatApiError } from "./errors.js";
 import type {
     WechatApiCallOptions,
@@ -25,9 +26,7 @@ interface PendingReply {
 /** 微信公众号 API 客户端与统一事件入口。 */
 export class WechatClient extends EventEmitter {
     readonly apiBaseUrl: string;
-    private accessToken = "";
-    private tokenExpiresAt = 0;
-    private tokenRequest?: Promise<string>;
+    private readonly tokens = new RefreshableValue<string>(TOKEN_REFRESH_MARGIN);
     private readonly pendingReplies = new Map<string, PendingReply>();
 
     constructor(
@@ -44,9 +43,7 @@ export class WechatClient extends EventEmitter {
     }
 
     stop(): void {
-        this.accessToken = "";
-        this.tokenExpiresAt = 0;
-        this.tokenRequest = undefined;
+        this.tokens.clear();
         for (const pending of this.pendingReplies.values()) {
             clearTimeout(pending.timer);
             pending.resolve(undefined);
@@ -57,17 +54,7 @@ export class WechatClient extends EventEmitter {
 
     /** 获取并缓存 access_token；并发刷新只发起一个请求。 */
     async getAccessToken(force = false): Promise<string> {
-        if (!force && this.accessToken && Date.now() < this.tokenExpiresAt - TOKEN_REFRESH_MARGIN) {
-            return this.accessToken;
-        }
-        if (this.tokenRequest) return this.tokenRequest;
-        const request = this.fetchAccessToken();
-        this.tokenRequest = request;
-        try {
-            return await request;
-        } finally {
-            if (this.tokenRequest === request) this.tokenRequest = undefined;
-        }
+        return this.tokens.get(() => this.fetchAccessToken(), force);
     }
 
     /** 调用任意经过路径约束的公众号 API；token 失效时仅自动刷新并重试一次。 */
@@ -211,7 +198,7 @@ export class WechatClient extends EventEmitter {
         };
     }
 
-    private async fetchAccessToken(): Promise<string> {
+    private async fetchAccessToken(): Promise<{ value: string; ttlMs: number }> {
         const data = await this.performCall<{ access_token?: string; expires_in?: number }>(
             {
                 path: "/cgi-bin/token",
@@ -230,10 +217,8 @@ export class WechatClient extends EventEmitter {
                 details: data,
             });
         }
-        this.accessToken = data.access_token;
-        this.tokenExpiresAt = Date.now() + data.expires_in * 1000;
         this.emit("token_refreshed", data.expires_in);
-        return data.access_token;
+        return { value: data.access_token, ttlMs: data.expires_in * 1000 };
     }
 
     private async performCall<T>(options: WechatApiCallOptions, retryToken: boolean): Promise<T> {
@@ -270,8 +255,7 @@ export class WechatClient extends EventEmitter {
         const payload = await parseJson(response, options.path);
         const errorCode = apiErrorCode(payload);
         if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
-            if (this.accessToken === requestToken) {
-                this.accessToken = "";
+            if (requestToken && this.tokens.invalidate(requestToken)) {
                 await this.getAccessToken(true);
             }
             return this.performCall<T>(options, false);
@@ -284,7 +268,7 @@ export class WechatClient extends EventEmitter {
         path: string,
         query?: Readonly<Record<string, string | number | boolean | undefined>>,
     ): URL {
-        if (!isSafeApiPath(path)) {
+        if (!isSafeAbsoluteApiPath(path)) {
             throw new WechatApiError("微信公众号 API path 必须是安全的绝对路径", {
                 code: "WECHAT_INVALID_API_PATH",
                 path,
@@ -303,35 +287,6 @@ export class WechatClient extends EventEmitter {
             status: response.status,
             path,
         });
-    }
-}
-
-function isSafeApiPath(path: string): boolean {
-    if (
-        !path.startsWith("/") ||
-        path.startsWith("//") ||
-        path.includes("?") ||
-        path.includes("#") ||
-        path.includes("\\") ||
-        /[\u0000-\u001f\u007f]/u.test(path)
-    ) {
-        return false;
-    }
-    try {
-        return path
-            .slice(1)
-            .split("/")
-            .every(segment => {
-                const decoded = decodeURIComponent(segment);
-                return (
-                    decoded.length > 0 &&
-                    decoded !== "." &&
-                    decoded !== ".." &&
-                    !/[/?#\\\u0000-\u001f\u007f]/u.test(decoded)
-                );
-            });
-    } catch {
-        return false;
     }
 }
 

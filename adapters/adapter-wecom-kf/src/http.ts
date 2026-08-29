@@ -1,13 +1,13 @@
 import { WeComKfError } from "./errors.js";
+import { isSafeAbsoluteApiPath } from "onebots";
 
-/** 将受限相对 API 路径解析到已校验的微信客服 Base URL。 */
+/** 将受限绝对 API path 解析到已校验的微信客服 Base URL。 */
 export function resolveKfApiUrl(
     base: string,
     path: string,
     query?: Readonly<Record<string, string | number | boolean | undefined>>,
 ): URL {
-    if (!path.startsWith("/") || path.includes("..") || /%2e/iu.test(path))
-        throw invalid("API path 必须是安全的绝对路径", path);
+    if (!isSafeAbsoluteApiPath(path)) throw invalid("API path 必须是安全的绝对路径", path);
     const url = new URL(`${base}${path}`);
     for (const [key, value] of Object.entries(query || {}))
         if (value !== undefined) url.searchParams.set(key, String(value));

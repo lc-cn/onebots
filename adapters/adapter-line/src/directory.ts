@@ -1,4 +1,5 @@
 import type { LineBotClient, messagingApi } from "@line/bot-sdk";
+import { mapConcurrent } from "onebots";
 import { LineApiError } from "./errors.js";
 
 export interface LineChatAddress {
@@ -58,21 +59,4 @@ function nextCursor(
     }
     seen.add(value);
     return value;
-}
-
-async function mapConcurrent<TInput, TOutput>(
-    values: readonly TInput[],
-    concurrency: number,
-    mapper: (value: TInput) => Promise<TOutput>,
-): Promise<TOutput[]> {
-    const results = new Array<TOutput>(values.length);
-    let index = 0;
-    const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-        while (index < values.length) {
-            const current = index++;
-            results[current] = await mapper(values[current]);
-        }
-    });
-    await Promise.all(workers);
-    return results;
 }

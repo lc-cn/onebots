@@ -67,6 +67,7 @@ export interface WeComEvent extends Record<string, unknown> {
     MsgId?: string;
     CreateTime?: number;
     Event?: string;
+    EventKey?: string;
     ChangeType?: string;
     FromUserName?: string;
     ToUserName?: string;
@@ -84,6 +85,8 @@ export interface WeComEvent extends Record<string, unknown> {
     Description?: string;
     Url?: string;
     UserID?: string;
+    TaskId?: string;
+    ResponseCode?: string;
 }
 
 export interface WeComAgent extends WeComAPIResponse {

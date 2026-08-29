@@ -12,6 +12,8 @@ onebots 核心库 - 提供多平台多协议机器人应用的基础架构。
 - **Account**: 账号管理
 - **Registry**: 注册中心（适配器注册、协议注册）
 - **Types**: 通用类型定义
+- **Async utilities**: 代次安全的可刷新值缓存与有序受控并发
+- **API path**: 供适配器复用的结构化 API 路径安全校验
 
 ## 特性
 
@@ -34,6 +36,7 @@ pnpm add @onebots/core
 ### BaseApp
 
 应用基类，提供：
+
 - 配置管理
 - 适配器管理
 - 账号管理
@@ -43,6 +46,7 @@ pnpm add @onebots/core
 ### Adapter
 
 适配器基类，用于：
+
 - 连接特定平台（微信、QQ、钉钉等）
 - 管理账号
 - 转换平台事件为通用格式
@@ -50,6 +54,7 @@ pnpm add @onebots/core
 ### Protocol
 
 协议基类，用于：
+
 - 实现通信协议（OneBot v11/v12、Satori、Milky 等）
 - 处理 API 调用
 - 分发事件
@@ -57,13 +62,14 @@ pnpm add @onebots/core
 ### Registry
 
 注册中心：
+
 - `AdapterRegistry`: 管理适配器注册
 - `ProtocolRegistry`: 管理协议注册
 
 ## 使用示例
 
 ```typescript
-import { BaseApp, Adapter, Protocol } from '@onebots/core';
+import { BaseApp, Adapter, Protocol } from "@onebots/core";
 
 // 创建自定义适配器
 class MyAdapter extends Adapter {
@@ -77,7 +83,7 @@ class MyProtocol extends Protocol {
   async apply(action: string, params: any) {
     // 实现 API 调用逻辑
   }
-  
+
   dispatch(event: any) {
     // 实现事件分发逻辑
   }
@@ -131,11 +137,7 @@ abstract class Protocol {
 核心包提供了完整的类型定义：
 
 ```typescript
-import type { 
-  Dict, 
-  CommonEvent, 
-  CommonTypes 
-} from '@onebots/core';
+import type { Dict, CommonEvent, CommonTypes } from "@onebots/core";
 ```
 
 ## 开发

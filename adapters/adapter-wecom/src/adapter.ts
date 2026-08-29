@@ -4,6 +4,7 @@ import {
     Adapter,
     AdapterRegistry,
     BaseApp,
+    mapConcurrent,
     readPackageVersion,
 } from "onebots";
 import { weComCapabilities } from "./capabilities.js";
@@ -236,23 +237,6 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
 
 function asBase64Source(value: string): string {
     return /^(?:base64:\/\/|data:)/u.test(value) ? value : `base64://${value}`;
-}
-
-async function mapConcurrent<T, R>(
-    items: readonly T[],
-    limit: number,
-    mapper: (item: T) => Promise<R>,
-): Promise<R[]> {
-    const results = new Array<R>(items.length);
-    let next = 0;
-    const worker = async (): Promise<void> => {
-        while (next < items.length) {
-            const index = next++;
-            results[index] = await mapper(items[index]!);
-        }
-    };
-    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
-    return results;
 }
 
 function normalizeConfig(config: Account.Config<"wecom">): WeComConfig {

@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { RefreshableValue } from "onebots";
 import { loadKfCursors, persistKfCursors } from "./cursor-store.js";
 import { WeComKfError } from "./errors.js";
 import {
@@ -45,10 +46,8 @@ export interface WeComKfClientEvents {
 /** 微信客服 API 客户端、游标同步器与统一事件入口。 */
 export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     readonly apiBaseUrl: string;
-    private accessToken = "";
-    private tokenExpiresAt = 0;
+    private readonly tokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
     private tokenGeneration = 0;
-    private tokenRequest?: Promise<string>;
     private pollTimer?: ReturnType<typeof setInterval>;
     private lifecycleAbort?: AbortController;
     private lifecycleGeneration = 0;
@@ -113,9 +112,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         this.pollTimer = undefined;
         this.lifecycleAbort?.abort();
         this.lifecycleAbort = undefined;
-        this.accessToken = "";
-        this.tokenExpiresAt = 0;
-        this.tokenRequest = undefined;
+        this.tokens.clear();
         this.emit("stop");
     }
 
@@ -143,16 +140,8 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
 
     /** 获取缓存凭证；`force` 用于平台明确报告凭证失效后的单次刷新。 */
     async getAccessToken(force = false): Promise<string> {
-        if (!force && this.accessToken && Date.now() < this.tokenExpiresAt - TOKEN_MARGIN_MS)
-            return this.accessToken;
-        if (this.tokenRequest) return this.tokenRequest;
-        const request = this.fetchToken(this.tokenGeneration);
-        this.tokenRequest = request;
-        try {
-            return await request;
-        } finally {
-            if (this.tokenRequest === request) this.tokenRequest = undefined;
-        }
+        const generation = this.tokenGeneration;
+        return this.tokens.get(() => this.fetchToken(generation), force);
     }
 
     /** 调用受限官方路径，并统一处理凭证、JSON、平台错误与一次失效重试。 */
@@ -373,7 +362,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         }
     }
 
-    private async fetchToken(generation: number): Promise<string> {
+    private async fetchToken(generation: number): Promise<{ value: string; ttlMs: number }> {
         const result = await this.performCall<KfTokenResponse>(
             {
                 path: "/cgi-bin/gettoken",
@@ -389,15 +378,13 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
             });
         }
         if (generation !== this.tokenGeneration) throw aborted();
-        this.accessToken = result.access_token;
-        this.tokenExpiresAt = Date.now() + result.expires_in * 1000;
-        return result.access_token;
+        return { value: result.access_token, ttlMs: result.expires_in * 1000 };
     }
 
     private async performCall<T>(options: KfCallOptions, retryToken: boolean): Promise<T> {
         const url = resolveKfApiUrl(this.apiBaseUrl, options.path, options.query);
-        if (options.token !== false)
-            url.searchParams.set("access_token", await this.getAccessToken());
+        const requestToken = options.token === false ? undefined : await this.getAccessToken();
+        if (requestToken) url.searchParams.set("access_token", requestToken);
         const headers = new Headers();
         let body: BodyInit | undefined;
         if (options.body instanceof FormData || typeof options.body === "string")
@@ -429,8 +416,9 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         const payload = await parseKfJson(response, options.path);
         const errorCode = kfApiErrorCode(payload);
         if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
-            this.accessToken = "";
-            await this.getAccessToken(true);
+            if (requestToken && this.tokens.invalidate(requestToken)) {
+                await this.getAccessToken(true);
+            }
             return this.performCall<T>(options, false);
         }
         if (!response.ok || errorCode !== 0)

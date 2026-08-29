@@ -37,6 +37,7 @@ export const weComCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         user_added: { support: "native" },
         user_updated: { support: "native" },
         user_removed: { support: "native" },
+        interaction: { support: "native", scenes: ["private"] },
         raw_event: { support: "native" },
         custom: { support: "native" },
     },

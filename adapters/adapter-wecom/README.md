@@ -43,12 +43,12 @@ await adapter.callAction("internal_app", "wecom_call", {
 });
 ```
 
-access token 自动缓存，并在企业微信报告失效时刷新且只重试一次。所有非零 `errcode` 都会抛出保留 `details`、`path` 与错误码的 `WeComApiError`。
+`wecom_call.path` 只接受不含 query/fragment 的绝对 API 路径，查询参数应单独放在 `query`。access token 自动缓存，并在企业微信报告失效时刷新且只重试一次；旧请求的迟到错误不会清空已经刷新的凭证。所有非零 `errcode` 都会抛出保留 `details`、`path` 与错误码的 `WeComApiError`。
 
 ## 底层接入
 
 `WeComWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂载到已有 Koa 风格 Host；`WeComClient.ingest()` 可接收已经解密/解析且含稳定时间与身份字段的事件。适配器不会自行监听端口。
 
-事件统一保留 `raw_event`，其中 `RawXml` 是解密后的完整 XML，`EncryptedXml` 是收到的密文外层 XML。
+事件统一保留 `raw_event`，其中 `RawXml` 是解密后的完整 XML，`EncryptedXml` 是收到的密文外层 XML。通讯录成员变更投影为 `user_added` / `user_updated` / `user_removed`；菜单、进入应用和模板卡片回调统一投影为 `interaction`，精确企业微信事件名保留在 `sub_type`。
 
 [企业微信开发者中心](https://developer.work.weixin.qq.com/)

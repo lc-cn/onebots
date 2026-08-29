@@ -33,14 +33,54 @@ describe("WeComClient", () => {
         expect(String(fetcher.mock.calls[3]?.[0])).toContain("access_token=new");
     });
 
-    it("拒绝危险 API 路径和非数字 AgentID", async () => {
+    it.each([
+        "https://evil.example",
+        "//evil.example/path",
+        "/cgi-bin/../gettoken",
+        "/cgi-bin/%2e%2e/gettoken",
+        "/cgi-bin/user/get?userid=forged",
+        "/cgi-bin/user/get#fragment",
+    ])("拒绝危险或夹带 URL 语义的 API 路径: %s", async path => {
         const client = new WeComClient(config);
-        await expect(client.call({ path: "https://evil.example" })).rejects.toMatchObject({
+        await expect(client.call({ path })).rejects.toMatchObject({
             code: "WECOM_INVALID_API_PATH",
         });
+    });
+
+    it("拒绝非数字 AgentID", () => {
         expect(() => new WeComClient({ ...config, agent_id: "app" })).toThrowError(
             expect.objectContaining({ code: "WECOM_INVALID_AGENT_ID" }),
         );
+    });
+
+    it("迟到的旧 token 错误不会清空已经刷新的新 token", async () => {
+        const oldResponses: Array<(response: Response) => void> = [];
+        let tokenRequests = 0;
+        const fetcher = vi.fn<typeof fetch>(async input => {
+            const url = String(input);
+            if (url.includes("/cgi-bin/gettoken")) {
+                tokenRequests += 1;
+                return json({
+                    errcode: 0,
+                    access_token: tokenRequests === 1 ? "old" : "new",
+                    expires_in: 7200,
+                });
+            }
+            if (url.includes("access_token=old")) {
+                return new Promise(resolve => oldResponses.push(resolve));
+            }
+            return json({ errcode: 0, userid: url.includes("userid=a") ? "a" : "b" });
+        });
+        const client = new WeComClient(config, fetcher);
+        await client.getAccessToken();
+        const first = client.getUserInfo("a");
+        const second = client.getUserInfo("b");
+        await vi.waitFor(() => expect(oldResponses).toHaveLength(2));
+        oldResponses[0]!(json({ errcode: 40014, errmsg: "invalid token" }));
+        await expect(first).resolves.toMatchObject({ userid: "a" });
+        oldResponses[1]!(json({ errcode: 40014, errmsg: "invalid token" }));
+        await expect(second).resolves.toMatchObject({ userid: "b" });
+        expect(tokenRequests).toBe(2);
     });
 
     it("将平台 errcode 保留为结构化错误", async () => {
