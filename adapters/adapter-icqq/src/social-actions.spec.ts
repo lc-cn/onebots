@@ -43,7 +43,7 @@ describe("ICQQ 账号资料动作", () => {
             },
         });
 
-        await expect(actions.getFriendList("bot")).resolves.toEqual([
+        await expect(actions.getFriendList("bot", { no_cache: true })).resolves.toEqual([
             expect.objectContaining({
                 sex: "female",
                 remark: "A",
@@ -54,8 +54,11 @@ describe("ICQQ 账号资料动作", () => {
         await expect(
             actions.getFriendInfo("bot", {
                 user_id: { string: "10001", number: 10001, source: 10001 },
+                no_cache: true,
             }),
         ).resolves.toEqual(expect.objectContaining({ category_id: 2, category_name: "朋友" }));
+        expect(bot.getFriendList).toHaveBeenCalledWith(true);
+        expect(bot.getFriendInfo).toHaveBeenCalledWith(10001, true);
     });
 
     it("以真实 QQ UID 列出并处理好友请求", async () => {

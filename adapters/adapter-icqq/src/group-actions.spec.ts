@@ -113,10 +113,15 @@ describe("ICQQ 群动作", () => {
             numericId: { value: (value: string) => Number(value) },
         });
 
-        await expect(actions.getGroupList("bot")).resolves.toEqual([
+        await expect(actions.getGroupList("bot", { no_cache: true })).resolves.toEqual([
             expect.objectContaining({ created_time: 100 }),
         ]);
-        await expect(actions.getGroupMemberList("bot", { group_id: id(20001) })).resolves.toEqual([
+        await expect(
+            actions.getGroupMemberList("bot", {
+                group_id: id(20001),
+                no_cache: true,
+            }),
+        ).resolves.toEqual([
             expect.objectContaining({
                 sex: "female",
                 age: 20,
@@ -129,6 +134,8 @@ describe("ICQQ 群动作", () => {
                 shut_up_end_time: 400,
             }),
         ]);
+        expect(bot.getGroupList).toHaveBeenCalledWith(true);
+        expect(bot.getGroupMemberList).toHaveBeenCalledWith(20001, true);
     });
 
     it("按表态类型添加和删除群消息回应", async () => {

@@ -235,13 +235,13 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
      */
     async getFriendList(
         uin: string,
-        _params?: Adapter.GetFriendListParams,
+        params?: Adapter.GetFriendListParams,
     ): Promise<Adapter.FriendInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const friends = await bot.getFriendList();
+        const friends = await bot.getFriendList(params?.no_cache);
 
         return friends.map(friend => ({
             user_id: this.createId(friend.user_id.toString()),
@@ -265,7 +265,7 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
 
         const bot = account.client;
         const userId = this.numericId(params.user_id.string, "user_id");
-        const info = await bot.getFriendInfo(userId);
+        const info = await bot.getFriendInfo(userId, params.no_cache);
         if (!info) throw new TypeError(`好友 ${userId} 不存在`);
 
         return {

@@ -10,6 +10,14 @@ class FakeClient extends EventEmitter {
     logout = vi.fn(async () => undefined);
     sendSsoHeartBeat = vi.fn(() => true);
     startSsoHeartBeat = vi.fn();
+    fl = new Map();
+    classes = new Map();
+    gl = new Map();
+    reloadFriendList = vi.fn(async () => undefined);
+    reloadGroupList = vi.fn(async () => undefined);
+    getGroupInfo = vi.fn();
+    getGroupMemberList = vi.fn(async () => new Map());
+    getGroupMemberInfo = vi.fn();
 }
 
 function factoryFor(...clients: FakeClient[]): typeof createClient {
@@ -88,5 +96,32 @@ describe("ICQQBot 生命周期", () => {
         await expect(bot.stop()).resolves.toBeUndefined();
         expect(bot.getClient()).toBeNull();
         expect(stopError).toHaveBeenCalledOnce();
+    });
+
+    it("将目录刷新意图传递给 ICQQ 原生客户端", async () => {
+        const client = new FakeClient();
+        client.getGroupInfo.mockResolvedValue({
+            group_id: 20001,
+            group_name: "OneBots",
+            owner_id: 10001,
+            member_count: 2,
+            max_member_count: 500,
+            create_time: 100,
+        });
+        const bot = new ICQQBot({ account_id: "123456" }, { createClient: factoryFor(client) });
+        await bot.start();
+
+        await bot.getFriendList(true);
+        await bot.getFriendInfo(10001, true);
+        await bot.getGroupList(true);
+        await bot.getGroupInfo(20001, true);
+        await bot.getGroupMemberList(20001, true);
+        await bot.getGroupMemberInfo(20001, 10001, true);
+
+        expect(client.reloadFriendList).toHaveBeenCalledTimes(2);
+        expect(client.reloadGroupList).toHaveBeenCalledOnce();
+        expect(client.getGroupInfo).toHaveBeenCalledWith(20001, true);
+        expect(client.getGroupMemberList).toHaveBeenCalledWith(20001, true);
+        expect(client.getGroupMemberInfo).toHaveBeenCalledWith(20001, 10001, true);
     });
 });

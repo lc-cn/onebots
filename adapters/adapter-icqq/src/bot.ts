@@ -233,9 +233,10 @@ export class ICQQBot extends EventEmitter {
     /**
      * 获取好友列表
      */
-    async getFriendList(): Promise<ICQQFriend[]> {
+    async getFriendList(noCache = false): Promise<ICQQFriend[]> {
         const client = this.client;
         if (!client) throw new Error("Bot not connected");
+        if (noCache) await client.reloadFriendList();
         const friends = client.fl;
         return Array.from(friends.values()).map((friend: FriendInfo) => ({
             user_id: friend.user_id,
@@ -248,9 +249,11 @@ export class ICQQBot extends EventEmitter {
     }
 
     /** 获取好友资料；不存在时不降级为陌生人资料。 */
-    async getFriendInfo(userId: number): Promise<ICQQFriend | undefined> {
-        if (!this.client) throw new Error("Bot not connected");
-        const friend = this.client.fl.get(userId);
+    async getFriendInfo(userId: number, noCache = false): Promise<ICQQFriend | undefined> {
+        const client = this.client;
+        if (!client) throw new Error("Bot not connected");
+        if (noCache) await client.reloadFriendList();
+        const friend = client.fl.get(userId);
         if (!friend) return undefined;
         return {
             user_id: friend.user_id,
@@ -258,7 +261,7 @@ export class ICQQBot extends EventEmitter {
             sex: friend.sex,
             remark: friend.remark,
             class_id: friend.class_id,
-            class_name: this.client.classes.get(friend.class_id) ?? "",
+            class_name: client.classes.get(friend.class_id) ?? "",
         };
     }
 
@@ -293,9 +296,11 @@ export class ICQQBot extends EventEmitter {
     /**
      * 获取群列表
      */
-    async getGroupList(): Promise<ICQQGroup[]> {
-        if (!this.client) throw new Error("Bot not connected");
-        const groups = this.client.gl;
+    async getGroupList(noCache = false): Promise<ICQQGroup[]> {
+        const client = this.client;
+        if (!client) throw new Error("Bot not connected");
+        if (noCache) await client.reloadGroupList();
+        const groups = client.gl;
         return Array.from(groups.values()).map((group: GroupInfo) => ({
             group_id: group.group_id,
             group_name: group.group_name,
@@ -309,9 +314,10 @@ export class ICQQBot extends EventEmitter {
     /**
      * 获取群信息
      */
-    async getGroupInfo(groupId: number): Promise<ICQQGroup | undefined> {
-        if (!this.client) throw new Error("Bot not connected");
-        const group = this.client.gl.get(groupId);
+    async getGroupInfo(groupId: number, noCache = false): Promise<ICQQGroup | undefined> {
+        const client = this.client;
+        if (!client) throw new Error("Bot not connected");
+        const group = noCache ? await client.getGroupInfo(groupId, true) : client.gl.get(groupId);
         if (!group) return undefined;
         return {
             group_id: group.group_id,
@@ -326,9 +332,9 @@ export class ICQQBot extends EventEmitter {
     /**
      * 获取群成员列表
      */
-    async getGroupMemberList(groupId: number): Promise<ICQQGroupMember[]> {
+    async getGroupMemberList(groupId: number, noCache = false): Promise<ICQQGroupMember[]> {
         if (!this.client) throw new Error("Bot not connected");
-        const members = await this.client.getGroupMemberList(groupId);
+        const members = await this.client.getGroupMemberList(groupId, noCache);
         return Array.from(members.values()).map((member: MemberInfo) => ({
             group_id: groupId,
             user_id: member.user_id,
@@ -353,9 +359,10 @@ export class ICQQBot extends EventEmitter {
     async getGroupMemberInfo(
         groupId: number,
         userId: number,
+        noCache = false,
     ): Promise<ICQQGroupMember | undefined> {
         if (!this.client) throw new Error("Bot not connected");
-        const member = await this.client.getGroupMemberInfo(groupId, userId);
+        const member = await this.client.getGroupMemberInfo(groupId, userId, noCache);
         if (!member) return undefined;
         return {
             group_id: groupId,

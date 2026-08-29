@@ -14,13 +14,13 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
      */
     async getGroupList(
         uin: string,
-        _params?: Adapter.GetGroupListParams,
+        params?: Adapter.GetGroupListParams,
     ): Promise<Adapter.GroupInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const groups = await bot.getGroupList();
+        const groups = await bot.getGroupList(params?.no_cache);
 
         return groups.map(group => ({
             group_id: this.createId(group.group_id.toString()),
@@ -43,7 +43,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
 
         const bot = account.client;
         const groupId = this.numericId(params.group_id.string, "group_id");
-        const info = await bot.getGroupInfo(groupId);
+        const info = await bot.getGroupInfo(groupId, params.no_cache);
 
         if (!info) throw new Error(`Group ${groupId} not found`);
 
@@ -91,7 +91,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
 
         const bot = account.client;
         const groupId = this.numericId(params.group_id.string, "group_id");
-        const members = await bot.getGroupMemberList(groupId);
+        const members = await bot.getGroupMemberList(groupId, params.no_cache);
 
         return members.map(member => ({
             group_id: params.group_id,
@@ -124,7 +124,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         const bot = account.client;
         const groupId = this.numericId(params.group_id.string, "group_id");
         const userId = this.numericId(params.user_id.string, "user_id");
-        const member = await bot.getGroupMemberInfo(groupId, userId);
+        const member = await bot.getGroupMemberInfo(groupId, userId, params.no_cache);
 
         if (!member) throw new Error(`Member ${userId} not found in group ${groupId}`);
 
