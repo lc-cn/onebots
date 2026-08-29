@@ -23,19 +23,23 @@ export function projectKfItem(
         raw_event: item,
     };
     if (item.msgtype === "event") {
-        const eventType = stringValue(item.event?.event_type) || "unknown";
+        const event = item.event || {};
+        const eventType = stringValue(event.event_type) || "unknown";
+        const openKfId = stringValue(event.open_kfid) || item.open_kfid || context.openKfId;
+        const externalUserId = stringValue(event.external_userid) || item.external_userid;
         return {
             ...base,
             type: "notice",
             notice_type: "custom",
             sub_type: eventType,
-            user: item.external_userid ? { id: context.createId(item.external_userid) } : undefined,
+            user: externalUserId ? { id: context.createId(externalUserId) } : undefined,
             extensions: {
                 wecom_kf: {
                     event_type: eventType,
-                    open_kfid: item.open_kfid || context.openKfId,
-                    external_userid: item.external_userid,
-                    event: { ...(item.event || {}) },
+                    open_kfid: openKfId,
+                    external_userid: externalUserId,
+                    servicer_userid: stringValue(event.servicer_userid) || item.servicer_userid,
+                    event: { ...event },
                 },
             },
         };
@@ -71,7 +75,8 @@ export function projectKfCallback(
     event: KfCallbackEvent,
     context: Omit<KfProjectionContext, "openKfId">,
 ): CommonEvent.Event<KfCallbackEvent> {
-    const identity = `${event.Event}:${event.OpenKfId || ""}:${event.CreateTime || 0}:${event.Token || ""}`;
+    const rawEvent = publicCallback(event);
+    const identity = event.EncryptedXml || JSON.stringify(rawEvent);
     return {
         id: context.createId(createHash("sha256").update(identity).digest("hex")),
         timestamp: unixSecondsToEventMs(event.CreateTime ?? 0),
@@ -80,7 +85,7 @@ export function projectKfCallback(
         type: "notice",
         notice_type: "custom",
         sub_type: event.Event,
-        raw_event: event,
+        raw_event: rawEvent,
         extensions: {
             wecom_kf: {
                 callback: true,
@@ -88,6 +93,15 @@ export function projectKfCallback(
             },
         },
     };
+}
+
+/** 同步 Token 与明密文只用于接入层，绝不能沿协议事件发送给下游。 */
+function publicCallback(event: KfCallbackEvent): KfCallbackEvent {
+    const value: KfCallbackEvent = { ...event };
+    delete value.Token;
+    delete value.RawXml;
+    delete value.EncryptedXml;
+    return value;
 }
 
 export function projectKfSegments(item: KfMsgItem): CommonTypes.Segment[] {

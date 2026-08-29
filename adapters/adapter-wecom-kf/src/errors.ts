@@ -33,3 +33,22 @@ export class WeComKfError extends Error {
         });
     }
 }
+
+export function invalidKfParameter(message: string, path?: string): WeComKfError {
+    return new WeComKfError(`微信客服 ${message}`, {
+        code: "WECOM_KF_INVALID_PARAMETER",
+        path,
+    });
+}
+
+export function ensureKfNotAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) throw kfAborted();
+}
+
+export function kfAborted(): WeComKfError {
+    return new WeComKfError("微信客服客户端已停止", { code: "WECOM_KF_ABORTED" });
+}
+
+export function isKfAborted(error: unknown): boolean {
+    return error instanceof WeComKfError && error.code === "WECOM_KF_ABORTED";
+}

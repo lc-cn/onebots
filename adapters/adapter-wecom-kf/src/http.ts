@@ -1,5 +1,6 @@
 import { WeComKfError } from "./errors.js";
 import { isSafeAbsoluteApiPath } from "onebots";
+import type { KfJsonResponse } from "./types.js";
 
 /** 将受限绝对 API path 解析到已校验的微信客服 Base URL。 */
 export function resolveKfApiUrl(
@@ -36,16 +37,17 @@ export async function parseKfJson(response: Response, path: string): Promise<unk
     }
 }
 
-export function kfApiErrorCode(payload: unknown): number {
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return 0;
-    const value = (payload as Record<string, unknown>).errcode;
-    return typeof value === "number" ? value : 0;
+export function kfApiErrorCode(payload: KfJsonResponse): number {
+    return payload.errcode;
 }
 
-export function createKfApiError(response: Response, payload: unknown, path: string): WeComKfError {
-    const value = payload as Record<string, unknown>;
-    const code = typeof value.errcode === "number" ? value.errcode : response.status;
-    const message = typeof value.errmsg === "string" ? value.errmsg : response.statusText;
+export function createKfApiError(
+    response: Response,
+    payload: KfJsonResponse,
+    path: string,
+): WeComKfError {
+    const code = payload.errcode || response.status;
+    const message = payload.errmsg || response.statusText;
     return new WeComKfError(message || `微信客服 API 调用失败: ${code}`, {
         code: `WECOM_KF_${code}`,
         status: response.status,

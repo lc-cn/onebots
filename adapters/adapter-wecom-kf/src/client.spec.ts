@@ -104,9 +104,9 @@ describe("WeComKfClient", () => {
             .mockResolvedValueOnce(json({ errcode: 0, errmsg: "ok", value: 1 }));
         const client = new WeComKfClient(config, fetcher);
 
-        await expect(
-            client.call<{ value: number }>({ path: "/cgi-bin/kf/example" }),
-        ).resolves.toEqual(expect.objectContaining({ value: 1 }));
+        await expect(client.call({ path: "/cgi-bin/kf/example" })).resolves.toEqual(
+            expect.objectContaining({ value: 1 }),
+        );
         expect(String(fetcher.mock.calls[1]?.[0])).toContain("access_token=old");
         expect(String(fetcher.mock.calls[3]?.[0])).toContain("access_token=new");
     });
@@ -131,6 +131,21 @@ describe("WeComKfClient", () => {
                 response_type: "buffer",
             }),
         ).rejects.toMatchObject({ code: "WECOM_KF_93000" });
+    });
+
+    it("拒绝缺少官方响应 envelope 的 JSON", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", access_token: "access", expires_in: 7200 }),
+            )
+            .mockResolvedValueOnce(json({ value: 1 }));
+        const client = new WeComKfClient(config, fetcher);
+
+        await expect(client.call({ path: "/cgi-bin/kf/example" })).rejects.toMatchObject({
+            code: "WECOM_KF_INVALID_RESPONSE",
+            path: "/cgi-bin/kf/example",
+        });
     });
 
     it("分页同步、去重、分发并原子持久化游标", async () => {
@@ -170,6 +185,40 @@ describe("WeComKfClient", () => {
         await expect(readFile(cursorPath, "utf8")).resolves.toContain('"wk-1": "c3"');
     });
 
+    it("隔离业务监听器异常并继续提交游标", async () => {
+        const cursorPath = `/tmp/onebots-wecom-kf-listener-${process.pid}-${Date.now()}.json`;
+        temporaryFiles.push(cursorPath);
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", access_token: "access", expires_in: 7200 }),
+            )
+            .mockResolvedValueOnce(
+                json({
+                    errcode: 0,
+                    errmsg: "ok",
+                    next_cursor: "committed",
+                    has_more: 0,
+                    msg_list: [{ msgid: "m1", msgtype: "text", text: { content: "one" } }],
+                }),
+            );
+        const client = new WeComKfClient({ ...config, cursor_store_path: cursorPath }, fetcher);
+        const errors = vi.fn();
+        const delivered = vi.fn();
+        client.on("raw_event", () => {
+            throw new Error("observer failed");
+        });
+        client.on("kf_item", delivered);
+        client.on("client_error", errors);
+
+        await expect(client.synchronize("wk-1")).resolves.toHaveLength(1);
+        expect(delivered).toHaveBeenCalledTimes(1);
+        expect(errors).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "WECOM_KF_EVENT_LISTENER_ERROR" }),
+        );
+        await expect(readFile(cursorPath, "utf8")).resolves.toContain('"wk-1": "committed"');
+    });
+
     it("保留平台错误并防止原生消息覆盖目标", async () => {
         const fetcher = vi
             .fn<typeof fetch>()
@@ -207,6 +256,32 @@ describe("WeComKfClient", () => {
             code: "WECOM_KF_INVALID_UPLOAD",
         });
         expect(fetcher).not.toHaveBeenCalled();
+    });
+
+    it("按官方数字时间戳解码临时素材响应", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", access_token: "access", expires_in: 7200 }),
+            )
+            .mockResolvedValueOnce(
+                json({
+                    errcode: 0,
+                    errmsg: "ok",
+                    type: "file",
+                    media_id: "media-1",
+                    created_at: 1788105600,
+                }),
+            );
+        const client = new WeComKfClient(config, fetcher);
+
+        await expect(
+            client.uploadTemporaryMedia("file", new Blob(["payload"]), "file.txt"),
+        ).resolves.toMatchObject({
+            type: "file",
+            media_id: "media-1",
+            created_at: 1788105600,
+        });
     });
 
     it("拒绝不符合官方长度与字符约束的 msgid", async () => {

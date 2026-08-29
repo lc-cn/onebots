@@ -151,10 +151,13 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
             this.logger.error("微信客服 Webhook 处理失败", error),
         );
         client.on("kf_item", ({ open_kfid, item }: { open_kfid: string; item: KfMsgItem }) => {
-            if (item.external_userid) {
+            const externalUserId =
+                item.external_userid || stringField(item.event, "external_userid");
+            const eventOpenKfId = stringField(item.event, "open_kfid");
+            if (externalUserId) {
                 this.userLastOpenKf.set(
-                    this.contextKey(account.account_id, item.external_userid),
-                    item.open_kfid || open_kfid,
+                    this.contextKey(account.account_id, externalUserId),
+                    item.open_kfid || eventOpenKfId || open_kfid,
                 );
             }
             account.dispatch(
@@ -208,6 +211,14 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
     private contextKey(accountId: string, externalUserid: string): string {
         return `${accountId}\0${externalUserid}`;
     }
+}
+
+function stringField(
+    value: Readonly<Record<string, unknown>> | undefined,
+    key: string,
+): string | undefined {
+    const field = value?.[key];
+    return typeof field === "string" && field ? field : undefined;
 }
 
 function normalizeConfig(config: Account.Config<"wecom-kf">): WeComKfConfig {

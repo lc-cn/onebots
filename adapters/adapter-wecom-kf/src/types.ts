@@ -20,20 +20,32 @@ export interface KfApiResponse {
     errmsg: string;
 }
 
+/** 已通过运行时校验的微信客服 JSON 响应。 */
+export interface KfJsonResponse extends KfApiResponse, Record<string, unknown> {}
+
 export interface KfTokenResponse extends KfApiResponse {
-    access_token?: string;
-    expires_in?: number;
+    access_token: string;
+    expires_in: number;
 }
 
-export interface KfCallOptions {
+interface KfCallBaseOptions {
     method?: "GET" | "POST";
     path: string;
     query?: Readonly<Record<string, string | number | boolean | undefined>>;
     body?: unknown;
     token?: boolean;
-    response_type?: "json" | "buffer";
     signal?: AbortSignal;
 }
+
+export interface KfJsonCallOptions extends KfCallBaseOptions {
+    response_type?: "json";
+}
+
+export interface KfBufferCallOptions extends KfCallBaseOptions {
+    response_type: "buffer";
+}
+
+export type KfCallOptions = KfJsonCallOptions | KfBufferCallOptions;
 
 export interface KfSyncMsgRequest {
     cursor?: string;
@@ -62,7 +74,20 @@ export interface KfMsgItem extends Record<string, unknown> {
     business_card?: { userid?: string };
     miniprogram?: { appid?: string; title?: string; pagepath?: string; thumb_media_id?: string };
     msgmenu?: Record<string, unknown>;
-    event?: Record<string, unknown>;
+    event?: KfMessageEvent;
+}
+
+/** `sync_msg` 中事件消息的公共字段；未知官方字段继续原样保留。 */
+export interface KfMessageEvent extends Record<string, unknown> {
+    event_type?: string;
+    open_kfid?: string;
+    external_userid?: string;
+    servicer_userid?: string;
+    scene?: string;
+    scene_param?: string;
+    welcome_code?: string;
+    msg_code?: string;
+    recall_msgid?: string;
 }
 
 export interface KfSyncMsgResponse extends KfApiResponse {
@@ -99,6 +124,12 @@ export interface KfAccount {
     name?: string;
     avatar?: string;
     manage_privilege?: boolean;
+}
+
+export interface KfMediaUploadResponse extends KfApiResponse {
+    type?: "image" | "voice" | "video" | "file";
+    media_id: string;
+    created_at?: number;
 }
 
 export interface KfCallbackEvent extends Record<string, unknown> {

@@ -33,6 +33,9 @@ wecom-kf.customer_service:
 - 游标使用异步临时文件加原子重命名持久化；损坏或不可写不会被静默忽略。
 - `start()` 幂等；`stop()` 会中止在途同步，快速重启使用 generation 隔离旧请求。
 - 客户消息、接待人员消息、平台事件和未知消息类型都会保留完整 `raw_event`。
+- `sync_msg` 的事件身份从官方 `event.open_kfid/external_userid` 读取，不再误依赖消息顶层字段。
+- 回调 `Token`、解密明文和加密 XML 只留在接入层，不会随协议事件发送给下游。
+- 业务事件监听器相互隔离；单个监听器异常会进入 `client_error`，不会阻断同批消息与游标提交。
 - 接待人员消息的 `sender.id` 是真实 `servicer_userid`，客户身份保留在 `extensions.wecom_kf.external_userid`。
 - 可选 `enable_sync_poll` 仅作无回调 Token 时的补偿；默认关闭，开启时必须配置 `open_kfid`。
 
@@ -72,7 +75,7 @@ await adapter.sendMessage("customer_service", {
 - 消息：原生发送、事件欢迎语/提示语、临时素材上传下载；
 - 数据：企业汇总、接待人员统计与视频号绑定状态。
 
-`wecom_kf_call` 为新增或低频接口提供统一 token、HTTPS Base URL、受限 API 路径和结构化错误：
+`wecom_kf_call` 为新增或低频接口提供统一 token、HTTPS Base URL、受限 API 路径和结构化错误。所有 JSON 响应都会先验证官方 `errcode/errmsg` envelope；账号、客户、同步消息、会话状态和素材响应还会校验对应结构，畸形成功响应不会再被强制断言成目标类型：
 
 ```ts
 await adapter.callAction("customer_service", "wecom_kf_call", {
@@ -89,7 +92,7 @@ await adapter.callAction("customer_service", "wecom_kf_call", {
 - `WeComKfWebhookHost.ingest()` 接收框架无关请求并返回结构化 HTTP 响应；
 - `WeComKfWebhookHost.acceptHttp()` 可挂到已有 Koa 风格 Host；
 - `WeComKfClient.ingest()` 可接收已有连接或其他同步器取得的原始 `sync_msg` 条目；
-- `WeComKfClient.call()` 提供完整类型化底层 API 入口。
+- `WeComKfClient.call()` 对 JSON 与二进制响应提供闭合重载；JSON 返回 `KfJsonResponse`，素材下载返回 `Buffer`。
 
 适配器不会自行监听端口。发送窗口、5 条限制与“接口成功不等于最终送达”均由微信客服规则决定，最终失败通过 `sync_msg` 事件交付。
 

@@ -85,6 +85,36 @@ describe("WeComKfAdapter 基础契约", () => {
         expect(adapter.resolveId(result.message_id.number).string).toBe("platform-message");
     });
 
+    it("从事件内层字段恢复客户与客服账号会话上下文", async () => {
+        const account = adapter.createAccount({ ...config, open_kfid: undefined });
+        adapter.accounts.set(config.account_id, account);
+        const send = vi.spyOn(account.client, "sendMessage").mockResolvedValue("message-1");
+        account.client.ingest(
+            {
+                msgid: "event-1",
+                msgtype: "event",
+                event: {
+                    event_type: "enter_session",
+                    open_kfid: "wk-event",
+                    external_userid: "customer-event",
+                },
+            },
+            "wk-callback",
+        );
+
+        await adapter.sendMessage(config.account_id, {
+            scene_type: "private",
+            scene_id: adapter.createId("customer-event"),
+            message: ["欢迎咨询"],
+        });
+
+        expect(send).toHaveBeenCalledWith(
+            "customer-event",
+            "wk-event",
+            expect.objectContaining({ msgtype: "text" }),
+        );
+    });
+
     it("缓存平台 ID 并拒绝空 ID", () => {
         const first = adapter.createId("customer-1");
         const second = adapter.createId("customer-1");

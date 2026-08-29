@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CommonTypes } from "onebots";
-import { projectKfItem } from "./events.js";
+import { projectKfCallback, projectKfItem } from "./events.js";
 
 const createId = (value: string | number): CommonTypes.Id => ({
     string: String(value),
@@ -49,13 +49,47 @@ describe("projectKfItem", () => {
         const raw = {
             msgid: "event-1",
             msgtype: "event",
-            event: { event_type: "enter_session", scene: "web" },
+            event: {
+                event_type: "enter_session",
+                scene: "web",
+                open_kfid: "wk-event",
+                external_userid: "customer-event",
+            },
         };
         expect(projectKfItem(raw, { botId: "bot", openKfId: "wk-1", createId })).toMatchObject({
             type: "notice",
             notice_type: "custom",
             sub_type: "enter_session",
+            user: { id: { string: "customer-event" } },
+            extensions: {
+                wecom_kf: {
+                    open_kfid: "wk-event",
+                    external_userid: "customer-event",
+                },
+            },
             raw_event: raw,
         });
+    });
+
+    it("回调投影移除仅供同步使用的凭证与明密文", () => {
+        const event = projectKfCallback(
+            {
+                MsgType: "event",
+                Event: "kf_msg_or_event",
+                OpenKfId: "wk-1",
+                Token: "sensitive-token",
+                RawXml: "<xml>sensitive-token</xml>",
+                EncryptedXml: "ciphertext",
+            },
+            { botId: "bot", createId },
+        );
+
+        expect(event.raw_event).toEqual({
+            MsgType: "event",
+            Event: "kf_msg_or_event",
+            OpenKfId: "wk-1",
+        });
+        expect(JSON.stringify(event)).not.toContain("sensitive-token");
+        expect(JSON.stringify(event)).not.toContain("ciphertext");
     });
 });
