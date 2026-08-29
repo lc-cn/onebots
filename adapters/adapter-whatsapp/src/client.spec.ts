@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
@@ -104,7 +105,13 @@ describe("WhatsAppClient", () => {
                 },
             ],
         };
-        expect(client.ingest(event)).toBe(2);
+        expect(client.ingest(event)).toMatchObject({
+            accepted: 2,
+            duplicate: false,
+            changes: 1,
+            messages: 1,
+            statuses: 1,
+        });
         expect(raw).toHaveBeenCalledWith(event);
         expect(message).toHaveBeenCalledTimes(1);
         expect(status).toHaveBeenCalledTimes(1);
@@ -136,5 +143,74 @@ describe("WhatsAppClient", () => {
         expect(client.getObservedContact("86123")).toEqual({ id: "86123", name: "Alice" });
         expect(client.getObservedContact("unknown")).toBeUndefined();
         expect(observedDuringDispatch).toHaveBeenCalledWith({ id: "86123", name: "Alice" });
+    });
+
+    it("manual 模式无需 Webhook 凭据并拒绝重复原始事件", () => {
+        const client = new WhatsAppClient({
+            ...config,
+            receive_mode: "manual",
+            app_secret: undefined,
+            webhook_verify_token: undefined,
+        });
+        const event = {
+            object: "whatsapp_business_account" as const,
+            entry: [{ id: "waba", changes: [] }],
+        };
+        expect(client.ingest(event).duplicate).toBe(false);
+        expect(client.ingest(event).duplicate).toBe(true);
+    });
+
+    it("业务监听器失败时不提交去重状态，允许 Meta 重投递", () => {
+        const client = new WhatsAppClient({ ...config, receive_mode: "manual" });
+        const event = {
+            object: "whatsapp_business_account" as const,
+            entry: [{ id: "waba", changes: [] }],
+        };
+        const failure = (): void => {
+            throw new Error("downstream failed");
+        };
+        client.on("webhook", failure);
+        expect(() => client.ingest(event)).toThrow("downstream failed");
+        client.off("webhook", failure);
+        expect(client.ingest(event).duplicate).toBe(false);
+    });
+
+    it("acceptHttp 接收标准 Request 并返回结构化响应", async () => {
+        const client = new WhatsAppClient(config);
+        const body = JSON.stringify({ object: "whatsapp_business_account", entry: [] });
+        const signature = `sha256=${createHmac("sha256", "secret").update(body).digest("hex")}`;
+        const response = await client.acceptHttp(
+            new Request("https://example.test/whatsapp", {
+                method: "POST",
+                body,
+                headers: { "x-hub-signature-256": signature },
+            }),
+        );
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            ok: true,
+            accepted: 0,
+            duplicate: false,
+            changes: 0,
+        });
+        const verification = await client.acceptHttp(
+            new Request(
+                "https://example.test/whatsapp?hub.mode=subscribe&hub.verify_token=verify&hub.challenge=42",
+            ),
+        );
+        expect(verification.status).toBe(200);
+        expect(await verification.text()).toBe("42");
+    });
+
+    it("严格拒绝带凭据、路径或查询的 Graph API Base URL", () => {
+        for (const apiBaseUrl of [
+            "https://user:pass@graph.facebook.com",
+            "https://graph.facebook.com/custom",
+            "https://graph.facebook.com?token=x",
+        ]) {
+            expect(() => new WhatsAppClient({ ...config, api_base_url: apiBaseUrl })).toThrow(
+                /HTTPS Origin/u,
+            );
+        }
     });
 });

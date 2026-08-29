@@ -3,20 +3,22 @@ import { AdapterRegistry, type Schema } from "onebots";
 export { WhatsAppAdapter } from "./adapter.js";
 export { whatsAppCapabilities } from "./capabilities.js";
 export { WhatsAppClient } from "./client.js";
-export { WhatsAppApiError } from "./errors.js";
+export { WhatsAppApiError, type WhatsAppApiErrorOptions } from "./errors.js";
 export { projectMessageContent, projectWhatsAppWebhook } from "./events.js";
 export { compileWhatsAppMessages } from "./messages.js";
 export { executeWhatsAppPlatformAction, WHATSAPP_PLATFORM_ACTIONS } from "./platform-actions.js";
 export { WhatsAppWebhookHost } from "./webhook-host.js";
-export type { WhatsAppHttpContext, WhatsAppWebhookListener } from "./webhook-host.js";
+export type { WhatsAppHttpContext } from "./webhook-host.js";
 export type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
+    WhatsAppClientEvents,
     WhatsAppConfig,
     WhatsAppContact,
     WhatsAppErrorData,
     WhatsAppMediaInfo,
     WhatsAppMediaObject,
+    WhatsAppIngestResult,
     WhatsAppMessageEvent,
     WhatsAppMessageStatus,
     WhatsAppMessageStatusEvent,
@@ -32,7 +34,7 @@ export type {
     WhatsAppWebhookValue,
 } from "./types.js";
 
-const whatsappSchema: Schema = {
+export const whatsappSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -64,26 +66,45 @@ const whatsappSchema: Schema = {
     },
     app_secret: {
         type: "string",
-        required: true,
         label: "App Secret",
         sensitive: true,
         description: "Meta 应用 Secret，仅用于校验 X-Hub-Signature-256",
-        ui: { section: "credentials" },
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
+    },
+    receive_mode: {
+        type: "string",
+        default: "webhook",
+        label: "事件接收方式",
+        choices: [
+            { value: "webhook", label: "Webhook" },
+            { value: "manual", label: "手动接入既有 Host/队列" },
+        ],
+        description: "manual 不注册路由，由现有连接调用 ingest()",
+        ui: { section: "transport" },
     },
     webhook_verify_token: {
         type: "string",
-        required: true,
         label: "Webhook Verify Token",
         sensitive: true,
         description: "自定义随机令牌，须与 Meta Webhook 配置完全一致",
-        ui: { section: "transport" },
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     webhook_path: {
         type: "string",
         label: "Webhook 路径",
         placeholder: "/whatsapp/{account_id}/webhook",
         description: "复用 OneBots 主 HTTP 服务；留空自动生成账号隔离路径",
-        ui: { section: "transport" },
+        pattern: /^\/(?!\/)[^?#\u0000-\u001f\u007f]*$/,
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     api_version: {
         type: "string",
@@ -97,6 +118,7 @@ const whatsappSchema: Schema = {
         default: "https://graph.facebook.com",
         label: "Graph API Base URL",
         description: "仅官方兼容代理或测试环境需要覆盖，必须使用 HTTPS",
+        pattern: /^https:\/\/[^\s/?#]+(?::\d+)?\/?$/,
         ui: { section: "advanced" },
     },
     deduplicate_webhooks: {

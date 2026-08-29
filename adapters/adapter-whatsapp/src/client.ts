@@ -3,27 +3,40 @@ import { WhatsAppApiError } from "./errors.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
+    WhatsAppClientEvents,
     WhatsAppConfig,
+    WhatsAppIngestResult,
     WhatsAppMediaInfo,
     WhatsAppObservedContact,
     WhatsAppPhoneNumberInfo,
     WhatsAppSendMessageParams,
     WhatsAppWebhookEvent,
 } from "./types.js";
+import {
+    acceptWhatsAppVerification,
+    digestWhatsAppPayload,
+    parseWhatsAppWebhook,
+    parseWhatsAppWebhookBody,
+    verifyWhatsAppSignature,
+    whatsAppErrorResponse,
+} from "./webhook.js";
 
 const DEFAULT_API_BASE_URL = "https://graph.facebook.com";
+const DEFAULT_DEDUPLICATION_LIMIT = 10_000;
 
 /** WhatsApp Cloud API 客户端；保留通用 call 以覆盖 Graph API 新增能力。 */
-export class WhatsAppClient extends EventEmitter {
+export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly apiVersion: string;
     readonly apiBaseUrl: string;
     private readonly contacts = new Map<string, WhatsAppObservedContact>();
+    private readonly processedEvents = new Set<string>();
 
     constructor(
         readonly config: WhatsAppConfig,
         private readonly fetcher: typeof fetch = fetch,
     ) {
         super();
+        assertWhatsAppConfig(config);
         this.apiVersion = requireApiVersion(config.api_version);
         this.apiBaseUrl = requireHttpsBase(config.api_base_url || DEFAULT_API_BASE_URL);
     }
@@ -38,26 +51,102 @@ export class WhatsAppClient extends EventEmitter {
         this.emit("stop");
     }
 
-    /** 最底层事件入口，供共享 Webhook Host 或其他可信连接复用同一个 Client。 */
-    ingest(event: WhatsAppWebhookEvent): number {
+    get receiveMode(): "webhook" | "manual" {
+        return this.config.receive_mode || "webhook";
+    }
+
+    /** 最底层事件入口，供共享 Webhook Host、队列或其他可信连接复用。 */
+    ingest(rawEvent: unknown, deduplicationKey?: string): WhatsAppIngestResult {
+        const event = parseWhatsAppWebhook(rawEvent);
+        const key = deduplicationKey || digestWhatsAppPayload(event);
+        if (this.isDuplicate(key)) {
+            return {
+                accepted: 0,
+                duplicate: true,
+                changes: 0,
+                messages: 0,
+                statuses: 0,
+                event,
+            };
+        }
         this.observeContacts(event);
         this.emit("raw_event", event);
         this.emit("webhook", event);
-        let count = 0;
+        let changes = 0;
+        let messages = 0;
+        let statuses = 0;
         for (const entry of event.entry) {
             for (const change of entry.changes) {
                 this.emit("change", change, entry.id);
+                changes += 1;
                 for (const message of change.value.messages || []) {
                     this.emit("message", message, change.value.metadata, change);
-                    count += 1;
+                    messages += 1;
                 }
                 for (const status of change.value.statuses || []) {
                     this.emit("status", status, change.value.metadata, change);
-                    count += 1;
+                    statuses += 1;
                 }
             }
         }
-        return count;
+        this.markProcessed(key);
+        return {
+            accepted: messages + statuses,
+            duplicate: false,
+            changes,
+            messages,
+            statuses,
+            event,
+        };
+    }
+
+    /** 校验原始请求体签名，并交给与 manual 模式相同的 ingest 管线。 */
+    ingestHttp(body: string | Buffer, signature?: string): WhatsAppIngestResult {
+        const rawBody = Buffer.isBuffer(body) ? body : Buffer.from(body);
+        verifyWhatsAppSignature(rawBody, signature, this.config.app_secret);
+        return this.ingest(parseWhatsAppWebhookBody(rawBody), digestWhatsAppPayload(rawBody));
+    }
+
+    /** Fetch / WinterCG Host 可直接转交标准 Request，无需另开端口。 */
+    async acceptHttp(request: Request): Promise<Response> {
+        if (request.method === "GET") {
+            return acceptWhatsAppVerification(request.url, this.config.webhook_verify_token);
+        }
+        if (request.method !== "POST") {
+            return Response.json(
+                { error: { code: "WHATSAPP_METHOD_NOT_ALLOWED", message: "Method Not Allowed" } },
+                { status: 405, headers: { Allow: "GET, POST" } },
+            );
+        }
+        try {
+            const result = this.ingestHttp(
+                Buffer.from(await request.arrayBuffer()),
+                request.headers.get("x-hub-signature-256") || undefined,
+            );
+            return Response.json({
+                ok: true,
+                accepted: result.accepted,
+                duplicate: result.duplicate,
+                changes: result.changes,
+            });
+        } catch (error) {
+            return whatsAppErrorResponse(WhatsAppApiError.wrap(error, "WHATSAPP_WEBHOOK_ERROR"));
+        }
+    }
+
+    private isDuplicate(key: string): boolean {
+        return this.config.deduplicate_webhooks !== false && this.processedEvents.has(key);
+    }
+
+    private markProcessed(key: string): void {
+        if (this.config.deduplicate_webhooks === false) return;
+        this.processedEvents.add(key);
+        const limit = this.config.webhook_deduplication_limit || DEFAULT_DEDUPLICATION_LIMIT;
+        while (this.processedEvents.size > limit) {
+            const oldest = this.processedEvents.values().next().value;
+            if (typeof oldest !== "string") break;
+            this.processedEvents.delete(oldest);
+        }
     }
 
     /** 返回 Webhook 中真实出现过的联系人；Cloud API 不支持任意号码资料查询。 */
@@ -313,11 +402,69 @@ function requireApiVersion(value: string): string {
 }
 
 function requireHttpsBase(value: string): string {
-    if (!URL.canParse(value) || new URL(value).protocol !== "https:") {
+    if (!URL.canParse(value)) {
         throw new WhatsAppApiError("WhatsApp api_base_url 必须是有效 HTTPS URL", {
             code: "WHATSAPP_INVALID_API_BASE_URL",
             details: value,
         });
     }
-    return value.replace(/\/+$/u, "");
+    const url = new URL(value);
+    if (
+        url.protocol !== "https:" ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        (url.pathname !== "/" && url.pathname !== "")
+    ) {
+        throw new WhatsAppApiError("WhatsApp api_base_url 必须是无凭据和路径语义的 HTTPS Origin", {
+            code: "WHATSAPP_INVALID_API_BASE_URL",
+            details: value,
+        });
+    }
+    return url.origin;
+}
+
+function assertWhatsAppConfig(config: WhatsAppConfig): void {
+    for (const [name, value] of [
+        ["account_id", config.account_id],
+        ["business_account_id", config.business_account_id],
+        ["phone_number_id", config.phone_number_id],
+        ["access_token", config.access_token],
+    ] as const) {
+        if (!value?.trim()) {
+            throw new WhatsAppApiError(`WhatsApp ${name} 不能为空`, {
+                code: "WHATSAPP_CONFIG_REQUIRED",
+            });
+        }
+    }
+    const receiveMode = config.receive_mode || "webhook";
+    if (receiveMode !== "webhook" && receiveMode !== "manual") {
+        throw new WhatsAppApiError("WhatsApp receive_mode 仅支持 webhook 或 manual", {
+            code: "WHATSAPP_INVALID_RECEIVE_MODE",
+        });
+    }
+    if (
+        receiveMode === "webhook" &&
+        (!config.app_secret?.trim() || !config.webhook_verify_token?.trim())
+    ) {
+        throw new WhatsAppApiError(
+            "WhatsApp Webhook 模式必须配置 app_secret 和 webhook_verify_token",
+            {
+                code: "WHATSAPP_WEBHOOK_CONFIG_REQUIRED",
+            },
+        );
+    }
+    if (
+        config.webhook_deduplication_limit !== undefined &&
+        (!Number.isInteger(config.webhook_deduplication_limit) ||
+            config.webhook_deduplication_limit < 100)
+    ) {
+        throw new WhatsAppApiError(
+            "WhatsApp webhook_deduplication_limit 必须是大于等于 100 的整数",
+            {
+                code: "WHATSAPP_INVALID_DEDUPLICATION_LIMIT",
+            },
+        );
+    }
 }

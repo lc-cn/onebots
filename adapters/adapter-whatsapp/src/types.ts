@@ -2,7 +2,7 @@
 export interface WhatsAppConfig {
     account_id: string;
     /** Meta App Dashboard 中的应用 Secret，用于 Webhook HMAC-SHA256 验签。 */
-    app_secret: string;
+    app_secret?: string;
     /** WhatsApp Business Account ID。 */
     business_account_id: string;
     /** Cloud API Phone Number ID。 */
@@ -10,7 +10,9 @@ export interface WhatsAppConfig {
     /** 具备 whatsapp_business_messaging 权限的访问令牌。 */
     access_token: string;
     /** Meta 配置 Webhook 回调时填写的自定义验证令牌。 */
-    webhook_verify_token: string;
+    webhook_verify_token?: string;
+    /** Webhook 由 OneBots 接收，或由已有 Host/队列手动 ingest。 */
+    receive_mode?: "webhook" | "manual";
     /** 挂载到 OneBots HTTP Host 的路径，默认使用账号标准路径。 */
     webhook_path?: string;
     /** Graph API 版本，必须显式带 v 前缀。 */
@@ -207,4 +209,33 @@ export interface WhatsAppWebhookResponse {
     status: number;
     body: unknown;
     contentType?: string;
+}
+
+/** 所有接入方式共享的事件接收结果。 */
+export interface WhatsAppIngestResult {
+    accepted: number;
+    duplicate: boolean;
+    changes: number;
+    messages: number;
+    statuses: number;
+    event: WhatsAppWebhookEvent;
+}
+
+/** WhatsAppClient 对外事件表，参数保持 Cloud API 原始类型。 */
+export interface WhatsAppClientEvents {
+    ready: [info: WhatsAppPhoneNumberInfo];
+    stop: [];
+    raw_event: [event: WhatsAppWebhookEvent];
+    webhook: [event: WhatsAppWebhookEvent];
+    change: [change: WhatsAppWebhookChange, entryId: string];
+    message: [
+        message: WhatsAppMessageEvent,
+        metadata: WhatsAppWebhookMetadata | undefined,
+        change: WhatsAppWebhookChange,
+    ];
+    status: [
+        status: WhatsAppMessageStatusEvent,
+        metadata: WhatsAppWebhookMetadata | undefined,
+        change: WhatsAppWebhookChange,
+    ];
 }

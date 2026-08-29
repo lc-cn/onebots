@@ -12,7 +12,7 @@
 - 媒体上传、查询、下载、删除，消息已读与 typing indicator
 - Business Profile、号码注册、两步验证、用户屏蔽和消息模板管理
 - 通用 `whatsapp_call`，无需等待适配器升级即可调用新的 Graph API 资源
-- `WhatsAppClient.ingest(rawEvent)`，让外部可信连接复用同一事件分发链路
+- `ingest()`、`ingestHttp()` 与标准 `acceptHttp(Request)` 共用同一 typed 事件和去重链路
 
 `getUserInfo` 只返回 Webhook 中真实观察到的联系人名称；Cloud API 不提供任意号码资料查询，尚未出现过的号码会返回结构化 `WHATSAPP_USER_NOT_OBSERVED`，不会用号码伪造用户资料。
 
@@ -27,6 +27,7 @@ whatsapp.my_bot:
   access_token: "your_long_lived_access_token"
   app_secret: "your_meta_app_secret"
   webhook_verify_token: "your_random_verify_token"
+  receive_mode: webhook
   api_version: "v23.0"
 
   onebot.v11:
@@ -36,6 +37,31 @@ whatsapp.my_bot:
 默认回调路径是 `/whatsapp/my_bot/webhook`。将完整公网地址和同一个 `webhook_verify_token` 填入 Meta App Dashboard，并订阅 `messages` 字段。Koa 请求解析器必须保留未经修改的 `rawBody`，否则适配器会拒绝无法验签的请求。
 
 配置只使用上面的 snake_case 字段；旧的 camelCase、`webhook.url`、`webhook.fields` 和适配器私有代理配置不再使用。
+
+已有 Host、队列或代理已经负责接收事件时，使用 manual 模式，不会在 OneBots Router 上注册额外路由：
+
+```yaml
+whatsapp.my_bot:
+  phone_number_id: "your_phone_number_id"
+  business_account_id: "your_business_account_id"
+  access_token: "your_long_lived_access_token"
+  api_version: "v23.0"
+  receive_mode: manual
+```
+
+三层接入最终进入同一个 `WhatsAppClient`，共享联系人观察、typed events 与去重状态：
+
+```ts
+const result = client.ingest(rawEvent);
+const verified = client.ingestHttp(rawBody, xHubSignature256);
+const response = await client.acceptHttp(request);
+
+client.on("message", (message, metadata, change) => {
+  // 参数均保留 Cloud API 原始类型
+});
+```
+
+`ingest()` 与 `ingestHttp()` 返回 `{ accepted, duplicate, changes, messages, statuses, event }`；`acceptHttp()` 返回可直接交给 Fetch/WinterCG Host 的结构化响应。
 
 ## 原生消息
 

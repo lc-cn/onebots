@@ -124,12 +124,8 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
         const whatsappConfig = normalizeConfig(config);
         const client = new WhatsAppClient(whatsappConfig);
         const account = new Account<"whatsapp", WhatsAppClient>(this, client, config);
-        const webhook = new WhatsAppWebhookHost(
-            whatsappConfig,
-            event => {
-                client.ingest(event);
-            },
-            error => this.logger.error("WhatsApp Webhook 处理失败", error),
+        const webhook = new WhatsAppWebhookHost(whatsappConfig, client, error =>
+            this.logger.error("WhatsApp Webhook 处理失败", error),
         );
         client.on("webhook", (event: WhatsAppWebhookEvent) => {
             for (const projected of projectWhatsAppWebhook(event, {
@@ -140,15 +136,17 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
             }
         });
 
-        this.app.router.get(webhook.path, ctx => {
-            const response = webhook.acceptVerification(ctx.query);
-            ctx.status = response.status;
-            ctx.type = response.contentType || "text/plain";
-            ctx.body = response.body;
-        });
-        this.app.router.post(webhook.path, ctx =>
-            webhook.acceptHttp(ctx as unknown as WhatsAppHttpContext),
-        );
+        if (client.receiveMode === "webhook") {
+            this.app.router.get(webhook.path, ctx => {
+                const response = webhook.acceptVerification(ctx.query);
+                ctx.status = response.status;
+                ctx.type = response.contentType || "text/plain";
+                ctx.body = response.body;
+            });
+            this.app.router.post(webhook.path, ctx =>
+                webhook.acceptHttp(ctx as unknown as WhatsAppHttpContext),
+            );
+        }
 
         account.on("start", async () => {
             try {
@@ -166,7 +164,6 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
             client.stop();
             account.status = AccountStatus.OffLine;
         });
-        client.on("error", error => this.logger.error("WhatsApp 客户端错误", error));
         return account;
     }
 
@@ -197,6 +194,7 @@ function normalizeConfig(config: Account.Config<"whatsapp">): WhatsAppConfig {
         business_account_id: config.business_account_id,
         phone_number_id: config.phone_number_id,
         access_token: config.access_token,
+        receive_mode: config.receive_mode,
         webhook_verify_token: config.webhook_verify_token,
         webhook_path: config.webhook_path,
         api_version: config.api_version,
