@@ -1,76 +1,94 @@
 # @onebots/adapter-wecom-kf
 
-OneBots 适配 **企业微信 · 微信客服**（[官方文档概述](https://developer.work.weixin.qq.com/document/path/94638)）：通过回调 `kf_msg_or_event` 触发 **`sync_msg` 拉取消息**，使用 **`send_msg`** 主动回复。
+OneBots 的企业微信“微信客服”官方 API 适配器。它通过加密回调触发 `kf/sync_msg`，用 `kf/send_msg` 回复客户，并提供客服账号、接待人员、会话分配、升级服务与统计管理能力。
 
-与 `@onebots/adapter-wecom`（自建应用 `/cgi-bin/message/send`）**不是**同一套 API，请勿混用。
+> 本包不是 `@onebots/adapter-wecom`。后者处理企业自建应用消息与 `appchat`，两套产品模型和 Secret 不混用。
 
-## 前置条件
-
-1. 企业已开通 **微信客服**，并在 **应用管理 → 微信客服 → API** 中为 **自建应用** 勾选「可调用接口的应用」。
-2. 在 **通过 API 管理微信客服账号** 中，将需要机器人托管的客服号改为 API 管理（原生接待规则将暂停，需自行 `sync_msg` / `send_msg`）。
-3. 客服账号的 **接待人员** 必须在自建应用 **可见范围** 内，否则常见错误 **`60030`**。
-
-## 安装
-
-```bash
-pnpm add @onebots/adapter-wecom-kf
-# 依赖主包 onebots
-```
-
-## 启动
-
-```bash
-npx onebots -r wecom-kf -p onebot-v11 -c config.yaml
-```
-
-## 配置示例 `config.yaml`
+## 配置
 
 ```yaml
-wecom-kf.mykf:
-  corp_id: 'wwxxxxxxxx'
-  corp_secret: '应用Secret'
-  token: '回调Token'
-  encoding_aes_key: 'EncodingAESKey'
-  open_kfid: 'wkxxxx'   # 默认客服账号，回调中的 OpenKfId 优先
-  agent_id: '1000001'   # 发送图片/文件等需先上传临时素材时填写
-  cursor_store_path: './data/wecom-kf-cursor.json'  # 可选，持久化 sync_msg 游标
-  enable_sync_poll: false   #  true：无 token 定时 sync_msg（易触发频次限制）
-  sync_poll_interval_ms: 30000
+wecom-kf.customer_service:
+  corp_id: ww1234567890abcdef
+  corp_secret: your_wecom_customer_service_secret
+  token: your_callback_token
+  encoding_aes_key: your_43_character_key
+  open_kfid: wkxxxxxxxxxxxxxxxx # 可选默认客服账号
+  cursor_store_path: ./data/wecom-kf-cursor.json
+  deduplicate_messages: true
+
   onebot.v11:
-    access_token: 'your_token'
+    use_http: true
+    use_ws: true
 ```
 
-## 回调 URL
+`corp_secret` 是微信客服 API 页面生成的 Secret。临时素材上传不需要 `agent_id`，旧配置中的该字段不再使用。
 
-在微信客服 / 接收消息 中填写（将 `account_id` 换成配置键名，如 `mykf`）：
+在微信客服“接收消息”中填写 `https://bot.example.com/wecom-kf/customer_service/webhook`。默认路径为 `/wecom-kf/{account_id}/webhook`，可用 `webhook_path` 覆盖。适配器只接受验签、解密且 CorpID 匹配的官方加密 XML，不接受明文或 JSON 兼容载荷。
 
-```text
-https://你的域名/wecom-kf/mykf/webhook
+## 同步与事件
+
+- `kf_msg_or_event` 回调中的 `Token` 和 `OpenKfId` 会触发对应客服账号的 `sync_msg`。
+- 回调在验签、解密和字段校验后立即确认；分页同步进入后台队列，错误通过 `client_error` 与适配器日志报告。
+- 同一客服账号的同步请求串行执行，分页必须推进游标，避免并发回调覆盖进度。
+- 游标使用异步临时文件加原子重命名持久化；损坏或不可写不会被静默忽略。
+- `start()` 幂等；`stop()` 会中止在途同步，快速重启使用 generation 隔离旧请求。
+- 客户消息、接待人员消息、平台事件和未知消息类型都会保留完整 `raw_event`。
+- 接待人员消息的 `sender.id` 是真实 `servicer_userid`，客户身份保留在 `extensions.wecom_kf.external_userid`。
+- 可选 `enable_sync_poll` 仅作无回调 Token 时的补偿；默认关闭，开启时必须配置 `open_kfid`。
+
+## 消息
+
+通用发送支持文本、图片、语音、视频、文件、图文链接、位置、小程序与菜单。媒体段必须使用 `media_id` / `file_id`，可先调用标准 `upload_file` 或 `upload_temporary_media`。未知段会明确报错，不会发送 `[type]` 占位文本。
+
+`wecom_kf_message` 可传任意官方原生消息体，但标准发送目标、客服账号和消息 ID 由客户端统一控制：
+
+```ts
+await adapter.sendMessage("customer_service", {
+  scene_type: "private",
+  scene_id: customerId,
+  message: [
+    {
+      type: "wecom_kf_message",
+      data: {
+        msgtype: "msgmenu",
+        msgmenu: {
+          head_content: "请选择",
+          list: [{ type: "click", click: { id: "help", content: "帮助" } }],
+        },
+      },
+    },
+  ],
+});
 ```
 
-需同时支持 **GET**（URL 校验）与 **POST**（`Encrypt` 密文）。
+## 原生动作
 
-### 可信域名校验文件（如 `WW_verify_xxx.txt`）
+平台动作覆盖：
 
-企业微信要求校验文件能通过 **站点根路径** 下载。在 OneBots 全局配置中设置 `public_static_dir`（例如 `static`），将 txt 放在该目录下即可由网关对外提供；Docker 可将文件放入挂载卷内的 `/data/static`。
+- 客服账号：列表、详情、新增、更新、删除、获取客服链接；
+- 接待人员：添加、删除、列表；
+- 会话：查询状态、变更状态、手动同步；
+- 客户：批量详情、升级服务、取消升级；
+- 消息：原生发送、事件欢迎语/提示语、临时素材上传下载；
+- 数据：企业汇总、接待人员统计与视频号绑定状态。
 
-## 消息流说明
+`wecom_kf_call` 为新增或低频接口提供统一 token、HTTPS Base URL、受限相对路径和结构化错误：
 
-1. 企业微信 POST 密文事件，解密后若为 `kf_msg_or_event`，从 XML 取 `Token`、`OpenKfId`。
-2. 使用 `sync_msg`（带 `token` + `open_kfid` + 本地 `cursor`）分页拉取 **`msg_list`**。
-3. 将 **客户消息**（`origin === 3`）与 **接待人员消息**（`origin === 5`）转为 OneBots `message`；`msgtype === event` 转为 `notice`（`notice_type: custom`）。
-4. 回复：协议层 `sendMessage` → `send_msg`（`touser` 为 `external_userid`）。
+```ts
+await adapter.callAction("customer_service", "wecom_kf_call", {
+  method: "POST",
+  path: "/cgi-bin/kf/get_corp_statistic",
+  body: { open_kfid: "wk...", start_time: 1788105600, end_time: 1788192000 },
+});
+```
 
-受限于微信客服规则：用户发消息后 **48 小时内**、最多 **5 条** 等限制以官方最新文档为准。
+## 底层接入
 
-## Bot 进阶 API
+- `WeComKfWebhookHost.ingest()` 接收框架无关请求并返回结构化 HTTP 响应；
+- `WeComKfWebhookHost.acceptHttp()` 可挂到已有 Koa 风格 Host；
+- `WeComKfClient.ingest()` 可接收已有连接或其他同步器取得的原始 `sync_msg` 条目；
+- `WeComKfClient.call()` 提供完整类型化底层 API 入口。
 
-`Account` 的 `client` 为 `WeComKfBot`，还可调用：
+适配器不会自行监听端口。发送窗口、5 条限制与“接口成功不等于最终送达”均由微信客服规则决定，最终失败通过 `sync_msg` 事件交付。
 
-- `serviceStateGet` / `serviceStateTrans`（[会话分配](https://developer.work.weixin.qq.com/document/path/94669)）
-- `customerBatchGet`（[客户基础信息](https://developer.work.weixin.qq.com/document/path/95159)）
-
-## 相关链接
-
-- [接收消息和事件 / sync_msg](https://developer.work.weixin.qq.com/document/path/94670)
-- [发送消息 send_msg](https://developer.work.weixin.qq.com/document/path/94677)
+[企业微信开发者中心：微信客服](https://developer.work.weixin.qq.com/document/path/94638)

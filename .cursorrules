@@ -172,7 +172,7 @@ pnpm docs:dev         # 文档开发
 
 - 适配器: `adapter-{platform}/`
 - 类型: `types.ts`
-- 机器人: `bot.ts`
+- 平台客户端: 有状态 SDK 包装使用 `bot.ts`；可独立嵌入的 API/传输客户端使用 `client.ts`，按职责择一
 - 适配器: `adapter.ts`
 - 入口: `index.ts`
 
@@ -194,4 +194,3 @@ chore: 构建/工具
 3. 错误消息使用中文
 4. 文档使用中文（中文文档）或英文（英文文档）
 5. 代码变量/函数名使用英文
-

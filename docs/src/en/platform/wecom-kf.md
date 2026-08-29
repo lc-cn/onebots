@@ -1,11 +1,21 @@
-# WeCom Customer Service (WeChat 客服)
+# WeCom Customer Service
 
-This adapter connects **WeChat Customer Service** APIs (`kf/sync_msg`, `kf/send_msg`), not the standard WeCom **app message** APIs. See the Chinese documentation for full setup (callback URL, `open_kfid`, caveats):
+`@onebots/adapter-wecom-kf` targets WeCom Customer Service (`kf/sync_msg`, `kf/send_msg`, and session assignment). Standard custom-application messages use the separate [`wecom`](./wecom.md) adapter; their secrets and conversation models are not interchangeable.
 
-- [微信客服 wecom-kf (中文)](/platform/wecom-kf)
-- [Official overview](https://developer.work.weixin.qq.com/document/path/94638)
-- Package: [`@onebots/adapter-wecom-kf`](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wecom-kf)
-
-```bash
-onebots -r wecom-kf -p onebot-v11 -c config.yaml
+```yaml
+wecom-kf.customer_service:
+  corp_id: ww1234567890abcdef
+  corp_secret: your_wecom_customer_service_secret
+  token: your_callback_token
+  encoding_aes_key: your_43_character_key
+  open_kfid: wkxxxxxxxxxxxxxxxx
+  cursor_store_path: ./data/wecom-kf-cursor.json
 ```
+
+The default callback path is `/wecom-kf/{account_id}/webhook`. Only signed encrypted XML is accepted, and the decrypted CorpID is validated.
+
+See [WeCom Customer Service configuration](/en/config/adapter/wecom-kf) for field defaults and Web form groups.
+
+The adapter acknowledges fully validated callbacks immediately, serializes `sync_msg` pagination per customer-service account in the background, and persists cursors atomically. Stop/restart cancels and generation-isolates stale lifecycle requests. Every raw message/event is preserved, and staff replies use the real `servicer_userid`. Native capabilities include media, links, locations, mini programs, menus, account and servicer management, session state, event-response messages, upgrade service, and statistics. Temporary-media upload does not require an `agent_id`.
+
+See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wecom-kf) for platform actions and the framework-neutral `ingest` / `acceptHttp` contract.

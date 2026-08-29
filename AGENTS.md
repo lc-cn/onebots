@@ -82,7 +82,7 @@ onebots/
 | 协议（服务端） | `@onebots/protocol-*` | `@onebots/protocol-onebot-v11` |
 | 客户端 SDK | `imhelper` / `@imhelper/*` | `@imhelper/onebot-v11` |
 
-**适配器内部文件命名**：`bot.ts`（机器人客户端）、`adapter.ts`（适配器）、`types.ts`（类型）、`index.ts`（入口）。
+**适配器内部文件命名**：`bot.ts`（有状态平台 SDK 包装）、`client.ts`（可独立嵌入的官方 API/传输客户端，二者按职责择一）、`adapter.ts`（适配器）、`types.ts`（类型）、`index.ts`（入口）。不要为兼容命名创建无逻辑的转发文件。
 
 ---
 

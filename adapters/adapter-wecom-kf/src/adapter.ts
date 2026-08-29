@@ -1,19 +1,17 @@
-/**
- * 微信客服 OneBots 适配器
- */
-import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp, CommonTypes } from "onebots";
-import { readFileSync } from "node:fs";
-import { WeComKfBot } from "./bot.js";
-import { kfItemToCommonEvent } from "./msg-mapper.js";
-import type { WeComKfConfig, KfMsgItem } from "./types.js";
+import { readFile } from "node:fs/promises";
+import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
 import { weComKfCapabilities } from "./capabilities.js";
+import { WeComKfClient } from "./client.js";
+import { WeComKfError } from "./errors.js";
+import { projectKfCallback, projectKfItem } from "./events.js";
+import { assertKfUploadSize, decodeKfBase64 } from "./media.js";
+import { compileKfMessages } from "./messages.js";
+import { executeWeComKfPlatformAction, WECOM_KF_PLATFORM_ACTIONS } from "./platform-actions.js";
+import type { KfMsgItem, WeComKfConfig } from "./types.js";
+import { WeComKfWebhookHost, type WeComKfHttpContext } from "./webhook-host.js";
 
-function unsupported(name: string): never {
-    throw new Error(`微信客服不支持 ${name}`);
-}
-
-export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
-    /** account_id:external_userid -> open_kfid */
+/** 企业微信“微信客服”适配器。 */
+export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
     private readonly userLastOpenKf = new Map<string, string>();
 
     constructor(app: BaseApp) {
@@ -21,625 +19,262 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         this.icon = "https://work.weixin.qq.com/favicon.ico";
     }
 
-    private ctxKey(accountId: string, externalUserid: string): string {
-        return `${accountId}\0${externalUserid}`;
-    }
-
     async sendMessage(
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到账号 ${uin}`);
-
         if (params.scene_type !== "private" && params.scene_type !== "direct") {
-            throw new Error("微信客服仅支持私聊/direct 场景");
+            return this.unsupported(
+                "send_message",
+                "platform_unsupported",
+                "微信客服只支持客户私聊会话",
+            );
         }
-
-        const bot = account.client;
-        const cfg = bot.getConfig();
-        const touser = this.coerceId(params.scene_id as CommonTypes.Id | string | number).string;
-        const openKf =
-            this.userLastOpenKf.get(this.ctxKey(account.account_id, touser)) || cfg.open_kfid || "";
-        if (!openKf) {
-            throw new Error("未配置 open_kfid 且无会话上下文，无法发送消息");
+        const client = this.requireClient(uin);
+        const externalUserid = this.coerceId(params.scene_id).string;
+        const openKfid =
+            this.userLastOpenKf.get(this.contextKey(uin, externalUserid)) ||
+            client.config.open_kfid;
+        if (!openKfid)
+            throw new WeComKfError("没有会话上下文且未配置 open_kfid", {
+                code: "WECOM_KF_ACCOUNT_CONTEXT_REQUIRED",
+            });
+        let firstId: string | undefined;
+        for (const message of compileKfMessages(params.message)) {
+            const id = await client.sendMessage(externalUserid, openKfid, message);
+            firstId ||= id;
         }
-
-        let lastMsgId: string | undefined;
-        for (const seg of params.message) {
-            if (typeof seg === "string") {
-                const r = await bot.sendMsg({
-                    touser,
-                    open_kfid: openKf,
-                    msgtype: "text",
-                    text: { content: seg },
-                });
-                if (r.errcode !== 0) throw new Error(`发送消息失败: ${r.errmsg} (${r.errcode})`);
-                lastMsgId = r.msgid || lastMsgId;
-                continue;
-            }
-            if (seg.type === "text") {
-                const r = await bot.sendMsg({
-                    touser,
-                    open_kfid: openKf,
-                    msgtype: "text",
-                    text: { content: seg.data.text || "" },
-                });
-                if (r.errcode !== 0) throw new Error(`发送消息失败: ${r.errmsg} (${r.errcode})`);
-                lastMsgId = r.msgid || lastMsgId;
-            } else if (seg.type === "image") {
-                const mediaId =
-                    seg.data.file_id ||
-                    seg.data.media_id ||
-                    (await this.resolveMediaId(bot, "image", seg.data.url, seg.data.file));
-                const r = await bot.sendMsg({
-                    touser,
-                    open_kfid: openKf,
-                    msgtype: "image",
-                    image: { media_id: mediaId },
-                });
-                if (r.errcode !== 0) throw new Error(`发送图片失败: ${r.errmsg} (${r.errcode})`);
-                lastMsgId = r.msgid || lastMsgId;
-            } else if (seg.type === "voice" || seg.type === "record") {
-                const mediaId = await this.resolveMediaId(
-                    bot,
-                    "voice",
-                    seg.data.url,
-                    seg.data.file,
-                );
-                const r = await bot.sendMsg({
-                    touser,
-                    open_kfid: openKf,
-                    msgtype: "voice",
-                    voice: { media_id: mediaId },
-                });
-                if (r.errcode !== 0) throw new Error(`发送语音失败: ${r.errmsg} (${r.errcode})`);
-                lastMsgId = r.msgid || lastMsgId;
-            } else if (seg.type === "video") {
-                const mediaId = await this.resolveMediaId(
-                    bot,
-                    "video",
-                    seg.data.url,
-                    seg.data.file,
-                );
-                const r = await bot.sendMsg({
-                    touser,
-                    open_kfid: openKf,
-                    msgtype: "video",
-                    video: { media_id: mediaId },
-                });
-                if (r.errcode !== 0) throw new Error(`发送视频失败: ${r.errmsg} (${r.errcode})`);
-                lastMsgId = r.msgid || lastMsgId;
-            } else if (seg.type === "file") {
-                const mediaId = await this.resolveMediaId(bot, "file", seg.data.url, seg.data.file);
-                const r = await bot.sendMsg({
-                    touser,
-                    open_kfid: openKf,
-                    msgtype: "file",
-                    file: { media_id: mediaId },
-                });
-                if (r.errcode !== 0) throw new Error(`发送文件失败: ${r.errmsg} (${r.errcode})`);
-                lastMsgId = r.msgid || lastMsgId;
-            } else {
-                const r = await bot.sendMsg({
-                    touser,
-                    open_kfid: openKf,
-                    msgtype: "text",
-                    text: { content: `[${seg.type}]` },
-                });
-                if (r.errcode !== 0) throw new Error(`发送消息失败: ${r.errmsg} (${r.errcode})`);
-                lastMsgId = r.msgid || lastMsgId;
-            }
-        }
-
-        return {
-            message_id: this.createId(lastMsgId || Date.now().toString()),
-        };
-    }
-
-    private async resolveMediaId(
-        bot: WeComKfBot,
-        type: string,
-        url?: string,
-        path?: string,
-    ): Promise<string> {
-        if (!url && !path) {
-            throw new Error("图片/语音等消息需要提供 url、file 路径或 file_id/media_id");
-        }
-        let buf: Buffer;
-        let filename = "file.bin";
-        if (path) {
-            buf = readFileSync(path);
-            const parts = path.split(/[/\\]/);
-            filename = parts[parts.length - 1] || filename;
-        } else if (url) {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`下载媒体失败: ${res.status}`);
-            buf = Buffer.from(await res.arrayBuffer());
-            try {
-                const u = new URL(url);
-                filename = u.pathname.split("/").pop() || filename;
-            } catch {
-                /* ignore */
-            }
-        } else {
-            throw new Error("无法解析媒体");
-        }
-        return bot.uploadTempMedia(type, buf, filename);
-    }
-
-    async deleteMessage(_uin: string, _params: Adapter.DeleteMessageParams): Promise<void> {
-        throw unsupported("撤回/删除消息");
-    }
-
-    async getMessage(
-        _uin: string,
-        _params: Adapter.GetMessageParams,
-    ): Promise<Adapter.MessageInfo> {
-        throw unsupported("getMessage");
-    }
-
-    async getMessageHistory(
-        _uin: string,
-        _params: Adapter.GetMessageHistoryParams,
-    ): Promise<Adapter.MessageInfo[]> {
-        throw unsupported("getMessageHistory");
-    }
-
-    async updateMessage(_uin: string, _params: Adapter.UpdateMessageParams): Promise<void> {
-        throw unsupported("updateMessage");
-    }
-
-    async getForwardMessage(
-        _uin: string,
-        _params: Adapter.GetForwardMessageParams,
-    ): Promise<Adapter.MessageInfo[]> {
-        throw unsupported("getForwardMessage");
-    }
-
-    async markMessageAsRead(_uin: string, _params: Adapter.MarkMessageAsReadParams): Promise<void> {
-        throw unsupported("markMessageAsRead");
+        if (!firstId)
+            throw new WeComKfError("微信客服未生成消息 ID", {
+                code: "WECOM_KF_EMPTY_SEND_RESPONSE",
+            });
+        return { message_id: this.createId(firstId) };
     }
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到账号 ${uin}`);
-        const cfg = account.client.getConfig();
-        const id = cfg.open_kfid || account.account_id;
+        const client = this.requireClient(uin);
+        if (!client.config.open_kfid) {
+            return {
+                user_id: this.createId(uin),
+                user_name: "微信客服",
+                user_displayname: "微信客服",
+                avatar: this.icon,
+            };
+        }
+        const account = await client.getAccount(client.config.open_kfid);
         return {
-            user_id: this.createId(id),
-            user_name: "微信客服",
-            user_displayname: account.nickname || "微信客服",
-            avatar: this.icon,
+            user_id: this.createId(account.open_kfid),
+            user_name: account.name || account.open_kfid,
+            user_displayname: account.name,
+            avatar: account.avatar,
         };
     }
 
     async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到账号 ${uin}`);
-        const bot = account.client;
-        const uid = params.user_id.string;
-        const res = await bot.customerBatchGet([uid], 0);
-        if (res.errcode !== 0) {
-            throw new Error(`获取客户信息失败: ${res.errmsg} (${res.errcode})`);
-        }
-        const c = res.customer_list?.[0];
-        if (!c) {
-            return {
-                user_id: params.user_id,
-                user_name: uid,
-            };
-        }
+        const externalUserid = params.user_id.string;
+        const result = await this.requireClient(uin).customerBatchGet([externalUserid]);
+        const customer = result.customer_list?.[0];
+        if (!customer)
+            throw new WeComKfError(`未找到微信客服客户 ${externalUserid}`, {
+                code: "WECOM_KF_CUSTOMER_NOT_FOUND",
+                details: result.invalid_external_userid,
+            });
         return {
-            user_id: this.createId(c.external_userid),
-            user_name: c.nickname || c.external_userid,
-            user_displayname: c.nickname,
-            avatar: c.avatar,
+            user_id: this.createId(customer.external_userid),
+            user_name: customer.nickname || customer.external_userid,
+            user_displayname: customer.nickname,
+            avatar: customer.avatar,
         };
-    }
-
-    async createUserChannel(
-        _uin: string,
-        _params: Adapter.CreateUserChannelParams,
-    ): Promise<Adapter.ChannelInfo> {
-        throw unsupported("createUserChannel");
-    }
-
-    async getFriendList(_uin: string): Promise<Adapter.FriendInfo[]> {
-        return [];
-    }
-
-    async getFriendInfo(
-        uin: string,
-        params: Adapter.GetFriendInfoParams,
-    ): Promise<Adapter.FriendInfo> {
-        const u = await this.getUserInfo(uin, { user_id: params.user_id });
-        return {
-            user_id: u.user_id,
-            user_name: u.user_name,
-            remark: u.user_displayname || u.user_name,
-        };
-    }
-
-    async deleteFriend(_uin: string, _params: Adapter.DeleteFriendParams): Promise<void> {
-        throw unsupported("deleteFriend");
-    }
-
-    async sendFriendNudge(_uin: string, _params: Adapter.SendFriendNudgeParams): Promise<void> {
-        throw unsupported("sendFriendNudge");
-    }
-
-    async sendLike(_uin: string, _params: Adapter.SendLikeParams): Promise<void> {
-        throw unsupported("sendLike");
-    }
-
-    async getFriendRequests(_uin: string): Promise<Adapter.FriendRequest[]> {
-        return [];
-    }
-
-    async handleFriendRequest(
-        _uin: string,
-        _params: Adapter.HandleFriendRequestParams,
-    ): Promise<void> {
-        throw unsupported("handleFriendRequest");
-    }
-
-    async getGroupList(_uin: string): Promise<Adapter.GroupInfo[]> {
-        return [];
-    }
-
-    async getGroupInfo(
-        _uin: string,
-        _params: Adapter.GetGroupInfoParams,
-    ): Promise<Adapter.GroupInfo> {
-        throw unsupported("群聊");
-    }
-
-    async setGroupName(_uin: string, _params: Adapter.SetGroupNameParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async leaveGroup(_uin: string, _params: Adapter.LeaveGroupParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async getGroupMemberList(
-        _uin: string,
-        _params: Adapter.GetGroupMemberListParams,
-    ): Promise<Adapter.GroupMemberInfo[]> {
-        return [];
-    }
-
-    async getGroupMemberInfo(
-        _uin: string,
-        _params: Adapter.GetGroupMemberInfoParams,
-    ): Promise<Adapter.GroupMemberInfo> {
-        throw unsupported("群聊");
-    }
-
-    async kickGroupMember(_uin: string, _params: Adapter.KickGroupMemberParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async muteGroupMember(_uin: string, _params: Adapter.MuteGroupMemberParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async muteGroupAll(_uin: string, _params: Adapter.MuteGroupAllParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async setGroupAdmin(_uin: string, _params: Adapter.SetGroupAdminParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async setGroupCard(_uin: string, _params: Adapter.SetGroupCardParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async setGroupSpecialTitle(
-        _uin: string,
-        _params: Adapter.SetGroupSpecialTitleParams,
-    ): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async getGroupHonorInfo(
-        _uin: string,
-        _params: Adapter.GetGroupHonorInfoParams,
-    ): Promise<Adapter.GroupHonorInfo> {
-        throw unsupported("群聊");
-    }
-
-    async sendGroupNudge(_uin: string, _params: Adapter.SendGroupNudgeParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async handleGroupRequest(
-        _uin: string,
-        _params: Adapter.HandleGroupRequestParams,
-    ): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async getGroupNotifications(_uin: string): Promise<Adapter.GroupNotification[]> {
-        return [];
-    }
-
-    async setGroupAvatar(_uin: string, _params: Adapter.SetGroupAvatarParams): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async sendGroupMessageReaction(
-        _uin: string,
-        _params: Adapter.SendGroupMessageReactionParams,
-    ): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async getGroupAnnouncements(_uin: string): Promise<Adapter.GroupAnnouncement[]> {
-        return [];
-    }
-
-    async sendGroupAnnouncement(
-        _uin: string,
-        _params: Adapter.SendGroupAnnouncementParams,
-    ): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async deleteGroupAnnouncement(
-        _uin: string,
-        _params: Adapter.DeleteGroupAnnouncementParams,
-    ): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async getGroupEssenceMessages(_uin: string): Promise<Adapter.MessageInfo[]> {
-        return [];
-    }
-
-    async setGroupEssenceMessage(
-        _uin: string,
-        _params: Adapter.SetGroupEssenceMessageParams,
-    ): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async deleteGroupEssenceMessage(
-        _uin: string,
-        _params: Adapter.DeleteGroupEssenceMessageParams,
-    ): Promise<void> {
-        throw unsupported("群聊");
-    }
-
-    async getGuildInfo(
-        _uin: string,
-        _params: Adapter.GetGuildInfoParams,
-    ): Promise<Adapter.GuildInfo> {
-        throw unsupported("频道");
-    }
-
-    async getGuildList(_uin: string): Promise<Adapter.GuildInfo[]> {
-        return [];
-    }
-
-    async getGuildMemberInfo(
-        _uin: string,
-        _params: Adapter.GetGuildMemberInfoParams,
-    ): Promise<Adapter.GuildMemberInfo> {
-        throw unsupported("频道");
-    }
-
-    async getChannelInfo(
-        _uin: string,
-        _params: Adapter.GetChannelInfoParams,
-    ): Promise<Adapter.ChannelInfo> {
-        throw unsupported("频道");
-    }
-
-    async getChannelList(_uin: string): Promise<Adapter.ChannelInfo[]> {
-        return [];
-    }
-
-    async createChannel(
-        _uin: string,
-        _params: Adapter.CreateChannelParams,
-    ): Promise<Adapter.ChannelInfo> {
-        throw unsupported("频道");
-    }
-
-    async updateChannel(_uin: string, _params: Adapter.UpdateChannelParams): Promise<void> {
-        throw unsupported("频道");
-    }
-
-    async deleteChannel(_uin: string, _params: Adapter.DeleteChannelParams): Promise<void> {
-        throw unsupported("频道");
     }
 
     async uploadFile(uin: string, params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到账号 ${uin}`);
-        let buf: Buffer;
-        let name = params.name || "upload.bin";
-        if (params.data) {
-            buf = Buffer.from(params.data, "base64");
-        } else if (params.path) {
-            buf = readFileSync(params.path);
-        } else if (params.url) {
-            const res = await fetch(params.url);
-            if (!res.ok) throw new Error(`下载文件失败: ${res.status}`);
-            buf = Buffer.from(await res.arrayBuffer());
-        } else {
-            throw new Error("uploadFile 需要 url、path 或 data(base64)");
-        }
-        const mediaId = await account.client.uploadTempMedia("file", buf, name);
+        const data = await loadUpload(params);
+        const result = await this.requireClient(uin).uploadTemporaryMedia(
+            "file",
+            new Blob([Uint8Array.from(data.bytes)], { type: "application/octet-stream" }),
+            data.filename,
+        );
         return {
-            file_id: this.createId(mediaId),
-            file_name: name,
-            file_size: buf.length,
+            file_id: this.createId(result.media_id),
+            file_name: data.filename,
+            file_size: data.bytes.length,
         };
     }
 
-    async getFile(_uin: string, _params: Adapter.GetFileParams): Promise<Adapter.FileInfo> {
-        throw unsupported("getFile");
+    executePlatformAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!WECOM_KF_PLATFORM_ACTIONS.has(action))
+            return super.executePlatformAction(uin, action, params);
+        return executeWeComKfPlatformAction(this.requireClient(uin), action, params);
     }
 
-    async deleteFile(_uin: string, _params: Adapter.DeleteFileParams): Promise<void> {
-        throw unsupported("deleteFile");
+    isPlatformActionImplemented(action: string): boolean {
+        return WECOM_KF_PLATFORM_ACTIONS.has(action);
     }
 
-    async getGroupFiles(
-        _uin: string,
-        _params: Adapter.GetGroupFilesParams,
-    ): Promise<Adapter.GroupFilesResult> {
-        return { files: [], folders: [] };
-    }
-
-    async createGroupFolder(
-        _uin: string,
-        _params: Adapter.CreateGroupFolderParams,
-    ): Promise<Adapter.FolderInfo> {
-        throw unsupported("createGroupFolder");
-    }
-
-    async getFileDownloadUrl(
-        _uin: string,
-        _params: Adapter.GetFileDownloadUrlParams,
-    ): Promise<string> {
-        throw unsupported("getFileDownloadUrl");
-    }
-
-    async moveGroupFile(_uin: string, _params: Adapter.MoveGroupFileParams): Promise<void> {
-        throw unsupported("moveGroupFile");
-    }
-
-    async renameGroupFile(_uin: string, _params: Adapter.RenameGroupFileParams): Promise<void> {
-        throw unsupported("renameGroupFile");
-    }
-
-    async renameGroupFolder(_uin: string, _params: Adapter.RenameGroupFolderParams): Promise<void> {
-        throw unsupported("renameGroupFolder");
-    }
-
-    async deleteGroupFolder(_uin: string, _params: Adapter.DeleteGroupFolderParams): Promise<void> {
-        throw unsupported("deleteGroupFolder");
-    }
-
-    async getImage(_uin: string, _params: Adapter.GetImageParams): Promise<Adapter.ImageInfo> {
-        throw unsupported("getImage");
-    }
-
-    async getRecord(_uin: string, _params: Adapter.GetRecordParams): Promise<Adapter.RecordInfo> {
-        throw unsupported("getRecord");
-    }
-
-    async getResourceTempUrl(
-        _uin: string,
-        _params: Adapter.GetResourceTempUrlParams,
-    ): Promise<string> {
-        throw unsupported("getResourceTempUrl");
-    }
-
-    async canSendImage(_uin: string): Promise<boolean> {
+    async canSendImage(): Promise<boolean> {
         return true;
     }
 
-    async canSendRecord(_uin: string): Promise<boolean> {
+    async canSendRecord(): Promise<boolean> {
         return true;
     }
 
-    async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+    async getVersion(): Promise<Adapter.VersionInfo> {
         return {
-            app_name: "onebots 微信客服 Adapter",
-            app_version: "0.1.0",
-            impl: "wecom-kf",
-            version: "0.1.0",
+            app_name: "onebots WeCom Customer Service Adapter",
+            app_version: await readPackageVersion(new URL("../package.json", import.meta.url)),
+            impl: "WeCom Customer Service API",
+            version: "v1",
         };
     }
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const account = this.getAccount(uin);
-        return {
-            online: account?.status === AccountStatus.Online,
-            good: account?.status === AccountStatus.Online,
-        };
+        const online = this.getAccount(uin)?.status === AccountStatus.Online;
+        return { online, good: online };
     }
 
-    private dispatchKfItems(
-        account: Account<"wecom-kf", WeComKfBot>,
-        openKfid: string,
-        items: KfMsgItem[],
-    ): void {
-        for (const item of items) {
-            const ext = item.external_userid;
-            if (ext) {
+    createAccount(config: Account.Config<"wecom-kf">): Account<"wecom-kf", WeComKfClient> {
+        const client = new WeComKfClient(normalizeConfig(config));
+        const account = new Account<"wecom-kf", WeComKfClient>(this, client, config);
+        const webhook = new WeComKfWebhookHost(client.config, client, error =>
+            this.logger.error("微信客服 Webhook 处理失败", error),
+        );
+        client.on("kf_item", ({ open_kfid, item }: { open_kfid: string; item: KfMsgItem }) => {
+            if (item.external_userid) {
                 this.userLastOpenKf.set(
-                    this.ctxKey(account.account_id, ext),
-                    item.open_kfid || openKfid,
+                    this.contextKey(account.account_id, item.external_userid),
+                    item.open_kfid || open_kfid,
                 );
             }
-            const ev = kfItemToCommonEvent(item, {
-                createId: this.createId.bind(this),
-                platform: this.platform,
-                botAccountId: account.account_id,
-                openKfId: openKfid,
-            });
-            if (ev) {
-                account.dispatch(ev);
-            }
-        }
-    }
-
-    createAccount(config: Account.Config<"wecom-kf">): Account<"wecom-kf", WeComKfBot> {
-        const kfCfg: WeComKfConfig = {
-            account_id: config.account_id,
-            corp_id: config.corp_id,
-            corp_secret: config.corp_secret,
-            token: config.token,
-            encoding_aes_key: config.encoding_aes_key,
-            open_kfid: config.open_kfid,
-            agent_id: config.agent_id,
-            enable_sync_poll: config.enable_sync_poll,
-            sync_poll_interval_ms: config.sync_poll_interval_ms,
-            cursor_store_path: config.cursor_store_path,
-        };
-
-        const bot = new WeComKfBot(kfCfg);
-        const account = new Account<"wecom-kf", WeComKfBot>(this, bot, config);
-
-        const hook = bot.handleWebhook.bind(bot);
-        this.app.router.get(`${account.path}/webhook`, hook);
-        this.app.router.post(`${account.path}/webhook`, hook);
-
-        bot.on("kf_messages", (payload: { open_kfid: string; items: KfMsgItem[] }) => {
-            this.dispatchKfItems(account, payload.open_kfid, payload.items);
+            account.dispatch(
+                projectKfItem(item, {
+                    botId: account.account_id,
+                    openKfId: open_kfid,
+                    createId: value => this.createId(value),
+                }),
+            );
         });
-
-        bot.on("error", err => {
-            this.logger.error(`微信客服 ${config.account_id} 错误:`, err);
+        client.on("callback", event => {
+            account.dispatch(
+                projectKfCallback(event, {
+                    botId: account.account_id,
+                    createId: value => this.createId(value),
+                }),
+            );
         });
-
+        client.on("client_error", error => this.logger.error("微信客服客户端错误", error));
+        this.app.router.all(webhook.path, ctx =>
+            webhook.acceptHttp(ctx as unknown as WeComKfHttpContext),
+        );
         account.on("start", async () => {
             try {
-                await bot.start();
+                await client.start();
                 account.status = AccountStatus.Online;
                 account.nickname = "微信客服";
                 account.avatar = this.icon;
                 this.logger.info(`微信客服账号 ${config.account_id} 已启动`);
-            } catch (e) {
-                this.logger.error(`启动微信客服失败:`, e);
+            } catch (error) {
                 account.status = AccountStatus.OffLine;
+                this.logger.error("启动微信客服失败", error);
             }
         });
-
-        account.on("stop", async () => {
-            await bot.stop();
+        account.on("stop", () => {
+            client.stop();
             account.status = AccountStatus.OffLine;
         });
-
         return account;
     }
+
+    private requireClient(uin: string): WeComKfClient {
+        const account = this.getAccount(uin);
+        if (!account)
+            throw new WeComKfError(`微信客服账号 ${uin} 不存在`, {
+                code: "ACCOUNT_NOT_FOUND",
+            });
+        return account.client;
+    }
+
+    private contextKey(accountId: string, externalUserid: string): string {
+        return `${accountId}\0${externalUserid}`;
+    }
+}
+
+function normalizeConfig(config: Account.Config<"wecom-kf">): WeComKfConfig {
+    return {
+        account_id: config.account_id,
+        corp_id: config.corp_id,
+        corp_secret: config.corp_secret,
+        token: config.token,
+        encoding_aes_key: config.encoding_aes_key,
+        open_kfid: config.open_kfid,
+        webhook_path: config.webhook_path,
+        enable_sync_poll: config.enable_sync_poll,
+        sync_poll_interval_ms: config.sync_poll_interval_ms,
+        cursor_store_path: config.cursor_store_path,
+        deduplicate_messages: config.deduplicate_messages,
+        message_deduplication_limit: config.message_deduplication_limit,
+        api_base_url: config.api_base_url,
+    };
+}
+
+async function loadUpload(params: Adapter.UploadFileParams): Promise<{
+    bytes: Buffer;
+    filename: string;
+}> {
+    let bytes: Buffer;
+    if (params.data) {
+        bytes = decodeKfBase64(params.data, "upload_file.data");
+    } else if (params.path) {
+        try {
+            bytes = await readFile(params.path);
+        } catch (error) {
+            throw new WeComKfError(`读取上传文件失败：${params.path}`, {
+                code: "WECOM_KF_UPLOAD_READ_ERROR",
+                cause: error,
+            });
+        }
+    } else if (params.url) {
+        if (!URL.canParse(params.url))
+            throw new WeComKfError("upload_file.url 必须是有效 HTTPS URL", {
+                code: "WECOM_KF_INVALID_UPLOAD_URL",
+            });
+        const url = new URL(params.url);
+        if (url.protocol !== "https:" || url.username || url.password)
+            throw new WeComKfError("upload_file.url 必须是无凭据 HTTPS URL", {
+                code: "WECOM_KF_INVALID_UPLOAD_URL",
+            });
+        let response: Response;
+        try {
+            response = await fetch(url, { redirect: "error" });
+        } catch (error) {
+            throw new WeComKfError("下载上传文件失败", {
+                code: "WECOM_KF_UPLOAD_DOWNLOAD_ERROR",
+                cause: error,
+            });
+        }
+        if (!response.ok)
+            throw new WeComKfError(`下载上传文件失败: HTTP ${response.status}`, {
+                code: "WECOM_KF_UPLOAD_DOWNLOAD_ERROR",
+                status: response.status,
+            });
+        bytes = Buffer.from(await response.arrayBuffer());
+    } else {
+        throw new WeComKfError("upload_file 需要 data、path 或 url", {
+            code: "WECOM_KF_INVALID_UPLOAD",
+        });
+    }
+    assertKfUploadSize(bytes.length);
+    return { bytes, filename: params.name || "upload.bin" };
+}
+
+async function readPackageVersion(url: URL): Promise<string> {
+    const value = JSON.parse(await readFile(url, "utf8")) as { version?: unknown };
+    if (typeof value.version !== "string") throw new Error(`package.json 缺少 version: ${url}`);
+    return value.version;
 }
 
 declare module "onebots" {
@@ -653,8 +288,7 @@ declare module "onebots" {
 AdapterRegistry.register("wecom-kf", WeComKfAdapter, {
     name: "wecom-kf",
     displayName: "企业微信·微信客服",
-    description:
-        "企业微信「微信客服」API：回调 kf_msg_or_event + sync_msg 拉取消息，send_msg 发送（需管理台开通并授权自建应用）",
+    description: "微信客服官方 API：客服账号、会话分配、sync_msg 与消息收发",
     icon: "https://work.weixin.qq.com/favicon.ico",
     homepage: "https://developer.work.weixin.qq.com/document/path/94638",
     author: "凉菜",

@@ -484,9 +484,11 @@ adapter-foo/
 └── src/
     ├── index.ts            # 入口：导出 + 注册
     ├── adapter.ts          # Adapter 子类实现
-    ├── bot.ts              # 平台客户端封装
+    ├── bot.ts/client.ts    # 有状态 SDK 包装 / 可独立嵌入的 API 客户端，按职责择一
     └── types.ts            # 配置类型定义
 ```
+
+使用 `bot.ts` 封装有状态平台 SDK 生命周期；使用 `client.ts` 提供不依赖 OneBots Host、可单独嵌入的官方 API 或传输客户端。两者按领域职责择一，不要仅为文件名兼容增加转发层。
 
 ### 2. 实现 Adapter
 
