@@ -1,521 +1,193 @@
-/**
- * Line Bot 客户端
- * 轻量版实现，直接封装 Line Messaging API
- * 支持 Node.js 和 Cloudflare Workers
- */
+import { EventEmitter } from "node:events";
+import { LineBotClient, validateSignature, type messagingApi } from "@line/bot-sdk";
+import { LineApiError } from "./errors.js";
+import type { LineConfig, WebhookEvent, WebhookRequest } from "./types.js";
 
-import { EventEmitter } from 'node:events';
-import { createHmac } from 'crypto';
-import type { Agent as HttpAgent } from 'http';
-import type { RequestOptions as HttpRequestOptions } from 'https';
-import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
-import type {
-    LineConfig,
-    WebhookEvent,
-    MessageEvent,
-    UserProfile,
-    GroupSummary,
-    GroupMemberProfile,
-    GroupMemberCount,
-    SendMessage,
-    SendMessageResponse,
-} from './types.js';
-const LINE_API_BASE = 'https://api.line.me/v2';
-const LINE_API_DATA = 'https://api-data.line.me/v2';
+const DEFAULT_API_BASE = "https://api.line.me";
+const DEFAULT_DATA_API_BASE = "https://api-data.line.me";
+const DEFAULT_DEDUPLICATION_LIMIT = 10_000;
 
-/**
- * 检测是否为 Node.js 环境
- */
-function isNode(): boolean {
-    return typeof process !== 'undefined' && process.versions?.node !== undefined;
+export interface LineEventRepository {
+    has(eventId: string): boolean;
+    save(eventId: string, limit: number): void;
 }
 
-/**
- * Line Bot 客户端
- */
+/** 基于 LINE 官方 Node SDK 的客户端，只负责鉴权、收发和原始事件分发。 */
 export class LineBot extends EventEmitter {
-    private config: LineConfig;
-    private agent: HttpAgent | null = null;
-    private initialized = false;
+    private readonly client: LineBotClient;
+    private readonly processedEvents = new Set<string>();
 
-    constructor(config: LineConfig) {
+    constructor(
+        private readonly config: LineConfig,
+        private readonly eventRepository?: LineEventRepository,
+    ) {
         super();
-        this.config = config;
-    }
-
-    /**
-     * 初始化代理 Agent
-     */
-    private async initAgent(): Promise<void> {
-        if (this.initialized) return;
-        this.initialized = true;
-
-        if (!this.config.proxy?.url || !isNode()) return;
-
-        const agent = await createHttpsProxyAgent(this.config.proxy);
-        if (agent) {
-            this.agent = agent as HttpAgent;
-            console.debug(`[LineBot] 已配置代理: ${maskProxyUrl(buildProxyUrl(this.config.proxy))}`);
-        } else {
-            console.warn('[LineBot] https-proxy-agent 未安装，将直接连接');
-        }
-    }
-
-    // ============================================
-    // HTTP 请求
-    // ============================================
-
-    /**
-     * Node.js 原生 HTTPS 请求
-     */
-    private nodeRequest<T>(url: string, options: {
-        method: string;
-        headers: Record<string, string>;
-        body?: string;
-    }): Promise<T> {
-        return new Promise(async (resolve, reject) => {
-            const https = await import('https');
-            const urlObj = new URL(url);
-
-            const reqOptions: import('https').RequestOptions = {
-                hostname: urlObj.hostname,
-                port: urlObj.port || 443,
-                path: urlObj.pathname + urlObj.search,
-                method: options.method as string,
-                headers: options.headers,
-            };
-
-            if (this.agent) {
-                (reqOptions as Record<string, unknown>).agent = this.agent;
-            }
-
-            const req = https.request(reqOptions, (res) => {
-                let data = '';
-
-                res.on('data', (chunk: Buffer) => {
-                    data += chunk;
-                });
-
-                res.on('end', () => {
-                    if (res.statusCode === 200 || res.statusCode === 201) {
-                        try {
-                            resolve(data ? JSON.parse(data) : {} as T);
-                        } catch {
-                            resolve(data as T);
-                        }
-                    } else if (res.statusCode === 204) {
-                        resolve({} as T);
-                    } else {
-                        let errorMsg = `Line API Error: ${res.statusCode}`;
-                        try {
-                            const errorData = JSON.parse(data);
-                            errorMsg += ` - ${JSON.stringify(errorData)}`;
-                        } catch {
-                            errorMsg += ` - ${data}`;
-                        }
-                        reject(new Error(errorMsg));
-                    }
-                });
-            });
-
-            req.on('error', reject);
-            req.setTimeout(30000, () => {
-                req.destroy();
-                reject(new Error('Request timeout'));
-            });
-
-            if (options.body) {
-                req.write(options.body);
-            }
-
-            req.end();
+        this.client = LineBotClient.fromChannelAccessToken({
+            channelAccessToken: config.channel_access_token,
+            apiBaseURL: requireHttpsUrl(config.api_base_url || DEFAULT_API_BASE, "api_base_url"),
+            dataApiBaseURL: requireHttpsUrl(
+                config.data_api_base_url || DEFAULT_DATA_API_BASE,
+                "data_api_base_url",
+            ),
         });
     }
 
-    /**
-     * Fetch 请求（Cloudflare Workers）
-     */
-    private async fetchRequest<T>(url: string, options: {
-        method: string;
-        headers: Record<string, string>;
-        body?: string;
-    }): Promise<T> {
-        const response = await fetch(url, {
-            method: options.method,
-            headers: options.headers,
-            body: options.body,
-        });
-
-        if (response.status === 204) {
-            return {} as T;
-        }
-
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ message: response.statusText }));
-            throw new Error(`Line API Error: ${response.status} - ${JSON.stringify(error)}`);
-        }
-
-        return response.json();
+    getClient(): LineBotClient {
+        return this.client;
     }
 
-    /**
-     * 发送 API 请求
-     */
-    async request<T = unknown>(
-        endpoint: string,
-        options: {
-            method?: string;
-            body?: unknown;
-            baseUrl?: string;
-        } = {}
-    ): Promise<T> {
-        await this.initAgent();
-
-        const { method = 'GET', body, baseUrl = LINE_API_BASE } = options;
-        const url = `${baseUrl}${endpoint}`;
-
-        const headers: Record<string, string> = {
-            'Authorization': `Bearer ${this.config.channel_access_token}`,
-            'Content-Type': 'application/json',
-        };
-
-        const requestBody = body ? JSON.stringify(body) : undefined;
-
-        if (isNode()) {
-            return this.nodeRequest<T>(url, { method, headers, body: requestBody });
-        }
-
-        return this.fetchRequest<T>(url, { method, headers, body: requestBody });
+    validateSignature(body: string | Buffer, signature: string): boolean {
+        return validateSignature(body, this.config.channel_secret, signature);
     }
 
-    // ============================================
-    // Webhook 签名验证
-    // ============================================
-
-    /**
-     * 验证 Webhook 签名
-     */
-    validateSignature(body: string, signature: string): boolean {
-        const hash = createHmac('sha256', this.config.channel_secret)
-            .update(body)
-            .digest('base64');
-        return hash === signature;
-    }
-
-    /**
-     * 处理 Webhook 请求
-     */
-    async handleWebhook(body: string, signature: string): Promise<void> {
-        // 验证签名
-        if (!this.validateSignature(body, signature)) {
-            throw new Error('Invalid signature');
+    /** 验证未经修改的原始请求体，并将同一批事件依次交给统一分发路径。 */
+    ingest(body: string | Buffer, signature: string): number {
+        if (!signature || !this.validateSignature(body, signature)) {
+            throw new LineApiError("LINE Webhook 签名验证失败", {
+                code: "LINE_INVALID_SIGNATURE",
+                status: 401,
+            });
         }
-
-        const data = JSON.parse(body);
-        const events: WebhookEvent[] = data.events || [];
-
-        for (const event of events) {
-            this.emit('event', event);
+        const request = parseWebhookRequest(body);
+        let accepted = 0;
+        for (const event of request.events) {
+            if (this.isDuplicate(event)) continue;
+            this.emit("event", event);
             this.emit(event.type, event);
+            this.markProcessed(event.webhookEventId);
+            accepted += 1;
+        }
+        return accepted;
+    }
+
+    async pushMessage(
+        to: string,
+        messages: messagingApi.Message[],
+        options: {
+            retryKey?: string;
+            notificationDisabled?: boolean;
+            customAggregationUnits?: string[];
+        } = {},
+    ): Promise<messagingApi.PushMessageResponse> {
+        try {
+            return await this.client.pushMessage(
+                {
+                    to,
+                    messages: requireMessages(messages),
+                    notificationDisabled: options.notificationDisabled,
+                    customAggregationUnits: options.customAggregationUnits,
+                },
+                options.retryKey,
+            );
+        } catch (error) {
+            throw LineApiError.wrap(error, "LINE_PUSH_MESSAGE_ERROR");
         }
     }
 
-    // ============================================
-    // 消息发送
-    // ============================================
-
-    /**
-     * 回复消息
-     */
-    async replyMessage(replyToken: string, messages: SendMessage | SendMessage[]): Promise<SendMessageResponse> {
-        const messageArray = Array.isArray(messages) ? messages : [messages];
-        return this.request<SendMessageResponse>('/bot/message/reply', {
-            method: 'POST',
-            body: {
+    async replyMessage(
+        replyToken: string,
+        messages: messagingApi.Message[],
+        notificationDisabled?: boolean,
+    ): Promise<messagingApi.ReplyMessageResponse> {
+        try {
+            return await this.client.replyMessage({
                 replyToken,
-                messages: messageArray,
-            },
-        });
-    }
-
-    /**
-     * 推送消息给用户
-     */
-    async pushMessage(to: string, messages: SendMessage | SendMessage[]): Promise<SendMessageResponse> {
-        const messageArray = Array.isArray(messages) ? messages : [messages];
-        return this.request<SendMessageResponse>('/bot/message/push', {
-            method: 'POST',
-            body: {
-                to,
-                messages: messageArray,
-            },
-        });
-    }
-
-    /**
-     * 多播消息（发送给多个用户）
-     */
-    async multicast(to: string[], messages: SendMessage | SendMessage[]): Promise<void> {
-        const messageArray = Array.isArray(messages) ? messages : [messages];
-        await this.request('/bot/message/multicast', {
-            method: 'POST',
-            body: {
-                to,
-                messages: messageArray,
-            },
-        });
-    }
-
-    /**
-     * 广播消息（发送给所有好友）
-     */
-    async broadcast(messages: SendMessage | SendMessage[]): Promise<void> {
-        const messageArray = Array.isArray(messages) ? messages : [messages];
-        await this.request('/bot/message/broadcast', {
-            method: 'POST',
-            body: {
-                messages: messageArray,
-            },
-        });
-    }
-
-    /**
-     * 发送文本消息
-     */
-    async sendText(to: string, text: string): Promise<SendMessageResponse> {
-        return this.pushMessage(to, { type: 'text', text });
-    }
-
-    /**
-     * 回复文本消息
-     */
-    async replyText(replyToken: string, text: string): Promise<SendMessageResponse> {
-        return this.replyMessage(replyToken, { type: 'text', text });
-    }
-
-    /**
-     * 发送图片消息
-     */
-    async sendImage(to: string, originalUrl: string, previewUrl?: string): Promise<SendMessageResponse> {
-        return this.pushMessage(to, {
-            type: 'image',
-            originalContentUrl: originalUrl,
-            previewImageUrl: previewUrl || originalUrl,
-        });
-    }
-
-    /**
-     * 发送视频消息
-     */
-    async sendVideo(to: string, originalUrl: string, previewUrl: string): Promise<SendMessageResponse> {
-        return this.pushMessage(to, {
-            type: 'video',
-            originalContentUrl: originalUrl,
-            previewImageUrl: previewUrl,
-        });
-    }
-
-    /**
-     * 发送音频消息
-     */
-    async sendAudio(to: string, originalUrl: string, duration: number): Promise<SendMessageResponse> {
-        return this.pushMessage(to, {
-            type: 'audio',
-            originalContentUrl: originalUrl,
-            duration,
-        });
-    }
-
-    /**
-     * 发送位置消息
-     */
-    async sendLocation(to: string, title: string, address: string, latitude: number, longitude: number): Promise<SendMessageResponse> {
-        return this.pushMessage(to, {
-            type: 'location',
-            title,
-            address,
-            latitude,
-            longitude,
-        });
-    }
-
-    /**
-     * 发送贴图消息
-     */
-    async sendSticker(to: string, packageId: string, stickerId: string): Promise<SendMessageResponse> {
-        return this.pushMessage(to, {
-            type: 'sticker',
-            packageId,
-            stickerId,
-        });
-    }
-
-    // ============================================
-    // 用户资料
-    // ============================================
-
-    /**
-     * 获取用户资料
-     */
-    async getProfile(userId: string): Promise<UserProfile> {
-        return this.request<UserProfile>(`/bot/profile/${userId}`);
-    }
-
-    /**
-     * 获取群组成员资料
-     */
-    async getGroupMemberProfile(groupId: string, userId: string): Promise<GroupMemberProfile> {
-        return this.request<GroupMemberProfile>(`/bot/group/${groupId}/member/${userId}`);
-    }
-
-    /**
-     * 获取聊天室成员资料
-     */
-    async getRoomMemberProfile(roomId: string, userId: string): Promise<GroupMemberProfile> {
-        return this.request<GroupMemberProfile>(`/bot/room/${roomId}/member/${userId}`);
-    }
-
-    // ============================================
-    // 群组管理
-    // ============================================
-
-    /**
-     * 获取群组信息
-     */
-    async getGroupSummary(groupId: string): Promise<GroupSummary> {
-        return this.request<GroupSummary>(`/bot/group/${groupId}/summary`);
-    }
-
-    /**
-     * 获取群组成员数量
-     */
-    async getGroupMemberCount(groupId: string): Promise<GroupMemberCount> {
-        return this.request<GroupMemberCount>(`/bot/group/${groupId}/members/count`);
-    }
-
-    /**
-     * 获取群组成员 ID 列表
-     */
-    async getGroupMemberIds(groupId: string, start?: string): Promise<{ memberIds: string[]; next?: string }> {
-        const query = start ? `?start=${start}` : '';
-        return this.request(`/bot/group/${groupId}/members/ids${query}`);
-    }
-
-    /**
-     * 离开群组
-     */
-    async leaveGroup(groupId: string): Promise<void> {
-        await this.request(`/bot/group/${groupId}/leave`, { method: 'POST' });
-    }
-
-    /**
-     * 离开聊天室
-     */
-    async leaveRoom(roomId: string): Promise<void> {
-        await this.request(`/bot/room/${roomId}/leave`, { method: 'POST' });
-    }
-
-    // ============================================
-    // 内容获取
-    // ============================================
-
-    /**
-     * 获取消息内容（图片、视频、音频、文件）
-     * 返回 ArrayBuffer
-     */
-    async getMessageContent(messageId: string): Promise<ArrayBuffer> {
-        await this.initAgent();
-
-        const url = `${LINE_API_DATA}/bot/message/${messageId}/content`;
-        const headers = {
-            'Authorization': `Bearer ${this.config.channel_access_token}`,
-        };
-
-        if (isNode()) {
-            return new Promise(async (resolve, reject) => {
-                const https = await import('https');
-                const urlObj = new URL(url);
-
-                const reqOptions: import('https').RequestOptions = {
-                    hostname: urlObj.hostname,
-                    port: 443,
-                    path: urlObj.pathname,
-                    method: 'GET',
-                    headers,
-                };
-
-                if (this.agent) {
-                    (reqOptions as Record<string, unknown>).agent = this.agent;
-                }
-
-                const req = https.request(reqOptions, (res) => {
-                    const chunks: Buffer[] = [];
-
-                    res.on('data', (chunk) => {
-                        chunks.push(chunk);
-                    });
-
-                    res.on('end', () => {
-                        if (res.statusCode === 200) {
-                            const buffer = Buffer.concat(chunks);
-                            resolve(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
-                        } else {
-                            reject(new Error(`Failed to get content: ${res.statusCode}`));
-                        }
-                    });
-                });
-
-                req.on('error', reject);
-                req.end();
+                messages: requireMessages(messages),
+                notificationDisabled,
             });
+        } catch (error) {
+            throw LineApiError.wrap(error, "LINE_REPLY_MESSAGE_ERROR");
         }
+    }
 
-        const response = await fetch(url, { headers });
-        if (!response.ok) {
-            throw new Error(`Failed to get content: ${response.status}`);
+    async getBotInfo(): Promise<messagingApi.BotInfoResponse> {
+        try {
+            return await this.client.getBotInfo();
+        } catch (error) {
+            throw LineApiError.wrap(error, "LINE_GET_BOT_INFO_ERROR");
         }
-        return response.arrayBuffer();
     }
 
-    // ============================================
-    // Bot 信息
-    // ============================================
-
-    /**
-     * 获取 Bot 信息
-     */
-    async getBotInfo(): Promise<{
-        userId: string;
-        basicId: string;
-        premiumId?: string;
-        displayName: string;
-        pictureUrl?: string;
-        chatMode: 'chat' | 'bot';
-        markAsReadMode: 'auto' | 'manual';
-    }> {
-        return this.request('/bot/info');
+    private isDuplicate(event: WebhookEvent): boolean {
+        if (this.config.deduplicate_webhooks === false || !event.webhookEventId) return false;
+        if (this.eventRepository) return this.eventRepository.has(event.webhookEventId);
+        return this.processedEvents.has(event.webhookEventId);
     }
 
-    // ============================================
-    // 配额相关
-    // ============================================
-
-    /**
-     * 获取本月消息配额
-     */
-    async getMessageQuota(): Promise<{
-        type: 'none' | 'limited' | 'unlimited';
-        value?: number;
-    }> {
-        return this.request('/bot/message/quota');
+    private markProcessed(eventId: string): void {
+        if (this.config.deduplicate_webhooks === false || !eventId) return;
+        const limit = Math.max(
+            100,
+            Math.floor(this.config.webhook_deduplication_limit || DEFAULT_DEDUPLICATION_LIMIT),
+        );
+        if (this.eventRepository) {
+            this.eventRepository.save(eventId, limit);
+            return;
+        }
+        this.processedEvents.add(eventId);
+        while (this.processedEvents.size > limit) {
+            const oldest = this.processedEvents.values().next().value;
+            if (typeof oldest !== "string") break;
+            this.processedEvents.delete(oldest);
+        }
     }
+}
 
-    /**
-     * 获取本月已发送消息数量
-     */
-    async getMessageQuotaConsumption(): Promise<{
-        totalUsage: number;
-    }> {
-        return this.request('/bot/message/quota/consumption');
+function parseWebhookRequest(body: string | Buffer): WebhookRequest {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(body.toString()) as unknown;
+    } catch (error) {
+        throw new LineApiError("LINE Webhook 请求体不是有效 JSON", {
+            code: "LINE_INVALID_WEBHOOK_BODY",
+            status: 400,
+            cause: error,
+        });
     }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw invalidWebhookBody();
+    }
+    const record = parsed as Record<string, unknown>;
+    if (typeof record.destination !== "string" || !Array.isArray(record.events)) {
+        throw invalidWebhookBody();
+    }
+    if (!record.events.every(isWebhookEvent)) throw invalidWebhookBody();
+    return { destination: record.destination, events: record.events };
+}
+
+function isWebhookEvent(value: unknown): value is WebhookEvent {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const record = value as Record<string, unknown>;
+    return (
+        typeof record.type === "string" &&
+        typeof record.timestamp === "number" &&
+        typeof record.webhookEventId === "string"
+    );
+}
+
+function invalidWebhookBody(): LineApiError {
+    return new LineApiError("LINE Webhook 请求体结构无效", {
+        code: "LINE_INVALID_WEBHOOK_BODY",
+        status: 400,
+    });
+}
+
+function requireMessages(messages: messagingApi.Message[]): messagingApi.Message[] {
+    if (messages.length < 1 || messages.length > 5) {
+        throw new LineApiError("LINE 每次请求必须包含 1 到 5 条消息", {
+            code: "LINE_INVALID_MESSAGE_COUNT",
+            details: messages.length,
+        });
+    }
+    return messages;
+}
+
+function requireHttpsUrl(value: string, name: string): string {
+    if (!URL.canParse(value) || new URL(value).protocol !== "https:") {
+        throw new LineApiError(`LINE 配置 ${name} 必须是有效 HTTPS URL`, {
+            code: "LINE_INVALID_CONFIG_URL",
+            details: value,
+        });
+    }
+    return value.replace(/\/$/u, "");
 }

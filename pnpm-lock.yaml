@@ -252,13 +252,12 @@ importers:
 
   adapters/adapter-line:
     dependencies:
+      '@line/bot-sdk':
+        specifier: 11.2.0
+        version: 11.2.0
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
-    optionalDependencies:
-      https-proxy-agent:
-        specifier: ^7.0.6
-        version: 7.0.6
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -1513,6 +1512,10 @@ packages:
 
   '@larksuiteoapi/node-sdk@1.73.0':
     resolution: {integrity: sha512-gs4EiupJ6RdYAEJGtuYrCVsB7wSMBwtUDK+ilpmOHD6RTvbtciW6AWciQO9coOQVuBZfh7hvAi25dPfCsny/nA==}
+
+  '@line/bot-sdk@11.2.0':
+    resolution: {integrity: sha512-JKYFa3jaPYWqgI4hnc0ls+7tMmUEgnFF0Jb48kscKcGOO8qh4hddJyiq8/TFqaTWWxXQeSgYd1o5zrHjt6FrpQ==}
+    engines: {node: '>=22'}
 
   '@manypkg/find-root@1.1.0':
     resolution: {integrity: sha512-mki5uBvhHzO8kYYix/WRy2WX8S3B5wdVSc9D6KcU5lQNglP2yt58/VfLuAK49glRXChosY8ap2oJ1qgma3GUVA==}
@@ -5592,6 +5595,10 @@ snapshots:
       - debug
       - supports-color
       - utf-8-validate
+
+  '@line/bot-sdk@11.2.0':
+    dependencies:
+      '@types/node': 24.12.0
 
   '@manypkg/find-root@1.1.0':
     dependencies:

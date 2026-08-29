@@ -1,187 +1,114 @@
 # @onebots/adapter-line
 
-onebots Line Messaging API 适配器 - 轻量版实现，支持 Node.js 和 Cloudflare Workers。
+基于官方 `@line/bot-sdk` 11.x 的 OneBots LINE Messaging API 适配器。适配器复用 OneBots 的 Koa 服务接收 Webhook，不会自行监听新端口。
 
-## 特性
-
-- ✅ **轻量级**：直接封装 Line Messaging API，无外部依赖
-- ✅ **多运行时**：支持 Node.js 和 Cloudflare Workers
-- ✅ **Webhook 支持**：自动注册 Webhook 路由
-- ✅ **代理支持**：使用 https-proxy-agent（可选）
-
-## 安装
+## 安装与配置
 
 ```bash
-npm install @onebots/adapter-line
-
-# 需要代理时
-npm install https-proxy-agent
+pnpm add @onebots/adapter-line
 ```
-
-## 配置
-
-在 onebots 配置文件中添加 Line 账号配置：
 
 ```yaml
-line.your_bot_id:
-  channel_access_token: 'your_channel_access_token'  # Channel Access Token，必填
-  channel_secret: 'your_channel_secret'              # Channel Secret，必填
-  
-  # 代理配置（可选）
-  proxy:
-    url: "http://127.0.0.1:7890"
-    # username: "user"  # 可选
-    # password: "pass"  # 可选
+line.my-line-bot:
+  channel_access_token: "..."
+  channel_secret: "..."
+  deduplicate_webhooks: true
 ```
 
-## 获取 Line Bot 凭证
+在 LINE Developers Console 中把 Webhook URL 设置为：
 
-1. 前往 [Line Developers Console](https://developers.line.biz/console/)
-2. 登录你的 Line 账号
-3. 创建一个 Provider（如果没有）
-4. 在 Provider 下创建一个 Messaging API Channel
-5. 在 Channel 设置页面获取：
-   - **Channel Secret**：在 Basic settings 页签
-   - **Channel Access Token**：在 Messaging API 页签，点击 Issue 生成
+```text
+https://your-domain.example/line/my-line-bot/webhook
+```
 
-## 配置 Webhook
+| 配置项                        | 说明                                                       |
+| ----------------------------- | ---------------------------------------------------------- |
+| `channel_access_token`        | Messaging API Channel Access Token                         |
+| `channel_secret`              | Webhook HMAC-SHA256 验签密钥                               |
+| `deduplicate_webhooks`        | 按 `webhookEventId` 持久化忽略重复投递，默认 `true`        |
+| `webhook_deduplication_limit` | 每账号持久化去重窗口，默认 10000                           |
+| `api_base_url`                | Messaging API 地址，默认 `https://api.line.me`             |
+| `data_api_base_url`           | 媒体与 Rich Menu 图片地址，默认 `https://api-data.line.me` |
 
-1. 在 Line Developers Console 的 Messaging API 页签
-2. 设置 **Webhook URL** 为：`https://your-domain.com/line/{account_id}/webhook`
-3. 启用 **Use webhook**
-4. 禁用 **Auto-reply messages** 和 **Greeting messages**（可选）
+两个 Base URL 只用于官方兼容实现、可信代理或测试环境，必须使用 HTTPS。官方 SDK 11.x 需要 Node.js 22+，OneBots 当前要求 Node.js 24+。
 
-## 支持的 API
+## Webhook 安全与事件
 
-### 消息相关
-- ✅ sendMessage - 发送消息（推送消息）
-- ✅ replyMessage - 回复消息（使用 replyToken）
-- ❌ deleteMessage - Line 不支持删除消息
-- ❌ getMessage - Line 不支持获取消息
+适配器只使用未经修改的 `rawBody` 验证 `x-line-signature`，不会对已经 JSON 解析再序列化的请求体做降级验签。LINE 重投递会按 `webhookEventId` 去重；所有投影事件都保留 `raw_event`。
 
-### 用户相关
-- ✅ getLoginInfo - 获取机器人信息
-- ✅ getUserInfo - 获取用户资料
+已投影的标准事件包括：
 
-### 群组相关
-- ❌ getGroupList - Line 不提供群组列表
-- ✅ getGroupInfo - 获取群组信息
-- ✅ getGroupMemberList - 获取群组成员列表
-- ✅ getGroupMemberInfo - 获取群组成员信息
-- ✅ leaveGroup - 离开群组
+- 文本、图片、视频、音频、文件、位置、Sticker 消息；
+- `messageEdited` → `message_updated`；
+- `unsend` → `message_deleted`；
+- follow / unfollow、成员加入 / 离开、postback；
+- join / leave、会员、Beacon、账号绑定、视频播放完成、模块生命周期等作为 `custom` 事件无损交付。
 
-## 支持的事件
+LINE 可能重复投递且顺序改变；业务需要以事件 `timestamp` 判断编辑事件的新旧。用户撤回事件到达后，应同步清除业务侧保存的原消息内容。
 
-### 消息事件
-- ✅ message - 收到消息（文本、图片、视频、音频、文件、位置、贴图）
+## 消息能力
 
-### 关注事件
-- ✅ follow - 用户关注机器人
-- ✅ unfollow - 用户取消关注
+通用段支持 `text`、`at`、`reply`、`image`、`video`、`audio` / `voice`、`location`、`sticker`。媒体 URL 必须是公开 HTTPS URL。`reply` 发送需要 LINE 原生 `quote_token`，不能用普通消息 ID 代替。
 
-### 群组事件
-- ✅ join - 机器人加入群组
-- ✅ leave - 机器人离开群组
-- ✅ memberJoined - 成员加入群组
-- ✅ memberLeft - 成员离开群组
+任意官方 Message 可通过 `line_message` 段发送，因此 Flex、Template、Imagemap、Coupon、Quick Reply、发送者样式及后续 SDK 新消息类型不需要在 OneBots 重复建模：
 
-### 其他事件
-- ✅ postback - Postback 回调
+```ts
+await adapter.sendMessage(accountId, {
+  scene_type: "private",
+  scene_id: userId,
+  message: [
+    {
+      type: "line_message",
+      data: {
+        message: {
+          type: "flex",
+          altText: "订单详情",
+          contents: { type: "bubble", body: { type: "box", layout: "vertical", contents: [] } },
+        },
+      },
+    },
+  ],
+});
+```
 
-## 消息格式
+LINE 每次最多发送 5 条 Message。通用 `sendMessage` 会按 5 条自动分批，并为每批生成独立 retry key，避免网络重试造成重复发送。
 
-### 发送消息支持的类型
-- `text` - 文本消息
-- `image` - 图片消息
-- `video` - 视频消息
-- `audio` - 音频消息
-- `location` - 位置消息
+## 原生扩展动作
 
-### 接收消息的类型
-- `text` - 文本
-- `image` - 图片
-- `video` - 视频
-- `audio` - 音频
-- `file` - 文件
-- `location` - 位置
-- `sticker` - 贴图
+平台动作使用显式白名单，不开放任意 SDK 方法反射调用。
 
-## 独立使用
+- 消息：`push_message`、`reply_message`、`multicast`、`broadcast`、`narrowcast`、请求校验、窄播进度、电话通知消息、`show_loading_animation`、两种已读动作；
+- 内容：下载原内容/预览、查询转码状态，二进制以 `data_base64` 返回；
+- 用户与聊天：followers、room 成员、account link token；
+- Rich Menu：创建、校验、查询、列表、删除、图片上传/下载、默认菜单、按用户及批量关联、alias、batch；
+- Coupon：创建、查询、分页列表与关闭；
+- 会员：计划列表、用户订阅、已加入用户；
+- 运维：Webhook 查询/设置/测试、消息配额、分类发送量、aggregation unit 与用量；
+- 洞察：好友数/画像、消息送达、消息互动、aggregation unit、Rich Menu 汇总与逐日统计。
 
-```typescript
-import { LineBot } from '@onebots/adapter-line';
+各动作的参数名与完整清单可通过 `get_supported_actions` 和适配器能力清单获取。部分接口受 LINE Official Account 所在地区、认证状态、套餐或专项权限限制；适配器会保留官方 HTTP 状态和错误体并抛出 `LineApiError`。
+
+## 官方限制
+
+- LINE 不提供机器人撤回已发送消息的 API；`deleteMessage` 会返回结构化“不支持”错误。
+- LINE 不提供任意历史消息查询；媒体只能在收到 Webhook 后用消息 ID 下载，且会在一段时间后失效。
+- LINE 不提供“机器人所在全部群聊”接口；`getGroupList` 返回从 Webhook 持久化得到的已知 group/room。
+- `getFriendList` 映射官方 Get followers，能否调用取决于账号条件，不会伪造空列表。
+
+参考：[Messaging API reference](https://developers.line.biz/en/reference/messaging-api/)、[Receive messages](https://developers.line.biz/en/docs/messaging-api/receiving-messages/)、[Rich menus](https://developers.line.biz/en/docs/messaging-api/rich-menus-overview/)。
+
+## 直接使用客户端
+
+```ts
+import { LineBot } from "@onebots/adapter-line";
 
 const bot = new LineBot({
-    account_id: 'my-bot',
-    channel_access_token: 'your_token',
-    channel_secret: 'your_secret',
+  account_id: "my-line-bot",
+  channel_access_token: process.env.LINE_CHANNEL_ACCESS_TOKEN!,
+  channel_secret: process.env.LINE_CHANNEL_SECRET!,
 });
 
-// 发送消息
-await bot.pushMessage('user_id', {
-    type: 'text',
-    text: 'Hello!',
-});
-
-// 获取用户资料
-const profile = await bot.getProfile('user_id');
-console.log(profile.displayName);
-
-// 处理 Webhook
-bot.on('message', (event) => {
-    console.log('收到消息:', event.message);
-    
-    // 回复消息
-    bot.replyMessage(event.replyToken, {
-        type: 'text',
-        text: '收到了！',
-    });
-});
+await bot.pushMessage("U...", [{ type: "text", text: "Hello" }]);
+const officialClient = bot.getClient();
+const quota = await officialClient.getMessageQuota();
 ```
-
-## 注意事项
-
-1. **replyToken 有效期**：replyToken 仅在收到消息后 30 秒内有效
-2. **消息配额**：Line 免费账号有月消息配额限制
-3. **图片/视频 URL**：必须是 HTTPS 且可公开访问的 URL
-4. **群组消息**：机器人需要被邀请加入群组才能收发消息
-
-## 依赖说明
-
-本适配器采用轻量级设计，核心功能无需外部依赖。
-
-| 依赖 | 何时需要 | 安装命令 |
-|------|----------|----------|
-| `https-proxy-agent` | 使用代理时 | `npm install https-proxy-agent` |
-
-### 常见问题
-
-#### 1. API 请求失败 / 连接超时
-
-如果你需要通过代理访问 Line API，请配置代理：
-
-```yaml
-line.your_bot:
-  channel_access_token: 'xxx'
-  channel_secret: 'xxx'
-  proxy:
-    url: "http://127.0.0.1:7890"  # 你的代理地址
-```
-
-并安装代理依赖：
-
-```bash
-npm install https-proxy-agent
-```
-
-#### 2. Webhook 签名验证失败
-
-请确认：
-1. `channel_secret` 配置正确
-2. Webhook URL 正确：`https://your-domain.com/line/{account_id}/webhook`
-3. 服务使用 HTTPS（Line 要求 Webhook 必须是 HTTPS）
-
-## 许可证
-
-MIT
-

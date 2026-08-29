@@ -1,0 +1,13 @@
+import { describe, expect, it } from "vitest";
+import { lineCapabilities } from "./capabilities.js";
+import { LINE_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+describe("LINE 能力清单", () => {
+    it("所有平台动作均公开且不存在虚假的删除能力", () => {
+        for (const action of LINE_PLATFORM_ACTIONS) {
+            expect(lineCapabilities.actions[action]?.support).toBe("native");
+        }
+        expect(lineCapabilities.actions.delete_message?.support).toBe("unsupported");
+        expect(lineCapabilities.segments.line_message?.support).toBe("native");
+    });
+});
