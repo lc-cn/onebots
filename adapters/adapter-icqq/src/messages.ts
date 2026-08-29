@@ -17,10 +17,19 @@ export function compileICQQMessage(
                 const qq = data.qq ?? data.id ?? data.user_id;
                 return segment.at(qq === "all" ? "all" : requireInteger(qq, "at.qq"));
             }
-            case "image":
-                return segment.image(resolveICQQMediaSource(data, "image"));
+            case "image": {
+                const summary = optionalString(data.summary, "image.summary");
+                return {
+                    ...segment.image(resolveICQQMediaSource(data, "image")),
+                    asface: data.asface === true,
+                    ...(summary ? { summary } : {}),
+                };
+            }
             case "face":
-                return segment.face(requireInteger(data.id, "face.id"));
+                return {
+                    ...segment.face(requireInteger(data.id, "face.id")),
+                    big: data.is_large === true || data.big === true,
+                };
             case "record":
             case "audio":
                 return segment.record(resolveICQQMediaSource(data, item.type));

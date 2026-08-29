@@ -15,6 +15,7 @@ import { createHmac } from "crypto";
 import { WebSocket } from "ws";
 import { projectMilkyEvent } from "./event-projector.js";
 import { executeMilkyAccountAction, MILKY_ACCOUNT_ACTIONS } from "./account-actions.js";
+import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 
 const milkySchema: Schema = {
     use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
@@ -354,7 +355,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
             scene_id: this.adapter.resolveId(user_id),
-            message,
+            message: compileMilkySegments(
+                message,
+                sequence => this.adapter.resolveId(sequence).string,
+            ),
         });
         return { message_seq: result.message_id.number, time: Math.floor(Date.now() / 1000) };
     }
@@ -366,7 +370,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
             scene_id: this.adapter.resolveId(group_id),
-            message,
+            message: compileMilkySegments(
+                message,
+                sequence => this.adapter.resolveId(sequence).string,
+            ),
         });
         return { message_seq: result.message_id.number, time: Math.floor(Date.now() / 1000) };
     }
@@ -439,7 +446,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 user_id: msg.sender.sender_id.string,
                 nickname: msg.sender.sender_name,
             },
-            message: msg.message as unknown as Milky.Segment[],
+            message: projectMilkySegments(msg.message),
         };
     }
 

@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { compileICQQMessage, projectICQQMessageSegments } from "./messages.js";
 
 describe("ICQQ 消息编译", () => {
+    it("保留 Milky 投影所需的超级表情和贴纸语义", () => {
+        expect(
+            compileICQQMessage([
+                { type: "face", data: { id: "66", is_large: true } },
+                {
+                    type: "image",
+                    data: { file: "base64://aGVsbG8=", asface: true, summary: "[贴纸]" },
+                },
+            ]),
+        ).toMatchObject([
+            { type: "face", id: 66, big: true },
+            { type: "image", asface: true, summary: "[贴纸]" },
+        ]);
+    });
     it("拒绝静默丢弃未知发送段", () => {
         expect(() => compileICQQMessage([{ type: "unknown", data: {} }])).toThrow(
             "ICQQ 不支持消息段 unknown",

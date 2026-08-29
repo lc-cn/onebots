@@ -7,26 +7,21 @@ export namespace Milky {
     /**
      * Message segment types
      */
-    export type SegmentType = 
+    export type SegmentType =
         | "text"
+        | "mention"
+        | "mention_all"
         | "image"
         | "face"
         | "record"
         | "video"
-        | "at"
-        | "rps"
-        | "dice"
-        | "shake"
-        | "poke"
-        | "share"
-        | "contact"
-        | "location"
-        | "music"
+        | "file"
         | "reply"
         | "forward"
-        | "node"
+        | "market_face"
+        | "light_app"
         | "xml"
-        | "json";
+        | "markdown";
 
     /**
      * Message segment

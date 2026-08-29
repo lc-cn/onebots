@@ -1,5 +1,6 @@
 import type { CommonEvent } from "onebots";
 import type { Milky } from "./types.js";
+import { projectMilkySegments } from "./message-segments.js";
 
 const projectMessage = (event: CommonEvent.Message): Milky.MessageEvent => {
     const isGroup = event.message_type === "group" && event.group !== undefined;
@@ -15,10 +16,7 @@ const projectMessage = (event: CommonEvent.Message): Milky.MessageEvent => {
             message_seq: event.message_id.number,
             sender_id: sender,
             time: Math.floor(event.timestamp / 1000),
-            segments: event.message.map(segment => ({
-                type: segment.type as Milky.SegmentType,
-                data: segment.data,
-            })),
+            segments: projectMilkySegments(event.message),
             ...(isGroup
                 ? {
                       group: {

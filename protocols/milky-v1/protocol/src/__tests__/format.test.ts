@@ -203,7 +203,17 @@ describe("Milky V1 protocol", () => {
         }
         expect(result.data.segments).toEqual([
             { type: "text", data: { text: "Hello" } },
-            { type: "image", data: { url: "http://example.com/img.png" } },
+            {
+                type: "image",
+                data: {
+                    resource_id: "http://example.com/img.png",
+                    temp_url: "http://example.com/img.png",
+                    width: 0,
+                    height: 0,
+                    summary: "",
+                    sub_type: "normal",
+                },
+            },
             { type: "text", data: { text: " World" } },
         ]);
     });
