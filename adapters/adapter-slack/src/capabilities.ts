@@ -4,8 +4,16 @@ import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebo
 export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
         send_message: { support: "native", scenes: ["private", "group", "channel"] },
-        delete_message: { support: "native" },
-        update_message: { support: "native" },
+        delete_message: {
+            support: "native",
+            availability: "context",
+            note: "需提供 scene_id，或消息已由当前进程收发",
+        },
+        update_message: {
+            support: "native",
+            availability: "context",
+            note: "需提供 scene_id，或消息已由当前进程收发",
+        },
         get_message: { support: "native", availability: "context" },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },
@@ -68,15 +76,16 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
     segments: {
         text: { support: "native", direction: "both" },
         at: { support: "native", direction: "send" },
-        image: { support: "native", direction: "send" },
-        file: {
-            support: "emulated",
-            direction: "send",
-            note: "当前将文件 URL 投影为消息文本；原生上传可通过 call_slack_api 扩展",
-        },
-        audio: { support: "native", direction: "receive" },
-        video: { support: "native", direction: "receive" },
+        image: { support: "native", direction: "both" },
+        file: { support: "native", direction: "both" },
+        audio: { support: "native", direction: "both" },
+        video: { support: "native", direction: "both" },
         reply: { support: "native", direction: "both" },
+        slack_message: {
+            support: "native",
+            direction: "send",
+            note: "承载 Block Kit、attachments 与 chat.postMessage 原生选项",
+        },
     },
     transports: {
         socket_mode: { support: "native", mode: "websocket" },

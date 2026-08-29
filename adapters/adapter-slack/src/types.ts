@@ -112,6 +112,7 @@ export interface SlackEvent {
     channel?: string;
     text?: string;
     ts?: string;
+    thread_ts?: string;
     [key: string]: unknown;
 }
 

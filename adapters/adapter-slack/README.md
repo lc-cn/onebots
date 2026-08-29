@@ -30,7 +30,7 @@ onebots -r slack
 ## 功能
 
 - HTTP Events API 与自动重连的 Socket Mode
-- 频道、私聊、线程消息以及文本、@、回复、附件接收
+- 频道、私聊、线程消息以及文本、@、回复、附件收发
 - 消息查询、编辑、删除、定时消息、回复列表
 - Reaction、Pin、频道生命周期、成员邀请与移除、Bookmark
 - 消息编辑/删除、Reaction、成员变化等 canonical 事件投影
@@ -54,6 +54,12 @@ onebots -r slack
 ```
 
 动作能否执行仍由当前 token scopes 和 Slack 会话上下文决定；`get_supported_actions` 只声明适配器已实现的调用路径。
+
+## 消息与文件
+
+`image`、`file`、`audio`、`video` 会使用 Slack 当前推荐的 `filesUploadV2` 原生上传，不再退化成附件 URL 或 `[文件: …]` 文本。媒体 `file` / `url` 支持 HTTP(S)、Node.js 本地路径、`file://`、Base64 data URL 与 `base64://`；上传文件需要 `files:write` scope。
+
+Block Kit、传统 attachments 及其他 `chat.postMessage` 选项可通过 `slack_message` 段的 `data.body` 传入。未知消息段会明确失败。查询、编辑、删除消息时应提供 `scene_id`；当前进程已收发的消息会保存有界的频道/线程上下文，可省略该字段。
 
 ## 获取 Bot Token
 

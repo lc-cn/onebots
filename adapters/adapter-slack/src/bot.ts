@@ -6,7 +6,8 @@ import { EventEmitter } from "node:events";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { SocketModeClient } from "@slack/socket-mode";
 import { WebClient } from "@slack/web-api";
-import type { Next, RouterContext } from "onebots";
+import { materializeMediaSource, type Next, type RouterContext } from "onebots";
+import { slackUploadMessageTimestamp, type SlackFileInput } from "./messages.js";
 import type {
     SlackConfig,
     SlackUser,
@@ -32,6 +33,10 @@ export class SlackBot extends EventEmitter {
     private client: WebClient;
     private socketClient?: SocketModeClient;
     private me: SlackUser | null = null;
+    private readonly messageContexts = new Map<
+        string,
+        { channel: string; threadTs?: string }
+    >();
 
     constructor(config: SlackConfig) {
         super();
@@ -161,6 +166,20 @@ export class SlackBot extends EventEmitter {
         return this.me;
     }
 
+    rememberMessage(ts: string, channel: string, threadTs?: string): void {
+        if (!ts || !channel) return;
+        this.messageContexts.delete(ts);
+        this.messageContexts.set(ts, { channel, threadTs });
+        if (this.messageContexts.size > 4_096) {
+            const oldest = this.messageContexts.keys().next().value;
+            if (typeof oldest === "string") this.messageContexts.delete(oldest);
+        }
+    }
+
+    getMessageContext(ts: string): { channel: string; threadTs?: string } | undefined {
+        return this.messageContexts.get(ts);
+    }
+
     /**
      * 获取 Bot 信息
      */
@@ -213,6 +232,31 @@ export class SlackBot extends EventEmitter {
         }
 
         return result as unknown as SlackChatResult;
+    }
+
+    /** 使用 Slack 推荐的 filesUploadV2 上传并分享一条或多条文件。 */
+    async sendFiles(
+        channel: string,
+        files: SlackFileInput[],
+        text: string,
+        options: Pick<SlackMessageOptions, "thread_ts" | "blocks"> = {},
+    ): Promise<SlackChatResult> {
+        const media = await Promise.all(files.map(file => materializeMediaSource(file)));
+        const result = await this.client.filesUploadV2({
+            channel_id: channel,
+            thread_ts: options.thread_ts,
+            initial_comment: text || undefined,
+            blocks: text ? undefined : options.blocks,
+            file_uploads: media.map((item, index) => ({
+                file: Buffer.from(item.data),
+                filename: item.filename,
+                title: files[index].title,
+                alt_text: files[index].altText,
+            })),
+        });
+        const timestamp = slackUploadMessageTimestamp(result);
+        if (!timestamp) throw new Error("Slack 文件上传响应缺少消息时间戳");
+        return { ...result, ok: true, channel, ts: timestamp } as SlackChatResult;
     }
 
     /**

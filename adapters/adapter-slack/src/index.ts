@@ -5,6 +5,7 @@ import type { Schema } from "onebots";
 export type { SlackConfig } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
+export { compileSlackMessage, type CompiledSlackMessage, type SlackFileInput } from "./messages.js";
 
 const slackSchema: Schema = {
     account_id: {

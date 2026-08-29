@@ -35,6 +35,9 @@ export function createSlackAccount(
     });
     bot.on("event", (event: SlackEvent, envelope: SlackWebhookBody) => {
         try {
+            if (event.type === "message" && event.ts && event.channel) {
+                bot.rememberMessage(event.ts, event.channel, event.thread_ts);
+            }
             const me = bot.getCachedMe();
             if (
                 (event.type === "message" || event.type === "app_mention") &&

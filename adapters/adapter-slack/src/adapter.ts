@@ -7,10 +7,12 @@ import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { SlackBot } from "./bot.js";
 import { type CommonTypes } from "onebots";
-import type { SlackConfig, SlackMessageOptions } from "./types.js";
+import type { SlackConfig, SlackMessage } from "./types.js";
 import { slackCapabilities } from "./capabilities.js";
 import { createSlackAccount } from "./account.js";
 import { executeSlackPlatformAction, SLACK_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { compileSlackMessage } from "./messages.js";
+import { projectSlackMessageSegments } from "./events.js";
 
 export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     constructor(app: BaseApp) {
@@ -50,52 +52,17 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { message } = params;
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
-
-        // 解析消息内容
-        let text = "";
-        const options: SlackMessageOptions = {};
-
-        for (const seg of message) {
-            if (typeof seg === "string") {
-                text += seg;
-            } else if (seg.type === "text") {
-                text += seg.data.text || "";
-            } else if (seg.type === "at") {
-                const userId = seg.data.qq || seg.data.id || seg.data.user_id;
-                if (userId === "all") {
-                    text += "<!channel> ";
-                } else {
-                    text += `<@${userId}> `;
-                }
-            } else if (seg.type === "reply") {
-                const replyId = seg.data.message_id || seg.data.id;
-                if (replyId) options.thread_ts = String(replyId);
-            } else if (seg.type === "image") {
-                // Slack 图片需要单独发送或作为附件
-                if (seg.data.url || seg.data.file) {
-                    const imageUrl = seg.data.url || seg.data.file;
-                    if (!options.attachments) options.attachments = [];
-                    options.attachments.push({
-                        image_url: imageUrl,
-                        fallback: text || "Image",
-                    });
-                }
-            } else if (seg.type === "file") {
-                // Slack 文件需要先上传
-                if (seg.data.url || seg.data.file) {
-                    text += `[文件: ${seg.data.url || seg.data.file}]`;
-                }
-            }
-        }
-
-        // 发送消息
+        const { text, options, files } = compileSlackMessage(params.message);
         const channelId = sceneId.string;
-        const result = await bot.sendMessage(channelId, text, options);
+        const result = files.length
+            ? await bot.sendFiles(channelId, files, text, options)
+            : await bot.sendMessage(channelId, text, options);
+        if (!result.ts) throw new Error("Slack 发送响应缺少消息时间戳");
+        bot.rememberMessage(result.ts, channelId, options.thread_ts);
 
         return {
-            message_id: this.createId(result.ts || Date.now().toString()),
+            message_id: this.createId(result.ts),
         };
     }
 
@@ -108,14 +75,14 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
 
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const context = bot.getMessageContext(msgId);
         const channelId =
             params.scene_id != null
                 ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
-                : "";
+                : context?.channel || "";
 
-        if (channelId) {
-            await bot.deleteMessage(channelId, msgId);
-        }
+        if (!channelId) throw new Error("Slack 删除消息需要 scene_id（频道 ID）");
+        await bot.deleteMessage(channelId, msgId);
     }
 
     /**
@@ -124,18 +91,19 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
-        if (!params.scene_id) throw new Error("Slack 获取消息需要 scene_id（频道 ID）");
-        const channel = params.scene_id.string;
         const timestamp = params.message_id.string;
+        const context = account.client.getMessageContext(timestamp);
+        const channel = params.scene_id?.string || context?.channel;
+        if (!channel) throw new Error("Slack 获取消息需要 scene_id（频道 ID）或已知消息上下文");
         const result = await account.client.call("conversations.replies", {
             channel,
-            ts: timestamp,
+            ts: context?.threadTs || timestamp,
+            oldest: timestamp,
+            latest: timestamp,
             inclusive: true,
             limit: 1,
         });
-        const response = result as {
-            messages?: Array<{ ts?: string; user?: string; text?: string }>;
-        };
+        const response = result as { messages?: SlackMessage[] };
         const message = response.messages?.find(item => item.ts === timestamp);
         if (!message?.ts) throw new Error(`Slack 消息 ${timestamp} 不存在或当前 token 无权读取`);
         const privateScene = channel.startsWith("D");
@@ -149,7 +117,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
                 sender_name: message.user || "",
                 scene_name: "",
             },
-            message: message.text ? [{ type: "text", data: { text: message.text } }] : [],
+            message: projectSlackMessageSegments(message),
         };
     }
 
@@ -165,24 +133,17 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         const rawScene = (
             params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }
         ).scene_id;
+        const context = bot.getMessageContext(msgId);
         const channelId =
             rawScene != null
                 ? this.coerceId(rawScene as CommonTypes.Id | string | number).string
-                : "";
+                : context?.channel || "";
 
-        // 解析消息内容
-        let text = "";
-        for (const seg of params.message) {
-            if (typeof seg === "string") {
-                text += seg;
-            } else if (seg.type === "text") {
-                text += seg.data.text || "";
-            }
-        }
-
-        if (channelId) {
-            await bot.updateMessage(channelId, msgId, text);
-        }
+        if (!channelId) throw new Error("Slack 更新消息需要 scene_id（频道 ID）");
+        const { text, options, files } = compileSlackMessage(params.message);
+        if (files.length) throw new Error("Slack 更新消息不支持新增文件，请使用 call_slack_api");
+        if (options.thread_ts) throw new Error("Slack 更新消息不能改变所属线程");
+        await bot.updateMessage(channelId, msgId, text, options);
     }
 
     // ============================================
@@ -421,12 +382,15 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      * 获取版本信息
      */
     async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
-        const version = await readPackageVersion(import.meta.url);
+        const [appVersion, sdkVersion] = await Promise.all([
+            readPackageVersion(import.meta.url),
+            readPackageVersion(import.meta.resolve("@slack/web-api")),
+        ]);
         return {
             app_name: "onebots Slack Adapter",
-            app_version: version,
-            impl: "slack",
-            version,
+            app_version: appVersion,
+            impl: "@slack/web-api",
+            version: sdkVersion,
         };
     }
 

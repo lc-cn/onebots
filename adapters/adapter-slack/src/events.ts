@@ -23,7 +23,7 @@ export function projectSlackEvent(
             const message = objectValue(event.message) as SlackMessage;
             return notice(envelope, event, context, "message_updated", {
                 message_id: context.createId(message.ts ?? event.ts ?? event.event_ts),
-                message: projectSegments(message),
+                message: projectSlackMessageSegments(message),
             });
         }
         if (event.subtype === "message_deleted") {
@@ -100,11 +100,11 @@ function projectMessage(
         group: isPrivate ? undefined : projectGroup(channel, context),
         message_id: context.createId(event.ts ?? event.event_ts),
         raw_message: event.text ?? "",
-        message: projectSegments(event),
+        message: projectSlackMessageSegments(event),
     };
 }
 
-function projectSegments(event: SlackMessage): CommonTypes.Segment[] {
+export function projectSlackMessageSegments(event: SlackMessage): CommonTypes.Segment[] {
     const segments: CommonTypes.Segment[] = [];
     if (event.thread_ts && event.thread_ts !== event.ts) {
         segments.push({ type: "reply", data: { message_id: event.thread_ts } });

@@ -71,4 +71,51 @@ describe("SlackBot conversations", () => {
 
         await expect(bot.createChannel("general")).rejects.toThrow("响应缺少频道信息");
     });
+
+    it("通过 filesUploadV2 上传 Base64 文件并返回真实消息时间戳", async () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        const upload = vi.fn().mockResolvedValue({
+            ok: true,
+            files: [{ files: [{ shares: { public: { C1: [{ ts: "171.0001" }] } } }] }],
+        });
+        bot.getWebClient().filesUploadV2 = upload;
+
+        await expect(
+            bot.sendFiles(
+                "C1",
+                [
+                    {
+                        source: "base64://aW1hZ2U=",
+                        filename: "image.png",
+                        altText: "截图",
+                    },
+                ],
+                "说明",
+                { thread_ts: "170.0001" },
+            ),
+        ).resolves.toMatchObject({ channel: "C1", ts: "171.0001" });
+        expect(upload).toHaveBeenCalledWith(
+            expect.objectContaining({
+                channel_id: "C1",
+                thread_ts: "170.0001",
+                initial_comment: "说明",
+                file_uploads: [
+                    expect.objectContaining({
+                        file: expect.any(Buffer),
+                        filename: "image.png",
+                        alt_text: "截图",
+                    }),
+                ],
+            }),
+        );
+    });
+
+    it("使用有界消息上下文保存线程父消息", () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        bot.rememberMessage("171.0002", "C1", "170.0001");
+        expect(bot.getMessageContext("171.0002")).toEqual({
+            channel: "C1",
+            threadTs: "170.0001",
+        });
+    });
 });
