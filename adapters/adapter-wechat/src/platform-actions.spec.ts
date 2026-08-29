@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WechatClient } from "./client.js";
+import { WechatApiError } from "./errors.js";
 import { executeWechatPlatformAction, WECHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 describe("微信公众号平台动作", () => {
@@ -26,7 +27,23 @@ describe("微信公众号平台动作", () => {
             body: { value: 1 },
         });
         expect(call).toHaveBeenCalledWith(expect.objectContaining({ path: "/cgi-bin/new/action" }));
+        expect(WECHAT_PLATFORM_ACTIONS.size).toBe(61);
         expect(WECHAT_PLATFORM_ACTIONS.has("publish_draft")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("mass_send_by_tag")).toBe(true);
+    });
+
+    it("跨领域分派素材动作并保留未知动作错误", async () => {
+        const call = vi.fn().mockResolvedValue({ media_id: "draft-1" });
+        const client = { call } as unknown as WechatClient;
+        await executeWechatPlatformAction(client, "get_draft", { media_id: "draft-1" });
+        expect(call).toHaveBeenCalledWith({
+            method: "POST",
+            path: "/cgi-bin/draft/get",
+            body: { media_id: "draft-1" },
+        });
+
+        const promise = executeWechatPlatformAction(client, "missing_action", {});
+        await expect(promise).rejects.toBeInstanceOf(WechatApiError);
+        await expect(promise).rejects.toMatchObject({ code: "WECHAT_UNKNOWN_ACTION" });
     });
 });
