@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { SchemaGroup } from "./types";
+import type { SchemaGroup } from "./types.js";
 import SchemaField from "../SchemaField.vue";
 import UiCollapse from "../../ui/UiCollapse.vue";
 import UiCollapseItem from "../../ui/UiCollapseItem.vue";
 import UiEmpty from "../../ui/UiEmpty.vue";
-import { isSchemaFieldVisible } from "./utils";
+import { isSchemaFieldVisible } from "./utils.js";
 
 defineProps<{
     schemaGroups: SchemaGroup[];
@@ -16,7 +16,8 @@ const activeGroups = defineModel<string[]>("activeGroups", { required: true });
 const isWideField = (field: SchemaGroup["fields"][number]) =>
     field.rule.ui?.widget === "endpoint-list" ||
     field.rule.ui?.widget === "event-filter" ||
-    field.rule.ui?.widget === "choice-list";
+    field.rule.ui?.widget === "choice-list" ||
+    field.rule.ui?.widget === "record-list";
 
 const visibleFields = (fields: SchemaGroup["fields"]) =>
     fields.filter(field => isSchemaFieldVisible(field, formModel));

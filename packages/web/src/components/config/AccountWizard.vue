@@ -13,7 +13,7 @@ import UiEmpty from "../../ui/UiEmpty.vue";
 import { buildApiUrl } from "../../config";
 import { authFetch } from "../../composables/useAuth";
 import { useToast } from "../../ui/toast.js";
-import type { SchemaBundle, SchemaGroup, SchemaFieldDef, AccountRow } from "./types";
+import type { SchemaBundle, SchemaGroup, SchemaFieldDef, AccountRow } from "./types.js";
 import {
     buildSchemaFields,
     deleteValueByPath,

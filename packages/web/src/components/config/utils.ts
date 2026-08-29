@@ -5,7 +5,7 @@ import type {
     SchemaFieldDef,
     SchemaGroup,
     AccountRow,
-} from "./types";
+} from "./types.js";
 
 export const isRule = (rule: ValidationRule | Schema): rule is ValidationRule => {
     return (
@@ -85,6 +85,9 @@ export const usesEventFilterEditor = (rule: ValidationRule): boolean =>
 export const usesChoiceListEditor = (rule: ValidationRule): boolean =>
     rule.type === "array" && rule.ui?.widget === "choice-list";
 
+export const usesRecordListEditor = (rule: ValidationRule): boolean =>
+    rule.type === "array" && rule.ui?.widget === "record-list";
+
 const cloneConfigValue = (value: unknown, seen = new WeakMap<object, unknown>()): unknown => {
     if (typeof value !== "object" || value === null) return value;
 
@@ -110,7 +113,7 @@ export const resolveStructuredFieldDisplay = (
     currentValue: unknown,
     rule: ValidationRule,
 ): unknown => {
-    if (usesEndpointListEditor(rule)) {
+    if (usesEndpointListEditor(rule) || usesRecordListEditor(rule)) {
         const value = currentValue ?? rule.default;
         return Array.isArray(value) ? cloneConfigValue(value) : [];
     }
@@ -147,6 +150,28 @@ export const parseStructuredFieldValue = (
             if (!values.includes(item)) values.push(item);
         }
         return { ok: true, value: values };
+    }
+    if (usesRecordListEditor(rule)) {
+        if (!Array.isArray(raw)) return { ok: false, message: `字段 ${label} 必须是对象列表` };
+        const fieldTypes = new Map((rule.ui?.fields || []).map(field => [field.key, field.type]));
+        const entries: Record<string, unknown>[] = [];
+        for (const item of raw) {
+            if (!isRecord(item)) return { ok: false, message: `字段 ${label} 中存在无效项目` };
+            const entry = { ...item };
+            for (const [key, type] of fieldTypes) {
+                const value = entry[key];
+                if (value === undefined || value === "") {
+                    delete entry[key];
+                    continue;
+                }
+                const expected = type || "string";
+                if (typeof value !== expected) {
+                    return { ok: false, message: `字段 ${label}.${key} 必须是${expected}` };
+                }
+            }
+            if (Object.keys(entry).length) entries.push(entry);
+        }
+        return { ok: true, value: entries };
     }
     if (!usesEndpointListEditor(rule)) return parseJsonFieldValue(raw, rule, label);
     if (!Array.isArray(raw)) return { ok: false, message: `字段 ${label} 必须是地址列表` };

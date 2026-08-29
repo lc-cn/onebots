@@ -6,8 +6,10 @@ onebots Mock 适配器 - 用于测试和开发环境。
 
 - ✅ **无外部依赖**：不需要真实的机器人账号或服务
 - ✅ **精确能力**：只声明已真实模拟的 API，不伪造成功结果
-- ✅ **可控事件**：可以手动触发事件用于测试
+- ✅ **统一事件入口**：自动事件与手动事件都经过 typed `ingest()`
+- ✅ **可复现事件**：随机种子、时钟、随机源和等待器均可控制
 - ✅ **模拟数据**：预置好友、群组等模拟数据
+- ✅ **结构化错误**：可通过稳定的 `MockError.code` 精确断言失败原因
 - ✅ **CI/CD 友好**：适合在自动化测试环境中使用
 
 ## 安装
@@ -26,6 +28,8 @@ mock.test_bot:
   avatar: "https://via.placeholder.com/100"
   auto_events: false # 是否自动生成模拟事件
   event_interval: 5000 # 事件生成间隔（毫秒）
+  auto_event_types: [private_message, group_message] # 可选事件白名单
+  random_seed: 2026 # 可选；使自动事件选择可复现
   latency: 10 # 模拟 API 延迟（毫秒）
 
   # 预定义好友列表
@@ -50,7 +54,7 @@ mock.test_bot:
 
 ```typescript
 import { describe, test, expect, beforeAll, afterAll } from "vitest";
-import { MockBot, MockAdapter } from "@onebots/adapter-mock";
+import { MockBot, type MockIncomingMessage } from "@onebots/adapter-mock";
 
 describe("Bot Tests", () => {
   let bot: MockBot;
@@ -85,8 +89,8 @@ describe("Bot Tests", () => {
   });
 
   test("手动触发事件", async () => {
-    const events: any[] = [];
-    bot.on("message", e => events.push(e));
+    const events: MockIncomingMessage[] = [];
+    bot.on("message", event => events.push(event));
 
     // 手动触发消息事件
     bot.triggerEvent("message", {
@@ -121,18 +125,20 @@ describe("Bot Tests", () => {
 | `getUserInfo(userId)`                  | 获取用户信息   |
 | `sendMessage(targetId, message, type)` | 发送消息       |
 | `deleteMessage(messageId)`             | 删除消息       |
-| `getMessage(messageId)`                | 获取已发送消息 |
+| `getMessage(messageId)`                | 获取消息快照   |
 
 ### 测试辅助方法
 
-| 方法                        | 说明                                   |
-| --------------------------- | -------------------------------------- |
-| `triggerEvent(event, data)` | 手动触发事件                           |
-| `addFriend(friend)`         | 添加模拟好友                           |
-| `addGroup(group)`           | 添加模拟群组                           |
-| `getSentMessages()`         | 获取所有已发送的消息                   |
-| `clearData()`               | 清除所有模拟数据，不会自动恢复默认数据 |
-| `isActive()`                | 检查是否正在运行                       |
+| 方法                        | 说明                                         |
+| --------------------------- | -------------------------------------------- |
+| `ingest(event)`             | 接收结构化入站事件，与自动事件共用校验和投影 |
+| `triggerEvent(event, data)` | 按事件名触发 typed 入站事件                  |
+| `addFriend(friend)`         | 添加模拟好友                                 |
+| `addGroup(group)`           | 添加模拟群组                                 |
+| `getSentMessages()`         | 仅获取出站消息快照                           |
+| `getReceivedMessages()`     | 仅获取入站消息快照                           |
+| `clearData()`               | 清除所有模拟数据，不会自动恢复默认数据       |
+| `isActive()`                | 检查是否正在运行                             |
 
 ## 事件
 
@@ -144,8 +150,11 @@ describe("Bot Tests", () => {
 | `heartbeat`    | 心跳                   |
 | `stopped`      | 机器人停止             |
 | `message_sent` | 消息发送成功           |
+| `client_error` | 延迟任务等异步错误     |
 
-Mock 仅声明并接受文本消息段。传入图片、文件等未模拟消息段会明确报错，避免测试把占位字符串误判为平台支持。`latency: 0` 可用于完全关闭模拟延迟；停止正在启动的 Bot 会取消过期的 `ready` 事件。
+Web 管理端会根据 Schema 把好友、群组和自动事件类型渲染为可动态增删的结构化列表，无需手写 JSON；群组中未展示的 `members` 等扩展字段在编辑后仍会保留。
+
+Mock 仅声明并接受文本消息段。传入图片、文件等未模拟消息段会明确报错，避免测试把占位字符串误判为平台支持。`latency: 0` 可用于完全关闭模拟延迟；停止正在启动的 Bot 会取消过期的 `ready` 和 `message_sent` 事件。构造器第二个参数可注入 `now`、`random`、`sleep`，用于完全确定性的测试。
 
 ## 许可证
 

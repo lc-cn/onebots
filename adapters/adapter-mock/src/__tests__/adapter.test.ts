@@ -11,119 +11,30 @@
  * 7. 删除消息
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-
-// Mock node:sqlite before any imports that depend on it.
-// The real SqliteDB constructor uses DatabaseSync internally; we replace it
-// so vitest can resolve the built-in module without a real node:sqlite binding.
-vi.mock("node:sqlite", () => {
-    const mockAll = vi.fn(() => []);
-    const mockRun = vi.fn();
-    const mockPrepare = vi.fn(() => ({ all: mockAll, run: mockRun }));
-    return {
-        DatabaseSync: class MockDatabaseSync {
-            exec = vi.fn();
-            prepare = mockPrepare;
-            close = vi.fn();
-        },
-    };
-});
-
+import { rm } from "node:fs/promises";
+import {
+    AccountStatus,
+    assertAdapterCapabilityContract,
+    BaseApp,
+    SqliteDB,
+    type Account,
+} from "onebots";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MockAdapter } from "../adapter.js";
-import { AccountStatus, assertAdapterCapabilityContract } from "onebots";
+import type { MockConfig } from "../types.js";
 
-// ============================================================
-// 内存 Mock SqliteDB —— 满足 Adapter 基类对 db 的全部要求：
-//   - db.create(tableName, schema)
-//   - db.select('*').from(t).where(c).run()
-//   - db.insert(t).values(row).run()
-// 不依赖 node:sqlite / DatabaseSync，可以安全在任何 Node 版本运行。
-// ============================================================
-class MockSqliteDB {
-    private tables = new Map<string, Array<Record<string, any>>>();
-
-    create(tableName: string, _schema: unknown): void {
-        if (!this.tables.has(tableName)) {
-            this.tables.set(tableName, []);
-        }
-    }
-
-    /* eslint-disable @typescript-eslint/no-this-alias */
-    select(...fields: string[]) {
-        const self = this;
-        let tableName = "";
-        return {
-            from(t: string) {
-                tableName = t;
-                return {
-                    where: (condition: Record<string, any>) => ({
-                        run: (): any[] => {
-                            const rows = self.rows(tableName);
-                            const matched = rows.filter(r =>
-                                Object.entries(condition).every(([k, v]) => r[k] === v),
-                            );
-                            if (fields.length === 1 && fields[0] === "*") return matched;
-                            return matched.map(r => {
-                                const obj: Record<string, any> = {};
-                                for (const f of fields) obj[f] = r[f];
-                                return obj;
-                            });
-                        },
-                    }),
-                };
-            },
-        };
-    }
-
-    insert(table: string) {
-        const self = this;
-        return {
-            values: (first: any, ...rest: any[]) => ({
-                run: () => {
-                    const rows = self.rows(table);
-                    for (const row of [first, ...rest]) {
-                        rows.push(row);
-                    }
-                },
-            }),
-        };
-    }
-
-    private rows(name: string): Array<Record<string, any>> {
-        if (!this.tables.has(name)) this.tables.set(name, []);
-        return this.tables.get(name)!;
-    }
-}
-
-// ============================================================
-// 最小化 Mock App —— 仅暴露 Adapter 基类依赖的成员
-// ============================================================
-function createMockApp() {
-    return {
-        db: new MockSqliteDB(),
-        config: { general: {}, log_level: "off" as const },
-        getLogger: () => ({
-            info: vi.fn(),
-            warn: vi.fn(),
-            error: vi.fn(),
-            debug: vi.fn(),
-            trace: vi.fn(),
-            level: "off" as const,
-        }),
-    };
-}
+const databasePath = `/tmp/onebots-mock-adapter-${process.pid}`;
 
 // ============================================================
 // 辅助：快速启动一个账号并等待 ready 事件
 // ============================================================
-async function createAndStartAccount(adapter: MockAdapter, overrides: Record<string, any> = {}) {
-    const config = {
-        platform: "mock" as const,
+async function createAndStartAccount(adapter: MockAdapter, overrides: Partial<MockConfig> = {}) {
+    const config: Account.Config<"mock"> = {
+        platform: "mock",
+        ...overrides,
         account_id: overrides.account_id || (overrides.nickname || "Test") + "_bot",
         nickname: overrides.nickname || "Tester",
         latency: 0,
-        friends: overrides.friends,
-        groups: overrides.groups,
     };
     const account = adapter.createAccount(config);
     adapter.accounts.set(config.account_id, account);
@@ -141,15 +52,30 @@ async function createAndStartAccount(adapter: MockAdapter, overrides: Record<str
 
 describe("MockAdapter", () => {
     let adapter: MockAdapter;
-    let mockApp: ReturnType<typeof createMockApp>;
+    let database: SqliteDB;
 
     beforeEach(() => {
-        mockApp = createMockApp();
-        adapter = new MockAdapter(mockApp as any);
+        database = new SqliteDB(databasePath);
+        const app = {
+            db: database,
+            config: { general: {} },
+            getLogger: () => ({
+                trace: vi.fn(),
+                debug: vi.fn(),
+                info: vi.fn(),
+                warn: vi.fn(),
+                error: vi.fn(),
+                fatal: vi.fn(),
+                mark: vi.fn(),
+            }),
+        } as unknown as BaseApp;
+        adapter = new MockAdapter(app);
     });
 
-    afterEach(() => {
+    afterEach(async () => {
         adapter.removeAllListeners();
+        database.close();
+        await rm(`${databasePath}.db`, { force: true });
     });
 
     describe("capabilities", () => {
@@ -185,13 +111,13 @@ describe("MockAdapter", () => {
                 account_id: "bot1",
                 nickname: "Bot1",
                 latency: 0,
-            } as any);
+            });
             const a2 = adapter.createAccount({
                 platform: "mock",
                 account_id: "bot2",
                 nickname: "Bot2",
                 latency: 100,
-            } as any);
+            });
             adapter.accounts.set("bot1", a1);
             adapter.accounts.set("bot2", a2);
 
@@ -205,12 +131,22 @@ describe("MockAdapter", () => {
         });
 
         it("should throw for non-existent account access", async () => {
-            await expect(adapter.getLoginInfo("ghost")).rejects.toThrow("Account ghost not found");
-            await expect(adapter.getFriendList("ghost")).rejects.toThrow("Account ghost not found");
-            await expect(adapter.getGroupList("ghost")).rejects.toThrow("Account ghost not found");
-            await expect(adapter.sendMessage("ghost", null as any)).rejects.toThrow(
-                "Account ghost not found",
-            );
+            await expect(adapter.getLoginInfo("ghost")).rejects.toMatchObject({
+                code: "MOCK_ACCOUNT_NOT_FOUND",
+            });
+            await expect(adapter.getFriendList("ghost")).rejects.toMatchObject({
+                code: "MOCK_ACCOUNT_NOT_FOUND",
+            });
+            await expect(adapter.getGroupList("ghost")).rejects.toMatchObject({
+                code: "MOCK_ACCOUNT_NOT_FOUND",
+            });
+            await expect(
+                adapter.sendMessage("ghost", {
+                    scene_type: "private",
+                    scene_id: adapter.createId("10001"),
+                    message: [{ type: "text", data: { text: "hi" } }],
+                }),
+            ).rejects.toMatchObject({ code: "MOCK_ACCOUNT_NOT_FOUND" });
         });
     });
 
@@ -275,7 +211,7 @@ describe("MockAdapter", () => {
                     scene_id: adapter.createId("10001"),
                     message: [{ type: "text", data: { text: "hi" } }],
                 }),
-            ).rejects.toThrow("Account ghost not found");
+            ).rejects.toMatchObject({ code: "MOCK_ACCOUNT_NOT_FOUND" });
         });
     });
 
@@ -317,34 +253,11 @@ describe("MockAdapter", () => {
             expect(resolved).toBe(id);
         });
 
-        it("should coerce string, number, and Id inputs to the same Id", () => {
-            const id = adapter.createId("coerce_target");
-
-            // Access the protected `coerceId` method via bracket notation
-            const adapterAny = adapter as any;
-
-            const fromString = adapterAny.coerceId("coerce_target");
-            expect(fromString.string).toBe(id.string);
-            expect(fromString.number).toBe(id.number);
-
-            const fromNumber = adapterAny.coerceId(id.number);
-            expect(fromNumber.string).toBe(id.string);
-            expect(fromNumber.number).toBe(id.number);
-
-            const fromId = adapterAny.coerceId(id);
-            expect(fromId).toBe(id); // same reference
-        });
-
         it("should directly accept numeric input", () => {
             const id = adapter.createId(54321);
             expect(id.string).toBe("54321");
             expect(id.number).toBe(54321);
             expect(id.source).toBe(54321);
-        });
-
-        it("should throw for null / undefined input", () => {
-            expect(() => (adapter as any).createId(null)).toThrow();
-            expect(() => (adapter as any).createId(undefined)).toThrow();
         });
     });
 
@@ -382,7 +295,7 @@ describe("MockAdapter", () => {
         it("should throw for non-existent group", async () => {
             await expect(
                 adapter.getGroupInfo("group_bot", { group_id: adapter.createId("999999") }),
-            ).rejects.toThrow("Group 999999 not found");
+            ).rejects.toMatchObject({ code: "MOCK_GROUP_NOT_FOUND" });
         });
     });
 
@@ -418,7 +331,7 @@ describe("MockAdapter", () => {
         it("should throw for non-existent user", async () => {
             await expect(
                 adapter.getUserInfo("user_bot", { user_id: adapter.createId("99999") }),
-            ).rejects.toThrow("User 99999 not found");
+            ).rejects.toMatchObject({ code: "MOCK_USER_NOT_FOUND" });
         });
     });
 
@@ -432,7 +345,7 @@ describe("MockAdapter", () => {
                 account_id: "st_bot",
                 nickname: "ST",
                 latency: 0,
-            } as any);
+            });
             adapter.accounts.set("st_bot", account);
 
             expect(account.status).toBe(AccountStatus.Pending);
@@ -460,7 +373,7 @@ describe("MockAdapter", () => {
                 account_id: "run_bot",
             });
 
-            const bot = account.client as any;
+            const bot = account.client;
             expect(bot.isActive()).toBe(true);
 
             await adapter.stop("run_bot");
@@ -491,7 +404,7 @@ describe("MockAdapter", () => {
         it("should throw for non-existent account", async () => {
             await expect(
                 adapter.deleteMessage("ghost", { message_id: adapter.createId("xxx") }),
-            ).rejects.toThrow("Account ghost not found");
+            ).rejects.toMatchObject({ code: "MOCK_ACCOUNT_NOT_FOUND" });
         });
     });
 
@@ -500,7 +413,7 @@ describe("MockAdapter", () => {
     // ==========================================================
     describe("custom configuration", () => {
         it("should use custom friends and groups instead of defaults", async () => {
-            const { account } = await createAndStartAccount(adapter, {
+            await createAndStartAccount(adapter, {
                 account_id: "custom_bot",
                 friends: [
                     { user_id: "c_f1", nickname: "CustomFriend1" },
@@ -536,7 +449,7 @@ describe("MockAdapter", () => {
     // ==========================================================
     describe("getLoginInfo", () => {
         it("should return account id and nickname from config", async () => {
-            const { account, config } = await createAndStartAccount(adapter, {
+            const { config } = await createAndStartAccount(adapter, {
                 account_id: "login_bot",
                 nickname: "SuperBot",
             });

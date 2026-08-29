@@ -35,7 +35,7 @@ export interface ValidationRule<T = unknown> {
     sensitive?: boolean;
     /** Web 表单展示元数据，不参与运行时校验。 */
     ui?: {
-        widget?: "endpoint-list" | "event-filter" | "choice-list";
+        widget?: "endpoint-list" | "event-filter" | "choice-list" | "record-list";
         /** Web 配置页中的语义分区；布局由消费端统一决定。 */
         section?: "transport" | "delivery" | "credentials" | "filter" | "advanced";
         itemLabel?: string;
@@ -102,7 +102,9 @@ export function assertSchemaFormContract(schema: Schema): void {
             throw new ValidationError(`配置字段 ${path} 的显示条件 oneOf 不能为空`);
         }
         if (
-            (rule.ui.widget === "endpoint-list" || rule.ui.widget === "choice-list") &&
+            (rule.ui.widget === "endpoint-list" ||
+                rule.ui.widget === "choice-list" ||
+                rule.ui.widget === "record-list") &&
             rule.type !== "array"
         ) {
             throw new ValidationError(`配置字段 ${path} 的列表组件必须使用 array 类型`);

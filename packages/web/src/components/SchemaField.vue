@@ -9,7 +9,8 @@ import UiTextarea from "../ui/UiTextarea.vue";
 import EndpointListField from "./config/EndpointListField.vue";
 import EventFilterField from "./config/EventFilterField.vue";
 import ChoiceListField from "./config/ChoiceListField.vue";
-import type { SchemaFieldDef } from "./config/types";
+import RecordListField from "./config/RecordListField.vue";
+import type { SchemaFieldDef } from "./config/types.js";
 
 interface Props {
     /** 字段定义（来自配置 Schema） */
@@ -32,12 +33,14 @@ type WidgetKind =
     | "textarea"
     | "endpoint-list"
     | "event-filter"
-    | "choice-list";
+    | "choice-list"
+    | "record-list";
 
 const widget = computed<WidgetKind>(() => {
     const rule = props.field.rule;
     if (rule.type === "array" && rule.ui?.widget === "endpoint-list") return "endpoint-list";
     if (rule.type === "array" && rule.ui?.widget === "choice-list") return "choice-list";
+    if (rule.type === "array" && rule.ui?.widget === "record-list") return "record-list";
     if (rule.type === "object" && rule.ui?.widget === "event-filter") return "event-filter";
     if (rule.choices && rule.choices.length > 0) return "select";
     if (rule.type === "string") return "input";
@@ -122,6 +125,11 @@ const choiceModel = computed<string | number | boolean | undefined>({
             :disabled="disabled" />
         <ChoiceListField
             v-else-if="widget === 'choice-list'"
+            v-model="model"
+            :rule="field.rule"
+            :disabled="disabled" />
+        <RecordListField
+            v-else-if="widget === 'record-list'"
             v-model="model"
             :rule="field.rule"
             :disabled="disabled" />

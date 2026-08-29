@@ -1,4 +1,4 @@
-import type { SchemaFieldDef, SchemaGroup } from "./types";
+import type { SchemaFieldDef, SchemaGroup } from "./types.js";
 
 export type ProtocolSectionKey = "transport" | "delivery" | "credentials" | "filter";
 

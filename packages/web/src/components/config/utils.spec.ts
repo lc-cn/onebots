@@ -37,6 +37,17 @@ const choiceListRule: ValidationRule = {
     ui: { widget: "choice-list" },
 };
 
+const recordListRule: ValidationRule = {
+    type: "array",
+    ui: {
+        widget: "record-list",
+        fields: [
+            { key: "id", label: "ID" },
+            { key: "limit", label: "上限", type: "number" },
+        ],
+    },
+};
+
 describe("config form generation", () => {
     test("splits protocol defaults and does not repeat account fields", () => {
         const bundle: SchemaBundle = {
@@ -105,6 +116,19 @@ describe("config form generation", () => {
             ok: false,
             message: "字段 事件 中存在未声明的选项：unknown",
         });
+    });
+
+    test("keeps generic record lists structured and preserves extension fields", () => {
+        const value = reactive([{ id: "group-1", limit: 10, members: [1, 2] }]);
+
+        expect(resolveStructuredFieldDisplay(value, recordListRule)).toEqual(value);
+        expect(parseStructuredFieldValue(value, recordListRule, "群组")).toEqual({
+            ok: true,
+            value: [{ id: "group-1", limit: 10, members: [1, 2] }],
+        });
+        expect(
+            parseStructuredFieldValue([{ id: "group-1", limit: "10" }], recordListRule, "群组"),
+        ).toEqual({ ok: false, message: "字段 群组.limit 必须是number" });
     });
 
     test("removes blank rows and rejects the wrong URL scheme", () => {

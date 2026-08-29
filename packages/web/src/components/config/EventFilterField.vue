@@ -5,7 +5,7 @@ import UiButton from "../../ui/UiButton.vue";
 import UiInput from "../../ui/UiInput.vue";
 import UiSelect from "../../ui/UiSelect.vue";
 import UiTextarea from "../../ui/UiTextarea.vue";
-import type { ValidationRule } from "./types";
+import type { ValidationRule } from "./types.js";
 import {
     editorToEventFilters,
     eventFiltersToEditor,

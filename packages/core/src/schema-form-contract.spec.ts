@@ -28,12 +28,28 @@ const validSchema: Schema = {
 describe("schema form contract", () => {
     it("接受闭合的表单 Schema", () => {
         expect(() => assertSchemaFormContract(validSchema)).not.toThrow();
+        expect(() =>
+            assertSchemaFormContract({
+                friends: {
+                    type: "array",
+                    label: "好友",
+                    ui: {
+                        section: "advanced",
+                        widget: "record-list",
+                        fields: [
+                            { key: "user_id", label: "用户 ID" },
+                            { key: "enabled", label: "启用", type: "boolean" },
+                        ],
+                    },
+                },
+            }),
+        ).not.toThrow();
     });
 
     it("拒绝缺少分区、悬空依赖和未保护的敏感字段", () => {
-        expect(() =>
-            assertSchemaFormContract({ name: { type: "string", label: "名称" } }),
-        ).toThrow("ui.section");
+        expect(() => assertSchemaFormContract({ name: { type: "string", label: "名称" } })).toThrow(
+            "ui.section",
+        );
         expect(() =>
             assertSchemaFormContract({
                 endpoint: {
@@ -68,5 +84,14 @@ describe("schema form contract", () => {
                 },
             }),
         ).toThrow("endpoints.access_token");
+        expect(() =>
+            assertSchemaFormContract({
+                friend: {
+                    type: "object",
+                    label: "好友",
+                    ui: { section: "advanced", widget: "record-list" },
+                },
+            }),
+        ).toThrow("必须使用 array");
     });
 });
