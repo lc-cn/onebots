@@ -1,9 +1,11 @@
-import { ImHelper } from '../imhelper.js';
-import { GroupMember } from './groupMember.js';
-import type { Message } from '../message.js';
-export class Group<Id extends string | number=string|number> {
-    constructor(public helper: ImHelper<Id>,public info: Group.Data<Id>) {
-    }
+import { ImHelper } from "../imhelper.js";
+import { GroupMember } from "./groupMember.js";
+import type { Message } from "../message.js";
+export class Group<Id extends string | number = string | number> {
+    constructor(
+        public helper: ImHelper<Id>,
+        public info: Group.Data<Id>,
+    ) {}
     get group_id() {
         return this.info.group_id;
     }
@@ -13,24 +15,24 @@ export class Group<Id extends string | number=string|number> {
     get avatar() {
         return this.info.avatar;
     }
-    get members(){
-        return Array.from(this.helper.$groupMemberMap.get(this.group_id)?.values() || [])
+    get members() {
+        return Array.from(this.helper.$groupMemberMap.get(this.group_id)?.values() || []);
     }
-    setAdmin(userId: Id){
+    setAdmin(userId: Id) {
         return this.helper.adapter.setGroupMemberAdmin(this.group_id, userId, true);
     }
-    setOwner(userId: Id){
+    setOwner(userId: Id) {
         return this.helper.adapter.setGroupMemberOwner(this.group_id, userId, true);
     }
-    kickMember(userId: Id){
+    kickMember(userId: Id) {
         return this.helper.adapter.kickGroupMember(this.group_id, userId);
     }
-    muteMember(userId: Id, duration: number){
+    muteMember(userId: Id, duration: number) {
         return this.helper.adapter.setGroupMemberMute(this.group_id, userId, duration);
     }
     sendMessage(message: Message.Content) {
         return this.helper.adapter.sendMessage({
-            scene_type: 'group',
+            scene_type: "group",
             scene_id: this.group_id,
             message: message,
         });
@@ -42,12 +44,14 @@ export class Group<Id extends string | number=string|number> {
         return this.helper.adapter.leaveGroup(this.group_id);
     }
     async refresh() {
-        const updated = await this.helper.adapter.getGroupInfo(this.group_id);
+        const updated = await this.helper.adapter.getGroupInfo(this.group_id, { fresh: true });
         this.info = updated.info;
         return this;
     }
     async refreshMembers() {
-        const members = await this.helper.adapter.getGroupMemberList(this.group_id);
+        const members = await this.helper.adapter.getGroupMemberList(this.group_id, {
+            fresh: true,
+        });
         const memberMap = new Map<Id, GroupMember.Data<Id>>();
         for (const member of members) {
             memberMap.set(member.user_id, {
@@ -62,18 +66,22 @@ export class Group<Id extends string | number=string|number> {
     }
 }
 export namespace Group {
-    export interface Data<Id extends string | number=string|number> {
+    export interface Data<Id extends string | number = string | number> {
         group_id: Id;
         group_name: string;
         avatar: string;
     }
-    export const cache:WeakMap<Data<string | number>, Group<string | number>> = new WeakMap();
-    export function from<Id extends string | number=string|number>(this: ImHelper<Id>, groupId: Id): Group<Id>{
+    export const cache: WeakMap<Data<string | number>, Group<string | number>> = new WeakMap();
+    export function from<Id extends string | number = string | number>(
+        this: ImHelper<Id>,
+        groupId: Id,
+    ): Group<Id> {
         const data = this.$groupMap.get(groupId);
         if (!data) {
             throw new Error(`Group ${groupId} not found`);
         }
-        if(cache.has(data as Data<string | number>)) return cache.get(data as Data<string | number>)! as Group<Id>;
+        if (cache.has(data as Data<string | number>))
+            return cache.get(data as Data<string | number>)! as Group<Id>;
         const group = new Group(this, data);
         cache.set(data as Data<string | number>, group as Group<string | number>);
         return group;

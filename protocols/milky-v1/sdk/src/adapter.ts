@@ -1,12 +1,10 @@
 import {
     Adapter,
+    type DirectoryQueryOptions,
     Message,
     ReceiveTransport,
-    type Friend,
-    type Group,
     type GroupMessageEvent,
     type PrivateMessageEvent,
-    type User,
     type WebSocketReceiverOptions,
 } from "imhelper";
 import { HttpClient } from "./http-client.js";
@@ -20,6 +18,8 @@ import type {
     MilkyV1Event,
     MilkyV1Response,
 } from "./types.js";
+import { MilkyDirectoryApi } from "./directory-api.js";
+import { MilkyGroupApi, type FriendRequestContext, type GroupRequestContext } from "./group-api.js";
 
 export interface MilkyAdapterConfig {
     baseUrl: string;
@@ -39,21 +39,6 @@ interface SendMessageResult {
     message_seq: number;
     time: number;
 }
-
-interface FriendRequestContext {
-    initiatorUid: string;
-    isFiltered: boolean;
-}
-
-type GroupRequestContext =
-    | {
-          kind: "request";
-          notificationSeq: number;
-          notificationType: "join_request" | "invited_join_request";
-          groupId: number;
-          isFiltered: boolean;
-      }
-    | { kind: "invitation"; invitationSeq: number; groupId: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
@@ -137,6 +122,8 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
     readonly #friendRequests = new Map<string, FriendRequestContext>();
     readonly #groupRequests = new Map<string, GroupRequestContext>();
     readonly #receiveTransport: ReceiveTransport<string, MilkyV1Event>;
+    readonly #directoryApi: MilkyDirectoryApi;
+    readonly #groupApi: MilkyGroupApi;
 
     constructor(config: MilkyAdapterConfig) {
         super();
@@ -149,6 +136,10 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
             call: config.call,
             fetch: config.fetch,
         });
+        const call = <T = unknown>(action: string, params?: Record<string, unknown>) =>
+            this.call<T>(action, params);
+        this.#directoryApi = new MilkyDirectoryApi(call);
+        this.#groupApi = new MilkyGroupApi(call, this.#friendRequests, this.#groupRequests);
         this.#receiveTransport = new ReceiveTransport(this, {
             mode: config.receiveMode,
             endpoints: resolveReceiveEndpoints(config),
@@ -375,192 +366,65 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
         return response.status === "ok";
     }
 
-    async getUserInfo(userId: string): Promise<User<string>> {
-        const response = await this.call<Record<string, unknown>>("get_user_profile", {
-            user_id: Number(userId),
-        });
-        if (response.status !== "ok" || !response.data) {
-            throw new Error("获取 Milky 用户信息失败");
-        }
-        return {
-            info: {
-                user_id: String(response.data.user_id ?? userId),
-                user_name: (response.data.nickname as string) ?? "",
-                avatar: (response.data.avatar_url as string) ?? "",
-            },
-        } as unknown as User<string>;
+    getUserInfo(userId: string, options?: DirectoryQueryOptions) {
+        return this.#directoryApi.getUserInfo(userId, options);
     }
 
-    async getFriendInfo(userId: string): Promise<Friend<string>> {
-        const response = await this.call<Record<string, unknown>>("get_friend_info", {
-            user_id: Number(userId),
-        });
-        if (response.status !== "ok" || !response.data) {
-            throw new Error("获取 Milky 好友信息失败");
-        }
-        const friend = isRecord(response.data.friend) ? response.data.friend : response.data;
-        return {
-            info: {
-                user_id: String(friend.user_id ?? userId),
-                user_name: (friend.nickname as string) ?? "",
-                avatar: (friend.avatar_url as string) ?? "",
-                remark: (friend.remark as string) ?? "",
-            },
-        } as unknown as Friend<string>;
+    getFriendInfo(userId: string, options?: DirectoryQueryOptions) {
+        return this.#directoryApi.getFriendInfo(userId, options);
     }
 
-    async getUserList(): Promise<User<string>[]> {
-        const response = await this.call<unknown>("get_friend_list", { no_cache: false });
-        if (response.status !== "ok") return [];
-        const data = response.data;
-        const friends = Array.isArray(data)
-            ? data
-            : isRecord(data) && Array.isArray(data.friends)
-              ? data.friends
-              : [];
-        return friends.filter(isRecord).map(
-            friend =>
-                ({
-                    info: {
-                        user_id: String(friend.user_id),
-                        user_name: (friend.nickname as string) ?? "",
-                        avatar: (friend.avatar_url as string) ?? "",
-                    },
-                }) as unknown as User<string>,
-        );
+    getUserList(options?: DirectoryQueryOptions) {
+        return this.#directoryApi.getUserList(options);
     }
 
-    async getGroupInfo(groupId: string): Promise<Group<string>> {
-        const response = await this.call<Record<string, unknown>>("get_group_info", {
-            group_id: Number(groupId),
-            no_cache: false,
-        });
-        if (response.status !== "ok" || !response.data) {
-            throw new Error("获取 Milky 群信息失败");
-        }
-        return {
-            info: {
-                group_id: String(response.data.group_id ?? groupId),
-                group_name: (response.data.group_name as string) ?? "",
-                avatar: (response.data.avatar_url as string) ?? "",
-            },
-        } as unknown as Group<string>;
+    getGroupInfo(groupId: string, options?: DirectoryQueryOptions) {
+        return this.#directoryApi.getGroupInfo(groupId, options);
     }
 
-    async getGroupList(): Promise<Group<string>[]> {
-        const response = await this.call<unknown>("get_group_list", { no_cache: false });
-        if (response.status !== "ok") return [];
-        const data = response.data;
-        const groups = Array.isArray(data)
-            ? data
-            : isRecord(data) && Array.isArray(data.groups)
-              ? data.groups
-              : [];
-        return groups.filter(isRecord).map(
-            group =>
-                ({
-                    info: {
-                        group_id: String(group.group_id),
-                        group_name: (group.group_name as string) ?? "",
-                        avatar: (group.avatar_url as string) ?? "",
-                    },
-                }) as unknown as Group<string>,
-        );
+    getGroupList(options?: DirectoryQueryOptions) {
+        return this.#directoryApi.getGroupList(options);
     }
 
-    async getGroupMemberInfo(groupId: string, userId: string): Promise<User<string>> {
-        const response = await this.call<Record<string, unknown>>("get_group_member_info", {
-            group_id: Number(groupId),
-            user_id: Number(userId),
-            no_cache: false,
-        });
-        if (response.status !== "ok" || !response.data) {
-            throw new Error("获取 Milky 群成员信息失败");
-        }
-        const member = isRecord(response.data.member) ? response.data.member : response.data;
-        return {
-            info: {
-                user_id: String(member.user_id ?? userId),
-                user_name: (member.card as string) ?? (member.nickname as string) ?? "",
-                avatar: (member.avatar_url as string) ?? "",
-            },
-        } as unknown as User<string>;
+    getGroupMemberInfo(groupId: string, userId: string, options?: DirectoryQueryOptions) {
+        return this.#directoryApi.getGroupMemberInfo(groupId, userId, options);
     }
 
-    async getGroupMemberList(groupId: string): Promise<User<string>[]> {
-        const response = await this.call<unknown>("get_group_member_list", {
-            group_id: Number(groupId),
-            no_cache: false,
-        });
-        if (response.status !== "ok" || !Array.isArray(response.data)) return [];
-        return response.data.filter(isRecord).map(
-            member =>
-                ({
-                    info: {
-                        user_id: String(member.user_id),
-                        user_name: (member.card as string) ?? (member.nickname as string) ?? "",
-                        avatar: (member.avatar_url as string) ?? "",
-                    },
-                }) as unknown as User<string>,
-        );
+    getGroupMemberList(groupId: string, options?: DirectoryQueryOptions) {
+        return this.#directoryApi.getGroupMemberList(groupId, options);
     }
 
     async kickGroupMember(groupId: string, userId: string): Promise<void> {
-        await this.call("kick_group_member", {
-            group_id: Number(groupId),
-            user_id: Number(userId),
-            reject_add_request: false,
-        });
+        return this.#groupApi.kickMember(groupId, userId);
     }
 
     /** OneBots 扩展：邀请机器人好友加入指定群。 */
     async inviteFriendToGroup(groupId: string, userId: string): Promise<void> {
-        await this.call("invite_friend_to_group", {
-            group_id: Number(groupId),
-            user_id: Number(userId),
-        });
+        return this.#groupApi.inviteFriend(groupId, userId);
     }
 
     async setGroupMemberMute(groupId: string, userId: string, duration: number): Promise<void> {
-        await this.call("set_group_member_mute", {
-            group_id: Number(groupId),
-            user_id: Number(userId),
-            duration,
-        });
+        return this.#groupApi.muteMember(groupId, userId, duration);
     }
 
     async setGroupMemberAdmin(groupId: string, userId: string, admin = true): Promise<void> {
-        await this.call("set_group_member_admin", {
-            group_id: Number(groupId),
-            user_id: Number(userId),
-            enable: admin,
-        });
+        return this.#groupApi.setMemberAdmin(groupId, userId, admin);
     }
 
     async setGroupMemberCard(groupId: string, userId: string, card: string): Promise<void> {
-        await this.call("set_group_member_card", {
-            group_id: Number(groupId),
-            user_id: Number(userId),
-            card,
-        });
+        return this.#groupApi.setMemberCard(groupId, userId, card);
     }
 
     async setGroupName(groupId: string, name: string): Promise<void> {
-        await this.call("set_group_name", { group_id: Number(groupId), new_group_name: name });
+        return this.#groupApi.setName(groupId, name);
     }
 
     async leaveGroup(groupId: string): Promise<void> {
-        await this.call("quit_group", { group_id: Number(groupId), is_dismiss: false });
+        return this.#groupApi.leave(groupId);
     }
 
     async approveFriendRequest(requestId: string, approve: boolean): Promise<void> {
-        const context = this.#friendRequests.get(requestId);
-        if (!context) throw new TypeError(`未知的 Milky 好友请求：${requestId}`);
-        await this.call(approve ? "accept_friend_request" : "reject_friend_request", {
-            initiator_uid: context.initiatorUid,
-            is_filtered: context.isFiltered,
-        });
-        this.#friendRequests.delete(requestId);
+        return this.#groupApi.approveFriendRequest(requestId, approve);
     }
 
     /** 直接同意好友申请；initiatorUid 来自 friend_request 事件。 */
@@ -569,32 +433,11 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
         isFiltered = false,
         remark?: string,
     ): Promise<void> {
-        await this.call("accept_friend_request", {
-            initiator_uid: initiatorUid,
-            is_filtered: isFiltered,
-            ...(remark === undefined ? {} : { remark }),
-        });
+        return this.#groupApi.acceptFriendRequest(initiatorUid, isFiltered, remark);
     }
 
     async approveGroupRequest(requestId: string, approve: boolean, reason?: string): Promise<void> {
-        const context = this.#groupRequests.get(requestId);
-        if (!context) throw new TypeError(`未知的 Milky 群请求：${requestId}`);
-        if (context.kind === "invitation") {
-            await this.call(approve ? "accept_group_invitation" : "reject_group_invitation", {
-                group_id: context.groupId,
-                invitation_seq: context.invitationSeq,
-            });
-            this.#groupRequests.delete(requestId);
-            return;
-        }
-        await this.call(approve ? "accept_group_request" : "reject_group_request", {
-            notification_seq: context.notificationSeq,
-            notification_type: context.notificationType,
-            group_id: context.groupId,
-            is_filtered: context.isFiltered,
-            ...(approve ? {} : { reason }),
-        });
-        this.#groupRequests.delete(requestId);
+        return this.#groupApi.approveGroupRequest(requestId, approve, reason);
     }
 
     async start(port?: number): Promise<void> {

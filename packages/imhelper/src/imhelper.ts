@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { Adapter } from "./adapter.js";
+import { Adapter, type DirectoryQueryOptions } from "./adapter.js";
 import { Group } from "./instances/group.js";
 import { Channel } from "./instances/channel.js";
 import { User } from "./instances/user.js";
@@ -193,13 +193,13 @@ export class ImHelper<
     // ============================================
 
     /** 批量获取用户信息 */
-    async getUserList(): Promise<User<Id>[]> {
-        return this.#adapter.getUserList();
+    async getUserList(options?: DirectoryQueryOptions): Promise<User<Id>[]> {
+        return this.#adapter.getUserList(options);
     }
 
     /** 批量获取群组列表 */
-    async getGroupList(): Promise<Group<Id>[]> {
-        return this.#adapter.getGroupList();
+    async getGroupList(options?: DirectoryQueryOptions): Promise<Group<Id>[]> {
+        return this.#adapter.getGroupList(options);
     }
 
     /** 批量获取频道列表 */

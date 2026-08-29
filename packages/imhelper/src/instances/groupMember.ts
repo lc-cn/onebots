@@ -36,7 +36,9 @@ export class GroupMember<Id extends string | number = string | number> extends U
         return this.helper.adapter.setGroupMemberCard(this.group_id, this.user_id, card);
     }
     async refresh() {
-        const updated = await this.helper.adapter.getGroupMemberInfo(this.group_id, this.user_id);
+        const updated = await this.helper.adapter.getGroupMemberInfo(this.group_id, this.user_id, {
+            fresh: true,
+        });
         this.info = {
             ...updated.info,
             group_id: this.group_id,

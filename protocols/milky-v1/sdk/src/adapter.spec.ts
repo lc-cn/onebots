@@ -171,6 +171,92 @@ describe("Milky V1 SDK", () => {
         });
     });
 
+    test("maps fresh directory reads to no_cache and unwraps canonical entities", async () => {
+        const call = vi.fn(async (action: string) => {
+            if (action === "get_group_info") {
+                return {
+                    status: "ok" as const,
+                    retcode: 0,
+                    data: {
+                        group: {
+                            group_id: 30003,
+                            group_name: "OneBots",
+                            avatar_url: "https://example.com/group.png",
+                        },
+                    },
+                };
+            }
+            return {
+                status: "ok" as const,
+                retcode: 0,
+                data: {
+                    members: [
+                        {
+                            user_id: 20002,
+                            nickname: "Alice",
+                            card: "管理员",
+                            avatar_url: "https://example.com/user.png",
+                        },
+                    ],
+                },
+            };
+        });
+        const client = createMilkyClient({
+            baseUrl: "https://milky.example",
+            selfId: "10001",
+            receiveMode: "manual",
+            call,
+        });
+
+        await expect(client.adapter.getGroupInfo("30003", { fresh: true })).resolves.toMatchObject({
+            info: { group_id: "30003", group_name: "OneBots" },
+        });
+        await expect(client.adapter.getGroupMemberList("30003", { fresh: true })).resolves.toEqual([
+            expect.objectContaining({ info: expect.objectContaining({ user_id: "20002" }) }),
+        ]);
+        expect(call).toHaveBeenNthCalledWith(1, "get_group_info", {
+            group_id: 30003,
+            no_cache: true,
+        });
+        expect(call).toHaveBeenNthCalledWith(2, "get_group_member_list", {
+            group_id: 30003,
+            no_cache: true,
+        });
+    });
+
+    test("entity refresh requests fresh protocol data", async () => {
+        const call = vi.fn(async () => ({
+            status: "ok" as const,
+            retcode: 0,
+            data: {
+                group: {
+                    group_id: 30003,
+                    group_name: "最新群名",
+                    avatar_url: "https://example.com/group.png",
+                },
+            },
+        }));
+        const client = createMilkyClient({
+            baseUrl: "https://milky.example",
+            selfId: "10001",
+            receiveMode: "manual",
+            call,
+        });
+        client.$groupMap.set("30003", {
+            group_id: "30003",
+            group_name: "旧群名",
+            avatar: "",
+        });
+
+        const group = await client.pickGroup("30003").refresh();
+
+        expect(group.groupName).toBe("最新群名");
+        expect(call).toHaveBeenCalledWith("get_group_info", {
+            group_id: 30003,
+            no_cache: true,
+        });
+    });
+
     test("appends the native API route to baseUrl without guessing gateway routes", async () => {
         const fetchMock = vi.fn(
             async () => new Response(JSON.stringify({ status: "ok", retcode: 0, data: {} })),

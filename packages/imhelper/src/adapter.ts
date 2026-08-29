@@ -24,6 +24,11 @@ import type {
 
 const adapterType: unique symbol = Symbol("imhelper.adapter.type");
 
+/** 协议无关的目录读取策略，由具体适配器映射到平台刷新参数。 */
+export interface DirectoryQueryOptions {
+    fresh?: boolean;
+}
+
 export abstract class Adapter<
     Id extends string | number = string | number,
     TRawEvent = unknown,
@@ -39,25 +44,29 @@ export abstract class Adapter<
     recallMessage(message_id: Id): Promise<boolean> {
         throw new Error("Not implemented");
     }
-    async getUserList(): Promise<User<Id>[]> {
+    async getUserList(_options?: DirectoryQueryOptions): Promise<User<Id>[]> {
         return [];
     }
-    getUserInfo(user_id: Id): Promise<User<Id>> {
+    getUserInfo(user_id: Id, _options?: DirectoryQueryOptions): Promise<User<Id>> {
         throw new Error("Not implemented");
     }
-    getFriendInfo(user_id: Id): Promise<Friend<Id>> {
+    getFriendInfo(user_id: Id, _options?: DirectoryQueryOptions): Promise<Friend<Id>> {
         throw new Error("Not implemented");
     }
-    async getGroupList(): Promise<Group<Id>[]> {
+    async getGroupList(_options?: DirectoryQueryOptions): Promise<Group<Id>[]> {
         return [];
     }
-    getGroupInfo(group_id: Id): Promise<Group<Id>> {
+    getGroupInfo(group_id: Id, _options?: DirectoryQueryOptions): Promise<Group<Id>> {
         throw new Error("Not implemented");
     }
-    async getGroupMemberList(group_id: Id): Promise<User<Id>[]> {
+    async getGroupMemberList(group_id: Id, _options?: DirectoryQueryOptions): Promise<User<Id>[]> {
         return [];
     }
-    getGroupMemberInfo(group_id: Id, user_id: Id): Promise<User<Id>> {
+    getGroupMemberInfo(
+        group_id: Id,
+        user_id: Id,
+        _options?: DirectoryQueryOptions,
+    ): Promise<User<Id>> {
         throw new Error("Not implemented");
     }
     async getChannelList(): Promise<Channel<Id>[]> {
