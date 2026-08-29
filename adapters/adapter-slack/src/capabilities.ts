@@ -3,7 +3,7 @@ import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebo
 /** Slack Web API/Events API 当前可用的能力。 */
 export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { support: "native", scenes: ["private", "group", "channel"] },
+        send_message: { support: "native", scenes: ["private", "channel"] },
         delete_message: {
             support: "native",
             availability: "context",
@@ -19,12 +19,15 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         get_user_info: { support: "native" },
         get_friend_list: { support: "native", note: "按工作区用户目录投影" },
         get_friend_info: { support: "emulated", note: "按工作区用户投影" },
-        get_group_list: { support: "emulated", note: "按频道投影群组" },
-        get_group_info: { support: "emulated", note: "按频道投影群组" },
-        leave_group: { support: "native" },
-        get_group_member_list: { support: "native" },
-        get_group_member_info: { support: "native" },
-        kick_group_member: {
+        get_channel_list: { support: "native" },
+        get_channel_info: { support: "native" },
+        get_channel_member_list: { support: "native" },
+        get_channel_member_info: { support: "native" },
+        create_channel: { support: "native", availability: "permission" },
+        update_channel: { support: "native", availability: "permission" },
+        delete_channel: { support: "native", availability: "permission" },
+        invite_channel_member: { support: "native", availability: "permission" },
+        kick_channel_member: {
             support: "native",
             availability: "permission",
             permissions: ["channels:manage"],
@@ -40,7 +43,6 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         remove_pin: { support: "native", permissions: ["pins:write"] },
         get_thread_replies: { support: "native", availability: "permission" },
         open_conversation: { support: "native", availability: "permission" },
-        create_channel: { support: "native", availability: "permission" },
         archive_channel: { support: "native", availability: "permission" },
         unarchive_channel: { support: "native", availability: "permission" },
         rename_channel: { support: "native", availability: "permission" },
@@ -48,7 +50,7 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         set_channel_purpose: { support: "native", availability: "permission" },
         join_channel: { support: "native", availability: "permission" },
         invite_channel_members: { support: "native", availability: "permission" },
-        kick_channel_member: { support: "native", availability: "permission" },
+        leave_channel: { support: "native", availability: "permission" },
         schedule_message: { support: "native", permissions: ["chat:write"] },
         delete_scheduled_message: { support: "native", permissions: ["chat:write"] },
         list_scheduled_messages: { support: "native", permissions: ["chat:write"] },
@@ -61,7 +63,7 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         get_supported_actions: { support: "native" },
     },
     events: {
-        message: { support: "native", scenes: ["private", "group", "channel"] },
+        message: { support: "native", scenes: ["private", "channel"] },
         message_updated: { support: "native" },
         message_deleted: { support: "native" },
         reaction_added: { support: "native" },

@@ -232,16 +232,16 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     }
 
     // ============================================
-    // 群组相关方法
+    // 频道相关方法
     // ============================================
 
     /**
-     * 获取群列表（频道列表）
+     * 获取频道列表
      */
-    async getGroupList(
+    async getChannelList(
         uin: string,
-        _params?: Adapter.GetGroupListParams,
-    ): Promise<Adapter.GroupInfo[]> {
+        _params?: Adapter.GetChannelListParams,
+    ): Promise<Adapter.ChannelInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -249,40 +249,29 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         const channels = await bot.getChannelList();
 
         return channels.map(channel => ({
-            group_id: this.createId(channel.id),
-            group_name: channel.name || "",
+            channel_id: this.createId(channel.id),
+            channel_name: channel.name || "",
         }));
     }
 
     /**
-     * 获取群信息（频道信息）
+     * 获取频道信息
      */
-    async getGroupInfo(
+    async getChannelInfo(
         uin: string,
-        params: Adapter.GetGroupInfoParams,
-    ): Promise<Adapter.GroupInfo> {
+        params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const channelId = params.group_id.string;
+        const channelId = params.channel_id.string;
         const channel = await bot.getChannelInfo(channelId);
 
         return {
-            group_id: this.createId(channel.id),
-            group_name: channel.name || "",
+            channel_id: this.createId(channel.id),
+            channel_name: channel.name || "",
         };
-    }
-
-    /**
-     * 退出群组（离开频道）
-     */
-    async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.leaveChannel(params.group_id.string);
     }
 
     async createChannel(
@@ -299,39 +288,64 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         };
     }
 
-    async kickChannelMember(
+    async updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> {
+        if (params.parent_id) throw new TypeError("Slack 不支持移动频道层级");
+        if (!params.channel_name) throw new TypeError("Slack 更新频道需要 channel_name");
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        await account.client.call("conversations.rename", {
+            channel: params.channel_id.string,
+            name: params.channel_name,
+        });
+    }
+
+    async deleteChannel(uin: string, params: Adapter.DeleteChannelParams): Promise<void> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        await account.client.call("conversations.archive", { channel: params.channel_id.string });
+    }
+
+    async inviteChannelMember(
         uin: string,
-        params: Adapter.KickChannelMemberParams,
+        params: Adapter.InviteChannelMemberParams,
     ): Promise<void> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        await account.client.call("conversations.invite", {
+            channel: params.channel_id.string,
+            users: params.user_id.string,
+        });
+    }
+
+    async kickChannelMember(uin: string, params: Adapter.KickChannelMemberParams): Promise<void> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
         await account.client.kickChannelMember(params.channel_id.string, params.user_id.string);
     }
 
     /**
-     * 获取群成员列表（频道成员列表）
+     * 获取频道成员列表
      */
-    async getGroupMemberList(
+    async getChannelMemberList(
         uin: string,
-        params: Adapter.GetGroupMemberListParams,
-    ): Promise<Adapter.GroupMemberInfo[]> {
+        params: Adapter.GetChannelMemberListParams,
+    ): Promise<Adapter.ChannelMemberInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const channelId = params.group_id.string;
+        const channelId = params.channel_id.string;
         const memberIds = await bot.getChannelMembers(channelId);
 
         // 获取每个成员的详细信息
-        const members: Adapter.GroupMemberInfo[] = [];
+        const members: Adapter.ChannelMemberInfo[] = [];
         for (const memberId of memberIds) {
             try {
                 const user = await bot.getUserInfo(memberId);
                 members.push({
-                    group_id: params.group_id,
+                    channel_id: params.channel_id,
                     user_id: this.createId(user.id),
-                    user_name: user.name || "",
-                    card: user.display_name || user.real_name || user.name || "",
+                    user_name: user.display_name || user.real_name || user.name || "",
                     role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
                 });
             } catch (error) {
@@ -343,12 +357,12 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     }
 
     /**
-     * 获取群成员信息
+     * 获取频道成员信息
      */
-    async getGroupMemberInfo(
+    async getChannelMemberInfo(
         uin: string,
-        params: Adapter.GetGroupMemberInfoParams,
-    ): Promise<Adapter.GroupMemberInfo> {
+        params: Adapter.GetChannelMemberInfoParams,
+    ): Promise<Adapter.ChannelMemberInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -357,21 +371,11 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         const user = await bot.getUserInfo(userId);
 
         return {
-            group_id: params.group_id,
+            channel_id: params.channel_id,
             user_id: this.createId(user.id),
-            user_name: user.name || "",
-            card: user.display_name || user.real_name || user.name || "",
+            user_name: user.display_name || user.real_name || user.name || "",
             role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
         };
-    }
-
-    /**
-     * 踢出群成员
-     */
-    async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-        await account.client.kickChannelMember(params.group_id.string, params.user_id.string);
     }
 
     // ============================================
