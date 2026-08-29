@@ -27,6 +27,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
             group_name: group.group_name,
             member_count: group.member_count,
             max_member_count: group.max_member_count,
+            created_time: group.created_time,
         }));
     }
 
@@ -51,6 +52,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
             group_name: info.group_name,
             member_count: info.member_count,
             max_member_count: info.max_member_count,
+            created_time: info.created_time,
         };
     }
 
@@ -96,7 +98,16 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
             user_id: this.createId(member.user_id.toString()),
             user_name: member.nickname,
             card: member.card || "",
+            sex: member.sex ?? "unknown",
+            age: member.age,
+            area: member.area,
+            level: member.level,
             role: member.role || "member",
+            join_time: member.join_time,
+            last_sent_time: member.last_sent_time,
+            title: member.title ?? "",
+            title_expire_time: member.title_expire_time,
+            shut_up_end_time: member.shut_up_end_time,
         }));
     }
 
@@ -122,7 +133,16 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
             user_id: params.user_id,
             user_name: member.nickname,
             card: member.card || "",
+            sex: member.sex ?? "unknown",
+            age: member.age,
+            area: member.area,
+            level: member.level,
             role: member.role || "member",
+            join_time: member.join_time,
+            last_sent_time: member.last_sent_time,
+            title: member.title ?? "",
+            title_expire_time: member.title_expire_time,
+            shut_up_end_time: member.shut_up_end_time,
         };
     }
 

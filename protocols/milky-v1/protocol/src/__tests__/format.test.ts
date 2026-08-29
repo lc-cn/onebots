@@ -823,6 +823,7 @@ describe("Milky V1 protocol", () => {
                 group_name: "Test Group",
                 member_count: 2,
                 max_member_count: 500,
+                created_time: 100,
             },
         ]);
         adapter.getGroupMemberList.mockResolvedValue([
@@ -831,7 +832,12 @@ describe("Milky V1 protocol", () => {
                 user_id: { string: "friend", number: 10001 },
                 user_name: "Alice",
                 card: "Admin",
+                sex: "female",
+                level: 12,
                 role: "admin",
+                join_time: 100,
+                last_sent_time: 200,
+                title: "",
             },
         ]);
 

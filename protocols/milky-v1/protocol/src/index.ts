@@ -16,6 +16,7 @@ import { WebSocket } from "ws";
 import { projectMilkyEvent } from "./event-projector.js";
 import { executeMilkyAccountAction, MILKY_ACCOUNT_ACTIONS } from "./account-actions.js";
 import { executeMilkyGroupAction, MILKY_GROUP_ACTIONS } from "./group-actions.js";
+import { projectMilkyGroup, projectMilkyGroupMember } from "./group-entities.js";
 import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 
 const milkySchema: Schema = {
@@ -572,26 +573,12 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const info = await this.adapter.getGroupInfo(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
         });
-        return {
-            group: {
-                group_id: info.group_id.number,
-                group_name: info.group_name,
-                member_count: info.member_count || 0,
-                max_member_count: info.max_member_count || 0,
-            },
-        };
+        return { group: projectMilkyGroup(info) };
     }
 
     private async getGroupList(): Promise<{ groups: Milky.GroupInfo[] }> {
         const result = await this.adapter.getGroupList(this.account.account_id);
-        return {
-            groups: result.map(info => ({
-                group_id: info.group_id.number,
-                group_name: info.group_name,
-                member_count: info.member_count || 0,
-                max_member_count: info.max_member_count || 0,
-            })),
-        };
+        return { groups: result.map(projectMilkyGroup) };
     }
 
     private async getGroupMemberInfo(
@@ -602,25 +589,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             group_id: this.adapter.resolveId(group_id),
             user_id: this.adapter.resolveId(user_id),
         });
-        return {
-            member: {
-                group_id: info.group_id.number,
-                user_id: info.user_id.number,
-                nickname: info.user_name,
-                card: info.card || "",
-                sex: "unknown",
-                age: 0,
-                area: "",
-                join_time: 0,
-                last_sent_time: 0,
-                level: "",
-                role: info.role || "member",
-                unfriendly: false,
-                title: "",
-                title_expire_time: 0,
-                card_changeable: false,
-            },
-        };
+        return { member: projectMilkyGroupMember(info) };
     }
 
     private async getGroupMemberList(
@@ -630,25 +599,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const list = await this.adapter.getGroupMemberList(this.account.account_id, {
             group_id: this.adapter.resolveId(group_id),
         });
-        return {
-            members: list.map(info => ({
-                group_id: info.group_id.number,
-                user_id: info.user_id.number,
-                nickname: info.user_name,
-                card: info.card || "",
-                sex: "unknown",
-                age: 0,
-                area: "",
-                join_time: 0,
-                last_sent_time: 0,
-                level: "",
-                role: info.role || "member",
-                unfriendly: false,
-                title: "",
-                title_expire_time: 0,
-                card_changeable: false,
-            })),
-        };
+        return { members: list.map(projectMilkyGroupMember) };
     }
 
     private async getGroupNotifications(

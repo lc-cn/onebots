@@ -182,21 +182,17 @@ export namespace Milky {
      * Group member info
      */
     export interface GroupMemberInfo {
-        group_id: number;
         user_id: number;
         nickname: string;
-        card: string;
         sex: "male" | "female" | "unknown";
-        age: number;
-        area: string;
+        group_id: number;
+        card: string;
+        title: string;
+        level: number;
+        role: "owner" | "admin" | "member";
         join_time: number;
         last_sent_time: number;
-        level: string;
-        role: "owner" | "admin" | "member";
-        unfriendly: boolean;
-        title: string;
-        title_expire_time: number;
-        card_changeable: boolean;
+        shut_up_end_time?: number;
     }
 
     /**
@@ -207,6 +203,11 @@ export namespace Milky {
         group_name: string;
         member_count: number;
         max_member_count: number;
+        remark?: string;
+        created_time?: number;
+        description?: string;
+        question?: string;
+        announcement?: string;
     }
 
     /**

@@ -18,6 +18,61 @@ function createActions(client: Client): ICQQGroupActions {
 }
 
 describe("ICQQ 群动作", () => {
+    it("保留群创建时间和完整成员资料", async () => {
+        const bot = {
+            getGroupList: vi.fn().mockResolvedValue([
+                {
+                    group_id: 20001,
+                    group_name: "OneBots",
+                    member_count: 20,
+                    max_member_count: 500,
+                    created_time: 100,
+                },
+            ]),
+            getGroupMemberList: vi.fn().mockResolvedValue([
+                {
+                    group_id: 20001,
+                    user_id: 10001,
+                    nickname: "Alice",
+                    card: "管理员",
+                    sex: "female",
+                    age: 20,
+                    area: "广东",
+                    level: 12,
+                    role: "admin",
+                    join_time: 100,
+                    last_sent_time: 200,
+                    title: "活跃成员",
+                    title_expire_time: 300,
+                    shut_up_end_time: 400,
+                },
+            ]),
+        };
+        const actions = Object.create(ICQQGroupActions.prototype) as ICQQGroupActions;
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: bot }) },
+            createId: { value: id },
+            numericId: { value: (value: string) => Number(value) },
+        });
+
+        await expect(actions.getGroupList("bot")).resolves.toEqual([
+            expect.objectContaining({ created_time: 100 }),
+        ]);
+        await expect(actions.getGroupMemberList("bot", { group_id: id(20001) })).resolves.toEqual([
+            expect.objectContaining({
+                sex: "female",
+                age: 20,
+                area: "广东",
+                level: 12,
+                join_time: 100,
+                last_sent_time: 200,
+                title: "活跃成员",
+                title_expire_time: 300,
+                shut_up_end_time: 400,
+            }),
+        ]);
+    });
+
     it("按表态类型添加和删除群消息回应", async () => {
         const setReaction = vi.fn().mockResolvedValue({});
         const delReaction = vi.fn().mockResolvedValue({});

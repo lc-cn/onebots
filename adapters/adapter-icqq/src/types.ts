@@ -86,6 +86,8 @@ export interface ICQQUser {
     sex?: "male" | "female" | "unknown";
     /** 年龄 */
     age?: number;
+    /** 地区 */
+    area?: string;
     /** 头像 URL */
     avatar?: string;
 }
@@ -120,6 +122,8 @@ export interface ICQQGroup {
     member_count?: number;
     /** 最大成员数 */
     max_member_count?: number;
+    /** 群创建时间 */
+    created_time?: number;
 }
 
 /**
@@ -138,6 +142,8 @@ export interface ICQQGroupMember {
     sex?: "male" | "female" | "unknown";
     /** 年龄 */
     age?: number;
+    /** 地区 */
+    area?: string;
     /** 加群时间 */
     join_time?: number;
     /** 最后发言时间 */
@@ -150,8 +156,8 @@ export interface ICQQGroupMember {
     title?: string;
     /** 头衔过期时间 */
     title_expire_time?: number;
-    /** 是否被禁言 */
-    shutup_time?: number;
+    /** 禁言结束时间 */
+    shut_up_end_time?: number;
 }
 
 // ============================================

@@ -291,6 +291,7 @@ export class ICQQBot extends EventEmitter {
             owner_id: group.owner_id,
             member_count: group.member_count,
             max_member_count: group.max_member_count,
+            created_time: group.create_time,
         }));
     }
 
@@ -307,6 +308,7 @@ export class ICQQBot extends EventEmitter {
             owner_id: group.owner_id,
             member_count: group.member_count,
             max_member_count: group.max_member_count,
+            created_time: group.create_time,
         };
     }
 
@@ -323,13 +325,14 @@ export class ICQQBot extends EventEmitter {
             card: member.card,
             sex: member.sex,
             age: member.age,
+            area: member.area,
             join_time: member.join_time,
             last_sent_time: member.last_sent_time,
             level: member.level,
             role: member.role,
             title: member.title,
             title_expire_time: member.title_expire_time,
-            shutup_time: member.shutup_time,
+            shut_up_end_time: member.shutup_time || undefined,
         }));
     }
 
@@ -350,13 +353,14 @@ export class ICQQBot extends EventEmitter {
             card: member.card,
             sex: member.sex,
             age: member.age,
+            area: member.area,
             join_time: member.join_time,
             last_sent_time: member.last_sent_time,
             level: member.level,
             role: member.role,
             title: member.title,
             title_expire_time: member.title_expire_time,
-            shutup_time: member.shutup_time,
+            shut_up_end_time: member.shutup_time || undefined,
         };
     }
 

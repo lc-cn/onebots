@@ -285,13 +285,27 @@ declare module "./adapter.js" {
             group_name: string;
             member_count?: number;
             max_member_count?: number;
+            remark?: string;
+            created_time?: number;
+            description?: string;
+            question?: string;
+            announcement?: string;
         }
         export interface GroupMemberInfo {
             group_id: CommonTypes.Id;
             user_id: CommonTypes.Id;
             user_name: string;
             card?: string;
+            sex?: "male" | "female" | "unknown";
+            age?: number;
+            area?: string;
+            level?: number;
             role?: "owner" | "admin" | "member";
+            join_time?: number;
+            last_sent_time?: number;
+            title?: string;
+            title_expire_time?: number;
+            shut_up_end_time?: number;
         }
         export interface HonorMember {
             user_id: CommonTypes.Id;
