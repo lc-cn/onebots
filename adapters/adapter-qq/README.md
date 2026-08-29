@@ -8,12 +8,15 @@ QQ 官方机器人适配器，基于腾讯官方 [`@tencent-connect/qqbot-nodejs
 - 图片、语音、视频、文件、Markdown、Ark、Embed 与 Inline Keyboard
 - 频道、成员、角色、权限、公告、表态、日程、帖子与音频控制
 - C2C 主动唤醒、输入状态和流式消息（可直接使用 `account.client`）
+- 好友增删、机器人进退群、消息接收状态、Guild 成员、表态与交互事件的标准投影
 - 所有未知 QQ Gateway 事件均通过 `raw_event` 无损下发
 - WebSocket 自动恢复；SDK 内部重试耗尽后仍会建立新的连接代次
 - Webhook 复用 OneBots 主 HTTP 服务，不另开端口
 - `qq_call` 可调用尚未封装的任意 QQ OpenAPI 相对路径
 
 C2C、群聊、频道与频道私信统一从官方 SDK 的 typed `message` 事件投影，不再维护第二套 Gateway 消息猜测逻辑。`raw_event` 直接保存 QQ Gateway 原始载荷；需要 SDK 归一化视图时可使用导出的 `QQInboundMessage` 类型。`qq_call` 的 path 只接受无查询串、无目录穿越的安全相对路径，query 必须单独提供且只能包含字符串、数字或布尔值。
+
+Gateway 生命周期事件会优先投影到 OneBots canonical notice：好友增删、机器人进退群、Guild 成员增改删、消息接收状态、表态和交互分别使用 `friend_*`、`group_*`、`member_*`、`message_status`、`reaction_*` 与 `interaction`。频道、Guild、论坛、音频及未来新增事件使用带结构化用户/频道地址的 `custom` notice；所有分支都保留完整 `raw_event` 与 `extensions.qq`，不会因为标准模型暂未覆盖而丢字段。
 
 消息编译遵循 QQ 平台的单载荷约束：一条消息只能包含一个 Reply、一个 Markdown/Ark/Embed 主载荷及一个 Keyboard。C2C/群聊的文本与首个媒体会合并为原生 caption；频道单条消息只接受一张 HTTPS URL 图片。冲突载荷、多张频道图片和本地频道图片会在请求发出前返回结构化错误，不会静默丢弃消息段。
 

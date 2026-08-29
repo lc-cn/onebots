@@ -88,4 +88,81 @@ describe("QQ 事件投影", () => {
         );
         expect(event).toMatchObject({ type: "request", request_type: "group", flag: "r1" });
     });
+
+    it("投影 Guild 成员生命周期并保留频道服务器地址", () => {
+        const event = projectQQRawEvent(
+            "GUILD_MEMBER_ADD",
+            {
+                id: "e1",
+                guild_id: "guild-1",
+                user: { id: "u1", username: "Alice", avatar: "https://example.com/a.png" },
+                op_user_id: "admin-1",
+            },
+            context,
+        );
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "member_joined",
+            user: { id: { string: "u1" }, name: "Alice" },
+            operator: { id: { string: "admin-1" } },
+            group: { id: { string: "guild-1" } },
+        });
+    });
+
+    it.each([
+        ["FRIEND_DEL", "friend_remove"],
+        ["GROUP_ADD_ROBOT", "group_increase"],
+        ["GROUP_DEL_ROBOT", "group_decrease"],
+        ["GROUP_MSG_REJECT", "message_status"],
+        ["C2C_MSG_RECEIVE", "message_status"],
+    ])("将 %s 投影为 canonical %s 通知", (eventType, noticeType) => {
+        const event = projectQQRawEvent(
+            eventType,
+            { id: "e1", group_openid: "g1", user_openid: "u1" },
+            context,
+        );
+        expect(event).toMatchObject({ type: "notice", notice_type: noticeType });
+    });
+
+    it("表态事件投影消息、用户、频道地址与原生 emoji", () => {
+        const raw = {
+            id: "e1",
+            guild_id: "guild-1",
+            channel_id: "channel-1",
+            user_id: "u1",
+            target: { id: "message-1", type: 0 },
+            emoji: { id: "128077", type: 1 },
+        };
+        const event = projectQQRawEvent("MESSAGE_REACTION_ADD", raw, context);
+        expect(event).toMatchObject({
+            notice_type: "reaction_added",
+            user: { id: { string: "u1" } },
+            group: {
+                id: { string: "channel-1" },
+                guild_id: { string: "guild-1" },
+                channel_id: { string: "channel-1" },
+            },
+            message_id: { string: "message-1" },
+            extensions: { qq: { emoji: raw.emoji } },
+        });
+    });
+
+    it("交互事件读取 resolved 中的用户与消息标识", () => {
+        const event = projectQQRawEvent(
+            "INTERACTION_CREATE",
+            {
+                id: "interaction-1",
+                guild_id: "guild-1",
+                channel_id: "channel-1",
+                data: { resolved: { user_id: "u1", message_id: "message-1" } },
+            },
+            context,
+        );
+        expect(event).toMatchObject({
+            notice_type: "interaction",
+            user: { id: { string: "u1" } },
+            message_id: { string: "message-1" },
+            extensions: { qq: { interaction_id: "interaction-1" } },
+        });
+    });
 });

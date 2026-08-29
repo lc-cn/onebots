@@ -98,26 +98,102 @@ export function projectQQRawEvent(
             raw_event: raw,
         };
     }
-    const noticeType = resolveNoticeType(eventType);
+    return projectQQNotice(eventType, data, raw, eventId, timestamp, context);
+}
+
+function projectQQNotice(
+    eventType: string,
+    data: Record<string, unknown>,
+    raw: unknown,
+    eventId: string,
+    timestamp: number,
+    context: QQProjectionContext,
+): CommonEvent.Notice {
+    const user = projectEventUser(data, context);
+    const group = projectEventGroup(eventType, data, context);
+    const operatorId = firstText(data, "operator_id", "op_user_id", "op_member_openid");
+    const messageId =
+        firstText(data, "message_id", "target_id") ??
+        nestedText(data, "target", "id") ??
+        nestedText(data, "data", "resolved", "message_id");
     return {
         id: context.createId(eventId),
         timestamp,
         platform: "qq",
         bot_id: context.botId,
         type: "notice",
-        notice_type: noticeType,
+        notice_type: resolveNoticeType(eventType),
         sub_type: eventType.toLowerCase(),
-        user: userId ? { id: context.createId(userId) } : undefined,
-        group: groupId ? { id: context.createId(groupId) } : undefined,
-        operator: firstText(data, "operator_id", "op_user_id")
-            ? { id: context.createId(firstText(data, "operator_id", "op_user_id")!) }
-            : undefined,
-        message_id: firstText(data, "message_id", "target_id")
-            ? context.createId(firstText(data, "message_id", "target_id")!)
-            : undefined,
+        user,
+        group,
+        operator: operatorId ? { id: context.createId(operatorId) } : undefined,
+        message_id: messageId ? context.createId(messageId) : undefined,
         raw_event: raw,
-        extensions: { qq: { event_type: eventType, data: raw } },
+        extensions: {
+            qq: {
+                event_type: eventType,
+                data: raw,
+                ...(eventType.startsWith("MESSAGE_REACTION_")
+                    ? {
+                          emoji: data.emoji,
+                          target: data.target,
+                      }
+                    : {}),
+                ...(eventType === "INTERACTION_CREATE"
+                    ? { interaction_id: text(data.id), interaction_data: data.data }
+                    : {}),
+            },
+        },
     };
+}
+
+function projectEventUser(
+    data: Record<string, unknown>,
+    context: QQProjectionContext,
+): CommonTypes.User | undefined {
+    const rawUser = asRecord(data.user);
+    const userId =
+        firstText(data, "user_openid", "member_openid", "openid", "user_id") ??
+        firstText(rawUser, "id", "user_openid", "member_openid") ??
+        nestedText(data, "data", "resolved", "user_id");
+    if (!userId) return undefined;
+    return {
+        id: context.createId(userId),
+        name: firstText(rawUser, "username", "nickname") ?? firstText(data, "nick", "nickname"),
+        avatar: text(rawUser.avatar),
+    };
+}
+
+function projectEventGroup(
+    eventType: string,
+    data: Record<string, unknown>,
+    context: QQProjectionContext,
+): CommonTypes.Group | undefined {
+    const guildId = text(data.guild_id);
+    const channelId = text(data.channel_id);
+    const groupId = firstText(data, "group_openid", "group_id");
+    if (channelId) {
+        return {
+            id: context.createId(channelId),
+            name: text(data.name),
+            guild_id: guildId ? context.createId(guildId) : undefined,
+            channel_id: context.createId(channelId),
+        };
+    }
+    if (groupId) return { id: context.createId(groupId), name: text(data.group_name) };
+    if (guildId) return { id: context.createId(guildId), name: text(data.name) };
+    if (eventType.startsWith("GUILD_") && text(data.id)) {
+        return { id: context.createId(text(data.id)!), name: text(data.name) };
+    }
+    if (eventType.startsWith("CHANNEL_") && text(data.id)) {
+        const id = text(data.id)!;
+        return {
+            id: context.createId(id),
+            name: text(data.name),
+            channel_id: context.createId(id),
+        };
+    }
+    return undefined;
 }
 
 function projectMessageSegments(event: QQMessageProjectionInput): CommonTypes.Segment[] {
@@ -164,8 +240,15 @@ function mediaSegmentType(contentType: string): string {
 
 function resolveNoticeType(eventType: string): CommonEvent.NoticeType {
     if (eventType === "FRIEND_ADD") return "friend_add";
+    if (eventType === "FRIEND_DEL") return "friend_remove";
+    if (eventType === "GROUP_ADD_ROBOT") return "group_increase";
+    if (eventType === "GROUP_DEL_ROBOT") return "group_decrease";
     if (eventType.endsWith("MEMBER_ADD")) return "member_joined";
+    if (eventType.endsWith("MEMBER_UPDATE")) return "user_updated";
     if (eventType.endsWith("MEMBER_REMOVE")) return "member_left";
+    if (eventType.endsWith("MSG_REJECT") || eventType.endsWith("MSG_RECEIVE")) {
+        return "message_status";
+    }
     if (eventType === "MESSAGE_REACTION_ADD") return "reaction_added";
     if (eventType === "MESSAGE_REACTION_REMOVE") return "reaction_removed";
     if (eventType === "INTERACTION_CREATE") return "interaction";
@@ -186,4 +269,10 @@ function firstText(data: Record<string, unknown>, ...keys: string[]): string | u
         if (value) return value;
     }
     return undefined;
+}
+
+function nestedText(data: Record<string, unknown>, ...path: string[]): string | undefined {
+    let value: unknown = data;
+    for (const key of path) value = asRecord(value)[key];
+    return text(value);
 }
