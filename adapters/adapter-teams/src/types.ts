@@ -1,127 +1,145 @@
-/**
- * Microsoft Teams Bot Framework 类型定义
- * 基于 Bot Framework SDK
- */
-
-// 配置类型
+/** Microsoft Teams Agents SDK 适配器配置。 */
 export interface TeamsConfig {
     account_id: string;
-    app_id: string; // Microsoft App ID
-    app_password: string; // Microsoft App Password
-    webhook?: {
-        url?: string; // Webhook URL（可选）
-        port?: number; // Webhook 端口
-    };
-    // Bot Framework 配置
-    channel_service?: string; // Channel Service URL（可选，用于政府云等）
-    open_id_metadata?: string; // OpenID Metadata URL（可选）
+    /** Microsoft Entra 应用（Azure Bot）客户端 ID。 */
+    app_id: string;
+    /** 客户端密钥。 */
+    app_password: string;
+    /** 单租户应用必须填写；多租户应用可使用 organizations。 */
+    tenant_id?: string;
+    /** Entra 认证端点；主权云可覆盖。 */
+    authority_endpoint?: string;
+    /** Graph API 根地址；主权云可覆盖。 */
+    graph_base_url?: string;
+    /** Graph app-only token 使用的具体租户；多租户 Bot 与 Bot auth tenant 分离。 */
+    graph_tenant_id?: string;
+    /** Connector token audience；美国政府云使用 api.botframework.us。 */
+    bot_audience?: string;
+    /** 除微软内置 allowlist 外额外信任的 Connector service URL。 */
+    allowed_service_urls?: Array<string | { url: string }>;
+    /** 是否严格校验入站 token 中的 serviceUrl，生产环境默认开启。 */
+    validate_service_url?: boolean;
 }
 
-// Teams 用户类型
 export interface TeamsUser {
     id: string;
     name: string;
     aadObjectId?: string;
+    tenantId?: string;
     role?: string;
+}
+
+export interface TeamsConversation {
+    id: string;
+    name?: string;
+    isGroup?: boolean;
+    conversationType?: string;
     tenantId?: string;
 }
 
-// Teams 频道类型
-export interface TeamsChannel {
-    id: string;
-    name?: string;
-    type: "standard" | "private" | "shared";
-    teamId?: string;
-}
-
-// Teams channelData 中的 tenant 信息
 export interface TeamsChannelDataTenant {
     id?: string;
     name?: string;
 }
 
-// Teams channelData 结构
 export interface TeamsChannelData {
     channel?: { id?: string; name?: string };
     team?: { id?: string; name?: string };
     tenant?: TeamsChannelDataTenant;
+    meeting?: { id?: string };
+    eventType?: string;
     [key: string]: unknown;
 }
 
-// Teams Entity 类型（Bot Framework Entity 的扩展）
 export interface TeamsEntity {
     type: string;
-    [key: string]: unknown;
-}
-
-// Teams 消息类型
-export interface TeamsMessage {
-    id: string;
-    timestamp: string;
+    mentioned?: TeamsUser;
     text?: string;
-    textFormat?: "plain" | "markdown" | "xml";
-    attachments?: TeamsAttachment[];
-    membersAdded?: TeamsUser[];
-    membersRemoved?: TeamsUser[];
-    from: TeamsUser;
-    channelAccount?: TeamsUser;
-    conversation?: {
-        id: string;
-        name?: string;
-        isGroup?: boolean;
-    };
-    channelData?: TeamsChannelData;
-    entities?: TeamsEntity[];
     [key: string]: unknown;
 }
 
-// Teams 附件类型
 export interface TeamsAttachment {
     contentType: string;
     contentUrl?: string;
-    content?: Record<string, unknown>;
+    content?: unknown;
     name?: string;
     thumbnailUrl?: string;
 }
 
-// Teams 活动类型
+/** 无损保留协议关键字段的 Teams Activity 投影。 */
 export interface TeamsActivity {
     type: string;
     id: string;
     timestamp: string;
-    from: TeamsUser;
-    conversation: {
-        id: string;
-        name?: string;
-        isGroup?: boolean;
-    };
+    localTimestamp?: string;
+    localTimezone?: string;
+    serviceUrl?: string;
     channelId: string;
-    channelData?: TeamsChannelData;
+    from: TeamsUser;
+    recipient?: TeamsUser;
+    conversation: TeamsConversation;
+    replyToId?: string;
     text?: string;
+    textFormat?: string;
+    locale?: string;
+    importance?: string;
+    name?: string;
+    summary?: string;
+    channelData?: TeamsChannelData;
+    entities?: TeamsEntity[];
     attachments?: TeamsAttachment[];
     membersAdded?: TeamsUser[];
     membersRemoved?: TeamsUser[];
-    value?: Record<string, unknown>;
+    reactionsAdded?: Array<{ type: string }>;
+    reactionsRemoved?: Array<{ type: string }>;
+    value?: unknown;
+    relatesTo?: unknown;
     [key: string]: unknown;
 }
 
-// Teams 事件类型
 export interface TeamsEvent {
-    type:
-        | "message"
-        | "messageUpdate"
-        | "messageDelete"
-        | "conversationUpdate"
-        | "typing"
-        | "endOfConversation"
-        | "event"
-        | "invoke";
+    type: string;
     activity: TeamsActivity;
 }
 
-// sendMessage / sendCard 的选项
-export interface SendMessageOptions {
-    isGroup?: boolean;
-    conversationName?: string;
+/** 可序列化并跨重启恢复的 Agents SDK 会话引用。 */
+export interface TeamsConversationReference {
+    activityId?: string;
+    user?: TeamsUser;
+    locale?: string;
+    agent?: TeamsUser | null;
+    conversation: TeamsConversation & { id: string };
+    channelId: string;
+    serviceUrl?: string;
+}
+
+export interface TeamsOutboundActivity {
+    text?: string;
+    textFormat?: string;
+    replyToId?: string;
+    summary?: string;
+    importance?: string;
+    attachments?: TeamsAttachment[];
+    entities?: TeamsEntity[];
+    channelData?: Record<string, unknown>;
+}
+
+export interface TeamsSendOptions {
     reply_to_message_id?: string;
 }
+
+export interface TeamsApiContext {
+    conversation_id: string;
+    service_url: string;
+    team_id?: string;
+    tenant_id?: string;
+}
+
+export interface TeamsChannel {
+    id: string;
+    name?: string;
+    type?: "standard" | "private" | "shared";
+    teamId?: string;
+}
+
+export type TeamsMessage = TeamsActivity;

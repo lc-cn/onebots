@@ -1,4 +1,5 @@
 import { dateLikeToEventMs, type CommonEvent, type CommonTypes } from "onebots";
+import { projectTeamsSegments } from "./activity.js";
 import type { TeamsActivity, TeamsEvent, TeamsUser } from "./types.js";
 
 export type TeamsProjectionKind =
@@ -7,104 +8,170 @@ export type TeamsProjectionKind =
     | "message_updated"
     | "message_deleted"
     | "member_joined"
-    | "member_left";
+    | "member_left"
+    | "reaction_added"
+    | "reaction_removed"
+    | "interaction"
+    | "custom";
 
 export interface TeamsProjectionContext {
     botId: string;
     createId(value: string | number): CommonTypes.Id;
 }
 
-/** 将 Bot Framework Activity 无副作用地投影成 CommonEvent，便于独立契约测试。 */
+/** 将全部 Teams Activity 无损投影为通用消息或 notice。 */
 export function projectTeamsEvent(
     kind: TeamsProjectionKind,
     event: TeamsEvent,
     context: TeamsProjectionContext,
 ): CommonEvent.Event<TeamsEvent> {
     const activity = event.activity;
-    const base = {
-        id: context.createId(activity.id),
-        timestamp: dateLikeToEventMs(activity.timestamp),
-        platform: "teams",
-        bot_id: context.createId(context.botId),
-        raw_event: event,
-    };
-
+    const base = createBase(activity, event, context);
     if (kind === "private_message" || kind === "group_message") {
         const isGroup = kind === "group_message";
         return {
             ...base,
             type: "message",
-            message_type: isGroup ? "group" : "private",
+            message_type:
+                activity.conversation.conversationType === "channel"
+                    ? "channel"
+                    : isGroup
+                      ? "group"
+                      : "private",
             sender: projectUser(activity.from, context),
             group: isGroup ? projectGroup(activity, context) : undefined,
             message_id: context.createId(activity.id),
-            raw_message: activity.text ?? "",
+            raw_message: activity.text || "",
             message: projectTeamsSegments(activity),
+            extensions: teamsExtensions(activity),
         };
     }
 
-    const noticeTypes: Record<
-        Exclude<TeamsProjectionKind, "private_message" | "group_message">,
-        CommonEvent.NoticeType
-    > = {
-        message_updated: "message_updated",
-        message_deleted: "message_deleted",
-        member_joined: "member_joined",
-        member_left: "member_left",
-    };
-    const noticeType = noticeTypes[kind];
+    const noticeType = NOTICE_TYPES[kind];
     const member =
         kind === "member_joined"
-            ? (activity.membersAdded?.[0] ?? activity.from)
+            ? activity.membersAdded?.[0]
             : kind === "member_left"
-              ? (activity.membersRemoved?.[0] ?? activity.from)
+              ? activity.membersRemoved?.[0]
               : activity.from;
-
     return {
         ...base,
-        id: kind === "member_joined" || kind === "member_left"
-            ? context.createId(`${activity.id}:${kind}:${member.id}`)
-            : base.id,
+        id:
+            kind === "member_joined" || kind === "member_left"
+                ? context.createId(`${base.id.string}:${kind}:${member?.id || "unknown"}`)
+                : base.id,
         type: "notice",
         notice_type: noticeType,
-        message_id: kind.startsWith("message_") ? context.createId(activity.id) : undefined,
+        message_id: messageIdForNotice(kind, activity, context),
         message: kind === "message_updated" ? projectTeamsSegments(activity) : undefined,
-        user: projectUser(member, context),
-        group: activity.conversation.isGroup ? projectGroup(activity, context) : undefined,
+        user: member?.id ? projectUser(member, context) : undefined,
+        group: isGroupActivity(activity) ? projectGroup(activity, context) : undefined,
+        extensions: {
+            ...teamsExtensions(activity),
+            teams: {
+                ...teamsExtensions(activity).teams,
+                projection_kind: kind,
+                activity_type: activity.type,
+                activity_name: activity.name,
+                value: activity.value,
+                reactions:
+                    kind === "reaction_added"
+                        ? activity.reactionsAdded
+                        : kind === "reaction_removed"
+                          ? activity.reactionsRemoved
+                          : undefined,
+            },
+        },
     };
 }
 
-export function projectTeamsSegments(activity: TeamsActivity): CommonTypes.Segment[] {
-    const segments: CommonTypes.Segment[] = [];
-    if (activity.text) {
-        segments.push({ type: "text", data: { text: activity.text } });
-    }
-    for (const attachment of activity.attachments ?? []) {
-        const type = attachment.contentType?.startsWith("image/")
-            ? "image"
-            : attachment.contentType?.startsWith("video/")
-              ? "video"
-              : attachment.contentType?.startsWith("audio/")
-                ? "audio"
-                : "file";
-        segments.push({
-            type,
-            data: { url: attachment.contentUrl, name: attachment.name },
-        });
-    }
-    return segments.length > 0 ? segments : [{ type: "text", data: { text: "" } }];
+function createBase(
+    activity: TeamsActivity,
+    rawEvent: TeamsEvent,
+    context: TeamsProjectionContext,
+): CommonEvent.Base<TeamsEvent> {
+    const fallbackId = `${activity.type}:${activity.timestamp}:${activity.conversation.id}:${activity.name || ""}`;
+    return {
+        id: context.createId(activity.id || fallbackId),
+        timestamp: dateLikeToEventMs(activity.timestamp),
+        type: "custom",
+        platform: "teams",
+        bot_id: context.createId(context.botId),
+        raw_event: rawEvent,
+    };
 }
 
 function projectUser(user: TeamsUser, context: TeamsProjectionContext): CommonTypes.User {
     return {
         id: context.createId(user.id),
-        name: user.name || "",
+        name: user.name,
+        aad_object_id: user.aadObjectId,
+        tenant_id: user.tenantId,
+        role: user.role,
     };
 }
 
 function projectGroup(activity: TeamsActivity, context: TeamsProjectionContext): CommonTypes.Group {
     return {
         id: context.createId(activity.conversation.id),
-        name: activity.conversation.name || "",
+        name: activity.conversation.name || activity.channelData?.channel?.name || "",
+        team_id: activity.channelData?.team?.id,
+        channel_id: activity.channelData?.channel?.id,
+        tenant_id: activity.channelData?.tenant?.id || activity.conversation.tenantId,
     };
 }
+
+function teamsExtensions(activity: TeamsActivity): { teams: Record<string, unknown> } {
+    return {
+        teams: {
+            service_url: activity.serviceUrl,
+            conversation_type: activity.conversation.conversationType,
+            tenant_id: activity.channelData?.tenant?.id || activity.conversation.tenantId,
+            team_id: activity.channelData?.team?.id,
+            channel_id: activity.channelData?.channel?.id,
+            reply_to_id: activity.replyToId,
+            locale: activity.locale,
+            importance: activity.importance,
+            channel_data: activity.channelData,
+        },
+    };
+}
+
+function isGroupActivity(activity: TeamsActivity): boolean {
+    return Boolean(
+        activity.conversation.isGroup ||
+        ["channel", "groupChat"].includes(activity.conversation.conversationType || ""),
+    );
+}
+
+function messageRelated(kind: TeamsProjectionKind): boolean {
+    return ["message_updated", "message_deleted", "reaction_added", "reaction_removed"].includes(
+        kind,
+    );
+}
+
+function messageIdForNotice(
+    kind: TeamsProjectionKind,
+    activity: TeamsActivity,
+    context: TeamsProjectionContext,
+): CommonTypes.Id | undefined {
+    if (!messageRelated(kind)) return undefined;
+    const id = kind.startsWith("reaction_") ? activity.replyToId || activity.id : activity.id;
+    return id ? context.createId(id) : undefined;
+}
+
+const NOTICE_TYPES: Record<
+    Exclude<TeamsProjectionKind, "private_message" | "group_message">,
+    CommonEvent.NoticeType
+> = {
+    message_updated: "message_updated",
+    message_deleted: "message_deleted",
+    member_joined: "member_joined",
+    member_left: "member_left",
+    reaction_added: "reaction_added",
+    reaction_removed: "reaction_removed",
+    interaction: "interaction",
+    custom: "custom",
+};
+
+export { projectTeamsSegments } from "./activity.js";

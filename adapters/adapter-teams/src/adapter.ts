@@ -1,7 +1,4 @@
-/**
- * Microsoft Teams 适配器
- * 继承 Adapter 基类，实现 Microsoft Teams 平台功能
- */
+import { readFile } from "node:fs/promises";
 import {
     Account,
     AccountStatus,
@@ -10,220 +7,223 @@ import {
     BaseApp,
     type CommonTypes,
 } from "onebots";
+import { compileTeamsActivity } from "./activity.js";
 import { TeamsBot } from "./bot.js";
 import { teamsCapabilities } from "./capabilities.js";
+import { TeamsConversationStore } from "./conversation-store.js";
+import { TeamsApiError } from "./errors.js";
 import { projectTeamsEvent, type TeamsProjectionKind } from "./events.js";
+import { executeTeamsPlatformAction, TEAMS_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type { TeamsConfig, TeamsEvent } from "./types.js";
 
 export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
+    private readonly conversationStore: TeamsConversationStore;
+
     constructor(app: BaseApp) {
         super(app, "teams", teamsCapabilities);
         this.icon = "https://teams.microsoft.com/favicon.ico";
+        this.conversationStore = new TeamsConversationStore(this.db);
     }
 
-    // ============================================
-    // 消息相关方法
-    // ============================================
-
-    /**
-     * 发送消息
-     */
     async sendMessage(
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const { message } = params;
-        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
-
-        // 解析消息内容
-        let text = "";
-        const options: Record<string, unknown> = {};
-
-        for (const seg of message) {
-            if (typeof seg === "string") {
-                text += seg;
-            } else if (seg.type === "text") {
-                text += seg.data.text || "";
-            } else if (seg.type === "at") {
-                const userId = seg.data.qq || seg.data.id || seg.data.user_id;
-                if (userId === "all") {
-                    text += "<at>所有人</at>";
-                } else {
-                    text += `<at>${userId}</at>`;
-                }
-            } else if (seg.type === "image") {
-                // Teams 图片需要作为附件发送
-                if (seg.data.url || seg.data.file) {
-                    text += `[图片: ${seg.data.url || seg.data.file}]`;
-                }
-            } else if (seg.type === "file") {
-                if (seg.data.url || seg.data.file) {
-                    text += `[文件: ${seg.data.url || seg.data.file}]`;
-                }
-            }
-        }
-
-        // 发送消息
-        const conversationId = sceneId.string;
-        const result = await bot.sendMessage(conversationId, text, options);
-
-        return {
-            message_id: this.createId(result?.id || ""),
-        };
+        const bot = this.requireBot(uin);
+        const conversationId = this.coerceId(params.scene_id).string;
+        const activity = this.compileActivity(params.message);
+        const result = await bot.sendActivity(conversationId, activity);
+        return { message_id: this.createId(result.id) };
     }
 
-    /**
-     * 删除/撤回消息
-     */
+    async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
+        const messageId = this.coerceId(params.message_id).string;
+        const conversationId = this.requireMessageConversation(uin, messageId);
+        await this.requireBot(uin).updateActivity(
+            conversationId,
+            messageId,
+            this.compileActivity(params.message),
+        );
+    }
+
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
-        const conversationId =
-            params.scene_id != null
-                ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
-                : "";
-
-        await bot.deleteMessage(conversationId, msgId);
+        const messageId = this.coerceId(params.message_id).string;
+        const conversationId = params.scene_id
+            ? this.coerceId(params.scene_id).string
+            : this.requireMessageConversation(uin, messageId);
+        await this.requireBot(uin).deleteActivity(conversationId, messageId);
     }
 
-    // ============================================
-    // 用户相关方法
-    // ============================================
+    async getGroupList(uin: string): Promise<Adapter.GroupInfo[]> {
+        return this.conversationStore
+            .listReferences(uin)
+            .filter(reference =>
+                Boolean(
+                    reference.conversation.isGroup ||
+                    ["channel", "groupChat"].includes(
+                        reference.conversation.conversationType || "",
+                    ),
+                ),
+            )
+            .map(reference => ({
+                group_id: this.createId(reference.conversation.id),
+                group_name: reference.conversation.name || reference.conversation.id,
+            }));
+    }
 
-    /**
-     * 获取机器人自身信息
-     */
-    async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const me = bot.getCachedMe();
-        const config = account.config as TeamsConfig;
-
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
+        const conversationId = this.coerceId(params.group_id).string;
+        const reference = this.conversationStore.getReference(uin, conversationId);
+        if (!reference)
+            this.unsupported("get_group_info", "context_missing", "尚未收到该 Teams 会话事件");
         return {
-            user_id: this.createId(me?.id || config.app_id || ""),
-            user_name: me?.name || "",
-            user_displayname: me?.name || "",
-            avatar: me?.avatar || "",
+            group_id: this.createId(conversationId),
+            group_name: reference.conversation.name || conversationId,
         };
     }
 
-    // ============================================
-    // 系统相关方法
-    // ============================================
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
+        const conversationId = this.coerceId(params.group_id).string;
+        const members = await this.requireBot(uin).withConversation(conversationId, context =>
+            context.client.conversations.getMembers(conversationId),
+        );
+        return members.map(member => this.toGroupMember(member, params.group_id));
+    }
 
-    /**
-     * 获取版本信息
-     */
-    async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
+        const conversationId = this.coerceId(params.group_id).string;
+        const userId = this.resolveId(params.user_id).string;
+        const member = await this.requireBot(uin).withConversation(conversationId, context =>
+            context.client.conversations.getMemberById(conversationId, userId),
+        );
+        return this.toGroupMember(member, params.group_id);
+    }
+
+    async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
+        const me = this.requireBot(uin).getCachedMe();
         return {
-            app_name: "onebots Teams Adapter",
-            app_version: "1.0.0",
-            impl: "teams",
-            version: "1.0.0",
+            user_id: this.createId(me.id),
+            user_name: me.name,
+            user_displayname: me.name,
+        };
+    }
+
+    executePlatformAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!TEAMS_PLATFORM_ACTIONS.has(action)) {
+            return super.executePlatformAction(uin, action, params);
+        }
+        return executeTeamsPlatformAction(this.requireBot(uin), action, params);
+    }
+
+    isPlatformActionImplemented(action: string): boolean {
+        return TEAMS_PLATFORM_ACTIONS.has(action);
+    }
+
+    async getVersion(): Promise<Adapter.VersionInfo> {
+        const version = await readPackageVersion(new URL("../package.json", import.meta.url));
+        return {
+            app_name: "onebots Microsoft Teams Adapter",
+            app_version: version,
+            impl: "microsoft-365-agents-sdk",
+            version,
         };
     }
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const account = this.getAccount(uin);
-        return {
-            online: account?.status === AccountStatus.Online,
-            good: account?.status === AccountStatus.Online,
-        };
+        const online = this.getAccount(uin)?.status === AccountStatus.Online;
+        return { online, good: online };
     }
 
-    // ============================================
-    // 账号管理
-    // ============================================
-
-    /**
-     * 创建账号实例
-     */
     createAccount(config: Account.Config<"teams">): Account<"teams", TeamsBot> {
         const teamsConfig: TeamsConfig = {
             account_id: config.account_id,
             app_id: config.app_id,
             app_password: config.app_password,
-            webhook: config.webhook,
-            channel_service: config.channel_service,
-            open_id_metadata: config.open_id_metadata,
+            tenant_id: config.tenant_id,
+            authority_endpoint: config.authority_endpoint,
+            graph_base_url: config.graph_base_url,
+            graph_tenant_id: config.graph_tenant_id,
+            bot_audience: config.bot_audience,
+            allowed_service_urls: config.allowed_service_urls,
+            validate_service_url: config.validate_service_url,
         };
-
-        const bot = new TeamsBot(teamsConfig);
+        const accountId = config.account_id;
+        const bot = new TeamsBot(teamsConfig, {
+            get: conversationId => this.conversationStore.getReference(accountId, conversationId),
+            list: () => this.conversationStore.listReferences(accountId),
+            save: reference => this.conversationStore.saveReference(accountId, reference),
+            saveMessage: (messageId, conversationId) =>
+                this.conversationStore.saveMessageContext(accountId, messageId, conversationId),
+        });
         const account = new Account<"teams", TeamsBot>(this, bot, config);
-
-        // 注册 Webhook 路由
         this.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
+        this.bindLifecycle(account, bot);
+        this.bindEvents(account, bot);
+        return account;
+    }
 
-        // 监听 Bot 事件
+    private bindLifecycle(account: Account<"teams", TeamsBot>, bot: TeamsBot): void {
         bot.on("ready", () => {
-            this.logger.info(`Teams Bot ${config.account_id} 已就绪`);
             account.status = AccountStatus.Online;
+            this.logger.info(`Teams Agent ${account.config.account_id} 已就绪`);
         });
-
         bot.on("error", (error: Error) => {
-            this.logger.error(`Teams Bot ${config.account_id} 错误:`, error);
-            account.status = AccountStatus.OffLine;
-            this.emit("error", { account_id: config.account_id, error });
+            // 单次 Webhook/API 错误不代表账号离线；Webhook 服务仍可继续接收下一事件。
+            this.logger.error(`Teams Agent ${account.config.account_id} 错误`, error);
+            this.emit("error", { account_id: account.config.account_id, error });
         });
-
         bot.on("stopped", () => {
             account.status = AccountStatus.OffLine;
         });
-
-        // 监听 Teams 事件并转换为适配器事件
-        bot.on("private_message", (event: TeamsEvent) => {
-            this.dispatchTeamsEvent(account, "private_message", event);
-        });
-
-        bot.on("group_message", (event: TeamsEvent) => {
-            this.dispatchTeamsEvent(account, "group_message", event);
-        });
-
-        bot.on("message_edited", (event: TeamsEvent) => {
-            this.dispatchTeamsEvent(account, "message_updated", event);
-        });
-
-        bot.on("message_deleted", (event: TeamsEvent) => {
-            this.dispatchTeamsEvent(account, "message_deleted", event);
-        });
-
-        bot.on("member_joined", (event: TeamsEvent) => {
-            this.dispatchTeamsEvent(account, "member_joined", event);
-        });
-
-        bot.on("member_left", (event: TeamsEvent) => {
-            this.dispatchTeamsEvent(account, "member_left", event);
-        });
-
-        // 启动时初始化 Bot
         account.on("start", async () => {
             try {
                 await bot.start();
                 account.status = AccountStatus.Online;
                 const me = bot.getCachedMe();
-                account.nickname = me?.name || "Teams Bot";
-                account.avatar = me?.avatar || this.icon;
+                account.nickname = me.name;
+                account.avatar = this.icon;
             } catch (error) {
-                this.logger.error(`启动 Teams Bot 失败:`, error);
+                this.logger.error("启动 Teams Agent 失败", error);
                 account.status = AccountStatus.OffLine;
             }
         });
-
         account.on("stop", async () => {
             await bot.stop();
             account.status = AccountStatus.OffLine;
         });
+    }
 
-        return account;
+    private bindEvents(account: Account<"teams", TeamsBot>, bot: TeamsBot): void {
+        const routes: Array<[string, TeamsProjectionKind]> = [
+            ["private_message", "private_message"],
+            ["group_message", "group_message"],
+            ["message_edited", "message_updated"],
+            ["message_deleted", "message_deleted"],
+            ["member_joined", "member_joined"],
+            ["member_left", "member_left"],
+            ["reaction_added", "reaction_added"],
+            ["reaction_removed", "reaction_removed"],
+        ];
+        for (const [eventName, kind] of routes) {
+            bot.on(eventName, (event: TeamsEvent) => this.dispatchTeamsEvent(account, kind, event));
+        }
+        bot.on("event", (event: TeamsEvent) => {
+            const kind = event.activity.type === "invoke" ? "interaction" : "custom";
+            this.dispatchTeamsEvent(account, kind, event);
+        });
     }
 
     private dispatchTeamsEvent(
@@ -238,9 +238,52 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
             }),
         );
     }
+
+    private compileActivity(message: CommonTypes.Segment[]) {
+        return compileTeamsActivity(message, {
+            resolveUserId: value => String(this.resolveId(value).source),
+        });
+    }
+
+    private requireBot(uin: string): TeamsBot {
+        const account = this.getAccount(uin);
+        if (!account)
+            throw new TeamsApiError(`Teams 账号 ${uin} 不存在`, { code: "ACCOUNT_NOT_FOUND" });
+        return account.client;
+    }
+
+    private requireMessageConversation(uin: string, messageId: string): string {
+        const conversationId = this.conversationStore.findConversationByMessage(uin, messageId);
+        if (!conversationId) {
+            throw new TeamsApiError(`未记录 Teams 消息 ${messageId} 所属会话`, {
+                code: "TEAMS_MESSAGE_CONTEXT_MISSING",
+            });
+        }
+        return conversationId;
+    }
+
+    private toGroupMember(
+        member: { id?: string; name?: string; aadObjectId?: string; role?: string },
+        groupId: CommonTypes.Id,
+    ): Adapter.GroupMemberInfo {
+        const id = member.id || member.aadObjectId || "";
+        const role = member.role === "owner" || member.role === "admin" ? member.role : "member";
+        return {
+            group_id: groupId,
+            user_id: this.createId(id),
+            user_name: member.name || id,
+            card: member.name,
+            role,
+        };
+    }
 }
 
-// 声明类型扩展
+async function readPackageVersion(url: URL): Promise<string> {
+    const value = JSON.parse(await readFile(url, "utf8")) as { version?: unknown };
+    if (typeof value.version !== "string") throw new Error(`package.json 缺少 version: ${url}`);
+    return value.version;
+}
+
 declare module "onebots" {
     export namespace Adapter {
         export interface Configs {
@@ -252,9 +295,9 @@ declare module "onebots" {
 AdapterRegistry.register("teams", TeamsAdapter, {
     name: "teams",
     displayName: "Microsoft Teams",
-    description: "Microsoft Teams Bot Framework 适配器，支持频道消息、私聊、自适应卡片",
+    description: "基于 Microsoft 365 Agents SDK 的 Teams 适配器",
     icon: "https://teams.microsoft.com/favicon.ico",
-    homepage: "https://dev.botframework.com/",
+    homepage: "https://learn.microsoft.com/microsoft-365/agents-sdk/",
     author: "凉菜",
     capabilities: teamsCapabilities,
 });

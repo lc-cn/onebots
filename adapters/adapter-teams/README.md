@@ -1,140 +1,89 @@
 # @onebots/adapter-teams
 
-onebots Microsoft Teams 适配器 - 支持 Microsoft Teams Bot Framework 的机器人适配器
+Microsoft Teams 官方机器人适配器。基于 Microsoft 365 Agents SDK、Teams Connector API 和 Microsoft Graph，不再依赖已停止维护的 Bot Framework SDK。
 
-## 简介
-
-`@onebots/adapter-teams` 是 onebots 框架的官方 Microsoft Teams 适配器，用于连接 Microsoft Teams 平台，将 Teams 的消息和事件转换为 onebots 的通用格式。
-
-## 特性
-
-- 🔐 **Bot Framework 支持** - 基于 Microsoft Bot Framework SDK
-- 📨 **消息处理** - 完整的消息接收和发送支持
-- 🎯 **事件处理** - 支持消息、成员加入/离开等事件
-- 🔄 **自动转换** - 自动将 Teams 消息转换为通用格式
-- 📡 **Webhook** - 支持 Teams Webhook 回调
-- 🎨 **自适应卡片** - 支持发送 Teams 自适应卡片
-
-## 安装
-
-```bash
-npm install @onebots/adapter-teams
-# 或
-pnpm add @onebots/adapter-teams
-```
-
-## 使用方法
-
-> **重要：** 适配器必须先注册才能使用。即使在配置文件中配置了 Teams 账号，如果没有注册该适配器，配置也不会生效。
-
-### 1. 命令行注册（推荐）
-
-使用 `onebots` 命令行工具时，通过 `-r` 参数注册适配器：
-
-```bash
-# 注册 Teams 适配器
-onebots -r teams
-
-# 同时注册多个适配器
-onebots -r teams -r telegram -r slack
-```
-
-### 2. 配置文件方式
-
-在 `config.yaml` 中配置：
+## 配置
 
 ```yaml
-accounts:
-  - platform: teams
-    account_id: my_teams_bot
-    protocol: onebot.v11
-    
-    # Microsoft Teams 配置
-    app_id: your_app_id
-    app_password: your_app_password
-    webhook:
-      url: https://your-domain.com/teams/my_teams_bot/webhook
-      port: 8080
+teams:
+  work-agent:
+    account_id: work-agent
+    app_id: your-microsoft-app-id
+    app_password: your-client-secret-value
+    tenant_id: your-tenant-id
 ```
 
-### 3. 代码方式
+| 字段                   | 说明                                                             |
+| ---------------------- | ---------------------------------------------------------------- |
+| `account_id`           | OneBots 内部稳定账号标识                                         |
+| `app_id`               | Azure Bot 绑定的 Microsoft Entra 应用 Client ID                  |
+| `app_password`         | Entra 客户端密钥的值，不是 Secret ID                             |
+| `tenant_id`            | 单租户填写 Tenant GUID；多租户 Azure Bot 留空                    |
+| `validate_service_url` | 校验 Activity serviceUrl 与 JWT claim，默认开启                  |
+| `authority_endpoint`   | 主权云的 Entra Authority；普通 Microsoft 365 环境不填            |
+| `graph_base_url`       | Graph 根地址，默认 `https://graph.microsoft.com/v1.0`            |
+| `graph_tenant_id`      | 多租户 Bot 调用 app-only Graph 时使用的具体目标 Tenant           |
+| `bot_audience`         | Connector audience；美国政府云使用 `https://api.botframework.us` |
+| `allowed_service_urls` | 私有/自定义 Connector 的额外可信 HTTPS URL，可在 Web 动态增减    |
 
-```typescript
-import { App } from 'onebots';
-import { TeamsAdapter } from '@onebots/adapter-teams';
+适配器不自行启动第二个 HTTP 服务，也没有需要手填的 `webhook.url` 或端口。Azure Bot 的 Messaging endpoint 直接配置为：
 
-// 注册适配器
-await App.registerAdapter('teams', TeamsAdapter);
-
-// 创建应用
-const app = new App({
-  accounts: [{
-    platform: 'teams',
-    account_id: 'my_teams_bot',
-    protocol: 'onebot.v11',
-    app_id: 'your_app_id',
-    app_password: 'your_app_password',
-  }],
-});
-
-// 启动应用
-await app.start();
+```text
+https://你的域名/teams/work-agent/webhook
 ```
 
-## 配置说明
+反向代理必须保留 `Authorization` 请求头和 JSON 请求体。生产环境不应关闭 `validate_service_url`。
 
-### 必需配置
+## 会话模型
 
-- `app_id`: Microsoft App ID（从 Azure Portal 获取）
-- `app_password`: Microsoft App Password（从 Azure Portal 获取）
+Teams 主动消息不能只依赖 conversation ID；微软要求同时保留 `serviceUrl`、bot/user、tenant 等 ConversationReference。适配器会在每个入站 Activity 上捕获真实引用，并存入 OneBots SQLite 数据库：
 
-### 可选配置
+- 进程重启后仍能继续主动发送；
+- 编辑和删除消息可由持久化的 message→conversation 上下文定位；
+- 未见过的会话不会伪造引用，而是抛出 `TeamsConversationReferenceError`；
+- 外部系统可通过 `register_conversation_reference` 导入可信引用；
+- 首次主动私聊使用 `create_personal_conversation`，目标用户必须已安装 Teams 应用。
 
-- `webhook.url`: Webhook URL（如果使用自定义域名）
-- `webhook.port`: Webhook 端口（默认使用全局配置）
-- `channel_service`: Channel Service URL（用于政府云等特殊环境）
-- `open_id_metadata`: OpenID Metadata URL（用于自定义认证）
+## 消息与事件
 
-## Microsoft Teams 配置
+发送链路原生支持文本、Teams mention entity、回复、图片/音频/视频/文件附件、Adaptive Card、Hero/Thumbnail 等 Bot Card，以及 `teams_activity` 扩展选项。富媒体不会再降级为文本链接。
 
-1. 登录 [Azure Portal](https://portal.azure.com)
-2. 创建 Azure Bot 资源
-3. 获取 **App ID** 和 **App Password**
-4. 配置 **Messaging endpoint** 为：`https://your-domain.com/teams/{account_id}/webhook`
-5. 在 Teams 中测试 Bot
+入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；invoke 投影为 `interaction`；typing、installationUpdate、会议、read receipt 和其他 Activity 以 `custom` notice 无损交付。原始 Activity 始终位于 `raw_event`，Teams 上下文位于 `extensions.teams`。
 
-## 功能支持
+## 平台扩展动作
 
-### ✅ 已实现功能
+会话与主动消息：
 
-- 私聊消息收发
-- 群聊消息收发
-- 消息编辑
-- 消息删除
-- 成员加入/离开事件
-- 自适应卡片发送
+- `get_conversation_reference`、`list_conversation_references`
+- `register_conversation_reference`
+- `create_personal_conversation`：`service_url`、`tenant_id`、`aad_object_id`、`message`
+- `send_adaptive_card`：`conversation_id`、`card`
+- `send_targeted_message`：`conversation_id`、`message`，可用 `user_id` 指定仅其可见的成员
+- `send_typing`：`conversation_id`
 
-### ❌ 不支持的功能
+文件与卡片：
 
-- 获取消息（Bot Framework 不提供此 API）
-- 获取用户信息（需从消息事件中获取）
-- 获取群信息（Bot Framework 不提供此 API）
-- 群成员管理（Bot Framework 不提供此 API）
+- `send_file_consent_card`：`conversation_id`、`file_name`、`size_in_bytes`，可带 accept/decline context
+- `send_file_info_card`：上传完成后发送文件信息，需 `unique_id`、`file_type`、`file_name`、`content_url`
 
-## 注意事项
+Teams Connector：
 
-1. **Webhook 模式**：Teams Bot 必须使用 Webhook 模式，不支持轮询
-2. **HTTPS 要求**：Webhook URL 必须是 HTTPS（生产环境）
-3. **消息限制**：Teams 对消息频率有限制
-4. **自适应卡片**：Teams 支持丰富的自适应卡片格式
+- `get_team_details`、`list_team_channels`
+- `get_conversation_member`、`list_conversation_members`、`list_conversation_members_paged`
+- `add_message_reaction`、`remove_message_reaction`
+- `get_meeting_info`、`get_meeting_participant`
+- `send_meeting_notification`，需要 `OnlineMeetingNotification.Send.Chat` RSC 权限
 
-## 许可证
+Microsoft Graph：
 
-与 onebots 主项目保持一致。
+- `call_graph_api`：安全相对 `path`、`method`、`query`、`body`
 
-## 相关链接
+Graph 使用应用凭据流，必须有具体 Tenant ID：单租户复用 `tenant_id`，多租户 Bot 单独填写 `graph_tenant_id`。它只能调用管理员已授予相应 application permission 的资源。普通发送聊天消息不能用 app-only Graph 权限冒充；消息发送仍通过 Teams Connector 完成。认证、Connector 和 Graph 错误统一抛出 `TeamsApiError`，包含稳定 `code`、HTTP `status` 与 `details`。
 
-- [Microsoft Bot Framework 文档](https://dev.botframework.com/)
-- [Teams Bot 开发文档](https://docs.microsoft.com/en-us/microsoftteams/platform/bots/what-are-bots)
-- [Bot Framework SDK for Node.js](https://github.com/Microsoft/botbuilder-js)
+## 官方参考
 
+- [Microsoft 365 Agents SDK](https://learn.microsoft.com/microsoft-365/agents-sdk/)
+- [Node.js 迁移指南](https://learn.microsoft.com/microsoft-365/agents-sdk/bf-migration-nodejs)
+- [Teams 主动消息](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/conversations/send-proactive-messages)
+- [Teams 文件](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/bots-filesv4)
+- [Teams RSC 权限](https://learn.microsoft.com/microsoftteams/platform/graph-api/app-permissions/teams-app-permissions)

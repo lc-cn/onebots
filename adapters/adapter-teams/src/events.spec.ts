@@ -41,6 +41,13 @@ describe("projectTeamsEvent", () => {
         ]);
     });
 
+    it("Teams channel 不被压扁为普通群聊场景", () => {
+        const raw = createEvent();
+        raw.activity.conversation.conversationType = "channel";
+        const event = projectTeamsEvent("group_message", raw, { botId: "bot", createId });
+        expect(event).toMatchObject({ type: "message", message_type: "channel" });
+    });
+
     it("成员事件使用 membersAdded 中的真实成员", () => {
         const raw = createEvent();
         raw.activity.membersAdded = [{ id: "joined", name: "Joined" }];
@@ -59,6 +66,34 @@ describe("projectTeamsEvent", () => {
             type: "notice",
             notice_type: "message_updated",
             message_id: { string: "message-1" },
+        });
+    });
+
+    it("反应事件使用 replyToId 指向被操作消息", () => {
+        const raw = createEvent();
+        raw.activity.type = "messageReaction";
+        raw.activity.replyToId = "target-message";
+        raw.activity.reactionsAdded = [{ type: "like" }];
+        const event = projectTeamsEvent("reaction_added", raw, { botId: "bot", createId });
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "reaction_added",
+            message_id: { string: "target-message" },
+            extensions: { teams: { reactions: [{ type: "like" }] } },
+        });
+    });
+
+    it("未知 Activity 作为 custom notice 无损交付", () => {
+        const raw = createEvent();
+        raw.type = "installationUpdate";
+        raw.activity.type = "installationUpdate";
+        raw.activity.name = "add";
+        const event = projectTeamsEvent("custom", raw, { botId: "bot", createId });
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "custom",
+            raw_event: raw,
+            extensions: { teams: { activity_type: "installationUpdate", activity_name: "add" } },
         });
     });
 });
