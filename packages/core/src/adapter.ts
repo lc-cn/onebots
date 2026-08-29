@@ -135,6 +135,12 @@ export abstract class Adapter<
     getCustomFaceUrlList(_uin: string): Promise<string[]> {
         return this.unsupported("get_custom_face_url_list");
     }
+    getPeerPins(_uin: string): Promise<Adapter.PeerPins> {
+        return this.unsupported("get_peer_pins");
+    }
+    setPeerPin(_uin: string, _params: Adapter.SetPeerPinParams): Promise<void> {
+        return this.unsupported("set_peer_pin");
+    }
 
     // 好友相关方法 (Friend - 7个)
     getFriendList(
@@ -269,7 +275,7 @@ export abstract class Adapter<
     getGroupEssenceMessages(
         _uin: string,
         _params: Adapter.GetGroupEssenceMessagesParams,
-    ): Promise<Adapter.MessageInfo[]> {
+    ): Promise<Adapter.GroupEssenceMessage[]> {
         return this.unsupported("get_group_essence_messages");
     }
     setGroupEssenceMessage(
@@ -397,6 +403,9 @@ export abstract class Adapter<
     }
     deleteGroupFolder(_uin: string, _params: Adapter.DeleteGroupFolderParams): Promise<void> {
         return this.unsupported("delete_group_folder");
+    }
+    persistGroupFile(_uin: string, _params: Adapter.PersistGroupFileParams): Promise<void> {
+        return this.unsupported("persist_group_file");
     }
 
     // 媒体资源相关方法 (Media - 5个)

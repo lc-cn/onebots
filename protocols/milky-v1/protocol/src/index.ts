@@ -31,6 +31,8 @@ import { projectMilkyFriend } from "./friend-entities.js";
 import { projectMilkyIncomingMessage } from "./message-entities.js";
 import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 import { projectMilkyImplInfo, projectMilkyUserProfile } from "./system-entities.js";
+import { isMilkyAction } from "./action-registry.js";
+import { MilkyActionNotFoundError, toMilkyFailure } from "./api-errors.js";
 
 const milkySchema: Schema = {
     use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
@@ -222,11 +224,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             };
         } catch (error) {
             this.logger.error(`Milky action ${action} failed:`, error);
-            return {
-                status: "failed",
-                retcode: -1,
-                message: error.message,
-            };
+            return toMilkyFailure(error);
         }
     }
 
@@ -237,6 +235,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         action: string,
         params: Record<string, unknown> = {},
     ): Promise<unknown> {
+        if (!this.isKnownAction(action)) throw new MilkyActionNotFoundError(action);
         if (MILKY_ACCOUNT_ACTIONS.has(action)) {
             return executeMilkyAccountAction(this.adapter, this.account.account_id, action, params);
         }
@@ -328,6 +327,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.renameGroupFile(params);
             case "delete_group_file":
                 return this.deleteGroupFile(params);
+            case "persist_group_file":
+                return this.persistGroupFile(params);
             case "rename_group_folder":
                 return this.renameGroupFolder(params);
             case "delete_group_folder":
@@ -339,8 +340,13 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 ) {
                     return this.adapter.callAction(this.account.account_id, action, params);
                 }
-                throw new Error(`Unknown action: ${action}`);
+                throw new MilkyActionNotFoundError(action);
         }
+    }
+
+    private isKnownAction(action: string): boolean {
+        if (isMilkyAction(action)) return true;
+        return Boolean(this.adapter.describeCapabilities(this.account.account_id).actions[action]);
     }
 
     // Action implementations
@@ -729,6 +735,16 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         });
     }
 
+    private async persistGroupFile(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, never>> {
+        await this.adapter.persistGroupFile(this.account.account_id, {
+            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
+            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
+        });
+        return {};
+    }
+
     /**
      * Verify access token
      */
@@ -778,6 +794,12 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             const action = ctx.params.action;
             const params = ((ctx.request as unknown as Record<string, unknown>).body ??
                 {}) as Record<string, unknown>;
+
+            if (!this.isKnownAction(action)) {
+                ctx.status = 404;
+                ctx.body = toMilkyFailure(new MilkyActionNotFoundError(action));
+                return;
+            }
 
             try {
                 const result = await this.apply(action, params);

@@ -19,6 +19,8 @@ export {
     CommonEvent,
     CommonTypes,
     AccountStatus,
+    UnsupportedCapabilityError,
+    ValidationError,
     type Schema,
     type RouterContext,
     type Next,

@@ -21,11 +21,25 @@ declare module "./adapter.js" {
             content: string;
             time: number;
             sender_id?: CommonTypes.Id;
+            image_url?: string;
         }
 
         // --- 群精华消息 (3个方法) ---
         export interface GetGroupEssenceMessagesParams {
             group_id: CommonTypes.Id;
+            page_index: number;
+            page_size: number;
+        }
+        export interface GroupEssenceMessage {
+            group_id: CommonTypes.Id;
+            message_id: CommonTypes.Id;
+            message_time: number;
+            sender_id: CommonTypes.Id;
+            sender_name: string;
+            operator_id: CommonTypes.Id;
+            operator_name: string;
+            operation_time: number;
+            message: CommonTypes.Segment[];
         }
         export interface SetGroupEssenceMessageParams {
             group_id: CommonTypes.Id;
@@ -183,6 +197,10 @@ declare module "./adapter.js" {
             group_id: CommonTypes.Id;
             folder_id: CommonTypes.Id;
         }
+        export interface PersistGroupFileParams {
+            group_id: CommonTypes.Id;
+            file_id: CommonTypes.Id;
+        }
         export interface FileInfo {
             file_id: CommonTypes.Id;
             file_name: string;
@@ -264,6 +282,15 @@ declare module "./adapter.js" {
                 | "iphone"
                 | "harmony"
                 | "watch";
+        }
+        export interface PeerPins {
+            friends: Adapter.FriendInfo[];
+            groups: Adapter.GroupInfo[];
+        }
+        export interface SetPeerPinParams {
+            scene_type: "private" | "group" | "temp";
+            peer_id: CommonTypes.Id;
+            is_pinned: boolean;
         }
         export interface BotStatus {
             self: CommonTypes.Id;

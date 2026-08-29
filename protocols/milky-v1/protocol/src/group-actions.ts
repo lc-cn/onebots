@@ -4,6 +4,7 @@ import {
     requireNonEmptyStringParam,
     requirePositiveIntegerParam,
 } from "onebots";
+import { projectMilkySegments } from "./message-segments.js";
 
 export const MILKY_GROUP_ACTIONS = new Set([
     "kick_group_member",
@@ -20,6 +21,9 @@ export const MILKY_GROUP_ACTIONS = new Set([
     "send_group_announcement",
     "set_group_essence_message",
     "send_group_message_reaction",
+    "get_group_announcements",
+    "delete_group_announcement",
+    "get_group_essence_messages",
 ]);
 
 /** 将 Milky 群管理动作严格翻译到通用 Adapter seam。 */
@@ -28,7 +32,7 @@ export async function executeMilkyGroupAction(
     accountId: string,
     action: string,
     params: Record<string, unknown>,
-): Promise<Record<string, never>> {
+): Promise<unknown> {
     const groupId = adapter.resolveId(requirePositiveIntegerParam(params, "group_id"));
 
     switch (action) {
@@ -131,11 +135,63 @@ export async function executeMilkyGroupAction(
                 is_add: optionalBoolean(params, "is_add", true),
             });
             break;
+        case "get_group_announcements": {
+            const announcements = await adapter.getGroupAnnouncements(accountId, {
+                group_id: groupId,
+            });
+            return { announcements: announcements.map(projectGroupAnnouncement) };
+        }
+        case "delete_group_announcement":
+            await adapter.deleteGroupAnnouncement(accountId, {
+                group_id: groupId,
+                announcement_id: adapter.resolveId(
+                    requireNonEmptyStringParam(params, "announcement_id"),
+                ),
+            });
+            break;
+        case "get_group_essence_messages": {
+            const pageIndex = nonNegativeInteger(params, "page_index", 0);
+            const pageSize = positiveInteger(params, "page_size");
+            const messages = await adapter.getGroupEssenceMessages(accountId, {
+                group_id: groupId,
+                page_index: pageIndex,
+                page_size: pageSize,
+            });
+            return {
+                messages: messages.map(projectGroupEssenceMessage),
+                is_end: messages.length < pageSize,
+            };
+        }
         default:
             throw new TypeError(`未知 Milky 群动作: ${action}`);
     }
 
     return {};
+}
+
+function projectGroupAnnouncement(value: Adapter.GroupAnnouncement) {
+    return {
+        group_id: positiveId(value.group_id.number, "group_id"),
+        announcement_id: value.announcement_id.string,
+        user_id: positiveId(value.sender_id?.number, "user_id"),
+        time: nonNegativeValue(value.time, "time"),
+        content: value.content,
+        ...(value.image_url === undefined ? {} : { image_url: value.image_url }),
+    };
+}
+
+function projectGroupEssenceMessage(value: Adapter.GroupEssenceMessage) {
+    return {
+        group_id: positiveId(value.group_id.number, "group_id"),
+        message_seq: positiveId(value.message_id.number, "message_seq"),
+        message_time: nonNegativeValue(value.message_time, "message_time"),
+        sender_id: positiveId(value.sender_id.number, "sender_id"),
+        sender_name: value.sender_name,
+        operator_id: positiveId(value.operator_id.number, "operator_id"),
+        operator_name: value.operator_name,
+        operation_time: nonNegativeValue(value.operation_time, "operation_time"),
+        segments: projectMilkySegments(value.message),
+    };
 }
 
 function resolveUserId(adapter: Adapter, params: Record<string, unknown>) {
@@ -162,6 +218,27 @@ function nonNegativeInteger(
         throw new TypeError(`${key} 必须是非负整数`);
     }
     return value;
+}
+
+function positiveInteger(params: Record<string, unknown>, key: string): number {
+    const value = params[key];
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+        throw new TypeError(`${key} 必须是正整数`);
+    }
+    return value;
+}
+
+function nonNegativeValue(value: unknown, field: string): number {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+        throw new TypeError(`Adapter 返回的 ${field} 必须是非负整数`);
+    }
+    return value;
+}
+
+function positiveId(value: unknown, field: string): number {
+    const id = nonNegativeValue(value, field);
+    if (id === 0) throw new TypeError(`Adapter 返回的 ${field} 必须是正整数 ID`);
+    return id;
 }
 
 function reactionType(params: Record<string, unknown>): "face" | "emoji" {

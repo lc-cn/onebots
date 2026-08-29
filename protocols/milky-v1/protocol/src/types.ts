@@ -217,6 +217,27 @@ export namespace Milky {
         shut_up_end_time?: number;
     }
 
+    export interface GroupAnnouncementInfo {
+        group_id: number;
+        announcement_id: string;
+        user_id: number;
+        time: number;
+        content: string;
+        image_url?: string;
+    }
+
+    export interface GroupEssenceMessageInfo {
+        group_id: number;
+        message_seq: number;
+        message_time: number;
+        sender_id: number;
+        sender_name: string;
+        operator_id: number;
+        operator_name: string;
+        operation_time: number;
+        segments: Segment[];
+    }
+
     /**
      * Group info
      */

@@ -76,6 +76,7 @@ function createProtocol() {
             source: id,
             number: typeof id === "number" ? id : resolvedId.number,
         })),
+        describeCapabilities: vi.fn().mockReturnValue({ actions: {} }),
         sendMessage: vi.fn(),
         deleteMessage: vi.fn(),
         kickGroupMember: vi.fn(),
@@ -91,6 +92,7 @@ function createProtocol() {
         getFriendInfo: vi.fn(),
         getFriendList: vi.fn(),
         getGroupList: vi.fn(),
+        getGroupInfo: vi.fn(),
         getGroupMemberList: vi.fn(),
         getMessage: vi.fn(),
         getMessageHistory: vi.fn(),
@@ -104,6 +106,8 @@ function createProtocol() {
         setNickname: vi.fn(),
         setBio: vi.fn(),
         getCustomFaceUrlList: vi.fn(),
+        getPeerPins: vi.fn(),
+        setPeerPin: vi.fn(),
         setGroupSpecialTitle: vi.fn(),
         handleGroupRequest: vi.fn(),
         sendFriendNudge: vi.fn(),
@@ -114,6 +118,9 @@ function createProtocol() {
         setGroupAvatar: vi.fn(),
         muteGroupAll: vi.fn(),
         sendGroupAnnouncement: vi.fn(),
+        getGroupAnnouncements: vi.fn(),
+        deleteGroupAnnouncement: vi.fn(),
+        getGroupEssenceMessages: vi.fn(),
         setGroupEssenceMessage: vi.fn(),
         deleteGroupEssenceMessage: vi.fn(),
         sendGroupMessageReaction: vi.fn(),
@@ -123,6 +130,7 @@ function createProtocol() {
         moveGroupFile: vi.fn(),
         renameGroupFile: vi.fn(),
         renameGroupFolder: vi.fn(),
+        persistGroupFile: vi.fn(),
     };
 
     const protocol = new MilkyV1(
@@ -569,7 +577,7 @@ describe("Milky V1 protocol", () => {
 
         await expect(
             protocol.apply("invite_friend_to_group", { group_id: 0, user_id: "not-a-number" }),
-        ).resolves.toMatchObject({ status: "failed", retcode: -1 });
+        ).resolves.toMatchObject({ status: "failed", retcode: -400 });
         expect(adapter.inviteGroupMember).not.toHaveBeenCalled();
     });
 
@@ -591,7 +599,7 @@ describe("Milky V1 protocol", () => {
 
         await expect(
             protocol.apply("accept_friend_request", { initiator_uid: " " }),
-        ).resolves.toMatchObject({ status: "failed", retcode: -1 });
+        ).resolves.toMatchObject({ status: "failed", retcode: -400 });
         expect(adapter.handleFriendRequest).toHaveBeenCalledTimes(1);
     });
 
@@ -815,6 +823,66 @@ describe("Milky V1 protocol", () => {
         ).resolves.toMatchObject({ status: "failed" });
         expect(adapter.setGroupAvatar).not.toHaveBeenCalled();
         expect(adapter.sendGroupAnnouncement).not.toHaveBeenCalled();
+    });
+
+    test("Milky 标准补充动作经由通用 Adapter seam", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getPeerPins.mockResolvedValue({ friends: [], groups: [] });
+        adapter.getGroupAnnouncements.mockResolvedValue([
+            {
+                group_id: { string: "20001", number: 20001 },
+                announcement_id: { string: "announcement", number: 7001 },
+                sender_id: { string: "10001", number: 10001 },
+                time: 100,
+                content: "公告",
+            },
+        ]);
+        adapter.getGroupEssenceMessages.mockResolvedValue([
+            {
+                group_id: { string: "20001", number: 20001 },
+                message_id: { string: "message", number: 9001 },
+                message_time: 100,
+                sender_id: { string: "10001", number: 10001 },
+                sender_name: "Alice",
+                operator_id: { string: "10002", number: 10002 },
+                operator_name: "Bob",
+                operation_time: 110,
+                message: [{ type: "text", data: { text: "hello" } }],
+            },
+        ]);
+
+        await expect(protocol.apply("get_peer_pins", {})).resolves.toMatchObject({
+            status: "ok",
+            data: { friends: [], groups: [] },
+        });
+        await expect(
+            protocol.apply("set_peer_pin", {
+                message_scene: "friend",
+                peer_id: 10001,
+            }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+        await expect(
+            protocol.apply("get_group_announcements", { group_id: 20001 }),
+        ).resolves.toMatchObject({
+            data: { announcements: [{ announcement_id: "announcement", user_id: 10001 }] },
+        });
+        await expect(
+            protocol.apply("get_group_essence_messages", {
+                group_id: 20001,
+                page_index: 0,
+                page_size: 20,
+            }),
+        ).resolves.toMatchObject({
+            data: { messages: [{ message_seq: 9001 }], is_end: true },
+        });
+        await expect(
+            protocol.apply("persist_group_file", { group_id: 20001, file_id: "file-id" }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+        expect(adapter.setPeerPin).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ scene_type: "private", is_pinned: true }),
+        );
+        expect(adapter.persistGroupFile).toHaveBeenCalledOnce();
     });
 
     test("文件动作仅接受并返回 canonical Milky 字段", async () => {
@@ -1064,9 +1132,9 @@ describe("Milky V1 protocol", () => {
 
         expect(result).toMatchObject({
             status: "failed",
-            retcode: -1,
+            retcode: -404,
         });
-        expect(result.message).toContain("Unknown action");
+        expect(result.message).toContain("不存在");
     });
 
     test("isMilkyShapedEvent detects objects with string event_type", () => {
