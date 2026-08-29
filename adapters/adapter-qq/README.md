@@ -77,6 +77,8 @@ const guilds = await account?.client.call({
 
 绝对 URL 会被拒绝，避免令牌被发送到非 QQ OpenAPI 主机。
 
+参数、账号、生命周期和 OpenAPI 故障均使用 `QQApiError`，并接入 OneBots 核心错误分类。协议层可据此稳定区分客户端参数、资源缺失、平台拒绝和网络故障；`code`、HTTP `status` 与 API `path` 不会在包装时丢失。
+
 ## 相关链接
 
 - [QQ 开放平台](https://q.qq.com/)

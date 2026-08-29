@@ -5,6 +5,7 @@ import {
     Adapter,
     AdapterRegistry,
     BaseApp,
+    ErrorCategory,
     readPackageVersion,
     type CommonEvent,
     type CommonTypes,
@@ -44,9 +45,10 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
 
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
         if (!params.scene_type || !params.scene_id) {
-            throw new QQApiError("撤回 QQ 消息必须提供 scene_type 与 scene_id", {
-                code: "QQ_SCENE_REQUIRED",
-            });
+            throw QQApiError.invalid(
+                "撤回 QQ 消息必须提供 scene_type 与 scene_id",
+                "QQ_SCENE_REQUIRED",
+            );
         }
         await this.openApi(uin).recallMessage(
             params.scene_type,
@@ -60,9 +62,7 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
             (params.scene_type !== "channel" && params.scene_type !== "direct") ||
             !params.scene_id
         ) {
-            throw new QQApiError("QQ 仅支持查询频道与频道私信消息", {
-                code: "QQ_SCENE_UNSUPPORTED",
-            });
+            throw QQApiError.invalid("QQ 仅支持查询频道与频道私信消息", "QQ_SCENE_UNSUPPORTED");
         }
         const message = await this.openApi(uin).getMessage(
             params.scene_type,
@@ -149,9 +149,7 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         params?: Adapter.GetChannelListParams,
     ): Promise<Adapter.ChannelInfo[]> {
         if (!params?.guild_id)
-            throw new QQApiError("获取 QQ 子频道列表必须提供 guild_id", {
-                code: "QQ_GUILD_REQUIRED",
-            });
+            throw QQApiError.invalid("获取 QQ 子频道列表必须提供 guild_id", "QQ_GUILD_REQUIRED");
         return (await this.openApi(uin).listChannels(params.guild_id.string)).map(channel =>
             this.channelInfo(channel),
         );
@@ -192,9 +190,7 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         params: Adapter.CreateUserChannelParams,
     ): Promise<Adapter.ChannelInfo> {
         if (!params.guild_id)
-            throw new QQApiError("创建 QQ 频道私信必须提供 guild_id", {
-                code: "QQ_GUILD_REQUIRED",
-            });
+            throw QQApiError.invalid("创建 QQ 频道私信必须提供 guild_id", "QQ_GUILD_REQUIRED");
         const session = await this.openApi(uin).createDirectSession(
             params.guild_id.string,
             params.user_id.string,
@@ -208,15 +204,17 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
 
     async uploadFile(uin: string, params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> {
         if (params.scene_type !== "private" && params.scene_type !== "group") {
-            throw new QQApiError("QQ 富媒体上传仅适用于 C2C 与群聊", {
-                code: "QQ_UPLOAD_SCENE_UNSUPPORTED",
-            });
+            throw QQApiError.invalid(
+                "QQ 富媒体上传仅适用于 C2C 与群聊",
+                "QQ_UPLOAD_SCENE_UNSUPPORTED",
+            );
         }
         const sources = [params.url, params.path, params.data].filter(value => value !== undefined);
         if (sources.length !== 1)
-            throw new QQApiError("上传 QQ 文件必须且只能提供 url/path/data 之一", {
-                code: "QQ_MEDIA_SOURCE_REQUIRED",
-            });
+            throw QQApiError.invalid(
+                "上传 QQ 文件必须且只能提供 url/path/data 之一",
+                "QQ_MEDIA_SOURCE_REQUIRED",
+            );
         const result = await this.client(uin).uploadMedia({
             target: {
                 scope: params.scene_type === "private" ? "c2c" : "group",
@@ -374,7 +372,11 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
     private client(uin: string): QQClient {
         const client = this.getAccount(uin)?.client;
         if (!client)
-            throw new QQApiError(`QQ 账号 ${uin} 不存在`, { code: "QQ_ACCOUNT_NOT_FOUND" });
+            throw new QQApiError(`QQ 账号 ${uin} 不存在`, {
+                code: "QQ_ACCOUNT_NOT_FOUND",
+                category: ErrorCategory.RESOURCE,
+                details: { account_id: uin },
+            });
         return client;
     }
 

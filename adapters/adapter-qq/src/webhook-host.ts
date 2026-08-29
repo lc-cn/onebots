@@ -5,6 +5,7 @@ import {
     type WebhookResponse,
     type WebhookServerAdapter,
 } from "@tencent-connect/qqbot-nodejs/protocol";
+import { ErrorCategory } from "onebots";
 import { QQApiError } from "./errors.js";
 
 export type QQRawEventListener = (eventType: string, data: unknown) => void | Promise<void>;
@@ -39,7 +40,10 @@ export class QQWebhookHost implements WebhookServerAdapter {
     /** 最底层结构化入口，可供现有 HTTP Host 或测试直接投递原始请求。 */
     async ingest(request: WebhookRequest): Promise<WebhookResponse> {
         if (!this.handler) {
-            throw new QQApiError("QQ Webhook 尚未启动", { code: "QQ_WEBHOOK_NOT_READY" });
+            throw new QQApiError("QQ Webhook 尚未启动", {
+                code: "QQ_WEBHOOK_NOT_READY",
+                category: ErrorCategory.RUNTIME,
+            });
         }
         const response = await this.handler(request);
         if (response.status >= 200 && response.status < 300) {
@@ -75,9 +79,10 @@ export class QQWebhookHost implements WebhookServerAdapter {
         if (typeof rawBody === "string") return Buffer.from(rawBody);
         if (Buffer.isBuffer(parsedBody)) return parsedBody;
         if (typeof parsedBody === "string") return Buffer.from(parsedBody);
-        throw new QQApiError("QQ Webhook 验签必须保留未经修改的 rawBody", {
-            code: "QQ_WEBHOOK_RAW_BODY_REQUIRED",
-        });
+        throw QQApiError.invalid(
+            "QQ Webhook 验签必须保留未经修改的 rawBody",
+            "QQ_WEBHOOK_RAW_BODY_REQUIRED",
+        );
     }
 
     private async dispatchRawEvent(body: Buffer): Promise<void> {

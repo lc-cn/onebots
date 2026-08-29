@@ -442,5 +442,5 @@ function requiredArray(params: Readonly<Record<string, unknown>>, key: string): 
 }
 
 function invalid(message: string): QQApiError {
-    return new QQApiError(message, { code: "QQ_INVALID_ACTION_PARAMS" });
+    return QQApiError.invalid(message, "QQ_INVALID_ACTION_PARAMS");
 }

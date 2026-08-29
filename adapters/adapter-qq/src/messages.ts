@@ -62,9 +62,10 @@ export function compileMessage(
                 break;
             case "reply": {
                 if (replyId)
-                    throw new QQApiError("一条 QQ 消息只能包含一个 reply 消息段", {
-                        code: "QQ_DUPLICATE_REPLY",
-                    });
+                    throw QQApiError.invalid(
+                        "一条 QQ 消息只能包含一个 reply 消息段",
+                        "QQ_DUPLICATE_REPLY",
+                    );
                 replyId = requiredString(
                     data.message_id ?? data.id,
                     "reply 消息缺少 message_id/id",
@@ -78,9 +79,10 @@ export function compileMessage(
             case "file": {
                 const source = optionalString(data.url ?? data.file ?? data.path);
                 if (!source)
-                    throw new QQApiError(`${segment.type} 消息缺少 url/file/path`, {
-                        code: "QQ_MEDIA_SOURCE_REQUIRED",
-                    });
+                    throw QQApiError.invalid(
+                        `${segment.type} 消息缺少 url/file/path`,
+                        "QQ_MEDIA_SOURCE_REQUIRED",
+                    );
                 media.push({
                     type: mediaType(segment.type),
                     source,
@@ -121,9 +123,10 @@ export function compileMessage(
                 setKeyboard(advanced, { content: { rows: [{ buttons: [readButton(data)] }] } });
                 break;
             default:
-                throw new QQApiError(`QQ 不支持消息段 ${segment.type}`, {
-                    code: "QQ_UNSUPPORTED_SEGMENT",
-                });
+                throw QQApiError.invalid(
+                    `QQ 不支持消息段 ${segment.type}`,
+                    "QQ_UNSUPPORTED_SEGMENT",
+                );
         }
     }
     return { content: textParts.join(""), replyId, advanced, media };
@@ -162,7 +165,7 @@ async function sendOpenIdMessage(
         });
         response = sent.message ?? response;
     }
-    if (!response) throw new QQApiError("QQ 消息不能为空", { code: "QQ_EMPTY_MESSAGE" });
+    if (!response) throw QQApiError.invalid("QQ 消息不能为空", "QQ_EMPTY_MESSAGE");
     return response.id;
 }
 
@@ -173,22 +176,19 @@ async function sendGuildMessage(
     message: CompiledMessage,
 ): Promise<string> {
     if (message.media.some(item => item.type !== MediaFileType.IMAGE)) {
-        throw new QQApiError("QQ 频道与频道私信仅支持 URL 图片；音视频和文件请使用平台 OpenAPI", {
-            code: "QQ_GUILD_MEDIA_UNSUPPORTED",
-        });
+        throw QQApiError.invalid(
+            "QQ 频道与频道私信仅支持 URL 图片；音视频和文件请使用平台 OpenAPI",
+            "QQ_GUILD_MEDIA_UNSUPPORTED",
+        );
     }
     if (message.media.length > 1) {
-        throw new QQApiError("QQ 频道单条消息只能包含一张图片", {
-            code: "QQ_GUILD_MEDIA_LIMIT",
-        });
+        throw QQApiError.invalid("QQ 频道单条消息只能包含一张图片", "QQ_GUILD_MEDIA_LIMIT");
     }
     if (message.media[0] && !/^https:\/\//u.test(message.media[0].source)) {
-        throw new QQApiError("QQ 频道图片必须使用 HTTPS URL", {
-            code: "QQ_GUILD_IMAGE_URL_REQUIRED",
-        });
+        throw QQApiError.invalid("QQ 频道图片必须使用 HTTPS URL", "QQ_GUILD_IMAGE_URL_REQUIRED");
     }
     if (!message.content && Object.keys(message.advanced).length === 0 && !message.media[0]) {
-        throw new QQApiError("QQ 消息不能为空", { code: "QQ_EMPTY_MESSAGE" });
+        throw QQApiError.invalid("QQ 消息不能为空", "QQ_EMPTY_MESSAGE");
     }
     const body: Record<string, unknown> = { content: message.content };
     if (message.replyId) body.msg_id = message.replyId;
@@ -227,13 +227,13 @@ function mediaType(type: string): MediaFileType {
 
 function requiredString(value: unknown, message: string): string {
     const result = optionalString(value);
-    if (!result) throw new QQApiError(message, { code: "QQ_INVALID_SEGMENT" });
+    if (!result) throw QQApiError.invalid(message, "QQ_INVALID_SEGMENT");
     return result;
 }
 
 function requiredIdentifier(value: unknown, message: string): string | number {
     if ((typeof value !== "string" && typeof value !== "number") || String(value) === "") {
-        throw new QQApiError(message, { code: "QQ_INVALID_SEGMENT" });
+        throw QQApiError.invalid(message, "QQ_INVALID_SEGMENT");
     }
     return value;
 }
@@ -245,7 +245,7 @@ function optionalString(value: unknown): string | undefined {
 function numberValue(value: unknown): number {
     const result = Number(value);
     if (!Number.isFinite(result))
-        throw new QQApiError("QQ 消息字段必须是数字", { code: "QQ_INVALID_NUMBER" });
+        throw QQApiError.invalid("QQ 消息字段必须是数字", "QQ_INVALID_NUMBER");
     return result;
 }
 
@@ -255,9 +255,10 @@ function selectRichMessage(
     segmentType: string,
 ): void {
     if (advanced.msgType !== undefined) {
-        throw new QQApiError(`QQ 富消息段不能与 ${segmentType} 组合`, {
-            code: "QQ_CONFLICTING_RICH_SEGMENTS",
-        });
+        throw QQApiError.invalid(
+            `QQ 富消息段不能与 ${segmentType} 组合`,
+            "QQ_CONFLICTING_RICH_SEGMENTS",
+        );
     }
     advanced.msgType = msgType;
 }
@@ -267,9 +268,10 @@ function setKeyboard(
     keyboard: NonNullable<SendMessageOptions["keyboard"]>,
 ): void {
     if (advanced.keyboard) {
-        throw new QQApiError("一条 QQ 消息只能包含一个 keyboard/button 消息段", {
-            code: "QQ_DUPLICATE_KEYBOARD",
-        });
+        throw QQApiError.invalid(
+            "一条 QQ 消息只能包含一个 keyboard/button 消息段",
+            "QQ_DUPLICATE_KEYBOARD",
+        );
     }
     advanced.keyboard = keyboard;
 }
@@ -277,18 +279,17 @@ function setKeyboard(
 function readKeyboard(value: Record<string, unknown>): NonNullable<SendMessageOptions["keyboard"]> {
     const content = requiredRecord(value.content, "keyboard.content 必须是对象");
     if (!Array.isArray(content.rows)) {
-        throw new QQApiError("keyboard.content.rows 必须是数组", {
-            code: "QQ_INVALID_SEGMENT",
-        });
+        throw QQApiError.invalid("keyboard.content.rows 必须是数组", "QQ_INVALID_SEGMENT");
     }
     return {
         content: {
             rows: content.rows.map((row, index) => {
                 const record = requiredRecord(row, `keyboard 第 ${index + 1} 行必须是对象`);
                 if (!Array.isArray(record.buttons)) {
-                    throw new QQApiError(`keyboard 第 ${index + 1} 行缺少 buttons 数组`, {
-                        code: "QQ_INVALID_SEGMENT",
-                    });
+                    throw QQApiError.invalid(
+                        `keyboard 第 ${index + 1} 行缺少 buttons 数组`,
+                        "QQ_INVALID_SEGMENT",
+                    );
                 }
                 return { buttons: record.buttons.map(readButton) };
             }),
@@ -325,7 +326,7 @@ function readButton(value: unknown): QQKeyboardButton {
 function readMarkdownParams(value: unknown): Array<{ key: string; values: string[] }> | undefined {
     if (value === undefined) return undefined;
     if (!Array.isArray(value)) {
-        throw new QQApiError("markdown.params 必须是数组", { code: "QQ_INVALID_SEGMENT" });
+        throw QQApiError.invalid("markdown.params 必须是数组", "QQ_INVALID_SEGMENT");
     }
     return value.map(item => {
         const record = requiredRecord(item, "markdown.params 项必须是对象");
@@ -333,9 +334,10 @@ function readMarkdownParams(value: unknown): Array<{ key: string; values: string
             !Array.isArray(record.values) ||
             !record.values.every(entry => typeof entry === "string")
         ) {
-            throw new QQApiError("markdown.params.values 必须是字符串数组", {
-                code: "QQ_INVALID_SEGMENT",
-            });
+            throw QQApiError.invalid(
+                "markdown.params.values 必须是字符串数组",
+                "QQ_INVALID_SEGMENT",
+            );
         }
         return {
             key: requiredString(record.key, "markdown.params.key 不能为空"),
@@ -347,12 +349,12 @@ function readMarkdownParams(value: unknown): Array<{ key: string; values: string
 function readArkKv(value: unknown): Array<{ key: string; value?: string; obj?: unknown[] }> {
     if (value === undefined) return [];
     if (!Array.isArray(value)) {
-        throw new QQApiError("ark.kv 必须是数组", { code: "QQ_INVALID_SEGMENT" });
+        throw QQApiError.invalid("ark.kv 必须是数组", "QQ_INVALID_SEGMENT");
     }
     return value.map(item => {
         const record = requiredRecord(item, "ark.kv 项必须是对象");
         if (record.obj !== undefined && !Array.isArray(record.obj)) {
-            throw new QQApiError("ark.kv.obj 必须是数组", { code: "QQ_INVALID_SEGMENT" });
+            throw QQApiError.invalid("ark.kv.obj 必须是数组", "QQ_INVALID_SEGMENT");
         }
         return {
             key: requiredString(record.key, "ark.kv.key 不能为空"),
@@ -364,7 +366,7 @@ function readArkKv(value: unknown): Array<{ key: string; value?: string; obj?: u
 
 function requiredRecord(value: unknown, message: string): Record<string, unknown> {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new QQApiError(message, { code: "QQ_INVALID_SEGMENT" });
+        throw QQApiError.invalid(message, "QQ_INVALID_SEGMENT");
     }
     return value as Record<string, unknown>;
 }

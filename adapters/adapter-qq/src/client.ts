@@ -1,4 +1,5 @@
 import { QQBot, type QQBotOptions } from "@tencent-connect/qqbot-nodejs";
+import { ErrorCategory } from "onebots";
 import { QQApiError } from "./errors.js";
 import type { QQPlatformCall } from "./types.js";
 
@@ -22,7 +23,11 @@ export class QQClient extends QQBot {
 
     /** 持续接收事件；SDK 内部重连耗尽后会重新建立一个全新的连接代次。 */
     async run(): Promise<void> {
-        if (this.runController) throw new QQApiError("QQ Client 已启动", { code: "QQ_STARTED" });
+        if (this.runController)
+            throw new QQApiError("QQ Client 已启动", {
+                code: "QQ_STARTED",
+                category: ErrorCategory.RUNTIME,
+            });
         const controller = new AbortController();
         this.runController = controller;
         let generation = 0;
@@ -55,10 +60,11 @@ export class QQClient extends QQBot {
     /** 经 SDK 认证与结构化错误处理调用任意 QQ OpenAPI。 */
     async call<T = unknown>(request: QQPlatformCall): Promise<T> {
         if (!isSafeApiPath(request.path)) {
-            throw new QQApiError("QQ OpenAPI path 必须是以单个 / 开头的相对路径", {
-                code: "QQ_INVALID_API_PATH",
-                path: request.path,
-            });
+            throw QQApiError.invalid(
+                "QQ OpenAPI path 必须是以单个 / 开头的相对路径",
+                "QQ_INVALID_API_PATH",
+                { path: request.path },
+            );
         }
         const pathWithQuery = appendQuery(request.path, request.query);
         try {
