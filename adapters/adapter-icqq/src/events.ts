@@ -9,6 +9,7 @@ import type {
     ICQQGroupMessageEvent,
     ICQQGroupMuteEvent,
     ICQQGroupRecallEvent,
+    ICQQGroupReactionEvent,
     ICQQGroupRequestEvent,
     ICQQPokeEvent,
     ICQQPrivateMessageEvent,
@@ -125,6 +126,25 @@ export function projectICQQRecall(
         operator: group ? { id: context.createId(event.operator_id) } : undefined,
         group: group ? { id: context.createId(event.group_id) } : undefined,
     });
+}
+
+export function projectICQQReaction(
+    event: ICQQGroupReactionEvent,
+    context: ICQQProjectionContext,
+): CommonEvent.Notice {
+    return noticeBase(
+        event,
+        context,
+        event.is_add ? "reaction_added" : "reaction_removed",
+        event.reaction_type,
+        {
+            user: { id: context.createId(event.user_id) },
+            message_id: context.createId(event.message_seq),
+            face_id: event.face_id,
+            reaction_type: event.reaction_type,
+            is_add: event.is_add,
+        },
+    );
 }
 
 export function projectICQQPoke(

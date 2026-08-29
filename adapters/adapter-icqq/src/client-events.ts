@@ -146,6 +146,18 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             time: Date.now() / 1000,
         });
     });
+    client.on("notice.group.reaction", event => {
+        sink.emit("group_reaction", {
+            raw_event: event,
+            group_id: event.group_id,
+            user_id: event.user_id,
+            message_seq: event.seq,
+            face_id: event.id,
+            reaction_type: event.type === 1 ? "face" : "emoji",
+            is_add: event.set,
+            time: Date.now() / 1000,
+        });
+    });
     client.on("notice.friend.recall", event => {
         sink.emit("friend_recall", {
             raw_event: event,

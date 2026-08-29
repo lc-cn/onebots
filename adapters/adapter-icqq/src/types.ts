@@ -324,7 +324,7 @@ export interface ICQQGroupDecreaseEvent {
     /** 离开的成员 QQ */
     user_id: number;
     /** 操作者 QQ (踢人者) */
-    operator_id?: number;
+    operator_id: number;
     /** 类型: leave 退群, kick 被踢 */
     sub_type: "leave" | "kick" | "kick_me";
     /** 群主退群导致群解散 */
@@ -362,6 +362,18 @@ export interface ICQQGroupAdminEvent {
     /** 类型: set 设置管理员, unset 取消管理员 */
     sub_type: "set" | "unset";
     /** 时间戳 */
+    time: number;
+}
+
+/** 群消息表情回应事件。 */
+export interface ICQQGroupReactionEvent {
+    raw_event: unknown;
+    group_id: number;
+    user_id: number;
+    message_seq: number;
+    face_id: string;
+    reaction_type: "face" | "emoji";
+    is_add: boolean;
     time: number;
 }
 

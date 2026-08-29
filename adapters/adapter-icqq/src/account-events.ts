@@ -8,6 +8,7 @@ import {
     projectICQQMute,
     projectICQQPoke,
     projectICQQRecall,
+    projectICQQReaction,
     projectICQQRequest,
     type ICQQProjectionContext,
 } from "./events.js";
@@ -22,6 +23,7 @@ import type {
     ICQQGroupMessageEvent,
     ICQQGroupMuteEvent,
     ICQQGroupRecallEvent,
+    ICQQGroupReactionEvent,
     ICQQGroupRequestEvent,
     ICQQLoginErrorEvent,
     ICQQOfflineEvent,
@@ -194,6 +196,9 @@ function wireProjectedEvents(
     };
     bot.on("friend_recall", onRecall);
     bot.on("group_recall", onRecall);
+    bot.on("group_reaction", (event: ICQQGroupReactionEvent) => {
+        account.dispatch(projectICQQReaction(event, projection()));
+    });
     bot.on("poke", (event: ICQQPokeEvent) => {
         account.dispatch(projectICQQPoke(event, projection()));
     });

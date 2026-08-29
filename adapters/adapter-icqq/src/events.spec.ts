@@ -5,6 +5,7 @@ import {
     projectICQQMute,
     projectICQQPoke,
     projectICQQRecall,
+    projectICQQReaction,
 } from "./events.js";
 
 function id(value: string | number) {
@@ -99,5 +100,30 @@ describe("ICQQ 事件投影", () => {
         );
         expect(first.extensions).toEqual({ icqq: { is_dismiss: true } });
         expect(first.id.string).not.toBe(second.id.string);
+    });
+
+    it("将群消息表情回应投影为可区分增删的通用事件", () => {
+        const event = projectICQQReaction(
+            {
+                raw_event: { type: 1 },
+                group_id: 1,
+                user_id: 2,
+                message_seq: 42,
+                face_id: "66",
+                reaction_type: "face",
+                is_add: false,
+                time: 100,
+            },
+            context,
+        );
+
+        expect(event).toMatchObject({
+            notice_type: "reaction_removed",
+            sub_type: "face",
+            face_id: "66",
+            reaction_type: "face",
+            is_add: false,
+            message_id: { number: 42 },
+        });
     });
 });

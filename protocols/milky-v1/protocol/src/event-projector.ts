@@ -1,6 +1,7 @@
 import type { CommonEvent } from "onebots";
 import type { Milky } from "./types.js";
 import { projectMilkySegments } from "./message-segments.js";
+import { projectMilkyNotice } from "./notice-projector.js";
 
 const projectMessage = (event: CommonEvent.Message): Milky.MessageEvent => {
     const isGroup = event.message_type === "group" && event.group !== undefined;
@@ -34,26 +35,6 @@ const projectMessage = (event: CommonEvent.Message): Milky.MessageEvent => {
                           nickname: event.sender.name,
                       },
                   }),
-        },
-    };
-};
-
-const projectNotice = (event: CommonEvent.Notice): Milky.NoticeEvent => {
-    const eventTypes: Partial<Record<CommonEvent.NoticeType, string>> = {
-        group_increase: "group_member_increase",
-        group_decrease: "group_member_decrease",
-        group_admin: "group_admin_change",
-        group_ban: "group_member_mute",
-        friend_add: "friend_increase",
-    };
-    return {
-        time: Math.floor(event.timestamp / 1000),
-        self_id: event.bot_id.number,
-        event_type: eventTypes[event.notice_type] ?? "custom_notice",
-        data: {
-            ...(event.user ? { user_id: event.user.id.number } : {}),
-            ...(event.group ? { group_id: event.group.id.number } : {}),
-            ...(event.operator ? { operator_id: event.operator.id.number } : {}),
         },
     };
 };
@@ -101,7 +82,7 @@ export const projectMilkyEvent = (event: CommonEvent.Event): Milky.Event | null 
         case "message":
             return projectMessage(event);
         case "notice":
-            return projectNotice(event);
+            return projectMilkyNotice(event);
         case "request":
             return projectRequest(event);
         case "meta":
