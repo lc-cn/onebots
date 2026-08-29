@@ -1,86 +1,39 @@
-# Zulip Adapter Configuration
+# Zulip configuration
 
-Zulip adapter configuration guide.
+## Credentials
 
-## Configuration Fields
+| Field | Type | Description |
+| --- | --- | --- |
+| `server_url` | string | Organization root URL, such as `https://example.zulipchat.com` |
+| `email` | string | Bot API email |
+| `api_key` | string | Bot API key; rendered as a sensitive field in the Web UI |
 
-### serverUrl
-
-- **Type**: `string`
-- **Required**: ✅
-- **Description**: Zulip server address, e.g., `https://chat.zulip.org`
-
-### email
-
-- **Type**: `string`
-- **Required**: ✅
-- **Description**: Bot email address
-
-### apiKey
-
-- **Type**: `string`
-- **Required**: ✅
-- **Description**: API Key (obtained from Zulip settings)
-
-### websocket
-
-WebSocket configuration.
-
-#### websocket.enabled
-
-- **Type**: `boolean`
-- **Default**: `true`
-- **Description**: Whether to enable WebSocket, default true
-
-#### websocket.reconnectInterval
-
-- **Type**: `number`
-- **Default**: `3000`
-- **Description**: Reconnect interval (milliseconds)
-
-#### websocket.maxReconnectAttempts
-
-- **Type**: `number`
-- **Default**: `10`
-- **Description**: Maximum reconnect attempts
-
-### proxy
-
-- **Type**: `object`
-- **Required**: ❌
-- **Description**: Proxy configuration (optional)
-
-## Configuration Example
-
-### Basic Configuration
+Do not append `/api/v1` to `server_url`. The old `serverUrl`, `apiKey`, and `websocket` fields were removed: Zulip's real-time protocol is the long-polling Event Queue API, not WebSocket.
 
 ```yaml
-zulip.my_bot:
-  serverUrl: 'https://chat.zulip.org'
-  email: 'bot@example.com'
-  apiKey: 'your_api_key'
-  
-  websocket:
+zulip.team-bot:
+  server_url: https://example.zulipchat.com
+  email: onebots-bot@example.zulipchat.com
+  api_key: your-api-key
+  default_topic: general
+  event_queue:
     enabled: true
-    reconnectInterval: 3000
-    maxReconnectAttempts: 10
-  
+    event_types:
+      - message
+      - update_message
+      - delete_message
+      - reaction
+      - subscription
+      - realm_user
+    all_public_streams: false
+    retry_initial_delay_ms: 1000
+    retry_max_delay_ms: 30000
   onebot.v11:
-    access_token: 'your_token'
+    access_token: your-token
 ```
 
-## Getting API Key
+The Web form can add and remove event types directly. Reconnection is always unlimited; the delay grows exponentially from `retry_initial_delay_ms` up to `retry_max_delay_ms`.
 
-1. Log in to Zulip server
-2. Go to Settings → Your bots → Add a new bot
-3. Fill in bot information:
-   - **Full name**: Bot display name
-   - **Bot email**: Bot email address (auto-generated)
-   - **Bot type**: Choose "Incoming webhook" or "Generic bot"
-4. Get API Key after creation
+Optional HTTP(S) and SOCKS proxy settings are available under `proxy.url`, `proxy.username`, and `proxy.password`. Missing proxy support fails startup explicitly instead of silently using a direct connection.
 
-## Related Links
-
-- [Zulip Platform](/en/platform/zulip)
-- [Quick Start](/en/guide/start)
-
+See [Zulip platform support](/en/platform/zulip) for scene IDs and native actions.

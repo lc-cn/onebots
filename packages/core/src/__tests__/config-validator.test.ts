@@ -2,15 +2,15 @@
  * 配置验证系统测试
  */
 
-import { describe, it, expect } from 'vitest';
-import { ConfigValidator, ValidationError } from '../config-validator.js';
+import { describe, it, expect } from "vitest";
+import { ConfigValidator, ValidationError } from "../config-validator.js";
 
-describe('Config Validator', () => {
-    describe('Basic Validation', () => {
-        it('should validate required fields', () => {
+describe("Config Validator", () => {
+    describe("Basic Validation", () => {
+        it("should validate required fields", () => {
             const schema = {
-                name: { type: 'string' as const, required: true },
-                age: { type: 'number' as const, required: true },
+                name: { type: "string" as const, required: true },
+                age: { type: "number" as const, required: true },
             };
 
             expect(() => {
@@ -18,14 +18,14 @@ describe('Config Validator', () => {
             }).toThrow(ValidationError);
 
             expect(() => {
-                ConfigValidator.validate({ name: 'test', age: 20 }, schema);
+                ConfigValidator.validate({ name: "test", age: 20 }, schema);
             }).not.toThrow();
         });
 
-        it('should apply default values', () => {
+        it("should apply default values", () => {
             const schema = {
-                port: { type: 'number' as const, default: 8080 },
-                enabled: { type: 'boolean' as const, default: true },
+                port: { type: "number" as const, default: 8080 },
+                enabled: { type: "boolean" as const, default: true },
             };
 
             const result = ConfigValidator.validate({}, schema);
@@ -33,25 +33,25 @@ describe('Config Validator', () => {
             expect((result as Record<string, unknown>).enabled).toBe(true);
         });
 
-        it('should validate type', () => {
+        it("should validate type", () => {
             const schema = {
-                port: { type: 'number' as const },
-                name: { type: 'string' as const },
-                enabled: { type: 'boolean' as const },
+                port: { type: "number" as const },
+                name: { type: "string" as const },
+                enabled: { type: "boolean" as const },
             };
 
             expect(() => {
-                ConfigValidator.validate({ port: '8080' }, schema);
+                ConfigValidator.validate({ port: "8080" }, schema);
             }).toThrow(ValidationError);
 
             expect(() => {
-                ConfigValidator.validate({ port: 8080, name: 'test', enabled: true }, schema);
+                ConfigValidator.validate({ port: 8080, name: "test", enabled: true }, schema);
             }).not.toThrow();
         });
 
-        it('should validate number range', () => {
+        it("should validate number range", () => {
             const schema = {
-                port: { type: 'number' as const, min: 1, max: 65535 },
+                port: { type: "number" as const, min: 1, max: 65535 },
             };
 
             expect(() => {
@@ -67,66 +67,85 @@ describe('Config Validator', () => {
             }).not.toThrow();
         });
 
-        it('should validate string length', () => {
+        it("should validate string length", () => {
             const schema = {
-                name: { type: 'string' as const, min: 3, max: 10 },
+                name: { type: "string" as const, min: 3, max: 10 },
             };
 
             expect(() => {
-                ConfigValidator.validate({ name: 'ab' }, schema);
+                ConfigValidator.validate({ name: "ab" }, schema);
             }).toThrow(ValidationError);
 
             expect(() => {
-                ConfigValidator.validate({ name: 'abcdefghijklmnop' }, schema);
+                ConfigValidator.validate({ name: "abcdefghijklmnop" }, schema);
             }).toThrow(ValidationError);
 
             expect(() => {
-                ConfigValidator.validate({ name: 'test' }, schema);
+                ConfigValidator.validate({ name: "test" }, schema);
             }).not.toThrow();
         });
 
-        it('should validate choices values', () => {
+        it("should validate choices values", () => {
             const schema = {
                 level: {
-                    type: 'string' as const,
+                    type: "string" as const,
                     choices: [
-                        { value: 'low', label: '低' },
-                        { value: 'medium', label: '中' },
-                        { value: 'high', label: '高' },
+                        { value: "low", label: "低" },
+                        { value: "medium", label: "中" },
+                        { value: "high", label: "高" },
                     ],
                 },
             };
 
             expect(() => {
-                ConfigValidator.validate({ level: 'invalid' }, schema);
+                ConfigValidator.validate({ level: "invalid" }, schema);
             }).toThrow(ValidationError);
 
             expect(() => {
-                ConfigValidator.validate({ level: 'medium' }, schema);
+                ConfigValidator.validate({ level: "medium" }, schema);
             }).not.toThrow();
         });
 
-        it('should validate with pattern', () => {
+        it("should validate every value in a choices array", () => {
             const schema = {
-                email: { type: 'string' as const, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
+                events: {
+                    type: "array" as const,
+                    choices: [
+                        { value: "message", label: "消息" },
+                        { value: "reaction", label: "反应" },
+                    ],
+                },
             };
 
             expect(() => {
-                ConfigValidator.validate({ email: 'invalid-email' }, schema);
+                ConfigValidator.validate({ events: ["message", "reaction"] }, schema);
+            }).not.toThrow();
+            expect(() => {
+                ConfigValidator.validate({ events: ["message", "unknown"] }, schema);
+            }).toThrow(ValidationError);
+        });
+
+        it("should validate with pattern", () => {
+            const schema = {
+                email: { type: "string" as const, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
+            };
+
+            expect(() => {
+                ConfigValidator.validate({ email: "invalid-email" }, schema);
             }).toThrow(ValidationError);
 
             expect(() => {
-                ConfigValidator.validate({ email: 'test@example.com' }, schema);
+                ConfigValidator.validate({ email: "test@example.com" }, schema);
             }).not.toThrow();
         });
 
-        it('should use custom validator', () => {
+        it("should use custom validator", () => {
             const schema = {
                 password: {
-                    type: 'string' as const,
+                    type: "string" as const,
                     validator: (value: unknown) => {
                         if (String(value).length < 8) {
-                            return 'Password must be at least 8 characters';
+                            return "Password must be at least 8 characters";
                         }
                         return true;
                     },
@@ -134,21 +153,21 @@ describe('Config Validator', () => {
             };
 
             expect(() => {
-                ConfigValidator.validate({ password: 'short' }, schema);
+                ConfigValidator.validate({ password: "short" }, schema);
             }).toThrow(ValidationError);
 
             expect(() => {
-                ConfigValidator.validate({ password: 'longpassword' }, schema);
+                ConfigValidator.validate({ password: "longpassword" }, schema);
             }).not.toThrow();
         });
     });
 
-    describe('Nested Schema', () => {
-        it('should validate nested objects', () => {
+    describe("Nested Schema", () => {
+        it("should validate nested objects", () => {
             const schema = {
                 server: {
-                    host: { type: 'string' as const, required: true },
-                    port: { type: 'number' as const, default: 8080 },
+                    host: { type: "string" as const, required: true },
+                    port: { type: "number" as const, default: 8080 },
                 },
             };
 
@@ -156,39 +175,38 @@ describe('Config Validator', () => {
                 ConfigValidator.validate({ server: {} }, schema);
             }).toThrow(ValidationError);
 
-            const result = ConfigValidator.validate({ server: { host: 'localhost' } }, schema);
+            const result = ConfigValidator.validate({ server: { host: "localhost" } }, schema);
             const server = (result as Record<string, unknown>).server as Record<string, unknown>;
-            expect(server.host).toBe('localhost');
+            expect(server.host).toBe("localhost");
             expect(server.port).toBe(8080);
         });
     });
 
-    describe('Transform', () => {
-        it('should transform values', () => {
+    describe("Transform", () => {
+        it("should transform values", () => {
             const schema = {
                 port: {
-                    type: 'number' as const,
+                    type: "number" as const,
                     transform: (value: unknown) => parseInt(String(value), 10),
                 },
             };
 
-            const result = ConfigValidator.validate({ port: '8080' }, schema);
+            const result = ConfigValidator.validate({ port: "8080" }, schema);
             expect((result as Record<string, unknown>).port).toBe(8080);
-            expect(typeof (result as Record<string, unknown>).port).toBe('number');
+            expect(typeof (result as Record<string, unknown>).port).toBe("number");
         });
     });
 
-    describe('validateWithDefaults', () => {
-        it('should apply defaults to missing fields', () => {
+    describe("validateWithDefaults", () => {
+        it("should apply defaults to missing fields", () => {
             const schema = {
-                port: { type: 'number' as const, default: 8080 },
-                host: { type: 'string' as const, default: 'localhost' },
+                port: { type: "number" as const, default: 8080 },
+                host: { type: "string" as const, default: "localhost" },
             };
 
             const result = ConfigValidator.validateWithDefaults({}, schema);
             expect((result as Record<string, unknown>).port).toBe(8080);
-            expect((result as Record<string, unknown>).host).toBe('localhost');
+            expect((result as Record<string, unknown>).host).toBe("localhost");
         });
     });
 });
-

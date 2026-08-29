@@ -1,19 +1,23 @@
-import type { ValidationRule, Schema, SchemaBundle, SchemaFieldDef, SchemaGroup, AccountRow } from './types';
+import type {
+    ValidationRule,
+    Schema,
+    SchemaBundle,
+    SchemaFieldDef,
+    SchemaGroup,
+    AccountRow,
+} from "./types";
 
 export const isRule = (rule: ValidationRule | Schema): rule is ValidationRule => {
     return (
-        typeof rule === 'object' &&
-        ('type' in rule ||
-            'required' in rule ||
-            'choices' in rule ||
-            'default' in rule)
+        typeof rule === "object" &&
+        ("type" in rule || "required" in rule || "choices" in rule || "default" in rule)
     );
 };
 
-export const makeKey = (path: string[]) => path.join('::');
+export const makeKey = (path: string[]) => path.join("::");
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
 export const getValueByPath = (data: Record<string, unknown>, path: string[]): unknown => {
@@ -45,27 +49,27 @@ export const setValueByPath = (data: Record<string, unknown>, path: string[], va
 };
 
 /** object/array 字段：空输入表示未配置（undefined），不要默认写成 {} */
-export const resolveJsonFieldDisplay = (
-    currentValue: unknown,
-    rule: ValidationRule
-): string => {
+export const resolveJsonFieldDisplay = (currentValue: unknown, rule: ValidationRule): string => {
     if (currentValue !== undefined && currentValue !== null) {
         return JSON.stringify(currentValue, null, 2);
     }
     if (rule.default !== undefined) {
         return JSON.stringify(rule.default, null, 2);
     }
-    return '';
+    return "";
 };
 
 export const usesEndpointListEditor = (rule: ValidationRule): boolean =>
-    rule.type === 'array' && rule.ui?.widget === 'endpoint-list';
+    rule.type === "array" && rule.ui?.widget === "endpoint-list";
 
 export const usesEventFilterEditor = (rule: ValidationRule): boolean =>
-    rule.type === 'object' && rule.ui?.widget === 'event-filter';
+    rule.type === "object" && rule.ui?.widget === "event-filter";
+
+export const usesChoiceListEditor = (rule: ValidationRule): boolean =>
+    rule.type === "array" && rule.ui?.widget === "choice-list";
 
 const cloneConfigValue = (value: unknown, seen = new WeakMap<object, unknown>()): unknown => {
-    if (typeof value !== 'object' || value === null) return value;
+    if (typeof value !== "object" || value === null) return value;
 
     const cached = seen.get(value);
     if (cached !== undefined) return cached;
@@ -87,9 +91,13 @@ const cloneConfigValue = (value: unknown, seen = new WeakMap<object, unknown>())
 
 export const resolveStructuredFieldDisplay = (
     currentValue: unknown,
-    rule: ValidationRule
+    rule: ValidationRule,
 ): unknown => {
     if (usesEndpointListEditor(rule)) {
+        const value = currentValue ?? rule.default;
+        return Array.isArray(value) ? cloneConfigValue(value) : [];
+    }
+    if (usesChoiceListEditor(rule)) {
         const value = currentValue ?? rule.default;
         return Array.isArray(value) ? cloneConfigValue(value) : [];
     }
@@ -102,21 +110,37 @@ export const resolveStructuredFieldDisplay = (
 export const parseStructuredFieldValue = (
     raw: unknown,
     rule: ValidationRule,
-    label: string
+    label: string,
 ): { ok: true; value: unknown } | { ok: false; message: string } => {
     if (usesEventFilterEditor(rule)) {
         if (isRecord(raw)) return { ok: true, value: cloneConfigValue(raw) };
         return parseJsonFieldValue(raw, rule, label);
+    }
+    if (usesChoiceListEditor(rule)) {
+        if (!Array.isArray(raw)) return { ok: false, message: `字段 ${label} 必须是选项列表` };
+        const allowed = new Set((rule.choices || []).map(choice => choice.value));
+        const values: Array<string | number | boolean> = [];
+        for (const item of raw) {
+            if (typeof item !== "string" && typeof item !== "number" && typeof item !== "boolean") {
+                return { ok: false, message: `字段 ${label} 中存在无效选项` };
+            }
+            if (allowed.size && !allowed.has(item)) {
+                return { ok: false, message: `字段 ${label} 中存在未声明的选项：${String(item)}` };
+            }
+            if (!values.includes(item)) values.push(item);
+        }
+        return { ok: true, value: values };
     }
     if (!usesEndpointListEditor(rule)) return parseJsonFieldValue(raw, rule, label);
     if (!Array.isArray(raw)) return { ok: false, message: `字段 ${label} 必须是地址列表` };
 
     const entries: unknown[] = [];
     for (const item of raw) {
-        const value = typeof item === 'string' ? item.trim() : item;
-        const urlValue = isRecord(value) && typeof value.url === 'string' ? value.url.trim() : value;
-        if (urlValue === '') continue;
-        if (typeof urlValue !== 'string') {
+        const value = typeof item === "string" ? item.trim() : item;
+        const urlValue =
+            isRecord(value) && typeof value.url === "string" ? value.url.trim() : value;
+        if (urlValue === "") continue;
+        if (typeof urlValue !== "string") {
             return { ok: false, message: `字段 ${label} 中存在无效地址` };
         }
         try {
@@ -125,7 +149,7 @@ export const parseStructuredFieldValue = (
             if (schemes?.length && !schemes.includes(url.protocol)) {
                 return {
                     ok: false,
-                    message: `字段 ${label} 仅支持 ${schemes.map(item => item.replace(':', '')).join(' / ')}`
+                    message: `字段 ${label} 仅支持 ${schemes.map(item => item.replace(":", "")).join(" / ")}`,
                 };
             }
         } catch {
@@ -139,9 +163,9 @@ export const parseStructuredFieldValue = (
 export const parseJsonFieldValue = (
     raw: unknown,
     rule: ValidationRule,
-    label: string
+    label: string,
 ): { ok: true; value: unknown } | { ok: false; message: string } => {
-    const text = typeof raw === 'string' ? raw.trim() : '';
+    const text = typeof raw === "string" ? raw.trim() : "";
     if (!text) {
         return { ok: true, value: rule.default !== undefined ? rule.default : undefined };
     }
@@ -152,7 +176,10 @@ export const parseJsonFieldValue = (
     }
 };
 
-export const buildSchemaFields = (schemaData: Schema, basePath: string[] = []): SchemaFieldDef[] => {
+export const buildSchemaFields = (
+    schemaData: Schema,
+    basePath: string[] = [],
+): SchemaFieldDef[] => {
     const fields: SchemaFieldDef[] = [];
     Object.entries(schemaData).forEach(([key, rule]) => {
         const currentPath = [...basePath, key];
@@ -160,11 +187,11 @@ export const buildSchemaFields = (schemaData: Schema, basePath: string[] = []): 
             fields.push({
                 path: currentPath,
                 key: makeKey(currentPath),
-                label: rule.label || currentPath.join('.'),
+                label: rule.label || currentPath.join("."),
                 rule,
                 placeholder:
                     rule.placeholder ||
-                    (rule.default !== undefined ? `默认：${String(rule.default)}` : '')
+                    (rule.default !== undefined ? `默认：${String(rule.default)}` : ""),
             });
         } else {
             fields.push(...buildSchemaFields(rule as Schema, currentPath));
@@ -174,7 +201,7 @@ export const buildSchemaFields = (schemaData: Schema, basePath: string[] = []): 
 };
 
 export const normalizeSchema = (data: Schema | SchemaBundle): SchemaBundle => {
-    if ('base' in data || 'general' in data || 'protocols' in data || 'adapters' in data) {
+    if ("base" in data || "general" in data || "protocols" in data || "adapters" in data) {
         return data as SchemaBundle;
     }
     return { base: data as Schema };
@@ -182,27 +209,25 @@ export const normalizeSchema = (data: Schema | SchemaBundle): SchemaBundle => {
 
 /** 配置文件中保留给全局设置的键名，不是账号 */
 export const BASE_CONFIG_KEYS = new Set([
-    'port',
-    'path',
-    'database',
-    'timeout',
-    'username',
-    'password',
-    'log_level',
-    'general'
+    "port",
+    "path",
+    "database",
+    "timeout",
+    "username",
+    "password",
+    "log_level",
+    "general",
 ]);
 
 /** 根据 SchemaBundle 和已解析配置对象，构建表单分组 */
-export const buildConfigGroups = (
-    bundle: SchemaBundle
-): SchemaGroup[] => {
+export const buildConfigGroups = (bundle: SchemaBundle): SchemaGroup[] => {
     const groups: SchemaGroup[] = [];
 
     if (bundle.base) {
         groups.push({
-            key: 'base',
-            title: '基础配置',
-            fields: buildSchemaFields(bundle.base)
+            key: "base",
+            title: "基础配置",
+            fields: buildSchemaFields(bundle.base),
         });
     }
 
@@ -212,7 +237,7 @@ export const buildConfigGroups = (
                 key: `general:${protocolKey}`,
                 title: `协议默认值 · ${protocolTitle(protocolKey)}`,
                 description: `应用于未在账号中单独覆盖的 ${protocolTitle(protocolKey)} 配置。`,
-                fields: buildSchemaFields(protocolSchema as Schema, ['general', protocolKey])
+                fields: buildSchemaFields(protocolSchema as Schema, ["general", protocolKey]),
             });
         });
     }
@@ -221,10 +246,10 @@ export const buildConfigGroups = (
 };
 
 const PROTOCOL_TITLES: Record<string, string> = {
-    'onebot.v11': 'OneBot 11',
-    'onebot.v12': 'OneBot 12',
-    'milky.v1': 'Milky',
-    'satori.v1': 'Satori'
+    "onebot.v11": "OneBot 11",
+    "onebot.v12": "OneBot 12",
+    "milky.v1": "Milky",
+    "satori.v1": "Satori",
 };
 
 export const protocolTitle = (key: string): string => PROTOCOL_TITLES[key] ?? key;
@@ -233,15 +258,15 @@ export const protocolTitle = (key: string): string => PROTOCOL_TITLES[key] ?? ke
 export const extractAccountRows = (configObject: Record<string, unknown>): AccountRow[] => {
     const rows: AccountRow[] = [];
     Object.entries(configObject).forEach(([key, value]) => {
-        if (!key.includes('.') || BASE_CONFIG_KEYS.has(key)) return;
-        const [platform, ...rest] = key.split('.');
-        const account_id = rest.join('.');
+        if (!key.includes(".") || BASE_CONFIG_KEYS.has(key)) return;
+        const [platform, ...rest] = key.split(".");
+        const account_id = rest.join(".");
         rows.push({
             key,
             platform,
             account_id,
             config: isRecord(value) ? value : {},
-            preview: JSON.stringify(value, null, 2)
+            preview: JSON.stringify(value, null, 2),
         });
     });
     return rows;

@@ -1,0 +1,200 @@
+import { describe, expect, it, vi } from "vitest";
+import { ZulipClient } from "./client.js";
+import { ZulipError } from "./errors.js";
+import type { ZulipHttpRequest, ZulipTransport } from "./http.js";
+import type { ZulipConfig } from "./types.js";
+
+const config: ZulipConfig = {
+    account_id: "bot",
+    server_url: "https://example.zulipchat.com",
+    email: "bot@example.com",
+    api_key: "secret",
+};
+
+describe("ZulipClient", () => {
+    it("使用官方 register/events 长轮询并在 stop 时删除队列", async () => {
+        const requests: ZulipHttpRequest[] = [];
+        const transport: ZulipTransport = request => {
+            requests.push(request);
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: "queue-1",
+                    last_event_id: -1,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                return new Promise((_, reject) => {
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        { once: true },
+                    );
+                });
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(config, { transport });
+
+        await client.start();
+        await vi.waitFor(() => expect(requests.some(item => item.path === "events")).toBe(true));
+        await client.stop();
+
+        expect(requests.map(item => `${item.method} ${item.path}`)).toContain("POST register");
+        expect(requests.map(item => `${item.method} ${item.path}`)).toContain("DELETE events");
+    });
+
+    it("队列被回收后无限恢复并创建新 generation", async () => {
+        let registrations = 0;
+        let eventCalls = 0;
+        const transport: ZulipTransport = request => {
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                registrations += 1;
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: `queue-${registrations}`,
+                    last_event_id: -1,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                eventCalls += 1;
+                if (eventCalls === 1) {
+                    return Promise.reject(
+                        new ZulipError("queue expired", { code: "BAD_EVENT_QUEUE_ID" }),
+                    );
+                }
+                return new Promise((_, reject) => {
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        {
+                            once: true,
+                        },
+                    );
+                });
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(config, {
+            transport,
+            sleep: () => Promise.resolve(),
+        });
+        const errors: ZulipError[] = [];
+        client.on("client_error", error => errors.push(error));
+
+        await client.start();
+        await vi.waitFor(() => expect(registrations).toBe(2));
+        expect(errors[0]?.code).toBe("BAD_EVENT_QUEUE_ID");
+        await client.stop();
+    });
+
+    it("隔离调用方监听器异常并继续投递原始事件", () => {
+        const client = new ZulipClient(
+            { ...config, event_queue: { enabled: false } },
+            { transport: async () => ({}) },
+        );
+        const seen = vi.fn();
+        const sameEventSeen = vi.fn();
+        const errors: ZulipError[] = [];
+        client.on("message", () => {
+            throw new Error("listener failed");
+        });
+        client.on("message", sameEventSeen);
+        client.on("event", seen);
+        client.on("client_error", error => errors.push(error));
+
+        client.ingest({ id: 1, type: "message", message: message() });
+
+        expect(seen).toHaveBeenCalledOnce();
+        expect(sameEventSeen).toHaveBeenCalledOnce();
+        expect(errors[0]?.code).toBe("ZULIP_LISTENER_FAILED");
+    });
+
+    it("空事件选择回落到默认订阅，并投递官方命名事件", async () => {
+        const requests: ZulipHttpRequest[] = [];
+        const transport: ZulipTransport = request => {
+            requests.push(request);
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: "queue-1",
+                    last_event_id: -1,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                return new Promise((_, reject) =>
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        {
+                            once: true,
+                        },
+                    ),
+                );
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(
+            { ...config, event_queue: { event_types: [] } },
+            { transport },
+        );
+        const subscription = vi.fn();
+        client.on("subscription", subscription);
+
+        await client.start();
+        const registration = requests.find(request => request.path === "register");
+        expect(registration?.params?.event_types).toContain("message");
+        client.ingest({ id: 2, type: "subscription", op: "add" });
+        expect(subscription).toHaveBeenCalledOnce();
+        await client.stop();
+    });
+
+    it("上传文件使用受控 multipart 请求", async () => {
+        const transport = vi.fn<ZulipTransport>().mockResolvedValue({
+            result: "success",
+            msg: "",
+            url: "/user_uploads/a.txt",
+        });
+        const client = new ZulipClient(config, { transport });
+
+        const result = await client.upload(Buffer.from("hello"), "a.txt", "text/plain");
+
+        expect(result.url).toBe("/user_uploads/a.txt");
+        expect(transport).toHaveBeenCalledWith(
+            expect.objectContaining({
+                method: "POST",
+                path: "user_uploads",
+                body: expect.any(Buffer),
+                contentType: expect.stringContaining("multipart/form-data"),
+            }),
+        );
+    });
+});
+
+function user() {
+    return {
+        result: "success",
+        msg: "",
+        user_id: 1,
+        email: "bot@example.com",
+        full_name: "Bot",
+    };
+}
+
+function message() {
+    return {
+        id: 10,
+        type: "private" as const,
+        sender_id: 2,
+        sender_email: "user@example.com",
+        sender_full_name: "User",
+        content: "hello",
+        timestamp: 100,
+    };
+}

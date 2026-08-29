@@ -1,119 +1,80 @@
 # @onebots/adapter-zulip
 
-onebots Zulip 适配器，基于 Zulip REST API 和 WebSocket API。
+面向 Zulip 当前 REST API 与 Event Queue 的 OneBots 适配器。它使用官方 `POST /register` + `GET /events` 长轮询，不会创建不存在的 WebSocket 连接。
 
-## 特性
+## 能力
 
-- ✅ 流消息（Stream）和私聊消息（Private）支持
-- ✅ REST API 消息发送
-- ✅ WebSocket 实时事件接收
-- ✅ 消息编辑和删除
-- ✅ 流管理
-- ✅ 用户信息获取
-- ✅ 自动重连支持
-- ✅ 代理配置支持
-
-## 安装
-
-```bash
-pnpm add @onebots/adapter-zulip
-```
+- 频道、话题与单人/多人私聊消息
+- 消息查询、历史、编辑、删除、已读与星标
+- Zulip-flavored Markdown、用户提及、Emoji、图片和文件上传
+- 真实频道订阅者查询、邀请、移除、退订与频道改名
+- 消息反应、成员变更、心跳及未知原始事件投影
+- 队列过期自动重建、无限指数退避、生命周期取消与调用方监听器隔离
+- 独立可嵌入的 `ZulipClient`、底层 `call()` 与 `ingest(rawEvent)`
+- HTTP/SOCKS 代理、结构化 `ZulipError` 和完整 TypeScript 类型
 
 ## 配置
 
-### 前置要求
-
-1. **Zulip 服务器**
-   - 自托管 Zulip 服务器或使用 Zulip Cloud
-   - 获取服务器地址，如 `https://chat.zulip.org`
-
-2. **获取 API Key**
-   - 登录 Zulip 服务器
-   - 访问 Settings → Your bots → Add a new bot
-   - 创建 Bot 并获取 API Key
-
-### 配置示例
-
 ```yaml
-zulip.my_bot:
-  # Zulip 服务器配置
-  serverUrl: 'https://chat.zulip.org'
-  email: 'bot@example.com'
-  apiKey: 'your_api_key'
-  
-  # WebSocket 配置（可选）
-  websocket:
-    enabled: true  # 是否启用 WebSocket，默认 true
-    reconnectInterval: 3000  # 重连间隔（毫秒），默认 3000
-    maxReconnectAttempts: 10  # 最大重连次数，默认 10
-  
-  # 代理配置（可选）
-  proxy:
-    url: 'http://127.0.0.1:7890'
-  
-  # 协议配置
+zulip.team-bot:
+  server_url: https://example.zulipchat.com
+  email: onebots-bot@example.zulipchat.com
+  api_key: your-api-key
+  default_topic: general
+
+  event_queue:
+    enabled: true
+    all_public_streams: false
+    retry_initial_delay_ms: 1000
+    retry_max_delay_ms: 30000
+
   onebot.v11:
-    access_token: 'your_token'
+    access_token: your-token
 ```
 
-## 使用示例
+`server_url` 是组织根地址，不应包含 `/api/v1`。`api_key` 在 Web 表单中按敏感字段处理。旧的 `serverUrl`、`apiKey` 和 `websocket` 不是 Zulip 官方模型，已移除。
 
-### 发送流消息
+事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。
 
-```javascript
-// 发送到流 "general" 的话题 "test"
-await bot.sendMessage('general/test', {
-  scene_id: bot.createId('general/test'),
-  scene_type: 'group',
-  message: [
-    { type: 'text', data: { text: 'Hello from Zulip!' } }
-  ]
+## 场景 ID
+
+- 频道：`stream_id/topic`，例如 `42/releases`。只有 `stream_id` 时使用 `default_topic`。
+- 私聊：用户 ID，例如 `17`；多人私聊使用 `17,23`。
+
+入站频道消息会把频道 ID 与原话题同时写入 `group.id`，因此直接回复不会丢失话题。频道名称可能变化，不作为稳定 ID。
+
+## 独立 Client
+
+```ts
+import { ZulipClient } from "@onebots/adapter-zulip";
+
+const client = new ZulipClient({
+  account_id: "team-bot",
+  server_url: "https://example.zulipchat.com",
+  email: "onebots-bot@example.zulipchat.com",
+  api_key: process.env.ZULIP_API_KEY!,
 });
-```
 
-### 发送私聊消息
-
-```javascript
-// 发送给用户
-await bot.sendMessage('user@example.com', {
-  scene_id: bot.createId('user@example.com'),
-  scene_type: 'private',
-  message: [
-    { type: 'text', data: { text: 'Hello!' } }
-  ]
+client.on("message", event => {
+  console.log(event.message);
 });
-```
-
-### 接收消息
-
-适配器会自动接收 WebSocket 事件并转换为消息事件：
-
-```javascript
-bot.on('message', (event) => {
-  if (event.platform === 'zulip') {
-    console.log('收到 Zulip 消息:', event.sender.name, event.message);
-  }
+client.on("client_error", error => {
+  console.error(error.code, error.message);
 });
+
+await client.start();
 ```
 
-## 消息类型支持
+已有 Event Queue 或代理连接可调用 `client.ingest(rawEvent)`，与内置长轮询共用同一事件管线。`client.call(path, method, params)` 只允许当前组织 `/api/v1` 下的安全相对路径。
 
-| 消息类型 | 支持 | 说明 |
-|---------|------|------|
-| 文本 | ✅ | 支持 Markdown 格式 |
-| 图片 | ✅ | 通过 Markdown 图片语法 |
-| 文件 | ✅ | 通过 Markdown 链接语法 |
+## 平台扩展动作
 
-## 注意事项
+通过统一 `callAction` 可调用反应、星标、消息搜索与编辑历史、频道订阅/管理、话题可见性、Presence、用户状态、输入状态、附件、Emoji 和服务器信息等动作。`call_zulip_api` 用于尚未封装的官方端点，但不会接受绝对 URL。
 
-1. **流消息格式**：`scene_id` 格式为 `stream_name` 或 `stream_name/topic`
-2. **私聊消息格式**：`scene_id` 格式为邮箱地址或逗号分隔的邮箱列表
-3. **Markdown 支持**：Zulip 支持 Markdown 格式，可以在消息中使用
-4. **WebSocket 重连**：自动重连机制，可配置重连间隔和最大次数
+平台新增字段不会被丢弃：每个投影事件都保留 `raw_event`，未建立通用语义的事件会以 `notice_type: "custom"` 分发。
 
-## 相关链接
+## 官方文档
 
-- [Zulip API 文档](https://zulip.com/api)
-- [适配器配置指南](/guide/adapter)
-- [Zulip 平台文档](/platform/zulip)
-
+- [Zulip REST API](https://zulip.com/api/rest)
+- [Real-time events](https://zulip.com/api/real-time-events)
+- [Register an event queue](https://zulip.com/api/register-queue)

@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import type { SchemaGroup } from './types';
-import SchemaField from '../SchemaField.vue';
-import UiCollapse from '../../ui/UiCollapse.vue';
-import UiCollapseItem from '../../ui/UiCollapseItem.vue';
-import UiEmpty from '../../ui/UiEmpty.vue';
+import type { SchemaGroup } from "./types";
+import SchemaField from "../SchemaField.vue";
+import UiCollapse from "../../ui/UiCollapse.vue";
+import UiCollapseItem from "../../ui/UiCollapseItem.vue";
+import UiEmpty from "../../ui/UiEmpty.vue";
 
 defineProps<{
     schemaGroups: SchemaGroup[];
     formModel: Record<string, unknown>;
 }>();
 
-const activeGroups = defineModel<string[]>('activeGroups', { required: true });
+const activeGroups = defineModel<string[]>("activeGroups", { required: true });
 
-const isEndpointField = (field: SchemaGroup['fields'][number]) =>
-    field.rule.ui?.widget === 'endpoint-list' || field.rule.ui?.widget === 'event-filter';
+const isWideField = (field: SchemaGroup["fields"][number]) =>
+    field.rule.ui?.widget === "endpoint-list" ||
+    field.rule.ui?.widget === "event-filter" ||
+    field.rule.ui?.widget === "choice-list";
 </script>
 
 <template>
@@ -27,7 +29,9 @@ const isEndpointField = (field: SchemaGroup['fields'][number]) =>
                 <template #title>
                     <div class="min-w-0">
                         <div class="font-medium text-fg">{{ group.title }}</div>
-                        <div v-if="group.description" class="mt-0.5 text-xs font-normal text-fg-tertiary">
+                        <div
+                            v-if="group.description"
+                            class="mt-0.5 text-xs font-normal text-fg-tertiary">
                             {{ group.description }}
                         </div>
                     </div>
@@ -38,7 +42,7 @@ const isEndpointField = (field: SchemaGroup['fields'][number]) =>
                         :key="field.key"
                         v-model="formModel[field.key]"
                         :field="field"
-                        :class="isEndpointField(field) ? 'sm:col-span-2' : ''" />
+                        :class="isWideField(field) ? 'sm:col-span-2' : ''" />
                 </div>
             </UiCollapseItem>
         </UiCollapse>

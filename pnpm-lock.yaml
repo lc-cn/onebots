@@ -459,15 +459,9 @@ importers:
 
   adapters/adapter-zulip:
     dependencies:
-      axios:
-        specifier: ^1.19.0
-        version: 1.19.0(debug@4.4.3)
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
-      ws:
-        specifier: ^8.21.3
-        version: 8.21.3
     optionalDependencies:
       https-proxy-agent:
         specifier: ^7.0.6

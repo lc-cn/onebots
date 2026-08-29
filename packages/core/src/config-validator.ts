@@ -35,7 +35,7 @@ export interface ValidationRule<T = unknown> {
     sensitive?: boolean;
     /** Web 表单展示元数据，不参与运行时校验。 */
     ui?: {
-        widget?: "endpoint-list" | "event-filter";
+        widget?: "endpoint-list" | "event-filter" | "choice-list";
         /** Web 配置页中的语义分区；布局由消费端统一决定。 */
         section?: "transport" | "delivery" | "credentials" | "filter" | "advanced";
         itemLabel?: string;
@@ -175,8 +175,12 @@ export class ConfigValidator {
 
             // choices 取值校验
             const allowed = validationRule.choices?.map(c => c.value);
-            if (allowed && allowed.length > 0 && !allowed.includes(finalValue)) {
-                errors.push(`${currentPath} must be one of: ${allowed.join(", ")}`);
+            if (allowed && allowed.length > 0) {
+                if (Array.isArray(finalValue) && finalValue.some(item => !allowed.includes(item))) {
+                    errors.push(`${currentPath} must contain only: ${allowed.join(", ")}`);
+                } else if (!Array.isArray(finalValue) && !allowed.includes(finalValue)) {
+                    errors.push(`${currentPath} must be one of: ${allowed.join(", ")}`);
+                }
             }
 
             // 自定义验证器：true / null / undefined 通过；false 或 string 为失败

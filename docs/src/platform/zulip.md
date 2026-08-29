@@ -1,143 +1,37 @@
-# Zulip 平台
+# Zulip
 
-## 状态
+Zulip 适配器按官方 REST API 与 Event Queue 工作，支持频道（Channel）、话题（Topic）和私聊。实时连接为 `POST /register` 注册队列后持续 `GET /events` 长轮询。
 
-✅ **已实现并可用**
+## 平台映射
 
-## 简介
+| Zulip | OneBots |
+| --- | --- |
+| Channel + Topic | `group` / `channel` 场景，ID 为 `stream_id/topic` |
+| Direct message | `private` 场景，ID 为用户 ID 或逗号分隔用户 ID |
+| Organization user | 用户；不伪装成“好友” |
+| Channel subscribers | 群成员 |
+| Reaction | `reaction_added` / `reaction_removed` |
+| Realm user event | `user_added` / `user_updated` / `user_removed` |
+| 其他 Event Queue 事件 | `custom`，完整保留 `raw_event` |
 
-Zulip 适配器基于 Zulip REST API 和 WebSocket API，支持流消息（Stream）和私聊消息（Private）。
+## 消息与文件
 
-## 特性
+文本直接使用 Zulip-flavored Markdown。`at` 会先查询真实用户名称并生成带用户 ID 的 Zulip 提及；远程图片/文件以 Markdown 链接发送，本地路径或 Base64 数据先通过 `/user_uploads` 上传。获取消息、消息历史、编辑、删除、已读和星标均走官方接口。
 
-- ✅ 流消息（Stream）和私聊消息（Private）支持
-- ✅ REST API 消息发送
-- ✅ WebSocket 实时事件接收
-- ✅ 消息编辑和删除
-- ✅ 流管理
-- ✅ 用户信息获取
-- ✅ 自动重连支持
-- ✅ 代理配置支持
+频道列表来自可访问 Channel；成员列表调用 `/streams/{stream_id}/members`，不会再用整个组织成员列表伪装频道成员。邀请、移除和退订使用官方 subscriptions API。
 
-## 安装
+## 可靠事件队列
 
-```bash
-pnpm add @onebots/adapter-zulip
-```
+- 使用服务器返回的 `queue_id` 与 `last_event_id` 顺序确认事件。
+- `BAD_EVENT_QUEUE_ID` 时重新注册队列。
+- 网络错误默认无限指数退避，成功后恢复在线状态。
+- `stop()` 通过 AbortSignal 取消长轮询并删除服务器队列。
+- 用户事件监听器抛错不会中断后续事件消费。
 
-## 前置要求
+## 原生扩展
 
-### 1. Zulip 服务器
+适配器公开消息反应、星标、搜索、编辑历史、已读回执、Markdown 渲染、频道创建/更新/归档、订阅、话题可见性、Presence、用户状态、Typing、Emoji、附件与服务器信息动作。未封装端点可通过受限 `call_zulip_api` 调用。
 
-- 自托管 Zulip 服务器或使用 Zulip Cloud
-- 获取服务器地址，如 `https://chat.zulip.org`
+独立集成可直接使用包导出的 `ZulipClient`，并通过 `ingest(rawEvent)` 把已有连接的事件送入统一管线。
 
-### 2. 获取 API Key
-
-1. 登录 Zulip 服务器
-2. 访问 Settings → Your bots → Add a new bot
-3. 创建 Bot 并获取 API Key
-
-## 配置
-
-### 基础配置
-
-```yaml
-zulip.my_bot:
-  # Zulip 服务器配置
-  serverUrl: 'https://chat.zulip.org'
-  email: 'bot@example.com'
-  apiKey: 'your_api_key'
-  
-  # WebSocket 配置（可选）
-  websocket:
-    enabled: true  # 是否启用 WebSocket，默认 true
-    reconnectInterval: 3000  # 重连间隔（毫秒），默认 3000
-    maxReconnectAttempts: 10  # 最大重连次数，默认 10
-  
-  # 协议配置
-  onebot.v11:
-    access_token: 'your_token'
-```
-
-### 配置项说明
-
-| 配置项 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| `serverUrl` | string | 是 | Zulip 服务器地址 |
-| `email` | string | 是 | Bot 邮箱地址 |
-| `apiKey` | string | 是 | API Key |
-| `websocket.enabled` | boolean | 否 | 是否启用 WebSocket，默认 true |
-| `websocket.reconnectInterval` | number | 否 | 重连间隔（毫秒），默认 3000 |
-| `websocket.maxReconnectAttempts` | number | 否 | 最大重连次数，默认 10 |
-| `proxy` | object | 否 | 代理配置 |
-
-## 使用客户端 SDK
-
-```typescript
-import { ImHelper } from '@onebots/imhelper';
-import { OneBotV11Adapter } from '@onebots/protocol-onebot-v11';
-
-const helper = new ImHelper({
-  adapter: new OneBotV11Adapter({
-    baseUrl: 'http://localhost:6727',
-    basePath: '/zulip/my_bot/onebot/v11',
-    accessToken: 'your_token',
-    platform: 'zulip',
-    accountId: 'my_bot',
-  }),
-});
-
-// 监听消息
-helper.on('message', async (message) => {
-  console.log('收到 Zulip 消息:', message.sender.name, message.content);
-  
-  // 自动回复
-  await helper.sendMessage({
-    scene_id: message.sender.id,
-    scene_type: message.message_type,
-    message: [
-      { type: 'text', data: { text: '已收到您的消息！' } }
-    ],
-  });
-});
-
-await helper.start();
-```
-
-## 消息类型
-
-### 流消息（Stream）
-
-流消息类似于群组消息，需要指定流名称和话题：
-
-```yaml
-# scene_id 格式: stream_name 或 stream_name/topic
-scene_id: 'general'  # 发送到 general 流的默认话题
-scene_id: 'general/test'  # 发送到 general 流的 test 话题
-```
-
-### 私聊消息（Private）
-
-私聊消息需要指定收件人邮箱：
-
-```yaml
-# scene_id 格式: email 或 email1,email2
-scene_id: 'user@example.com'  # 单用户
-scene_id: 'user1@example.com,user2@example.com'  # 多用户
-```
-
-## 注意事项
-
-1. **流消息格式**：`scene_id` 格式为 `stream_name` 或 `stream_name/topic`
-2. **私聊消息格式**：`scene_id` 格式为邮箱地址或逗号分隔的邮箱列表
-3. **Markdown 支持**：Zulip 支持 Markdown 格式，可以在消息中使用
-4. **WebSocket 重连**：自动重连机制，可配置重连间隔和最大次数
-
-## 相关链接
-
-- [适配器配置](/config/adapter/zulip)
-- [快速开始](/guide/start)
-- [客户端 SDK](/guide/client-sdk)
-- [Zulip API 文档](https://zulip.com/api)
-
+配置见 [Zulip 配置](/config/adapter/zulip)，完整用法见包内 README。

@@ -25,6 +25,15 @@ const filterRule: ValidationRule = {
     ui: { widget: "event-filter" },
 };
 
+const choiceListRule: ValidationRule = {
+    type: "array",
+    choices: [
+        { label: "消息", value: "message" },
+        { label: "反应", value: "reaction" },
+    ],
+    ui: { widget: "choice-list" },
+};
+
 describe("config form generation", () => {
     test("splits protocol defaults and does not repeat account fields", () => {
         const bundle: SchemaBundle = {
@@ -61,9 +70,7 @@ describe("config form generation", () => {
     });
 
     test("copies reactive endpoint arrays without cloning Vue proxies", () => {
-        const value = reactive([
-            { url: "wss://events.example", access_token: "secret" },
-        ]);
+        const value = reactive([{ url: "wss://events.example", access_token: "secret" }]);
 
         expect(resolveStructuredFieldDisplay(value, endpointRule)).toEqual([
             { url: "wss://events.example", access_token: "secret" },
@@ -78,9 +85,23 @@ describe("config form generation", () => {
             ok: true,
             value: { $and: [{ type: "message" }] },
         });
+        expect(parseStructuredFieldValue('{"type":"request"}', filterRule, "事件过滤")).toEqual({
+            ok: true,
+            value: { type: "request" },
+        });
+    });
+
+    test("keeps dynamic choice lists structured, unique and constrained", () => {
+        const value = reactive(["message", "reaction"]);
+
+        expect(resolveStructuredFieldDisplay(value, choiceListRule)).toEqual(value);
         expect(
-            parseStructuredFieldValue('{"type":"request"}', filterRule, "事件过滤"),
-        ).toEqual({ ok: true, value: { type: "request" } });
+            parseStructuredFieldValue(["message", "message", "reaction"], choiceListRule, "事件"),
+        ).toEqual({ ok: true, value: ["message", "reaction"] });
+        expect(parseStructuredFieldValue(["unknown"], choiceListRule, "事件")).toEqual({
+            ok: false,
+            message: "字段 事件 中存在未声明的选项：unknown",
+        });
     });
 
     test("removes blank rows and rejects the wrong URL scheme", () => {
