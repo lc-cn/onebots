@@ -6,6 +6,7 @@
 
 - 频道、话题与单人/多人私聊消息
 - 消息查询、历史、编辑、删除、已读与星标
+- 定时消息、草稿、提醒与保存片段管理
 - Zulip-flavored Markdown、用户提及、Emoji、图片和文件上传
 - 真实频道订阅者查询、邀请、移除、退订与频道改名
 - 消息反应、成员变更、心跳及未知原始事件投影
@@ -32,7 +33,7 @@ zulip.team-bot:
     access_token: your-token
 ```
 
-`server_url` 是组织根地址，不应包含 `/api/v1`。`api_key` 在 Web 表单中按敏感字段处理。旧的 `serverUrl`、`apiKey` 和 `websocket` 不是 Zulip 官方模型，已移除。
+`server_url` 是组织根地址，不应包含 `/api/v1`。生产地址必须使用 HTTPS，仅本机回环地址允许 HTTP。`api_key` 在 Web 表单中按敏感字段处理。旧的 `serverUrl`、`apiKey` 和 `websocket` 不是 Zulip 官方模型，已移除。
 
 事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。
 
@@ -69,7 +70,7 @@ await client.start();
 
 ## 平台扩展动作
 
-通过统一 `callAction` 可调用反应、星标、消息搜索与编辑历史、频道订阅/管理、话题可见性、Presence、用户状态、输入状态、附件、Emoji 和服务器信息等动作。`call_zulip_api` 用于尚未封装的官方端点，但不会接受绝对 URL。
+通过统一 `callAction` 可调用反应、星标、消息搜索与编辑历史、频道订阅/管理、话题可见性、Presence、用户状态、输入状态、定时消息、草稿、提醒、保存片段、附件、Emoji 和服务器信息等动作。`call_zulip_api` 用于尚未封装的官方端点，但不会接受绝对 URL。
 
 平台新增字段不会被丢弃：每个投影事件都保留 `raw_event`，未建立通用语义的事件会以 `notice_type: "custom"` 分发。
 

@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { randomBytes } from "node:crypto";
+import { assertZulipConfig } from "./config.js";
 import { isBadEventQueue, ZulipError } from "./errors.js";
 import { assertZulipApiPath, createZulipTransport, type ZulipTransport } from "./http.js";
 import {
@@ -83,6 +84,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         options: ZulipClientOptions = {},
     ) {
         super();
+        assertZulipConfig(config);
         this.transportRequest = options.transport
             ? Promise.resolve(options.transport)
             : createZulipTransport(config);
@@ -156,6 +158,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         method: ZulipHttpMethod = "GET",
         params: ZulipParams = {},
         signal?: AbortSignal,
+        timeoutMs?: number,
     ): Promise<unknown> {
         const transport = await this.transportRequest;
         return transport({
@@ -163,6 +166,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
             path: assertZulipApiPath(path),
             params,
             signal,
+            timeoutMs,
         });
     }
 
@@ -348,6 +352,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
                     { queue_id: registration.queue_id, last_event_id: registration.last_event_id },
                     parseZulipEventsResponse,
                     signal,
+                    longPollTimeoutMs(registration),
                 );
                 failures = 0;
                 if (recovering) this.safeEmit("connected", registration);
@@ -388,8 +393,9 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         params: ZulipParams,
         parse: (value: unknown) => T,
         signal?: AbortSignal,
+        timeoutMs?: number,
     ): Promise<T> {
-        return parse(await this.call(path, method, params, signal));
+        return parse(await this.call(path, method, params, signal, timeoutMs));
     }
 
     private safeEmit<K extends keyof ZulipClientEvents>(
@@ -414,6 +420,12 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
             }
         }
     }
+}
+
+/** 为服务端长轮询窗口保留网络传输与响应解析余量。 */
+function longPollTimeoutMs(registration: ZulipQueueRegistration): number | undefined {
+    const seconds = registration.event_queue_longpoll_timeout_seconds;
+    return typeof seconds === "number" && seconds > 0 ? seconds * 1_000 + 10_000 : undefined;
 }
 
 function abortableSleep(delayMs: number, signal: AbortSignal): Promise<void> {

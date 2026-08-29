@@ -3,6 +3,7 @@ import { ZULIP_EVENT_TYPES } from "./types.js";
 
 export { ZulipAdapter } from "./adapter.js";
 export { ZulipClient, type ZulipClientEvents, type ZulipClientOptions } from "./client.js";
+export { assertZulipConfig } from "./config.js";
 export { zulipCapabilities } from "./capabilities.js";
 export { ZulipError } from "./errors.js";
 export { projectZulipEvent, projectZulipMessage } from "./events.js";
@@ -26,7 +27,7 @@ const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
     restart: "服务器重启",
 };
 
-const zulipSchema: Schema = {
+export const zulipSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -39,7 +40,8 @@ const zulipSchema: Schema = {
         required: true,
         label: "Zulip 组织地址",
         placeholder: "https://chat.zulip.org",
-        pattern: /^https?:\/\/[^\s]+$/,
+        pattern:
+            /^(?:https:\/\/[^\s]+|http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/[^\s]*)?)$/,
         ui: { section: "credentials" },
     },
     email: {
@@ -81,6 +83,7 @@ const zulipSchema: Schema = {
             ui: {
                 section: "filter",
                 widget: "choice-list",
+                visibleWhen: { path: "event_queue.enabled", oneOf: [true] },
             },
         },
         all_public_streams: {
@@ -88,21 +91,30 @@ const zulipSchema: Schema = {
             default: false,
             label: "接收所有公共频道",
             description: "开启后接收 Bot 未订阅但有权访问的公共频道消息",
-            ui: { section: "filter" },
+            ui: {
+                section: "filter",
+                visibleWhen: { path: "event_queue.enabled", oneOf: [true] },
+            },
         },
         retry_initial_delay_ms: {
             type: "number",
             min: 100,
             default: 1000,
             label: "初始重试延迟（毫秒）",
-            ui: { section: "advanced" },
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "event_queue.enabled", oneOf: [true] },
+            },
         },
         retry_max_delay_ms: {
             type: "number",
             min: 1000,
             default: 30000,
             label: "最大重试延迟（毫秒）",
-            ui: { section: "advanced" },
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "event_queue.enabled", oneOf: [true] },
+            },
         },
     },
     proxy: {

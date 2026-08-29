@@ -56,6 +56,29 @@ const ACTION_HANDLERS: Readonly<Record<string, ActionHandler>> = {
     get_custom_emoji: client => client.call("realm/emoji"),
     get_attachments: client => client.call("attachments"),
     get_server_settings: client => client.call("server_settings"),
+    get_scheduled_messages: client => client.call("scheduled_messages"),
+    create_scheduled_message: (client, params) =>
+        client.call("scheduled_messages", "POST", requireParams(params)),
+    edit_scheduled_message: (client, params) =>
+        resourceAction(client, "scheduled_messages", "scheduled_message_id", "PATCH", params),
+    delete_scheduled_message: (client, params) =>
+        resourceAction(client, "scheduled_messages", "scheduled_message_id", "DELETE", params),
+    get_drafts: client => client.call("drafts"),
+    create_drafts: (client, params) => client.call("drafts", "POST", requireParams(params)),
+    edit_draft: (client, params) => resourceAction(client, "drafts", "draft_id", "PATCH", params),
+    delete_draft: (client, params) =>
+        resourceAction(client, "drafts", "draft_id", "DELETE", params),
+    get_reminders: client => client.call("reminders"),
+    create_reminder: (client, params) => client.call("reminders", "POST", requireParams(params)),
+    delete_reminder: (client, params) =>
+        resourceAction(client, "reminders", "reminder_id", "DELETE", params),
+    get_saved_snippets: client => client.call("saved_snippets"),
+    create_saved_snippet: (client, params) =>
+        client.call("saved_snippets", "POST", requireParams(params)),
+    edit_saved_snippet: (client, params) =>
+        resourceAction(client, "saved_snippets", "saved_snippet_id", "PATCH", params),
+    delete_saved_snippet: (client, params) =>
+        resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
 };
 
 export const ZULIP_PLATFORM_ACTIONS: ReadonlySet<string> = new Set(Object.keys(ACTION_HANDLERS));
@@ -109,6 +132,17 @@ function archiveChannel(
     return client.call(`streams/${requireInteger(params.stream_id, "stream_id")}`, "PATCH", {
         is_archived: archived,
     });
+}
+
+function resourceAction(
+    client: ZulipClient,
+    collection: string,
+    idField: string,
+    method: "PATCH" | "DELETE",
+    params: Readonly<Record<string, unknown>>,
+): Promise<unknown> {
+    const id = requireInteger(params[idField], idField);
+    return client.call(`${collection}/${id}`, method, without(params, idField));
 }
 
 function requireMethod(value: unknown): ZulipHttpMethod {

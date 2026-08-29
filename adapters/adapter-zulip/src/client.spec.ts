@@ -23,6 +23,7 @@ describe("ZulipClient", () => {
                     msg: "",
                     queue_id: "queue-1",
                     last_event_id: -1,
+                    event_queue_longpoll_timeout_seconds: 30,
                 });
             }
             if (request.path === "events" && request.method === "GET") {
@@ -44,6 +45,9 @@ describe("ZulipClient", () => {
 
         expect(requests.map(item => `${item.method} ${item.path}`)).toContain("POST register");
         expect(requests.map(item => `${item.method} ${item.path}`)).toContain("DELETE events");
+        expect(
+            requests.find(item => item.path === "events" && item.method === "GET")?.timeoutMs,
+        ).toBe(40_000);
     });
 
     it("队列被回收后无限恢复并创建新 generation", async () => {
@@ -174,6 +178,23 @@ describe("ZulipClient", () => {
                 contentType: expect.stringContaining("multipart/form-data"),
             }),
         );
+    });
+
+    it("在创建传输前拒绝不安全或不完整配置", () => {
+        expect(
+            () =>
+                new ZulipClient({
+                    ...config,
+                    server_url: "http://zulip.example.com",
+                }),
+        ).toThrowError(expect.objectContaining({ code: "ZULIP_INVALID_CONFIG" }));
+        expect(
+            () =>
+                new ZulipClient({
+                    ...config,
+                    server_url: "https://zulip.example.com/api/v1",
+                }),
+        ).toThrowError(expect.objectContaining({ code: "ZULIP_INVALID_CONFIG" }));
     });
 });
 
