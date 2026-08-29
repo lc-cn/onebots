@@ -11,7 +11,7 @@ import type { TelegramConfig } from "./types.js";
 import { telegramCapabilities } from "./capabilities.js";
 import { createTelegramAccount } from "./account.js";
 import { executeTelegramPlatformAction, TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
-import { sendTelegramMessage } from "./message-sender.js";
+import { compileTelegramEditableText, sendTelegramMessage } from "./message-sender.js";
 
 export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     constructor(app: BaseApp) {
@@ -31,7 +31,9 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
 
         const bot = account.client;
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
-        const messageId = await sendTelegramMessage(bot, sceneId.string, params.message);
+        const messageId = await sendTelegramMessage(bot, sceneId.string, params.message, {
+            resolveUserId: value => String(this.resolveId(value).source),
+        });
         return {
             message_id: this.createId(messageId),
         };
@@ -78,15 +80,9 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
                 ? this.coerceId(rawScene as CommonTypes.Id | string | number).string
                 : "";
 
-        // 解析消息内容
-        let text = "";
-        for (const seg of params.message) {
-            if (typeof seg === "string") {
-                text += seg;
-            } else if (seg.type === "text") {
-                text += seg.data.text || "";
-            }
-        }
+        const text = compileTelegramEditableText(params.message, {
+            resolveUserId: value => String(this.resolveId(value).source),
+        });
 
         if (!chatId) return this.unsupported("update_message", "context_missing");
         await bot.editMessageText(chatId, msgId, text);

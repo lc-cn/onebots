@@ -75,6 +75,8 @@ onebots -r telegram
 - ✅ 其他 Telegram Update 以 `notice.custom` + `raw_event` 无损交付
 - ✅ **代理支持**（HTTP/HTTPS）
 
+媒体段可直接使用 Telegram `file_id` 或 HTTP(S) URL；本地路径、`file://`、data URL 与 `base64://` 会物化为 grammY `InputFile` 原生上传。未知段、无效回复、空位置/联系人和平台无法表达的内容会明确失败，不会退化为空文本请求。统一 `update_message` 只更新文本和 @；媒体、Caption 或键盘更新请使用 `call_telegram_api` 调用相应 Bot API 方法。
+
 能力列表可通过协议的 `get_supported_actions` 查询。平台扩展动作使用 snake_case，例如 `send_poll`：
 
 ```json

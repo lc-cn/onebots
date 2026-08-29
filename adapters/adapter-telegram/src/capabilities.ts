@@ -5,7 +5,11 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
     actions: {
         send_message: { support: "native", scenes: ["private", "group", "channel"] },
         delete_message: { support: "native", availability: "context" },
-        update_message: { support: "native", availability: "context" },
+        update_message: {
+            support: "native",
+            availability: "context",
+            note: "统一更新路径支持文本与 @；媒体/Caption 使用 call_telegram_api",
+        },
         get_login_info: { support: "native" },
         get_group_info: { support: "native" },
         set_group_name: {
