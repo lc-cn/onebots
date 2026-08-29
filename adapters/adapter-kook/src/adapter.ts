@@ -310,6 +310,10 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         return executeKookPlatformAction(this.requireBot(uin), action, params);
     }
 
+    isPlatformActionImplemented(action: string): boolean {
+        return KOOK_PLATFORM_ACTIONS.has(action);
+    }
+
     async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
         const version = await readPackageVersion(new URL("../package.json", import.meta.url));
         return { app_name: "onebots KOOK Adapter", app_version: version, impl: "kook", version };

@@ -27,11 +27,26 @@ describe("adapter capability manifest", () => {
         expect(Object.isFrozen(manifest.actions.send_message)).toBe(true);
     });
 
-    it("拒绝未声明权限名称的 permission 能力", () => {
+    it("允许动态判权，并拒绝无效的权限名提示", () => {
         expect(() =>
             defineAdapterCapabilities({
                 actions: {
                     get_user_info: { support: "native", availability: "permission" },
+                },
+                events: {},
+                segments: {},
+                transports: {},
+            }),
+        ).not.toThrow();
+
+        expect(() =>
+            defineAdapterCapabilities({
+                actions: {
+                    get_user_info: {
+                        support: "native",
+                        availability: "permission",
+                        permissions: [""],
+                    },
                 },
                 events: {},
                 segments: {},

@@ -26,15 +26,21 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         return endpoint.includes("larksuite.com");
     }
 
-    override async callAction(
+    executePlatformAction(
         uin: string,
         action: string,
         params: Readonly<Record<string, unknown>>,
     ): Promise<unknown> {
-        if (!FEISHU_PLATFORM_ACTIONS.has(action)) return super.callAction(uin, action, params);
+        if (!FEISHU_PLATFORM_ACTIONS.has(action)) {
+            return super.executePlatformAction(uin, action, params);
+        }
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
         return executeFeishuPlatformAction(account.client, action, params);
+    }
+
+    isPlatformActionImplemented(action: string): boolean {
+        return FEISHU_PLATFORM_ACTIONS.has(action);
     }
 
     // ============================================

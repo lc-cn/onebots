@@ -19,6 +19,10 @@ export interface CapabilityDescriptor {
     /** 能力是否依赖额外权限或当前会话上下文。 */
     availability?: CapabilityAvailability;
     scenes?: readonly CommonTypes.Scene[];
+    /**
+     * 已知且稳定的权限名提示。省略表示平台会按 token、资源角色或动作参数动态判权，
+     * 不代表该能力无需权限。
+     */
     permissions?: readonly string[];
     note?: string;
 }
@@ -177,10 +181,15 @@ function validateDescriptorMap(
         if (!(["native", "emulated", "unsupported"] as const).includes(descriptor.support)) {
             throw new ValidationError(`适配器能力 ${category}.${name} 的 support 无效`);
         }
-        if (descriptor.availability === "permission" && !descriptor.permissions?.length) {
-            throw new ValidationError(
-                `适配器能力 ${category}.${name} 依赖权限，但未声明 permissions`,
-            );
+        if (descriptor.permissions) {
+            if (
+                descriptor.permissions.length === 0 ||
+                descriptor.permissions.some(permission => !permission.trim())
+            ) {
+                throw new ValidationError(
+                    `适配器能力 ${category}.${name} 的 permissions 必须为非空权限名`,
+                );
+            }
         }
     }
 }

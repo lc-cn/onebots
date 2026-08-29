@@ -18,15 +18,21 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         this.icon = "https://slack.com/favicon.ico";
     }
 
-    override async callAction(
+    executePlatformAction(
         uin: string,
         action: string,
         params: Readonly<Record<string, unknown>>,
     ): Promise<unknown> {
-        if (!SLACK_PLATFORM_ACTIONS.has(action)) return super.callAction(uin, action, params);
+        if (!SLACK_PLATFORM_ACTIONS.has(action)) {
+            return super.executePlatformAction(uin, action, params);
+        }
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
         return executeSlackPlatformAction(account.client, action, params);
+    }
+
+    isPlatformActionImplemented(action: string): boolean {
+        return SLACK_PLATFORM_ACTIONS.has(action);
     }
 
     // ============================================
