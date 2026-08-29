@@ -12,7 +12,7 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         send_message: { ...contextual, scenes: ["private", "direct", "group", "channel"] },
         update_message: contextual,
         delete_message: contextual,
-        get_group_list: { support: "native" },
+        get_group_list: { support: "native", note: "仅列出 groupChat，不混入团队频道" },
         get_group_info: contextual,
         get_group_member_list: contextual,
         get_group_member_info: contextual,

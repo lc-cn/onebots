@@ -14,7 +14,16 @@ import { TeamsConversationStore } from "./conversation-store.js";
 import { TeamsApiError } from "./errors.js";
 import { projectTeamsEvent, type TeamsProjectionKind } from "./events.js";
 import { executeTeamsPlatformAction, TEAMS_PLATFORM_ACTIONS } from "./platform-actions.js";
-import type { TeamsConfig, TeamsEvent } from "./types.js";
+import type { TeamsConfig, TeamsConversationReference, TeamsEvent } from "./types.js";
+
+/** Teams 只有 groupChat 属于 canonical Group；频道必须保留 team/channel 层级。 */
+export function isTeamsGroupConversation(reference: TeamsConversationReference): boolean {
+    return (
+        reference.conversation.conversationType === "groupChat" ||
+        (reference.conversation.isGroup === true &&
+            reference.conversation.conversationType !== "channel")
+    );
+}
 
 export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     private readonly conversationStore: TeamsConversationStore;
@@ -57,14 +66,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     async getGroupList(uin: string): Promise<Adapter.GroupInfo[]> {
         return this.conversationStore
             .listReferences(uin)
-            .filter(reference =>
-                Boolean(
-                    reference.conversation.isGroup ||
-                    ["channel", "groupChat"].includes(
-                        reference.conversation.conversationType || "",
-                    ),
-                ),
-            )
+            .filter(isTeamsGroupConversation)
             .map(reference => ({
                 group_id: this.createId(reference.conversation.id),
                 group_name: reference.conversation.name || reference.conversation.id,
@@ -76,9 +78,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         params: Adapter.GetGroupInfoParams,
     ): Promise<Adapter.GroupInfo> {
         const conversationId = this.coerceId(params.group_id).string;
-        const reference = this.conversationStore.getReference(uin, conversationId);
-        if (!reference)
-            this.unsupported("get_group_info", "context_missing", "尚未收到该 Teams 会话事件");
+        const reference = this.requireGroupReference(uin, conversationId, "get_group_info");
         return {
             group_id: this.createId(conversationId),
             group_name: reference.conversation.name || conversationId,
@@ -90,6 +90,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         params: Adapter.GetGroupMemberListParams,
     ): Promise<Adapter.GroupMemberInfo[]> {
         const conversationId = this.coerceId(params.group_id).string;
+        this.requireGroupReference(uin, conversationId, "get_group_member_list");
         const members = await this.requireBot(uin).withConversation(conversationId, context =>
             context.client.conversations.getMembers(conversationId),
         );
@@ -101,6 +102,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
         const conversationId = this.coerceId(params.group_id).string;
+        this.requireGroupReference(uin, conversationId, "get_group_member_info");
         const userId = this.resolveId(params.user_id).string;
         const member = await this.requireBot(uin).withConversation(conversationId, context =>
             context.client.conversations.getMemberById(conversationId, userId),
@@ -148,6 +150,25 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const online = this.getAccount(uin)?.status === AccountStatus.Online;
         return { online, good: online };
+    }
+
+    private requireGroupReference(
+        uin: string,
+        conversationId: string,
+        action: string,
+    ): TeamsConversationReference {
+        const reference = this.conversationStore.getReference(uin, conversationId);
+        if (!reference) {
+            return this.unsupported(action, "context_missing", "尚未收到该 Teams 会话事件");
+        }
+        if (!isTeamsGroupConversation(reference)) {
+            return this.unsupported(
+                action,
+                "platform_unsupported",
+                "Teams 频道不是 canonical Group",
+            );
+        }
+        return reference;
     }
 
     createAccount(config: Account.Config<"teams">): Account<"teams", TeamsBot> {
