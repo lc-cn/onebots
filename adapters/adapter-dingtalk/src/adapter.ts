@@ -45,7 +45,9 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
         const bot = this.requireBot(uin);
         const scene =
             params.scene_type === "private" || params.scene_type === "direct" ? "private" : "group";
-        const message = buildDingTalkOutboundMessage(params.message);
+        const message = buildDingTalkOutboundMessage(params.message, {
+            resolveUserId: value => String(this.resolveId(value).source),
+        });
         const result = await bot.sendMessage(params.scene_id.string, scene, message);
         return { message_id: this.createId(dingtalkMessageId(result)) };
     }

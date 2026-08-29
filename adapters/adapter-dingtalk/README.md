@@ -60,6 +60,7 @@ dingtalk.my_bot:
 - 收消息：文本、富文本、图片、语音、视频和文件均投影为统一消息段。
 - 发消息：文本、Markdown、图片 URL、链接和 ActionCard 映射为钉钉原生 `msgKey`。
 - `@` 会映射到 `atUserIds` / `isAtAll`。
+- 图片与链接必须是钉钉服务端可访问的无凭据 HTTP(S) URL；未知段、空消息和平台无法无损表达的混合消息会明确失败。
 - Stream 收到的 `sessionWebhook` 会按会话及过期时间缓存，普通 `send_message` 优先复用它。
 - 通讯录、群成员及未知原生事件均保留在 `raw_event`；尚未标准化的事件同时投影为 `custom` notice。
 
