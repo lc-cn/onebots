@@ -9,6 +9,7 @@ import {
 } from "onebots";
 import { compileTeamsActivity } from "./activity.js";
 import { TeamsBot } from "./bot.js";
+import { resolveTeamsReceiveMode, resolveTeamsWebhookPath } from "./bot-utils.js";
 import { teamsCapabilities } from "./capabilities.js";
 import { TeamsConversationStore } from "./conversation-store.js";
 import { TeamsApiError } from "./errors.js";
@@ -172,8 +173,11 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     }
 
     createAccount(config: Account.Config<"teams">): Account<"teams", TeamsBot> {
+        const receiveMode = resolveTeamsReceiveMode(config);
         const teamsConfig: TeamsConfig = {
             account_id: config.account_id,
+            receive_mode: receiveMode,
+            webhook_path: config.webhook_path,
             app_id: config.app_id,
             app_password: config.app_password,
             tenant_id: config.tenant_id,
@@ -193,7 +197,10 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
                 this.conversationStore.saveMessageContext(accountId, messageId, conversationId),
         });
         const account = new Account<"teams", TeamsBot>(this, bot, config);
-        this.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
+        if (receiveMode === "webhook") {
+            const webhookPath = resolveTeamsWebhookPath(teamsConfig, `${account.path}/webhook`);
+            this.app.router.post(webhookPath, bot.handleWebhook.bind(bot));
+        }
         this.bindLifecycle(account, bot);
         this.bindEvents(account, bot);
         return account;

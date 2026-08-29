@@ -13,4 +13,19 @@ describe("Teams 配置 Schema", () => {
             },
         });
     });
+
+    it("提供 manual 接入并只在 webhook 模式展示路由", () => {
+        const webhookUi = teamsSchema.webhook_path.ui as {
+            visibleWhen?: { path: string; oneOf: string[] };
+        };
+
+        expect(teamsSchema.receive_mode.choices?.map(choice => choice.value)).toEqual([
+            "webhook",
+            "manual",
+        ]);
+        expect(webhookUi.visibleWhen).toEqual({
+            path: "receive_mode",
+            oneOf: ["webhook"],
+        });
+    });
 });

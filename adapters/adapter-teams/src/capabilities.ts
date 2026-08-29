@@ -107,5 +107,10 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
     },
     transports: {
         webhook: { support: "native", mode: "webhook" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 TeamsBot.ingestHttp() 复用 Agents SDK 认证与 Turn 管线",
+        },
     },
 });

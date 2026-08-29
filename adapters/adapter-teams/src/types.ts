@@ -1,6 +1,10 @@
 /** Microsoft Teams Agents SDK 适配器配置。 */
 export interface TeamsConfig {
     account_id: string;
+    /** 由 OneBots 挂载 Webhook，或由已有 Host 手动转交请求。 */
+    receive_mode?: "webhook" | "manual";
+    /** Webhook 模式挂载路径；默认使用账号标准路径。 */
+    webhook_path?: string;
     /** Microsoft Entra 应用（Azure Bot）客户端 ID。 */
     app_id: string;
     /** 客户端密钥。 */
@@ -19,6 +23,30 @@ export interface TeamsConfig {
     allowed_service_urls?: Array<string | { url: string }>;
     /** 是否严格校验入站 token 中的 serviceUrl，生产环境默认开启。 */
     validate_service_url?: boolean;
+}
+
+/** 与具体 HTTP 框架无关的 Teams Activity 请求。 */
+export interface TeamsHttpRequest {
+    method?: string;
+    headers?: Readonly<Record<string, unknown>>;
+    body: unknown;
+}
+
+/** Microsoft Agents SDK 处理完成后的结构化 HTTP 响应。 */
+export interface TeamsHttpResponse {
+    status: number;
+    headers: Readonly<Record<string, string>>;
+    body?: unknown;
+}
+
+/** OneBots/Koa Host 所需的最小上下文接口。 */
+export interface TeamsHttpContext {
+    method: string;
+    headers: Readonly<Record<string, unknown>>;
+    request: { body?: unknown };
+    status: number;
+    body: unknown;
+    set(name: string, value: string): unknown;
 }
 
 export interface TeamsUser {

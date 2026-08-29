@@ -26,14 +26,23 @@ import {
 import { transformConversationReference, transformTeamsActivity } from "./activity-transform.js";
 import {
     allowedServiceUrlHosts,
+    applyTeamsHttpResponse,
     bodyValue,
-    KoaAgentsResponse,
     normalizeHeaders,
     requireHttpsConfigUrl,
+    StructuredAgentsResponse,
 } from "./bot-utils.js";
 import { TeamsApiError, TeamsConversationReferenceError } from "./errors.js";
 import { TeamsGraphClient, type TeamsGraphRequestOptions } from "./graph.js";
-import type { TeamsConfig, TeamsConversationReference, TeamsEvent, TeamsUser } from "./types.js";
+import type {
+    TeamsConfig,
+    TeamsConversationReference,
+    TeamsEvent,
+    TeamsHttpContext,
+    TeamsHttpRequest,
+    TeamsHttpResponse,
+    TeamsUser,
+} from "./types.js";
 
 export interface TeamsReferenceRepository {
     get(conversationId: string): TeamsConversationReference | undefined;
@@ -123,15 +132,23 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
         this.emit("stopped");
     }
 
-    /** 在 OneBots 的 Koa 路由中完成 JWT 校验并处理 Activity。 */
-    async handleWebhook(ctx: RouterContext, _next: Next): Promise<void> {
-        const response = new KoaAgentsResponse(ctx);
+    /** 由任意 HTTP Host 调用，完成 JWT 校验并返回宿主无关的结构化响应。 */
+    async ingestHttp(input: TeamsHttpRequest): Promise<TeamsHttpResponse> {
+        const response = new StructuredAgentsResponse();
         let processing: Promise<void> | undefined;
         try {
+            const method = (input.method || "POST").toUpperCase();
+            if (method !== "POST") {
+                throw new TeamsApiError("Teams Activity 入口只接受 POST", {
+                    code: "TEAMS_WEBHOOK_METHOD_NOT_ALLOWED",
+                    category: ErrorCategory.VALIDATION,
+                    status: 405,
+                });
+            }
             const request: Request = {
-                method: ctx.method,
-                headers: normalizeHeaders(ctx.headers),
-                body: bodyValue(ctx.request.body),
+                method,
+                headers: normalizeHeaders(input.headers ?? {}),
+                body: bodyValue(input.body),
             };
             await this.adapter.authorizeRequest(request, response, error => {
                 if (error) throw error;
@@ -144,11 +161,32 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
             const wrapped = TeamsApiError.wrap(error, "TEAMS_WEBHOOK_ERROR");
             this.emit("client_error", wrapped);
             if (!response.headersSent) {
-                ctx.status =
-                    wrapped.status || (wrapped.category === ErrorCategory.VALIDATION ? 400 : 500);
-                ctx.body = { error: { code: wrapped.code, message: wrapped.message } };
+                response
+                    .status(
+                        wrapped.status ||
+                            (wrapped.category === ErrorCategory.VALIDATION ? 400 : 500),
+                    )
+                    .send({ error: { code: wrapped.code, message: wrapped.message } });
             }
         }
+        return response.toResponse();
+    }
+
+    /** 将结构化响应写回 OneBots/Koa Host。 */
+    async acceptHttp(context: TeamsHttpContext): Promise<void> {
+        applyTeamsHttpResponse(
+            context,
+            await this.ingestHttp({
+                method: context.method,
+                headers: context.headers,
+                body: context.request.body,
+            }),
+        );
+    }
+
+    /** OneBots 路由入口；保留标准 Koa 中间件签名。 */
+    async handleWebhook(context: RouterContext, _next: Next): Promise<void> {
+        await this.acceptHttp(context);
     }
 
     getCachedMe(): TeamsUser {

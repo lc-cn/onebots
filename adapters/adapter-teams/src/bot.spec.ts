@@ -164,6 +164,21 @@ describe("TeamsBot 会话引用契约", () => {
         expect(error).toBeInstanceOf(OneBotsError);
         expect(error).toMatchObject({ category: ErrorCategory.VALIDATION });
     });
+
+    it("ingestHttp 拒绝非 POST 并返回可移植的结构化响应", async () => {
+        const bot = createBot();
+
+        await expect(bot.ingestHttp({ method: "GET", body: {} })).resolves.toEqual({
+            status: 405,
+            headers: {},
+            body: {
+                error: {
+                    code: "TEAMS_WEBHOOK_METHOD_NOT_ALLOWED",
+                    message: "Teams Activity 入口只接受 POST",
+                },
+            },
+        });
+    });
 });
 
 function createBot(overrides: Partial<ConstructorParameters<typeof TeamsBot>[0]> = {}): TeamsBot {

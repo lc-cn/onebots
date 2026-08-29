@@ -34,6 +34,9 @@ export type {
     TeamsEntity,
     TeamsOutboundActivity,
     TeamsSendOptions,
+    TeamsHttpRequest,
+    TeamsHttpResponse,
+    TeamsHttpContext,
 } from "./types.js";
 
 export const teamsSchema: Schema = {
@@ -43,6 +46,28 @@ export const teamsSchema: Schema = {
         label: "账号标识",
         description: "OneBots 内部区分 Microsoft Teams Agent 的稳定标识",
         ui: { section: "credentials" },
+    },
+    receive_mode: {
+        type: "string",
+        default: "webhook",
+        label: "事件接收方式",
+        choices: [
+            { value: "webhook", label: "OneBots Webhook" },
+            { value: "manual", label: "手动接入已有 HTTP Host" },
+        ],
+        description: "Webhook 复用 OneBots HTTP Host；manual 由现有 Host 调用 ingestHttp()",
+        ui: { section: "transport" },
+    },
+    webhook_path: {
+        type: "string",
+        label: "Webhook 路径",
+        placeholder: "/teams/{account_id}/webhook",
+        description: "仅 Webhook 模式使用；留空时生成账号隔离路径",
+        pattern: /^\/(?!\/)(?:[^?#\u0000-\u001f\u007f])*$/u,
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     app_id: {
         type: "string",

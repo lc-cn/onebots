@@ -11,6 +11,7 @@ teams:
     app_id: your-microsoft-app-id
     app_password: your-client-secret-value
     tenant_id: your-tenant-id
+    receive_mode: webhook
 ```
 
 | 字段                   | 说明                                                             |
@@ -19,6 +20,8 @@ teams:
 | `app_id`               | Azure Bot 绑定的 Microsoft Entra 应用 Client ID                  |
 | `app_password`         | Entra 客户端密钥的值，不是 Secret ID                             |
 | `tenant_id`            | 单租户填写 Tenant GUID；多租户 Azure Bot 留空                    |
+| `receive_mode`         | `webhook` 由 OneBots 挂载路由；`manual` 由已有 Host 转交请求     |
+| `webhook_path`         | Webhook 路径；留空使用 `/teams/{account_id}/webhook`             |
 | `validate_service_url` | 校验 Activity serviceUrl 与 JWT claim，默认开启                  |
 | `authority_endpoint`   | 主权云的 Entra Authority；普通 Microsoft 365 环境不填            |
 | `graph_base_url`       | Graph 根地址，默认 `https://graph.microsoft.com/v1.0`            |
@@ -33,6 +36,8 @@ https://你的域名/teams/work-agent/webhook
 ```
 
 反向代理必须保留 `Authorization` 请求头和 JSON 请求体。生产环境不应关闭 `validate_service_url`。
+
+若应用已有 HTTP Host，可配置 `receive_mode: manual`。OneBots 此时不注册路由；宿主调用 `account.client.ingestHttp({ method, headers, body })`，即可获得 `{ status, headers, body }` 结构化响应，并继续使用同一 Microsoft Agents SDK JWT 认证与 Turn 管线。Koa 风格宿主可直接调用 `account.client.acceptHttp(ctx)`。
 
 ## 会话模型
 
@@ -52,7 +57,7 @@ Teams 的“附件链接”和“真实文件上传”不是同一能力。个�
 
 入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；invoke 投影为 `interaction`；typing、installationUpdate、会议、read receipt 和其他 Activity 以 `custom` notice 无损交付。原始 Activity 始终位于 `raw_event`，Teams 上下文位于 `extensions.teams`。
 
-Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `TeamsBot.ingest(activity)` 入站管线。Connector 重试会继续触发 `raw_activity`，但同一 Activity ID 的 canonical 事件只投影一次；一个 Activity 携带多个 Reaction 时会逐项派发并生成不同事件 ID。
+Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `TeamsBot.ingest(activity)` 入站管线。`ingestHttp()` 负责 Microsoft JWT 认证；`ingest(activity)` 只接收已由上游认证的 Activity。Connector 重试会继续触发 `raw_activity`，但同一 Activity ID 的 canonical 事件只投影一次；一个 Activity 携带多个 Reaction 时会逐项派发并生成不同事件 ID。
 
 ## 平台扩展动作
 

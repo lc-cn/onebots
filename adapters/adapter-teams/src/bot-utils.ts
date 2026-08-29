@@ -1,14 +1,14 @@
 import type { WebResponse } from "@microsoft/agents-hosting";
-import type { RouterContext } from "onebots";
 import { TeamsApiError } from "./errors.js";
-import type { TeamsConfig } from "./types.js";
+import type { TeamsConfig, TeamsHttpContext, TeamsHttpResponse } from "./types.js";
 
-/** 将 Agents SDK 的响应接口桥接到 OneBots 已有的 Koa 服务。 */
-export class KoaAgentsResponse implements WebResponse {
+/** 在内存中实现 Agents SDK 响应接口，作为所有 HTTP Host 的单一结构化边界。 */
+export class StructuredAgentsResponse implements WebResponse {
     private ended = false;
     private sent = false;
-
-    constructor(private readonly context: RouterContext) {}
+    private statusCode = 200;
+    private readonly headers: Record<string, string> = {};
+    private body: unknown;
 
     get headersSent(): boolean {
         return this.sent;
@@ -19,17 +19,17 @@ export class KoaAgentsResponse implements WebResponse {
     }
 
     status(code: number): this {
-        this.context.status = code;
+        this.statusCode = code;
         return this;
     }
 
     setHeader(name: string, value: string): this {
-        this.context.set(name, value);
+        this.headers[name] = value;
         return this;
     }
 
     send(body?: unknown): this {
-        this.context.body = body;
+        this.body = body;
         this.sent = true;
         return this;
     }
@@ -39,14 +39,62 @@ export class KoaAgentsResponse implements WebResponse {
         this.sent = true;
         return this;
     }
+
+    toResponse(): TeamsHttpResponse {
+        return {
+            status: this.statusCode,
+            headers: { ...this.headers },
+            ...(this.body === undefined ? {} : { body: this.body }),
+        };
+    }
 }
 
 export function normalizeHeaders(
-    headers: RouterContext["headers"],
+    headers: Readonly<Record<string, unknown>>,
 ): Record<string, string | string[] | undefined> {
-    return Object.fromEntries(
-        Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]),
-    );
+    const normalized: Record<string, string | string[] | undefined> = {};
+    for (const [key, value] of Object.entries(headers)) {
+        if (
+            typeof value === "string" ||
+            (Array.isArray(value) && value.every(item => typeof item === "string"))
+        ) {
+            normalized[key.toLowerCase()] = value;
+        }
+    }
+    return normalized;
+}
+
+/** 将宿主无关响应写回 OneBots/Koa Context。 */
+export function applyTeamsHttpResponse(
+    context: TeamsHttpContext,
+    response: TeamsHttpResponse,
+): void {
+    context.status = response.status;
+    for (const [name, value] of Object.entries(response.headers)) context.set(name, value);
+    context.body = response.body;
+}
+
+export function resolveTeamsWebhookPath(config: TeamsConfig, defaultPath: string): string {
+    const path = config.webhook_path || defaultPath;
+    if (!/^\/(?!\/)(?:[^?#\u0000-\u001f\u007f])*$/u.test(path)) {
+        throw TeamsApiError.invalid(
+            "Teams webhook_path 必须是安全的绝对路径",
+            "TEAMS_INVALID_WEBHOOK_PATH",
+        );
+    }
+    return path;
+}
+
+export function resolveTeamsReceiveMode(config: TeamsConfig): "webhook" | "manual" {
+    const mode = config.receive_mode || "webhook";
+    if (mode !== "webhook" && mode !== "manual") {
+        throw TeamsApiError.invalid(
+            "Teams receive_mode 仅支持 webhook 或 manual",
+            "TEAMS_INVALID_RECEIVE_MODE",
+            { receive_mode: mode },
+        );
+    }
+    return mode;
 }
 
 export function bodyValue(value: unknown): Record<string, unknown> {
