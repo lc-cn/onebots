@@ -869,13 +869,31 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         });
         return {
             files: result.files.map(file => ({
+                group_id: file.group_id?.number ?? groupId,
                 file_id: file.file_id.string,
                 file_name: file.file_name,
+                parent_folder_id: file.parent_folder_id?.string ?? "/",
                 file_size: file.file_size ?? 0,
+                uploaded_time: requireNonNegativeInteger(file.uploaded_time, "uploaded_time"),
+                ...(file.expire_time === undefined ? {} : { expire_time: file.expire_time }),
+                uploader_id: requirePositiveId(file.uploader_id?.number, "uploader_id"),
+                downloaded_times: requireNonNegativeInteger(
+                    file.downloaded_times,
+                    "downloaded_times",
+                ),
             })),
             folders: result.folders.map(folder => ({
+                group_id: folder.group_id?.number ?? groupId,
                 folder_id: folder.folder_id.string,
+                parent_folder_id: folder.parent_folder_id?.string ?? "/",
                 folder_name: folder.folder_name,
+                created_time: requireNonNegativeInteger(folder.created_time, "created_time"),
+                last_modified_time: requireNonNegativeInteger(
+                    folder.last_modified_time,
+                    "last_modified_time",
+                ),
+                creator_id: requirePositiveId(folder.creator_id?.number, "creator_id"),
+                file_count: requireNonNegativeInteger(folder.file_count, "file_count"),
             })),
         };
     }
@@ -897,19 +915,23 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     ): Promise<{ file_id: string }> {
         const sceneKey = scene === "private" ? "user_id" : "group_id";
         const sceneId = requirePositiveIntegerParam(params, sceneKey);
-        const file = requireNonEmptyStringParam(params, "file");
+        const file = requireNonEmptyStringParam(params, "file_uri");
         const upload = await this.adapter.uploadFile(this.account.account_id, {
             scene_type: scene,
             scene_id: this.adapter.resolveId(sceneId),
-            name: requireNonEmptyStringParam(params, "name"),
+            name: requireNonEmptyStringParam(params, "file_name"),
             ...(file.startsWith("base64://")
                 ? { data: file.slice("base64://".length) }
                 : file.startsWith("http://") || file.startsWith("https://")
                   ? { url: file }
                   : { path: file }),
             folder_id:
-                scene === "group" && typeof params.folder_id === "string"
-                    ? this.adapter.resolveId(params.folder_id)
+                scene === "group"
+                    ? this.adapter.resolveId(
+                          typeof params.parent_folder_id === "string"
+                              ? params.parent_folder_id
+                              : "/",
+                      )
                     : undefined,
         });
         return { file_id: upload.file_id.string };
@@ -918,23 +940,29 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async getFileDownloadUrl(
         scene: "private" | "group",
         params: Record<string, unknown>,
-    ): Promise<{ url: string }> {
+    ): Promise<{ download_url: string }> {
         const sceneKey = scene === "private" ? "user_id" : "group_id";
         const sceneId = requirePositiveIntegerParam(params, sceneKey);
         const url = await this.adapter.getFileDownloadUrl(this.account.account_id, {
             scene_type: scene,
             scene_id: this.adapter.resolveId(sceneId),
             file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
+            file_hash:
+                scene === "private" ? requireNonEmptyStringParam(params, "file_hash") : undefined,
+            is_self_send:
+                scene === "private" && params.is_self_send !== undefined
+                    ? requireBooleanParam(params, "is_self_send")
+                    : undefined,
         });
-        return { url };
+        return { download_url: url };
     }
 
     private async moveGroupFile(params: Record<string, unknown>): Promise<void> {
         await this.adapter.moveGroupFile(this.account.account_id, {
             group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
             file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
-            parent_folder_id: this.adapter.resolveId(
-                requireNonEmptyStringParam(params, "parent_folder_id"),
+            target_folder_id: this.adapter.resolveId(
+                typeof params.target_folder_id === "string" ? params.target_folder_id : "/",
             ),
         });
     }
@@ -943,7 +971,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         await this.adapter.renameGroupFile(this.account.account_id, {
             group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
             file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
-            new_name: requireNonEmptyStringParam(params, "new_name"),
+            new_name: requireNonEmptyStringParam(params, "new_file_name"),
         });
     }
 
@@ -960,7 +988,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         await this.adapter.renameGroupFolder(this.account.account_id, {
             group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
             folder_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "folder_id")),
-            new_name: requireNonEmptyStringParam(params, "new_name"),
+            new_name: requireNonEmptyStringParam(params, "new_folder_name"),
         });
     }
 
@@ -1214,6 +1242,20 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         this.reverseWebSocketCleanups.add(cleanup);
         session.start();
     }
+}
+
+function requireNonNegativeInteger(value: unknown, field: string): number {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+        throw new TypeError(`Adapter 返回的 ${field} 必须是非负整数`);
+    }
+    return value;
+}
+
+function requirePositiveId(value: unknown, field: string): number {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+        throw new TypeError(`Adapter 返回的 ${field} 必须是正整数 ID`);
+    }
+    return value;
 }
 
 ProtocolRegistry.register("milky", "v1", MilkyV1);

@@ -72,6 +72,8 @@ function createProtocol() {
         },
         resolveId: vi.fn((id: string | number) => ({
             ...resolvedId,
+            string: String(id),
+            source: id,
             number: typeof id === "number" ? id : resolvedId.number,
         })),
         sendMessage: vi.fn(),
@@ -109,6 +111,10 @@ function createProtocol() {
         sendGroupAnnouncement: vi.fn(),
         getGroupFiles: vi.fn(),
         uploadFile: vi.fn(),
+        getFileDownloadUrl: vi.fn(),
+        moveGroupFile: vi.fn(),
+        renameGroupFile: vi.fn(),
+        renameGroupFolder: vi.fn(),
     };
 
     const protocol = new MilkyV1(
@@ -558,8 +564,8 @@ describe("Milky V1 protocol", () => {
         await expect(
             protocol.apply("upload_private_file", {
                 user_id: 10001,
-                file: "base64://aGVsbG8=",
-                name: "demo.txt",
+                file_uri: "base64://aGVsbG8=",
+                file_name: "demo.txt",
             }),
         ).resolves.toMatchObject({ data: { file_id: "fid" } });
 
@@ -571,6 +577,90 @@ describe("Milky V1 protocol", () => {
         expect(adapter.uploadFile).toHaveBeenCalledWith(
             "bot",
             expect.objectContaining({ data: "aGVsbG8=", scene_type: "private" }),
+        );
+    });
+
+    test("文件动作仅接受并返回 canonical Milky 字段", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getFileDownloadUrl.mockResolvedValue("https://example.com/file");
+        adapter.getGroupFiles.mockResolvedValue({
+            files: [
+                {
+                    group_id: { string: "20001", number: 20001, source: 20001 },
+                    file_id: { string: "file-id", number: 42, source: "file-id" },
+                    file_name: "demo.txt",
+                    parent_folder_id: { string: "/", number: 1, source: "/" },
+                    file_size: 5,
+                    uploaded_time: 100,
+                    expire_time: 160,
+                    uploader_id: { string: "10001", number: 10001, source: 10001 },
+                    downloaded_times: 2,
+                },
+            ],
+            folders: [],
+        });
+
+        await expect(
+            protocol.apply("get_private_file_download_url", {
+                user_id: 10001,
+                file_id: "file-id",
+                file_hash: "sha1",
+                is_self_send: true,
+            }),
+        ).resolves.toMatchObject({
+            data: { download_url: "https://example.com/file" },
+        });
+        await expect(protocol.apply("get_group_files", { group_id: 20001 })).resolves.toMatchObject(
+            {
+                data: {
+                    files: [
+                        {
+                            group_id: 20001,
+                            parent_folder_id: "/",
+                            uploaded_time: 100,
+                            expire_time: 160,
+                            uploader_id: 10001,
+                            downloaded_times: 2,
+                        },
+                    ],
+                },
+            },
+        );
+        await protocol.apply("move_group_file", {
+            group_id: 20001,
+            file_id: "file-id",
+            parent_folder_id: "/source",
+            target_folder_id: "/target",
+        });
+        await protocol.apply("rename_group_file", {
+            group_id: 20001,
+            file_id: "file-id",
+            parent_folder_id: "/",
+            new_file_name: "renamed.txt",
+        });
+        await protocol.apply("rename_group_folder", {
+            group_id: 20001,
+            folder_id: "folder-id",
+            new_folder_name: "renamed",
+        });
+
+        expect(adapter.getFileDownloadUrl).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ file_hash: "sha1", is_self_send: true }),
+        );
+        expect(adapter.moveGroupFile).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({
+                target_folder_id: expect.objectContaining({ string: "/target" }),
+            }),
+        );
+        expect(adapter.renameGroupFile).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ new_name: "renamed.txt" }),
+        );
+        expect(adapter.renameGroupFolder).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ new_name: "renamed" }),
         );
     });
 

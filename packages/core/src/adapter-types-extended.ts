@@ -161,11 +161,13 @@ declare module "./adapter.js" {
             scene_type: CommonTypes.Scene;
             scene_id: CommonTypes.Id;
             file_id: CommonTypes.Id;
+            file_hash?: string;
+            is_self_send?: boolean;
         }
         export interface MoveGroupFileParams {
             group_id: CommonTypes.Id;
             file_id: CommonTypes.Id;
-            parent_folder_id: CommonTypes.Id;
+            target_folder_id: CommonTypes.Id;
         }
         export interface RenameGroupFileParams {
             group_id: CommonTypes.Id;
@@ -186,10 +188,22 @@ declare module "./adapter.js" {
             file_name: string;
             file_size?: number;
             url?: string;
+            group_id?: CommonTypes.Id;
+            parent_folder_id?: CommonTypes.Id;
+            uploaded_time?: number;
+            expire_time?: number;
+            uploader_id?: CommonTypes.Id;
+            downloaded_times?: number;
         }
         export interface FolderInfo {
             folder_id: CommonTypes.Id;
             folder_name: string;
+            group_id?: CommonTypes.Id;
+            parent_folder_id?: CommonTypes.Id;
+            created_time?: number;
+            last_modified_time?: number;
+            creator_id?: CommonTypes.Id;
+            file_count?: number;
         }
         export interface GroupFilesResult {
             files: FileInfo[];

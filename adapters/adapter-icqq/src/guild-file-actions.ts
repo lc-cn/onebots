@@ -1,5 +1,5 @@
 import type { GfsDirStat, GfsFileStat } from "@icqqjs/icqq/lib/gfs";
-import { Adapter } from "onebots";
+import { Adapter, type CommonTypes } from "onebots";
 import { ICQQGroupActions } from "./group-actions.js";
 import { materializeICQQUpload } from "./media.js";
 
@@ -143,10 +143,18 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
             .acquireGfs(this.numericId(params.group_id.string, "group_id"))
             .dir(params.parent_folder_id?.string ?? "/");
         return {
-            files: entries.filter(this.isGfsFile).map(file => this.convertFileInfo(file)),
+            files: entries
+                .filter(this.isGfsFile)
+                .map(file => this.convertFileInfo(file, params.group_id)),
             folders: entries.filter(this.isGfsDirectory).map(folder => ({
                 folder_id: this.createId(folder.fid),
                 folder_name: folder.name,
+                group_id: params.group_id,
+                parent_folder_id: this.createId(folder.pid),
+                created_time: folder.create_time,
+                last_modified_time: folder.modify_time,
+                creator_id: this.createId(folder.user_id),
+                file_count: folder.file_count,
             })),
         };
     }
@@ -189,7 +197,7 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
     async moveGroupFile(uin: string, params: Adapter.MoveGroupFileParams): Promise<void> {
         await this.requireNativeClient(uin)
             .acquireGfs(this.numericId(params.group_id.string, "group_id"))
-            .mv(params.file_id.string, params.parent_folder_id.string);
+            .mv(params.file_id.string, params.target_folder_id.string);
     }
 
     async renameGroupFile(uin: string, params: Adapter.RenameGroupFileParams): Promise<void> {
@@ -220,11 +228,17 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
         return true;
     }
 
-    private convertFileInfo(file: GfsFileStat): Adapter.FileInfo {
+    private convertFileInfo(file: GfsFileStat, groupId?: CommonTypes.Id): Adapter.FileInfo {
         return {
             file_id: this.createId(file.fid),
             file_name: file.name,
             file_size: file.size,
+            group_id: groupId,
+            parent_folder_id: this.createId(file.pid),
+            uploaded_time: file.create_time,
+            expire_time: file.duration > 0 ? file.create_time + file.duration : undefined,
+            uploader_id: this.createId(file.user_id),
+            downloaded_times: file.download_times,
         };
     }
 

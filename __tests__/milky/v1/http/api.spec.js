@@ -1162,8 +1162,8 @@ describe('Milky V1 - 文件 API', () => {
 
     const { status, data } = await callMilkyAPI(CONFIG, 'upload_private_file', {
       user_id: 123456789,
-      file: 'base64://...',  // 实际应该是文件数据
-      name: 'test.txt'
+      file_uri: 'base64://...',  // 实际应该是文件数据
+      file_name: 'test.txt'
     });
 
     if (status === 200) {
@@ -1185,9 +1185,9 @@ describe('Milky V1 - 文件 API', () => {
 
     const { status, data } = await callMilkyAPI(CONFIG, 'upload_group_file', {
       group_id: 123456789,
-      file: 'base64://...',  // 实际应该是文件数据
-      name: 'test.txt',
-      folder_id: '/'
+      file_uri: 'base64://...',  // 实际应该是文件数据
+      file_name: 'test.txt',
+      parent_folder_id: '/'
     });
 
     if (status === 200) {
@@ -1209,13 +1209,14 @@ describe('Milky V1 - 文件 API', () => {
 
     const { status, data } = await callMilkyAPI(CONFIG, 'get_private_file_download_url', {
       user_id: 123456789,
-      file_id: 'test_file_id'
+      file_id: 'test_file_id',
+      file_hash: 'test_file_hash'
     });
 
     if (status === 200) {
       if (data.status === 'ok') {
         console.log('✅ get_private_file_download_url 成功');
-        expect(data.data.url).toBeDefined();
+        expect(data.data.download_url).toBeDefined();
       } else {
         console.log('⚠️  get_private_file_download_url 失败:', data.message);
         unsupportedApis.push('get_private_file_download_url - ' + data.message);
@@ -1237,7 +1238,7 @@ describe('Milky V1 - 文件 API', () => {
     if (status === 200) {
       if (data.status === 'ok') {
         console.log('✅ get_group_file_download_url 成功');
-        expect(data.data.url).toBeDefined();
+        expect(data.data.download_url).toBeDefined();
       } else {
         console.log('⚠️  get_group_file_download_url 失败:', data.message);
         unsupportedApis.push('get_group_file_download_url - ' + data.message);
@@ -1254,7 +1255,8 @@ describe('Milky V1 - 文件 API', () => {
     const { status, data } = await callMilkyAPI(CONFIG, 'move_group_file', {
       group_id: 123456789,
       file_id: 'test_file_id',
-      parent_folder_id: '/target_folder'
+      parent_folder_id: '/',
+      target_folder_id: '/target_folder'
     });
 
     if (status === 200) {
@@ -1276,7 +1278,8 @@ describe('Milky V1 - 文件 API', () => {
     const { status, data } = await callMilkyAPI(CONFIG, 'rename_group_file', {
       group_id: 123456789,
       file_id: 'test_file_id',
-      new_name: 'renamed.txt'
+      parent_folder_id: '/',
+      new_file_name: 'renamed.txt'
     });
 
     if (status === 200) {
@@ -1319,7 +1322,7 @@ describe('Milky V1 - 文件 API', () => {
     const { status, data } = await callMilkyAPI(CONFIG, 'rename_group_folder', {
       group_id: 123456789,
       folder_id: 'test_folder_id',
-      new_name: 'Renamed Folder'
+      new_folder_name: 'Renamed Folder'
     });
 
     if (status === 200) {
