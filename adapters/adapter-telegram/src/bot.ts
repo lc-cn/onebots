@@ -2,14 +2,47 @@
  * Telegram Bot 客户端
  * 基于 grammy 封装
  */
-import { EventEmitter } from 'node:events';
-import { Bot, Context, InputFile, type PollingOptions } from 'grammy';
-import type { Opts, MessageEntity } from 'grammy/types';
-import type { Update } from 'grammy/types';
-import type { UserFromGetMe, ChatFullInfo, ChatMember, ChatMemberOwner, ChatMemberAdministrator } from 'grammy/types';
-import type { Message } from 'grammy/types';
-import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
-import type { TelegramConfig, ProxyConfig, TelegramMessage } from './types.js';
+import { EventEmitter } from "node:events";
+import { Bot, Context, InputFile, type PollingOptions } from "grammy";
+import type { Opts, MessageEntity } from "grammy/types";
+import type { Update } from "grammy/types";
+import type {
+    UserFromGetMe,
+    ChatFullInfo,
+    ChatMember,
+    ChatMemberOwner,
+    ChatMemberAdministrator,
+} from "grammy/types";
+import type { Message } from "grammy/types";
+import { createHttpsProxyAgent } from "onebots";
+import type { TelegramConfig, TelegramMessage } from "./types.js";
+
+/** Bot API 默认排除部分管理类更新；显式订阅才能兑现完整事件能力。 */
+const DEFAULT_ALLOWED_UPDATES: ReadonlyArray<Exclude<keyof Update, "update_id">> = [
+    "message",
+    "edited_message",
+    "channel_post",
+    "edited_channel_post",
+    "business_connection",
+    "business_message",
+    "edited_business_message",
+    "deleted_business_messages",
+    "message_reaction",
+    "message_reaction_count",
+    "inline_query",
+    "chosen_inline_result",
+    "callback_query",
+    "shipping_query",
+    "pre_checkout_query",
+    "poll",
+    "poll_answer",
+    "my_chat_member",
+    "chat_member",
+    "chat_join_request",
+    "chat_boost",
+    "removed_chat_boost",
+    "purchased_paid_media",
+];
 
 export class TelegramBot extends EventEmitter {
     private bot!: Bot;
@@ -18,6 +51,7 @@ export class TelegramBot extends EventEmitter {
     private initialized: boolean = false;
     /** grammy Bot 已 init（handleUpdate 前必须，仅 webhook 模式需在首请求时兜底） */
     private botInited: boolean = false;
+    private pollingTask?: Promise<void>;
 
     constructor(config: TelegramConfig) {
         super();
@@ -29,9 +63,9 @@ export class TelegramBot extends EventEmitter {
      */
     private async initBot(): Promise<void> {
         if (this.initialized) return;
-        
+
         const botConfig: ConstructorParameters<typeof Bot>[1] = {};
-        
+
         const agent = await createHttpsProxyAgent(this.config.proxy);
         if (agent) {
             botConfig.client = {
@@ -40,11 +74,8 @@ export class TelegramBot extends EventEmitter {
                     compress: true,
                 },
             };
-            console.debug(`[Telegram] 已配置代理: ${this.config.proxy.url}`);
-        } else {
-            console.warn('[Telegram] 创建代理失败，将直接连接');
         }
-        
+
         this.bot = new Bot(this.config.token, botConfig);
         this.setupEventHandlers();
         this.initialized = true;
@@ -54,8 +85,15 @@ export class TelegramBot extends EventEmitter {
      * 设置事件处理器
      */
     private setupEventHandlers(): void {
+        // 先保留完整 Update，再由 Adapter 统一投影。这样新增 Telegram update 类型时
+        // 不需要在 Bot 封装和 Adapter 各维护一套事件分支。
+        this.bot.use(async (ctx, next) => {
+            this.emit("update", ctx.update);
+            await next();
+        });
+
         // 监听所有消息
-        this.bot.on('message', async (ctx: Context) => {
+        this.bot.on("message", async (ctx: Context) => {
             const message = ctx.message;
             if (!message) return;
 
@@ -64,39 +102,39 @@ export class TelegramBot extends EventEmitter {
 
             // 转换消息格式
             const event = this.transformMessage(message, ctx);
-            
+
             // 判断是私聊还是群组/频道
-            if (message.chat.type === 'private') {
-                this.emit('private_message', event);
+            if (message.chat.type === "private") {
+                this.emit("private_message", event);
             } else {
-                this.emit('group_message', event);
+                this.emit("group_message", event);
             }
         });
 
         // 监听编辑的消息
-        this.bot.on('edited_message', async (ctx: Context) => {
+        this.bot.on("edited_message", async (ctx: Context) => {
             const message = ctx.editedMessage;
             if (!message) return;
 
             const event = this.transformMessage(message, ctx);
-            this.emit('message_edited', event);
+            this.emit("message_edited", event);
         });
 
         // 监听频道消息
-        this.bot.on('channel_post', async (ctx: Context) => {
+        this.bot.on("channel_post", async (ctx: Context) => {
             const message = ctx.channelPost;
             if (!message) return;
 
             const event = this.transformMessage(message, ctx);
-            this.emit('channel_message', event);
+            this.emit("channel_message", event);
         });
 
         // 监听回调查询（Inline Keyboard 按钮点击）
-        this.bot.on('callback_query', async (ctx: Context) => {
+        this.bot.on("callback_query", async (ctx: Context) => {
             const query = ctx.callbackQuery;
             if (!query) return;
 
-            this.emit('callback_query', {
+            this.emit("callback_query", {
                 id: query.id,
                 from: query.from,
                 message: query.message,
@@ -106,8 +144,8 @@ export class TelegramBot extends EventEmitter {
         });
 
         // 监听错误
-        this.bot.catch((err) => {
-            this.emit('error', err);
+        this.bot.catch(err => {
+            this.emit("error", err);
         });
     }
 
@@ -131,7 +169,8 @@ export class TelegramBot extends EventEmitter {
             contact: (message as Message.ContactMessage).contact,
             reply_to_message: message.reply_to_message as unknown as TelegramMessage,
             entities: (message as Message.TextMessage).entities,
-            caption_entities: (message as Message & { caption_entities?: MessageEntity[] }).caption_entities,
+            caption_entities: (message as Message & { caption_entities?: MessageEntity[] })
+                .caption_entities,
             _original: message,
             _ctx: ctx,
         } as TelegramMessage;
@@ -144,35 +183,39 @@ export class TelegramBot extends EventEmitter {
         try {
             // 初始化 Bot（包含代理配置）
             await this.initBot();
-            
+
             // 获取 Bot 信息
             this.me = await this.bot.api.getMe();
-            
+
             // 根据配置选择启动方式
             if (this.config.webhook?.url) {
                 // Webhook 模式：grammy 要求先 init 才能 handleUpdate
-                if (typeof this.bot.init === 'function') {
+                if (typeof this.bot.init === "function") {
                     await this.bot.init();
                     this.botInited = true;
                 }
                 await this.bot.api.setWebhook(this.config.webhook.url, {
                     secret_token: this.config.webhook.secret_token,
-                    allowed_updates: this.config.webhook.allowed_updates,
+                    allowed_updates: this.config.webhook.allowed_updates ?? DEFAULT_ALLOWED_UPDATES,
                 });
-                this.emit('ready');
+                this.emit("ready");
             } else if (this.config.polling?.enabled !== false) {
                 // 轮询模式（默认）
                 const pollingOptions: PollingOptions = {};
-                if (this.config.polling?.allowed_updates) {
-                    pollingOptions.allowed_updates = this.config.polling.allowed_updates;
-                }
-                await this.bot.start(pollingOptions);
-                this.emit('ready');
+                pollingOptions.allowed_updates = [
+                    ...(this.config.polling?.allowed_updates ?? DEFAULT_ALLOWED_UPDATES),
+                ];
+                // grammy 的 start() 在轮询停止前不会 resolve。保存后台任务而不是 await，
+                // 否则 Account 会一直停留在 Pending，协议层也无法获知 Bot 已上线。
+                this.pollingTask = this.bot.start(pollingOptions).catch(error => {
+                    this.emit("error", error);
+                });
+                this.emit("ready");
             } else {
-                throw new Error('必须启用 webhook 或 polling 模式之一');
+                throw new Error("必须启用 webhook 或 polling 模式之一");
             }
         } catch (error) {
-            this.emit('error', error);
+            this.emit("error", error);
             throw error;
         }
     }
@@ -188,11 +231,13 @@ export class TelegramBot extends EventEmitter {
             } else {
                 // 轮询模式：停止轮询
                 await this.bot.stop();
+                await this.pollingTask;
+                this.pollingTask = undefined;
             }
-            
-            this.emit('stopped');
+
+            this.emit("stopped");
         } catch (error) {
-            this.emit('error', error);
+            this.emit("error", error);
             throw error;
         }
     }
@@ -204,7 +249,7 @@ export class TelegramBot extends EventEmitter {
     async handleWebhookUpdate(update: Update): Promise<void> {
         if (!this.initialized) await this.initBot();
         // grammy 要求 bot 已 init 才能 handleUpdate（start() 未跑到时兜底，只 init 一次）
-        if (!this.botInited && typeof this.bot.init === 'function') {
+        if (!this.botInited && typeof this.bot.init === "function") {
             await this.bot.init();
             this.botInited = true;
         }
@@ -242,42 +287,67 @@ export class TelegramBot extends EventEmitter {
     /**
      * 发送消息
      */
-    async sendMessage(chatId: number | string, text: string, options?: Opts<"sendMessage">): Promise<Message.TextMessage> {
+    async sendMessage(
+        chatId: number | string,
+        text: string,
+        options?: Opts<"sendMessage">,
+    ): Promise<Message.TextMessage> {
         return await this.bot.api.sendMessage(chatId, text, options);
     }
 
     /**
      * 发送图片
      */
-    async sendPhoto(chatId: number | string, photo: string | InputFile, options?: Opts<"sendPhoto">): Promise<Message.PhotoMessage> {
+    async sendPhoto(
+        chatId: number | string,
+        photo: string | InputFile,
+        options?: Opts<"sendPhoto">,
+    ): Promise<Message.PhotoMessage> {
         return await this.bot.api.sendPhoto(chatId, photo, options);
     }
 
     /**
      * 发送视频
      */
-    async sendVideo(chatId: number | string, video: string | InputFile, options?: Opts<"sendVideo">): Promise<Message.VideoMessage> {
+    async sendVideo(
+        chatId: number | string,
+        video: string | InputFile,
+        options?: Opts<"sendVideo">,
+    ): Promise<Message.VideoMessage> {
         return await this.bot.api.sendVideo(chatId, video, options);
     }
 
     /**
      * 发送音频
      */
-    async sendAudio(chatId: number | string, audio: string | InputFile, options?: Opts<"sendAudio">): Promise<Message.AudioMessage> {
+    async sendAudio(
+        chatId: number | string,
+        audio: string | InputFile,
+        options?: Opts<"sendAudio">,
+    ): Promise<Message.AudioMessage> {
         return await this.bot.api.sendAudio(chatId, audio, options);
     }
 
     /**
      * 发送文档
      */
-    async sendDocument(chatId: number | string, document: string | InputFile, options?: Opts<"sendDocument">): Promise<Message.DocumentMessage> {
+    async sendDocument(
+        chatId: number | string,
+        document: string | InputFile,
+        options?: Opts<"sendDocument">,
+    ): Promise<Message.DocumentMessage> {
         return await this.bot.api.sendDocument(chatId, document, options);
     }
 
     /**
      * 编辑消息
      */
-    async editMessageText(chatId: number | string, messageId: number, text: string, options?: Opts<"editMessageText">): Promise<true | (Message.CommonMessage & { edit_date: number })> {
+    async editMessageText(
+        chatId: number | string,
+        messageId: number,
+        text: string,
+        options?: Opts<"editMessageText">,
+    ): Promise<true | (Message.CommonMessage & { edit_date: number })> {
         return await this.bot.api.editMessageText(chatId, messageId, text, options);
     }
 
@@ -305,7 +375,9 @@ export class TelegramBot extends EventEmitter {
     /**
      * 获取聊天成员列表
      */
-    async getChatAdministrators(chatId: number | string): Promise<(ChatMemberOwner | ChatMemberAdministrator)[]> {
+    async getChatAdministrators(
+        chatId: number | string,
+    ): Promise<(ChatMemberOwner | ChatMemberAdministrator)[]> {
         return await this.bot.api.getChatAdministrators(chatId);
     }
 
@@ -319,14 +391,22 @@ export class TelegramBot extends EventEmitter {
     /**
      * 踢出成员
      */
-    async banChatMember(chatId: number | string, userId: number, options?: Opts<"banChatMember">): Promise<boolean> {
+    async banChatMember(
+        chatId: number | string,
+        userId: number,
+        options?: Opts<"banChatMember">,
+    ): Promise<boolean> {
         return await this.bot.api.banChatMember(chatId, userId, options);
     }
 
     /**
      * 取消封禁成员
      */
-    async unbanChatMember(chatId: number | string, userId: number, options?: Opts<"unbanChatMember">): Promise<boolean> {
+    async unbanChatMember(
+        chatId: number | string,
+        userId: number,
+        options?: Opts<"unbanChatMember">,
+    ): Promise<boolean> {
         return await this.bot.api.unbanChatMember(chatId, userId, options);
     }
 

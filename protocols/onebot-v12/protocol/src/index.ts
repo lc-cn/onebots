@@ -282,6 +282,12 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 );
 
             default:
+                if (
+                    typeof this.adapter.describeCapabilities === "function" &&
+                    this.adapter.describeCapabilities(this.account.account_id).actions[action]
+                ) {
+                    return this.adapter.callAction(this.account.account_id, action, params);
+                }
                 throw new Error(`Unknown action: ${action}`);
         }
     }

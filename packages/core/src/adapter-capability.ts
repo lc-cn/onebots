@@ -97,6 +97,12 @@ export function assertAdapterCapabilities(manifest: AdapterCapabilityManifest): 
 export interface AdapterCapabilityProvider {
     describeCapabilities(accountId?: string): AdapterCapabilityManifest;
     getSupportedActions(accountId: string): Promise<string[]>;
+    /** 通过统一参数对象调用标准或平台扩展动作。 */
+    callAction?(
+        accountId: string,
+        action: string,
+        params?: Readonly<Record<string, unknown>>,
+    ): Promise<unknown>;
     /** 判断动作是否由具体适配器实现，而不是落到 Adapter 基类的未支持实现。 */
     isActionImplemented?(action: string): boolean;
 }

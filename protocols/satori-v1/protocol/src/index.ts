@@ -220,6 +220,12 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
                 return this.getLogin();
 
             default:
+                if (
+                    typeof this.adapter.describeCapabilities === "function" &&
+                    this.adapter.describeCapabilities(this.account.account_id).actions[action]
+                ) {
+                    return this.adapter.callAction(this.account.account_id, action, params);
+                }
                 throw new Error(`Unknown action: ${action}`);
         }
     }

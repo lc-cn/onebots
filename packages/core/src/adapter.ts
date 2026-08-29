@@ -424,16 +424,59 @@ export abstract class Adapter<
         return listSupportedActions(manifest);
     }
 
+    /**
+     * 从协议层调用能力清单中的动作。
+     *
+     * 标准动作统一使用 `(accountId, params)`；平台扩展动作必须显式覆写
+     * executePlatformAction，避免将任意实例方法意外暴露为远程 API。
+     */
+    async callAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>> = {},
+    ): Promise<unknown> {
+        const descriptor = this.describeCapabilities(uin).actions[action];
+        if (!descriptor || descriptor.support === "unsupported") {
+            return this.unsupported(action, "platform_unsupported");
+        }
+
+        const methodName = adapterActionMethodName(action);
+        const baseMethod = (Adapter.prototype as unknown as Record<string, unknown>)[methodName];
+        if (typeof baseMethod === "function") {
+            const instanceMethod = (this as unknown as Record<string, unknown>)[methodName];
+            if (typeof instanceMethod !== "function" || instanceMethod === baseMethod) {
+                return this.unsupported(action);
+            }
+            return Reflect.apply(instanceMethod, this, [uin, params]);
+        }
+
+        return this.executePlatformAction(uin, action, params);
+    }
+
+    /** 平台扩展动作的显式远程调用入口；子类应按 action 做穷尽路由。 */
+    executePlatformAction(
+        _uin: string,
+        action: string,
+        _params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        return this.unsupported(action);
+    }
+
+    /** 平台扩展动作必须同时声明可执行性，供能力契约检测清单漂移。 */
+    isPlatformActionImplemented(_action: string): boolean {
+        return false;
+    }
+
     /** 能力契约使用该方法确认清单没有把基类占位实现误报为可用能力。 */
     isActionImplemented(action: string): boolean {
         if (action === "get_supported_actions") return true;
 
         const methodName = adapterActionMethodName(action);
         const instanceMethod = (this as unknown as Record<string, unknown>)[methodName];
-        if (typeof instanceMethod !== "function") return false;
+        if (typeof instanceMethod !== "function") return this.isPlatformActionImplemented(action);
 
         const baseMethod = (Adapter.prototype as unknown as Record<string, unknown>)[methodName];
-        return typeof baseMethod !== "function" || instanceMethod !== baseMethod;
+        return typeof baseMethod !== "function" ? true : instanceMethod !== baseMethod;
     }
     getCookies(_uin: string, _params?: Adapter.GetCookiesParams): Promise<string> {
         return this.unsupported("get_cookies");

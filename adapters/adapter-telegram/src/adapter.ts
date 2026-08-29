@@ -2,33 +2,22 @@
  * Telegram 适配器
  * 继承 Adapter 基类，实现 Telegram 平台功能
  */
-import { Account, AdapterRegistry, AccountStatus, unixSecondsToEventMs } from "onebots";
+import { Account, AdapterRegistry, AccountStatus } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TelegramBot } from "./bot.js";
-import { CommonEvent, type CommonTypes } from "onebots";
-import type { Update } from "grammy/types";
-import type { TelegramConfig, TelegramMessage } from "./types.js";
+import type { CommonTypes } from "onebots";
+import type { TelegramConfig } from "./types.js";
 import { telegramCapabilities } from "./capabilities.js";
-
-function isTelegramUpdate(value: unknown): value is Update {
-    return (
-        typeof value === "object" &&
-        value !== null &&
-        "update_id" in value &&
-        typeof value.update_id === "number"
-    );
-}
+import { createTelegramAccount } from "./account.js";
+import { executeTelegramPlatformAction, TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { sendTelegramMessage } from "./message-sender.js";
 
 export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     constructor(app: BaseApp) {
         super(app, "telegram", telegramCapabilities);
         this.icon = "https://telegram.org/favicon.ico";
     }
-
-    // ============================================
-    // 消息相关方法
-    // ============================================
 
     /**
      * 发送消息
@@ -41,79 +30,10 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_type, message } = params;
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
-
-        // 解析消息内容
-        let text = "";
-        const options: Record<string, unknown> = {};
-
-        for (const seg of message) {
-            if (typeof seg === "string") {
-                text += seg;
-            } else if (seg.type === "text") {
-                text += seg.data.text || "";
-            } else if (seg.type === "at") {
-                const userId = seg.data.qq || seg.data.id || seg.data.user_id;
-                if (userId === "all") {
-                    text += "@all ";
-                } else {
-                    text += `@${userId} `;
-                }
-            } else if (seg.type === "image") {
-                // 图片需要单独发送
-                if (seg.data.url || seg.data.file) {
-                    const photo = seg.data.url || seg.data.file;
-                    const chatId = sceneId.string;
-                    const result = await bot.sendPhoto(chatId, photo, {
-                        caption: text || undefined,
-                    } as never);
-                    return {
-                        message_id: this.createId(result.message_id.toString()),
-                    };
-                }
-            } else if (seg.type === "video") {
-                if (seg.data.url || seg.data.file) {
-                    const video = seg.data.url || seg.data.file;
-                    const chatId = sceneId.string;
-                    const result = await bot.sendVideo(chatId, video, {
-                        caption: text || undefined,
-                    } as never);
-                    return {
-                        message_id: this.createId(result.message_id.toString()),
-                    };
-                }
-            } else if (seg.type === "audio") {
-                if (seg.data.url || seg.data.file) {
-                    const audio = seg.data.url || seg.data.file;
-                    const chatId = sceneId.string;
-                    const result = await bot.sendAudio(chatId, audio, {
-                        caption: text || undefined,
-                    } as never);
-                    return {
-                        message_id: this.createId(result.message_id.toString()),
-                    };
-                }
-            } else if (seg.type === "file") {
-                if (seg.data.url || seg.data.file) {
-                    const document = seg.data.url || seg.data.file;
-                    const chatId = sceneId.string;
-                    const result = await bot.sendDocument(chatId, document, {
-                        caption: text || undefined,
-                    } as never);
-                    return {
-                        message_id: this.createId(result.message_id.toString()),
-                    };
-                }
-            }
-        }
-
-        // 发送文本消息
-        const chatId = sceneId.string;
-        const result = await bot.sendMessage(chatId, text, options as never);
-
+        const messageId = await sendTelegramMessage(bot, sceneId.string, params.message);
         return {
-            message_id: this.createId(result.message_id.toString()),
+            message_id: this.createId(messageId),
         };
     }
 
@@ -134,9 +54,8 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
                 ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
                 : "";
 
-        if (chatId) {
-            await bot.deleteMessage(chatId, msgId);
-        }
+        if (!chatId) return this.unsupported("delete_message", "context_missing");
+        await bot.deleteMessage(chatId, msgId);
     }
 
     /**
@@ -178,14 +97,9 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
             }
         }
 
-        if (chatId) {
-            await bot.editMessageText(chatId, msgId, text);
-        }
+        if (!chatId) return this.unsupported("update_message", "context_missing");
+        await bot.editMessageText(chatId, msgId, text);
     }
-
-    // ============================================
-    // 用户相关方法
-    // ============================================
 
     /**
      * 获取机器人自身信息
@@ -214,10 +128,6 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         throw new Error("Telegram Bot API 不支持直接获取用户信息");
     }
 
-    // ============================================
-    // 好友（私聊会话）相关方法
-    // ============================================
-
     /**
      * 获取好友列表（Telegram 不支持）
      */
@@ -239,10 +149,6 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         // Telegram Bot API 不直接支持获取好友信息
         throw new Error("Telegram Bot API 不支持直接获取好友信息");
     }
-
-    // ============================================
-    // 群组相关方法
-    // ============================================
 
     /**
      * 获取群列表（Telegram 不支持）
@@ -351,6 +257,90 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         await bot.banChatMember(chatId, userId);
     }
 
+    async muteGroupMember(uin: string, params: Adapter.MuteGroupMemberParams): Promise<void> {
+        const api = this.requireBot(uin).getBot().api;
+        const allowed = params.duration <= 0;
+        await api.restrictChatMember(
+            params.group_id.string,
+            Number(params.user_id.string),
+            {
+                can_send_messages: allowed,
+                can_send_audios: allowed,
+                can_send_documents: allowed,
+                can_send_photos: allowed,
+                can_send_videos: allowed,
+                can_send_video_notes: allowed,
+                can_send_voice_notes: allowed,
+                can_send_polls: allowed,
+                can_send_other_messages: allowed,
+                can_add_web_page_previews: allowed,
+                can_change_info: allowed,
+                can_invite_users: allowed,
+                can_pin_messages: allowed,
+                can_manage_topics: allowed,
+            },
+            params.duration > 0
+                ? { until_date: Math.floor(Date.now() / 1000) + params.duration }
+                : undefined,
+        );
+    }
+
+    async setGroupAdmin(uin: string, params: Adapter.SetGroupAdminParams): Promise<void> {
+        const enabled = params.enable;
+        await this.requireBot(uin)
+            .getBot()
+            .api.promoteChatMember(params.group_id.string, Number(params.user_id.string), {
+                can_manage_chat: enabled,
+                can_delete_messages: enabled,
+                can_manage_video_chats: enabled,
+                can_restrict_members: enabled,
+                can_promote_members: enabled,
+                can_change_info: enabled,
+                can_invite_users: enabled,
+                can_pin_messages: enabled,
+                can_manage_topics: enabled,
+            });
+    }
+
+    async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
+        await this.requireBot(uin)
+            .getBot()
+            .api.setChatTitle(params.group_id.string, params.group_name);
+    }
+
+    async setGroupSpecialTitle(
+        uin: string,
+        params: Adapter.SetGroupSpecialTitleParams,
+    ): Promise<void> {
+        await this.requireBot(uin)
+            .getBot()
+            .api.setChatAdministratorCustomTitle(
+                params.group_id.string,
+                Number(params.user_id.string),
+                params.special_title,
+            );
+    }
+
+    async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
+        const flag = params.flag ?? params.request_id?.string;
+        const [chatId, userId] = String(flag ?? "").split(":");
+        if (!chatId || !userId || !Number.isSafeInteger(Number(userId))) {
+            throw new Error("Telegram 入群申请 flag 必须为 chat_id:user_id");
+        }
+        const api = this.requireBot(uin).getBot().api;
+        if (params.approve) await api.approveChatJoinRequest(chatId, Number(userId));
+        else await api.declineChatJoinRequest(chatId, Number(userId));
+    }
+
+    async getFile(uin: string, params: Adapter.GetFileParams): Promise<Adapter.FileInfo> {
+        const file = await this.requireBot(uin).getBot().api.getFile(params.file_id.string);
+        return {
+            file_id: params.file_id,
+            file_name: file.file_path ?? params.file_id.string,
+            file_size: file.file_size,
+        };
+    }
+
     /**
      * 设置群名片（Telegram 不支持）
      */
@@ -359,9 +349,26 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         throw new Error("Telegram Bot API 不支持设置群名片");
     }
 
-    // ============================================
-    // 系统相关方法
-    // ============================================
+    async executePlatformAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!TELEGRAM_PLATFORM_ACTIONS.has(action)) {
+            return super.executePlatformAction(uin, action, params);
+        }
+        return executeTelegramPlatformAction(this.requireBot(uin).getBot().api, action, params);
+    }
+
+    isPlatformActionImplemented(action: string): boolean {
+        return TELEGRAM_PLATFORM_ACTIONS.has(action);
+    }
+
+    private requireBot(uin: string): TelegramBot {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        return account.client;
+    }
 
     /**
      * 获取版本信息
@@ -386,260 +393,8 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         };
     }
 
-    // ============================================
-    // 账号创建
-    // ============================================
-
     createAccount(config: Account.Config<"telegram">): Account<"telegram", TelegramBot> {
-        const telegramConfig: TelegramConfig = {
-            account_id: config.account_id,
-            token: config.token,
-            webhook: config.webhook,
-            polling: config.polling || { enabled: true },
-            proxy: config.proxy,
-        };
-
-        const bot = new TelegramBot(telegramConfig);
-        const account = new Account<"telegram", TelegramBot>(this, bot, config);
-
-        // Webhook 模式：按 bot 注册独立 webhook 路径，供 Telegram 服务器 POST 推送
-        if (telegramConfig.webhook?.url) {
-            this.app.router.post(
-                `${account.path}/webhook`,
-                async (ctx: import("onebots").RouterContext) => {
-                    const secretHeader = ctx.request.headers["x-telegram-bot-api-secret-token"] as
-                        | string
-                        | undefined;
-                    if (!bot.verifyWebhookSecret(secretHeader)) {
-                        ctx.status = 401;
-                        ctx.body = { ok: false };
-                        return;
-                    }
-                    try {
-                        if (!isTelegramUpdate(ctx.request.body)) {
-                            ctx.status = 400;
-                            ctx.body = { ok: false };
-                            return;
-                        }
-                        await bot.handleWebhookUpdate(ctx.request.body);
-                        ctx.status = 200;
-                        ctx.body = { ok: true };
-                    } catch (error) {
-                        this.logger.error(`Telegram webhook ${config.account_id} 处理失败:`, error);
-                        ctx.status = 500;
-                        ctx.body = { ok: false };
-                    }
-                },
-            );
-            this.logger.info(
-                `Telegram Bot ${config.account_id} Webhook 路径: ${account.path}/webhook`,
-            );
-        }
-
-        // 监听 Bot 事件
-        bot.on("ready", () => {
-            this.logger.info(`Telegram Bot ${config.account_id} 已就绪`);
-        });
-
-        bot.on("error", error => {
-            this.logger.error(`Telegram Bot ${config.account_id} 错误:`, error);
-        });
-
-        // 监听私聊消息
-        bot.on("private_message", (event: TelegramMessage) => {
-            try {
-                // 忽略自己发送的消息
-                const me = bot.getCachedMe();
-                if (me && event.from?.id === me.id) return;
-
-                // 打印消息接收日志
-                const content = event.text || event.caption || "";
-                const contentPreview =
-                    content.length > 100 ? content.substring(0, 100) + "..." : content;
-                this.logger.info(
-                    `[Telegram] 收到私聊消息 | 消息ID: ${event.message_id} | ` +
-                        `发送者: ${event.from?.username || event.from?.first_name || event.from?.id} | 内容: ${contentPreview}`,
-                );
-
-                // 构建消息段
-                const messageSegments: { type: string; data: Record<string, unknown> }[] = [];
-
-                if (event.text) {
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: event.text },
-                    });
-                } else if (event.caption) {
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: event.caption },
-                    });
-                }
-
-                if (event.photo) {
-                    const photo = event.photo[event.photo.length - 1]; // 取最大尺寸
-                    messageSegments.push({
-                        type: "image",
-                        data: { url: photo.file_id },
-                    });
-                }
-
-                if (event.video) {
-                    messageSegments.push({
-                        type: "video",
-                        data: { url: event.video.file_id },
-                    });
-                }
-
-                if (event.audio) {
-                    messageSegments.push({
-                        type: "audio",
-                        data: { url: event.audio.file_id },
-                    });
-                }
-
-                if (event.document) {
-                    messageSegments.push({
-                        type: "file",
-                        data: { url: event.document.file_id },
-                    });
-                }
-
-                // 转换为 CommonEvent 格式
-                const commonEvent: CommonEvent.Message = {
-                    id: this.createId(event.message_id.toString()),
-                    timestamp: unixSecondsToEventMs(event.date),
-                    platform: "telegram",
-                    bot_id: this.createId(config.account_id),
-                    type: "message",
-                    message_type: "private",
-                    sender: {
-                        id: this.createId(event.from?.id.toString() || ""),
-                        name: event.from?.username || event.from?.first_name || "",
-                        avatar: undefined,
-                    },
-                    message_id: this.createId(event.message_id.toString()),
-                    raw_message: event.text || event.caption || "",
-                    message: messageSegments,
-                };
-
-                // 派发到协议层
-                account.dispatch(commonEvent);
-            } catch (e) {
-                this.logger.error(`[Telegram] 处理私聊消息事件异常:`, e);
-            }
-        });
-
-        // 监听群组消息
-        bot.on("group_message", (event: TelegramMessage) => {
-            try {
-                // 忽略自己发送的消息
-                const me = bot.getCachedMe();
-                if (me && event.from?.id === me.id) return;
-
-                // 打印消息接收日志
-                const content = event.text || event.caption || "";
-                const contentPreview =
-                    content.length > 100 ? content.substring(0, 100) + "..." : content;
-                const chatId = event.chat?.id || "";
-                this.logger.info(
-                    `[Telegram] 收到群组消息 | 消息ID: ${event.message_id} | 群组: ${chatId} | ` +
-                        `发送者: ${event.from?.username || event.from?.first_name || event.from?.id} | 内容: ${contentPreview}`,
-                );
-
-                // 构建消息段（与私聊相同逻辑）
-                const messageSegments: { type: string; data: Record<string, unknown> }[] = [];
-
-                if (event.text) {
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: event.text },
-                    });
-                } else if (event.caption) {
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: event.caption },
-                    });
-                }
-
-                if (event.photo) {
-                    const photo = event.photo[event.photo.length - 1];
-                    messageSegments.push({
-                        type: "image",
-                        data: { url: photo.file_id },
-                    });
-                }
-
-                if (event.video) {
-                    messageSegments.push({
-                        type: "video",
-                        data: { url: event.video.file_id },
-                    });
-                }
-
-                if (event.audio) {
-                    messageSegments.push({
-                        type: "audio",
-                        data: { url: event.audio.file_id },
-                    });
-                }
-
-                if (event.document) {
-                    messageSegments.push({
-                        type: "file",
-                        data: { url: event.document.file_id },
-                    });
-                }
-
-                // 转换为 CommonEvent 格式
-                const commonEvent: CommonEvent.Message = {
-                    id: this.createId(event.message_id.toString()),
-                    timestamp: unixSecondsToEventMs(event.date),
-                    platform: "telegram",
-                    bot_id: this.createId(config.account_id),
-                    type: "message",
-                    message_type: "group",
-                    sender: {
-                        id: this.createId(event.from?.id.toString() || ""),
-                        name: event.from?.username || event.from?.first_name || "",
-                        avatar: undefined,
-                    },
-                    group: {
-                        id: this.createId(event.chat?.id.toString() || ""),
-                        name: event.chat?.title || event.chat?.username || "",
-                    },
-                    message_id: this.createId(event.message_id.toString()),
-                    raw_message: event.text || event.caption || "",
-                    message: messageSegments,
-                };
-
-                // 派发到协议层
-                account.dispatch(commonEvent);
-            } catch (e) {
-                this.logger.error(`[Telegram] 处理群组消息事件异常:`, e);
-            }
-        });
-
-        // 启动时初始化 Bot
-        account.on("start", async () => {
-            try {
-                await bot.start();
-                account.status = AccountStatus.Online;
-                const me = bot.getCachedMe();
-                account.nickname = me?.username || me?.first_name || "Telegram Bot";
-                account.avatar = undefined;
-            } catch (error) {
-                this.logger.error(`启动 Telegram Bot 失败:`, error);
-                account.status = AccountStatus.OffLine;
-            }
-        });
-
-        account.on("stop", async () => {
-            await bot.stop();
-            account.status = AccountStatus.OffLine;
-        });
-
-        return account;
+        return createTelegramAccount(this, config);
     }
 }
 

@@ -326,6 +326,12 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                 return this.cleanCache(params);
 
             default:
+                if (
+                    typeof this.adapter.describeCapabilities === "function" &&
+                    this.adapter.describeCapabilities(this.account.account_id).actions[action]
+                ) {
+                    return this.adapter.callAction(this.account.account_id, action, params);
+                }
                 throw new Error(`Unknown action: ${action}`);
         }
     }

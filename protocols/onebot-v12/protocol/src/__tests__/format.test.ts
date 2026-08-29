@@ -71,6 +71,10 @@ function createProtocol() {
         inviteGroupMember: vi.fn(),
         handleFriendRequest: vi.fn(),
         getGuildMemberList: vi.fn(),
+        describeCapabilities: vi.fn(() => ({
+            actions: { send_poll: { support: "native" } },
+        })),
+        callAction: vi.fn().mockResolvedValue({ message_id: 42 }),
     };
 
     const protocol = new OneBotV12Protocol(
@@ -347,6 +351,17 @@ describe("OneBot V12 protocol", () => {
             data: null,
         });
         expect(result.message).toContain("Unknown action");
+    });
+
+    test("能力清单中的平台扩展动作通过统一入口调用", async () => {
+        const { protocol, adapter } = createProtocol();
+        const params = { chat_id: -100, question: "Q", options: ["A", "B"] };
+
+        await expect(protocol.apply("send_poll", params)).resolves.toMatchObject({
+            status: "ok",
+            data: { message_id: 42 },
+        });
+        expect(adapter.callAction).toHaveBeenCalledWith("bot", "send_poll", params);
     });
 
     test("invite_friend_to_group is advertised and delegates to the adapter", async () => {

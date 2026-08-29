@@ -1,6 +1,6 @@
 # @onebots/adapter-telegram
 
-onebots Telegram 适配器，支持代理访问。
+OneBots 的 Telegram Bot API 适配器。支持 polling、webhook、代理、完整原始 Update 透传，以及可由所有已启用协议调用的平台扩展动作。
 
 ## 安装
 
@@ -17,13 +17,13 @@ pnpm add @onebots/adapter-telegram grammy
 ```yaml
 telegram.your_bot_id:
   token: "YOUR_BOT_TOKEN"
-  
+
   # 代理配置（可选，用于访问 Telegram API）
   proxy:
-    url: "http://127.0.0.1:7890"  # 或 socks5://127.0.0.1:1080
+    url: "http://127.0.0.1:7890" # 或 socks5://127.0.0.1:1080
     # username: "user"  # 可选
     # password: "pass"  # 可选
-  
+
   # 轮询模式（默认）
   polling:
     enabled: true
@@ -31,20 +31,22 @@ telegram.your_bot_id:
     limit: 100
   # 或 Webhook 模式
   # webhook:
-  #   url: "https://your-domain.com/webhook"
+  #   # Telegram 实际请求地址；通常指向 OneBots 账号的 /telegram/<account_id>/webhook
+  #   url: "https://your-domain.com/telegram/your_bot_id/webhook"
   #   secret_token: "your_secret_token"
   #   allowed_updates: ["message", "callback_query"]
 ```
 
 ### 代理配置说明
 
-| 配置项 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| `proxy.url` | string | 是 | 代理服务器地址 |
-| `proxy.username` | string | 否 | 代理用户名 |
-| `proxy.password` | string | 否 | 代理密码 |
+| 配置项           | 类型   | 必填 | 说明           |
+| ---------------- | ------ | ---- | -------------- |
+| `proxy.url`      | string | 是   | 代理服务器地址 |
+| `proxy.username` | string | 否   | 代理用户名     |
+| `proxy.password` | string | 否   | 代理密码       |
 
 支持的代理类型：
+
 - HTTP 代理：`http://host:port`
 - HTTPS 代理：`https://host:port`
 
@@ -54,17 +56,33 @@ telegram.your_bot_id:
 onebots -r telegram
 ```
 
-## 功能
+## 能力
 
 - ✅ 私聊消息收发
 - ✅ 群组消息收发
 - ✅ 频道消息收发
 - ✅ 图片、视频、音频、文件发送
 - ✅ 消息编辑和删除
-- ✅ 群组管理（获取信息、踢出成员等）
-- ✅ Inline Keyboard 支持（通过 Callback Query）
-- ✅ 命令处理（/command）
+- ✅ 群组管理：踢出/禁言成员、设置管理员、群名、管理员头衔、处理入群申请
+- ✅ Bot API 扩展动作：投票、转发/复制、Reaction、置顶、邀请链接、群描述
+- ✅ Callback Query、消息编辑、成员变化、入群申请、Reaction 的标准事件投影
+- ✅ 其他 Telegram Update 以 `notice.custom` + `raw_event` 无损交付
 - ✅ **代理支持**（HTTP/HTTPS）
+
+能力列表可通过协议的 `get_supported_actions` 查询。平台扩展动作使用 snake_case，例如 `send_poll`：
+
+```json
+{
+  "action": "send_poll",
+  "params": {
+    "chat_id": -100123456,
+    "question": "选择一个版本",
+    "options": ["稳定版", "预览版"]
+  }
+}
+```
+
+当前扩展动作包括：`send_poll`、`forward_message`、`copy_message`、 `set_message_reaction`、`pin_message`、`unpin_message`、 `create_chat_invite_link`、`set_chat_description`。
 
 ## 获取 Bot Token
 
@@ -72,13 +90,6 @@ onebots -r telegram
 2. 发送 `/newbot` 创建新机器人
 3. 按照提示设置机器人名称和用户名
 4. 获取 Bot Token
-
-## 依赖说明
-
-| 依赖 | 何时需要 | 安装命令 |
-|------|----------|----------|
-| `grammy` | 必需 | `npm install grammy` |
-| `https-proxy-agent` | 使用代理时 | `npm install https-proxy-agent` |
 
 ### 常见问题
 
@@ -88,15 +99,9 @@ onebots -r telegram
 
 ```yaml
 telegram.your_bot:
-  token: 'xxx'
+  token: "xxx"
   proxy:
-    url: "http://127.0.0.1:7890"  # 你的代理地址
-```
-
-并安装代理依赖：
-
-```bash
-npm install https-proxy-agent
+    url: "http://127.0.0.1:7890" # 你的代理地址
 ```
 
 #### 2. 代理配置后仍然超时
@@ -111,17 +116,8 @@ npm install https-proxy-agent
 curl -x http://127.0.0.1:7890 https://api.telegram.org/bot<TOKEN>/getMe
 ```
 
-#### 3. 缺少 https-proxy-agent 警告
-
-如果看到 `https-proxy-agent 未安装` 警告但你需要代理：
-
-```bash
-npm install https-proxy-agent
-```
-
 ## 相关链接
 
 - [Telegram Bot API 文档](https://core.telegram.org/bots/api)
 - [grammy 文档](https://grammy.dev/)
 - [onebots 文档](https://onebots.pages.dev/)
-
