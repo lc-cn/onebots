@@ -45,7 +45,7 @@ describe("projectWeComEvent", () => {
     });
 
     it("未知事件仍以 custom notice 无损投影", () => {
-        const raw = { MsgType: "event", Event: "batch_job_result", EventId: "event-1" };
+        const raw = { MsgType: "event", Event: "batch_job_result", CreateTime: 1_777_000_000 };
         const event = projectWeComEvent(raw, { botId: "bot", createId });
         expect(event).toMatchObject({
             type: "notice",

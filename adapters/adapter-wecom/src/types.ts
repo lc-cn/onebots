@@ -1,19 +1,17 @@
-/**
- * 企业微信开放平台 API 类型定义
- * 基于企业微信开放平台官方 API
- */
-
-// 配置类型
+/** 企业微信自建应用官方 API 类型。 */
 export interface WeComConfig {
     account_id: string;
-    corp_id: string; // 企业 ID
-    corp_secret: string; // 应用 Secret
-    agent_id: string; // 应用 AgentId
-    token?: string; // 回调验证 Token（可选）
-    encoding_aes_key?: string; // 消息加解密密钥（可选）
+    corp_id: string;
+    corp_secret: string;
+    agent_id: string;
+    token: string;
+    encoding_aes_key: string;
+    webhook_path?: string;
+    deduplicate_webhooks?: boolean;
+    webhook_deduplication_limit?: number;
+    api_base_url?: string;
 }
 
-// 企业微信用户类型
 export interface WeComUser {
     userid: string;
     name: string;
@@ -35,9 +33,6 @@ export interface WeComUser {
     external_profile?: WeComExternalProfile;
 }
 
-/**
- * 企业微信用户扩展属性
- */
 export interface WeComExtAttr {
     attrs?: Array<{
         type: number;
@@ -47,9 +42,6 @@ export interface WeComExtAttr {
     }>;
 }
 
-/**
- * 企业微信用户外部资料
- */
 export interface WeComExternalProfile {
     external_corp_name?: string;
     external_attr?: WeComExtAttr;
@@ -59,7 +51,6 @@ export interface WeComExternalProfile {
     };
 }
 
-// 企业微信部门类型
 export interface WeComDepartment {
     id: number;
     name: string;
@@ -68,56 +59,10 @@ export interface WeComDepartment {
     order?: number;
 }
 
-// 企业微信消息类型
-export interface WeComMessage {
-    msgid: string;
-    action: string;
-    from: {
-        type: string;
-        id: string;
-    };
-    tolist: string[];
-    roomid?: string;
-    msgtime: number;
-    msgtype: string;
-    text?: {
-        content: string;
-    };
-    image?: {
-        md5: string;
-        filesize: number;
-        sdkfileid: string;
-    };
-    voice?: {
-        md5: string;
-        voice_size: number;
-        play_length: number;
-        sdkfileid: string;
-    };
-    video?: {
-        md5: string;
-        filesize: number;
-        play_length: number;
-        sdkfileid: string;
-    };
-    file?: {
-        md5: string;
-        filename: string;
-        filesize: number;
-        sdkfileid: string;
-    };
-    /** 扩展字段 */
-    location?: string;
-    button?: Array<{ type: string; name: string; value?: string }>;
-}
-
-// 企业微信事件类型
-export interface WeComEvent {
-    /** OneBots 旧结构或第三方转发器提供的事件类型。 */
-    EventType?: string;
-    EventId?: string;
-    TimeStamp?: number;
-    /** 企业微信原生回调字段。 */
+/** 解密后的企业微信接收消息或事件。未枚举字段仍完整保留。 */
+export interface WeComEvent extends Record<string, unknown> {
+    RawXml?: string;
+    EncryptedXml?: string;
     MsgType?: string;
     MsgId?: string;
     CreateTime?: number;
@@ -141,17 +86,57 @@ export interface WeComEvent {
     UserID?: string;
 }
 
-/**
- * 企业微信通讯录变更事件
- */
+export interface WeComAgent extends WeComAPIResponse {
+    agentid: number;
+    name?: string;
+    square_logo_url?: string;
+    description?: string;
+    allow_userinfos?: { user?: Array<{ userid: string }> };
+    allow_partys?: { partyid?: number[] };
+    allow_tags?: { tagid?: number[] };
+    close?: number;
+    redirect_domain?: string;
+    report_location_flag?: number;
+    isreportenter?: number;
+    home_url?: string;
+}
+
+export interface WeComAppChat {
+    chatid: string;
+    name?: string;
+    owner?: string;
+    userlist: string[];
+}
+
+export interface WeComCallOptions {
+    method?: "GET" | "POST";
+    path: string;
+    query?: Readonly<Record<string, string | number | boolean | undefined>>;
+    body?: unknown;
+    token?: boolean;
+    response_type?: "json" | "buffer";
+    signal?: AbortSignal;
+}
+
+export interface WeComWebhookRequest {
+    method: "GET" | "POST";
+    query: Readonly<Record<string, unknown>>;
+    body?: string | Buffer;
+}
+
+export interface WeComWebhookResponse {
+    status: number;
+    body: unknown;
+    contentType?: string;
+}
+
 export interface WeComChangeEvent extends WeComEvent {
-    EventType?: "change_contact";
-    Event?: "change_contact";
+    MsgType: "event";
+    Event: "change_contact";
     ChangeType: "create_user" | "update_user" | "delete_user";
     UserID: string;
 }
 
-// 访问令牌响应
 export interface WeComTokenResponse {
     errcode: number;
     errmsg: string;
@@ -159,7 +144,6 @@ export interface WeComTokenResponse {
     expires_in?: number;
 }
 
-// 发送消息请求
 export interface WeComSendMessageRequest {
     touser?: string;
     toparty?: string;
@@ -212,7 +196,6 @@ export interface WeComSendMessageRequest {
     };
 }
 
-// 发送消息响应
 export interface WeComSendMessageResponse {
     errcode: number;
     errmsg: string;
@@ -223,39 +206,11 @@ export interface WeComSendMessageResponse {
     response_code?: string;
 }
 
-// API 基础响应
 export interface WeComAPIResponse {
     errcode: number;
     errmsg: string;
 }
 
-// 获取用户信息响应
-export interface WeComUserResponse extends WeComAPIResponse {
-    userid: string;
-    name: string;
-    alias?: string;
-    mobile?: string;
-    department?: number[];
-    order?: number[];
-    position?: string;
-    gender?: string;
-    email?: string;
-    avatar?: string;
-    status?: number;
-    is_leader_in_dept?: number[];
-    telephone?: string;
-    address?: string;
-    extattr?: WeComExtAttr;
-    external_position?: string;
-    external_profile?: WeComExternalProfile;
-}
-
-// 获取部门列表响应
-export interface WeComDepartmentListResponse extends WeComAPIResponse {
-    department?: WeComDepartment[];
-}
-
-// 获取部门成员列表响应
 export interface WeComDepartmentMembersResponse extends WeComAPIResponse {
     userlist?: WeComUser[];
 }

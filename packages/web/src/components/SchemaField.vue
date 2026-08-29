@@ -90,6 +90,8 @@ const choiceModel = computed<string | number | boolean | undefined>({
         <UiInput
             v-if="widget === 'input'"
             v-model="stringModel"
+            :type="field.rule.sensitive ? 'password' : 'text'"
+            :autocomplete="field.rule.sensitive ? 'off' : undefined"
             :placeholder="field.placeholder"
             :disabled="disabled" />
         <UiNumberInput

@@ -11,11 +11,10 @@ export function projectWeComEvent(
     event: WeComEvent,
     context: WeComProjectionContext,
 ): CommonEvent.Event<WeComEvent> {
-    const eventType = event.EventType ?? event.Event;
-    const timestamp = coerceUnixToEventMs(event.CreateTime ?? event.TimeStamp);
+    const eventType = event.Event;
+    const timestamp = coerceUnixToEventMs(event.CreateTime);
     const eventId =
         event.MsgId ??
-        event.EventId ??
         `${event.FromUserName ?? "unknown"}:${eventType ?? event.MsgType ?? "event"}:${timestamp}`;
     const base = {
         id: context.createId(eventId),
@@ -85,7 +84,10 @@ export function projectWeComSegments(event: WeComEvent): CommonTypes.Segment[] {
                 },
             ];
         case "video":
+        case "shortvideo":
             return [{ type: "video", data: { file_id: event.MediaId } }];
+        case "file":
+            return [{ type: "file", data: { file_id: event.MediaId } }];
         case "location":
             return [
                 {
@@ -110,7 +112,7 @@ export function projectWeComSegments(event: WeComEvent): CommonTypes.Segment[] {
                 },
             ];
         default:
-            return [{ type: event.MsgType ?? "unknown", data: {} }];
+            return [{ type: "wecom_message", data: { event: structuredClone(event) } }];
     }
 }
 

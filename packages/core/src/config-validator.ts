@@ -3,7 +3,7 @@
  * 提供配置schema验证和默认值处理
  */
 
-import { ValidationError, ConfigError } from "./errors.js";
+import { ValidationError } from "./errors.js";
 
 export { ValidationError };
 export interface Choice<T = unknown> {
@@ -31,6 +31,8 @@ export interface ValidationRule<T = unknown> {
     description?: string;
     /** 用于表单展示的占位提示 */
     placeholder?: string;
+    /** Web 表单按密码输入展示；仅影响显示，不改变配置值或运行时校验。 */
+    sensitive?: boolean;
     /** Web 表单展示元数据，不参与运行时校验。 */
     ui?: {
         widget?: "endpoint-list" | "event-filter";

@@ -1,52 +1,16 @@
-# WeCom Adapter Configuration
-
-WeCom (Enterprise WeChat) adapter configuration guide.
-
-## Configuration Fields
-
-### corp_id
-
-- **Type**: `string`
-- **Required**: ✅
-- **Description**: Enterprise ID (CorpID)
-
-### corp_secret
-
-- **Type**: `string`
-- **Required**: ✅
-- **Description**: App Secret (CorpSecret)
-
-### agent_id
-
-- **Type**: `string`
-- **Required**: ✅
-- **Description**: App AgentId
-
-### token
-
-- **Type**: `string`
-- **Required**: ❌
-- **Description**: Callback verification Token
-
-### encoding_aes_key
-
-- **Type**: `string`
-- **Required**: ❌
-- **Description**: Message encryption/decryption key (required when encryption mode is enabled)
-
-## Configuration Example
+# WeCom Custom Application Configuration
 
 ```yaml
-wecom.my_bot:
-  corp_id: 'ww1234567890abcdef'
-  corp_secret: 'your_corp_secret'
+wecom.internal_app:
+  corp_id: ww1234567890abcdef
+  corp_secret: your_application_secret
   agent_id: '1000001'
-  token: 'your_token'  # Optional
-  encoding_aes_key: 'your_encoding_aes_key'  # Optional
+  token: your_callback_token
+  encoding_aes_key: your_43_character_key
+  webhook_path: /wecom/internal_app/webhook
+  deduplicate_webhooks: true
+  webhook_deduplication_limit: 10000
+  api_base_url: https://qyapi.weixin.qq.com
 ```
 
-## Related Links
-
-- [WeCom Platform](/en/platform/wecom)
-- [Quick Start](/en/guide/start)
-
+`token` and the 43-character `encoding_aes_key` are required because the adapter only accepts encrypted callbacks. `corp_id` is also validated against the decrypted callback receive ID. `agent_id` must contain digits only.

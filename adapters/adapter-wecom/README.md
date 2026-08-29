@@ -1,64 +1,53 @@
 # @onebots/adapter-wecom
 
-onebots 企业微信适配器
+OneBots 的企业微信自建应用官方 API 适配器。它复用 OneBots HTTP Host 接收加密回调，支持应用消息、应用创建的群聊、通讯录与企业管理 API。
 
-## 安装
-
-```bash
-npm install @onebots/adapter-wecom
-# 或
-pnpm add @onebots/adapter-wecom
-```
+> 微信客服的 `kf/sync_msg` / `kf/send_msg` 属于不同产品模型，请使用 `@onebots/adapter-wecom-kf`。
 
 ## 配置
 
-在 `config.yaml` 中配置：
-
 ```yaml
-wecom.your_bot_id:
-  corp_id: "YOUR_CORP_ID"
-  corp_secret: "YOUR_CORP_SECRET"
-  agent_id: "YOUR_AGENT_ID"
-  token: "YOUR_TOKEN"  # 可选，回调验证 Token
-  encoding_aes_key: "YOUR_ENCODING_AES_KEY"  # 可选，消息加解密密钥
+wecom.internal_app:
+  corp_id: ww1234567890abcdef
+  corp_secret: your_application_secret
+  agent_id: "1000001"
+  token: your_callback_token
+  encoding_aes_key: your_43_character_key
+  deduplicate_webhooks: true
+
+  onebot.v11:
+    use_http: true
+    use_ws: true
 ```
 
-## 使用
+在自建应用“接收消息”中填写 `https://bot.example.com/wecom/internal_app/webhook`。默认路径为 `/wecom/{account_id}/webhook`，可用 `webhook_path` 覆盖。回调必须使用企业微信的加密模式，解密后会校验 `corp_id`。
 
-```bash
-onebots -r wecom
+## 消息与会话
+
+- `private` / `direct` 使用 `/cgi-bin/message/send` 向成员发送应用消息。
+- `group` 指真实的应用群聊 `appchat`，使用 `/cgi-bin/appchat/send`；部门和标签不会伪装成群聊。
+- 支持文本、图片、语音、视频、文件、Markdown 和任意 `wecom_message` 原生消息。通用 `at` 段会保留为 `@userid` 可读文本，但企业微信自建应用 API 不保证产生提醒。
+- 媒体必须先上传并使用 `media_id` 或 `wecom://media/{media_id}`，不会降级成 URL 占位文本。
+- `delete_message` 调用 `/cgi-bin/message/recall` 撤回返回服务端 `msgid` 且符合时限的应用消息；`appchat/send` 不返回 `msgid`，因此群消息不可通过该接口撤回。
+
+## 原生 API
+
+平台动作覆盖应用详情、临时素材、模板卡片更新、应用群聊、部门、成员、标签、邀请、加入企业二维码与回调 IP。`wecom_call` 可调用新增或低频接口：
+
+```ts
+await adapter.callAction("internal_app", "wecom_call", {
+  method: "POST",
+  path: "/cgi-bin/appchat/create",
+  body: { name: "项目群", owner: "zhangsan", userlist: ["zhangsan", "lisi"] },
+});
 ```
 
-## 功能
+access token 自动缓存，并在企业微信报告失效时刷新且只重试一次。所有非零 `errcode` 都会抛出保留 `details`、`path` 与错误码的 `WeComApiError`。
 
-- ✅ 应用消息推送
-  - 文本消息
-  - 图片消息
-  - 视频消息
-  - 文件消息
-  - 文本卡片
-  - Markdown 消息
-- ✅ 通讯录管理
-  - 获取用户信息
-  - 获取部门列表
-  - 获取部门成员列表
-- ✅ 事件订阅
-  - 通讯录变更事件
-  - 应用消息回调
+## 底层接入
 
-## 获取应用凭证
+`WeComWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂载到已有 Koa 风格 Host；`WeComClient.ingest()` 可接收已经解密/解析的事件。适配器不会自行监听端口。
 
-1. 访问 [企业微信管理后台](https://work.weixin.qq.com/)
-2. 应用管理 → 创建应用
-3. 获取 `企业ID`（CorpID）
-4. 获取 `应用Secret`（CorpSecret）
-5. 获取 `应用ID`（AgentID）
-6. 配置回调 URL：`http://your-server:port/wecom/{account_id}/webhook`
-7. 获取 `Token` 和 `EncodingAESKey`（如果启用加密）
+事件统一保留 `raw_event`，其中 `RawXml` 是解密后的完整 XML，`EncryptedXml` 是收到的密文外层 XML。
 
-## 相关链接
-
-- [企业微信开放平台](https://developer.work.weixin.qq.com/)
-- [企业微信应用开发文档](https://developer.work.weixin.qq.com/document/path/90488)
-- [onebots 文档](https://onebots.js.org/)
-
+[企业微信开发者中心](https://developer.work.weixin.qq.com/)

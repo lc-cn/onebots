@@ -1,84 +1,21 @@
-# WeCom Adapter
+# WeCom Custom Application
 
-The WeCom (Enterprise WeChat) adapter is fully implemented and supports connecting to onebots service through WeCom app.
-
-## Status
-
-✅ **Implemented and Available**
-
-## Features
-
-- ✅ **App Message Push**
-  - Text messages
-  - Image messages
-  - Video messages
-  - File messages
-  - Text cards
-  - Markdown messages
-  - Image-text messages
-- ✅ **Contact Management**
-  - Get user information
-  - Get department list
-  - Get department member list
-- ✅ **Event Subscription**
-  - Contact change events (user create/update/delete)
-  - App message callbacks
-
-## Installation
-
-```bash
-npm install @onebots/adapter-wecom
-# or
-pnpm add @onebots/adapter-wecom
-```
-
-## Configuration
-
-Configure WeCom account in `config.yaml`:
+`@onebots/adapter-wecom` targets the official WeCom custom-application API. WeCom Customer Service (`kf/sync_msg` and `kf/send_msg`) is a separate product and uses [`wecom-kf`](./wecom-kf.md).
 
 ```yaml
-# WeCom app configuration
-wecom.your_bot_id:
-  # WeCom platform configuration
-  corp_id: 'your_corp_id'  # Enterprise ID, required
-  corp_secret: 'your_corp_secret'  # App Secret, required
-  agent_id: 'your_agent_id'  # App AgentId, required
-  token: 'your_token'  # Optional, callback verification Token
-  encoding_aes_key: 'your_encoding_aes_key'  # Optional, message encryption/decryption key
-  
-  # OneBot V11 protocol configuration
-  onebot.v11:
-    access_token: 'your_v11_token'
-  
-  # OneBot V12 protocol configuration
-  onebot.v12:
-    access_token: 'your_v12_token'
+wecom.internal_app:
+  corp_id: ww1234567890abcdef
+  corp_secret: your_application_secret
+  agent_id: '1000001'
+  token: your_callback_token
+  encoding_aes_key: your_43_character_key
+  deduplicate_webhooks: true
 ```
 
-## Client SDK Usage
+Configure `https://bot.example.com/wecom/internal_app/webhook` as the receive-message URL. The adapter only accepts signed encrypted callbacks and validates the decrypted CorpID.
 
-```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
+Private/direct messages use the application-message API. Group scenes are real application-created `appchat` conversations; departments and tags are never projected as chats. Recall is available only when WeCom returned a server `msgid`; app-chat sends do not return one and are not falsely advertised as recallable. A common `at` segment becomes readable `@userid` text without claiming notification semantics.
 
-const client = new ImHelper();
+Native actions cover media, message recall, template-card updates, app chats, contacts, departments, tags, invitations, and network metadata. `wecom_call` provides a constrained path for new official endpoints.
 
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'wecom',
-  account_id: 'your_bot_id',
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/wecom/your_bot_id/onebot/v11/ws',
-  access_token: 'your_access_token',
-});
-```
-
-## Related Links
-
-- [WeCom Adapter Configuration](/en/config/adapter/wecom)
-- [Quick Start](/en/guide/start)
-- [Client SDK Guide](/en/guide/client-sdk)
-
+Every event retains the complete decrypted and encrypted XML in `raw_event`. See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wecom) for embedding and action details.
