@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import WebSocket from "ws";
-import { createProxyAgent } from "onebots";
+import { createProxyAgent, ErrorCategory } from "onebots";
 import { HeychatApiError } from "../errors.js";
 import type { HeychatConfig, HeychatWsEnvelope } from "../types.js";
 
@@ -9,6 +9,14 @@ const DEFAULT_CHAT_VERSION = "1.30.0";
 const DEFAULT_HEARTBEAT_INTERVAL = 30_000;
 const DEFAULT_RECONNECT_INITIAL_DELAY = 1_000;
 const DEFAULT_RECONNECT_MAX_DELAY = 30_000;
+
+export interface HeychatWsClientEvents {
+    ready: [];
+    disconnected: [details: { code: number; reason: string }];
+    reconnecting: [details: { attempt: number; delay: number }];
+    error: [error: HeychatApiError];
+    event: [event: HeychatWsEnvelope];
+}
 
 /** 可复现的指数退避；实际连接使用 ±20% 抖动避免实例同步重连。 */
 export function calculateHeychatReconnectDelay(
@@ -22,7 +30,7 @@ export function calculateHeychatReconnectDelay(
 }
 
 /** 正向 WebSocket 客户端；无限重连，并用 generation 隔离过期 socket 回调。 */
-export class HeychatWsClient extends EventEmitter {
+export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
     private ws: WebSocket | null = null;
     private pendingWs: WebSocket | null = null;
     private readonly token: string;
@@ -95,7 +103,11 @@ export class HeychatWsClient extends EventEmitter {
             this.emit("ready");
         } catch (error) {
             if (this.closed || generation !== this.generation) return;
-            const wrapped = HeychatApiError.wrap(error, "HEYCHAT_WS_CONNECT_ERROR");
+            const wrapped = HeychatApiError.wrap(
+                error,
+                "HEYCHAT_WS_CONNECT_ERROR",
+                ErrorCategory.NETWORK,
+            );
             this.emit("error", wrapped);
             this.scheduleReconnect();
         }
@@ -154,7 +166,10 @@ export class HeychatWsClient extends EventEmitter {
             this.awaitingPong = false;
         });
         ws.on("error", error => {
-            this.emit("error", HeychatApiError.wrap(error, "HEYCHAT_WS_ERROR"));
+            this.emit(
+                "error",
+                HeychatApiError.wrap(error, "HEYCHAT_WS_ERROR", ErrorCategory.NETWORK),
+            );
         });
         ws.once("close", (code, reason) => {
             if (generation !== this.generation) return;
@@ -178,6 +193,7 @@ export class HeychatWsClient extends EventEmitter {
                 "error",
                 new HeychatApiError("WebSocket 推送不是有效 JSON", {
                     code: "HEYCHAT_INVALID_WS_EVENT",
+                    category: ErrorCategory.PROTOCOL,
                     details: raw.slice(0, 500),
                     cause: error,
                 }),
@@ -189,6 +205,7 @@ export class HeychatWsClient extends EventEmitter {
                 "error",
                 new HeychatApiError("WebSocket 推送结构无效", {
                     code: "HEYCHAT_INVALID_WS_EVENT",
+                    category: ErrorCategory.PROTOCOL,
                     details: value,
                 }),
             );
@@ -278,6 +295,7 @@ function validateWsUrl(value: string): string {
     if (!URL.canParse(value)) {
         throw new HeychatApiError("ws_url 必须是有效的 ws:// 或 wss:// URL", {
             code: "HEYCHAT_INVALID_CONFIG_URL",
+            category: ErrorCategory.CONFIG,
             details: value,
         });
     }
@@ -292,7 +310,11 @@ function validateWsUrl(value: string): string {
     ) {
         throw new HeychatApiError(
             "ws_url 必须是无凭据、查询参数或片段的 wss:// URL（本机测试可用 ws://）",
-            { code: "HEYCHAT_INVALID_CONFIG_URL", details: value },
+            {
+                code: "HEYCHAT_INVALID_CONFIG_URL",
+                category: ErrorCategory.CONFIG,
+                details: value,
+            },
         );
     }
     return url.toString();

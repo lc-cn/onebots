@@ -112,6 +112,8 @@ heychat.my_bot:
 
 `upload_media` 接收 `data`（Base64、`base64://` 或 Base64 data URL）、`filename` 和可选 `content_type`，最大 25 MiB。文件名与 Content-Type 会在拼装 multipart 前校验，不能注入额外头部。
 
+动作参数、账号与资源缺失、配置、平台响应和网络故障统一使用 `HeychatApiError`，并接入 OneBots 核心错误分类。调用方可以读取稳定的 `code`、HTTP `status`、API `path` 与 `details`，不需要解析错误文本。底层 `HeychatBot`、`HeychatWsClient` 及其完整事件映射类型均从包入口导出。
+
 ## 文档
 
 - [黑盒语音机器人帮助文档](https://s.apifox.cn/43256fe4-9a8c-4f22-949a-74a3f8b431f5)

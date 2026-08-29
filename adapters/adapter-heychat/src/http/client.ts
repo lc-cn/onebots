@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Agent } from "node:http";
-import { createHttpsProxyAgent } from "onebots";
+import { createHttpsProxyAgent, ErrorCategory } from "onebots";
 import { HeychatApiError, normalizeHeychatErrorCode } from "../errors.js";
 import { createHeychatAckId } from "../utils.js";
 import type {
@@ -64,9 +64,7 @@ export class HeychatHttpClient {
         contentType = "application/octet-stream",
     ): Promise<string> {
         if (!data.byteLength) {
-            throw new HeychatApiError("上传媒体文件不能为空", {
-                code: "HEYCHAT_INVALID_UPLOAD",
-            });
+            throw HeychatApiError.invalid("上传媒体文件不能为空", "HEYCHAT_INVALID_UPLOAD");
         }
         const boundary = `onebots-${randomUUID()}`;
         const safeFilename = filename.replace(/[\r\n"]/gu, "_") || "upload.bin";
@@ -193,10 +191,11 @@ export class HeychatHttpClient {
         base = this.apiBase,
     ): URL {
         if (!path.startsWith("/") || path.startsWith("//") || path.includes("..")) {
-            throw new HeychatApiError("API path 必须是安全绝对路径", {
-                code: "HEYCHAT_INVALID_API_PATH",
-                details: path,
-            });
+            throw HeychatApiError.invalid(
+                "API path 必须是安全绝对路径",
+                "HEYCHAT_INVALID_API_PATH",
+                path,
+            );
         }
         const url = new URL(`${base}${path}`);
         const defaults: Record<string, string> = {
@@ -225,7 +224,7 @@ export class HeychatHttpClient {
         try {
             response = await this.rawRequest(url, method, body, { ...headers, token: this.token });
         } catch (error) {
-            throw HeychatApiError.wrap(error, "HEYCHAT_NETWORK_ERROR");
+            throw HeychatApiError.wrap(error, "HEYCHAT_NETWORK_ERROR", ErrorCategory.NETWORK);
         }
 
         const payload = parseResponse(response.text, url.pathname);
@@ -294,6 +293,7 @@ function normalizeBaseUrl(value: string, name: string): string {
     if (!URL.canParse(value)) {
         throw new HeychatApiError(`配置 ${name} 不是有效 URL`, {
             code: "HEYCHAT_INVALID_CONFIG_URL",
+            category: ErrorCategory.CONFIG,
             details: value,
         });
     }
@@ -310,6 +310,7 @@ function normalizeBaseUrl(value: string, name: string): string {
             `配置 ${name} 必须是无凭据、查询参数或片段的 HTTPS URL（本机测试可用 HTTP）`,
             {
                 code: "HEYCHAT_INVALID_CONFIG_URL",
+                category: ErrorCategory.CONFIG,
                 details: value,
             },
         );
@@ -331,6 +332,7 @@ function parseResponse(text: string, path: string): HeychatApiResponse {
     } catch (error) {
         throw new HeychatApiError("黑盒语音响应不是有效 JSON", {
             code: "HEYCHAT_INVALID_RESPONSE",
+            category: ErrorCategory.PROTOCOL,
             path,
             details: text.slice(0, 500),
             cause: error,
@@ -338,6 +340,7 @@ function parseResponse(text: string, path: string): HeychatApiResponse {
     }
     throw new HeychatApiError("黑盒语音响应结构无效", {
         code: "HEYCHAT_INVALID_RESPONSE",
+        category: ErrorCategory.PROTOCOL,
         path,
         details: text.slice(0, 500),
     });
@@ -370,10 +373,7 @@ function messageResult(result: Record<string, unknown>, ackId: string): HeychatS
 function numericId(value: string, name: string): number {
     const id = Number(value);
     if (!Number.isSafeInteger(id) || id < 0) {
-        throw new HeychatApiError(`${name} 必须是安全整数 ID`, {
-            code: "HEYCHAT_INVALID_ID",
-            details: value,
-        });
+        throw HeychatApiError.invalid(`${name} 必须是安全整数 ID`, "HEYCHAT_INVALID_ID", value);
     }
     return id;
 }

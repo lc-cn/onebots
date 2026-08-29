@@ -1,14 +1,18 @@
 import { AdapterRegistry, type Schema } from "onebots";
 
 export { HeychatAdapter } from "./adapter.js";
-export { HeychatBot } from "./bot.js";
+export { HeychatBot, type HeychatBotEvents } from "./bot.js";
 export { heychatCapabilities } from "./capabilities.js";
 export { HeychatApiError, type HeychatApiErrorOptions } from "./errors.js";
 export { projectHeychatEvent, type HeychatEventProjectionOptions } from "./events.js";
 export { compileHeychatMessage } from "./messages.js";
 export { normalizeBase64Source, prepareHeychatMediaSegments, uploadHeychatMedia } from "./media.js";
 export { executeHeychatPlatformAction, HEYCHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
-export { calculateHeychatReconnectDelay, HeychatWsClient } from "./ws/client.js";
+export {
+    calculateHeychatReconnectDelay,
+    HeychatWsClient,
+    type HeychatWsClientEvents,
+} from "./ws/client.js";
 export { HeychatHttpClient } from "./http/client.js";
 export type {
     ProxyConfig,

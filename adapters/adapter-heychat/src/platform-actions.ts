@@ -84,7 +84,13 @@ export async function executeHeychatPlatformAction(
         };
     }
     const route = ROUTES[action];
-    if (!route) throw new Error(`未实现黑盒语音平台动作: ${action}`);
+    if (!route) {
+        throw HeychatApiError.resource(
+            `未实现黑盒语音平台动作: ${action}`,
+            "HEYCHAT_ACTION_NOT_FOUND",
+            { action },
+        );
+    }
     return bot.callApi(
         route.path,
         route.method === "GET"
@@ -154,7 +160,8 @@ function optionalString(value: unknown, name: string): string | undefined {
 }
 
 function invalid(message: string): HeychatApiError {
-    return new HeychatApiError(`黑盒语音平台动作参数错误: ${message}`, {
-        code: "HEYCHAT_INVALID_ACTION_PARAMS",
-    });
+    return HeychatApiError.invalid(
+        `黑盒语音平台动作参数错误: ${message}`,
+        "HEYCHAT_INVALID_ACTION_PARAMS",
+    );
 }

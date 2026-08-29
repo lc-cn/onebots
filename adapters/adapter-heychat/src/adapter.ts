@@ -3,31 +3,31 @@ import {
     AccountStatus,
     Adapter,
     AdapterRegistry,
-    BaseApp,
+    UnsupportedCapabilityError,
     readPackageVersion,
-    type CommonTypes,
 } from "onebots";
+import { HeychatActionBase } from "./action-base.js";
 import { HeychatBot } from "./bot.js";
 import { heychatCapabilities } from "./capabilities.js";
 import { projectHeychatEvent } from "./events.js";
+import { HeychatApiError } from "./errors.js";
 import { normalizeBase64Source, prepareHeychatMediaSegments, uploadHeychatMedia } from "./media.js";
 import { compileHeychatMessage } from "./messages.js";
+import {
+    flattenHeychatChannels,
+    projectHeychatChannel,
+    projectHeychatGroupMember,
+} from "./models.js";
 import { executeHeychatPlatformAction, HEYCHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { extractRoomId } from "./utils.js";
 import type {
-    HeychatChannelInfo,
     HeychatConfig,
     HeychatSendMessageResult,
     HeychatUserInfo,
     HeychatWsEnvelope,
 } from "./types.js";
 
-export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
-    constructor(app: BaseApp) {
-        super(app, "heychat", heychatCapabilities);
-        this.icon = "https://chat.xiaoheihe.cn/favicon.ico";
-    }
-
+export class HeychatAdapter extends HeychatActionBase {
     async sendMessage(
         uin: string,
         params: Adapter.SendMessageParams,
@@ -50,7 +50,13 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
         const bot = this.requireBot(uin);
         const msgId = this.toPlatformId(params.message_id);
         const context = bot.getMessageContext(msgId);
-        if (!context) throw new Error("更新频道消息需要已知消息上下文");
+        if (!context) {
+            throw HeychatApiError.invalid(
+                "更新频道消息需要已知消息上下文",
+                "HEYCHAT_MESSAGE_CONTEXT_REQUIRED",
+                { message_id: msgId },
+            );
+        }
         const segments = await prepareHeychatMediaSegments(bot, params.message);
         const message = compileHeychatMessage(segments, value => this.toPlatformId(value));
         await bot.callApi("/chatroom/v2/channel_msg/update", {
@@ -71,7 +77,13 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
             const target = bot.resolveSendTarget(this.toPlatformId(params.scene_id));
             context = { room_id: target.room_id, channel_id: target.channel_id };
         }
-        if (!context) throw new Error("删除频道消息需要 scene_id 或已知消息上下文");
+        if (!context) {
+            throw HeychatApiError.invalid(
+                "删除频道消息需要 scene_id 或已知消息上下文",
+                "HEYCHAT_MESSAGE_CONTEXT_REQUIRED",
+                { message_id: msgId },
+            );
+        }
         await bot.deleteChannelMessage(context.room_id, context.channel_id, msgId);
     }
 
@@ -127,7 +139,9 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
             const total = page.room_info?.user_count ?? users.length;
             if (!values.length || users.length >= total) break;
         }
-        return users.map(user => this.toGroupMember(roomId, user));
+        return users.map(user =>
+            projectHeychatGroupMember(value => this.createId(value), roomId, user),
+        );
     }
 
     async getGroupMemberInfo(
@@ -138,8 +152,14 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
         const userId = this.toPlatformId(params.user_id);
         const page = await this.requireBot(uin).listRoomUsers(roomId, userId);
         const user = page.room_info?.user_info?.find(value => String(value.user_id) === userId);
-        if (!user) throw new Error(`房间 ${roomId} 中未找到成员 ${userId}`);
-        return this.toGroupMember(roomId, user);
+        if (!user) {
+            throw HeychatApiError.resource(
+                `房间 ${roomId} 中未找到成员 ${userId}`,
+                "HEYCHAT_MEMBER_NOT_FOUND",
+                { room_id: roomId, user_id: userId },
+            );
+        }
+        return projectHeychatGroupMember(value => this.createId(value), roomId, user);
     }
 
     async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
@@ -232,8 +252,8 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
     ): Promise<Adapter.ChannelInfo[]> {
         const roomId = extractRoomId(this.toPlatformId(params.guild_id));
         const view = await this.requireBot(uin).getRoomView(roomId);
-        return this.flattenChannels(view.channels || []).map(channel =>
-            this.toChannelInfo(roomId, channel),
+        return flattenHeychatChannels(view.channels || []).map(channel =>
+            projectHeychatChannel(value => this.createId(value), roomId, channel),
         );
     }
 
@@ -252,11 +272,17 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
               }
             : bot.resolveSendTarget(channelValue);
         const view = await bot.getRoomView(target.room_id);
-        const channel = this.flattenChannels(view.channels || []).find(
+        const channel = flattenHeychatChannels(view.channels || []).find(
             value => value.channel_id === target.channel_id,
         );
-        if (!channel) throw new Error(`房间 ${target.room_id} 中未找到频道 ${target.channel_id}`);
-        return this.toChannelInfo(target.room_id, channel);
+        if (!channel) {
+            throw HeychatApiError.resource(
+                `房间 ${target.room_id} 中未找到频道 ${target.channel_id}`,
+                "HEYCHAT_CHANNEL_NOT_FOUND",
+                target,
+            );
+        }
+        return projectHeychatChannel(value => this.createId(value), target.room_id, channel);
     }
 
     async createChannel(
@@ -279,7 +305,12 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
                 },
             },
         );
-        if (!result.channel_id) throw new Error("创建频道接口未返回 channel_id");
+        if (!result.channel_id) {
+            throw new HeychatApiError("创建频道接口未返回 channel_id", {
+                code: "HEYCHAT_INVALID_RESPONSE",
+                details: result,
+            });
+        }
         account.client.rememberChannel({
             room_id: roomId,
             channel_id: result.channel_id,
@@ -296,7 +327,12 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
 
     async updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> {
         if (params.parent_id) {
-            throw new Error("黑盒语音官方 API 未提供移动现有频道到其他分组的稳定接口");
+            throw new UnsupportedCapabilityError({
+                platform: "heychat",
+                capability: "update_channel.parent_id",
+                reason: "platform_unsupported",
+                message: "黑盒语音官方 API 未提供移动现有频道到其他分组的稳定接口",
+            });
         }
         if (!params.channel_name) return;
         const bot = this.requireBot(uin);
@@ -337,7 +373,10 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
             (value): value is string => typeof value === "string" && value.length > 0,
         );
         if (sources.length !== 1) {
-            throw new Error("黑盒语音 upload_file 必须且只能提供 url/path/data 之一");
+            throw HeychatApiError.invalid(
+                "黑盒语音 upload_file 必须且只能提供 url/path/data 之一",
+                "HEYCHAT_MEDIA_SOURCE_REQUIRED",
+            );
         }
         const source = params.url || params.path || normalizeBase64Source(params.data!);
         const url = await uploadHeychatMedia(this.requireBot(uin), {
@@ -423,61 +462,6 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
         });
         account.on("stop", async () => bot.stop());
         return account;
-    }
-
-    private requireAccount(uin: string): Account<"heychat", HeychatBot> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到黑盒语音账号 ${uin}`);
-        return account;
-    }
-
-    private requireBot(uin: string): HeychatBot {
-        return this.requireAccount(uin).client;
-    }
-
-    private toPlatformId(value: unknown): string {
-        if (
-            typeof value !== "string" &&
-            typeof value !== "number" &&
-            !(value && typeof value === "object" && "string" in value)
-        )
-            throw new Error("黑盒语音 ID 必须是字符串、数字或统一 ID");
-        const resolved = this.resolveId(value as string | number | CommonTypes.Id);
-        return String(resolved.source ?? resolved.string);
-    }
-
-    private numericId(value: CommonTypes.Id): number {
-        const id = Number(this.toPlatformId(value));
-        if (!Number.isSafeInteger(id) || id < 0) throw new Error("黑盒语音用户 ID 必须是安全整数");
-        return id;
-    }
-
-    private toGroupMember(roomId: string, user: HeychatUserInfo): Adapter.GroupMemberInfo {
-        return {
-            group_id: this.createId(roomId),
-            user_id: this.createId(user.user_id),
-            user_name: user.nickname || user.username || String(user.user_id),
-            card: user.room_nickname,
-            role: "member",
-        };
-    }
-
-    private flattenChannels(channels: HeychatChannelInfo[]): HeychatChannelInfo[] {
-        return channels.flatMap(channel => [
-            channel,
-            ...this.flattenChannels(channel.channel_list || []),
-        ]);
-    }
-
-    private toChannelInfo(roomId: string, channel: HeychatChannelInfo): Adapter.ChannelInfo {
-        return {
-            channel_id: this.createId(`${roomId}:${channel.channel_id}`),
-            channel_name: channel.channel_name || channel.channel_id,
-            channel_type: channel.channel_type,
-            ...(channel.parent_id
-                ? { parent_id: this.createId(`${roomId}:${channel.parent_id}`) }
-                : {}),
-        };
     }
 }
 

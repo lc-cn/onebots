@@ -166,5 +166,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function invalidMessage(message: string): HeychatApiError {
-    return new HeychatApiError(message, { code: "HEYCHAT_INVALID_MESSAGE" });
+    return HeychatApiError.invalid(message, "HEYCHAT_INVALID_MESSAGE");
 }

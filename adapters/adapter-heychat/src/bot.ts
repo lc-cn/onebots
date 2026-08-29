@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { HeychatApiError } from "./errors.js";
 import { HeychatHttpClient } from "./http/client.js";
 import { HeychatWsClient } from "./ws/client.js";
 import type {
@@ -16,8 +17,17 @@ import type {
 
 const MAX_CONTEXTS = 10_000;
 
+export interface HeychatBotEvents {
+    ready: [];
+    disconnected: [details: { code: number; reason: string }];
+    reconnecting: [details: { attempt: number; delay: number }];
+    error: [error: HeychatApiError];
+    event: [event: HeychatWsEnvelope];
+    stopped: [];
+}
+
 /** 聚合 REST 与正向 WebSocket 的平台客户端，不承担通用事件投影。 */
-export class HeychatBot extends EventEmitter {
+export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     private readonly http: HeychatHttpClient;
     private ws: HeychatWsClient | null = null;
     private botId: number | null = null;
@@ -83,8 +93,10 @@ export class HeychatBot extends EventEmitter {
         }
         const context = this.channelContexts.get(sceneId);
         if (context) return { room_id: context.room_id, channel_id: context.channel_id };
-        throw new Error(
+        throw HeychatApiError.invalid(
             `无法解析 scene_id=${sceneId}；频道消息请使用 room_id:channel_id，或先接收该频道命令事件`,
+            "HEYCHAT_SCENE_CONTEXT_REQUIRED",
+            { scene_id: sceneId },
         );
     }
 

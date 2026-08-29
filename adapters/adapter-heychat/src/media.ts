@@ -1,4 +1,9 @@
-import { materializeMediaSource, type CommonTypes, type MediaSourceInput } from "onebots";
+import {
+    ErrorCategory,
+    materializeMediaSource,
+    type CommonTypes,
+    type MediaSourceInput,
+} from "onebots";
 import type { HeychatBot } from "./bot.js";
 import { HeychatApiError } from "./errors.js";
 
@@ -12,13 +17,14 @@ export async function uploadHeychatMedia(
     try {
         const media = await materializeMediaSource(input);
         if (media.data.byteLength > MAX_UPLOAD_SIZE) {
-            throw new HeychatApiError("黑盒语音上传文件不能超过 25 MiB", {
-                code: "HEYCHAT_INVALID_UPLOAD",
-            });
+            throw HeychatApiError.invalid(
+                "黑盒语音上传文件不能超过 25 MiB",
+                "HEYCHAT_INVALID_UPLOAD",
+            );
         }
         return await bot.uploadMedia(media.data, media.filename, media.contentType);
     } catch (error) {
-        throw HeychatApiError.wrap(error, "HEYCHAT_MEDIA_UPLOAD_ERROR");
+        throw HeychatApiError.wrap(error, "HEYCHAT_MEDIA_UPLOAD_ERROR", ErrorCategory.VALIDATION);
     }
 }
 
@@ -51,9 +57,10 @@ function uniqueSource(data: Record<string, unknown>): string {
         .map(stringValue)
         .filter(value => value !== undefined);
     if (values.length !== 1) {
-        throw new HeychatApiError("图片消息必须且只能提供 url/path/file/data 之一", {
-            code: "HEYCHAT_INVALID_MESSAGE",
-        });
+        throw HeychatApiError.invalid(
+            "图片消息必须且只能提供 url/path/file/data 之一",
+            "HEYCHAT_INVALID_MESSAGE",
+        );
     }
     return data.data === values[0] ? normalizeBase64Source(values[0]!) : values[0]!;
 }
