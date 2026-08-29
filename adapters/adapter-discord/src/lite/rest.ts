@@ -196,6 +196,7 @@ export class DiscordREST {
      * 发送请求
      */
     async request<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+        assertDiscordEndpoint(endpoint);
         // 初始化代理
         await this.initAgent();
 
@@ -430,5 +431,23 @@ export class DiscordREST {
         };
     }> {
         return this.request("/gateway/bot");
+    }
+}
+
+/** 只允许访问固定 Discord API 根下的相对资源路径。 */
+export function assertDiscordEndpoint(
+    endpoint: unknown,
+    label = "Discord endpoint",
+): asserts endpoint is string {
+    if (
+        typeof endpoint !== "string" ||
+        !endpoint.startsWith("/") ||
+        endpoint.startsWith("//") ||
+        endpoint.includes("..") ||
+        endpoint.includes("?") ||
+        endpoint.includes("#") ||
+        endpoint.includes("\\")
+    ) {
+        throw new Error(`${label} 必须是 API 根下的安全绝对路径`);
     }
 }

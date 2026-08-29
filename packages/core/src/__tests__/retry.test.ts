@@ -83,36 +83,44 @@ describe('ConnectionManager', () => {
         expect(connect).toHaveBeenCalledTimes(1);
     });
 
-    it('scheduleReconnect 增加计数', () => {
+    it('scheduleReconnect 增加计数', async () => {
         const connect = vi.fn().mockResolvedValue(undefined);
         const cm = new ConnectionManager(connect, { ...RetryPresets.fast, maxRetries: 5 });
+        await cm.start();
         expect(cm.getAttempts()).toBe(0);
         cm.scheduleReconnect(new Error('test'));
         expect(cm.getAttempts()).toBe(1);
         cm.stop();
     });
 
-    it('stop 清除重连定时器', () => {
+    it('stop 清除重连定时器', async () => {
+        vi.useFakeTimers();
         const connect = vi.fn().mockResolvedValue(undefined);
         const cm = new ConnectionManager(connect, RetryPresets.fast);
+        await cm.start();
         cm.scheduleReconnect(new Error('test'));
         cm.stop();
         expect(cm.getAttempts()).toBe(1); // attempt was counted before stop
+        await vi.runAllTimersAsync();
+        expect(connect).toHaveBeenCalledTimes(1);
+        vi.useRealTimers();
     });
 
-    it('resetAttempts 重置计数', () => {
+    it('resetAttempts 重置计数', async () => {
         const connect = vi.fn().mockResolvedValue(undefined);
         const cm = new ConnectionManager(connect, RetryPresets.fast);
+        await cm.start();
         cm.scheduleReconnect(new Error('test'));
         expect(cm.getAttempts()).toBe(1);
         cm.resetAttempts();
         expect(cm.getAttempts()).toBe(0);
     });
 
-    it('支持 logger 注入', () => {
+    it('支持 logger 注入', async () => {
         const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
         const connect = vi.fn().mockResolvedValue(undefined);
         const cm = new ConnectionManager(connect, RetryPresets.fast, { logger });
+        await cm.start();
         cm.scheduleReconnect(new Error('test'));
         expect(logger.info).toHaveBeenCalled();
         cm.stop();
@@ -126,16 +134,54 @@ describe('ConnectionManager', () => {
         expect(onConnected).toHaveBeenCalledTimes(1);
     });
 
-    it('支持 onMaxRetriesReached 回调', () => {
+    it('首次连接失败后按策略持续重连', async () => {
+        vi.useFakeTimers();
+        const connect = vi.fn()
+            .mockRejectedValueOnce(new Error('network unavailable'))
+            .mockResolvedValue(undefined);
+        const cm = new ConnectionManager(connect, { ...RetryPresets.fast, jitter: false });
+
+        await cm.start();
+        expect(cm.getAttempts()).toBe(1);
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(connect).toHaveBeenCalledTimes(2);
+        expect(cm.getAttempts()).toBe(0);
+        cm.stop();
+        vi.useRealTimers();
+    });
+
+    it('旧一代连接结果不会在重启后触发回调', async () => {
+        let resolveFirst: (() => void) | undefined;
+        const first = new Promise<void>(resolve => {
+            resolveFirst = resolve;
+        });
+        const connect = vi.fn().mockReturnValueOnce(first).mockResolvedValue(undefined);
+        const onConnected = vi.fn();
+        const cm = new ConnectionManager(connect, RetryPresets.fast, { onConnected });
+
+        const oldStart = cm.start();
+        await cm.start();
+        resolveFirst?.();
+        await oldStart;
+
+        expect(onConnected).toHaveBeenCalledTimes(1);
+        cm.stop();
+    });
+
+    it('支持 onMaxRetriesReached 回调', async () => {
+        vi.useFakeTimers();
         const onMaxRetriesReached = vi.fn();
         const connect = vi.fn().mockRejectedValue(new Error('fail'));
-        const cm = new ConnectionManager(connect, { ...RetryPresets.fast, maxRetries: 2 }, { onMaxRetriesReached });
-        // Schedule without starting — faster test
-        cm.scheduleReconnect(new Error('test'));
-        cm.scheduleReconnect(new Error('test'));
-        cm.scheduleReconnect(new Error('test'));
-        // After 3 calls with maxRetries=2, the 3rd should trigger onMaxRetriesReached
+        const cm = new ConnectionManager(
+            connect,
+            { ...RetryPresets.fast, maxRetries: 2, jitter: false },
+            { onMaxRetriesReached },
+        );
+        await cm.start();
+        await vi.advanceTimersByTimeAsync(1000);
+        await vi.advanceTimersByTimeAsync(1500);
         expect(onMaxRetriesReached).toHaveBeenCalled();
         cm.stop();
+        vi.useRealTimers();
     });
 });

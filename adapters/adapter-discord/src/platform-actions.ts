@@ -1,6 +1,11 @@
 import type { DiscordBot } from "./bot.js";
+import { assertDiscordEndpoint } from "./lite/rest.js";
+
+const DISCORD_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+type DiscordMethod = (typeof DISCORD_METHODS)[number];
 
 export const DISCORD_PLATFORM_ACTIONS = new Set([
+    "call_discord_api",
     "ban_member",
     "unban_member",
     "get_guild_bans",
@@ -41,6 +46,12 @@ export async function executeDiscordPlatformAction(
     const userId = () => requireSnowflake(params, "user_id");
     const messageId = () => requireSnowflake(params, "message_id");
     switch (action) {
+        case "call_discord_api":
+            return rest.request(requirePath(params.path), {
+                method: methodValue(params.method),
+                body: optionalObject(params.body, "body"),
+                query: query(params),
+            });
         case "ban_member":
             return bot.banMember(guildId(), userId(), {
                 deleteMessageSeconds: optionalInteger(params, "delete_message_seconds"),
@@ -121,7 +132,7 @@ export async function executeDiscordPlatformAction(
         case "create_channel_invite":
             return rest.request(`/channels/${channelId()}/invites`, {
                 method: "POST",
-                body: params.invite && typeof params.invite === "object" ? params.invite : {},
+                body: optionalObject(params.invite, "invite") ?? {},
             });
         case "delete_invite":
             return rest.request(`/invites/${requireString(params, "code")}`, { method: "DELETE" });
@@ -133,6 +144,34 @@ export async function executeDiscordPlatformAction(
         default:
             throw new Error(`未实现 Discord 平台动作: ${action}`);
     }
+}
+
+function requirePath(value: unknown): string {
+    assertDiscordEndpoint(value, "Discord 参数 path");
+    return value;
+}
+
+function methodValue(value: unknown): DiscordMethod {
+    const method = typeof value === "string" ? value.toUpperCase() : "GET";
+    if (!isDiscordMethod(method)) {
+        throw new Error("Discord 参数 method 不是受支持的 HTTP 方法");
+    }
+    return method;
+}
+
+function isDiscordMethod(value: string): value is DiscordMethod {
+    return (DISCORD_METHODS as readonly string[]).includes(value);
+}
+
+function optionalObject(
+    value: unknown,
+    name: string,
+): Readonly<Record<string, unknown>> | undefined {
+    if (value == null) return undefined;
+    if (typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(`Discord 参数 ${name} 必须为对象`);
+    }
+    return value as Readonly<Record<string, unknown>>;
 }
 
 function requireString(params: Readonly<Record<string, unknown>>, name: string): string {
@@ -196,9 +235,17 @@ function optionalInteger(
 function query(params: Readonly<Record<string, unknown>>): Record<string, string> {
     const source = params.query;
     if (typeof source !== "object" || source === null || Array.isArray(source)) return {};
-    return Object.fromEntries(
-        Object.entries(source).flatMap(([key, value]) =>
-            value == null ? [] : [[key, String(value)]],
-        ),
-    );
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(source)) {
+        if (value == null) continue;
+        if (!isScalar(value)) {
+            throw new Error(`Discord query 参数 ${key} 必须为标量`);
+        }
+        result[key] = String(value);
+    }
+    return result;
+}
+
+function isScalar(value: unknown): value is string | number | boolean {
+    return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }

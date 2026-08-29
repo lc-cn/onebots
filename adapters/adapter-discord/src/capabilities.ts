@@ -44,6 +44,11 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         },
         set_group_card: { support: "native", availability: "context" },
         send_group_message_reaction: { support: "native" },
+        call_discord_api: {
+            support: "native",
+            availability: "context",
+            note: "受当前 Bot token 权限约束的完整 Discord v10 REST API 入口",
+        },
         ban_member: {
             support: "native",
             availability: "permission",

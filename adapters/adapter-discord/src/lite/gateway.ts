@@ -86,15 +86,21 @@ interface WsWebSocket {
     on(event: string, listener: (...args: unknown[]) => void): void;
 }
 
+const FATAL_GATEWAY_CLOSE_CODES = new Set([4004, 4010, 4011, 4012, 4013, 4014]);
+
 export class DiscordGateway extends EventEmitter {
     private ws: WsWebSocket | null = null;
     private token: string;
     private intents: number;
     private proxyUrl?: string;
+    private heartbeatStartTimer: NodeJS.Timeout | null = null;
     private heartbeatInterval: NodeJS.Timeout | null = null;
+    private sessionRetryTimer: NodeJS.Timeout | null = null;
+    private pendingConnectionReject?: (error: Error) => void;
     private sequence: number | null = null;
     private sessionId: string | null = null;
     private resumeGatewayUrl: string | null = null;
+    private resumeOnHello = false;
     private rest: DiscordREST;
     private isReady = false;
     private connectionManager: ConnectionManager;
@@ -115,15 +121,17 @@ export class DiscordGateway extends EventEmitter {
             async () => {
                 if (this.resumeGatewayUrl && this.sessionId) {
                     try {
-                        await this.connectToGateway(`${this.resumeGatewayUrl}?v=10&encoding=json`);
-                        this.resume();
+                        await this.connectToGateway(
+                            `${this.resumeGatewayUrl}?v=10&encoding=json`,
+                            true,
+                        );
                         return;
                     } catch {
                         // 恢复失败，降级到完整连接
                     }
                 }
                 const { url } = await this.rest.getGatewayBot();
-                await this.connectToGateway(`${url}?v=10&encoding=json`);
+                await this.connectToGateway(`${url}?v=10&encoding=json`, false);
             },
             RetryPresets.websocket,
             {},
@@ -140,7 +148,7 @@ export class DiscordGateway extends EventEmitter {
     /**
      * 连接到指定 Gateway URL
      */
-    private async connectToGateway(url: string): Promise<void> {
+    private async connectToGateway(url: string, resume: boolean): Promise<void> {
         // 动态导入 ws
         const { WebSocket } = await import("ws");
 
@@ -154,44 +162,72 @@ export class DiscordGateway extends EventEmitter {
         }
 
         return new Promise((resolve, reject) => {
-            this.ws = new WebSocket(url, wsOptions) as unknown as WsWebSocket;
+            const socket = new WebSocket(url, wsOptions) as unknown as WsWebSocket;
+            this.ws = socket;
+            this.resumeOnHello = resume;
+            let settled = false;
+            let timeout: NodeJS.Timeout;
+            const onReady = () => {
+                if (settled || this.ws !== socket) return;
+                settled = true;
+                clearTimeout(timeout);
+                this.pendingConnectionReject = undefined;
+                resolve();
+            };
+            const fail = (error: Error) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeout);
+                this.off("connected", onReady);
+                if (this.pendingConnectionReject === fail) {
+                    this.pendingConnectionReject = undefined;
+                }
+                reject(error);
+            };
+            this.pendingConnectionReject = fail;
 
-            this.ws.on("message", (data: unknown) => {
-                const buffer = data as Buffer;
-                this.handleMessage(JSON.parse(buffer.toString()));
-            });
-
-            this.ws.on("close", (code: unknown, reason: unknown) => {
-                const closeCode = code as number;
-                const closeReason = (reason as Buffer).toString();
-                this.cleanup();
-                this.emit("close", closeCode, closeReason);
-
-                // 使用 ConnectionManager 管理重连，支持指数退避
-                if (closeCode !== 1000 && closeCode !== 4004) {
-                    this.connectionManager.scheduleReconnect(
-                        new Error(`WebSocket closed with code ${closeCode}`),
-                    );
+            socket.on("message", (data: unknown) => {
+                if (this.ws !== socket) return;
+                try {
+                    const buffer = data as Buffer;
+                    this.handleMessage(JSON.parse(buffer.toString()));
+                } catch (error) {
+                    const reason = error instanceof Error ? error : new Error(String(error));
+                    this.emit("error", reason);
                 }
             });
 
-            this.ws.on("error", (error: unknown) => {
-                const err = error instanceof Error ? error : new Error(String(error));
-                this.emit("error", err);
-                reject(err);
+            socket.on("close", (code: unknown, reason: unknown) => {
+                if (this.ws !== socket) return;
+                const closeCode = code as number;
+                const closeReason = Buffer.isBuffer(reason)
+                    ? reason.toString()
+                    : String(reason ?? "");
+                const error = new Error(`WebSocket closed with code ${closeCode}`);
+                const fatal = FATAL_GATEWAY_CLOSE_CODES.has(closeCode);
+                if (fatal) this.connectionManager.stop();
+                this.cleanup(error);
+                this.emit("close", closeCode, closeReason);
+
+                if (!fatal) {
+                    this.connectionManager.scheduleReconnect(error);
+                }
             });
 
-            // 设置超时
-            const timeout = setTimeout(() => {
-                if (!this.isReady) {
-                    reject(new Error("Gateway 连接超时"));
+            socket.on("error", (error: unknown) => {
+                if (this.ws !== socket) return;
+                const err = error instanceof Error ? error : new Error(String(error));
+                this.emit("error", err);
+                this.cleanup(err);
+            });
+
+            timeout = setTimeout(() => {
+                if (!settled && this.ws === socket) {
+                    this.cleanup(new Error("Gateway 连接超时"));
                 }
             }, 30000);
 
-            this.once("ready", () => {
-                clearTimeout(timeout);
-                resolve();
-            });
+            this.once("connected", onReady);
         });
     }
 
@@ -211,7 +247,8 @@ export class DiscordGateway extends EventEmitter {
             case GatewayOpcodes.Hello: {
                 const helloData = d as GatewayHelloData;
                 this.startHeartbeat(helloData.heartbeat_interval);
-                this.identify();
+                if (this.resumeOnHello) this.resume();
+                else this.identify();
                 break;
             }
 
@@ -228,19 +265,24 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case GatewayOpcodes.Reconnect:
-                this.cleanup();
+                this.cleanup(new Error("Discord requested reconnect"));
                 this.connectionManager.scheduleReconnect(new Error("Discord requested reconnect"));
                 break;
 
             case GatewayOpcodes.InvalidSession: {
                 const isResumable = d as boolean;
+                if (this.sessionRetryTimer) clearTimeout(this.sessionRetryTimer);
                 if (isResumable) {
-                    // 可恢复，尝试 resume
-                    setTimeout(() => this.resume(), 1000);
+                    this.sessionRetryTimer = setTimeout(() => {
+                        this.sessionRetryTimer = null;
+                        this.resume();
+                    }, 1000);
                 } else {
-                    // 不可恢复，重新 identify
                     this.sessionId = null;
-                    setTimeout(() => this.identify(), 1000);
+                    this.sessionRetryTimer = setTimeout(() => {
+                        this.sessionRetryTimer = null;
+                        this.identify();
+                    }, 1000);
                 }
                 break;
             }
@@ -260,11 +302,14 @@ export class DiscordGateway extends EventEmitter {
                 this.sessionId = readyData.session_id;
                 this.resumeGatewayUrl = readyData.resume_gateway_url;
                 this.isReady = true;
+                this.emit("connected");
                 this.emit("ready", readyData.user);
                 break;
             }
 
             case "RESUMED":
+                this.isReady = true;
+                this.emit("connected");
                 this.emit("resumed");
                 break;
 
@@ -328,7 +373,7 @@ export class DiscordGateway extends EventEmitter {
      * 发送 Resume
      */
     private resume() {
-        if (!this.sessionId || !this.sequence) {
+        if (!this.sessionId || this.sequence === null) {
             this.identify();
             return;
         }
@@ -351,7 +396,8 @@ export class DiscordGateway extends EventEmitter {
 
         // 首次心跳添加随机抖动
         const jitter = Math.random() * interval;
-        setTimeout(() => {
+        this.heartbeatStartTimer = setTimeout(() => {
+            this.heartbeatStartTimer = null;
             this.sendHeartbeat();
             this.heartbeatInterval = setInterval(() => this.sendHeartbeat(), interval);
         }, jitter);
@@ -361,6 +407,10 @@ export class DiscordGateway extends EventEmitter {
      * 停止心跳
      */
     private stopHeartbeat() {
+        if (this.heartbeatStartTimer) {
+            clearTimeout(this.heartbeatStartTimer);
+            this.heartbeatStartTimer = null;
+        }
         if (this.heartbeatInterval) {
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
@@ -389,9 +439,17 @@ export class DiscordGateway extends EventEmitter {
     /**
      * 清理资源
      */
-    private cleanup() {
+    private cleanup(connectionError?: Error) {
+        const reject = this.pendingConnectionReject;
+        this.pendingConnectionReject = undefined;
+        reject?.(connectionError ?? new Error("Discord Gateway 已停止"));
         this.stopHeartbeat();
+        if (this.sessionRetryTimer) {
+            clearTimeout(this.sessionRetryTimer);
+            this.sessionRetryTimer = null;
+        }
         this.isReady = false;
+        this.resumeOnHello = false;
 
         if (this.ws) {
             this.ws.removeAllListeners();
@@ -409,7 +467,7 @@ export class DiscordGateway extends EventEmitter {
         this.connectionManager.stop();
         this.sessionId = null;
         this.resumeGatewayUrl = null;
-        this.cleanup();
+        this.cleanup(new Error("Discord Gateway 已停止"));
     }
 
     /**

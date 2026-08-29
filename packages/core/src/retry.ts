@@ -176,6 +176,12 @@ export interface LoggerLike {
     debug?(...args: unknown[]): void;
 }
 
+const NULL_LOGGER: LoggerLike = {
+    info: () => undefined,
+    warn: () => undefined,
+    error: () => undefined,
+};
+
 /**
  * ConnectionManager 回调选项
  */
@@ -202,7 +208,9 @@ export interface ConnectionManagerCallbacks {
 export class ConnectionManager {
     private reconnectAttempt = 0;
     private reconnectTimer: NodeJS.Timeout | null = null;
-    private isConnecting = false;
+    private active = false;
+    private generation = 0;
+    private connectingGeneration?: number;
     private options: Required<RetryOptions>;
     private logger: LoggerLike;
     private callbacks: ConnectionManagerCallbacks;
@@ -210,10 +218,10 @@ export class ConnectionManager {
     constructor(
         private connect: () => Promise<void>,
         options: RetryOptions = RetryPresets.websocket,
-        { logger, ...callbacks }: { logger?: LoggerLike } & ConnectionManagerCallbacks = {}
+        { logger, ...callbacks }: { logger?: LoggerLike } & ConnectionManagerCallbacks = {},
     ) {
         this.options = { ...DEFAULT_OPTIONS, ...options };
-        this.logger = logger ?? console;
+        this.logger = logger ?? NULL_LOGGER;
         this.callbacks = callbacks;
     }
 
@@ -222,26 +230,40 @@ export class ConnectionManager {
      */
     async start(): Promise<void> {
         this.stop();
+        this.active = true;
         this.reconnectAttempt = 0;
-        await this.tryConnect();
+        await this.tryConnect(this.generation);
     }
 
     /**
      * 停止连接和重连
      */
     stop(): void {
+        this.active = false;
+        this.generation++;
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
-        this.isConnecting = false;
+        this.connectingGeneration = undefined;
     }
 
     /**
      * 触发重连
      */
     scheduleReconnect(error?: Error): void {
-        if (this.isConnecting) return;
+        this.scheduleReconnectFor(this.generation, error);
+    }
+
+    private scheduleReconnectFor(generation: number, error?: Error): void {
+        if (
+            !this.active ||
+            generation !== this.generation ||
+            this.connectingGeneration === generation ||
+            this.reconnectTimer
+        ) {
+            return;
+        }
 
         this.reconnectAttempt++;
 
@@ -262,7 +284,8 @@ export class ConnectionManager {
         }
 
         this.reconnectTimer = setTimeout(() => {
-            this.tryConnect();
+            this.reconnectTimer = null;
+            void this.tryConnect(generation);
         }, delay);
     }
 
@@ -280,21 +303,33 @@ export class ConnectionManager {
         return this.reconnectAttempt;
     }
 
-    private async tryConnect(): Promise<void> {
-        if (this.isConnecting) return;
-
-        this.isConnecting = true;
-
+    private async tryConnect(generation: number): Promise<void> {
+        if (
+            !this.active ||
+            generation !== this.generation ||
+            this.connectingGeneration === generation
+        ) {
+            return;
+        }
+        this.connectingGeneration = generation;
+        let failure: Error | undefined;
         try {
             await this.connect();
-            this.resetAttempts();
-            this.callbacks.onConnected?.();
         } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            this.logger.error('[ConnectionManager] 连接失败:', err.message);
-            this.scheduleReconnect(err);
+            failure = error instanceof Error ? error : new Error(String(error));
         } finally {
-            this.isConnecting = false;
+            if (this.connectingGeneration === generation) {
+                this.connectingGeneration = undefined;
+            }
         }
+
+        if (!this.active || generation !== this.generation) return;
+        if (failure) {
+            this.logger.error("[ConnectionManager] 连接失败:", failure.message);
+            this.scheduleReconnectFor(generation, failure);
+            return;
+        }
+        this.resetAttempts();
+        this.callbacks.onConnected?.();
     }
 }
