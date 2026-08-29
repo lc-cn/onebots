@@ -30,6 +30,7 @@ import type {
 } from "./types.js";
 
 const DEFAULT_EVENT_TYPES = [
+    "heartbeat",
     "message",
     "update_message",
     "delete_message",
@@ -40,6 +41,7 @@ const DEFAULT_EVENT_TYPES = [
     "presence",
     "user_status",
     "typing",
+    "restart",
 ] as const;
 
 interface ZulipLifecycleEvents {
@@ -124,6 +126,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
                 this.started = false;
                 this.lifecycleAbort = undefined;
                 this.registration = undefined;
+                this.me = undefined;
             }
             throw ZulipError.wrap(error, "ZULIP_START_FAILED");
         }
@@ -133,18 +136,20 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
     async stop(): Promise<void> {
         if (!this.started && !this.startRequest) return;
         const registration = this.registration;
+        const pollRequest = this.pollRequest;
         this.started = false;
         this.lifecycleGeneration += 1;
         this.lifecycleAbort?.abort();
         this.lifecycleAbort = undefined;
         this.registration = undefined;
         this.startRequest = undefined;
+        this.pollRequest = undefined;
+        this.me = undefined;
         try {
-            await this.pollRequest;
+            await pollRequest;
         } catch (error) {
             this.reportError(ZulipError.wrap(error, "ZULIP_EVENT_QUEUE_STOP_FAILED"));
         }
-        this.pollRequest = undefined;
         if (registration?.queue_id) {
             await this.call("events", "DELETE", { queue_id: registration.queue_id }).catch(error =>
                 this.reportError(ZulipError.wrap(error, "ZULIP_QUEUE_DELETE_FAILED")),

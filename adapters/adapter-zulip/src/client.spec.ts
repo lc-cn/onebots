@@ -135,6 +135,32 @@ describe("ZulipClient", () => {
         expect(requests.map(request => request.path)).toEqual(["users/me"]);
         expect(client.getCachedMe()).toEqual(user());
         await client.stop();
+        expect(client.getCachedMe()).toBeUndefined();
+    });
+
+    it("快速重启时旧 stop 不会清除新 generation 的轮询引用", async () => {
+        const client = new ZulipClient(
+            { ...config, receive_mode: "manual" },
+            { transport: async () => user() },
+        );
+        let resolveOldPoll: (() => void) | undefined;
+        const oldPoll = new Promise<void>(resolve => {
+            resolveOldPoll = resolve;
+        });
+        const newPoll = Promise.resolve();
+        const lifecycle = client as unknown as {
+            started: boolean;
+            pollRequest?: Promise<void>;
+        };
+        lifecycle.started = true;
+        lifecycle.pollRequest = oldPoll;
+
+        const stopping = client.stop();
+        lifecycle.pollRequest = newPoll;
+        resolveOldPoll?.();
+        await stopping;
+
+        expect(lifecycle.pollRequest).toBe(newPoll);
     });
 
     it("空事件选择回落到默认订阅，并投递官方命名事件", async () => {
@@ -173,6 +199,8 @@ describe("ZulipClient", () => {
         await client.start();
         const registration = requests.find(request => request.path === "register");
         expect(registration?.params?.event_types).toContain("message");
+        expect(registration?.params?.event_types).toContain("heartbeat");
+        expect(registration?.params?.event_types).toContain("restart");
         client.ingest({ id: 2, type: "subscription", op: "add" });
         expect(subscription).toHaveBeenCalledOnce();
         await client.stop();

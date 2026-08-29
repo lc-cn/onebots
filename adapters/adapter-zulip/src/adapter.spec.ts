@@ -85,6 +85,38 @@ describe("ZulipAdapter", () => {
         expect(result.message_id.string).toBe("99");
     });
 
+    it("事件投影与状态使用认证后的真实 Bot ID", async () => {
+        const account = adapter.createAccount(config);
+        adapter.accounts.set(config.account_id, account);
+        vi.spyOn(account.client, "getCachedMe").mockReturnValue({
+            user_id: 101,
+            email: config.email,
+            full_name: "OneBots",
+        });
+        const dispatch = vi.spyOn(account, "dispatch");
+
+        account.client.ingest({
+            id: 1,
+            type: "message",
+            message: {
+                id: 10,
+                type: "private",
+                sender_id: 2,
+                sender_email: "user@example.com",
+                sender_full_name: "User",
+                content: "hello",
+                timestamp: 100,
+            },
+        });
+
+        expect(dispatch).toHaveBeenCalledWith(
+            expect.objectContaining({ bot_id: expect.objectContaining({ string: "101" }) }),
+        );
+        await expect(adapter.getStatus(config.account_id)).resolves.toMatchObject({
+            bots: [{ self: { string: "101" } }],
+        });
+    });
+
     it("使用真实频道订阅者而非整个组织伪装成员", async () => {
         const account = adapter.createAccount(config);
         adapter.accounts.set(config.account_id, account);

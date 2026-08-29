@@ -282,20 +282,26 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
 
     /** 获取账号连接健康状态。 */
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const online = this.getAccount(uin)?.status === AccountStatus.Online;
-        return { online, good: online };
+        const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
+        const selfId = account?.client.getCachedMe()?.user_id ?? account?.account_id ?? uin;
+        return {
+            online,
+            good: online,
+            bots: [{ self: this.createId(selfId), online }],
+        };
     }
 
     /** 创建具有可靠 Event Queue 生命周期的 Zulip 账号。 */
     createAccount(config: Account.Config<"zulip">): Account<"zulip", ZulipClient> {
         const client = new ZulipClient(normalizeConfig(config));
         const account = new Account<"zulip", ZulipClient>(this, client, config);
-        let selfId: number | undefined;
         client.on("event", (event: ZulipEvent) => {
+            const selfId = client.getCachedMe()?.user_id;
             if (event.type === "message" && isOwnMessage(event, selfId)) return;
             account.dispatch(
                 projectZulipEvent(event, {
-                    botId: this.createId(account.account_id),
+                    botId: this.createId(selfId ?? account.account_id),
                     botUserId: selfId,
                     serverUrl: client.config.server_url,
                     createId: value => this.createId(value),
@@ -315,7 +321,6 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
             try {
                 await client.start();
                 const me = client.getCachedMe() || (await client.getMe());
-                selfId = me.user_id;
                 account.nickname = me.full_name;
                 account.avatar = me.avatar_url || "";
                 account.status = AccountStatus.Online;

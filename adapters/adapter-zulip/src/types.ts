@@ -234,6 +234,8 @@ export interface ZulipQueueRegistration extends ZulipApiEnvelope {
     queue_id: string;
     last_event_id: number;
     event_queue_longpoll_timeout_seconds?: number;
+    /** Zulip 12（feature level 481）返回的空闲队列服务端存活时间。 */
+    idle_queue_timeout_secs?: number;
     zulip_version?: string;
     zulip_feature_level?: number;
     max_file_upload_size_mib?: number;
