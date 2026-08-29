@@ -28,12 +28,11 @@ import {
     MILKY_FRIEND_REQUEST_ACTIONS,
 } from "./friend-requests.js";
 import { projectMilkyFriend } from "./friend-entities.js";
-import { projectMilkyIncomingMessage } from "./message-entities.js";
-import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 import { projectMilkyImplInfo, projectMilkyUserProfile } from "./system-entities.js";
 import { isMilkyAction } from "./action-registry.js";
 import { MilkyActionNotFoundError, toMilkyFailure } from "./api-errors.js";
 import { executeMilkyFileAction, MILKY_FILE_ACTIONS } from "./file-actions.js";
+import { executeMilkyMessageAction, MILKY_MESSAGE_ACTIONS } from "./message-actions.js";
 
 const milkySchema: Schema = {
     use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
@@ -262,25 +261,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         if (MILKY_FILE_ACTIONS.has(action)) {
             return executeMilkyFileAction(this.adapter, this.account.account_id, action, params);
         }
+        if (MILKY_MESSAGE_ACTIONS.has(action)) {
+            return executeMilkyMessageAction(this.adapter, this.account.account_id, action, params);
+        }
         switch (action) {
-            case "send_private_message":
-                return this.sendPrivateMessage(params);
-            case "send_group_message":
-                return this.sendGroupMessage(params);
-            case "recall_private_message":
-                return this.recallMessage("friend", params);
-            case "recall_group_message":
-                return this.recallMessage("group", params);
-            case "get_message":
-                return this.getMessage(params);
-            case "get_history_messages":
-                return this.getHistoryMessages(params);
-            case "get_resource_temp_url":
-                return this.getResourceTempUrl(params);
-            case "mark_message_as_read":
-                return this.markMessageAsRead(params);
-            case "get_forwarded_messages":
-                return this.getForwardMessage(params);
             case "get_login_info":
                 return this.getLoginInfo();
             case "get_impl_info":
@@ -327,141 +311,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private isKnownAction(action: string): boolean {
         if (isMilkyAction(action)) return true;
         return Boolean(this.adapter.describeCapabilities(this.account.account_id).actions[action]);
-    }
-
-    // Action implementations
-    private async sendPrivateMessage(
-        params: Record<string, unknown>,
-    ): Promise<Milky.SendMessageResult> {
-        const message = params.message as Milky.Segment[];
-        const result = await this.adapter.sendMessage(this.account.account_id, {
-            scene_type: "private",
-            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
-            message: compileMilkySegments(
-                message,
-                sequence => this.adapter.resolveId(sequence).string,
-            ),
-        });
-        return { message_seq: result.message_id.number, time: Math.floor(Date.now() / 1000) };
-    }
-
-    private async sendGroupMessage(
-        params: Record<string, unknown>,
-    ): Promise<Milky.SendMessageResult> {
-        const message = params.message as Milky.Segment[];
-        const result = await this.adapter.sendMessage(this.account.account_id, {
-            scene_type: "group",
-            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
-            message: compileMilkySegments(
-                message,
-                sequence => this.adapter.resolveId(sequence).string,
-            ),
-        });
-        return { message_seq: result.message_id.number, time: Math.floor(Date.now() / 1000) };
-    }
-
-    private async recallMessage(
-        scene: "friend" | "group",
-        params: Record<string, unknown>,
-    ): Promise<Record<string, never>> {
-        const messageSequence = requirePositiveIntegerParam(params, "message_seq");
-        const sceneKey = scene === "friend" ? "user_id" : "group_id";
-        await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(messageSequence),
-            scene_type: scene === "friend" ? "private" : "group",
-            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, sceneKey)),
-        });
-        return {};
-    }
-
-    private async getMessage(
-        params: Record<string, unknown>,
-    ): Promise<{ message: Milky.MessageInfo }> {
-        const scene = this.requireMilkyMessageScene(params);
-        const peerId = this.adapter.resolveId(requirePositiveIntegerParam(params, "peer_id"));
-        const messageId = this.adapter.resolveId(
-            requirePositiveIntegerParam(params, "message_seq"),
-        );
-        const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: messageId,
-            scene_type: scene,
-            scene_id: peerId,
-        });
-        return {
-            message: await projectMilkyIncomingMessage(this.adapter, this.account.account_id, msg),
-        };
-    }
-
-    private async getHistoryMessages(
-        params: Record<string, unknown>,
-    ): Promise<{ messages: Milky.MessageInfo[]; next_message_seq?: number }> {
-        const scene = this.requireMilkyMessageScene(params);
-        const limit = params.limit === undefined ? 20 : requireHistoryLimit(params.limit);
-        const messages = await this.adapter.getMessageHistory(this.account.account_id, {
-            scene_type: scene,
-            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "peer_id")),
-            limit,
-            start_message_id:
-                params.start_message_seq === undefined
-                    ? undefined
-                    : this.adapter.resolveId(
-                          requirePositiveIntegerParam(params, "start_message_seq"),
-                      ),
-        });
-        return {
-            messages: await Promise.all(
-                messages.map(message =>
-                    projectMilkyIncomingMessage(this.adapter, this.account.account_id, message),
-                ),
-            ),
-            ...(messages.length < limit || messages[0] === undefined
-                ? {}
-                : { next_message_seq: messages[0].message_id.number }),
-        };
-    }
-
-    private async markMessageAsRead(
-        params: Record<string, unknown>,
-    ): Promise<Record<string, never>> {
-        const scene = this.requireMilkyMessageScene(params);
-        await this.adapter.markMessageAsRead(this.account.account_id, {
-            scene_type: scene,
-            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "peer_id")),
-            message_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "message_seq")),
-        });
-        return {};
-    }
-
-    private async getResourceTempUrl(params: Record<string, unknown>): Promise<{ url: string }> {
-        return {
-            url: await this.adapter.getResourceTempUrl(this.account.account_id, {
-                resource_id: requireNonEmptyStringParam(params, "resource_id"),
-            }),
-        };
-    }
-
-    private requireMilkyMessageScene(params: Record<string, unknown>): "private" | "group" {
-        if (params.message_scene === "friend") return "private";
-        if (params.message_scene === "group") return "group";
-        throw new TypeError("message_scene 必须是 friend 或 group");
-    }
-
-    private async getForwardMessage(
-        params: Record<string, unknown>,
-    ): Promise<{ messages: Record<string, unknown>[] }> {
-        const resourceId = requireNonEmptyStringParam(params, "forward_id");
-        const messages = await this.adapter.getForwardMessage(this.account.account_id, {
-            resource_id: resourceId,
-        });
-        return {
-            messages: messages.map(message => ({
-                message_seq: message.message_id.number,
-                sender_name: message.sender.sender_name,
-                avatar_url: `https://q1.qlogo.cn/g?b=qq&nk=${message.sender.sender_id.number}&s=640`,
-                time: message.time,
-                segments: projectMilkySegments(message.message),
-            })),
-        };
     }
 
     private async getLoginInfo(): Promise<Milky.LoginInfo> {
@@ -788,13 +637,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         this.reverseWebSocketCleanups.add(cleanup);
         session.start();
     }
-}
-
-function requireHistoryLimit(value: unknown): number {
-    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > 30) {
-        throw new TypeError("limit 必须是 1 到 30 的整数");
-    }
-    return value;
 }
 
 ProtocolRegistry.register("milky", "v1", MilkyV1);
