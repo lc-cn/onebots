@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { WechatClient } from "./client.js";
 import { wechatEventId } from "./client.js";
+import { requireWechatWebhookConfig } from "./config.js";
 import {
     decryptWechatPayload,
     encryptWechatPayload,
@@ -8,7 +9,12 @@ import {
     verifyWechatSignature,
 } from "./crypto.js";
 import { WechatApiError } from "./errors.js";
-import type { WechatConfig, WechatWebhookRequest, WechatWebhookResponse } from "./types.js";
+import type {
+    WechatConfig,
+    WechatWebhookConfig,
+    WechatWebhookRequest,
+    WechatWebhookResponse,
+} from "./types.js";
 import {
     buildEncryptedReply,
     buildPassiveReply,
@@ -28,17 +34,19 @@ export interface WechatHttpContext {
 /** 微信回调接入层：签名、解密、去重和被动回复都在框架无关的 ingest 中完成。 */
 export class WechatWebhookHost {
     readonly path: string;
+    private readonly config: WechatWebhookConfig;
     private readonly processed = new Set<string>();
     private readonly inFlight = new Map<string, Promise<WechatWebhookResponse>>();
 
     constructor(
-        private readonly config: WechatConfig,
+        config: WechatConfig,
         private readonly client: WechatClient,
         private readonly errorListener: (error: WechatApiError) => void = () => undefined,
     ) {
-        this.path = config.webhook_path || `/wechat/${config.account_id}/webhook`;
-        if (!this.path.startsWith("/")) {
-            throw new WechatApiError("webhook_path 必须以 / 开头", {
+        this.config = requireWechatWebhookConfig(config);
+        this.path = this.config.webhook_path || `/wechat/${this.config.account_id}/webhook`;
+        if (!/^\/(?!\/)[^?#\u0000-\u001f\u007f]*$/u.test(this.path)) {
+            throw new WechatApiError("webhook_path 必须是安全的绝对路径", {
                 code: "WECHAT_INVALID_WEBHOOK_PATH",
             });
         }

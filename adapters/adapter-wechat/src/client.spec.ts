@@ -127,6 +127,26 @@ describe("WechatClient", () => {
         expect(messageListener).toHaveBeenCalledWith(message);
     });
 
+    it("按微信原生 Event 精确订阅并可取消", async () => {
+        const client = new WechatClient(config);
+        const subscribe = vi.fn();
+        const unsubscribe = vi.fn();
+        const off = client.onEvent("subscribe", subscribe);
+        client.onEvent("unsubscribe", unsubscribe);
+        const event: WechatIncomingMessage = {
+            ToUserName: "bot",
+            FromUserName: "user",
+            CreateTime: 1,
+            MsgType: "event",
+            Event: "subscribe",
+        };
+        await client.ingest(event);
+        off();
+        await client.ingest({ ...event, CreateTime: 2 });
+        expect(subscribe).toHaveBeenCalledTimes(1);
+        expect(unsubscribe).not.toHaveBeenCalled();
+    });
+
     it("ingest 拒绝无法稳定投影的外部消息", async () => {
         const client = new WechatClient(config);
         await expect(

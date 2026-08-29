@@ -8,6 +8,7 @@ OneBots 的微信公众平台官方 API 适配器。它复用 OneBots HTTP Host 
 wechat.my_mp:
   app_id: wx1234567890abcdef
   app_secret: your_app_secret
+  receive_mode: webhook
   token: your_webhook_token
   encoding_aes_key: your_43_character_key # 安全/兼容模式必填
   passive_reply_timeout_ms: 4500
@@ -25,6 +26,8 @@ https://bot.example.com/wechat/my_mp/webhook
 ```
 
 默认路径为 `/wechat/{account_id}/webhook`，可用 `webhook_path` 覆盖。`token` 与 `encoding_aes_key` 必须和公众平台配置一致。
+
+如事件已由既有 HTTP Host、消息队列或测试夹具接收，可改用 `receive_mode: manual`。此时适配器不注册 Webhook 路由，也不要求 `token`；将解析后的 `WechatIncomingMessage` 交给同一个 `WechatClient.ingest()` 即可。`onEvent(name, listener)` 可按微信原生 `Event` 精确订阅，并返回取消订阅函数。
 
 ## 消息
 

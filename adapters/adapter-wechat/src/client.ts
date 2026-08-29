@@ -1,12 +1,15 @@
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import { isSafeAbsoluteApiPath, RefreshableValue } from "onebots";
+import { assertWechatConfig } from "./config.js";
 import { WechatApiError } from "./errors.js";
 import type {
     WechatApiCallOptions,
+    WechatClientEvents,
     WechatConfig,
     WechatIncomingMessage,
     WechatIngressOptions,
+    WechatNamedEvent,
     WechatOutboundMessage,
     WechatTag,
     WechatTemplateMessage,
@@ -24,7 +27,7 @@ interface PendingReply {
 }
 
 /** 微信公众号 API 客户端与统一事件入口。 */
-export class WechatClient extends EventEmitter {
+export class WechatClient extends EventEmitter<WechatClientEvents> {
     readonly apiBaseUrl: string;
     private readonly tokens = new RefreshableValue<string>(TOKEN_REFRESH_MARGIN);
     private readonly pendingReplies = new Map<string, PendingReply>();
@@ -34,7 +37,12 @@ export class WechatClient extends EventEmitter {
         private readonly fetcher: typeof fetch = fetch,
     ) {
         super();
+        assertWechatConfig(config);
         this.apiBaseUrl = requireHttpsBase(config.api_base_url || DEFAULT_API_BASE);
+    }
+
+    get receiveMode(): "webhook" | "manual" {
+        return this.config.receive_mode || "webhook";
     }
 
     async start(): Promise<void> {
@@ -153,6 +161,14 @@ export class WechatClient extends EventEmitter {
             this.emit(`event.${message.Event.toLowerCase()}`, message);
         }
         return waiter;
+    }
+
+    /** 按微信 Event 精确订阅，并返回取消订阅函数。 */
+    onEvent<K extends string>(name: K, listener: (event: WechatNamedEvent<K>) => void): () => void {
+        const eventName = `event.${name.toLowerCase()}` as const;
+        const wrapped = (event: WechatIncomingMessage) => listener(event as WechatNamedEvent<K>);
+        this.on(eventName, wrapped);
+        return () => this.off(eventName, wrapped);
     }
 
     submitPassiveReply(eventId: string, message: WechatOutboundMessage): boolean {

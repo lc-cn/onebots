@@ -133,9 +133,6 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
         const wechatConfig = normalizeConfig(config);
         const client = new WechatClient(wechatConfig);
         const account = new Account<"wechat", WechatClient>(this, client, config);
-        const webhook = new WechatWebhookHost(wechatConfig, client, error =>
-            this.logger.error("微信公众号 Webhook 处理失败", error),
-        );
 
         client.on("raw_event", (message: WechatIncomingMessage) => {
             account.dispatch(
@@ -145,10 +142,14 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
                 }),
             );
         });
-        client.on("error", error => this.logger.error("微信公众号客户端错误", error));
-        this.app.router.all(webhook.path, ctx =>
-            webhook.acceptHttp(ctx as unknown as WechatHttpContext),
-        );
+        if (client.receiveMode === "webhook") {
+            const webhook = new WechatWebhookHost(wechatConfig, client, error =>
+                this.logger.error("微信公众号 Webhook 处理失败", error),
+            );
+            this.app.router.all(webhook.path, ctx =>
+                webhook.acceptHttp(ctx as unknown as WechatHttpContext),
+            );
+        }
 
         account.on("start", async () => {
             try {
@@ -218,6 +219,7 @@ function normalizeConfig(config: Account.Config<"wechat">): WechatConfig {
         app_id: config.app_id,
         app_secret: config.app_secret,
         token: config.token,
+        receive_mode: config.receive_mode,
         encoding_aes_key: config.encoding_aes_key,
         webhook_path: config.webhook_path,
         passive_reply_timeout_ms: config.passive_reply_timeout_ms,

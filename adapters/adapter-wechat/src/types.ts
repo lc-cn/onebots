@@ -3,7 +3,9 @@ export interface WechatConfig {
     account_id: string;
     app_id: string;
     app_secret: string;
-    token: string;
+    token?: string;
+    /** Webhook 由 OneBots 接收，或由已有 Host/队列手动 ingest。 */
+    receive_mode?: "webhook" | "manual";
     /** 安全模式或兼容模式必填，43 位。 */
     encoding_aes_key?: string;
     webhook_path?: string;
@@ -13,6 +15,12 @@ export interface WechatConfig {
     deduplicate_webhooks?: boolean;
     webhook_deduplication_limit?: number;
     api_base_url?: string;
+}
+
+/** Webhook Host 已闭合的最小配置。 */
+export interface WechatWebhookConfig extends WechatConfig {
+    token: string;
+    receive_mode?: "webhook";
 }
 
 export type WechatMessageType =
@@ -60,6 +68,22 @@ export interface WechatIncomingMessage extends Record<string, unknown> {
     Longitude?: number;
     Precision?: number;
     Status?: string;
+}
+
+export interface WechatNamedEvent<TName extends string = string> extends WechatIncomingMessage {
+    MsgType: "event";
+    Event: TName;
+}
+
+/** WechatClient 对外事件表；精确微信 Event 可通过 onEvent() 订阅。 */
+export interface WechatClientEvents {
+    ready: [];
+    stop: [];
+    token_refreshed: [expiresIn: number];
+    raw_event: [message: WechatIncomingMessage];
+    message: [message: WechatIncomingMessage];
+    event: [message: WechatIncomingMessage];
+    [eventName: `event.${string}`]: [message: WechatIncomingMessage];
 }
 
 export interface WechatUser {

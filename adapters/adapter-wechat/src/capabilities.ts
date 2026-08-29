@@ -50,5 +50,8 @@ export const wechatCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
         news: { support: "native", direction: "send" },
         wechat_message: { support: "native", direction: "both" },
     },
-    transports: { webhook: { support: "native", mode: "webhook" } },
+    transports: {
+        webhook: { support: "native", mode: "webhook" },
+        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
+    },
 });
