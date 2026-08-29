@@ -52,7 +52,9 @@ discord.your_bot_id:
 
 Web 管理端会把 Gateway Intents 渲染为可搜索、可增减的选项列表，并将凭据、事件订阅、发送表现与高级网络设置分区展示，无需手写数组 JSON。
 
-主适配器与独立 Lite Bot 使用同一套 Intent 解析器；未知名称会在启动前报错，不会被静默忽略。默认订阅消息、成员与 Reaction 所需的核心 Intent，`MessageContent`、`GuildMembers` 等特权 Intent 仍需先在 Developer Portal 开启。
+主适配器使用公开的 `resolveDiscordIntents()` 解析 Intent；独立 `DiscordLite` 需要名称配置时也应复用该函数。未知名称会在连接前报错，不会被静默忽略。默认订阅消息、成员与 Reaction 所需的核心 Intent，`MessageContent`、`GuildMembers` 等特权 Intent 仍需先在 Developer Portal 开启。
+
+独立使用只暴露一个深模块 `DiscordLite`；旧的 `DiscordLiteBot` 重复包装层已移除。Gateway 使用 `start()`，Interactions 使用 `handleRequest()`，REST 通过 `getREST()` 访问，不再维护第二套消息、成员与频道方法。
 
 ## 独立使用（不依赖 onebots）
 

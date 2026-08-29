@@ -60,16 +60,6 @@ export {
     verifyInteractionSignature,
     type InteractionWebhookOptions,
 } from "./interactions.js";
-export { DiscordLiteBot, type DiscordLiteBotConfig } from "./bot.js";
-export type {
-    DiscordUser,
-    DiscordMessage,
-    DiscordGuild,
-    DiscordChannel,
-    DiscordMember,
-    DiscordAttachment,
-} from "./bot.js";
-
 /**
  * 运行时类型
  */

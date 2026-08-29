@@ -4,7 +4,7 @@ import { DEFAULT_DISCORD_INTENTS, resolveDiscordIntents } from "./intents.js";
 import { DISCORD_GATEWAY_INTENTS } from "./types.js";
 
 describe("resolveDiscordIntents", () => {
-    it("两个 Bot 共用覆盖核心事件能力的默认位图", () => {
+    it("默认位图覆盖核心事件能力", () => {
         const bitmask = resolveDiscordIntents();
 
         for (const name of DEFAULT_DISCORD_INTENTS) {
