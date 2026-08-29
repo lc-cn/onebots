@@ -41,6 +41,7 @@ export {
     requirePositiveIntegerParam,
     requireNonEmptyStringParam,
     requireBooleanParam,
+    readPackageVersion,
     defineAdapterCapabilities,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,

@@ -2,7 +2,7 @@
  * Telegram 适配器
  * 继承 Adapter 基类，实现 Telegram 平台功能
  */
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
+import { Account, AdapterRegistry, AccountStatus, readPackageVersion } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TelegramBot } from "./bot.js";
@@ -373,12 +373,13 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     /**
      * 获取版本信息
      */
-    async getVersion(uin: string): Promise<Adapter.VersionInfo> {
+    async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+        const version = await readPackageVersion(import.meta.url);
         return {
             app_name: "onebots Telegram Adapter",
-            app_version: "1.0.0",
+            app_version: version,
             impl: "telegram",
-            version: "1.0.0",
+            version,
         };
     }
 

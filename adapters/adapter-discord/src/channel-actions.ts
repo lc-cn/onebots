@@ -1,4 +1,4 @@
-import { Adapter } from "onebots";
+import { Adapter, readPackageVersion } from "onebots";
 import { type DiscordBot } from "./bot.js";
 import { DiscordGuildActions } from "./guild-actions.js";
 import { DISCORD_PLATFORM_ACTIONS, executeDiscordPlatformAction } from "./platform-actions.js";
@@ -339,11 +339,12 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
      * 获取版本信息
      */
     async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+        const version = await readPackageVersion(import.meta.url);
         return {
             app_name: "onebots-discord",
-            app_version: "1.0.0",
+            app_version: version,
             impl: "discord-lite",
-            version: "1.0.0",
+            version,
         };
     }
 
