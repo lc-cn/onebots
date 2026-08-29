@@ -90,7 +90,7 @@ export function chunkLineMessages(messages: messagingApi.Message[]): messagingAp
 function compileNonTextSegment(
     type: string,
     data: Record<string, unknown>,
-): messagingApi.Message | undefined {
+): messagingApi.Message {
     if (type === "line_message" || type === "line") return nativeMessage(data);
     if (type === "image") {
         const originalContentUrl = httpsMediaUrl(data);
@@ -140,7 +140,10 @@ function compileNonTextSegment(
             stickerId,
         };
     }
-    return undefined;
+    throw new LineApiError(`LINE 不支持消息段 ${type}`, {
+        code: "LINE_UNSUPPORTED_SEGMENT",
+        details: type,
+    });
 }
 
 function mentionTarget(data: Record<string, unknown>): string {

@@ -42,4 +42,13 @@ describe("LINE 消息编译", () => {
             ]),
         ).toEqual([{ type: "sticker", packageId: "1", stickerId: "2", quoteToken: "quote" }]);
     });
+
+    it("未知消息段显式失败而不是静默丢失", () => {
+        expect(() =>
+            compileLineMessages([
+                { type: "text", data: { text: "known" } },
+                { type: "unknown", data: {} },
+            ]),
+        ).toThrow("不支持消息段 unknown");
+    });
 });

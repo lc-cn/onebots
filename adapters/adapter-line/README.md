@@ -73,6 +73,8 @@ await adapter.sendMessage(accountId, {
 
 LINE 每次最多发送 5 条 Message。通用 `sendMessage` 会按 5 条自动分批，并为每批生成独立 retry key，避免网络重试造成重复发送。
 
+未知消息段会返回 `LINE_UNSUPPORTED_SEGMENT`，不会在混合消息中静默丢失。启动时的官方 API 身份探针会无限退避重试；Webhook 路由始终复用 OneBots HTTP Host，停止账号会同时取消后台探针。
+
 ## 原生扩展动作
 
 平台动作使用显式白名单，不开放任意 SDK 方法反射调用。

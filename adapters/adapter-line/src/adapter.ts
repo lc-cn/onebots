@@ -6,6 +6,8 @@ import {
     Adapter,
     AdapterRegistry,
     BaseApp,
+    ConnectionManager,
+    RetryPresets,
     readPackageVersion,
     type CommonTypes,
 } from "onebots";
@@ -173,12 +175,15 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     }
 
     async getVersion(): Promise<Adapter.VersionInfo> {
-        const version = await readPackageVersion(import.meta.url);
+        const [appVersion, sdkVersion] = await Promise.all([
+            readPackageVersion(import.meta.url),
+            readPackageVersion(import.meta.resolve("@line/bot-sdk")),
+        ]);
         return {
             app_name: "onebots LINE Adapter",
-            app_version: version,
+            app_version: appVersion,
             impl: "@line/bot-sdk",
-            version: "v2",
+            version: sdkVersion,
         };
     }
 
@@ -267,19 +272,29 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     }
 
     private bindLifecycle(account: Account<"line", LineBot>, bot: LineBot): void {
+        let connectedInfo: Awaited<ReturnType<LineBot["getBotInfo"]>> | undefined;
+        const manager = new ConnectionManager(
+            async () => {
+                connectedInfo = await bot.getBotInfo();
+            },
+            RetryPresets.websocket,
+            {
+                logger: this.logger,
+                onConnected: () => {
+                    if (!connectedInfo) return;
+                    account.status = AccountStatus.Online;
+                    account.nickname = connectedInfo.displayName;
+                    account.avatar = connectedInfo.pictureUrl ?? "";
+                    this.logger.info(`LINE Bot ${connectedInfo.displayName} 已就绪`);
+                },
+            },
+        );
         account.on("start", async () => {
-            try {
-                const info = await bot.getBotInfo();
-                account.status = AccountStatus.Online;
-                account.nickname = info.displayName;
-                account.avatar = info.pictureUrl ?? "";
-                this.logger.info(`LINE Bot ${info.displayName} 已就绪`);
-            } catch (error) {
-                this.logger.error("启动 LINE Bot 失败", error);
-                account.status = AccountStatus.OffLine;
-            }
+            account.status = AccountStatus.Pending;
+            await manager.start();
         });
         account.on("stop", () => {
+            manager.stop();
             account.status = AccountStatus.OffLine;
         });
     }
