@@ -8,7 +8,6 @@ import {
     AdapterRegistry,
     BaseApp,
     readPackageVersion,
-    type CommonTypes,
 } from "onebots";
 import { WechatIlinkBot } from "./bot.js";
 import type { WechatClawbotConfig, WechatIlinkRuntimeConfig } from "./types.js";
@@ -24,7 +23,7 @@ import {
     ILINK_HTTP_ORIGIN_DEFAULT,
     ILINK_QR_BOT_CLASS_DEFAULT,
 } from "./sdk/internal/config.js";
-import { StaleCredentialFault } from "./sdk/internal/errors.js";
+import { GatewayFault, StaleCredentialFault } from "./sdk/internal/errors.js";
 import {
     ensureWechatClawbotContextTokenTable,
     SqliteClawbotContextTokenStore,
@@ -95,10 +94,7 @@ function summarizeNetworkError(error: unknown): string {
     return String(error);
 }
 
-function buildWechatClawbotQrBlocks(
-    qrCodeUrl: string,
-    _qrcode: string,
-): Adapter.VerificationBlock[] {
+function buildWechatClawbotQrBlocks(qrCodeUrl: string): Adapter.VerificationBlock[] {
     const blocks: Adapter.VerificationBlock[] = [];
     const img = qrCodeUrl.trim();
     if (img.startsWith("http://") || img.startsWith("https://")) {
@@ -141,9 +137,24 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         return WECHAT_CLAWBOT_PLATFORM_ACTIONS.has(action);
     }
 
+    override submitVerification(
+        accountId: string,
+        type: string,
+        data: Record<string, unknown>,
+    ): void {
+        if (type !== "pair_code") {
+            throw new GatewayFault(
+                "VERIFICATION_TYPE_UNSUPPORTED",
+                `微信 ClawBot 不支持验证类型 ${type}`,
+            );
+        }
+        const code = typeof data.code === "string" ? data.code : "";
+        this.requireClient(accountId).submitVerificationCode(code);
+    }
+
     private requireClient(uin: string): WechatIlinkBot {
         const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到账号 ${uin}`);
+        if (!account) throw new GatewayFault("ACCOUNT_NOT_FOUND", `未找到账号 ${uin}`);
         return account.client;
     }
 
@@ -152,19 +163,22 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到账号 ${uin}`);
+        if (!account) throw new GatewayFault("ACCOUNT_NOT_FOUND", `未找到账号 ${uin}`);
 
         const bot = account.client;
         const { scene_type, message } = params;
-        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
+        const sceneId = this.coerceId(params.scene_id);
 
         if (scene_type !== "private") {
-            throw new Error(`${this.platform} 仅支持私聊 (private)，当前: ${scene_type}`);
+            throw new GatewayFault(
+                "SCENE_NOT_SUPPORTED",
+                `${this.platform} 仅支持私聊 (private)，当前: ${scene_type}`,
+            );
         }
 
         const chatId = sceneId.string;
         if (!message || message.length === 0) {
-            throw new Error("消息段为空");
+            throw new GatewayFault("MESSAGE_EMPTY", "消息段为空");
         }
         let lastId = "";
         for (const operation of compileWechatClawbotMessage(message)) {
@@ -189,7 +203,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到账号 ${uin}`);
+        if (!account) throw new GatewayFault("ACCOUNT_NOT_FOUND", `未找到账号 ${uin}`);
         const cfg = account.client.getConfig();
         return {
             user_id: this.createId(cfg.ilink_bot_id ?? uin),
@@ -246,7 +260,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
 
         bot.on("qr", (payload: { qrCodeUrl: string; qrcode: string; refreshed?: boolean }) => {
             this.logger.info(
-                `[${this.platform}] ${config.account_id} 请使用微信扫描登录: ${payload.qrCodeUrl} (qrcode=${payload.qrcode.slice(0, 16)}...)` +
+                `[${this.platform}] ${config.account_id} 请使用微信扫描登录: ${payload.qrCodeUrl}` +
                     (payload.refreshed ? " [已刷新]" : ""),
             );
             this.emit("verification:request", {
@@ -256,17 +270,35 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
                 hint: payload.refreshed
                     ? "二维码已过期并自动刷新，请使用微信重新扫描"
                     : "请使用微信扫描下方二维码完成 iLink 扩展登录",
-                options: { blocks: buildWechatClawbotQrBlocks(payload.qrCodeUrl, payload.qrcode) },
-                data: { qrcode: payload.qrcode, refreshed: !!payload.refreshed },
+                options: { blocks: buildWechatClawbotQrBlocks(payload.qrCodeUrl) },
+                data: { refreshed: !!payload.refreshed },
+            } satisfies Adapter.VerificationRequest);
+        });
+
+        bot.on("verification_code_required", () => {
+            this.emit("verification:request", {
+                platform: this.platform,
+                account_id: config.account_id,
+                type: "pair_code",
+                hint: "请输入手机微信显示的数字配对码",
+                options: {
+                    blocks: [
+                        {
+                            type: "input",
+                            key: "code",
+                            placeholder: "4 至 8 位数字",
+                            maxLength: 8,
+                            secret: true,
+                        },
+                    ],
+                },
             } satisfies Adapter.VerificationRequest);
         });
 
         bot.on("login", session => {
             account.nickname = session.accountId;
             account.avatar = this.icon;
-            this.logger.info(
-                `[${this.platform}] ${config.account_id} 扫码登录成功，ilink_bot_id=${session.accountId}`,
-            );
+            this.logger.info(`[${this.platform}] ${config.account_id} 扫码登录成功`);
             this.emit("verification:clear", {
                 platform: this.platform,
                 account_id: config.account_id,

@@ -45,11 +45,19 @@ export async function runPollingLoop(context: PollingLoopContext): Promise<void>
             if (batch.longpolling_timeout_ms && batch.longpolling_timeout_ms > 0) {
                 ceiling = batch.longpolling_timeout_ms;
             }
+            for (const event of batch.msgs ?? []) {
+                try {
+                    await context.ingest(event);
+                } catch (error) {
+                    // 单条畸形事件不能阻断同批后续消息；错误仍交给宿主完整记录。
+                    context.reportError(error);
+                }
+            }
+            // 仅在整批事件均已尝试投递后提交游标，保证进程异常时至少一次交付。
             if (typeof batch.get_updates_buf === "string") {
                 context.session.syncBuffer = batch.get_updates_buf;
                 await context.persist();
             }
-            for (const event of batch.msgs ?? []) await context.ingest(event);
             retryDelay = context.options.retryInitialDelayMs ?? ILINK_RETRY_INITIAL_MS;
         } catch (error) {
             if (context.signal.aborted || !context.isCurrent()) break;

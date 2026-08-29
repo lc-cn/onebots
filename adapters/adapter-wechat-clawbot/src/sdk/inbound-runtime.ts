@@ -3,7 +3,7 @@ import type { NormalizedChatEvent } from "./protocol/chat-event.js";
 import type { OnTextListener } from "./protocol/chat-event.js";
 import { mapInboundWirePacket } from "./protocol/inbound-mapper.js";
 import { GatewayFault } from "./internal/errors.js";
-import type { InboundWirePacket } from "./protocol/wire-models.js";
+import { AuthorKind, type InboundWirePacket } from "./protocol/wire-models.js";
 
 export interface RegexBinding {
     pattern: RegExp;
@@ -16,8 +16,14 @@ export function assertInboundWirePacket(value: unknown): asserts value is Inboun
         throw new GatewayFault("INVALID_EVENT", "iLink 事件必须是对象");
     }
     const event = value as Record<string, unknown>;
-    if (typeof event.from_user_id !== "string" || !event.from_user_id.trim()) {
-        throw new GatewayFault("INVALID_EVENT", "iLink 事件缺少 from_user_id");
+    if (event.message_type !== AuthorKind.Human && event.message_type !== AuthorKind.Bot) {
+        throw new GatewayFault("INVALID_EVENT", "iLink 事件 message_type 必须是 USER 或 BOT");
+    }
+    if (
+        event.message_type === AuthorKind.Human &&
+        (typeof event.from_user_id !== "string" || !event.from_user_id.trim())
+    ) {
+        throw new GatewayFault("INVALID_EVENT", "iLink 用户事件缺少 from_user_id");
     }
     const hasNumericId =
         (typeof event.message_id === "number" && Number.isFinite(event.message_id)) ||
@@ -28,6 +34,21 @@ export function assertInboundWirePacket(value: unknown): asserts value is Inboun
     }
     if (event.item_list !== undefined && !Array.isArray(event.item_list)) {
         throw new GatewayFault("INVALID_EVENT", "iLink 事件 item_list 必须是数组");
+    }
+    if (
+        Array.isArray(event.item_list) &&
+        event.item_list.some(item => !item || typeof item !== "object" || Array.isArray(item))
+    ) {
+        throw new GatewayFault("INVALID_EVENT", "iLink 事件 item_list 只能包含对象");
+    }
+    if (
+        event.group_id !== undefined &&
+        (typeof event.group_id !== "string" || !event.group_id.trim())
+    ) {
+        throw new GatewayFault("INVALID_EVENT", "iLink 事件 group_id 必须是非空字符串");
+    }
+    if (event.context_token !== undefined && typeof event.context_token !== "string") {
+        throw new GatewayFault("INVALID_EVENT", "iLink 事件 context_token 必须是字符串");
     }
 }
 

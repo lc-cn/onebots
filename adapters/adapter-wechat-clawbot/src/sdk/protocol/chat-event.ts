@@ -38,7 +38,7 @@ export interface SessionStore {
 
 export interface ChatHandle {
     id: string;
-    type: "private";
+    type: "private" | "group";
 }
 
 export interface PeerHandle {
@@ -49,21 +49,24 @@ export type NormalizedFacet = "text" | "photo" | "video" | "document" | "voice" 
 
 export interface MediaPhoto {
     kind: "photo";
-    fileId: string;
+    fileId?: string;
+    downloadUrl?: string;
     aesKey?: string;
     item: WireImageSection;
 }
 
 export interface MediaVideo {
     kind: "video";
-    fileId: string;
+    fileId?: string;
+    downloadUrl?: string;
     aesKey?: string;
     item: WireVideoSection;
 }
 
 export interface MediaDocument {
     kind: "document";
-    fileId: string;
+    fileId?: string;
+    downloadUrl?: string;
     aesKey?: string;
     fileName?: string;
     item: WireFileSection;
@@ -71,7 +74,8 @@ export interface MediaDocument {
 
 export interface MediaVoice {
     kind: "voice";
-    fileId: string;
+    fileId?: string;
+    downloadUrl?: string;
     aesKey?: string;
     transcript?: string;
     item: WireVoiceSection;
@@ -139,10 +143,13 @@ export interface WaitForLoginOptions {
     signal?: AbortSignal;
     /** 二维码过期后自动换发新码时回调，便于推送到 Web 更新 UI */
     onQrRefresh?: (ticket: Pick<LoginTicket, "qrcode" | "qrCodeUrl">) => void;
+    /** 手机端要求数字配对码时，由宿主安全地向用户收集并返回。 */
+    onVerificationCode?: () => Promise<string>;
 }
 
 export interface LoginOutcome {
     connected: boolean;
+    alreadyConnected?: boolean;
     message: string;
     session?: CredentialBlob;
 }

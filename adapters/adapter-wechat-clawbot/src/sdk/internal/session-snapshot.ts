@@ -2,7 +2,9 @@ import { ILINK_CDN_ROOT_DEFAULT } from "./config.js";
 import type { CredentialBlob } from "../protocol/chat-event.js";
 
 /** 从残缺字段推导可工作的凭证快照；不满足最低字段则返回 null */
-export function pickCredentialOrNull(partial?: Partial<CredentialBlob> | null): CredentialBlob | null {
+export function pickCredentialOrNull(
+    partial?: Partial<CredentialBlob> | null,
+): CredentialBlob | null {
     if (!partial?.token || !partial.accountId) return null;
     return {
         token: partial.token,

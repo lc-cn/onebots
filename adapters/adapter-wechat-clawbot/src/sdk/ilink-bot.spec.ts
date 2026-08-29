@@ -18,6 +18,7 @@ describe("IlinkBot 接收与轮询生命周期", () => {
         bot.on("message", listener);
         const event = await bot.ingest({
             message_id: 7,
+            message_type: 1,
             from_user_id: "peer",
             context_token: "ctx",
             item_list: [{ type: 1, text_item: { text: "hello" } }],
@@ -41,6 +42,7 @@ describe("IlinkBot 接收与轮询生命周期", () => {
         await expect(
             bot.ingest({
                 message_id: 8,
+                message_type: 1,
                 from_user_id: "peer",
                 item_list: [{ type: 1, text_item: { text: "hello" } }],
             }),
@@ -51,12 +53,20 @@ describe("IlinkBot 接收与轮询生命周期", () => {
     it("ingest 拒绝无法定位或无法回复的畸形事件", async () => {
         const bot = new IlinkBot();
         await expect(bot.ingest(null)).rejects.toMatchObject({ code: "INVALID_EVENT" });
-        await expect(bot.ingest({ message_id: 1 })).rejects.toThrow("from_user_id");
-        await expect(bot.ingest({ from_user_id: "peer" })).rejects.toThrow(
+        await expect(bot.ingest({ message_id: 1 })).rejects.toThrow("message_type");
+        await expect(bot.ingest({ message_type: 1, message_id: 1 })).rejects.toThrow(
+            "from_user_id",
+        );
+        await expect(bot.ingest({ message_type: 1, from_user_id: "peer" })).rejects.toThrow(
             "message_id、seq 或 client_id",
         );
         await expect(
-            bot.ingest({ from_user_id: "peer", client_id: "client", item_list: {} }),
+            bot.ingest({
+                message_type: 1,
+                from_user_id: "peer",
+                client_id: "client",
+                item_list: {},
+            }),
         ).rejects.toThrow("item_list 必须是数组");
     });
 
@@ -64,10 +74,61 @@ describe("IlinkBot 接收与轮询生命周期", () => {
         const bot = new IlinkBot();
         const event = await bot.ingest({
             client_id: "client-message",
+            message_type: 1,
             from_user_id: "peer",
             item_list: [{ type: 1, text_item: { text: "hello" } }],
         });
         expect(event.id).toBe("client-message");
+    });
+
+    it("忽略 getupdates 回送的 BOT 副本，不污染事件与回复上下文", async () => {
+        const bot = new IlinkBot();
+        const listener = vi.fn();
+        bot.on("message", listener);
+        await expect(
+            bot.ingest({
+                client_id: "outbound",
+                message_type: 2,
+                from_user_id: "",
+                context_token: "must-not-store",
+            }),
+        ).resolves.toBeUndefined();
+        expect(listener).not.toHaveBeenCalled();
+        expect(await bot.getLatestContextToken("")).toBeUndefined();
+    });
+
+    it("typing ticket 失效时刷新一次并重试", async () => {
+        const calls: string[] = [];
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (input: string | URL) => {
+                const url = String(input);
+                calls.push(url);
+                if (url.endsWith("getconfig")) {
+                    const ticket = calls.filter(call => call.endsWith("getconfig")).length;
+                    return new Response(
+                        JSON.stringify({ ret: 0, typing_ticket: `ticket-${ticket}` }),
+                    );
+                }
+                const sendCount = calls.filter(call => call.endsWith("sendtyping")).length;
+                if (url.endsWith("sendtyping") && sendCount === 1) {
+                    return new Response(JSON.stringify({ ret: 7, errmsg: "ticket expired" }));
+                }
+                return new Response(JSON.stringify({ ret: 0 }));
+            }),
+        );
+        const bot = new IlinkBot({
+            session: {
+                token: "token",
+                accountId: "bot",
+                baseUrl: "https://example.test",
+                cdnBaseUrl: "https://cdn.example.test",
+                contextTokens: { peer: "context" },
+            },
+        });
+        await bot.sendTypingToUser("peer");
+        expect(calls.filter(url => url.endsWith("getconfig"))).toHaveLength(2);
+        expect(calls.filter(url => url.endsWith("sendtyping"))).toHaveLength(2);
     });
 
     it("stopPolling 立即中止旧长轮询并发送停止通知", async () => {

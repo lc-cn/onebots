@@ -1,4 +1,5 @@
 import type { WechatIlinkBot } from "./bot.js";
+import { GatewayFault } from "./sdk/internal/errors.js";
 
 type ActionHandler = (
     client: WechatIlinkBot,
@@ -34,13 +35,14 @@ export function executeWechatClawbotPlatformAction(
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
     const handler = ACTION_HANDLERS[action];
-    if (!handler) throw new Error(`未实现微信 ClawBot 平台动作: ${action}`);
+    if (!handler) {
+        throw new GatewayFault("ACTION_NOT_IMPLEMENTED", `未实现微信 ClawBot 平台动作: ${action}`);
+    }
     return handler(client, params);
 }
 
 function requireString(value: unknown, field: string): string {
-    if (typeof value !== "string" || !value.trim())
-        throw new TypeError(`${field} 必须是非空字符串`);
+    if (typeof value !== "string" || !value.trim()) invalid(`${field} 必须是非空字符串`);
     return value;
 }
 
@@ -52,13 +54,17 @@ function optionalString(value: unknown, field: string): string | undefined {
 function typingStatus(value: unknown): "active" | "idle" | undefined {
     if (value === undefined) return undefined;
     if (value === "active" || value === "idle") return value;
-    throw new TypeError("status 必须是 active 或 idle");
+    return invalid("status 必须是 active 或 idle");
 }
 
 function optionalInteger(value: unknown, field: string): number | undefined {
     if (value === undefined) return undefined;
     if (!Number.isInteger(value) || Number(value) < 0) {
-        throw new TypeError(`${field} 必须是非负整数`);
+        invalid(`${field} 必须是非负整数`);
     }
     return Number(value);
+}
+
+function invalid(message: string): never {
+    throw new GatewayFault("INVALID_ACTION_PARAMS", `微信 ClawBot ${message}`);
 }

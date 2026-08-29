@@ -4,10 +4,16 @@ import type { IlinkJsonTransport } from "../transport/ilink-json-transport.js";
 import type { NormalizedChatEvent } from "../protocol/chat-event.js";
 import type { DownloadMediaOptions, DownloadMediaResult } from "../protocol/chat-event.js";
 import { GatewayFault } from "../internal/errors.js";
-import { cipherBudgetForPlain, decodeCdnAesMaterial, openAes128Ecb, sealAes128Ecb } from "./symmetric-block.js";
+import {
+    cipherBudgetForPlain,
+    decodeCdnAesMaterial,
+    openAes128Ecb,
+    sealAes128Ecb,
+} from "./symmetric-block.js";
 import { guessMimeByPath } from "../internal/mime-table.js";
 import { materializeUserSuppliedFile } from "../internal/load-bytes.js";
 import type { InputFile } from "../protocol/chat-event.js";
+import { delay } from "../internal/async-tools.js";
 
 export interface StagedCipherPayload {
     slotKey: string;
@@ -28,35 +34,48 @@ function cdnPushUrl(root: string, uploadToken: string, slotKey: string): string 
 }
 
 async function postCiphertextToEdge(
-    transport: IlinkJsonTransport,
-    uploadToken: string,
-    slotKey: string,
+    uploadUrl: string,
     key16: Buffer,
     plain: Buffer,
 ): Promise<string> {
     const body = sealAes128Ecb(plain, key16);
-    const response = await fetch(
-        cdnPushUrl(transport.cdnBaseUrl, uploadToken, slotKey),
-        {
-            method: "POST",
-            headers: { "Content-Type": "application/octet-stream" },
-            body: new Uint8Array(body),
-        },
-    );
-
-    if (response.status >= 400 && response.status < 500) {
-        const hint = response.headers.get("x-error-message") ?? (await response.text());
-        throw new GatewayFault("CDN_UPLOAD_CLIENT_ERROR", `边缘写入失败: ${hint}`);
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+            const response = await fetch(uploadUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/octet-stream" },
+                body: new Uint8Array(body),
+            });
+            if (response.status >= 400 && response.status < 500) {
+                const hint = response.headers.get("x-error-message") ?? (await response.text());
+                throw new GatewayFault("CDN_UPLOAD_CLIENT_ERROR", `边缘写入失败: ${hint}`);
+            }
+            if (response.status === 200) {
+                const headerHandle = response.headers.get("x-encrypted-param");
+                if (!headerHandle) {
+                    throw new GatewayFault(
+                        "CDN_UPLOAD_MISSING_PARAM",
+                        "响应缺少 x-encrypted-param",
+                    );
+                }
+                return headerHandle;
+            }
+            lastError = new GatewayFault(
+                "CDN_UPLOAD_SERVER_ERROR",
+                `边缘写入失败: ${response.headers.get("x-error-message") ?? `HTTP ${String(response.status)}`}`,
+            );
+        } catch (error) {
+            if (error instanceof GatewayFault && error.code !== "CDN_UPLOAD_SERVER_ERROR") {
+                throw error;
+            }
+            lastError = error;
+        }
+        if (attempt < 3) await delay(attempt * 250);
     }
-    if (response.status !== 200) {
-        const hint = response.headers.get("x-error-message") ?? `HTTP ${String(response.status)}`;
-        throw new GatewayFault("CDN_UPLOAD_SERVER_ERROR", `边缘写入失败: ${hint}`);
-    }
-    const headerHandle = response.headers.get("x-encrypted-param");
-    if (!headerHandle) {
-        throw new GatewayFault("CDN_UPLOAD_MISSING_PARAM", "响应缺少 x-encrypted-param");
-    }
-    return headerHandle;
+    throw new GatewayFault("CDN_UPLOAD_RETRY_EXHAUSTED", "CDN 上传连续失败 3 次", {
+        cause: lastError,
+    });
 }
 
 /** 申请槽位并上传密文，返回后续 sendmessage 所需句柄 */
@@ -89,17 +108,21 @@ export async function stageBinaryForPeer(params: {
         aeskey: key16.toString("hex"),
     });
 
-    if (!grant.upload_param) {
-        throw new GatewayFault("UPLOAD_URL_MISSING", "reserveCdnUploadSlot 未返回 upload_param");
+    const fullUploadUrl = grant.upload_full_url;
+    const uploadToken = grant.upload_param;
+    let uploadUrl: string;
+    if (fullUploadUrl) {
+        uploadUrl = safeHttpsUrl(fullUploadUrl, "CDN_UPLOAD_URL_INVALID");
+    } else if (uploadToken) {
+        uploadUrl = cdnPushUrl(params.transport.cdnBaseUrl, uploadToken, slotKey);
+    } else {
+        throw new GatewayFault(
+            "UPLOAD_URL_MISSING",
+            "reserveCdnUploadSlot 未返回 upload_full_url 或 upload_param",
+        );
     }
 
-    const remoteHandle = await postCiphertextToEdge(
-        params.transport,
-        grant.upload_param,
-        slotKey,
-        key16,
-        blob.buffer,
-    );
+    const remoteHandle = await postCiphertextToEdge(uploadUrl, key16, blob.buffer);
 
     return {
         slotKey,
@@ -112,8 +135,11 @@ export async function stageBinaryForPeer(params: {
     };
 }
 
-function resolveDownloadTarget(evt: NormalizedChatEvent): {
-    handle: string;
+function resolveDownloadTarget(
+    evt: NormalizedChatEvent,
+    cdnRoot: string,
+): {
+    url: string;
     key16?: Buffer;
     fallbackName: string;
     mime: string;
@@ -130,7 +156,7 @@ function resolveDownloadTarget(evt: NormalizedChatEvent): {
                 key16 = decodeCdnAesMaterial(evt.media.aesKey);
             }
             return {
-                handle: evt.media.fileId,
+                url: mediaDownloadUrl(evt.media, evt.media.fileId, cdnRoot),
                 key16,
                 fallbackName: "image.jpg",
                 mime: "image/jpeg",
@@ -138,21 +164,21 @@ function resolveDownloadTarget(evt: NormalizedChatEvent): {
         }
         case "video":
             return {
-                handle: evt.media.fileId,
+                url: mediaDownloadUrl(evt.media, evt.media.fileId, cdnRoot),
                 key16: evt.media.aesKey ? decodeCdnAesMaterial(evt.media.aesKey) : undefined,
                 fallbackName: "video.mp4",
                 mime: "video/mp4",
             };
         case "document":
             return {
-                handle: evt.media.fileId,
+                url: mediaDownloadUrl(evt.media, evt.media.fileId, cdnRoot),
                 key16: evt.media.aesKey ? decodeCdnAesMaterial(evt.media.aesKey) : undefined,
                 fallbackName: evt.media.fileName ?? "file.bin",
                 mime: guessMimeByPath(evt.media.fileName ?? "file.bin"),
             };
         case "voice":
             return {
-                handle: evt.media.fileId,
+                url: mediaDownloadUrl(evt.media, evt.media.fileId, cdnRoot),
                 key16: evt.media.aesKey ? decodeCdnAesMaterial(evt.media.aesKey) : undefined,
                 fallbackName: "voice.silk",
                 mime: "audio/silk",
@@ -165,10 +191,13 @@ export async function pullUserMediaAttachment(params: {
     message: NormalizedChatEvent;
     options?: DownloadMediaOptions;
 }): Promise<DownloadMediaResult> {
-    const spec = resolveDownloadTarget(params.message);
-    const response = await fetch(cdnPullUrl(spec.handle, params.transport.cdnBaseUrl));
+    const spec = resolveDownloadTarget(params.message, params.transport.cdnBaseUrl);
+    const response = await fetch(spec.url);
     if (!response.ok) {
-        throw new GatewayFault("CDN_DOWNLOAD_FAILED", `拉取失败 ${response.status} ${response.statusText}`);
+        throw new GatewayFault(
+            "CDN_DOWNLOAD_FAILED",
+            `拉取失败 ${response.status} ${response.statusText}`,
+        );
     }
     const cipher = Buffer.from(await response.arrayBuffer());
     const plain = spec.key16 ? openAes128Ecb(cipher, spec.key16) : cipher;
@@ -176,6 +205,29 @@ export async function pullUserMediaAttachment(params: {
         await fs.writeFile(params.options.filePath, plain);
     }
     return { buffer: plain, fileName: spec.fallbackName, mimeType: spec.mime };
+}
+
+function mediaDownloadUrl(
+    media: { downloadUrl?: string },
+    handle: string | undefined,
+    cdnRoot: string,
+): string {
+    if (media.downloadUrl) return safeHttpsUrl(media.downloadUrl, "CDN_DOWNLOAD_URL_INVALID");
+    if (handle) return cdnPullUrl(handle, cdnRoot);
+    throw new GatewayFault("CDN_DOWNLOAD_URL_MISSING", "媒体缺少 full_url 与下载句柄");
+}
+
+function safeHttpsUrl(value: string, code: string): string {
+    let url: URL;
+    try {
+        url = new URL(value);
+    } catch (error) {
+        throw new GatewayFault(code, "iLink CDN 返回无效完整 URL", { cause: error });
+    }
+    if (url.protocol !== "https:" || url.username || url.password) {
+        throw new GatewayFault(code, "iLink CDN 完整 URL 必须使用 HTTPS 且不能包含凭据");
+    }
+    return url.href;
 }
 
 export function mapMimeFamilyToUploadKind(contentType: string): number {

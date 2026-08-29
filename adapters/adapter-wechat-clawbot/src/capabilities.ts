@@ -22,7 +22,7 @@ export const wechatClawbotCapabilities: AdapterCapabilityManifest = defineAdapte
         get_supported_actions: { support: "native" },
     },
     events: {
-        message: { support: "native", scenes: ["private"] },
+        message: { support: "native", scenes: ["private", "group"] },
     },
     segments: {
         text: { support: "native", direction: "both" },
@@ -30,6 +30,10 @@ export const wechatClawbotCapabilities: AdapterCapabilityManifest = defineAdapte
         video: { support: "native", direction: "both" },
         file: { support: "native", direction: "both" },
         audio: { support: "native", direction: "receive" },
+        reply: { support: "native", direction: "receive" },
+        wechat_clawbot_reference: { support: "native", direction: "receive" },
+        wechat_clawbot_tool_call_start: { support: "native", direction: "receive" },
+        wechat_clawbot_tool_call_result: { support: "native", direction: "receive" },
         wechat_clawbot_raw: { support: "native", direction: "receive" },
     },
     transports: {

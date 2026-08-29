@@ -11,14 +11,29 @@ describe("微信 ClawBot 事件投影", () => {
     it("保留复合消息顺序、语音语义与原始事件", () => {
         const raw: InboundWirePacket = {
             message_id: 42,
+            message_type: 1,
             from_user_id: "wx-user",
             create_time_ms: 1_700_000_000_000,
             context_token: "ctx",
             item_list: [
                 { type: ItemKind.Text, text_item: { text: "说明" } },
                 {
+                    type: ItemKind.Text,
+                    ref_msg: {
+                        title: "引用摘要",
+                        message_item: { msg_id: "quoted-1", type: ItemKind.Text },
+                    },
+                    text_item: { text: "回复" },
+                },
+                {
                     type: ItemKind.Image,
-                    image_item: { media: { encrypt_query_param: "image-handle", aes_key: "key" } },
+                    image_item: {
+                        media: {
+                            encrypt_query_param: "image-handle",
+                            full_url: "https://cdn.test/image",
+                            aes_key: "key",
+                        },
+                    },
                 },
                 {
                     type: ItemKind.Voice,
@@ -47,14 +62,21 @@ describe("微信 ClawBot 事件投影", () => {
         );
 
         expect(event.raw_event).toBe(raw);
-        expect(event.raw_message).toBe("说明转写");
+        expect(event.raw_message).toBe("说明回复转写");
         expect(event.message.map(segment => segment.type)).toEqual([
+            "text",
+            "reply",
             "text",
             "image",
             "text",
             "audio",
         ]);
-        expect(event.message[1]?.data).toMatchObject({ file_id: "image-handle", aes_key: "key" });
+        expect(event.message[1]?.data).toMatchObject({ message_id: "quoted-1" });
+        expect(event.message[3]?.data).toMatchObject({
+            file_id: "image-handle",
+            url: "https://cdn.test/image",
+            aes_key: "key",
+        });
         expect(event.extensions?.wechat_clawbot).toMatchObject({ context_token: "ctx" });
     });
 
@@ -79,6 +101,32 @@ describe("微信 ClawBot 事件投影", () => {
         expect(event.message).toEqual([
             { type: "wechat_clawbot_raw", data: { item: { type: 11 } } },
         ]);
+    });
+
+    it("上游携带 group_id 时保留群场景与真实发送者", () => {
+        const raw: InboundWirePacket = {
+            message_id: 44,
+            message_type: 1,
+            from_user_id: "member",
+            group_id: "group",
+            item_list: [{ type: ItemKind.Text, text_item: { text: "hello" } }],
+        };
+        const event = projectWechatClawbotEvent(
+            {
+                id: 44,
+                seq: undefined,
+                type: "text",
+                chat: { id: "group", type: "group" },
+                from: { id: "member" },
+                date: undefined,
+                text: "hello",
+                raw,
+            },
+            { accountId: id("bot"), createId: id },
+        );
+        expect(event.message_type).toBe("group");
+        expect(event.group?.id.string).toBe("group");
+        expect(event.sender.id.string).toBe("member");
     });
 
     it("拒绝缺少稳定标识或发送者的非 canonical 消息", () => {

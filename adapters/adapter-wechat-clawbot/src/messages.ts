@@ -1,5 +1,6 @@
 import type { CommonTypes } from "onebots";
 import type { InputFile, SendMediaOptions } from "./sdk/protocol/chat-event.js";
+import { GatewayFault } from "./sdk/internal/errors.js";
 
 export type WechatClawbotOutboundOperation =
     | { kind: "text"; text: string }
@@ -21,7 +22,7 @@ export function compileWechatClawbotMessage(
             continue;
         }
         if (segment.type !== "image" && segment.type !== "video" && segment.type !== "file") {
-            throw new TypeError(`微信 ClawBot 不支持消息段: ${segment.type}`);
+            return invalid(`不支持消息段: ${segment.type}`);
         }
         operations.push({
             kind: segment.type,
@@ -39,7 +40,7 @@ export function compileWechatClawbotMessage(
             },
         });
     }
-    if (operations.length === 0) throw new TypeError("微信 ClawBot 消息不能全部为空");
+    if (operations.length === 0) invalid("消息不能全部为空");
     return operations;
 }
 
@@ -51,13 +52,11 @@ function mediaSource(segment: CommonTypes.Segment): string {
         const nativeHint = segment.data.file_id
             ? "；file_id 是入站加密句柄，请先调用 download_media"
             : "";
-        throw new TypeError(
-            `${segment.type} 必须且只能提供 url、path、file、data 之一${nativeHint}`,
-        );
+        invalid(`${segment.type} 必须且只能提供 url、path、file、data 之一${nativeHint}`);
     }
     const [{ field, value }] = candidates;
     const source = optionalString(value, `${segment.type}.${field}`);
-    if (!source) throw new TypeError(`${segment.type}.${field} 不能为空`);
+    if (!source) invalid(`${segment.type}.${field} 不能为空`);
     return field === "data" && !/^(?:base64:\/\/|data:)/u.test(source)
         ? `base64://${source}`
         : source;
@@ -65,6 +64,10 @@ function mediaSource(segment: CommonTypes.Segment): string {
 
 function optionalString(value: unknown, field: string): string | undefined {
     if (value === undefined) return undefined;
-    if (typeof value !== "string") throw new TypeError(`${field} 必须是字符串`);
+    if (typeof value !== "string") invalid(`${field} 必须是字符串`);
     return value;
+}
+
+function invalid(message: string): never {
+    throw new GatewayFault("INVALID_MESSAGE", `微信 ClawBot ${message}`);
 }

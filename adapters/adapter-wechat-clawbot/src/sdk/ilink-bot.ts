@@ -4,7 +4,7 @@ import { ILINK_LONG_WAIT_MS, ILINK_QR_BOT_CLASS_DEFAULT } from "./internal/confi
 import { MissingReplyLaneFault, GatewayFault } from "./internal/errors.js";
 import { pickCredentialOrNull } from "./internal/session-snapshot.js";
 import { materializeUserSuppliedFile } from "./internal/load-bytes.js";
-import { TypingPhase, UploadKind } from "./protocol/wire-models.js";
+import { AuthorKind, UploadKind } from "./protocol/wire-models.js";
 import type {
     CredentialBlob,
     DownloadMediaOptions,
@@ -47,6 +47,7 @@ import {
     resolveRecentMedia,
     type RegexBinding,
 } from "./inbound-runtime.js";
+import { IlinkTypingRuntime } from "./typing-runtime.js";
 
 export class IlinkBot extends EventEmitter {
     private readonly store: SessionStore;
@@ -61,7 +62,7 @@ export class IlinkBot extends EventEmitter {
     protected pollLoop: Promise<void> | null = null;
     private pollKnobs: PollingOptions;
     private readonly regexBindings: RegexBinding[] = [];
-    private readonly typingPass = new Map<string, string>();
+    private readonly typing: IlinkTypingRuntime;
     private readonly recentMessages = new Map<string, NormalizedChatEvent>();
     private readonly contextTokenStore?: ClawbotContextTokenStore;
     private readonly contextTokenAccountKey?: string;
@@ -94,6 +95,7 @@ export class IlinkBot extends EventEmitter {
             routeTag: options.routeTag,
             token: options.token,
         });
+        this.typing = new IlinkTypingRuntime(this.transport);
 
         this.contextTokenStore = options.contextTokenStore;
         this.contextTokenAccountKey = options.contextTokenAccountKey;
@@ -188,7 +190,7 @@ export class IlinkBot extends EventEmitter {
         }
         this.snapshot = null;
         this.hydrated = true;
-        this.typingPass.clear();
+        this.typing.clear();
         await this.store.clear();
         this.transport.patchRuntimeTargets({ token: undefined, routeTag: undefined });
     }
@@ -219,9 +221,10 @@ export class IlinkBot extends EventEmitter {
         botType?: string;
         signal?: AbortSignal;
     }): Promise<LoginTicket> {
-        await this.ensureSessionLoaded();
+        const session = await this.ensureSessionLoaded();
         return allocateLoginTicket(this.transport, {
             botType: options?.botType ?? ILINK_QR_BOT_CLASS_DEFAULT,
+            localTokens: session?.token ? [session.token] : [],
             signal: options?.signal,
         });
     }
@@ -372,26 +375,7 @@ export class IlinkBot extends EventEmitter {
         await this.ensureSessionLoaded();
         const s = this.insistSnapshot(this.snapshot);
         const ctx = await this.obtainReplyContext(chatId, options.contextToken);
-        let ticket = this.typingPass.get(chatId);
-        if (!ticket) {
-            const cfg = await this.transport.loadPeerTypingConfig({
-                ilinkUserId: chatId,
-                contextToken: ctx,
-            });
-            if ((cfg.ret ?? 0) !== 0 || !cfg.typing_ticket) {
-                throw new GatewayFault(
-                    "TYPING_TICKET_UNAVAILABLE",
-                    `未拿到 typing_ticket：${chatId}`,
-                );
-            }
-            ticket = cfg.typing_ticket;
-            this.typingPass.set(chatId, ticket);
-        }
-        await this.transport.signalTypingState({
-            ilink_user_id: chatId,
-            typing_ticket: ticket,
-            status: options.status === "idle" ? TypingPhase.Idle : TypingPhase.Active,
-        });
+        await this.typing.send(chatId, ctx, options.status ?? "active");
         s.updatedAt = new Date().toISOString();
         await this.persistSnapshot();
     }
@@ -414,8 +398,10 @@ export class IlinkBot extends EventEmitter {
      * 将一个原始 iLink 事件交给统一事件管线。
      * 长轮询、测试夹具和宿主已有连接均应调用此入口，确保 context_token 与 typed 事件一致。
      */
-    async ingest(rawEvent: unknown): Promise<NormalizedChatEvent> {
+    async ingest(rawEvent: unknown): Promise<NormalizedChatEvent | undefined> {
         assertInboundWirePacket(rawEvent);
+        // getupdates 会回送 BOT 副本；将它投递为入站消息会造成自触发与上下文污染。
+        if (rawEvent.message_type !== AuthorKind.Human) return undefined;
         const evt = mapInboundWirePacket(rawEvent);
         rememberRecentMessage(this.recentMessages, evt);
         await this.memorizeReplyContext(evt.chat.id, evt.contextToken);

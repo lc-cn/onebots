@@ -2,6 +2,7 @@ import path from "node:path";
 import { IlinkBot } from "./sdk/ilink-bot.js";
 import type { WechatIlinkRuntimeConfig } from "./types.js";
 import type { StaleCredentialFault } from "./sdk/internal/errors.js";
+import { GatewayFault } from "./sdk/internal/errors.js";
 import type { ClawbotContextTokenStore } from "./context-token-store.js";
 import type { SessionStore } from "./sdk/protocol/chat-event.js";
 
@@ -9,9 +10,10 @@ import type { SessionStore } from "./sdk/protocol/chat-event.js";
 const SESSION_DATA_SUBDIR = "wechat-clawbot";
 
 /** 约定会话文件路径（JsonFileCredentialStore）：`{cwd}/data/wechat-clawbot/{account_id}.json` */
-function conventionSessionPath(accountId: string): string {
-    const safeId = String(accountId).replace(/[^a-zA-Z0-9._-]/g, "_");
-    return path.join(process.cwd(), "data", SESSION_DATA_SUBDIR, `${safeId}.json`);
+export function conventionSessionPath(accountId: string): string {
+    // encodeURIComponent 是单射；字符替换会让 a/b 与 a_b 共用凭证，造成账号串线。
+    const encodedId = encodeURIComponent(accountId);
+    return path.join(process.cwd(), "data", SESSION_DATA_SUBDIR, `${encodedId}.json`);
 }
 
 /** OneBots 封装的 iLink 客户端：启动长轮询、可选扫码登录 */
@@ -23,6 +25,9 @@ export class WechatIlinkBot extends IlinkBot {
     private lifecycleGeneration = 0;
     private startPromise: Promise<void> | null = null;
     private loginAbort: AbortController | null = null;
+    private verificationCodeRequest:
+        | { resolve(code: string): void; reject(error: unknown): void }
+        | undefined;
 
     constructor(
         config: WechatIlinkRuntimeConfig,
@@ -81,10 +86,53 @@ export class WechatIlinkBot extends IlinkBot {
             onQrRefresh: ({ qrcode, qrCodeUrl }) => {
                 this.emit("qr", { qrCodeUrl, qrcode, refreshed: true });
             },
+            onVerificationCode: () => this.waitForVerificationCode(signal),
         });
         if (!result.connected || !result.session) {
-            throw new Error(result.message || "扫码登录失败");
+            throw new GatewayFault("LOGIN_FAILED", result.message || "扫码登录失败");
         }
+    }
+
+    /** 提交手机微信显示的数字配对码。 */
+    submitVerificationCode(code: string): void {
+        const request = this.verificationCodeRequest;
+        if (!request) {
+            throw new GatewayFault("LOGIN_VERIFY_CODE_NOT_PENDING", "当前没有待提交的数字配对码");
+        }
+        const normalized = code.trim();
+        if (!/^\d{4,8}$/u.test(normalized)) {
+            throw new GatewayFault("LOGIN_VERIFY_CODE_INVALID", "数字配对码必须是 4 至 8 位数字");
+        }
+        this.verificationCodeRequest = undefined;
+        request.resolve(normalized);
+    }
+
+    private waitForVerificationCode(signal: AbortSignal): Promise<string> {
+        this.verificationCodeRequest?.reject(
+            new GatewayFault("LOGIN_VERIFY_CODE_REPLACED", "登录流程已请求新的数字配对码"),
+        );
+        return new Promise<string>((resolve, reject) => {
+            let pending: { resolve(code: string): void; reject(error: unknown): void };
+            const abort = () => {
+                if (this.verificationCodeRequest === pending) {
+                    this.verificationCodeRequest = undefined;
+                }
+                reject(signal.reason ?? new DOMException("登录已取消", "AbortError"));
+            };
+            const finish = (code: string) => {
+                signal.removeEventListener("abort", abort);
+                resolve(code);
+            };
+            const fail = (error: unknown) => {
+                signal.removeEventListener("abort", abort);
+                reject(error);
+            };
+            pending = { resolve: finish, reject: fail };
+            this.verificationCodeRequest = pending;
+            if (signal.aborted) abort();
+            else signal.addEventListener("abort", abort, { once: true });
+            this.emit("verification_code_required");
+        });
     }
 
     /**
@@ -156,7 +204,8 @@ export class WechatIlinkBot extends IlinkBot {
                     if (!this.isCurrentLifecycle(generation)) return;
                     session = await this.getSession();
                 } else {
-                    throw new Error(
+                    throw new GatewayFault(
+                        "SESSION_NOT_AVAILABLE",
                         "未找到 iLink 会话：请扫码登录（会话写入工作目录 data/wechat-clawbot/<账号>.json，重启可恢复）。",
                     );
                 }

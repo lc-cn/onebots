@@ -40,7 +40,11 @@ async function emitFacetChain(
     return last;
 }
 
-export function packLiteralReply(peerKey: string, contextToken: string, markdown: string): OutboundWireEnvelope {
+export function packLiteralReply(
+    peerKey: string,
+    contextToken: string,
+    markdown: string,
+): OutboundWireEnvelope {
     const flat = coercePlainMarkdown(markdown);
     return {
         msg: {
