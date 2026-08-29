@@ -18,6 +18,7 @@ import { feishuCapabilities } from "./capabilities.js";
 import { createFeishuAccount } from "./account.js";
 import { executeFeishuPlatformAction, FEISHU_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { projectFeishuMessageSegments } from "./events.js";
+import { compileFeishuMessage } from "./messages.js";
 
 export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     constructor(app: BaseApp) {
@@ -64,52 +65,12 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const { scene_type, message } = params;
+        const { scene_type } = params;
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
-
-        const objectSegments = message.filter(segment => typeof segment !== "string");
-        const reply = objectSegments.find(segment => segment.type === "reply");
-        const native = objectSegments.filter(segment => segment.type !== "reply");
-        let text = "";
-        let msgType = "text";
-        let content: Record<string, unknown> = {};
-
-        for (const seg of message) {
-            if (typeof seg === "string") {
-                text += seg;
-            } else if (seg.type === "text") {
-                text += seg.data.text || "";
-            } else if (seg.type === "at") {
-                const userId = seg.data.qq || seg.data.id || seg.data.user_id;
-                if (userId === "all") {
-                    text += '<at user_id="all">所有人</at>';
-                } else {
-                    text += `<at user_id="${userId}">${seg.data.name || userId}</at>`;
-                }
-            } else if (seg.type === "image") {
-                const imageKey = seg.data.image_key || seg.data.file;
-                if (native.length === 1 && imageKey) {
-                    msgType = "image";
-                    content = { image_key: imageKey };
-                } else if (seg.data.url) text += `[图片: ${seg.data.url}]`;
-            } else if (["file", "audio", "video"].includes(seg.type)) {
-                const fileKey = seg.data.file_key || seg.data.file;
-                if (native.length === 1 && fileKey) {
-                    msgType = seg.type === "video" ? "media" : seg.type;
-                    content = {
-                        file_key: fileKey,
-                        ...(seg.data.image_key ? { image_key: seg.data.image_key } : {}),
-                    };
-                } else if (seg.data.url) text += `[文件: ${seg.data.url}]`;
-            } else if (seg.type === "post" || seg.type === "interactive") {
-                if (native.length === 1) {
-                    msgType = seg.type;
-                    content = (seg.data.content as Record<string, unknown>) || seg.data;
-                }
-            }
-        }
-
-        if (msgType === "text") content = { text };
+        const compiled = await compileFeishuMessage(params.message, {
+            client: bot,
+            resolveUserId: value => String(this.resolveId(value).source),
+        });
 
         // 根据场景类型发送消息
         let receiveIdType: "open_id" | "user_id" | "union_id" | "email" | "chat_id" = "open_id";
@@ -120,15 +81,20 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             receiveIdType = "chat_id";
         }
 
-        const result = reply
-            ? ((await bot.callApi(
-                  `/im/v1/messages/${String(reply.data.message_id || reply.data.id)}/reply`,
-                  {
-                      method: "POST",
-                      body: { msg_type: msgType, content: JSON.stringify(content) },
+        const result = compiled.replyTo
+            ? ((await bot.callApi(`/im/v1/messages/${encodeURIComponent(compiled.replyTo)}/reply`, {
+                  method: "POST",
+                  body: {
+                      msg_type: compiled.msgType,
+                      content: JSON.stringify(compiled.content),
                   },
-              )) as import("./types.js").FeishuSendMessageResponse)
-            : await bot.sendMessage(sceneId.string, receiveIdType, content, msgType);
+              })) as import("./types.js").FeishuSendMessageResponse)
+            : await bot.sendMessage(
+                  sceneId.string,
+                  receiveIdType,
+                  compiled.content,
+                  compiled.msgType,
+              );
 
         const messageId = result.data?.message_id;
         if (!messageId) {
@@ -151,7 +117,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
         // 飞书删除消息 API
         const http = bot.getHttpClient();
-        await http.delete(`/im/v1/messages/${msgId}`);
+        await http.delete(`/im/v1/messages/${encodeURIComponent(msgId)}`);
     }
 
     /**
@@ -166,7 +132,9 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         // 飞书获取消息 API
         const http = bot.getHttpClient();
-        const response = await http.get<FeishuAPIResponse>(`/im/v1/messages/${msgId}`);
+        const response = await http.get<FeishuAPIResponse>(
+            `/im/v1/messages/${encodeURIComponent(msgId)}`,
+        );
 
         if (response.data.code !== 0) {
             throw new Error(`获取消息失败: ${response.data.msg}`);
@@ -205,20 +173,20 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
-        // 解析消息内容
-        let text = "";
-        for (const seg of params.message) {
-            if (typeof seg === "string") {
-                text += seg;
-            } else if (seg.type === "text") {
-                text += seg.data.text || "";
-            }
+        const compiled = await compileFeishuMessage(params.message, {
+            client: bot,
+            resolveUserId: value => String(this.resolveId(value).source),
+        });
+        if (compiled.replyTo) throw new Error("飞书更新消息不能改变回复关系");
+        if (compiled.msgType !== "interactive") {
+            throw new Error("飞书开放平台只支持更新 interactive 消息卡片");
         }
 
-        // 飞书更新消息 API
-        const http = bot.getHttpClient();
-        await http.put(`/im/v1/messages/${msgId}`, {
-            content: JSON.stringify({ text }),
+        await bot.callApi(`/im/v1/messages/${encodeURIComponent(msgId)}`, {
+            method: "PATCH",
+            body: {
+                content: JSON.stringify(compiled.content),
+            },
         });
     }
 
@@ -444,13 +412,16 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const account = this.getAccount(uin);
         const isLark = account ? this.isLarkEndpoint(account.client.endpoint) : false;
         const platformName = isLark ? "Lark" : "飞书";
-        const version = await readPackageVersion(import.meta.url);
+        const [appVersion, sdkVersion] = await Promise.all([
+            readPackageVersion(import.meta.url),
+            readPackageVersion(import.meta.resolve("@larksuiteoapi/node-sdk")),
+        ]);
 
         return {
             app_name: `onebots ${platformName} Adapter`,
-            app_version: version,
-            impl: "feishu",
-            version,
+            app_version: appVersion,
+            impl: "@larksuiteoapi/node-sdk",
+            version: sdkVersion,
         };
     }
 

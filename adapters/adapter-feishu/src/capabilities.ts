@@ -6,7 +6,11 @@ export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
         send_message: { support: "native", scenes: ["private", "group", "channel"] },
         delete_message: { support: "native" },
         get_message: { support: "native" },
-        update_message: { support: "native" },
+        update_message: {
+            support: "native",
+            availability: "context",
+            note: "飞书开放平台仅允许更新应用发送的 interactive 消息卡片",
+        },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },
         get_friend_list: {
@@ -65,10 +69,26 @@ export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
     segments: {
         text: { support: "native", direction: "both" },
         at: { support: "native", direction: "both" },
-        image: { support: "native", direction: "both" },
-        file: { support: "native", direction: "both" },
-        audio: { support: "native", direction: "both" },
-        video: { support: "native", direction: "both" },
+        image: {
+            support: "native",
+            direction: "both",
+            note: "image_key 直发，URL、本地路径与 Base64 自动上传",
+        },
+        file: {
+            support: "native",
+            direction: "both",
+            note: "file_key 直发，URL、本地路径与 Base64 自动上传",
+        },
+        audio: {
+            support: "native",
+            direction: "both",
+            note: "file_key 直发；上传内容需符合飞书 opus 格式要求",
+        },
+        video: {
+            support: "native",
+            direction: "both",
+            note: "file_key 直发；上传内容需符合飞书 mp4 格式要求",
+        },
         post: { support: "native", direction: "both" },
         interactive: { support: "native", direction: "both" },
         reply: { support: "native", direction: "both" },

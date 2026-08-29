@@ -11,6 +11,7 @@ export {
 } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
+export { compileFeishuMessage, type CompiledFeishuMessage } from "./messages.js";
 
 const feishuSchema: Schema = {
     account_id: {

@@ -81,6 +81,12 @@ onebots -r feishu
 - 消息撤回、成员变化等 canonical 事件投影；未知事件通过 `raw_event` 无损交付
 - 飞书和 Lark 双端点以及私有化开放平台端点
 
+## 消息与媒体
+
+`image_key` / `file_key` 可直接发送；`image`、`file`、`audio`、`video` 段也可通过 `url` / `file` 传入 HTTP(S)、本地路径、data URL 或 `base64://`，适配器会先上传到当前飞书/Lark 应用再发送。音频和视频必须分别符合飞书的 opus 与 mp4 格式要求，可用 `file_type` 显式指定官方支持的文件类型。
+
+文本、@ 与图片混排会编译为飞书 post 富文本。文件、音频、视频、卡片等平台不能在一条消息内无损混合的组合会明确失败，请拆分发送；未知消息段也不会再被静默忽略。飞书开放平台的消息更新接口仅适用于应用发送的 `interactive` 消息卡片，适配器不会再用错误的 HTTP 方法尝试更新文本或媒体。
+
 ## 平台扩展 API
 
 下列动作可从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
