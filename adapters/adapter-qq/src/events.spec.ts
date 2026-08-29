@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectQQMessage, projectQQRawEvent } from "./events.js";
+import { projectQQGatewayMessage, projectQQMessage, projectQQRawEvent } from "./events.js";
 
 const createId = (value: string | number) => ({ string: String(value), source: value, number: 1 });
 const context = { botId: createId("bot"), createId };
@@ -34,25 +34,42 @@ describe("QQ 事件投影", () => {
 
     it("频道消息分别保留 Guild 与 Channel 地址", () => {
         const raw = {
-            rawEventType: "AT_MESSAGE_CREATE",
-            kind: "guild" as const,
-            senderId: "u1",
+            id: "m1",
             content: "你好",
-            messageId: "m1",
             timestamp: "2026-08-29T00:00:00.000Z",
-            guildId: "guild-1",
-            channelId: "channel-1",
-            raw: {} as never,
-            replyTarget: { scope: "channel" as const, targetId: "channel-1" },
+            guild_id: "guild-1",
+            channel_id: "channel-1",
+            author: { id: "u1", username: "Alice" },
         };
 
-        expect(projectQQMessage(raw, context)).toMatchObject({
+        expect(projectQQGatewayMessage("AT_MESSAGE_CREATE", raw, context)).toMatchObject({
             message_type: "channel",
             group: {
                 id: { string: "channel-1" },
                 guild_id: { string: "guild-1" },
                 channel_id: { string: "channel-1" },
             },
+            raw_event: expect.objectContaining({ raw: raw }),
+        });
+    });
+
+    it("频道私信从 Gateway 原始事件投影为 direct", () => {
+        expect(
+            projectQQGatewayMessage(
+                "DIRECT_MESSAGE_CREATE",
+                {
+                    id: "m1",
+                    content: "你好",
+                    timestamp: "2026-08-29T00:00:00.000Z",
+                    guild_id: "dm-guild-1",
+                    author: { id: "u1" },
+                },
+                context,
+            ),
+        ).toMatchObject({
+            message_type: "direct",
+            sender: { id: { string: "u1" } },
+            extensions: { qq: { guild_id: "dm-guild-1" } },
         });
     });
 

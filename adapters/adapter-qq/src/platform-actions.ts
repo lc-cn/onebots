@@ -97,9 +97,7 @@ export async function executeQQPlatformAction(
             return client.call({
                 method: "GET",
                 path: `/v2/groups/${requiredString(params, "group_id")}/join_request_list`,
-                query: optionalRecord(params.query) as
-                    | Record<string, string | number | boolean>
-                    | undefined,
+                query: optionalQuery(params.query),
             });
         case "get_group_restrict_chat":
             return client.call({
@@ -121,7 +119,7 @@ export async function executeQQPlatformAction(
             return client.call({
                 method: "GET",
                 path: "/v2/groups/join_approval_strategy",
-                query: optionalRecord(params.query) as QQPlatformCall["query"],
+                query: optionalQuery(params.query),
             });
         case "create_group_join_approval_strategy":
             return client.call({
@@ -155,7 +153,8 @@ export async function executeQQPlatformAction(
         case "kick_guild_member":
             return client.call({
                 method: "DELETE",
-                path: `/guilds/${requiredString(params, "guild_id")}/members/${requiredString(params, "member_id")}?add_blacklist=${params.add_blacklist === true}`,
+                path: `/guilds/${requiredString(params, "guild_id")}/members/${requiredString(params, "member_id")}`,
+                query: { add_blacklist: params.add_blacklist === true },
             });
         case "mute_guild_member":
             return client.call({
@@ -228,17 +227,13 @@ export async function executeQQPlatformAction(
             return client.call({
                 method: "GET",
                 path: reactionPath(params),
-                query: optionalRecord(params.query) as
-                    | Record<string, string | number | boolean>
-                    | undefined,
+                query: optionalQuery(params.query),
             });
         case "get_schedules":
             return client.call({
                 method: "GET",
                 path: `/channels/${requiredString(params, "channel_id")}/schedules`,
-                query: optionalRecord(params.query) as
-                    | Record<string, string | number | boolean>
-                    | undefined,
+                query: optionalQuery(params.query),
             });
         case "get_schedule":
             return client.call({ method: "GET", path: schedulePath(params) });
@@ -328,7 +323,7 @@ export async function executeQQPlatformAction(
             return client.call({
                 method: "GET",
                 path: "/v2/panels",
-                query: optionalRecord(params.query) as QQPlatformCall["query"],
+                query: optionalQuery(params.query),
             });
         case "create_bot_panel":
             return client.call({
@@ -377,7 +372,7 @@ function readPlatformCall(params: Readonly<Record<string, unknown>>): QQPlatform
     return {
         method: method as QQPlatformCall["method"],
         path: requiredString(params, "path"),
-        query: optionalRecord(params.query) as QQPlatformCall["query"],
+        query: optionalQuery(params.query),
         body: params.body,
     };
 }
@@ -415,6 +410,20 @@ function optionalRecord(value: unknown): Record<string, unknown> | undefined {
     return value && typeof value === "object" && !Array.isArray(value)
         ? (value as Record<string, unknown>)
         : undefined;
+}
+
+function optionalQuery(value: unknown): QQPlatformCall["query"] {
+    if (value == null) return undefined;
+    const record = optionalRecord(value);
+    if (!record) throw invalid("query 必须是对象");
+    const query: NonNullable<QQPlatformCall["query"]> = {};
+    for (const [key, item] of Object.entries(record)) {
+        if (typeof item !== "string" && typeof item !== "number" && typeof item !== "boolean") {
+            throw invalid(`query 参数 ${key} 必须是字符串、数字或布尔值`);
+        }
+        query[key] = item;
+    }
+    return query;
 }
 
 function requiredRecord(

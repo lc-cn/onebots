@@ -6,10 +6,13 @@ export interface QQProjectionContext {
     createId(value: string | number): CommonTypes.Id;
 }
 
-export function projectQQMessage(
-    event: QQBotInboundMessage,
+type QQMessageProjectionInput = Omit<QQBotInboundMessage, "replyTarget"> &
+    Partial<Pick<QQBotInboundMessage, "replyTarget">>;
+
+export function projectQQMessage<TEvent extends QQMessageProjectionInput>(
+    event: TEvent,
     context: QQProjectionContext,
-): CommonEvent.Message<QQBotInboundMessage> {
+): CommonEvent.Message<TEvent> {
     const scene =
         event.kind === "c2c"
             ? "private"
@@ -53,6 +56,40 @@ export function projectQQMessage(
             },
         },
     };
+}
+
+/** SDK 不触发 Guild/DM message 事件，因此从无损 Gateway 事件补齐频道消息投影。 */
+export function projectQQGatewayMessage(
+    eventType: string,
+    raw: unknown,
+    context: QQProjectionContext,
+): CommonEvent.Message<QQMessageProjectionInput> | undefined {
+    if (eventType !== "AT_MESSAGE_CREATE" && eventType !== "DIRECT_MESSAGE_CREATE") {
+        return undefined;
+    }
+    const data = asRecord(raw);
+    const author = asRecord(data.author);
+    const messageId = text(data.id);
+    const guildId = text(data.guild_id);
+    const senderId = text(author.id);
+    if (!messageId || !guildId || !senderId) return undefined;
+    const direct = eventType === "DIRECT_MESSAGE_CREATE";
+    const channelId = direct ? undefined : text(data.channel_id);
+    if (!direct && !channelId) return undefined;
+    const event: QQMessageProjectionInput = {
+        rawEventType: eventType,
+        kind: direct ? "dm" : "guild",
+        senderId,
+        senderName: text(author.username),
+        content: text(data.content) || "",
+        messageId,
+        timestamp: text(data.timestamp) || new Date().toISOString(),
+        guildId,
+        channelId,
+        attachments: Array.isArray(data.attachments) ? data.attachments : undefined,
+        raw: raw as never,
+    };
+    return projectQQMessage(event, context);
 }
 
 export function projectQQRawEvent(
@@ -117,7 +154,7 @@ export function projectQQRawEvent(
     };
 }
 
-function projectMessageSegments(event: QQBotInboundMessage): CommonTypes.Segment[] {
+function projectMessageSegments(event: QQMessageProjectionInput): CommonTypes.Segment[] {
     const segments: CommonTypes.Segment[] = [];
     if (event.refMsgIdx) {
         segments.push({

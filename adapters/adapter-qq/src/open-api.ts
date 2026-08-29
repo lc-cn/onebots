@@ -113,7 +113,8 @@ export class QQOpenApi {
     async kickMember(guildId: string, userId: string, addBlacklist = false): Promise<void> {
         await this.client.call({
             method: "DELETE",
-            path: `/guilds/${guildId}/members/${userId}?add_blacklist=${addBlacklist}`,
+            path: `/guilds/${guildId}/members/${userId}`,
+            query: { add_blacklist: addBlacklist },
         });
     }
 

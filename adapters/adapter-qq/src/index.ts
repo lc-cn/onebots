@@ -5,7 +5,7 @@ export { QQAdapter } from "./adapter.js";
 export { qqCapabilities } from "./capabilities.js";
 export { QQClient } from "./client.js";
 export { QQApiError } from "./errors.js";
-export { projectQQMessage, projectQQRawEvent } from "./events.js";
+export { projectQQGatewayMessage, projectQQMessage, projectQQRawEvent } from "./events.js";
 export { compileMessage, sendQQMessage } from "./messages.js";
 export { QQOpenApi } from "./open-api.js";
 export { executeQQPlatformAction, QQ_PLATFORM_ACTIONS } from "./platform-actions.js";

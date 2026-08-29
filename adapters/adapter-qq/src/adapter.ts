@@ -12,7 +12,7 @@ import {
 import { qqCapabilities } from "./capabilities.js";
 import { QQClient } from "./client.js";
 import { QQApiError } from "./errors.js";
-import { projectQQMessage, projectQQRawEvent } from "./events.js";
+import { projectQQGatewayMessage, projectQQMessage, projectQQRawEvent } from "./events.js";
 import { sendQQMessage } from "./messages.js";
 import { QQOpenApi, type QQGuildMessage } from "./open-api.js";
 import {
@@ -336,9 +336,13 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         client.on("interaction", (_context, event: InteractionEvent) =>
             account.dispatch(this.projectRaw(account, "INTERACTION_CREATE", event)),
         );
-        client.on("rawEvent", event =>
-            account.dispatch(this.projectRaw(account, event.eventType, event.data)),
-        );
+        client.on("rawEvent", event => {
+            const context = this.projectionContext(account);
+            account.dispatch(
+                projectQQGatewayMessage(event.eventType, event.data, context) ??
+                    projectQQRawEvent(event.eventType, event.data, context),
+            );
+        });
     }
 
     private projectRaw(

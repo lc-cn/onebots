@@ -29,4 +29,16 @@ describe("QQ 平台动作", () => {
             }),
         ).rejects.toBeInstanceOf(QQApiError);
     });
+
+    it("通用入口拒绝非标量 query", async () => {
+        const client = { call: vi.fn() } as unknown as QQClient;
+        await expect(
+            executeQQPlatformAction(client, "qq_call", {
+                method: "GET",
+                path: "/users/@me/guilds",
+                query: { cursor: { nested: true } },
+            }),
+        ).rejects.toMatchObject({ code: "QQ_INVALID_ACTION_PARAMS" });
+        expect(client.call).not.toHaveBeenCalled();
+    });
 });

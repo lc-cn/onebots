@@ -54,28 +54,43 @@ export class QQClient extends QQBot {
 
     /** 经 SDK 认证与结构化错误处理调用任意 QQ OpenAPI。 */
     async call<T = unknown>(request: QQPlatformCall): Promise<T> {
-        if (!request.path.startsWith("/") || request.path.startsWith("//")) {
+        if (!isSafeApiPath(request.path)) {
             throw new QQApiError("QQ OpenAPI path 必须是以单个 / 开头的相对路径", {
                 code: "QQ_INVALID_API_PATH",
                 path: request.path,
             });
         }
+        const pathWithQuery = appendQuery(request.path, request.query);
         try {
             switch (request.method) {
                 case "GET":
                     return await this.api.get<T>(request.path, request.query);
                 case "POST":
-                    return await this.api.post<T>(request.path, request.body);
+                    return await this.api.post<T>(pathWithQuery, request.body);
                 case "PUT":
-                    return await this.api.put<T>(request.path, request.body);
+                    return await this.api.put<T>(pathWithQuery, request.body);
                 case "PATCH":
-                    return await this.api.patch<T>(request.path, request.body);
+                    return await this.api.patch<T>(pathWithQuery, request.body);
                 case "DELETE":
-                    return await this.api.delete<T>(appendQuery(request.path, request.query));
+                    return await this.api.delete<T>(pathWithQuery);
             }
         } catch (error) {
             throw QQApiError.wrap(error);
         }
+    }
+}
+
+function isSafeApiPath(path: string): boolean {
+    if (!path.startsWith("/") || path.startsWith("//") || /[?#\\\u0000-\u001f]/u.test(path)) {
+        return false;
+    }
+    try {
+        return !path
+            .split("/")
+            .map(segment => decodeURIComponent(segment))
+            .some(segment => segment === ".." || segment === ".");
+    } catch {
+        return false;
     }
 }
 
