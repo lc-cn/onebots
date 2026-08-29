@@ -1,11 +1,13 @@
 import { AdapterRegistry } from "onebots";
 import type { Schema } from "onebots";
 import { DISCORD_GATEWAY_INTENTS } from "./types.js";
+import { DEFAULT_DISCORD_INTENTS } from "./intents.js";
 
 // 导出类型
 export type { DiscordConfig, ProxyConfig, GatewayIntentName, PresenceStatus } from "./types.js";
 export { ChannelType, MessageType, ActivityType } from "./types.js";
 export { DISCORD_GATEWAY_INTENTS } from "./types.js";
+export { DEFAULT_DISCORD_INTENTS, resolveDiscordIntents } from "./intents.js";
 
 // 导出 Discord API 类型
 export type {
@@ -74,6 +76,7 @@ export const discordSchema: Schema = {
     },
     intents: {
         type: "array",
+        default: [...DEFAULT_DISCORD_INTENTS],
         label: "Gateway Intents",
         description: "仅选择机器人已在 Developer Portal 开通的特权 Intent",
         choices: DISCORD_GATEWAY_INTENTS.map(value => ({ value, label: value })),

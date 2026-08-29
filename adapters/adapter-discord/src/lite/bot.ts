@@ -4,7 +4,8 @@
  */
 
 import { EventEmitter } from "node:events";
-import { DiscordLite, GatewayIntents, type DiscordLiteOptions } from "./index.js";
+import { DiscordLite, type DiscordLiteOptions } from "./index.js";
+import { resolveDiscordIntents } from "../intents.js";
 import type { DiscordREST } from "./rest.js";
 import type {
     DiscordApiUser,
@@ -74,7 +75,7 @@ export class DiscordLiteBot extends EventEmitter {
         this.config = config;
 
         // 解析 intents
-        const intents = this.parseIntents(config.intents);
+        const intents = resolveDiscordIntents(config.intents);
 
         const clientOptions: DiscordLiteOptions = {
             token: config.token,
@@ -87,57 +88,6 @@ export class DiscordLiteBot extends EventEmitter {
 
         this.client = new DiscordLite(clientOptions);
         this.setupEventListeners();
-    }
-
-    /**
-     * 解析 intents 配置
-     */
-    private parseIntents(intentsConfig?: number | string[]): number {
-        if (typeof intentsConfig === "number") {
-            return intentsConfig;
-        }
-
-        if (!intentsConfig || intentsConfig.length === 0) {
-            // 默认 intents
-            return (
-                GatewayIntents.Guilds |
-                GatewayIntents.GuildMessages |
-                GatewayIntents.GuildMembers |
-                GatewayIntents.GuildMessageReactions |
-                GatewayIntents.DirectMessages |
-                GatewayIntents.DirectMessageReactions |
-                GatewayIntents.MessageContent
-            );
-        }
-
-        let result = 0;
-        const intentMap: Record<string, number> = {
-            "Guilds": GatewayIntents.Guilds,
-            "GuildMembers": GatewayIntents.GuildMembers,
-            "GuildModeration": GatewayIntents.GuildModeration,
-            "GuildEmojisAndStickers": GatewayIntents.GuildEmojisAndStickers,
-            "GuildIntegrations": GatewayIntents.GuildIntegrations,
-            "GuildWebhooks": GatewayIntents.GuildWebhooks,
-            "GuildInvites": GatewayIntents.GuildInvites,
-            "GuildVoiceStates": GatewayIntents.GuildVoiceStates,
-            "GuildPresences": GatewayIntents.GuildPresences,
-            "GuildMessages": GatewayIntents.GuildMessages,
-            "GuildMessageReactions": GatewayIntents.GuildMessageReactions,
-            "GuildMessageTyping": GatewayIntents.GuildMessageTyping,
-            "DirectMessages": GatewayIntents.DirectMessages,
-            "DirectMessageReactions": GatewayIntents.DirectMessageReactions,
-            "DirectMessageTyping": GatewayIntents.DirectMessageTyping,
-            "MessageContent": GatewayIntents.MessageContent,
-            "GuildScheduledEvents": GatewayIntents.GuildScheduledEvents,
-        };
-
-        for (const intent of intentsConfig) {
-            if (intent in intentMap) {
-                result |= intentMap[intent];
-            }
-        }
-
-        return result;
     }
 
     /**

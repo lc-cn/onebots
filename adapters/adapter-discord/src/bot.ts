@@ -4,7 +4,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import { DiscordLite, GatewayIntents, type DiscordLiteOptions } from "./lite/index.js";
+import { DiscordLite, type DiscordLiteOptions } from "./lite/index.js";
 import type { DiscordREST } from "./lite/rest.js";
 import type { DiscordConfig } from "./types.js";
 import type {
@@ -28,6 +28,7 @@ import {
     type DiscordMessage,
     type DiscordUser,
 } from "./bot-model.js";
+import { resolveDiscordIntents } from "./intents.js";
 export type {
     DiscordAttachment,
     DiscordChannel,
@@ -46,7 +47,7 @@ export class DiscordBot extends EventEmitter {
         super();
         this.config = config;
         // 解析 intents
-        const intents = this.parseIntents(config.intents);
+        const intents = resolveDiscordIntents(config.intents);
         const clientOptions: DiscordLiteOptions = {
             token: config.token,
             intents,
@@ -55,48 +56,6 @@ export class DiscordBot extends EventEmitter {
         };
         this.client = new DiscordLite(clientOptions);
         this.setupEventListeners();
-    }
-    private parseIntents(intentsConfig?: string[]): number {
-        if (!intentsConfig || intentsConfig.length === 0) {
-            // 默认 intents
-            return (
-                GatewayIntents.Guilds |
-                GatewayIntents.GuildMessages |
-                GatewayIntents.GuildMembers |
-                GatewayIntents.GuildMessageReactions |
-                GatewayIntents.DirectMessages |
-                GatewayIntents.DirectMessageReactions |
-                GatewayIntents.MessageContent |
-                GatewayIntents.GuildVoiceStates |
-                GatewayIntents.GuildPresences
-            );
-        }
-        let result = 0;
-        const intentMap: Record<string, number> = {
-            "Guilds": GatewayIntents.Guilds,
-            "GuildMembers": GatewayIntents.GuildMembers,
-            "GuildModeration": GatewayIntents.GuildModeration,
-            "GuildEmojisAndStickers": GatewayIntents.GuildEmojisAndStickers,
-            "GuildIntegrations": GatewayIntents.GuildIntegrations,
-            "GuildWebhooks": GatewayIntents.GuildWebhooks,
-            "GuildInvites": GatewayIntents.GuildInvites,
-            "GuildVoiceStates": GatewayIntents.GuildVoiceStates,
-            "GuildPresences": GatewayIntents.GuildPresences,
-            "GuildMessages": GatewayIntents.GuildMessages,
-            "GuildMessageReactions": GatewayIntents.GuildMessageReactions,
-            "GuildMessageTyping": GatewayIntents.GuildMessageTyping,
-            "DirectMessages": GatewayIntents.DirectMessages,
-            "DirectMessageReactions": GatewayIntents.DirectMessageReactions,
-            "DirectMessageTyping": GatewayIntents.DirectMessageTyping,
-            "MessageContent": GatewayIntents.MessageContent,
-            "GuildScheduledEvents": GatewayIntents.GuildScheduledEvents,
-        };
-        for (const intent of intentsConfig) {
-            if (intent in intentMap) {
-                result |= intentMap[intent];
-            }
-        }
-        return result;
     }
     private setupEventListeners(): void {
         this.client.on("ready", (user: unknown) => {
