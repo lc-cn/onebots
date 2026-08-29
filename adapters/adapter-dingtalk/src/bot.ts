@@ -9,12 +9,17 @@ import {
 } from "dingtalk-stream";
 import type { Next, RouterContext } from "onebots";
 import { DingTalkCallbackCrypto } from "./crypto.js";
+import {
+    getDingTalkDepartmentUsers,
+    getDingTalkSceneGroupMembers,
+    getDingTalkVisibleUsers,
+} from "./directory-api.js";
 import type {
     DingTalkApiRequestOptions,
     DingTalkConfig,
-    DingTalkDepartmentUserResponse,
     DingTalkEvent,
     DingTalkRobotMessage,
+    DingTalkSceneGroupMember,
     DingTalkSendResult,
     DingTalkTokenResponse,
     DingTalkUser,
@@ -50,6 +55,7 @@ export class DingTalkApiError extends Error {
 export class DingTalkBot extends EventEmitter {
     private accessToken = "";
     private tokenExpireTime = 0;
+    private accessTokenPromise?: Promise<string>;
     private me: DingTalkUser | null = null;
     private streamClient?: DWClient;
     private callbackCrypto?: DingTalkCallbackCrypto;
@@ -178,6 +184,15 @@ export class DingTalkBot extends EventEmitter {
         if (!this.hasAppCredentials())
             throw new Error("钉钉开放平台 API 需要 app_key 和 app_secret");
         if (this.accessToken && Date.now() < this.tokenExpireTime) return this.accessToken;
+        const refresh = (this.accessTokenPromise ||= this.refreshAccessToken());
+        try {
+            return await refresh;
+        } finally {
+            if (this.accessTokenPromise === refresh) this.accessTokenPromise = undefined;
+        }
+    }
+
+    private async refreshAccessToken(): Promise<string> {
         const data = await this.request<DingTalkTokenResponse>("/v1.0/oauth2/accessToken", {
             method: "POST",
             auth: "none",
@@ -322,17 +337,17 @@ export class DingTalkBot extends EventEmitter {
     }
 
     async getDepartmentUsers(departmentId = 1): Promise<DingTalkUser[]> {
-        const users: DingTalkUser[] = [];
-        let cursor = 0;
-        do {
-            const response = await this.callApi<DingTalkDepartmentUserResponse>(
-                "/topapi/v2/user/list",
-                { method: "POST", body: { dept_id: departmentId, cursor, size: 100 } },
-            );
-            users.push(...(response.result?.list || []));
-            cursor = response.result?.has_more ? response.result.next_cursor || 0 : 0;
-        } while (cursor);
-        return users;
+        return getDingTalkDepartmentUsers(this, departmentId);
+    }
+
+    /** 获取应用可见的完整组织通讯录，并按用户 ID 去重。 */
+    async getVisibleUsers(rootDepartmentId = 1): Promise<DingTalkUser[]> {
+        return getDingTalkVisibleUsers(this, rootDepartmentId);
+    }
+
+    /** 获取场景群的完整成员目录；钉钉在此接口中提供群昵称。 */
+    async getSceneGroupMembers(openConversationId: string): Promise<DingTalkSceneGroupMember[]> {
+        return getDingTalkSceneGroupMembers(this, openConversationId);
     }
 }
 

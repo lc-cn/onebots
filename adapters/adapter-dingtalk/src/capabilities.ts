@@ -19,7 +19,7 @@ export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapa
             support: "emulated",
             availability: "permission",
             permissions: ["Contact.User.Read"],
-            note: "钉钉没有好友模型，按应用可见的根部门通讯录投影",
+            note: "钉钉没有好友模型，按应用可见的完整组织通讯录投影",
         },
         get_friend_info: {
             support: "emulated",
@@ -36,7 +36,7 @@ export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         get_group_member_info: {
             support: "emulated",
             availability: "permission",
-            note: "成员详情由通讯录用户信息投影",
+            note: "先校验场景群成员身份，再由通讯录用户信息补全资料",
         },
         invite_group_member: { support: "native", availability: "permission" },
         kick_group_member: { support: "native", availability: "permission" },

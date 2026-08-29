@@ -101,6 +101,32 @@ export interface DingTalkDepartmentUserResponse {
     };
 }
 
+export interface DingTalkDepartment {
+    dept_id: number;
+    name?: string;
+    parent_id?: number;
+}
+
+export interface DingTalkDepartmentListResponse {
+    errcode: number;
+    errmsg: string;
+    result?: DingTalkDepartment[];
+}
+
+export interface DingTalkSceneGroupMember {
+    userId: string;
+    nickname?: string;
+}
+
+export interface DingTalkSceneGroupMemberResponse {
+    result?: {
+        member_user_ids?: string[];
+        next_cursor?: string;
+        has_more?: boolean;
+        staff_id_nick_map?: Record<string, string> | string;
+    };
+}
+
 export interface DingTalkSendResult {
     processQueryKey?: string;
     task_id?: string;

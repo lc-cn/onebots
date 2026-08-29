@@ -80,6 +80,102 @@ describe("DingTalkBot", () => {
             ),
         ).toBe("success");
     });
+
+    it("递归读取可见部门、完成分页并去重用户", async () => {
+        const tokenRequests: string[] = [];
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+                const url = new URL(String(input));
+                const body = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+                if (url.pathname === "/v1.0/oauth2/accessToken") {
+                    tokenRequests.push(url.pathname);
+                    return jsonResponse({ accessToken: "token", expireIn: 7200 });
+                }
+                if (url.pathname === "/topapi/v2/department/listsub") {
+                    return jsonResponse({
+                        errcode: 0,
+                        errmsg: "ok",
+                        result: body.dept_id === 1 ? [{ dept_id: 2 }] : [],
+                    });
+                }
+                if (url.pathname === "/topapi/v2/user/list") {
+                    if (body.dept_id === 1 && body.cursor === 0) {
+                        return jsonResponse({
+                            errcode: 0,
+                            errmsg: "ok",
+                            result: {
+                                list: [{ userid: "u1", name: "甲" }],
+                                has_more: true,
+                                next_cursor: 100,
+                            },
+                        });
+                    }
+                    if (body.dept_id === 1) {
+                        return jsonResponse({
+                            errcode: 0,
+                            errmsg: "ok",
+                            result: { list: [{ userid: "u2", name: "乙" }] },
+                        });
+                    }
+                    return jsonResponse({
+                        errcode: 0,
+                        errmsg: "ok",
+                        result: { list: [{ userid: "u2", name: "乙（重复）" }] },
+                    });
+                }
+                throw new Error(`未处理的测试请求: ${url.pathname}`);
+            }),
+        );
+        const bot = new DingTalkBot({
+            account_id: "bot",
+            app_key: "app-key",
+            app_secret: "secret",
+        });
+
+        await expect(bot.getVisibleUsers()).resolves.toEqual([
+            { userid: "u1", name: "甲" },
+            { userid: "u2", name: "乙（重复）" },
+        ]);
+        expect(tokenRequests).toHaveLength(1);
+    });
+
+    it("完整读取场景群成员分页和群昵称", async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(jsonResponse({ accessToken: "token", expireIn: 7200 }))
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    result: {
+                        member_user_ids: ["u1"],
+                        staff_id_nick_map: '{"u1":"群昵称甲"}',
+                        has_more: true,
+                        next_cursor: "next",
+                    },
+                }),
+            )
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    result: {
+                        member_user_ids: ["u2"],
+                        staff_id_nick_map: { u2: "群昵称乙" },
+                    },
+                }),
+            );
+        vi.stubGlobal("fetch", fetchMock);
+        const bot = new DingTalkBot({
+            account_id: "bot",
+            app_key: "app-key",
+            app_secret: "secret",
+        });
+
+        await expect(bot.getSceneGroupMembers("cid_group")).resolves.toEqual([
+            { userId: "u1", nickname: "群昵称甲" },
+            { userId: "u2", nickname: "群昵称乙" },
+        ]);
+        const [, secondPageRequest] = fetchMock.mock.calls[2] as [URL, RequestInit];
+        expect(JSON.parse(String(secondPageRequest.body))).toMatchObject({ cursor: "next" });
+    });
 });
 
 function jsonResponse(value: unknown): Response {

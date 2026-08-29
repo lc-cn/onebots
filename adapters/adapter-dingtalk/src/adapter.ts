@@ -23,15 +23,6 @@ interface SceneGroupResponse {
     };
 }
 
-interface SceneGroupMemberResponse {
-    result?: {
-        member_user_ids?: string[];
-        next_cursor?: string;
-        has_more?: boolean;
-        staff_id_nick_map?: Record<string, string> | string;
-    };
-}
-
 export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
     constructor(app: BaseApp) {
         super(app, "dingtalk", dingTalkCapabilities);
@@ -66,9 +57,9 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
         return this.toUserInfo(await this.requireBot(uin).getUserInfo(params.user_id.string));
     }
 
-    /** 钉钉没有好友模型，以应用可见的根部门通讯录投影。 */
+    /** 钉钉没有好友模型，以应用可见的完整组织通讯录投影。 */
     async getFriendList(uin: string): Promise<Adapter.FriendInfo[]> {
-        const users = await this.requireBot(uin).getDepartmentUsers();
+        const users = await this.requireBot(uin).getVisibleUsers();
         return users.map(user => ({
             user_id: this.createId(user.userid),
             user_name: user.name,
@@ -120,45 +111,36 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
         uin: string,
         params: Adapter.GetGroupMemberListParams,
     ): Promise<Adapter.GroupMemberInfo[]> {
-        const bot = this.requireBot(uin);
-        const members: Adapter.GroupMemberInfo[] = [];
-        let cursor = "0";
-        do {
-            const response = await bot.callApi<SceneGroupMemberResponse>(
-                "/topapi/im/chat/scenegroup/member/get",
-                {
-                    method: "POST",
-                    auth: "legacy",
-                    body: { open_conversation_id: params.group_id.string, cursor, size: 100 },
-                },
-            );
-            const result = response.result;
-            const nicknames = nicknameMap(result?.staff_id_nick_map);
-            for (const userId of result?.member_user_ids || []) {
-                members.push({
-                    group_id: params.group_id,
-                    user_id: this.createId(userId),
-                    user_name: nicknames[userId] || userId,
-                    card: nicknames[userId],
-                    role: "member",
-                });
-            }
-            cursor = result?.has_more ? result.next_cursor || "" : "";
-        } while (cursor);
-        return members;
+        const members = await this.requireBot(uin).getSceneGroupMembers(params.group_id.string);
+        return members.map(member => ({
+            group_id: params.group_id,
+            user_id: this.createId(member.userId),
+            user_name: member.nickname || member.userId,
+            card: member.nickname,
+            role: "member",
+        }));
     }
 
     async getGroupMemberInfo(
         uin: string,
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
-        const user = await this.requireBot(uin).getUserInfo(params.user_id.string);
+        const bot = this.requireBot(uin);
+        const member = (await bot.getSceneGroupMembers(params.group_id.string)).find(
+            item => item.userId === params.user_id.string,
+        );
+        if (!member) {
+            throw new Error(
+                `钉钉用户 ${params.user_id.string} 不是场景群 ${params.group_id.string} 的成员`,
+            );
+        }
+        const user = await bot.getUserInfo(member.userId);
         return {
             group_id: params.group_id,
             user_id: this.createId(user.userid),
             user_name: user.name,
-            card: user.name,
-            role: user.admin ? "admin" : "member",
+            card: member.nickname,
+            role: "member",
         };
     }
 
@@ -249,19 +231,6 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
             auth: "legacy",
             body: { open_conversation_id: groupId, user_ids: [userId] },
         });
-    }
-}
-
-function nicknameMap(value: Record<string, string> | string | undefined): Record<string, string> {
-    if (!value) return {};
-    if (typeof value === "object") return value;
-    try {
-        const parsed: unknown = JSON.parse(value);
-        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-            ? (parsed as Record<string, string>)
-            : {};
-    } catch {
-        return {};
     }
 }
 
