@@ -67,11 +67,16 @@ export interface TelegramConfig {
     webhook?: {
         url?: string;
         secret_token?: string;
+        /** Telegram 连接 Webhook 时使用的固定来源 IP。 */
+        ip_address?: string;
+        max_connections?: number;
+        drop_pending_updates?: boolean;
         allowed_updates?: ReadonlyArray<TelegramUpdateType>;
     };
     polling?: {
         timeout?: number;
         limit?: number;
+        drop_pending_updates?: boolean;
         allowed_updates?: ReadonlyArray<TelegramUpdateType>;
     };
 }

@@ -88,6 +88,7 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         member_left: { support: "native" },
         group_request: { support: "native" },
         message_reaction: { support: "native" },
+        message_deleted: { support: "native", note: "商业消息批量删除会拆分为独立事件" },
         native_update: {
             support: "native",
             note: "未标准化的 Telegram Update 以 custom notice 和 raw_event 无损交付",
@@ -95,7 +96,11 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
     },
     segments: {
         text: { support: "native", direction: "both" },
-        at: { support: "emulated", direction: "both", note: "按 Telegram mention 文本投影" },
+        at: {
+            support: "native",
+            direction: "both",
+            note: "发送使用 tg://user text_link；接收投影 text_mention；@all 为文本模拟",
+        },
         image: { support: "native", direction: "both" },
         video: { support: "native", direction: "both" },
         audio: { support: "native", direction: "both" },

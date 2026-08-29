@@ -12,6 +12,7 @@ import { telegramCapabilities } from "./capabilities.js";
 import { createTelegramAccount } from "./account.js";
 import { executeTelegramPlatformAction, TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { compileTelegramEditableText, sendTelegramMessage } from "./message-sender.js";
+import { TelegramError } from "./errors.js";
 
 export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     constructor(app: BaseApp) {
@@ -26,10 +27,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
         const messageId = await sendTelegramMessage(bot, sceneId.string, params.message, {
             resolveUserId: value => String(this.resolveId(value).source),
@@ -43,13 +41,10 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
      * 删除/撤回消息
      */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const msgId = parseInt(
+        const bot = this.requireBot(uin);
+        const msgId = requireTelegramInteger(
             this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
-            10,
+            "message_id",
         );
         const chatId =
             params.scene_id != null
@@ -64,13 +59,10 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
      * 更新消息
      */
     async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const msgId = parseInt(
+        const bot = this.requireBot(uin);
+        const msgId = requireTelegramInteger(
             this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
-            10,
+            "message_id",
         );
         const rawScene = (
             params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }
@@ -92,10 +84,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
      * 获取机器人自身信息
      */
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const me = await bot.getMe();
 
         return {
@@ -113,10 +102,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         uin: string,
         params: Adapter.GetGroupInfoParams,
     ): Promise<Adapter.GroupInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const chatId = params.group_id.string;
         const chat = await bot.getChat(chatId);
 
@@ -130,10 +116,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
      * 退出群组
      */
     async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         await bot.leaveChat(params.group_id.string);
     }
 
@@ -144,12 +127,9 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         uin: string,
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const chatId = params.group_id.string;
-        const userId = parseInt(params.user_id.string);
+        const userId = requireTelegramInteger(params.user_id.string, "user_id");
         const member = await bot.getChatMember(chatId, userId);
 
         return {
@@ -170,93 +150,119 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
      * 踢出群成员
      */
     async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const chatId = params.group_id.string;
-        const userId = parseInt(params.user_id.string);
+        const userId = requireTelegramInteger(params.user_id.string, "user_id");
         await bot.banChatMember(chatId, userId);
         if (!params.reject_add_request) await bot.unbanChatMember(chatId, userId);
     }
 
     async muteGroupMember(uin: string, params: Adapter.MuteGroupMemberParams): Promise<void> {
-        const api = this.requireBot(uin).getBot().api;
+        const bot = this.requireBot(uin);
         const allowed = params.duration <= 0;
-        await api.restrictChatMember(
-            params.group_id.string,
-            Number(params.user_id.string),
-            {
-                can_send_messages: allowed,
-                can_send_audios: allowed,
-                can_send_documents: allowed,
-                can_send_photos: allowed,
-                can_send_videos: allowed,
-                can_send_video_notes: allowed,
-                can_send_voice_notes: allowed,
-                can_send_polls: allowed,
-                can_send_other_messages: allowed,
-                can_add_web_page_previews: allowed,
-                can_change_info: allowed,
-                can_invite_users: allowed,
-                can_pin_messages: allowed,
-                can_manage_topics: allowed,
-            },
-            params.duration > 0
-                ? { until_date: Math.floor(Date.now() / 1000) + params.duration }
-                : undefined,
+        await bot.callApi("restrictChatMember", () =>
+            bot.getBot().api.restrictChatMember(
+                params.group_id.string,
+                requireTelegramInteger(params.user_id.string, "user_id"),
+                {
+                    can_send_messages: allowed,
+                    can_send_audios: allowed,
+                    can_send_documents: allowed,
+                    can_send_photos: allowed,
+                    can_send_videos: allowed,
+                    can_send_video_notes: allowed,
+                    can_send_voice_notes: allowed,
+                    can_send_polls: allowed,
+                    can_send_other_messages: allowed,
+                    can_add_web_page_previews: allowed,
+                    can_change_info: allowed,
+                    can_invite_users: allowed,
+                    can_pin_messages: allowed,
+                    can_manage_topics: allowed,
+                },
+                params.duration > 0
+                    ? { until_date: Math.floor(Date.now() / 1000) + params.duration }
+                    : undefined,
+            ),
         );
     }
 
     async setGroupAdmin(uin: string, params: Adapter.SetGroupAdminParams): Promise<void> {
         const enabled = params.enable;
-        await this.requireBot(uin)
-            .getBot()
-            .api.promoteChatMember(params.group_id.string, Number(params.user_id.string), {
-                can_manage_chat: enabled,
-                can_delete_messages: enabled,
-                can_manage_video_chats: enabled,
-                can_restrict_members: enabled,
-                can_promote_members: enabled,
-                can_change_info: enabled,
-                can_invite_users: enabled,
-                can_pin_messages: enabled,
-                can_manage_topics: enabled,
-            });
+        const bot = this.requireBot(uin);
+        await bot.callApi("promoteChatMember", () =>
+            bot
+                .getBot()
+                .api.promoteChatMember(
+                    params.group_id.string,
+                    requireTelegramInteger(params.user_id.string, "user_id"),
+                    {
+                        can_manage_chat: enabled,
+                        can_delete_messages: enabled,
+                        can_manage_video_chats: enabled,
+                        can_restrict_members: enabled,
+                        can_promote_members: enabled,
+                        can_change_info: enabled,
+                        can_invite_users: enabled,
+                        can_pin_messages: enabled,
+                        can_manage_topics: enabled,
+                    },
+                ),
+        );
     }
 
     async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
-        await this.requireBot(uin)
-            .getBot()
-            .api.setChatTitle(params.group_id.string, params.group_name);
+        const bot = this.requireBot(uin);
+        await bot.callApi("setChatTitle", () =>
+            bot.getBot().api.setChatTitle(params.group_id.string, params.group_name),
+        );
     }
 
     async setGroupSpecialTitle(
         uin: string,
         params: Adapter.SetGroupSpecialTitleParams,
     ): Promise<void> {
-        await this.requireBot(uin)
-            .getBot()
-            .api.setChatAdministratorCustomTitle(
-                params.group_id.string,
-                Number(params.user_id.string),
-                params.special_title,
-            );
+        const bot = this.requireBot(uin);
+        await bot.callApi("setChatAdministratorCustomTitle", () =>
+            bot
+                .getBot()
+                .api.setChatAdministratorCustomTitle(
+                    params.group_id.string,
+                    requireTelegramInteger(params.user_id.string, "user_id"),
+                    params.special_title,
+                ),
+        );
     }
 
     async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
         const flag = params.flag ?? params.request_id?.string;
         const [chatId, userId] = String(flag ?? "").split(":");
-        if (!chatId || !userId || !Number.isSafeInteger(Number(userId))) {
-            throw new Error("Telegram 入群申请 flag 必须为 chat_id:user_id");
+        if (
+            !chatId ||
+            !userId ||
+            !Number.isSafeInteger(Number(chatId)) ||
+            !Number.isSafeInteger(Number(userId)) ||
+            Number(userId) <= 0
+        ) {
+            throw TelegramError.invalid(
+                "Telegram 入群申请 flag 必须为 chat_id:user_id",
+                "TELEGRAM_JOIN_REQUEST_FLAG_INVALID",
+            );
         }
-        const api = this.requireBot(uin).getBot().api;
-        if (params.approve) await api.approveChatJoinRequest(chatId, Number(userId));
-        else await api.declineChatJoinRequest(chatId, Number(userId));
+        const bot = this.requireBot(uin);
+        const method = params.approve ? "approveChatJoinRequest" : "declineChatJoinRequest";
+        await bot.callApi(method, () =>
+            params.approve
+                ? bot.getBot().api.approveChatJoinRequest(chatId, Number(userId))
+                : bot.getBot().api.declineChatJoinRequest(chatId, Number(userId)),
+        );
     }
 
     async getFile(uin: string, params: Adapter.GetFileParams): Promise<Adapter.FileInfo> {
-        const file = await this.requireBot(uin).getBot().api.getFile(params.file_id.string);
+        const bot = this.requireBot(uin);
+        const file = await bot.callApi("getFile", () =>
+            bot.getBot().api.getFile(params.file_id.string),
+        );
         return {
             file_id: params.file_id,
             file_name: file.file_path ?? params.file_id.string,
@@ -272,7 +278,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         if (!TELEGRAM_PLATFORM_ACTIONS.has(action)) {
             return super.executePlatformAction(uin, action, params);
         }
-        return executeTelegramPlatformAction(this.requireBot(uin).getBot().api, action, params);
+        return executeTelegramPlatformAction(this.requireBot(uin), action, params);
     }
 
     isPlatformActionImplemented(action: string): boolean {
@@ -281,7 +287,15 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
 
     private requireBot(uin: string): TelegramBot {
         const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        if (!account) {
+            throw TelegramError.resource(
+                `Telegram 账号 ${uin} 不存在`,
+                "TELEGRAM_ACCOUNT_NOT_FOUND",
+                {
+                    account_id: uin,
+                },
+            );
+        }
         return account.client;
     }
 
@@ -334,3 +348,13 @@ AdapterRegistry.register("telegram", TelegramAdapter, {
     author: "凉菜",
     capabilities: telegramCapabilities,
 });
+
+function requireTelegramInteger(value: string | number, name: string): number {
+    const result = Number(value);
+    if (!Number.isSafeInteger(result) || result <= 0) {
+        throw TelegramError.invalid(`Telegram ${name} 必须为安全整数`, "TELEGRAM_ID_INVALID", {
+            name,
+        });
+    }
+    return result;
+}

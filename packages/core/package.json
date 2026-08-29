@@ -65,6 +65,10 @@
     "reflect-metadata": "^0.1.13",
     "ws": "^8.16.0"
   },
+  "optionalDependencies": {
+    "https-proxy-agent": "^7.0.6",
+    "socks-proxy-agent": "^8.0.5"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lc-cn/onebots.git"

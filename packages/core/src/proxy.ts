@@ -31,7 +31,7 @@ export function buildProxyUrl(proxy: ProxyConfig): string {
  * 将密码部分替换为 ***
  */
 export function maskProxyUrl(url: string): string {
-    return url.replace(/:([^:@]+)@/, ':***@');
+    return url.replace(/:([^:@]+)@/, ":***@");
 }
 
 /**
@@ -43,8 +43,7 @@ export async function createHttpsProxyAgent(proxy: ProxyConfig): Promise<unknown
     if (!proxy?.url) return null;
     try {
         const proxyUrl = buildProxyUrl(proxy);
-        // @ts-ignore - https-proxy-agent 是可选依赖
-        const { HttpsProxyAgent } = await import('https-proxy-agent');
+        const { HttpsProxyAgent } = await import("https-proxy-agent");
         return new HttpsProxyAgent(proxyUrl);
     } catch {
         return null;
@@ -61,9 +60,8 @@ export async function createSocksProxyAgent(proxy: ProxyConfig): Promise<unknown
     try {
         const proxyUrl = buildProxyUrl(proxy);
         // 将 http/https scheme 转换为 socks5
-        const socksUrl = proxyUrl.replace(/^https?:\/\//, 'socks5://');
-        // @ts-ignore - socks-proxy-agent 是可选依赖
-        const { SocksProxyAgent } = await import('socks-proxy-agent');
+        const socksUrl = proxyUrl.replace(/^https?:\/\//, "socks5://");
+        const { SocksProxyAgent } = await import("socks-proxy-agent");
         return new SocksProxyAgent(socksUrl);
     } catch {
         return null;
@@ -85,11 +83,11 @@ export async function createSocksProxyAgent(proxy: ProxyConfig): Promise<unknown
  */
 export async function createProxyAgent(
     proxy: ProxyConfig | undefined,
-    preferSocks = false
+    preferSocks = false,
 ): Promise<unknown | null> {
     if (!proxy?.url) return null;
 
-    const isSocksUrl = proxy.url.startsWith('socks');
+    const isSocksUrl = proxy.url.startsWith("socks");
 
     if (isSocksUrl || preferSocks) {
         // 尝试 SOCKS5 代理

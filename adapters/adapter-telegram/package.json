@@ -35,9 +35,6 @@
   "dependencies": {
     "grammy": "^1.24.0"
   },
-  "optionalDependencies": {
-    "https-proxy-agent": "^7.0.6"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lc-cn/onebots.git"

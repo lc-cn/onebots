@@ -365,10 +365,6 @@ importers:
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
-    optionalDependencies:
-      https-proxy-agent:
-        specifier: ^7.0.6
-        version: 7.0.6
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -631,6 +627,13 @@ importers:
       ws:
         specifier: ^8.21.3
         version: 8.21.3
+    optionalDependencies:
+      https-proxy-agent:
+        specifier: ^7.0.6
+        version: 7.0.6
+      socks-proxy-agent:
+        specifier: ^8.0.5
+        version: 8.0.5
     devDependencies:
       '@types/js-yaml':
         specifier: ^4.0.9

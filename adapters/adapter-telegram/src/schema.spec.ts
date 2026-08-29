@@ -20,6 +20,9 @@ describe("Telegram 配置 Schema", () => {
             path: "receive_mode",
             oneOf: ["polling"],
         });
+        expect(ruleAt("webhook", "max_connections").max).toBe(100);
+        expect(ruleAt("polling", "drop_pending_updates").type).toBe("boolean");
+        expect(ruleAt("proxy", "url").pattern?.test("socks5://127.0.0.1:1080")).toBe(true);
     });
 
     it("所有 Update 订阅均使用可增减的受限选项列表", () => {

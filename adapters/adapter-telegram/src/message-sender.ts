@@ -1,6 +1,8 @@
 import { materializeMediaSource, type Adapter } from "onebots";
 import { InputFile } from "grammy";
+import type { MessageEntity, Opts } from "grammy/types";
 import type { TelegramBot } from "./bot.js";
+import { TelegramError } from "./errors.js";
 
 /** 编译 Telegram 可编辑文本；媒体编辑应通过 call_telegram_api 选择对应原生方法。 */
 export function compileTelegramEditableText(
@@ -14,10 +16,16 @@ export function compileTelegramEditableText(
             const id = segment.data.qq ?? segment.data.id ?? segment.data.user_id;
             text += id === "all" ? "@all " : `@${context.resolveUserId(idValue(id))} `;
         } else {
-            throw new Error(`Telegram 文本更新不支持消息段 ${segment.type}`);
+            throw TelegramError.invalid(
+                `Telegram 文本更新不支持消息段 ${segment.type}`,
+                "TELEGRAM_MESSAGE_SEGMENT_UNSUPPORTED",
+                { segment_type: segment.type },
+            );
         }
     }
-    if (!text) throw new Error("Telegram 更新文本不能为空");
+    if (!text) {
+        throw TelegramError.invalid("Telegram 更新文本不能为空", "TELEGRAM_MESSAGE_EMPTY");
+    }
     return text;
 }
 
@@ -29,6 +37,7 @@ export async function sendTelegramMessage(
     context: { resolveUserId(value: string | number): string } = { resolveUserId: String },
 ): Promise<number> {
     let text = "";
+    const entities: MessageEntity[] = [];
     let replyTo: number | undefined;
     const media: Array<{ type: string; data: Record<string, unknown> }> = [];
     let replyCount = 0;
@@ -37,12 +46,26 @@ export async function sendTelegramMessage(
         if (segment.type === "text") text += String(segment.data.text ?? "");
         else if (segment.type === "at") {
             const id = segment.data.qq ?? segment.data.id ?? segment.data.user_id;
-            text += id === "all" ? "@all " : `@${context.resolveUserId(idValue(id))} `;
+            if (id === "all") text += "@all ";
+            else {
+                const userId = requireTelegramUserId(context.resolveUserId(idValue(id)));
+                const label = String(segment.data.name ?? `@${userId}`);
+                entities.push({
+                    type: "text_link",
+                    offset: text.length,
+                    length: label.length,
+                    url: `tg://user?id=${userId}`,
+                });
+                text += `${label} `;
+            }
         } else if (segment.type === "reply") {
             replyCount += 1;
             const value = Number(segment.data.message_id ?? segment.data.id);
             if (!Number.isSafeInteger(value) || value <= 0) {
-                throw new Error("Telegram reply.message_id 必须为正整数");
+                throw TelegramError.invalid(
+                    "Telegram reply.message_id 必须为正整数",
+                    "TELEGRAM_REPLY_INVALID",
+                );
             }
             replyTo = value;
         } else if (
@@ -51,9 +74,20 @@ export async function sendTelegramMessage(
             )
         ) {
             media.push(segment);
-        } else throw new Error(`Telegram 不支持消息段 ${segment.type}`);
+        } else {
+            throw TelegramError.invalid(
+                `Telegram 不支持消息段 ${segment.type}`,
+                "TELEGRAM_MESSAGE_SEGMENT_UNSUPPORTED",
+                { segment_type: segment.type },
+            );
+        }
     }
-    if (replyCount > 1) throw new Error("Telegram 消息只能包含一个 reply 段");
+    if (replyCount > 1) {
+        throw TelegramError.invalid(
+            "Telegram 消息只能包含一个 reply 段",
+            "TELEGRAM_REPLY_DUPLICATED",
+        );
+    }
 
     const options = replyTo ? { reply_parameters: { message_id: replyTo } } : {};
     let lastMessageId: number | undefined;
@@ -64,51 +98,55 @@ export async function sendTelegramMessage(
                 ? undefined
                 : await telegramFile(segment.data);
         let result: { message_id: number } | undefined;
+        let usedCaption = false;
+        const captionOptions = {
+            ...options,
+            caption,
+            caption_entities: caption && entities.length ? entities : undefined,
+        };
         switch (segment.type) {
             case "image":
-                result = await bot.sendPhoto(chatId, file!, {
-                    ...options,
-                    caption,
-                } as never);
+                result = await bot.sendPhoto(chatId, file!, captionOptions as never);
+                usedCaption = Boolean(caption);
                 break;
             case "video":
                 if (segment.data.animation === true) {
-                    result = await bot.getBot().api.sendAnimation(chatId, file!, {
-                        ...options,
-                        caption,
-                    });
+                    result = await bot.callApi("sendAnimation", () =>
+                        bot.getBot().api.sendAnimation(chatId, file!, captionOptions),
+                    );
                 } else {
-                    result = await bot.sendVideo(chatId, file!, {
-                        ...options,
-                        caption,
-                    } as never);
+                    result = await bot.sendVideo(chatId, file!, captionOptions as never);
                 }
+                usedCaption = Boolean(caption);
                 break;
             case "audio":
                 if (segment.data.voice === true) {
-                    result = await bot.getBot().api.sendVoice(chatId, file!, {
-                        ...options,
-                        caption,
-                    });
-                } else
-                    result = await bot.sendAudio(chatId, file!, {
-                        ...options,
-                        caption,
-                    } as never);
+                    result = await bot.callApi("sendVoice", () =>
+                        bot.getBot().api.sendVoice(chatId, file!, captionOptions),
+                    );
+                } else result = await bot.sendAudio(chatId, file!, captionOptions as never);
+                usedCaption = Boolean(caption);
                 break;
             case "file":
-                result = await bot.sendDocument(chatId, file!, {
-                    ...options,
-                    caption,
-                } as never);
+                result = await bot.sendDocument(chatId, file!, captionOptions as never);
+                usedCaption = Boolean(caption);
                 break;
             case "sticker":
-                result = await bot.getBot().api.sendSticker(chatId, file!, options);
+                result = await bot.callApi("sendSticker", () =>
+                    bot.getBot().api.sendSticker(chatId, file!, options),
+                );
                 break;
             case "location":
-                const latitude = finiteNumber(segment.data.latitude, "location.latitude");
-                const longitude = finiteNumber(segment.data.longitude, "location.longitude");
-                result = await bot.getBot().api.sendLocation(chatId, latitude, longitude, options);
+                const latitude = boundedNumber(segment.data.latitude, "location.latitude", -90, 90);
+                const longitude = boundedNumber(
+                    segment.data.longitude,
+                    "location.longitude",
+                    -180,
+                    180,
+                );
+                result = await bot.callApi("sendLocation", () =>
+                    bot.getBot().api.sendLocation(chatId, latitude, longitude, options),
+                );
                 break;
             case "contact":
                 const phoneNumber = requiredString(
@@ -116,21 +154,28 @@ export async function sendTelegramMessage(
                     "contact.phone_number",
                 );
                 const firstName = requiredString(segment.data.first_name, "contact.first_name");
-                result = await bot.getBot().api.sendContact(chatId, phoneNumber, firstName, {
-                    ...options,
-                    last_name: String(segment.data.last_name ?? "") || undefined,
-                });
+                result = await bot.callApi("sendContact", () =>
+                    bot.getBot().api.sendContact(chatId, phoneNumber, firstName, {
+                        ...options,
+                        last_name: String(segment.data.last_name ?? "") || undefined,
+                    }),
+                );
                 break;
         }
         if (result) {
             lastMessageId = result.message_id;
-            caption = undefined;
+            if (usedCaption) caption = undefined;
         }
     }
 
     if (lastMessageId == null || caption) {
-        if (!(caption ?? text)) throw new Error("Telegram 消息不包含可发送内容");
-        const result = await bot.sendMessage(chatId, caption ?? text, options as never);
+        if (!(caption ?? text)) {
+            throw TelegramError.invalid("Telegram 消息不包含可发送内容", "TELEGRAM_MESSAGE_EMPTY");
+        }
+        const result = await bot.sendMessage(chatId, caption ?? text, {
+            ...options,
+            entities: entities.length ? entities : undefined,
+        } as Opts<"sendMessage">);
         lastMessageId = result.message_id;
     }
     return lastMessageId;
@@ -158,11 +203,17 @@ function idValue(value: unknown): string | number {
         const record = value as Record<string, unknown>;
         return idValue(record.string ?? record.source);
     }
-    throw new Error("Telegram at 段缺少有效用户 ID");
+    throw TelegramError.invalid("Telegram at 段缺少有效用户 ID", "TELEGRAM_MENTION_USER_INVALID");
 }
 
 function requiredString(value: unknown, name: string): string {
-    if (typeof value !== "string" || !value) throw new Error(`Telegram ${name} 不能为空`);
+    if (typeof value !== "string" || !value) {
+        throw TelegramError.invalid(
+            `Telegram ${name} 不能为空`,
+            "TELEGRAM_MESSAGE_FIELD_REQUIRED",
+            { name },
+        );
+    }
     return value;
 }
 
@@ -170,8 +221,24 @@ function optionalString(value: unknown): string | undefined {
     return typeof value === "string" && value ? value : undefined;
 }
 
-function finiteNumber(value: unknown, name: string): number {
+function boundedNumber(value: unknown, name: string, min: number, max: number): number {
     const result = Number(value);
-    if (!Number.isFinite(result)) throw new Error(`Telegram ${name} 必须是数字`);
+    if (!Number.isFinite(result) || result < min || result > max) {
+        throw TelegramError.invalid(
+            `Telegram ${name} 必须是 ${min}-${max} 范围内的数字`,
+            "TELEGRAM_MESSAGE_FIELD_INVALID",
+            { name, min, max },
+        );
+    }
     return result;
+}
+
+function requireTelegramUserId(value: string): string {
+    if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) <= 0) {
+        throw TelegramError.invalid(
+            "Telegram at 段的用户 ID 必须为安全整数",
+            "TELEGRAM_MENTION_USER_INVALID",
+        );
+    }
+    return value;
 }

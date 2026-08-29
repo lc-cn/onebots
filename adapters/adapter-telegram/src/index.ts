@@ -11,6 +11,10 @@ export type {
 } from "./types.js";
 export { TELEGRAM_UPDATE_TYPES } from "./types.js";
 export { resolveTelegramReceiveConfig, type TelegramReceiveConfig } from "./receive-config.js";
+export { TelegramBot, type TelegramBotEvents } from "./bot.js";
+export { TelegramError, type TelegramErrorOptions } from "./errors.js";
+export { projectTelegramEvents, type TelegramEventProjectorContext } from "./events.js";
+export { TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
 
@@ -43,7 +47,7 @@ export const telegramSchema: Schema = {
             type: "string",
             label: "代理地址",
             placeholder: "http://127.0.0.1:7890",
-            pattern: /^https?:\/\/[^\s]+$/,
+            pattern: /^(?:https?|socks[45]):\/\/[^\s]+$/,
             ui: { section: "advanced" },
         },
         username: { type: "string", label: "代理用户名", ui: { section: "advanced" } },
@@ -69,9 +73,39 @@ export const telegramSchema: Schema = {
             type: "string",
             label: "Webhook 密钥",
             sensitive: true,
-            description: "Telegram 将通过请求头回传此值；建议使用随机字符串",
+            description: "Webhook 模式必填；Telegram 将通过请求头回传此随机字符串",
             ui: {
                 section: "credentials",
+                visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            },
+        },
+        ip_address: {
+            type: "string",
+            label: "Webhook 来源 IP",
+            description: "可选；要求 Telegram 固定从该 IPv4/IPv6 地址连接",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            },
+        },
+        max_connections: {
+            type: "number",
+            min: 1,
+            max: 100,
+            default: 40,
+            label: "Webhook 最大连接数",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            },
+        },
+        drop_pending_updates: {
+            type: "boolean",
+            default: false,
+            label: "丢弃待处理更新",
+            description: "注册 Webhook 时清空 Telegram 服务端积压的 Update",
+            ui: {
+                section: "advanced",
                 visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
             },
         },
@@ -88,6 +122,16 @@ export const telegramSchema: Schema = {
         },
     },
     polling: {
+        drop_pending_updates: {
+            type: "boolean",
+            default: false,
+            label: "丢弃待处理更新",
+            description: "切换到长轮询时清除旧 Webhook，并可同时清空积压 Update",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "receive_mode", oneOf: ["polling"] },
+            },
+        },
         timeout: {
             type: "number",
             min: 1,

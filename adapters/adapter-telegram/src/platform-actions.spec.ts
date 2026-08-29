@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Bot } from "grammy";
+import type { TelegramBot } from "./bot.js";
 import { executeTelegramPlatformAction, TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 describe("Telegram 平台扩展动作", () => {
@@ -7,7 +8,7 @@ describe("Telegram 平台扩展动作", () => {
         const sendPoll = vi.fn().mockResolvedValue({ message_id: 1 });
         const api = { sendPoll } as unknown as Bot["api"];
 
-        await executeTelegramPlatformAction(api, "send_poll", {
+        await executeTelegramPlatformAction(botWithApi(api), "send_poll", {
             chat_id: -100,
             question: "Q",
             options: ["A", "B"],
@@ -18,7 +19,7 @@ describe("Telegram 平台扩展动作", () => {
 
     it("在调用快捷动作前拒绝缺失的结构化参数", async () => {
         await expect(
-            executeTelegramPlatformAction({} as unknown as Bot["api"], "forward_message", {
+            executeTelegramPlatformAction(botWithApi({} as Bot["api"]), "forward_message", {
                 chat_id: 1,
                 from_chat_id: 2,
             }),
@@ -31,11 +32,13 @@ describe("Telegram 平台扩展动作", () => {
         const api = { raw: { getMe, sendDice } } as unknown as Bot["api"];
 
         await expect(
-            executeTelegramPlatformAction(api, "call_telegram_api", { method: "getMe" }),
+            executeTelegramPlatformAction(botWithApi(api), "call_telegram_api", {
+                method: "getMe",
+            }),
         ).resolves.toEqual({ id: 42 });
         expect(getMe).toHaveBeenCalledWith();
 
-        await executeTelegramPlatformAction(api, "call_telegram_api", {
+        await executeTelegramPlatformAction(botWithApi(api), "call_telegram_api", {
             method: "sendDice",
             params: { chat_id: 123 },
         });
@@ -45,12 +48,12 @@ describe("Telegram 平台扩展动作", () => {
     it("拒绝路径、URL 和非对象参数", async () => {
         const api = { raw: { getMe: vi.fn() } } as unknown as Bot["api"];
         await expect(
-            executeTelegramPlatformAction(api, "call_telegram_api", {
+            executeTelegramPlatformAction(botWithApi(api), "call_telegram_api", {
                 method: "https://api.telegram.org/getMe",
             }),
         ).rejects.toThrow("camelCase");
         await expect(
-            executeTelegramPlatformAction(api, "call_telegram_api", {
+            executeTelegramPlatformAction(botWithApi(api), "call_telegram_api", {
                 method: "getMe",
                 params: [],
             }),
@@ -67,10 +70,21 @@ describe("Telegram 平台扩展动作", () => {
         const api = { getChatAdministrators, getChatMemberCount } as unknown as Bot["api"];
 
         await expect(
-            executeTelegramPlatformAction(api, "get_chat_administrators", { chat_id: -100 }),
+            executeTelegramPlatformAction(botWithApi(api), "get_chat_administrators", {
+                chat_id: -100,
+            }),
         ).resolves.toEqual([{ status: "creator" }]);
         await expect(
-            executeTelegramPlatformAction(api, "get_chat_member_count", { chat_id: -100 }),
+            executeTelegramPlatformAction(botWithApi(api), "get_chat_member_count", {
+                chat_id: -100,
+            }),
         ).resolves.toBe(42);
     });
 });
+
+function botWithApi(api: Bot["api"]): TelegramBot {
+    return {
+        getBot: () => ({ api }),
+        callApi: async (_method: string, task: () => Promise<unknown>) => task(),
+    } as unknown as TelegramBot;
+}

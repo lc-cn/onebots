@@ -1,18 +1,21 @@
-import type { Message, Update, User } from "grammy/types";
+import type { Message, MessageEntity, ReactionType, Update, User } from "grammy/types";
 import { CommonEvent, type CommonTypes } from "onebots";
 
-interface TelegramEventProjectorContext {
+export interface TelegramEventProjectorContext {
     botId: CommonTypes.Id;
     createId(value: string | number): CommonTypes.Id;
 }
 
-/** 将完整 Telegram Update 投影为 CommonEvent，同时始终保留 raw_event。 */
-export function projectTelegramUpdate(
+/**
+ * 将一个 Telegram Update 投影为零到多个 CommonEvent。
+ * Reaction diff、批量删除等 Update 天然包含多个事实，不能压扁成单一事件。
+ */
+export function projectTelegramEvents(
     update: Update,
     context: TelegramEventProjectorContext,
-): CommonEvent.Event<Update> | undefined {
+): CommonEvent.Event<Update>[] {
     const message = update.message ?? update.channel_post ?? update.business_message ?? undefined;
-    if (message) return projectMessage(update, message, context);
+    if (message) return [projectMessage(update, message, context)];
 
     const edited =
         update.edited_message ??
@@ -20,44 +23,35 @@ export function projectTelegramUpdate(
         update.edited_business_message ??
         undefined;
     if (edited) {
-        return projectNotice(update, context, "message_updated", {
-            message_id: context.createId(edited.message_id),
-            message: projectSegments(edited),
-            group: projectGroup(edited, context),
-        });
+        return [
+            projectNotice(update, context, "message_updated", {
+                message_id: context.createId(edited.message_id),
+                message: projectSegments(edited, context),
+                group: projectGroup(edited, context),
+            }),
+        ];
     }
 
-    if (update.callback_query) {
-        return projectNotice(update, context, "interaction", {
-            user: projectUser(update.callback_query.from, context),
-            message_id: update.callback_query.message
-                ? context.createId(update.callback_query.message.message_id)
-                : undefined,
-            extensions: {
-                telegram: {
-                    callback_query_id: update.callback_query.id,
-                    data: update.callback_query.data,
-                    chat_instance: update.callback_query.chat_instance,
-                },
-            },
-        });
-    }
+    const interaction = projectInteraction(update, context);
+    if (interaction) return [interaction];
 
     if (update.chat_join_request) {
         const request = update.chat_join_request;
-        return {
-            ...baseEvent(update, context),
-            type: "request",
-            request_type: "group",
-            sub_type: "add",
-            user: projectUser(request.from, context),
-            group: {
-                id: context.createId(request.chat.id),
-                name: request.chat.title ?? request.chat.username ?? "",
+        return [
+            {
+                ...baseEvent(update, context),
+                type: "request",
+                request_type: "group",
+                sub_type: "add",
+                user: projectUser(request.from, context),
+                group: {
+                    id: context.createId(request.chat.id),
+                    name: request.chat.title ?? request.chat.username ?? "",
+                },
+                comment: request.bio,
+                flag: `${request.chat.id}:${request.from.id}`,
             },
-            comment: request.bio,
-            flag: `${request.chat.id}:${request.from.id}`,
-        };
+        ];
     }
 
     const memberUpdate = update.chat_member ?? update.my_chat_member;
@@ -66,29 +60,113 @@ export function projectTelegramUpdate(
         const current = memberUpdate.new_chat_member.status;
         const joined = ["member", "administrator", "creator", "restricted"].includes(current);
         const left = ["left", "kicked"].includes(current);
-        return projectNotice(
-            update,
-            context,
-            joined && !["member", "administrator", "creator", "restricted"].includes(previous)
-                ? "member_joined"
-                : left && !["left", "kicked"].includes(previous)
-                  ? "member_left"
-                  : "custom",
-            {
-                user: projectUser(memberUpdate.new_chat_member.user, context),
-                operator: projectUser(memberUpdate.from, context),
-                group: {
-                    id: context.createId(memberUpdate.chat.id),
-                    name: memberUpdate.chat.title ?? memberUpdate.chat.username ?? "",
+        return [
+            projectNotice(
+                update,
+                context,
+                joined && !["member", "administrator", "creator", "restricted"].includes(previous)
+                    ? "member_joined"
+                    : left && !["left", "kicked"].includes(previous)
+                      ? "member_left"
+                      : "custom",
+                {
+                    user: projectUser(memberUpdate.new_chat_member.user, context),
+                    operator: projectUser(memberUpdate.from, context),
+                    group: {
+                        id: context.createId(memberUpdate.chat.id),
+                        name: memberUpdate.chat.title ?? memberUpdate.chat.username ?? "",
+                    },
+                    extensions: {
+                        telegram: { previous_status: previous, current_status: current },
+                    },
                 },
-                extensions: { telegram: { previous_status: previous, current_status: current } },
-            },
-        );
+            ),
+        ];
     }
 
     if (update.message_reaction) {
         const reaction = update.message_reaction;
-        return projectNotice(update, context, "custom", {
+        const oldKeys = new Set(reaction.old_reaction.map(reactionKey));
+        const newKeys = new Set(reaction.new_reaction.map(reactionKey));
+        const added = reaction.new_reaction.filter(value => !oldKeys.has(reactionKey(value)));
+        const removed = reaction.old_reaction.filter(value => !newKeys.has(reactionKey(value)));
+        return [
+            ...added.map((value, index) =>
+                projectReaction(update, context, "reaction_added", value, index),
+            ),
+            ...removed.map((value, index) =>
+                projectReaction(update, context, "reaction_removed", value, added.length + index),
+            ),
+        ];
+    }
+
+    if (update.deleted_business_messages) {
+        const deleted = update.deleted_business_messages;
+        return deleted.message_ids.map((messageId, index) =>
+            projectNotice(
+                update,
+                context,
+                "message_deleted",
+                {
+                    message_id: context.createId(messageId),
+                    group: {
+                        id: context.createId(deleted.chat.id),
+                        name: deleted.chat.title ?? deleted.chat.username ?? "",
+                    },
+                    extensions: {
+                        telegram: { business_connection_id: deleted.business_connection_id },
+                    },
+                },
+                `deleted:${index}`,
+            ),
+        );
+    }
+
+    // 其余原生 Update 仍作为 custom notice 无损交付，避免 SDK 升级前丢事件。
+    const kind = Object.keys(update).find(key => key !== "update_id");
+    if (!kind) return [];
+    return [
+        projectNotice(update, context, "custom", {
+            extensions: { telegram: { kind } },
+        }),
+    ];
+}
+
+function projectInteraction(
+    update: Update,
+    context: TelegramEventProjectorContext,
+): CommonEvent.Notice<Update> | undefined {
+    const source =
+        update.callback_query ??
+        update.inline_query ??
+        update.chosen_inline_result ??
+        update.shipping_query ??
+        update.pre_checkout_query;
+    if (!source) return undefined;
+    const kind = Object.keys(update).find(key => key !== "update_id") ?? "interaction";
+    return projectNotice(update, context, "interaction", {
+        user: projectUser(source.from, context),
+        message_id:
+            "message" in source && source.message
+                ? context.createId(source.message.message_id)
+                : undefined,
+        extensions: { telegram: { kind, interaction: source } },
+    });
+}
+
+function projectReaction(
+    update: Update,
+    context: TelegramEventProjectorContext,
+    noticeType: "reaction_added" | "reaction_removed",
+    reactionValue: ReactionType,
+    index: number,
+): CommonEvent.Notice<Update> {
+    const reaction = update.message_reaction!;
+    return projectNotice(
+        update,
+        context,
+        noticeType,
+        {
             message_id: context.createId(reaction.message_id),
             user: reaction.user ? projectUser(reaction.user, context) : undefined,
             group: {
@@ -97,20 +175,17 @@ export function projectTelegramUpdate(
             },
             extensions: {
                 telegram: {
-                    kind: "message_reaction",
-                    old_reaction: reaction.old_reaction,
-                    new_reaction: reaction.new_reaction,
+                    reaction: reactionValue,
+                    actor_chat: reaction.actor_chat,
                 },
             },
-        });
-    }
+        },
+        `reaction:${index}`,
+    );
+}
 
-    // 其余原生 Update 仍作为 custom notice 无损交付，避免 SDK 升级前丢事件。
-    const kind = Object.keys(update).find(key => key !== "update_id");
-    if (!kind) return undefined;
-    return projectNotice(update, context, "custom", {
-        extensions: { telegram: { kind } },
-    });
+function reactionKey(value: object): string {
+    return JSON.stringify(value);
 }
 
 function projectMessage(
@@ -132,16 +207,23 @@ function projectMessage(
                   name: message.sender_chat?.title ?? message.chat.title ?? "",
               },
         group: projectGroup(message, context),
-        message: projectSegments(message),
+        message: projectSegments(message, context),
         raw_message: message.text ?? message.caption ?? "",
         message_id: context.createId(message.message_id),
     };
 }
 
-function projectSegments(message: Message): CommonTypes.Segment[] {
+function projectSegments(
+    message: Message,
+    context: TelegramEventProjectorContext,
+): CommonTypes.Segment[] {
     const segments: CommonTypes.Segment[] = [];
-    if (message.text) segments.push({ type: "text", data: { text: message.text } });
-    if (message.caption) segments.push({ type: "text", data: { text: message.caption } });
+    if (message.text) {
+        appendTextSegments(segments, message.text, message.entities ?? [], context);
+    }
+    if (message.caption) {
+        appendTextSegments(segments, message.caption, message.caption_entities ?? [], context);
+    }
     if (message.photo?.length) {
         segments.push({
             type: "image",
@@ -196,6 +278,36 @@ function projectSegments(message: Message): CommonTypes.Segment[] {
     return segments;
 }
 
+function appendTextSegments(
+    segments: CommonTypes.Segment[],
+    text: string,
+    entities: readonly MessageEntity[],
+    context: TelegramEventProjectorContext,
+): void {
+    const mentions = entities
+        .filter(
+            (entity): entity is Extract<MessageEntity, { type: "text_mention" }> =>
+                entity.type === "text_mention",
+        )
+        .sort((left, right) => left.offset - right.offset);
+    let offset = 0;
+    for (const mention of mentions) {
+        if (mention.offset < offset || mention.offset + mention.length > text.length) continue;
+        const before = text.slice(offset, mention.offset);
+        if (before) segments.push({ type: "text", data: { text: before } });
+        segments.push({
+            type: "at",
+            data: {
+                user_id: context.createId(mention.user.id),
+                name: text.slice(mention.offset, mention.offset + mention.length),
+            },
+        });
+        offset = mention.offset + mention.length;
+    }
+    const remaining = text.slice(offset);
+    if (remaining) segments.push({ type: "text", data: { text: remaining } });
+}
+
 function projectUser(user: User, context: TelegramEventProjectorContext): CommonTypes.User {
     return {
         id: context.createId(user.id),
@@ -219,17 +331,26 @@ function projectNotice(
     context: TelegramEventProjectorContext,
     noticeType: CommonEvent.NoticeType,
     fields: Omit<Partial<CommonEvent.Notice<Update>>, keyof CommonEvent.Base<Update> | "type">,
+    eventIdSuffix?: string,
 ): CommonEvent.Notice<Update> {
-    return { ...baseEvent(update, context), type: "notice", notice_type: noticeType, ...fields };
+    return {
+        ...baseEvent(update, context, undefined, eventIdSuffix),
+        type: "notice",
+        notice_type: noticeType,
+        ...fields,
+    };
 }
 
 function baseEvent(
     update: Update,
     context: TelegramEventProjectorContext,
     unixTimestamp?: number,
+    eventIdSuffix?: string,
 ): CommonEvent.Base<Update> {
     return {
-        id: context.createId(update.update_id),
+        id: context.createId(
+            eventIdSuffix ? `${update.update_id}:${eventIdSuffix}` : update.update_id,
+        ),
         timestamp: unixTimestamp ? unixTimestamp * 1000 : Date.now(),
         type: "custom",
         platform: "telegram",

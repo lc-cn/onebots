@@ -12,6 +12,7 @@ describe("resolveTelegramReceiveConfig", () => {
         expect(receive).toEqual({
             mode: "polling",
             options: { timeout: 25, limit: 50, allowed_updates: ["message"] },
+            dropPendingUpdates: false,
         });
     });
 
@@ -44,6 +45,9 @@ describe("resolveTelegramReceiveConfig", () => {
             mode: "webhook",
             url: "https://bot.example/telegram/webhook",
             secretToken: "valid_secret-1",
+            ipAddress: undefined,
+            maxConnections: undefined,
+            dropPendingUpdates: false,
             allowedUpdates: ["callback_query"],
         });
     });
@@ -56,6 +60,24 @@ describe("resolveTelegramReceiveConfig", () => {
         ],
         [{ polling: { timeout: 0 } }, "polling.timeout"],
         [{ polling: { limit: 101 } }, "polling.limit"],
+        [
+            {
+                receive_mode: "webhook",
+                webhook: {
+                    url: "https://bot.example",
+                    secret_token: "ok",
+                    ip_address: "999.1.1.1",
+                },
+            },
+            "ip_address",
+        ],
+        [
+            {
+                receive_mode: "webhook",
+                webhook: { url: "https://bot.example", secret_token: "ok", max_connections: 101 },
+            },
+            "max_connections",
+        ],
         [{ polling: { allowed_updates: ["future_update"] } }, "future_update"],
     ])("拒绝无效接收配置 %#", (partial, message) => {
         expect(() =>

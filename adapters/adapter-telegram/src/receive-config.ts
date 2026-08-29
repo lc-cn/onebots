@@ -1,12 +1,16 @@
 import type { PollingOptions } from "grammy";
 import { TELEGRAM_UPDATE_TYPES, type TelegramConfig, type TelegramUpdateType } from "./types.js";
+import { TelegramError } from "./errors.js";
 
 export type TelegramReceiveConfig =
-    | { mode: "polling"; options: PollingOptions }
+    | { mode: "polling"; options: PollingOptions; dropPendingUpdates: boolean }
     | {
           mode: "webhook";
           url: string;
-          secretToken?: string;
+          secretToken: string;
+          ipAddress?: string;
+          maxConnections?: number;
+          dropPendingUpdates: boolean;
           allowedUpdates: ReadonlyArray<TelegramUpdateType>;
       };
 
@@ -24,13 +28,39 @@ export function resolveTelegramReceiveConfig(config: TelegramConfig): TelegramRe
     if (config.receive_mode === "webhook") {
         const url = config.webhook?.url;
         if (!url || !isHttpsUrl(url)) {
-            throw new Error("Telegram Webhook 模式必须配置有效的 HTTPS webhook.url");
+            throw TelegramError.invalid(
+                "Telegram Webhook 模式必须配置有效的 HTTPS webhook.url",
+                "TELEGRAM_WEBHOOK_URL_INVALID",
+            );
         }
         const secretToken = config.webhook?.secret_token;
-        if (secretToken && !/^[A-Za-z0-9_-]{1,256}$/.test(secretToken)) {
-            throw new Error("Telegram webhook.secret_token 仅允许 1-256 位字母、数字、_ 和 -");
+        if (!secretToken || !/^[A-Za-z0-9_-]{1,256}$/.test(secretToken)) {
+            throw TelegramError.invalid(
+                "Telegram Webhook 模式必须配置 secret_token，且仅允许 1-256 位字母、数字、_ 和 -",
+                "TELEGRAM_WEBHOOK_SECRET_INVALID",
+            );
         }
-        return { mode: "webhook", url, secretToken, allowedUpdates };
+        const ipAddress = config.webhook?.ip_address;
+        if (ipAddress !== undefined && !isIpAddress(ipAddress)) {
+            throw TelegramError.invalid(
+                "Telegram webhook.ip_address 必须为合法的 IPv4 或 IPv6 地址",
+                "TELEGRAM_WEBHOOK_IP_INVALID",
+            );
+        }
+        return {
+            mode: "webhook",
+            url,
+            secretToken,
+            ipAddress,
+            maxConnections: optionalInteger(
+                config.webhook?.max_connections,
+                "webhook.max_connections",
+                1,
+                100,
+            ),
+            dropPendingUpdates: config.webhook?.drop_pending_updates === true,
+            allowedUpdates,
+        };
     }
 
     return {
@@ -40,7 +70,23 @@ export function resolveTelegramReceiveConfig(config: TelegramConfig): TelegramRe
             limit: optionalInteger(config.polling?.limit, "polling.limit", 1, 100),
             allowed_updates: allowedUpdates,
         },
+        dropPendingUpdates: config.polling?.drop_pending_updates === true,
     };
+}
+
+function isIpAddress(value: string): boolean {
+    if (value.includes(":")) {
+        try {
+            return new URL(`http://[${value}]`).hostname.length > 2;
+        } catch {
+            return false;
+        }
+    }
+    const parts = value.split(".");
+    return (
+        parts.length === 4 &&
+        parts.every(part => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+    );
 }
 
 function resolveAllowedUpdates(
@@ -50,7 +96,12 @@ function resolveAllowedUpdates(
     const allowed = new Set<string>(TELEGRAM_UPDATE_TYPES);
     const unique: TelegramUpdateType[] = [];
     for (const value of values) {
-        if (!allowed.has(value)) throw new Error(`未知的 Telegram Update 类型：${value}`);
+        if (!allowed.has(value)) {
+            throw TelegramError.invalid(
+                `未知的 Telegram Update 类型：${value}`,
+                "TELEGRAM_UPDATE_TYPE_INVALID",
+            );
+        }
         if (!unique.includes(value)) unique.push(value);
     }
     return unique;
@@ -64,14 +115,19 @@ function optionalInteger(
 ): number | undefined {
     if (value === undefined) return undefined;
     if (!Number.isSafeInteger(value) || value < min || value > max) {
-        throw new Error(`Telegram ${name} 必须是 ${min}-${max} 的整数`);
+        throw TelegramError.invalid(
+            `Telegram ${name} 必须是 ${min}-${max} 的整数`,
+            "TELEGRAM_POLLING_OPTION_INVALID",
+            { name, min, max },
+        );
     }
     return value;
 }
 
 function isHttpsUrl(value: string): boolean {
     try {
-        return new URL(value).protocol === "https:";
+        const url = new URL(value);
+        return url.protocol === "https:" && !url.username && !url.password && !url.hash;
     } catch {
         return false;
     }

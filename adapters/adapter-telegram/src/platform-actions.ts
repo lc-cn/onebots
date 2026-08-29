@@ -1,4 +1,6 @@
 import type { Bot } from "grammy";
+import type { TelegramBot } from "./bot.js";
+import { TelegramError } from "./errors.js";
 
 export const TELEGRAM_PLATFORM_ACTIONS = new Set([
     "call_telegram_api",
@@ -16,6 +18,34 @@ export const TELEGRAM_PLATFORM_ACTIONS = new Set([
 
 /** Telegram 专属动作均使用一个参数对象，供所有协议统一转发。 */
 export async function executeTelegramPlatformAction(
+    bot: TelegramBot,
+    action: string,
+    params: Readonly<Record<string, unknown>>,
+): Promise<unknown> {
+    const method = telegramMethodName(action, params);
+    return bot.callApi(method, () => executeTelegramApi(bot.getBot().api, action, params));
+}
+
+const TELEGRAM_ACTION_METHODS: Readonly<Record<string, string>> = {
+    send_poll: "sendPoll",
+    forward_message: "forwardMessage",
+    copy_message: "copyMessage",
+    set_message_reaction: "setMessageReaction",
+    pin_message: "pinChatMessage",
+    unpin_message: "unpinChatMessage",
+    create_chat_invite_link: "createChatInviteLink",
+    set_chat_description: "setChatDescription",
+    get_chat_administrators: "getChatAdministrators",
+    get_chat_member_count: "getChatMemberCount",
+};
+
+function telegramMethodName(action: string, params: Readonly<Record<string, unknown>>): string {
+    return action === "call_telegram_api"
+        ? requireMethod(params.method)
+        : (TELEGRAM_ACTION_METHODS[action] ?? action);
+}
+
+async function executeTelegramApi(
     api: Bot["api"],
     action: string,
     params: Readonly<Record<string, unknown>>,
@@ -25,7 +55,10 @@ export async function executeTelegramPlatformAction(
         const raw = api.raw as unknown as Readonly<Record<string, unknown>>;
         const method = raw[methodName];
         if (typeof method !== "function") {
-            throw new Error(`Telegram Bot API 方法不存在: ${methodName}`);
+            throw TelegramError.invalid(
+                `Telegram Bot API 方法不存在: ${methodName}`,
+                "TELEGRAM_API_METHOD_NOT_FOUND",
+            );
         }
         const payload = optionalObject(params.params, "params");
         return Reflect.apply(method, raw, payload ? [payload] : []);
@@ -80,13 +113,19 @@ export async function executeTelegramPlatformAction(
         case "get_chat_member_count":
             return api.getChatMemberCount(chatId);
         default:
-            throw new Error(`未实现 Telegram 平台动作: ${action}`);
+            throw TelegramError.invalid(
+                `未实现 Telegram 平台动作: ${action}`,
+                "TELEGRAM_ACTION_UNSUPPORTED",
+            );
     }
 }
 
 function requireMethod(value: unknown): string {
     if (typeof value !== "string" || !/^[a-z][A-Za-z0-9]*$/.test(value)) {
-        throw new Error("Telegram 参数 method 必须为合法的 Bot API camelCase 方法名");
+        throw TelegramError.invalid(
+            "Telegram 参数 method 必须为合法的 Bot API camelCase 方法名",
+            "TELEGRAM_API_METHOD_INVALID",
+        );
     }
     return value;
 }
@@ -97,14 +136,22 @@ function optionalObject(
 ): Readonly<Record<string, unknown>> | undefined {
     if (value == null) return undefined;
     if (typeof value !== "object" || Array.isArray(value)) {
-        throw new Error(`Telegram 参数 ${name} 必须为对象`);
+        throw TelegramError.invalid(`Telegram 参数 ${name} 必须为对象`, "TELEGRAM_PARAM_INVALID", {
+            name,
+        });
     }
     return value as Readonly<Record<string, unknown>>;
 }
 
 function requireString(params: Readonly<Record<string, unknown>>, name: string): string {
     const value = params[name];
-    if (typeof value !== "string" || !value) throw new Error(`Telegram 参数 ${name} 必须为字符串`);
+    if (typeof value !== "string" || !value) {
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为字符串`,
+            "TELEGRAM_PARAM_REQUIRED",
+            { name },
+        );
+    }
     return value;
 }
 
@@ -113,22 +160,42 @@ function requireStringOrNumber(
     name: string,
 ): string | number {
     const value = params[name];
-    if ((typeof value !== "string" || !value) && typeof value !== "number") {
-        throw new Error(`Telegram 参数 ${name} 必须为字符串或数字`);
+    if (
+        ((typeof value !== "string" || !value) && typeof value !== "number") ||
+        (typeof value === "number" && !Number.isSafeInteger(value))
+    ) {
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为字符串或数字`,
+            "TELEGRAM_PARAM_INVALID",
+            { name },
+        );
     }
     return value;
 }
 
 function requireInteger(params: Readonly<Record<string, unknown>>, name: string): number {
-    const value = Number(params[name]);
-    if (!Number.isSafeInteger(value)) throw new Error(`Telegram 参数 ${name} 必须为整数`);
+    const source = params[name];
+    const value = Number(source);
+    if (
+        (typeof source !== "string" && typeof source !== "number") ||
+        !Number.isSafeInteger(value) ||
+        value <= 0
+    ) {
+        throw TelegramError.invalid(`Telegram 参数 ${name} 必须为整数`, "TELEGRAM_PARAM_INVALID", {
+            name,
+        });
+    }
     return value;
 }
 
 function requireStringArray(params: Readonly<Record<string, unknown>>, name: string): string[] {
     const value = params[name];
     if (!Array.isArray(value) || !value.every(item => typeof item === "string")) {
-        throw new Error(`Telegram 参数 ${name} 必须为字符串数组`);
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为字符串数组`,
+            "TELEGRAM_PARAM_INVALID",
+            { name },
+        );
     }
     return value;
 }
