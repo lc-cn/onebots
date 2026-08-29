@@ -1,4 +1,4 @@
-import { UnsupportedCapabilityError, ValidationError } from "onebots";
+import { ErrorCategory, OneBotsError, UnsupportedCapabilityError, ValidationError } from "onebots";
 import type { Milky } from "./types.js";
 
 export class MilkyActionNotFoundError extends Error {
@@ -21,6 +21,10 @@ export function toMilkyFailure(error: unknown): Milky.Response {
     }
     if (error instanceof UnsupportedCapabilityError) {
         return failed(-404, error.message);
+    }
+    if (error instanceof OneBotsError) {
+        if (error.category === ErrorCategory.VALIDATION) return failed(-400, error.message);
+        if (error.category === ErrorCategory.RESOURCE) return failed(-404, error.message);
     }
     return failed(-500, error instanceof Error ? error.message : "未知错误");
 }

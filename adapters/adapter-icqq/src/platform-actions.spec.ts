@@ -17,7 +17,7 @@ describe("ICQQ 平台扩展动作", () => {
         const client = {} as Client;
         await expect(
             executeICQQPlatformAction(client, "set_online_status", { status: "online" }),
-        ).rejects.toThrow("status 必须是安全整数");
+        ).rejects.toMatchObject({ code: "ICQQ_INVALID_PARAM" });
         await expect(
             executeICQQPlatformAction(client, "send_temp_message", {
                 group_id: 1,

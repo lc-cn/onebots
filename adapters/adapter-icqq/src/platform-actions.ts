@@ -1,6 +1,7 @@
 import type { Client } from "@icqqjs/icqq";
 import type { CommonTypes } from "onebots";
 import { compileICQQMessage } from "./messages.js";
+import { ICQQError, icqqResourceNotFound, invalidICQQParam } from "./errors.js";
 
 export const ICQQ_PLATFORM_ACTIONS = new Set([
     "get_client_key",
@@ -198,29 +199,33 @@ export async function executeICQQPlatformAction(
                 platformMessage(params.message),
             );
         default:
-            throw new TypeError(`未实现 ICQQ 平台动作: ${action}`);
+            throw new ICQQError(`未实现 ICQQ 平台动作: ${action}`, {
+                code: "ICQQ_ACTION_NOT_IMPLEMENTED",
+                operation: action,
+            });
     }
 }
 
 function platformMessage(value: unknown) {
-    if (!Array.isArray(value)) throw new TypeError("message 必须是消息段数组");
+    if (!Array.isArray(value)) throw invalidICQQParam("message 必须是消息段数组", value);
     return compileICQQMessage(value as CommonTypes.Segment[]);
 }
 
 function requiredString(value: unknown, field: string): string {
-    if (typeof value !== "string" || !value) throw new TypeError(`${field} 必须是非空字符串`);
+    if (typeof value !== "string" || !value)
+        throw invalidICQQParam(`${field} 必须是非空字符串`, value);
     return value;
 }
 
 function optionalString(value: unknown): string | undefined {
     if (value === undefined) return undefined;
-    if (typeof value !== "string") throw new TypeError("参数必须是字符串");
+    if (typeof value !== "string") throw invalidICQQParam("参数必须是字符串", value);
     return value;
 }
 
 function requiredInteger(value: unknown, field: string): number {
     if (typeof value !== "number" || !Number.isSafeInteger(value)) {
-        throw new TypeError(`${field} 必须是安全整数`);
+        throw invalidICQQParam(`${field} 必须是安全整数`, value);
     }
     return value;
 }
@@ -243,17 +248,17 @@ function optionalQQNumber(value: unknown): number | undefined {
 
 function optionalBoolean(value: unknown): boolean | undefined {
     if (value === undefined) return undefined;
-    if (typeof value !== "boolean") throw new TypeError("参数必须是布尔值");
+    if (typeof value !== "boolean") throw invalidICQQParam("参数必须是布尔值", value);
     return value;
 }
 
 function stringArray(value: unknown, field: string): string[] {
-    if (!Array.isArray(value)) throw new TypeError(`${field} 必须是字符串数组`);
+    if (!Array.isArray(value)) throw invalidICQQParam(`${field} 必须是字符串数组`, value);
     return value.map(item => requiredString(item, field));
 }
 
 function qqNumberArray(value: unknown, field: string): number[] {
-    if (!Array.isArray(value)) throw new TypeError(`${field} 必须是整数数组`);
+    if (!Array.isArray(value)) throw invalidICQQParam(`${field} 必须是整数数组`, value);
     return value.map(item => requiredQQNumber(item, field));
 }
 
@@ -268,7 +273,7 @@ function stringOrInteger(value: unknown, field: string): string | number {
 function gender(value: unknown): 0 | 1 | 2 {
     const result = requiredInteger(value, "gender");
     if (result !== 0 && result !== 1 && result !== 2) {
-        throw new TypeError("gender 只能是 0、1 或 2");
+        throw invalidICQQParam("gender 只能是 0、1 或 2", value);
     }
     return result;
 }
@@ -276,7 +281,7 @@ function gender(value: unknown): 0 | 1 | 2 {
 function groupMessageRate(value: unknown): 0 | 5 | 10 {
     const result = requiredInteger(value, "times");
     if (result !== 0 && result !== 5 && result !== 10) {
-        throw new TypeError("times 只能是 0、5 或 10");
+        throw invalidICQQParam("times 只能是 0、5 或 10", value);
     }
     return result;
 }
@@ -291,7 +296,7 @@ function groupJoinType(value: unknown): "AnyOne" | "None" | "requireAuth" | "QAj
     ) {
         return value;
     }
-    throw new TypeError("type 必须是 AnyOne、None、requireAuth、QAjoin 或 Correct");
+    throw invalidICQQParam("type 必须是 AnyOne、None、requireAuth、QAjoin 或 Correct", value);
 }
 
 function setGroupMessageRateLimit(
@@ -312,10 +317,10 @@ function setGroupJoinType(
     const question = optionalString(params.question);
     const answer = optionalString(params.answer);
     if ((type === "QAjoin" || type === "Correct") && !question) {
-        throw new TypeError(`${type} 加群策略必须提供 question`);
+        throw invalidICQQParam(`${type} 加群策略必须提供 question`, params);
     }
     if (type === "Correct" && !answer) {
-        throw new TypeError("Correct 加群策略必须提供 answer");
+        throw invalidICQQParam("Correct 加群策略必须提供 answer", params);
     }
     return client.pickGroup(groupId).setGroupJoinType(type, question, answer);
 }
@@ -333,13 +338,16 @@ async function deleteGroupMessageReaction(
     const messageId = requiredString(params.message_id, "message_id");
     const message = await client.getMsg(messageId);
     if (!message || message.message_type !== "group") {
-        throw new TypeError("删除群消息表态需要有效的群消息 ID");
+        throw icqqResourceNotFound("群消息", messageId);
     }
     if (
         params.group_id !== undefined &&
         message.group_id !== requiredQQNumber(params.group_id, "group_id")
     ) {
-        throw new TypeError("消息不属于指定群");
+        throw invalidICQQParam("消息不属于指定群", {
+            message_id: messageId,
+            group_id: params.group_id,
+        });
     }
     return client
         .pickGroup(message.group_id)

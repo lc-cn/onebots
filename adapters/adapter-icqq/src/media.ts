@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { materializeMediaSource, type Adapter } from "onebots";
+import { invalidICQQParam } from "./errors.js";
 
 /** 将标准媒体 URI 物化为 ICQQ 接受的 Buffer。 */
 export async function materializeICQQMediaSource(source: string): Promise<Buffer> {
@@ -13,7 +14,7 @@ export async function materializeICQQUpload(params: Adapter.UploadFileParams): P
         (value): value is string => typeof value === "string" && value.length > 0,
     );
     if (candidates.length !== 1) {
-        throw new TypeError("ICQQ upload_file 必须且只能提供 url、path、data 之一");
+        throw invalidICQQParam("ICQQ upload_file 必须且只能提供 url、path、data 之一", params);
     }
     const source = params.data ? `base64://${params.data}` : candidates[0]!;
     const media = await materializeMediaSource({ source, filename: params.name });

@@ -2,6 +2,7 @@ import type { GroupInviteEvent, GroupRequestEvent } from "@icqqjs/icqq/lib/event
 import { Adapter } from "onebots";
 import { resolveICQQMediaSource } from "./messages.js";
 import { ICQQSocialActions } from "./social-actions.js";
+import { icqqOperationRejected, icqqResourceNotFound, invalidICQQParam } from "./errors.js";
 
 /** 群成员、管理、申请和群消息扩展动作。 */
 export abstract class ICQQGroupActions extends ICQQSocialActions {
@@ -16,10 +17,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         uin: string,
         params?: Adapter.GetGroupListParams,
     ): Promise<Adapter.GroupInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const groups = await bot.getGroupList(params?.no_cache);
 
         return groups.map(group => ({
@@ -38,14 +36,11 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         uin: string,
         params: Adapter.GetGroupInfoParams,
     ): Promise<Adapter.GroupInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const groupId = this.numericId(params.group_id.string, "group_id");
         const info = await bot.getGroupInfo(groupId, params.no_cache);
 
-        if (!info) throw new Error(`Group ${groupId} not found`);
+        if (!info) throw icqqResourceNotFound("群", groupId);
 
         return {
             group_id: this.createId(info.group_id.toString()),
@@ -61,14 +56,11 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
      */
     async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
         if (params.is_dismiss) {
-            throw new TypeError("ICQQ 不支持通过退出群动作解散群聊");
+            throw invalidICQQParam("ICQQ 不支持通过退出群动作解散群聊");
         }
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const groupId = this.numericId(params.group_id.string, "group_id");
-        await bot.leaveGroup(groupId);
+        this.assertNativeAccepted(await bot.leaveGroup(groupId), "退出群聊");
     }
 
     async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
@@ -86,10 +78,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         uin: string,
         params: Adapter.GetGroupMemberListParams,
     ): Promise<Adapter.GroupMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const groupId = this.numericId(params.group_id.string, "group_id");
         const members = await bot.getGroupMemberList(groupId, params.no_cache);
 
@@ -118,15 +107,12 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         uin: string,
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const groupId = this.numericId(params.group_id.string, "group_id");
         const userId = this.numericId(params.user_id.string, "user_id");
         const member = await bot.getGroupMemberInfo(groupId, userId, params.no_cache);
 
-        if (!member) throw new Error(`Member ${userId} not found in group ${groupId}`);
+        if (!member) throw icqqResourceNotFound("群成员", { group_id: groupId, user_id: userId });
 
         return {
             group_id: params.group_id,
@@ -150,10 +136,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
      * 踢出群成员
      */
     async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const groupId = this.numericId(params.group_id.string, "group_id");
         const userId = this.numericId(params.user_id.string, "user_id");
         await bot.kickGroupMember(groupId, userId, params.reject_add_request);
@@ -161,17 +144,15 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
 
     /** 邀请好友加入指定群。 */
     async inviteGroupMember(uin: string, params: Adapter.InviteGroupMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const accepted = await account.client.inviteFriendToGroup(
+        const accepted = await this.requireBot(uin).inviteFriendToGroup(
             this.numericId(params.group_id.string, "group_id"),
             this.numericId(params.user_id.string, "user_id"),
         );
         if (!accepted) {
-            throw new Error(
-                `邀请好友 ${params.user_id.string} 加入群 ${params.group_id.string} 失败`,
-            );
+            throw icqqOperationRejected("邀请好友加入群", {
+                group_id: params.group_id.string,
+                user_id: params.user_id.string,
+            });
         }
     }
 
@@ -221,13 +202,13 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
      * 设置群名片
      */
     async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const groupId = this.numericId(params.group_id.string, "group_id");
         const userId = this.numericId(params.user_id.string, "user_id");
-        await bot.setGroupCard(groupId, userId, params.card);
+        this.assertNativeAccepted(
+            await bot.setGroupCard(groupId, userId, params.card),
+            "设置群名片",
+        );
     }
 
     async setGroupSpecialTitle(
@@ -253,23 +234,23 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
 
     async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
         const flag = params.flag ?? params.request_id?.string;
-        if (!flag) throw new TypeError("处理 ICQQ 群申请需要 request_id 或原始 flag");
-        if (params.is_filtered) throw new TypeError("ICQQ 不支持处理风险过滤群申请");
+        if (!flag) throw invalidICQQParam("处理 ICQQ 群申请需要 request_id 或原始 flag", params);
+        if (params.is_filtered) throw invalidICQQParam("ICQQ 不支持处理风险过滤群申请");
 
         const client = this.requireNativeClient(uin);
         const request = (await client.getSystemMsg()).find(
             (event): event is GroupRequestEvent | GroupInviteEvent =>
                 event.request_type === "group" && event.flag === flag,
         );
-        if (!request) throw new TypeError("群申请已失效或不在当前通知列表中");
+        if (!request) throw icqqResourceNotFound("群申请", flag);
         if (
             params.group_id &&
             request.group_id !== this.numericId(params.group_id.string, "group_id")
         ) {
-            throw new TypeError("群申请不属于指定群");
+            throw invalidICQQParam("群申请不属于指定群", params.group_id.string);
         }
         if (!this.matchesGroupRequestType(request, params)) {
-            throw new TypeError("群申请类型与 notification_type 不一致");
+            throw invalidICQQParam("群申请类型与 notification_type 不一致", params);
         }
 
         const accepted = await client.setGroupAddRequest(flag, params.approve, params.reason);
@@ -363,7 +344,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
                 notification.notification_id.string === start.string ||
                 notification.notification_id.number === start.number,
         );
-        if (index < 0) throw new TypeError("start_notification_seq 不在当前群通知列表中");
+        if (index < 0) throw invalidICQQParam("start_notification_id 不在当前群通知列表中", start);
         return index;
     }
 
@@ -374,10 +355,13 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         const client = this.requireNativeClient(uin);
         const message = await client.getMsg(params.message_id.string);
         if (!message || message.message_type !== "group") {
-            throw new TypeError("群消息表态需要有效的群消息 ID");
+            throw icqqResourceNotFound("群消息", params.message_id.string);
         }
         if (message.group_id !== this.numericId(params.group_id.string, "group_id")) {
-            throw new TypeError("消息不属于指定群");
+            throw invalidICQQParam("消息不属于指定群", {
+                message_id: params.message_id.string,
+                group_id: params.group_id.string,
+            });
         }
         const group = client.pickGroup(message.group_id);
         const reactionType = params.reaction_type === "face" ? 1 : 2;

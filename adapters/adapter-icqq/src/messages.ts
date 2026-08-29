@@ -2,6 +2,7 @@ import { segment } from "@icqqjs/icqq";
 import type { MessageElem, Sendable } from "@icqqjs/icqq/lib/message";
 import type { CommonTypes } from "onebots";
 import type { ICQQMessageElement } from "./types.js";
+import { ICQQError, invalidICQQParam } from "./errors.js";
 
 /** 将通用消息段严格编译为 ICQQ Sendable；不静默丢弃未知段。 */
 export function compileICQQMessage(
@@ -51,7 +52,10 @@ export function compileICQQMessage(
             case "icqq":
                 return requireNativeElement(data.element);
             default:
-                throw new TypeError(`ICQQ 不支持消息段 ${item.type}`);
+                throw new ICQQError(`ICQQ 不支持消息段 ${item.type}`, {
+                    code: "ICQQ_UNSUPPORTED_SEGMENT",
+                    details: item.type,
+                });
         }
     });
 }
@@ -117,20 +121,21 @@ export function resolveICQQMediaSource(
     if (!source.startsWith("base64://")) return source;
     const encoded = source.slice("base64://".length).replace(/\s/g, "");
     if (!encoded || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
-        throw new TypeError(`${segmentType}.file 包含无效 Base64`);
+        throw invalidICQQParam(`${segmentType}.file 包含无效 Base64`, source);
     }
     return Buffer.from(encoded, "base64");
 }
 
 function requireNativeElement(value: unknown): MessageElem {
     if (!value || typeof value !== "object" || !("type" in value)) {
-        throw new TypeError("icqq.element 必须是原生消息元素");
+        throw invalidICQQParam("icqq.element 必须是原生消息元素", value);
     }
     return value as MessageElem;
 }
 
 function requireString(value: unknown, field: string): string {
-    if (typeof value !== "string" || !value) throw new TypeError(`${field} 必须是非空字符串`);
+    if (typeof value !== "string" || !value)
+        throw invalidICQQParam(`${field} 必须是非空字符串`, value);
     return value;
 }
 
@@ -142,7 +147,7 @@ function optionalString(value: unknown, field: string): string | undefined {
 function requireInteger(value: unknown, field: string): number {
     const number = typeof value === "string" && value.trim() ? Number(value) : value;
     if (typeof number !== "number" || !Number.isSafeInteger(number)) {
-        throw new TypeError(`${field} 必须是安全整数`);
+        throw invalidICQQParam(`${field} 必须是安全整数`, value);
     }
     return number;
 }

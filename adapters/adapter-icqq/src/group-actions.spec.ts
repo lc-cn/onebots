@@ -25,6 +25,29 @@ function createActions(client: Client): ICQQGroupActions {
 }
 
 describe("ICQQ 群动作", () => {
+    it("原生退出群和设置名片拒绝时不返回伪成功", async () => {
+        const bot = {
+            leaveGroup: vi.fn().mockResolvedValue(false),
+            setGroupCard: vi.fn().mockResolvedValue(false),
+        };
+        const actions = Object.create(ICQQGroupActions.prototype) as ICQQGroupActions;
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: bot }) },
+            numericId: { value: (value: string) => Number(value) },
+        });
+
+        await expect(
+            actions.leaveGroup("bot", { group_id: id(20001), is_dismiss: false }),
+        ).rejects.toMatchObject({ code: "ICQQ_OPERATION_REJECTED", operation: "退出群聊" });
+        await expect(
+            actions.setGroupCard("bot", {
+                group_id: id(20001),
+                user_id: id(10001),
+                card: "新名片",
+            }),
+        ).rejects.toMatchObject({ code: "ICQQ_OPERATION_REJECTED", operation: "设置群名片" });
+    });
+
     it("将系统消息投影为可翻页且可处理的 canonical 群通知", async () => {
         const requests = [
             {

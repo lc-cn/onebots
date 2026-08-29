@@ -144,6 +144,30 @@ describe("ICQQ 账号资料动作", () => {
 });
 
 describe("ICQQ 消息资源与历史游标", () => {
+    it("原生撤回拒绝和空消息 ID 不会被伪装成成功", async () => {
+        const bot = {
+            recallMessage: vi.fn().mockResolvedValue(false),
+            sendPrivateMessage: vi.fn().mockResolvedValue({ message_id: "" }),
+        };
+        const actions = Object.create(ICQQSocialActions.prototype) as ICQQSocialActions;
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: bot }) },
+            coerceId: { value: (value: unknown) => value },
+            numericId: { value: (value: string) => Number(value) },
+        });
+
+        await expect(
+            actions.deleteMessage("bot", { message_id: { string: "m1", number: 1, source: "m1" } }),
+        ).rejects.toMatchObject({ code: "ICQQ_OPERATION_REJECTED", operation: "撤回消息" });
+        await expect(
+            actions.sendMessage("bot", {
+                scene_type: "private",
+                scene_id: { string: "10001", number: 10001, source: 10001 },
+                message: [{ type: "text", data: { text: "hello" } }],
+            }),
+        ).rejects.toMatchObject({ code: "ICQQ_INVALID_RESPONSE", operation: "sendMessage" });
+    });
+
     it("从投影过的媒体消息解析临时链接", async () => {
         const bot = {
             getMessage: vi.fn().mockResolvedValue({
@@ -182,9 +206,9 @@ describe("ICQQ 消息资源与历史游标", () => {
         await expect(
             actions.getResourceTempUrl("bot", { resource_id: "resource-id" }),
         ).resolves.toBe("https://example.com/image.jpg");
-        await expect(actions.getResourceTempUrl("bot", { resource_id: "unknown" })).rejects.toThrow(
-            "不存在或临时链接已过期",
-        );
+        await expect(
+            actions.getResourceTempUrl("bot", { resource_id: "unknown" }),
+        ).rejects.toMatchObject({ code: "ICQQ_RESOURCE_NOT_FOUND" });
     });
 
     it("按排他性 start_message_id 向历史方向分页", async () => {

@@ -1,5 +1,6 @@
 import type { Config as ICQQClientConfig } from "@icqqjs/icqq";
 import type { ICQQConfig } from "./types.js";
+import { invalidICQQParam } from "./errors.js";
 
 export function parseICQQUin(accountId: string): number {
     return parseICQQNumericId(accountId, "account_id");
@@ -8,7 +9,7 @@ export function parseICQQUin(accountId: string): number {
 export function parseICQQNumericId(value: string, field: string): number {
     const result = Number(value);
     if (!Number.isSafeInteger(result) || result <= 0) {
-        throw new TypeError(`${field} 必须是正安全整数格式的 QQ 号`);
+        throw invalidICQQParam(`${field} 必须是正安全整数格式的 QQ 号`, value);
     }
     return result;
 }

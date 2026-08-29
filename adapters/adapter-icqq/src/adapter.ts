@@ -49,12 +49,7 @@ export class ICQQAdapter extends ICQQActionAdapter {
         type: string,
         data: Record<string, unknown>,
     ): Promise<void> {
-        const account = this.getAccount(accountId);
-        if (!account) {
-            this.logger.warn(`submitVerification: 账号不存在 ${accountId}`);
-            return;
-        }
-        const bot = account.client;
+        const bot = this.requireBot(accountId);
         const value = typeof data.value === "string" ? data.value : undefined;
         const action = typeof data.action === "string" ? data.action : undefined;
 
@@ -79,20 +74,12 @@ export class ICQQAdapter extends ICQQActionAdapter {
 
     /** 请求向密保手机发送短信验证码（设备锁时用户选短信验证前调用） */
     override requestSmsCode(accountId: string): Promise<void> {
-        const account = this.getAccount(accountId);
-        if (!account) {
-            this.logger.warn(`requestSmsCode: 账号不存在 ${accountId}`);
-            return Promise.resolve();
-        }
-        return account.client.sendSmsCode();
+        return this.requireBot(accountId).sendSmsCode();
     }
 
     /** 重新登录：停止后再次 start，触发二维码/滑块等验证流程 */
     override async setOnline(uin: string): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) {
-            throw new Error(`未找到账号 ${uin}`);
-        }
+        const account = this.requireAccount(uin);
         this.emit("verification:clear", {
             platform: "icqq",
             account_id: uin,
@@ -113,10 +100,7 @@ export class ICQQAdapter extends ICQQActionAdapter {
     }
 
     override async setOffline(uin: string): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) {
-            throw new Error(`未找到账号 ${uin}`);
-        }
+        const account = this.requireAccount(uin);
         await account.client.stop();
         account.status = AccountStatus.OffLine;
         this.emit("verification:clear", {

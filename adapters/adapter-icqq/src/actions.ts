@@ -2,6 +2,7 @@ import type { Client } from "@icqqjs/icqq";
 import { AccountStatus, Adapter, readPackageVersion, readPackageVersionFile } from "onebots";
 import { ICQQGuildFileActions } from "./guild-file-actions.js";
 import { executeICQQPlatformAction, ICQQ_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { invalidICQQParam } from "./errors.js";
 
 /** 系统状态、版本与凭据动作；账号装配由最终适配器负责。 */
 export abstract class ICQQActionAdapter extends ICQQGuildFileActions {
@@ -85,6 +86,8 @@ function milkyProtocolType(platform: number): NonNullable<Adapter.VersionInfo["q
         case 6:
             return "windows";
         default:
-            throw new TypeError(`ICQQ 登录平台 ${platform} 无法投影为 Milky 协议类型`);
+            throw invalidICQQParam(`ICQQ 登录平台 ${platform} 无法投影为 Milky 协议类型`, {
+                platform,
+            });
     }
 }

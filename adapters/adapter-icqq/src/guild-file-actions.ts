@@ -2,6 +2,7 @@ import type { GfsDirStat, GfsFileStat } from "@icqqjs/icqq/lib/gfs";
 import { Adapter, type CommonTypes } from "onebots";
 import { ICQQGroupActions } from "./group-actions.js";
 import { materializeICQQUpload } from "./media.js";
+import { icqqResourceNotFound, invalidICQQParam } from "./errors.js";
 
 /** QQ 频道与私聊/群文件动作。 */
 export abstract class ICQQGuildFileActions extends ICQQGroupActions {
@@ -19,7 +20,7 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
         params: Adapter.GetGuildInfoParams,
     ): Promise<Adapter.GuildInfo> {
         const guild = this.requireNativeClient(uin).getGuildInfo(params.guild_id.string);
-        if (!guild) throw new Error(`Guild ${params.guild_id.string} not found`);
+        if (!guild) throw icqqResourceNotFound("频道服务器", params.guild_id.string);
         return {
             guild_id: this.createId(guild.guild_id),
             guild_name: guild.guild_name,
@@ -34,7 +35,11 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
             .pickGuild(params.guild_id.string)
             .getMemberList();
         const member = members.find(item => item.tiny_id === params.user_id.string);
-        if (!member) throw new Error(`Guild member ${params.user_id.string} not found`);
+        if (!member)
+            throw icqqResourceNotFound("频道成员", {
+                guild_id: params.guild_id.string,
+                user_id: params.user_id.string,
+            });
         return {
             guild_id: params.guild_id,
             user_id: this.createId(member.tiny_id),
@@ -64,7 +69,7 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
         uin: string,
         params?: Adapter.GetChannelListParams,
     ): Promise<Adapter.ChannelInfo[]> {
-        if (!params) throw new TypeError("获取 ICQQ 子频道列表需要 guild_id");
+        if (!params) throw invalidICQQParam("获取 ICQQ 子频道列表需要 guild_id");
         return this.requireNativeClient(uin)
             .getChannelList(params.guild_id.string)
             .map(channel => ({
@@ -90,7 +95,7 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
                 };
             }
         }
-        throw new Error(`Channel ${params.channel_id.string} not found`);
+        throw icqqResourceNotFound("子频道", params.channel_id.string);
     }
 
     async uploadFile(uin: string, params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> {
@@ -113,11 +118,11 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
                 url: file.url,
             };
         }
-        throw new TypeError(`ICQQ 不支持在 ${params.scene_type} 场景上传文件`);
+        throw invalidICQQParam(`ICQQ 不支持在 ${params.scene_type} 场景上传文件`, params);
     }
 
     async deleteFile(uin: string, params: Adapter.DeleteFileParams): Promise<void> {
-        if (!params.scene_id) throw new TypeError("删除 ICQQ 文件需要 scene_id");
+        if (!params.scene_id) throw invalidICQQParam("删除 ICQQ 文件需要 scene_id", params);
         const client = this.requireNativeClient(uin);
         if (params.scene_type === "group") {
             await client
@@ -132,7 +137,7 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
             this.assertNativeAccepted(accepted, "撤回私聊文件");
             return;
         }
-        throw new TypeError("删除 ICQQ 文件需要 private、direct 或 group 场景");
+        throw invalidICQQParam("删除 ICQQ 文件需要 private、direct 或 group 场景", params);
     }
 
     async getGroupFiles(
@@ -164,7 +169,9 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
         params: Adapter.CreateGroupFolderParams,
     ): Promise<Adapter.FolderInfo> {
         if (params.parent_folder_id && params.parent_folder_id.string !== "/") {
-            throw new TypeError("ICQQ 仅支持在群文件根目录创建文件夹");
+            throw invalidICQQParam("ICQQ 仅支持在群文件根目录创建文件夹", {
+                parent_folder_id: params.parent_folder_id.string,
+            });
         }
         const folder = await this.requireNativeClient(uin)
             .acquireGfs(this.numericId(params.group_id.string, "group_id"))
@@ -191,7 +198,7 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
                 .pickUser(this.numericId(params.scene_id.string, "scene_id"))
                 .getFileUrl(params.file_id.string);
         }
-        throw new TypeError(`ICQQ 不支持获取 ${params.scene_type} 场景的文件地址`);
+        throw invalidICQQParam(`ICQQ 不支持获取 ${params.scene_type} 场景的文件地址`, params);
     }
 
     async moveGroupFile(uin: string, params: Adapter.MoveGroupFileParams): Promise<void> {
