@@ -17,8 +17,9 @@ describe("黑盒语音能力清单", () => {
         }
     });
 
-    it("只声明真实的正向 WebSocket 与官方事件", () => {
+    it("声明正向与宿主接入方式及官方事件", () => {
         expect(heychatCapabilities.transports.websocket?.support).toBe("native");
+        expect(heychatCapabilities.transports.manual?.support).toBe("native");
         expect(heychatCapabilities.transports.webhook).toBeUndefined();
         expect(heychatCapabilities.events.message?.note).toContain("type=50");
         expect(heychatCapabilities.segments.heychat_message?.support).toBe("native");

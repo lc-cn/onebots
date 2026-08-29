@@ -1,7 +1,9 @@
 import { EventEmitter } from "node:events";
 import WebSocket from "ws";
 import { createProxyAgent, ErrorCategory } from "onebots";
+import { assertHeychatConfig } from "../config.js";
 import { HeychatApiError } from "../errors.js";
+import { decodeHeychatEnvelope, isHeychatControlPayload } from "../ingress.js";
 import type { HeychatConfig, HeychatWsEnvelope } from "../types.js";
 
 const DEFAULT_WS_URL = "wss://chat.xiaoheihe.cn/chatroom/ws/connect";
@@ -42,7 +44,6 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
     private readonly proxy?: HeychatConfig["proxy"];
     private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    private lastSequence = 0;
     private reconnectAttempt = 0;
     private generation = 0;
     private closed = true;
@@ -50,21 +51,14 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
 
     constructor(config: HeychatConfig) {
         super();
+        assertHeychatConfig(config);
         this.token = config.token;
         this.wsUrl = validateWsUrl(config.ws_url || DEFAULT_WS_URL);
         this.chatVersion = config.chat_version || DEFAULT_CHAT_VERSION;
-        this.heartbeatIntervalMs = Math.max(
-            5_000,
-            config.heartbeat_interval_ms || DEFAULT_HEARTBEAT_INTERVAL,
-        );
-        this.reconnectInitialDelayMs = Math.max(
-            100,
-            config.reconnect_initial_delay_ms || DEFAULT_RECONNECT_INITIAL_DELAY,
-        );
-        this.reconnectMaxDelayMs = Math.max(
-            this.reconnectInitialDelayMs,
-            config.reconnect_max_delay_ms || DEFAULT_RECONNECT_MAX_DELAY,
-        );
+        this.heartbeatIntervalMs = config.heartbeat_interval_ms ?? DEFAULT_HEARTBEAT_INTERVAL;
+        this.reconnectInitialDelayMs =
+            config.reconnect_initial_delay_ms ?? DEFAULT_RECONNECT_INITIAL_DELAY;
+        this.reconnectMaxDelayMs = config.reconnect_max_delay_ms ?? DEFAULT_RECONNECT_MAX_DELAY;
         this.proxy = config.proxy;
     }
 
@@ -158,9 +152,7 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
     private attachSocket(ws: WebSocket, generation: number): void {
         this.disposeSocket();
         this.ws = ws;
-        // Heychat 没有跨连接 resume 游标；新连接的 sequence 从独立代次重新计数。
-        this.lastSequence = 0;
-        ws.on("message", raw => this.handleMessage(raw.toString()));
+        ws.on("message", raw => this.handleMessage(raw));
         ws.on("ping", data => ws.pong(data));
         ws.on("pong", () => {
             this.awaitingPong = false;
@@ -180,40 +172,19 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
         });
     }
 
-    private handleMessage(raw: string): void {
-        if (/^pong$/iu.test(raw.trim()) || raw.startsWith("PONG")) {
+    private handleMessage(raw: WebSocket.RawData): void {
+        if (isHeychatControlPayload(raw)) {
             this.awaitingPong = false;
             return;
         }
-        let value: unknown;
         try {
-            value = JSON.parse(raw) as unknown;
+            this.emit("event", decodeHeychatEnvelope(raw));
         } catch (error) {
             this.emit(
                 "error",
-                new HeychatApiError("WebSocket 推送不是有效 JSON", {
-                    code: "HEYCHAT_INVALID_WS_EVENT",
-                    category: ErrorCategory.PROTOCOL,
-                    details: raw.slice(0, 500),
-                    cause: error,
-                }),
+                HeychatApiError.wrap(error, "HEYCHAT_INVALID_WS_EVENT", ErrorCategory.PROTOCOL),
             );
-            return;
         }
-        if (!isEnvelope(value)) {
-            this.emit(
-                "error",
-                new HeychatApiError("WebSocket 推送结构无效", {
-                    code: "HEYCHAT_INVALID_WS_EVENT",
-                    category: ErrorCategory.PROTOCOL,
-                    details: value,
-                }),
-            );
-            return;
-        }
-        if (value.sequence <= this.lastSequence) return;
-        this.lastSequence = value.sequence;
-        this.emit("event", value);
     }
 
     private startHeartbeat(generation: number): void {
@@ -276,19 +247,6 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
         this.ws.terminate();
         this.ws = null;
     }
-}
-
-function isEnvelope(value: unknown): value is HeychatWsEnvelope {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-    const record = value as Record<string, unknown>;
-    return (
-        typeof record.sequence === "number" &&
-        typeof record.type === "string" &&
-        typeof record.timestamp === "number" &&
-        Boolean(record.data) &&
-        typeof record.data === "object" &&
-        !Array.isArray(record.data)
-    );
 }
 
 function validateWsUrl(value: string): string {

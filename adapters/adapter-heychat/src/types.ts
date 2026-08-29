@@ -8,6 +8,8 @@ export interface ProxyConfig {
 export interface HeychatConfig {
     account_id: string;
     token: string;
+    /** manual 不创建正向连接，由宿主调用 ingest() 或 acceptWebSocket() */
+    receive_mode?: "websocket" | "manual";
     api_base_url?: string;
     upload_base_url?: string;
     ws_url?: string;

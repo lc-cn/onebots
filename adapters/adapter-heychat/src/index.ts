@@ -2,6 +2,18 @@ import { AdapterRegistry, type Schema } from "onebots";
 
 export { HeychatAdapter } from "./adapter.js";
 export { HeychatBot, type HeychatBotEvents } from "./bot.js";
+export {
+    assertHeychatConfig,
+    resolveHeychatReceiveMode,
+    type HeychatReceiveMode,
+} from "./config.js";
+export {
+    decodeHeychatEnvelope,
+    HeychatEventIngress,
+    isHeychatEnvelope,
+    isHeychatControlPayload,
+    type HeychatIngestResult,
+} from "./ingress.js";
 export { heychatCapabilities } from "./capabilities.js";
 export { HeychatApiError, type HeychatApiErrorOptions } from "./errors.js";
 export { projectHeychatEvent, type HeychatEventProjectionOptions } from "./events.js";
@@ -42,7 +54,7 @@ export type {
     HeychatApiRequestOptions,
 } from "./types.js";
 
-const heychatSchema: Schema = {
+export const heychatSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -57,6 +69,17 @@ const heychatSchema: Schema = {
         sensitive: true,
         description: "黑盒语音机器人控制台签发的 Token",
         ui: { section: "credentials" },
+    },
+    receive_mode: {
+        type: "string",
+        default: "websocket",
+        label: "事件接收方式",
+        choices: [
+            { value: "websocket", label: "内置正向 WebSocket" },
+            { value: "manual", label: "手动接入已有连接" },
+        ],
+        description: "manual 不创建连接，由宿主调用 HeychatBot.ingest() 或 acceptWebSocket()",
+        ui: { section: "transport" },
     },
     api_base_url: {
         type: "string",
@@ -77,7 +100,10 @@ const heychatSchema: Schema = {
         default: "wss://chat.xiaoheihe.cn/chatroom/ws/connect",
         label: "WebSocket URL",
         description: "接收命令、回应、成员变更与卡片交互的官方正向长连接",
-        ui: { section: "delivery" },
+        ui: {
+            section: "delivery",
+            visibleWhen: { path: "receive_mode", oneOf: ["websocket"] },
+        },
     },
     chat_version: {
         type: "string",
@@ -100,26 +126,39 @@ const heychatSchema: Schema = {
     heartbeat_interval_ms: {
         type: "number",
         default: 30000,
+        min: 5000,
         label: "心跳间隔（毫秒）",
         description: "最低 5000；连续一个周期未收到 pong 会重建连接",
-        ui: { section: "delivery" },
+        ui: {
+            section: "delivery",
+            visibleWhen: { path: "receive_mode", oneOf: ["websocket"] },
+        },
     },
     reconnect_initial_delay_ms: {
         type: "number",
         default: 1000,
+        min: 100,
         label: "首次重连延迟（毫秒）",
         description: "长连接采用带抖动的无限指数退避",
-        ui: { section: "delivery" },
+        ui: {
+            section: "delivery",
+            visibleWhen: { path: "receive_mode", oneOf: ["websocket"] },
+        },
     },
     reconnect_max_delay_ms: {
         type: "number",
         default: 30000,
+        min: 100,
         label: "最大重连延迟（毫秒）",
-        ui: { section: "delivery" },
+        ui: {
+            section: "delivery",
+            visibleWhen: { path: "receive_mode", oneOf: ["websocket"] },
+        },
     },
     request_timeout_ms: {
         type: "number",
         default: 30000,
+        min: 1000,
         label: "REST 请求超时（毫秒）",
         ui: { section: "advanced" },
     },

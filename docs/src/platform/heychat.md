@@ -1,72 +1,42 @@
-# 黑盒语音适配器
+# 黑盒语音（Heychat）适配器
 
-黑盒语音 (Heychat) 适配器基于官方 Bot API，支持 WebSocket 事件接收与 HTTP 消息发送。
+黑盒语音适配器使用官方 REST API 管理消息、房间、频道、角色与语音能力，并通过官方正向 WebSocket 或宿主已有事件源接收推送。
 
-## 状态
+## 能力摘要
 
-✅ **Beta — 已实现核心能力**
+- 发送私聊、频道 Markdown、图片、@、回复与卡片消息
+- 更新、删除频道消息以及添加或取消消息回应
+- 查询房间、频道、成员、角色、权限和语音状态，并执行对应管理动作
+- 投影官方斜杠命令（`type=50`）、回应（`5003`）、成员变更（`3001`）与卡片交互
+- 未知官方事件以 `custom` + `raw_event` 无损交付，不把未公开的 `type=5` 伪造成普通消息
+- 正向 WebSocket 无限重连、可取消心跳、代次隔离与指数退避
+- manual 模式通过 `HeychatBot.ingest()` 或 `acceptWebSocket()` 复用已有 Host
 
-## 功能特性
+## 安装与配置
 
-- ✅ WebSocket 长连接与心跳
-- ✅ 斜杠命令事件 (type=50)
-- ⚠️ 普通频道消息 (type=5，实验性)
-- ✅ 频道消息发送与删除
-- ✅ 房间信息查询
-
-## 安装
+在[机器人控制台](https://bot.xiaoheihe.cn)创建机器人、注册斜杠命令并邀请机器人进入房间：
 
 ```bash
-npm install @onebots/adapter-heychat
-# 或
 pnpm add @onebots/adapter-heychat
 ```
 
-## 前置条件
-
-1. 在 [开发者平台](https://open.xiaoheihe.cn/zh_cn/chat_robot/home) 完成开发者认证（约 3 个工作日）
-2. 在 [bot.xiaoheihe.cn](https://bot.xiaoheihe.cn) 创建机器人并复制 Token
-3. 在控制台注册斜杠命令（如 `/ping`）
-4. 将机器人邀请进测试房间
-
-## 配置
-
 ```yaml
 heychat.my_bot:
-  token: 'your_bot_token'
-  chat_version: '1.30.0'
-
-  onebot.v11:
-    access_token: 'your_v11_token'
+  token: your_bot_token
+  receive_mode: websocket # 或 manual
 ```
 
-## 启动
+`websocket` 由适配器建立官方正向连接并负责心跳与无限恢复。`manual` 不创建事件连接，仍保留 REST 出站能力；已有 Host 可投递结构化原始事件，或把 `ws` 已升级 socket 交给同一个 Bot。socket 的心跳、关闭和重连仍由宿主管理。
 
-```bash
-onebots -r heychat -p onebot-v11 -c config.yaml
-```
+## 频道场景 ID
 
-## 事件说明
+黑盒语音频道 API 同时需要房间 ID 与频道 ID。适配器使用 `room_id:channel_id` 作为稳定 `scene_id`；收到该频道事件后，也可通过有界上下文缓存解析单独的频道 ID。
 
-| WS type | 说明 | OneBots 映射 |
-|---------|------|-------------|
-| 50 | 用户使用斜杠命令 | `message` (group) |
-| 5 | 普通频道消息（实验性） | `message` (group) |
-| 5003 | 消息表情回应 | 暂未映射 |
-| 3001 | 用户加入/离开房间 | 暂未映射 |
+## 平台扩展
 
-## 发送消息
+除通用动作外，适配器公开消息、角色、房间表情、频道、邀请、权限、语音成员与在线媒体流等官方动作。`call_heychat_api` 仅允许官方 chatroom API 安全路径，`upload_media` 复用统一的 25 MiB 媒体管线。
 
-黑盒 API 要求同时提供 `room_id` 与 `channel_id`：
-
-- 适配器在收到消息后自动缓存频道上下文
-- 主动发送时可使用 `room_id:channel_id` 格式的 scene_id
-
-## 限制
-
-- 需常驻进程（无 Webhook 模式）
-- 官方以斜杠命令为主；type=5 需实际联调验证
-- Bot 必须在目标房间内
+完整动作、消息段、结构化错误与高级配置见[包内 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-heychat)。
 
 ## 相关链接
 

@@ -11,6 +11,7 @@ OneBots 的黑盒语音官方机器人适配器。它使用官方 REST API 发�
 - 向语音频道输入在线媒体流并停止推流
 - 投影斜杠命令、消息回应、成员加入/退出和卡片按钮事件；未知事件通过 `raw_event` 无损交付
 - WebSocket 默认无限重连，支持可配置心跳、指数退避、代理和请求超时
+- `receive_mode: manual` 不创建正向连接；`HeychatBot.ingest(rawEvent)` 与 `acceptWebSocket(socket)` 可让现有 Host、反向代理或已升级 socket 复用同一校验、去重和事件管线
 - `call_heychat_api` 与 `upload_media` 为尚未封装或新增的官方接口保留受限底层入口
 
 黑盒语音官方当前公布的机器人推送事件不包含普通频道消息。适配器不会把未经官方定义的 `type=5` 当作消息事件；`message` 事件对应 `type=50` 斜杠命令。
@@ -28,6 +29,7 @@ pnpm add @onebots/adapter-heychat
 ```yaml
 heychat.my_bot:
   token: your_bot_token
+  receive_mode: websocket # 或 manual
   onebot.v11:
     access_token: your_protocol_token
 ```
@@ -37,6 +39,7 @@ heychat.my_bot:
 ```yaml
 heychat.my_bot:
   token: your_bot_token
+  receive_mode: websocket
   api_base_url: https://chat.xiaoheihe.cn
   upload_base_url: https://chat-upload.xiaoheihe.cn
   ws_url: wss://chat.xiaoheihe.cn/chatroom/ws/connect
@@ -51,6 +54,8 @@ heychat.my_bot:
 ```
 
 `api_base_url`、`upload_base_url` 和 `ws_url` 仅用于官方兼容代理、私有网关或测试环境，日常配置不应修改。
+
+manual 模式仍保留 REST 出站能力，但不会建立 WebSocket、发送心跳或负责重连。宿主可逐条调用 `bot.ingest(rawEvent)`，也可将 `ws` 已升级实例交给 `bot.acceptWebSocket(socket)`；后者返回解除监听函数，socket 的心跳、关闭与重连所有权仍属于宿主。
 
 ## 场景 ID
 

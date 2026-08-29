@@ -100,5 +100,10 @@ export const heychatCapabilities: AdapterCapabilityManifest = defineAdapterCapab
     },
     transports: {
         websocket: { support: "native", mode: "websocket" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 HeychatBot.ingest() 或 acceptWebSocket() 接入已有事件源",
+        },
     },
 });
