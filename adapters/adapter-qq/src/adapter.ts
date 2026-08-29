@@ -36,7 +36,9 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const messageId = await sendQQMessage(this.client(uin), params);
+        const messageId = await sendQQMessage(this.client(uin), params, value =>
+            String(this.resolveId(value).source),
+        );
         return { message_id: this.createId(messageId) };
     }
 
@@ -210,9 +212,9 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
                 code: "QQ_UPLOAD_SCENE_UNSUPPORTED",
             });
         }
-        const source = params.url ?? params.path ?? params.data;
-        if (!source)
-            throw new QQApiError("上传 QQ 文件必须提供 url/path/data", {
+        const sources = [params.url, params.path, params.data].filter(value => value !== undefined);
+        if (sources.length !== 1)
+            throw new QQApiError("上传 QQ 文件必须且只能提供 url/path/data 之一", {
                 code: "QQ_MEDIA_SOURCE_REQUIRED",
             });
         const result = await this.client(uin).uploadMedia({
@@ -227,7 +229,7 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
                 ? { url: params.url }
                 : params.path
                   ? { localPath: params.path }
-                  : { fileData: params.data }),
+                  : { fileData: stripBase64Prefix(params.data!) }),
         });
         return { file_id: this.createId(result.file_uuid), file_name: params.name };
     }
@@ -416,6 +418,10 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
             ],
         };
     }
+}
+
+function stripBase64Prefix(data: string): string {
+    return data.startsWith("base64://") ? data.slice("base64://".length) : data;
 }
 
 AdapterRegistry.register("qq", QQAdapter, {

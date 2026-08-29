@@ -13,6 +13,8 @@ QQ 官方机器人适配器，基于腾讯官方 [`@tencent-connect/qqbot-nodejs
 - Webhook 复用 OneBots 主 HTTP 服务，不另开端口
 - `qq_call` 可调用尚未封装的任意 QQ OpenAPI 相对路径
 
+消息编译遵循 QQ 平台的单载荷约束：一条消息只能包含一个 Reply、一个 Markdown/Ark/Embed 主载荷及一个 Keyboard。C2C/群聊的文本与首个媒体会合并为原生 caption；频道单条消息只接受一张 HTTPS URL 图片。冲突载荷、多张频道图片和本地频道图片会在请求发出前返回结构化错误，不会静默丢弃消息段。
+
 ## 配置
 
 ```yaml
