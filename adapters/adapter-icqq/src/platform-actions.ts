@@ -1,209 +1,156 @@
 import type { Client } from "@icqqjs/icqq";
-import type { CommonTypes } from "onebots";
+import { definePlatformActions, type CommonTypes, type PlatformActionHandler } from "onebots";
 import { compileICQQMessage } from "./messages.js";
 import { ICQQError, icqqResourceNotFound, invalidICQQParam } from "./errors.js";
 
-export const ICQQ_PLATFORM_ACTIONS = new Set([
-    "get_client_key",
-    "get_pskey",
-    "refresh_nt_pic_rkey",
-    "uid_to_uin",
-    "uin_to_uid",
-    "get_online_status",
-    "set_online_status",
-    "get_client_statistics",
-    "set_gender",
-    "set_birthday",
-    "set_description",
-    "set_signature",
-    "get_profile",
-    "get_add_friend_setting",
-    "get_user_status",
-    "set_friend_remark",
-    "set_friend_group",
-    "search_same_groups",
-    "get_roaming_stamps",
-    "delete_stamp",
-    "add_friend_group",
-    "delete_friend_group",
-    "rename_friend_group",
-    "reload_friend_list",
-    "reload_stranger_list",
-    "reload_guild_list",
-    "reload_group_list",
-    "reload_blacklist",
-    "get_stranger_list",
-    "image_ocr",
-    "get_video_url",
-    "get_group_share_json",
-    "send_group_sign",
-    "get_group_at_all_remainder",
-    "get_group_mute_member_list",
-    "get_group_anonymous_info",
-    "set_group_message_rate_limit",
-    "set_group_join_type",
-    "set_group_remark",
-    "set_group_member_screen",
-    "delete_group_message_reaction",
-    "add_group_member_as_friend",
-    "get_forum_url",
-    "send_temp_message",
-    "send_discuss_message",
-]);
+type Params = Readonly<Record<string, unknown>>;
+type Handler = PlatformActionHandler<Client>;
+
+const PLATFORM_ACTIONS = definePlatformActions(
+    {
+        get_client_key: async (client: Client) => client.getClientKey(),
+        get_pskey: async (client: Client, params: Params) =>
+            client.getPSkey(stringOrStrings(params.domains, "domains")),
+        refresh_nt_pic_rkey: async (client: Client, params: Params) =>
+            client.refreshNTPicRkey(optionalBoolean(params.force)),
+        uid_to_uin: uidToUin,
+        uin_to_uid: uinToUid,
+        get_online_status: async (client: Client) => client.getOnlineStatus(),
+        set_online_status: async (client: Client, params: Params) =>
+            client.setOnlineStatus(requiredInteger(params.status, "status")),
+        get_client_statistics: async (client: Client) => client.stat,
+        set_gender: async (client: Client, params: Params) =>
+            client.setGender(gender(params.gender)),
+        set_birthday: async (client: Client, params: Params) =>
+            client.setBirthday(stringOrInteger(params.birthday, "birthday")),
+        set_description: async (client: Client, params: Params) =>
+            client.setDescription(optionalString(params.description)),
+        set_signature: async (client: Client, params: Params) =>
+            client.setSignature(optionalString(params.signature)),
+        get_profile: async (client: Client, params: Params) =>
+            client.getProfile(stringOrInteger(params.user_id, "user_id")),
+        get_add_friend_setting: async (client: Client, params: Params) =>
+            client.pickUser(requiredQQNumber(params.user_id, "user_id")).getAddFriendSetting(),
+        get_user_status: async (client: Client, params: Params) =>
+            client
+                .pickUser(requiredQQNumber(params.user_id, "user_id"))
+                .getStatusInfo(optionalBoolean(params.use_jce)),
+        set_friend_remark: async (client: Client, params: Params) =>
+            client
+                .pickFriend(requiredQQNumber(params.user_id, "user_id"))
+                .setRemark(requiredString(params.remark, "remark")),
+        set_friend_group: async (client: Client, params: Params) =>
+            client
+                .pickFriend(requiredQQNumber(params.user_id, "user_id"))
+                .setClass(requiredInteger(params.group_id, "group_id")),
+        search_same_groups: async (client: Client, params: Params) =>
+            client.pickFriend(requiredQQNumber(params.user_id, "user_id")).searchSameGroup(),
+        get_roaming_stamps: async (client: Client, params: Params) =>
+            client.getRoamingStamp(optionalBoolean(params.no_cache)),
+        delete_stamp: async (client: Client, params: Params) =>
+            client.deleteStamp(stringOrStrings(params.id, "id")),
+        add_friend_group: async (client: Client, params: Params) =>
+            client.addClass(requiredString(params.name, "name")),
+        delete_friend_group: async (client: Client, params: Params) =>
+            client.deleteClass(requiredInteger(params.id, "id")),
+        rename_friend_group: async (client: Client, params: Params) =>
+            client.renameClass(
+                requiredInteger(params.id, "id"),
+                requiredString(params.name, "name"),
+            ),
+        reload_friend_list: reloadAction(client => client.reloadFriendList()),
+        reload_stranger_list: reloadAction(client => client.reloadStrangerList()),
+        reload_guild_list: reloadAction(client => client.reloadGuilds()),
+        reload_group_list: reloadAction(client => client.reloadGroupList()),
+        reload_blacklist: reloadAction(client => client.reloadBlackList()),
+        get_stranger_list: async (client: Client) => [...client.getStrangerList().values()],
+        image_ocr: async (client: Client, params: Params) =>
+            client.imageOcr(requiredString(params.file, "file")),
+        get_video_url: async (client: Client, params: Params) =>
+            client.getVideoUrl(
+                requiredString(params.fid, "fid"),
+                requiredString(params.md5, "md5"),
+            ),
+        get_group_share_json: async (client: Client, params: Params) =>
+            client.getGroupShareJson(requiredQQNumber(params.group_id, "group_id")),
+        send_group_sign: async (client: Client, params: Params) =>
+            client.sendGroupSign(requiredQQNumber(params.group_id, "group_id")),
+        get_group_at_all_remainder: groupAction(group => group.getAtAllRemainder()),
+        get_group_mute_member_list: groupAction(group => group.getMuteMemberList()),
+        get_group_anonymous_info: groupAction(group => group.getAnonyInfo()),
+        set_group_message_rate_limit: setGroupMessageRateLimit,
+        set_group_join_type: setGroupJoinType,
+        set_group_remark: setGroupRemark,
+        set_group_member_screen: async (client: Client, params: Params) =>
+            client.setGroupMemberScreenMsg(
+                requiredQQNumber(params.group_id, "group_id"),
+                requiredQQNumber(params.user_id, "user_id"),
+                optionalBoolean(params.enabled),
+            ),
+        delete_group_message_reaction: deleteGroupMessageReaction,
+        add_group_member_as_friend: async (client: Client, params: Params) =>
+            client.addFriend(
+                requiredQQNumber(params.group_id, "group_id"),
+                requiredQQNumber(params.user_id, "user_id"),
+                optionalString(params.comment),
+            ),
+        get_forum_url: async (client: Client, params: Params) =>
+            client.getForumUrl(
+                requiredString(params.guild_id, "guild_id"),
+                requiredString(params.channel_id, "channel_id"),
+                requiredString(params.forum_id, "forum_id"),
+            ),
+        send_temp_message: async (client: Client, params: Params) =>
+            client.sendTempMsg(
+                requiredQQNumber(params.group_id, "group_id"),
+                requiredQQNumber(params.user_id, "user_id"),
+                platformMessage(params.message),
+            ),
+        send_discuss_message: async (client: Client, params: Params) =>
+            client.sendDiscussMsg(
+                requiredQQNumber(params.discuss_id, "discuss_id"),
+                platformMessage(params.message),
+            ),
+    },
+    action =>
+        new ICQQError(`未实现 ICQQ 平台动作: ${action}`, {
+            code: "ICQQ_ACTION_NOT_IMPLEMENTED",
+            operation: action,
+        }),
+);
+
+export const ICQQ_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 调用 ICQQ 无法由通用 Adapter 语义准确表达的原生能力。 */
 export async function executeICQQPlatformAction(
     client: Client,
     action: string,
-    params: Readonly<Record<string, unknown>>,
+    params: Params,
 ): Promise<unknown> {
-    switch (action) {
-        case "get_client_key":
-            return client.getClientKey();
-        case "get_pskey":
-            return client.getPSkey(stringOrStrings(params.domains, "domains"));
-        case "refresh_nt_pic_rkey":
-            return client.refreshNTPicRkey(optionalBoolean(params.force));
-        case "uid_to_uin":
-            return Array.isArray(params.uid)
-                ? client.uid2uins(stringArray(params.uid, "uid"), optionalQQNumber(params.group_id))
-                : client.uid2uin(
-                      requiredString(params.uid, "uid"),
-                      optionalQQNumber(params.group_id),
-                  );
-        case "uin_to_uid":
-            return Array.isArray(params.uin)
-                ? client.uin2uids(
-                      qqNumberArray(params.uin, "uin"),
-                      optionalQQNumber(params.group_id),
-                  )
-                : client.uin2uid(
-                      requiredQQNumber(params.uin, "uin"),
-                      optionalQQNumber(params.group_id),
-                  );
-        case "get_online_status":
-            return client.getOnlineStatus();
-        case "set_online_status":
-            return client.setOnlineStatus(requiredInteger(params.status, "status"));
-        case "get_client_statistics":
-            return client.stat;
-        case "set_gender":
-            return client.setGender(gender(params.gender));
-        case "set_birthday":
-            return client.setBirthday(stringOrInteger(params.birthday, "birthday"));
-        case "set_description":
-            return client.setDescription(optionalString(params.description));
-        case "set_signature":
-            return client.setSignature(optionalString(params.signature));
-        case "get_profile":
-            return client.getProfile(stringOrInteger(params.user_id, "user_id"));
-        case "get_add_friend_setting":
-            return client
-                .pickUser(requiredQQNumber(params.user_id, "user_id"))
-                .getAddFriendSetting();
-        case "get_user_status":
-            return client
-                .pickUser(requiredQQNumber(params.user_id, "user_id"))
-                .getStatusInfo(optionalBoolean(params.use_jce));
-        case "set_friend_remark":
-            return client
-                .pickFriend(requiredQQNumber(params.user_id, "user_id"))
-                .setRemark(requiredString(params.remark, "remark"));
-        case "set_friend_group":
-            return client
-                .pickFriend(requiredQQNumber(params.user_id, "user_id"))
-                .setClass(requiredInteger(params.group_id, "group_id"));
-        case "search_same_groups":
-            return client.pickFriend(requiredQQNumber(params.user_id, "user_id")).searchSameGroup();
-        case "get_roaming_stamps":
-            return client.getRoamingStamp(optionalBoolean(params.no_cache));
-        case "delete_stamp":
-            return client.deleteStamp(stringOrStrings(params.id, "id"));
-        case "add_friend_group":
-            return client.addClass(requiredString(params.name, "name"));
-        case "delete_friend_group":
-            return client.deleteClass(requiredInteger(params.id, "id"));
-        case "rename_friend_group":
-            return client.renameClass(
-                requiredInteger(params.id, "id"),
-                requiredString(params.name, "name"),
-            );
-        case "reload_friend_list":
-            return client.reloadFriendList();
-        case "reload_stranger_list":
-            return client.reloadStrangerList();
-        case "reload_guild_list":
-            return client.reloadGuilds();
-        case "reload_group_list":
-            return client.reloadGroupList();
-        case "reload_blacklist":
-            return client.reloadBlackList();
-        case "get_stranger_list":
-            return [...client.getStrangerList().values()];
-        case "image_ocr":
-            return client.imageOcr(requiredString(params.file, "file"));
-        case "get_video_url":
-            return client.getVideoUrl(
-                requiredString(params.fid, "fid"),
-                requiredString(params.md5, "md5"),
-            );
-        case "get_group_share_json":
-            return client.getGroupShareJson(requiredQQNumber(params.group_id, "group_id"));
-        case "send_group_sign":
-            return client.sendGroupSign(requiredQQNumber(params.group_id, "group_id"));
-        case "get_group_at_all_remainder":
-            return client
-                .pickGroup(requiredQQNumber(params.group_id, "group_id"))
-                .getAtAllRemainder();
-        case "get_group_mute_member_list":
-            return client
-                .pickGroup(requiredQQNumber(params.group_id, "group_id"))
-                .getMuteMemberList();
-        case "get_group_anonymous_info":
-            return client.pickGroup(requiredQQNumber(params.group_id, "group_id")).getAnonyInfo();
-        case "set_group_message_rate_limit":
-            return setGroupMessageRateLimit(client, params);
-        case "set_group_join_type":
-            return setGroupJoinType(client, params);
-        case "set_group_remark":
-            return setGroupRemark(client, params);
-        case "set_group_member_screen":
-            return client.setGroupMemberScreenMsg(
-                requiredQQNumber(params.group_id, "group_id"),
-                requiredQQNumber(params.user_id, "user_id"),
-                optionalBoolean(params.enabled),
-            );
-        case "delete_group_message_reaction":
-            return deleteGroupMessageReaction(client, params);
-        case "add_group_member_as_friend":
-            return client.addFriend(
-                requiredQQNumber(params.group_id, "group_id"),
-                requiredQQNumber(params.user_id, "user_id"),
-                optionalString(params.comment),
-            );
-        case "get_forum_url":
-            return client.getForumUrl(
-                requiredString(params.guild_id, "guild_id"),
-                requiredString(params.channel_id, "channel_id"),
-                requiredString(params.forum_id, "forum_id"),
-            );
-        case "send_temp_message":
-            return client.sendTempMsg(
-                requiredQQNumber(params.group_id, "group_id"),
-                requiredQQNumber(params.user_id, "user_id"),
-                platformMessage(params.message),
-            );
-        case "send_discuss_message":
-            return client.sendDiscussMsg(
-                requiredQQNumber(params.discuss_id, "discuss_id"),
-                platformMessage(params.message),
-            );
-        default:
-            throw new ICQQError(`未实现 ICQQ 平台动作: ${action}`, {
-                code: "ICQQ_ACTION_NOT_IMPLEMENTED",
-                operation: action,
-            });
-    }
+    return PLATFORM_ACTIONS.execute(client, action, params);
+}
+
+async function uidToUin(client: Client, params: Params): Promise<unknown> {
+    return Array.isArray(params.uid)
+        ? client.uid2uins(stringArray(params.uid, "uid"), optionalQQNumber(params.group_id))
+        : client.uid2uin(requiredString(params.uid, "uid"), optionalQQNumber(params.group_id));
+}
+
+async function uinToUid(client: Client, params: Params): Promise<unknown> {
+    return Array.isArray(params.uin)
+        ? client.uin2uids(qqNumberArray(params.uin, "uin"), optionalQQNumber(params.group_id))
+        : client.uin2uid(requiredQQNumber(params.uin, "uin"), optionalQQNumber(params.group_id));
+}
+
+function reloadAction(operation: (client: Client) => Promise<unknown>): Handler {
+    return async client => operation(client);
+}
+
+function groupAction(
+    operation: (group: ReturnType<Client["pickGroup"]>) => Promise<unknown>,
+): Handler {
+    return async (client, params) =>
+        operation(client.pickGroup(requiredQQNumber(params.group_id, "group_id")));
 }
 
 function platformMessage(value: unknown) {
