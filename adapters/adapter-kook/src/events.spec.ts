@@ -17,7 +17,11 @@ describe("KOOK 事件投影", () => {
         expect(projected).toMatchObject({
             type: "message",
             message_type: "channel",
-            group: { id: { string: "channel-1" } },
+            group: {
+                id: { string: "channel-1" },
+                guild_id: { string: "guild-1" },
+                channel_id: { string: "channel-1" },
+            },
             extensions: { kook: { guild_id: "guild-1" } },
             raw_event: { signal: { sn: 2 } },
         });

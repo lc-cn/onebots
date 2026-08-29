@@ -34,7 +34,12 @@ describe("projectHeychatEvent", () => {
             type: "message",
             message_type: "channel",
             raw_message: "/ping pong",
-            group: { id: { string: "r1:c1" } },
+            group: {
+                id: { string: "r1:c1" },
+                guild_id: { string: "r1" },
+                channel_id: { string: "r1:c1" },
+                native_channel_id: { string: "c1" },
+            },
             sender: { id: { string: "42" } },
             raw_event: raw,
         });

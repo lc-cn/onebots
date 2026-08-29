@@ -34,6 +34,10 @@ export namespace CommonTypes {
         id: Id;
         /** Group name */
         name?: string;
+        /** 频道所属服务器/工作区；仅 channel 场景存在。 */
+        guild_id?: Id;
+        /** 可直接交给适配器寻址的频道 ID；默认与 id 相同。 */
+        channel_id?: Id;
         /** Additional group data */
         [key: string]: unknown;
     }

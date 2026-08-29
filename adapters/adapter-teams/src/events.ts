@@ -112,11 +112,15 @@ function projectUser(user: TeamsUser, context: TeamsProjectionContext): CommonTy
 }
 
 function projectGroup(activity: TeamsActivity, context: TeamsProjectionContext): CommonTypes.Group {
+    const isChannel = activity.conversation.conversationType === "channel";
+    const teamId = activity.channelData?.team?.id;
     return {
         id: context.createId(activity.conversation.id),
         name: activity.conversation.name || activity.channelData?.channel?.name || "",
+        ...(isChannel && teamId ? { guild_id: context.createId(teamId) } : {}),
+        ...(isChannel ? { channel_id: context.createId(activity.conversation.id) } : {}),
         team_id: activity.channelData?.team?.id,
-        channel_id: activity.channelData?.channel?.id,
+        native_channel_id: activity.channelData?.channel?.id,
         tenant_id: activity.channelData?.tenant?.id || activity.conversation.tenantId,
     };
 }

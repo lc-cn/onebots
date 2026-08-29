@@ -124,7 +124,14 @@ function projectMessage(
         type: "message",
         message_type: isDirect ? "private" : "channel",
         sender: projectUser(message.author, context),
-        group: isDirect ? undefined : { id: context.createId(message.channel_id), name: "" },
+        group: isDirect
+            ? undefined
+            : {
+                  id: context.createId(message.channel_id),
+                  name: "",
+                  guild_id: context.createId(message.guild_id!),
+                  channel_id: context.createId(message.channel_id),
+              },
         message: projectSegments(message),
         raw_message: message.content,
         message_id: context.createId(message.id),

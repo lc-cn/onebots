@@ -262,11 +262,16 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             timestamp: event.timestamp,
             channel: event.group
                 ? {
-                      id: event.group.id.string,
+                      id: event.group.channel_id?.string || event.group.id.string,
                       type: event.message_type === "group" ? 0 : 1,
                       name: event.group.name,
                   }
                 : undefined,
+            guild: event.group?.guild_id
+                ? { id: event.group.guild_id.string }
+                : event.message_type === "group" && event.group
+                  ? { id: event.group.id.string, name: event.group.name }
+                  : undefined,
             user: {
                 id: event.sender.id.string,
                 name: event.sender.name,

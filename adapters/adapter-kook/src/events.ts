@@ -75,7 +75,14 @@ function projectMessage(
         },
         group: direct
             ? undefined
-            : { id: context.createId(event.target_id), name: event.extra.channel_name || "" },
+            : {
+                  id: context.createId(event.target_id),
+                  name: event.extra.channel_name || "",
+                  ...(event.extra.guild_id
+                      ? { guild_id: context.createId(event.extra.guild_id) }
+                      : {}),
+                  channel_id: context.createId(event.target_id),
+              },
         message_id: context.createId(event.msg_id),
         raw_message: event.content,
         message: projectKookMessageSegments(event.type, event.content, event.extra.mention),

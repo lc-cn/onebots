@@ -29,7 +29,7 @@ export function projectSlackEvent(
         if (event.subtype === "message_deleted") {
             return notice(envelope, event, context, "message_deleted", {
                 message_id: context.createId(stringValue(event.deleted_ts, event.event_ts)),
-                group: projectGroup(event.channel, context),
+                group: projectGroup(event.channel, context, envelope.team_id),
             });
         }
         if (event.subtype && event.subtype !== "thread_broadcast") {
@@ -49,7 +49,7 @@ export function projectSlackEvent(
                 event.type === "reaction_added" ? "reaction_added" : "reaction_removed",
                 {
                     user: projectUser(event.user, context),
-                    group: projectGroup(stringValue(item.channel), context),
+                    group: projectGroup(stringValue(item.channel), context, envelope.team_id),
                     message_id: item.ts ? context.createId(String(item.ts)) : undefined,
                     extensions: { slack: { reaction: event.reaction, item } },
                 },
@@ -64,7 +64,7 @@ export function projectSlackEvent(
                 event.type === "member_joined_channel" ? "member_joined" : "member_left",
                 {
                     user: projectUser(event.user, context),
-                    group: projectGroup(event.channel, context),
+                    group: projectGroup(event.channel, context, envelope.team_id),
                     extensions: { slack: { inviter: event.inviter } },
                 },
             );
@@ -97,7 +97,7 @@ function projectMessage(
         type: "message",
         message_type: isPrivate ? "private" : "channel",
         sender,
-        group: isPrivate ? undefined : projectGroup(channel, context),
+        group: isPrivate ? undefined : projectGroup(channel, context, envelope.team_id),
         message_id: context.createId(event.ts ?? event.event_ts),
         raw_message: event.text ?? "",
         message: projectSlackMessageSegments(event),
@@ -167,8 +167,19 @@ function projectUser(
         : undefined;
 }
 
-function projectGroup(id: unknown, context: ProjectorContext): CommonTypes.Group | undefined {
-    return typeof id === "string" && id ? { id: context.createId(id), name: "" } : undefined;
+function projectGroup(
+    id: unknown,
+    context: ProjectorContext,
+    teamId?: string,
+): CommonTypes.Group | undefined {
+    return typeof id === "string" && id
+        ? {
+              id: context.createId(id),
+              name: "",
+              ...(teamId ? { guild_id: context.createId(teamId) } : {}),
+              channel_id: context.createId(id),
+          }
+        : undefined;
 }
 
 function extension(event: SlackEventShape): { extensions: { slack: { event_type: string } } } {

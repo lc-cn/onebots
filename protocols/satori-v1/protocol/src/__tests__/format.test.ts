@@ -170,10 +170,7 @@ describe("Satori V1 protocol", () => {
     const { protocol } = createProtocol();
     const event = textMsgEvent({
       message_type: "group",
-      group: {
-        id: { number: 20001, string: "g20001", source: "g20001" },
-        name: "Test Group",
-      },
+      group: { id: { number: 20001, string: "g20001", source: "g20001" }, name: "Test Group" },
     });
     const result = protocol["convertToSatoriFormat"](event as unknown as CommonEvent.Event);
 
@@ -193,6 +190,25 @@ describe("Satori V1 protocol", () => {
         id: "m50001",
         content: "Hello, world!",
       },
+    });
+  });
+
+  test("频道消息分别投影服务器与频道地址", () => {
+    const { protocol } = createProtocol();
+    const event = textMsgEvent({
+      message_type: "channel",
+      group: {
+        id: { number: 30001, string: "channel-1", source: "channel-1" },
+        name: "General",
+        guild_id: { number: 30000, string: "guild-1", source: "guild-1" },
+        channel_id: { number: 30001, string: "channel-1", source: "channel-1" },
+      },
+    });
+
+    expect(protocol["convertToSatoriFormat"](event as unknown as CommonEvent.Event)).toMatchObject({
+      type: "message-created",
+      guild: { id: "guild-1" },
+      channel: { id: "channel-1", type: 1, name: "General" },
     });
   });
 
@@ -248,7 +264,10 @@ describe("Satori V1 protocol", () => {
       bot_id: { number: 12345678, string: "bot", source: "bot" },
       notice_type: "group_decrease",
       user: { id: { number: 10006, string: "u10006", source: "u10006" }, name: "LeftUser" },
-      group: { id: { number: 20001, string: "g20001", source: "g20001" }, name: "Test Group" },
+      group: {
+        id: { number: 20001, string: "g20001", source: "g20001" },
+        name: "Test Group",
+      },
     };
     const result = protocol["convertToSatoriFormat"](event as unknown as CommonEvent.Event);
 

@@ -26,13 +26,22 @@ describe("projectSlackEvent", () => {
                 },
             ],
         } satisfies SlackEvent;
-        const envelope: SlackWebhookBody = { type: "event_callback", event_id: "Ev1", event };
+        const envelope: SlackWebhookBody = {
+            type: "event_callback",
+            event_id: "Ev1",
+            team_id: "T1",
+            event,
+        };
 
         const projected = projectSlackEvent(event, envelope, context);
 
         expect(projected).toMatchObject({
             type: "message",
             message_type: "channel",
+            group: {
+                guild_id: { string: "T1" },
+                channel_id: { string: "C1" },
+            },
             raw_event: envelope,
             message: [
                 { type: "reply", data: { message_id: "1709999999.000001" } },

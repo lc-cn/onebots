@@ -65,6 +65,8 @@ declare module "./adapter.js" {
         export interface SendMessageParams {
             scene_type: CommonTypes.Scene;
             scene_id: CommonTypes.Id;
+            /** channel 场景的所属服务器/工作区。 */
+            guild_id?: CommonTypes.Id;
             message: CommonTypes.Segment[];
         }
         export interface SendMessageResult {

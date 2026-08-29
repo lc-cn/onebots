@@ -44,8 +44,21 @@ describe("projectTeamsEvent", () => {
     it("Teams channel 不被压扁为普通群聊场景", () => {
         const raw = createEvent();
         raw.activity.conversation.conversationType = "channel";
+        raw.activity.channelData = {
+            team: { id: "team-1" },
+            channel: { id: "native-channel-1" },
+        };
         const event = projectTeamsEvent("group_message", raw, { botId: "bot", createId });
-        expect(event).toMatchObject({ type: "message", message_type: "channel" });
+        expect(event).toMatchObject({
+            type: "message",
+            message_type: "channel",
+            group: {
+                id: { string: "group" },
+                guild_id: { string: "team-1" },
+                channel_id: { string: "group" },
+                native_channel_id: "native-channel-1",
+            },
+        });
     });
 
     it("成员事件使用 membersAdded 中的真实成员", () => {

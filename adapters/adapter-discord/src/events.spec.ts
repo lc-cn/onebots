@@ -48,6 +48,10 @@ describe("projectDiscordDispatch", () => {
 
         expect(event?.type).toBe("message");
         if (event?.type !== "message") throw new Error("expected message");
+        expect(event.group).toMatchObject({
+            guild_id: { string: "30" },
+            channel_id: { string: "20" },
+        });
         expect(event.message.map(segment => segment.type)).toEqual([
             "reply",
             "text",

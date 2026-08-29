@@ -64,10 +64,18 @@ function createProtocol() {
                 error: vi.fn(),
             }),
         },
-        resolveId: vi.fn((id: string | number) => ({
-            ...resolvedId,
-            number: typeof id === "number" ? id : resolvedId.number,
-        })),
+        resolveId: vi.fn((id: string | number) =>
+            id === "bot"
+                ? resolvedId
+                : {
+                      string: String(id),
+                      source: id,
+                      number: typeof id === "number" ? id : resolvedId.number,
+                  },
+        ),
+        sendMessage: vi.fn().mockResolvedValue({
+            message_id: { string: "sent", source: "sent", number: 1 },
+        }),
         inviteGroupMember: vi.fn(),
         handleFriendRequest: vi.fn(),
         getGuildMemberList: vi.fn(),
@@ -172,6 +180,8 @@ describe("OneBot V12 protocol", () => {
             group: {
                 id: { number: 30001, string: "c30001", source: "c30001" },
                 name: "Channel",
+                guild_id: { number: 30000, string: "g30000", source: "g30000" },
+                channel_id: { number: 30001, string: "c30001", source: "c30001" },
             },
         });
         const result = protocol["convertToV12Format"](event as unknown as CommonEvent.Event)!;
@@ -179,7 +189,25 @@ describe("OneBot V12 protocol", () => {
         expect(result.type).toBe("message");
         expect(result.detail_type).toBe("channel");
         expect(result.sub_type).toBe("");
-        expect((result as unknown as Record<string, unknown>).group_id).toBe("c30001");
+        expect(result).toMatchObject({ guild_id: "g30000", channel_id: "c30001" });
+    });
+
+    test("sends a channel message with separate guild and channel addresses", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        await protocol["sendMessage"]({
+            detail_type: "channel",
+            guild_id: "g30000",
+            channel_id: "c30001",
+            message: [{ type: "text", data: { text: "hello" } }],
+        });
+
+        expect(adapter.sendMessage).toHaveBeenCalledWith("bot", {
+            scene_type: "channel",
+            scene_id: expect.objectContaining({ string: "c30001" }),
+            guild_id: expect.objectContaining({ string: "g30000" }),
+            message: [{ type: "text", data: { text: "hello" } }],
+        });
     });
 
     test("converts at segment to mention with user_id", () => {
@@ -479,7 +507,7 @@ describe("OneBot V12 protocol", () => {
             }),
         ).resolves.toMatchObject({ status: "ok" });
         expect(adapter.updateChannel).toHaveBeenCalledWith("bot", {
-            channel_id: expect.objectContaining({ string: "openid-123" }),
+            channel_id: expect.objectContaining({ string: "channel-1" }),
             channel_name: "general",
         });
 

@@ -32,6 +32,30 @@ describe("QQ 事件投影", () => {
         expect(event).toMatchObject({ type: "notice", notice_type: "custom", raw_event: raw });
     });
 
+    it("频道消息分别保留 Guild 与 Channel 地址", () => {
+        const raw = {
+            rawEventType: "AT_MESSAGE_CREATE",
+            kind: "guild" as const,
+            senderId: "u1",
+            content: "你好",
+            messageId: "m1",
+            timestamp: "2026-08-29T00:00:00.000Z",
+            guildId: "guild-1",
+            channelId: "channel-1",
+            raw: {} as never,
+            replyTarget: { scope: "channel" as const, targetId: "channel-1" },
+        };
+
+        expect(projectQQMessage(raw, context)).toMatchObject({
+            message_type: "channel",
+            group: {
+                id: { string: "channel-1" },
+                guild_id: { string: "guild-1" },
+                channel_id: { string: "channel-1" },
+            },
+        });
+    });
+
     it("加群申请投影为可处理 request", () => {
         const event = projectQQRawEvent(
             "GROUP_JOIN_REQUEST",

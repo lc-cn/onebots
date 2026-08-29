@@ -327,7 +327,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             scene_id = group_id;
         } else if (detail_type === "channel" && guild_id && channel_id) {
             scene_type = "channel";
-            scene_id = `${guild_id}:${channel_id}`;
+            scene_id = channel_id;
         } else {
             throw new Error("Invalid message parameters");
         }
@@ -336,6 +336,9 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type,
             scene_id: this.adapter.resolveId(scene_id),
+            ...(detail_type === "channel" && guild_id
+                ? { guild_id: this.adapter.resolveId(guild_id) }
+                : {}),
             message: segments,
         });
 
@@ -372,9 +375,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     }
 
     private getSupportedActions(): string[] {
-        return projectOneBotV12Actions(
-            this.adapter.describeCapabilities(this.account.account_id),
-        );
+        return projectOneBotV12Actions(this.adapter.describeCapabilities(this.account.account_id));
     }
 
     private async getStatus(): Promise<OneBotV12.Status> {
@@ -694,8 +695,16 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 user_id: event.sender.id.string,
             };
 
-            if (event.group) {
+            if (event.group && event.message_type === "group") {
                 (messageEvent as OneBotV12.GroupMessageEvent).group_id = event.group.id.string;
+            } else if (event.group && event.message_type === "channel") {
+                if (!event.group.guild_id) {
+                    this.logger.warn("频道事件缺少 guild_id，无法投影为合法 OneBot V12 事件");
+                    return null;
+                }
+                const channelEvent = messageEvent as OneBotV12.ChannelMessageEvent;
+                channelEvent.guild_id = event.group.guild_id.string;
+                channelEvent.channel_id = event.group.channel_id?.string || event.group.id.string;
             }
 
             return messageEvent;

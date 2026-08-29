@@ -18,7 +18,8 @@ export function projectQQMessage(
               : event.kind === "dm"
                 ? "direct"
                 : "group";
-    const groupId = event.groupOpenid ?? event.guildId;
+    const groupId = event.groupOpenid;
+    const channelId = event.channelId;
     return {
         id: context.createId(event.messageId),
         timestamp: dateLikeToEventMs(event.timestamp),
@@ -27,7 +28,16 @@ export function projectQQMessage(
         type: "message",
         message_type: scene,
         sender: { id: context.createId(event.senderId), name: event.senderName },
-        group: groupId ? { id: context.createId(groupId) } : undefined,
+        group:
+            scene === "group" && groupId
+                ? { id: context.createId(groupId) }
+                : scene === "channel" && channelId && event.guildId
+                  ? {
+                        id: context.createId(channelId),
+                        guild_id: context.createId(event.guildId),
+                        channel_id: context.createId(channelId),
+                    }
+                  : undefined,
         message_id: context.createId(event.messageId),
         raw_message: event.content,
         message: projectMessageSegments(event),

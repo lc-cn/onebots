@@ -56,8 +56,10 @@ function projectCommand(
         group: {
             id: options.createId(`${room.room_id}:${channel.channel_id}`),
             name: channel.channel_name || room.room_name || channel.channel_id,
+            guild_id: options.createId(room.room_id),
+            channel_id: options.createId(`${room.room_id}:${channel.channel_id}`),
             room_id: options.createId(room.room_id),
-            channel_id: options.createId(channel.channel_id),
+            native_channel_id: options.createId(channel.channel_id),
         },
         message_id: options.createId(messageId),
         raw_message: rawMessage,
