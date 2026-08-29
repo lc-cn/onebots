@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createImapMessageId } from "./message-id.js";
 import { compileEmailMessage, createEmailSendOptions } from "./messages.js";
 
 describe("compileEmailMessage", () => {
@@ -62,5 +63,12 @@ describe("compileEmailMessage", () => {
                 },
             ]),
         ).toThrow("email.headers.X-Test");
+    });
+
+    it("拒绝把无 RFC Message-ID 的 IMAP 标识伪装成线程头", () => {
+        const messageId = createImapMessageId("INBOX", 42);
+        expect(() =>
+            compileEmailMessage([{ type: "reply", data: { message_id: messageId } }]),
+        ).toThrowError(expect.objectContaining({ code: "EMAIL_THREAD_ID_UNAVAILABLE" }));
     });
 });

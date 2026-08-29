@@ -6,6 +6,7 @@ export { EmailClient, type EmailClientEvents, type EmailClientOptions } from "./
 export { EmailError, type EmailErrorOptions } from "./errors.js";
 export { parseEmailSource, projectEmailEvent, type EmailProjectionContext } from "./events.js";
 export { compileEmailMessage, createEmailSendOptions, type CompiledEmail } from "./messages.js";
+export { createImapMessageId, parseImapMessageId, type ImapMessageLocation } from "./message-id.js";
 export { EMAIL_PLATFORM_ACTIONS, executeEmailPlatformAction } from "./platform-actions.js";
 export type { EmailSmtpTransport } from "./transports.js";
 export type * from "./types.js";

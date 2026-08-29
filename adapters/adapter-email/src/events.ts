@@ -1,6 +1,7 @@
 import { CommonEvent, type CommonTypes } from "onebots";
 import { simpleParser, type ParsedMail } from "mailparser";
 import { EmailError } from "./errors.js";
+import { createImapMessageId } from "./message-id.js";
 import type { EmailAddress, EmailMessage } from "./types.js";
 
 export interface EmailProjectionContext {
@@ -14,6 +15,7 @@ export async function parseEmailSource(
     uid: number,
     mailbox: string,
     source: Buffer,
+    uidValidity?: bigint,
 ): Promise<EmailMessage> {
     const parsed = await simpleParser(source);
     const from = addresses(parsed.from)[0];
@@ -26,7 +28,7 @@ export async function parseEmailSource(
     return {
         uid,
         mailbox,
-        id: parsed.messageId || `${mailbox}:${uid}`,
+        id: parsed.messageId || createImapMessageId(mailbox, uid, uidValidity),
         subject: parsed.subject || "",
         from,
         to: addresses(parsed.to),

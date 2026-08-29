@@ -9,6 +9,8 @@ import {
 } from "./client-utils.js";
 import { EmailError } from "./errors.js";
 import { parseEmailSource } from "./events.js";
+import { parseImapMessageId } from "./message-id.js";
+import { EmailDeliveryState, syncUnseenMessages } from "./sync.js";
 import {
     createImapClient,
     createSmtpTransport,
@@ -47,7 +49,7 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     private syncRequest?: Promise<void>;
     private syncAgain = false;
     private pollTimer?: NodeJS.Timeout;
-    private readonly delivered = new Set<string>();
+    private readonly deliveries = new EmailDeliveryState();
     private started = false;
     private receiveConnected = false;
 
@@ -194,11 +196,22 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     }
 
     /** 按 UID 获取一封邮件。 */
-    async getEmail(uid: number, mailbox = this.mailbox): Promise<EmailMessage> {
+    async getEmail(
+        uid: number,
+        mailbox = this.mailbox,
+        expectedUidValidity?: bigint,
+    ): Promise<EmailMessage> {
         return this.withMailbox(mailbox, async imap => {
+            const uidValidity = imap.mailbox ? imap.mailbox.uidValidity : undefined;
+            if (expectedUidValidity !== undefined && uidValidity !== expectedUidValidity) {
+                throw new EmailError(`邮箱目录 ${mailbox} 的 UIDVALIDITY 已变化`, {
+                    code: "EMAIL_UIDVALIDITY_CHANGED",
+                    details: { mailbox, expected: expectedUidValidity, actual: uidValidity },
+                });
+            }
             const message = await imap.fetchOne(String(uid), { source: true }, { uid: true });
             if (!message || !message.source) throw emailNotFound(uid, mailbox);
-            return parseEmailSource(message.uid, mailbox, message.source);
+            return parseEmailSource(message.uid, mailbox, message.source, uidValidity);
         });
     }
 
@@ -214,7 +227,8 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
             const uids = found ? found.slice(-limit).reverse() : [];
             if (!uids.length) return [];
             const messages = await imap.fetchAll(uids, { source: true }, { uid: true });
-            return parseFetched(messages, mailbox);
+            const uidValidity = imap.mailbox ? imap.mailbox.uidValidity : undefined;
+            return parseFetched(messages, mailbox, uidValidity);
         });
     }
 
@@ -252,8 +266,10 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
         });
     }
 
-    /** 按 RFC Message-ID 定位邮件，目录缺省为收件箱。 */
+    /** 按 RFC Message-ID 或可逆 IMAP 原生 ID 定位邮件。 */
     async findEmail(messageId: string, mailbox = this.mailbox): Promise<EmailMessage> {
+        const location = parseImapMessageId(messageId);
+        if (location) return this.getEmail(location.uid, location.mailbox, location.uidValidity);
         const [email] = await this.searchEmails(
             { header: { "message-id": messageId } },
             { mailbox, limit: 1 },
@@ -393,23 +409,14 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
 
     private async syncUnseen(): Promise<void> {
         await this.withMailbox(this.mailbox, async imap => {
-            const found = await imap.search({ seen: false }, { uid: true });
-            const uids = found || [];
-            if (!uids.length) return;
-            const fetched = await imap.fetchAll(uids, { source: true }, { uid: true });
-            const markSeen: number[] = [];
-            for (const item of fetched) {
-                if (!item.source) continue;
-                const key = `${this.mailbox}:${item.uid}`;
-                if (this.delivered.has(key)) continue;
-                const email = await parseEmailSource(item.uid, this.mailbox, item.source);
-                this.ingest(email);
-                this.rememberDelivery(key);
-                markSeen.push(item.uid);
-            }
-            if (markSeen.length && this.config.imap.mark_seen !== false) {
-                await imap.messageFlagsAdd(markSeen, ["\\Seen"], { uid: true });
-            }
+            await syncUnseenMessages({
+                imap,
+                mailbox: this.mailbox,
+                markSeen: this.config.imap.mark_seen !== false,
+                deliveries: this.deliveries,
+                ingest: email => this.ingest(email),
+                reportError: error => this.reportError(error),
+            });
         });
     }
 
@@ -434,13 +441,6 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
                 }
             }
         }
-    }
-
-    private rememberDelivery(key: string): void {
-        this.delivered.add(key);
-        if (this.delivered.size <= 10_000) return;
-        const oldest = this.delivered.values().next().value;
-        if (oldest) this.delivered.delete(oldest);
     }
 
     private requireImap(): ImapFlow {

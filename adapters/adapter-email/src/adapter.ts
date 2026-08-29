@@ -47,7 +47,7 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
         await this.requireClient(uin).deleteEmails([email.uid], email.mailbox);
     }
 
-    /** 按 RFC Message-ID 获取已接收邮件。 */
+    /** 按 RFC Message-ID 或可逆 IMAP 原生 ID 获取已接收邮件。 */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
         return this.messageInfo(uin, await this.findMessage(uin, params.message_id));
     }

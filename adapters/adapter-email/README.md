@@ -7,7 +7,8 @@ OneBots 邮件适配器。通过 SMTP 发送邮件，通过 IMAP IDLE 实时接�
 - SMTP 密码或 OAuth2 认证，连接池与 HTTP/HTTPS/SOCKS 代理
 - IMAP IDLE 实时接收、可选兜底轮询、无限指数退避重连
 - 纯文本、HTML、内联图片、普通附件、CC/BCC、Reply-To 与 RFC Message-ID 线程
-- 成功投影后再标记 `\\Seen`，避免处理失败时丢邮件
+- 逐封隔离无法解析的邮件，正常邮件不会被同批毒邮件阻塞
+- 投影去重与 `\\Seen` 确认分离，标记失败会在后续同步中重试
 - `EmailClient.ingest()` 可把外部解析的邮件交给同一事件管线
 - 结构化 `EmailError` 与白名单式 SMTP/IMAP 平台动作
 
@@ -64,6 +65,8 @@ await adapter.sendMessage("my_bot", {
 ```
 
 接收事件在 `raw_event` 中保留完整 `EmailMessage`，在 `extensions.email` 中保留 UID、目录、主题、收件人和线程头。HTML 正文同时使用只读的 `email_html` 段保留，避免只留下有损生成的纯文本。发送 `reply` 时会同时生成 `In-Reply-To` 与去重后的 `References`；显式 `email.html` 优先于纯文本自动生成的 HTML alternative，自定义 Header 会拒绝非法字段名和换行注入。
+
+缺少 RFC Message-ID 的邮件会获得包含目录、UIDVALIDITY 与 UID 的可逆 `onebots-imap:v1:` 原生标识，标准 `get_message` 与 `delete_message` 因此仍能精确回到来源；邮箱代次变化时会返回 `EMAIL_UIDVALIDITY_CHANGED`，绝不把旧 ID 误指向新邮件。由于原邮件没有可引用的 RFC 线程头，对这类标识发送 `reply` 会明确返回 `EMAIL_THREAD_ID_UNAVAILABLE`。无法解析的邮件会报告 `EMAIL_MESSAGE_REJECTED` 并在启用 `mark_seen` 时隔离为已读，原始邮件不会被删除。
 
 ## 平台动作
 

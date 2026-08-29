@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseEmailSource, projectEmailEvent } from "./events.js";
+import { parseImapMessageId } from "./message-id.js";
 
 describe("email event projection", () => {
     it("保留线程、附件和 reply-all 场景", async () => {
@@ -52,6 +53,20 @@ describe("email event projection", () => {
         expect(event.message).toContainEqual({
             type: "email_html",
             data: { html: "<strong>Hello</strong>" },
+        });
+    });
+
+    it("为缺少 RFC Message-ID 的邮件生成可反查的 IMAP 标识", async () => {
+        const source = Buffer.from(
+            ["From: alice@example.com", "To: bot@example.com", "", "正文"].join("\r\n"),
+        );
+
+        const email = await parseEmailSource(73, "项目/收件箱", source, 2026n);
+
+        expect(parseImapMessageId(email.id)).toEqual({
+            mailbox: "项目/收件箱",
+            uid: 73,
+            uidValidity: 2026n,
         });
     });
 });

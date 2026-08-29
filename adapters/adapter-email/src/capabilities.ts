@@ -13,7 +13,10 @@ export const emailCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
             support: "native",
             note: "删除 IMAP 邮箱中的邮件，不等同于撤回已投递邮件",
         },
-        get_message: { support: "native", note: "按 RFC Message-ID 查询 IMAP 邮箱" },
+        get_message: {
+            support: "native",
+            note: "按 RFC Message-ID 或可逆 IMAP 原生 ID 查询邮箱",
+        },
         get_message_history: { support: "native", scenes: ["private", "direct"] },
         mark_message_as_read: { support: "native" },
         get_login_info: { support: "native" },

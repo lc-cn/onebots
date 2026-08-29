@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { CommonTypes } from "onebots";
 import { EmailError } from "./errors.js";
+import { parseImapMessageId } from "./message-id.js";
 import type { EmailOutgoingAttachment, EmailSendOptions } from "./types.js";
 
 export interface CompiledEmail {
@@ -39,7 +40,7 @@ export function compileEmailMessage(segments: readonly CommonTypes.Segment[]): C
                     code: "EMAIL_INVALID_SEGMENT",
                 });
             }
-            metadata.in_reply_to = requiredString(
+            metadata.in_reply_to = threadMessageId(
                 segment.data.message_id ?? segment.data.id,
                 "reply.message_id",
             );
@@ -141,7 +142,7 @@ function applyEmailMetadata(target: CompiledEmail, data: Record<string, unknown>
     if (data.bcc !== undefined) target.bcc = addressList(data.bcc, "email.bcc");
     if (data.reply_to !== undefined) target.reply_to = addressList(data.reply_to, "email.reply_to");
     if (data.in_reply_to !== undefined)
-        target.in_reply_to = requiredString(data.in_reply_to, "email.in_reply_to");
+        target.in_reply_to = threadMessageId(data.in_reply_to, "email.in_reply_to");
     if (data.references !== undefined)
         target.references = addressList(data.references, "email.references");
     if (data.priority === "high" || data.priority === "normal" || data.priority === "low") {
@@ -170,6 +171,17 @@ function stringRecord(value: unknown, field: string): Record<string, string> {
 function requiredString(value: unknown, field: string): string {
     if (typeof value !== "string" || !value.trim()) throw invalidField(field);
     return value.trim();
+}
+
+function threadMessageId(value: unknown, field: string): string {
+    const messageId = requiredString(value, field);
+    if (parseImapMessageId(messageId)) {
+        throw new EmailError("来源邮件没有 RFC Message-ID，无法生成线程回复头", {
+            code: "EMAIL_THREAD_ID_UNAVAILABLE",
+            details: messageId,
+        });
+    }
+    return messageId;
 }
 
 function stringValue(value: unknown): string {

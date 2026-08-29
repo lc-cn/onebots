@@ -6,11 +6,12 @@ import type { EmailMessage } from "./types.js";
 export async function parseFetched(
     messages: FetchMessageObject[],
     mailbox: string,
+    uidValidity?: bigint,
 ): Promise<EmailMessage[]> {
     const result: EmailMessage[] = [];
     for (const message of messages) {
         if (message.source)
-            result.push(await parseEmailSource(message.uid, mailbox, message.source));
+            result.push(await parseEmailSource(message.uid, mailbox, message.source, uidValidity));
     }
     return result;
 }
