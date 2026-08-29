@@ -5,7 +5,7 @@ export { LineBot, type LineBotEvents, type LineEventRepository } from "./bot.js"
 export { lineCapabilities } from "./capabilities.js";
 export { LineApiError, type LineApiErrorOptions } from "./errors.js";
 export { chunkLineMessages, compileLineMessages } from "./messages.js";
-export { projectLineEvent, projectMessageContent } from "./events.js";
+export { projectLineEvents, projectMessageContent } from "./events.js";
 export {
     LINE_PLATFORM_ACTIONS,
     executeLinePlatformAction,

@@ -16,7 +16,7 @@ import { lineCapabilities } from "./capabilities.js";
 import { LineContextStore } from "./context-store.js";
 import { listLineFollowerIds, listLineMemberProfiles } from "./directory.js";
 import { LineApiError } from "./errors.js";
-import { projectLineEvent } from "./events.js";
+import { projectLineEvents } from "./events.js";
 import { chunkLineMessages, compileLineMessages } from "./messages.js";
 import { executeLinePlatformAction, LINE_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type { LineChatContext, LineConfig } from "./types.js";
@@ -168,8 +168,15 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     }
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const online = this.getAccount(uin)?.status === AccountStatus.Online;
-        return { online, good: online };
+        const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
+        return {
+            online,
+            good: online,
+            bots: account
+                ? [{ self: this.createId(account.client.getBotUserId() || uin), online }]
+                : [],
+        };
     }
 
     async canSendImage(): Promise<boolean> {
@@ -242,18 +249,23 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
 
     private dispatchEvent(account: Account<"line", LineBot>, event: webhook.Event): void {
         this.captureChat(account.config.account_id, event);
-        const projected = projectLineEvent(event, {
-            botId: this.createId(account.config.account_id),
+        const projected = projectLineEvents(event, {
+            botId: this.createId(account.client.getBotUserId() || account.config.account_id),
             createId: value => this.createId(value),
         });
-        if (projected) account.dispatch(projected);
+        for (const item of projected) account.dispatch(item);
     }
 
     private captureChat(accountId: string, event: webhook.Event): void {
         const source = event.source;
         if (!source || source.type === "user") return;
+        const id = source.type === "group" ? source.groupId : source.roomId;
+        if (event.type === "leave") {
+            this.contexts.remove(accountId, id);
+            return;
+        }
         this.contexts.save(accountId, {
-            id: source.type === "group" ? source.groupId : source.roomId,
+            id,
             type: source.type,
         });
     }

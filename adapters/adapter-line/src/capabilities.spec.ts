@@ -9,5 +9,7 @@ describe("LINE 能力清单", () => {
         }
         expect(lineCapabilities.actions.delete_message?.support).toBe("unsupported");
         expect(lineCapabilities.segments.line_message?.support).toBe("native");
+        expect(lineCapabilities.events.group_increase?.support).toBe("native");
+        expect(lineCapabilities.events.group_decrease?.support).toBe("native");
     });
 });

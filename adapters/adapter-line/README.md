@@ -46,8 +46,10 @@ https://your-domain.example/line/my-line-bot/webhook
 - 文本、图片、视频、音频、文件、位置、Sticker 消息；
 - `messageEdited` → `message_updated`；
 - `unsend` → `message_deleted`；
-- follow / unfollow、成员加入 / 离开、postback；
-- join / leave、会员、Beacon、账号绑定、视频播放完成、模块生命周期等作为 `custom` 事件无损交付。
+- follow / unfollow、机器人加入 / 离开会话、成员加入 / 离开、postback；
+- 批量成员事件会按用户拆成独立 typed notice；会员、Beacon、账号绑定、视频播放完成、模块生命周期等作为 `custom` 事件无损交付。
+
+事件的 `bot_id` 使用 CallbackRequest 的 `destination` 或身份接口返回的 LINE Official Account user ID，不会把 OneBots 的账号配置别名伪装成平台身份。机器人离开 group/room 后，对应会话也会从已知群目录移除。
 
 LINE 可能重复投递且顺序改变；业务需要以事件 `timestamp` 判断编辑事件的新旧。用户撤回事件到达后，应同步清除业务侧保存的原消息内容。
 
@@ -87,6 +89,9 @@ LINE 每次最多发送 5 条 Message。通用 `sendMessage` 会按 5 条自动�
 - 消息：`push_message`、`reply_message`、`multicast`、`broadcast`、`narrowcast`、请求校验、窄播进度、电话通知消息、`show_loading_animation`、两种已读动作；
 - 内容：下载原内容/预览、查询转码状态，二进制以 `data_base64` 返回；
 - 用户与聊天：followers、room 成员、account link token；
+- 群聊与身份：profile、group summary、group/room 成员、退出会话；
+- Audience：用户 ID / 点击 / 曝光受众创建、扩充、查询、共享查询、更新与删除；
+- 渠道扩展：LIFF 应用、Module 绑定与 chat control、Mission Sticker；
 - Rich Menu：创建、校验、查询、列表、删除、图片上传/下载、默认菜单、按用户及批量关联、alias、batch；
 - Coupon：创建、查询、分页列表与关闭；
 - 会员：计划列表、用户订阅、已加入用户；

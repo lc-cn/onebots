@@ -23,6 +23,7 @@ describe("LineBot Webhook 契约", () => {
         const signature = createHmac("sha256", "secret").update(body).digest("base64");
 
         expect(bot.ingestHttp(body, signature)).toMatchObject({ accepted: 1, duplicate: 0 });
+        expect(bot.getBotUserId()).toBe("U00000000000000000000000000000000");
         expect(bot.ingestHttp(body, signature)).toMatchObject({ accepted: 0, duplicate: 1 });
         expect(listener).toHaveBeenCalledTimes(1);
     });

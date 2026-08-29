@@ -6,61 +6,85 @@ interface LineProjectionContext {
     createId(value: string | number): CommonTypes.Id;
 }
 
-/** 将所有 LINE Webhook Event 投影到 CommonEvent；未知及管理事件仍以 custom 无损交付。 */
-export function projectLineEvent(
+/** 将所有 LINE Webhook Event 投影到 CommonEvent；批量成员事件按成员拆分。 */
+export function projectLineEvents(
     event: webhook.Event,
     context: LineProjectionContext,
-): CommonEvent.Event<webhook.Event> | undefined {
-    if (event.type === "message") return projectMessage(event, context);
+): CommonEvent.Event<webhook.Event>[] {
+    if (event.type === "message") return [projectMessage(event, context)];
     if (event.type === "messageEdited") {
-        return notice(event, context, "message_updated", {
-            message_id: context.createId(event.message.id),
-            message: projectMessageContent(event.message),
-            user: sourceUser(event.source, context),
-            group: sourceGroup(event.source, context),
-        });
+        return [
+            notice(event, context, "message_updated", {
+                message_id: context.createId(event.message.id),
+                message: projectMessageContent(event.message),
+                user: sourceUser(event.source, context),
+                group: sourceGroup(event.source, context),
+            }),
+        ];
     }
     if (event.type === "unsend") {
-        return notice(event, context, "message_deleted", {
-            message_id: context.createId(event.unsend.messageId),
-            user: sourceUser(event.source, context),
-            group: sourceGroup(event.source, context),
-        });
+        return [
+            notice(event, context, "message_deleted", {
+                message_id: context.createId(event.unsend.messageId),
+                user: sourceUser(event.source, context),
+                group: sourceGroup(event.source, context),
+            }),
+        ];
     }
     if (event.type === "follow") {
-        return notice(event, context, "friend_add", { user: sourceUser(event.source, context) });
+        return [
+            notice(event, context, "friend_add", {
+                user: sourceUser(event.source, context),
+                sub_type: event.follow.isUnblocked ? "unblock" : "add",
+            }),
+        ];
     }
     if (event.type === "unfollow") {
-        return notice(event, context, "user_removed", { user: sourceUser(event.source, context) });
+        return [
+            notice(event, context, "user_removed", {
+                user: sourceUser(event.source, context),
+                sub_type: "block",
+            }),
+        ];
+    }
+    if (event.type === "join" || event.type === "leave") {
+        return [
+            notice(event, context, event.type === "join" ? "group_increase" : "group_decrease", {
+                user: { id: context.botId, name: "" },
+                group: sourceGroup(event.source, context),
+                sub_type: event.type,
+                extensions: { line: { reply_token: replyToken(event) } },
+            }),
+        ];
     }
     if (event.type === "memberJoined" || event.type === "memberLeft") {
         const members = event.type === "memberJoined" ? event.joined.members : event.left.members;
-        const first = members[0];
-        return notice(
-            event,
-            context,
-            event.type === "memberJoined" ? "member_joined" : "member_left",
-            {
-                user: first?.userId ? { id: context.createId(first.userId), name: "" } : undefined,
+        const noticeType = event.type === "memberJoined" ? "member_joined" : "member_left";
+        return members.map((member, index) => {
+            const userId = member.userId;
+            return notice(event, context, noticeType, {
+                id: context.createId(`${event.webhookEventId}:${userId || index}`),
+                user: userId ? { id: context.createId(userId), name: "" } : undefined,
                 group: sourceGroup(event.source, context),
-                users: members.flatMap(member =>
-                    member.userId ? [{ id: context.createId(member.userId), name: "" }] : [],
-                ),
-            },
-        );
-    }
-    if (event.type === "postback") {
-        return notice(event, context, "interaction", {
-            user: sourceUser(event.source, context),
-            group: sourceGroup(event.source, context),
-            extensions: { line: { postback: event.postback, reply_token: event.replyToken } },
+            });
         });
     }
-    return notice(event, context, "custom", {
-        user: sourceUser(event.source, context),
-        group: sourceGroup(event.source, context),
-        extensions: { line: { kind: event.type, reply_token: replyToken(event) } },
-    });
+    if (event.type === "postback") {
+        return [
+            notice(event, context, "interaction", {
+                user: sourceUser(event.source, context),
+                group: sourceGroup(event.source, context),
+                extensions: { line: { postback: event.postback, reply_token: event.replyToken } },
+            }),
+        ];
+    }
+    return [
+        notice(event, context, "custom", {
+            user: sourceUser(event.source, context),
+            group: sourceGroup(event.source, context),
+            extensions: { line: { kind: event.type, reply_token: replyToken(event) } },
+        }),
+    ];
 }
 
 function projectMessage(

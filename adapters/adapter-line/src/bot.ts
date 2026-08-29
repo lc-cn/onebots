@@ -19,6 +19,7 @@ export interface LineEventRepository {
 export class LineBot extends EventEmitter<LineBotEvents> {
     private readonly client: LineBotClient;
     private readonly processedEvents = new Set<string>();
+    private botUserId?: string;
 
     constructor(
         private readonly config: LineConfig,
@@ -26,6 +27,7 @@ export class LineBot extends EventEmitter<LineBotEvents> {
     ) {
         super();
         assertLineConfig(config);
+        this.botUserId = config.destination;
         this.client = LineBotClient.fromChannelAccessToken({
             channelAccessToken: config.channel_access_token,
             apiBaseURL: requireHttpsUrl(config.api_base_url || DEFAULT_API_BASE, "api_base_url"),
@@ -44,6 +46,11 @@ export class LineBot extends EventEmitter<LineBotEvents> {
         return this.config.receive_mode || "webhook";
     }
 
+    /** LINE Official Account 的真实 user ID，优先来自 Webhook destination 或身份接口。 */
+    getBotUserId(): string | undefined {
+        return this.botUserId;
+    }
+
     validateSignature(body: string | Buffer, signature: string): boolean {
         if (!this.config.channel_secret) {
             throw new LineApiError("LINE Webhook 验签需要 channel_secret", {
@@ -56,10 +63,11 @@ export class LineBot extends EventEmitter<LineBotEvents> {
     /** 最低层事件入口，可接收单个官方事件或完整 CallbackRequest。 */
     ingest(rawEvent: unknown): LineIngestResult {
         const request = parseIngestRequest(rawEvent);
+        const expectedDestination = this.config.destination || this.botUserId;
         if (
-            this.config.destination &&
+            expectedDestination &&
             request.destination &&
-            request.destination !== this.config.destination
+            request.destination !== expectedDestination
         ) {
             throw new LineApiError("LINE Webhook destination 与当前机器人不匹配", {
                 code: "LINE_DESTINATION_MISMATCH",
@@ -67,6 +75,7 @@ export class LineBot extends EventEmitter<LineBotEvents> {
                 details: { destination: request.destination },
             });
         }
+        this.botUserId ||= request.destination || undefined;
         const events: WebhookEvent[] = [];
         let duplicate = 0;
         for (const event of request.events) {
@@ -159,7 +168,9 @@ export class LineBot extends EventEmitter<LineBotEvents> {
 
     async getBotInfo(): Promise<messagingApi.BotInfoResponse> {
         try {
-            return await this.client.getBotInfo();
+            const info = await this.client.getBotInfo();
+            this.botUserId = info.userId;
+            return info;
         } catch (error) {
             throw LineApiError.wrap(error, "LINE_GET_BOT_INFO_ERROR");
         }

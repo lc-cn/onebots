@@ -12,9 +12,12 @@ export async function streamResult(
     return { data_base64: Buffer.concat(chunks).toString("base64") };
 }
 
-export function base64Blob(params: Readonly<Record<string, unknown>>): Blob {
+export function base64Blob(
+    params: Readonly<Record<string, unknown>>,
+    defaultContentType = "image/png",
+): Blob {
     const data = Buffer.from(requireString(params, "data_base64"), "base64");
-    return new Blob([data], { type: optionalString(params, "content_type") || "image/png" });
+    return new Blob([data], { type: optionalString(params, "content_type") || defaultContentType });
 }
 
 export function couponStatuses(

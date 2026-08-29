@@ -2,6 +2,8 @@ import { definePlatformActions } from "onebots";
 import type { LineBot } from "./bot.js";
 import { LineApiError } from "./errors.js";
 import type { LineActionContext, LineActionParams } from "./platform-action-context.js";
+import { LINE_AUDIENCE_ACTIONS } from "./platform-actions-audience.js";
+import { LINE_CHANNEL_ACTIONS } from "./platform-actions-channel.js";
 import { LINE_INSIGHT_ACTIONS } from "./platform-actions-insights.js";
 import { LINE_MESSAGING_ACTIONS } from "./platform-actions-messaging.js";
 import { LINE_RICH_MENU_ACTIONS } from "./platform-actions-rich-menu.js";
@@ -11,6 +13,8 @@ const PLATFORM_ACTIONS = definePlatformActions(
         ...LINE_MESSAGING_ACTIONS,
         ...LINE_RICH_MENU_ACTIONS,
         ...LINE_INSIGHT_ACTIONS,
+        ...LINE_AUDIENCE_ACTIONS,
+        ...LINE_CHANNEL_ACTIONS,
     },
     action =>
         new LineApiError(`未实现 LINE 平台动作: ${action}`, {
