@@ -1,19 +1,29 @@
-/**
- * 钉钉适配器
- * 继承 Adapter 基类，实现钉钉平台功能
- */
-import { Account, AdapterRegistry, AccountStatus, unixMillisToEventMs } from "onebots";
-import { Adapter } from "onebots";
-import { BaseApp } from "onebots";
+import { readFile } from "node:fs/promises";
+import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
+import { createDingTalkAccount } from "./account.js";
 import { DingTalkBot } from "./bot.js";
-import { CommonEvent, type CommonTypes } from "onebots";
-import type {
-    DingTalkConfig,
-    DingTalkEvent,
-    DingTalkSendMessageResponse,
-    DingTalkWebhookResponse,
-} from "./types.js";
 import { dingTalkCapabilities } from "./capabilities.js";
+import { buildDingTalkOutboundMessage, dingtalkMessageId } from "./messages.js";
+import { DINGTALK_PLATFORM_ACTIONS, executeDingTalkPlatformAction } from "./platform-actions.js";
+import type { DingTalkUser } from "./types.js";
+
+interface SceneGroupResponse {
+    result?: {
+        open_conversation_id?: string;
+        title?: string;
+        owner_user_id?: string;
+        member_user_ids?: string[];
+    };
+}
+
+interface SceneGroupMemberResponse {
+    result?: {
+        member_user_ids?: string[];
+        next_cursor?: string;
+        has_more?: boolean;
+        staff_id_nick_map?: Record<string, string> | string;
+    };
+}
 
 export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
     constructor(app: BaseApp) {
@@ -21,300 +31,175 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
         this.icon = "https://open.dingtalk.com/favicon.ico";
     }
 
-    // ============================================
-    // 消息相关方法
-    // ============================================
-
-    /**
-     * 发送消息
-     */
     async sendMessage(
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const { scene_type, message } = params;
-        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
-
-        // 解析消息内容
-        let text = "";
-        const content: {
-            text?: string;
-            at?: {
-                isAtAll?: boolean;
-                atUserIds?: string[];
-            };
-        } = {};
-
-        for (const seg of message) {
-            if (typeof seg === "string") {
-                text += seg;
-            } else if (seg.type === "text") {
-                text += seg.data.text || "";
-            } else if (seg.type === "at") {
-                const userId = seg.data.qq || seg.data.id || seg.data.user_id;
-                if (userId === "all") {
-                    if (!content.at) content.at = {};
-                    content.at.isAtAll = true;
-                } else {
-                    if (!content.at) content.at = {};
-                    if (!content.at.atUserIds) content.at.atUserIds = [];
-                    content.at.atUserIds.push(userId);
-                }
-            } else if (seg.type === "image") {
-                // 钉钉图片消息需要先上传图片获取 media_id，这里简化处理
-                if (seg.data.url || seg.data.file) {
-                    text += `[图片: ${seg.data.url || seg.data.file}]`;
-                }
-            }
-        }
-
-        // 构建消息内容
-        content.text = text;
-
-        // 根据场景类型发送消息
-        let receiveIdType: "user" | "chat" = "user";
-
-        if (scene_type === "private" || scene_type === "direct") {
-            receiveIdType = "user";
-        } else if (scene_type === "group" || scene_type === "channel") {
-            receiveIdType = "chat";
-        }
-
-        const result = await bot.sendMessage(sceneId.string, receiveIdType, content, "text");
-
-        // 钉钉返回的是 task_id，不是 message_id，这里使用 task_id
-        return {
-            message_id: this.createId(
-                "task_id" in result
-                    ? result.task_id || Date.now().toString()
-                    : Date.now().toString(),
-            ),
-        };
+        const bot = this.requireBot(uin);
+        const scene =
+            params.scene_type === "private" || params.scene_type === "direct" ? "private" : "group";
+        const message = buildDingTalkOutboundMessage(params.message);
+        const result = await bot.sendMessage(params.scene_id.string, scene, message);
+        return { message_id: this.createId(dingtalkMessageId(result)) };
     }
 
-    /**
-     * 删除/撤回消息
-     */
-    async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
-        // 钉钉不支持撤回消息
-        throw new Error("钉钉不支持撤回消息");
-    }
-
-    /**
-     * 获取消息
-     */
-    async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
-        // 钉钉不支持直接获取消息
-        throw new Error("钉钉不支持直接获取消息");
-    }
-
-    /**
-     * 更新消息
-     */
-    async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
-        // 钉钉不支持更新消息
-        throw new Error("钉钉不支持更新消息");
-    }
-
-    // ============================================
-    // 用户相关方法
-    // ============================================
-
-    /**
-     * 获取机器人自身信息
-     */
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const me = bot.getCachedMe();
-
+        const me = this.requireBot(uin).getCachedMe();
         return {
-            user_id: this.createId(me?.userid || ""),
-            user_name: me?.name || "",
-            user_displayname: me?.name || "",
+            user_id: this.createId(me?.userid || this.getAccount(uin)?.config.account_id || uin),
+            user_name: me?.name || "钉钉机器人",
+            user_displayname: me?.name || "钉钉机器人",
             avatar: me?.avatar,
         };
     }
 
-    /**
-     * 获取用户信息
-     */
     async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        return this.toUserInfo(await this.requireBot(uin).getUserInfo(params.user_id.string));
+    }
 
-        const bot = account.client;
-
-        if (bot.getMode() === "webhook") {
-            throw new Error("Webhook 模式不支持获取用户信息");
-        }
-
-        const userId = params.user_id.string;
-        const user = await bot.getUserInfo(userId);
-
-        return {
+    /** 钉钉没有好友模型，以应用可见的根部门通讯录投影。 */
+    async getFriendList(uin: string): Promise<Adapter.FriendInfo[]> {
+        const users = await this.requireBot(uin).getDepartmentUsers();
+        return users.map(user => ({
             user_id: this.createId(user.userid),
-            user_name: user.name || "",
-            user_displayname: user.name || "",
-            avatar: user.avatar,
-        };
+            user_name: user.name,
+            remark: user.name,
+        }));
     }
 
-    // ============================================
-    // 好友（私聊会话）相关方法
-    // ============================================
-
-    /**
-     * 获取好友列表（钉钉不支持）
-     */
-    async getFriendList(
-        uin: string,
-        params?: Adapter.GetFriendListParams,
-    ): Promise<Adapter.FriendInfo[]> {
-        // 钉钉不提供好友列表 API
-        return [];
-    }
-
-    /**
-     * 获取好友信息
-     */
     async getFriendInfo(
         uin: string,
         params: Adapter.GetFriendInfoParams,
     ): Promise<Adapter.FriendInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-
-        if (bot.getMode() === "webhook") {
-            throw new Error("Webhook 模式不支持获取好友信息");
-        }
-
-        const userId = params.user_id.string;
-        const user = await bot.getUserInfo(userId);
-
+        const user = await this.requireBot(uin).getUserInfo(params.user_id.string);
         return {
             user_id: this.createId(user.userid),
-            user_name: user.name || "",
-            remark: user.name || "",
+            user_name: user.name,
+            remark: user.name,
         };
     }
 
-    // ============================================
-    // 群组相关方法
-    // ============================================
-
-    /**
-     * 获取群列表（钉钉不支持）
-     */
-    async getGroupList(
-        uin: string,
-        params?: Adapter.GetGroupListParams,
-    ): Promise<Adapter.GroupInfo[]> {
-        // 钉钉不提供群列表 API，需要通过事件订阅获取
-        return [];
-    }
-
-    /**
-     * 获取群信息
-     */
+    /** 获取场景群信息；普通群必须先具备对应开放平台上下文。 */
     async getGroupInfo(
         uin: string,
         params: Adapter.GetGroupInfoParams,
     ): Promise<Adapter.GroupInfo> {
-        // 钉钉不提供直接获取群信息的 API
-        throw new Error("钉钉不支持直接获取群信息");
+        const response = await this.requireBot(uin).callApi<SceneGroupResponse>(
+            "/topapi/im/chat/scenegroup/get",
+            {
+                method: "POST",
+                auth: "legacy",
+                body: { open_conversation_id: params.group_id.string },
+            },
+        );
+        const group = response.result;
+        return {
+            group_id: this.createId(group?.open_conversation_id || params.group_id.string),
+            group_name: group?.title || "",
+        };
     }
 
-    /**
-     * 退出群组
-     */
-    async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        // 钉钉不支持退出群组
-        throw new Error("钉钉不支持退出群组");
+    async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
+        await this.requireBot(uin).callApi("/topapi/im/chat/scenegroup/update", {
+            method: "POST",
+            auth: "legacy",
+            body: { open_conversation_id: params.group_id.string, title: params.group_name },
+        });
     }
 
-    /**
-     * 获取群成员列表
-     */
     async getGroupMemberList(
         uin: string,
         params: Adapter.GetGroupMemberListParams,
     ): Promise<Adapter.GroupMemberInfo[]> {
-        // 钉钉不提供群成员列表 API
-        throw new Error("钉钉不支持获取群成员列表");
+        const bot = this.requireBot(uin);
+        const members: Adapter.GroupMemberInfo[] = [];
+        let cursor = "0";
+        do {
+            const response = await bot.callApi<SceneGroupMemberResponse>(
+                "/topapi/im/chat/scenegroup/member/get",
+                {
+                    method: "POST",
+                    auth: "legacy",
+                    body: { open_conversation_id: params.group_id.string, cursor, size: 100 },
+                },
+            );
+            const result = response.result;
+            const nicknames = nicknameMap(result?.staff_id_nick_map);
+            for (const userId of result?.member_user_ids || []) {
+                members.push({
+                    group_id: params.group_id,
+                    user_id: this.createId(userId),
+                    user_name: nicknames[userId] || userId,
+                    card: nicknames[userId],
+                    role: "member",
+                });
+            }
+            cursor = result?.has_more ? result.next_cursor || "" : "";
+        } while (cursor);
+        return members;
     }
 
-    /**
-     * 获取群成员信息
-     */
     async getGroupMemberInfo(
         uin: string,
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-
-        if (bot.getMode() === "webhook") {
-            throw new Error("Webhook 模式不支持获取群成员信息");
-        }
-
-        const userId = params.user_id.string;
-        const user = await bot.getUserInfo(userId);
-
+        const user = await this.requireBot(uin).getUserInfo(params.user_id.string);
         return {
             group_id: params.group_id,
             user_id: this.createId(user.userid),
-            user_name: user.name || "",
-            card: user.name || "",
-            role: user.is_admin ? "admin" : "member",
+            user_name: user.name,
+            card: user.name,
+            role: user.admin ? "admin" : "member",
         };
     }
 
-    /**
-     * 踢出群成员
-     */
+    async inviteGroupMember(uin: string, params: Adapter.InviteGroupMemberParams): Promise<void> {
+        await this.updateSceneGroupMembers(
+            uin,
+            params.group_id.string,
+            params.user_id.string,
+            "add",
+        );
+    }
+
     async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        // 钉钉不支持踢出群成员
-        throw new Error("钉钉不支持踢出群成员");
+        await this.updateSceneGroupMembers(
+            uin,
+            params.group_id.string,
+            params.user_id.string,
+            "delete",
+        );
     }
 
-    /**
-     * 设置群名片（钉钉不支持）
-     */
-    async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        // 钉钉不支持设置群名片
-        throw new Error("钉钉不支持设置群名片");
+    executePlatformAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!DINGTALK_PLATFORM_ACTIONS.has(action)) {
+            return super.executePlatformAction(uin, action, params);
+        }
+        return executeDingTalkPlatformAction(this.requireBot(uin), action, params);
     }
 
-    // ============================================
-    // 系统相关方法
-    // ============================================
+    isPlatformActionImplemented(action: string): boolean {
+        return DINGTALK_PLATFORM_ACTIONS.has(action);
+    }
 
-    /**
-     * 获取版本信息
-     */
-    async getVersion(uin: string): Promise<Adapter.VersionInfo> {
+    async getVersion(): Promise<Adapter.VersionInfo> {
+        const [adapterVersion, sdkVersion] = await Promise.all([
+            readPackageVersion(new URL("../package.json", import.meta.url)),
+            readPackageVersion(new URL("../package.json", import.meta.resolve("dingtalk-stream"))),
+        ]);
         return {
             app_name: "onebots 钉钉 Adapter",
-            app_version: "1.0.0",
+            app_version: adapterVersion,
             impl: "dingtalk",
-            version: "1.0.0",
+            version: sdkVersion,
+            impl_version: sdkVersion,
         };
     }
 
-    /**
-     * 获取运行状态
-     */
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const account = this.getAccount(uin);
         return {
@@ -323,149 +208,69 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
         };
     }
 
-    // ============================================
-    // 账号创建
-    // ============================================
-
     createAccount(config: Account.Config<"dingtalk">): Account<"dingtalk", DingTalkBot> {
-        const dingtalkConfig: DingTalkConfig = {
-            account_id: config.account_id,
-            app_key: config.app_key,
-            app_secret: config.app_secret,
-            agent_id: config.agent_id,
-            encrypt_key: config.encrypt_key,
-            token: config.token,
-            webhook_url: config.webhook_url,
-        };
-
-        const bot = new DingTalkBot(dingtalkConfig);
-        const account = new Account<"dingtalk", DingTalkBot>(this, bot, config);
-
-        // Webhook 路由（事件订阅）
-        this.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
-
-        // 监听 Bot 事件
-        bot.on("ready", () => {
-            this.logger.info(`钉钉 Bot ${config.account_id} 已就绪`);
-        });
-
-        bot.on("error", error => {
-            this.logger.error(`钉钉 Bot ${config.account_id} 错误:`, error);
-        });
-
-        // 监听钉钉事件
-        bot.on("event", (event: DingTalkEvent) => {
-            this.handleDingTalkEvent(account, event);
-        });
-
-        // 启动时初始化 Bot
-        account.on("start", async () => {
-            try {
-                await bot.start();
-                account.status = AccountStatus.Online;
-                const me = bot.getCachedMe();
-                account.nickname = me?.name || "钉钉 Bot";
-                account.avatar = me?.avatar || this.icon;
-            } catch (error) {
-                this.logger.error(`启动钉钉 Bot 失败:`, error);
-                account.status = AccountStatus.OffLine;
-            }
-        });
-
-        account.on("stop", async () => {
-            await bot.stop();
-            account.status = AccountStatus.OffLine;
-        });
-
-        return account;
+        return createDingTalkAccount(this, config);
     }
 
-    /**
-     * 处理钉钉事件
-     */
-    private handleDingTalkEvent(
-        account: Account<"dingtalk", DingTalkBot>,
-        event: DingTalkEvent,
-    ): void {
-        const eventType = event.eventType;
+    private requireBot(uin: string): DingTalkBot {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        return account.client;
+    }
 
-        // 处理消息事件
-        if (eventType === "chat_update_message" || eventType === "im.message.receive") {
-            const message = event.eventData.msg;
-            if (!message) return;
+    private toUserInfo(user: DingTalkUser): Adapter.UserInfo {
+        return {
+            user_id: this.createId(user.userid),
+            user_name: user.name,
+            user_displayname: user.name,
+            avatar: user.avatar,
+        };
+    }
 
-            // 忽略自己发送的消息
-            const bot = account.client;
-            const me = bot.getCachedMe();
-            if (me && message.senderId === me.userid) return;
-
-            // 打印消息接收日志
-            const content = message.text?.content || "";
-            const contentPreview =
-                content.length > 100 ? content.substring(0, 100) + "..." : content;
-            this.logger.info(
-                `[钉钉] 收到消息 | 消息ID: ${message.msgId} | ` +
-                    `发送者: ${message.senderId} | 内容: ${contentPreview}`,
-            );
-
-            // 构建消息段
-            const messageSegments: CommonTypes.Segment[] = [];
-            if (content) {
-                messageSegments.push({
-                    type: "text",
-                    data: { text: content },
-                });
-            }
-
-            // 判断是私聊还是群聊
-            const isGroup = message.conversationType === "2";
-            const messageType = isGroup ? "group" : "private";
-
-            // 转换为 CommonEvent 格式
-            const commonEvent: CommonEvent.Message = {
-                id: this.createId(message.msgId),
-                // 钉钉消息 createAt 为毫秒时间戳
-                timestamp: unixMillisToEventMs(message.createAt),
-                platform: "dingtalk",
-                bot_id: this.createId(account.config.account_id),
-                type: "message",
-                message_type: messageType,
-                sender: {
-                    id: this.createId(message.senderId),
-                    name: message.senderNick || message.senderId,
-                    avatar: undefined,
-                },
-                ...(isGroup
-                    ? {
-                          group: {
-                              id: this.createId(message.conversationId || ""),
-                              name: "",
-                          },
-                      }
-                    : {}),
-                message_id: this.createId(message.msgId),
-                raw_message: content,
-                message: messageSegments,
-            };
-
-            // 派发到协议层
-            account.dispatch(commonEvent);
-        }
+    private async updateSceneGroupMembers(
+        uin: string,
+        groupId: string,
+        userId: string,
+        operation: "add" | "delete",
+    ): Promise<void> {
+        await this.requireBot(uin).callApi(`/topapi/im/chat/scenegroup/member/${operation}`, {
+            method: "POST",
+            auth: "legacy",
+            body: { open_conversation_id: groupId, user_ids: [userId] },
+        });
     }
 }
 
-declare module "onebots" {
-    export namespace Adapter {
-        export interface Configs {
-            dingtalk: DingTalkConfig;
-        }
+function nicknameMap(value: Record<string, string> | string | undefined): Record<string, string> {
+    if (!value) return {};
+    if (typeof value === "object") return value;
+    try {
+        const parsed: unknown = JSON.parse(value);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? (parsed as Record<string, string>)
+            : {};
+    } catch {
+        return {};
     }
+}
+
+async function readPackageVersion(url: URL): Promise<string> {
+    const metadata: unknown = JSON.parse(await readFile(url, "utf8"));
+    if (
+        !metadata ||
+        typeof metadata !== "object" ||
+        !("version" in metadata) ||
+        typeof metadata.version !== "string"
+    ) {
+        throw new TypeError(`包元数据缺少 version: ${url.pathname}`);
+    }
+    return metadata.version;
 }
 
 AdapterRegistry.register("dingtalk", DingTalkAdapter, {
     name: "dingtalk",
     displayName: "钉钉官方机器人",
-    description: "钉钉官方机器人适配器，支持企业内部应用和自定义机器人",
+    description: "钉钉官方机器人适配器，支持 Stream、HTTP 回调和开放平台 API",
     icon: "https://open.dingtalk.com/favicon.ico",
     homepage: "https://open.dingtalk.com/",
     author: "凉菜",

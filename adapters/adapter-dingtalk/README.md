@@ -1,83 +1,82 @@
 # @onebots/adapter-dingtalk
 
-onebots 钉钉适配器
+OneBots 的钉钉官方适配器。接收侧支持官方 Stream 长连接和 HTTP 回调；发送侧支持企业机器人主动消息、会话 Webhook 与自定义群机器人，三者不会再通过一个 `webhook_url` 开关混为同一模式。
 
 ## 安装
 
 ```bash
-npm install @onebots/adapter-dingtalk
-# 或
 pnpm add @onebots/adapter-dingtalk
 ```
 
-## 配置
-
-### 企业内部应用模式
-
-在 `config.yaml` 中配置：
+## 推荐配置：Stream
 
 ```yaml
-dingtalk.your_bot_id:
-  app_key: "YOUR_APP_KEY"
-  app_secret: "YOUR_APP_SECRET"
-  agent_id: "YOUR_AGENT_ID"  # 可选
-  encrypt_key: "YOUR_ENCRYPT_KEY"  # 可选，事件加密密钥
-  token: "YOUR_TOKEN"  # 可选，事件验证 Token
+dingtalk.my_bot:
+  account_id: my_bot
+  receive_mode: stream
+  app_key: dingxxxxxxxx
+  app_secret: xxxxxxxx
+  robot_code: dingxxxxxxxx # 可省略，默认使用 app_key
+  agent_id: "123456" # 仅工作通知 API 需要
 ```
 
-### 自定义机器人模式（Webhook）
+在开发者后台为企业内部应用添加机器人能力、选择 Stream 模式并发布。Stream 不需要公网回调地址，断线后由钉钉官方 SDK 持续重连。
 
-在 `config.yaml` 中配置：
+## HTTP 加密回调
 
 ```yaml
-dingtalk.your_bot_id:
-  webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"
+dingtalk.my_bot:
+  account_id: my_bot
+  receive_mode: webhook
+  app_key: dingxxxxxxxx
+  app_secret: xxxxxxxx
+  corp_id: dingxxxxxxxx
+  token: callback-token
+  encrypt_key: 43-character-EncodingAESKey
 ```
 
-## 使用
+回调地址为：
 
-```bash
-onebots -r dingtalk
+```text
+POST /dingtalk/{account_id}/webhook
 ```
 
-## 功能
+适配器会验证 SHA-1 签名、解密 AES-256-CBC 载荷、校验 CorpId，并按钉钉要求返回加密响应。未配置 `encrypt_key` 时只接收带正确 `token` 的明文回调。
 
-### 企业内部应用模式
-- ✅ 单聊消息收发
-- ✅ 群聊消息收发
-- ✅ 文本消息
-- ✅ Markdown 消息
-- ✅ 卡片消息（部分支持）
-- ✅ 事件订阅（Webhook）
-- ✅ 用户信息获取
+## 自定义群机器人
 
-### 自定义机器人模式（Webhook）
-- ✅ 群聊消息推送
-- ✅ 文本消息
-- ✅ Markdown 消息
-- ✅ @用户、@所有人
-- ✅ 卡片消息（部分支持）
+自定义机器人 Webhook 只负责向其所在的固定群发送消息，不会禁用企业通讯录 API，也不会改变事件接收方式：
 
-## 获取应用凭证
+```yaml
+dingtalk.my_bot:
+  account_id: my_bot
+  receive_mode: webhook
+  webhook_url: https://oapi.dingtalk.com/robot/send?access_token=xxxx
+  webhook_secret: SECxxxxxxxx # 开启加签时填写
+```
 
-### 企业内部应用
+## 消息与事件
 
-1. 访问 [钉钉开放平台](https://open.dingtalk.com/)
-2. 创建企业内部应用
-3. 获取 `AppKey` 和 `AppSecret`
-4. 获取 `AgentId`（可选）
-5. 配置事件订阅 URL（Webhook）
-6. 配置应用权限（消息收发、通讯录等）
+- 收消息：文本、富文本、图片、语音、视频和文件均投影为统一消息段。
+- 发消息：文本、Markdown、图片 URL、链接和 ActionCard 映射为钉钉原生 `msgKey`。
+- `@` 会映射到 `atUserIds` / `isAtAll`。
+- Stream 收到的 `sessionWebhook` 会按会话及过期时间缓存，普通 `send_message` 优先复用它。
+- 通讯录、群成员及未知原生事件均保留在 `raw_event`；尚未标准化的事件同时投影为 `custom` notice。
 
-### 自定义机器人
+## 平台扩展动作
 
-1. 在钉钉群聊中，点击"群设置" -> "智能群助手" -> "添加机器人"
-2. 选择"自定义"机器人
-3. 获取 Webhook URL
+除统一 API 外，适配器通过 `callAction()` 提供结构化钉钉能力：
+
+- `call_dingtalk_api`：底层开放平台入口，参数为 `path`、`method`、`auth`、`query`、`body`。
+- `send_robot_private_message`、`send_robot_group_message`。
+- `send_work_notification`、`get_work_notification_result`、`recall_work_notification`。
+- `get_department_users`、`get_sub_departments`、部门增删改。
+- `get_role_list`、`get_role_users`、用户角色增删。
+
+`auth` 可选 `modern`、`legacy`、`none`。路径必须是以 `/` 开头且不含目录穿越的开放平台路径。
 
 ## 相关链接
 
 - [钉钉开放平台](https://open.dingtalk.com/)
-- [钉钉机器人开发文档](https://open.dingtalk.com/document/robots/robot-overview)
-- [onebots 文档](https://onebots.js.org/)
-
+- [钉钉 Stream Node.js SDK](https://github.com/open-dingtalk/dingtalk-stream-sdk-nodejs)
+- [自定义机器人文档](https://open.dingtalk.com/document/orgapp/custom-robot-access)

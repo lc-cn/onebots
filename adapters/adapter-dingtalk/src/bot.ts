@@ -1,367 +1,426 @@
-/**
- * 钉钉 Bot 客户端
- * 基于钉钉开放平台 API，使用 fetch 实现
- */
-import { EventEmitter } from 'node:events';
-import type { RouterContext, Next } from 'onebots';
+import { createHmac } from "node:crypto";
+import { EventEmitter } from "node:events";
+import {
+    DWClient,
+    EventAck,
+    TOPIC_CARD,
+    TOPIC_ROBOT,
+    type DWClientDownStream,
+} from "dingtalk-stream";
+import type { Next, RouterContext } from "onebots";
+import { DingTalkCallbackCrypto } from "./crypto.js";
 import type {
+    DingTalkApiRequestOptions,
     DingTalkConfig,
-    DingTalkTokenResponse,
-    DingTalkSendMessageRequest,
-    DingTalkSendMessageResponse,
+    DingTalkDepartmentUserResponse,
     DingTalkEvent,
+    DingTalkRobotMessage,
+    DingTalkSendResult,
+    DingTalkTokenResponse,
     DingTalkUser,
-    DingTalkChat,
+    DingTalkUserGetResponse,
     DingTalkWebhookMessage,
     DingTalkWebhookResponse,
-    DingTalkUserGetResponse,
-    DingTalkMessageContent
-} from './types.js';
+} from "./types.js";
 
-const DINGTALK_API_BASE = 'https://oapi.dingtalk.com';
+const MODERN_API_BASE = "https://api.dingtalk.com";
+const LEGACY_API_BASE = "https://oapi.dingtalk.com";
 
-/**
- * HTTP 请求选项
- */
-interface RequestOptions {
-    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-    headers?: Record<string, string>;
-    body?: Record<string, unknown>;
-    params?: Record<string, string | number | boolean>;
-    skipAuth?: boolean;
+export interface DingTalkOutboundMessage {
+    msgKey: string;
+    msgParam: Record<string, unknown>;
+    atUserIds?: string[];
+    isAtAll?: boolean;
+    webhook: DingTalkWebhookMessage;
 }
 
+export class DingTalkApiError extends Error {
+    constructor(
+        message: string,
+        readonly status: number,
+        readonly code?: string | number,
+        readonly requestId?: string,
+    ) {
+        super(message);
+        this.name = "DingTalkApiError";
+    }
+}
+
+/** 钉钉 API、Stream 与 HTTP 回调的底层客户端。 */
 export class DingTalkBot extends EventEmitter {
-    private config: DingTalkConfig;
-    private accessToken: string = '';
-    private tokenExpireTime: number = 0;
+    private accessToken = "";
+    private tokenExpireTime = 0;
     private me: DingTalkUser | null = null;
-    private mode: 'internal' | 'webhook' = 'internal'; // 企业内部应用 或 自定义机器人
+    private streamClient?: DWClient;
+    private callbackCrypto?: DingTalkCallbackCrypto;
+    private readonly sessionWebhooks = new Map<string, { url: string; expiresAt: number }>();
 
-    constructor(config: DingTalkConfig) {
+    constructor(readonly config: DingTalkConfig) {
         super();
-        this.config = config;
-        
-        // 判断使用模式
-        if (config.webhook_url) {
-            this.mode = 'webhook';
-        } else {
-            this.mode = 'internal';
+        if (config.encrypt_key) {
+            if (!config.corp_id) throw new Error("钉钉加密回调必须配置 corp_id");
+            this.callbackCrypto = new DingTalkCallbackCrypto(
+                config.token || "",
+                config.encrypt_key,
+                config.corp_id,
+            );
         }
     }
 
-    /**
-     * 发送 HTTP 请求
-     */
-    private async request<T = unknown>(url: string, options: RequestOptions = {}): Promise<T> {
-        const { method = 'GET', headers = {}, body, params, skipAuth = false } = options;
-        
-        // 构建 URL
-        const urlObj = new URL(url);
-        if (params) {
-            for (const [key, value] of Object.entries(params)) {
-                urlObj.searchParams.append(key, String(value));
-            }
-        }
-
-        // 企业内部应用模式自动添加 token
-        if (this.mode === 'internal' && !skipAuth && !url.includes('/gettoken')) {
-            const token = await this.getAccessToken();
-            urlObj.searchParams.append('access_token', token);
-        }
-
-        // 构建请求头
-        const requestHeaders: Record<string, string> = {
-            'Content-Type': 'application/json',
-            ...headers,
-        };
-
-        // 发送请求
-        const response = await fetch(urlObj.toString(), {
-            method,
-            headers: requestHeaders,
-            body: body ? JSON.stringify(body) : undefined,
-        });
-
-        return response.json();
+    get receiveMode(): "stream" | "webhook" {
+        return this.config.receive_mode || "stream";
     }
 
-    /**
-     * GET 请求
-     */
-    async get<T = unknown>(path: string, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
-        const data = await this.request<T>(`${DINGTALK_API_BASE}${path}`, { params });
-        return { data };
-    }
-
-    /**
-     * POST 请求
-     */
-    async post<T = unknown>(path: string, body?: Record<string, unknown>, params?: Record<string, string | number | boolean>): Promise<{ data: T }> {
-        const data = await this.request<T>(`${DINGTALK_API_BASE}${path}`, { method: 'POST', body, params });
-        return { data };
-    }
-
-    /**
-     * 获取访问令牌（企业内部应用）
-     */
-    async getAccessToken(): Promise<string> {
-        if (this.mode === 'webhook') {
-            // Webhook 模式不需要 token
-            return '';
-        }
-
-        if (this.accessToken && Date.now() < this.tokenExpireTime) {
-            return this.accessToken;
-        }
-
-        const data = await this.request<DingTalkTokenResponse>(`${DINGTALK_API_BASE}/gettoken`, {
-            params: {
-                appkey: this.config.app_key || '',
-                appsecret: this.config.app_secret || '',
-            },
-            skipAuth: true,
-        });
-
-        if (data.errcode !== 0) {
-            throw new Error(`获取访问令牌失败: ${data.errmsg}`);
-        }
-
-        this.accessToken = data.access_token || '';
-        this.tokenExpireTime = Date.now() + ((data.expires_in || 7200) - 60) * 1000; // 提前60秒刷新
-
-        return this.accessToken;
-    }
-
-    /**
-     * 启动 Bot
-     */
     async start(): Promise<void> {
-        try {
-            if (this.mode === 'internal') {
-                // 获取访问令牌
-                await this.getAccessToken();
-                
-                // 获取 Bot 信息
-                this.me = await this.getBotInfo();
-            } else {
-                // Webhook 模式不需要初始化
-                this.me = {
-                    userid: this.config.account_id,
-                    name: 'DingTalk Bot',
-                };
-            }
-            
-            this.emit('ready');
-        } catch (error) {
-            this.emit('error', error);
-            throw error;
-        }
-    }
-
-    /**
-     * 停止 Bot
-     */
-    async stop(): Promise<void> {
-        this.emit('stopped');
-    }
-
-    /**
-     * 处理 Webhook 请求（事件订阅）
-     */
-    async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        const body = ctx.request.body as Record<string, unknown>;
-        
-        // 验证事件（如果配置了 token）
-        if (this.config.token && body.token !== this.config.token) {
-            ctx.status = 401;
-            ctx.body = { error: 'Invalid token' };
-            return;
-        }
-
-        // 处理 URL 验证（钉钉首次配置 webhook 时会发送验证请求）
-        if (body.encrypt) {
-            // 这里需要解密，简化处理
-            ctx.body = { 
-                encrypt: body.encrypt, // 原样返回
-            };
-            return;
-        }
-
-        // 处理事件
-        const event: DingTalkEvent = {
-            eventType: String(body.eventType || body.type || ''),
-            eventId: String(body.eventId || body.id || ''),
-            eventTime: Number(body.eventTime || body.timestamp) || Date.now(),
-            eventCorpId: body.eventCorpId != null ? String(body.eventCorpId) :
-                         body.corpId != null ? String(body.corpId) : undefined,
-            eventData: (body.data as Record<string, unknown>) || body,
+        if (this.receiveMode === "stream") await this.startStream();
+        if (this.hasAppCredentials()) await this.getAccessToken();
+        this.me ||= {
+            userid: this.config.robot_code || this.config.app_key || this.config.account_id,
+            name: "钉钉机器人",
         };
-        
-        this.emit('event', event);
-
-        ctx.body = { success: true };
-        await next();
+        this.emit("ready");
     }
 
-    /**
-     * 获取缓存的 Bot 信息
-     */
+    async stop(): Promise<void> {
+        this.streamClient?.disconnect();
+        this.streamClient = undefined;
+        this.emit("stopped");
+    }
+
+    private async startStream(): Promise<void> {
+        if (!this.config.app_key || !this.config.app_secret) {
+            throw new Error("钉钉 Stream 模式必须配置 app_key 和 app_secret");
+        }
+        if (this.streamClient) return;
+        const stream = new DWClient({
+            clientId: this.config.app_key,
+            clientSecret: this.config.app_secret,
+            autoReconnect: true,
+            keepAlive: true,
+            debug: false,
+        });
+        stream.registerCallbackListener(TOPIC_ROBOT, message => {
+            const data = parseObject(message.data, "钉钉 Stream 机器人消息");
+            this.rememberRobot(data);
+            this.emit("robot_message", data, message);
+            stream.socketCallBackResponse(message.headers.messageId, { success: true });
+        });
+        stream.registerCallbackListener(TOPIC_CARD, message => {
+            this.emit("native_event", streamEvent(message), message);
+            stream.socketCallBackResponse(message.headers.messageId, { success: true });
+        });
+        stream.registerAllEventListener(message => {
+            this.emit("event", streamEvent(message), message);
+            return { status: EventAck.SUCCESS };
+        });
+        stream.on("error", error => this.emit("error", error));
+        this.streamClient = stream;
+        await stream.connect();
+    }
+
+    private rememberRobot(data: Record<string, unknown>): void {
+        const message = data as DingTalkRobotMessage;
+        if (message.chatbotUserId) {
+            this.me = { userid: message.chatbotUserId, name: "钉钉机器人" };
+        }
+        if (message.conversationId && message.sessionWebhook) {
+            this.sessionWebhooks.set(message.conversationId, {
+                url: message.sessionWebhook,
+                expiresAt: message.sessionWebhookExpiredTime || Date.now() + 60 * 60 * 1000,
+            });
+        }
+    }
+
+    async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
+        try {
+            const body = objectValue(ctx.request.body, "钉钉回调 body");
+            const encrypted = stringValue(body.encrypt);
+            if (encrypted) {
+                if (!this.callbackCrypto) throw new Error("收到加密回调但未配置 encrypt_key");
+                const timestamp = queryString(ctx.query.timestamp || ctx.query.timeStamp);
+                const nonce = queryString(ctx.query.nonce);
+                const signature = queryString(ctx.query.signature || ctx.query.msg_signature);
+                const plain = this.callbackCrypto.decrypt(encrypted, signature, timestamp, nonce);
+                const decoded = tryParseObject(plain);
+                if (decoded) this.emit("event", webhookEvent(decoded), body);
+                ctx.body = this.callbackCrypto.encryptResponse(decoded ? "success" : plain);
+                return;
+            }
+            if (this.config.token && body.token !== this.config.token) {
+                ctx.status = 401;
+                ctx.body = { error: "Invalid token" };
+                return;
+            }
+            if (looksLikeRobotMessage(body)) {
+                this.rememberRobot(body);
+                this.emit("robot_message", body, body);
+            } else {
+                this.emit("event", webhookEvent(body), body);
+            }
+            ctx.body = { success: true };
+            await next();
+        } catch (error) {
+            this.emit("error", error);
+            ctx.status = 400;
+            ctx.body = { error: error instanceof Error ? error.message : "Invalid callback" };
+        }
+    }
+
     getCachedMe(): DingTalkUser | null {
         return this.me;
     }
 
-    /**
-     * 获取 Bot 信息（企业内部应用）
-     */
-    async getBotInfo(): Promise<DingTalkUser> {
-        if (this.mode === 'webhook') {
-            return {
-                userid: this.config.account_id,
-                name: 'DingTalk Bot',
-            };
-        }
-
-        // 钉钉没有直接的 getBotInfo API，这里返回一个占位信息
-        return {
-            userid: this.config.agent_id || this.config.account_id,
-            name: 'DingTalk Bot',
-        };
+    hasAppCredentials(): boolean {
+        return Boolean(this.config.app_key && this.config.app_secret);
     }
 
-    /**
-     * 发送消息（企业内部应用）
-     */
-    async sendMessageInternal(request: DingTalkSendMessageRequest): Promise<DingTalkSendMessageResponse> {
-        const response = await this.post<DingTalkSendMessageResponse>('/topapi/message/corpconversation/asyncsend_v2', {
-            agent_id: this.config.agent_id || request.agent_id,
-            userid_list: request.userid_list,
-            dept_id_list: request.dept_id_list,
-            to_all_user: request.to_all_user || false,
-            msg: request.msg,
+    async getAccessToken(): Promise<string> {
+        if (!this.hasAppCredentials())
+            throw new Error("钉钉开放平台 API 需要 app_key 和 app_secret");
+        if (this.accessToken && Date.now() < this.tokenExpireTime) return this.accessToken;
+        const data = await this.request<DingTalkTokenResponse>("/v1.0/oauth2/accessToken", {
+            method: "POST",
+            auth: "none",
+            body: { appKey: this.config.app_key, appSecret: this.config.app_secret },
         });
-
-        if (response.data.errcode !== 0) {
-            throw new Error(`发送消息失败: ${response.data.errmsg}`);
-        }
-
-        return response.data;
+        const token = data.accessToken || data.access_token;
+        if (!token) throw new DingTalkApiError("获取钉钉访问令牌失败", 200, data.errcode);
+        this.accessToken = token;
+        this.tokenExpireTime =
+            Date.now() + ((data.expireIn || data.expires_in || 7200) - 60) * 1000;
+        return token;
     }
 
-    /**
-     * 发送消息（自定义机器人 Webhook）
-     */
-    async sendMessageWebhook(message: DingTalkWebhookMessage): Promise<DingTalkWebhookResponse> {
-        if (!this.config.webhook_url) {
-            throw new Error('Webhook URL 未配置');
+    async callApi<T = unknown>(path: string, options: DingTalkApiRequestOptions = {}): Promise<T> {
+        if (!path.startsWith("/") || path.includes("..")) {
+            throw new Error("钉钉 API path 必须为安全绝对路径");
         }
+        return this.request<T>(path, options);
+    }
 
-        const response = await fetch(this.config.webhook_url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+    private async request<T>(path: string, options: DingTalkApiRequestOptions): Promise<T> {
+        const auth = options.auth || (path.startsWith("/v1.0/") ? "modern" : "legacy");
+        const url = new URL(`${auth === "legacy" ? LEGACY_API_BASE : MODERN_API_BASE}${path}`);
+        for (const [key, value] of Object.entries(options.query || {})) {
+            url.searchParams.set(key, String(value));
+        }
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+            ...options.headers,
+        };
+        if (auth !== "none") {
+            const token = await this.getAccessToken();
+            if (auth === "modern") headers["x-acs-dingtalk-access-token"] = token;
+            else url.searchParams.set("access_token", token);
+        }
+        const response = await fetch(url, {
+            method: options.method || "GET",
+            headers,
+            body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+        const text = await response.text();
+        const data = parseResponse(text, path);
+        const apiError = extractApiError(data);
+        if (!response.ok || apiError) {
+            throw new DingTalkApiError(
+                apiError?.message || response.statusText || "钉钉 API 调用失败",
+                response.status,
+                apiError?.code,
+                apiError?.requestId,
+            );
+        }
+        return data as T;
+    }
+
+    async sendMessage(
+        receiveId: string,
+        scene: "private" | "group",
+        message: DingTalkOutboundMessage,
+    ): Promise<DingTalkSendResult | DingTalkWebhookResponse> {
+        const session = this.sessionWebhooks.get(receiveId);
+        if (session && session.expiresAt > Date.now()) {
+            return this.postWebhook(session.url, message.webhook, true);
+        }
+        if (!this.hasAppCredentials()) {
+            if (scene !== "group" || !this.config.webhook_url) {
+                throw new Error("当前钉钉配置无法向该会话主动发送消息");
+            }
+            return this.postWebhook(this.signedWebhookUrl(), message.webhook, false);
+        }
+        const robotCode = this.config.robot_code || this.config.app_key;
+        if (!robotCode) throw new Error("钉钉企业机器人必须配置 robot_code 或 app_key");
+        const common = {
+            robotCode,
+            msgKey: message.msgKey,
+            msgParam: JSON.stringify(message.msgParam),
+        };
+        if (scene === "private") {
+            return this.callApi("/v1.0/robot/oToMessages/batchSend", {
+                method: "POST",
+                body: { ...common, userIds: [receiveId] },
+            });
+        }
+        return this.callApi("/v1.0/robot/groupMessages/send", {
+            method: "POST",
+            body: {
+                ...common,
+                openConversationId: receiveId,
+                ...(message.atUserIds?.length ? { atUserIds: message.atUserIds } : {}),
+                ...(message.isAtAll ? { isAtAll: true } : {}),
+            },
+        });
+    }
+
+    private async postWebhook(
+        url: string,
+        message: DingTalkWebhookMessage,
+        authenticated: boolean,
+    ): Promise<DingTalkWebhookResponse> {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (authenticated) {
+            headers["x-acs-dingtalk-access-token"] = await this.getAccessToken();
+        }
+        const response = await fetch(url, {
+            method: "POST",
+            headers,
             body: JSON.stringify(message),
         });
-
-        const data = await response.json() as DingTalkWebhookResponse;
-
-        if (data.errcode !== 0) {
-            throw new Error(`发送消息失败: ${data.errmsg}`);
+        const data = parseResponse(
+            await response.text(),
+            "session webhook",
+        ) as DingTalkWebhookResponse;
+        if (!response.ok || data.errcode) {
+            throw new DingTalkApiError(
+                data.errmsg || response.statusText,
+                response.status,
+                data.errcode,
+            );
         }
-
         return data;
     }
 
-    /**
-     * 发送消息（统一接口）
-     */
-    async sendMessage(
-        receiveId: string,
-        receiveIdType: 'user' | 'chat',
-        content: string | DingTalkMessageContent,
-        msgType: string = 'text'
-    ): Promise<DingTalkSendMessageResponse | DingTalkWebhookResponse> {
-        if (this.mode === 'webhook') {
-            // Webhook 模式
-            const webhookMessage: DingTalkWebhookMessage = {
-                msgtype: msgType,
-            };
-
-            if (msgType === 'text') {
-                webhookMessage.text = {
-                    content: typeof content === 'string' ? content : content.text || '',
-                };
-            } else if (msgType === 'markdown') {
-                webhookMessage.markdown = {
-                    title: typeof content === 'string' ? '消息' : content.title || '消息',
-                    text: typeof content === 'string' ? content : content.text || '',
-                };
-            }
-
-            // 处理 @
-            if (receiveIdType === 'chat' && typeof content !== 'string' && content.at) {
-                webhookMessage.at = content.at;
-            }
-
-            return await this.sendMessageWebhook(webhookMessage);
-        } else {
-            // 企业内部应用模式
-            const request: DingTalkSendMessageRequest = {
-                agent_id: this.config.agent_id,
-                msg: {
-                    msgtype: msgType,
-                },
-            };
-
-            if (receiveIdType === 'user') {
-                request.userid_list = receiveId;
-            } else {
-                // 群聊需要通过其他方式
-                request.userid_list = receiveId;
-            }
-
-            if (msgType === 'text') {
-                request.msg.text = {
-                    content: typeof content === 'string' ? content : content.text || '',
-                };
-            } else if (msgType === 'markdown') {
-                request.msg.markdown = {
-                    title: typeof content === 'string' ? '消息' : content.title || '消息',
-                    text: typeof content === 'string' ? content : content.text || '',
-                };
-            }
-
-            return await this.sendMessageInternal(request);
-        }
+    private signedWebhookUrl(): string {
+        const raw = this.config.webhook_url;
+        if (!raw) throw new Error("钉钉自定义机器人 webhook_url 未配置");
+        if (!this.config.webhook_secret) return raw;
+        const timestamp = Date.now().toString();
+        const sign = createHmac("sha256", this.config.webhook_secret)
+            .update(`${timestamp}\n${this.config.webhook_secret}`)
+            .digest("base64");
+        const url = new URL(raw);
+        url.searchParams.set("timestamp", timestamp);
+        url.searchParams.set("sign", sign);
+        return url.toString();
     }
 
-    /**
-     * 获取用户信息
-     */
     async getUserInfo(userId: string): Promise<DingTalkUser> {
-        if (this.mode === 'webhook') {
-            throw new Error('Webhook 模式不支持获取用户信息');
-        }
-
-        const response = await this.get<DingTalkUserGetResponse>('/topapi/v2/user/get', { userid: userId });
-
-        if (response.data.errcode !== 0) {
-            throw new Error(`获取用户信息失败: ${response.data.errmsg}`);
-        }
-
-        return response.data.result;
+        const response = await this.callApi<DingTalkUserGetResponse>("/topapi/v2/user/get", {
+            method: "POST",
+            body: { userid: userId },
+        });
+        return response.result;
     }
 
-    /**
-     * 获取 HTTP 客户端实例（返回 this 以便链式调用）
-     */
-    getHttpClient(): DingTalkBot {
-        return this;
+    async getDepartmentUsers(departmentId = 1): Promise<DingTalkUser[]> {
+        const users: DingTalkUser[] = [];
+        let cursor = 0;
+        do {
+            const response = await this.callApi<DingTalkDepartmentUserResponse>(
+                "/topapi/v2/user/list",
+                { method: "POST", body: { dept_id: departmentId, cursor, size: 100 } },
+            );
+            users.push(...(response.result?.list || []));
+            cursor = response.result?.has_more ? response.result.next_cursor || 0 : 0;
+        } while (cursor);
+        return users;
     }
+}
 
-    /**
-     * 获取模式
-     */
-    getMode(): 'internal' | 'webhook' {
-        return this.mode;
+function streamEvent(message: DWClientDownStream): DingTalkEvent {
+    const eventData = parseObject(message.data, "钉钉 Stream 事件");
+    return {
+        eventType: message.headers.eventType || message.headers.topic,
+        eventId: message.headers.eventId || message.headers.messageId,
+        eventTime: Number(message.headers.eventBornTime || message.headers.time) || Date.now(),
+        eventCorpId: message.headers.eventCorpId,
+        eventData,
+        raw: { headers: { ...message.headers }, data: eventData, type: message.type },
+    };
+}
+
+function webhookEvent(body: Record<string, unknown>): DingTalkEvent {
+    return {
+        eventType: String(body.EventType || body.eventType || body.type || "unknown"),
+        eventId: String(body.eventId || body.id || `${Date.now()}`),
+        eventTime: Number(body.eventTime || body.timestamp) || Date.now(),
+        eventCorpId: stringValue(body.CorpId || body.corpId || body.eventCorpId),
+        eventData: objectOrSelf(body.data, body),
+        raw: body,
+    };
+}
+
+function parseResponse(text: string, operation: string): unknown {
+    if (!text) return {};
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        throw new Error(`钉钉 ${operation} 返回了无效 JSON`, { cause: error });
     }
+}
+
+function extractApiError(value: unknown) {
+    if (!value || typeof value !== "object") return undefined;
+    const data = value as Record<string, unknown>;
+    const legacyCode = typeof data.errcode === "number" ? data.errcode : undefined;
+    const modernCode = typeof data.code === "string" ? data.code : undefined;
+    if ((!legacyCode || legacyCode === 0) && !modernCode) return undefined;
+    return {
+        code: modernCode || legacyCode,
+        message: String(data.message || data.errmsg || "钉钉 API 调用失败"),
+        requestId: stringValue(data.requestid || data.requestId),
+    };
+}
+
+function parseObject(text: string, description: string): Record<string, unknown> {
+    const value = parseResponse(text, description);
+    return objectValue(value, description);
+}
+
+function tryParseObject(text: string): Record<string, unknown> | undefined {
+    try {
+        const value: unknown = JSON.parse(text);
+        return value && typeof value === "object" && !Array.isArray(value)
+            ? (value as Record<string, unknown>)
+            : undefined;
+    } catch {
+        // URL 校验的 challenge 是普通字符串，并非 JSON。
+        return undefined;
+    }
+}
+
+function objectValue(value: unknown, description: string): Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(`${description} 必须为对象`);
+    }
+    return value as Record<string, unknown>;
+}
+
+function objectOrSelf(value: unknown, fallback: Record<string, unknown>): Record<string, unknown> {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : fallback;
+}
+
+function queryString(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+    return "";
+}
+
+function stringValue(value: unknown): string | undefined {
+    return typeof value === "string" && value ? value : undefined;
+}
+
+function looksLikeRobotMessage(value: Record<string, unknown>): boolean {
+    return typeof value.msgId === "string" && typeof value.conversationId === "string";
 }

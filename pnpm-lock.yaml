@@ -96,6 +96,9 @@ importers:
 
   adapters/adapter-dingtalk:
     dependencies:
+      dingtalk-stream:
+        specifier: 2.1.7-beta.1
+        version: 2.1.7-beta.1
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
@@ -443,7 +446,7 @@ importers:
     dependencies:
       axios:
         specifier: ^1.19.0
-        version: 1.19.0
+        version: 1.19.0(debug@4.4.3)
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
@@ -469,7 +472,7 @@ importers:
     dependencies:
       axios:
         specifier: ^1.19.0
-        version: 1.19.0
+        version: 1.19.0(debug@4.4.3)
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
@@ -3047,6 +3050,9 @@ packages:
 
   dijkstrajs@1.0.3:
     resolution: {integrity: sha512-qiSlmBq9+BCdCA/L46dw8Uy93mloxsPSbwnm5yrKn2vMPiy8KyAskTF6zuV/j5BMsmOGZDPs7KjU+mjb670kfA==}
+
+  dingtalk-stream@2.1.7-beta.1:
+    resolution: {integrity: sha512-MBWfDa3KrocwFPf5tOAhG2oM6FFYBN30sQQ7wbz7BPlRcuemAb7SGXbeztS49Pp/3Hiyzhwqjcssf8Yq3Z9DzA==}
 
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
@@ -5683,7 +5689,7 @@ snapshots:
 
   '@icqqjs/icqq@1.10.18':
     dependencies:
-      axios: 1.19.0
+      axios: 1.19.0(debug@4.4.3)
       log4js: 6.9.1
       long: 5.3.2
       pngjs: 7.0.0
@@ -5746,7 +5752,7 @@ snapshots:
 
   '@larksuiteoapi/node-sdk@1.73.0':
     dependencies:
-      axios: 1.19.0
+      axios: 1.19.0(debug@4.4.3)
       lodash.identity: 3.0.0
       lodash.merge: 4.6.2
       lodash.pickby: 4.6.0
@@ -6048,7 +6054,7 @@ snapshots:
       '@slack/types': 2.20.1
       '@types/node': 24.12.0
       '@types/retry': 0.12.0
-      axios: 1.19.0
+      axios: 1.19.0(debug@4.4.3)
       eventemitter3: 5.0.4
       form-data: 4.0.6
       is-electron: 2.2.2
@@ -6729,7 +6735,7 @@ snapshots:
       vue: 3.5.30(typescript@5.9.3)
     optionalDependencies:
       async-validator: 4.2.5
-      axios: 1.19.0
+      axios: 1.19.0(debug@4.4.3)
       focus-trap: 7.8.0
       qrcode: 1.5.4
     transitivePeerDependencies:
@@ -6857,9 +6863,9 @@ snapshots:
 
   auto-bind@5.0.1: {}
 
-  axios@1.19.0:
+  axios@1.19.0(debug@4.4.3):
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.6
       https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
@@ -6917,7 +6923,7 @@ snapshots:
     dependencies:
       '@azure/core-rest-pipeline': 1.23.0
       '@azure/msal-node': 2.16.3
-      axios: 1.19.0
+      axios: 1.19.0(debug@4.4.3)
       botbuilder-core: 4.23.3
       botbuilder-stdlib: 4.23.3-internal
       botframework-connector: 4.23.3
@@ -6942,7 +6948,7 @@ snapshots:
       '@azure/identity': 4.13.1
       '@azure/msal-node': 2.16.3
       '@types/jsonwebtoken': 9.0.6
-      axios: 1.19.0
+      axios: 1.19.0(debug@4.4.3)
       base64url: 3.0.1
       botbuilder-stdlib: 4.23.3-internal
       botframework-schema: 4.23.3
@@ -7440,6 +7446,16 @@ snapshots:
 
   dijkstrajs@1.0.3: {}
 
+  dingtalk-stream@2.1.7-beta.1:
+    dependencies:
+      axios: 1.19.0(debug@4.4.3)
+      debug: 4.4.3
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   dir-glob@3.0.1:
     dependencies:
       path-type: 4.0.0
@@ -7750,7 +7766,9 @@ snapshots:
     dependencies:
       tabbable: 6.4.0
 
-  follow-redirects@1.16.0: {}
+  follow-redirects@1.16.0(debug@4.4.3):
+    optionalDependencies:
+      debug: 4.4.3
 
   form-data@4.0.6:
     dependencies:
@@ -8261,7 +8279,7 @@ snapshots:
 
   kook-client@1.0.4:
     dependencies:
-      axios: 1.19.0
+      axios: 1.19.0(debug@4.4.3)
       dotenv: 17.3.1
       formdata-node: 6.0.3
       log4js: 6.9.1
@@ -8835,7 +8853,7 @@ snapshots:
   qq-official-bot@1.3.0:
     dependencies:
       '@noble/curves': 1.9.7
-      axios: 1.19.0
+      axios: 1.19.0(debug@4.4.3)
       formdata-node: 6.0.3
       log4js: 6.9.1
       ws: 8.21.3
