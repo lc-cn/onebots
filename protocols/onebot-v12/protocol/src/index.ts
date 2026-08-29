@@ -11,6 +11,7 @@ import { CommonEvent, CommonTypes } from "onebots";
 import { OneBotV12 } from "./types.js";
 import { WebSocket } from "ws";
 import { OneBotV12Config } from "./config.js";
+import { projectOneBotV12Actions } from "./supported-actions.js";
 
 const onebotV12Schema: Schema = {
     use_http: { type: "boolean", default: true, label: "启用 HTTP", ui: { section: "transport" } },
@@ -366,32 +367,9 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     }
 
     private getSupportedActions(): string[] {
-        return [
-            "send_message",
-            "delete_message",
-            "get_self_info",
-            "get_user_info",
-            "get_friend_list",
-            "get_group_info",
-            "get_group_list",
-            "get_group_member_info",
-            "get_group_member_list",
-            "set_group_name",
-            "leave_group",
-            "invite_friend_to_group",
-            "accept_friend_request",
-            "get_guild_info",
-            "get_guild_list",
-            "get_guild_member_info",
-            "get_channel_info",
-            "get_channel_list",
-            "set_channel_name",
-            "get_channel_member_info",
-            "get_channel_member_list",
-            "get_status",
-            "get_version",
-            "get_supported_actions",
-        ];
+        return projectOneBotV12Actions(
+            this.adapter.describeCapabilities(this.account.account_id),
+        );
     }
 
     private async getStatus(): Promise<OneBotV12.Status> {

@@ -74,8 +74,16 @@ function createProtocol() {
         updateChannel: vi.fn(),
         getChannelMemberInfo: vi.fn(),
         getChannelMemberList: vi.fn(),
-        describeCapabilities: vi.fn(() => ({
-            actions: { send_poll: { support: "native" } },
+        describeCapabilities: vi.fn((): { actions: Record<string, { support: string }> } => ({
+            actions: {
+                send_message: { support: "native" },
+                invite_group_member: { support: "native" },
+                handle_friend_request: { support: "native" },
+                update_channel: { support: "native" },
+                get_channel_member_info: { support: "native" },
+                get_channel_member_list: { support: "native" },
+                send_poll: { support: "native" },
+            },
         })),
         callAction: vi.fn().mockResolvedValue({ message_id: 42 }),
     };
@@ -342,6 +350,30 @@ describe("OneBot V12 protocol", () => {
         expect(Array.isArray(result.data)).toBe(true);
         expect(result.data).toContain("send_message");
         expect(result.data).toContain("get_self_info");
+    });
+
+    test("get_supported_actions reflects canonical and platform capabilities", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.describeCapabilities.mockReturnValue({
+            actions: {
+                get_guild_member_list: { support: "native" },
+                update_channel: { support: "native" },
+                upload_file: { support: "native" },
+                send_poll: { support: "native" },
+                delete_message: { support: "unsupported" },
+            },
+        });
+
+        await expect(protocol.apply("get_supported_actions")).resolves.toMatchObject({
+            data: [
+                "get_guild_member_list",
+                "get_self_info",
+                "get_supported_actions",
+                "send_poll",
+                "set_channel_name",
+                "update_channel",
+            ],
+        });
     });
 
     test("apply() returns failure response for unknown action", async () => {
