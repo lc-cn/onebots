@@ -45,6 +45,9 @@ export const KOOK_PLATFORM_ACTIONS = new Set([
     "set_bot_online",
     "set_bot_offline",
     "get_bot_online_status",
+    "leave_guild",
+    "kick_guild_member",
+    "set_guild_member_nickname",
 ]);
 
 interface ActionRoute {
@@ -95,6 +98,9 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     set_bot_online: { path: "/v3/user/online", method: "POST" },
     set_bot_offline: { path: "/v3/user/offline", method: "POST" },
     get_bot_online_status: { path: "/v3/user/get-online-status", method: "GET" },
+    leave_guild: { path: "/v3/guild/leave", method: "POST" },
+    kick_guild_member: { path: "/v3/guild/kickout", method: "POST" },
+    set_guild_member_nickname: { path: "/v3/guild/nickname", method: "POST" },
 };
 
 /** 执行 KOOK 官方扩展动作；命名参数直接沿用开放平台字段。 */

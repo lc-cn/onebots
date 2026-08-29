@@ -35,10 +35,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     ): Promise<Adapter.SendMessageResult> {
         const bot = this.requireBot(uin);
         const direct = params.scene_type === "private" || params.scene_type === "direct";
-        const message = await prepareKookOutboundMessage(
-            params.message,
-            bot.uploadAsset.bind(bot),
-        );
+        const message = await prepareKookOutboundMessage(params.message, bot.uploadAsset.bind(bot));
         const result = direct
             ? await bot.sendDirectMessage(params.scene_id.string, message)
             : await bot.sendChannelMessage(params.scene_id.string, message);
@@ -107,10 +104,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const id = params.message_id.string;
         const scene = this.messageScene(bot, id);
         assertKookEditableMessage(params.message);
-        const message = await prepareKookOutboundMessage(
-            params.message,
-            bot.uploadAsset.bind(bot),
-        );
+        const message = await prepareKookOutboundMessage(params.message, bot.uploadAsset.bind(bot));
         await bot.callApi(`/v3/${scene === "direct" ? "direct-message" : "message"}/update`, {
             method: "POST",
             body: { msg_id: id, content: message.content, quote: message.quote },
@@ -128,68 +122,6 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             query: { user_id: params.user_id.string },
         });
         return this.toUserInfo(user);
-    }
-
-    async getGroupList(uin: string): Promise<Adapter.GroupInfo[]> {
-        return (await this.listAll<KookGuild>(this.requireBot(uin), "/v3/guild/list")).map(
-            guild => ({
-                group_id: this.createId(guild.id),
-                group_name: guild.name,
-            }),
-        );
-    }
-
-    async getGroupInfo(
-        uin: string,
-        params: Adapter.GetGroupInfoParams,
-    ): Promise<Adapter.GroupInfo> {
-        const guild = await this.guild(uin, params.group_id.string);
-        return { group_id: this.createId(guild.id), group_name: guild.name };
-    }
-
-    async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        await this.requireBot(uin).callApi("/v3/guild/leave", {
-            method: "POST",
-            body: { guild_id: params.group_id.string },
-        });
-    }
-
-    async getGroupMemberList(
-        uin: string,
-        params: Adapter.GetGroupMemberListParams,
-    ): Promise<Adapter.GroupMemberInfo[]> {
-        const users = await this.listAll<KookUser>(this.requireBot(uin), "/v3/guild/user-list", {
-            guild_id: params.group_id.string,
-        });
-        return users.map(user => this.toGroupMember(user, params.group_id));
-    }
-
-    async getGroupMemberInfo(
-        uin: string,
-        params: Adapter.GetGroupMemberInfoParams,
-    ): Promise<Adapter.GroupMemberInfo> {
-        const user = await this.requireBot(uin).callApi<KookUser>("/v3/user/view", {
-            query: { user_id: params.user_id.string, guild_id: params.group_id.string },
-        });
-        return this.toGroupMember(user, params.group_id);
-    }
-
-    async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        await this.requireBot(uin).callApi("/v3/guild/kickout", {
-            method: "POST",
-            body: { guild_id: params.group_id.string, target_id: params.user_id.string },
-        });
-    }
-
-    async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        await this.requireBot(uin).callApi("/v3/guild/nickname", {
-            method: "POST",
-            body: {
-                guild_id: params.group_id.string,
-                user_id: params.user_id.string,
-                nickname: params.card,
-            },
-        });
     }
 
     async getGuildList(uin: string): Promise<Adapter.GuildInfo[]> {
@@ -300,10 +232,9 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         uin: string,
         params: Adapter.GetChannelMemberListParams,
     ): Promise<Adapter.ChannelMemberInfo[]> {
-        const response = await this.requireBot(uin).callApi<unknown>(
-            "/v3/channel/user-list",
-            { query: { channel_id: params.channel_id.string } },
-        );
+        const response = await this.requireBot(uin).callApi<unknown>("/v3/channel/user-list", {
+            query: { channel_id: params.channel_id.string },
+        });
         return parseKookVoiceMembers(response).map(user => ({
             channel_id: params.channel_id,
             user_id: this.createId(user.id),
@@ -410,19 +341,6 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             user_name: user.username,
             user_displayname: user.nickname || user.username,
             avatar: user.avatar,
-        };
-    }
-
-    private toGroupMember(
-        user: KookUser,
-        groupId: Adapter.GroupMemberInfo["group_id"],
-    ): Adapter.GroupMemberInfo {
-        return {
-            group_id: groupId,
-            user_id: this.createId(user.id),
-            user_name: user.username,
-            card: user.nickname,
-            role: "member",
         };
     }
 
