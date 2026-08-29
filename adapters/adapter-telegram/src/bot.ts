@@ -1,7 +1,3 @@
-/**
- * Telegram Bot 客户端
- * 基于 grammy 封装
- */
 import { EventEmitter } from "node:events";
 import { timingSafeEqual } from "node:crypto";
 import { Bot, Context, InputFile } from "grammy";
@@ -26,6 +22,7 @@ import {
     maskProxyAddress,
     pollingRetryDelay,
 } from "./runtime-utils.js";
+import { acceptTelegramHttp } from "./webhook.js";
 
 export interface TelegramBotEvents {
     ready: [];
@@ -114,8 +111,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
     }
 
     private setupEventHandlers(): void {
-        // 先保留完整 Update，再由 Adapter 统一投影。这样新增 Telegram update 类型时
-        // 不需要在 Bot 封装和 Adapter 各维护一套事件分支。
+        // 完整 Update 先进入统一投影，避免 Bot 与 Adapter 维护两套事件分支。
         this.bot.use(async (ctx, next) => {
             this.dispatchUpdate(ctx.update);
             await next();
@@ -268,7 +264,6 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
         }
     }
 
-    /** 将已有 HTTP/队列接收到的原始 Update 交给同一中间件与去重链。 */
     async ingest(rawEvent: unknown): Promise<Update> {
         if (!isTelegramUpdate(rawEvent)) {
             throw TelegramError.invalid(
@@ -282,14 +277,22 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
         return update;
     }
 
+    acceptHttp(request: Request): Promise<Response> {
+        return acceptTelegramHttp(this, request);
+    }
+
     private async ensureBotInited(): Promise<void> {
         await this.initBot();
-        if (this.bot.isInited()) return;
+        if (this.bot.isInited()) {
+            this.me = this.bot.botInfo;
+            return;
+        }
         if (this.botInitPromise) return this.botInitPromise;
         const initialize = this.callApi("getMe", () => this.bot.init());
         this.botInitPromise = initialize;
         try {
             await initialize;
+            this.me = this.bot.botInfo;
         } finally {
             if (this.botInitPromise === initialize) this.botInitPromise = undefined;
         }
@@ -297,15 +300,24 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
 
     private dispatchUpdate(update: Update): void {
         this.emit("raw_update", update);
+        if (this.hasProcessedUpdate(update.update_id)) return;
+        this.emit("update", update);
+        this.markUpdateProcessed(update.update_id);
+    }
+
+    private hasProcessedUpdate(updateId: number): boolean {
         const now = Date.now();
-        const previous = this.receivedUpdateIds.get(update.update_id);
-        this.receivedUpdateIds.delete(update.update_id);
-        this.receivedUpdateIds.set(update.update_id, now);
+        const previous = this.receivedUpdateIds.get(updateId);
         for (const [id, receivedAt] of this.receivedUpdateIds) {
             if (this.receivedUpdateIds.size <= 4_096 && now - receivedAt <= 10 * 60_000) break;
             this.receivedUpdateIds.delete(id);
         }
-        if (previous === undefined || now - previous > 10 * 60_000) this.emit("update", update);
+        return previous !== undefined && now - previous <= 10 * 60_000;
+    }
+
+    private markUpdateProcessed(updateId: number): void {
+        this.receivedUpdateIds.delete(updateId);
+        this.receivedUpdateIds.set(updateId, Date.now());
     }
 
     private async runPolling(generation: number, signal: AbortSignal): Promise<void> {
@@ -374,7 +386,6 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
     getCachedMe(): UserFromGetMe | null {
         return this.me;
     }
-
     // 常用 API 保持强类型；长尾能力通过 call_telegram_api 无损调用。
     async getMe(): Promise<UserFromGetMe> {
         this.me = await this.callApi("getMe", () => this.bot.api.getMe());

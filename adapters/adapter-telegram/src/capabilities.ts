@@ -86,6 +86,8 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         interaction: { support: "native" },
         member_joined: { support: "native" },
         member_left: { support: "native" },
+        group_increase: { support: "native" },
+        group_decrease: { support: "native" },
         group_request: { support: "native" },
         message_reaction: { support: "native" },
         message_deleted: { support: "native", note: "商业消息批量删除会拆分为独立事件" },
@@ -113,6 +115,10 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
     transports: {
         webhook: { support: "native", mode: "webhook" },
         polling: { support: "native", mode: "polling" },
-        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 ingest() 或 acceptHttp(Request) 接入既有 Host",
+        },
     },
 });

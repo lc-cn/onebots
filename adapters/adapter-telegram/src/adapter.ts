@@ -320,9 +320,13 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
      */
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
         return {
-            online: account?.status === AccountStatus.Online,
-            good: account?.status === AccountStatus.Online,
+            online,
+            good: online,
+            bots: account
+                ? [{ self: this.createId(account.client.getCachedMe()?.id || uin), online }]
+                : [],
         };
     }
 

@@ -21,6 +21,7 @@ export {
 } from "./platform-actions.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
+export { acceptTelegramHttp, ingestTelegramHttp, type TelegramHttpResult } from "./webhook.js";
 
 export const telegramSchema: Schema = {
     account_id: {

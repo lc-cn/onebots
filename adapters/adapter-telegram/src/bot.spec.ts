@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { TelegramBot } from "./bot.js";
 import { TelegramError } from "./errors.js";
 import type { Bot } from "grammy";
+import type { Update } from "grammy/types";
 
 describe("TelegramBot 边界", () => {
     it("在建立 grammY 客户端前拒绝空 token", () => {
@@ -104,5 +105,57 @@ describe("TelegramBot 边界", () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    it("acceptHttp 校验 secret 并复用 grammY Update 入口", async () => {
+        const bot = new TelegramBot({
+            account_id: "bot",
+            token: "1:token",
+            receive_mode: "webhook",
+            webhook: { url: "https://bot.example/hook", secret_token: "secret_1" },
+        });
+        const handleUpdate = vi.fn(async () => undefined);
+        Object.assign(bot as unknown as { initialized: boolean; bot: Bot }, {
+            initialized: true,
+            bot: { isInited: () => true, handleUpdate } as unknown as Bot,
+        });
+        const request = new Request("https://bot.example/hook", {
+            method: "POST",
+            body: JSON.stringify({ update_id: 1 }),
+            headers: {
+                "content-type": "application/json",
+                "x-telegram-bot-api-secret-token": "secret_1",
+            },
+        });
+
+        const response = await bot.acceptHttp(request);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ ok: true });
+        expect(handleUpdate).toHaveBeenCalledWith({ update_id: 1 });
+        expect((await bot.acceptHttp(new Request("https://bot.example/hook"))).status).toBe(405);
+    });
+
+    it("业务更新监听器失败时不提交去重状态", () => {
+        const bot = new TelegramBot({ account_id: "bot", token: "1:token" });
+        const update = { update_id: 2 } as Update;
+        const dispatch = (value: Update): void =>
+            (
+                bot as unknown as {
+                    dispatchUpdate(update: Update): void;
+                }
+            ).dispatchUpdate(value);
+        const failure = (): void => {
+            throw new Error("downstream failed");
+        };
+        bot.on("update", failure);
+        expect(() => dispatch(update)).toThrow("downstream failed");
+        bot.off("update", failure);
+        const listener = vi.fn();
+        bot.on("update", listener);
+
+        dispatch(update);
+
+        expect(listener).toHaveBeenCalledOnce();
     });
 });

@@ -1,4 +1,4 @@
-import type { Message, MessageEntity, ReactionType, Update, User } from "grammy/types";
+import type { Chat, Message, MessageEntity, ReactionType, Update, User } from "grammy/types";
 import { CommonEvent, type CommonTypes } from "onebots";
 
 export interface TelegramEventProjectorContext {
@@ -15,7 +15,20 @@ export function projectTelegramEvents(
     context: TelegramEventProjectorContext,
 ): CommonEvent.Event<Update>[] {
     const message = update.message ?? update.channel_post ?? update.business_message ?? undefined;
-    if (message) return [projectMessage(update, message, context)];
+    if (message) {
+        const membership = projectServiceMembership(update, message, context);
+        if (membership.length) return membership;
+        const projected = projectMessage(update, message, context);
+        if (projected.message.length) return [projected];
+        return [
+            projectNotice(update, context, "custom", {
+                user: message.from ? projectUser(message.from, context) : undefined,
+                group: projectGroup(message, context),
+                message_id: context.createId(message.message_id),
+                extensions: { telegram: { kind: serviceMessageKind(message) } },
+            }),
+        ];
+    }
 
     const edited =
         update.edited_message ??
@@ -27,6 +40,7 @@ export function projectTelegramEvents(
             projectNotice(update, context, "message_updated", {
                 message_id: context.createId(edited.message_id),
                 message: projectSegments(edited, context),
+                user: edited.from ? projectUser(edited.from, context) : undefined,
                 group: projectGroup(edited, context),
             }),
         ];
@@ -58,29 +72,34 @@ export function projectTelegramEvents(
     if (memberUpdate) {
         const previous = memberUpdate.old_chat_member.status;
         const current = memberUpdate.new_chat_member.status;
-        const joined = ["member", "administrator", "creator", "restricted"].includes(current);
-        const left = ["left", "kicked"].includes(current);
+        const wasMember = isMemberStatus(previous);
+        const isMember = isMemberStatus(current);
+        const isSelfMembership = Boolean(update.my_chat_member);
+        const isGroup = memberUpdate.chat.type !== "private";
+        const noticeType =
+            isGroup && isMember !== wasMember
+                ? isSelfMembership
+                    ? isMember
+                        ? "group_increase"
+                        : "group_decrease"
+                    : isMember
+                      ? "member_joined"
+                      : "member_left"
+                : "custom";
         return [
-            projectNotice(
-                update,
-                context,
-                joined && !["member", "administrator", "creator", "restricted"].includes(previous)
-                    ? "member_joined"
-                    : left && !["left", "kicked"].includes(previous)
-                      ? "member_left"
-                      : "custom",
-                {
-                    user: projectUser(memberUpdate.new_chat_member.user, context),
-                    operator: projectUser(memberUpdate.from, context),
-                    group: {
-                        id: context.createId(memberUpdate.chat.id),
-                        name: memberUpdate.chat.title ?? memberUpdate.chat.username ?? "",
-                    },
-                    extensions: {
-                        telegram: { previous_status: previous, current_status: current },
+            projectNotice(update, context, noticeType, {
+                user: projectUser(memberUpdate.new_chat_member.user, context),
+                operator: projectUser(memberUpdate.from, context),
+                group: projectGroupFromChat(memberUpdate.chat, context),
+                sub_type: current,
+                extensions: {
+                    telegram: {
+                        kind: isSelfMembership ? "my_chat_member" : "chat_member",
+                        previous_status: previous,
+                        current_status: current,
                     },
                 },
-            ),
+            }),
         ];
     }
 
@@ -231,6 +250,12 @@ function projectSegments(
         });
     }
     if (message.video) segments.push({ type: "video", data: { file: message.video.file_id } });
+    if (message.video_note) {
+        segments.push({
+            type: "video",
+            data: { file: message.video_note.file_id, video_note: true },
+        });
+    }
     if (message.animation) {
         segments.push({
             type: "video",
@@ -256,6 +281,17 @@ function projectSegments(
         segments.push({
             type: "location",
             data: { latitude: message.location.latitude, longitude: message.location.longitude },
+        });
+    }
+    if (message.venue) {
+        segments.push({
+            type: "location",
+            data: {
+                latitude: message.venue.location.latitude,
+                longitude: message.venue.location.longitude,
+                title: message.venue.title,
+                address: message.venue.address,
+            },
         });
     }
     if (message.contact) {
@@ -326,6 +362,89 @@ function projectGroup(
     };
 }
 
+function projectGroupFromChat(
+    chat: Chat,
+    context: TelegramEventProjectorContext,
+): CommonTypes.Group | undefined {
+    if (chat.type === "private") return undefined;
+    return {
+        id: context.createId(chat.id),
+        name: "title" in chat ? chat.title : "",
+    };
+}
+
+function projectServiceMembership(
+    update: Update,
+    message: Message,
+    context: TelegramEventProjectorContext,
+): CommonEvent.Notice<Update>[] {
+    if ("new_chat_members" in message && message.new_chat_members?.length) {
+        return message.new_chat_members.map((user, index) =>
+            projectNotice(
+                update,
+                context,
+                "member_joined",
+                {
+                    user: projectUser(user, context),
+                    operator: message.from ? projectUser(message.from, context) : undefined,
+                    group: projectGroup(message, context),
+                    message_id: context.createId(message.message_id),
+                    sub_type: "service_message",
+                },
+                `member-joined:${user.id}:${index}`,
+            ),
+        );
+    }
+    if ("left_chat_member" in message && message.left_chat_member) {
+        return [
+            projectNotice(update, context, "member_left", {
+                user: projectUser(message.left_chat_member, context),
+                operator: message.from ? projectUser(message.from, context) : undefined,
+                group: projectGroup(message, context),
+                message_id: context.createId(message.message_id),
+                sub_type: "service_message",
+            }),
+        ];
+    }
+    return [];
+}
+
+function serviceMessageKind(message: Message): string {
+    const ignored = new Set([
+        "message_id",
+        "message_thread_id",
+        "from",
+        "sender_chat",
+        "sender_boost_count",
+        "sender_business_bot",
+        "date",
+        "business_connection_id",
+        "chat",
+        "forward_origin",
+        "is_topic_message",
+        "is_automatic_forward",
+        "reply_to_message",
+        "external_reply",
+        "quote",
+        "reply_to_story",
+        "via_bot",
+        "edit_date",
+        "has_protected_content",
+        "is_from_offline",
+        "media_group_id",
+        "author_signature",
+        "paid_star_count",
+        "effect_id",
+        "show_caption_above_media",
+        "has_media_spoiler",
+    ]);
+    return Object.keys(message).find(key => !ignored.has(key)) ?? "unsupported_message";
+}
+
+function isMemberStatus(status: string): boolean {
+    return ["member", "administrator", "creator", "restricted"].includes(status);
+}
+
 function projectNotice(
     update: Update,
     context: TelegramEventProjectorContext,
@@ -351,10 +470,26 @@ function baseEvent(
         id: context.createId(
             eventIdSuffix ? `${update.update_id}:${eventIdSuffix}` : update.update_id,
         ),
-        timestamp: unixTimestamp ? unixTimestamp * 1000 : Date.now(),
+        timestamp: (unixTimestamp ?? updateTimestamp(update) ?? Date.now() / 1000) * 1000,
         type: "custom",
         platform: "telegram",
         bot_id: context.botId,
         raw_event: update,
     };
+}
+
+function updateTimestamp(update: Update): number | undefined {
+    const dated =
+        update.message ??
+        update.edited_message ??
+        update.channel_post ??
+        update.edited_channel_post ??
+        update.business_message ??
+        update.edited_business_message ??
+        update.message_reaction ??
+        update.chat_member ??
+        update.my_chat_member ??
+        update.chat_join_request ??
+        update.business_connection;
+    return dated && "date" in dated && typeof dated.date === "number" ? dated.date : undefined;
 }

@@ -7,6 +7,8 @@ import { TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
 describe("Telegram 能力清单", () => {
     it("不把管理员列表伪装成完整成员目录", () => {
         expect(telegramCapabilities.actions.get_group_member_list).toBeUndefined();
+        expect(telegramCapabilities.events.group_increase?.support).toBe("native");
+        expect(telegramCapabilities.events.group_decrease?.support).toBe("native");
         expect(TelegramAdapter.prototype.isActionImplemented("get_group_member_list")).toBe(false);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("get_chat_administrators")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("get_chat_member_count")).toBe(true);

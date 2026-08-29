@@ -1,9 +1,16 @@
-import { Account, AccountStatus, ErrorCategory, type RouterContext } from "onebots";
+import {
+    Account,
+    AccountStatus,
+    ConnectionManager,
+    RetryPresets,
+    type RouterContext,
+} from "onebots";
 import type { Update } from "grammy/types";
 import { TelegramBot } from "./bot.js";
 import { projectTelegramEvents } from "./events.js";
 import type { TelegramConfig } from "./types.js";
 import type { TelegramAdapter } from "./adapter.js";
+import { ingestTelegramHttp } from "./webhook.js";
 
 export function createTelegramAccount(
     adapter: TelegramAdapter,
@@ -24,31 +31,13 @@ export function createTelegramAccount(
         adapter.app.router.post(`${account.path}/webhook`, async (ctx: RouterContext) => {
             const secretHeader = ctx.request.headers["x-telegram-bot-api-secret-token"];
             const secret = Array.isArray(secretHeader) ? secretHeader[0] : secretHeader;
-            if (!bot.verifyWebhookSecret(secret)) {
-                ctx.status = 401;
-                ctx.body = { ok: false };
-                return;
-            }
-            try {
-                await bot.ingest(ctx.request.body);
-                ctx.status = 200;
-                ctx.body = { ok: true };
-            } catch (error) {
-                adapter.logger.error(`Telegram webhook ${config.account_id} 处理失败:`, error);
-                ctx.status =
-                    typeof error === "object" &&
-                    error !== null &&
-                    "category" in error &&
-                    error.category === ErrorCategory.VALIDATION
-                        ? 400
-                        : 500;
-                ctx.body = {
-                    ok: false,
-                    error:
-                        typeof error === "object" && error !== null && "code" in error
-                            ? error.code
-                            : "TELEGRAM_WEBHOOK_ERROR",
-                };
+            const result = await ingestTelegramHttp(bot, ctx.request.body, secret);
+            ctx.status = result.status;
+            ctx.body = result.body;
+            if (result.status >= 400) {
+                adapter.logger.error(
+                    `Telegram webhook ${config.account_id} 处理失败: ${result.body.error}`,
+                );
             }
         });
         adapter.logger.info(
@@ -56,18 +45,28 @@ export function createTelegramAccount(
         );
     }
 
-    bot.on("ready", () => adapter.logger.info(`Telegram Bot ${config.account_id} 已就绪`));
+    const syncIdentity = (): void => {
+        const me = bot.getCachedMe();
+        account.nickname = me?.username || me?.first_name || "Telegram Bot";
+        account.avatar = "";
+    };
+    bot.on("ready", () => {
+        syncIdentity();
+        if (bot.getReceiveMode() !== "polling") account.status = AccountStatus.Online;
+        adapter.logger.info(`Telegram Bot ${config.account_id} 已就绪`);
+    });
     bot.on("client_error", error =>
         adapter.logger.error(`Telegram Bot ${config.account_id} 错误:`, error),
     );
     bot.on("transport_state", state => {
         account.status = state === "connected" ? AccountStatus.Online : AccountStatus.OffLine;
+        if (state === "connected") syncIdentity();
         adapter.logger.info(`Telegram Bot ${config.account_id} polling 状态: ${state}`);
     });
     bot.on("update", (update: Update) => {
         try {
             const events = projectTelegramEvents(update, {
-                botId: adapter.createId(config.account_id),
+                botId: adapter.createId(bot.getCachedMe()?.id || config.account_id),
                 createId: value => adapter.createId(value),
             });
             for (const event of events) account.dispatch(event);
@@ -76,20 +75,15 @@ export function createTelegramAccount(
         }
     });
 
+    const manager = new ConnectionManager(() => bot.start(), RetryPresets.websocket, {
+        logger: adapter.logger,
+    });
     account.on("start", async () => {
-        try {
-            await bot.start();
-            if (bot.getReceiveMode() === "webhook") account.status = AccountStatus.Online;
-            const me = bot.getCachedMe();
-            account.nickname = me?.username || me?.first_name || "Telegram Bot";
-            account.avatar = "";
-        } catch (error) {
-            adapter.logger.error(`启动 Telegram Bot 失败:`, error);
-            account.status = AccountStatus.OffLine;
-            throw error;
-        }
+        account.status = AccountStatus.Pending;
+        await manager.start();
     });
     account.on("stop", async () => {
+        manager.stop();
         await bot.stop();
         account.status = AccountStatus.OffLine;
     });

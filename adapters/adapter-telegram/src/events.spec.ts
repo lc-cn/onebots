@@ -130,4 +130,73 @@ describe("projectTelegramEvents", () => {
             { type: "text", data: { text: "!" } },
         ]);
     });
+
+    it("将机器人加入与退出群投影为群生命周期", () => {
+        for (const current of ["member", "left"] as const) {
+            const update = {
+                update_id: current === "member" ? 15 : 16,
+                my_chat_member: {
+                    chat: { id: -30, type: "supergroup", title: "group" },
+                    from: { id: 40, is_bot: false, first_name: "Alice" },
+                    date: 101,
+                    old_chat_member: {
+                        status: current === "member" ? "left" : "member",
+                        user: { id: 1, is_bot: true, first_name: "Bot" },
+                    },
+                    new_chat_member: {
+                        status: current,
+                        user: { id: 1, is_bot: true, first_name: "Bot" },
+                    },
+                },
+            } as Update;
+
+            expect(projectTelegramEvents(update, context)[0]).toMatchObject({
+                notice_type: current === "member" ? "group_increase" : "group_decrease",
+                timestamp: 101000,
+                user: { id: { string: "1" } },
+                group: { id: { string: "-30" } },
+            });
+        }
+    });
+
+    it("将服务消息里的批量成员变化逐人投影", () => {
+        const update = {
+            update_id: 17,
+            message: {
+                message_id: 22,
+                date: 102,
+                chat: { id: -30, type: "supergroup", title: "group" },
+                from: { id: 40, is_bot: false, first_name: "Alice" },
+                new_chat_members: [
+                    { id: 41, is_bot: false, first_name: "Bob" },
+                    { id: 42, is_bot: false, first_name: "Carol" },
+                ],
+            },
+        } as Update;
+
+        const events = projectTelegramEvents(update, context);
+
+        expect(events).toHaveLength(2);
+        expect(events.map(event => event.notice_type)).toEqual(["member_joined", "member_joined"]);
+        expect(new Set(events.map(event => event.id.string)).size).toBe(2);
+    });
+
+    it("不把无法标准化的服务消息伪装为空消息", () => {
+        const update = {
+            update_id: 18,
+            message: {
+                message_id: 23,
+                date: 103,
+                chat: { id: -30, type: "supergroup", title: "group" },
+                forum_topic_closed: {},
+            },
+        } as Update;
+
+        expect(projectTelegramEvents(update, context)[0]).toMatchObject({
+            type: "notice",
+            notice_type: "custom",
+            message_id: { string: "23" },
+            extensions: { telegram: { kind: "forum_topic_closed" } },
+        });
+    });
 });
