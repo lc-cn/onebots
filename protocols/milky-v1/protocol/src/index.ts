@@ -14,6 +14,7 @@ import { MilkyConfig } from "./config.js";
 import { createHmac } from "crypto";
 import { WebSocket } from "ws";
 import { projectMilkyEvent } from "./event-projector.js";
+import { executeMilkyAccountAction, MILKY_ACCOUNT_ACTIONS } from "./account-actions.js";
 
 const milkySchema: Schema = {
     use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
@@ -220,6 +221,9 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         action: string,
         params: Record<string, unknown> = {},
     ): Promise<unknown> {
+        if (MILKY_ACCOUNT_ACTIONS.has(action)) {
+            return executeMilkyAccountAction(this.adapter, this.account.account_id, action, params);
+        }
         switch (action) {
             case "send_private_message":
                 return this.sendPrivateMessage(params);

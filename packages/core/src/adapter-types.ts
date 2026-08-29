@@ -113,7 +113,7 @@ declare module "./adapter.js" {
             message: CommonTypes.Segment[];
         }
 
-        // --- 用户 (3个方法) ---
+        // --- 用户与账号资料 ---
         export interface GetUserInfoParams {
             user_id: CommonTypes.Id;
             no_cache?: boolean;
@@ -121,6 +121,15 @@ declare module "./adapter.js" {
         export interface CreateUserChannelParams {
             user_id: CommonTypes.Id;
             guild_id?: CommonTypes.Id;
+        }
+        export interface SetAvatarParams {
+            source: string;
+        }
+        export interface SetNicknameParams {
+            nickname: string;
+        }
+        export interface SetBioParams {
+            bio: string;
         }
         export interface UserInfo {
             user_id: CommonTypes.Id;

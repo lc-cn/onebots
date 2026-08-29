@@ -110,7 +110,7 @@ export abstract class Adapter<
         return this.unsupported("mark_message_as_read");
     }
 
-    // 用户相关方法 (User - 3个)
+    // 用户与账号资料相关方法
     getLoginInfo(_uin: string): Promise<Adapter.UserInfo> {
         return this.unsupported("get_login_info");
     }
@@ -122,6 +122,18 @@ export abstract class Adapter<
         _params: Adapter.CreateUserChannelParams,
     ): Promise<Adapter.ChannelInfo> {
         return this.unsupported("create_user_channel");
+    }
+    setAvatar(_uin: string, _params: Adapter.SetAvatarParams): Promise<void> {
+        return this.unsupported("set_avatar");
+    }
+    setNickname(_uin: string, _params: Adapter.SetNicknameParams): Promise<void> {
+        return this.unsupported("set_nickname");
+    }
+    setBio(_uin: string, _params: Adapter.SetBioParams): Promise<void> {
+        return this.unsupported("set_bio");
+    }
+    getCustomFaceUrlList(_uin: string): Promise<string[]> {
+        return this.unsupported("get_custom_face_url_list");
     }
 
     // 好友相关方法 (Friend - 7个)

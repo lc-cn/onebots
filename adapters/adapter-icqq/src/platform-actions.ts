@@ -11,7 +11,6 @@ export const ICQQ_PLATFORM_ACTIONS = new Set([
     "get_online_status",
     "set_online_status",
     "get_client_statistics",
-    "set_nickname",
     "set_gender",
     "set_birthday",
     "set_description",
@@ -22,7 +21,6 @@ export const ICQQ_PLATFORM_ACTIONS = new Set([
     "set_friend_remark",
     "set_friend_group",
     "search_same_groups",
-    "set_avatar",
     "get_roaming_stamps",
     "delete_stamp",
     "add_friend_group",
@@ -88,8 +86,6 @@ export async function executeICQQPlatformAction(
             return client.setOnlineStatus(requiredInteger(params.status, "status"));
         case "get_client_statistics":
             return client.stat;
-        case "set_nickname":
-            return client.setNickname(requiredString(params.nickname, "nickname"));
         case "set_gender":
             return client.setGender(gender(params.gender));
         case "set_birthday":
@@ -118,8 +114,6 @@ export async function executeICQQPlatformAction(
                 .setClass(requiredInteger(params.group_id, "group_id"));
         case "search_same_groups":
             return client.pickFriend(requiredQQNumber(params.user_id, "user_id")).searchSameGroup();
-        case "set_avatar":
-            return client.setAvatar(requiredString(params.file, "file"));
         case "get_roaming_stamps":
             return client.getRoamingStamp(optionalBoolean(params.no_cache));
         case "delete_stamp":

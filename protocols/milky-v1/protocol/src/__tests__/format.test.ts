@@ -93,6 +93,11 @@ function createProtocol() {
         markMessageAsRead: vi.fn(),
         getVersion: vi.fn(),
         getStatus: vi.fn(),
+        deleteFriend: vi.fn(),
+        setAvatar: vi.fn(),
+        setNickname: vi.fn(),
+        setBio: vi.fn(),
+        getCustomFaceUrlList: vi.fn(),
         setGroupSpecialTitle: vi.fn(),
         handleGroupRequest: vi.fn(),
         sendFriendNudge: vi.fn(),
@@ -589,6 +594,36 @@ describe("Milky V1 protocol", () => {
             "bot",
             expect.objectContaining({ special_title: "VIP", duration: -1 }),
         );
+    });
+
+    test("Milky 1.1 账号动作通过通用 Adapter seam 执行", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getCustomFaceUrlList.mockResolvedValue(["https://example.com/face.png"]);
+
+        await expect(protocol.apply("delete_friend", { user_id: 10001 })).resolves.toMatchObject({
+            status: "ok",
+            data: {},
+        });
+        await expect(
+            protocol.apply("set_avatar", { uri: "base64://aGVsbG8=" }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+        await protocol.apply("set_nickname", { new_nickname: "OneBots" });
+        await protocol.apply("set_bio", { new_bio: "统一 IM 网关" });
+        await protocol.apply("set_bio", { new_bio: "" });
+        await expect(protocol.apply("get_custom_face_url_list", {})).resolves.toMatchObject({
+            data: { urls: ["https://example.com/face.png"] },
+        });
+
+        expect(adapter.deleteFriend).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ user_id: expect.objectContaining({ number: 10001 }) }),
+        );
+        expect(adapter.setAvatar).toHaveBeenCalledWith("bot", {
+            source: "base64://aGVsbG8=",
+        });
+        expect(adapter.setNickname).toHaveBeenCalledWith("bot", { nickname: "OneBots" });
+        expect(adapter.setBio).toHaveBeenCalledWith("bot", { bio: "统一 IM 网关" });
+        expect(adapter.setBio).toHaveBeenLastCalledWith("bot", { bio: "" });
     });
 
     test("apply returns native Milky wrappers for login and list actions", async () => {

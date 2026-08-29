@@ -6,6 +6,7 @@ import { ICQQBot } from "./bot.js";
 import { icqqCapabilities } from "./capabilities.js";
 import { parseICQQNumericId } from "./client-config.js";
 import { compileICQQMessage, projectICQQMessageSegments } from "./messages.js";
+import { materializeICQQMediaSource } from "./media.js";
 
 /** 消息、用户与好友动作，以及所有原生动作共用的客户端边界。 */
 export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
@@ -178,6 +179,30 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
             user_displayname: info.nickname,
             avatar: info.avatar,
         };
+    }
+
+    async setAvatar(uin: string, params: Adapter.SetAvatarParams): Promise<void> {
+        await this.requireNativeClient(uin).setAvatar(
+            await materializeICQQMediaSource(params.source),
+        );
+    }
+
+    async setNickname(uin: string, params: Adapter.SetNicknameParams): Promise<void> {
+        this.assertNativeAccepted(
+            await this.requireNativeClient(uin).setNickname(params.nickname),
+            "设置昵称",
+        );
+    }
+
+    async setBio(uin: string, params: Adapter.SetBioParams): Promise<void> {
+        this.assertNativeAccepted(
+            await this.requireNativeClient(uin).setSignature(params.bio),
+            "设置个性签名",
+        );
+    }
+
+    async getCustomFaceUrlList(uin: string): Promise<string[]> {
+        return this.requireNativeClient(uin).getRoamingStamp();
     }
 
     // ============================================

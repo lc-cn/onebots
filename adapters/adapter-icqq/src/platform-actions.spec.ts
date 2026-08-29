@@ -3,14 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import { executeICQQPlatformAction } from "./platform-actions.js";
 
 describe("ICQQ 平台扩展动作", () => {
-    it("路由资料动作并保留底层返回值", async () => {
-        const setNickname = vi.fn().mockResolvedValue(true);
-        const client = { setNickname } as unknown as Client;
+    it("路由 ICQQ 专属资料动作并保留底层返回值", async () => {
+        const setDescription = vi.fn().mockResolvedValue(true);
+        const client = { setDescription } as unknown as Client;
 
         await expect(
-            executeICQQPlatformAction(client, "set_nickname", { nickname: "OneBots" }),
+            executeICQQPlatformAction(client, "set_description", { description: "OneBots" }),
         ).resolves.toBe(true);
-        expect(setNickname).toHaveBeenCalledWith("OneBots");
+        expect(setDescription).toHaveBeenCalledWith("OneBots");
     });
 
     it("在进入 ICQQ 前严格拒绝错误参数", async () => {

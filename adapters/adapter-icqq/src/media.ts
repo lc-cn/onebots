@@ -1,6 +1,12 @@
 import { Buffer } from "node:buffer";
 import { materializeMediaSource, type Adapter } from "onebots";
 
+/** 将标准媒体 URI 物化为 ICQQ 接受的 Buffer。 */
+export async function materializeICQQMediaSource(source: string): Promise<Buffer> {
+    const media = await materializeMediaSource({ source });
+    return Buffer.from(media.data);
+}
+
 /** 将标准 upload_file 参数统一物化为 ICQQ 可上传的字节。 */
 export async function materializeICQQUpload(params: Adapter.UploadFileParams): Promise<Buffer> {
     const candidates = [params.url, params.path, params.data].filter(
