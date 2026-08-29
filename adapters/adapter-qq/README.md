@@ -20,6 +20,8 @@ Gateway 生命周期事件会优先投影到 OneBots canonical notice：好友�
 
 消息编译遵循 QQ 平台的单载荷约束：一条消息只能包含一个 Reply、一个 Markdown/Ark/Embed 主载荷及一个 Keyboard。C2C/群聊的文本与首个媒体会合并为原生 caption；频道单条消息只接受一张 HTTPS URL 图片。冲突载荷、多张频道图片和本地频道图片会在请求发出前返回结构化错误，不会静默丢弃消息段。
 
+`upload_file` 返回的是 QQ `file_info` 对应的统一 `file_id`，并携带平台 TTL 计算出的 `expire_time`。该句柄与上传目标会话绑定，可直接放入 C2C/群聊的 `image`、`audio`、`video` 或 `file` 消息段；适配器会还原句柄并以 `msg_type: 7` 发送，不会把它误当成本地文件路径或重复上传。
+
 ## 配置
 
 ```yaml

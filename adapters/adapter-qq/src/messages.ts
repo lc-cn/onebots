@@ -13,10 +13,15 @@ interface CompiledMessage {
     content: string;
     replyId?: string;
     advanced: Omit<SendMessageOptions, "target" | "content">;
-    media: Array<{ type: MediaFileType; source: string; name?: string }>;
+    media: Array<{
+        type: MediaFileType;
+        source?: string;
+        fileInfo?: string;
+        name?: string;
+    }>;
 }
 
-type ResolveUserId = (value: string | number) => string;
+type ResolveId = (value: string | number | CommonTypes.Id) => string;
 
 type QQKeyboardButton = NonNullable<
     SendMessageOptions["keyboard"]
@@ -25,10 +30,10 @@ type QQKeyboardButton = NonNullable<
 export async function sendQQMessage(
     client: QQClient,
     params: Adapter.SendMessageParams,
-    resolveUserId: ResolveUserId = value => String(value),
+    resolveId: ResolveId = defaultResolveId,
 ): Promise<string> {
     const sceneId = params.scene_id.string;
-    const compiled = compileMessage(params.message, resolveUserId);
+    const compiled = compileMessage(params.message, resolveId);
     if (params.scene_type === "private" || params.scene_type === "group") {
         return sendOpenIdMessage(client, params.scene_type, sceneId, compiled);
     }
@@ -37,7 +42,7 @@ export async function sendQQMessage(
 
 export function compileMessage(
     segments: readonly CommonTypes.Segment[],
-    resolveUserId: ResolveUserId = value => String(value),
+    resolveId: ResolveId = defaultResolveId,
 ): CompiledMessage {
     const textParts: string[] = [];
     const media: CompiledMessage["media"] = [];
@@ -54,7 +59,7 @@ export function compileMessage(
                     data.qq ?? data.id ?? data.user_id,
                     "at 消息缺少 qq/id/user_id",
                 );
-                textParts.push(id === "all" ? "@全体成员" : `<@${resolveUserId(id)}>`);
+                textParts.push(id === "all" ? "@全体成员" : `<@${resolveId(id)}>`);
                 break;
             }
             case "face":
@@ -66,9 +71,8 @@ export function compileMessage(
                         "一条 QQ 消息只能包含一个 reply 消息段",
                         "QQ_DUPLICATE_REPLY",
                     );
-                replyId = requiredString(
-                    data.message_id ?? data.id,
-                    "reply 消息缺少 message_id/id",
+                replyId = resolveId(
+                    requiredIdentifier(data.message_id ?? data.id, "reply 消息缺少 message_id/id"),
                 );
                 break;
             }
@@ -77,15 +81,26 @@ export function compileMessage(
             case "audio":
             case "record":
             case "file": {
+                const fileInfo = data.file_info
+                    ? requiredString(data.file_info, `${segment.type}.file_info 不能为空`)
+                    : data.file_id
+                      ? resolveId(
+                            requiredIdentifier(
+                                data.file_id,
+                                `${segment.type}.file_id 必须是有效标识`,
+                            ),
+                        )
+                      : undefined;
                 const source = optionalString(data.url ?? data.file ?? data.path);
-                if (!source)
+                if (!fileInfo && !source)
                     throw QQApiError.invalid(
-                        `${segment.type} 消息缺少 url/file/path`,
+                        `${segment.type} 消息缺少 file_id/file_info/url/file/path`,
                         "QQ_MEDIA_SOURCE_REQUIRED",
                     );
                 media.push({
                     type: mediaType(segment.type),
                     source,
+                    fileInfo,
                     name: optionalString(data.name),
                 });
                 break;
@@ -155,15 +170,24 @@ async function sendOpenIdMessage(
     }
     const media = firstMedia ? [firstMedia, ...remainingMedia] : [];
     for (const [index, item] of media.entries()) {
-        const source = resolveMediaSource(item.source);
-        const sent = await client.sendMedia({
-            target,
-            fileType: item.type,
-            fileName: item.name,
-            content: canUseCaption && index === 0 ? message.content : undefined,
-            ...source,
-        });
-        response = sent.message ?? response;
+        const content = canUseCaption && index === 0 ? message.content : undefined;
+        if (item.fileInfo) {
+            response = await client.send({
+                target,
+                msgType: MsgType.MEDIA,
+                media: { file_info: item.fileInfo },
+                content,
+            });
+        } else {
+            const sent = await client.sendMedia({
+                target,
+                fileType: item.type,
+                fileName: item.name,
+                content,
+                ...resolveMediaSource(item.source!),
+            });
+            response = sent.message ?? response;
+        }
     }
     if (!response) throw QQApiError.invalid("QQ 消息不能为空", "QQ_EMPTY_MESSAGE");
     return response.id;
@@ -184,16 +208,17 @@ async function sendGuildMessage(
     if (message.media.length > 1) {
         throw QQApiError.invalid("QQ 频道单条消息只能包含一张图片", "QQ_GUILD_MEDIA_LIMIT");
     }
-    if (message.media[0] && !/^https:\/\//u.test(message.media[0].source)) {
+    const image = message.media[0];
+    if (image && (!image.source || !/^https:\/\//u.test(image.source))) {
         throw QQApiError.invalid("QQ 频道图片必须使用 HTTPS URL", "QQ_GUILD_IMAGE_URL_REQUIRED");
     }
-    if (!message.content && Object.keys(message.advanced).length === 0 && !message.media[0]) {
+    if (!message.content && Object.keys(message.advanced).length === 0 && !image) {
         throw QQApiError.invalid("QQ 消息不能为空", "QQ_EMPTY_MESSAGE");
     }
     const body: Record<string, unknown> = { content: message.content };
     if (message.replyId) body.msg_id = message.replyId;
     Object.assign(body, toPlatformPayload(message.advanced));
-    if (message.media[0]) body.image = message.media[0].source;
+    if (image) body.image = image.source;
     const path = scene === "channel" ? `/channels/${sceneId}/messages` : `/dms/${sceneId}/messages`;
     const response = await client.call<{ id: string }>({ method: "POST", path, body });
     return response.id;
@@ -231,11 +256,27 @@ function requiredString(value: unknown, message: string): string {
     return result;
 }
 
-function requiredIdentifier(value: unknown, message: string): string | number {
+function requiredIdentifier(value: unknown, message: string): string | number | CommonTypes.Id {
+    if (isId(value)) return value;
     if ((typeof value !== "string" && typeof value !== "number") || String(value) === "") {
         throw QQApiError.invalid(message, "QQ_INVALID_SEGMENT");
     }
     return value;
+}
+
+function defaultResolveId(value: string | number | CommonTypes.Id): string {
+    return typeof value === "object" ? String(value.source) : String(value);
+}
+
+function isId(value: unknown): value is CommonTypes.Id {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        typeof (value as Partial<CommonTypes.Id>).string === "string" &&
+        typeof (value as Partial<CommonTypes.Id>).number === "number" &&
+        (typeof (value as Partial<CommonTypes.Id>).source === "string" ||
+            typeof (value as Partial<CommonTypes.Id>).source === "number")
+    );
 }
 
 function optionalString(value: unknown): string | undefined {

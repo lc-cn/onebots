@@ -42,6 +42,13 @@ describe("QQ 消息编译", () => {
         expect(resolveUserId).toHaveBeenCalledWith(42);
     });
 
+    it("还原统一回复 ID，并接受 canonical Id 对象", () => {
+        const id = { string: "mapped-message", source: "native-message", number: 42 };
+        expect(compileMessage([{ type: "reply", data: { message_id: id } }])).toMatchObject({
+            replyId: "native-message",
+        });
+    });
+
     it("拒绝重复回复与互相覆盖的富消息段", () => {
         expect(() =>
             compileMessage([
@@ -81,6 +88,36 @@ describe("QQ 消息编译", () => {
         expect(sendMedia).toHaveBeenCalledWith(
             expect.objectContaining({ content: "说明", fileData: "YWJj" }),
         );
+    });
+
+    it("使用上传返回的 file_id 直接发送富媒体而不重复上传", async () => {
+        const send = vi.fn().mockResolvedValue({ id: "m1" });
+        const sendMedia = vi.fn();
+        const client = { send, sendMedia } as unknown as QQClient;
+        const resolveId = vi.fn(() => "opaque-file-info");
+
+        await expect(
+            sendQQMessage(
+                client,
+                {
+                    scene_type: "private",
+                    scene_id: { string: "u1", source: "u1", number: 1 },
+                    message: [
+                        { type: "text", data: { text: "附件" } },
+                        { type: "file", data: { file_id: 42, name: "report.pdf" } },
+                    ],
+                },
+                resolveId,
+            ),
+        ).resolves.toBe("m1");
+        expect(resolveId).toHaveBeenCalledWith(42);
+        expect(sendMedia).not.toHaveBeenCalled();
+        expect(send).toHaveBeenCalledWith({
+            target: { scope: "c2c", targetId: "u1", msgId: undefined },
+            msgType: MsgType.MEDIA,
+            media: { file_info: "opaque-file-info" },
+            content: "附件",
+        });
     });
 
     it("在请求前拒绝频道多图与本地图片路径", async () => {

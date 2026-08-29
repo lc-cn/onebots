@@ -229,7 +229,12 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
                   ? { localPath: params.path }
                   : { fileData: stripBase64Prefix(params.data!) }),
         });
-        return { file_id: this.createId(result.file_uuid), file_name: params.name };
+        return {
+            // file_info 才是 QQ 后续 msg_type=7 可复用的目标会话媒体句柄；file_uuid 不能发送。
+            file_id: this.createId(result.file_info),
+            file_name: params.name,
+            expire_time: result.ttl > 0 ? Date.now() + result.ttl * 1_000 : undefined,
+        };
     }
 
     async canSendImage(): Promise<boolean> {
