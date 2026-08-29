@@ -1,7 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { reactive } from "vue";
 import {
+    buildSchemaFields,
     buildConfigGroups,
+    deleteValueByPath,
+    isSchemaFieldVisible,
     parseStructuredFieldValue,
     resolveStructuredFieldDisplay,
 } from "./utils.js";
@@ -114,5 +117,40 @@ describe("config form generation", () => {
                 message: "字段 连接 仅支持 ws / wss",
             },
         );
+    });
+
+    test("resolves conditional fields against the same schema root", () => {
+        const fields = buildSchemaFields(
+            {
+                receive_mode: { type: "string", default: "polling" },
+                webhook: {
+                    url: {
+                        type: "string",
+                        ui: {
+                            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+                        },
+                    },
+                },
+            },
+            ["telegram"],
+        );
+        const webhookUrl = fields.find(field => field.path.join(".") === "telegram.webhook.url");
+        if (!webhookUrl) throw new Error("missing webhook field");
+
+        expect(webhookUrl.visibility?.dependencyKey).toBe("telegram::receive_mode");
+        expect(isSchemaFieldVisible(webhookUrl, { "telegram::receive_mode": "polling" })).toBe(
+            false,
+        );
+        expect(isSchemaFieldVisible(webhookUrl, { "telegram::receive_mode": "webhook" })).toBe(
+            true,
+        );
+    });
+
+    test("removes hidden values and empty parent objects", () => {
+        const config = { telegram: { receive_mode: "polling", webhook: { url: "https://old" } } };
+
+        deleteValueByPath(config, ["telegram", "webhook", "url"]);
+
+        expect(config).toEqual({ telegram: { receive_mode: "polling" } });
     });
 });

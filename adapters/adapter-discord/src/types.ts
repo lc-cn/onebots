@@ -22,26 +22,29 @@ export interface ProxyConfig {
 /**
  * Gateway Intents 名称
  */
-export type GatewayIntentName =
-    | "Guilds"
-    | "GuildMembers"
-    | "GuildModeration"
-    | "GuildEmojisAndStickers"
-    | "GuildIntegrations"
-    | "GuildWebhooks"
-    | "GuildInvites"
-    | "GuildVoiceStates"
-    | "GuildPresences"
-    | "GuildMessages"
-    | "GuildMessageReactions"
-    | "GuildMessageTyping"
-    | "DirectMessages"
-    | "DirectMessageReactions"
-    | "DirectMessageTyping"
-    | "MessageContent"
-    | "GuildScheduledEvents"
-    | "AutoModerationConfiguration"
-    | "AutoModerationExecution";
+export const DISCORD_GATEWAY_INTENTS = [
+    "Guilds",
+    "GuildMembers",
+    "GuildModeration",
+    "GuildEmojisAndStickers",
+    "GuildIntegrations",
+    "GuildWebhooks",
+    "GuildInvites",
+    "GuildVoiceStates",
+    "GuildPresences",
+    "GuildMessages",
+    "GuildMessageReactions",
+    "GuildMessageTyping",
+    "DirectMessages",
+    "DirectMessageReactions",
+    "DirectMessageTyping",
+    "MessageContent",
+    "GuildScheduledEvents",
+    "AutoModerationConfiguration",
+    "AutoModerationExecution",
+] as const;
+
+export type GatewayIntentName = (typeof DISCORD_GATEWAY_INTENTS)[number];
 
 /**
  * 在线状态

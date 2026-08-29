@@ -1,4 +1,4 @@
-import type { Update } from 'grammy/types';
+import type { Update } from "grammy/types";
 import type {
     PhotoSize,
     Audio,
@@ -8,7 +8,7 @@ import type {
     Location,
     Contact,
     MessageEntity,
-} from 'grammy/types';
+} from "grammy/types";
 /**
  * Telegram Bot API 类型定义
  * 基于 Telegram Bot API 官方文档
@@ -26,22 +26,53 @@ export interface ProxyConfig {
     password?: string;
 }
 
+export type TelegramReceiveMode = "polling" | "webhook";
+export type TelegramUpdateType = Exclude<keyof Update, "update_id">;
+
+/** 默认订阅完整 Bot API Update 集合，供运行时和配置 Schema 共用。 */
+export const TELEGRAM_UPDATE_TYPES = [
+    "message",
+    "edited_message",
+    "channel_post",
+    "edited_channel_post",
+    "business_connection",
+    "business_message",
+    "edited_business_message",
+    "deleted_business_messages",
+    "message_reaction",
+    "message_reaction_count",
+    "inline_query",
+    "chosen_inline_result",
+    "callback_query",
+    "shipping_query",
+    "pre_checkout_query",
+    "poll",
+    "poll_answer",
+    "my_chat_member",
+    "chat_member",
+    "chat_join_request",
+    "chat_boost",
+    "removed_chat_boost",
+    "purchased_paid_media",
+] as const satisfies ReadonlyArray<TelegramUpdateType>;
+
 // 配置类型
 export interface TelegramConfig {
     account_id: string;
-    token: string;           // Bot Token
+    token: string;
+    /** Update 接收模式；Webhook 与长轮询互斥。 */
+    receive_mode?: TelegramReceiveMode;
     /** 代理配置（用于访问 Telegram API） */
     proxy?: ProxyConfig;
     webhook?: {
-        url?: string;        // Webhook URL
-        secret_token?: string; // Webhook 密钥
-        allowed_updates?:ReadonlyArray<Exclude<keyof Update, "update_id">>; // 允许的更新类型
+        url?: string;
+        secret_token?: string;
+        allowed_updates?: ReadonlyArray<TelegramUpdateType>;
     };
     polling?: {
-        enabled?: boolean;   // 是否启用轮询
-        timeout?: number;    // 轮询超时时间（秒）
-        limit?: number;      // 每次获取的更新数量
-        allowed_updates?: ReadonlyArray<Exclude<keyof Update, "update_id">>; // 允许的更新类型
+        timeout?: number;
+        limit?: number;
+        allowed_updates?: ReadonlyArray<TelegramUpdateType>;
     };
 }
 
@@ -59,7 +90,7 @@ export interface TelegramUser {
 // Telegram 聊天类型
 export interface TelegramChat {
     id: number;
-    type: 'private' | 'group' | 'supergroup' | 'channel';
+    type: "private" | "group" | "supergroup" | "channel";
     title?: string;
     username?: string;
     first_name?: string;
@@ -129,4 +160,3 @@ export interface TelegramUpdate {
     chosen_inline_result?: TelegramChosenInlineResult;
     [key: string]: unknown;
 }
-

@@ -48,6 +48,23 @@ export const setValueByPath = (data: Record<string, unknown>, path: string[], va
     });
 };
 
+/** 删除字段并向上清理因此变空的对象，避免隐藏字段留下空配置块。 */
+export const deleteValueByPath = (data: Record<string, unknown>, path: string[]): void => {
+    const parents: Array<{ value: Record<string, unknown>; key: string }> = [];
+    let current = data;
+    for (const key of path.slice(0, -1)) {
+        const next = current[key];
+        if (!isRecord(next)) return;
+        parents.push({ value: current, key });
+        current = next;
+    }
+    delete current[path[path.length - 1] ?? ""];
+    for (const parent of parents.reverse()) {
+        const child = parent.value[parent.key];
+        if (isRecord(child) && Object.keys(child).length === 0) delete parent.value[parent.key];
+    }
+};
+
 /** object/array 字段：空输入表示未配置（undefined），不要默认写成 {} */
 export const resolveJsonFieldDisplay = (currentValue: unknown, rule: ValidationRule): string => {
     if (currentValue !== undefined && currentValue !== null) {
@@ -179,6 +196,7 @@ export const parseJsonFieldValue = (
 export const buildSchemaFields = (
     schemaData: Schema,
     basePath: string[] = [],
+    schemaRootPath: string[] = basePath,
 ): SchemaFieldDef[] => {
     const fields: SchemaFieldDef[] = [];
     Object.entries(schemaData).forEach(([key, rule]) => {
@@ -192,12 +210,32 @@ export const buildSchemaFields = (
                 placeholder:
                     rule.placeholder ||
                     (rule.default !== undefined ? `默认：${String(rule.default)}` : ""),
+                visibility: rule.ui?.visibleWhen
+                    ? {
+                          dependencyKey: makeKey([
+                              ...schemaRootPath,
+                              ...rule.ui.visibleWhen.path.split(".").filter(Boolean),
+                          ]),
+                          oneOf: rule.ui.visibleWhen.oneOf,
+                      }
+                    : undefined,
             });
         } else {
-            fields.push(...buildSchemaFields(rule as Schema, currentPath));
+            fields.push(...buildSchemaFields(rule as Schema, currentPath, schemaRootPath));
         }
     });
     return fields;
+};
+
+/** Schema 声明是显示与持久化的唯一来源，两个配置入口共用同一判断。 */
+export const isSchemaFieldVisible = (
+    field: SchemaFieldDef,
+    formModel: Readonly<Record<string, unknown>>,
+): boolean => {
+    if (!field.visibility) return true;
+    return field.visibility.oneOf.includes(
+        formModel[field.visibility.dependencyKey] as string | number | boolean,
+    );
 };
 
 export const normalizeSchema = (data: Schema | SchemaBundle): SchemaBundle => {

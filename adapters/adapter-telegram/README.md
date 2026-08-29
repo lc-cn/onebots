@@ -18,6 +18,9 @@ pnpm add @onebots/adapter-telegram grammy
 telegram.your_bot_id:
   token: "YOUR_BOT_TOKEN"
 
+  # polling（默认）或 webhook；Web 表单会只显示当前模式相关字段
+  receive_mode: polling
+
   # 代理配置（可选，用于访问 Telegram API）
   proxy:
     url: "http://127.0.0.1:7890" # 或 socks5://127.0.0.1:1080
@@ -26,16 +29,19 @@ telegram.your_bot_id:
 
   # 轮询模式（默认）
   polling:
-    enabled: true
     timeout: 30
     limit: 100
+    allowed_updates: ["message", "callback_query", "chat_member"]
   # 或 Webhook 模式
+  # receive_mode: webhook
   # webhook:
   #   # Telegram 实际请求地址；通常指向 OneBots 账号的 /telegram/<account_id>/webhook
   #   url: "https://your-domain.com/telegram/your_bot_id/webhook"
   #   secret_token: "your_secret_token"
   #   allowed_updates: ["message", "callback_query"]
 ```
+
+`receive_mode` 是接收方式的唯一来源。选择 `webhook` 时必须配置 HTTPS `webhook.url`；选择 `polling` 时不会注册 Webhook。Web 管理端会按模式动态显示字段，`allowed_updates` 也使用可增减的选项列表，不需要手写 JSON。
 
 ### 代理配置说明
 

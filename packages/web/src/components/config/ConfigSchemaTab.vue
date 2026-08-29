@@ -4,6 +4,7 @@ import SchemaField from "../SchemaField.vue";
 import UiCollapse from "../../ui/UiCollapse.vue";
 import UiCollapseItem from "../../ui/UiCollapseItem.vue";
 import UiEmpty from "../../ui/UiEmpty.vue";
+import { isSchemaFieldVisible } from "./utils";
 
 defineProps<{
     schemaGroups: SchemaGroup[];
@@ -16,6 +17,9 @@ const isWideField = (field: SchemaGroup["fields"][number]) =>
     field.rule.ui?.widget === "endpoint-list" ||
     field.rule.ui?.widget === "event-filter" ||
     field.rule.ui?.widget === "choice-list";
+
+const visibleFields = (fields: SchemaGroup["fields"]) =>
+    fields.filter(field => isSchemaFieldVisible(field, formModel));
 </script>
 
 <template>
@@ -38,7 +42,7 @@ const isWideField = (field: SchemaGroup["fields"][number]) =>
                 </template>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <SchemaField
-                        v-for="field in group.fields"
+                        v-for="field in visibleFields(group.fields)"
                         :key="field.key"
                         v-model="formModel[field.key]"
                         :field="field"

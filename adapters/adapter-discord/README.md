@@ -50,6 +50,8 @@ discord.your_bot_id:
         type: 0 # 0: Playing, 1: Streaming, 2: Listening, 3: Watching, 5: Competing
 ```
 
+Web 管理端会把 Gateway Intents 渲染为可搜索、可增减的选项列表，并将凭据、事件订阅、发送表现与高级网络设置分区展示，无需手写数组 JSON。
+
 ## 独立使用（不依赖 onebots）
 
 ### Node.js Gateway 模式

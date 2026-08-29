@@ -3,7 +3,7 @@
  * 基于 grammy 封装
  */
 import { EventEmitter } from "node:events";
-import { Bot, Context, InputFile, type PollingOptions } from "grammy";
+import { Bot, Context, InputFile } from "grammy";
 import type { Opts, MessageEntity } from "grammy/types";
 import type { Update } from "grammy/types";
 import type {
@@ -16,39 +16,14 @@ import type {
 import type { Message } from "grammy/types";
 import { createHttpsProxyAgent } from "onebots";
 import type { TelegramConfig, TelegramMessage } from "./types.js";
-
-/** Bot API 默认排除部分管理类更新；显式订阅才能兑现完整事件能力。 */
-const DEFAULT_ALLOWED_UPDATES: ReadonlyArray<Exclude<keyof Update, "update_id">> = [
-    "message",
-    "edited_message",
-    "channel_post",
-    "edited_channel_post",
-    "business_connection",
-    "business_message",
-    "edited_business_message",
-    "deleted_business_messages",
-    "message_reaction",
-    "message_reaction_count",
-    "inline_query",
-    "chosen_inline_result",
-    "callback_query",
-    "shipping_query",
-    "pre_checkout_query",
-    "poll",
-    "poll_answer",
-    "my_chat_member",
-    "chat_member",
-    "chat_join_request",
-    "chat_boost",
-    "removed_chat_boost",
-    "purchased_paid_media",
-];
+import { resolveTelegramReceiveConfig, type TelegramReceiveConfig } from "./receive-config.js";
 
 export class TelegramBot extends EventEmitter {
     private bot!: Bot;
     private config: TelegramConfig;
     private me: UserFromGetMe | null = null;
     private initialized: boolean = false;
+    private readonly receiveConfig: TelegramReceiveConfig;
     /** grammy Bot 已 init（handleUpdate 前必须，仅 webhook 模式需在首请求时兜底） */
     private botInited: boolean = false;
     private pollingTask?: Promise<void>;
@@ -56,6 +31,11 @@ export class TelegramBot extends EventEmitter {
     constructor(config: TelegramConfig) {
         super();
         this.config = config;
+        this.receiveConfig = resolveTelegramReceiveConfig(config);
+    }
+
+    getReceiveMode(): TelegramReceiveConfig["mode"] {
+        return this.receiveConfig.mode;
     }
 
     /**
@@ -188,31 +168,26 @@ export class TelegramBot extends EventEmitter {
             this.me = await this.bot.api.getMe();
 
             // 根据配置选择启动方式
-            if (this.config.webhook?.url) {
+            if (this.receiveConfig.mode === "webhook") {
                 // Webhook 模式：grammy 要求先 init 才能 handleUpdate
                 if (typeof this.bot.init === "function") {
                     await this.bot.init();
                     this.botInited = true;
                 }
-                await this.bot.api.setWebhook(this.config.webhook.url, {
-                    secret_token: this.config.webhook.secret_token,
-                    allowed_updates: this.config.webhook.allowed_updates ?? DEFAULT_ALLOWED_UPDATES,
+                await this.bot.api.setWebhook(this.receiveConfig.url, {
+                    secret_token: this.receiveConfig.secretToken,
+                    allowed_updates: this.receiveConfig.allowedUpdates,
                 });
                 this.emit("ready");
-            } else if (this.config.polling?.enabled !== false) {
-                // 轮询模式（默认）
-                const pollingOptions: PollingOptions = {};
-                pollingOptions.allowed_updates = [
-                    ...(this.config.polling?.allowed_updates ?? DEFAULT_ALLOWED_UPDATES),
-                ];
+            } else {
+                // 长轮询模式（默认）
+                const pollingOptions = this.receiveConfig.options;
                 // grammy 的 start() 在轮询停止前不会 resolve。保存后台任务而不是 await，
                 // 否则 Account 会一直停留在 Pending，协议层也无法获知 Bot 已上线。
                 this.pollingTask = this.bot.start(pollingOptions).catch(error => {
                     this.emit("error", error);
                 });
                 this.emit("ready");
-            } else {
-                throw new Error("必须启用 webhook 或 polling 模式之一");
             }
         } catch (error) {
             this.emit("error", error);
@@ -225,7 +200,7 @@ export class TelegramBot extends EventEmitter {
      */
     async stop(): Promise<void> {
         try {
-            if (this.config.webhook?.url) {
+            if (this.receiveConfig.mode === "webhook") {
                 // Webhook 模式：删除 webhook
                 await this.bot.api.deleteWebhook();
             } else {

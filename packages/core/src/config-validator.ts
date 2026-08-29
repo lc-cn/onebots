@@ -54,6 +54,11 @@ export interface ValidationRule<T = unknown> {
             label: string;
             choices?: Array<Choice>;
         }>;
+        /** 仅当同一 Schema 根下的依赖字段命中任一值时展示并保存。 */
+        visibleWhen?: {
+            path: string;
+            oneOf: Array<string | number | boolean>;
+        };
     };
 }
 

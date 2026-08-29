@@ -12,14 +12,15 @@ export function createTelegramAccount(
     const telegramConfig: TelegramConfig = {
         account_id: config.account_id,
         token: config.token,
+        receive_mode: config.receive_mode ?? "polling",
         webhook: config.webhook,
-        polling: config.polling || { enabled: true },
+        polling: config.polling,
         proxy: config.proxy,
     };
     const bot = new TelegramBot(telegramConfig);
     const account = new Account<"telegram", TelegramBot>(adapter, bot, config);
 
-    if (telegramConfig.webhook?.url) {
+    if (bot.getReceiveMode() === "webhook") {
         adapter.app.router.post(`${account.path}/webhook`, async (ctx: RouterContext) => {
             const secret = ctx.request.headers["x-telegram-bot-api-secret-token"] as
                 | string

@@ -15,6 +15,10 @@ export type SchemaFieldDef = {
     label: string;
     rule: ValidationRule;
     placeholder: string;
+    visibility?: {
+        dependencyKey: string;
+        oneOf: Array<string | number | boolean>;
+    };
 };
 
 export type SchemaGroup = {

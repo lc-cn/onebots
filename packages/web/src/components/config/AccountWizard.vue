@@ -16,10 +16,12 @@ import { useToast } from "../../ui/toast.js";
 import type { SchemaBundle, SchemaGroup, SchemaFieldDef, AccountRow } from "./types";
 import {
     buildSchemaFields,
+    deleteValueByPath,
     getValueByPath,
     setValueByPath,
     resolveStructuredFieldDisplay,
     parseStructuredFieldValue,
+    isSchemaFieldVisible,
     protocolTitle,
 } from "./utils";
 import { buildProtocolFieldLayout } from "./protocol-layout";
@@ -43,6 +45,9 @@ const accountFormModel = reactive<Record<string, unknown>>({});
 const protocolGroups = ref<SchemaGroup[]>([]);
 const adapterFields = ref<SchemaFieldDef[]>([]);
 const protocolEnabled = reactive<Record<string, boolean>>({});
+
+const visibleFields = (fields: SchemaFieldDef[]) =>
+    fields.filter(field => isSchemaFieldVisible(field, accountFormModel));
 
 const steps = [
     { key: "basic", label: "基本信息" },
@@ -165,6 +170,10 @@ const handleSubmit = async () => {
             continue;
         }
         for (const field of group.fields) {
+            if (!isSchemaFieldVisible(field, accountFormModel)) {
+                deleteValueByPath(configObject, field.path);
+                continue;
+            }
             let value = accountFormModel[field.key];
             if (field.rule.type === "object" || field.rule.type === "array") {
                 const parsed = parseStructuredFieldValue(value, field.rule, field.label);
@@ -179,6 +188,10 @@ const handleSubmit = async () => {
     }
 
     for (const field of adapterFields.value) {
+        if (!isSchemaFieldVisible(field, accountFormModel)) {
+            deleteValueByPath(configObject, field.path);
+            continue;
+        }
         let value = accountFormModel[field.key];
         if (field.rule.type === "object" || field.rule.type === "array") {
             const parsed = parseStructuredFieldValue(value, field.rule, field.label);
@@ -294,7 +307,7 @@ defineExpose({ openAdd, openEdit });
             <div v-show="currentStep === 1" class="flex flex-col gap-4">
                 <template v-if="adapterFields.length">
                     <SchemaField
-                        v-for="field in adapterFields"
+                        v-for="field in visibleFields(adapterFields)"
                         :key="field.key"
                         v-model="accountFormModel[field.key]"
                         :field="field" />
@@ -339,7 +352,7 @@ defineExpose({ openAdd, openEdit });
                                     section.columns ? 'grid gap-3 sm:grid-cols-2' : 'space-y-3'
                                 ">
                                 <SchemaField
-                                    v-for="field in section.fields"
+                                    v-for="field in visibleFields(section.fields)"
                                     :key="field.key"
                                     v-model="accountFormModel[field.key]"
                                     :field="field"
@@ -359,7 +372,9 @@ defineExpose({ openAdd, openEdit });
                             </summary>
                             <div class="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
                                 <SchemaField
-                                    v-for="field in protocolLayouts[group.key]?.advanced || []"
+                                    v-for="field in visibleFields(
+                                        protocolLayouts[group.key]?.advanced || [],
+                                    )"
                                     :key="field.key"
                                     v-model="accountFormModel[field.key]"
                                     :field="field"
