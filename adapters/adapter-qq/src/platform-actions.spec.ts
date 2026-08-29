@@ -23,6 +23,42 @@ describe("QQ 平台动作", () => {
         });
     });
 
+    it("生成 QQ 官方机器人分享链接", async () => {
+        const call = vi.fn().mockResolvedValue({ url: "https://example.com/share" });
+        const client = { call } as unknown as QQClient;
+        await executeQQPlatformAction(client, "generate_share_link", {
+            link: { scene: "group" },
+        });
+        expect(call).toHaveBeenCalledWith({
+            method: "POST",
+            path: "/v2/generate_url_link",
+            body: { scene: "group" },
+        });
+    });
+
+    it("审批群申请时透传成员黑名单选项", async () => {
+        const call = vi.fn().mockResolvedValue({ ok: true });
+        const client = { call } as unknown as QQClient;
+        await executeQQPlatformAction(client, "approve_group_join_request", {
+            group_id: "g1",
+            member_openid: "u1",
+            join_request_id: "r1",
+            approve: false,
+            reject_reason: "风险账号",
+            add_to_member_blacklist: true,
+        });
+        expect(call).toHaveBeenCalledWith({
+            method: "POST",
+            path: "/v2/groups/g1/approval_join_request/u1",
+            body: {
+                op: "decline",
+                join_request_id: "r1",
+                reject_reason: "风险账号",
+                add_to_member_blacklist: true,
+            },
+        });
+    });
+
     it("通用入口拒绝绝对 URL", async () => {
         const call = vi.fn().mockRejectedValue(new QQApiError("非法路径"));
         const client = { call } as unknown as QQClient;
@@ -49,7 +85,7 @@ describe("QQ 平台动作", () => {
     it("完整注册并跨群、频道服务器和面板领域分派", async () => {
         const call = vi.fn().mockResolvedValue({ ok: true });
         const client = { call } as unknown as QQClient;
-        expect(QQ_PLATFORM_ACTIONS.size).toBe(57);
+        expect(QQ_PLATFORM_ACTIONS.size).toBe(58);
 
         await executeQQPlatformAction(client, "create_group_join_approval_strategy", {
             strategy: { name: "审核" },

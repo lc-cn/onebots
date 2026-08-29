@@ -34,6 +34,9 @@ export const QQ_GROUP_ACTIONS = {
                 op: params.approve === false ? "decline" : "approve",
                 join_request_id: requiredString(params, "join_request_id"),
                 reject_reason: optionalString(params.reject_reason),
+                ...(typeof params.add_to_member_blacklist === "boolean"
+                    ? { add_to_member_blacklist: params.add_to_member_blacklist }
+                    : {}),
             },
         }),
     get_group_join_requests: async (client: QQClient, params: QQActionParams) =>

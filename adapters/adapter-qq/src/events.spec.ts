@@ -80,13 +80,40 @@ describe("QQ 事件投影", () => {
         });
     });
 
-    it("加群申请投影为可处理 request", () => {
+    it("加群邀请完整投影申请人、验证信息与平台扩展", () => {
         const event = projectQQRawEvent(
             "GROUP_JOIN_REQUEST",
-            { id: "e1", group_openid: "g1", member_openid: "u1", join_request_id: "r1" },
+            {
+                group_openid: "g1",
+                member_openid: "u1",
+                username: "Alice",
+                join_request_id: "r1",
+                apply_at: "2026-08-29T00:00:00.000Z",
+                apply_source: "invited",
+                invited_by: { member_openid: "admin-1" },
+                verify_info: { method: "message", verify_message: "请拉我进群" },
+                auto_approved: false,
+            },
             context,
         );
-        expect(event).toMatchObject({ type: "request", request_type: "group", flag: "r1" });
+        expect(event).toMatchObject({
+            id: { string: "r1" },
+            type: "request",
+            request_type: "group",
+            sub_type: "invite",
+            user: { id: { string: "u1" }, name: "Alice" },
+            group: { id: { string: "g1" } },
+            comment: "请拉我进群",
+            flag: "r1",
+            extensions: {
+                qq: {
+                    apply_source: "invited",
+                    invited_by: { member_openid: "admin-1" },
+                    verify_info: { method: "message", verify_message: "请拉我进群" },
+                    auto_approved: false,
+                },
+            },
+        });
     });
 
     it("投影 Guild 成员生命周期并保留频道服务器地址", () => {
@@ -115,6 +142,7 @@ describe("QQ 事件投影", () => {
         ["GROUP_DEL_ROBOT", "group_decrease"],
         ["GROUP_MSG_REJECT", "message_status"],
         ["C2C_MSG_RECEIVE", "message_status"],
+        ["SUBSCRIBE_MESSAGE_STATUS", "message_status"],
     ])("将 %s 投影为 canonical %s 通知", (eventType, noticeType) => {
         const event = projectQQRawEvent(
             eventType,
@@ -122,6 +150,22 @@ describe("QQ 事件投影", () => {
             context,
         );
         expect(event).toMatchObject({ type: "notice", notice_type: noticeType });
+    });
+
+    it.each([
+        ["GROUP_MEMBER_ADD", "member_joined"],
+        ["GROUP_MEMBER_REMOVE", "member_left"],
+    ])("投影群成员事件 %s", (eventType, noticeType) => {
+        const event = projectQQRawEvent(
+            eventType,
+            { id: "e1", group_openid: "g1", member_openid: "u1" },
+            context,
+        );
+        expect(event).toMatchObject({
+            notice_type: noticeType,
+            group: { id: { string: "g1" } },
+            user: { id: { string: "u1" } },
+        });
     });
 
     it("表态事件投影消息、用户、频道地址与原生 emoji", () => {
@@ -163,6 +207,53 @@ describe("QQ 事件投影", () => {
             user: { id: { string: "u1" } },
             message_id: { string: "message-1" },
             extensions: { qq: { interaction_id: "interaction-1" } },
+        });
+    });
+
+    it("群交互事件读取 group_member_openid", () => {
+        const event = projectQQRawEvent(
+            "INTERACTION_CREATE",
+            { id: "interaction-1", group_openid: "g1", group_member_openid: "u1" },
+            context,
+        );
+        expect(event).toMatchObject({
+            notice_type: "interaction",
+            user: { id: { string: "u1" } },
+            group: { id: { string: "g1" } },
+        });
+    });
+
+    it.each(["MESSAGE_AUDIT_PASS", "MESSAGE_AUDIT_REJECT"])("将 %s 投影为消息状态", eventType => {
+        expect(projectQQRawEvent(eventType, { id: "e1" }, context)).toMatchObject({
+            notice_type: "message_status",
+        });
+    });
+
+    it("从消息删除载荷中投影消息、作者、操作者与频道地址", () => {
+        const event = projectQQRawEvent(
+            "PUBLIC_MESSAGE_DELETE",
+            {
+                id: "e1",
+                message: {
+                    id: "m1",
+                    guild_id: "guild-1",
+                    channel_id: "channel-1",
+                    author: { id: "u1", username: "Alice" },
+                },
+                op_user: { id: "admin-1", username: "Admin" },
+            },
+            context,
+        );
+        expect(event).toMatchObject({
+            notice_type: "message_deleted",
+            message_id: { string: "m1" },
+            user: { id: { string: "u1" }, name: "Alice" },
+            operator: { id: { string: "admin-1" }, name: "Admin" },
+            group: {
+                id: { string: "channel-1" },
+                guild_id: { string: "guild-1" },
+                channel_id: { string: "channel-1" },
+            },
         });
     });
 });

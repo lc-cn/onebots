@@ -64,9 +64,11 @@ export function projectQQRawEvent(
     context: QQProjectionContext,
 ): CommonEvent.Notice | CommonEvent.Request | CommonEvent.Meta {
     const data = asRecord(raw);
-    const eventId = text(data.id) ?? text(data.event_id) ?? `${eventType}:${Date.now()}`;
+    const eventId =
+        firstText(data, "id", "event_id", "join_request_id", "request_id") ??
+        `${eventType}:${Date.now()}`;
     const timestamp = dateLikeToEventMs(
-        text(data.timestamp) ?? text(data.time) ?? text(data.event_time) ?? Date.now(),
+        firstText(data, "timestamp", "time", "event_time", "apply_at") ?? Date.now(),
     );
     if (eventType === "READY" || eventType === "RESUMED") {
         return {
@@ -83,6 +85,8 @@ export function projectQQRawEvent(
     const userId = firstText(data, "user_openid", "member_openid", "openid", "user_id");
     const groupId = firstText(data, "group_openid", "guild_id", "group_id");
     if (eventType === "GROUP_JOIN_REQUEST" || eventType === "GROUP_ADD_REQUEST") {
+        const verifyInfo = asRecord(data.verify_info);
+        const applySource = text(data.apply_source);
         return {
             id: context.createId(eventId),
             timestamp,
@@ -90,12 +94,24 @@ export function projectQQRawEvent(
             bot_id: context.botId,
             type: "request",
             request_type: "group",
-            sub_type: "add",
-            user: { id: context.createId(userId ?? "unknown") },
+            sub_type: applySource === "invited" ? "invite" : "add",
+            user: {
+                id: context.createId(userId ?? "unknown"),
+                name: text(data.username),
+            },
             group: groupId ? { id: context.createId(groupId) } : undefined,
-            comment: text(data.comment) ?? text(data.message),
+            comment: text(verifyInfo.verify_message) ?? text(data.comment) ?? text(data.message),
             flag: firstText(data, "join_request_id", "request_id") ?? eventId,
             raw_event: raw,
+            extensions: {
+                qq: {
+                    apply_source: applySource,
+                    invited_by: data.invited_by,
+                    risk_tips: data.risk_tips,
+                    verify_info: data.verify_info,
+                    auto_approved: data.auto_approved,
+                },
+            },
         };
     }
     return projectQQNotice(eventType, data, raw, eventId, timestamp, context);
@@ -111,9 +127,13 @@ function projectQQNotice(
 ): CommonEvent.Notice {
     const user = projectEventUser(data, context);
     const group = projectEventGroup(eventType, data, context);
-    const operatorId = firstText(data, "operator_id", "op_user_id", "op_member_openid");
+    const rawOperator = asRecord(data.op_user);
+    const operatorId =
+        firstText(data, "operator_id", "op_user_id", "op_member_openid") ??
+        firstText(rawOperator, "id", "user_openid", "member_openid");
     const messageId =
         firstText(data, "message_id", "target_id") ??
+        nestedText(data, "message", "id") ??
         nestedText(data, "target", "id") ??
         nestedText(data, "data", "resolved", "message_id");
     return {
@@ -126,7 +146,13 @@ function projectQQNotice(
         sub_type: eventType.toLowerCase(),
         user,
         group,
-        operator: operatorId ? { id: context.createId(operatorId) } : undefined,
+        operator: operatorId
+            ? {
+                  id: context.createId(operatorId),
+                  name: firstText(rawOperator, "username", "nickname"),
+                  avatar: text(rawOperator.avatar),
+              }
+            : undefined,
         message_id: messageId ? context.createId(messageId) : undefined,
         raw_event: raw,
         extensions: {
@@ -152,15 +178,27 @@ function projectEventUser(
     context: QQProjectionContext,
 ): CommonTypes.User | undefined {
     const rawUser = asRecord(data.user);
+    const rawMessageAuthor = asRecord(asRecord(data.message).author);
     const userId =
-        firstText(data, "user_openid", "member_openid", "openid", "user_id") ??
+        firstText(
+            data,
+            "user_openid",
+            "member_openid",
+            "group_member_openid",
+            "openid",
+            "user_id",
+        ) ??
         firstText(rawUser, "id", "user_openid", "member_openid") ??
+        firstText(rawMessageAuthor, "id", "user_openid", "member_openid") ??
         nestedText(data, "data", "resolved", "user_id");
     if (!userId) return undefined;
     return {
         id: context.createId(userId),
-        name: firstText(rawUser, "username", "nickname") ?? firstText(data, "nick", "nickname"),
-        avatar: text(rawUser.avatar),
+        name:
+            firstText(rawUser, "username", "nickname") ??
+            firstText(rawMessageAuthor, "username", "nickname") ??
+            firstText(data, "username", "nick", "nickname"),
+        avatar: text(rawUser.avatar) ?? text(rawMessageAuthor.avatar),
     };
 }
 
@@ -169,8 +207,9 @@ function projectEventGroup(
     data: Record<string, unknown>,
     context: QQProjectionContext,
 ): CommonTypes.Group | undefined {
-    const guildId = text(data.guild_id);
-    const channelId = text(data.channel_id);
+    const rawMessage = asRecord(data.message);
+    const guildId = text(data.guild_id) ?? text(rawMessage.guild_id);
+    const channelId = text(data.channel_id) ?? text(rawMessage.channel_id);
     const groupId = firstText(data, "group_openid", "group_id");
     if (channelId) {
         return {
@@ -248,6 +287,17 @@ function resolveNoticeType(eventType: string): CommonEvent.NoticeType {
     if (eventType.endsWith("MEMBER_REMOVE")) return "member_left";
     if (eventType.endsWith("MSG_REJECT") || eventType.endsWith("MSG_RECEIVE")) {
         return "message_status";
+    }
+    if (eventType === "SUBSCRIBE_MESSAGE_STATUS") return "message_status";
+    if (eventType === "MESSAGE_AUDIT_PASS" || eventType === "MESSAGE_AUDIT_REJECT") {
+        return "message_status";
+    }
+    if (
+        eventType === "MESSAGE_DELETE" ||
+        eventType === "PUBLIC_MESSAGE_DELETE" ||
+        eventType === "DIRECT_MESSAGE_DELETE"
+    ) {
+        return "message_deleted";
     }
     if (eventType === "MESSAGE_REACTION_ADD") return "reaction_added";
     if (eventType === "MESSAGE_REACTION_REMOVE") return "reaction_removed";

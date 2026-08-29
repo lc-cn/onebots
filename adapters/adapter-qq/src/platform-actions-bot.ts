@@ -4,6 +4,12 @@ import { optionalQuery, requiredRecord, requiredString } from "./platform-action
 
 /** 机器人菜单与面板动作。 */
 export const QQ_BOT_ACTIONS = {
+    generate_share_link: async (client: QQClient, params: QQActionParams) =>
+        client.call({
+            method: "POST",
+            path: "/v2/generate_url_link",
+            body: requiredRecord(params, "link"),
+        }),
     get_bot_menu: async (client: QQClient) => client.call({ method: "GET", path: "/v2/menu" }),
     update_bot_menu: async (client: QQClient, params: QQActionParams) =>
         client.call({
