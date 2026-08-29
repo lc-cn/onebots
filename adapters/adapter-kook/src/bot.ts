@@ -156,7 +156,12 @@ export class KookBot extends EventEmitter<KookBotEvents> {
                 else resolve();
             };
             const helloTimer = setTimeout(
-                () => settle(new Error("等待 KOOK Gateway HELLO 超时")),
+                () =>
+                    settle(
+                        new KookError("等待 KOOK Gateway HELLO 超时", {
+                            code: "KOOK_GATEWAY_HELLO_TIMEOUT",
+                        }),
+                    ),
                 HELLO_TIMEOUT,
             );
             socket.on("message", raw => {
@@ -187,7 +192,12 @@ export class KookBot extends EventEmitter<KookBotEvents> {
             });
             socket.once("error", error => settle(error));
             socket.once("close", (code, reason) => {
-                settle(new Error(`KOOK Gateway 在握手时关闭: ${code} ${reason.toString()}`));
+                settle(
+                    new KookError(`KOOK Gateway 在握手时关闭: ${code} ${reason.toString()}`, {
+                        code: "KOOK_GATEWAY_HANDSHAKE_CLOSED",
+                        details: { close_code: code, reason: reason.toString() },
+                    }),
+                );
                 this.handleClose(socket, generation);
             });
             socket.once("open", () => this.emit("debug", "KOOK Gateway 已建立 TCP 连接"));

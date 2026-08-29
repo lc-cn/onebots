@@ -456,7 +456,12 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
     private cleanup(connectionError?: Error) {
         const reject = this.pendingConnectionReject;
         this.pendingConnectionReject = undefined;
-        reject?.(connectionError ?? new Error("Discord Gateway 已停止"));
+        reject?.(
+            connectionError ??
+                new DiscordError("Discord Gateway 已停止", {
+                    code: "DISCORD_GATEWAY_STOPPED",
+                }),
+        );
         this.stopHeartbeat();
         if (this.sessionRetryTimer) {
             clearTimeout(this.sessionRetryTimer);

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { ErrorCategory } from "onebots";
+import { DiscordError } from "./errors.js";
 import { materializeDiscordFile } from "./media.js";
 
 describe("Discord media", () => {
@@ -21,9 +23,12 @@ describe("Discord media", () => {
     });
 
     it("拒绝无效 Base64、响应头注入和带凭据 URL", async () => {
-        await expect(materializeDiscordFile({ source: "base64://***" })).rejects.toThrow(
-            "Base64 数据无效",
-        );
+        const invalidBase64 = materializeDiscordFile({ source: "base64://***" });
+        await expect(invalidBase64).rejects.toBeInstanceOf(DiscordError);
+        await expect(invalidBase64).rejects.toMatchObject({
+            code: "DISCORD_MEDIA_INVALID",
+            category: ErrorCategory.VALIDATION,
+        });
         await expect(
             materializeDiscordFile({
                 source: "base64://YQ==",

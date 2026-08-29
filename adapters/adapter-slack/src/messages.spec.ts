@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { ErrorCategory } from "onebots";
+import { SlackError } from "./errors.js";
 import { compileSlackMessage, slackUploadMessageTimestamp } from "./messages.js";
 
 describe("Slack message compiler", () => {
@@ -37,9 +39,18 @@ describe("Slack message compiler", () => {
                 },
             ]),
         ).toMatchObject({ text: "fallback", options: { blocks: [{ type: "divider" }] } });
-        expect(() => compileSlackMessage([{ type: "unknown", data: {} }])).toThrow(
-            "不支持消息段 unknown",
-        );
+        let error: unknown;
+        try {
+            compileSlackMessage([{ type: "unknown", data: {} }]);
+        } catch (cause) {
+            error = cause;
+        }
+        expect(error).toBeInstanceOf(SlackError);
+        expect(error).toMatchObject({
+            code: "SLACK_MESSAGE_SEGMENT_UNSUPPORTED",
+            category: ErrorCategory.VALIDATION,
+            context: { details: { segment_type: "unknown" } },
+        });
     });
 
     it("拒绝会让 Slack 静默丢弃 Block Kit 的文件组合", () => {

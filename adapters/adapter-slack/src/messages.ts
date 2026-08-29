@@ -1,4 +1,5 @@
 import type { CommonTypes, MediaSourceInput } from "onebots";
+import { SlackError } from "./errors.js";
 import type { SlackMessageOptions } from "./types.js";
 
 export interface SlackFileInput extends MediaSourceInput {
@@ -47,18 +48,29 @@ export function compileSlackMessage(message: CommonTypes.Segment[]): CompiledSla
                 break;
             }
             default:
-                throw new Error(`Slack 不支持消息段 ${segment.type}`);
+                throw SlackError.invalid(
+                    `Slack 不支持消息段 ${segment.type}`,
+                    "SLACK_MESSAGE_SEGMENT_UNSUPPORTED",
+                    { segment_type: segment.type },
+                );
         }
     }
     if (!text && !files.length && !options.blocks?.length && !options.attachments?.length) {
-        throw new Error("Slack 消息不包含可发送内容");
+        throw SlackError.invalid("Slack 消息不包含可发送内容", "SLACK_MESSAGE_EMPTY");
     }
     const unsupported = unsupportedUploadOptions(options);
     if (files.length && unsupported.length) {
-        throw new Error(`Slack 文件上传不能与这些消息选项混用: ${unsupported.join(", ")}`);
+        throw SlackError.invalid(
+            `Slack 文件上传不能与这些消息选项混用: ${unsupported.join(", ")}`,
+            "SLACK_FILE_OPTIONS_UNSUPPORTED",
+            { options: unsupported },
+        );
     }
     if (files.length && text && options.blocks?.length) {
-        throw new Error("Slack 文件上传不能同时发送正文与 Block Kit，请拆分为两条消息");
+        throw SlackError.invalid(
+            "Slack 文件上传不能同时发送正文与 Block Kit，请拆分为两条消息",
+            "SLACK_FILE_BLOCKS_CONFLICT",
+        );
     }
     return { text, options, files };
 }
@@ -94,7 +106,11 @@ function idValue(value: unknown, name: string): string {
 
 function requiredString(value: unknown, name: string): string {
     const result = optionalString(value) || (typeof value === "number" ? String(value) : "");
-    if (!result) throw new Error(`Slack ${name} 必须为非空字符串`);
+    if (!result) {
+        throw SlackError.invalid(`Slack ${name} 必须为非空字符串`, "SLACK_FIELD_REQUIRED", {
+            field: name,
+        });
+    }
     return result;
 }
 

@@ -1,4 +1,5 @@
 import { materializeMediaSource, type MaterializedMedia, type MediaSourceInput } from "onebots";
+import { DiscordError } from "./errors.js";
 
 /** Discord 待上传附件；source 支持 HTTP(S)、data URL、base64:// 和 Node.js 本地路径。 */
 export interface DiscordFileInput extends MediaSourceInput {
@@ -12,12 +13,16 @@ export interface DiscordUpload extends MaterializedMedia {
 
 /** 将统一媒体来源收敛为字节与可信元数据。 */
 export async function materializeDiscordFile(input: DiscordFileInput): Promise<DiscordUpload> {
-    const media = await materializeMediaSource(input);
-    const description = optionalDescription(input.description);
-    return {
-        ...media,
-        ...(description ? { description } : {}),
-    };
+    try {
+        const media = await materializeMediaSource(input);
+        const description = optionalDescription(input.description);
+        return {
+            ...media,
+            ...(description ? { description } : {}),
+        };
+    } catch (error) {
+        throw DiscordError.wrap(error, "DISCORD_MEDIA_INVALID");
+    }
 }
 
 function optionalDescription(value: string | undefined): string | undefined {
@@ -26,6 +31,6 @@ function optionalDescription(value: string | undefined): string | undefined {
     return value;
 }
 
-function invalidSource(message: string): Error {
-    return new Error(`Discord 媒体来源无效: ${message}`);
+function invalidSource(message: string): DiscordError {
+    return DiscordError.invalid(`Discord 媒体来源无效: ${message}`, "DISCORD_MEDIA_INVALID");
 }
