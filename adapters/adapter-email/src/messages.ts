@@ -23,6 +23,7 @@ export function compileEmailMessage(segments: readonly CommonTypes.Segment[]): C
     const html: string[] = [];
     const attachments: EmailOutgoingAttachment[] = [];
     const metadata: CompiledEmail = {};
+    let replyCount = 0;
 
     for (const segment of segments) {
         if (segment.type === "text") {
@@ -32,6 +33,12 @@ export function compileEmailMessage(segments: readonly CommonTypes.Segment[]): C
             continue;
         }
         if (segment.type === "reply") {
+            replyCount += 1;
+            if (replyCount > 1) {
+                throw new EmailError("邮件只能包含一个 reply 段", {
+                    code: "EMAIL_INVALID_SEGMENT",
+                });
+            }
             metadata.in_reply_to = requiredString(
                 segment.data.message_id ?? segment.data.id,
                 "reply.message_id",
@@ -58,10 +65,16 @@ export function compileEmailMessage(segments: readonly CommonTypes.Segment[]): C
         });
     }
 
+    if (metadata.in_reply_to) {
+        metadata.references = [...(metadata.references || []), metadata.in_reply_to].filter(
+            (value, index, values) => values.indexOf(value) === index,
+        );
+    }
+
     return {
         ...metadata,
         text: text.join("") || undefined,
-        html: html.join("") || metadata.html,
+        html: metadata.html || html.join("") || undefined,
         attachments: attachments.length ? attachments : undefined,
     };
 }
@@ -145,7 +158,12 @@ function addressList(value: unknown, field: string): string[] {
 function stringRecord(value: unknown, field: string): Record<string, string> {
     if (!isRecord(value)) throw invalidField(field);
     const result: Record<string, string> = {};
-    for (const [key, item] of Object.entries(value)) result[key] = requiredString(item, field);
+    for (const [key, item] of Object.entries(value)) {
+        if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u.test(key)) throw invalidField(`${field}.${key}`);
+        const header = requiredString(item, `${field}.${key}`);
+        if (/\r|\n/u.test(header)) throw invalidField(`${field}.${key}`);
+        result[key] = header;
+    }
     return result;
 }
 

@@ -63,7 +63,7 @@ await adapter.sendMessage("my_bot", {
 });
 ```
 
-接收事件在 `raw_event` 中保留完整 `EmailMessage`，在 `extensions.email` 中保留 UID、目录、主题、收件人和线程头。HTML 正文同时使用只读的 `email_html` 段保留，避免只留下有损生成的纯文本。
+接收事件在 `raw_event` 中保留完整 `EmailMessage`，在 `extensions.email` 中保留 UID、目录、主题、收件人和线程头。HTML 正文同时使用只读的 `email_html` 段保留，避免只留下有损生成的纯文本。发送 `reply` 时会同时生成 `In-Reply-To` 与去重后的 `References`；显式 `email.html` 优先于纯文本自动生成的 HTML alternative，自定义 Header 会拒绝非法字段名和换行注入。
 
 ## 平台动作
 

@@ -122,11 +122,16 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
     }
 
     async getVersion(): Promise<Adapter.VersionInfo> {
+        const [appVersion, nodemailerVersion, imapflowVersion] = await Promise.all([
+            readPackageVersion(import.meta.url),
+            readPackageVersion(import.meta.resolve("nodemailer")),
+            readPackageVersion(import.meta.resolve("imapflow")),
+        ]);
         return {
             app_name: "onebots Email Adapter",
-            app_version: await readPackageVersion(import.meta.url),
-            impl: "SMTP / IMAP IDLE",
-            version: "RFC 5321 / RFC 3501",
+            app_version: appVersion,
+            impl: "nodemailer + imapflow",
+            version: `nodemailer ${nodemailerVersion} / imapflow ${imapflowVersion}`,
         };
     }
 

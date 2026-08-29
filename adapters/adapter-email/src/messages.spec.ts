@@ -15,6 +15,7 @@ describe("compileEmailMessage", () => {
 
         expect(compiled.subject).toBe("主题");
         expect(compiled.in_reply_to).toBe("<parent@example.com>");
+        expect(compiled.references).toEqual(["<parent@example.com>"]);
         expect(compiled.text).toBe("<hello>\nworld");
         expect(compiled.html).toContain("&lt;hello&gt;<br>world");
         expect(compiled.html).toContain("cid:onebots-");
@@ -38,5 +39,28 @@ describe("compileEmailMessage", () => {
             compileEmailMessage([{ type: "email", data: { subject: "指定主题" } }]),
         );
         expect(result.subject).toBe("指定主题");
+    });
+
+    it("显式 HTML 优先，并拒绝歧义 reply 与 Header 注入", () => {
+        expect(
+            compileEmailMessage([
+                { type: "text", data: { text: "纯文本" } },
+                { type: "email", data: { html: "<strong>HTML</strong>" } },
+            ]).html,
+        ).toBe("<strong>HTML</strong>");
+        expect(() =>
+            compileEmailMessage([
+                { type: "reply", data: { message_id: "<one@example.com>" } },
+                { type: "reply", data: { message_id: "<two@example.com>" } },
+            ]),
+        ).toThrow("只能包含一个 reply");
+        expect(() =>
+            compileEmailMessage([
+                {
+                    type: "email",
+                    data: { headers: { "X-Test": "safe\r\nBcc: victim@example.com" } },
+                },
+            ]),
+        ).toThrow("email.headers.X-Test");
     });
 });
