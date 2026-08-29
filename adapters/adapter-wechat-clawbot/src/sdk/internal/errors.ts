@@ -1,11 +1,26 @@
 /** 网关或协议层可恢复/不可恢复故障 */
 export class GatewayFault extends Error {
     readonly code: string;
+    readonly operation?: string;
+    readonly status?: number;
+    readonly details?: Readonly<Record<string, unknown>>;
 
-    constructor(code: string, message: string, options?: { cause?: unknown }) {
+    constructor(
+        code: string,
+        message: string,
+        options?: {
+            cause?: unknown;
+            operation?: string;
+            status?: number;
+            details?: Readonly<Record<string, unknown>>;
+        },
+    ) {
         super(message, options);
         this.name = "GatewayFault";
         this.code = code;
+        this.operation = options?.operation;
+        this.status = options?.status;
+        this.details = options?.details;
     }
 }
 

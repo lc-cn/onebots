@@ -1,14 +1,24 @@
 /**
  * 微信 ClawBot（iLink Bot HTTP）适配器，平台标识 **`wechat-clawbot`**。
  */
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
-import { Adapter } from "onebots";
-import { BaseApp } from "onebots";
+import { readFile } from "node:fs/promises";
+import {
+    Account,
+    AccountStatus,
+    Adapter,
+    AdapterRegistry,
+    BaseApp,
+    type CommonTypes,
+} from "onebots";
 import { WechatIlinkBot } from "./bot.js";
-import { CommonEvent, type CommonTypes } from "onebots";
-import type { WechatIlinkConfig } from "./types.js";
+import type { WechatClawbotConfig, WechatIlinkRuntimeConfig } from "./types.js";
 import type { IlinkBotMessage } from "./sdk/ilink-types.js";
 import { wechatClawbotCapabilities } from "./capabilities.js";
+import { projectWechatClawbotEvent } from "./events.js";
+import {
+    executeWechatClawbotPlatformAction,
+    WECHAT_CLAWBOT_PLATFORM_ACTIONS,
+} from "./platform-actions.js";
 import {
     ILINK_CDN_ROOT_DEFAULT,
     ILINK_HTTP_ORIGIN_DEFAULT,
@@ -21,7 +31,7 @@ import {
 } from "./context-token-store.js";
 
 /** DNS / 超时等可恢复网络错误，轮询循环会自动重试 */
-function isTransientNetworkError(err: unknown): boolean {
+function isTransientNetworkError(error: unknown): boolean {
     const codes = new Set([
         "ENOTFOUND",
         "EAI_AGAIN",
@@ -67,21 +77,21 @@ function isTransientNetworkError(err: unknown): boolean {
         }
         return false;
     };
-    return walk(err);
+    return walk(error);
 }
 
-function summarizeNetworkError(err: unknown): string {
-    if (err instanceof Error) {
-        const cause = (err as Error & { cause?: unknown }).cause;
+function summarizeNetworkError(error: unknown): string {
+    if (error instanceof Error) {
+        const cause = (error as Error & { cause?: unknown }).cause;
         if (cause instanceof Error) {
             const code = (cause as Error & { code?: string }).code;
             return code
-                ? `${err.message} (${code}: ${cause.message})`
-                : `${err.message} (${cause.message})`;
+                ? `${error.message} (${code}: ${cause.message})`
+                : `${error.message} (${cause.message})`;
         }
-        return err.message;
+        return error.message;
     }
-    return String(err);
+    return String(error);
 }
 
 function buildWechatClawbotQrBlocks(
@@ -109,16 +119,31 @@ function buildWechatClawbotQrBlocks(
     return blocks;
 }
 
-function ilinkTimeToMs(t?: number): number {
-    if (t == null || !Number.isFinite(t)) return Date.now();
-    if (t >= 1_000_000_000_000) return Math.floor(t);
-    return Math.floor(t * 1000);
-}
-
 export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbot"> {
     constructor(app: BaseApp) {
         super(app, "wechat-clawbot", wechatClawbotCapabilities);
         this.icon = "https://res.wx.qq.com/a/wx_fed/assets/res/OTE0YTAw.png";
+    }
+
+    executePlatformAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!WECHAT_CLAWBOT_PLATFORM_ACTIONS.has(action)) {
+            return super.executePlatformAction(uin, action, params);
+        }
+        return executeWechatClawbotPlatformAction(this.requireClient(uin), action, params);
+    }
+
+    isPlatformActionImplemented(action: string): boolean {
+        return WECHAT_CLAWBOT_PLATFORM_ACTIONS.has(action);
+    }
+
+    private requireClient(uin: string): WechatIlinkBot {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`未找到账号 ${uin}`);
+        return account.client;
     }
 
     async sendMessage(
@@ -189,12 +214,12 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         };
     }
 
-    async getVersion(uin: string): Promise<Adapter.VersionInfo> {
+    async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots wechat-clawbot adapter",
-            app_version: "1.0.0",
+            app_version: await packageVersion(),
             impl: this.platform,
-            version: "1.0.0",
+            version: "iLink Bot HTTP",
         };
     }
 
@@ -206,88 +231,11 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         };
     }
 
-    /**
-     * iLink 侧无完整「好友列表」开放能力时，返回单条占位。
-     * - `accountId`：机器人账号（CredentialBlob.accountId），不当作好友。
-     * - `userId`：微信用户账号（CredentialBlob.userId），好友列表仅使用此项。
-     */
-    async getFriendList(
-        uin: string,
-        _params?: Adapter.GetFriendListParams,
-    ): Promise<Adapter.FriendInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`未找到账号 ${uin}`);
-        const session = await account.client.getSession();
-        if (!session) {
-            throw new Error("未加载 iLink 会话，无法获取好友列表");
-        }
-        if (!session.userId) {
-            throw new Error("会话中缺少 userId（微信用户标识），无法组装好友列表");
-        }
-        return [
-            {
-                user_id: this.createId(session.userId),
-                user_name: session.userId,
-            },
-        ];
-    }
-
-    private buildSegments(m: IlinkBotMessage): CommonTypes.Segment[] {
-        const segments: CommonTypes.Segment[] = [];
-        if (m.type === "text" && m.text) {
-            segments.push({ type: "text", data: { text: m.text } });
-        } else if (m.type === "photo") {
-            if (m.caption) segments.push({ type: "text", data: { text: m.caption } });
-            if (m.media?.fileId) {
-                segments.push({
-                    type: "image",
-                    data: { url: `ilink-cdn:${m.media.fileId}` },
-                });
-            }
-        } else if (m.type === "video") {
-            if (m.caption) segments.push({ type: "text", data: { text: m.caption } });
-            if (m.media?.fileId) {
-                segments.push({
-                    type: "video",
-                    data: { url: `ilink-cdn:${m.media.fileId}` },
-                });
-            }
-        } else if (m.type === "document") {
-            if (m.caption) segments.push({ type: "text", data: { text: m.caption } });
-            if (m.media?.fileId) {
-                segments.push({
-                    type: "file",
-                    data: {
-                        url: `ilink-cdn:${m.media.fileId}`,
-                        name: m.media.kind === "document" ? m.media.fileName : undefined,
-                    },
-                });
-            }
-        } else if (m.type === "voice") {
-            if (m.text) segments.push({ type: "text", data: { text: m.text } });
-            if (m.media?.fileId) {
-                segments.push({
-                    type: "file",
-                    data: { url: `ilink-cdn:${m.media.fileId}`, name: "voice.silk" },
-                });
-            }
-        } else {
-            segments.push({
-                type: "text",
-                data: { text: "[不支持的消息类型]" },
-            });
-        }
-        if (segments.length === 0) {
-            segments.push({ type: "text", data: { text: "" } });
-        }
-        return segments;
-    }
-
     createAccount(
         config: Account.Config<"wechat-clawbot">,
     ): Account<"wechat-clawbot", WechatIlinkBot> {
         /** token / ilink_bot_id / 端点 / bot_type / qr_login 等由约定与会话文件驱动，不从 YAML 读取 */
-        const wc: WechatIlinkConfig = {
+        const wc: WechatIlinkRuntimeConfig = {
             account_id: config.account_id,
             base_url: ILINK_HTTP_ORIGIN_DEFAULT,
             cdn_base_url: ILINK_CDN_ROOT_DEFAULT,
@@ -295,7 +243,8 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             qr_login: true,
             qr_login_timeout_ms: config.qr_login_timeout_ms ?? 480_000,
             polling_timeout_ms: config.polling_timeout_ms,
-            polling_retry_delay_ms: config.polling_retry_delay_ms,
+            polling_retry_initial_delay_ms: config.polling_retry_initial_delay_ms,
+            polling_retry_max_delay_ms: config.polling_retry_max_delay_ms,
         };
 
         ensureWechatClawbotContextTokenTable(this.db);
@@ -317,7 +266,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
                     : "请使用微信扫描下方二维码完成 iLink 扩展登录",
                 options: { blocks: buildWechatClawbotQrBlocks(payload.qrCodeUrl, payload.qrcode) },
                 data: { qrcode: payload.qrcode, refreshed: !!payload.refreshed },
-            } as unknown as Adapter.VerificationRequest);
+            } satisfies Adapter.VerificationRequest);
         });
 
         bot.on("login", session => {
@@ -344,9 +293,12 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             this.logger.warn(`[${this.platform}] ${config.account_id} ${payload.message}`);
         });
 
-        bot.on("relogin_failed", (e: unknown) => {
+        bot.on("relogin_failed", (error: unknown) => {
             account.status = AccountStatus.OffLine;
-            this.logger.error(`[${this.platform}] ${config.account_id} 自动重新扫码登录失败:`, e);
+            this.logger.error(
+                `[${this.platform}] ${config.account_id} 自动重新扫码登录失败:`,
+                error,
+            );
         });
 
         bot.on("ready", () => {
@@ -354,15 +306,22 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             this.logger.info(`[${this.platform}] ${config.account_id} 长轮询已启动`);
         });
 
-        bot.on("polling_error", (err: unknown) => {
-            if (err instanceof StaleCredentialFault) return;
-            if (isTransientNetworkError(err)) {
+        bot.on("polling_error", (error: unknown) => {
+            if (error instanceof StaleCredentialFault) return;
+            if (isTransientNetworkError(error)) {
                 this.logger.warn(
-                    `[${this.platform}] ${config.account_id} 轮询网络异常（将自动重试）: ${summarizeNetworkError(err)}`,
+                    `[${this.platform}] ${config.account_id} 轮询网络异常（将自动重试）: ${summarizeNetworkError(error)}`,
                 );
                 return;
             }
-            this.logger.error(`[${this.platform}] ${config.account_id} 轮询错误:`, err);
+            this.logger.error(`[${this.platform}] ${config.account_id} 轮询错误:`, error);
+        });
+
+        bot.on("listener_error", (payload: { event: string; error: unknown }) => {
+            this.logger.error(
+                `[${this.platform}] ${config.account_id} 事件监听器 ${payload.event} 执行失败:`,
+                payload.error,
+            );
         });
 
         bot.on("message", (m: IlinkBotMessage) => {
@@ -370,42 +329,50 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             const preview = rawText.length > 80 ? `${rawText.slice(0, 80)}...` : rawText;
             this.logger.info(`[${this.platform}] 收到私聊 | from=${m.from.id} | ${preview}`);
 
-            const segments = this.buildSegments(m);
-            const mid =
-                m.id != null ? String(m.id) : m.seq != null ? String(m.seq) : String(Date.now());
-
-            const commonEvent: CommonEvent.Message = {
-                id: this.createId(mid),
-                timestamp: ilinkTimeToMs(m.date),
-                platform: this.platform,
-                bot_id: this.createId(config.account_id),
-                type: "message",
-                message_type: "private",
-                sender: {
-                    id: this.createId(m.from.id),
-                    name: m.from.id,
-                },
-                message_id: this.createId(mid),
-                raw_message: JSON.stringify(m.raw),
-                message: segments,
-            };
-
-            account.dispatch(commonEvent);
+            account.dispatch(
+                projectWechatClawbotEvent(m, {
+                    accountId: this.createId(config.account_id),
+                    createId: value => this.createId(value),
+                }),
+            );
         });
 
-        void bot.start().catch((e: unknown) => {
-            this.logger.error(`[${this.platform}] ${config.account_id} 启动失败:`, e);
-            account.status = AccountStatus.OffLine;
+        account.on("start", async () => {
+            try {
+                await bot.start();
+            } catch (error) {
+                account.status = AccountStatus.OffLine;
+                this.logger.error(`[${this.platform}] ${config.account_id} 启动失败:`, error);
+            }
+        });
+        account.on("stop", async () => {
+            try {
+                await bot.stop();
+            } catch (error) {
+                this.logger.error(`[${this.platform}] ${config.account_id} 停止失败:`, error);
+            } finally {
+                account.status = AccountStatus.OffLine;
+            }
         });
 
         return account;
     }
 }
 
+async function packageVersion(): Promise<string> {
+    const raw = await readFile(new URL("../package.json", import.meta.url), "utf8");
+    const value: unknown = JSON.parse(raw);
+    return isRecord(value) && typeof value.version === "string" ? value.version : "unknown";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 declare module "onebots" {
     export namespace Adapter {
         export interface Configs {
-            "wechat-clawbot": WechatIlinkConfig;
+            "wechat-clawbot": WechatClawbotConfig;
         }
     }
 }

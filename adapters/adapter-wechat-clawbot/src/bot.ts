@@ -1,6 +1,6 @@
 import path from "node:path";
 import { IlinkBot } from "./sdk/ilink-bot.js";
-import type { WechatIlinkConfig } from "./types.js";
+import type { WechatIlinkRuntimeConfig } from "./types.js";
 import type { StaleCredentialFault } from "./sdk/internal/errors.js";
 import type { ClawbotContextTokenStore } from "./context-token-store.js";
 
@@ -15,12 +15,12 @@ function conventionSessionPath(accountId: string): string {
 
 /** OneBots 封装的 iLink 客户端：启动长轮询、可选扫码登录 */
 export class WechatIlinkBot extends IlinkBot {
-    private readonly cfg: WechatIlinkConfig;
+    private readonly cfg: WechatIlinkRuntimeConfig;
     /** 防止凭证失效重登与首次登录并发 */
     private reloginBusy = false;
 
     constructor(
-        config: WechatIlinkConfig,
+        config: WechatIlinkRuntimeConfig,
         deps?: { contextTokenStore?: ClawbotContextTokenStore },
     ) {
         const initial =
@@ -54,7 +54,7 @@ export class WechatIlinkBot extends IlinkBot {
         });
     }
 
-    getConfig(): WechatIlinkConfig {
+    getConfig(): WechatIlinkRuntimeConfig {
         return this.cfg;
     }
 
@@ -89,22 +89,18 @@ export class WechatIlinkBot extends IlinkBot {
 
             if (!this.cfg.qr_login) {
                 this.emit("relogin_blocked", {
-                    message: "会话已在服务端失效且本地已清除，但未启用扫码登录（qr_login），无法自动重新登录。请在配置中启用扫码或手动写入 token 后重启。",
+                    message:
+                        "会话已在服务端失效且本地已清除，但未启用扫码登录（qr_login），无法自动重新登录。请在配置中启用扫码或手动写入 token 后重启。",
                 });
                 return;
             }
 
             await this.runInteractiveQrLogin();
 
-            void this.startPolling({
-                timeoutMs: this.cfg.polling_timeout_ms,
-                retryDelayMs: this.cfg.polling_retry_delay_ms,
-            }).catch((err: unknown) => {
-                this.emit("polling_error", err);
-            });
+            await this.startPolling(this.pollingOptions());
             this.emit("ready");
-        } catch (e: unknown) {
-            this.emit("relogin_failed", e);
+        } catch (error: unknown) {
+            this.emit("relogin_failed", error);
         } finally {
             this.reloginBusy = false;
         }
@@ -126,14 +122,20 @@ export class WechatIlinkBot extends IlinkBot {
             }
         }
 
-        // startPolling 内部为无限长轮询，返回的 Promise 仅在停止轮询时才会结束；
-        // 若 await，则永远到不了 ready，账号会一直处于 pending。
-        void this.startPolling({
-            timeoutMs: this.cfg.polling_timeout_ms,
-            retryDelayMs: this.cfg.polling_retry_delay_ms,
-        }).catch((err: unknown) => {
-            this.emit("polling_error", err);
-        });
+        await this.startPolling(this.pollingOptions());
         this.emit("ready");
+    }
+
+    /** 立即中止长轮询并通知 iLink 会话下线。 */
+    async stop(): Promise<void> {
+        await this.stopPolling();
+    }
+
+    private pollingOptions(): import("./sdk/protocol/chat-event.js").PollingOptions {
+        return {
+            timeoutMs: this.cfg.polling_timeout_ms,
+            retryInitialDelayMs: this.cfg.polling_retry_initial_delay_ms,
+            retryMaxDelayMs: this.cfg.polling_retry_max_delay_ms,
+        };
     }
 }

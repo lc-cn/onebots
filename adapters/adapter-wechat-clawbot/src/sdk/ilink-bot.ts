@@ -1,11 +1,9 @@
 import { EventEmitter } from "node:events";
 
 import { ILINK_LONG_WAIT_MS, ILINK_QR_BOT_CLASS_DEFAULT } from "./internal/config.js";
-import { delay } from "./internal/async-tools.js";
-import { MissingReplyLaneFault, StaleCredentialFault, GatewayFault } from "./internal/errors.js";
+import { MissingReplyLaneFault, GatewayFault } from "./internal/errors.js";
 import { pickCredentialOrNull } from "./internal/session-snapshot.js";
 import { materializeUserSuppliedFile } from "./internal/load-bytes.js";
-import { mapInboundWirePacket } from "./protocol/inbound-mapper.js";
 import { TypingPhase, UploadKind } from "./protocol/wire-models.js";
 import type {
     CredentialBlob,
@@ -19,9 +17,13 @@ import type {
     PollingOptions,
     SendCommonOptions,
     SendMediaOptions,
+    SendTypingOptions,
     SessionStore,
     WaitForLoginOptions,
 } from "./protocol/chat-event.js";
+import type { ClearSessionOptions, IlinkBotOptions } from "./ilink-options.js";
+import { mapInboundWirePacket } from "./protocol/inbound-mapper.js";
+import type { InboundWirePacket } from "./protocol/wire-models.js";
 import { allocateLoginTicket, awaitLoginTicketResolution } from "./login/qr-handshake.js";
 import {
     postFileBundle,
@@ -31,39 +33,21 @@ import {
 } from "./outbound/assembler.js";
 import { IlinkJsonTransport } from "./transport/ilink-json-transport.js";
 import { JsonFileCredentialStore, MemoryCredentialStore } from "./state/persist.js";
-import { pullUserMediaAttachment, stageBinaryForPeer, mapMimeFamilyToUploadKind } from "./cdn/payload-pipeline.js";
+import {
+    pullUserMediaAttachment,
+    stageBinaryForPeer,
+    mapMimeFamilyToUploadKind,
+} from "./cdn/payload-pipeline.js";
 import type { ClawbotContextTokenStore } from "../context-token-store.js";
+import { runPollingLoop } from "./polling-loop.js";
+import {
+    emitInboundSafely,
+    rememberRecentMessage,
+    runTextBindings,
+    resolveRecentMedia,
+    type RegexBinding,
+} from "./inbound-runtime.js";
 
-export interface IlinkBotOptions {
-    session?: Partial<CredentialBlob> | null;
-    sessionStore?: SessionStore | string;
-    token?: string;
-    accountId?: string;
-    baseUrl?: string;
-    cdnBaseUrl?: string;
-    routeTag?: string;
-    polling?: boolean | PollingOptions;
-    /**
-     * 与 `contextTokenAccountKey` 同时传入时，context_token 只读写 SQLite（OneBots 主库），
-     * 会话 JSON 不再持久化 contextTokens；写入带会话 `accountId` + 对端 peer，读取按 accountKey + peer。
-     */
-    contextTokenStore?: ClawbotContextTokenStore;
-    /** OneBots 配置账号键（如 `account_id`） */
-    contextTokenAccountKey?: string;
-}
-
-/** {@link IlinkBot.clearSession} 选项 */
-export interface ClearSessionOptions {
-    /**
-     * 未启用 `contextTokenStore` 时：为 true 则清除凭证但把 context_token 暂存内存，待下次 `useSession` 合并回快照。
-     * 已启用 DB 存储时：context_token 始终在库中，本项无效。
-     */
-    preserveContextTokens?: boolean;
-}
-
-type RegexBinding = { pattern: RegExp; listener: OnTextListener };
-
-/** iLink 会话运行时：凭证、长轮询、出站消息 */
 export class IlinkBot extends EventEmitter {
     private readonly store: SessionStore;
     private readonly transport: IlinkJsonTransport;
@@ -71,16 +55,17 @@ export class IlinkBot extends EventEmitter {
     private readonly seedCredential: Partial<CredentialBlob> | null;
     private hydrated = false;
     private pollArmed = false;
+    private pollingGeneration = 0;
+    private pollingAbort: AbortController | null = null;
     /** 子类在凭证失效重登前可 await 其结束并置 null */
     protected pollLoop: Promise<void> | null = null;
     private pollKnobs: PollingOptions;
     private readonly regexBindings: RegexBinding[] = [];
     private readonly typingPass = new Map<string, string>();
+    private readonly recentMessages = new Map<string, NormalizedChatEvent>();
     private readonly contextTokenStore?: ClawbotContextTokenStore;
     private readonly contextTokenAccountKey?: string;
-    /** 已从会话文件迁入 DB 后写回空 contextTokens（仅 DB 模式用一次） */
     private didMigrateContextTokensFromFile = false;
-    /** 凭证清理时暂存的 context_token（仅无 DB 存储时） */
     private contextTokensCarryover: Record<string, string> | null = null;
 
     constructor(options: IlinkBotOptions = {}) {
@@ -101,7 +86,7 @@ export class IlinkBot extends EventEmitter {
         this.store =
             typeof options.sessionStore === "string"
                 ? new JsonFileCredentialStore(options.sessionStore)
-                : options.sessionStore ?? new MemoryCredentialStore();
+                : (options.sessionStore ?? new MemoryCredentialStore());
 
         this.transport = new IlinkJsonTransport({
             baseUrl: options.baseUrl,
@@ -114,11 +99,15 @@ export class IlinkBot extends EventEmitter {
         this.contextTokenAccountKey = options.contextTokenAccountKey;
 
         this.pollKnobs =
-            typeof options.polling === "object" ? options.polling : { timeoutMs: ILINK_LONG_WAIT_MS };
+            typeof options.polling === "object"
+                ? options.polling
+                : { timeoutMs: ILINK_LONG_WAIT_MS };
 
         if (options.polling) {
             queueMicrotask(() => {
-                void this.startPolling().catch((err: unknown) => this.emit("polling_error", err));
+                void this.startPolling().catch((error: unknown) =>
+                    this.emit("polling_error", error),
+                );
             });
         }
     }
@@ -127,7 +116,6 @@ export class IlinkBot extends EventEmitter {
         this.regexBindings.push({ pattern, listener });
         return this;
     }
-
     protected async ensureSessionLoaded(): Promise<CredentialBlob | null> {
         if (this.hydrated) return this.snapshot;
 
@@ -150,13 +138,11 @@ export class IlinkBot extends EventEmitter {
         return this.snapshot;
     }
 
-    /** 会话落盘时不带 contextTokens（由 DB 或内存维护） */
     private stripForJsonSave(blob: CredentialBlob): CredentialBlob {
         if (!this.contextTokenStore) return blob;
         return { ...blob, contextTokens: {} };
     }
 
-    /** 旧版 JSON 里若有 contextTokens，一次性写入 SQLite 并写回空对象 */
     private async maybeMigrateContextTokensFromSessionFile(): Promise<void> {
         if (this.didMigrateContextTokensFromFile) return;
         this.didMigrateContextTokensFromFile = true;
@@ -165,7 +151,12 @@ export class IlinkBot extends EventEmitter {
         if (!ct || Object.keys(ct).length === 0) return;
         for (const [peerId, tok] of Object.entries(ct)) {
             if (typeof tok === "string" && tok.length > 0) {
-                this.contextTokenStore.set(this.contextTokenAccountKey, this.snapshot.accountId, peerId, tok);
+                this.contextTokenStore.set(
+                    this.contextTokenAccountKey,
+                    this.snapshot.accountId,
+                    peerId,
+                    tok,
+                );
             }
         }
         this.snapshot.contextTokens = {};
@@ -181,7 +172,6 @@ export class IlinkBot extends EventEmitter {
     async getSession(): Promise<CredentialBlob | null> {
         return this.ensureSessionLoaded();
     }
-
     async clearSession(options?: ClearSessionOptions): Promise<void> {
         if (
             !this.contextTokenStore &&
@@ -225,7 +215,10 @@ export class IlinkBot extends EventEmitter {
         await this.persistSnapshot();
     }
 
-    async createLoginSession(options?: { botType?: string; signal?: AbortSignal }): Promise<LoginTicket> {
+    async createLoginSession(options?: {
+        botType?: string;
+        signal?: AbortSignal;
+    }): Promise<LoginTicket> {
         await this.ensureSessionLoaded();
         return allocateLoginTicket(this.transport, {
             botType: options?.botType ?? ILINK_QR_BOT_CLASS_DEFAULT,
@@ -257,15 +250,21 @@ export class IlinkBot extends EventEmitter {
     async getLatestContextToken(chatId: string): Promise<string | undefined> {
         const s = await this.ensureSessionLoaded();
         if (this.contextTokenStore && this.contextTokenAccountKey && s) {
-            const fromDb = this.contextTokenStore.get(this.contextTokenAccountKey, s.accountId, chatId);
+            const fromDb = this.contextTokenStore.get(
+                this.contextTokenAccountKey,
+                s.accountId,
+                chatId,
+            );
             if (fromDb) return fromDb;
         }
         return s?.contextTokens?.[chatId];
     }
-
     private insistSnapshot(s: CredentialBlob | null): CredentialBlob {
         if (!s) {
-            throw new GatewayFault("SESSION_NOT_AVAILABLE", "未配置 iLink 会话：请先扫码或写入 token。");
+            throw new GatewayFault(
+                "SESSION_NOT_AVAILABLE",
+                "未配置 iLink 会话：请先扫码或写入 token。",
+            );
         }
         return s;
     }
@@ -285,7 +284,12 @@ export class IlinkBot extends EventEmitter {
         if (!contextToken) return;
         const s = this.insistSnapshot(await this.ensureSessionLoaded());
         if (this.contextTokenStore && this.contextTokenAccountKey) {
-            this.contextTokenStore.set(this.contextTokenAccountKey, s.accountId, peerKey, contextToken);
+            this.contextTokenStore.set(
+                this.contextTokenAccountKey,
+                s.accountId,
+                peerKey,
+                contextToken,
+            );
         } else {
             s.contextTokens = s.contextTokens ?? {};
             s.contextTokens[peerKey] = contextToken;
@@ -293,13 +297,21 @@ export class IlinkBot extends EventEmitter {
         await this.persistSnapshot();
     }
 
-    async sendTextToUser(chatId: string, text: string, options: SendCommonOptions = {}): Promise<{ messageId: string }> {
+    async sendTextToUser(
+        chatId: string,
+        text: string,
+        options: SendCommonOptions = {},
+    ): Promise<{ messageId: string }> {
         await this.ensureSessionLoaded();
         const ctx = await this.obtainReplyContext(chatId, options.contextToken);
         return postLiteralReply(this.transport, chatId, ctx, text);
     }
 
-    async sendPhotoToUser(chatId: string, input: InputFile, options: SendMediaOptions = {}): Promise<{ messageId: string }> {
+    async sendPhotoToUser(
+        chatId: string,
+        input: InputFile,
+        options: SendMediaOptions = {},
+    ): Promise<{ messageId: string }> {
         await this.ensureSessionLoaded();
         const ctx = await this.obtainReplyContext(chatId, options.contextToken);
         const staged = await stageBinaryForPeer({
@@ -314,7 +326,11 @@ export class IlinkBot extends EventEmitter {
         return { messageId: mid };
     }
 
-    async sendVideoToUser(chatId: string, input: InputFile, options: SendMediaOptions = {}): Promise<{ messageId: string }> {
+    async sendVideoToUser(
+        chatId: string,
+        input: InputFile,
+        options: SendMediaOptions = {},
+    ): Promise<{ messageId: string }> {
         await this.ensureSessionLoaded();
         const ctx = await this.obtainReplyContext(chatId, options.contextToken);
         const staged = await stageBinaryForPeer({
@@ -329,7 +345,11 @@ export class IlinkBot extends EventEmitter {
         return { messageId: mid };
     }
 
-    async sendDocumentToUser(chatId: string, input: InputFile, options: SendMediaOptions = {}): Promise<{ messageId: string }> {
+    async sendDocumentToUser(
+        chatId: string,
+        input: InputFile,
+        options: SendMediaOptions = {},
+    ): Promise<{ messageId: string }> {
         await this.ensureSessionLoaded();
         const ctx = await this.obtainReplyContext(chatId, options.contextToken);
         const blob = await materializeUserSuppliedFile(input, {
@@ -348,7 +368,7 @@ export class IlinkBot extends EventEmitter {
         return { messageId: mid };
     }
 
-    async sendTypingToUser(chatId: string, options: SendCommonOptions = {}): Promise<void> {
+    async sendTypingToUser(chatId: string, options: SendTypingOptions = {}): Promise<void> {
         await this.ensureSessionLoaded();
         const s = this.insistSnapshot(this.snapshot);
         const ctx = await this.obtainReplyContext(chatId, options.contextToken);
@@ -359,7 +379,10 @@ export class IlinkBot extends EventEmitter {
                 contextToken: ctx,
             });
             if ((cfg.ret ?? 0) !== 0 || !cfg.typing_ticket) {
-                throw new GatewayFault("TYPING_TICKET_UNAVAILABLE", `未拿到 typing_ticket：${chatId}`);
+                throw new GatewayFault(
+                    "TYPING_TICKET_UNAVAILABLE",
+                    `未拿到 typing_ticket：${chatId}`,
+                );
             }
             ticket = cfg.typing_ticket;
             this.typingPass.set(chatId, ticket);
@@ -367,90 +390,107 @@ export class IlinkBot extends EventEmitter {
         await this.transport.signalTypingState({
             ilink_user_id: chatId,
             typing_ticket: ticket,
-            status: TypingPhase.Active,
+            status: options.status === "idle" ? TypingPhase.Idle : TypingPhase.Active,
         });
         s.updatedAt = new Date().toISOString();
         await this.persistSnapshot();
     }
 
-    async downloadInboundMedia(message: NormalizedChatEvent, options?: DownloadMediaOptions): Promise<DownloadMediaResult> {
+    async downloadInboundMedia(
+        message: NormalizedChatEvent,
+        options?: DownloadMediaOptions,
+    ): Promise<DownloadMediaResult> {
         await this.ensureSessionLoaded();
         return pullUserMediaAttachment({ transport: this.transport, message, options });
     }
 
-    private async fanOutInbound(evt: NormalizedChatEvent): Promise<void> {
-        await this.memorizeReplyContext(evt.chat.id, evt.contextToken);
-        this.emit("message", evt);
-        if (evt.type !== "unknown") {
-            this.emit(evt.type, evt);
-        }
-        if (evt.text) {
-            for (const { pattern, listener } of this.regexBindings) {
-                const hit = pattern.exec(evt.text);
-                pattern.lastIndex = 0;
-                if (hit) await listener(evt, hit);
-            }
-        }
+    async downloadRecentMedia(messageId: string, itemIndex?: number): Promise<DownloadMediaResult> {
+        return this.downloadInboundMedia(
+            resolveRecentMedia(this.recentMessages, messageId, itemIndex),
+        );
     }
 
+    /**
+     * 将一个原始 iLink 事件交给统一事件管线。
+     * 长轮询、测试夹具和宿主已有连接均应调用此入口，确保 context_token 与 typed 事件一致。
+     */
+    async ingest(rawEvent: InboundWirePacket): Promise<NormalizedChatEvent> {
+        const evt = mapInboundWirePacket(rawEvent);
+        rememberRecentMessage(this.recentMessages, evt);
+        await this.memorizeReplyContext(evt.chat.id, evt.contextToken);
+        await emitInboundSafely(this, "message", evt);
+        if (evt.type !== "unknown") {
+            await emitInboundSafely(this, evt.type, evt);
+        }
+        await runTextBindings(this, this.regexBindings, evt);
+        return evt;
+    }
+
+    /** 启动无限恢复的长轮询；方法在轮询建立后返回，不占用账号启动生命周期。 */
     async startPolling(options?: PollingOptions): Promise<void> {
-        if (this.pollArmed) return this.pollLoop ?? Promise.resolve();
+        if (this.pollArmed) return;
 
         await this.ensureSessionLoaded();
         const s = this.insistSnapshot(this.snapshot);
         this.pollArmed = true;
         const knobs = { ...this.pollKnobs, ...options };
+        const generation = ++this.pollingGeneration;
+        const controller = new AbortController();
+        this.pollingAbort = controller;
+        const abortFromOuter = () => controller.abort(knobs.signal?.reason);
+        if (knobs.signal?.aborted) abortFromOuter();
+        else knobs.signal?.addEventListener("abort", abortFromOuter, { once: true });
+        try {
+            await this.transport.notifyStart(controller.signal);
+        } catch (error) {
+            this.pollArmed = false;
+            this.pollingAbort = null;
+            knobs.signal?.removeEventListener("abort", abortFromOuter);
+            throw error;
+        }
 
-        this.pollLoop = (async () => {
-            let ceiling = knobs.timeoutMs ?? ILINK_LONG_WAIT_MS;
-            while (this.pollArmed) {
+        this.pollLoop = runPollingLoop({
+            transport: this.transport,
+            session: s,
+            options: knobs,
+            signal: controller.signal,
+            isCurrent: () => this.pollArmed && generation === this.pollingGeneration,
+            persist: () => this.persistSnapshot(),
+            ingest: event => this.ingest(event),
+            credentialStale: async error => {
+                this.pollArmed = false;
                 try {
-                    const batch = await this.transport.pullUnreadBatch(s.syncBuffer ?? "", ceiling);
-                    if ((batch.errcode ?? batch.ret ?? 0) === -14) {
-                        throw new StaleCredentialFault(batch.errmsg ?? "凭证失效");
-                    }
-                    if ((batch.errcode ?? 0) !== 0 || (batch.ret ?? 0) !== 0) {
-                        throw new GatewayFault(
-                            "GET_UPDATES_FAILED",
-                            `getupdates 异常 ret=${String(batch.ret ?? "")} errcode=${String(batch.errcode ?? "")}`,
-                        );
-                    }
-                    if (batch.longpolling_timeout_ms && batch.longpolling_timeout_ms > 0) {
-                        ceiling = batch.longpolling_timeout_ms;
-                    }
-                    if (typeof batch.get_updates_buf === "string") {
-                        s.syncBuffer = batch.get_updates_buf;
-                        await this.persistSnapshot();
-                    }
-                    for (const row of batch.msgs ?? []) {
-                        await this.fanOutInbound(mapInboundWirePacket(row));
-                    }
-                } catch (err) {
-                    if (err instanceof StaleCredentialFault) {
-                        // 停止轮询并清除磁盘/内存会话，避免下次启动仍用坏凭证
-                        this.pollArmed = false;
-                        try {
-                            await this.clearSession({ preserveContextTokens: true });
-                        } catch (clearErr: unknown) {
-                            this.emit("polling_error", clearErr);
-                        }
-                        this.emit("credential_stale", err);
-                        continue;
-                    }
-                    this.emit("polling_error", err);
-                    await delay(knobs.retryDelayMs ?? 2_000);
+                    await this.clearSession({ preserveContextTokens: true });
+                } catch (clearError: unknown) {
+                    this.emit("polling_error", clearError);
                 }
+                this.emit("credential_stale", error);
+            },
+            reportError: error => this.emit("polling_error", error),
+        }).finally(() => {
+            knobs.signal?.removeEventListener("abort", abortFromOuter);
+            if (generation === this.pollingGeneration) {
+                this.pollArmed = false;
+                this.pollingAbort = null;
             }
-        })();
-
-        return this.pollLoop;
+        });
+        void this.pollLoop.catch(error => {
+            if (!controller.signal.aborted) this.emit("polling_error", error);
+        });
     }
 
     async stopPolling(): Promise<void> {
         this.pollArmed = false;
+        this.pollingGeneration += 1;
+        this.pollingAbort?.abort(new DOMException("轮询已停止", "AbortError"));
+        this.pollingAbort = null;
         if (this.pollLoop) {
-            await this.pollLoop.catch(() => {});
+            await this.pollLoop.catch(error => {
+                if (!(error instanceof DOMException && error.name === "AbortError")) throw error;
+            });
             this.pollLoop = null;
         }
+        const session = await this.getSession();
+        if (session) await this.transport.notifyStop();
     }
 }

@@ -28,6 +28,14 @@ wechat-clawbot.my_bot: {}
 onebots -r wechat-clawbot -c config.yaml
 ```
 
+## Capabilities and limits
+
+- QR login, persistent sessions, automatic re-login, cancellable infinite polling, and exponential backoff.
+- Bidirectional text, image, video, and file messages; lossless voice and unknown-item reception.
+- Composite items retain their original order and every event retains `raw_event`.
+- `send_typing` and `download_media` are available through `callAction`.
+- Replies require a valid `context_token`; iLink does not expose contacts, groups, message recall, or history APIs.
+
 Full details: see the adapter README in the monorepo.
 
 - [WeChat ClawBot adapter configuration](/en/config/adapter/wechat-clawbot)

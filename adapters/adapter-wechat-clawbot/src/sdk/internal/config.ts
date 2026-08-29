@@ -5,7 +5,9 @@ export const ILINK_QR_BOT_CLASS_DEFAULT = "3";
 export const ILINK_LONG_WAIT_MS = 35_000;
 export const ILINK_RPC_BUDGET_MS = 15_000;
 export const ILINK_FAST_RPC_MS = 10_000;
+export const ILINK_RETRY_INITIAL_MS = 1_000;
+export const ILINK_RETRY_MAX_MS = 30_000;
 export const ADAPTER_COORDINATE = "@onebots/adapter-wechat-clawbot";
-export const ADAPTER_SEMVER = "1.0.0";
+export const ADAPTER_SEMVER = "3.0.8";
 /** outbound client_id 前缀，仅作日志/排障区分 */
 export const OUTBOUND_TRACE_SCOPE = "ob-wxcb";

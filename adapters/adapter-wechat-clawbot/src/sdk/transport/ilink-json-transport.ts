@@ -57,7 +57,11 @@ export class IlinkJsonTransport {
     }
 
     private bareHeaders(): Record<string, string> {
-        const h: Record<string, string> = {};
+        const h: Record<string, string> = {
+            "iLink-App-Id": ADAPTER_COORDINATE,
+            "iLink-App-ClientVersion": ADAPTER_SEMVER,
+            "X-WECHAT-UIN": ephemeralWeixinHeaderTag(),
+        };
         if (this.routeTag) h.SKRouteTag = this.routeTag;
         return h;
     }
@@ -67,6 +71,8 @@ export class IlinkJsonTransport {
             "Content-Type": "application/json",
             AuthorizationType: "ilink_bot_token",
             "Content-Length": String(Buffer.byteLength(payload, "utf-8")),
+            "iLink-App-Id": ADAPTER_COORDINATE,
+            "iLink-App-ClientVersion": ADAPTER_SEMVER,
             "X-Wechat-UIN": ephemeralWeixinHeaderTag(),
         };
         const tok = bearer ?? this.token;
@@ -75,9 +81,15 @@ export class IlinkJsonTransport {
         return headers;
     }
 
-    private async exchangeJson<T>(path: string, jsonBody: object, budgetMs: number, bearer?: string): Promise<T> {
+    private async exchangeJson<T>(
+        path: string,
+        jsonBody: object,
+        budgetMs: number,
+        bearer?: string,
+        outerSignal?: AbortSignal,
+    ): Promise<T> {
         const body = JSON.stringify({ ...jsonBody, base_info: fingerprintPayload() });
-        const { signal, disarm } = fuseAbortClock(budgetMs);
+        const { signal, disarm } = fuseAbortClock(budgetMs, outerSignal);
         try {
             const response = await fetch(new URL(path, withTrailingSlash(this.baseUrl)), {
                 method: "POST",
@@ -87,7 +99,14 @@ export class IlinkJsonTransport {
             });
             const raw = await response.text();
             if (!response.ok) {
-                throw new GatewayFault("HTTP_ERROR", `HTTP ${response.status} ${response.statusText}: ${raw}`);
+                throw new GatewayFault(
+                    "HTTP_ERROR",
+                    `HTTP ${response.status} ${response.statusText}: ${raw}`,
+                    {
+                        operation: path,
+                        status: response.status,
+                    },
+                );
             }
             return JSON.parse(raw) as T;
         } finally {
@@ -95,17 +114,27 @@ export class IlinkJsonTransport {
         }
     }
 
-    async openLoginBitmap(params?: { botType?: string; budgetMs?: number; signal?: AbortSignal }): Promise<QrBitmapReply> {
+    async openLoginBitmap(params?: {
+        botType?: string;
+        budgetMs?: number;
+        signal?: AbortSignal;
+    }): Promise<QrBitmapReply> {
         const url = new URL(
             `ilink/bot/get_bot_qrcode?bot_type=${encodeURIComponent(params?.botType ?? "3")}`,
             withTrailingSlash(this.baseUrl),
         );
-        const { signal, disarm } = fuseAbortClock(params?.budgetMs ?? ILINK_FAST_RPC_MS, params?.signal);
+        const { signal, disarm } = fuseAbortClock(
+            params?.budgetMs ?? ILINK_FAST_RPC_MS,
+            params?.signal,
+        );
         try {
             const response = await fetch(url, { headers: this.bareHeaders(), signal });
             const raw = await response.text();
             if (!response.ok) {
-                throw new GatewayFault("HTTP_ERROR", `HTTP ${response.status} ${response.statusText}: ${raw}`);
+                throw new GatewayFault(
+                    "HTTP_ERROR",
+                    `HTTP ${response.status} ${response.statusText}: ${raw}`,
+                );
             }
             return JSON.parse(raw) as QrBitmapReply;
         } finally {
@@ -130,35 +159,65 @@ export class IlinkJsonTransport {
             });
             const raw = await response.text();
             if (!response.ok) {
-                throw new GatewayFault("HTTP_ERROR", `HTTP ${response.status} ${response.statusText}: ${raw}`);
+                throw new GatewayFault(
+                    "HTTP_ERROR",
+                    `HTTP ${response.status} ${response.statusText}: ${raw}`,
+                );
             }
             return JSON.parse(raw) as QrPhaseReply;
-        } catch (err) {
+        } catch (error) {
+            if (params.signal?.aborted) throw params.signal.reason;
             if (clock.signal.aborted) {
                 return { status: "wait" };
             }
-            throw err;
+            throw error;
         } finally {
             clock.disarm();
         }
     }
 
-    async pullUnreadBatch(cursor: string, ceilingMs?: number): Promise<PollWireBatch> {
+    async pullUnreadBatch(
+        cursor: string,
+        ceilingMs?: number,
+        signal?: AbortSignal,
+    ): Promise<PollWireBatch> {
         try {
             return await this.exchangeJson<PollWireBatch>(
                 "ilink/bot/getupdates",
                 { get_updates_buf: cursor ?? "" },
                 ceilingMs ?? ILINK_LONG_WAIT_MS,
+                undefined,
+                signal,
             );
-        } catch (e) {
-            if (e instanceof Error && e.name === "AbortError") {
-                return { ret: 0, msgs: [], get_updates_buf: cursor ?? "" };
-            }
-            throw e;
+        } catch (error) {
+            if (signal?.aborted) throw signal.reason;
+            throw error;
         }
     }
 
-    async reserveCdnUploadSlot(req: CdnSlotRequest & { timeoutMs?: number }): Promise<CdnSlotGrant> {
+    async notifyStart(signal?: AbortSignal): Promise<void> {
+        await this.exchangeJson<unknown>(
+            "ilink/bot/msg/notifystart",
+            {},
+            ILINK_FAST_RPC_MS,
+            undefined,
+            signal,
+        );
+    }
+
+    async notifyStop(signal?: AbortSignal): Promise<void> {
+        await this.exchangeJson<unknown>(
+            "ilink/bot/msg/notifystop",
+            {},
+            ILINK_FAST_RPC_MS,
+            undefined,
+            signal,
+        );
+    }
+
+    async reserveCdnUploadSlot(
+        req: CdnSlotRequest & { timeoutMs?: number },
+    ): Promise<CdnSlotGrant> {
         return this.exchangeJson<CdnSlotGrant>(
             "ilink/bot/getuploadurl",
             {
@@ -178,17 +237,22 @@ export class IlinkJsonTransport {
         );
     }
 
-    private sniffCredentialFault<T extends { ret?: number; errcode?: number; errmsg?: string }>(row: T): void {
+    private sniffCredentialFault<T extends { ret?: number; errcode?: number; errmsg?: string }>(
+        row: T,
+    ): void {
         if ((row.errcode ?? row.ret ?? 0) === -14) {
             throw new StaleCredentialFault(row.errmsg ?? "凭证失效");
         }
     }
 
-    async dispatchOutboundEnvelope(envelope: OutboundWireEnvelope, budgetMs?: number): Promise<void> {
+    async dispatchOutboundEnvelope(
+        envelope: OutboundWireEnvelope,
+        budgetMs?: number,
+    ): Promise<void> {
         const ms = budgetMs ?? ILINK_RPC_BUDGET_MS;
         const row = await this.exchangeJson<{ ret?: number; errcode?: number; errmsg?: string }>(
             "ilink/bot/sendmessage",
-            envelope as unknown as object,
+            envelope,
             ms,
         );
         this.sniffCredentialFault(row);

@@ -8,7 +8,16 @@ export const UploadKind = { Image: 1, Video: 2, File: 3, Voice: 4 } as const;
 
 export const AuthorKind = { None: 0, Human: 1, Bot: 2 } as const;
 
-export const ItemKind = { None: 0, Text: 1, Image: 2, Voice: 3, File: 4, Video: 5 } as const;
+export const ItemKind = {
+    None: 0,
+    Text: 1,
+    Image: 2,
+    Voice: 3,
+    File: 4,
+    Video: 5,
+    ToolCallStart: 11,
+    ToolCallResult: 12,
+} as const;
 
 export const OutboxPhase = { Draft: 0, Streaming: 1, Settled: 2 } as const;
 

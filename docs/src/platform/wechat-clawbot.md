@@ -18,9 +18,15 @@
 
 ## 功能摘要
 
-- 扫码登录、会话落盘、凭证失效后自动重扫码（可选调超时）
-- `context_token` 写入主库 SQLite，私聊主动消息依赖对端先发或已缓存 token
+- 扫码登录、会话落盘、凭证失效后自动重扫码
+- 可取消的无限长轮询、指数退避与 iLink `notifystart` / `notifystop` 生命周期
+- 文本、图片、视频、文件双向收发，语音与未知 item 无损接收
+- 复合消息按原顺序投影，并始终保留 `raw_event`
+- `context_token` 写入主库 SQLite；回复依赖对端先发或显式传入有效 token
 - Web 管理端 `verification:request` 展示二维码（与 icqq 验证流一致）
+- `send_typing` 与 `download_media` 平台扩展动作
+
+iLink 没有好友目录、群聊、撤回或历史查询接口；适配器不会用会话身份伪造这些能力。
 
 完整说明、合规提示、会话路径与表结构见包内 README。
 

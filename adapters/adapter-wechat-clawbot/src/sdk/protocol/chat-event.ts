@@ -1,4 +1,10 @@
-import type { InboundWirePacket, WireFileSection, WireImageSection, WireVideoSection, WireVoiceSection } from "./wire-models.js";
+import type {
+    InboundWirePacket,
+    WireFileSection,
+    WireImageSection,
+    WireVideoSection,
+    WireVoiceSection,
+} from "./wire-models.js";
 
 export type InputFile =
     | string
@@ -98,9 +104,15 @@ export interface SendMediaOptions extends SendCommonOptions {
     contentType?: string;
 }
 
+export interface SendTypingOptions extends SendCommonOptions {
+    status?: "active" | "idle";
+}
+
 export interface PollingOptions {
     timeoutMs?: number;
-    retryDelayMs?: number;
+    retryInitialDelayMs?: number;
+    retryMaxDelayMs?: number;
+    signal?: AbortSignal;
 }
 
 export interface DownloadMediaResult {
@@ -135,4 +147,7 @@ export interface LoginOutcome {
     session?: CredentialBlob;
 }
 
-export type OnTextListener = (message: NormalizedChatEvent, match: RegExpExecArray) => void | Promise<void>;
+export type OnTextListener = (
+    message: NormalizedChatEvent,
+    match: RegExpExecArray,
+) => void | Promise<void>;

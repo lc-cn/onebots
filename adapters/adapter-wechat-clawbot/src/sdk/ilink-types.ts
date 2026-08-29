@@ -2,7 +2,10 @@
 import type { NormalizedChatEvent } from "./protocol/chat-event.js";
 
 export type IlinkBotMessage = NormalizedChatEvent;
-export type OnTextListener = (message: IlinkBotMessage, match: RegExpExecArray) => void | Promise<void>;
+export type OnTextListener = (
+    message: IlinkBotMessage,
+    match: RegExpExecArray,
+) => void | Promise<void>;
 
 export type { InboundWirePacket as IlinkRawMessage } from "./protocol/wire-models.js";
 export type { CredentialBlob as IlinkSession } from "./protocol/chat-event.js";
@@ -20,6 +23,7 @@ export type {
     InputFile,
     SendCommonOptions,
     SendMediaOptions,
+    SendTypingOptions,
     PollingOptions,
     DownloadMediaResult,
     DownloadMediaOptions,
@@ -48,5 +52,5 @@ export { TypingPhase as TypingStatus } from "./protocol/wire-models.js";
 export { UploadKind as UploadMediaType } from "./protocol/wire-models.js";
 
 export { GatewayFault, MissingReplyLaneFault, StaleCredentialFault } from "./internal/errors.js";
-export type { ClearSessionOptions } from "./ilink-bot.js";
+export type { ClearSessionOptions, IlinkBotOptions } from "./ilink-options.js";
 export type { ClawbotContextTokenStore } from "../context-token-store.js";
