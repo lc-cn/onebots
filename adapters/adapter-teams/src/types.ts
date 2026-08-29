@@ -112,6 +112,7 @@ export interface TeamsActivity {
     locale?: string;
     importance?: string;
     name?: string;
+    action?: string;
     summary?: string;
     channelData?: TeamsChannelData;
     entities?: TeamsEntity[];
@@ -128,6 +129,8 @@ export interface TeamsActivity {
 export interface TeamsEvent {
     type: string;
     activity: TeamsActivity;
+    /** Agents SDK 原始 Activity；用于访问尚未进入稳定投影的新字段。 */
+    raw_activity: import("@microsoft/agents-activity").Activity;
 }
 
 /** 可序列化并跨重启恢复的 Agents SDK 会话引用。 */

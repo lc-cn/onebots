@@ -65,6 +65,7 @@ export {
     isSafeAbsoluteApiPath,
     mapConcurrent,
     RefreshableValue,
+    RecentEventDeduplicator,
     defineAdapterCapabilities,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,

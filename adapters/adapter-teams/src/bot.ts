@@ -5,7 +5,7 @@ import {
     type ConnectorClient,
     OutboundHostValidator,
     type AuthConfiguration,
-    type Request,
+    type Request as AgentsRequest,
     type ResourceResponse,
     type TurnContext,
 } from "@microsoft/agents-hosting";
@@ -19,6 +19,7 @@ import {
 import {
     ErrorCategory,
     materializeMediaSource,
+    RecentEventDeduplicator,
     type MediaSourceInput,
     type Next,
     type RouterContext,
@@ -26,8 +27,10 @@ import {
 import { transformConversationReference, transformTeamsActivity } from "./activity-transform.js";
 import {
     allowedServiceUrlHosts,
+    acceptTeamsFetchRequest,
     applyTeamsHttpResponse,
     bodyValue,
+    isTeamsFetchRequest,
     normalizeHeaders,
     requireHttpsConfigUrl,
     StructuredAgentsResponse,
@@ -79,7 +82,7 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     private readonly graph: TeamsGraphClient;
     private me: TeamsUser;
     private running = false;
-    private readonly receivedActivityIds = new Map<string, number>();
+    private readonly receivedActivities = new RecentEventDeduplicator<string>();
 
     constructor(
         private readonly config: TeamsConfig,
@@ -145,7 +148,7 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
                     status: 405,
                 });
             }
-            const request: Request = {
+            const request: AgentsRequest = {
                 method,
                 headers: normalizeHeaders(input.headers ?? {}),
                 body: bodyValue(input.body),
@@ -172,14 +175,23 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
         return response.toResponse();
     }
 
-    /** 将结构化响应写回 OneBots/Koa Host。 */
-    async acceptHttp(context: TeamsHttpContext): Promise<void> {
+    async acceptHttp(request: globalThis.Request): Promise<Response>;
+    async acceptHttp(context: TeamsHttpContext): Promise<void>;
+    /** 接入 Fetch Request 或 Koa Context，并复用同一认证与 Turn 管线。 */
+    async acceptHttp(input: globalThis.Request | TeamsHttpContext): Promise<Response | void> {
+        if (isTeamsFetchRequest(input)) {
+            return acceptTeamsFetchRequest(
+                input,
+                request => this.ingestHttp(request),
+                error => this.emit("client_error", error),
+            );
+        }
         applyTeamsHttpResponse(
-            context,
+            input,
             await this.ingestHttp({
-                method: context.method,
-                headers: context.headers,
-                body: context.request.body,
+                method: input.method,
+                headers: input.headers,
+                body: input.request.body,
             }),
         );
     }
@@ -373,10 +385,14 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     ingest(activity: Activity): TeamsEvent | undefined {
         this.captureReference(activity);
         this.emit("raw_activity", activity);
-        if (this.isDuplicateActivity(activity)) return undefined;
+        if (activity.id && this.receivedActivities.has(activity.id)) return undefined;
         const transformed = transformTeamsActivity(activity);
         if (transformed.recipient?.id) this.me = transformed.recipient;
-        const event: TeamsEvent = { type: activity.type, activity: transformed };
+        const event: TeamsEvent = {
+            type: activity.type,
+            activity: transformed,
+            raw_activity: activity,
+        };
 
         if (activity.type === ActivityTypes.Message) {
             this.emit(isGroupActivity(transformed) ? "group_message" : "private_message", event);
@@ -386,6 +402,7 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
         else if (activity.type === ActivityTypes.ConversationUpdate) this.emitMembers(event);
         else if (activity.type === ActivityTypes.MessageReaction) this.emitReactions(event);
         else this.emit("event", event);
+        if (activity.id) this.receivedActivities.commit(activity.id);
         return event;
     }
 
@@ -398,20 +415,6 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
         this.references.save(reference);
         const activityId = activity.id;
         if (activityId) this.references.saveMessage(activityId, reference.conversation.id);
-    }
-
-    /** Bot Connector 可能重试同一 Activity；原始输入保留，canonical 事件仅派发一次。 */
-    private isDuplicateActivity(activity: Activity): boolean {
-        if (!activity.id) return false;
-        const now = Date.now();
-        const previous = this.receivedActivityIds.get(activity.id);
-        this.receivedActivityIds.delete(activity.id);
-        this.receivedActivityIds.set(activity.id, now);
-        for (const [id, receivedAt] of this.receivedActivityIds) {
-            if (this.receivedActivityIds.size <= 4_096 && now - receivedAt <= 10 * 60_000) break;
-            this.receivedActivityIds.delete(id);
-        }
-        return previous !== undefined && now - previous <= 10 * 60_000;
     }
 
     private emitMembers(event: TeamsEvent): void {

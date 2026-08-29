@@ -37,7 +37,7 @@ https://你的域名/teams/work-agent/webhook
 
 反向代理必须保留 `Authorization` 请求头和 JSON 请求体。生产环境不应关闭 `validate_service_url`。
 
-若应用已有 HTTP Host，可配置 `receive_mode: manual`。OneBots 此时不注册路由；宿主调用 `account.client.ingestHttp({ method, headers, body })`，即可获得 `{ status, headers, body }` 结构化响应，并继续使用同一 Microsoft Agents SDK JWT 认证与 Turn 管线。Koa 风格宿主可直接调用 `account.client.acceptHttp(ctx)`。
+若应用已有 HTTP Host，可配置 `receive_mode: manual`。OneBots 此时不注册路由；宿主调用 `account.client.ingestHttp({ method, headers, body })`，即可获得 `{ status, headers, body }` 结构化响应，并继续使用同一 Microsoft Agents SDK JWT 认证与 Turn 管线。Fetch/WinterCG 宿主可直接调用 `account.client.acceptHttp(request)` 获取标准 `Response`，Koa 风格宿主则调用 `account.client.acceptHttp(ctx)`。
 
 ## 会话模型
 
@@ -55,7 +55,7 @@ Teams 主动消息不能只依赖 conversation ID；微软要求同时保留 `se
 
 Teams 的“附件链接”和“真实文件上传”不是同一能力。个人聊天上传必须完成 file consent → OneDrive upload → file-info 卡片流程；频道和群聊文件依赖 Graph 与 SharePoint/OneDrive 权限。适配器为此提供 `send_file_consent_card`、`send_file_info_card` 和 `call_graph_api`，`file` 段也可用 `unique_id`、`file_type`、`name`、`url` 生成标准 file-info 卡片。
 
-入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；invoke 投影为 `interaction`；typing、installationUpdate、会议、read receipt 和其他 Activity 以 `custom` notice 无损交付。原始 Activity 始终位于 `raw_event`，Teams 上下文位于 `extensions.teams`。
+入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；群会话中明确的机器人安装/卸载投影为 `group_increase/group_decrease`，个人安装和其他 installation 动作仍保持 `custom`；invoke 投影为 `interaction`；typing、会议、read receipt 和其他 Activity 以 `custom` notice 无损交付。Agents SDK 原始 Activity 位于 `raw_event.raw_activity`，稳定投影位于 `raw_event.activity`，Teams 上下文位于 `extensions.teams`。
 
 Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `TeamsBot.ingest(activity)` 入站管线。`ingestHttp()` 负责 Microsoft JWT 认证；`ingest(activity)` 只接收已由上游认证的 Activity。Connector 重试会继续触发 `raw_activity`，但同一 Activity ID 的 canonical 事件只投影一次；一个 Activity 携带多个 Reaction 时会逐项派发并生成不同事件 ID。
 
@@ -80,9 +80,15 @@ Teams Connector：
 
 - `get_team_details`、`list_team_channels`
 - `get_conversation_member`、`list_conversation_members`、`list_conversation_members_paged`
+- `get_activity_members`：查询某条 Activity 的可见成员
 - `add_message_reaction`、`remove_message_reaction`
 - `get_meeting_info`、`get_meeting_participant`
 - `send_meeting_notification`，需要 `OnlineMeetingNotification.Send.Chat` RSC 权限
+
+Azure Bot OAuth：
+
+- `get_user_token`、`get_user_aad_tokens`、`get_user_token_status`
+- `exchange_user_token`、`sign_out_user`
 
 Microsoft Graph：
 

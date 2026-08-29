@@ -119,6 +119,23 @@ describe("TeamsBot 会话引用契约", () => {
         expect(bot.ingest(activity)).toBeUndefined();
         expect(rawActivity).toHaveBeenCalledTimes(2);
         expect(message).toHaveBeenCalledOnce();
+        expect(bot.getCachedMe()).toMatchObject({ id: "bot-1", name: "Agent" });
+    });
+
+    it("canonical 派发失败时不提交去重窗口", () => {
+        const bot = createBot();
+        const failing = vi.fn(() => {
+            throw new Error("consumer failed");
+        });
+        const activity = createActivity();
+        bot.on("private_message", failing);
+
+        expect(() => bot.ingest(activity)).toThrow("consumer failed");
+        bot.off("private_message", failing);
+        const recovered = vi.fn();
+        bot.on("private_message", recovered);
+        expect(bot.ingest(activity)).toBeDefined();
+        expect(recovered).toHaveBeenCalledOnce();
     });
 
     it("逐个派发同一 Activity 中的原生 Reaction", () => {
@@ -177,6 +194,31 @@ describe("TeamsBot 会话引用契约", () => {
                     message: "Teams Activity 入口只接受 POST",
                 },
             },
+        });
+    });
+
+    it("acceptHttp 接受标准 Request 并返回标准 Response", async () => {
+        const bot = createBot();
+        const response = await bot.acceptHttp(
+            new Request("https://example.com/teams", { method: "GET" }),
+        );
+
+        expect(response).toBeInstanceOf(Response);
+        expect(response.status).toBe(405);
+        await expect(response.json()).resolves.toMatchObject({
+            error: { code: "TEAMS_WEBHOOK_METHOD_NOT_ALLOWED" },
+        });
+    });
+
+    it("acceptHttp 对无效 JSON 返回结构化错误", async () => {
+        const bot = createBot();
+        const response = await bot.acceptHttp(
+            new Request("https://example.com/teams", { method: "POST", body: "{" }),
+        );
+
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            error: { code: "TEAMS_WEBHOOK_INVALID_JSON" },
         });
     });
 });

@@ -9,6 +9,8 @@ export type TeamsProjectionKind =
     | "message_deleted"
     | "member_joined"
     | "member_left"
+    | "group_increase"
+    | "group_decrease"
     | "reaction_added"
     | "reaction_removed"
     | "interaction"
@@ -17,6 +19,21 @@ export type TeamsProjectionKind =
 export interface TeamsProjectionContext {
     botId: string;
     createId(value: string | number): CommonTypes.Id;
+}
+
+/** 为非消息 Activity 选择稳定投影；不确定语义时保持 custom。 */
+export function resolveTeamsProjectionKind(event: TeamsEvent): TeamsProjectionKind {
+    if (event.activity.type === "invoke") return "interaction";
+    const conversationType = event.activity.conversation.conversationType;
+    const isGroup =
+        event.activity.conversation.isGroup === true ||
+        conversationType === "channel" ||
+        conversationType === "groupChat";
+    if (event.activity.type === "installationUpdate" && isGroup) {
+        if (event.activity.action === "add") return "group_increase";
+        if (event.activity.action === "remove") return "group_decrease";
+    }
+    return "custom";
 }
 
 /** 将全部 Teams Activity 无损投影为通用消息或 notice。 */
@@ -53,7 +70,9 @@ export function projectTeamsEvent(
             ? activity.membersAdded?.[0]
             : kind === "member_left"
               ? activity.membersRemoved?.[0]
-              : activity.from;
+              : kind === "group_increase" || kind === "group_decrease"
+                ? activity.recipient
+                : activity.from;
     return {
         ...base,
         id: context.createId(`${base.id.string}:${kind}:${noticeIdentity(kind, activity, member)}`),
@@ -87,7 +106,9 @@ function noticeIdentity(
     activity: TeamsActivity,
     member?: TeamsUser,
 ): string {
-    if (kind === "member_joined" || kind === "member_left") return member?.id || "unknown";
+    if (["member_joined", "member_left", "group_increase", "group_decrease"].includes(kind)) {
+        return member?.id || "unknown";
+    }
     if (kind === "reaction_added") return activity.reactionsAdded?.[0]?.type || "unknown";
     if (kind === "reaction_removed") return activity.reactionsRemoved?.[0]?.type || "unknown";
     return activity.name || activity.replyToId || activity.id || "event";
@@ -180,6 +201,8 @@ const NOTICE_TYPES: Record<
     message_deleted: "message_deleted",
     member_joined: "member_joined",
     member_left: "member_left",
+    group_increase: "group_increase",
+    group_decrease: "group_decrease",
     reaction_added: "reaction_added",
     reaction_removed: "reaction_removed",
     interaction: "interaction",

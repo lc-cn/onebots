@@ -1,6 +1,11 @@
 import type { WebResponse } from "@microsoft/agents-hosting";
 import { TeamsApiError } from "./errors.js";
-import type { TeamsConfig, TeamsHttpContext, TeamsHttpResponse } from "./types.js";
+import type {
+    TeamsConfig,
+    TeamsHttpContext,
+    TeamsHttpRequest,
+    TeamsHttpResponse,
+} from "./types.js";
 
 /** 在内存中实现 Agents SDK 响应接口，作为所有 HTTP Host 的单一结构化边界。 */
 export class StructuredAgentsResponse implements WebResponse {
@@ -72,6 +77,63 @@ export function applyTeamsHttpResponse(
     context.status = response.status;
     for (const [name, value] of Object.entries(response.headers)) context.set(name, value);
     context.body = response.body;
+}
+
+/** 将宿主无关响应转换为 Fetch/WinterCG 标准响应。 */
+export function toTeamsFetchResponse(response: TeamsHttpResponse): Response {
+    const headers = new Headers(response.headers);
+    if (response.body === undefined)
+        return new Response(null, { status: response.status, headers });
+    if (typeof response.body === "string") {
+        return new Response(response.body, { status: response.status, headers });
+    }
+    if (!headers.has("content-type"))
+        headers.set("content-type", "application/json; charset=utf-8");
+    return new Response(JSON.stringify(response.body), { status: response.status, headers });
+}
+
+/** 跨 realm 识别 Fetch/WinterCG Request，不依赖 instanceof。 */
+export function isTeamsFetchRequest(value: unknown): value is Request {
+    if (!value || typeof value !== "object") return false;
+    const candidate = value as { method?: unknown; headers?: unknown; json?: unknown };
+    return (
+        typeof candidate.method === "string" &&
+        typeof candidate.json === "function" &&
+        Boolean(candidate.headers) &&
+        typeof (candidate.headers as { entries?: unknown }).entries === "function"
+    );
+}
+
+/** 解析标准 Request，并把它桥接到结构化 Teams HTTP 入口。 */
+export async function acceptTeamsFetchRequest(
+    request: Request,
+    ingest: (input: TeamsHttpRequest) => Promise<TeamsHttpResponse>,
+    reportError: (error: TeamsApiError) => void,
+): Promise<Response> {
+    if (request.method.toUpperCase() !== "POST") {
+        return toTeamsFetchResponse(
+            await ingest({ method: request.method, headers: {}, body: {} }),
+        );
+    }
+    let body: unknown;
+    try {
+        body = await request.json();
+    } catch (error) {
+        const wrapped = TeamsApiError.wrap(error, "TEAMS_WEBHOOK_INVALID_JSON");
+        reportError(wrapped);
+        return toTeamsFetchResponse({
+            status: 400,
+            headers: {},
+            body: { error: { code: wrapped.code, message: "Teams 请求体必须是 JSON" } },
+        });
+    }
+    return toTeamsFetchResponse(
+        await ingest({
+            method: request.method,
+            headers: Object.fromEntries(request.headers),
+            body,
+        }),
+    );
 }
 
 export function resolveTeamsWebhookPath(config: TeamsConfig, defaultPath: string): string {

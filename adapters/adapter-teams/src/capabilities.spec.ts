@@ -12,7 +12,10 @@ describe("teamsCapabilities", () => {
                 "create_personal_conversation",
                 "send_adaptive_card",
                 "list_conversation_members_paged",
+                "get_activity_members",
                 "send_meeting_notification",
+                "get_user_token",
+                "exchange_user_token",
                 "call_graph_api",
             ]),
         );

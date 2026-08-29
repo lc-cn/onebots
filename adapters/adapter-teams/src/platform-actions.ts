@@ -49,6 +49,13 @@ const PLATFORM_ACTIONS = definePlatformActions(
                     optionalString(params.continuation_token),
                 ),
             ),
+        get_activity_members: async (bot: TeamsBot, params: Params) =>
+            withConversation(bot, params, context =>
+                context.client.conversations.getActivityMembers(
+                    conversationId(params),
+                    requireString(params.message_id, "message_id"),
+                ),
+            ),
         add_message_reaction: (bot: TeamsBot, params: Params) => updateReaction(bot, params, "add"),
         remove_message_reaction: (bot: TeamsBot, params: Params) =>
             updateReaction(bot, params, "remove"),
@@ -65,6 +72,11 @@ const PLATFORM_ACTIONS = definePlatformActions(
                 ),
             ),
         send_meeting_notification: sendMeetingNotification,
+        get_user_token: getUserToken,
+        get_user_aad_tokens: getUserAadTokens,
+        get_user_token_status: getUserTokenStatus,
+        sign_out_user: signOutUser,
+        exchange_user_token: exchangeUserToken,
         call_graph_api: callGraph,
     },
     action =>
@@ -184,6 +196,62 @@ async function sendMeetingNotification(bot: TeamsBot, params: Params) {
             objectValue(params.notification, "notification") as Parameters<typeof send>[1],
         );
     });
+}
+
+async function getUserToken(bot: TeamsBot, params: Params) {
+    return withConversation(bot, params, context =>
+        context.client.users.getToken({
+            userId: requireString(params.user_id, "user_id"),
+            connectionName: requireString(params.connection_name, "connection_name"),
+            channelId: optionalString(params.channel_id),
+            code: optionalString(params.code),
+        }),
+    );
+}
+
+async function getUserAadTokens(bot: TeamsBot, params: Params) {
+    return withConversation(bot, params, context =>
+        context.client.users.getAadTokens({
+            userId: requireString(params.user_id, "user_id"),
+            connectionName: requireString(params.connection_name, "connection_name"),
+            channelId: optionalString(params.channel_id) || "msteams",
+            resourceUrls: stringArray(params.resource_urls, "resource_urls"),
+        }),
+    );
+}
+
+async function getUserTokenStatus(bot: TeamsBot, params: Params) {
+    return withConversation(bot, params, context =>
+        context.client.users.getTokenStatus({
+            userId: requireString(params.user_id, "user_id"),
+            channelId: optionalString(params.channel_id) || "msteams",
+            includeFilter: requireString(params.include_filter, "include_filter"),
+        }),
+    );
+}
+
+async function signOutUser(bot: TeamsBot, params: Params) {
+    return withConversation(bot, params, context =>
+        context.client.users.signOut({
+            userId: requireString(params.user_id, "user_id"),
+            connectionName: requireString(params.connection_name, "connection_name"),
+            channelId: optionalString(params.channel_id) || "msteams",
+        }),
+    );
+}
+
+async function exchangeUserToken(bot: TeamsBot, params: Params) {
+    return withConversation(bot, params, context =>
+        context.client.users.exchangeToken({
+            userId: requireString(params.user_id, "user_id"),
+            connectionName: requireString(params.connection_name, "connection_name"),
+            channelId: optionalString(params.channel_id) || "msteams",
+            exchangeRequest: {
+                uri: optionalString(params.uri),
+                token: requireString(params.token, "token"),
+            },
+        }),
+    );
 }
 
 function conversationId(params: Params): string {
@@ -333,6 +401,19 @@ function requireNumber(value: unknown, name: string): number {
         });
     }
     return result;
+}
+
+function stringArray(value: unknown, name: string): string[] {
+    if (!Array.isArray(value) || value.length === 0) {
+        throw TeamsApiError.invalid(
+            `Teams 参数 ${name} 必须是非空字符串数组`,
+            "TEAMS_PARAM_INVALID",
+            {
+                name,
+            },
+        );
+    }
+    return value.map((item, index) => requireString(item, `${name}[${index}]`));
 }
 
 function teamsCard(

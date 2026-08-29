@@ -35,6 +35,7 @@ export function transformTeamsActivity(activity: Activity): TeamsActivity {
         locale: activity.locale,
         importance: activity.importance,
         name: activity.name,
+        action: activity.action,
         summary: activity.summary,
         channelData,
         entities: activity.entities?.map(entity => transformEntity(entity)),

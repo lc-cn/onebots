@@ -13,7 +13,11 @@ import { resolveTeamsReceiveMode, resolveTeamsWebhookPath } from "./bot-utils.js
 import { teamsCapabilities } from "./capabilities.js";
 import { TeamsConversationStore } from "./conversation-store.js";
 import { TeamsApiError } from "./errors.js";
-import { projectTeamsEvent, type TeamsProjectionKind } from "./events.js";
+import {
+    projectTeamsEvent,
+    resolveTeamsProjectionKind,
+    type TeamsProjectionKind,
+} from "./events.js";
 import { executeTeamsPlatformAction, TEAMS_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type { TeamsConfig, TeamsConversationReference, TeamsEvent } from "./types.js";
 
@@ -149,8 +153,13 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     }
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const online = this.getAccount(uin)?.status === AccountStatus.Online;
-        return { online, good: online };
+        const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
+        return {
+            online,
+            good: online,
+            bots: account ? [{ self: this.createId(account.client.getCachedMe().id), online }] : [],
+        };
     }
 
     private requireGroupReference(
@@ -258,7 +267,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
             this.dispatchTeamsEvent(account, "reaction_removed", event),
         );
         bot.on("event", (event: TeamsEvent) => {
-            const kind = event.activity.type === "invoke" ? "interaction" : "custom";
+            const kind = resolveTeamsProjectionKind(event);
             this.dispatchTeamsEvent(account, kind, event);
         });
     }
@@ -270,7 +279,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     ): void {
         account.dispatch(
             projectTeamsEvent(kind, event, {
-                botId: account.config.account_id,
+                botId: account.client.getCachedMe().id,
                 createId: value => this.createId(value),
             }),
         );

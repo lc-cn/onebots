@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { Activity, ActivityTypes } from "@microsoft/agents-activity";
 import type { CommonTypes } from "onebots";
-import { projectTeamsEvent } from "./events.js";
+import { projectTeamsEvent, resolveTeamsProjectionKind } from "./events.js";
 import type { TeamsEvent } from "./types.js";
 
 const createId = (value: string | number): CommonTypes.Id => ({
@@ -10,8 +11,10 @@ const createId = (value: string | number): CommonTypes.Id => ({
 });
 
 function createEvent(): TeamsEvent {
+    const rawActivity = new Activity(ActivityTypes.Message);
     return {
         type: "message",
+        raw_activity: rawActivity,
         activity: {
             type: "message",
             id: "message-1",
@@ -39,6 +42,7 @@ describe("projectTeamsEvent", () => {
             "text",
             "image",
         ]);
+        expect(event.raw_event.raw_activity).toBe(raw.raw_activity);
     });
 
     it("Teams channel 不被压扁为普通群聊场景", () => {
@@ -110,6 +114,24 @@ describe("projectTeamsEvent", () => {
             notice_type: "custom",
             raw_event: raw,
             extensions: { teams: { activity_type: "installationUpdate", activity_name: "add" } },
+        });
+    });
+
+    it("将群会话中的机器人安装投影为自身加入生命周期", () => {
+        const raw = createEvent();
+        raw.type = "installationUpdate";
+        raw.activity.type = "installationUpdate";
+        raw.activity.action = "add";
+        raw.activity.recipient = { id: "bot-native", name: "Agent" };
+        raw.activity.conversation.conversationType = "channel";
+        const kind = resolveTeamsProjectionKind(raw);
+        const event = projectTeamsEvent(kind, raw, { botId: "bot-native", createId });
+        expect(kind).toBe("group_increase");
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "group_increase",
+            user: { id: { string: "bot-native" } },
+            group: { id: { string: "group" } },
         });
     });
 });

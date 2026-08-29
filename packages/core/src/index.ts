@@ -17,6 +17,7 @@ export * from "./media-source.js";
 export * from "./package-metadata.js";
 export * from "./platform-action-registry.js";
 export * from "./reverse-websocket.js";
+export * from "./recent-event-deduplicator.js";
 export * from "./protocol.js";
 export * from "./event-filter.js";
 export * from "./registry.js";

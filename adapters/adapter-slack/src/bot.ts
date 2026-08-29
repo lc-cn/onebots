@@ -5,7 +5,7 @@
 import { EventEmitter } from "node:events";
 import { SocketModeClient } from "@slack/socket-mode";
 import type { WebClient } from "@slack/web-api";
-import { type Next, type RouterContext } from "onebots";
+import { RecentEventDeduplicator, type Next, type RouterContext } from "onebots";
 import { SlackError } from "./errors.js";
 import { parseSlackHttpBody, parseSlackInbound, verifySlackSignature } from "./inbound.js";
 import type { SlackFileInput } from "./messages.js";
@@ -55,7 +55,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     private running = false;
     private generation = 0;
     private readonly messageContexts = new Map<string, { channel: string; threadTs?: string }>();
-    private readonly receivedEventIds = new Map<string, number>();
+    private readonly receivedEvents = new RecentEventDeduplicator<string>();
 
     constructor(readonly config: SlackConfig) {
         super();
@@ -345,21 +345,12 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     /** Slack 超时重试仍交付 raw_event，但不会重复派发 canonical 事件。 */
     private hasProcessedEvent(body: SlackWebhookBody): boolean {
         const eventId = eventIdentity(body);
-        if (!eventId) return false;
-        const now = Date.now();
-        const previous = this.receivedEventIds.get(eventId);
-        for (const [id, receivedAt] of this.receivedEventIds) {
-            if (this.receivedEventIds.size <= 4_096 && now - receivedAt <= 10 * 60_000) break;
-            this.receivedEventIds.delete(id);
-        }
-        return previous !== undefined && now - previous <= 10 * 60_000;
+        return eventId ? this.receivedEvents.has(eventId) : false;
     }
 
     private markEventProcessed(body: SlackWebhookBody): void {
         const eventId = eventIdentity(body);
-        if (!eventId) return;
-        this.receivedEventIds.delete(eventId);
-        this.receivedEventIds.set(eventId, Date.now());
+        if (eventId) this.receivedEvents.commit(eventId);
     }
 
     /**

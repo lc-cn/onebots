@@ -42,6 +42,7 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         get_conversation_member: contextual,
         list_conversation_members: contextual,
         list_conversation_members_paged: contextual,
+        get_activity_members: contextual,
         add_message_reaction: contextual,
         remove_message_reaction: contextual,
         get_meeting_info: contextual,
@@ -50,6 +51,31 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
             support: "native",
             availability: "permission",
             permissions: ["OnlineMeetingNotification.Send.Chat"],
+        },
+        get_user_token: {
+            ...contextual,
+            availability: "permission",
+            permissions: ["Azure Bot OAuth connection"],
+        },
+        get_user_aad_tokens: {
+            ...contextual,
+            availability: "permission",
+            permissions: ["Azure Bot OAuth connection"],
+        },
+        get_user_token_status: {
+            ...contextual,
+            availability: "permission",
+            permissions: ["Azure Bot OAuth connection"],
+        },
+        sign_out_user: {
+            ...contextual,
+            availability: "permission",
+            permissions: ["Azure Bot OAuth connection"],
+        },
+        exchange_user_token: {
+            ...contextual,
+            availability: "permission",
+            permissions: ["Azure Bot OAuth connection"],
         },
         call_graph_api: {
             support: "native",
@@ -65,6 +91,8 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         reaction_removed: { support: "native" },
         member_joined: { support: "native" },
         member_left: { support: "native" },
+        group_increase: { support: "native", scenes: ["group", "channel"] },
+        group_decrease: { support: "native", scenes: ["group", "channel"] },
         interaction: { support: "native", note: "invoke 与 Adaptive Card 提交" },
         custom: {
             support: "native",

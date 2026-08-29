@@ -1,4 +1,5 @@
 import { rm } from "node:fs/promises";
+import { Activity, ActivityTypes } from "@microsoft/agents-activity";
 import { BaseApp, SqliteDB, type Account } from "onebots";
 import { describe, expect, it, vi } from "vitest";
 import { isTeamsGroupConversation, TeamsAdapter } from "./adapter.js";
@@ -42,8 +43,28 @@ describe("Teams 会话资源分类", () => {
         };
 
         try {
-            adapter.createAccount({ ...baseConfig, receive_mode: "manual" });
+            const account = adapter.createAccount({ ...baseConfig, receive_mode: "manual" });
             expect(post).not.toHaveBeenCalled();
+
+            const dispatch = vi.fn();
+            adapter.on("message:dispatch", dispatch);
+            const activity = new Activity(ActivityTypes.Message);
+            activity.id = "message-1";
+            activity.timestamp = new Date("2026-08-30T00:00:00.000Z");
+            activity.serviceUrl = "https://smba.trafficmanager.net/teams/";
+            activity.channelId = "msteams";
+            activity.from = { id: "user-native", name: "User" };
+            activity.recipient = { id: "bot-native", name: "Agent" };
+            activity.conversation = { id: "conversation-1", isGroup: false };
+            activity.text = "hello";
+            account.client.ingest(activity);
+            expect(dispatch).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    event: expect.objectContaining({
+                        bot_id: expect.objectContaining({ string: "bot-native" }),
+                    }),
+                }),
+            );
 
             adapter.createAccount({
                 ...baseConfig,

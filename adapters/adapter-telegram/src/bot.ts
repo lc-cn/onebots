@@ -11,7 +11,7 @@ import type {
     ChatMemberAdministrator,
 } from "grammy/types";
 import type { Message } from "grammy/types";
-import { createProxyAgent } from "onebots";
+import { createProxyAgent, RecentEventDeduplicator } from "onebots";
 import { TelegramError } from "./errors.js";
 import type { TelegramCallbackQuery, TelegramConfig, TelegramMessage } from "./types.js";
 import { resolveTelegramReceiveConfig, type TelegramReceiveConfig } from "./receive-config.js";
@@ -51,7 +51,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
     private generation = 0;
     private pollingAbort?: AbortController;
     private pollingTask?: Promise<void>;
-    private readonly receivedUpdateIds = new Map<number, number>();
+    private readonly receivedUpdates = new RecentEventDeduplicator<number>();
 
     constructor(config: TelegramConfig) {
         super();
@@ -300,24 +300,9 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
 
     private dispatchUpdate(update: Update): void {
         this.emit("raw_update", update);
-        if (this.hasProcessedUpdate(update.update_id)) return;
+        if (this.receivedUpdates.has(update.update_id)) return;
         this.emit("update", update);
-        this.markUpdateProcessed(update.update_id);
-    }
-
-    private hasProcessedUpdate(updateId: number): boolean {
-        const now = Date.now();
-        const previous = this.receivedUpdateIds.get(updateId);
-        for (const [id, receivedAt] of this.receivedUpdateIds) {
-            if (this.receivedUpdateIds.size <= 4_096 && now - receivedAt <= 10 * 60_000) break;
-            this.receivedUpdateIds.delete(id);
-        }
-        return previous !== undefined && now - previous <= 10 * 60_000;
-    }
-
-    private markUpdateProcessed(updateId: number): void {
-        this.receivedUpdateIds.delete(updateId);
-        this.receivedUpdateIds.set(updateId, Date.now());
+        this.receivedUpdates.commit(update.update_id);
     }
 
     private async runPolling(generation: number, signal: AbortSignal): Promise<void> {
