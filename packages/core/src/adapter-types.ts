@@ -260,12 +260,15 @@ declare module "./adapter.js" {
         export interface HandleGroupRequestParams {
             request_id?: CommonTypes.Id;
             flag?: string;
+            group_id?: CommonTypes.Id;
+            is_filtered?: boolean;
             sub_type?: "add" | "invite";
             type: "request" | "invitation";
             approve: boolean;
             reason?: string;
         }
         export interface GetGroupNotificationsParams {
+            start_notification_id?: CommonTypes.Id;
             is_filtered?: boolean;
             limit?: number;
         }
@@ -322,12 +325,29 @@ declare module "./adapter.js" {
             strong_newbie_list?: HonorMember[];
             emotion_list?: HonorMember[];
         }
-        export interface GroupNotification {
+        export interface GroupNotificationBase {
             notification_id: CommonTypes.Id;
             group_id: CommonTypes.Id;
-            user_id: CommonTypes.Id;
-            type: string;
-            time: number;
+            is_filtered: boolean;
+            state: "pending" | "accepted" | "rejected" | "ignored";
+            operator_id?: CommonTypes.Id;
+        }
+        export interface GroupJoinRequestNotification extends GroupNotificationBase {
+            type: "join_request";
+            initiator_id: CommonTypes.Id;
+            comment: string;
+        }
+        export interface GroupInvitedJoinRequestNotification extends GroupNotificationBase {
+            type: "invited_join_request";
+            initiator_id: CommonTypes.Id;
+            target_user_id: CommonTypes.Id;
+        }
+        export type GroupNotification =
+            | GroupJoinRequestNotification
+            | GroupInvitedJoinRequestNotification;
+        export interface GroupNotificationsResult {
+            notifications: GroupNotification[];
+            next_notification_id?: CommonTypes.Id;
         }
     }
 }

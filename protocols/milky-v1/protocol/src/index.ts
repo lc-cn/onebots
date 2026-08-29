@@ -17,6 +17,11 @@ import { projectMilkyEvent } from "./event-projector.js";
 import { executeMilkyAccountAction, MILKY_ACCOUNT_ACTIONS } from "./account-actions.js";
 import { executeMilkyGroupAction, MILKY_GROUP_ACTIONS } from "./group-actions.js";
 import { projectMilkyGroup, projectMilkyGroupMember } from "./group-entities.js";
+import {
+    executeMilkyGroupRequestAction,
+    getMilkyGroupNotifications,
+    MILKY_GROUP_REQUEST_ACTIONS,
+} from "./group-requests.js";
 import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 
 const milkySchema: Schema = {
@@ -230,6 +235,14 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         if (MILKY_GROUP_ACTIONS.has(action)) {
             return executeMilkyGroupAction(this.adapter, this.account.account_id, action, params);
         }
+        if (MILKY_GROUP_REQUEST_ACTIONS.has(action)) {
+            return executeMilkyGroupRequestAction(
+                this.adapter,
+                this.account.account_id,
+                action,
+                params,
+            );
+        }
         switch (action) {
             case "send_private_message":
                 return this.sendPrivateMessage(params);
@@ -278,17 +291,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             case "get_group_member_list":
                 return this.getGroupMemberList(params);
             case "get_group_notifications":
-                return this.getGroupNotifications(params);
+                return getMilkyGroupNotifications(this.adapter, this.account.account_id, params);
             case "accept_friend_request":
                 return this.handleFriendRequest(params, true);
             case "reject_friend_request":
                 return this.handleFriendRequest(params, false);
-            case "accept_group_request":
-            case "accept_group_invitation":
-                return this.handleGroupRequest(action, params, true);
-            case "reject_group_request":
-            case "reject_group_invitation":
-                return this.handleGroupRequest(action, params, false);
             case "get_group_files":
                 return this.getGroupFiles(params);
             case "create_group_folder":
@@ -602,31 +609,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         return { members: list.map(projectMilkyGroupMember) };
     }
 
-    private async getGroupNotifications(
-        params: Record<string, unknown>,
-    ): Promise<{ notifications: Record<string, unknown>[] }> {
-        const notifications = await this.adapter.getGroupNotifications(this.account.account_id, {
-            limit:
-                params.limit === undefined
-                    ? undefined
-                    : requirePositiveIntegerParam(params, "limit"),
-            is_filtered:
-                params.is_filtered === undefined
-                    ? undefined
-                    : requireBooleanParam(params, "is_filtered"),
-        });
-        return {
-            notifications: notifications.map(notification => ({
-                notification_seq: notification.notification_id.number,
-                group_id: notification.group_id.number,
-                initiator_id: notification.user_id.number,
-                notification_type: notification.type,
-                time: notification.time,
-                is_filtered: false,
-            })),
-        };
-    }
-
     private async getGroupFiles(params: Record<string, unknown>): Promise<unknown> {
         const groupId = requirePositiveIntegerParam(params, "group_id");
         const result = await this.adapter.getGroupFiles(this.account.account_id, {
@@ -777,29 +759,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
             flag,
             approve,
             remark: typeof params.remark === "string" ? params.remark : undefined,
-        });
-    }
-
-    private async handleGroupRequest(
-        action: string,
-        params: Record<string, unknown>,
-        approve: boolean,
-    ): Promise<void> {
-        const invitation = action.includes("invitation");
-        const sequence = requirePositiveIntegerParam(
-            params,
-            invitation ? "invitation_seq" : "notification_seq",
-        );
-        await this.adapter.handleGroupRequest(this.account.account_id, {
-            request_id: this.adapter.resolveId(sequence),
-            type: invitation ? "invitation" : "request",
-            sub_type: invitation
-                ? "invite"
-                : params.notification_type === "join_request"
-                  ? "add"
-                  : "invite",
-            approve,
-            reason: typeof params.reason === "string" ? params.reason : undefined,
         });
     }
 

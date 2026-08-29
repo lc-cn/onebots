@@ -5,7 +5,14 @@ import { ICQQGroupActions } from "./group-actions.js";
 const id = (value: string | number) => ({
     string: String(value),
     source: value,
-    number: Number(value) || 0,
+    number:
+        typeof value === "number"
+            ? value
+            : value === "flag-1"
+              ? 701
+              : value === "flag-2"
+                ? 702
+                : Number(value) || 1,
 });
 
 function createActions(client: Client): ICQQGroupActions {
@@ -18,6 +25,57 @@ function createActions(client: Client): ICQQGroupActions {
 }
 
 describe("ICQQ 群动作", () => {
+    it("将系统消息投影为可翻页且可处理的 canonical 群通知", async () => {
+        const requests = [
+            {
+                request_type: "group",
+                sub_type: "add",
+                flag: "flag-1",
+                group_id: 20001,
+                user_id: 10001,
+                comment: "申请加入",
+            },
+            {
+                request_type: "group",
+                sub_type: "invite",
+                flag: "flag-2",
+                group_id: 20002,
+                user_id: 10002,
+            },
+        ];
+        const setGroupAddRequest = vi.fn().mockResolvedValue(true);
+        const client = {
+            uin: 99999,
+            getSystemMsg: vi.fn().mockResolvedValue(requests),
+            setGroupAddRequest,
+        } as unknown as Client;
+        const actions = createActions(client);
+        Object.defineProperty(actions, "createId", { value: id });
+
+        await expect(actions.getGroupNotifications("bot", { limit: 1 })).resolves.toEqual({
+            notifications: [
+                expect.objectContaining({
+                    type: "join_request",
+                    comment: "申请加入",
+                    notification_id: expect.objectContaining({ number: 701 }),
+                }),
+            ],
+            next_notification_id: expect.objectContaining({ number: 702 }),
+        });
+        await expect(actions.getGroupNotifications("bot", { is_filtered: true })).resolves.toEqual({
+            notifications: [],
+        });
+        await actions.handleGroupRequest("bot", {
+            request_id: id("flag-1"),
+            group_id: id(20001),
+            type: "request",
+            sub_type: "add",
+            approve: true,
+            is_filtered: false,
+        });
+        expect(setGroupAddRequest).toHaveBeenCalledWith("flag-1", true, undefined);
+    });
+
     it("保留群创建时间和完整成员资料", async () => {
         const bot = {
             getGroupList: vi.fn().mockResolvedValue([

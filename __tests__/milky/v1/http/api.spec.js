@@ -1033,7 +1033,10 @@ describe('Milky V1 - 群聊 API', () => {
     }
 
     const { status, data } = await callMilkyAPI(CONFIG, 'accept_group_request', {
-      request_id: 'test_request_id'
+      notification_seq: 1,
+      notification_type: 'join_request',
+      group_id: 123456789,
+      is_filtered: false
     });
 
     if (status === 200) {
@@ -1053,7 +1056,10 @@ describe('Milky V1 - 群聊 API', () => {
     }
 
     const { status, data } = await callMilkyAPI(CONFIG, 'reject_group_request', {
-      request_id: 'test_request_id',
+      notification_seq: 1,
+      notification_type: 'join_request',
+      group_id: 123456789,
+      is_filtered: false,
       reason: 'Not allowed'
     });
 
@@ -1074,7 +1080,8 @@ describe('Milky V1 - 群聊 API', () => {
     }
 
     const { status, data } = await callMilkyAPI(CONFIG, 'accept_group_invitation', {
-      request_id: 'test_invitation_id'
+      group_id: 123456789,
+      invitation_seq: 1
     });
 
     if (status === 200) {
@@ -1094,7 +1101,8 @@ describe('Milky V1 - 群聊 API', () => {
     }
 
     const { status, data } = await callMilkyAPI(CONFIG, 'reject_group_invitation', {
-      request_id: 'test_invitation_id'
+      group_id: 123456789,
+      invitation_seq: 1
     });
 
     if (status === 200) {

@@ -232,7 +232,7 @@ export abstract class Adapter<
     getGroupNotifications(
         _uin: string,
         _params?: Adapter.GetGroupNotificationsParams,
-    ): Promise<Adapter.GroupNotification[]> {
+    ): Promise<Adapter.GroupNotificationsResult> {
         return this.unsupported("get_group_notifications");
     }
     setGroupAvatar(_uin: string, _params: Adapter.SetGroupAvatarParams): Promise<void> {

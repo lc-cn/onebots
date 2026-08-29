@@ -539,6 +539,8 @@ describe("Milky V1 protocol", () => {
         ).resolves.toMatchObject({ status: "ok", retcode: 0 });
         expect(adapter.handleGroupRequest).toHaveBeenCalledWith("bot", {
             request_id: expect.objectContaining({ number: 701 }),
+            group_id: expect.objectContaining({ number: 20001 }),
+            is_filtered: false,
             type: "invitation",
             sub_type: "invite",
             approve: true,
@@ -549,7 +551,7 @@ describe("Milky V1 protocol", () => {
     test("delegates ICQQ friend, group, and file extensions through Adapter", async () => {
         const { protocol, adapter } = createProtocol();
         adapter.getFriendRequests.mockResolvedValue([]);
-        adapter.getGroupNotifications.mockResolvedValue([]);
+        adapter.getGroupNotifications.mockResolvedValue({ notifications: [] });
         adapter.getGroupFiles.mockResolvedValue({ files: [], folders: [] });
         adapter.uploadFile.mockResolvedValue({
             file_id: { string: "fid", number: 801, source: "fid" },
@@ -582,6 +584,59 @@ describe("Milky V1 protocol", () => {
             "bot",
             expect.objectContaining({ data: "aGVsbG8=", scene_type: "private" }),
         );
+    });
+
+    test("群通知保持 canonical 联合类型、过滤条件与翻页游标", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getGroupNotifications.mockResolvedValue({
+            notifications: [
+                {
+                    type: "join_request",
+                    notification_id: {
+                        string: "request-flag",
+                        number: 701,
+                        source: "request-flag",
+                    },
+                    group_id: { string: "20001", number: 20001, source: 20001 },
+                    initiator_id: { string: "10001", number: 10001, source: 10001 },
+                    is_filtered: false,
+                    state: "pending",
+                    comment: "申请加入",
+                },
+            ],
+            next_notification_id: {
+                string: "next-request-flag",
+                number: 702,
+                source: "next-request-flag",
+            },
+        });
+
+        await expect(
+            protocol.apply("get_group_notifications", {
+                start_notification_seq: 700,
+                is_filtered: false,
+                limit: 1,
+            }),
+        ).resolves.toMatchObject({
+            data: {
+                notifications: [
+                    {
+                        type: "join_request",
+                        notification_seq: 701,
+                        group_id: 20001,
+                        initiator_id: 10001,
+                        state: "pending",
+                        comment: "申请加入",
+                    },
+                ],
+                next_notification_seq: 702,
+            },
+        });
+        expect(adapter.getGroupNotifications).toHaveBeenCalledWith("bot", {
+            start_notification_id: expect.objectContaining({ number: 700 }),
+            is_filtered: false,
+            limit: 1,
+        });
     });
 
     test("群管理动作使用 canonical 字段、默认值和空对象响应", async () => {

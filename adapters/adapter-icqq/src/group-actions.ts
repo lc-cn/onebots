@@ -254,30 +254,62 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
     async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
         const flag = params.flag ?? params.request_id?.string;
         if (!flag) throw new TypeError("处理 ICQQ 群申请需要 request_id 或原始 flag");
-        const accepted = await this.requireNativeClient(uin).setGroupAddRequest(
-            flag,
-            params.approve,
-            params.reason,
+        if (params.is_filtered) throw new TypeError("ICQQ 不支持处理风险过滤群申请");
+
+        const client = this.requireNativeClient(uin);
+        const request = (await client.getSystemMsg()).find(
+            (event): event is GroupRequestEvent | GroupInviteEvent =>
+                event.request_type === "group" && event.flag === flag,
         );
+        if (!request) throw new TypeError("群申请已失效或不在当前通知列表中");
+        if (
+            params.group_id &&
+            request.group_id !== this.numericId(params.group_id.string, "group_id")
+        ) {
+            throw new TypeError("群申请不属于指定群");
+        }
+        if (!this.matchesGroupRequestType(request, params)) {
+            throw new TypeError("群申请类型与 notification_type 不一致");
+        }
+
+        const accepted = await client.setGroupAddRequest(flag, params.approve, params.reason);
         this.assertNativeAccepted(accepted, `${params.approve ? "同意" : "拒绝"}群申请`);
+    }
+
+    private matchesGroupRequestType(
+        request: GroupRequestEvent | GroupInviteEvent,
+        params: Adapter.HandleGroupRequestParams,
+    ): boolean {
+        if (params.type === "invitation") return request.sub_type === "invite";
+        if (params.sub_type === "invite") {
+            return request.sub_type === "add" && request.inviter_id !== undefined;
+        }
+        return request.sub_type === "add" && request.inviter_id === undefined;
     }
 
     async getGroupNotifications(
         uin: string,
         params?: Adapter.GetGroupNotificationsParams,
-    ): Promise<Adapter.GroupNotification[]> {
-        const requests = (await this.requireNativeClient(uin).getSystemMsg()).filter(
+    ): Promise<Adapter.GroupNotificationsResult> {
+        if (params?.is_filtered) return { notifications: [] };
+
+        const client = this.requireNativeClient(uin);
+        const requests = (await client.getSystemMsg()).filter(
             (event): event is GroupRequestEvent | GroupInviteEvent =>
                 event.request_type === "group",
         );
-        const selected = params?.limit === undefined ? requests : requests.slice(0, params.limit);
-        return selected.map(event => ({
-            notification_id: this.createId(event.flag),
-            group_id: this.createId(event.group_id),
-            user_id: this.createId(event.user_id),
-            type: event.sub_type,
-            time: event.time,
-        }));
+        const notifications = requests.map(event =>
+            this.projectGroupNotification(event, client.uin),
+        );
+        const startIndex = this.resolveNotificationStart(
+            notifications,
+            params?.start_notification_id,
+        );
+        const limit = params?.limit ?? 20;
+        return {
+            notifications: notifications.slice(startIndex, startIndex + limit),
+            next_notification_id: notifications[startIndex + limit]?.notification_id,
+        };
     }
 
     async setGroupAvatar(uin: string, params: Adapter.SetGroupAvatarParams): Promise<void> {
@@ -285,6 +317,54 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
             this.numericId(params.group_id.string, "group_id"),
             resolveICQQMediaSource({ file: params.file }, "group_avatar"),
         );
+    }
+
+    private projectGroupNotification(
+        event: GroupRequestEvent | GroupInviteEvent,
+        selfId: number,
+    ): Adapter.GroupNotification {
+        const base = {
+            notification_id: this.createId(event.flag),
+            group_id: this.createId(event.group_id),
+            is_filtered: false,
+            state: "pending" as const,
+        };
+        if (event.sub_type === "invite") {
+            return {
+                ...base,
+                type: "invited_join_request",
+                initiator_id: this.createId(event.user_id),
+                target_user_id: this.createId(selfId),
+            };
+        }
+        if (event.inviter_id !== undefined) {
+            return {
+                ...base,
+                type: "invited_join_request",
+                initiator_id: this.createId(event.inviter_id),
+                target_user_id: this.createId(event.user_id),
+            };
+        }
+        return {
+            ...base,
+            type: "join_request",
+            initiator_id: this.createId(event.user_id),
+            comment: event.comment,
+        };
+    }
+
+    private resolveNotificationStart(
+        notifications: Adapter.GroupNotification[],
+        start?: Adapter.GetGroupNotificationsParams["start_notification_id"],
+    ): number {
+        if (!start) return 0;
+        const index = notifications.findIndex(
+            notification =>
+                notification.notification_id.string === start.string ||
+                notification.notification_id.number === start.number,
+        );
+        if (index < 0) throw new TypeError("start_notification_seq 不在当前群通知列表中");
+        return index;
     }
 
     async sendGroupMessageReaction(
