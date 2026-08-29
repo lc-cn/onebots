@@ -6,6 +6,7 @@ export type { ICQQConfig, ICQQProtocol, Platform } from "./types.js";
 export * from "./adapter.js";
 export { icqqCapabilities } from "./capabilities.js";
 export * from "./events.js";
+export * from "./media.js";
 export * from "./messages.js";
 export { buildICQQClientConfig, parseICQQNumericId, parseICQQUin } from "./client-config.js";
 export { executeICQQPlatformAction, ICQQ_PLATFORM_ACTIONS } from "./platform-actions.js";

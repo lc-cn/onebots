@@ -1,7 +1,7 @@
-import { Buffer } from "node:buffer";
 import type { GfsDirStat, GfsFileStat } from "@icqqjs/icqq/lib/gfs";
 import { Adapter } from "onebots";
 import { ICQQGroupActions } from "./group-actions.js";
+import { materializeICQQUpload } from "./media.js";
 
 /** QQ 频道与私聊/群文件动作。 */
 export abstract class ICQQGuildFileActions extends ICQQGroupActions {
@@ -95,7 +95,7 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
 
     async uploadFile(uin: string, params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> {
         const client = this.requireNativeClient(uin);
-        const source = this.resolveUploadSource(params);
+        const source = await materializeICQQUpload(params);
         if (params.scene_type === "group") {
             const file = await client
                 .acquireGfs(this.numericId(params.scene_id.string, "scene_id"))
@@ -218,17 +218,6 @@ export abstract class ICQQGuildFileActions extends ICQQGroupActions {
     async canSendRecord(uin: string): Promise<boolean> {
         this.requireNativeClient(uin);
         return true;
-    }
-
-    private resolveUploadSource(params: Adapter.UploadFileParams): string | Buffer {
-        if (params.data) return Buffer.from(params.data, "base64");
-        if (params.path) return params.path;
-        if (params.url) {
-            throw new TypeError(
-                "ICQQ 文件上传不直接接受 URL，请先下载为本地路径或传入 base64 data",
-            );
-        }
-        throw new TypeError("上传文件需要 path 或 base64 data");
     }
 
     private convertFileInfo(file: GfsFileStat): Adapter.FileInfo {
