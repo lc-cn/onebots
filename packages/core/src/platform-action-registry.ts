@@ -5,9 +5,14 @@ export type PlatformActionHandler<TContext> = (
     params: PlatformActionParams,
 ) => Promise<unknown>;
 
+/** 兼顾精确动作联合类型与动态字符串探测的只读集合。 */
+export type PlatformActionSet<TAction extends string> = Omit<ReadonlySet<TAction>, "has"> & {
+    has(action: string): action is TAction;
+};
+
 export interface PlatformActionRegistry<TContext, TAction extends string> {
     /** 由 handler 表生成的不可变动作集合。 */
-    readonly actions: ReadonlySet<TAction>;
+    readonly actions: PlatformActionSet<TAction>;
     has(action: string): action is TAction;
     execute(context: TContext, action: string, params: PlatformActionParams): Promise<unknown>;
 }
@@ -50,7 +55,7 @@ export function definePlatformActions<
 }
 
 /** Set 的只读视图；不暴露 add/delete/clear。 */
-class ImmutableSet<T> implements ReadonlySet<T> {
+class ImmutableSet<T extends string> implements ReadonlySet<T> {
     readonly #values: Set<T>;
 
     constructor(values: Iterable<T>) {
@@ -61,8 +66,8 @@ class ImmutableSet<T> implements ReadonlySet<T> {
         return this.#values.size;
     }
 
-    has(value: T): boolean {
-        return this.#values.has(value);
+    has(value: string): value is T {
+        return this.#values.has(value as T);
     }
 
     entries(): SetIterator<[T, T]> {

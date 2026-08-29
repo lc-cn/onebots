@@ -8,7 +8,11 @@ export { zulipCapabilities } from "./capabilities.js";
 export { ZulipError } from "./errors.js";
 export { projectZulipEvent, projectZulipMessage } from "./events.js";
 export { compileZulipMessage, type ZulipMessageCompiler } from "./messages.js";
-export { executeZulipPlatformAction, ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
+export {
+    executeZulipPlatformAction,
+    ZULIP_PLATFORM_ACTIONS,
+    type ZulipPlatformAction,
+} from "./platform-actions.js";
 export type { ZulipTransport, ZulipHttpRequest } from "./http.js";
 export type * from "./types.js";
 

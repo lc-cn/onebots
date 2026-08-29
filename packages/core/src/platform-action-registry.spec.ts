@@ -13,6 +13,10 @@ describe("definePlatformActions", () => {
 
         expect([...registry.actions]).toEqual(["echo"]);
         expect(registry.has("echo")).toBe(true);
+        const dynamicAction: string = "echo";
+        if (!registry.actions.has(dynamicAction)) throw new Error("动作集合未命中 echo");
+        const exactAction: "echo" = dynamicAction;
+        expect(exactAction).toBe("echo");
         await expect(registry.execute("bot", "echo", { value: 1 })).resolves.toBe("bot:1");
         expect(handler).toHaveBeenCalledOnce();
     });

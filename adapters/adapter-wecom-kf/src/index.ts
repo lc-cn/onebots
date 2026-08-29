@@ -13,7 +13,11 @@ export { compileKfMessages } from "./messages.js";
 export type { KfOutboundMessage } from "./messages.js";
 export { assertKfUploadSize, decodeKfBase64, MAX_KF_UPLOAD_BYTES } from "./media.js";
 export { resolveKfMessageId } from "./message-id.js";
-export { executeWeComKfPlatformAction, WECOM_KF_PLATFORM_ACTIONS } from "./platform-actions.js";
+export {
+    executeWeComKfPlatformAction,
+    WECOM_KF_PLATFORM_ACTIONS,
+    type WeComKfPlatformAction,
+} from "./platform-actions.js";
 export { WeComKfWebhookHost } from "./webhook-host.js";
 export type { WeComKfHttpContext } from "./webhook-host.js";
 export type {

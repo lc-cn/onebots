@@ -15,7 +15,11 @@ export { projectWechatEvent } from "./events.js";
 export { messageMediaType, prepareWechatMediaSegments, uploadWechatMedia } from "./media.js";
 export type { WechatMediaType } from "./media.js";
 export { compileWechatMessages } from "./messages.js";
-export { executeWechatPlatformAction, WECHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
+export {
+    executeWechatPlatformAction,
+    WECHAT_PLATFORM_ACTIONS,
+    type WechatPlatformAction,
+} from "./platform-actions.js";
 export { WechatWebhookHost } from "./webhook-host.js";
 export type { WechatHttpContext } from "./webhook-host.js";
 export {

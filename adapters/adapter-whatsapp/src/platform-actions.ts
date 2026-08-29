@@ -86,7 +86,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const WHATSAPP_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const WHATSAPP_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type WhatsAppPlatformAction =
+    typeof WHATSAPP_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 显式暴露常用 Cloud API，并以 whatsapp_call 覆盖新增 Graph API。 */
 export async function executeWhatsAppPlatformAction(

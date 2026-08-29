@@ -6,7 +6,11 @@ export { WhatsAppClient } from "./client.js";
 export { WhatsAppApiError, type WhatsAppApiErrorOptions } from "./errors.js";
 export { projectMessageContent, projectWhatsAppWebhook } from "./events.js";
 export { compileWhatsAppMessages } from "./messages.js";
-export { executeWhatsAppPlatformAction, WHATSAPP_PLATFORM_ACTIONS } from "./platform-actions.js";
+export {
+    executeWhatsAppPlatformAction,
+    WHATSAPP_PLATFORM_ACTIONS,
+    type WhatsAppPlatformAction,
+} from "./platform-actions.js";
 export { WhatsAppWebhookHost } from "./webhook-host.js";
 export type { WhatsAppHttpContext } from "./webhook-host.js";
 export type {

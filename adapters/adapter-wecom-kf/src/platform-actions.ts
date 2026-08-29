@@ -84,7 +84,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const WECOM_KF_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const WECOM_KF_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type WeComKfPlatformAction =
+    typeof WECOM_KF_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 微信客服常用原生动作；wecom_kf_call 覆盖后续新增接口。 */
 export function executeWeComKfPlatformAction(

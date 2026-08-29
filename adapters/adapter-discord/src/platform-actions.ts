@@ -23,11 +23,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
                 reason: optionalString(params, "reason"),
             }),
         unban_member: async (bot: DiscordBot, params: Params) =>
-            bot.unbanMember(
-                guildId(params),
-                userId(params),
-                optionalString(params, "reason"),
-            ),
+            bot.unbanMember(guildId(params), userId(params), optionalString(params, "reason")),
         get_guild_bans: restAction(params => `/guilds/${guildId(params)}/bans`, {
             query: true,
         }),
@@ -37,13 +33,11 @@ const PLATFORM_ACTIONS = definePlatformActions(
             body: "role",
         }),
         update_guild_role: restAction(
-            params =>
-                `/guilds/${guildId(params)}/roles/${requireSnowflake(params, "role_id")}`,
+            params => `/guilds/${guildId(params)}/roles/${requireSnowflake(params, "role_id")}`,
             { method: "PATCH", body: "role" },
         ),
         delete_guild_role: restAction(
-            params =>
-                `/guilds/${guildId(params)}/roles/${requireSnowflake(params, "role_id")}`,
+            params => `/guilds/${guildId(params)}/roles/${requireSnowflake(params, "role_id")}`,
             { method: "DELETE" },
         ),
         add_guild_member_role: guildMemberRole("PUT"),
@@ -54,14 +48,12 @@ const PLATFORM_ACTIONS = definePlatformActions(
                 body: { messages: requireSnowflakeArray(params, "message_ids", 2, 100) },
             }),
         crosspost_message: restAction(
-            params =>
-                `/channels/${channelId(params)}/messages/${messageId(params)}/crosspost`,
+            params => `/channels/${channelId(params)}/messages/${messageId(params)}/crosspost`,
             { method: "POST" },
         ),
-        get_channel_pins: restAction(
-            params => `/channels/${channelId(params)}/messages/pins`,
-            { query: true },
-        ),
+        get_channel_pins: restAction(params => `/channels/${channelId(params)}/messages/pins`, {
+            query: true,
+        }),
         pin_message: pinAction("PUT"),
         unpin_message: pinAction("DELETE"),
         trigger_typing: restAction(params => `/channels/${channelId(params)}/typing`, {
@@ -72,16 +64,11 @@ const PLATFORM_ACTIONS = definePlatformActions(
         leave_thread: ownThreadMembership("DELETE"),
         add_thread_member: threadMembership("PUT"),
         remove_thread_member: threadMembership("DELETE"),
-        list_thread_members: restAction(
-            params => `/channels/${channelId(params)}/thread-members`,
-            { query: true },
-        ),
-        get_active_threads: restAction(
-            params => `/guilds/${guildId(params)}/threads/active`,
-        ),
-        get_channel_invites: restAction(
-            params => `/channels/${channelId(params)}/invites`,
-        ),
+        list_thread_members: restAction(params => `/channels/${channelId(params)}/thread-members`, {
+            query: true,
+        }),
+        get_active_threads: restAction(params => `/guilds/${guildId(params)}/threads/active`),
+        get_channel_invites: restAction(params => `/channels/${channelId(params)}/invites`),
         create_channel_invite: async (bot: DiscordBot, params: Params) =>
             bot.getREST().request(`/channels/${channelId(params)}/invites`, {
                 method: "POST",
@@ -101,38 +88,46 @@ const PLATFORM_ACTIONS = definePlatformActions(
         timeout_guild_member: timeoutGuildMember,
         set_guild_member_nickname: setGuildMemberNickname,
         create_interaction_response: async (bot: DiscordBot, params: Params) =>
-            bot.getREST().createInteractionResponse(
-                requireSnowflake(params, "interaction_id"),
-                requireString(params, "interaction_token"),
-                requireObject(params, "response") as { type: number; data?: unknown },
-            ),
+            bot
+                .getREST()
+                .createInteractionResponse(
+                    requireSnowflake(params, "interaction_id"),
+                    requireString(params, "interaction_token"),
+                    requireObject(params, "response") as { type: number; data?: unknown },
+                ),
         get_original_interaction_response: async (bot: DiscordBot, params: Params) =>
-            bot.getREST().getOriginalInteractionResponse(
-                requireSnowflake(params, "application_id"),
-                requireString(params, "interaction_token"),
-            ),
+            bot
+                .getREST()
+                .getOriginalInteractionResponse(
+                    requireSnowflake(params, "application_id"),
+                    requireString(params, "interaction_token"),
+                ),
         edit_original_interaction_response: async (bot: DiscordBot, params: Params) =>
-            bot.getREST().editOriginalInteractionResponse(
-                requireSnowflake(params, "application_id"),
-                requireString(params, "interaction_token"),
-                requireObject(params, "content"),
-            ),
+            bot
+                .getREST()
+                .editOriginalInteractionResponse(
+                    requireSnowflake(params, "application_id"),
+                    requireString(params, "interaction_token"),
+                    requireObject(params, "content"),
+                ),
         create_followup_message: async (bot: DiscordBot, params: Params) =>
-            bot.getREST().createFollowupMessage(
-                requireSnowflake(params, "application_id"),
-                requireString(params, "interaction_token"),
-                requireObject(params, "content"),
-            ),
+            bot
+                .getREST()
+                .createFollowupMessage(
+                    requireSnowflake(params, "application_id"),
+                    requireString(params, "interaction_token"),
+                    requireObject(params, "content"),
+                ),
     },
     action =>
-        DiscordError.invalid(
-            `未实现 Discord 平台动作：${action}`,
-            "DISCORD_ACTION_UNSUPPORTED",
-            { action },
-        ),
+        DiscordError.invalid(`未实现 Discord 平台动作：${action}`, "DISCORD_ACTION_UNSUPPORTED", {
+            action,
+        }),
 );
 
-export const DISCORD_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const DISCORD_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type DiscordPlatformAction =
+    typeof DISCORD_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** Discord v10 平台扩展动作，按官方资源边界直接映射 REST endpoint。 */
 export async function executeDiscordPlatformAction(
@@ -149,10 +144,7 @@ interface RestActionOptions {
     query?: boolean;
 }
 
-function restAction(
-    path: (params: Params) => string,
-    options: RestActionOptions = {},
-): Handler {
+function restAction(path: (params: Params) => string, options: RestActionOptions = {}): Handler {
     return async (bot, params) =>
         bot.getREST().request(path(params), {
             method: options.method,
@@ -171,8 +163,7 @@ function guildMemberRole(method: "PUT" | "DELETE"): Handler {
 
 function pinAction(method: "PUT" | "DELETE"): Handler {
     return restAction(
-        params =>
-            `/channels/${channelId(params)}/messages/pins/${messageId(params)}`,
+        params => `/channels/${channelId(params)}/messages/pins/${messageId(params)}`,
         { method },
     );
 }
@@ -184,10 +175,9 @@ function ownThreadMembership(method: "PUT" | "DELETE"): Handler {
 }
 
 function threadMembership(method: "PUT" | "DELETE"): Handler {
-    return restAction(
-        params => `/channels/${channelId(params)}/thread-members/${userId(params)}`,
-        { method },
-    );
+    return restAction(params => `/channels/${channelId(params)}/thread-members/${userId(params)}`, {
+        method,
+    });
 }
 
 function reactionAction(method: "GET" | "PUT" | "DELETE", own = false): Handler {

@@ -119,7 +119,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const ICQQ_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const ICQQ_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type ICQQPlatformAction =
+    typeof ICQQ_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 调用 ICQQ 无法由通用 Adapter 语义准确表达的原生能力。 */
 export async function executeICQQPlatformAction(

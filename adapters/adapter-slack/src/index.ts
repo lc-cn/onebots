@@ -8,6 +8,11 @@ export * from "./capabilities.js";
 export { SlackBot, type SlackBotEvents } from "./bot.js";
 export { SlackError, type SlackErrorOptions } from "./errors.js";
 export { compileSlackMessage, type CompiledSlackMessage, type SlackFileInput } from "./messages.js";
+export {
+    SLACK_PLATFORM_ACTIONS,
+    executeSlackPlatformAction,
+    type SlackPlatformAction,
+} from "./platform-actions.js";
 
 export const slackSchema: Schema = {
     account_id: {

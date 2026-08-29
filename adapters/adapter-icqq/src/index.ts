@@ -9,7 +9,11 @@ export * from "./events.js";
 export * from "./media.js";
 export * from "./messages.js";
 export { buildICQQClientConfig, parseICQQNumericId, parseICQQUin } from "./client-config.js";
-export { executeICQQPlatformAction, ICQQ_PLATFORM_ACTIONS } from "./platform-actions.js";
+export {
+    executeICQQPlatformAction,
+    ICQQ_PLATFORM_ACTIONS,
+    type ICQQPlatformAction,
+} from "./platform-actions.js";
 export { ICQQBot } from "./bot.js";
 export type { ICQQBotEvents } from "./bot-events.js";
 export { ICQQError, type ICQQErrorOptions } from "./errors.js";

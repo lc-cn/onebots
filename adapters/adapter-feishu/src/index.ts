@@ -17,6 +17,11 @@ export * from "./capabilities.js";
 export { FeishuError, type FeishuErrorOptions } from "./errors.js";
 export { FeishuBot, type FeishuBotEvents } from "./bot.js";
 export { compileFeishuMessage, type CompiledFeishuMessage } from "./messages.js";
+export {
+    FEISHU_PLATFORM_ACTIONS,
+    executeFeishuPlatformAction,
+    type FeishuPlatformAction,
+} from "./platform-actions.js";
 
 export const feishuSchema: Schema = {
     account_id: {

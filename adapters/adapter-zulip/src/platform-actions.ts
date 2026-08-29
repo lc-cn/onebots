@@ -85,7 +85,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const ZULIP_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const ZULIP_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type ZulipPlatformAction =
+    typeof ZULIP_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行能力清单允许的 Zulip 原生动作。 */
 export async function executeZulipPlatformAction(

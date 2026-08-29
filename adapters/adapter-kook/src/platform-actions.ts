@@ -111,7 +111,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const KOOK_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const KOOK_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type KookPlatformAction =
+    typeof KOOK_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行 KOOK 官方扩展动作；命名参数直接沿用开放平台字段。 */
 export async function executeKookPlatformAction(

@@ -43,7 +43,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
     action => SlackError.invalid(`未实现 Slack 平台动作: ${action}`, "SLACK_ACTION_UNSUPPORTED"),
 );
 
-export const SLACK_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const SLACK_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type SlackPlatformAction =
+    typeof SLACK_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行能力清单允许的 Slack Web API 扩展动作。 */
 export async function executeSlackPlatformAction(

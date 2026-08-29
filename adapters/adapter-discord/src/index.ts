@@ -10,6 +10,11 @@ export { DISCORD_GATEWAY_INTENTS } from "./types.js";
 export { DEFAULT_DISCORD_INTENTS, resolveDiscordIntents } from "./intents.js";
 export { DiscordError, type DiscordErrorOptions } from "./errors.js";
 export {
+    DISCORD_PLATFORM_ACTIONS,
+    executeDiscordPlatformAction,
+    type DiscordPlatformAction,
+} from "./platform-actions.js";
+export {
     projectDiscordEvents,
     projectDiscordMessageSegments,
     type DiscordDispatchEvent,

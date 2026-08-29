@@ -49,8 +49,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
                     optionalString(params.continuation_token),
                 ),
             ),
-        add_message_reaction: (bot: TeamsBot, params: Params) =>
-            updateReaction(bot, params, "add"),
+        add_message_reaction: (bot: TeamsBot, params: Params) => updateReaction(bot, params, "add"),
         remove_message_reaction: (bot: TeamsBot, params: Params) =>
             updateReaction(bot, params, "remove"),
         get_meeting_info: async (bot: TeamsBot, params: Params) =>
@@ -69,14 +68,14 @@ const PLATFORM_ACTIONS = definePlatformActions(
         call_graph_api: callGraph,
     },
     action =>
-        TeamsApiError.invalid(
-            `未实现 Teams 平台动作: ${action}`,
-            "TEAMS_ACTION_UNSUPPORTED",
-            { action },
-        ),
+        TeamsApiError.invalid(`未实现 Teams 平台动作: ${action}`, "TEAMS_ACTION_UNSUPPORTED", {
+            action,
+        }),
 );
 
-export const TEAMS_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const TEAMS_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type TeamsPlatformAction =
+    typeof TEAMS_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行 Microsoft Teams Connector 与 Graph 的显式平台动作。 */
 export async function executeTeamsPlatformAction(

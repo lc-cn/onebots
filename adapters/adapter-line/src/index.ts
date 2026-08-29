@@ -6,6 +6,11 @@ export { lineCapabilities } from "./capabilities.js";
 export { LineApiError, type LineApiErrorOptions } from "./errors.js";
 export { chunkLineMessages, compileLineMessages } from "./messages.js";
 export { projectLineEvent, projectMessageContent } from "./events.js";
+export {
+    LINE_PLATFORM_ACTIONS,
+    executeLinePlatformAction,
+    type LinePlatformAction,
+} from "./platform-actions.js";
 export type {
     LineConfig,
     LineIngestResult,

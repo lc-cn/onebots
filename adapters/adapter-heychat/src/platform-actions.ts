@@ -89,7 +89,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const HEYCHAT_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const HEYCHAT_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type HeychatPlatformAction =
+    typeof HEYCHAT_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行官方扩展动作；参数名原样沿用开放平台，避免重复维护影子 DTO。 */
 export async function executeHeychatPlatformAction(

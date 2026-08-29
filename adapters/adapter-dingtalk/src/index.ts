@@ -11,6 +11,11 @@ export type {
 } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
+export {
+    DINGTALK_PLATFORM_ACTIONS,
+    executeDingTalkPlatformAction,
+    type DingTalkPlatformAction,
+} from "./platform-actions.js";
 
 const dingtalkSchema: Schema = {
     account_id: {

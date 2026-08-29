@@ -55,7 +55,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const EMAIL_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const EMAIL_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type EmailPlatformAction =
+    typeof EMAIL_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行经过白名单和参数校验的 SMTP/IMAP 原生动作。 */
 export async function executeEmailPlatformAction(

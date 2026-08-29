@@ -44,7 +44,9 @@ const PLATFORM_ACTIONS = definePlatformActions(ACTION_HANDLERS, action =>
     }),
 );
 
-export const DINGTALK_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const DINGTALK_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type DingTalkPlatformAction =
+    typeof DINGTALK_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行结构化钉钉扩展动作；参数名称与开放平台保持一致。 */
 export async function executeDingTalkPlatformAction(

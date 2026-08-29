@@ -15,6 +15,11 @@ export {
 } from "./errors.js";
 export { TeamsGraphClient, type TeamsGraphRequestOptions } from "./graph.js";
 export { compileTeamsActivity, projectTeamsSegments } from "./activity.js";
+export {
+    TEAMS_PLATFORM_ACTIONS,
+    executeTeamsPlatformAction,
+    type TeamsPlatformAction,
+} from "./platform-actions.js";
 export type {
     TeamsConfig,
     TeamsUser,

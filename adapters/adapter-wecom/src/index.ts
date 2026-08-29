@@ -9,7 +9,11 @@ export { prepareWeComMediaSegments, uploadWeComMedia, weComMediaType } from "./m
 export type { WeComMediaType } from "./media.js";
 export { compileWeComMessages } from "./messages.js";
 export type { WeComOutboundMessage } from "./messages.js";
-export { executeWeComPlatformAction, WECOM_PLATFORM_ACTIONS } from "./platform-actions.js";
+export {
+    executeWeComPlatformAction,
+    WECOM_PLATFORM_ACTIONS,
+    type WeComPlatformAction,
+} from "./platform-actions.js";
 export { WeComWebhookHost, weComEventId } from "./webhook-host.js";
 export type { WeComHttpContext } from "./webhook-host.js";
 export type {

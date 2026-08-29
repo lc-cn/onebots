@@ -7,7 +7,11 @@ export { HeychatApiError, type HeychatApiErrorOptions } from "./errors.js";
 export { projectHeychatEvent, type HeychatEventProjectionOptions } from "./events.js";
 export { compileHeychatMessage } from "./messages.js";
 export { normalizeBase64Source, prepareHeychatMediaSegments, uploadHeychatMedia } from "./media.js";
-export { executeHeychatPlatformAction, HEYCHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
+export {
+    executeHeychatPlatformAction,
+    HEYCHAT_PLATFORM_ACTIONS,
+    type HeychatPlatformAction,
+} from "./platform-actions.js";
 export {
     calculateHeychatReconnectDelay,
     HeychatWsClient,

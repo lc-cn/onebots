@@ -83,7 +83,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const WECOM_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const WECOM_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type WeComPlatformAction =
+    typeof WECOM_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 常用自建应用 API 的稳定动作入口；wecom_call 覆盖新增接口。 */
 export function executeWeComPlatformAction(

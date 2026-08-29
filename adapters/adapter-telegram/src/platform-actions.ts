@@ -81,7 +81,9 @@ const PLATFORM_ACTIONS = definePlatformActions(ACTION_HANDLERS, action =>
     TelegramError.invalid(`未实现 Telegram 平台动作: ${action}`, "TELEGRAM_ACTION_UNSUPPORTED"),
 );
 
-export const TELEGRAM_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const TELEGRAM_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type TelegramPlatformAction =
+    typeof TELEGRAM_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** Telegram 专属动作均使用一个参数对象，供所有协议统一转发。 */
 export async function executeTelegramPlatformAction(

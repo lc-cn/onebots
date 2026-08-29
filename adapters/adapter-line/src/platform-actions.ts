@@ -19,7 +19,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const LINE_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const LINE_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type LinePlatformAction =
+    typeof LINE_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行经过显式白名单审计的 LINE 原生能力。 */
 export async function executeLinePlatformAction(

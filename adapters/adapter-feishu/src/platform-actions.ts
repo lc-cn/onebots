@@ -65,7 +65,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const FEISHU_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const FEISHU_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type FeishuPlatformAction =
+    typeof FEISHU_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 执行飞书平台扩展动作；参数对象与开放平台 JSON 保持一致。 */
 export async function executeFeishuPlatformAction(

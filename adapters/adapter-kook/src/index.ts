@@ -8,6 +8,11 @@ export { KookBot, type KookBotEvents } from "./bot.js";
 export type { KookConfig, KookEvent, KookApiRequestOptions } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
+export {
+    KOOK_PLATFORM_ACTIONS,
+    executeKookPlatformAction,
+    type KookPlatformAction,
+} from "./platform-actions.js";
 
 export const kookSchema: Schema = {
     account_id: {

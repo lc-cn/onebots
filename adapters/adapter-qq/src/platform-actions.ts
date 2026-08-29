@@ -20,7 +20,7 @@ const PLATFORM_ACTIONS = definePlatformActions(ACTION_HANDLERS, action =>
     QQApiError.invalid(`未知 QQ 平台动作: ${action}`, "QQ_UNKNOWN_ACTION", { action }),
 );
 
-export const QQ_PLATFORM_ACTIONS: ReadonlySet<QQPlatformAction> = PLATFORM_ACTIONS.actions;
+export const QQ_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
 
 export async function executeQQPlatformAction(
     client: QQClient,

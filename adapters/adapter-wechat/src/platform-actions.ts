@@ -18,7 +18,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         }),
 );
 
-export const WECHAT_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+export const WECHAT_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
+export type WechatPlatformAction =
+    typeof WECHAT_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 显式覆盖常用公众号接口，并以 wechat_call 承接微信新增 API。 */
 export function executeWechatPlatformAction(
