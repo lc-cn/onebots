@@ -288,11 +288,11 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         uin: string,
         params: Adapter.GetChannelMemberListParams,
     ): Promise<Adapter.ChannelMemberInfo[]> {
-        const response = await this.requireBot(uin).callApi<KookListResponse<KookUser>>(
+        const response = await this.requireBot(uin).callApi<unknown>(
             "/v3/channel/user-list",
             { query: { channel_id: params.channel_id.string } },
         );
-        return response.items.map(user => ({
+        return parseKookVoiceMembers(response).map(user => ({
             channel_id: params.channel_id,
             user_id: this.createId(user.id),
             user_name: user.username,
@@ -422,6 +422,26 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             parent_id: channel.parent_id ? this.createId(channel.parent_id) : undefined,
         };
     }
+}
+
+/** KOOK 语音频道成员接口返回裸数组，不使用其他列表接口的分页 envelope。 */
+export function parseKookVoiceMembers(value: unknown): KookUser[] {
+    if (!Array.isArray(value)) {
+        throw new TypeError("KOOK 语音频道成员接口返回值必须为数组");
+    }
+    return value.map((item, index) => {
+        if (
+            !item ||
+            typeof item !== "object" ||
+            !("id" in item) ||
+            typeof item.id !== "string" ||
+            !("username" in item) ||
+            typeof item.username !== "string"
+        ) {
+            throw new TypeError(`KOOK 语音频道成员第 ${index + 1} 项缺少用户身份`);
+        }
+        return item as KookUser;
+    });
 }
 
 async function readPackageVersion(url: URL): Promise<string> {
