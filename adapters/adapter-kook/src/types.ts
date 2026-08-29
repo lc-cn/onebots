@@ -62,8 +62,10 @@ export interface KookEventAuthor extends KookUser {
 }
 
 export interface KookSystemBody {
-    user_id?: string;
+    user_id?: string | string[];
     target_id?: string;
+    author_id?: string;
+    operator_id?: string;
     channel_id?: string;
     guild_id?: string;
     msg_id?: string;

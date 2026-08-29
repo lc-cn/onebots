@@ -269,8 +269,15 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     }
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const online = this.getAccount(uin)?.status === AccountStatus.Online;
-        return { online, good: online };
+        const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
+        return {
+            online,
+            good: online,
+            bots: account
+                ? [{ self: this.createId(account.client.getCachedMe()?.id || uin), online }]
+                : [],
+        };
     }
 
     createAccount(config: Account.Config<"kook">): Account<"kook", KookBot> {

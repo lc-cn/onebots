@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { projectKookEvent } from "./events.js";
+import { projectKookEvents } from "./events.js";
 import type { KookEvent, KookSignal } from "./types.js";
 
 const id = (value: string | number) => ({
@@ -7,13 +7,13 @@ const id = (value: string | number) => ({
     source: value,
     number: Number(value),
 });
-const context = { botId: id("bot"), createId: id };
+const context = { botId: id("bot"), selfId: id("native-bot"), createId: id };
 
 describe("KOOK 事件投影", () => {
     test("频道消息使用频道作为统一 scene 并保留服务器 ID", () => {
         const event = messageEvent();
         const signal: KookSignal = { s: 0, sn: 2, d: event };
-        const projected = projectKookEvent(event, signal, context);
+        const projected = projectKookEvents(event, signal, context)[0];
         expect(projected).toMatchObject({
             type: "message",
             message_type: "channel",
@@ -37,7 +37,7 @@ describe("KOOK 事件投影", () => {
                 body: { user_id: "user-2", msg_id: "message-2", emoji: { name: "👍" } },
             },
         };
-        const projected = projectKookEvent(event, { s: 0, d: event }, context);
+        const projected = projectKookEvents(event, { s: 0, d: event }, context)[0];
         expect(projected).toMatchObject({
             type: "notice",
             notice_type: "reaction_removed",
@@ -52,7 +52,7 @@ describe("KOOK 事件投影", () => {
             type: 255,
             extra: { type: "future_event", body: { future: true } },
         };
-        expect(projectKookEvent(event, { s: 0, d: event }, context)).toMatchObject({
+        expect(projectKookEvents(event, { s: 0, d: event }, context)[0]).toMatchObject({
             type: "notice",
             notice_type: "custom",
             extensions: { kook: { event_type: "future_event", body: { future: true } } },
@@ -65,7 +65,7 @@ describe("KOOK 事件投影", () => {
             type: 12,
             content: { type: "item", data: { item_id: 10001, target_id: "user-2" } },
         };
-        expect(projectKookEvent(event, { s: 0, sn: 3, d: event }, context)).toMatchObject({
+        expect(projectKookEvents(event, { s: 0, sn: 3, d: event }, context)[0]).toMatchObject({
             type: "message",
             message: [
                 {
@@ -78,7 +78,90 @@ describe("KOOK 事件投影", () => {
             ],
         });
     });
+
+    test("私聊系统事件不会把目标用户伪装成频道", () => {
+        const event: KookEvent = {
+            ...messageEvent(),
+            type: 255,
+            channel_type: "PERSON",
+            target_id: "bot-user",
+            extra: {
+                type: "updated_private_message",
+                body: {
+                    author_id: "user-2",
+                    target_id: "bot-user",
+                    msg_id: "message-2",
+                    content: "updated",
+                    chat_code: "chat-1",
+                },
+            },
+        };
+        expect(projectKookEvents(event, { s: 0, d: event }, context)[0]).toMatchObject({
+            notice_type: "message_updated",
+            user: { id: { string: "user-2" } },
+            message_id: { string: "message-2" },
+            group: undefined,
+        });
+    });
+
+    test("投影机器人服务器生命周期和语音频道成员", () => {
+        const joined = systemEvent("self_joined_guild", { guild_id: "guild-2" }, "PERSON");
+        expect(projectKookEvents(joined, { s: 0, d: joined }, context)[0]).toMatchObject({
+            notice_type: "group_increase",
+            user: { id: { string: "native-bot" } },
+            group: { id: { string: "guild-2" }, guild_id: { string: "guild-2" } },
+            message_id: undefined,
+        });
+
+        const voice = systemEvent("joined_channel", {
+            user_id: "user-2",
+            channel_id: "voice-1",
+        });
+        expect(projectKookEvents(voice, { s: 0, d: voice }, context)[0]).toMatchObject({
+            notice_type: "member_joined",
+            user: { id: { string: "user-2" } },
+            group: {
+                id: { string: "voice-1" },
+                guild_id: { string: "guild-1" },
+                channel_id: { string: "voice-1" },
+            },
+        });
+    });
+
+    test("将批量服务器封禁逐用户投影并保留操作人", () => {
+        const event = systemEvent("added_block_list", {
+            operator_id: "admin-1",
+            user_id: ["user-2", "user-3"],
+            remark: "spam",
+        });
+        const projected = projectKookEvents(event, { s: 0, d: event }, context);
+        expect(projected).toHaveLength(2);
+        expect(projected[0]).toMatchObject({
+            id: { string: "system-message:user-2" },
+            notice_type: "group_ban",
+            sub_type: "ban",
+            user: { id: { string: "user-2" } },
+            operator: { id: { string: "admin-1" } },
+            group: { id: { string: "guild-1" } },
+        });
+        expect(projected[1]).toMatchObject({ user: { id: { string: "user-3" } } });
+    });
 });
+
+function systemEvent(
+    type: string,
+    body: Record<string, unknown>,
+    channelType: KookEvent["channel_type"] = "GROUP",
+): KookEvent {
+    return {
+        ...messageEvent(),
+        type: 255,
+        channel_type: channelType,
+        target_id: channelType === "GROUP" ? "guild-1" : "bot-user",
+        msg_id: "system-message",
+        extra: { type, body },
+    };
+}
 
 function messageEvent(): KookEvent {
     return {

@@ -1,4 +1,4 @@
-import { ErrorCategory } from "onebots";
+import { ErrorCategory, isSafeAbsoluteApiPath } from "onebots";
 import { KookApiError, KookError } from "./errors.js";
 import type { KookApiEnvelope, KookApiRequestOptions, KookConfig } from "./types.js";
 
@@ -254,12 +254,7 @@ function normaliseApiBase(value?: string): string {
 }
 
 function assertApiPath(path: string): void {
-    if (
-        !path.startsWith("/v3/") ||
-        path.includes("..") ||
-        /[\\?#]/.test(path) ||
-        /%(?:2f|2e|5c)/i.test(path)
-    ) {
+    if (!path.startsWith("/v3/") || !isSafeAbsoluteApiPath(path)) {
         throw KookError.invalid(
             "KOOK API path 必须是 /v3/ 下的安全绝对路径",
             "KOOK_API_PATH_INVALID",

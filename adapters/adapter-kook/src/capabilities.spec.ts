@@ -15,6 +15,8 @@ describe("KOOK 能力清单", () => {
         expect(KOOK_PLATFORM_ACTIONS.has("list_invitees")).toBe(true);
         expect(KOOK_PLATFORM_ACTIONS.has("get_intimacy")).toBe(true);
         expect(KOOK_PLATFORM_ACTIONS.has("list_user_chats")).toBe(true);
+        expect(kookCapabilities.events.group_increase?.support).toBe("native");
+        expect(kookCapabilities.events.group_ban?.support).toBe("native");
     });
 
     it("所有声明动作均有真实入口", () => {

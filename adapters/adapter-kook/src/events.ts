@@ -10,51 +10,152 @@ export interface KookRawEvent {
 
 interface ProjectionContext {
     botId: CommonTypes.Id;
+    selfId?: CommonTypes.Id;
     createId(value: string | number): CommonTypes.Id;
 }
 
-/** 投影全部 KOOK 消息与系统事件；未知系统事件作为 custom notice 无损交付。 */
-export function projectKookEvent(
+/** 投影全部 KOOK 消息与系统事件；批量系统事件会拆为稳定的逐对象 notice。 */
+export function projectKookEvents(
     event: KookEvent,
     signal: KookSignal,
     context: ProjectionContext,
-): CommonEvent.Event<KookRawEvent> | undefined {
+): CommonEvent.Event<KookRawEvent>[] {
     const raw = { event, signal };
     if (event.type !== 255 && ["GROUP", "PERSON"].includes(event.channel_type)) {
-        return projectMessage(event, raw, context);
+        return [projectMessage(event, raw, context)];
     }
-    if (event.type !== 255) return undefined;
+    if (event.type !== 255) return [];
     const eventType = String(event.extra.type || "unknown");
     const body = event.extra.body || {};
+    if (eventType === "added_block_list" || eventType === "deleted_block_list") {
+        return projectGuildBans(event, raw, body, context, eventType === "added_block_list");
+    }
+    return [projectSystemNotice(event, raw, body, context, eventType)];
+}
+
+function projectSystemNotice(
+    event: KookEvent,
+    raw: KookRawEvent,
+    body: Record<string, unknown>,
+    context: ProjectionContext,
+    eventType: string,
+): CommonEvent.Notice<KookRawEvent> {
     const noticeType = NOTICE_TYPES[eventType] || "custom";
-    const userId = stringValue(body.user_id || body.target_id || event.author_id);
-    const groupId = stringValue(body.guild_id || event.extra.guild_id);
-    const channelId = stringValue(body.channel_id || event.target_id);
-    const messageId = stringValue(body.msg_id || event.msg_id);
+    const bodyUser = objectValue(body.user_info);
+    const userId = stringValue(body.user_id || bodyUser.id || body.author_id || body.target_id);
+    const guildId = stringValue(
+        body.guild_id ||
+            event.extra.guild_id ||
+            (event.channel_type === "GROUP" ? event.target_id : ""),
+    );
+    const channelId = stringValue(body.channel_id);
+    const messageId = stringValue(body.msg_id);
     return {
         ...base(event, raw, context),
         type: "notice",
         notice_type: noticeType,
-        user: userId ? { id: context.createId(userId), name: userId } : undefined,
-        group:
-            channelId || groupId
-                ? {
-                      id: context.createId(channelId || groupId),
-                      name: event.extra.channel_name || "",
-                  }
-                : undefined,
+        user:
+            eventType === "self_joined_guild" || eventType === "self_exited_guild"
+                ? { id: context.selfId || context.botId, name: "" }
+                : userId
+                  ? {
+                        id: context.createId(userId),
+                        name: stringValue(bodyUser.nickname || bodyUser.username || userId),
+                        avatar: stringValue(bodyUser.avatar) || undefined,
+                    }
+                  : undefined,
+        operator: userValue(body.operator_id, context),
+        group: projectGroup(guildId, channelId, event.extra.channel_name, context),
         message_id: messageId ? context.createId(messageId) : undefined,
         message: body.content ? projectKookMessageSegments(9, String(body.content)) : undefined,
+        sub_type: eventType,
         extensions: {
             kook: {
                 event_type: eventType,
-                guild_id: groupId || undefined,
+                guild_id: guildId || undefined,
                 channel_id: channelId || undefined,
                 emoji: body.emoji,
+                chat_code: body.chat_code,
+                updated_at: body.updated_at,
+                deleted_at: body.deleted_at,
                 body,
             },
         },
     };
+}
+
+function projectGuildBans(
+    event: KookEvent,
+    raw: KookRawEvent,
+    body: Record<string, unknown>,
+    context: ProjectionContext,
+    banned: boolean,
+): CommonEvent.Notice<KookRawEvent>[] {
+    const users = Array.isArray(body.user_id)
+        ? body.user_id.filter((value): value is string => typeof value === "string" && !!value)
+        : stringValue(body.user_id)
+          ? [stringValue(body.user_id)]
+          : [];
+    if (!users.length) {
+        return [
+            projectSystemNotice(
+                event,
+                raw,
+                body,
+                context,
+                banned ? "added_block_list" : "deleted_block_list",
+            ),
+        ];
+    }
+    const guildId = stringValue(
+        body.guild_id ||
+            event.extra.guild_id ||
+            (event.channel_type === "GROUP" ? event.target_id : ""),
+    );
+    return users.map(userId => ({
+        ...base(event, raw, context),
+        id: context.createId(`${event.msg_id}:${userId}`),
+        type: "notice",
+        notice_type: "group_ban",
+        sub_type: banned ? "ban" : "lift_ban",
+        user: { id: context.createId(userId), name: userId },
+        operator: userValue(body.operator_id, context),
+        group: projectGroup(guildId, "", "", context),
+        extensions: {
+            kook: {
+                event_type: banned ? "added_block_list" : "deleted_block_list",
+                remark: body.remark,
+                users,
+                body,
+            },
+        },
+    }));
+}
+
+function projectGroup(
+    guildId: string,
+    channelId: string,
+    name: unknown,
+    context: ProjectionContext,
+): CommonTypes.Group | undefined {
+    if (!guildId && !channelId) return undefined;
+    return {
+        id: context.createId(channelId || guildId),
+        name: stringValue(name),
+        ...(guildId ? { guild_id: context.createId(guildId) } : {}),
+        ...(channelId ? { channel_id: context.createId(channelId) } : {}),
+    };
+}
+
+function userValue(value: unknown, context: ProjectionContext): CommonTypes.User | undefined {
+    const id = stringValue(value);
+    return id ? { id: context.createId(id), name: id } : undefined;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
 }
 
 function projectMessage(
@@ -130,4 +231,8 @@ const NOTICE_TYPES: Record<string, CommonEvent.NoticeType> = {
     updated_guild_member: "user_updated",
     user_updated: "user_updated",
     message_btn_click: "interaction",
+    self_joined_guild: "group_increase",
+    self_exited_guild: "group_decrease",
+    joined_channel: "member_joined",
+    exited_channel: "member_left",
 };

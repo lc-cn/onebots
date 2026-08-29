@@ -19,6 +19,11 @@ describe("KOOK 平台扩展动作", () => {
                 path: "/api/config",
             }),
         ).rejects.toThrow("/v3/");
+        await expect(
+            executeKookPlatformAction({ callApi: vi.fn() } as never, "call_kook_api", {
+                path: "/v3/message/%2e%2e/user/me",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PATH_INVALID" });
     });
 
     test("创建服务器表情使用 multipart 原生接口", async () => {

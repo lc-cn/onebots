@@ -1,4 +1,9 @@
-import { definePlatformActions, materializeMediaSource, type PlatformActionHandler } from "onebots";
+import {
+    definePlatformActions,
+    isSafeAbsoluteApiPath,
+    materializeMediaSource,
+    type PlatformActionHandler,
+} from "onebots";
 import type { KookBot } from "./bot.js";
 import { KookError } from "./errors.js";
 import type { KookApiRequestOptions } from "./types.js";
@@ -206,7 +211,7 @@ function scalarValue(value: unknown, key: string): string | number | boolean | u
 }
 
 function requirePath(value: unknown): string {
-    if (typeof value !== "string" || !value.startsWith("/v3/") || value.includes("..")) {
+    if (typeof value !== "string" || !value.startsWith("/v3/") || !isSafeAbsoluteApiPath(value)) {
         throw KookError.invalid(
             "KOOK 参数 path 必须是 /v3/ 下的安全绝对路径",
             "KOOK_ACTION_PATH_INVALID",

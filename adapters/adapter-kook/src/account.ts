@@ -1,7 +1,7 @@
 import { Account, AccountStatus } from "onebots";
 import type { KookAdapter } from "./adapter.js";
 import { KookBot } from "./bot.js";
-import { projectKookEvent } from "./events.js";
+import { projectKookEvents } from "./events.js";
 import type { KookConfig, KookEvent, KookSignal } from "./types.js";
 
 /** 创建 KOOK 账号，并让 Gateway 与 Webhook 共用同一条事件投影链路。 */
@@ -12,7 +12,7 @@ export function createKookAccount(
     const kookConfig: KookConfig = { ...config };
     const bot = new KookBot(kookConfig);
     const account = new Account<"kook", KookBot>(adapter, bot, config);
-    const context = {
+    const baseContext = {
         botId: adapter.createId(config.account_id),
         createId: (value: string | number) => adapter.createId(value),
     };
@@ -48,8 +48,13 @@ export function createKookAccount(
                 event.channel_type === "PERSON" ? event.extra.code : undefined,
             );
         }
-        const projected = projectKookEvent(event, signal, context);
-        if (projected) account.dispatch(projected);
+        const context = {
+            ...baseContext,
+            ...(me ? { selfId: adapter.createId(me.id) } : {}),
+        };
+        for (const projected of projectKookEvents(event, signal, context)) {
+            account.dispatch(projected);
+        }
     });
 
     account.on("start", async () => {
