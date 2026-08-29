@@ -1,5 +1,12 @@
-import { readFile } from "node:fs/promises";
-import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
+import {
+    Account,
+    AccountStatus,
+    Adapter,
+    AdapterRegistry,
+    BaseApp,
+    readPackageVersion,
+    readPackageVersionFile,
+} from "onebots";
 import { createDingTalkAccount } from "./account.js";
 import { DingTalkBot } from "./bot.js";
 import { dingTalkCapabilities } from "./capabilities.js";
@@ -188,8 +195,10 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
 
     async getVersion(): Promise<Adapter.VersionInfo> {
         const [adapterVersion, sdkVersion] = await Promise.all([
-            readPackageVersion(new URL("../package.json", import.meta.url)),
-            readPackageVersion(new URL("../package.json", import.meta.resolve("dingtalk-stream"))),
+            readPackageVersion(import.meta.url),
+            readPackageVersionFile(
+                new URL("../package.json", import.meta.resolve("dingtalk-stream")),
+            ),
         ]);
         return {
             app_name: "onebots 钉钉 Adapter",
@@ -252,19 +261,6 @@ function nicknameMap(value: Record<string, string> | string | undefined): Record
     } catch {
         return {};
     }
-}
-
-async function readPackageVersion(url: URL): Promise<string> {
-    const metadata: unknown = JSON.parse(await readFile(url, "utf8"));
-    if (
-        !metadata ||
-        typeof metadata !== "object" ||
-        !("version" in metadata) ||
-        typeof metadata.version !== "string"
-    ) {
-        throw new TypeError(`包元数据缺少 version: ${url.pathname}`);
-    }
-    return metadata.version;
 }
 
 AdapterRegistry.register("dingtalk", DingTalkAdapter, {

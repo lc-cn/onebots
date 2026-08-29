@@ -1,21 +1,7 @@
-import { readFile } from "node:fs/promises";
 import type { Client } from "@icqqjs/icqq";
-import { AccountStatus, Adapter } from "onebots";
+import { AccountStatus, Adapter, readPackageVersion, readPackageVersionFile } from "onebots";
 import { ICQQGuildFileActions } from "./guild-file-actions.js";
 import { executeICQQPlatformAction, ICQQ_PLATFORM_ACTIONS } from "./platform-actions.js";
-
-async function readPackageVersion(url: URL): Promise<string> {
-    const metadata: unknown = JSON.parse(await readFile(url, "utf8"));
-    if (
-        typeof metadata !== "object" ||
-        metadata === null ||
-        !("version" in metadata) ||
-        typeof metadata.version !== "string"
-    ) {
-        throw new TypeError(`包元数据缺少 version: ${url.pathname}`);
-    }
-    return metadata.version;
-}
 
 /** 系统状态、版本与凭据动作；账号装配由最终适配器负责。 */
 export abstract class ICQQActionAdapter extends ICQQGuildFileActions {
@@ -36,8 +22,10 @@ export abstract class ICQQActionAdapter extends ICQQGuildFileActions {
 
     async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
         const [adapterVersion, icqqVersion] = await Promise.all([
-            readPackageVersion(new URL("../package.json", import.meta.url)),
-            readPackageVersion(new URL("../package.json", import.meta.resolve("@icqqjs/icqq"))),
+            readPackageVersion(import.meta.url),
+            readPackageVersionFile(
+                new URL("../package.json", import.meta.resolve("@icqqjs/icqq")),
+            ),
         ]);
         return {
             app_name: "onebots ICQQ Adapter",

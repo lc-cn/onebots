@@ -8,12 +8,17 @@ import { ValidationError } from "./errors.js";
  * `import.meta.url`，无需各适配器重复实现 JSON 读取与类型校验。
  */
 export async function readPackageVersion(moduleUrl: string | URL): Promise<string> {
-    const packageUrl = new URL("../package.json", moduleUrl);
+    return readPackageVersionFile(new URL("../package.json", moduleUrl));
+}
+
+/** 读取已解析出的 package.json，供同时报告底层 SDK 版本的适配器使用。 */
+export async function readPackageVersionFile(packageUrl: string | URL): Promise<string> {
+    const resolvedUrl = new URL(packageUrl);
     let metadata: unknown;
     try {
-        metadata = JSON.parse(await readFile(packageUrl, "utf8")) as unknown;
+        metadata = JSON.parse(await readFile(resolvedUrl, "utf8")) as unknown;
     } catch (error) {
-        throw new ValidationError(`无法读取包元数据: ${packageUrl.pathname}`, { cause: error });
+        throw new ValidationError(`无法读取包元数据: ${resolvedUrl.pathname}`, { cause: error });
     }
     if (
         !metadata ||
@@ -22,7 +27,7 @@ export async function readPackageVersion(moduleUrl: string | URL): Promise<strin
         typeof metadata.version !== "string" ||
         !metadata.version.trim()
     ) {
-        throw new ValidationError(`包元数据缺少有效 version: ${packageUrl.pathname}`);
+        throw new ValidationError(`包元数据缺少有效 version: ${resolvedUrl.pathname}`);
     }
     return metadata.version;
 }
