@@ -210,7 +210,7 @@ function projectGroup(
     if (message.chat.type === "private") return undefined;
     return {
         id: context.createId(message.chat.id),
-        name: message.chat.title ?? message.chat.username ?? "",
+        name: message.chat.title ?? "",
     };
 }
 

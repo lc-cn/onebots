@@ -288,7 +288,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
                 const info = await bot.getBotInfo();
                 account.status = AccountStatus.Online;
                 account.nickname = info.displayName;
-                account.avatar = info.pictureUrl;
+                account.avatar = info.pictureUrl ?? "";
                 this.logger.info(`LINE Bot ${info.displayName} 已就绪`);
             } catch (error) {
                 this.logger.error("启动 LINE Bot 失败", error);

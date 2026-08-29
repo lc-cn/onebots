@@ -63,4 +63,21 @@ describe("projectSlackEvent", () => {
             extensions: { slack: { event_type: "canvas_updated" } },
         });
     });
+
+    it("缺少发送者的消息降级为无损 custom notice", () => {
+        const event: SlackEvent = {
+            type: "message",
+            event_ts: "1710000003",
+            channel: "C1",
+            text: "sender missing",
+        };
+        const envelope: SlackWebhookBody = { event_id: "Ev2", event };
+
+        expect(projectSlackEvent(event, envelope, context)).toMatchObject({
+            type: "notice",
+            notice_type: "custom",
+            raw_event: envelope,
+            extensions: { slack: { event_type: "message" } },
+        });
+    });
 });

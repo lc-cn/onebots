@@ -6,6 +6,12 @@ interface ProjectorContext {
     createId(value: string | number): CommonTypes.Id;
 }
 
+interface SlackEventShape {
+    type: string;
+    event_ts?: string;
+    ts?: string;
+}
+
 /** 投影 Slack Events API；未知事件仍以 custom notice 和 raw_event 无损交付。 */
 export function projectSlackEvent(
     event: SlackEvent,
@@ -79,14 +85,18 @@ function projectMessage(
     event: SlackMessage,
     envelope: SlackWebhookBody,
     context: ProjectorContext,
-): CommonEvent.Message<SlackWebhookBody> {
+): CommonEvent.Event<SlackWebhookBody> {
     const channel = event.channel ?? "";
     const isPrivate = channel.startsWith("D");
+    const sender = projectUser(event.user, context);
+    if (!sender) {
+        return notice(envelope, event, context, "custom", extension(event));
+    }
     return {
         ...base(envelope, event, context),
         type: "message",
         message_type: isPrivate ? "private" : "channel",
-        sender: projectUser(event.user, context),
+        sender,
         group: isPrivate ? undefined : projectGroup(channel, context),
         message_id: context.createId(event.ts ?? event.event_ts),
         raw_message: event.text ?? "",
@@ -118,7 +128,7 @@ function projectSegments(event: SlackMessage): CommonTypes.Segment[] {
 
 function notice(
     envelope: SlackWebhookBody,
-    event: SlackEvent,
+    event: SlackEventShape,
     context: ProjectorContext,
     noticeType: CommonEvent.NoticeType,
     fields: Omit<Partial<CommonEvent.Notice<SlackWebhookBody>>, keyof CommonEvent.Base | "type">,
@@ -133,7 +143,7 @@ function notice(
 
 function base(
     envelope: SlackWebhookBody,
-    event: Pick<SlackEvent, "type"> & { event_ts?: string; ts?: string },
+    event: SlackEventShape,
     context: ProjectorContext,
 ): CommonEvent.Base<SlackWebhookBody> {
     const timestamp = unixSecondsToEventMs(event.ts ?? event.event_ts);
@@ -161,7 +171,7 @@ function projectGroup(id: unknown, context: ProjectorContext): CommonTypes.Group
     return typeof id === "string" && id ? { id: context.createId(id), name: "" } : undefined;
 }
 
-function extension(event: SlackEvent): { extensions: { slack: { event_type: string } } } {
+function extension(event: SlackEventShape): { extensions: { slack: { event_type: string } } } {
     return { extensions: { slack: { event_type: event.type } } };
 }
 

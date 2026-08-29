@@ -22,7 +22,11 @@ export interface DiscordMessage extends Omit<DiscordApiMessage, "author"> {
 export type DiscordAttachment = DiscordApiAttachment;
 export type DiscordGuild = DiscordApiGuild;
 export type DiscordChannel = DiscordApiChannel;
-export type DiscordMember = DiscordApiGuildMember;
+/**
+ * 经 Bot 边界校验后的成员。
+ * Discord 的通用负载将 user 标为可选，但 REST 与成员网关事件必须携带用户。
+ */
+export type DiscordMember = Omit<DiscordApiGuildMember, "user"> & { user: DiscordUser };
 
 export function wrapDiscordUser(user: DiscordApiUser): DiscordUser {
     return {
@@ -39,9 +43,12 @@ export function wrapDiscordUser(user: DiscordApiUser): DiscordUser {
 }
 
 export function wrapDiscordMember(member: DiscordApiGuildMember): DiscordMember {
+    if (!member.user) {
+        throw new Error("Discord 成员负载缺少 user");
+    }
     return {
         ...member,
-        user: member.user ? wrapDiscordUser(member.user) : undefined,
+        user: wrapDiscordUser(member.user),
     };
 }
 

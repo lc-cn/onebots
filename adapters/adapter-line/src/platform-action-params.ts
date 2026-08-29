@@ -113,7 +113,9 @@ export function optionalNumber(
 
 export function requireInteger(params: Readonly<Record<string, unknown>>, name: string): number {
     const value = optionalNumber(params, name);
-    if (!Number.isSafeInteger(value)) throw invalidParams(`LINE 参数 ${name} 必须是整数`);
+    if (value === undefined || !Number.isSafeInteger(value)) {
+        throw invalidParams(`LINE 参数 ${name} 必须是整数`);
+    }
     return value;
 }
 

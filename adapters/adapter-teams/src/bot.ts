@@ -222,7 +222,8 @@ export class TeamsBot extends EventEmitter {
                 conversation,
                 async context => {
                     this.captureReference(context);
-                    result = this.references.get(context.activity.conversation.id);
+                    const conversationId = context.activity.conversation?.id;
+                    if (conversationId) result = this.references.get(conversationId);
                 },
             );
             if (!result) {

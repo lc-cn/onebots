@@ -39,11 +39,3 @@ AdapterRegistry.register("discord", DiscordAdapter, {
     author: "凉菜",
     capabilities: discordCapabilities,
 });
-
-declare module "@/adapter.js" {
-    namespace Adapter {
-        interface Configs {
-            discord: DiscordConfig;
-        }
-    }
-}

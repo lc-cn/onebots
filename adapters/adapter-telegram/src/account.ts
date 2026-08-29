@@ -71,7 +71,7 @@ export function createTelegramAccount(
             account.status = AccountStatus.Online;
             const me = bot.getCachedMe();
             account.nickname = me?.username || me?.first_name || "Telegram Bot";
-            account.avatar = undefined;
+            account.avatar = "";
         } catch (error) {
             adapter.logger.error(`启动 Telegram Bot 失败:`, error);
             account.status = AccountStatus.OffLine;

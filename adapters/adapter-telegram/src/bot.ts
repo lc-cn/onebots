@@ -66,7 +66,7 @@ export class TelegramBot extends EventEmitter {
 
         const botConfig: ConstructorParameters<typeof Bot>[1] = {};
 
-        const agent = await createHttpsProxyAgent(this.config.proxy);
+        const agent = this.config.proxy ? await createHttpsProxyAgent(this.config.proxy) : null;
         if (agent) {
             botConfig.client = {
                 baseFetchConfig: {
