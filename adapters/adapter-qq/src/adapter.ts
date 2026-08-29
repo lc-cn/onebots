@@ -1,10 +1,11 @@
-import { createRequire } from "node:module";
 import { MediaFileType, type InteractionEvent } from "@tencent-connect/qqbot-nodejs";
 import {
     Account,
     AccountStatus,
     Adapter,
+    AdapterRegistry,
     BaseApp,
+    readPackageVersion,
     type CommonEvent,
     type CommonTypes,
 } from "onebots";
@@ -22,10 +23,8 @@ import {
 import { resolveIntentMask, type QQConfig } from "./types.js";
 import { QQWebhookHost } from "./webhook-host.js";
 
-const packageMetadata = createRequire(import.meta.url)("../package.json") as {
-    version: string;
-    dependencies: Record<string, string>;
-};
+const appVersion = readPackageVersion(import.meta.url);
+const sdkVersion = readPackageVersion(import.meta.resolve("@tencent-connect/qqbot-nodejs"));
 
 export class QQAdapter extends Adapter<QQClient, "qq"> {
     constructor(app: BaseApp) {
@@ -243,9 +242,9 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
     async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "@onebots/adapter-qq",
-            app_version: packageMetadata.version,
+            app_version: await appVersion,
             impl: "onebots",
-            version: packageMetadata.dependencies["@tencent-connect/qqbot-nodejs"],
+            version: await sdkVersion,
             onebot_version: "12",
         };
     }
@@ -418,3 +417,11 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         };
     }
 }
+
+AdapterRegistry.register("qq", QQAdapter, {
+    name: "qq",
+    displayName: "QQ 官方机器人",
+    description: "腾讯 QQ 开放平台官方机器人适配器，支持 Gateway、Webhook 与 OpenAPI",
+    homepage: "https://q.qq.com/",
+    capabilities: qqCapabilities,
+});
