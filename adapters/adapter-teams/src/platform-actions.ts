@@ -1,176 +1,194 @@
 import { compileTeamsActivity } from "./activity.js";
 import { Activity, ActivityTypes } from "@microsoft/agents-activity";
-import type { TeamsBot } from "./bot.js";
+import { definePlatformActions } from "onebots";
+import type { TeamsBot, TeamsContext } from "./bot.js";
 import { TeamsApiError } from "./errors.js";
 import type { TeamsConversationReference } from "./types.js";
 
-export const TEAMS_PLATFORM_ACTIONS = new Set([
-    "get_conversation_reference",
-    "list_conversation_references",
-    "register_conversation_reference",
-    "create_personal_conversation",
-    "send_adaptive_card",
-    "send_targeted_message",
-    "send_typing",
-    "send_file_consent_card",
-    "send_file_info_card",
-    "complete_file_consent_upload",
-    "get_team_details",
-    "list_team_channels",
-    "get_conversation_member",
-    "list_conversation_members",
-    "list_conversation_members_paged",
-    "add_message_reaction",
-    "remove_message_reaction",
-    "get_meeting_info",
-    "get_meeting_participant",
-    "send_meeting_notification",
-    "call_graph_api",
-]);
+type Params = Readonly<Record<string, unknown>>;
+
+const PLATFORM_ACTIONS = definePlatformActions(
+    {
+        get_conversation_reference: async (bot: TeamsBot, params: Params) =>
+            bot.getConversationReference(requireString(params.conversation_id, "conversation_id")),
+        list_conversation_references: async (bot: TeamsBot) => bot.listConversationReferences(),
+        register_conversation_reference: registerConversationReference,
+        create_personal_conversation: createPersonalConversation,
+        send_adaptive_card: sendAdaptiveCard,
+        send_targeted_message: sendTargetedMessage,
+        send_typing: async (bot: TeamsBot, params: Params) =>
+            bot.sendActivity(conversationId(params), new Activity(ActivityTypes.Typing)),
+        send_file_consent_card: sendFileConsentCard,
+        send_file_info_card: async (bot: TeamsBot, params: Params) =>
+            bot.sendActivity(conversationId(params), fileInfoActivity(params)),
+        complete_file_consent_upload: completeFileConsentUpload,
+        get_team_details: async (bot: TeamsBot, params: Params) =>
+            withConversation(bot, params, context =>
+                context.client.teams.getById(requireString(params.team_id, "team_id")),
+            ),
+        list_team_channels: async (bot: TeamsBot, params: Params) =>
+            withConversation(bot, params, context =>
+                context.client.teams.getConversations(requireString(params.team_id, "team_id")),
+            ),
+        get_conversation_member: async (bot: TeamsBot, params: Params) =>
+            withConversation(bot, params, context =>
+                context.client.conversations.getMemberById(
+                    conversationId(params),
+                    requireString(params.user_id, "user_id"),
+                ),
+            ),
+        list_conversation_members: async (bot: TeamsBot, params: Params) =>
+            withConversation(bot, params, context =>
+                context.client.conversations.getMembers(conversationId(params)),
+            ),
+        list_conversation_members_paged: async (bot: TeamsBot, params: Params) =>
+            withConversation(bot, params, context =>
+                context.client.conversations.getPagedMembers(
+                    conversationId(params),
+                    optionalNumber(params.page_size),
+                    optionalString(params.continuation_token),
+                ),
+            ),
+        add_message_reaction: (bot: TeamsBot, params: Params) =>
+            updateReaction(bot, params, "add"),
+        remove_message_reaction: (bot: TeamsBot, params: Params) =>
+            updateReaction(bot, params, "remove"),
+        get_meeting_info: async (bot: TeamsBot, params: Params) =>
+            withConversation(bot, params, context =>
+                context.client.meetings.getById(requireString(params.meeting_id, "meeting_id")),
+            ),
+        get_meeting_participant: async (bot: TeamsBot, params: Params) =>
+            withConversation(bot, params, context =>
+                context.client.meetings.getParticipant(
+                    requireString(params.meeting_id, "meeting_id"),
+                    requireString(params.aad_object_id, "aad_object_id"),
+                    requireString(params.tenant_id, "tenant_id"),
+                ),
+            ),
+        send_meeting_notification: sendMeetingNotification,
+        call_graph_api: callGraph,
+    },
+    action =>
+        TeamsApiError.invalid(
+            `未实现 Teams 平台动作: ${action}`,
+            "TEAMS_ACTION_UNSUPPORTED",
+            { action },
+        ),
+);
+
+export const TEAMS_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 执行 Microsoft Teams Connector 与 Graph 的显式平台动作。 */
 export async function executeTeamsPlatformAction(
     bot: TeamsBot,
     action: string,
-    params: Readonly<Record<string, unknown>>,
+    params: Params,
 ): Promise<unknown> {
-    if (action === "get_conversation_reference") {
-        return bot.getConversationReference(
-            requireString(params.conversation_id, "conversation_id"),
-        );
-    }
-    if (action === "list_conversation_references") return bot.listConversationReferences();
-    if (action === "register_conversation_reference") {
-        const reference = conversationReferenceValue(params.reference);
-        bot.registerConversationReference(reference);
-        return reference;
-    }
-    if (action === "create_personal_conversation") {
-        const activity = compileTeamsActivity(messageValue(params.message), {
-            resolveUserId: String,
-        });
-        return bot.createPersonalConversation({
-            service_url: requireHttpsUrl(params.service_url, "service_url"),
-            tenant_id: requireString(params.tenant_id, "tenant_id"),
-            aad_object_id: requireString(params.aad_object_id, "aad_object_id"),
-            activity,
-        });
-    }
-    if (action === "call_graph_api") return callGraph(bot, params);
+    return PLATFORM_ACTIONS.execute(bot, action, params);
+}
 
-    const conversationId = requireString(params.conversation_id, "conversation_id");
-    if (action === "send_adaptive_card") {
-        const activity = compileTeamsActivity(
-            [{ type: "adaptive_card", data: { content: objectValue(params.card, "card") } }],
-            { resolveUserId: String },
-        );
-        return bot.sendActivity(conversationId, activity);
-    }
-    if (action === "send_targeted_message") {
-        const activity = compileTeamsActivity(messageValue(params.message), {
-            resolveUserId: String,
-        });
-        activity.entities = [
-            ...(activity.entities || []),
-            { type: "activityTreatment", treatment: "targeted" },
-        ];
-        const userId = optionalString(params.user_id);
-        if (userId) activity.recipient = { id: userId };
-        return bot.sendActivity(conversationId, activity);
-    }
-    if (action === "send_typing") {
-        return bot.sendActivity(conversationId, new Activity(ActivityTypes.Typing));
-    }
-    if (action === "send_file_consent_card") {
-        return bot.sendActivity(
-            conversationId,
-            teamsCard(
-                "application/vnd.microsoft.teams.card.file.consent",
-                {
-                    description: optionalString(params.description) || "",
-                    sizeInBytes: requireNumber(params.size_in_bytes, "size_in_bytes"),
-                    acceptContext: params.accept_context,
-                    declineContext: params.decline_context,
-                },
-                requireString(params.file_name, "file_name"),
-            ),
-        );
-    }
-    if (action === "send_file_info_card") {
-        return bot.sendActivity(conversationId, fileInfoActivity(params));
-    }
-    if (action === "complete_file_consent_upload") {
-        const upload = await bot.uploadFileConsentContent(
-            requireHttpsUrl(params.upload_url, "upload_url"),
-            {
-                source: requireString(params.source, "source"),
-                filename: optionalString(params.file_name),
-                contentType: optionalString(params.content_type),
-            },
-        );
-        const message = await bot.sendActivity(conversationId, fileInfoActivity(params));
-        return { upload, message };
-    }
+async function registerConversationReference(bot: TeamsBot, params: Params) {
+    const reference = conversationReferenceValue(params.reference);
+    bot.registerConversationReference(reference);
+    return reference;
+}
 
-    return bot.withConversation(conversationId, async context => {
-        if (action === "get_team_details") {
-            return context.client.teams.getById(requireString(params.team_id, "team_id"));
-        }
-        if (action === "list_team_channels") {
-            return context.client.teams.getConversations(requireString(params.team_id, "team_id"));
-        }
-        if (action === "get_conversation_member") {
-            return context.client.conversations.getMemberById(
-                conversationId,
-                requireString(params.user_id, "user_id"),
-            );
-        }
-        if (action === "list_conversation_members") {
-            return context.client.conversations.getMembers(conversationId);
-        }
-        if (action === "list_conversation_members_paged") {
-            return context.client.conversations.getPagedMembers(
-                conversationId,
-                optionalNumber(params.page_size),
-                optionalString(params.continuation_token),
-            );
-        }
-        if (action === "add_message_reaction" || action === "remove_message_reaction") {
-            const operation =
-                action === "add_message_reaction"
-                    ? context.client.conversations.addReaction.bind(context.client.conversations)
-                    : context.client.conversations.deleteReaction.bind(
-                          context.client.conversations,
-                      );
-            const reaction = requireString(params.reaction, "reaction") as Parameters<
-                typeof operation
-            >[2];
-            await operation(
-                conversationId,
-                requireString(params.message_id, "message_id"),
-                reaction,
-            );
-            return undefined;
-        }
-        if (action === "get_meeting_info") {
-            return context.client.meetings.getById(requireString(params.meeting_id, "meeting_id"));
-        }
-        if (action === "get_meeting_participant") {
-            return context.client.meetings.getParticipant(
-                requireString(params.meeting_id, "meeting_id"),
-                requireString(params.aad_object_id, "aad_object_id"),
-                requireString(params.tenant_id, "tenant_id"),
-            );
-        }
-        if (action === "send_meeting_notification") {
-            const send = context.client.meetings.sendNotification.bind(context.client.meetings);
-            return send(
-                requireString(params.meeting_id, "meeting_id"),
-                objectValue(params.notification, "notification") as Parameters<typeof send>[1],
-            );
-        }
-        throw TeamsApiError.invalid(`未实现 Teams 平台动作: ${action}`, "TEAMS_ACTION_UNSUPPORTED");
+async function createPersonalConversation(bot: TeamsBot, params: Params) {
+    const activity = compileTeamsActivity(messageValue(params.message), { resolveUserId: String });
+    return bot.createPersonalConversation({
+        service_url: requireHttpsUrl(params.service_url, "service_url"),
+        tenant_id: requireString(params.tenant_id, "tenant_id"),
+        aad_object_id: requireString(params.aad_object_id, "aad_object_id"),
+        activity,
     });
+}
+
+async function sendAdaptiveCard(bot: TeamsBot, params: Params) {
+    const activity = compileTeamsActivity(
+        [{ type: "adaptive_card", data: { content: objectValue(params.card, "card") } }],
+        { resolveUserId: String },
+    );
+    return bot.sendActivity(conversationId(params), activity);
+}
+
+async function sendTargetedMessage(bot: TeamsBot, params: Params) {
+    const activity = compileTeamsActivity(messageValue(params.message), { resolveUserId: String });
+    activity.entities = [
+        ...(activity.entities || []),
+        { type: "activityTreatment", treatment: "targeted" },
+    ];
+    const userId = optionalString(params.user_id);
+    if (userId) activity.recipient = { id: userId };
+    return bot.sendActivity(conversationId(params), activity);
+}
+
+async function sendFileConsentCard(bot: TeamsBot, params: Params) {
+    return bot.sendActivity(
+        conversationId(params),
+        teamsCard(
+            "application/vnd.microsoft.teams.card.file.consent",
+            {
+                description: optionalString(params.description) || "",
+                sizeInBytes: requireNumber(params.size_in_bytes, "size_in_bytes"),
+                acceptContext: params.accept_context,
+                declineContext: params.decline_context,
+            },
+            requireString(params.file_name, "file_name"),
+        ),
+    );
+}
+
+async function completeFileConsentUpload(bot: TeamsBot, params: Params) {
+    const upload = await bot.uploadFileConsentContent(
+        requireHttpsUrl(params.upload_url, "upload_url"),
+        {
+            source: requireString(params.source, "source"),
+            filename: optionalString(params.file_name),
+            contentType: optionalString(params.content_type),
+        },
+    );
+    const message = await bot.sendActivity(conversationId(params), fileInfoActivity(params));
+    return { upload, message };
+}
+
+function withConversation<T>(
+    bot: TeamsBot,
+    params: Params,
+    logic: (context: TeamsContext) => Promise<T>,
+): Promise<T> {
+    return bot.withConversation(conversationId(params), logic);
+}
+
+async function updateReaction(bot: TeamsBot, params: Params, mode: "add" | "remove") {
+    return withConversation(bot, params, async context => {
+        const operation =
+            mode === "add"
+                ? context.client.conversations.addReaction.bind(context.client.conversations)
+                : context.client.conversations.deleteReaction.bind(context.client.conversations);
+        const reaction = requireString(params.reaction, "reaction") as Parameters<
+            typeof operation
+        >[2];
+        await operation(
+            conversationId(params),
+            requireString(params.message_id, "message_id"),
+            reaction,
+        );
+        return undefined;
+    });
+}
+
+async function sendMeetingNotification(bot: TeamsBot, params: Params) {
+    return withConversation(bot, params, context => {
+        const send = context.client.meetings.sendNotification.bind(context.client.meetings);
+        return send(
+            requireString(params.meeting_id, "meeting_id"),
+            objectValue(params.notification, "notification") as Parameters<typeof send>[1],
+        );
+    });
+}
+
+function conversationId(params: Params): string {
+    return requireString(params.conversation_id, "conversation_id");
 }
 
 async function callGraph(
