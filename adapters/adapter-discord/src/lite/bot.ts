@@ -3,9 +3,9 @@
  * 轻量版实现，不依赖 discord.js，支持 Cloudflare Workers
  */
 
-import { EventEmitter } from 'node:events';
-import { DiscordLite, GatewayIntents, type DiscordLiteOptions } from './index.js';
-import type { DiscordREST } from './rest.js';
+import { EventEmitter } from "node:events";
+import { DiscordLite, GatewayIntents, type DiscordLiteOptions } from "./index.js";
+import type { DiscordREST } from "./rest.js";
 import type {
     DiscordApiUser,
     DiscordApiMessage,
@@ -15,10 +15,9 @@ import type {
     DiscordApiGuildMember,
     DiscordRole,
     CreateMessageBody,
-    EditMessageBody,
     GatewayQueryOptions,
     GatewayMemberQueryOptions,
-} from '../types.js';
+} from "../types.js";
 
 export interface DiscordLiteBotConfig {
     /** 账号标识 */
@@ -36,7 +35,7 @@ export interface DiscordLiteBotConfig {
         password?: string;
     };
     /** 运行模式: gateway (Node.js) 或 interactions (Serverless) */
-    mode?: 'gateway' | 'interactions' | 'auto';
+    mode?: "gateway" | "interactions" | "auto";
     /** Gateway Intents (数值或字符串数组) */
     intents?: number | string[];
 }
@@ -47,7 +46,7 @@ export interface DiscordUser extends DiscordApiUser {
     tag: string;
 }
 
-export interface DiscordMessage extends Omit<DiscordApiMessage, 'author'> {
+export interface DiscordMessage extends Omit<DiscordApiMessage, "author"> {
     createdTimestamp: number;
     channel: { id: string; type: number };
     guild?: { id: string; name?: string };
@@ -94,7 +93,7 @@ export class DiscordLiteBot extends EventEmitter {
      * 解析 intents 配置
      */
     private parseIntents(intentsConfig?: number | string[]): number {
-        if (typeof intentsConfig === 'number') {
+        if (typeof intentsConfig === "number") {
             return intentsConfig;
         }
 
@@ -113,23 +112,23 @@ export class DiscordLiteBot extends EventEmitter {
 
         let result = 0;
         const intentMap: Record<string, number> = {
-            'Guilds': GatewayIntents.Guilds,
-            'GuildMembers': GatewayIntents.GuildMembers,
-            'GuildModeration': GatewayIntents.GuildModeration,
-            'GuildEmojisAndStickers': GatewayIntents.GuildEmojisAndStickers,
-            'GuildIntegrations': GatewayIntents.GuildIntegrations,
-            'GuildWebhooks': GatewayIntents.GuildWebhooks,
-            'GuildInvites': GatewayIntents.GuildInvites,
-            'GuildVoiceStates': GatewayIntents.GuildVoiceStates,
-            'GuildPresences': GatewayIntents.GuildPresences,
-            'GuildMessages': GatewayIntents.GuildMessages,
-            'GuildMessageReactions': GatewayIntents.GuildMessageReactions,
-            'GuildMessageTyping': GatewayIntents.GuildMessageTyping,
-            'DirectMessages': GatewayIntents.DirectMessages,
-            'DirectMessageReactions': GatewayIntents.DirectMessageReactions,
-            'DirectMessageTyping': GatewayIntents.DirectMessageTyping,
-            'MessageContent': GatewayIntents.MessageContent,
-            'GuildScheduledEvents': GatewayIntents.GuildScheduledEvents,
+            "Guilds": GatewayIntents.Guilds,
+            "GuildMembers": GatewayIntents.GuildMembers,
+            "GuildModeration": GatewayIntents.GuildModeration,
+            "GuildEmojisAndStickers": GatewayIntents.GuildEmojisAndStickers,
+            "GuildIntegrations": GatewayIntents.GuildIntegrations,
+            "GuildWebhooks": GatewayIntents.GuildWebhooks,
+            "GuildInvites": GatewayIntents.GuildInvites,
+            "GuildVoiceStates": GatewayIntents.GuildVoiceStates,
+            "GuildPresences": GatewayIntents.GuildPresences,
+            "GuildMessages": GatewayIntents.GuildMessages,
+            "GuildMessageReactions": GatewayIntents.GuildMessageReactions,
+            "GuildMessageTyping": GatewayIntents.GuildMessageTyping,
+            "DirectMessages": GatewayIntents.DirectMessages,
+            "DirectMessageReactions": GatewayIntents.DirectMessageReactions,
+            "DirectMessageTyping": GatewayIntents.DirectMessageTyping,
+            "MessageContent": GatewayIntents.MessageContent,
+            "GuildScheduledEvents": GatewayIntents.GuildScheduledEvents,
         };
 
         for (const intent of intentsConfig) {
@@ -145,55 +144,55 @@ export class DiscordLiteBot extends EventEmitter {
      * 设置事件监听器
      */
     private setupEventListeners(): void {
-        this.client.on('ready', (user: unknown) => {
+        this.client.on("ready", (user: unknown) => {
             this.ready = true;
             this.user = this.wrapUser(user as DiscordApiUser);
-            this.emit('ready', this.user);
+            this.emit("ready", this.user);
         });
 
-        this.client.on('messageCreate', (message: unknown) => {
-            this.emit('messageCreate', this.wrapMessage(message as DiscordApiMessage));
+        this.client.on("messageCreate", (message: unknown) => {
+            this.emit("messageCreate", this.wrapMessage(message as DiscordApiMessage));
         });
 
-        this.client.on('messageUpdate', (message: unknown) => {
-            this.emit('messageUpdate', null, this.wrapMessage(message as DiscordApiMessage));
+        this.client.on("messageUpdate", (message: unknown) => {
+            this.emit("messageUpdate", null, this.wrapMessage(message as DiscordApiMessage));
         });
 
-        this.client.on('messageDelete', (data: unknown) => {
-            this.emit('messageDelete', data);
+        this.client.on("messageDelete", (data: unknown) => {
+            this.emit("messageDelete", data);
         });
 
-        this.client.on('guildCreate', (guild: unknown) => {
+        this.client.on("guildCreate", (guild: unknown) => {
             const g = guild as DiscordApiGuild;
             this.guilds.set(g.id, g);
-            this.emit('guildCreate', guild);
+            this.emit("guildCreate", guild);
         });
 
-        this.client.on('guildDelete', (guild: unknown) => {
+        this.client.on("guildDelete", (guild: unknown) => {
             const g = guild as DiscordApiGuild;
             this.guilds.delete(g.id);
-            this.emit('guildDelete', guild);
+            this.emit("guildDelete", guild);
         });
 
-        this.client.on('guildMemberAdd', (member: unknown) => {
-            this.emit('guildMemberAdd', member);
+        this.client.on("guildMemberAdd", (member: unknown) => {
+            this.emit("guildMemberAdd", member);
         });
 
-        this.client.on('guildMemberRemove', (member: unknown) => {
-            this.emit('guildMemberRemove', member);
+        this.client.on("guildMemberRemove", (member: unknown) => {
+            this.emit("guildMemberRemove", member);
         });
 
-        this.client.on('interactionCreate', (interaction: unknown) => {
-            this.emit('interactionCreate', interaction);
+        this.client.on("interactionCreate", (interaction: unknown) => {
+            this.emit("interactionCreate", interaction);
         });
 
-        this.client.on('error', (error: unknown) => {
-            this.emit('error', error);
+        this.client.on("error", (error: unknown) => {
+            this.emit("error", error);
         });
 
-        this.client.on('close', (code: unknown, reason: unknown) => {
+        this.client.on("close", (code: unknown, reason: unknown) => {
             this.ready = false;
-            this.emit('close', code, reason);
+            this.emit("close", code, reason);
         });
     }
 
@@ -208,7 +207,7 @@ export class DiscordLiteBot extends EventEmitter {
         try {
             await this.client.start();
         } catch (error) {
-            this.emit('error', error);
+            this.emit("error", error);
             throw error;
         }
     }
@@ -219,7 +218,7 @@ export class DiscordLiteBot extends EventEmitter {
     async stop(): Promise<void> {
         this.ready = false;
         this.client.stop();
-        this.emit('stopped');
+        this.emit("stopped");
     }
 
     /**
@@ -245,9 +244,9 @@ export class DiscordLiteBot extends EventEmitter {
      */
     async sendMessage(
         channelId: string,
-        content: string | CreateMessageBody
+        content: string | CreateMessageBody,
     ): Promise<DiscordMessage> {
-        const body = typeof content === 'string' ? { content } : content;
+        const body = typeof content === "string" ? { content } : content;
         const result = await this.getREST().createMessage(channelId, body);
         return this.wrapMessage(result);
     }
@@ -255,13 +254,10 @@ export class DiscordLiteBot extends EventEmitter {
     /**
      * 发送私信
      */
-    async sendDM(
-        userId: string,
-        content: string | CreateMessageBody
-    ): Promise<DiscordMessage> {
+    async sendDM(userId: string, content: string | CreateMessageBody): Promise<DiscordMessage> {
         // 首先创建 DM 频道
-        const dmChannel = await this.getREST().request<DiscordApiChannel>('/users/@me/channels', {
-            method: 'POST',
+        const dmChannel = await this.getREST().request<DiscordApiChannel>("/users/@me/channels", {
+            method: "POST",
             body: { recipient_id: userId },
         });
 
@@ -271,7 +267,10 @@ export class DiscordLiteBot extends EventEmitter {
     /**
      * 发送 Embed 消息
      */
-    async sendEmbed(channelId: string, embeds: CreateMessageBody['embeds']): Promise<DiscordMessage> {
+    async sendEmbed(
+        channelId: string,
+        embeds: CreateMessageBody["embeds"],
+    ): Promise<DiscordMessage> {
         return this.sendMessage(channelId, { embeds });
     }
 
@@ -281,7 +280,7 @@ export class DiscordLiteBot extends EventEmitter {
     async sendWithAttachments(
         channelId: string,
         content: string,
-        _attachments: unknown[]
+        _attachments: unknown[],
     ): Promise<DiscordMessage> {
         // 轻量版暂不支持附件上传，仅发送文本
         return this.sendMessage(channelId, content);
@@ -290,7 +289,11 @@ export class DiscordLiteBot extends EventEmitter {
     /**
      * 编辑消息
      */
-    async editMessage(channelId: string, messageId: string, content: string): Promise<DiscordMessage> {
+    async editMessage(
+        channelId: string,
+        messageId: string,
+        content: string,
+    ): Promise<DiscordMessage> {
         const result = await this.getREST().editMessage(channelId, messageId, content);
         return this.wrapMessage(result);
     }
@@ -313,7 +316,11 @@ export class DiscordLiteBot extends EventEmitter {
     /**
      * 获取消息历史
      */
-    async getMessageHistory(channelId: string, limit: number = 50, before?: string): Promise<Map<string, DiscordMessage>> {
+    async getMessageHistory(
+        channelId: string,
+        limit: number = 50,
+        before?: string,
+    ): Promise<Map<string, DiscordMessage>> {
         const query: GatewayQueryOptions = { limit };
         if (before) query.before = before;
         const messages = await this.getREST().getMessages(channelId, query);
@@ -329,20 +336,31 @@ export class DiscordLiteBot extends EventEmitter {
      */
     async addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
         const encodedEmoji = encodeURIComponent(emoji);
-        await this.getREST().request(`/channels/${channelId}/messages/${messageId}/reactions/${encodedEmoji}/@me`, {
-            method: 'PUT',
-        });
+        await this.getREST().request(
+            `/channels/${channelId}/messages/${messageId}/reactions/${encodedEmoji}/@me`,
+            {
+                method: "PUT",
+            },
+        );
     }
 
     /**
      * 移除消息反应
      */
-    async removeReaction(channelId: string, messageId: string, emoji: string, userId?: string): Promise<void> {
+    async removeReaction(
+        channelId: string,
+        messageId: string,
+        emoji: string,
+        userId?: string,
+    ): Promise<void> {
         const encodedEmoji = encodeURIComponent(emoji);
-        const target = userId || '@me';
-        await this.getREST().request(`/channels/${channelId}/messages/${messageId}/reactions/${encodedEmoji}/${target}`, {
-            method: 'DELETE',
-        });
+        const target = userId || "@me";
+        await this.getREST().request(
+            `/channels/${channelId}/messages/${messageId}/reactions/${encodedEmoji}/${target}`,
+            {
+                method: "DELETE",
+            },
+        );
     }
 
     // ============================================
@@ -427,7 +445,7 @@ export class DiscordLiteBot extends EventEmitter {
     async banMember(
         guildId: string,
         userId: string,
-        options?: { reason?: string; deleteMessageSeconds?: number }
+        options?: { reason?: string; deleteMessageSeconds?: number },
     ): Promise<void> {
         await this.getREST().banGuildMember(guildId, userId, {
             delete_message_seconds: options?.deleteMessageSeconds,
@@ -439,17 +457,22 @@ export class DiscordLiteBot extends EventEmitter {
      */
     async unbanMember(guildId: string, userId: string, _reason?: string): Promise<void> {
         await this.getREST().request(`/guilds/${guildId}/bans/${userId}`, {
-            method: 'DELETE',
+            method: "DELETE",
         });
     }
 
     /**
      * 禁言成员（超时）
      */
-    async timeoutMember(guildId: string, userId: string, duration: number, _reason?: string): Promise<DiscordMember> {
+    async timeoutMember(
+        guildId: string,
+        userId: string,
+        duration: number,
+        _reason?: string,
+    ): Promise<DiscordMember> {
         const until = new Date(Date.now() + duration * 1000).toISOString();
         return this.getREST().request<DiscordMember>(`/guilds/${guildId}/members/${userId}`, {
-            method: 'PATCH',
+            method: "PATCH",
             body: { communication_disabled_until: until },
         });
     }
@@ -459,7 +482,7 @@ export class DiscordLiteBot extends EventEmitter {
      */
     async removeTimeout(guildId: string, userId: string, _reason?: string): Promise<DiscordMember> {
         return this.getREST().request<DiscordMember>(`/guilds/${guildId}/members/${userId}`, {
-            method: 'PATCH',
+            method: "PATCH",
             body: { communication_disabled_until: null },
         });
     }
@@ -467,9 +490,14 @@ export class DiscordLiteBot extends EventEmitter {
     /**
      * 修改成员昵称
      */
-    async setMemberNickname(guildId: string, userId: string, nickname: string | null, _reason?: string): Promise<DiscordMember> {
+    async setMemberNickname(
+        guildId: string,
+        userId: string,
+        nickname: string | null,
+        _reason?: string,
+    ): Promise<DiscordMember> {
         return this.getREST().request<DiscordMember>(`/guilds/${guildId}/members/${userId}`, {
-            method: 'PATCH',
+            method: "PATCH",
             body: { nick: nickname },
         });
     }
@@ -477,9 +505,14 @@ export class DiscordLiteBot extends EventEmitter {
     /**
      * 添加角色
      */
-    async addRole(guildId: string, userId: string, roleId: string, _reason?: string): Promise<DiscordMember> {
+    async addRole(
+        guildId: string,
+        userId: string,
+        roleId: string,
+        _reason?: string,
+    ): Promise<DiscordMember> {
         await this.getREST().request(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
-            method: 'PUT',
+            method: "PUT",
         });
         return this.getGuildMember(guildId, userId);
     }
@@ -487,9 +520,14 @@ export class DiscordLiteBot extends EventEmitter {
     /**
      * 移除角色
      */
-    async removeRole(guildId: string, userId: string, roleId: string, _reason?: string): Promise<DiscordMember> {
+    async removeRole(
+        guildId: string,
+        userId: string,
+        roleId: string,
+        _reason?: string,
+    ): Promise<DiscordMember> {
         await this.getREST().request(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
-            method: 'DELETE',
+            method: "DELETE",
         });
         return this.getGuildMember(guildId, userId);
     }
@@ -513,7 +551,9 @@ export class DiscordLiteBot extends EventEmitter {
      * 获取服务器频道列表
      */
     async getGuildChannels(guildId: string): Promise<Map<string, DiscordChannel>> {
-        const channels = await this.getREST().request<DiscordApiChannel[]>(`/guilds/${guildId}/channels`);
+        const channels = await this.getREST().request<DiscordApiChannel[]>(
+            `/guilds/${guildId}/channels`,
+        );
         const map = new Map<string, DiscordChannel>();
         for (const channel of channels) {
             map.set(channel.id, channel);
@@ -527,10 +567,10 @@ export class DiscordLiteBot extends EventEmitter {
     async createTextChannel(
         guildId: string,
         name: string,
-        options?: { topic?: string; parent?: string; nsfw?: boolean }
+        options?: { topic?: string; parent?: string; nsfw?: boolean },
     ): Promise<DiscordChannel> {
         return this.getREST().request<DiscordChannel>(`/guilds/${guildId}/channels`, {
-            method: 'POST',
+            method: "POST",
             body: {
                 name,
                 type: 0, // GUILD_TEXT
@@ -546,7 +586,7 @@ export class DiscordLiteBot extends EventEmitter {
      */
     async deleteChannel(channelId: string): Promise<void> {
         await this.getREST().request(`/channels/${channelId}`, {
-            method: 'DELETE',
+            method: "DELETE",
         });
     }
 
@@ -555,10 +595,10 @@ export class DiscordLiteBot extends EventEmitter {
      */
     async updateChannel(
         channelId: string,
-        options: { name?: string; topic?: string; nsfw?: boolean; parent?: string }
+        options: { name?: string; topic?: string; nsfw?: boolean; parent?: string },
     ): Promise<DiscordChannel> {
         return this.getREST().request<DiscordChannel>(`/channels/${channelId}`, {
-            method: 'PATCH',
+            method: "PATCH",
             body: {
                 name: options.name,
                 topic: options.topic,
@@ -597,10 +637,16 @@ export class DiscordLiteBot extends EventEmitter {
      */
     async createRole(
         guildId: string,
-        options: { name: string; color?: number; hoist?: boolean; mentionable?: boolean; permissions?: bigint }
+        options: {
+            name: string;
+            color?: number;
+            hoist?: boolean;
+            mentionable?: boolean;
+            permissions?: bigint;
+        },
     ): Promise<DiscordRole> {
         return this.getREST().request<DiscordRole>(`/guilds/${guildId}/roles`, {
-            method: 'POST',
+            method: "POST",
             body: {
                 name: options.name,
                 color: options.color,
@@ -616,7 +662,7 @@ export class DiscordLiteBot extends EventEmitter {
      */
     async deleteRole(guildId: string, roleId: string): Promise<void> {
         await this.getREST().request(`/guilds/${guildId}/roles/${roleId}`, {
-            method: 'DELETE',
+            method: "DELETE",
         });
     }
 
@@ -641,7 +687,7 @@ export class DiscordLiteBot extends EventEmitter {
     /**
      * 获取当前运行模式
      */
-    getMode(): 'gateway' | 'interactions' {
+    getMode(): "gateway" | "interactions" {
         return this.client.getMode();
     }
 
@@ -655,10 +701,10 @@ export class DiscordLiteBot extends EventEmitter {
                 if (user.avatar) {
                     return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
                 }
-                const defaultAvatar = parseInt(user.discriminator || '0') % 5;
+                const defaultAvatar = parseInt(user.discriminator || "0") % 5;
                 return `https://cdn.discordapp.com/embed/avatars/${defaultAvatar}.png`;
             },
-            tag: `${user.username}#${user.discriminator || '0'}`,
+            tag: `${user.username}#${user.discriminator || "0"}`,
         };
     }
 

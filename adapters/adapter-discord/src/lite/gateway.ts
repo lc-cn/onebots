@@ -3,12 +3,11 @@
  * 用于 Node.js 环境
  */
 
-import { EventEmitter } from 'node:events';
-import { DiscordREST } from './rest.js';
-import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from 'onebots';
-import type { Agent } from 'http';
+import { EventEmitter } from "node:events";
+import { DiscordREST } from "./rest.js";
+import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from "onebots";
+import type { Agent } from "http";
 import type {
-    DiscordApiUser,
     DiscordApiGuild,
     DiscordApiGuildMember,
     DiscordApiMessage,
@@ -16,7 +15,7 @@ import type {
     DiscordInteraction,
     GatewayHelloData,
     GatewayReadyData,
-} from '../types.js';
+} from "../types.js";
 
 // Gateway Opcodes
 export enum GatewayOpcodes {
@@ -127,7 +126,7 @@ export class DiscordGateway extends EventEmitter {
                 await this.connectToGateway(`${url}?v=10&encoding=json`);
             },
             RetryPresets.websocket,
-            { logger: console }
+            {},
         );
     }
 
@@ -143,7 +142,7 @@ export class DiscordGateway extends EventEmitter {
      */
     private async connectToGateway(url: string): Promise<void> {
         // 动态导入 ws
-        const { WebSocket } = await import('ws');
+        const { WebSocket } = await import("ws");
 
         // 如果有代理，使用共享代理工具
         const wsOptions: { agent?: Agent } = {};
@@ -151,52 +150,45 @@ export class DiscordGateway extends EventEmitter {
             const agent = await createProxyAgent({ url: this.proxyUrl }, true);
             if (agent) {
                 wsOptions.agent = agent as Agent;
-                console.debug(`[Gateway] 已配置代理`);
-            } else {
-                console.warn('[Gateway] 代理 agent 未安装，将直接连接');
             }
         }
 
         return new Promise((resolve, reject) => {
             this.ws = new WebSocket(url, wsOptions) as unknown as WsWebSocket;
 
-            this.ws.on('open', () => {
-                console.debug('[Gateway] WebSocket 已连接');
-            });
-
-            this.ws.on('message', (data: unknown) => {
+            this.ws.on("message", (data: unknown) => {
                 const buffer = data as Buffer;
                 this.handleMessage(JSON.parse(buffer.toString()));
             });
 
-            this.ws.on('close', (code: unknown, reason: unknown) => {
+            this.ws.on("close", (code: unknown, reason: unknown) => {
                 const closeCode = code as number;
                 const closeReason = (reason as Buffer).toString();
-                console.debug(`[Gateway] WebSocket 关闭: ${closeCode} - ${closeReason}`);
                 this.cleanup();
-                this.emit('close', closeCode, closeReason);
+                this.emit("close", closeCode, closeReason);
 
                 // 使用 ConnectionManager 管理重连，支持指数退避
                 if (closeCode !== 1000 && closeCode !== 4004) {
-                    this.connectionManager.scheduleReconnect(new Error(`WebSocket closed with code ${closeCode}`));
+                    this.connectionManager.scheduleReconnect(
+                        new Error(`WebSocket closed with code ${closeCode}`),
+                    );
                 }
             });
 
-            this.ws.on('error', (error: unknown) => {
+            this.ws.on("error", (error: unknown) => {
                 const err = error instanceof Error ? error : new Error(String(error));
-                console.error('[Gateway] WebSocket 错误:', err);
-                this.emit('error', err);
+                this.emit("error", err);
                 reject(err);
             });
 
             // 设置超时
             const timeout = setTimeout(() => {
                 if (!this.isReady) {
-                    reject(new Error('Gateway 连接超时'));
+                    reject(new Error("Gateway 连接超时"));
                 }
             }, 30000);
 
-            this.once('ready', () => {
+            this.once("ready", () => {
                 clearTimeout(timeout);
                 resolve();
             });
@@ -236,13 +228,11 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case GatewayOpcodes.Reconnect:
-                console.debug('[Gateway] 收到重连请求');
                 this.cleanup();
-                this.connectionManager.scheduleReconnect(new Error('Discord requested reconnect'));
+                this.connectionManager.scheduleReconnect(new Error("Discord requested reconnect"));
                 break;
 
             case GatewayOpcodes.InvalidSession: {
-                console.warn('[Gateway] 会话无效，重新识别');
                 const isResumable = d as boolean;
                 if (isResumable) {
                     // 可恢复，尝试 resume
@@ -261,56 +251,58 @@ export class DiscordGateway extends EventEmitter {
      * 处理 Dispatch 事件
      */
     private handleDispatch(eventName: string, data: unknown) {
+        // 所有 Gateway Dispatch 都先走统一原始事件通道；具名事件只是便捷别名。
+        // Adapter 以此保证 Discord 新增事件不会在 SDK 更新前被静默丢弃。
+        this.emit("dispatch", eventName, data);
         switch (eventName) {
-            case 'READY': {
+            case "READY": {
                 const readyData = data as GatewayReadyData;
                 this.sessionId = readyData.session_id;
                 this.resumeGatewayUrl = readyData.resume_gateway_url;
                 this.isReady = true;
-                this.emit('ready', readyData.user);
+                this.emit("ready", readyData.user);
                 break;
             }
 
-            case 'RESUMED':
-                console.debug('[Gateway] 会话已恢复');
-                this.emit('resumed');
+            case "RESUMED":
+                this.emit("resumed");
                 break;
 
-            case 'MESSAGE_CREATE':
-                this.emit('messageCreate', data as DiscordApiMessage);
+            case "MESSAGE_CREATE":
+                this.emit("messageCreate", data as DiscordApiMessage);
                 break;
 
-            case 'MESSAGE_UPDATE':
-                this.emit('messageUpdate', data as DiscordApiMessage);
+            case "MESSAGE_UPDATE":
+                this.emit("messageUpdate", data as DiscordApiMessage);
                 break;
 
-            case 'MESSAGE_DELETE':
-                this.emit('messageDelete', data as DiscordMessageDeleteData);
+            case "MESSAGE_DELETE":
+                this.emit("messageDelete", data as DiscordMessageDeleteData);
                 break;
 
-            case 'GUILD_CREATE':
-                this.emit('guildCreate', data as DiscordApiGuild);
+            case "GUILD_CREATE":
+                this.emit("guildCreate", data as DiscordApiGuild);
                 break;
 
-            case 'GUILD_DELETE':
-                this.emit('guildDelete', data as DiscordApiGuild);
+            case "GUILD_DELETE":
+                this.emit("guildDelete", data as DiscordApiGuild);
                 break;
 
-            case 'GUILD_MEMBER_ADD':
-                this.emit('guildMemberAdd', data as DiscordApiGuildMember);
+            case "GUILD_MEMBER_ADD":
+                this.emit("guildMemberAdd", data as DiscordApiGuildMember);
                 break;
 
-            case 'GUILD_MEMBER_REMOVE':
-                this.emit('guildMemberRemove', data as DiscordApiGuildMember);
+            case "GUILD_MEMBER_REMOVE":
+                this.emit("guildMemberRemove", data as DiscordApiGuildMember);
                 break;
 
-            case 'INTERACTION_CREATE':
-                this.emit('interactionCreate', data as DiscordInteraction);
+            case "INTERACTION_CREATE":
+                this.emit("interactionCreate", data as DiscordInteraction);
                 break;
 
             default:
-                // 发送通用事件
-                this.emit('dispatch', eventName, data);
+                // 原始 dispatch 已在 switch 前发送。
+                break;
         }
     }
 
@@ -324,9 +316,9 @@ export class DiscordGateway extends EventEmitter {
                 token: this.token,
                 intents: this.intents,
                 properties: {
-                    os: typeof process !== 'undefined' ? process.platform : 'unknown',
-                    browser: 'onebots-lite',
-                    device: 'onebots-lite',
+                    os: typeof process !== "undefined" ? process.platform : "unknown",
+                    browser: "onebots-lite",
+                    device: "onebots-lite",
                 },
             },
         });

@@ -1,5 +1,21 @@
 import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
 
+const manageMessages = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["MANAGE_MESSAGES"],
+};
+const manageRoles = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["MANAGE_ROLES"],
+};
+const manageThreads = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["MANAGE_THREADS"],
+};
+
 /** Discord REST/Gateway 实现当前可用的能力。 */
 export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
@@ -28,6 +44,68 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         },
         set_group_card: { support: "native", availability: "context" },
         send_group_message_reaction: { support: "native" },
+        ban_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["BAN_MEMBERS"],
+        },
+        unban_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["BAN_MEMBERS"],
+        },
+        get_guild_bans: {
+            support: "native",
+            availability: "permission",
+            permissions: ["BAN_MEMBERS"],
+        },
+        get_guild_roles: { support: "native" },
+        create_guild_role: manageRoles,
+        update_guild_role: manageRoles,
+        delete_guild_role: manageRoles,
+        add_guild_member_role: manageRoles,
+        remove_guild_member_role: manageRoles,
+        bulk_delete_messages: manageMessages,
+        crosspost_message: {
+            support: "native",
+            availability: "permission",
+            permissions: ["SEND_MESSAGES"],
+        },
+        get_channel_pins: { support: "native" },
+        pin_message: {
+            support: "native",
+            availability: "permission",
+            permissions: ["PIN_MESSAGES"],
+        },
+        unpin_message: {
+            support: "native",
+            availability: "permission",
+            permissions: ["PIN_MESSAGES"],
+        },
+        trigger_typing: { support: "native" },
+        create_thread: manageThreads,
+        join_thread: { support: "native" },
+        leave_thread: { support: "native" },
+        add_thread_member: { support: "native" },
+        remove_thread_member: manageThreads,
+        list_thread_members: { support: "native" },
+        get_active_threads: { support: "native" },
+        get_channel_invites: {
+            support: "native",
+            availability: "permission",
+            permissions: ["MANAGE_CHANNELS"],
+        },
+        create_channel_invite: {
+            support: "native",
+            availability: "permission",
+            permissions: ["CREATE_INSTANT_INVITE"],
+        },
+        delete_invite: {
+            support: "native",
+            availability: "permission",
+            permissions: ["MANAGE_CHANNELS"],
+        },
+        get_reaction_users: { support: "native" },
         get_guild_info: { support: "native" },
         get_guild_list: { support: "native" },
         get_guild_member_info: { support: "native" },
@@ -70,6 +148,15 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         message: { support: "native", scenes: ["private", "group", "channel"] },
         group_member_increase: { support: "native", scenes: ["group"] },
         group_member_decrease: { support: "native", scenes: ["group"] },
+        message_updated: { support: "native" },
+        message_deleted: { support: "native" },
+        reaction_added: { support: "native" },
+        reaction_removed: { support: "native" },
+        interaction: { support: "native" },
+        native_dispatch: {
+            support: "native",
+            note: "所有未标准化 Gateway Dispatch 以 custom notice 和 raw_event 无损交付",
+        },
     },
     segments: {
         text: { support: "native", direction: "both" },
@@ -79,6 +166,8 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         audio: { support: "native", direction: "both" },
         video: { support: "native", direction: "both" },
         embed: { support: "native", direction: "send" },
+        reply: { support: "native", direction: "receive" },
+        sticker: { support: "native", direction: "receive" },
     },
     transports: {
         gateway: { support: "native", mode: "websocket" },

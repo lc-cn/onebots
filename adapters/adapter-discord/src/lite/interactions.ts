@@ -3,16 +3,15 @@
  * 用于 Cloudflare Workers / Vercel 等 Serverless 环境
  */
 
-import { DiscordREST } from './rest.js';
+import { DiscordREST } from "./rest.js";
 import type {
     DiscordInteraction,
     DiscordInteractionResponse,
     DiscordInteractionCallbackData,
-    DiscordEmbed,
     DiscordMessageComponent,
     CreateMessageBody,
     EditMessageBody,
-} from '../types.js';
+} from "../types.js";
 
 // Interaction Types
 export enum InteractionType {
@@ -54,7 +53,7 @@ export async function verifyInteractionSignature(
     publicKey: string,
     signature: string,
     timestamp: string,
-    body: string
+    body: string,
 ): Promise<boolean> {
     try {
         // 将 hex 字符串转换为 Uint8Array
@@ -69,21 +68,16 @@ export async function verifyInteractionSignature(
 
         // 使用 Web Crypto API（兼容 Node.js 和 Cloudflare Workers）
         const cryptoKey = await crypto.subtle.importKey(
-            'raw',
+            "raw",
             publicKeyBytes,
-            { name: 'Ed25519', namedCurve: 'Ed25519' },
+            { name: "Ed25519", namedCurve: "Ed25519" },
             false,
-            ['verify']
+            ["verify"],
         );
 
-        return await crypto.subtle.verify(
-            'Ed25519',
-            cryptoKey,
-            signatureBytes,
-            messageBytes
-        );
-    } catch (error) {
-        console.error('签名验证失败:', error);
+        return await crypto.subtle.verify("Ed25519", cryptoKey, signatureBytes, messageBytes);
+    } catch {
+        // 外部签名或公钥格式无效属于正常鉴权失败，由调用方统一返回 401。
         return false;
     }
 }
@@ -132,23 +126,23 @@ export class InteractionsHandler {
      */
     async handleRequest(request: Request): Promise<Response> {
         // 验证签名
-        const signature = request.headers.get('x-signature-ed25519');
-        const timestamp = request.headers.get('x-signature-timestamp');
+        const signature = request.headers.get("x-signature-ed25519");
+        const timestamp = request.headers.get("x-signature-timestamp");
         const body = await request.text();
 
         if (!signature || !timestamp) {
-            return new Response('Missing signature', { status: 401 });
+            return new Response("Missing signature", { status: 401 });
         }
 
         const isValid = await verifyInteractionSignature(
             this.publicKey,
             signature,
             timestamp,
-            body
+            body,
         );
 
         if (!isValid) {
-            return new Response('Invalid signature', { status: 401 });
+            return new Response("Invalid signature", { status: 401 });
         }
 
         // 解析并处理 Interaction
@@ -156,7 +150,7 @@ export class InteractionsHandler {
         const response = await this.handleInteraction(interaction);
 
         return new Response(JSON.stringify(response), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { "Content-Type": "application/json" },
         });
     }
 
@@ -177,7 +171,7 @@ export class InteractionsHandler {
             if (handler) {
                 return handler(interaction);
             }
-            return this.defaultResponse('命令未找到');
+            return this.defaultResponse("命令未找到");
         }
 
         // 消息组件
@@ -188,7 +182,7 @@ export class InteractionsHandler {
             // 尝试前缀匹配
             if (!handler) {
                 for (const [key, h] of this.handlers) {
-                    if (key.startsWith('component:') && data.custom_id?.startsWith(key.slice(10))) {
+                    if (key.startsWith("component:") && data.custom_id?.startsWith(key.slice(10))) {
                         handler = h;
                         break;
                     }
@@ -198,7 +192,7 @@ export class InteractionsHandler {
             if (handler) {
                 return handler(interaction);
             }
-            return this.defaultResponse('组件处理器未找到');
+            return this.defaultResponse("组件处理器未找到");
         }
 
         // 模态框提交
@@ -207,7 +201,7 @@ export class InteractionsHandler {
             if (handler) {
                 return handler(interaction);
             }
-            return this.defaultResponse('模态框处理器未找到');
+            return this.defaultResponse("模态框处理器未找到");
         }
 
         // 自动补全
@@ -222,7 +216,7 @@ export class InteractionsHandler {
             };
         }
 
-        return this.defaultResponse('未知的 Interaction 类型');
+        return this.defaultResponse("未知的 Interaction 类型");
     }
 
     /**
@@ -253,15 +247,16 @@ export class InteractionsHandler {
      */
     static messageResponse(
         content: string | CreateMessageBody,
-        ephemeral = false
+        ephemeral = false,
     ): DiscordInteractionResponse {
-        const data: DiscordInteractionCallbackData = typeof content === 'string'
-            ? { content }
-            : {
-                content: content.content,
-                embeds: content.embeds,
-                components: content.components,
-            };
+        const data: DiscordInteractionCallbackData =
+            typeof content === "string"
+                ? { content }
+                : {
+                      content: content.content,
+                      embeds: content.embeds,
+                      components: content.components,
+                  };
         return {
             type: InteractionCallbackType.ChannelMessageWithSource,
             data: {
@@ -275,13 +270,14 @@ export class InteractionsHandler {
      * 创建更新消息响应
      */
     static updateResponse(content: string | EditMessageBody): DiscordInteractionResponse {
-        const data: DiscordInteractionCallbackData = typeof content === 'string'
-            ? { content }
-            : {
-                content: content.content,
-                embeds: content.embeds,
-                components: content.components,
-            };
+        const data: DiscordInteractionCallbackData =
+            typeof content === "string"
+                ? { content }
+                : {
+                      content: content.content,
+                      embeds: content.embeds,
+                      components: content.components,
+                  };
         return {
             type: InteractionCallbackType.UpdateMessage,
             data,
@@ -291,7 +287,11 @@ export class InteractionsHandler {
     /**
      * 创建模态框响应
      */
-    static modalResponse(customId: string, title: string, components: DiscordMessageComponent[]): DiscordInteractionResponse {
+    static modalResponse(
+        customId: string,
+        title: string,
+        components: DiscordMessageComponent[],
+    ): DiscordInteractionResponse {
         return {
             type: InteractionCallbackType.Modal,
             data: {
@@ -316,7 +316,7 @@ export class InteractionsHandler {
         return this.rest.editOriginalInteractionResponse(
             this.applicationId,
             interactionToken,
-            content
+            content,
         );
     }
 
@@ -324,10 +324,6 @@ export class InteractionsHandler {
      * 发送后续消息
      */
     async sendFollowup(interactionToken: string, content: CreateMessageBody) {
-        return this.rest.createFollowupMessage(
-            this.applicationId,
-            interactionToken,
-            content
-        );
+        return this.rest.createFollowupMessage(this.applicationId, interactionToken, content);
     }
 }

@@ -27,15 +27,15 @@ npm install https-proxy-agent
 
 ```yaml
 discord.your_bot_id:
-  token: 'your_discord_bot_token'  # Discord Bot Token，必填
-  
+  token: "your_discord_bot_token" # Discord Bot Token，必填
+
   # 代理配置（可选）
   proxy:
     url: "http://127.0.0.1:7890"
     # username: "user"  # 可选
     # password: "pass"  # 可选
-  
-  intents:  # 可选，Gateway Intents
+
+  intents: # 可选，Gateway Intents
     - Guilds
     - GuildMessages
     - GuildMembers
@@ -43,11 +43,11 @@ discord.your_bot_id:
     - DirectMessages
     - DirectMessageReactions
     - MessageContent
-  presence:  # 可选，机器人状态
-    status: online  # online, idle, dnd, invisible
+  presence: # 可选，机器人状态
+    status: online # online, idle, dnd, invisible
     activities:
-      - name: '正在运行 onebots'
-        type: 0  # 0: Playing, 1: Streaming, 2: Listening, 3: Watching, 5: Competing
+      - name: "正在运行 onebots"
+        type: 0 # 0: Playing, 1: Streaming, 2: Listening, 3: Watching, 5: Competing
 ```
 
 ## 独立使用（不依赖 onebots）
@@ -55,23 +55,23 @@ discord.your_bot_id:
 ### Node.js Gateway 模式
 
 ```typescript
-import { DiscordLite, GatewayIntents } from '@onebots/adapter-discord/lite';
+import { DiscordLite, GatewayIntents } from "@onebots/adapter-discord/lite";
 
 const client = new DiscordLite({
-    token: process.env.DISCORD_TOKEN,
-    intents: GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.MessageContent,
-    mode: 'gateway',
-    proxy: { url: 'http://127.0.0.1:7890' },  // 可选
+  token: process.env.DISCORD_TOKEN,
+  intents: GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.MessageContent,
+  mode: "gateway",
+  proxy: { url: "http://127.0.0.1:7890" }, // 可选
 });
 
-client.on('ready', (user) => {
-    console.log(`已登录为 ${user.username}`);
+client.on("ready", user => {
+  console.log(`已登录为 ${user.username}`);
 });
 
-client.on('messageCreate', async (message) => {
-    if (message.content === '!ping') {
-        await client.sendMessage(message.channel_id, 'Pong!');
-    }
+client.on("messageCreate", async message => {
+  if (message.content === "!ping") {
+    await client.sendMessage(message.channel_id, "Pong!");
+  }
 });
 
 await client.start();
@@ -80,37 +80,37 @@ await client.start();
 ### Cloudflare Workers 模式
 
 ```typescript
-import { InteractionsHandler } from '@onebots/adapter-discord/lite';
+import { InteractionsHandler } from "@onebots/adapter-discord/lite";
 
 export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
-        const handler = new InteractionsHandler({
-            publicKey: env.DISCORD_PUBLIC_KEY,
-            token: env.DISCORD_TOKEN,
-            applicationId: env.DISCORD_APP_ID,
-        });
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const handler = new InteractionsHandler({
+      publicKey: env.DISCORD_PUBLIC_KEY,
+      token: env.DISCORD_TOKEN,
+      applicationId: env.DISCORD_APP_ID,
+    });
 
-        handler.onCommand('ping', async () => {
-            return InteractionsHandler.messageResponse('🏓 Pong!');
-        });
+    handler.onCommand("ping", async () => {
+      return InteractionsHandler.messageResponse("🏓 Pong!");
+    });
 
-        return handler.handleRequest(request);
-    },
+    return handler.handleRequest(request);
+  },
 };
 ```
 
 ### 直接使用 REST API
 
 ```typescript
-import { DiscordREST } from '@onebots/adapter-discord/lite';
+import { DiscordREST } from "@onebots/adapter-discord/lite";
 
 const rest = new DiscordREST({ token: process.env.DISCORD_TOKEN });
 
 // 发送消息
-await rest.createMessage('channel_id', 'Hello!');
+await rest.createMessage("channel_id", "Hello!");
 
 // 获取用户
-const user = await rest.getUser('user_id');
+const user = await rest.getUser("user_id");
 ```
 
 ## 获取 Discord Bot Token
@@ -124,16 +124,19 @@ const user = await rest.getUser('user_id');
 ## 支持的 API
 
 ### 消息相关
+
 - ✅ sendMessage - 发送消息
 - ✅ deleteMessage - 删除消息
 - ✅ getMessage - 获取消息
 - ✅ getMessageHistory - 获取历史消息
 
 ### 用户相关
+
 - ✅ getLoginInfo - 获取机器人信息
 - ✅ getUserInfo - 获取用户信息
 
 ### 群组（服务器）相关
+
 - ✅ getGroupList - 获取服务器列表
 - ✅ getGroupInfo - 获取服务器信息
 - ✅ leaveGroup - 退出服务器
@@ -144,20 +147,33 @@ const user = await rest.getUser('user_id');
 - ✅ setGroupCard - 设置昵称
 
 ### 频道相关
+
 - ✅ getChannelInfo - 获取频道信息
 - ✅ getChannelList - 获取频道列表
 - ✅ createChannel - 创建频道
 - ✅ deleteChannel - 删除频道
 - ✅ updateChannel - 更新频道
 
+### Discord 原生扩展
+
+能力列表可通过协议的 `get_supported_actions` 查询，所有协议都可以用 snake_case 动作名调用。扩展按 Discord v10 资源模型分组：
+
+- 成员：`ban_member`、`unban_member`、`get_guild_bans`
+- 角色：`get_guild_roles`、`create_guild_role`、`update_guild_role`、 `delete_guild_role`、`add_guild_member_role`、`remove_guild_member_role`
+- 消息：`bulk_delete_messages`、`crosspost_message`、`get_channel_pins`、 `pin_message`、`unpin_message`、`get_reaction_users`、`trigger_typing`
+- 线程：`create_thread`、`join_thread`、`leave_thread`、`add_thread_member`、 `remove_thread_member`、`list_thread_members`、`get_active_threads`
+- 邀请：`get_channel_invites`、`create_channel_invite`、`delete_invite`
+
+Gateway 的消息编辑/删除、Reaction、成员变化和 Interaction 会投影为标准事件；其他 Dispatch 以 `notice.custom` + `raw_event` 无损交付。
+
 ## 依赖说明
 
 本适配器采用轻量级设计，核心功能无需外部依赖。以下为可选依赖：
 
-| 依赖 | 何时需要 | 安装命令 |
-|------|----------|----------|
-| `ws` | Node.js Gateway 模式 | `npm install ws` |
-| `https-proxy-agent` | 使用 HTTP/HTTPS 代理（REST API） | `npm install https-proxy-agent` |
+| 依赖                | 何时需要                           | 安装命令                        |
+| ------------------- | ---------------------------------- | ------------------------------- |
+| `ws`                | Node.js Gateway 模式               | `npm install ws`                |
+| `https-proxy-agent` | 使用 HTTP/HTTPS 代理（REST API）   | `npm install https-proxy-agent` |
 | `socks-proxy-agent` | 使用 SOCKS5 代理（WebSocket 推荐） | `npm install socks-proxy-agent` |
 
 ### 常见问题
@@ -168,9 +184,9 @@ const user = await rest.getUser('user_id');
 
 ```yaml
 discord.your_bot:
-  token: 'xxx'
+  token: "xxx"
   proxy:
-    url: "http://127.0.0.1:7890"  # 你的代理地址
+    url: "http://127.0.0.1:7890" # 你的代理地址
 ```
 
 并安装代理依赖：

@@ -3,11 +3,10 @@
  * Node.js 使用原生 https 模块，Cloudflare Workers 使用 fetch
  */
 
-const DISCORD_API_BASE = 'https://discord.com/api/v10';
-import { buildProxyUrl, maskProxyUrl, createHttpsProxyAgent } from 'onebots';
-import type { Agent } from 'http';
+const DISCORD_API_BASE = "https://discord.com/api/v10";
+import { buildProxyUrl, createHttpsProxyAgent } from "onebots";
+import type { Agent } from "http";
 import type {
-    RESTRequestOptions,
     CreateMessageBody,
     EditMessageBody,
     DiscordApiMessage,
@@ -15,10 +14,9 @@ import type {
     DiscordApiGuild,
     DiscordApiUser,
     DiscordApiGuildMember,
-    DiscordRole,
     GatewayQueryOptions,
     GatewayMemberQueryOptions,
-} from '../types.js';
+} from "../types.js";
 
 export interface RESTOptions {
     token: string;
@@ -30,7 +28,7 @@ export interface RESTOptions {
 }
 
 export interface RequestOptions {
-    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: unknown;
     headers?: Record<string, string>;
     query?: Record<string, string>;
@@ -40,7 +38,7 @@ export interface RequestOptions {
  * 检测是否为 Node.js 环境
  */
 function isNode(): boolean {
-    return typeof process !== 'undefined' && process.versions?.node !== undefined;
+    return typeof process !== "undefined" && process.versions?.node !== undefined;
 }
 
 /**
@@ -84,22 +82,22 @@ export class DiscordREST {
         const agent = await createHttpsProxyAgent({ url: this.proxyUrl });
         if (agent) {
             this.agent = agent as Agent;
-            console.debug(`[DiscordREST] 已配置代理: ${maskProxyUrl(this.proxyUrl)}`);
-        } else {
-            console.warn('[DiscordREST] https-proxy-agent 未安装，将直接连接');
         }
     }
 
     /**
      * Node.js 原生 HTTPS 请求
      */
-    private nodeRequest<T>(url: string, options: {
-        method: string;
-        headers: Record<string, string>;
-        body?: string;
-    }): Promise<T> {
+    private nodeRequest<T>(
+        url: string,
+        options: {
+            method: string;
+            headers: Record<string, string>;
+            body?: string;
+        },
+    ): Promise<T> {
         return new Promise(async (resolve, reject) => {
-            const https = await import('https');
+            const https = await import("https");
             const urlObj = new URL(url);
 
             const reqOptions: NodeHttpsRequestOptions = {
@@ -115,14 +113,14 @@ export class DiscordREST {
                 reqOptions.agent = this.agent;
             }
 
-            const req = https.request(reqOptions, (res) => {
-                let data = '';
+            const req = https.request(reqOptions, res => {
+                let data = "";
 
-                res.on('data', (chunk: Buffer) => {
+                res.on("data", (chunk: Buffer) => {
                     data += chunk;
                 });
 
-                res.on('end', () => {
+                res.on("end", () => {
                     if (res.statusCode === 204) {
                         resolve(undefined as unknown as T);
                         return;
@@ -130,7 +128,7 @@ export class DiscordREST {
 
                     if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
                         try {
-                            resolve(data ? JSON.parse(data) : undefined as unknown as T);
+                            resolve(data ? JSON.parse(data) : (undefined as unknown as T));
                         } catch {
                             resolve(data as unknown as T);
                         }
@@ -147,14 +145,14 @@ export class DiscordREST {
                 });
             });
 
-            req.on('error', (error: Error) => {
+            req.on("error", (error: Error) => {
                 reject(error);
             });
 
             // 设置超时
             req.setTimeout(30000, () => {
                 req.destroy();
-                reject(new Error('Request timeout'));
+                reject(new Error("Request timeout"));
             });
 
             if (options.body) {
@@ -168,11 +166,14 @@ export class DiscordREST {
     /**
      * Fetch 请求（Cloudflare Workers 等环境）
      */
-    private async fetchRequest<T>(url: string, options: {
-        method: string;
-        headers: Record<string, string>;
-        body?: string;
-    }): Promise<T> {
+    private async fetchRequest<T>(
+        url: string,
+        options: {
+            method: string;
+            headers: Record<string, string>;
+            body?: string;
+        },
+    ): Promise<T> {
         const response = await fetch(url, {
             method: options.method,
             headers: options.headers,
@@ -198,12 +199,12 @@ export class DiscordREST {
         // 初始化代理
         await this.initAgent();
 
-        const { method = 'GET', body, headers = {}, query } = options;
+        const { method = "GET", body, headers = {}, query } = options;
 
         let url = `${DISCORD_API_BASE}${endpoint}`;
         if (query) {
             const filteredQuery = Object.fromEntries(
-                Object.entries(query).filter(([_, v]) => v !== undefined)
+                Object.entries(query).filter(([_, v]) => v !== undefined),
             );
             if (Object.keys(filteredQuery).length > 0) {
                 const params = new URLSearchParams(filteredQuery);
@@ -212,9 +213,9 @@ export class DiscordREST {
         }
 
         const requestHeaders: Record<string, string> = {
-            'Authorization': `Bot ${this.token}`,
-            'Content-Type': 'application/json',
-            'User-Agent': 'OneBots Discord Lite (https://github.com/lc-cn/onebots)',
+            "Authorization": `Bot ${this.token}`,
+            "Content-Type": "application/json",
+            "User-Agent": "OneBots Discord Lite (https://github.com/lc-cn/onebots)",
             ...headers,
         };
 
@@ -243,7 +244,7 @@ export class DiscordREST {
 
     /** 获取当前用户 */
     async getCurrentUser(): Promise<DiscordApiUser> {
-        return this.request<DiscordApiUser>('/users/@me');
+        return this.request<DiscordApiUser>("/users/@me");
     }
 
     /** 获取用户 */
@@ -261,19 +262,26 @@ export class DiscordREST {
     }
 
     /** 发送消息 */
-    async createMessage(channelId: string, content: string | CreateMessageBody): Promise<DiscordApiMessage> {
-        const body = typeof content === 'string' ? { content } : content;
+    async createMessage(
+        channelId: string,
+        content: string | CreateMessageBody,
+    ): Promise<DiscordApiMessage> {
+        const body = typeof content === "string" ? { content } : content;
         return this.request<DiscordApiMessage>(`/channels/${channelId}/messages`, {
-            method: 'POST',
+            method: "POST",
             body,
         });
     }
 
     /** 编辑消息 */
-    async editMessage(channelId: string, messageId: string, content: string | EditMessageBody): Promise<DiscordApiMessage> {
-        const body = typeof content === 'string' ? { content } : content;
+    async editMessage(
+        channelId: string,
+        messageId: string,
+        content: string | EditMessageBody,
+    ): Promise<DiscordApiMessage> {
+        const body = typeof content === "string" ? { content } : content;
         return this.request<DiscordApiMessage>(`/channels/${channelId}/messages/${messageId}`, {
-            method: 'PATCH',
+            method: "PATCH",
             body,
         });
     }
@@ -281,7 +289,7 @@ export class DiscordREST {
     /** 删除消息 */
     async deleteMessage(channelId: string, messageId: string): Promise<void> {
         return this.request<void>(`/channels/${channelId}/messages/${messageId}`, {
-            method: 'DELETE',
+            method: "DELETE",
         });
     }
 
@@ -291,7 +299,10 @@ export class DiscordREST {
     }
 
     /** 获取消息历史 */
-    async getMessages(channelId: string, options?: GatewayQueryOptions): Promise<DiscordApiMessage[]> {
+    async getMessages(
+        channelId: string,
+        options?: GatewayQueryOptions,
+    ): Promise<DiscordApiMessage[]> {
         return this.request<DiscordApiMessage[]>(`/channels/${channelId}/messages`, {
             query: options as Record<string, string>,
         });
@@ -308,7 +319,7 @@ export class DiscordREST {
 
     /** 获取服务器列表 */
     async getGuilds(): Promise<DiscordApiGuild[]> {
-        return this.request<DiscordApiGuild[]>('/users/@me/guilds');
+        return this.request<DiscordApiGuild[]>("/users/@me/guilds");
     }
 
     /** 获取服务器成员 */
@@ -317,7 +328,10 @@ export class DiscordREST {
     }
 
     /** 获取服务器成员列表 */
-    async getGuildMembers(guildId: string, options?: GatewayMemberQueryOptions): Promise<DiscordApiGuildMember[]> {
+    async getGuildMembers(
+        guildId: string,
+        options?: GatewayMemberQueryOptions,
+    ): Promise<DiscordApiGuildMember[]> {
         return this.request<DiscordApiGuildMember[]>(`/guilds/${guildId}/members`, {
             query: options as Record<string, string>,
         });
@@ -326,14 +340,18 @@ export class DiscordREST {
     /** 踢出成员 */
     async removeGuildMember(guildId: string, userId: string): Promise<void> {
         return this.request<void>(`/guilds/${guildId}/members/${userId}`, {
-            method: 'DELETE',
+            method: "DELETE",
         });
     }
 
     /** 封禁成员 */
-    async banGuildMember(guildId: string, userId: string, options?: { delete_message_seconds?: number }): Promise<void> {
+    async banGuildMember(
+        guildId: string,
+        userId: string,
+        options?: { delete_message_seconds?: number },
+    ): Promise<void> {
         return this.request<void>(`/guilds/${guildId}/bans/${userId}`, {
-            method: 'PUT',
+            method: "PUT",
             body: options,
         });
     }
@@ -343,30 +361,50 @@ export class DiscordREST {
     // ============================================
 
     /** 回复 Interaction */
-    async createInteractionResponse(interactionId: string, interactionToken: string, response: { type: number; data?: unknown }): Promise<void> {
+    async createInteractionResponse(
+        interactionId: string,
+        interactionToken: string,
+        response: { type: number; data?: unknown },
+    ): Promise<void> {
         return this.request<void>(`/interactions/${interactionId}/${interactionToken}/callback`, {
-            method: 'POST',
+            method: "POST",
             body: response,
         });
     }
 
     /** 获取原始 Interaction 回复 */
-    async getOriginalInteractionResponse(applicationId: string, interactionToken: string): Promise<DiscordApiMessage> {
-        return this.request<DiscordApiMessage>(`/webhooks/${applicationId}/${interactionToken}/messages/@original`);
+    async getOriginalInteractionResponse(
+        applicationId: string,
+        interactionToken: string,
+    ): Promise<DiscordApiMessage> {
+        return this.request<DiscordApiMessage>(
+            `/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+        );
     }
 
     /** 编辑原始 Interaction 回复 */
-    async editOriginalInteractionResponse(applicationId: string, interactionToken: string, content: EditMessageBody): Promise<DiscordApiMessage> {
-        return this.request<DiscordApiMessage>(`/webhooks/${applicationId}/${interactionToken}/messages/@original`, {
-            method: 'PATCH',
-            body: content,
-        });
+    async editOriginalInteractionResponse(
+        applicationId: string,
+        interactionToken: string,
+        content: EditMessageBody,
+    ): Promise<DiscordApiMessage> {
+        return this.request<DiscordApiMessage>(
+            `/webhooks/${applicationId}/${interactionToken}/messages/@original`,
+            {
+                method: "PATCH",
+                body: content,
+            },
+        );
     }
 
     /** 创建后续消息 */
-    async createFollowupMessage(applicationId: string, interactionToken: string, content: CreateMessageBody): Promise<DiscordApiMessage> {
+    async createFollowupMessage(
+        applicationId: string,
+        interactionToken: string,
+        content: CreateMessageBody,
+    ): Promise<DiscordApiMessage> {
         return this.request<DiscordApiMessage>(`/webhooks/${applicationId}/${interactionToken}`, {
-            method: 'POST',
+            method: "POST",
             body: content,
         });
     }
@@ -377,11 +415,20 @@ export class DiscordREST {
 
     /** 获取 Gateway URL */
     async getGateway(): Promise<{ url: string }> {
-        return this.request<{ url: string }>('/gateway');
+        return this.request<{ url: string }>("/gateway");
     }
 
     /** 获取 Gateway Bot URL（带分片信息） */
-    async getGatewayBot(): Promise<{ url: string; shards: number; session_start_limit: { total: number; remaining: number; reset_after: number; max_concurrency: number } }> {
-        return this.request('/gateway/bot');
+    async getGatewayBot(): Promise<{
+        url: string;
+        shards: number;
+        session_start_limit: {
+            total: number;
+            remaining: number;
+            reset_after: number;
+            max_concurrency: number;
+        };
+    }> {
+        return this.request("/gateway/bot");
     }
 }

@@ -23,30 +23,30 @@ export interface ProxyConfig {
  * Gateway Intents 名称
  */
 export type GatewayIntentName =
-    | 'Guilds'
-    | 'GuildMembers'
-    | 'GuildModeration'
-    | 'GuildEmojisAndStickers'
-    | 'GuildIntegrations'
-    | 'GuildWebhooks'
-    | 'GuildInvites'
-    | 'GuildVoiceStates'
-    | 'GuildPresences'
-    | 'GuildMessages'
-    | 'GuildMessageReactions'
-    | 'GuildMessageTyping'
-    | 'DirectMessages'
-    | 'DirectMessageReactions'
-    | 'DirectMessageTyping'
-    | 'MessageContent'
-    | 'GuildScheduledEvents'
-    | 'AutoModerationConfiguration'
-    | 'AutoModerationExecution';
+    | "Guilds"
+    | "GuildMembers"
+    | "GuildModeration"
+    | "GuildEmojisAndStickers"
+    | "GuildIntegrations"
+    | "GuildWebhooks"
+    | "GuildInvites"
+    | "GuildVoiceStates"
+    | "GuildPresences"
+    | "GuildMessages"
+    | "GuildMessageReactions"
+    | "GuildMessageTyping"
+    | "DirectMessages"
+    | "DirectMessageReactions"
+    | "DirectMessageTyping"
+    | "MessageContent"
+    | "GuildScheduledEvents"
+    | "AutoModerationConfiguration"
+    | "AutoModerationExecution";
 
 /**
  * 在线状态
  */
-export type PresenceStatus = 'online' | 'idle' | 'dnd' | 'invisible';
+export type PresenceStatus = "online" | "idle" | "dnd" | "invisible";
 
 /**
  * 活动类型
@@ -138,22 +138,22 @@ export enum MessageType {
  * Discord 事件类型
  */
 export type DiscordEventType =
-    | 'ready'
-    | 'messageCreate'
-    | 'messageUpdate'
-    | 'messageDelete'
-    | 'guildMemberAdd'
-    | 'guildMemberRemove'
-    | 'guildMemberUpdate'
-    | 'guildCreate'
-    | 'guildDelete'
-    | 'channelCreate'
-    | 'channelDelete'
-    | 'channelUpdate'
-    | 'messageReactionAdd'
-    | 'messageReactionRemove'
-    | 'interactionCreate'
-    | 'error';
+    | "ready"
+    | "messageCreate"
+    | "messageUpdate"
+    | "messageDelete"
+    | "guildMemberAdd"
+    | "guildMemberRemove"
+    | "guildMemberUpdate"
+    | "guildCreate"
+    | "guildDelete"
+    | "channelCreate"
+    | "channelDelete"
+    | "channelUpdate"
+    | "messageReactionAdd"
+    | "messageReactionRemove"
+    | "interactionCreate"
+    | "error";
 
 // ============================================
 // Discord API 实体类型 (API v10)
@@ -679,7 +679,7 @@ export interface GatewayMemberQueryOptions {
  * REST API 请求选项
  */
 export interface RESTRequestOptions {
-    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: unknown;
     headers?: Record<string, string>;
     query?: Record<string, string>;

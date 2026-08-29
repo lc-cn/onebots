@@ -44,79 +44,75 @@
  * ```
  */
 
-import { EventEmitter } from 'node:events';
-import { DiscordREST, type RESTOptions } from './rest.js';
-import { DiscordGateway, GatewayIntents, type GatewayOptions } from './gateway.js';
-import {
-    InteractionsHandler,
-    InteractionType,
-    InteractionCallbackType,
-    verifyInteractionSignature,
-    type InteractionWebhookOptions
-} from './interactions.js';
-import { DiscordLiteBot, type DiscordLiteBotConfig } from './bot.js';
-import type { DiscordApiUser, CreateMessageBody, EditMessageBody } from '../types.js';
+import { EventEmitter } from "node:events";
+import { DiscordREST } from "./rest.js";
+import { DiscordGateway, GatewayIntents } from "./gateway.js";
+import { InteractionsHandler } from "./interactions.js";
+import type { DiscordApiUser, CreateMessageBody, EditMessageBody } from "../types.js";
 
 // 重新导出
-export { DiscordREST, type RESTOptions } from './rest.js';
-export { DiscordGateway, GatewayIntents, GatewayOpcodes, type GatewayOptions } from './gateway.js';
+export { DiscordREST, type RESTOptions } from "./rest.js";
+export { DiscordGateway, GatewayIntents, GatewayOpcodes, type GatewayOptions } from "./gateway.js";
 export {
     InteractionsHandler,
     InteractionType,
     InteractionCallbackType,
     verifyInteractionSignature,
-    type InteractionWebhookOptions
-} from './interactions.js';
-export { DiscordLiteBot, type DiscordLiteBotConfig } from './bot.js';
+    type InteractionWebhookOptions,
+} from "./interactions.js";
+export { DiscordLiteBot, type DiscordLiteBotConfig } from "./bot.js";
 export type {
     DiscordUser,
     DiscordMessage,
     DiscordGuild,
     DiscordChannel,
     DiscordMember,
-    DiscordAttachment
-} from './bot.js';
+    DiscordAttachment,
+} from "./bot.js";
 
 /**
  * 运行时类型
  */
-export type RuntimeType = 'node' | 'cloudflare' | 'vercel' | 'deno' | 'bun' | 'browser' | 'unknown';
+export type RuntimeType = "node" | "cloudflare" | "vercel" | "deno" | "bun" | "browser" | "unknown";
 
 /**
  * 检测当前运行时环境
  */
 export function detectRuntime(): RuntimeType {
     // Cloudflare Workers
-    if (typeof globalThis.caches !== 'undefined' && typeof (globalThis as Record<string, unknown>).WebSocketPair !== 'undefined') {
-        return 'cloudflare';
+    if (
+        typeof globalThis.caches !== "undefined" &&
+        typeof (globalThis as Record<string, unknown>).WebSocketPair !== "undefined"
+    ) {
+        return "cloudflare";
     }
 
     // Vercel Edge Runtime
-    if (typeof (globalThis as Record<string, unknown>).EdgeRuntime !== 'undefined') {
-        return 'vercel';
+    if (typeof (globalThis as Record<string, unknown>).EdgeRuntime !== "undefined") {
+        return "vercel";
     }
 
     // Deno
-    if (typeof (globalThis as Record<string, unknown>).Deno !== 'undefined') {
-        return 'deno';
+    if (typeof (globalThis as Record<string, unknown>).Deno !== "undefined") {
+        return "deno";
     }
 
     // Bun
-    if (typeof (globalThis as Record<string, unknown>).Bun !== 'undefined') {
-        return 'bun';
+    if (typeof (globalThis as Record<string, unknown>).Bun !== "undefined") {
+        return "bun";
     }
 
     // Node.js
-    if (typeof process !== 'undefined' && process.versions?.node) {
-        return 'node';
+    if (typeof process !== "undefined" && process.versions?.node) {
+        return "node";
     }
 
     // Browser
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-        return 'browser';
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
+        return "browser";
     }
 
-    return 'unknown';
+    return "unknown";
 }
 
 /**
@@ -124,7 +120,7 @@ export function detectRuntime(): RuntimeType {
  */
 export function supportsGateway(): boolean {
     const runtime = detectRuntime();
-    return ['node', 'bun', 'deno'].includes(runtime);
+    return ["node", "bun", "deno"].includes(runtime);
 }
 
 /**
@@ -138,7 +134,7 @@ export interface DiscordLiteOptions {
         username?: string;
         password?: string;
     };
-    mode?: 'gateway' | 'interactions' | 'auto';
+    mode?: "gateway" | "interactions" | "auto";
     // Interactions 模式需要
     publicKey?: string;
     applicationId?: string;
@@ -153,7 +149,7 @@ export class DiscordLite extends EventEmitter {
     private interactions: InteractionsHandler | null = null;
     private rest: DiscordREST;
     private runtime: RuntimeType;
-    private mode: 'gateway' | 'interactions';
+    private mode: "gateway" | "interactions";
     private user: DiscordApiUser | null = null;
 
     constructor(options: DiscordLiteOptions) {
@@ -163,33 +159,31 @@ export class DiscordLite extends EventEmitter {
         this.rest = new DiscordREST({ token: options.token, proxy: options.proxy });
 
         // 确定运行模式
-        if (options.mode === 'auto' || !options.mode) {
-            this.mode = supportsGateway() ? 'gateway' : 'interactions';
+        if (options.mode === "auto" || !options.mode) {
+            this.mode = supportsGateway() ? "gateway" : "interactions";
         } else {
             this.mode = options.mode;
         }
-
-        console.debug(`[DiscordLite] 运行时: ${this.runtime}, 模式: ${this.mode}`);
     }
 
     /**
      * 启动客户端（Gateway 模式）
      */
     async start(): Promise<void> {
-        if (this.mode !== 'gateway') {
-            throw new Error('start() 仅支持 Gateway 模式，Interactions 模式请使用 handleRequest()');
+        if (this.mode !== "gateway") {
+            throw new Error("start() 仅支持 Gateway 模式，Interactions 模式请使用 handleRequest()");
         }
 
         if (!supportsGateway()) {
             throw new Error(`当前运行时 ${this.runtime} 不支持 Gateway 模式`);
         }
 
-        const intents = this.options.intents ?? (
+        const intents =
+            this.options.intents ??
             GatewayIntents.Guilds |
-            GatewayIntents.GuildMessages |
-            GatewayIntents.DirectMessages |
-            GatewayIntents.MessageContent
-        );
+                GatewayIntents.GuildMessages |
+                GatewayIntents.DirectMessages |
+                GatewayIntents.MessageContent;
 
         this.gateway = new DiscordGateway({
             token: this.options.token,
@@ -198,22 +192,30 @@ export class DiscordLite extends EventEmitter {
         });
 
         // 转发事件
-        this.gateway.on('ready', (user: unknown) => {
+        this.gateway.on("ready", (user: unknown) => {
             this.user = user as DiscordApiUser;
-            this.emit('ready', user);
+            this.emit("ready", user);
         });
 
-        this.gateway.on('messageCreate', (message: unknown) => this.emit('messageCreate', message));
-        this.gateway.on('messageUpdate', (message: unknown) => this.emit('messageUpdate', message));
-        this.gateway.on('messageDelete', (data: unknown) => this.emit('messageDelete', data));
-        this.gateway.on('guildCreate', (guild: unknown) => this.emit('guildCreate', guild));
-        this.gateway.on('guildDelete', (guild: unknown) => this.emit('guildDelete', guild));
-        this.gateway.on('guildMemberAdd', (member: unknown) => this.emit('guildMemberAdd', member));
-        this.gateway.on('guildMemberRemove', (member: unknown) => this.emit('guildMemberRemove', member));
-        this.gateway.on('interactionCreate', (interaction: unknown) => this.emit('interactionCreate', interaction));
-        this.gateway.on('dispatch', (event: unknown, data: unknown) => this.emit('dispatch', event, data));
-        this.gateway.on('error', (error: unknown) => this.emit('error', error));
-        this.gateway.on('close', (code: unknown, reason: unknown) => this.emit('close', code, reason));
+        this.gateway.on("messageCreate", (message: unknown) => this.emit("messageCreate", message));
+        this.gateway.on("messageUpdate", (message: unknown) => this.emit("messageUpdate", message));
+        this.gateway.on("messageDelete", (data: unknown) => this.emit("messageDelete", data));
+        this.gateway.on("guildCreate", (guild: unknown) => this.emit("guildCreate", guild));
+        this.gateway.on("guildDelete", (guild: unknown) => this.emit("guildDelete", guild));
+        this.gateway.on("guildMemberAdd", (member: unknown) => this.emit("guildMemberAdd", member));
+        this.gateway.on("guildMemberRemove", (member: unknown) =>
+            this.emit("guildMemberRemove", member),
+        );
+        this.gateway.on("interactionCreate", (interaction: unknown) =>
+            this.emit("interactionCreate", interaction),
+        );
+        this.gateway.on("dispatch", (event: unknown, data: unknown) =>
+            this.emit("dispatch", event, data),
+        );
+        this.gateway.on("error", (error: unknown) => this.emit("error", error));
+        this.gateway.on("close", (code: unknown, reason: unknown) =>
+            this.emit("close", code, reason),
+        );
 
         await this.gateway.connect();
     }
@@ -233,7 +235,7 @@ export class DiscordLite extends EventEmitter {
      */
     initInteractions(): InteractionsHandler {
         if (!this.options.publicKey || !this.options.applicationId) {
-            throw new Error('Interactions 模式需要 publicKey 和 applicationId');
+            throw new Error("Interactions 模式需要 publicKey 和 applicationId");
         }
 
         this.interactions = new InteractionsHandler({
@@ -279,7 +281,7 @@ export class DiscordLite extends EventEmitter {
     /**
      * 获取当前模式
      */
-    getMode(): 'gateway' | 'interactions' {
+    getMode(): "gateway" | "interactions" {
         return this.mode;
     }
 
