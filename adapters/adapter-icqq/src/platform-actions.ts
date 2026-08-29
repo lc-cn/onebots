@@ -20,6 +20,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         set_online_status: async (client: Client, params: Params) =>
             client.setOnlineStatus(requiredInteger(params.status, "status")),
         get_client_statistics: async (client: Client) => client.stat,
+        get_blacklist: async (client: Client) => [...client.blacklist],
+        get_friend_groups: async (client: Client) =>
+            [...client.classes].map(([group_id, group_name]) => ({ group_id, group_name })),
         set_gender: async (client: Client, params: Params) =>
             client.setGender(gender(params.gender)),
         set_birthday: async (client: Client, params: Params) =>
@@ -36,6 +39,10 @@ const PLATFORM_ACTIONS = definePlatformActions(
             client
                 .pickUser(requiredQQNumber(params.user_id, "user_id"))
                 .getStatusInfo(optionalBoolean(params.use_jce)),
+        get_user_avatar_url: async (client: Client, params: Params) =>
+            client
+                .pickUser(requiredQQNumber(params.user_id, "user_id"))
+                .getAvatarUrl(avatarSize(params.size)),
         set_friend_remark: async (client: Client, params: Params) =>
             client
                 .pickFriend(requiredQQNumber(params.user_id, "user_id"))
@@ -74,6 +81,10 @@ const PLATFORM_ACTIONS = definePlatformActions(
             ),
         get_group_share_json: async (client: Client, params: Params) =>
             client.getGroupShareJson(requiredQQNumber(params.group_id, "group_id")),
+        get_group_avatar_url: async (client: Client, params: Params) =>
+            client
+                .pickGroup(requiredQQNumber(params.group_id, "group_id"))
+                .getAvatarUrl(avatarSize(params.size), optionalInteger(params.history)),
         send_group_sign: async (client: Client, params: Params) =>
             client.sendGroupSign(requiredQQNumber(params.group_id, "group_id")),
         get_group_at_all_remainder: groupAction(group => group.getAtAllRemainder()),
@@ -262,6 +273,13 @@ function groupMessageRate(value: unknown): 0 | 5 | 10 {
         throw invalidICQQParam("times 只能是 0、5 或 10", value);
     }
     return result;
+}
+
+function avatarSize(value: unknown): 0 | 40 | 100 | 140 | undefined {
+    if (value === undefined) return undefined;
+    const result = requiredInteger(value, "size");
+    if (result === 0 || result === 40 || result === 100 || result === 140) return result;
+    throw invalidICQQParam("size 只能是 0、40、100 或 140", value);
 }
 
 function groupJoinType(value: unknown): "AnyOne" | "None" | "requireAuth" | "QAjoin" | "Correct" {

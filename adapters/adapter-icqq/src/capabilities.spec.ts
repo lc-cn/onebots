@@ -58,4 +58,22 @@ describe("ICQQ capability manifest", () => {
         expect(icqqCapabilities.events.message_status?.support).toBe("native");
         expect(icqqCapabilities.events.message_deleted?.scenes).toContain("channel");
     });
+
+    test("declares rich native segments instead of hiding them behind icqq_raw", () => {
+        for (const segment of [
+            "flash",
+            "location",
+            "poke",
+            "rps",
+            "dice",
+            "markdown",
+            "forward",
+            "node",
+            "file",
+        ]) {
+            expect(icqqCapabilities.segments[segment]?.support, segment).toBe("native");
+        }
+        expect(icqqCapabilities.segments.node?.direction).toBe("send");
+        expect(icqqCapabilities.segments.file?.direction).toBe("receive");
+    });
 });

@@ -60,6 +60,36 @@ describe("ICQQ 平台扩展动作", () => {
         expect(client.pickGroup).toHaveBeenCalledWith(654321);
     });
 
+    it("公开黑名单、好友分组与用户/群头像 URL", async () => {
+        const getUserAvatarUrl = vi.fn().mockReturnValue("https://avatar/user");
+        const getGroupAvatarUrl = vi.fn().mockReturnValue("https://avatar/group");
+        const client = {
+            blacklist: new Set([10001]),
+            classes: new Map([[1, "同事"]]),
+            pickUser: vi.fn(() => ({ getAvatarUrl: getUserAvatarUrl })),
+            pickGroup: vi.fn(() => ({ getAvatarUrl: getGroupAvatarUrl })),
+        } as unknown as Client;
+
+        await expect(executeICQQPlatformAction(client, "get_blacklist", {})).resolves.toEqual([
+            10001,
+        ]);
+        await expect(executeICQQPlatformAction(client, "get_friend_groups", {})).resolves.toEqual([
+            { group_id: 1, group_name: "同事" },
+        ]);
+        await executeICQQPlatformAction(client, "get_user_avatar_url", {
+            user_id: 10001,
+            size: 100,
+        });
+        await executeICQQPlatformAction(client, "get_group_avatar_url", {
+            group_id: 20001,
+            size: 140,
+            history: 1,
+        });
+
+        expect(getUserAvatarUrl).toHaveBeenCalledWith(100);
+        expect(getGroupAvatarUrl).toHaveBeenCalledWith(140, 1);
+    });
+
     it("删除表态前校验消息归属并使用原生 seq", async () => {
         const delReaction = vi.fn().mockResolvedValue({ ok: true });
         const client = {

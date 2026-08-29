@@ -15,7 +15,11 @@ export function compileICQQMessage(
             case "text":
                 return requireString(data.text, "text.text");
             case "at": {
-                const qq = data.qq ?? data.id ?? data.user_id;
+                if (data.id !== undefined) {
+                    const tinyId = requireString(data.id, "at.id");
+                    return segment.at(tinyId === "all" ? "all" : tinyId);
+                }
+                const qq = data.qq ?? data.user_id;
                 return segment.at(qq === "all" ? "all" : requireInteger(qq, "at.qq"));
             }
             case "image": {
@@ -26,29 +30,79 @@ export function compileICQQMessage(
                     ...(summary ? { summary } : {}),
                 };
             }
+            case "flash":
+                return segment.flash(resolveICQQMediaSource(data, "flash"));
             case "face":
                 return {
                     ...segment.face(requireInteger(data.id, "face.id")),
                     big: data.is_large === true || data.big === true,
                 };
+            case "rps":
+                return segment.rps(optionalInteger(data.id, "rps.id"));
+            case "dice":
+                return segment.dice(optionalInteger(data.id, "dice.id"));
+            case "bface":
+                return segment.bface(
+                    requireString(data.file, "bface.file"),
+                    requireString(data.text, "bface.text"),
+                );
             case "record":
             case "audio":
                 return segment.record(resolveICQQMediaSource(data, item.type));
             case "video":
                 return segment.video(resolveICQQMediaSource(data, "video"));
+            case "bubble":
+                return segment.bubble(resolveICQQMediaSource(data, "bubble"));
             case "reply":
                 return { type: "reply", id: requireString(data.id, "reply.id") } as MessageElem;
             case "share":
                 return segment.share(
                     requireString(data.url, "share.url"),
                     requireString(data.title, "share.title"),
-                    optionalString(data.content, "share.content"),
                     optionalString(data.image, "share.image"),
+                    optionalString(data.content, "share.content"),
+                    optionalString(data.audio, "share.audio"),
                 );
+            case "location":
+                return segment.location(
+                    requireFiniteNumber(data.lat, "location.lat"),
+                    requireFiniteNumber(data.lng ?? data.lon, "location.lng"),
+                    requireString(data.address, "location.address"),
+                    optionalString(data.id, "location.id"),
+                );
+            case "poke":
+                return segment.poke(requireInteger(data.id, "poke.id"));
             case "json":
                 return segment.json(requireString(data.data, "json.data"));
             case "xml":
                 return segment.xml(requireString(data.data, "xml.data"));
+            case "markdown":
+                return segment.markdown(requireString(data.content, "markdown.content"));
+            case "mirai":
+                return segment.mirai(requireString(data.data, "mirai.data"));
+            case "long_msg":
+                return segment.long_msg(requireString(data.resid, "long_msg.resid"));
+            case "forward":
+                return segment.multimsg(
+                    requireString(data.resid ?? data.forward_id, "forward.forward_id"),
+                    optionalString(data.filename, "forward.filename") ?? "MultiMsg",
+                    optionalStringArray(data.preview, "forward.preview"),
+                    optionalString(data.title, "forward.title"),
+                    optionalString(data.summary ?? data.content, "forward.summary"),
+                    optionalString(data.prompt, "forward.prompt"),
+                );
+            case "node":
+                return segment.node(
+                    requireInteger(data.user_id ?? data.uin, "node.user_id"),
+                    compileICQQMessage(
+                        requireSegments(data.message ?? data.content, "node.message"),
+                    ),
+                    optionalString(data.nickname ?? data.name, "node.nickname"),
+                    optionalInteger(data.time, "node.time"),
+                    optionalInteger(data.seq, "node.seq"),
+                    optionalInteger(data.rand, "node.rand"),
+                    optionalString(data.preview, "node.preview"),
+                );
             case "icqq":
                 return requireNativeElement(data.element);
             default:
@@ -73,6 +127,8 @@ export function projectICQQMessageSegments(
                 return { type: "face", data: { id: String(element.id) } };
             case "image":
                 return { type: "image", data: { url: element.url, file: element.file } };
+            case "flash":
+                return { type: "flash", data: mediaData(element) };
             case "record":
                 return { type: "record", data: { url: element.url, file: element.file } };
             case "video":
@@ -80,8 +136,20 @@ export function projectICQQMessageSegments(
                     type: "video",
                     data: { url: "url" in element ? element.url : undefined, file: element.file },
                 };
-            case "at":
-                return { type: "at", data: { qq: String(element.qq) } };
+            case "bubble":
+                return { type: "bubble", data: mediaData(element) };
+            case "at": {
+                const tinyId = "id" in element ? element.id : undefined;
+                return {
+                    type: "at",
+                    data: tinyId ? { id: tinyId } : { qq: String(element.qq) },
+                };
+            }
+            case "rps":
+            case "dice":
+                return { type: element.type, data: { id: element.id } };
+            case "bface":
+                return { type: "bface", data: { file: element.file, text: element.text } };
             case "share":
                 return {
                     type: "share",
@@ -90,11 +158,57 @@ export function projectICQQMessageSegments(
                         title: element.title,
                         content: element.content,
                         image: element.image,
+                        audio: "audio" in element ? element.audio : undefined,
                     },
+                };
+            case "location":
+                return {
+                    type: "location",
+                    data: {
+                        lat: element.lat,
+                        lng: element.lng,
+                        address: element.address,
+                        id: element.id,
+                    },
+                };
+            case "poke":
+                return {
+                    type: "poke",
+                    data: { id: element.id, text: "text" in element ? element.text : undefined },
                 };
             case "json":
             case "xml":
                 return { type: element.type, data: { data: element.data } };
+            case "markdown":
+                return { type: "markdown", data: { content: element.content } };
+            case "mirai":
+                return { type: "mirai", data: { data: element.data } };
+            case "long_msg":
+                return { type: "long_msg", data: { resid: element.resid } };
+            case "multimsg":
+                return {
+                    type: "forward",
+                    data: {
+                        forward_id: element.resid,
+                        filename: element.filename,
+                        preview: element.preview,
+                        title: element.title,
+                        summary: element.content,
+                        prompt: element.prompt,
+                    },
+                };
+            case "file":
+                return {
+                    type: "file",
+                    data: {
+                        file: element.file,
+                        file_id: element.fid,
+                        file_name: element.name,
+                        file_size: element.size,
+                        md5: element.md5,
+                        sha1: element.sha1,
+                    },
+                };
             case "reply":
                 return { type: "reply", data: { id: element.id } };
             case "icqq_raw":
@@ -150,4 +264,47 @@ function requireInteger(value: unknown, field: string): number {
         throw invalidICQQParam(`${field} 必须是安全整数`, value);
     }
     return number;
+}
+
+function optionalInteger(value: unknown, field: string): number | undefined {
+    return value === undefined ? undefined : requireInteger(value, field);
+}
+
+function requireFiniteNumber(value: unknown, field: string): number {
+    const number = typeof value === "string" && value.trim() ? Number(value) : value;
+    if (typeof number !== "number" || !Number.isFinite(number)) {
+        throw invalidICQQParam(`${field} 必须是有限数字`, value);
+    }
+    return number;
+}
+
+function optionalStringArray(value: unknown, field: string): string[] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) throw invalidICQQParam(`${field} 必须是字符串数组`, value);
+    return value.map(item => requireString(item, field));
+}
+
+function requireSegments(value: unknown, field: string): CommonTypes.Segment[] {
+    if (!Array.isArray(value)) throw invalidICQQParam(`${field} 必须是消息段数组`, value);
+    return value.map((item, index) => {
+        if (!isRecord(item)) {
+            throw invalidICQQParam(`${field}[${index}] 必须是消息段对象`, item);
+        }
+        const data = item.data;
+        if (!isRecord(data)) {
+            throw invalidICQQParam(`${field}[${index}].data 必须是对象`, data);
+        }
+        return {
+            type: requireString(item.type, `${field}[${index}].type`),
+            data,
+        };
+    });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mediaData(element: { file: unknown; url?: string; name?: string }) {
+    return { file: element.file, url: element.url, name: element.name };
 }
