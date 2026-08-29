@@ -29,10 +29,11 @@ import type {
     RoomSource,
     SendMessage,
 } from "./types.js";
+import { lineCapabilities } from "./capabilities.js";
 
 export class LineAdapter extends Adapter<LineBot, "line"> {
     constructor(app: BaseApp) {
-        super(app, "line");
+        super(app, "line", lineCapabilities);
         this.icon = "https://line.me/favicon.ico";
     }
 
@@ -43,7 +44,10 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     /**
      * 发送消息
      */
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -53,61 +57,61 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
 
         // 解析消息内容
         const messages: SendMessage[] = [];
-        let textContent = '';
+        let textContent = "";
 
         for (const seg of message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 textContent += seg;
-            } else if (seg.type === 'text') {
-                textContent += seg.data.text || '';
-            } else if (seg.type === 'image') {
+            } else if (seg.type === "text") {
+                textContent += seg.data.text || "";
+            } else if (seg.type === "image") {
                 if (textContent) {
-                    messages.push({ type: 'text', text: textContent });
-                    textContent = '';
+                    messages.push({ type: "text", text: textContent });
+                    textContent = "";
                 }
                 const url = seg.data.url || seg.data.file;
                 if (url) {
                     messages.push({
-                        type: 'image',
+                        type: "image",
                         originalContentUrl: url,
                         previewImageUrl: url,
                     });
                 }
-            } else if (seg.type === 'video') {
+            } else if (seg.type === "video") {
                 if (textContent) {
-                    messages.push({ type: 'text', text: textContent });
-                    textContent = '';
+                    messages.push({ type: "text", text: textContent });
+                    textContent = "";
                 }
                 const url = seg.data.url || seg.data.file;
                 if (url) {
                     messages.push({
-                        type: 'video',
+                        type: "video",
                         originalContentUrl: url,
                         previewImageUrl: seg.data.thumbnail || url,
                     });
                 }
-            } else if (seg.type === 'audio' || seg.type === 'voice' || seg.type === 'record') {
+            } else if (seg.type === "audio" || seg.type === "voice" || seg.type === "record") {
                 if (textContent) {
-                    messages.push({ type: 'text', text: textContent });
-                    textContent = '';
+                    messages.push({ type: "text", text: textContent });
+                    textContent = "";
                 }
                 const url = seg.data.url || seg.data.file;
                 if (url) {
                     messages.push({
-                        type: 'audio',
+                        type: "audio",
                         originalContentUrl: url,
                         duration: seg.data.duration || 60000,
                     });
                 }
-            } else if (seg.type === 'location') {
+            } else if (seg.type === "location") {
                 if (textContent) {
-                    messages.push({ type: 'text', text: textContent });
-                    textContent = '';
+                    messages.push({ type: "text", text: textContent });
+                    textContent = "";
                 }
                 messages.push({
-                    type: 'location',
-                    title: seg.data.title || '位置',
-                    address: seg.data.address || '',
+                    type: "location",
+                    title: seg.data.title || "位置",
+                    address: seg.data.address || "",
                     latitude: seg.data.lat || seg.data.latitude,
                     longitude: seg.data.lon || seg.data.longitude,
                 });
@@ -116,12 +120,12 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
 
         // 添加剩余文本
         if (textContent) {
-            messages.push({ type: 'text', text: textContent });
+            messages.push({ type: "text", text: textContent });
         }
 
         // 如果没有消息，返回空
         if (messages.length === 0) {
-            throw new Error('No valid message content');
+            throw new Error("No valid message content");
         }
 
         // 发送消息
@@ -138,7 +142,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
      * Line 不支持删除消息
      */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
-        throw new Error('Line API 不支持删除消息');
+        throw new Error("Line API 不支持删除消息");
     }
 
     /**
@@ -146,7 +150,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
      * Line 不支持直接获取消息
      */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
-        throw new Error('Line API 不支持获取消息');
+        throw new Error("Line API 不支持获取消息");
     }
 
     // ============================================
@@ -199,14 +203,20 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
      * 获取好友列表
      * Line 不提供好友列表 API
      */
-    async getFriendList(uin: string, params?: Adapter.GetFriendListParams): Promise<Adapter.FriendInfo[]> {
+    async getFriendList(
+        uin: string,
+        params?: Adapter.GetFriendListParams,
+    ): Promise<Adapter.FriendInfo[]> {
         return [];
     }
 
     /**
      * 获取好友信息
      */
-    async getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -229,14 +239,20 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
      * 获取群组列表
      * Line 不提供群组列表 API
      */
-    async getGroupList(uin: string, params?: Adapter.GetGroupListParams): Promise<Adapter.GroupInfo[]> {
+    async getGroupList(
+        uin: string,
+        params?: Adapter.GetGroupListParams,
+    ): Promise<Adapter.GroupInfo[]> {
         return [];
     }
 
     /**
      * 获取群组信息
      */
-    async getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -269,7 +285,10 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     /**
      * 获取群组成员列表
      */
-    async getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -295,7 +314,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
                     group_id: params.group_id,
                     user_id: this.createId(profile.userId),
                     user_name: profile.displayName,
-                    role: 'member',
+                    role: "member",
                 });
             } catch {
                 // 忽略获取失败的成员
@@ -308,7 +327,10 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     /**
      * 获取群组成员信息
      */
-    async getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -322,7 +344,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
             group_id: params.group_id,
             user_id: this.createId(profile.userId),
             user_name: profile.displayName,
-            role: 'member',
+            role: "member",
         };
     }
 
@@ -335,10 +357,10 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
      */
     async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
-            app_name: 'onebots-line',
-            app_version: '1.0.0',
-            impl: 'line-messaging-api',
-            version: 'v2',
+            app_name: "onebots-line",
+            app_version: "1.0.0",
+            impl: "line-messaging-api",
+            version: "v2",
         };
     }
 
@@ -375,7 +397,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     // 账号创建
     // ============================================
 
-    createAccount(config: Account.Config<'line'>): Account<'line', LineBot> {
+    createAccount(config: Account.Config<"line">): Account<"line", LineBot> {
         const lineConfig: LineConfig = {
             account_id: config.account_id,
             channel_access_token: config.channel_access_token,
@@ -384,17 +406,17 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         };
 
         const bot = new LineBot(lineConfig);
-        const account = new Account<'line', LineBot>(this, bot, config);
+        const account = new Account<"line", LineBot>(this, bot, config);
 
         // 设置 Webhook 路由
         const webhookPath = `/line/${config.account_id}/webhook`;
         this.app.router.post(webhookPath, async (ctx: RouterContext, next: Next) => {
             try {
-                const signature = ctx.get('x-line-signature') || '';
+                const signature = ctx.get("x-line-signature") || "";
                 const body = ctx.request.rawBody || JSON.stringify(ctx.request.body);
 
                 await bot.handleWebhook(body, signature);
-                ctx.body = 'OK';
+                ctx.body = "OK";
             } catch (error: unknown) {
                 const err = error instanceof Error ? error : new Error(String(error));
                 this.logger.error(`Webhook 处理错误:`, err);
@@ -406,7 +428,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         this.logger.info(`Line Webhook 已注册: ${webhookPath}`);
 
         // 监听消息事件
-        bot.on('message', (event: MessageEvent) => {
+        bot.on("message", (event: MessageEvent) => {
             const message = event.message;
             const source = event.source;
 
@@ -414,78 +436,78 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
             const messageSegments: CommonTypes.Segment[] = [];
 
             switch (message.type) {
-                case 'text':
+                case "text":
                     const textMsg = message as TextMessage;
                     messageSegments.push({
-                        type: 'text',
-                        data: { text: textMsg.text }
+                        type: "text",
+                        data: { text: textMsg.text },
                     });
                     break;
 
-                case 'image':
+                case "image":
                     const imageMsg = message as ImageMessage;
                     messageSegments.push({
-                        type: 'image',
+                        type: "image",
                         data: {
                             file: imageMsg.id,
                             url: imageMsg.contentProvider.originalContentUrl,
-                        }
+                        },
                     });
                     break;
 
-                case 'video':
+                case "video":
                     const videoMsg = message as VideoMessage;
                     messageSegments.push({
-                        type: 'video',
+                        type: "video",
                         data: {
                             file: videoMsg.id,
                             url: videoMsg.contentProvider.originalContentUrl,
-                        }
+                        },
                     });
                     break;
 
-                case 'audio':
+                case "audio":
                     const audioMsg = message as AudioMessage;
                     messageSegments.push({
-                        type: 'voice',
+                        type: "voice",
                         data: {
                             file: audioMsg.id,
                             url: audioMsg.contentProvider.originalContentUrl,
-                        }
+                        },
                     });
                     break;
 
-                case 'file':
+                case "file":
                     const fileMsg = message as FileMessage;
                     messageSegments.push({
-                        type: 'file',
+                        type: "file",
                         data: {
                             file: fileMsg.id,
                             filename: fileMsg.fileName,
-                        }
+                        },
                     });
                     break;
 
-                case 'location':
+                case "location":
                     const locMsg = message as LocationMessage;
                     messageSegments.push({
-                        type: 'location',
+                        type: "location",
                         data: {
                             lat: locMsg.latitude,
                             lon: locMsg.longitude,
                             title: locMsg.title,
                             address: locMsg.address,
-                        }
+                        },
                     });
                     break;
 
-                case 'sticker':
+                case "sticker":
                     const stickerMsg = message as StickerMessage;
                     messageSegments.push({
-                        type: 'face',
+                        type: "face",
                         data: {
                             id: `${stickerMsg.packageId}:${stickerMsg.stickerId}`,
-                        }
+                        },
                     });
                     break;
             }
@@ -494,66 +516,69 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
             let messageType: CommonEvent.MessageScene;
             let group: CommonTypes.Group | undefined;
 
-            if (source.type === 'user') {
-                messageType = 'private';
-            } else if (source.type === 'group') {
-                messageType = 'group';
+            if (source.type === "user") {
+                messageType = "private";
+            } else if (source.type === "group") {
+                messageType = "group";
                 group = {
                     id: this.createId(source.groupId),
-                    name: '',
+                    name: "",
                 };
             } else {
-                messageType = 'group';
+                messageType = "group";
                 group = {
                     id: this.createId((source as RoomSource).roomId),
-                    name: 'Room',
+                    name: "Room",
                 };
             }
 
             // 打印日志
-            const textContent = message.type === 'text' ? (message as TextMessage).text : `[${message.type}]`;
-            const preview = textContent.length > 50 ? textContent.substring(0, 50) + '...' : textContent;
+            const textContent =
+                message.type === "text" ? (message as TextMessage).text : `[${message.type}]`;
+            const preview =
+                textContent.length > 50 ? textContent.substring(0, 50) + "..." : textContent;
             this.logger.info(
-                `[LINE] 收到${messageType === 'private' ? '私聊' : '群组'}消息 | ` +
-                `消息ID: ${message.id} | 发送者: ${source.userId || 'unknown'} | 内容: ${preview}`
+                `[LINE] 收到${messageType === "private" ? "私聊" : "群组"}消息 | ` +
+                    `消息ID: ${message.id} | 发送者: ${source.userId || "unknown"} | 内容: ${preview}`,
             );
 
             // 构建事件
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.webhookEventId),
                 timestamp: event.timestamp,
-                platform: 'line',
+                platform: "line",
                 bot_id: this.createId(config.account_id),
-                type: 'message',
+                type: "message",
                 message_type: messageType,
                 sender: {
-                    id: this.createId(source.userId || 'unknown'),
-                    name: '',
+                    id: this.createId(source.userId || "unknown"),
+                    name: "",
                 },
                 group,
                 message_id: this.createId(message.id),
-                raw_message: message.type === 'text' ? (message as TextMessage).text : '',
+                raw_message: message.type === "text" ? (message as TextMessage).text : "",
                 message: messageSegments,
             };
 
             // 保存 replyToken 用于快速回复
-            (commonEvent as CommonEvent.Message & { replyToken: string }).replyToken = event.replyToken;
+            (commonEvent as CommonEvent.Message & { replyToken: string }).replyToken =
+                event.replyToken;
 
             account.dispatch(commonEvent);
         });
 
         // 监听关注事件
-        bot.on('follow', (event: FollowEvent) => {
+        bot.on("follow", (event: FollowEvent) => {
             const commonEvent: CommonEvent.Notice = {
                 id: this.createId(event.webhookEventId),
                 timestamp: event.timestamp,
-                platform: 'line',
+                platform: "line",
                 bot_id: this.createId(config.account_id),
-                type: 'notice',
-                notice_type: 'friend_add',
+                type: "notice",
+                notice_type: "friend_add",
                 user: {
-                    id: this.createId(event.source.userId || 'unknown'),
-                    name: '',
+                    id: this.createId(event.source.userId || "unknown"),
+                    name: "",
                 },
             };
 
@@ -561,46 +586,49 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         });
 
         // 监听取消关注事件
-        bot.on('unfollow', (event: UnfollowEvent) => {
+        bot.on("unfollow", (event: UnfollowEvent) => {
             this.logger.info(`[LINE] 用户取消关注: ${event.source.userId}`);
         });
 
         // 监听加入群组事件
-        bot.on('join', (event: JoinEvent) => {
+        bot.on("join", (event: JoinEvent) => {
             const source = event.source;
-            const groupId = source.type === 'group' ? source.groupId : (source as RoomSource).roomId;
+            const groupId =
+                source.type === "group" ? source.groupId : (source as RoomSource).roomId;
 
             this.logger.info(`[LINE] 机器人加入群组: ${groupId}`);
         });
 
         // 监听离开群组事件
-        bot.on('leave', (event: LeaveEvent) => {
+        bot.on("leave", (event: LeaveEvent) => {
             const source = event.source;
-            const groupId = source.type === 'group' ? source.groupId : (source as RoomSource).roomId;
+            const groupId =
+                source.type === "group" ? source.groupId : (source as RoomSource).roomId;
 
             this.logger.info(`[LINE] 机器人离开群组: ${groupId}`);
         });
 
         // 监听成员加入事件
-        bot.on('memberJoined', (event: MemberJoinedEvent) => {
+        bot.on("memberJoined", (event: MemberJoinedEvent) => {
             const source = event.source;
-            const groupId = source.type === 'group' ? source.groupId : (source as RoomSource).roomId;
+            const groupId =
+                source.type === "group" ? source.groupId : (source as RoomSource).roomId;
 
             for (const member of event.joined.members) {
                 const commonEvent: CommonEvent.Notice = {
                     id: this.createId(event.webhookEventId),
                     timestamp: event.timestamp,
-                    platform: 'line',
+                    platform: "line",
                     bot_id: this.createId(config.account_id),
-                    type: 'notice',
-                    notice_type: 'group_increase',
+                    type: "notice",
+                    notice_type: "group_increase",
                     user: {
                         id: this.createId(member.userId),
-                        name: '',
+                        name: "",
                     },
                     group: {
                         id: this.createId(groupId),
-                        name: '',
+                        name: "",
                     },
                 };
 
@@ -609,25 +637,26 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         });
 
         // 监听成员离开事件
-        bot.on('memberLeft', (event: MemberLeftEvent) => {
+        bot.on("memberLeft", (event: MemberLeftEvent) => {
             const source = event.source;
-            const groupId = source.type === 'group' ? source.groupId : (source as RoomSource).roomId;
+            const groupId =
+                source.type === "group" ? source.groupId : (source as RoomSource).roomId;
 
             for (const member of event.left.members) {
                 const commonEvent: CommonEvent.Notice = {
                     id: this.createId(event.webhookEventId),
                     timestamp: event.timestamp,
-                    platform: 'line',
+                    platform: "line",
                     bot_id: this.createId(config.account_id),
-                    type: 'notice',
-                    notice_type: 'group_decrease',
+                    type: "notice",
+                    notice_type: "group_decrease",
                     user: {
                         id: this.createId(member.userId),
-                        name: '',
+                        name: "",
                     },
                     group: {
                         id: this.createId(groupId),
-                        name: '',
+                        name: "",
                     },
                 };
 
@@ -636,7 +665,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         });
 
         // 启动时验证配置
-        account.on('start', async () => {
+        account.on("start", async () => {
             try {
                 const info = await bot.getBotInfo();
                 this.logger.info(`Line Bot ${info.displayName} 已就绪`);
@@ -649,7 +678,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
             }
         });
 
-        account.on('stop', () => {
+        account.on("stop", () => {
             account.status = AccountStatus.OffLine;
         });
 
@@ -665,12 +694,12 @@ declare module "onebots" {
     }
 }
 
-AdapterRegistry.register('line', LineAdapter, {
-    name: 'line',
-    displayName: 'Line Messaging API',
-    description: 'Line Messaging API 适配器，支持私聊和群组消息',
-    icon: 'https://line.me/favicon.ico',
-    homepage: 'https://developers.line.biz/',
-    author: '凉菜',
+AdapterRegistry.register("line", LineAdapter, {
+    name: "line",
+    displayName: "Line Messaging API",
+    description: "Line Messaging API 适配器，支持私聊和群组消息",
+    icon: "https://line.me/favicon.ico",
+    homepage: "https://developers.line.biz/",
+    author: "凉菜",
+    capabilities: lineCapabilities,
 });
-

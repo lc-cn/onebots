@@ -25,6 +25,7 @@ export {
     type Dict,
     type WsServer,
     type AdapterCapabilityManifest,
+    type CapabilityDescriptor,
     // Infrastructure
     ConnectionManager,
     RetryPresets,
@@ -43,6 +44,8 @@ export {
     defineAdapterCapabilities,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,
+    assertSupportedActionsImplemented,
+    adapterActionMethodName,
     listSupportedActions,
     decryptWechatCallback,
     decryptWechatCallbackFor,

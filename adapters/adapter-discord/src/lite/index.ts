@@ -44,7 +44,7 @@
  * ```
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { DiscordREST, type RESTOptions } from './rest.js';
 import { DiscordGateway, GatewayIntents, type GatewayOptions } from './gateway.js';
 import {

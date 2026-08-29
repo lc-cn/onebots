@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+    adapterActionMethodName,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,
+    assertSupportedActionsImplemented,
     defineAdapterCapabilities,
     listSupportedActions,
 } from "./adapter-capability.js";
@@ -52,5 +54,31 @@ describe("adapter capability manifest", () => {
 
         await expect(assertAdapterCapabilityContract(adapter)).rejects.toThrow(ValidationError);
         expect(() => assertAdapterCapabilities(manifest)).not.toThrow();
+    });
+
+    it("将 canonical 动作名映射到适配器方法", () => {
+        expect(adapterActionMethodName("get_group_member_list")).toBe("getGroupMemberList");
+        expect(adapterActionMethodName("get_csrf_token")).toBe("getCsrfToken");
+    });
+
+    it("拒绝声明支持但没有实际实现的动作", () => {
+        const manifest = defineAdapterCapabilities({
+            actions: {
+                send_message: { support: "native" },
+                delete_message: { support: "native" },
+            },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        const adapter = {
+            describeCapabilities: () => manifest,
+            getSupportedActions: async () => listSupportedActions(manifest),
+            isActionImplemented: (action: string) => action === "delete_message",
+        };
+
+        expect(() => assertSupportedActionsImplemented(adapter)).toThrow(
+            "适配器能力清单声明了未实现动作: send_message",
+        );
     });
 });

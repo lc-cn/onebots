@@ -2,7 +2,7 @@
  * Slack Bot 客户端
  * 基于 @slack/web-api
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { WebClient } from '@slack/web-api';
 import type { RouterContext, Next } from 'onebots';
 import type {
@@ -283,4 +283,3 @@ export class SlackBot extends EventEmitter {
         return this.client;
     }
 }
-

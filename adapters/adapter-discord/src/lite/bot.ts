@@ -3,7 +3,7 @@
  * 轻量版实现，不依赖 discord.js，支持 Cloudflare Workers
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { DiscordLite, GatewayIntents, type DiscordLiteOptions } from './index.js';
 import type { DiscordREST } from './rest.js';
 import type {

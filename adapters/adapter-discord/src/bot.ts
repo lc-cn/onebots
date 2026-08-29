@@ -3,7 +3,7 @@
  * 轻量版实现，直接封装 Discord API，支持 Node.js 和 Cloudflare Workers
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { DiscordLite, GatewayIntents, type DiscordLiteOptions } from './lite/index.js';
 import type { DiscordREST } from './lite/rest.js';
 import type { DiscordConfig, ProxyConfig } from './types.js';

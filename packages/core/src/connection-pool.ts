@@ -4,7 +4,7 @@
  */
 
 import { createLogger } from './logger.js';
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 
 const logger = createLogger('ConnectionPool');
 
@@ -260,4 +260,3 @@ export class ConnectionPool extends EventEmitter {
         this.emit('close');
     }
 }
-

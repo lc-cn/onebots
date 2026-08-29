@@ -18,8 +18,8 @@ export interface CapabilityDescriptor {
     support: CapabilitySupport;
     /** 能力是否依赖额外权限或当前会话上下文。 */
     availability?: CapabilityAvailability;
-    scenes?: CommonTypes.Scene[];
-    permissions?: string[];
+    scenes?: readonly CommonTypes.Scene[];
+    permissions?: readonly string[];
     note?: string;
 }
 
@@ -97,6 +97,8 @@ export function assertAdapterCapabilities(manifest: AdapterCapabilityManifest): 
 export interface AdapterCapabilityProvider {
     describeCapabilities(accountId?: string): AdapterCapabilityManifest;
     getSupportedActions(accountId: string): Promise<string[]>;
+    /** 判断动作是否由具体适配器实现，而不是落到 Adapter 基类的未支持实现。 */
+    isActionImplemented?(action: string): boolean;
 }
 
 /**
@@ -116,6 +118,27 @@ export async function assertAdapterCapabilityContract(
             `适配器 getSupportedActions 与能力清单不一致: expected ${expected.join(", ")}; actual ${actual.join(", ")}`,
         );
     }
+    assertSupportedActionsImplemented(adapter, manifest);
+}
+
+/** 校验每个已声明支持的动作都有实际实现，防止能力清单与运行时漂移。 */
+export function assertSupportedActionsImplemented(
+    adapter: AdapterCapabilityProvider,
+    manifest = adapter.describeCapabilities(),
+): void {
+    if (!adapter.isActionImplemented) return;
+
+    const missing = listSupportedActions(manifest).filter(
+        action => !adapter.isActionImplemented?.(action),
+    );
+    if (missing.length > 0) {
+        throw new ValidationError(`适配器能力清单声明了未实现动作: ${missing.join(", ")}`);
+    }
+}
+
+/** 将协议层使用的 snake_case 动作名转换为 Adapter 的 camelCase 方法名。 */
+export function adapterActionMethodName(action: string): string {
+    return action.replace(/_([a-z0-9])/g, (_, character: string) => character.toUpperCase());
 }
 
 function freezeDescriptors<T extends CapabilityDescriptor>(

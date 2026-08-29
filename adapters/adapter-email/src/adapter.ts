@@ -8,10 +8,11 @@ import { BaseApp } from "onebots";
 import { EmailBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
 import type { EmailConfig, EmailMessage } from "./types.js";
+import { emailCapabilities } from "./capabilities.js";
 
 export class EmailAdapter extends Adapter<EmailBot, "email"> {
     constructor(app: BaseApp) {
-        super(app, "email");
+        super(app, "email", emailCapabilities);
         this.icon = "https://www.google.com/s2/favicons?domain=mail.google.com&sz=64";
     }
 
@@ -22,7 +23,10 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
     /**
      * 发送消息（发送邮件）
      */
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -31,8 +35,8 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
-        let text = '';
-        let html = '';
+        let text = "";
+        let html = "";
         const attachments: Array<{
             filename: string;
             content: Buffer | string;
@@ -40,14 +44,14 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
         }> = [];
 
         for (const seg of message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 text += seg;
-                html += String(seg).replace(/\n/g, '<br>');
-            } else if (seg.type === 'text') {
-                const content = seg.data.text || '';
+                html += String(seg).replace(/\n/g, "<br>");
+            } else if (seg.type === "text") {
+                const content = seg.data.text || "";
                 text += content;
-                html += content.replace(/\n/g, '<br>');
-            } else if (seg.type === 'image') {
+                html += content.replace(/\n/g, "<br>");
+            } else if (seg.type === "image") {
                 if (seg.data.url || seg.data.file) {
                     // 图片作为附件发送
                     const imageUrl = seg.data.url || seg.data.file;
@@ -55,28 +59,28 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
                         const response = await fetch(imageUrl);
                         const buffer = Buffer.from(await response.arrayBuffer());
                         attachments.push({
-                            filename: 'image.jpg',
+                            filename: "image.jpg",
                             content: buffer,
-                            contentType: 'image/jpeg',
+                            contentType: "image/jpeg",
                         });
                         html += '<img src="cid:image.jpg" alt="Image" />';
                     } catch (error) {
-                        this.logger.warn('下载图片失败:', error);
+                        this.logger.warn("下载图片失败:", error);
                     }
                 }
-            } else if (seg.type === 'file') {
+            } else if (seg.type === "file") {
                 if (seg.data.url || seg.data.file) {
                     const fileUrl = seg.data.url || seg.data.file;
                     try {
                         const response = await fetch(fileUrl);
                         const buffer = Buffer.from(await response.arrayBuffer());
                         attachments.push({
-                            filename: seg.data.name || 'file',
+                            filename: seg.data.name || "file",
                             content: buffer,
-                            contentType: seg.data.content_type || 'application/octet-stream',
+                            contentType: seg.data.content_type || "application/octet-stream",
                         });
                     } catch (error) {
-                        this.logger.warn('下载文件失败:', error);
+                        this.logger.warn("下载文件失败:", error);
                     }
                 }
             }
@@ -102,7 +106,7 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
      */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
         // 邮件不支持撤回
-        throw new Error('邮件不支持撤回功能');
+        throw new Error("邮件不支持撤回功能");
     }
 
     /**
@@ -110,7 +114,7 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
      */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
         // 邮件适配器不直接支持获取消息
-        throw new Error('邮件适配器不支持直接获取消息');
+        throw new Error("邮件适配器不支持直接获取消息");
     }
 
     /**
@@ -118,7 +122,7 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
      */
     async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
         // 邮件不支持编辑
-        throw new Error('邮件不支持编辑功能');
+        throw new Error("邮件不支持编辑功能");
     }
 
     // ============================================
@@ -162,7 +166,10 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
     /**
      * 获取好友列表（邮件不支持）
      */
-    async getFriendList(uin: string, params?: Adapter.GetFriendListParams): Promise<Adapter.FriendInfo[]> {
+    async getFriendList(
+        uin: string,
+        params?: Adapter.GetFriendListParams,
+    ): Promise<Adapter.FriendInfo[]> {
         // 邮件不支持好友列表
         return [];
     }
@@ -170,9 +177,12 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
     /**
      * 获取好友信息
      */
-    async getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
         // 邮件不支持好友信息
-        throw new Error('邮件适配器不支持获取好友信息');
+        throw new Error("邮件适配器不支持获取好友信息");
     }
 
     // ============================================
@@ -182,7 +192,10 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
     /**
      * 获取群列表（邮件不支持群组）
      */
-    async getGroupList(uin: string, params?: Adapter.GetGroupListParams): Promise<Adapter.GroupInfo[]> {
+    async getGroupList(
+        uin: string,
+        params?: Adapter.GetGroupListParams,
+    ): Promise<Adapter.GroupInfo[]> {
         // 邮件不支持群组
         return [];
     }
@@ -190,43 +203,52 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
     /**
      * 获取群信息（邮件不支持群组）
      */
-    async getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
-        throw new Error('邮件适配器不支持群组功能');
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
+        throw new Error("邮件适配器不支持群组功能");
     }
 
     /**
      * 退出群组（邮件不支持群组）
      */
     async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        throw new Error('邮件适配器不支持群组功能');
+        throw new Error("邮件适配器不支持群组功能");
     }
 
     /**
      * 获取群成员列表（邮件不支持群组）
      */
-    async getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         return [];
     }
 
     /**
      * 获取群成员信息（邮件不支持群组）
      */
-    async getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
-        throw new Error('邮件适配器不支持群组功能');
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
+        throw new Error("邮件适配器不支持群组功能");
     }
 
     /**
      * 踢出群成员（邮件不支持群组）
      */
     async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        throw new Error('邮件适配器不支持群组功能');
+        throw new Error("邮件适配器不支持群组功能");
     }
 
     /**
      * 设置群名片（邮件不支持群组）
      */
     async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        throw new Error('邮件适配器不支持群组功能');
+        throw new Error("邮件适配器不支持群组功能");
     }
 
     // ============================================
@@ -238,10 +260,10 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
      */
     async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
-            app_name: 'onebots Email Adapter',
-            app_version: '1.0.0',
-            impl: 'email',
-            version: '1.0.0',
+            app_name: "onebots Email Adapter",
+            app_version: "1.0.0",
+            impl: "email",
+            version: "1.0.0",
         };
     }
 
@@ -260,7 +282,7 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
     // 账号创建
     // ============================================
 
-    createAccount(config: Account.Config<'email'>): Account<'email', EmailBot> {
+    createAccount(config: Account.Config<"email">): Account<"email", EmailBot> {
         const emailConfig: EmailConfig = {
             account_id: config.account_id,
             from: config.from,
@@ -270,44 +292,44 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
         };
 
         const bot = new EmailBot(emailConfig);
-        const account = new Account<'email', EmailBot>(this, bot, config);
+        const account = new Account<"email", EmailBot>(this, bot, config);
 
         // 监听 Bot 事件
-        bot.on('ready', () => {
+        bot.on("ready", () => {
             this.logger.info(`邮件 Bot ${config.account_id} 已就绪`);
         });
 
-        bot.on('error', (error) => {
+        bot.on("error", error => {
             this.logger.error(`邮件 Bot ${config.account_id} 错误:`, error);
         });
 
         // 监听新邮件
-        bot.on('email', (emailMessage: EmailMessage) => {
+        bot.on("email", (emailMessage: EmailMessage) => {
             // 忽略自己发送的邮件
             if (emailMessage.from.address === emailConfig.from) {
                 return;
             }
 
             // 打印邮件接收日志
-            const contentPreview = (emailMessage.text || emailMessage.html || '').substring(0, 100);
+            const contentPreview = (emailMessage.text || emailMessage.html || "").substring(0, 100);
             this.logger.info(
                 `[Email] 收到邮件 | 邮件ID: ${emailMessage.id} | ` +
-                `发件人: ${emailMessage.from.address} | 主题: ${emailMessage.subject} | 内容: ${contentPreview}...`
+                    `发件人: ${emailMessage.from.address} | 主题: ${emailMessage.subject} | 内容: ${contentPreview}...`,
             );
 
             // 构建消息段
             const messageSegments: CommonTypes.Segment[] = [];
-            
+
             if (emailMessage.text) {
                 messageSegments.push({
-                    type: 'text',
+                    type: "text",
                     data: { text: emailMessage.text },
                 });
             } else if (emailMessage.html) {
                 // 将 HTML 转换为纯文本（简化处理）
-                const text = emailMessage.html.replace(/<[^>]*>/g, '').replace(/\n\s*\n/g, '\n');
+                const text = emailMessage.html.replace(/<[^>]*>/g, "").replace(/\n\s*\n/g, "\n");
                 messageSegments.push({
-                    type: 'text',
+                    type: "text",
                     data: { text },
                 });
             }
@@ -316,10 +338,10 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
             if (emailMessage.attachments && emailMessage.attachments.length > 0) {
                 for (const att of emailMessage.attachments) {
                     messageSegments.push({
-                        type: 'file',
+                        type: "file",
                         data: {
                             name: att.filename,
-                            url: `data:${att.contentType};base64,${att.content.toString('base64')}`,
+                            url: `data:${att.contentType};base64,${att.content.toString("base64")}`,
                             content_type: att.contentType,
                         },
                     });
@@ -330,17 +352,17 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(emailMessage.id),
                 timestamp: emailMessage.date.getTime(),
-                platform: 'email',
+                platform: "email",
                 bot_id: this.createId(config.account_id),
-                type: 'message',
-                message_type: 'private', // 邮件视为私聊
+                type: "message",
+                message_type: "private", // 邮件视为私聊
                 sender: {
                     id: this.createId(emailMessage.from.address),
                     name: emailMessage.from.name || emailMessage.from.address,
                     avatar: undefined,
                 },
                 message_id: this.createId(emailMessage.id),
-                raw_message: emailMessage.text || emailMessage.html || '',
+                raw_message: emailMessage.text || emailMessage.html || "",
                 message: messageSegments,
             };
 
@@ -349,7 +371,7 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
         });
 
         // 启动时初始化 Bot
-        account.on('start', async () => {
+        account.on("start", async () => {
             try {
                 await bot.start();
                 account.status = AccountStatus.Online;
@@ -361,7 +383,7 @@ export class EmailAdapter extends Adapter<EmailBot, "email"> {
             }
         });
 
-        account.on('stop', async () => {
+        account.on("stop", async () => {
             await bot.stop();
             account.status = AccountStatus.OffLine;
         });
@@ -378,12 +400,12 @@ declare module "onebots" {
     }
 }
 
-AdapterRegistry.register('email', EmailAdapter, {
-    name: 'email',
-    displayName: '邮件适配器',
-    description: '邮件适配器，支持 SMTP 发送和 IMAP 接收邮件',
-    icon: 'https://www.google.com/s2/favicons?domain=mail.google.com&sz=64',
-    homepage: 'https://en.wikipedia.org/wiki/Email',
-    author: '凉菜',
+AdapterRegistry.register("email", EmailAdapter, {
+    name: "email",
+    displayName: "邮件适配器",
+    description: "邮件适配器，支持 SMTP 发送和 IMAP 接收邮件",
+    icon: "https://www.google.com/s2/favicons?domain=mail.google.com&sz=64",
+    homepage: "https://en.wikipedia.org/wiki/Email",
+    author: "凉菜",
+    capabilities: emailCapabilities,
 });
-

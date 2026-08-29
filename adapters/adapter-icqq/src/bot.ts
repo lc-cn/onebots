@@ -2,7 +2,7 @@
  * ICQQ Bot 封装
  * 基于 @icqqjs/icqq 库封装的机器人客户端
  */
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { createClient, Client, segment as Segment } from "@icqqjs/icqq";
 import type {
     Config as ICQQClientConfig,

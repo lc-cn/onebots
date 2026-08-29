@@ -19,10 +19,11 @@ import type {
     KookEvent,
 } from "./types.js";
 import { parseKMarkdown, mentionUser, mentionAll, mentionHere } from "./utils.js";
+import { kookCapabilities } from "./capabilities.js";
 
 export class KookAdapter extends Adapter<KookBot, "kook"> {
     constructor(app: BaseApp) {
-        super(app, "kook");
+        super(app, "kook", kookCapabilities);
         this.icon = "https://www.kookapp.cn/favicon.ico";
     }
 
@@ -1030,6 +1031,7 @@ AdapterRegistry.register("kook", KookAdapter, {
     icon: "https://www.kookapp.cn/favicon.ico",
     homepage: "https://www.kookapp.cn/",
     author: "凉菜",
+    capabilities: kookCapabilities,
 });
 
 declare module "@/adapter.js" {

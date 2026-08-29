@@ -2,7 +2,7 @@
  * Zulip Bot 客户端
  * 基于 Zulip REST API 和 WebSocket API
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import axios, { AxiosInstance } from 'axios';
 import type { Agent as HttpAgent } from 'http';
 import WebSocket from 'ws';
@@ -335,4 +335,3 @@ export class ZulipBot extends EventEmitter {
         this.emit('stop');
     }
 }
-

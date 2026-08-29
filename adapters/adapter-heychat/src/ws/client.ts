@@ -1,7 +1,7 @@
 /**
  * 黑盒语音 WebSocket 客户端
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
 import { ConnectionManager, RetryPresets, createProxyAgent } from 'onebots';
 import type { HeychatConfig, HeychatWsEnvelope } from '../types.js';

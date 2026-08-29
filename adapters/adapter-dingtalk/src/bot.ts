@@ -2,7 +2,7 @@
  * 钉钉 Bot 客户端
  * 基于钉钉开放平台 API，使用 fetch 实现
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import type { RouterContext, Next } from 'onebots';
 import type {
     DingTalkConfig,

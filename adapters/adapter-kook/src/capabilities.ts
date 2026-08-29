@@ -1,0 +1,75 @@
+import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+
+/** KOOK HTTP/Gateway 实现当前可用的能力。 */
+export const kookCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
+    actions: {
+        send_message: { support: "native", scenes: ["private", "channel"] },
+        delete_message: { support: "native", scenes: ["private", "channel"] },
+        get_message: { support: "native", scenes: ["private", "channel"] },
+        update_message: { support: "native", scenes: ["private", "channel"] },
+        get_login_info: { support: "native" },
+        get_user_info: { support: "native" },
+        get_friend_list: { support: "emulated", note: "返回机器人可见用户" },
+        get_friend_info: { support: "emulated", note: "按 KOOK 用户投影" },
+        get_group_list: { support: "emulated", note: "按服务器投影群组" },
+        get_group_info: { support: "emulated", note: "按服务器投影群组" },
+        leave_group: { support: "native" },
+        get_group_member_list: { support: "native" },
+        get_group_member_info: { support: "native" },
+        kick_group_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["guild.kick_member"],
+        },
+        set_group_card: {
+            support: "native",
+            availability: "permission",
+            permissions: ["guild.member"],
+        },
+        get_guild_info: { support: "native" },
+        get_guild_list: { support: "native" },
+        get_guild_member_info: { support: "native" },
+        get_channel_info: { support: "native" },
+        get_channel_list: { support: "native" },
+        create_channel: {
+            support: "native",
+            availability: "permission",
+            permissions: ["channel.manage"],
+        },
+        update_channel: {
+            support: "native",
+            availability: "permission",
+            permissions: ["channel.manage"],
+        },
+        delete_channel: {
+            support: "native",
+            availability: "permission",
+            permissions: ["channel.manage"],
+        },
+        get_channel_member_list: { support: "native" },
+        get_version: { support: "native" },
+        get_status: { support: "native" },
+        get_supported_actions: { support: "native" },
+    },
+    events: {
+        message: { support: "native", scenes: ["private", "channel"] },
+        group_member_increase: { support: "native", scenes: ["group"] },
+        group_member_decrease: { support: "native", scenes: ["group"] },
+        reaction_added: { support: "native", scenes: ["channel"] },
+        message_updated: { support: "native", scenes: ["channel"] },
+        message_deleted: { support: "native", scenes: ["channel"] },
+    },
+    segments: {
+        text: { support: "native", direction: "both" },
+        at: { support: "native", direction: "both" },
+        image: { support: "native", direction: "both" },
+        video: { support: "native", direction: "both" },
+        audio: { support: "native", direction: "both" },
+        file: { support: "native", direction: "both" },
+        card: { support: "native", direction: "both" },
+    },
+    transports: {
+        gateway: { support: "native", mode: "websocket" },
+        webhook: { support: "native", mode: "webhook" },
+    },
+});

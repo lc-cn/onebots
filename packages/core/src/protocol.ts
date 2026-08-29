@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { Account } from "./account.js";
 import { Adapter } from "./adapter.js";
 import { Dict } from "./types.js";

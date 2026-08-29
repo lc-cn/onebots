@@ -3,7 +3,7 @@
  * 模拟真实机器人行为，用于测试
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import type { MockConfig, MockUser, MockGroup, MockMember, MockMessage } from './types.js';
 
 export class MockBot extends EventEmitter {
@@ -321,4 +321,3 @@ export class MockBot extends EventEmitter {
         return this.isRunning;
     }
 }
-

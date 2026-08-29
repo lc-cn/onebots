@@ -8,7 +8,7 @@
  * "协议内自行 catch，避免一次失败阻断其它协议"，调试旁路的异常同样不能例外。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { Account } from "../account.js";
 import { ProtocolRegistry } from "../registry.js";
 import type { Protocol } from "../protocol.js";

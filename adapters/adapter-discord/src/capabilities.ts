@@ -1,0 +1,86 @@
+import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+
+/** Discord REST/Gateway 实现当前可用的能力。 */
+export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
+    actions: {
+        send_message: { support: "native", scenes: ["private", "group", "channel"] },
+        delete_message: { support: "native", scenes: ["private", "group", "channel"] },
+        get_message: { support: "native", scenes: ["private", "group", "channel"] },
+        get_message_history: { support: "native", scenes: ["private", "group", "channel"] },
+        get_login_info: { support: "native" },
+        get_user_info: { support: "native" },
+        get_friend_list: { support: "emulated", note: "返回机器人可见用户" },
+        get_friend_info: { support: "emulated", note: "按 Discord 用户投影" },
+        get_group_list: { support: "emulated", note: "按 Guild 投影群组" },
+        get_group_info: { support: "emulated", note: "按 Guild 投影群组" },
+        leave_group: { support: "native" },
+        get_group_member_list: { support: "native" },
+        get_group_member_info: { support: "native" },
+        kick_group_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["KICK_MEMBERS"],
+        },
+        mute_group_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["MODERATE_MEMBERS"],
+        },
+        set_group_card: { support: "native", availability: "context" },
+        send_group_message_reaction: { support: "native" },
+        get_guild_info: { support: "native" },
+        get_guild_list: { support: "native" },
+        get_guild_member_info: { support: "native" },
+        get_channel_info: { support: "native" },
+        get_channel_list: { support: "native" },
+        create_channel: {
+            support: "native",
+            availability: "permission",
+            permissions: ["MANAGE_CHANNELS"],
+        },
+        update_channel: {
+            support: "native",
+            availability: "permission",
+            permissions: ["MANAGE_CHANNELS"],
+        },
+        delete_channel: {
+            support: "native",
+            availability: "permission",
+            permissions: ["MANAGE_CHANNELS"],
+        },
+        get_channel_member_info: { support: "native" },
+        get_channel_member_list: { support: "native" },
+        kick_channel_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["KICK_MEMBERS"],
+        },
+        set_channel_member_mute: {
+            support: "native",
+            availability: "permission",
+            permissions: ["MODERATE_MEMBERS"],
+        },
+        can_send_image: { support: "native" },
+        can_send_record: { support: "native" },
+        get_version: { support: "native" },
+        get_status: { support: "native" },
+        get_supported_actions: { support: "native" },
+    },
+    events: {
+        message: { support: "native", scenes: ["private", "group", "channel"] },
+        group_member_increase: { support: "native", scenes: ["group"] },
+        group_member_decrease: { support: "native", scenes: ["group"] },
+    },
+    segments: {
+        text: { support: "native", direction: "both" },
+        at: { support: "native", direction: "both" },
+        image: { support: "native", direction: "both" },
+        file: { support: "native", direction: "both" },
+        audio: { support: "native", direction: "both" },
+        video: { support: "native", direction: "both" },
+        embed: { support: "native", direction: "send" },
+    },
+    transports: {
+        gateway: { support: "native", mode: "websocket" },
+    },
+});

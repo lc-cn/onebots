@@ -2,7 +2,7 @@
  * WhatsApp Bot 客户端
  * 基于 WhatsApp Business API (Meta Graph API)
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import axios, { AxiosInstance, type AxiosError } from 'axios';
 import { createRequire } from 'module';
 import type {

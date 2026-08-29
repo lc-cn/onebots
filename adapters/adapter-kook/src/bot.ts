@@ -2,7 +2,7 @@
  * KOOK (开黑了) Bot 客户端
  * 基于 kook-client 封装
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import {Client,ChannelMessageEvent,PrivateMessageEvent} from 'kook-client';
 import type { User, Guild, Channel, Message } from 'kook-client';
 import type { RouterContext, Next } from 'onebots';

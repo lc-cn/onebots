@@ -3,7 +3,7 @@
  * 用于 Node.js 环境
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { DiscordREST } from './rest.js';
 import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from 'onebots';
 import type { Agent } from 'http';

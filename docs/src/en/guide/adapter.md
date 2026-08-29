@@ -25,6 +25,12 @@ onebots currently supports the following platform adapters:
 | **WhatsApp** | ✅ Implemented | `@onebots/adapter-whatsapp` | Supports WhatsApp Business API |
 | **Zulip** | ✅ Implemented | `@onebots/adapter-zulip` | Supports Zulip streams and private messages |
 
+## Capability manifests
+
+Every adapter exports and registers one runtime capability manifest. It describes actions, events, message segments, and transports, distinguishing native support, emulated projections, and unsupported features. Context-dependent entries also declare their required permissions, availability, and scenes.
+
+Use `adapter.describeCapabilities(accountId)` for the complete manifest and `adapter.getSupportedActions(accountId)` for callable actions. OneBots verifies that every advertised action has a concrete adapter implementation, preventing capability metadata from drifting away from runtime behavior.
+
 ### Quick Links
 
 - [QQ Adapter Documentation](/en/platform/qq)
@@ -133,4 +139,3 @@ wechat.my_wechat_mp:
 ```
 
 For complete configuration examples, see [Configuration Guide](/en/config/global).
-

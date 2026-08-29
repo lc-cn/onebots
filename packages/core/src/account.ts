@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { deepClone, deepMerge } from "./utils.js";
 import { Adapter } from "./adapter.js";
 import { Logger } from "log4js";

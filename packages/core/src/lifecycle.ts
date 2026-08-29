@@ -3,7 +3,7 @@
  * 提供资源管理和优雅关闭机制
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { ResourceError } from './errors.js';
 import type { Dispose } from './types.js';
 
@@ -206,4 +206,3 @@ export class LifecycleManager extends EventEmitter {
         return Array.from(this.resources.keys());
     }
 }
-

@@ -1,7 +1,7 @@
 /**
  * 黑盒语音 Bot 客户端
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { HeychatHttpClient } from './http/client.js';
 import { HeychatWsClient } from './ws/client.js';
 import {

@@ -8,10 +8,11 @@ import { BaseApp } from "onebots";
 import { SlackBot } from "./bot.js";
 import { CommonEvent, type CommonTypes } from "onebots";
 import type { SlackConfig, SlackEvent, SlackMessageOptions } from "./types.js";
+import { slackCapabilities } from "./capabilities.js";
 
 export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     constructor(app: BaseApp) {
-        super(app, "slack");
+        super(app, "slack", slackCapabilities);
         this.icon = "https://slack.com/favicon.ico";
     }
 
@@ -22,7 +23,10 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     /**
      * 发送消息
      */
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -31,32 +35,32 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
-        let text = '';
+        let text = "";
         const options: SlackMessageOptions = {};
 
         for (const seg of message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 text += seg;
-            } else if (seg.type === 'text') {
-                text += seg.data.text || '';
-            } else if (seg.type === 'at') {
+            } else if (seg.type === "text") {
+                text += seg.data.text || "";
+            } else if (seg.type === "at") {
                 const userId = seg.data.qq || seg.data.id || seg.data.user_id;
-                if (userId === 'all') {
-                    text += '<!channel> ';
+                if (userId === "all") {
+                    text += "<!channel> ";
                 } else {
                     text += `<@${userId}> `;
                 }
-            } else if (seg.type === 'image') {
+            } else if (seg.type === "image") {
                 // Slack 图片需要单独发送或作为附件
                 if (seg.data.url || seg.data.file) {
                     const imageUrl = seg.data.url || seg.data.file;
                     if (!options.attachments) options.attachments = [];
                     options.attachments.push({
                         image_url: imageUrl,
-                        fallback: text || 'Image',
+                        fallback: text || "Image",
                     });
                 }
-            } else if (seg.type === 'file') {
+            } else if (seg.type === "file") {
                 // Slack 文件需要先上传
                 if (seg.data.url || seg.data.file) {
                     text += `[文件: ${seg.data.url || seg.data.file}]`;
@@ -82,7 +86,10 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
 
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
-        const channelId = params.scene_id != null ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string : '';
+        const channelId =
+            params.scene_id != null
+                ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
+                : "";
 
         if (channelId) {
             await bot.deleteMessage(channelId, msgId);
@@ -94,7 +101,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
         // Slack 不支持直接获取消息，需要通过 conversations.history
-        throw new Error('Slack 不支持直接获取消息');
+        throw new Error("Slack 不支持直接获取消息");
     }
 
     /**
@@ -106,16 +113,21 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
 
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
-        const rawScene = (params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }).scene_id;
-        const channelId = rawScene != null ? this.coerceId(rawScene as CommonTypes.Id | string | number).string : '';
+        const rawScene = (
+            params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }
+        ).scene_id;
+        const channelId =
+            rawScene != null
+                ? this.coerceId(rawScene as CommonTypes.Id | string | number).string
+                : "";
 
         // 解析消息内容
-        let text = '';
+        let text = "";
         for (const seg of params.message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 text += seg;
-            } else if (seg.type === 'text') {
-                text += seg.data.text || '';
+            } else if (seg.type === "text") {
+                text += seg.data.text || "";
             }
         }
 
@@ -139,9 +151,9 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         const me = bot.getCachedMe();
 
         return {
-            user_id: this.createId(me?.id || ''),
-            user_name: me?.name || '',
-            user_displayname: me?.display_name || me?.real_name || me?.name || '',
+            user_id: this.createId(me?.id || ""),
+            user_name: me?.name || "",
+            user_displayname: me?.display_name || me?.real_name || me?.name || "",
             avatar: me?.profile?.image_512 || me?.profile?.image_192,
         };
     }
@@ -159,8 +171,8 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
 
         return {
             user_id: this.createId(user.id),
-            user_name: user.name || '',
-            user_displayname: user.display_name || user.real_name || user.name || '',
+            user_name: user.name || "",
+            user_displayname: user.display_name || user.real_name || user.name || "",
             avatar: user.profile?.image_512 || user.profile?.image_192,
         };
     }
@@ -172,7 +184,10 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     /**
      * 获取好友列表（Slack 不支持）
      */
-    async getFriendList(uin: string, params?: Adapter.GetFriendListParams): Promise<Adapter.FriendInfo[]> {
+    async getFriendList(
+        uin: string,
+        params?: Adapter.GetFriendListParams,
+    ): Promise<Adapter.FriendInfo[]> {
         // Slack 不提供好友列表 API
         return [];
     }
@@ -180,7 +195,10 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     /**
      * 获取好友信息
      */
-    async getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -190,8 +208,8 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
 
         return {
             user_id: this.createId(user.id),
-            user_name: user.name || '',
-            remark: user.display_name || user.real_name || user.name || '',
+            user_name: user.name || "",
+            remark: user.display_name || user.real_name || user.name || "",
         };
     }
 
@@ -202,23 +220,29 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     /**
      * 获取群列表（频道列表）
      */
-    async getGroupList(uin: string, params?: Adapter.GetGroupListParams): Promise<Adapter.GroupInfo[]> {
+    async getGroupList(
+        uin: string,
+        params?: Adapter.GetGroupListParams,
+    ): Promise<Adapter.GroupInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
         const channels = await bot.getChannelList();
 
-        return channels.map((channel) => ({
+        return channels.map(channel => ({
             group_id: this.createId(channel.id),
-            group_name: channel.name || '',
+            group_name: channel.name || "",
         }));
     }
 
     /**
      * 获取群信息（频道信息）
      */
-    async getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -228,7 +252,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
 
         return {
             group_id: this.createId(channel.id),
-            group_name: channel.name || '',
+            group_name: channel.name || "",
         };
     }
 
@@ -246,7 +270,10 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     /**
      * 获取群成员列表（频道成员列表）
      */
-    async getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -262,9 +289,9 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
                 members.push({
                     group_id: params.group_id,
                     user_id: this.createId(user.id),
-                    user_name: user.name || '',
-                    card: user.display_name || user.real_name || user.name || '',
-                    role: user.is_admin ? 'admin' : user.is_owner ? 'owner' : 'member',
+                    user_name: user.name || "",
+                    card: user.display_name || user.real_name || user.name || "",
+                    role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
                 });
             } catch (error) {
                 // 忽略获取失败的用户
@@ -277,7 +304,10 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     /**
      * 获取群成员信息
      */
-    async getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -288,9 +318,9 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         return {
             group_id: params.group_id,
             user_id: this.createId(user.id),
-            user_name: user.name || '',
-            card: user.display_name || user.real_name || user.name || '',
-            role: user.is_admin ? 'admin' : user.is_owner ? 'owner' : 'member',
+            user_name: user.name || "",
+            card: user.display_name || user.real_name || user.name || "",
+            role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
         };
     }
 
@@ -299,7 +329,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      */
     async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
         // Slack 不支持直接踢出频道成员
-        throw new Error('Slack 不支持直接踢出频道成员');
+        throw new Error("Slack 不支持直接踢出频道成员");
     }
 
     /**
@@ -307,7 +337,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      */
     async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
         // Slack 不支持设置群名片
-        throw new Error('Slack 不支持设置群名片');
+        throw new Error("Slack 不支持设置群名片");
     }
 
     // ============================================
@@ -319,10 +349,10 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      */
     async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
-            app_name: 'onebots Slack Adapter',
-            app_version: '1.0.0',
-            impl: 'slack',
-            version: '1.0.0',
+            app_name: "onebots Slack Adapter",
+            app_version: "1.0.0",
+            impl: "slack",
+            version: "1.0.0",
         };
     }
 
@@ -341,7 +371,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     // 账号创建
     // ============================================
 
-    createAccount(config: Account.Config<'slack'>): Account<'slack', SlackBot> {
+    createAccount(config: Account.Config<"slack">): Account<"slack", SlackBot> {
         const slackConfig: SlackConfig = {
             account_id: config.account_id,
             token: config.token,
@@ -351,32 +381,32 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         };
 
         const bot = new SlackBot(slackConfig);
-        const account = new Account<'slack', SlackBot>(this, bot, config);
+        const account = new Account<"slack", SlackBot>(this, bot, config);
 
         // Webhook 路由（Events API）
         this.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
 
         // 监听 Bot 事件
-        bot.on('ready', () => {
+        bot.on("ready", () => {
             this.logger.info(`Slack Bot ${config.account_id} 已就绪`);
         });
 
-        bot.on('error', (error) => {
+        bot.on("error", error => {
             this.logger.error(`Slack Bot ${config.account_id} 错误:`, error);
         });
 
         // 监听 Slack 事件
-        bot.on('event', (event: SlackEvent) => {
+        bot.on("event", (event: SlackEvent) => {
             this.handleSlackEvent(account, event);
         });
 
         // 启动时初始化 Bot
-        account.on('start', async () => {
+        account.on("start", async () => {
             try {
                 await bot.start();
                 account.status = AccountStatus.Online;
                 const me = bot.getCachedMe();
-                account.nickname = me?.name || 'Slack Bot';
+                account.nickname = me?.name || "Slack Bot";
                 account.avatar = me?.profile?.image_512 || me?.profile?.image_192 || this.icon;
             } catch (error) {
                 this.logger.error(`启动 Slack Bot 失败:`, error);
@@ -384,7 +414,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
             }
         });
 
-        account.on('stop', async () => {
+        account.on("stop", async () => {
             await bot.stop();
             account.status = AccountStatus.OffLine;
         });
@@ -395,13 +425,13 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     /**
      * 处理 Slack 事件
      */
-    private handleSlackEvent(account: Account<'slack', SlackBot>, event: SlackEvent): void {
+    private handleSlackEvent(account: Account<"slack", SlackBot>, event: SlackEvent): void {
         const eventType = event.type;
 
         // 处理消息事件
-        if (eventType === 'message') {
+        if (eventType === "message") {
             // 忽略子类型消息（如 bot_message, message_changed 等）
-            if (event.subtype && event.subtype !== 'thread_broadcast') {
+            if (event.subtype && event.subtype !== "thread_broadcast") {
                 return;
             }
 
@@ -411,45 +441,48 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
             if (me && event.user === me.id) return;
 
             // 打印消息接收日志
-            const content = event.text || '';
-            const contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+            const content = event.text || "";
+            const contentPreview =
+                content.length > 100 ? content.substring(0, 100) + "..." : content;
             this.logger.info(
                 `[Slack] 收到消息 | 消息ID: ${event.ts} | 频道: ${event.channel} | ` +
-                `发送者: ${event.user} | 内容: ${contentPreview}`
+                    `发送者: ${event.user} | 内容: ${contentPreview}`,
             );
 
             // 构建消息段
             const messageSegments: CommonTypes.Segment[] = [];
             if (content) {
                 messageSegments.push({
-                    type: 'text',
+                    type: "text",
                     data: { text: content },
                 });
             }
 
             // 判断是私聊还是群聊（通过频道类型判断）
-            const isGroup = event.channel && !event.channel.startsWith('D'); // D 开头的通常是私聊
-            const messageType = isGroup ? 'group' : 'private';
+            const isGroup = event.channel && !event.channel.startsWith("D"); // D 开头的通常是私聊
+            const messageType = isGroup ? "group" : "private";
 
             // 转换为 CommonEvent 格式
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(event.ts || event.event_ts),
                 timestamp: unixSecondsToEventMs(event.ts ?? event.event_ts),
-                platform: 'slack',
+                platform: "slack",
                 bot_id: this.createId(account.config.account_id),
-                type: 'message',
+                type: "message",
                 message_type: messageType,
                 sender: {
-                    id: this.createId(event.user || ''),
-                    name: event.user || '',
+                    id: this.createId(event.user || ""),
+                    name: event.user || "",
                     avatar: undefined,
                 },
-                ...(isGroup ? {
-                    group: {
-                        id: this.createId(event.channel || ''),
-                        name: '',
-                    },
-                } : {}),
+                ...(isGroup
+                    ? {
+                          group: {
+                              id: this.createId(event.channel || ""),
+                              name: "",
+                          },
+                      }
+                    : {}),
                 message_id: this.createId(event.ts || event.event_ts),
                 raw_message: content,
                 message: messageSegments,
@@ -469,12 +502,12 @@ declare module "onebots" {
     }
 }
 
-AdapterRegistry.register('slack', SlackAdapter, {
-    name: 'slack',
-    displayName: 'Slack官方机器人',
-    description: 'Slack官方机器人适配器，支持频道消息、私聊、应用命令',
-    icon: 'https://slack.com/favicon.ico',
-    homepage: 'https://slack.com/',
-    author: '凉菜',
+AdapterRegistry.register("slack", SlackAdapter, {
+    name: "slack",
+    displayName: "Slack官方机器人",
+    description: "Slack官方机器人适配器，支持频道消息、私聊、应用命令",
+    icon: "https://slack.com/favicon.ico",
+    homepage: "https://slack.com/",
+    author: "凉菜",
+    capabilities: slackCapabilities,
 });
-

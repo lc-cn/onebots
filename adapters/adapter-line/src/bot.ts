@@ -4,7 +4,7 @@
  * 支持 Node.js 和 Cloudflare Workers
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { createHmac } from 'crypto';
 import type { Agent as HttpAgent } from 'http';
 import type { RequestOptions as HttpRequestOptions } from 'https';
@@ -519,4 +519,3 @@ export class LineBot extends EventEmitter {
         return this.request('/bot/message/quota/consumption');
     }
 }
-

@@ -2,7 +2,7 @@
  * Microsoft Teams Bot 客户端
  * 基于 Bot Framework SDK
  */
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import {
     BotFrameworkAdapter,
     type BotFrameworkAdapterSettings,

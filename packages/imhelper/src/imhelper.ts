@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { Adapter } from "./adapter.js";
 import { Group } from "./instances/group.js";
 import { Channel } from "./instances/channel.js";

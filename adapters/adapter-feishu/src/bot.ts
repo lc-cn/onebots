@@ -2,7 +2,7 @@
  * 飞书 Bot 客户端
  * 基于飞书开放平台 API，使用 fetch 实现
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import type { RouterContext, Next } from 'onebots';
 import {
     FeishuEndpoint,

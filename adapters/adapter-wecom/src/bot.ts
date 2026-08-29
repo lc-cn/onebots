@@ -2,7 +2,7 @@
  * 企业微信 Bot 客户端
  * 基于企业微信开放平台 API，使用 fetch 实现
  */
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import type { RouterContext } from "onebots";
 import {
     decryptWechatCallbackFor,

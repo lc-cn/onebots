@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import type { Message } from "./message.js";
 import { Friend } from "./instances/friend.js";
 import { User } from "./instances/user.js";

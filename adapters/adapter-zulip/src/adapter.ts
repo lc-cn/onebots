@@ -15,10 +15,11 @@ import type {
     ZulipDeleteMessageEvent,
     ZulipStream,
 } from "./types.js";
+import { zulipCapabilities } from "./capabilities.js";
 
 export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
     constructor(app: BaseApp) {
-        super(app, "zulip");
+        super(app, "zulip", zulipCapabilities);
         this.icon = "https://zulip.com/static/images/logo/zulip-icon-circle.png";
     }
 
@@ -29,7 +30,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
     /**
      * 发送消息
      */
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -38,24 +42,24 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         // 解析消息内容
-        let text = '';
+        let text = "";
         for (const seg of message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 text += seg;
-            } else if (seg.type === 'text') {
-                text += seg.data.text || '';
-            } else if (seg.type === 'image') {
+            } else if (seg.type === "text") {
+                text += seg.data.text || "";
+            } else if (seg.type === "image") {
                 // Zulip 支持 Markdown 图片语法
                 const imageUrl = seg.data.url || seg.data.file;
-                text += `\n![${seg.data.caption || 'image'}](${imageUrl})`;
-            } else if (seg.type === 'file') {
+                text += `\n![${seg.data.caption || "image"}](${imageUrl})`;
+            } else if (seg.type === "file") {
                 const fileUrl = seg.data.url || seg.data.file;
-                text += `\n[${seg.data.name || 'file'}](${fileUrl})`;
+                text += `\n[${seg.data.name || "file"}](${fileUrl})`;
             }
         }
 
         if (!text) {
-            throw new Error('No valid message content');
+            throw new Error("No valid message content");
         }
 
         // 解析 scene_id
@@ -64,26 +68,26 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         const sceneIdStr = sceneId.string;
         let sendParams: ZulipSendMessageParams;
 
-        if (scene_type === 'group' || sceneIdStr.includes('/')) {
+        if (scene_type === "group" || sceneIdStr.includes("/")) {
             // 流消息
-            const parts = sceneIdStr.split('/');
+            const parts = sceneIdStr.split("/");
             const streamName = parts[0];
-            const topic = parts[1] || 'general';
+            const topic = parts[1] || "general";
 
             sendParams = {
-                type: 'stream',
+                type: "stream",
                 to: streamName,
                 topic: topic,
                 content: text,
             };
         } else {
             // 私聊消息
-            const emails = sceneIdStr.includes(',') 
-                ? sceneIdStr.split(',').map(e => e.trim())
+            const emails = sceneIdStr.includes(",")
+                ? sceneIdStr.split(",").map(e => e.trim())
                 : [sceneIdStr];
 
             sendParams = {
-                type: 'private',
+                type: "private",
                 to_emails: emails,
                 content: text,
             };
@@ -92,7 +96,9 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         const result = await bot.sendMessage(sendParams);
 
         return {
-            message_id: this.createId(result.id?.toString() || result.message_id?.toString() || Date.now().toString()),
+            message_id: this.createId(
+                result.id?.toString() || result.message_id?.toString() || Date.now().toString(),
+            ),
         };
     }
 
@@ -104,7 +110,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const messageId = parseInt(this.coerceId(params.message_id as CommonTypes.Id | string | number).string, 10);
+        const messageId = parseInt(
+            this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
+            10,
+        );
         await bot.deleteMessage(messageId);
     }
 
@@ -113,7 +122,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
      */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
         // Zulip API 不直接支持获取单条消息
-        throw new Error('Zulip API 不支持直接获取消息');
+        throw new Error("Zulip API 不支持直接获取消息");
     }
 
     /**
@@ -124,16 +133,19 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        const messageId = parseInt(this.coerceId(params.message_id as CommonTypes.Id | string | number).string, 10);
+        const messageId = parseInt(
+            this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
+            10,
+        );
 
         // 解析消息内容
-        let text = '';
+        let text = "";
 
         for (const seg of params.message) {
-            if (typeof seg === 'string') {
+            if (typeof seg === "string") {
                 text += seg;
-            } else if (seg.type === 'text') {
-                text += seg.data.text || '';
+            } else if (seg.type === "text") {
+                text += seg.data.text || "";
             }
         }
 
@@ -189,7 +201,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
     /**
      * 获取好友列表（Zulip 不支持）
      */
-    async getFriendList(uin: string, params?: Adapter.GetFriendListParams): Promise<Adapter.FriendInfo[]> {
+    async getFriendList(
+        uin: string,
+        params?: Adapter.GetFriendListParams,
+    ): Promise<Adapter.FriendInfo[]> {
         // Zulip 不提供好友列表概念
         return [];
     }
@@ -197,7 +212,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
     /**
      * 获取好友信息
      */
-    async getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
         // 使用 getUserInfo
         const userInfo = await this.getUserInfo(uin, { user_id: params.user_id });
         return {
@@ -215,7 +233,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
     /**
      * 获取群列表（流列表）
      */
-    async getGroupList(uin: string, params?: Adapter.GetGroupListParams): Promise<Adapter.GroupInfo[]> {
+    async getGroupList(
+        uin: string,
+        params?: Adapter.GetGroupListParams,
+    ): Promise<Adapter.GroupInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -231,7 +252,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
     /**
      * 获取群信息（流信息）
      */
-    async getGroupInfo(uin: string, params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
 
@@ -254,13 +278,16 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
      * 退出群组（Zulip 不支持）
      */
     async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        throw new Error('Zulip API 不支持退出流');
+        throw new Error("Zulip API 不支持退出流");
     }
 
     /**
      * 获取群成员列表（Zulip 不支持）
      */
-    async getGroupMemberList(uin: string, params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         // Zulip 不提供流成员列表 API
         return [];
     }
@@ -268,22 +295,25 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
     /**
      * 获取群成员信息（Zulip 不支持）
      */
-    async getGroupMemberInfo(uin: string, params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
-        throw new Error('Zulip API 不支持获取流成员信息');
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
+        throw new Error("Zulip API 不支持获取流成员信息");
     }
 
     /**
      * 踢出群成员（Zulip 不支持）
      */
     async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        throw new Error('Zulip API 不支持踢出流成员');
+        throw new Error("Zulip API 不支持踢出流成员");
     }
 
     /**
      * 设置群名片（Zulip 不支持）
      */
     async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        throw new Error('Zulip API 不支持设置群名片');
+        throw new Error("Zulip API 不支持设置群名片");
     }
 
     // ============================================
@@ -295,10 +325,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
      */
     async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
-            app_name: 'onebots Zulip Adapter',
-            app_version: '1.0.0',
-            impl: 'zulip',
-            version: '1.0.0',
+            app_name: "onebots Zulip Adapter",
+            app_version: "1.0.0",
+            impl: "zulip",
+            version: "1.0.0",
         };
     }
 
@@ -317,7 +347,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
     // 账号创建
     // ============================================
 
-    createAccount(config: Account.Config<'zulip'>): Account<'zulip', ZulipBot> {
+    createAccount(config: Account.Config<"zulip">): Account<"zulip", ZulipBot> {
         const zulipConfig: ZulipConfig = {
             account_id: config.account_id,
             serverUrl: config.serverUrl,
@@ -328,19 +358,19 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         };
 
         const bot = new ZulipBot(zulipConfig);
-        const account = new Account<'zulip', ZulipBot>(this, bot, config);
+        const account = new Account<"zulip", ZulipBot>(this, bot, config);
 
         // 监听 Bot 事件
-        bot.on('ready', () => {
+        bot.on("ready", () => {
             this.logger.info(`Zulip Bot ${config.account_id} 已就绪`);
         });
 
-        bot.on('error', (error) => {
+        bot.on("error", error => {
             this.logger.error(`Zulip Bot ${config.account_id} 错误:`, error);
         });
 
         // 监听收到的消息
-        bot.on('message', (message: ZulipMessageEvent) => {
+        bot.on("message", (message: ZulipMessageEvent) => {
             // 忽略自己发送的消息
             const config = account.config as ZulipConfig;
             if (message.sender_email === config.email) {
@@ -348,21 +378,23 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
             }
 
             // 打印消息接收日志
-            const contentPreview = message.content.length > 100 
-                ? message.content.substring(0, 100) + '...' 
-                : message.content;
-            const location = message.message_type === 'stream'
-                ? `${message.stream_name}/${message.topic}`
-                : 'private';
+            const contentPreview =
+                message.content.length > 100
+                    ? message.content.substring(0, 100) + "..."
+                    : message.content;
+            const location =
+                message.message_type === "stream"
+                    ? `${message.stream_name}/${message.topic}`
+                    : "private";
             this.logger.info(
                 `[Zulip] 收到消息 | 消息ID: ${message.id} | 位置: ${location} | ` +
-                `发送者: ${message.sender_full_name} | 内容: ${contentPreview}`
+                    `发送者: ${message.sender_full_name} | 内容: ${contentPreview}`,
             );
 
             // 构建消息段
             const messageSegments: CommonTypes.Segment[] = [];
             messageSegments.push({
-                type: 'text',
+                type: "text",
                 data: { text: message.content },
             });
 
@@ -370,10 +402,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
             const commonEvent: CommonEvent.Message = {
                 id: this.createId(message.id.toString()),
                 timestamp: unixSecondsToEventMs(message.timestamp),
-                platform: 'zulip',
+                platform: "zulip",
                 bot_id: this.createId(config.account_id),
-                type: 'message',
-                message_type: message.message_type === 'stream' ? 'group' : 'private',
+                type: "message",
+                message_type: message.message_type === "stream" ? "group" : "private",
                 sender: {
                     id: this.createId(message.sender_id.toString()),
                     name: message.sender_full_name,
@@ -385,10 +417,10 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
             };
 
             // 添加群组信息（如果是流消息）
-            if (message.message_type === 'stream' && message.stream_id) {
+            if (message.message_type === "stream" && message.stream_id) {
                 commonEvent.group = {
                     id: this.createId(message.stream_id.toString()),
-                    name: message.stream_name || '',
+                    name: message.stream_name || "",
                 };
             }
 
@@ -397,17 +429,17 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
         });
 
         // 监听消息更新
-        bot.on('update_message', (event: ZulipUpdateMessageEvent) => {
+        bot.on("update_message", (event: ZulipUpdateMessageEvent) => {
             this.logger.debug(`[Zulip] 消息已更新: ${event.message_id}`);
         });
 
         // 监听消息删除
-        bot.on('delete_message', (event: ZulipDeleteMessageEvent) => {
+        bot.on("delete_message", (event: ZulipDeleteMessageEvent) => {
             this.logger.debug(`[Zulip] 消息已删除: ${event.message_id}`);
         });
 
         // 启动时初始化 Bot
-        account.on('start', async () => {
+        account.on("start", async () => {
             try {
                 await bot.start();
                 account.status = AccountStatus.Online;
@@ -420,7 +452,7 @@ export class ZulipAdapter extends Adapter<ZulipBot, "zulip"> {
             }
         });
 
-        account.on('stop', async () => {
+        account.on("stop", async () => {
             await bot.stop();
             account.status = AccountStatus.OffLine;
         });
@@ -437,12 +469,12 @@ declare module "onebots" {
     }
 }
 
-AdapterRegistry.register('zulip', ZulipAdapter, {
-    name: 'zulip',
-    displayName: 'Zulip 适配器',
-    description: 'Zulip 适配器，支持流消息和私聊消息，基于 REST API 和 WebSocket',
-    icon: 'https://zulip.com/static/images/logo/zulip-icon-circle.png',
-    homepage: 'https://zulip.com/',
-    author: '凉菜',
+AdapterRegistry.register("zulip", ZulipAdapter, {
+    name: "zulip",
+    displayName: "Zulip 适配器",
+    description: "Zulip 适配器，支持流消息和私聊消息，基于 REST API 和 WebSocket",
+    icon: "https://zulip.com/static/images/logo/zulip-icon-circle.png",
+    homepage: "https://zulip.com/",
+    author: "凉菜",
+    capabilities: zulipCapabilities,
 });
-

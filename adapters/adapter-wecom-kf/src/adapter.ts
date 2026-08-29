@@ -1,18 +1,12 @@
 /**
  * 微信客服 OneBots 适配器
  */
-import {
-    Account,
-    AccountStatus,
-    Adapter,
-    AdapterRegistry,
-    BaseApp,
-    CommonTypes,
-} from "onebots";
+import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp, CommonTypes } from "onebots";
 import { readFileSync } from "node:fs";
 import { WeComKfBot } from "./bot.js";
 import { kfItemToCommonEvent } from "./msg-mapper.js";
 import type { WeComKfConfig, KfMsgItem } from "./types.js";
+import { weComKfCapabilities } from "./capabilities.js";
 
 function unsupported(name: string): never {
     throw new Error(`微信客服不支持 ${name}`);
@@ -23,7 +17,7 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
     private readonly userLastOpenKf = new Map<string, string>();
 
     constructor(app: BaseApp) {
-        super(app, "wecom-kf");
+        super(app, "wecom-kf", weComKfCapabilities);
         this.icon = "https://work.weixin.qq.com/favicon.ico";
     }
 
@@ -31,7 +25,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         return `${accountId}\0${externalUserid}`;
     }
 
-    async sendMessage(uin: string, params: Adapter.SendMessageParams): Promise<Adapter.SendMessageResult> {
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`未找到账号 ${uin}`);
 
@@ -43,9 +40,7 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         const cfg = bot.getConfig();
         const touser = this.coerceId(params.scene_id as CommonTypes.Id | string | number).string;
         const openKf =
-            this.userLastOpenKf.get(this.ctxKey(account.account_id, touser)) ||
-            cfg.open_kfid ||
-            "";
+            this.userLastOpenKf.get(this.ctxKey(account.account_id, touser)) || cfg.open_kfid || "";
         if (!openKf) {
             throw new Error("未配置 open_kfid 且无会话上下文，无法发送消息");
         }
@@ -86,7 +81,12 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
                 if (r.errcode !== 0) throw new Error(`发送图片失败: ${r.errmsg} (${r.errcode})`);
                 lastMsgId = r.msgid || lastMsgId;
             } else if (seg.type === "voice" || seg.type === "record") {
-                const mediaId = await this.resolveMediaId(bot, "voice", seg.data.url, seg.data.file);
+                const mediaId = await this.resolveMediaId(
+                    bot,
+                    "voice",
+                    seg.data.url,
+                    seg.data.file,
+                );
                 const r = await bot.sendMsg({
                     touser,
                     open_kfid: openKf,
@@ -96,7 +96,12 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
                 if (r.errcode !== 0) throw new Error(`发送语音失败: ${r.errmsg} (${r.errcode})`);
                 lastMsgId = r.msgid || lastMsgId;
             } else if (seg.type === "video") {
-                const mediaId = await this.resolveMediaId(bot, "video", seg.data.url, seg.data.file);
+                const mediaId = await this.resolveMediaId(
+                    bot,
+                    "video",
+                    seg.data.url,
+                    seg.data.file,
+                );
                 const r = await bot.sendMsg({
                     touser,
                     open_kfid: openKf,
@@ -167,11 +172,17 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         throw unsupported("撤回/删除消息");
     }
 
-    async getMessage(_uin: string, _params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
+    async getMessage(
+        _uin: string,
+        _params: Adapter.GetMessageParams,
+    ): Promise<Adapter.MessageInfo> {
         throw unsupported("getMessage");
     }
 
-    async getMessageHistory(_uin: string, _params: Adapter.GetMessageHistoryParams): Promise<Adapter.MessageInfo[]> {
+    async getMessageHistory(
+        _uin: string,
+        _params: Adapter.GetMessageHistoryParams,
+    ): Promise<Adapter.MessageInfo[]> {
         throw unsupported("getMessageHistory");
     }
 
@@ -179,7 +190,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         throw unsupported("updateMessage");
     }
 
-    async getForwardMessage(_uin: string, _params: Adapter.GetForwardMessageParams): Promise<Adapter.MessageInfo[]> {
+    async getForwardMessage(
+        _uin: string,
+        _params: Adapter.GetForwardMessageParams,
+    ): Promise<Adapter.MessageInfo[]> {
         throw unsupported("getForwardMessage");
     }
 
@@ -224,7 +238,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         };
     }
 
-    async createUserChannel(_uin: string, _params: Adapter.CreateUserChannelParams): Promise<Adapter.ChannelInfo> {
+    async createUserChannel(
+        _uin: string,
+        _params: Adapter.CreateUserChannelParams,
+    ): Promise<Adapter.ChannelInfo> {
         throw unsupported("createUserChannel");
     }
 
@@ -232,7 +249,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         return [];
     }
 
-    async getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
         const u = await this.getUserInfo(uin, { user_id: params.user_id });
         return {
             user_id: u.user_id,
@@ -257,7 +277,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         return [];
     }
 
-    async handleFriendRequest(_uin: string, _params: Adapter.HandleFriendRequestParams): Promise<void> {
+    async handleFriendRequest(
+        _uin: string,
+        _params: Adapter.HandleFriendRequestParams,
+    ): Promise<void> {
         throw unsupported("handleFriendRequest");
     }
 
@@ -265,7 +288,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         return [];
     }
 
-    async getGroupInfo(_uin: string, _params: Adapter.GetGroupInfoParams): Promise<Adapter.GroupInfo> {
+    async getGroupInfo(
+        _uin: string,
+        _params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
         throw unsupported("群聊");
     }
 
@@ -277,11 +303,17 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         throw unsupported("群聊");
     }
 
-    async getGroupMemberList(_uin: string, _params: Adapter.GetGroupMemberListParams): Promise<Adapter.GroupMemberInfo[]> {
+    async getGroupMemberList(
+        _uin: string,
+        _params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
         return [];
     }
 
-    async getGroupMemberInfo(_uin: string, _params: Adapter.GetGroupMemberInfoParams): Promise<Adapter.GroupMemberInfo> {
+    async getGroupMemberInfo(
+        _uin: string,
+        _params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
         throw unsupported("群聊");
     }
 
@@ -305,11 +337,17 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         throw unsupported("群聊");
     }
 
-    async setGroupSpecialTitle(_uin: string, _params: Adapter.SetGroupSpecialTitleParams): Promise<void> {
+    async setGroupSpecialTitle(
+        _uin: string,
+        _params: Adapter.SetGroupSpecialTitleParams,
+    ): Promise<void> {
         throw unsupported("群聊");
     }
 
-    async getGroupHonorInfo(_uin: string, _params: Adapter.GetGroupHonorInfoParams): Promise<Adapter.GroupHonorInfo> {
+    async getGroupHonorInfo(
+        _uin: string,
+        _params: Adapter.GetGroupHonorInfoParams,
+    ): Promise<Adapter.GroupHonorInfo> {
         throw unsupported("群聊");
     }
 
@@ -317,7 +355,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         throw unsupported("群聊");
     }
 
-    async handleGroupRequest(_uin: string, _params: Adapter.HandleGroupRequestParams): Promise<void> {
+    async handleGroupRequest(
+        _uin: string,
+        _params: Adapter.HandleGroupRequestParams,
+    ): Promise<void> {
         throw unsupported("群聊");
     }
 
@@ -329,7 +370,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         throw unsupported("群聊");
     }
 
-    async sendGroupMessageReaction(_uin: string, _params: Adapter.SendGroupMessageReactionParams): Promise<void> {
+    async sendGroupMessageReaction(
+        _uin: string,
+        _params: Adapter.SendGroupMessageReactionParams,
+    ): Promise<void> {
         throw unsupported("群聊");
     }
 
@@ -337,11 +381,17 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         return [];
     }
 
-    async sendGroupAnnouncement(_uin: string, _params: Adapter.SendGroupAnnouncementParams): Promise<void> {
+    async sendGroupAnnouncement(
+        _uin: string,
+        _params: Adapter.SendGroupAnnouncementParams,
+    ): Promise<void> {
         throw unsupported("群聊");
     }
 
-    async deleteGroupAnnouncement(_uin: string, _params: Adapter.DeleteGroupAnnouncementParams): Promise<void> {
+    async deleteGroupAnnouncement(
+        _uin: string,
+        _params: Adapter.DeleteGroupAnnouncementParams,
+    ): Promise<void> {
         throw unsupported("群聊");
     }
 
@@ -349,15 +399,24 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         return [];
     }
 
-    async setGroupEssenceMessage(_uin: string, _params: Adapter.SetGroupEssenceMessageParams): Promise<void> {
+    async setGroupEssenceMessage(
+        _uin: string,
+        _params: Adapter.SetGroupEssenceMessageParams,
+    ): Promise<void> {
         throw unsupported("群聊");
     }
 
-    async deleteGroupEssenceMessage(_uin: string, _params: Adapter.DeleteGroupEssenceMessageParams): Promise<void> {
+    async deleteGroupEssenceMessage(
+        _uin: string,
+        _params: Adapter.DeleteGroupEssenceMessageParams,
+    ): Promise<void> {
         throw unsupported("群聊");
     }
 
-    async getGuildInfo(_uin: string, _params: Adapter.GetGuildInfoParams): Promise<Adapter.GuildInfo> {
+    async getGuildInfo(
+        _uin: string,
+        _params: Adapter.GetGuildInfoParams,
+    ): Promise<Adapter.GuildInfo> {
         throw unsupported("频道");
     }
 
@@ -365,11 +424,17 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         return [];
     }
 
-    async getGuildMemberInfo(_uin: string, _params: Adapter.GetGuildMemberInfoParams): Promise<Adapter.GuildMemberInfo> {
+    async getGuildMemberInfo(
+        _uin: string,
+        _params: Adapter.GetGuildMemberInfoParams,
+    ): Promise<Adapter.GuildMemberInfo> {
         throw unsupported("频道");
     }
 
-    async getChannelInfo(_uin: string, _params: Adapter.GetChannelInfoParams): Promise<Adapter.ChannelInfo> {
+    async getChannelInfo(
+        _uin: string,
+        _params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
         throw unsupported("频道");
     }
 
@@ -377,7 +442,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         return [];
     }
 
-    async createChannel(_uin: string, _params: Adapter.CreateChannelParams): Promise<Adapter.ChannelInfo> {
+    async createChannel(
+        _uin: string,
+        _params: Adapter.CreateChannelParams,
+    ): Promise<Adapter.ChannelInfo> {
         throw unsupported("频道");
     }
 
@@ -421,15 +489,24 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         throw unsupported("deleteFile");
     }
 
-    async getGroupFiles(_uin: string, _params: Adapter.GetGroupFilesParams): Promise<Adapter.GroupFilesResult> {
+    async getGroupFiles(
+        _uin: string,
+        _params: Adapter.GetGroupFilesParams,
+    ): Promise<Adapter.GroupFilesResult> {
         return { files: [], folders: [] };
     }
 
-    async createGroupFolder(_uin: string, _params: Adapter.CreateGroupFolderParams): Promise<Adapter.FolderInfo> {
+    async createGroupFolder(
+        _uin: string,
+        _params: Adapter.CreateGroupFolderParams,
+    ): Promise<Adapter.FolderInfo> {
         throw unsupported("createGroupFolder");
     }
 
-    async getFileDownloadUrl(_uin: string, _params: Adapter.GetFileDownloadUrlParams): Promise<string> {
+    async getFileDownloadUrl(
+        _uin: string,
+        _params: Adapter.GetFileDownloadUrlParams,
+    ): Promise<string> {
         throw unsupported("getFileDownloadUrl");
     }
 
@@ -457,7 +534,10 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         throw unsupported("getRecord");
     }
 
-    async getResourceTempUrl(_uin: string, _params: Adapter.GetResourceTempUrlParams): Promise<string> {
+    async getResourceTempUrl(
+        _uin: string,
+        _params: Adapter.GetResourceTempUrlParams,
+    ): Promise<string> {
         throw unsupported("getResourceTempUrl");
     }
 
@@ -486,11 +566,18 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
         };
     }
 
-    private dispatchKfItems(account: Account<"wecom-kf", WeComKfBot>, openKfid: string, items: KfMsgItem[]): void {
+    private dispatchKfItems(
+        account: Account<"wecom-kf", WeComKfBot>,
+        openKfid: string,
+        items: KfMsgItem[],
+    ): void {
         for (const item of items) {
             const ext = item.external_userid;
             if (ext) {
-                this.userLastOpenKf.set(this.ctxKey(account.account_id, ext), item.open_kfid || openKfid);
+                this.userLastOpenKf.set(
+                    this.ctxKey(account.account_id, ext),
+                    item.open_kfid || openKfid,
+                );
             }
             const ev = kfItemToCommonEvent(item, {
                 createId: this.createId.bind(this),
@@ -529,7 +616,7 @@ export class WeComKfAdapter extends Adapter<WeComKfBot, "wecom-kf"> {
             this.dispatchKfItems(account, payload.open_kfid, payload.items);
         });
 
-        bot.on("error", (err) => {
+        bot.on("error", err => {
             this.logger.error(`微信客服 ${config.account_id} 错误:`, err);
         });
 
@@ -571,4 +658,5 @@ AdapterRegistry.register("wecom-kf", WeComKfAdapter, {
     icon: "https://work.weixin.qq.com/favicon.ico",
     homepage: "https://developer.work.weixin.qq.com/document/path/94638",
     author: "凉菜",
+    capabilities: weComKfCapabilities,
 });

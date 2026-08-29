@@ -2,7 +2,7 @@
  * 微信公众号 Bot 客户端
  * 使用 Fetch API，完全 ESM 模块
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { Context, Next } from 'koa';
 import type {
     WechatConfig,

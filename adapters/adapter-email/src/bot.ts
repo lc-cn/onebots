@@ -2,7 +2,7 @@
  * 邮件 Bot 客户端
  * 基于 nodemailer (SMTP) 和 imap (IMAP) 封装
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import nodemailer, { Transporter } from 'nodemailer';
 import Imap from 'imap';
 import { simpleParser, ParsedMail } from 'mailparser';
@@ -308,4 +308,3 @@ export class EmailBot extends EventEmitter {
         this.emit('stop');
     }
 }
-

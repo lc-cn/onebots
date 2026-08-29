@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { BaseApp } from "./base-app.js";
 import { CommonTypes } from "./types.js";
 import { Account } from "./account.js";
@@ -6,6 +6,8 @@ import { Logger } from "log4js";
 import { SqliteDB } from "./db.js";
 import { buildTableName, createId, resolveId, coerceId } from "./adapter-id-manager.js";
 import {
+    adapterActionMethodName,
+    assertSupportedActionsImplemented,
     EMPTY_ADAPTER_CAPABILITIES,
     listSupportedActions,
     type AdapterCapabilityManifest,
@@ -418,7 +420,20 @@ export abstract class Adapter<
                 `${this.platform} 适配器尚未声明能力清单`,
             );
         }
+        assertSupportedActionsImplemented(this, manifest);
         return listSupportedActions(manifest);
+    }
+
+    /** 能力契约使用该方法确认清单没有把基类占位实现误报为可用能力。 */
+    isActionImplemented(action: string): boolean {
+        if (action === "get_supported_actions") return true;
+
+        const methodName = adapterActionMethodName(action);
+        const instanceMethod = (this as unknown as Record<string, unknown>)[methodName];
+        if (typeof instanceMethod !== "function") return false;
+
+        const baseMethod = (Adapter.prototype as unknown as Record<string, unknown>)[methodName];
+        return typeof baseMethod !== "function" || instanceMethod !== baseMethod;
     }
     getCookies(_uin: string, _params?: Adapter.GetCookiesParams): Promise<string> {
         return this.unsupported("get_cookies");

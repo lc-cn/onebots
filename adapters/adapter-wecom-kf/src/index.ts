@@ -3,6 +3,7 @@ import type { Schema } from "onebots";
 
 export type { WeComKfConfig } from "./types.js";
 export * from "./adapter.js";
+export * from "./capabilities.js";
 
 const wecomKfSchema: Schema = {
     account_id: { type: "string", required: true, label: "账号标识" },

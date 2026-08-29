@@ -36,6 +36,7 @@ import {
     type FormAuditNoticeEvent,
     type FriendActionNoticeEvent,
 } from "qq-official-bot";
+import { qqCapabilities } from "./capabilities.js";
 import { Account, AdapterRegistry, AccountStatus, dateLikeToEventMs } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
@@ -48,7 +49,7 @@ const SANDBOX_API_BASE_URL = "https://sandbox.api.sgroup.qq.com";
 
 export class QQAdapter extends Adapter<Bot, "qq"> {
     constructor(app: BaseApp) {
-        super(app, "qq");
+        super(app, "qq", qqCapabilities);
         this.icon = "https://q.qq.com/favicon.ico";
     }
 
@@ -1657,4 +1658,5 @@ AdapterRegistry.register("qq", QQAdapter, {
     icon: "https://q.qq.com/favicon.ico",
     homepage: "https://bot.q.qq.com/wiki",
     author: "凉菜",
+    capabilities: qqCapabilities,
 });

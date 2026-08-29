@@ -30,6 +30,16 @@ onebots 目前支持以下平台适配器：
 | **WhatsApp** | ✅ 已实现 | `@onebots/adapter-whatsapp` | 支持WhatsApp Business API |
 | **Zulip** | ✅ 已实现 | `@onebots/adapter-zulip` | 支持Zulip流和私信 |
 
+## 能力清单
+
+每个适配器都导出并在运行时注册同一份能力清单。清单分别描述动作、事件、消息段和连接方式，并区分：
+
+- `native`：平台或当前 SDK 原生实现；
+- `emulated`：OneBots 做了投影或组合实现，`note` 会说明信息损失；
+- `unsupported`：平台没有该能力，不会出现在 `get_supported_actions` 中。
+
+需要额外权限或会话上下文的能力还会声明 `permissions`、`availability` 和适用 `scenes`。调用 `adapter.describeCapabilities(accountId)` 可取得完整清单；调用 `adapter.getSupportedActions(accountId)` 可取得当前可调用动作。OneBots 会校验清单中的动作确有具体实现，防止能力声明与运行时漂移。
+
 ### 快速链接
 
 - [QQ 适配器文档](/platform/qq)

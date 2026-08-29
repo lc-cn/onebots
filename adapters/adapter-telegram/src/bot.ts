@@ -2,7 +2,7 @@
  * Telegram Bot 客户端
  * 基于 grammy 封装
  */
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { Bot, Context, InputFile, type PollingOptions } from 'grammy';
 import type { Opts, MessageEntity } from 'grammy/types';
 import type { Update } from 'grammy/types';
@@ -344,4 +344,3 @@ export class TelegramBot extends EventEmitter {
         return this.bot;
     }
 }
-
