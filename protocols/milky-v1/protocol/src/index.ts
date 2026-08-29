@@ -33,6 +33,7 @@ import { compileMilkySegments, projectMilkySegments } from "./message-segments.j
 import { projectMilkyImplInfo, projectMilkyUserProfile } from "./system-entities.js";
 import { isMilkyAction } from "./action-registry.js";
 import { MilkyActionNotFoundError, toMilkyFailure } from "./api-errors.js";
+import { executeMilkyFileAction, MILKY_FILE_ACTIONS } from "./file-actions.js";
 
 const milkySchema: Schema = {
     use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
@@ -258,6 +259,9 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 params,
             );
         }
+        if (MILKY_FILE_ACTIONS.has(action)) {
+            return executeMilkyFileAction(this.adapter, this.account.account_id, action, params);
+        }
         switch (action) {
             case "send_private_message":
                 return this.sendPrivateMessage(params);
@@ -309,30 +313,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.getGroupMemberList(params);
             case "get_group_notifications":
                 return getMilkyGroupNotifications(this.adapter, this.account.account_id, params);
-            case "get_group_files":
-                return this.getGroupFiles(params);
-            case "create_group_folder":
-                return this.createGroupFolder(params);
-            case "upload_private_file":
-                return this.uploadFile("private", params);
-            case "upload_group_file":
-                return this.uploadFile("group", params);
-            case "get_private_file_download_url":
-                return this.getFileDownloadUrl("private", params);
-            case "get_group_file_download_url":
-                return this.getFileDownloadUrl("group", params);
-            case "move_group_file":
-                return this.moveGroupFile(params);
-            case "rename_group_file":
-                return this.renameGroupFile(params);
-            case "delete_group_file":
-                return this.deleteGroupFile(params);
-            case "persist_group_file":
-                return this.persistGroupFile(params);
-            case "rename_group_folder":
-                return this.renameGroupFolder(params);
-            case "delete_group_folder":
-                return this.deleteGroupFolder(params);
             default:
                 if (
                     typeof this.adapter.describeCapabilities === "function" &&
@@ -594,157 +574,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         return { members: list.map(projectMilkyGroupMember) };
     }
 
-    private async getGroupFiles(params: Record<string, unknown>): Promise<unknown> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        const result = await this.adapter.getGroupFiles(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            parent_folder_id:
-                typeof params.parent_folder_id === "string"
-                    ? this.adapter.resolveId(params.parent_folder_id)
-                    : undefined,
-        });
-        return {
-            files: result.files.map(file => ({
-                group_id: file.group_id?.number ?? groupId,
-                file_id: file.file_id.string,
-                file_name: file.file_name,
-                parent_folder_id: file.parent_folder_id?.string ?? "/",
-                file_size: file.file_size ?? 0,
-                uploaded_time: requireNonNegativeInteger(file.uploaded_time, "uploaded_time"),
-                ...(file.expire_time === undefined ? {} : { expire_time: file.expire_time }),
-                uploader_id: requirePositiveId(file.uploader_id?.number, "uploader_id"),
-                downloaded_times: requireNonNegativeInteger(
-                    file.downloaded_times,
-                    "downloaded_times",
-                ),
-            })),
-            folders: result.folders.map(folder => ({
-                group_id: folder.group_id?.number ?? groupId,
-                folder_id: folder.folder_id.string,
-                parent_folder_id: folder.parent_folder_id?.string ?? "/",
-                folder_name: folder.folder_name,
-                created_time: requireNonNegativeInteger(folder.created_time, "created_time"),
-                last_modified_time: requireNonNegativeInteger(
-                    folder.last_modified_time,
-                    "last_modified_time",
-                ),
-                creator_id: requirePositiveId(folder.creator_id?.number, "creator_id"),
-                file_count: requireNonNegativeInteger(folder.file_count, "file_count"),
-            })),
-        };
-    }
-
-    private async createGroupFolder(
-        params: Record<string, unknown>,
-    ): Promise<{ folder_id: string }> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        const folder = await this.adapter.createGroupFolder(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            folder_name: requireNonEmptyStringParam(params, "folder_name"),
-        });
-        return { folder_id: folder.folder_id.string };
-    }
-
-    private async uploadFile(
-        scene: "private" | "group",
-        params: Record<string, unknown>,
-    ): Promise<{ file_id: string }> {
-        const sceneKey = scene === "private" ? "user_id" : "group_id";
-        const sceneId = requirePositiveIntegerParam(params, sceneKey);
-        const file = requireNonEmptyStringParam(params, "file_uri");
-        const upload = await this.adapter.uploadFile(this.account.account_id, {
-            scene_type: scene,
-            scene_id: this.adapter.resolveId(sceneId),
-            name: requireNonEmptyStringParam(params, "file_name"),
-            ...(file.startsWith("base64://")
-                ? { data: file.slice("base64://".length) }
-                : file.startsWith("http://") || file.startsWith("https://")
-                  ? { url: file }
-                  : { path: file }),
-            folder_id:
-                scene === "group"
-                    ? this.adapter.resolveId(
-                          typeof params.parent_folder_id === "string"
-                              ? params.parent_folder_id
-                              : "/",
-                      )
-                    : undefined,
-        });
-        return { file_id: upload.file_id.string };
-    }
-
-    private async getFileDownloadUrl(
-        scene: "private" | "group",
-        params: Record<string, unknown>,
-    ): Promise<{ download_url: string }> {
-        const sceneKey = scene === "private" ? "user_id" : "group_id";
-        const sceneId = requirePositiveIntegerParam(params, sceneKey);
-        const url = await this.adapter.getFileDownloadUrl(this.account.account_id, {
-            scene_type: scene,
-            scene_id: this.adapter.resolveId(sceneId),
-            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
-            file_hash:
-                scene === "private" ? requireNonEmptyStringParam(params, "file_hash") : undefined,
-            is_self_send:
-                scene === "private" && params.is_self_send !== undefined
-                    ? requireBooleanParam(params, "is_self_send")
-                    : undefined,
-        });
-        return { download_url: url };
-    }
-
-    private async moveGroupFile(params: Record<string, unknown>): Promise<void> {
-        await this.adapter.moveGroupFile(this.account.account_id, {
-            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
-            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
-            target_folder_id: this.adapter.resolveId(
-                typeof params.target_folder_id === "string" ? params.target_folder_id : "/",
-            ),
-        });
-    }
-
-    private async renameGroupFile(params: Record<string, unknown>): Promise<void> {
-        await this.adapter.renameGroupFile(this.account.account_id, {
-            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
-            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
-            new_name: requireNonEmptyStringParam(params, "new_file_name"),
-        });
-    }
-
-    private async deleteGroupFile(params: Record<string, unknown>): Promise<void> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        await this.adapter.deleteFile(this.account.account_id, {
-            scene_type: "group",
-            scene_id: this.adapter.resolveId(groupId),
-            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
-        });
-    }
-
-    private async renameGroupFolder(params: Record<string, unknown>): Promise<void> {
-        await this.adapter.renameGroupFolder(this.account.account_id, {
-            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
-            folder_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "folder_id")),
-            new_name: requireNonEmptyStringParam(params, "new_folder_name"),
-        });
-    }
-
-    private async deleteGroupFolder(params: Record<string, unknown>): Promise<void> {
-        await this.adapter.deleteGroupFolder(this.account.account_id, {
-            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
-            folder_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "folder_id")),
-        });
-    }
-
-    private async persistGroupFile(
-        params: Record<string, unknown>,
-    ): Promise<Record<string, never>> {
-        await this.adapter.persistGroupFile(this.account.account_id, {
-            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
-            file_id: this.adapter.resolveId(requireNonEmptyStringParam(params, "file_id")),
-        });
-        return {};
-    }
-
     /**
      * Verify access token
      */
@@ -959,20 +788,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         this.reverseWebSocketCleanups.add(cleanup);
         session.start();
     }
-}
-
-function requireNonNegativeInteger(value: unknown, field: string): number {
-    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-        throw new TypeError(`Adapter 返回的 ${field} 必须是非负整数`);
-    }
-    return value;
-}
-
-function requirePositiveId(value: unknown, field: string): number {
-    if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
-        throw new TypeError(`Adapter 返回的 ${field} 必须是正整数 ID`);
-    }
-    return value;
 }
 
 function requireHistoryLimit(value: unknown): number {
