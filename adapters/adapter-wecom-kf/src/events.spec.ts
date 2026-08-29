@@ -58,6 +58,7 @@ describe("projectKfItem", () => {
         };
         expect(projectKfItem(raw, { botId: "bot", openKfId: "wk-1", createId })).toMatchObject({
             type: "notice",
+            bot_id: { string: "wk-event" },
             notice_type: "custom",
             sub_type: "enter_session",
             user: { id: { string: "customer-event" } },
@@ -89,6 +90,7 @@ describe("projectKfItem", () => {
             Event: "kf_msg_or_event",
             OpenKfId: "wk-1",
         });
+        expect(event.bot_id).toMatchObject({ string: "wk-1" });
         expect(JSON.stringify(event)).not.toContain("sensitive-token");
         expect(JSON.stringify(event)).not.toContain("ciphertext");
     });

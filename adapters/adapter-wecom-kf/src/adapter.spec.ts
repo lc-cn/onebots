@@ -113,6 +113,9 @@ describe("WeComKfAdapter 基础契约", () => {
             "wk-event",
             expect.objectContaining({ msgtype: "text" }),
         );
+        await expect(adapter.getStatus(config.account_id)).resolves.toMatchObject({
+            bots: [{ self: { string: "wk-event" } }],
+        });
     });
 
     it("缓存平台 ID 并拒绝空 ID", () => {
@@ -122,5 +125,18 @@ describe("WeComKfAdapter 基础契约", () => {
         expect(second).toEqual(first);
         expect(adapter.resolveId(first.number).string).toBe("customer-1");
         expect(() => adapter.createId(undefined as unknown as string)).toThrow("不能为 undefined");
+    });
+
+    it("没有默认账号时只接受唯一的真实客服身份", async () => {
+        const account = adapter.createAccount({ ...config, open_kfid: undefined });
+        adapter.accounts.set(config.account_id, account);
+        vi.spyOn(account.client, "listAccounts").mockResolvedValue([
+            { open_kfid: "wk-1", name: "客服一" },
+            { open_kfid: "wk-2", name: "客服二" },
+        ]);
+
+        await expect(adapter.getLoginInfo(config.account_id)).rejects.toMatchObject({
+            code: "WECOM_KF_ACCOUNT_CONTEXT_REQUIRED",
+        });
     });
 });

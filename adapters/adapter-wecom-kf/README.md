@@ -75,6 +75,9 @@ await adapter.sendMessage("customer_service", {
 - 客户：批量详情、升级服务、取消升级；
 - 消息：原生发送、事件欢迎语/提示语、临时素材上传下载；
 - 数据：企业汇总、接待人员统计与视频号绑定状态。
+- 知识库：分组与问答的新增、修改、删除和分页查询。
+
+分组动作是 `add_knowledge_group`、`update_knowledge_group`、`delete_knowledge_group` 和 `list_knowledge_groups`；问答动作使用对应的 `*_knowledge_intent` 名称，其中列表为 `list_knowledge_intents`。复杂问答内容通过 `request` 原样使用官方结构，例如 `add_knowledge_intent` 接收 `{ request: { group_id, question, similar_questions, answers } }`；路径、方法、凭证与错误仍由 Client 统一处理。知识库接口遵循官方权限边界，目前应使用已配置到“微信客服-可调用接口的应用”的自建应用凭证。
 
 `wecom_kf_call` 为新增或低频接口提供统一 token、HTTPS Base URL、受限 API 路径和结构化错误。所有 JSON 响应都会先验证官方 `errcode/errmsg` envelope；账号、客户、同步消息、会话状态和素材响应还会校验对应结构，畸形成功响应不会再被强制断言成目标类型：
 

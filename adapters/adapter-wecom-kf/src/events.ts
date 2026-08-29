@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { unixSecondsToEventMs, type CommonEvent, type CommonTypes } from "onebots";
+import { resolveKfOpenKfId } from "./identity.js";
 import type { KfCallbackEvent, KfMsgItem } from "./types.js";
 
 export interface KfProjectionContext {
@@ -13,19 +14,20 @@ export function projectKfItem(
     item: KfMsgItem,
     context: KfProjectionContext,
 ): CommonEvent.Event<KfMsgItem> {
+    const itemOpenKfId = resolveKfOpenKfId(item, context.openKfId);
     const messageId = item.msgid || stableId(item);
     const timestamp = unixSecondsToEventMs(item.send_time ?? 0);
     const base = {
         id: context.createId(messageId),
         timestamp,
         platform: "wecom-kf",
-        bot_id: context.createId(context.botId),
+        bot_id: context.createId(itemOpenKfId || context.botId),
         raw_event: item,
     };
     if (item.msgtype === "event") {
         const event = item.event || {};
         const eventType = stringValue(event.event_type) || "unknown";
-        const openKfId = stringValue(event.open_kfid) || item.open_kfid || context.openKfId;
+        const openKfId = itemOpenKfId;
         const externalUserId = stringValue(event.external_userid) || item.external_userid;
         return {
             ...base,
@@ -62,7 +64,7 @@ export function projectKfItem(
         extensions: {
             wecom_kf: {
                 origin: item.origin,
-                open_kfid: item.open_kfid || context.openKfId,
+                open_kfid: itemOpenKfId,
                 external_userid: item.external_userid,
                 servicer_userid: item.servicer_userid,
             },
@@ -81,7 +83,7 @@ export function projectKfCallback(
         id: context.createId(createHash("sha256").update(identity).digest("hex")),
         timestamp: unixSecondsToEventMs(event.CreateTime ?? 0),
         platform: "wecom-kf",
-        bot_id: context.createId(context.botId),
+        bot_id: context.createId(event.OpenKfId || context.botId),
         type: "notice",
         notice_type: "custom",
         sub_type: event.Event,

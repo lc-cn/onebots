@@ -7,6 +7,7 @@ export type { WeComKfClientEvents } from "./client.js";
 export { loadKfCursors, persistKfCursors } from "./cursor-store.js";
 export { WeComKfError, type WeComKfErrorOptions } from "./errors.js";
 export { requireKfHttpsBase, resolveKfApiUrl } from "./http.js";
+export { resolveKfOpenKfId } from "./identity.js";
 export { projectKfCallback, projectKfItem, projectKfSegments } from "./events.js";
 export type { KfProjectionContext } from "./events.js";
 export { compileKfMessages } from "./messages.js";

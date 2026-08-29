@@ -19,6 +19,7 @@ import {
     requireKfHttpsBase,
     resolveKfApiUrl,
 } from "./http.js";
+import { resolveKfOpenKfId } from "./identity.js";
 import { assertKfUploadSize } from "./media.js";
 import { resolveKfMessageId } from "./message-id.js";
 import {
@@ -73,6 +74,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     private startRequest?: Promise<void>;
     private started = false;
     private readonly cursors = new Map<string, string>();
+    private readonly knownOpenKfIds = new Set<string>();
     private readonly seenMessageIds = new Set<string>();
     private readonly syncQueues = new Map<string, Promise<KfMsgItem[]>>();
 
@@ -83,6 +85,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         super();
         assertWeComKfConfig(config);
         this.apiBaseUrl = requireKfHttpsBase(config.api_base_url || DEFAULT_API_BASE);
+        if (config.open_kfid) this.knownOpenKfIds.add(config.open_kfid);
     }
 
     get receiveMode(): "webhook" | "manual" {
@@ -176,14 +179,10 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         return this.performCall(options, true);
     }
 
-    /**
-     * 分页同步指定客服账号的消息与事件。
-     * @param openKfid 客服账号 ID
-     * @param callbackToken 官方回调提供的临时同步凭证；补偿轮询时省略
-     * @returns 去重后已投递的原始条目
-     */
+    /** 分页同步指定客服账号的消息与事件，返回去重后已投递的原始条目。 */
     async synchronize(openKfid: string, callbackToken?: string): Promise<KfMsgItem[]> {
         if (!openKfid) throw invalidKfParameter("open_kfid 必须是非空字符串");
+        this.knownOpenKfIds.add(openKfid);
         const signal = this.lifecycleAbort?.signal;
         ensureKfNotAborted(signal);
         const previous = this.syncQueues.get(openKfid) || Promise.resolve([]);
@@ -200,14 +199,22 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     }
 
     /** 将已有连接取得的单个 `sync_msg` 条目送入统一事件管线。 */
-    ingest(item: KfMsgItem, openKfid = item.open_kfid || this.config.open_kfid || ""): void {
+    ingest(item: KfMsgItem, fallbackOpenKfId = this.config.open_kfid || ""): void {
+        const openKfid = resolveKfOpenKfId(item, fallbackOpenKfId);
+        if (openKfid) this.knownOpenKfIds.add(openKfid);
         emitKfDataEvent(this, "raw_event", item);
         emitKfDataEvent(this, "kf_item", { open_kfid: openKfid, item });
     }
 
     /** 将已验签、解密并校验的回调事件送入统一事件管线。 */
     ingestCallback(event: KfCallbackEvent): void {
+        if (event.OpenKfId) this.knownOpenKfIds.add(event.OpenKfId);
         this.emit("callback", event);
+    }
+
+    /** 返回配置、回调、同步或账号目录中已经确认的真实客服账号 ID。 */
+    getKnownOpenKfIds(): string[] {
+        return [...this.knownOpenKfIds];
     }
 
     /** 向指定客户会话发送原生消息，并返回受 32 字节约束的消息 ID。 */
@@ -264,6 +271,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
             );
             const accountPage = result;
             accounts.push(...accountPage);
+            for (const account of accountPage) this.knownOpenKfIds.add(account.open_kfid);
             if (accountPage.length < limit) return accounts;
         }
         throw new WeComKfError("客服账号分页超过安全上限", {

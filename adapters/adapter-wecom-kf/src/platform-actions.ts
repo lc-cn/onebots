@@ -1,6 +1,7 @@
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { WeComKfClient } from "./client.js";
 import { WeComKfError } from "./errors.js";
+import { WECOM_KF_KNOWLEDGE_ACTION_HANDLERS } from "./knowledge-actions.js";
 import { decodeKfBase64 } from "./media.js";
 import type { KfCallOptions } from "./types.js";
 
@@ -67,6 +68,7 @@ const PLATFORM_ACTION_HANDLERS = {
     get_servicer_statistic: (client, params) =>
         post(client, "/cgi-bin/kf/get_servicer_statistic", requireRecord(params, "request")),
     get_corp_qualification: client => client.call({ path: "/cgi-bin/kf/get_corp_qualification" }),
+    ...WECOM_KF_KNOWLEDGE_ACTION_HANDLERS,
     upload_temporary_media: uploadMedia,
     get_temporary_media: (client, params) =>
         client.call({

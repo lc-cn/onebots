@@ -14,7 +14,7 @@ import { projectKfCallback, projectKfItem } from "./events.js";
 import { assertKfUploadSize, decodeKfBase64 } from "./media.js";
 import { compileKfMessages } from "./messages.js";
 import { executeWeComKfPlatformAction, WECOM_KF_PLATFORM_ACTIONS } from "./platform-actions.js";
-import type { KfMsgItem, WeComKfConfig } from "./types.js";
+import type { KfAccount, KfMsgItem, WeComKfConfig } from "./types.js";
 import { WeComKfWebhookHost, type WeComKfHttpContext } from "./webhook-host.js";
 
 /** 企业微信“微信客服”适配器。 */
@@ -60,15 +60,7 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         const client = this.requireClient(uin);
-        if (!client.config.open_kfid) {
-            return {
-                user_id: this.createId(uin),
-                user_name: "微信客服",
-                user_displayname: "微信客服",
-                avatar: this.icon,
-            };
-        }
-        const account = await client.getAccount(client.config.open_kfid);
+        const account = await resolveLoginAccount(client);
         return {
             user_id: this.createId(account.open_kfid),
             user_name: account.name || account.open_kfid,
@@ -140,8 +132,16 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
     }
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const online = this.getAccount(uin)?.status === AccountStatus.Online;
-        return { online, good: online };
+        const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
+        return {
+            online,
+            good: online,
+            bots:
+                account?.client
+                    .getKnownOpenKfIds()
+                    .map(openKfid => ({ self: this.createId(openKfid), online })) || [],
+        };
     }
 
     createAccount(config: Account.Config<"wecom-kf">): Account<"wecom-kf", WeComKfClient> {
@@ -213,6 +213,18 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
     private contextKey(accountId: string, externalUserid: string): string {
         return `${accountId}\0${externalUserid}`;
     }
+}
+
+async function resolveLoginAccount(client: WeComKfClient): Promise<KfAccount> {
+    if (client.config.open_kfid) return client.getAccount(client.config.open_kfid);
+    const known = client.getKnownOpenKfIds();
+    if (known.length === 1) return client.getAccount(known[0]!);
+    const accounts = await client.listAccounts();
+    if (accounts.length === 1) return accounts[0]!;
+    throw new WeComKfError("get_login_info 需要唯一客服账号，请配置 open_kfid", {
+        code: "WECOM_KF_ACCOUNT_CONTEXT_REQUIRED",
+        details: { account_count: accounts.length },
+    });
 }
 
 function stringField(

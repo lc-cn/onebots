@@ -219,6 +219,22 @@ describe("WeComKfClient", () => {
         await expect(readFile(cursorPath, "utf8")).resolves.toContain('"wk-1": "committed"');
     });
 
+    it("从系统事件内层发现真实客服账号身份", () => {
+        const client = new WeComKfClient(config);
+
+        client.ingest({
+            msgtype: "event",
+            event: { event_type: "enter_session", open_kfid: "wk-event" },
+        });
+        client.ingestCallback({
+            MsgType: "event",
+            Event: "kf_msg_or_event",
+            OpenKfId: "wk-callback",
+        });
+
+        expect(client.getKnownOpenKfIds()).toEqual(["wk-event", "wk-callback"]);
+    });
+
     it("保留平台错误并防止原生消息覆盖目标", async () => {
         const fetcher = vi
             .fn<typeof fetch>()

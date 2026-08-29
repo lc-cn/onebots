@@ -20,6 +20,8 @@ describe("微信客服平台动作", () => {
             "transfer_service_state",
             "get_customers",
             "get_corp_statistic",
+            "add_knowledge_group",
+            "list_knowledge_intents",
         ])
             expect(WECOM_KF_PLATFORM_ACTIONS.has(action)).toBe(true);
     });
