@@ -49,5 +49,10 @@ export const wechatClawbotCapabilities: AdapterCapabilityManifest = defineAdapte
     },
     transports: {
         ilink: { support: "native", mode: "polling" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "保留 iLink 登录态，由已有 Host 调用 WechatIlinkBot.ingest()",
+        },
     },
 });

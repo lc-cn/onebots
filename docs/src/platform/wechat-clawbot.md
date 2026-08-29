@@ -10,8 +10,8 @@
 
 | 项目 | `adapter-wechat` | `adapter-wechat-clawbot` |
 |------|------------------|---------------------------|
-| 场景 | 公众平台服务器配置、Webhook | iLink HTTP API、扫码登录、长轮询收消息 |
-| 配置 | `app_id` / `token` 等 | 仅需 `account_id`，端点与会话由适配器约定 |
+| 场景 | 公众平台服务器配置、Webhook | iLink HTTP API、扫码登录、内置长轮询或手动事件源 |
+| 配置 | `app_id` / `token` 等 | `account_id`、接收模式；端点与会话由适配器约定 |
 | 平台 ID | `wechat` | **`wechat-clawbot`** |
 
 可同时安装，配置段分别为 `wechat.*` 与 `wechat-clawbot.*`。
@@ -20,6 +20,7 @@
 
 - 扫码登录、IDC 节点跳转、手机数字配对码、凭证失效后自动重扫码
 - 可取消的无限长轮询、指数退避与 iLink `notifystart` / `notifystop` 生命周期
+- `receive_mode: manual` 复用登录态与出站 API，但不创建 `getupdates`；已有 Host 通过 `WechatIlinkBot.ingest()` 投递原始事件
 - 文本、图片、视频、文件双向收发，语音与未知 item 无损接收
 - 复合消息、引用消息与工具调用进度按原顺序投影，并始终保留 `raw_event`
 - `context_token` 写入主库 SQLite；回复依赖对端先发或显式传入有效 token
@@ -40,7 +41,8 @@ pnpm add @onebots/adapter-wechat-clawbot
 ```
 
 ```yaml
-wechat-clawbot.my_bot: {}
+wechat-clawbot.my_bot:
+  receive_mode: polling # 或 manual
 ```
 
 ```bash

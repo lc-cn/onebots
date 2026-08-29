@@ -21,5 +21,6 @@ describe("微信 ClawBot 能力清单", () => {
         expect(wechatClawbotCapabilities.actions.can_send_record?.support).toBe("native");
         expect(wechatClawbotCapabilities.segments.audio?.direction).toBe("receive");
         expect(wechatClawbotCapabilities.transports.ilink?.mode).toBe("polling");
+        expect(wechatClawbotCapabilities.transports.manual?.support).toBe("native");
     });
 });

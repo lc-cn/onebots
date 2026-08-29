@@ -15,7 +15,7 @@ OneBots 适配器：**微信 ClawBot / iLink Bot HTTP**。提供扫码登录、�
 | 会话文件      | `{工作目录}/data/wechat-clawbot/<URL 编码 account_id>.json`                 |
 | context_token | 主库 SQLite 表 **`wechat_clawbot_context_token`**（按 `account_id` + peer） |
 
-YAML 通常只需账号键与可选超时，见文档站 [平台说明](https://github.com/lc-cn/onebots/tree/master/docs/src/platform/wechat-clawbot.md)。
+YAML 通常只需账号键、接收模式与可选超时，见文档站 [平台说明](https://github.com/lc-cn/onebots/tree/master/docs/src/platform/wechat-clawbot.md)。
 
 ## 能力边界
 
@@ -26,6 +26,7 @@ YAML 通常只需账号键与可选超时，见文档站 [平台说明](https://
 - iLink 未提供好友目录、消息撤回或历史查询 API，因此适配器不会返回占位数据。
 - 回复依赖有效的 `context_token`。对端尚未发言或 token 已失效时，发送会返回结构化错误。
 - 长轮询默认无限重试并采用指数退避；初始化、扫码重登和轮询共享同一生命周期代次，账号停止后旧异步任务不能重新拉起连接。
+- `receive_mode: manual` 仍加载或扫码取得 iLink 会话，以保留出站 API 与 `context_token`；但不会启动 `getupdates`，已有 Host 应把原始事件交给同一个 `WechatIlinkBot.ingest()`。凭证失效重登后也不会偷偷恢复内置轮询。
 - `ingest(rawEvent)` 会校验方向、发送者、稳定消息标识与 `item_list`；上游回送的 BOT 副本会被忽略，不会触发自回复或污染上下文。
 - 同批事件逐条隔离，整批完成后才提交同步游标；单条畸形事件不会吞掉后续正常消息。
 
@@ -70,7 +71,8 @@ pnpm add @onebots/adapter-wechat-clawbot
 ```
 
 ```yaml
-wechat-clawbot.my_bot: {}
+wechat-clawbot.my_bot:
+  receive_mode: polling # 或 manual
 ```
 
 ```bash

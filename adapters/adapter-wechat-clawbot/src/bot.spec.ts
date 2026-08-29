@@ -52,6 +52,23 @@ describe("WechatIlinkBot 生命周期", () => {
         expect(calls.filter(url => url.endsWith("notifystart"))).toHaveLength(1);
     });
 
+    it("manual 复用已有会话但不启动或停止内置长轮询", async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        const bot = new WechatIlinkBot(
+            { ...runtimeConfig(), receive_mode: "manual" },
+            { sessionStore: new MemoryCredentialStore() },
+        );
+        const ready = vi.fn();
+        bot.on("ready", ready);
+
+        await bot.start();
+        await bot.stop();
+
+        expect(ready).toHaveBeenCalledOnce();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it("stop 会取消进行中的扫码且不会启动轮询", async () => {
         const calls: string[] = [];
         vi.stubGlobal(

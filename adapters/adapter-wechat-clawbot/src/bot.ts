@@ -3,7 +3,7 @@ import { IlinkBot } from "./sdk/ilink-bot.js";
 import type { WechatIlinkRuntimeConfig } from "./types.js";
 import type { StaleCredentialFault } from "./sdk/internal/errors.js";
 import { GatewayFault } from "./sdk/internal/errors.js";
-import { assertWechatClawbotConfig } from "./config.js";
+import { assertWechatClawbotConfig, resolveWechatClawbotReceiveMode } from "./config.js";
 import type { ClawbotContextTokenStore } from "./context-token-store.js";
 import type { SessionStore } from "./sdk/protocol/chat-event.js";
 
@@ -137,9 +137,7 @@ export class WechatIlinkBot extends IlinkBot {
         });
     }
 
-    /**
-     * 长轮询收到凭证失效后：已清会话，此处自动再走扫码登录并重启轮询（无需重启进程）。
-     */
+    /** 凭证失效后重新登录；仅 polling 模式恢复内置事件源。 */
     private async handleCredentialStaleRelogin(): Promise<void> {
         if (this.reloginBusy || !this.desiredRunning) return;
         this.reloginBusy = true;
@@ -164,7 +162,7 @@ export class WechatIlinkBot extends IlinkBot {
             await this.runInteractiveQrLogin(controller.signal);
             if (!this.isCurrentLifecycle(generation)) return;
 
-            await this.startPolling({ ...this.pollingOptions(), signal: controller.signal });
+            await this.startReceiver(controller.signal);
             if (this.isCurrentLifecycle(generation)) this.emit("ready");
         } catch (error: unknown) {
             if (this.isCurrentLifecycle(generation) && !controller.signal.aborted) {
@@ -176,7 +174,7 @@ export class WechatIlinkBot extends IlinkBot {
         }
     }
 
-    /** 加载会话、可选扫码登录、启动 getupdates 长轮询 */
+    /** 加载会话、可选扫码登录，并按接收模式启动事件源。 */
     async start(): Promise<void> {
         if (this.startPromise) return this.startPromise;
         if (this.desiredRunning) return;
@@ -214,7 +212,7 @@ export class WechatIlinkBot extends IlinkBot {
             }
 
             if (!this.isCurrentLifecycle(generation)) return;
-            await this.startPolling({ ...this.pollingOptions(), signal: controller.signal });
+            await this.startReceiver(controller.signal);
             if (this.isCurrentLifecycle(generation)) this.emit("ready");
         } catch (error) {
             if (!this.isCurrentLifecycle(generation) || controller.signal.aborted) return;
@@ -229,11 +227,19 @@ export class WechatIlinkBot extends IlinkBot {
         this.lifecycleGeneration += 1;
         this.loginAbort?.abort(new DOMException("账号已停止", "AbortError"));
         await this.startPromise?.catch(() => {});
-        await this.stopPolling();
+        if (resolveWechatClawbotReceiveMode(this.cfg) === "polling") {
+            await this.stopPolling();
+        }
     }
 
     private isCurrentLifecycle(generation: number): boolean {
         return this.desiredRunning && generation === this.lifecycleGeneration;
+    }
+
+    /** manual 只复用登录态与事件投影，不得隐式创建 getupdates 长轮询。 */
+    private async startReceiver(signal: AbortSignal): Promise<void> {
+        if (resolveWechatClawbotReceiveMode(this.cfg) === "manual") return;
+        await this.startPolling({ ...this.pollingOptions(), signal });
     }
 
     private pollingOptions(): import("./sdk/protocol/chat-event.js").PollingOptions {

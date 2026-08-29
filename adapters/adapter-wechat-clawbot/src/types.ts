@@ -8,11 +8,13 @@
  * - `qr_login`：`true`（无会话时扫码）
  * - token / ilink_bot_id：来自会话文件 `{cwd}/data/wechat-clawbot/<URL 编码 account_id>.json`
  *
- * YAML 仅需 `account_id`（隐含在键名中）及可选轮询/超时调优字段。
+ * YAML 仅需 `account_id`（隐含在键名中）、接收模式及可选超时调优字段。
  */
 export interface WechatClawbotConfig {
     /** 账号标识（OneBots 内唯一） */
     account_id: string;
+    /** 事件接收方式；manual 由已有 Host 调用 `WechatIlinkBot.ingest()` */
+    receive_mode?: "polling" | "manual";
     /** 扫码登录总超时（毫秒），默认 480000 */
     qr_login_timeout_ms?: number;
     /** getupdates 长轮询超时（毫秒） */
