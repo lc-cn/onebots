@@ -171,7 +171,12 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         audio: { support: "native", direction: "both" },
         video: { support: "native", direction: "both" },
         embed: { support: "native", direction: "send" },
-        reply: { support: "native", direction: "receive" },
+        reply: { support: "native", direction: "both" },
+        discord_message: {
+            support: "native",
+            direction: "send",
+            note: "直接传递 Discord v10 Create Message JSON 字段",
+        },
         sticker: { support: "native", direction: "receive" },
     },
     transports: {

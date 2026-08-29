@@ -51,7 +51,11 @@ import { InteractionsHandler } from "./interactions.js";
 import type { DiscordApiUser, CreateMessageBody, EditMessageBody } from "../types.js";
 
 // 重新导出
-export { DiscordREST, type RESTOptions } from "./rest.js";
+export {
+    DiscordREST,
+    type RESTOptions,
+} from "./rest.js";
+export { buildDiscordMultipart, type DiscordMultipartBody } from "./multipart.js";
 export { DiscordGateway, GatewayIntents, GatewayOpcodes, type GatewayOptions } from "./gateway.js";
 export {
     InteractionsHandler,

@@ -1,14 +1,9 @@
 import { Adapter, CommonTypes } from "onebots";
 import { DiscordBot, type DiscordMessage } from "./bot.js";
-import type { DiscordEmbed } from "./types.js";
+import { compileDiscordMessage } from "./messages.js";
 
 /** Discord 消息、用户与好友投影动作。 */
 export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord"> {
-    protected abstract buildDiscordMessage(message: CommonTypes.Segment[]): {
-        content: string;
-        embeds: DiscordEmbed[];
-    };
-
     protected abstract convertMessageToInfo(message: DiscordMessage): Adapter.MessageInfo;
 
     // ============================================
@@ -34,17 +29,17 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
         const channelId = sceneId.string;
 
         // 构建消息内容
-        const { content, embeds } = this.buildDiscordMessage(message);
+        const { body, files } = compileDiscordMessage(message);
 
         try {
             let sentMessage: DiscordMessage;
 
             if (scene_type === "private") {
                 // 私信消息 - scene_id 是用户 ID
-                sentMessage = await bot.sendDM(channelId, { content, embeds });
+                sentMessage = await bot.sendDM(channelId, body, files);
             } else if (scene_type === "channel" || scene_type === "group") {
                 // 频道消息 - scene_id 是频道 ID
-                sentMessage = await bot.sendMessage(channelId, { content, embeds });
+                sentMessage = await bot.sendMessage(channelId, body, files);
             } else {
                 throw new Error(`不支持的消息类型: ${scene_type}`);
             }

@@ -6,6 +6,8 @@
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 import { buildProxyUrl, createHttpsProxyAgent } from "onebots";
 import type { Agent } from "http";
+import type { DiscordUpload } from "../media.js";
+import { buildDiscordMultipart } from "./multipart.js";
 import type {
     CreateMessageBody,
     EditMessageBody,
@@ -93,7 +95,7 @@ export class DiscordREST {
         options: {
             method: string;
             headers: Record<string, string>;
-            body?: string;
+            body?: string | Uint8Array;
         },
     ): Promise<T> {
         return new Promise(async (resolve, reject) => {
@@ -171,13 +173,18 @@ export class DiscordREST {
         options: {
             method: string;
             headers: Record<string, string>;
-            body?: string;
+            body?: string | Uint8Array;
         },
     ): Promise<T> {
         const response = await fetch(url, {
             method: options.method,
             headers: options.headers,
-            body: options.body,
+            body:
+                typeof options.body === "string"
+                    ? options.body
+                    : options.body
+                      ? new Blob([Uint8Array.from(options.body).buffer])
+                      : undefined,
         });
 
         if (response.status === 204) {
@@ -239,6 +246,38 @@ export class DiscordREST {
         });
     }
 
+    /** 按 Discord 官方 files[n] + payload_json 约定发送附件。 */
+    async requestMultipart<T = unknown>(
+        endpoint: string,
+        payload: CreateMessageBody,
+        files: DiscordUpload[],
+    ): Promise<T> {
+        assertDiscordEndpoint(endpoint);
+        if (!files.length) return this.request<T>(endpoint, { method: "POST", body: payload });
+        await this.initAgent();
+
+        const multipart = buildDiscordMultipart(payload, files);
+        const headers = {
+            "Authorization": `Bot ${this.token}`,
+            "Content-Type": multipart.contentType,
+            "Content-Length": String(multipart.body.byteLength),
+            "User-Agent": "OneBots Discord Lite (https://github.com/lc-cn/onebots)",
+        };
+        const url = `${DISCORD_API_BASE}${endpoint}`;
+        if (isNode()) {
+            return this.nodeRequest<T>(url, {
+                method: "POST",
+                headers,
+                body: multipart.body,
+            });
+        }
+        return this.fetchRequest<T>(url, {
+            method: "POST",
+            headers,
+            body: multipart.body,
+        });
+    }
+
     // ============================================
     // 用户相关
     // ============================================
@@ -266,8 +305,16 @@ export class DiscordREST {
     async createMessage(
         channelId: string,
         content: string | CreateMessageBody,
+        files: DiscordUpload[] = [],
     ): Promise<DiscordApiMessage> {
         const body = typeof content === "string" ? { content } : content;
+        if (files.length) {
+            return this.requestMultipart<DiscordApiMessage>(
+                `/channels/${channelId}/messages`,
+                body,
+                files,
+            );
+        }
         return this.request<DiscordApiMessage>(`/channels/${channelId}/messages`, {
             method: "POST",
             body,

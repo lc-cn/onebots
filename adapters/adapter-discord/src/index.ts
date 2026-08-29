@@ -30,6 +30,12 @@ export type {
 // 导出适配器
 export * from "./adapter.js";
 export * from "./capabilities.js";
+export { compileDiscordMessage, type CompiledDiscordMessage } from "./messages.js";
+export {
+    materializeDiscordFile,
+    type DiscordFileInput,
+    type DiscordUpload,
+} from "./media.js";
 
 // 导出 Bot 类型（Bot 类为内部实现）
 export type {

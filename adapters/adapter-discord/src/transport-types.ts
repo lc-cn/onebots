@@ -116,6 +116,16 @@ export interface CreateMessageBody {
     allowed_mentions?: Record<string, unknown>;
     message_reference?: DiscordMessageReference;
     sticker_ids?: string[];
+    attachments?: Array<{
+        id: number;
+        filename: string;
+        description?: string;
+    }>;
+    flags?: number;
+    tts?: boolean;
+    nonce?: string | number;
+    enforce_nonce?: boolean;
+    poll?: Record<string, unknown>;
 }
 
 export interface EditMessageBody {

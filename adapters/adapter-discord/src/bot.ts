@@ -29,6 +29,7 @@ import {
     type DiscordUser,
 } from "./bot-model.js";
 import { resolveDiscordIntents } from "./intents.js";
+import { materializeDiscordFile, type DiscordFileInput } from "./media.js";
 export type {
     DiscordAttachment,
     DiscordChannel,
@@ -123,18 +124,24 @@ export class DiscordBot extends EventEmitter {
     async sendMessage(
         channelId: string,
         content: string | CreateMessageBody,
+        files: DiscordFileInput[] = [],
     ): Promise<DiscordMessage> {
         const body = typeof content === "string" ? { content } : content;
-        const result = await this.getREST().createMessage(channelId, body);
+        const uploads = await Promise.all(files.map(materializeDiscordFile));
+        const result = await this.getREST().createMessage(channelId, body, uploads);
         return wrapDiscordMessage(result);
     }
-    async sendDM(userId: string, content: string | CreateMessageBody): Promise<DiscordMessage> {
+    async sendDM(
+        userId: string,
+        content: string | CreateMessageBody,
+        files: DiscordFileInput[] = [],
+    ): Promise<DiscordMessage> {
         // 首先创建 DM 频道
         const dmChannel = await this.getREST().request<DiscordChannel>("/users/@me/channels", {
             method: "POST",
             body: { recipient_id: userId },
         });
-        return this.sendMessage(dmChannel.id, content);
+        return this.sendMessage(dmChannel.id, content, files);
     }
     async sendEmbed(
         channelId: string,
@@ -145,10 +152,9 @@ export class DiscordBot extends EventEmitter {
     async sendWithAttachments(
         channelId: string,
         content: string,
-        _attachments: unknown[],
+        attachments: DiscordFileInput[],
     ): Promise<DiscordMessage> {
-        // 轻量版暂不支持附件上传，仅发送文本
-        return this.sendMessage(channelId, content);
+        return this.sendMessage(channelId, content, attachments);
     }
     async editMessage(
         channelId: string,

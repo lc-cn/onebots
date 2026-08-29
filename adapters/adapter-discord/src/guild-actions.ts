@@ -1,6 +1,5 @@
 import { Adapter, CommonTypes } from "onebots";
 import type { DiscordMessage, DiscordMember } from "./bot.js";
-import type { DiscordEmbed } from "./types.js";
 import { ChannelType } from "./types.js";
 import { DiscordMessageActions } from "./message-actions.js";
 
@@ -192,77 +191,6 @@ export abstract class DiscordGuildActions extends DiscordMessageActions {
     // ============================================
 
     /**
-     * 构建 Discord 消息内容
-     */
-    protected buildDiscordMessage(message: CommonTypes.Segment[]): {
-        content: string;
-        embeds: DiscordEmbed[];
-    } {
-        let content = "";
-        const embeds: DiscordEmbed[] = [];
-
-        for (const seg of message) {
-            switch (seg.type) {
-                case "text":
-                    content += seg.data.text || "";
-                    break;
-
-                case "at":
-                    if (seg.data.qq === "all") {
-                        content += "@everyone";
-                    } else {
-                        content += `<@${seg.data.qq}>`;
-                    }
-                    break;
-
-                case "image":
-                    if (seg.data.url) {
-                        // 轻量版：将图片作为 Embed 发送
-                        embeds.push({
-                            image: { url: seg.data.url },
-                        });
-                    }
-                    break;
-
-                case "share": {
-                    // 使用 Embed 展示分享链接
-                    const shareEmbed: DiscordEmbed = {
-                        title: seg.data.title || "分享链接",
-                        url: seg.data.url,
-                        description: seg.data.content || "",
-                    };
-
-                    if (seg.data.image) {
-                        shareEmbed.image = { url: seg.data.image };
-                    }
-
-                    embeds.push(shareEmbed);
-                    break;
-                }
-
-                case "face":
-                    // Discord 使用 Unicode emoji
-                    if (seg.data.id) {
-                        try {
-                            content += String.fromCodePoint(parseInt(seg.data.id));
-                        } catch {
-                            content += `[表情:${seg.data.id}]`;
-                        }
-                    }
-                    break;
-
-                default:
-                    // 未知类型，转为文本
-                    if (seg.data.text) {
-                        content += seg.data.text;
-                    }
-            }
-        }
-
-        return { content, embeds };
-    }
-
-    /**
      * 转换消息为 MessageInfo
      */
     protected convertMessageToInfo(message: DiscordMessage): Adapter.MessageInfo {
@@ -276,17 +204,22 @@ export abstract class DiscordGuildActions extends DiscordMessageActions {
         }
 
         for (const attachment of message.attachments || []) {
-            if (attachment.content_type?.startsWith("image/")) {
-                segments.push({
-                    type: "image",
-                    data: { file: attachment.id, url: attachment.url },
-                });
-            } else {
-                segments.push({
-                    type: "file",
-                    data: { file: attachment.id, url: attachment.url },
-                });
-            }
+            const type = attachment.content_type?.startsWith("image/")
+                ? "image"
+                : attachment.content_type?.startsWith("audio/")
+                  ? "audio"
+                  : attachment.content_type?.startsWith("video/")
+                    ? "video"
+                    : "file";
+            segments.push({
+                type,
+                data: {
+                    file: attachment.id,
+                    url: attachment.url,
+                    filename: attachment.filename,
+                    content_type: attachment.content_type,
+                },
+            });
         }
 
         // 确定场景类型

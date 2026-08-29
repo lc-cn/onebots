@@ -119,6 +119,20 @@ await rest.createMessage("channel_id", "Hello!");
 const user = await rest.getUser("user_id");
 ```
 
+## 消息与附件
+
+通用 `send_message` 支持 `text`、`at`、`reply`、`embed`、`share`、`face`、`image`、`file`、`audio`、`record` 和 `video`。媒体段通过 Discord 官方 `multipart/form-data` 上传，不会退化成文本链接或被静默丢弃：
+
+```typescript
+[
+  { type: "text", data: { text: "构建产物" } },
+  { type: "file", data: { file: "/srv/build/app.zip", name: "app.zip" } },
+  { type: "image", data: { file: "base64://...", name: "preview.png", alt: "预览" } },
+]
+```
+
+`file` / `url` 支持 HTTP(S) URL、Node.js 本地路径、`file://`、Base64 data URL 和 `base64://`。URL 由 OneBots 下载后上传到 Discord，因此运行节点必须能访问该资源；附件数量和大小最终受 Discord 当前频道限制。需要完整 Create Message 字段时，可使用 `discord_message` 段并把官方 JSON 放入 `data.body`。
+
 ## 获取 Discord Bot Token
 
 1. 前往 [Discord Developer Portal](https://discord.com/developers/applications)
@@ -169,6 +183,7 @@ const user = await rest.getUser("user_id");
 - 消息：`bulk_delete_messages`、`crosspost_message`、`get_channel_pins`、 `pin_message`、`unpin_message`、`get_reaction_users`、`trigger_typing`
 - 线程：`create_thread`、`join_thread`、`leave_thread`、`add_thread_member`、 `remove_thread_member`、`list_thread_members`、`get_active_threads`
 - 邀请：`get_channel_invites`、`create_channel_invite`、`delete_invite`
+- 底层：`call_discord_api`（固定在 `https://discord.com/api/v10` 根下，支持 GET/POST/PUT/PATCH/DELETE）
 
 Gateway 的消息编辑/删除、Reaction、成员变化和 Interaction 会投影为标准事件；其他 Dispatch 以 `notice.custom` + `raw_event` 无损交付。
 
