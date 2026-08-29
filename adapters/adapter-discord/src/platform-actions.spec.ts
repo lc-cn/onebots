@@ -65,4 +65,38 @@ describe("executeDiscordPlatformAction", () => {
             ),
         ).rejects.toThrow("数量必须为 2-100");
     });
+
+    it("以显式 Guild 动作执行踢出、超时与昵称更新", async () => {
+        const request = vi.fn();
+        const kickMember = vi.fn().mockResolvedValue(undefined);
+        const timeoutMember = vi.fn().mockResolvedValue(undefined);
+        const setMemberNickname = vi.fn().mockResolvedValue(undefined);
+        const bot = {
+            getREST: () => ({ request }),
+            kickMember,
+            timeoutMember,
+            removeTimeout: vi.fn(),
+            setMemberNickname,
+        } as never;
+
+        await executeDiscordPlatformAction(bot, "kick_guild_member", {
+            guild_id: "100",
+            user_id: "42",
+            reason: "spam",
+        });
+        await executeDiscordPlatformAction(bot, "timeout_guild_member", {
+            guild_id: "100",
+            user_id: "42",
+            duration: 60,
+        });
+        await executeDiscordPlatformAction(bot, "set_guild_member_nickname", {
+            guild_id: "100",
+            user_id: "42",
+            nickname: "Alice",
+        });
+
+        expect(kickMember).toHaveBeenCalledWith("100", "42", "spam");
+        expect(timeoutMember).toHaveBeenCalledWith("100", "42", 60);
+        expect(setMemberNickname).toHaveBeenCalledWith("100", "42", "Alice");
+    });
 });

@@ -32,6 +32,12 @@ export const DISCORD_PLATFORM_ACTIONS = new Set([
     "create_channel_invite",
     "delete_invite",
     "get_reaction_users",
+    "add_reaction",
+    "remove_own_reaction",
+    "leave_guild",
+    "kick_guild_member",
+    "timeout_guild_member",
+    "set_guild_member_nickname",
 ]);
 
 /** Discord v10 平台扩展动作，按官方资源边界直接映射 REST endpoint。 */
@@ -141,6 +147,28 @@ export async function executeDiscordPlatformAction(
                 `/channels/${channelId()}/messages/${messageId()}/reactions/${encodeURIComponent(requireString(params, "emoji"))}`,
                 { query: query(params) },
             );
+        case "add_reaction":
+        case "remove_own_reaction":
+            return rest.request(
+                `/channels/${channelId()}/messages/${messageId()}/reactions/${encodeURIComponent(requireString(params, "emoji"))}/@me`,
+                { method: action === "add_reaction" ? "PUT" : "DELETE" },
+            );
+        case "leave_guild":
+            return rest.request(`/users/@me/guilds/${guildId()}`, { method: "DELETE" });
+        case "kick_guild_member":
+            return bot.kickMember(guildId(), userId(), optionalString(params, "reason"));
+        case "timeout_guild_member": {
+            const duration = optionalInteger(params, "duration") ?? 0;
+            return duration > 0
+                ? bot.timeoutMember(guildId(), userId(), duration)
+                : bot.removeTimeout(guildId(), userId());
+        }
+        case "set_guild_member_nickname":
+            return bot.setMemberNickname(
+                guildId(),
+                userId(),
+                optionalString(params, "nickname") ?? null,
+            );
         default:
             throw new Error(`未实现 Discord 平台动作: ${action}`);
     }
@@ -229,6 +257,16 @@ function optionalInteger(
     const value = Number(params[name]);
     if (!Number.isSafeInteger(value) || value < 0)
         throw new Error(`Discord 参数 ${name} 必须为非负整数`);
+    return value;
+}
+
+function optionalString(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+): string | undefined {
+    if (params[name] == null) return undefined;
+    const value = params[name];
+    if (typeof value !== "string") throw new Error(`Discord 参数 ${name} 必须为字符串`);
     return value;
 }
 

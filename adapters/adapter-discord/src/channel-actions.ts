@@ -73,6 +73,22 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
         };
     }
 
+    async getGuildMemberList(
+        uin: string,
+        params: Adapter.GetGuildMemberListParams,
+    ): Promise<Adapter.GuildMemberInfo[]> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        const members = await account.client.getGuildMembers(params.guild_id.string);
+        return [...members.values()].map(member => ({
+            guild_id: params.guild_id,
+            user_id: this.createId(member.user.id),
+            user_name: member.user.username,
+            nickname: member.nick || undefined,
+            role: this.getMemberRole(member),
+        }));
+    }
+
     /**
      * 获取频道信息
      */
@@ -179,117 +195,6 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
             name: params.channel_name,
             parent: params.parent_id?.string,
         });
-    }
-
-    // ============================================
-    // 频道成员相关方法
-    // ============================================
-
-    /**
-     * 获取频道成员信息
-     */
-    async getChannelMemberInfo(
-        uin: string,
-        params: Adapter.GetChannelMemberInfoParams,
-    ): Promise<Adapter.ChannelMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const channelId = params.channel_id.string;
-        const userId = params.user_id.string;
-
-        // 获取频道所属的服务器
-        const channel = await bot.getChannel(channelId);
-        if (!channel || !channel.guild_id) {
-            throw new Error(`频道 ${channelId} 不属于任何服务器`);
-        }
-
-        const member = await bot.getGuildMember(channel.guild_id, userId);
-
-        return {
-            channel_id: params.channel_id,
-            user_id: this.createId(member.user.id),
-            user_name: member.user.username,
-            role: this.getMemberRole(member),
-        };
-    }
-
-    /**
-     * 获取频道成员列表
-     */
-    async getChannelMemberList(
-        uin: string,
-        params: Adapter.GetChannelMemberListParams,
-    ): Promise<Adapter.ChannelMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const channelId = params.channel_id.string;
-
-        // 获取频道所属的服务器
-        const channel = await bot.getChannel(channelId);
-        if (!channel || !channel.guild_id) {
-            throw new Error(`频道 ${channelId} 不属于任何服务器`);
-        }
-
-        const members = await bot.getGuildMembers(channel.guild_id);
-
-        return [...members.values()].map(member => ({
-            channel_id: params.channel_id,
-            user_id: this.createId(member.user.id),
-            user_name: member.user.username,
-            role: this.getMemberRole(member),
-        }));
-    }
-
-    /**
-     * 踢出频道成员
-     */
-    async kickChannelMember(uin: string, params: Adapter.KickChannelMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const channelId = params.channel_id.string;
-        const userId = params.user_id.string;
-
-        // 获取频道所属的服务器
-        const channel = await bot.getChannel(channelId);
-        if (!channel || !channel.guild_id) {
-            throw new Error(`频道 ${channelId} 不属于任何服务器`);
-        }
-
-        await bot.kickMember(channel.guild_id, userId);
-    }
-
-    /**
-     * 设置频道成员禁言
-     */
-    async setChannelMemberMute(
-        uin: string,
-        params: Adapter.SetChannelMemberMuteParams,
-    ): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const channelId = params.channel_id.string;
-        const userId = params.user_id.string;
-
-        // 获取频道所属的服务器
-        const channel = await bot.getChannel(channelId);
-        if (!channel || !channel.guild_id) {
-            throw new Error(`频道 ${channelId} 不属于任何服务器`);
-        }
-
-        if (params.mute) {
-            // Discord 超时最长 28 天
-            await bot.timeoutMember(channel.guild_id, userId, 28 * 24 * 60 * 60);
-        } else {
-            await bot.removeTimeout(channel.guild_id, userId);
-        }
     }
 
     // ============================================
