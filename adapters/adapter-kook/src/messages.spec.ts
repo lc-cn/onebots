@@ -1,5 +1,10 @@
-import { describe, expect, test } from "vitest";
-import { buildKookOutboundMessage, projectKookMessageSegments } from "./messages.js";
+import { describe, expect, test, vi } from "vitest";
+import {
+    assertKookEditableMessage,
+    buildKookOutboundMessage,
+    prepareKookOutboundMessage,
+    projectKookMessageSegments,
+} from "./messages.js";
 
 describe("KOOK 消息编译", () => {
     test("单媒体使用原生消息类型并保留回复", () => {
@@ -37,5 +42,31 @@ describe("KOOK 消息编译", () => {
             data: { content, cards: [{ type: "card", modules: [] }] },
         });
         expect(projectKookMessageSegments(8, "https://example.com/a.mp3")[0]?.type).toBe("audio");
+    });
+
+    test("发送前把 Base64 媒体上传为当前机器人的 KOOK 素材", async () => {
+        const upload = vi.fn().mockResolvedValue("https://img.kookapp.cn/asset.png");
+        const result = await prepareKookOutboundMessage(
+            [
+                {
+                    type: "image",
+                    data: { file: "base64://aW1hZ2U=", name: "image.png" },
+                },
+            ],
+            upload,
+        );
+        expect(upload).toHaveBeenCalledWith(expect.any(Uint8Array), "image.png", "image/png");
+        expect(result).toEqual({ type: 2, content: "https://img.kookapp.cn/asset.png" });
+    });
+
+    test("只允许更新 KMarkdown 与 Card", () => {
+        expect(() =>
+            assertKookEditableMessage([
+                { type: "image", data: { url: "https://img.kookapp.cn/a.png" } },
+            ]),
+        ).toThrow("只支持更新 KMarkdown 或 Card");
+        expect(() =>
+            assertKookEditableMessage([{ type: "text", data: { text: "new" } }]),
+        ).not.toThrow();
     });
 });

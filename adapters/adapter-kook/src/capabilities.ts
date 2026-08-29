@@ -28,7 +28,7 @@ export const kookCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
             support: "native",
             scenes: ["private", "channel"],
             availability: "context",
-            note: "消息必须已由当前进程收发；显式场景可使用 call_kook_api",
+            note: "仅支持 KMarkdown/Card；消息须已由当前进程收发，显式场景可使用 call_kook_api",
         },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },

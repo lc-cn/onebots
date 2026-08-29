@@ -47,9 +47,11 @@ https://你的域名/kook/my-bot/webhook?compress=0
 
 适配器原生收发文字、KMarkdown、图片、视频、音频、文件、Card、提及和回复。单个媒体段使用对应 KOOK 消息类型；混合富媒体会编译为 Card，不会退化成 Markdown 链接。
 
+KOOK 要求图片和视频等素材必须由当前机器人上传。通用媒体段的 `file` / `url` 可使用 HTTP(S) URL、Node.js 本地路径、`file://`、Base64 data URL 或 `base64://`；适配器会先通过 `/v3/asset/create` 上传，再发送 KOOK 素材 URL，避免第三方 URL 导致“找不到资源”。
+
 Gateway 与 Webhook 进入同一条事件投影链路。频道/私聊消息、回应增删、消息编辑/删除、成员进出和按钮交互会投影成统一事件；其他 KOOK 系统事件以 `custom` notice 交付，并完整保留在 `raw_event` 和 `extensions.kook` 中。
 
-KOOK 的频道消息与私聊消息使用两套 API。`delete_message`、`get_message` 应提供 `scene_type`；当前进程收发过的消息可以从有界上下文自动识别。通用 `update_message` 只适用于当前进程已知场景的消息，其他场景请使用 `call_kook_api` 显式调用。
+KOOK 的频道消息与私聊消息使用两套 API。`delete_message`、`get_message` 应提供 `scene_type`；当前进程收发过的消息可以从有界上下文自动识别。KOOK 官方只允许编辑 KMarkdown 和 Card；通用 `update_message` 还要求当前进程已知消息场景，其他场景请使用 `call_kook_api` 显式调用。
 
 ## 平台扩展动作
 

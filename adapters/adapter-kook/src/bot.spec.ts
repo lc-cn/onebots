@@ -1,9 +1,14 @@
 import { createCipheriv } from "node:crypto";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { KookApiError, KookBot } from "./bot.js";
 import { decryptWebhookMessage } from "./utils.js";
 
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => vi.useRealTimers());
+afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+});
 
 describe("KOOK Bot", () => {
     test("按官方格式解密 Webhook", () => {
@@ -69,6 +74,36 @@ describe("KOOK Bot", () => {
         const error = await bot.callApi("/v3/guild/list").catch(value => value);
         expect(error).toBeInstanceOf(KookApiError);
         expect(error).toMatchObject({ status: 403, code: 40301, path: "/v3/guild/list" });
+    });
+
+    test("首次身份请求失败后继续恢复 Webhook 账号", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, "random").mockReturnValue(0);
+        const fetchMock = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("network down"))
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } }),
+                    { status: 200 },
+                ),
+            );
+        vi.stubGlobal("fetch", fetchMock);
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "webhook",
+        });
+        const ready = vi.fn();
+        bot.on("ready", ready);
+
+        await expect(bot.start()).rejects.toThrow("network down");
+        await vi.advanceTimersByTimeAsync(800);
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(ready).toHaveBeenCalledOnce();
+        expect(bot.getCachedMe()).toMatchObject({ id: "bot" });
+        await bot.stop();
     });
 });
 

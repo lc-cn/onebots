@@ -1,4 +1,4 @@
-import type { CommonTypes } from "onebots";
+import { materializeMediaSource, type CommonTypes } from "onebots";
 import type { KookMessageType, KookSendMessage } from "./types.js";
 import { escapeKMarkdown, parseKMarkdown, stringValue } from "./utils.js";
 
@@ -8,6 +8,36 @@ const MEDIA_TYPES: Record<string, KookMessageType> = {
     file: 4,
     audio: 8,
 };
+
+/** 上传通用媒体来源后构建 KOOK 消息，确保素材属于当前机器人。 */
+export async function prepareKookOutboundMessage(
+    segments: CommonTypes.Segment[],
+    upload: (data: Uint8Array, filename: string, contentType: string) => Promise<string>,
+): Promise<KookSendMessage> {
+    const resolved = await Promise.all(
+        segments.map(async segment => {
+            if (!MEDIA_TYPES[segment.type]) return segment;
+            const source = stringValue(segment.data.url || segment.data.file || segment.data.src);
+            if (!source) throw new Error(`KOOK ${segment.type} 消息必须提供 url 或 file`);
+            const media = await materializeMediaSource({
+                source,
+                filename: optionalString(segment.data.filename || segment.data.name),
+                contentType: optionalString(segment.data.content_type || segment.data.mime),
+            });
+            const url = await upload(media.data, media.filename, media.contentType);
+            return { ...segment, data: { ...segment.data, url } };
+        }),
+    );
+    return buildKookOutboundMessage(resolved);
+}
+
+/** KOOK 官方只允许编辑 KMarkdown 与 Card 消息。 */
+export function assertKookEditableMessage(segments: CommonTypes.Segment[]): void {
+    const type = buildKookOutboundMessage(segments).type;
+    if (type !== 9 && type !== 10) {
+        throw new Error("KOOK 只支持更新 KMarkdown 或 Card 消息");
+    }
+}
 
 /** 将统一消息段编译为 KOOK 原生消息；混合富媒体使用 Card，避免降级成 URL 文本。 */
 export function buildKookOutboundMessage(segments: CommonTypes.Segment[]): KookSendMessage {
@@ -120,4 +150,8 @@ function parseJson(value: string): unknown {
     } catch {
         return undefined;
     }
+}
+
+function optionalString(value: unknown): string | undefined {
+    return typeof value === "string" && value ? value : undefined;
 }

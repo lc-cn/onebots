@@ -9,7 +9,11 @@ import {
 import { createKookAccount } from "./account.js";
 import { KookBot } from "./bot.js";
 import { kookCapabilities } from "./capabilities.js";
-import { buildKookOutboundMessage, projectKookMessageSegments } from "./messages.js";
+import {
+    assertKookEditableMessage,
+    prepareKookOutboundMessage,
+    projectKookMessageSegments,
+} from "./messages.js";
 import { executeKookPlatformAction, KOOK_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type {
     KookChannel,
@@ -31,15 +35,13 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     ): Promise<Adapter.SendMessageResult> {
         const bot = this.requireBot(uin);
         const direct = params.scene_type === "private" || params.scene_type === "direct";
+        const message = await prepareKookOutboundMessage(
+            params.message,
+            bot.uploadAsset.bind(bot),
+        );
         const result = direct
-            ? await bot.sendDirectMessage(
-                  params.scene_id.string,
-                  buildKookOutboundMessage(params.message),
-              )
-            : await bot.sendChannelMessage(
-                  params.scene_id.string,
-                  buildKookOutboundMessage(params.message),
-              );
+            ? await bot.sendDirectMessage(params.scene_id.string, message)
+            : await bot.sendChannelMessage(params.scene_id.string, message);
         bot.rememberMessageScene(
             result.msg_id,
             direct ? "direct" : "channel",
@@ -104,7 +106,11 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         const bot = this.requireBot(uin);
         const id = params.message_id.string;
         const scene = this.messageScene(bot, id);
-        const message = buildKookOutboundMessage(params.message);
+        assertKookEditableMessage(params.message);
+        const message = await prepareKookOutboundMessage(
+            params.message,
+            bot.uploadAsset.bind(bot),
+        );
         await bot.callApi(`/v3/${scene === "direct" ? "direct-message" : "message"}/update`, {
             method: "POST",
             body: { msg_id: id, content: message.content, quote: message.quote },

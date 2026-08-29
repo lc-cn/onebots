@@ -27,6 +27,8 @@ export {
     type AdapterCapabilityManifest,
     type CapabilityDescriptor,
     type ReverseWebSocketOptions,
+    type MediaSourceInput,
+    type MaterializedMedia,
     // Infrastructure
     ConnectionManager,
     ReverseWebSocketSession,
@@ -45,6 +47,7 @@ export {
     requireBooleanParam,
     readPackageVersion,
     readPackageVersionFile,
+    materializeMediaSource,
     defineAdapterCapabilities,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,

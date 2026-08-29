@@ -66,21 +66,19 @@ export class KookBot extends EventEmitter {
         if (!this.stopped) return;
         this.stopped = false;
         this.generation++;
-        this.me = await this.callApi<KookUser>("/v3/user/me");
-        if (this.receiveMode === "gateway") {
-            try {
-                await this.connect(this.generation);
-            } catch (error) {
-                this.scheduleReconnect(this.generation);
-                throw error;
-            }
-        } else this.emit("ready");
+        try {
+            await this.establish(this.generation);
+        } catch (error) {
+            this.scheduleReconnect(this.generation);
+            throw error;
+        }
     }
 
     async stop(): Promise<void> {
         this.stopped = true;
         this.generation++;
         this.clearTimers();
+        this.me = null;
         const socket = this.socket;
         this.socket = undefined;
         if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "OneBots stopped");
@@ -114,6 +112,14 @@ export class KookBot extends EventEmitter {
         messageId: string,
     ): { scene: "channel" | "direct"; targetId?: string; chatCode?: string } | undefined {
         return this.messageContexts.get(messageId);
+    }
+
+    private async establish(generation: number): Promise<void> {
+        if (this.stopped || generation !== this.generation) return;
+        if (!this.me) this.me = await this.callApi<KookUser>("/v3/user/me");
+        if (this.stopped || generation !== this.generation) return;
+        if (this.receiveMode === "gateway") await this.connect(generation);
+        else this.emit("ready");
     }
 
     private async connect(generation: number): Promise<void> {
@@ -240,7 +246,7 @@ export class KookBot extends EventEmitter {
         const delay = Math.round(base * (0.8 + Math.random() * 0.4));
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = undefined;
-            void this.connect(generation).catch(error => {
+            void this.establish(generation).catch(error => {
                 this.emit("error", error);
                 this.scheduleReconnect(generation);
             });
