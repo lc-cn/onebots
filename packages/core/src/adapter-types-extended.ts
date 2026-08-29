@@ -253,6 +253,17 @@ declare module "./adapter.js" {
             onebot_version?: string;
             milky_version?: string;
             impl_version?: string;
+            qq_protocol_version?: string;
+            qq_protocol_type?:
+                | "windows"
+                | "linux"
+                | "macos"
+                | "android_pad"
+                | "android_phone"
+                | "ipad"
+                | "iphone"
+                | "harmony"
+                | "watch";
         }
         export interface BotStatus {
             self: CommonTypes.Id;

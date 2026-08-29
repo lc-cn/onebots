@@ -87,6 +87,7 @@ function createProtocol() {
         setGroupName: vi.fn(),
         leaveGroup: vi.fn(),
         getLoginInfo: vi.fn(),
+        getUserInfo: vi.fn(),
         getFriendInfo: vi.fn(),
         getFriendList: vi.fn(),
         getGroupList: vi.fn(),
@@ -905,6 +906,8 @@ describe("Milky V1 protocol", () => {
         adapter.getVersion.mockResolvedValue({
             app_name: "onebots ICQQ Adapter",
             app_version: "3.0.7",
+            qq_protocol_version: "9.1.50",
+            qq_protocol_type: "android_pad",
         });
         adapter.getStatus.mockResolvedValue({ online: true, good: true });
 
@@ -912,9 +915,38 @@ describe("Milky V1 protocol", () => {
             data: {
                 impl_name: "onebots ICQQ Adapter",
                 impl_version: "3.0.7",
+                qq_protocol_version: "9.1.50",
+                qq_protocol_type: "android_pad",
                 milky_version: "1.0",
             },
         });
+        adapter.getUserInfo.mockResolvedValue({
+            user_id: { string: "friend", number: 10001 },
+            user_name: "Alice",
+            qid: "alice",
+            age: 21,
+            sex: "female",
+            remark: "A",
+            bio: "OneBots",
+            level: 42,
+            area: "Manila",
+        });
+        await expect(protocol.apply("get_user_profile", { user_id: 10001 })).resolves.toMatchObject(
+            {
+                data: {
+                    nickname: "Alice",
+                    qid: "alice",
+                    age: 21,
+                    sex: "female",
+                    remark: "A",
+                    bio: "OneBots",
+                    level: 42,
+                    country: "",
+                    city: "Manila",
+                    school: "",
+                },
+            },
+        );
         await expect(protocol.apply("get_status", {})).resolves.toMatchObject({
             data: { online: true, good: true },
         });

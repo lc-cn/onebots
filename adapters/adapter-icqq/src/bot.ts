@@ -10,6 +10,7 @@ import type { MessageRet } from "@icqqjs/icqq/lib/events";
 import type { ICQQConfig, ICQQUser, ICQQFriend, ICQQGroup, ICQQGroupMember } from "./types.js";
 import { detachICQQClientListeners, wireICQQClientEvents } from "./client-events.js";
 import { buildICQQClientConfig, parseICQQUin } from "./client-config.js";
+import { getICQQUserProfile } from "./user-profile.js";
 
 export class ICQQBot extends EventEmitter {
     private config: ICQQConfig;
@@ -266,14 +267,7 @@ export class ICQQBot extends EventEmitter {
      */
     async getStrangerInfo(userId: number): Promise<ICQQUser> {
         if (!this.client) throw new Error("Bot not connected");
-        const info = await this.client.getStrangerInfo(userId);
-        return {
-            user_id: info.user_id,
-            nickname: info.nickname,
-            sex: info.sex,
-            age: info.age,
-            avatar: `https://q1.qlogo.cn/g?b=qq&nk=${info.user_id}&s=640`,
-        };
+        return getICQQUserProfile(this.client, userId);
     }
 
     /**
@@ -488,26 +482,11 @@ export class ICQQBot extends EventEmitter {
     }
 
     /**
-     * 扫码登录 / 验证完成后继续登录流程（新版 ICQQ 需在 qrcode、auth 事件后显式调用 login）
-     */
-    qrcodeLogin(): void {
-        if (!this.client) throw new Error("Bot not connected");
-        this.client.login();
-    }
-
-    /**
      * 继续登录流程（扫码确认、身份验证完成后调用，等价于 client.login()）
      */
     continueLogin(): void {
         if (!this.client) throw new Error("Bot not connected");
         this.client.login();
-    }
-
-    /**
-     * 获取消息段构造器
-     */
-    static get segment() {
-        return Segment;
     }
 }
 

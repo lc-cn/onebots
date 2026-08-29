@@ -192,6 +192,13 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
             user_name: info.nickname,
             user_displayname: info.nickname,
             avatar: info.avatar,
+            qid: info.qid,
+            age: info.age,
+            sex: info.sex,
+            remark: info.remark,
+            bio: info.bio,
+            level: info.level,
+            area: info.area,
         };
     }
 

@@ -27,10 +27,18 @@ describe("ICQQ capability manifest", () => {
     });
 
     test("reports package versions from installed metadata", async () => {
-        const version = await ICQQAdapter.prototype.getVersion.call({} as ICQQAdapter, "unused");
+        const adapter = {
+            requireNativeClient: () => ({
+                apk: { ver: "9.1.50" },
+                config: { platform: 2 },
+            }),
+        } as unknown as ICQQAdapter;
+        const version = await ICQQAdapter.prototype.getVersion.call(adapter, "unused");
 
         expect(version.app_version).toMatch(/^\d+\.\d+\.\d+/);
         expect(version.impl_version).toMatch(/^\d+\.\d+\.\d+/);
+        expect(version.qq_protocol_version).toBe("9.1.50");
+        expect(version.qq_protocol_type).toBe("android_pad");
     });
 
     test("every declared action resolves to a concrete implementation", () => {

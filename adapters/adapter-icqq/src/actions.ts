@@ -20,12 +20,11 @@ export abstract class ICQQActionAdapter extends ICQQGuildFileActions {
         return ICQQ_PLATFORM_ACTIONS.has(action);
     }
 
-    async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+    async getVersion(uin: string): Promise<Adapter.VersionInfo> {
+        const client = this.requireNativeClient(uin);
         const [adapterVersion, icqqVersion] = await Promise.all([
             readPackageVersion(import.meta.url),
-            readPackageVersionFile(
-                new URL("../package.json", import.meta.resolve("@icqqjs/icqq")),
-            ),
+            readPackageVersionFile(new URL("../package.json", import.meta.resolve("@icqqjs/icqq"))),
         ]);
         return {
             app_name: "onebots ICQQ Adapter",
@@ -33,6 +32,8 @@ export abstract class ICQQActionAdapter extends ICQQGuildFileActions {
             impl: "icqq",
             version: icqqVersion,
             impl_version: icqqVersion,
+            qq_protocol_version: client.apk.ver,
+            qq_protocol_type: milkyProtocolType(client.config.platform),
         };
     }
 
@@ -66,5 +67,24 @@ export abstract class ICQQActionAdapter extends ICQQGuildFileActions {
 
     async cleanCache(uin: string): Promise<void> {
         this.requireNativeClient(uin).cleanCache();
+    }
+}
+
+function milkyProtocolType(platform: number): NonNullable<Adapter.VersionInfo["qq_protocol_type"]> {
+    switch (platform) {
+        case 1:
+            return "android_phone";
+        case 2:
+            return "android_pad";
+        case 3:
+            return "watch";
+        case 4:
+            return "macos";
+        case 5:
+            return "ipad";
+        case 6:
+            return "windows";
+        default:
+            throw new TypeError(`ICQQ 登录平台 ${platform} 无法投影为 Milky 协议类型`);
     }
 }

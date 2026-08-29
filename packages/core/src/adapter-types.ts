@@ -137,6 +137,16 @@ declare module "./adapter.js" {
             user_name: string;
             user_displayname?: string;
             avatar?: string;
+            qid?: string;
+            age?: number;
+            sex?: "male" | "female" | "unknown";
+            remark?: string;
+            bio?: string;
+            level?: number;
+            area?: string;
+            country?: string;
+            city?: string;
+            school?: string;
         }
 
         // --- 好友 (7个方法) ---

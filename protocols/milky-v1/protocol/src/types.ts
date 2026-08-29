@@ -46,6 +46,19 @@ export namespace Milky {
         title?: string;
     }
 
+    export interface UserProfile {
+        nickname: string;
+        qid: string;
+        age: number;
+        sex: "male" | "female" | "unknown";
+        remark: string;
+        bio: string;
+        level: number;
+        country: string;
+        city: string;
+        school: string;
+    }
+
     /**
      * Group information
      */
@@ -249,5 +262,22 @@ export namespace Milky {
         app_name: string;
         app_version: string;
         protocol_version: string;
+    }
+
+    export interface ImplInfo {
+        impl_name: string;
+        impl_version: string;
+        qq_protocol_version: string;
+        qq_protocol_type:
+            | "windows"
+            | "linux"
+            | "macos"
+            | "android_pad"
+            | "android_phone"
+            | "ipad"
+            | "iphone"
+            | "harmony"
+            | "watch";
+        milky_version: string;
     }
 }

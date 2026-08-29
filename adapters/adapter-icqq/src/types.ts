@@ -86,6 +86,14 @@ export interface ICQQUser {
     sex?: "male" | "female" | "unknown";
     /** 年龄 */
     age?: number;
+    /** QID */
+    qid?: string;
+    /** 好友备注 */
+    remark?: string;
+    /** 个性签名 */
+    bio?: string;
+    /** QQ 等级 */
+    level?: number;
     /** 地区 */
     area?: string;
     /** 头像 URL */

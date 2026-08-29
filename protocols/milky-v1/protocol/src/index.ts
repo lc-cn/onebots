@@ -30,6 +30,7 @@ import {
 import { projectMilkyFriend } from "./friend-entities.js";
 import { projectMilkyIncomingMessage } from "./message-entities.js";
 import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
+import { projectMilkyImplInfo, projectMilkyUserProfile } from "./system-entities.js";
 
 const milkySchema: Schema = {
     use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
@@ -485,29 +486,21 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         };
     }
 
-    private async getImplInfo(): Promise<Record<string, string>> {
+    private async getImplInfo(): Promise<Milky.ImplInfo> {
         const version = await this.adapter.getVersion(this.account.account_id);
-        return {
-            impl_name: version.app_name ?? version.impl ?? "onebots",
-            impl_version:
-                version.app_version ?? version.impl_version ?? version.version ?? "unknown",
-            milky_version: "1.0",
-        };
+        return projectMilkyImplInfo(version);
     }
 
     private async getStatus(): Promise<Adapter.StatusInfo> {
         return this.adapter.getStatus(this.account.account_id);
     }
 
-    private async getStrangerInfo(params: Record<string, unknown>): Promise<Milky.User> {
-        const { user_id } = params as { user_id: string };
+    private async getStrangerInfo(params: Record<string, unknown>): Promise<Milky.UserProfile> {
+        const userId = requirePositiveIntegerParam(params, "user_id");
         const info = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: this.adapter.resolveId(user_id),
+            user_id: this.adapter.resolveId(userId),
         });
-        return {
-            user_id: info.user_id.string,
-            nickname: info.user_name,
-        };
+        return projectMilkyUserProfile(info);
     }
 
     private async getFriendInfo(
