@@ -41,7 +41,12 @@ export class EmailError extends OneBotsError {
 }
 
 function categoryFor(code: string): ErrorCategory {
-    if (code.includes("AUTH") || code.includes("CONFIG") || code.includes("PROXY")) {
+    if (
+        code.includes("AUTH") ||
+        code.includes("CONFIG") ||
+        code.includes("PROXY") ||
+        code.includes("DISABLED")
+    ) {
         return ErrorCategory.CONFIG;
     }
     if (code.includes("NOT_FOUND") || code.includes("UIDVALIDITY")) {

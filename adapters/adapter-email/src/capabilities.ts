@@ -2,23 +2,38 @@ import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebo
 import { EMAIL_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const platformActions = Object.fromEntries(
-    [...EMAIL_PLATFORM_ACTIONS].map(action => [action, { support: "native" as const }]),
+    [...EMAIL_PLATFORM_ACTIONS].map(action => [
+        action,
+        action === "send_email"
+            ? { support: "native" as const }
+            : {
+                  support: "native" as const,
+                  availability: "context" as const,
+                  note: "仅 receive_mode=imap 且邮箱连接可用时执行",
+              },
+    ]),
 );
+
+const imapContext = {
+    support: "native" as const,
+    availability: "context" as const,
+    note: "仅 receive_mode=imap 且邮箱连接可用时执行",
+};
 
 /** SMTP、IMAP IDLE、线程头和邮箱管理的真实能力。 */
 export const emailCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
         send_message: { support: "native", scenes: ["private", "direct"] },
         delete_message: {
-            support: "native",
+            ...imapContext,
             note: "删除 IMAP 邮箱中的邮件，不等同于撤回已投递邮件",
         },
         get_message: {
-            support: "native",
+            ...imapContext,
             note: "按 RFC Message-ID 或可逆 IMAP 原生 ID 查询邮箱",
         },
-        get_message_history: { support: "native", scenes: ["private", "direct"] },
-        mark_message_as_read: { support: "native" },
+        get_message_history: { ...imapContext, scenes: ["private", "direct"] },
+        mark_message_as_read: imapContext,
         get_login_info: { support: "native" },
         get_user_info: { support: "emulated", note: "邮件协议没有用户目录，仅投影邮箱地址" },
         can_send_image: { support: "native" },
@@ -43,5 +58,10 @@ export const emailCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
     transports: {
         smtp: { support: "native", mode: "native" },
         imap_idle: { support: "native", mode: "native" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 EmailClient.ingest() 投递外部已解析邮件",
+        },
     },
 });

@@ -140,11 +140,13 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
         const status = account?.client.status;
         return {
             online: account?.status === AccountStatus.Online && status?.started === true,
-            good: status?.started === true && status.receive_connected,
+            good:
+                status?.started === true &&
+                (status.receive_mode === "manual" || status.receive_connected),
         };
     }
 
-    /** 创建具备 SMTP 独立可用与 IMAP 无限恢复能力的账号。 */
+    /** 创建 SMTP 始终可用、IMAP 可选且能无限恢复的账号。 */
     createAccount(config: Account.Config<"email">): Account<"email", EmailClient> {
         const client = new EmailClient(config);
         const account = new Account<"email", EmailClient>(this, client, config);

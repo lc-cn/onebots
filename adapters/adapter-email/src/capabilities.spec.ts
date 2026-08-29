@@ -26,6 +26,11 @@ describe("邮件能力清单", () => {
             support: "native",
             mode: "native",
         });
+        expect(emailCapabilities.transports.manual).toMatchObject({
+            support: "native",
+            mode: "native",
+        });
+        expect(emailCapabilities.actions.search_emails?.availability).toBe("context");
         expect(emailCapabilities.segments.email_html?.direction).toBe("receive");
     });
 });

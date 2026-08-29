@@ -13,7 +13,9 @@ export {
     type EmailPlatformAction,
 } from "./platform-actions.js";
 export {
+    requireEmailImapConfig,
     resolveEmailAuthMode,
+    resolveEmailReceiveMode,
     validateEmailConfig,
     type EmailSmtpTransport,
 } from "./transports.js";
@@ -25,6 +27,11 @@ const securityChoices = [
     { value: "plain", label: "明文（不推荐）" },
 ];
 
+const imapUi = (section: "transport" | "filter" | "delivery" | "advanced") => ({
+    section,
+    visibleWhen: { path: "receive_mode", oneOf: ["imap"] },
+});
+
 export const emailSchema: Schema = {
     account_id: {
         type: "string",
@@ -32,6 +39,17 @@ export const emailSchema: Schema = {
         label: "账号标识",
         description: "OneBots 内部使用的稳定账号 ID",
         ui: { section: "credentials" },
+    },
+    receive_mode: {
+        type: "string",
+        default: "imap",
+        label: "邮件接收方式",
+        choices: [
+            { value: "imap", label: "IMAP IDLE" },
+            { value: "manual", label: "手动投递已解析邮件" },
+        ],
+        description: "manual 不创建 IMAP 连接，由现有邮件系统调用 EmailClient.ingest()",
+        ui: { section: "transport" },
     },
     address: {
         type: "string",
@@ -162,31 +180,35 @@ export const emailSchema: Schema = {
     imap: {
         host: {
             type: "string",
-            required: true,
             label: "IMAP 主机",
             placeholder: "imap.example.com",
-            ui: { section: "transport" },
+            ui: imapUi("transport"),
         },
         port: {
             type: "number",
             min: 1,
             max: 65535,
             label: "IMAP 端口",
-            ui: { section: "transport" },
+            ui: imapUi("transport"),
         },
         security: {
             type: "string",
             default: "tls",
             label: "IMAP 加密方式",
             choices: securityChoices,
-            ui: { section: "transport" },
+            ui: imapUi("transport"),
         },
-        mailbox: { type: "string", default: "INBOX", label: "接收目录", ui: { section: "filter" } },
+        mailbox: {
+            type: "string",
+            default: "INBOX",
+            label: "接收目录",
+            ui: imapUi("filter"),
+        },
         mark_seen: {
             type: "boolean",
             default: true,
             label: "投影成功后标为已读",
-            ui: { section: "delivery" },
+            ui: imapUi("delivery"),
         },
         poll_interval_ms: {
             type: "number",
@@ -194,51 +216,51 @@ export const emailSchema: Schema = {
             default: 60000,
             label: "IDLE 兜底轮询（毫秒）",
             description: "设为 0 关闭兜底轮询；实时事件仍由 IMAP IDLE 驱动",
-            ui: { section: "advanced" },
+            ui: imapUi("advanced"),
         },
         retry_initial_delay_ms: {
             type: "number",
             min: 100,
             default: 1000,
             label: "初始重连延迟（毫秒）",
-            ui: { section: "advanced" },
+            ui: imapUi("advanced"),
         },
         retry_max_delay_ms: {
             type: "number",
             min: 1000,
             default: 30000,
             label: "最大重连延迟（毫秒）",
-            ui: { section: "advanced" },
+            ui: imapUi("advanced"),
         },
         reject_unauthorized: {
             type: "boolean",
             default: true,
             label: "校验 IMAP TLS 证书",
-            ui: { section: "advanced" },
+            ui: imapUi("advanced"),
         },
         connection_timeout_ms: {
             type: "number",
             min: 1,
             label: "IMAP 连接超时（毫秒）",
-            ui: { section: "advanced" },
+            ui: imapUi("advanced"),
         },
         greeting_timeout_ms: {
             type: "number",
             min: 1,
             label: "IMAP 欢迎超时（毫秒）",
-            ui: { section: "advanced" },
+            ui: imapUi("advanced"),
         },
         socket_timeout_ms: {
             type: "number",
             min: 1,
             label: "IMAP Socket 超时（毫秒）",
-            ui: { section: "advanced" },
+            ui: imapUi("advanced"),
         },
         max_idle_time_ms: {
             type: "number",
             min: 1000,
             label: "单次 IDLE 最长时间（毫秒）",
-            ui: { section: "advanced" },
+            ui: imapUi("advanced"),
         },
     },
     proxy: {

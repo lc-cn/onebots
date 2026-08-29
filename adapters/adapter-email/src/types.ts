@@ -54,10 +54,12 @@ export interface EmailConfig {
     account_id: string;
     address: string;
     display_name?: string;
+    /** 使用 IMAP IDLE 接收，或由外部邮件系统手动投递。 */
+    receive_mode?: "imap" | "manual";
     auth: EmailAuthConfig;
     proxy?: EmailProxyConfig;
     smtp: EmailSmtpConfig;
-    imap: EmailImapConfig;
+    imap?: EmailImapConfig;
     default_subject?: string;
 }
 

@@ -4,7 +4,7 @@ import SMTPPool from "nodemailer/lib/smtp-pool/index.js";
 import SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
 import { ImapFlow } from "imapflow";
 import { EmailError } from "./errors.js";
-import type { EmailConfig, EmailSendResult } from "./types.js";
+import type { EmailConfig, EmailImapConfig, EmailSendResult } from "./types.js";
 
 export interface EmailSmtpTransport {
     verify(): Promise<true>;
@@ -45,11 +45,12 @@ export function createSmtpTransport(config: EmailConfig): EmailSmtpTransport {
 
 /** 创建开启自动 IDLE、证书校验和代理支持的 IMAP 客户端。 */
 export function createImapClient(config: EmailConfig): ImapFlow {
-    const security = config.imap.security || "tls";
+    const imap = requireEmailImapConfig(config);
+    const security = imap.security || "tls";
     const authMode = resolveEmailAuthMode(config);
     return new ImapFlow({
-        host: config.imap.host,
-        port: config.imap.port || (security === "tls" ? 993 : 143),
+        host: imap.host,
+        port: imap.port || (security === "tls" ? 993 : 143),
         secure: security === "tls",
         doSTARTTLS: security === "starttls" ? true : security === "plain" ? false : undefined,
         auth: {
@@ -58,35 +59,40 @@ export function createImapClient(config: EmailConfig): ImapFlow {
             accessToken: authMode === "oauth2" ? config.auth.access_token : undefined,
         },
         proxy: resolveProxyUrl(config),
-        tls: { rejectUnauthorized: config.imap.reject_unauthorized !== false },
-        connectionTimeout: config.imap.connection_timeout_ms,
-        greetingTimeout: config.imap.greeting_timeout_ms,
-        socketTimeout: config.imap.socket_timeout_ms,
-        maxIdleTime: config.imap.max_idle_time_ms,
+        tls: { rejectUnauthorized: imap.reject_unauthorized !== false },
+        connectionTimeout: imap.connection_timeout_ms,
+        greetingTimeout: imap.greeting_timeout_ms,
+        socketTimeout: imap.socket_timeout_ms,
+        maxIdleTime: imap.max_idle_time_ms,
         logger: false,
     });
 }
 
 /** 校验运行时配置中无法由静态 Schema 表达的互斥条件。 */
 export function validateEmailConfig(config: EmailConfig): void {
+    const receiveMode = resolveEmailReceiveMode(config);
     for (const [field, value] of [
         ["account_id", config.account_id],
         ["address", config.address],
         ["auth.user", config.auth?.user],
         ["smtp.host", config.smtp?.host],
-        ["imap.host", config.imap?.host],
     ] as const) {
         if (!value?.trim()) {
             throw new EmailError(`${field} 不能为空`, { code: "EMAIL_CONFIG_INVALID" });
         }
     }
+    if (receiveMode === "imap" && !config.imap?.host?.trim()) {
+        throw new EmailError("imap 模式必须配置 imap.host", {
+            code: "EMAIL_CONFIG_INVALID",
+        });
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.address)) {
         throw new EmailError("address 不是有效邮箱地址", { code: "EMAIL_CONFIG_INVALID" });
     }
     validateSecurity("smtp.security", config.smtp.security);
-    validateSecurity("imap.security", config.imap.security);
+    validateSecurity("imap.security", config.imap?.security);
     validatePort("smtp.port", config.smtp.port);
-    validatePort("imap.port", config.imap.port);
+    validatePort("imap.port", config.imap?.port);
     const authMode = resolveEmailAuthMode(config);
     if (authMode === "password" && !config.auth.password?.trim()) {
         throw new EmailError("password 认证方式必须配置 auth.password", {
@@ -104,18 +110,18 @@ export function validateEmailConfig(config: EmailConfig): void {
         ["smtp.connection_timeout_ms", config.smtp.connection_timeout_ms, 1],
         ["smtp.greeting_timeout_ms", config.smtp.greeting_timeout_ms, 1],
         ["smtp.socket_timeout_ms", config.smtp.socket_timeout_ms, 1],
-        ["imap.poll_interval_ms", config.imap.poll_interval_ms, 0],
-        ["imap.retry_initial_delay_ms", config.imap.retry_initial_delay_ms, 100],
-        ["imap.retry_max_delay_ms", config.imap.retry_max_delay_ms, 1_000],
-        ["imap.connection_timeout_ms", config.imap.connection_timeout_ms, 1],
-        ["imap.greeting_timeout_ms", config.imap.greeting_timeout_ms, 1],
-        ["imap.socket_timeout_ms", config.imap.socket_timeout_ms, 1],
-        ["imap.max_idle_time_ms", config.imap.max_idle_time_ms, 1_000],
+        ["imap.poll_interval_ms", config.imap?.poll_interval_ms, 0],
+        ["imap.retry_initial_delay_ms", config.imap?.retry_initial_delay_ms, 100],
+        ["imap.retry_max_delay_ms", config.imap?.retry_max_delay_ms, 1_000],
+        ["imap.connection_timeout_ms", config.imap?.connection_timeout_ms, 1],
+        ["imap.greeting_timeout_ms", config.imap?.greeting_timeout_ms, 1],
+        ["imap.socket_timeout_ms", config.imap?.socket_timeout_ms, 1],
+        ["imap.max_idle_time_ms", config.imap?.max_idle_time_ms, 1_000],
     ] as const) {
         validateIntegerMinimum(field, value, minimum);
     }
     if (
-        config.imap.retry_initial_delay_ms !== undefined &&
+        config.imap?.retry_initial_delay_ms !== undefined &&
         config.imap.retry_max_delay_ms !== undefined &&
         config.imap.retry_initial_delay_ms > config.imap.retry_max_delay_ms
     ) {
@@ -124,6 +130,25 @@ export function validateEmailConfig(config: EmailConfig): void {
         });
     }
     resolveProxyUrl(config);
+}
+
+export function resolveEmailReceiveMode(config: EmailConfig): "imap" | "manual" {
+    const mode = config.receive_mode || "imap";
+    if (mode !== "imap" && mode !== "manual") {
+        throw new EmailError("receive_mode 必须是 imap 或 manual", {
+            code: "EMAIL_CONFIG_INVALID",
+        });
+    }
+    return mode;
+}
+
+export function requireEmailImapConfig(config: EmailConfig): EmailImapConfig {
+    if (resolveEmailReceiveMode(config) !== "imap" || !config.imap) {
+        throw new EmailError("当前邮件账号未启用 IMAP", {
+            code: "EMAIL_IMAP_DISABLED",
+        });
+    }
+    return config.imap;
 }
 
 /** 解析最终认证方式，供 SMTP 与 IMAP 共用同一决策。 */

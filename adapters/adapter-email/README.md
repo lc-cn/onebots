@@ -27,6 +27,7 @@ email.my_bot:
   address: bot@example.com
   display_name: 我的机器人
   default_subject: 来自 OneBots 的消息
+  receive_mode: imap
   auth:
     method: password
     user: bot@example.com
@@ -48,6 +49,8 @@ email.my_bot:
 ```
 
 `auth.method` 可选 `password` 或 `oauth2`，Web 表单只展示对应凭据；OAuth2 模式填写 `auth.access_token`。未显式设置方式的现有配置会根据 access token 是否存在确定认证方式。SMTP 与 IMAP 始终共用同一选择，不会把未选中的凭据发送给服务端。证书默认严格校验；只有接入受控的自签名服务时才应关闭对应的 `reject_unauthorized`。
+
+已有邮件接收器可配置 `receive_mode: manual` 并省略整个 `imap` 配置。客户端仍会验证和保留 SMTP 发送能力，但不会创建 IMAP 连接；外部系统将已解析的 `EmailMessage` 交给 `account.client.ingest(email)`，事件会进入与 IMAP 完全相同的去重和投影管线。邮箱搜索、标记、移动、删除及目录管理等 IMAP 动作会明确返回 `EMAIL_IMAP_DISABLED`。
 
 ## 原生邮件段
 

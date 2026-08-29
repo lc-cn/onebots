@@ -26,6 +26,32 @@ describe("EmailClient", () => {
         expect(() => client.ingest({ ...message(), id: "" })).toThrow("缺少 id、uid 或发件人");
     });
 
+    it("manual 模式保留 SMTP 发送且完全不创建 IMAP 连接", async () => {
+        const createImap = vi.fn();
+        const verify = vi.fn(async () => true as const);
+        const client = new EmailClient(
+            { ...config, receive_mode: "manual", imap: undefined },
+            {
+                createSmtp: () => ({ ...smtp, verify }),
+                createImap,
+            },
+        );
+
+        await client.start();
+
+        expect(verify).toHaveBeenCalledOnce();
+        expect(createImap).not.toHaveBeenCalled();
+        expect(client.status).toEqual({
+            started: true,
+            receive_connected: false,
+            receive_mode: "manual",
+        });
+        await expect(client.listMailboxes()).rejects.toMatchObject({
+            code: "EMAIL_IMAP_DISABLED",
+        });
+        await client.stop();
+    });
+
     it("要求密码或 OAuth2 token", () => {
         expect(() => new EmailClient({ ...config, auth: { user: "bot@example.com" } })).toThrow(
             "必须配置 auth.password",
@@ -60,6 +86,9 @@ describe("EmailClient", () => {
                     },
                 }),
         ).toThrow("不能大于 retry_max_delay_ms");
+        expect(() => new EmailClient({ ...config, receive_mode: "stream" as never })).toThrow(
+            "receive_mode 必须是 imap 或 manual",
+        );
     });
 
     it("重连成功瞬间再次关闭也会继续恢复", async () => {

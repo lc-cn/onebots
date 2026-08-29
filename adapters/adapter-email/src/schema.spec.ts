@@ -30,4 +30,18 @@ describe("邮件配置 Schema", () => {
         expect(emailSchema.imap?.retry_initial_delay_ms?.min).toBe(100);
         expect(emailSchema.imap?.retry_max_delay_ms?.min).toBe(1_000);
     });
+
+    it("提供 manual 接入并按接收模式隐藏全部 IMAP 字段", () => {
+        expect(emailSchema.receive_mode.choices?.map(choice => choice.value)).toEqual([
+            "imap",
+            "manual",
+        ]);
+        for (const rule of Object.values(emailSchema.imap)) {
+            expect(rule.ui?.visibleWhen).toEqual({
+                path: "receive_mode",
+                oneOf: ["imap"],
+            });
+        }
+        expect(emailSchema.imap.host.required).toBeUndefined();
+    });
 });

@@ -14,10 +14,18 @@ import { EmailDeliveryState, syncUnseenMessages } from "./sync.js";
 import {
     createImapClient,
     createSmtpTransport,
+    requireEmailImapConfig,
+    resolveEmailReceiveMode,
     type EmailSmtpTransport,
     validateEmailConfig,
 } from "./transports.js";
-import type { EmailConfig, EmailMessage, EmailSendOptions, EmailSendResult } from "./types.js";
+import type {
+    EmailConfig,
+    EmailImapConfig,
+    EmailMessage,
+    EmailSendOptions,
+    EmailSendResult,
+} from "./types.js";
 
 export interface EmailClientEvents {
     ready: [];
@@ -64,12 +72,20 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
         this.sleep = options.sleep || abortableSleep;
     }
 
-    /** 当前 SMTP 可发送且 IMAP 已连接时为健康状态。 */
-    get status(): { started: boolean; receive_connected: boolean } {
-        return { started: this.started, receive_connected: this.receiveConnected };
+    /** 分别报告客户端启动状态、接收连接与显式接收模式。 */
+    get status(): {
+        started: boolean;
+        receive_connected: boolean;
+        receive_mode: "imap" | "manual";
+    } {
+        return {
+            started: this.started,
+            receive_connected: this.receiveConnected,
+            receive_mode: resolveEmailReceiveMode(this.config),
+        };
     }
 
-    /** 验证 SMTP 并启动 IMAP；IMAP 暂时失败时在后台无限恢复。 */
+    /** 始终验证 SMTP；imap 模式启动并无限恢复接收连接，manual 模式不创建 IMAP。 */
     async start(): Promise<void> {
         if (this.startRequest) return this.startRequest;
         if (this.started) return;
@@ -90,13 +106,15 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
         try {
             this.smtp = this.createSmtp();
             await this.smtp.verify();
-            try {
-                await this.connectImap(generation, controller.signal);
-            } catch (error) {
-                const wrapped = EmailError.wrap(error, "EMAIL_IMAP_CONNECT_FAILED", "connect");
-                this.safeEmit("disconnected", wrapped);
-                this.reportError(wrapped);
-                this.scheduleReconnect(generation, controller.signal, 1);
+            if (resolveEmailReceiveMode(this.config) === "imap") {
+                try {
+                    await this.connectImap(generation, controller.signal);
+                } catch (error) {
+                    const wrapped = EmailError.wrap(error, "EMAIL_IMAP_CONNECT_FAILED", "connect");
+                    this.safeEmit("disconnected", wrapped);
+                    this.reportError(wrapped);
+                    this.scheduleReconnect(generation, controller.signal, 1);
+                }
             }
             if (!this.isCurrent(generation, controller.signal)) return;
             this.safeEmit("ready");
@@ -303,7 +321,11 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     }
 
     private get mailbox(): string {
-        return this.config.imap.mailbox || "INBOX";
+        return this.imapConfig.mailbox || "INBOX";
+    }
+
+    private get imapConfig(): EmailImapConfig {
+        return requireEmailImapConfig(this.config);
     }
 
     private async connectImap(generation: number, signal: AbortSignal): Promise<void> {
@@ -412,7 +434,7 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
             await syncUnseenMessages({
                 imap,
                 mailbox: this.mailbox,
-                markSeen: this.config.imap.mark_seen !== false,
+                markSeen: this.imapConfig.mark_seen !== false,
                 deliveries: this.deliveries,
                 ingest: email => this.ingest(email),
                 reportError: error => this.reportError(error),
@@ -444,6 +466,7 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     }
 
     private requireImap(): ImapFlow {
+        requireEmailImapConfig(this.config);
         if (!this.imap?.usable || !this.receiveConnected) {
             throw new EmailError("IMAP 当前未连接", { code: "EMAIL_IMAP_OFFLINE" });
         }
@@ -455,14 +478,14 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     }
 
     private retryDelay(failures: number): number {
-        const initial = this.config.imap.retry_initial_delay_ms ?? 1_000;
-        const maximum = this.config.imap.retry_max_delay_ms ?? 30_000;
+        const initial = this.imapConfig.retry_initial_delay_ms ?? 1_000;
+        const maximum = this.imapConfig.retry_max_delay_ms ?? 30_000;
         return Math.min(maximum, initial * 2 ** Math.min(Math.max(failures - 1, 0), 10));
     }
 
     private startPollTimer(): void {
         this.clearPollTimer();
-        const interval = this.config.imap.poll_interval_ms ?? 60_000;
+        const interval = this.imapConfig.poll_interval_ms ?? 60_000;
         if (interval <= 0) return;
         this.pollTimer = setInterval(() => void this.queueSync(), interval);
     }
