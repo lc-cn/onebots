@@ -2,7 +2,7 @@ import { Protocol } from "./protocol.js";
 import { Adapter } from "./adapter.js";
 import { BaseApp } from "./base-app.js";
 import { Account } from "./account.js";
-import type { Schema } from "./config-validator.js";
+import { assertSchemaFormContract, type Schema } from "./config-validator.js";
 
 /**
  * Protocol Registry
@@ -214,6 +214,7 @@ export class AdapterRegistry {
      * Register an adapter config schema
      */
     static registerSchema(name: string, schema: Schema): void {
+        assertSchemaFormContract(schema);
         this.schemas.set(name, schema);
     }
 

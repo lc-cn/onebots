@@ -66,6 +66,68 @@ export type Schema = {
     [key: string]: ValidationRule | Schema;
 };
 
+/** 判断 Schema 节点是否为字段规则，而不是嵌套对象。 */
+export function isValidationRule(value: ValidationRule | Schema): value is ValidationRule {
+    if (typeof value !== "object" || value === null) return false;
+    return (
+        "required" in value ||
+        "type" in value ||
+        "choices" in value ||
+        "default" in value ||
+        "validator" in value ||
+        "transform" in value ||
+        "label" in value
+    );
+}
+
+/**
+ * 校验供管理端生成表单的 Schema 元数据。
+ *
+ * 适配器注册边界调用本函数，使缺失分区、悬空显示依赖或泄露敏感凭据的错误
+ * 在插件加载时立即失败，而不是退化成难以维护的通用 JSON 输入。
+ */
+export function assertSchemaFormContract(schema: Schema): void {
+    const fields = flattenSchemaFields(schema);
+    const paths = new Set(fields.map(field => field.path));
+
+    for (const { path, rule } of fields) {
+        if (!rule.label?.trim()) throw new ValidationError(`配置字段 ${path} 缺少 label`);
+        if (!rule.ui?.section) throw new ValidationError(`配置字段 ${path} 缺少 ui.section`);
+
+        const visibility = rule.ui.visibleWhen;
+        if (visibility && !paths.has(visibility.path)) {
+            throw new ValidationError(`配置字段 ${path} 引用了不存在的显示依赖 ${visibility.path}`);
+        }
+        if (
+            (rule.ui.widget === "endpoint-list" || rule.ui.widget === "choice-list") &&
+            rule.type !== "array"
+        ) {
+            throw new ValidationError(`配置字段 ${path} 的列表组件必须使用 array 类型`);
+        }
+        if (rule.ui.widget === "event-filter" && rule.type !== "object") {
+            throw new ValidationError(`配置字段 ${path} 的事件过滤组件必须使用 object 类型`);
+        }
+        if (/(?:password|token|secret|private_key|encrypt_key|aes_key)$/i.test(path)) {
+            if (rule.sensitive !== true) {
+                throw new ValidationError(`配置字段 ${path} 必须声明 sensitive`);
+            }
+        }
+    }
+}
+
+interface FlattenedSchemaField {
+    path: string;
+    rule: ValidationRule;
+}
+
+function flattenSchemaFields(schema: Schema, prefix = ""): FlattenedSchemaField[] {
+    return Object.entries(schema).flatMap(([key, value]) => {
+        const path = prefix ? `${prefix}.${key}` : key;
+        if (isValidationRule(value)) return [{ path, rule: value }];
+        return flattenSchemaFields(value, path);
+    });
+}
+
 /**
  * 配置验证器
  */
@@ -86,7 +148,7 @@ export class ConfigValidator {
             const value = config[key];
 
             // 如果是嵌套schema，递归验证
-            if (this.isSchema(rule)) {
+            if (!isValidationRule(rule)) {
                 if (value !== undefined) {
                     result[key] = this.validate(
                         (value || {}) as Record<string, unknown>,
@@ -224,22 +286,6 @@ export class ConfigValidator {
             return `${path} must be ${expectedType}, got ${actualType}`;
         }
         return null;
-    }
-
-    /**
-     * 判断是否为嵌套schema
-     */
-    private static isSchema(rule: ValidationRule | Schema): rule is Schema {
-        if (typeof rule !== "object" || rule === null) return false;
-        return !(
-            "required" in rule ||
-            "type" in rule ||
-            "choices" in rule ||
-            "default" in rule ||
-            "validator" in rule ||
-            "transform" in rule ||
-            "label" in rule
-        );
     }
 
     /**
