@@ -98,6 +98,9 @@ export function assertSchemaFormContract(schema: Schema): void {
         if (visibility && !paths.has(visibility.path)) {
             throw new ValidationError(`配置字段 ${path} 引用了不存在的显示依赖 ${visibility.path}`);
         }
+        if (visibility && visibility.oneOf.length === 0) {
+            throw new ValidationError(`配置字段 ${path} 的显示条件 oneOf 不能为空`);
+        }
         if (
             (rule.ui.widget === "endpoint-list" || rule.ui.widget === "choice-list") &&
             rule.type !== "array"
@@ -110,6 +113,16 @@ export function assertSchemaFormContract(schema: Schema): void {
         if (/(?:password|token|secret|private_key|encrypt_key|aes_key)$/i.test(path)) {
             if (rule.sensitive !== true) {
                 throw new ValidationError(`配置字段 ${path} 必须声明 sensitive`);
+            }
+        }
+        for (const field of rule.ui.fields ?? []) {
+            if (!field.key.trim() || !field.label.trim()) {
+                throw new ValidationError(`配置字段 ${path} 的子字段必须声明 key 与 label`);
+            }
+            if (/(?:password|token|secret|private_key|encrypt_key|aes_key)$/i.test(field.key)) {
+                if (field.sensitive !== true) {
+                    throw new ValidationError(`配置字段 ${path}.${field.key} 必须声明 sensitive`);
+                }
             }
         }
     }

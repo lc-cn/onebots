@@ -35,9 +35,22 @@ const SERVER_NAME = 'onebots-mcp';
 const SERVER_VERSION = '0.1.0';
 
 const mcpV1Schema: Schema = {
-    access_token: { type: 'string', label: 'Access Token（鉴权）' },
-    tools_whitelist: { type: 'array', label: '工具白名单（留空则全部启用）' },
-    tools_blacklist: { type: 'array', label: '工具黑名单' },
+    access_token: {
+        type: 'string',
+        label: 'Access Token（鉴权）',
+        sensitive: true,
+        ui: { section: 'credentials' },
+    },
+    tools_whitelist: {
+        type: 'array',
+        label: '工具白名单（留空则全部启用）',
+        ui: { section: 'filter' },
+    },
+    tools_blacklist: {
+        type: 'array',
+        label: '工具黑名单',
+        ui: { section: 'filter' },
+    },
     filters: Protocol.FilterSchema,
 };
 

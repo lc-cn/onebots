@@ -77,8 +77,18 @@ const milkySchema: Schema = {
             ],
         },
     },
-    access_token: { type: "string", label: "Access Token", ui: { section: "credentials" } },
-    secret: { type: "string", label: "Secret", ui: { section: "credentials" } },
+    access_token: {
+        type: "string",
+        label: "Access Token",
+        sensitive: true,
+        ui: { section: "credentials" },
+    },
+    secret: {
+        type: "string",
+        label: "Secret",
+        sensitive: true,
+        ui: { section: "credentials" },
+    },
     filters: Protocol.FilterSchema,
 };
 
@@ -127,7 +137,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         }
     }
 
-    async stop(force?: boolean): Promise<void> {
+    async stop(_force?: boolean): Promise<void> {
         this.logger.info(`Stopping Milky protocol v1`);
         // Clean up Milky protocol resources
         this.removeAllListeners();

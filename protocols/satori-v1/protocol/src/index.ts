@@ -31,7 +31,12 @@ const satoriSchema: Schema = {
             ],
         },
     },
-    token: { type: "string", label: "Token", ui: { section: "credentials" } },
+    token: {
+        type: "string",
+        label: "Token",
+        sensitive: true,
+        ui: { section: "credentials" },
+    },
     platform: { type: "string", label: "平台标识", ui: { section: "credentials" } },
     filters: Protocol.FilterSchema,
 };
@@ -76,7 +81,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         }
     }
 
-    async stop(force?: boolean): Promise<void> {
+    async stop(_force?: boolean): Promise<void> {
         this.logger.info(`Stopping Satori protocol v1`);
         // Clean up Satori protocol resources
         this.removeAllListeners();
@@ -423,11 +428,9 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     private async getMessageList(
         params: Record<string, unknown>,
     ): Promise<Satori.BidiList<Satori.Message>> {
-        const { channel_id, limit, direction, order } = params as {
+        const { channel_id, limit } = params as {
             channel_id: string;
             limit?: number;
-            direction?: Satori.Direction;
-            order?: Satori.Order;
         };
 
         // Determine scene type

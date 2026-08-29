@@ -52,6 +52,7 @@ export class ProtocolRegistry {
      * Register a protocol config schema (key format: name.version)
      */
     static registerSchema(key: string, schema: Schema): void {
+        assertSchemaFormContract(schema);
         this.schemas.set(key, schema);
     }
 

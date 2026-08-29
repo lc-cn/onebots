@@ -48,10 +48,28 @@ const onebotV11Schema: Schema = {
             schemes: ["ws:", "wss:"],
         },
     },
-    enable_cors: { type: "boolean", label: "启用 CORS" },
-    access_token: { type: "string", label: "Access Token", ui: { section: "credentials" } },
-    secret: { type: "string", label: "Secret", ui: { section: "credentials" } },
-    post_timeout: { type: "number", label: "POST 超时(秒)" },
+    enable_cors: {
+        type: "boolean",
+        label: "启用 CORS",
+        ui: { section: "advanced" },
+    },
+    access_token: {
+        type: "string",
+        label: "Access Token",
+        sensitive: true,
+        ui: { section: "credentials" },
+    },
+    secret: {
+        type: "string",
+        label: "Secret",
+        sensitive: true,
+        ui: { section: "credentials" },
+    },
+    post_timeout: {
+        type: "number",
+        label: "POST 超时(秒)",
+        ui: { section: "advanced" },
+    },
     post_message_format: {
         type: "string",
         default: "array",
@@ -60,9 +78,18 @@ const onebotV11Schema: Schema = {
             { value: "array", label: "数组 (array)" },
             { value: "string", label: "字符串 (string / CQ 码)" },
         ],
+        ui: { section: "advanced" },
     },
-    serve_data_files: { type: "boolean", label: "静态文件服务" },
-    heartbeat_interval: { type: "number", label: "心跳间隔(秒)" },
+    serve_data_files: {
+        type: "boolean",
+        label: "静态文件服务",
+        ui: { section: "advanced" },
+    },
+    heartbeat_interval: {
+        type: "number",
+        label: "心跳间隔(秒)",
+        ui: { section: "advanced" },
+    },
     filters: Protocol.FilterSchema,
 };
 
@@ -120,7 +147,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     /**
      * Stop the protocol service
      */
-    async stop(force?: boolean): Promise<void> {
+    async stop(_force?: boolean): Promise<void> {
         this.logger.info(`Stopping OneBot V11 protocol`);
 
         // Clear heartbeat timer
@@ -602,7 +629,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     private async getStrangerInfo(
         params: Record<string, unknown>,
     ): Promise<Record<string, unknown>> {
-        const { user_id, no_cache = false } = params as {
+        const { user_id } = params as {
             user_id: string | number;
             no_cache?: boolean;
         };
@@ -632,7 +659,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     }
 
     private async getGroupInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-        const { group_id, no_cache = false } = params as {
+        const { group_id } = params as {
             group_id: string | number;
             no_cache?: boolean;
         };
@@ -665,11 +692,10 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     private async getGroupMemberInfo(
         params: Record<string, unknown>,
     ): Promise<Record<string, unknown>> {
-        const {
-            group_id,
-            user_id,
-            no_cache = false,
-        } = params as { group_id: string | number; user_id: string | number; no_cache?: boolean };
+        const { group_id, user_id } = params as {
+            group_id: string | number;
+            user_id: string | number;
+        };
 
         const memberInfo = await this.adapter.getGroupMemberInfo(this.account.account_id, {
             group_id: this.resolveV11Id(group_id),

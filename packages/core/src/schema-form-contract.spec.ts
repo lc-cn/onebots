@@ -55,5 +55,18 @@ describe("schema form contract", () => {
                 },
             }),
         ).toThrow("sensitive");
+        expect(() =>
+            assertSchemaFormContract({
+                endpoints: {
+                    type: "array",
+                    label: "地址",
+                    ui: {
+                        section: "delivery",
+                        widget: "endpoint-list",
+                        fields: [{ key: "access_token", label: "Token" }],
+                    },
+                },
+            }),
+        ).toThrow("endpoints.access_token");
     });
 });

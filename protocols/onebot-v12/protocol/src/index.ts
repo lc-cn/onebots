@@ -46,10 +46,27 @@ const onebotV12Schema: Schema = {
             schemes: ["ws:", "wss:"],
         },
     },
-    request_timeout: { type: "number", label: "请求超时(秒)" },
-    access_token: { type: "string", label: "Access Token", ui: { section: "credentials" } },
-    heartbeat_interval: { type: "number", label: "心跳间隔(秒)" },
-    enable_cors: { type: "boolean", label: "启用 CORS" },
+    request_timeout: {
+        type: "number",
+        label: "请求超时(秒)",
+        ui: { section: "advanced" },
+    },
+    access_token: {
+        type: "string",
+        label: "Access Token",
+        sensitive: true,
+        ui: { section: "credentials" },
+    },
+    heartbeat_interval: {
+        type: "number",
+        label: "心跳间隔(秒)",
+        ui: { section: "advanced" },
+    },
+    enable_cors: {
+        type: "boolean",
+        label: "启用 CORS",
+        ui: { section: "advanced" },
+    },
     filters: Protocol.FilterSchema,
 };
 
@@ -102,7 +119,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     /**
      * Stop the protocol service
      */
-    async stop(force?: boolean): Promise<void> {
+    async stop(_force?: boolean): Promise<void> {
         this.logger.info(`Stopping OneBot V12 protocol`);
 
         // Clear heartbeat timer
@@ -530,7 +547,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         }));
     }
 
-    private async setGuildName(params: OneBotV12.SetGuildNameParams): Promise<void> {
+    private async setGuildName(_params: OneBotV12.SetGuildNameParams): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_guild_name not implemented");
     }
@@ -562,7 +579,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         }));
     }
 
-    private async leaveGuild(params: OneBotV12.LeaveGuildParams): Promise<void> {
+    private async leaveGuild(_params: OneBotV12.LeaveGuildParams): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("leave_guild not implemented");
     }
@@ -595,72 +612,72 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         }));
     }
 
-    private async setChannelName(params: OneBotV12.SetChannelNameParams): Promise<void> {
+    private async setChannelName(_params: OneBotV12.SetChannelNameParams): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("set_channel_name not implemented");
     }
 
     private async getChannelMemberInfo(
-        params: OneBotV12.GetChannelMemberInfoParams,
+        _params: OneBotV12.GetChannelMemberInfoParams,
     ): Promise<OneBotV12.ChannelMemberInfo> {
         // Implementation depends on adapter support
         throw new Error("get_channel_member_info not implemented");
     }
 
     private async getChannelMemberList(
-        params: OneBotV12.GetChannelMemberListParams,
+        _params: OneBotV12.GetChannelMemberListParams,
     ): Promise<OneBotV12.ChannelMemberInfo[]> {
         // Implementation depends on adapter support
         throw new Error("get_channel_member_list not implemented");
     }
 
-    private async leaveChannel(params: OneBotV12.LeaveChannelParams): Promise<void> {
+    private async leaveChannel(_params: OneBotV12.LeaveChannelParams): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("leave_channel not implemented");
     }
 
     // ============ File API Implementations ============
 
-    private async uploadFile(params: OneBotV12.UploadFileParams): Promise<OneBotV12.FileInfo> {
+    private async uploadFile(_params: OneBotV12.UploadFileParams): Promise<OneBotV12.FileInfo> {
         // Implementation depends on adapter support
         throw new Error("upload_file not implemented");
     }
 
     private async uploadFileFragmentedPrepare(
-        params: OneBotV12.UploadFileFragmentedPrepareParams,
+        _params: OneBotV12.UploadFileFragmentedPrepareParams,
     ): Promise<{ file_id: string }> {
         // Implementation depends on adapter support
         throw new Error("upload_file_fragmented_prepare not implemented");
     }
 
     private async uploadFileFragmentedTransfer(
-        params: OneBotV12.UploadFileFragmentedTransferParams,
+        _params: OneBotV12.UploadFileFragmentedTransferParams,
     ): Promise<void> {
         // Implementation depends on adapter support
         throw new Error("upload_file_fragmented_transfer not implemented");
     }
 
     private async uploadFileFragmentedFinish(
-        params: OneBotV12.UploadFileFragmentedFinishParams,
+        _params: OneBotV12.UploadFileFragmentedFinishParams,
     ): Promise<OneBotV12.FileInfo> {
         // Implementation depends on adapter support
         throw new Error("upload_file_fragmented_finish not implemented");
     }
 
-    private async getFile(params: OneBotV12.GetFileParams): Promise<OneBotV12.FileInfo> {
+    private async getFile(_params: OneBotV12.GetFileParams): Promise<OneBotV12.FileInfo> {
         // Implementation depends on adapter support
         throw new Error("get_file not implemented");
     }
 
     private async getFileFragmentedPrepare(
-        params: OneBotV12.GetFileFragmentedPrepareParams,
+        _params: OneBotV12.GetFileFragmentedPrepareParams,
     ): Promise<{ name: string; total_size: number; sha256?: string }> {
         // Implementation depends on adapter support
         throw new Error("get_file_fragmented_prepare not implemented");
     }
 
     private async getFileFragmentedTransfer(
-        params: OneBotV12.GetFileFragmentedTransferParams,
+        _params: OneBotV12.GetFileFragmentedTransferParams,
     ): Promise<{ data: string | Uint8Array }> {
         // Implementation depends on adapter support
         throw new Error("get_file_fragmented_transfer not implemented");

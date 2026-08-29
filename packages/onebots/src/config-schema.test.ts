@@ -1,10 +1,18 @@
 import { describe, expect, test } from "vitest";
-import type { Schema, ValidationRule } from "@onebots/core";
+import { assertSchemaFormContract, type Schema, type ValidationRule } from "@onebots/core";
 import { getAppConfigSchema } from "./config-schema.js";
 
 const ruleAt = (schema: Schema, key: string): ValidationRule => schema[key] as ValidationRule;
 
 describe("protocol config schema", () => {
+    test("fallback 与基础配置也遵守统一表单契约", () => {
+        const schema = getAppConfigSchema();
+        expect(() => assertSchemaFormContract(schema.base)).not.toThrow();
+        for (const protocol of Object.values(schema.protocols)) {
+            expect(() => assertSchemaFormContract(protocol)).not.toThrow();
+        }
+    });
+
     test("publishes endpoint editor metadata for every reverse transport", () => {
         const schema = getAppConfigSchema();
         const cases = [
