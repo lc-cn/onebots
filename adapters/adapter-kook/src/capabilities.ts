@@ -78,5 +78,6 @@ export const kookCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
     transports: {
         gateway: { support: "native", mode: "websocket" },
         webhook: { support: "native", mode: "webhook" },
+        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有连接" },
     },
 });

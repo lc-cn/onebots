@@ -58,6 +58,26 @@ describe("KOOK 事件投影", () => {
             extensions: { kook: { event_type: "future_event", body: { future: true } } },
         });
     });
+
+    test("道具消息保留对象 content", () => {
+        const event: KookEvent = {
+            ...messageEvent(),
+            type: 12,
+            content: { type: "item", data: { item_id: 10001, target_id: "user-2" } },
+        };
+        expect(projectKookEvent(event, { s: 0, sn: 3, d: event }, context)).toMatchObject({
+            type: "message",
+            message: [
+                {
+                    type: "kook",
+                    data: {
+                        type: 12,
+                        content: { type: "item", data: { item_id: 10001 } },
+                    },
+                },
+            ],
+        });
+    });
 });
 
 function messageEvent(): KookEvent {

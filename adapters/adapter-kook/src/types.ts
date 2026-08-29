@@ -2,13 +2,16 @@
 export interface KookConfig {
     account_id: string;
     token: string;
-    receive_mode?: "gateway" | "webhook";
+    receive_mode?: "gateway" | "webhook" | "manual";
     verify_token?: string;
     encrypt_key?: string;
     api_base_url?: string;
+    /** REST 触发限流后的最大自动重试次数，默认 3。 */
+    max_retries?: number;
 }
 
-export type KookMessageType = 1 | 2 | 3 | 4 | 8 | 9 | 10 | 255;
+export type KookMessageType = 1 | 2 | 3 | 4 | 8 | 9 | 10 | 12 | 255;
+export type KookSendMessageType = 1 | 2 | 3 | 4 | 8 | 9 | 10;
 
 export interface KookUser {
     id: string;
@@ -89,7 +92,7 @@ export interface KookEvent {
     type: KookMessageType;
     target_id: string;
     author_id: string;
-    content: string;
+    content: unknown;
     msg_id: string;
     msg_timestamp: number;
     nonce?: string;
@@ -153,10 +156,11 @@ export interface KookApiRequestOptions {
     method?: "GET" | "POST" | "PUT" | "DELETE";
     query?: Readonly<Record<string, string | number | boolean | undefined>>;
     body?: Readonly<Record<string, unknown>>;
+    signal?: AbortSignal;
 }
 
 export interface KookSendMessage {
-    type: Exclude<KookMessageType, 255>;
+    type: KookSendMessageType;
     content: string;
     quote?: string;
     nonce?: string;

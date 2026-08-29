@@ -12,6 +12,9 @@ describe("KOOK 能力清单", () => {
         expect(KOOK_PLATFORM_ACTIONS.has("leave_guild")).toBe(true);
         expect(KOOK_PLATFORM_ACTIONS.has("kick_guild_member")).toBe(true);
         expect(KOOK_PLATFORM_ACTIONS.has("set_guild_member_nickname")).toBe(true);
+        expect(KOOK_PLATFORM_ACTIONS.has("list_invitees")).toBe(true);
+        expect(KOOK_PLATFORM_ACTIONS.has("get_intimacy")).toBe(true);
+        expect(KOOK_PLATFORM_ACTIONS.has("list_user_chats")).toBe(true);
     });
 
     it("所有声明动作均有真实入口", () => {

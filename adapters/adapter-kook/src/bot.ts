@@ -1,43 +1,32 @@
 import { EventEmitter } from "node:events";
 import { WebSocket } from "ws";
 import type { Next, RouterContext } from "onebots";
+import type { KookBotEvents } from "./bot-events.js";
+import { assertKookConfig } from "./config.js";
+import { KookError } from "./errors.js";
+import { KookGatewaySequence } from "./gateway-sequence.js";
+import { KookRestClient, type KookBinaryResult } from "./rest-client.js";
 import type {
-    KookApiEnvelope,
     KookApiRequestOptions,
     KookConfig,
+    KookEvent,
     KookHello,
     KookMessageResult,
     KookSendMessage,
     KookSignal,
     KookUser,
 } from "./types.js";
-import {
-    decryptWebhookMessage,
-    objectValue,
-    parseEvent,
-    parseSignal,
-    stringValue,
-} from "./utils.js";
+import { parseEvent, parseSignal } from "./utils.js";
+import { KookWebhookReceiver, type KookIngestResult } from "./webhook.js";
 
-const DEFAULT_API_BASE = "https://www.kookapp.cn/api";
+export type { KookBotEvents } from "./bot-events.js";
+
 const HELLO_TIMEOUT = 6_000;
-const PONG_TIMEOUT = 10_000;
+const PONG_TIMEOUT = 6_000;
 const MAX_RECONNECT_DELAY = 60_000;
 
-export class KookApiError extends Error {
-    constructor(
-        message: string,
-        readonly status: number,
-        readonly code?: number,
-        readonly path?: string,
-    ) {
-        super(message);
-        this.name = "KookApiError";
-    }
-}
-
 /** KOOK 官方 REST、Gateway 与 Webhook 的统一底层客户端。 */
-export class KookBot extends EventEmitter {
+export class KookBot extends EventEmitter<KookBotEvents> {
     private socket?: WebSocket;
     private reconnectTimer?: NodeJS.Timeout;
     private pingTimer?: NodeJS.Timeout;
@@ -45,10 +34,11 @@ export class KookBot extends EventEmitter {
     private generation = 0;
     private reconnectAttempt = 0;
     private stopped = true;
-    private sn = 0;
+    private readonly gatewaySequence = new KookGatewaySequence();
     private sessionId = "";
     private me: KookUser | null = null;
-    private readonly webhookSequences = new Set<number>();
+    private readonly webhook: KookWebhookReceiver;
+    private readonly rest: KookRestClient;
     private readonly messageContexts = new Map<
         string,
         { scene: "channel" | "direct"; targetId?: string; chatCode?: string }
@@ -56,9 +46,12 @@ export class KookBot extends EventEmitter {
 
     constructor(readonly config: KookConfig) {
         super();
+        assertKookConfig(config);
+        this.webhook = new KookWebhookReceiver(config);
+        this.rest = new KookRestClient(config);
     }
 
-    get receiveMode(): "gateway" | "webhook" {
+    get receiveMode(): "gateway" | "webhook" | "manual" {
         return this.config.receive_mode || "gateway";
     }
 
@@ -130,9 +123,9 @@ export class KookBot extends EventEmitter {
         });
         if (this.stopped || generation !== this.generation) return;
         const url = new URL(gateway.url);
-        if (this.sessionId && this.sn) {
+        if (this.sessionId) {
             url.searchParams.set("resume", "1");
-            url.searchParams.set("sn", String(this.sn));
+            url.searchParams.set("sn", String(this.gatewaySequence.sn));
             url.searchParams.set("session_id", this.sessionId);
         }
         const socket = new WebSocket(url);
@@ -172,7 +165,15 @@ export class KookBot extends EventEmitter {
                     if (signal.s === 1) {
                         const hello = signal.d as KookHello;
                         if (hello.code !== 0) {
-                            settle(new Error(`KOOK Gateway HELLO 失败: ${hello.code}`));
+                            if ([40106, 40107, 40108].includes(hello.code)) {
+                                this.resetGatewaySession();
+                            }
+                            settle(
+                                new KookError(`KOOK Gateway HELLO 失败: ${hello.code}`, {
+                                    code: "KOOK_GATEWAY_HELLO_FAILED",
+                                    platformCode: hello.code,
+                                }),
+                            );
                             return;
                         }
                         this.sessionId = hello.session_id || "";
@@ -194,10 +195,8 @@ export class KookBot extends EventEmitter {
     }
 
     private handleSignal(signal: KookSignal, socket: WebSocket, generation: number): void {
-        if (typeof signal.sn === "number") this.sn = Math.max(this.sn, signal.sn);
         if (signal.s === 0 && signal.d) {
-            const event = parseEvent(signal.d);
-            this.emit("event", event, signal);
+            this.ingestGatewaySignal(signal);
             return;
         }
         if (signal.s === 3) {
@@ -206,8 +205,7 @@ export class KookBot extends EventEmitter {
             return;
         }
         if (signal.s === 5) {
-            this.sn = 0;
-            this.sessionId = "";
+            this.resetGatewaySession();
             socket.close(4000, "KOOK requested reconnect");
             this.scheduleReconnect(generation);
         }
@@ -221,7 +219,7 @@ export class KookBot extends EventEmitter {
                 socket.readyState !== WebSocket.OPEN
             )
                 return;
-            socket.send(JSON.stringify({ s: 2, sn: this.sn }));
+            socket.send(JSON.stringify({ s: 2, sn: this.gatewaySequence.sn }));
             if (this.pongTimer) clearTimeout(this.pongTimer);
             this.pongTimer = setTimeout(() => socket.terminate(), PONG_TIMEOUT);
         };
@@ -267,83 +265,84 @@ export class KookBot extends EventEmitter {
         this.reconnectTimer = undefined;
     }
 
+    private resetGatewaySession(): void {
+        this.gatewaySequence.reset();
+        this.sessionId = "";
+    }
+
     async handleWebhook(ctx: RouterContext, _next: Next): Promise<void> {
         try {
-            const incoming = objectValue(ctx.request.body);
-            const encrypted = stringValue(incoming.encrypt);
-            const payload = encrypted
-                ? objectValue(
-                      JSON.parse(decryptWebhookMessage(encrypted, this.config.encrypt_key || "")),
-                  )
-                : incoming;
-            const signal = parseSignal(payload);
-            const event = parseEvent(signal.d);
-            if (this.config.verify_token && event.verify_token !== this.config.verify_token) {
-                ctx.status = 401;
-                ctx.body = { error: "Invalid verify_token" };
-                return;
-            }
-            if (event.channel_type === "WEBHOOK_CHALLENGE") {
-                ctx.body = { challenge: event.challenge || "" };
-                return;
-            }
-            if (typeof signal.sn === "number" && this.rememberWebhookSequence(signal.sn)) {
-                ctx.body = { success: true, duplicate: true };
-                return;
-            }
-            this.emit("event", event, signal);
-            ctx.body = { success: true };
+            const result = this.ingest(ctx.request.body, "webhook");
+            ctx.status = result.status;
+            ctx.body = result.body;
         } catch (error) {
             this.emit("error", error);
             ctx.status = 400;
-            ctx.body = { error: error instanceof Error ? error.message : "Invalid KOOK callback" };
+            const wrapped = KookError.wrap(error, "KOOK_WEBHOOK_INVALID");
+            ctx.body = { error: wrapped.message, code: wrapped.code };
         }
     }
 
-    private rememberWebhookSequence(sn: number): boolean {
-        if (this.webhookSequences.has(sn)) return true;
-        this.webhookSequences.add(sn);
-        if (this.webhookSequences.size > 2_048) {
-            const oldest = this.webhookSequences.values().next().value;
-            if (typeof oldest === "number") this.webhookSequences.delete(oldest);
+    /** 将既有 Webhook、反向 WS 或消息队列事件交给当前 Bot。 */
+    ingest(
+        rawEvent: unknown,
+        transport: "gateway" | "webhook" = this.receiveMode === "webhook" ? "webhook" : "gateway",
+    ): KookIngestResult {
+        if (transport === "gateway") {
+            const signal = parseSignal(rawEvent);
+            if (signal.s !== 0 || !signal.d) {
+                throw KookError.invalid(
+                    "KOOK 手动 Gateway 接入只接受事件信令",
+                    "KOOK_MANUAL_SIGNAL_INVALID",
+                    { signal: signal.s },
+                );
+            }
+            return this.ingestGatewaySignal(signal);
         }
-        return false;
+        const result = this.webhook.ingest(rawEvent);
+        if (result.event && result.signal) this.emit("event", result.event, result.signal);
+        return result;
+    }
+
+    /** 上游已有连接进入全新 session 时重置手动接入的 sn 状态。 */
+    resetIngest(): void {
+        this.resetGatewaySession();
+    }
+
+    /** 接入 Fetch/标准 Request 风格的既有 HTTP Host。 */
+    async acceptHttp(request: Request): Promise<Response> {
+        if (request.method !== "POST") return this.webhook.acceptHttp(request);
+        try {
+            const raw = (await request.json()) as unknown;
+            const result = this.ingest(raw, "webhook");
+            return Response.json(result.body, { status: result.status });
+        } catch (error) {
+            const wrapped = KookError.wrap(error, "KOOK_WEBHOOK_INVALID");
+            return Response.json({ error: wrapped.message, code: wrapped.code }, { status: 400 });
+        }
+    }
+
+    private ingestGatewaySignal(signal: KookSignal): KookIngestResult {
+        const sequenced = this.gatewaySequence.ingest(signal);
+        const events: KookEvent[] = [];
+        for (const ready of sequenced.ready) {
+            const event = parseEvent(ready.d);
+            events.push(event);
+            this.emit("event", event, ready);
+        }
+        return {
+            status: 200,
+            body: {
+                success: true,
+                ...(sequenced.duplicate ? { duplicate: true } : {}),
+                ...(!sequenced.duplicate && events.length === 0 ? { buffered: true } : {}),
+            },
+            ...(events.length ? { event: events.at(-1), events, signal } : {}),
+        };
     }
 
     async callApi<T = unknown>(path: string, options: KookApiRequestOptions = {}): Promise<T> {
-        if (!path.startsWith("/v3/") || path.includes("..")) {
-            throw new Error("KOOK API path 必须是 /v3/ 下的安全绝对路径");
-        }
-        const base = (this.config.api_base_url || DEFAULT_API_BASE).replace(/\/$/, "");
-        const url = new URL(`${base}${path}`);
-        for (const [key, value] of Object.entries(options.query || {})) {
-            if (value !== undefined) url.searchParams.set(key, String(value));
-        }
-        const response = await fetch(url, {
-            method: options.method || "GET",
-            headers: {
-                Authorization: `Bot ${this.config.token}`,
-                Accept: "application/json",
-                ...(options.body ? { "Content-Type": "application/json" } : {}),
-            },
-            body: options.body ? JSON.stringify(options.body) : undefined,
-        });
-        const text = await response.text();
-        let envelope: KookApiEnvelope<T>;
-        try {
-            envelope = JSON.parse(text) as KookApiEnvelope<T>;
-        } catch {
-            throw new KookApiError("KOOK API 返回了无效 JSON", response.status, undefined, path);
-        }
-        if (!response.ok || envelope.code !== 0) {
-            throw new KookApiError(
-                envelope.message || response.statusText || "KOOK API 调用失败",
-                response.status,
-                envelope.code,
-                path,
-            );
-        }
-        return envelope.data;
+        return this.rest.call(path, options);
     }
 
     sendChannelMessage(targetId: string, message: KookSendMessage): Promise<KookMessageResult> {
@@ -361,24 +360,22 @@ export class KookBot extends EventEmitter {
     }
 
     async uploadAsset(data: Uint8Array, filename: string, contentType?: string): Promise<string> {
-        const form = new FormData();
-        const bytes = new Uint8Array(data);
-        form.append("file", new Blob([bytes.buffer], { type: contentType }), filename);
-        const base = (this.config.api_base_url || DEFAULT_API_BASE).replace(/\/$/, "");
-        const response = await fetch(`${base}/v3/asset/create`, {
-            method: "POST",
-            headers: { Authorization: `Bot ${this.config.token}` },
-            body: form,
-        });
-        const envelope = (await response.json()) as KookApiEnvelope<{ url: string }>;
-        if (!response.ok || envelope.code !== 0 || !envelope.data?.url) {
-            throw new KookApiError(
-                envelope.message || "KOOK 素材上传失败",
-                response.status,
-                envelope.code,
-                "/v3/asset/create",
-            );
-        }
-        return envelope.data.url;
+        return this.rest.upload(data, filename, contentType);
+    }
+
+    callMultipart<T>(
+        path: string,
+        fields: Readonly<Record<string, string | number | boolean | undefined>>,
+        file: { field: string; data: Uint8Array; filename: string; contentType?: string },
+    ): Promise<T> {
+        return this.rest.multipart(path, fields, file);
+    }
+
+    download(
+        path: string,
+        query?: Readonly<Record<string, string | number | boolean | undefined>>,
+        signal?: AbortSignal,
+    ): Promise<KookBinaryResult> {
+        return this.rest.download(path, query, signal);
     }
 }

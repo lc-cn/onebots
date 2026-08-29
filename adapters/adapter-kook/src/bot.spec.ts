@@ -1,6 +1,7 @@
 import { createCipheriv } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { KookApiError, KookBot } from "./bot.js";
+import { KookBot } from "./bot.js";
+import { KookApiError } from "./errors.js";
 import { decryptWebhookMessage } from "./utils.js";
 
 beforeEach(() => vi.useRealTimers());
@@ -36,7 +37,7 @@ describe("KOOK Bot", () => {
     });
 
     test("Webhook 按 sn 去重", async () => {
-        const bot = new KookBot({ account_id: "bot", token: "token" });
+        const bot = new KookBot({ account_id: "bot", token: "token", verify_token: "verify" });
         const listener = vi.fn();
         bot.on("event", listener);
         const body = {
@@ -50,6 +51,7 @@ describe("KOOK Bot", () => {
                 content: "hello",
                 msg_id: "message",
                 msg_timestamp: Date.now(),
+                verify_token: "verify",
                 extra: {},
             },
         };
@@ -73,7 +75,11 @@ describe("KOOK Bot", () => {
         const bot = new KookBot({ account_id: "bot", token: "token" });
         const error = await bot.callApi("/v3/guild/list").catch(value => value);
         expect(error).toBeInstanceOf(KookApiError);
-        expect(error).toMatchObject({ status: 403, code: 40301, path: "/v3/guild/list" });
+        expect(error).toMatchObject({
+            status: 403,
+            platformCode: 40301,
+            path: "/v3/guild/list",
+        });
     });
 
     test("首次身份请求失败后继续恢复 Webhook 账号", async () => {
@@ -83,16 +89,16 @@ describe("KOOK Bot", () => {
             .fn()
             .mockRejectedValueOnce(new Error("network down"))
             .mockResolvedValueOnce(
-                new Response(
-                    JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } }),
-                    { status: 200 },
-                ),
+                new Response(JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } }), {
+                    status: 200,
+                }),
             );
         vi.stubGlobal("fetch", fetchMock);
         const bot = new KookBot({
             account_id: "bot",
             token: "token",
             receive_mode: "webhook",
+            verify_token: "verify",
         });
         const ready = vi.fn();
         bot.on("ready", ready);
@@ -105,7 +111,65 @@ describe("KOOK Bot", () => {
         expect(bot.getCachedMe()).toMatchObject({ id: "bot" });
         await bot.stop();
     });
+
+    test("manual 模式只初始化身份，不获取 Gateway", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } }), {
+                status: 200,
+            }),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        const ready = vi.fn();
+        bot.on("ready", ready);
+        await bot.start();
+        expect(ready).toHaveBeenCalledOnce();
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/v3/user/me");
+        await bot.stop();
+    });
+
+    test("manual ingest 复用 Gateway sn 保序器", () => {
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        const listener = vi.fn();
+        bot.on("event", listener);
+        expect(bot.ingest(gatewaySignal(10)).body).toEqual({ success: true });
+        expect(bot.ingest(gatewaySignal(12)).body).toEqual({ success: true, buffered: true });
+        expect(bot.ingest(gatewaySignal(11)).events?.map(event => event.msg_id)).toEqual([
+            "message-11",
+            "message-12",
+        ]);
+        expect(listener).toHaveBeenCalledTimes(3);
+
+        bot.resetIngest();
+        expect(bot.ingest(gatewaySignal(1)).event?.msg_id).toBe("message-1");
+    });
 });
+
+function gatewaySignal(sn: number): Record<string, unknown> {
+    return {
+        s: 0,
+        sn,
+        d: {
+            type: 9,
+            channel_type: "GROUP",
+            target_id: "channel",
+            author_id: "user",
+            content: `message ${sn}`,
+            msg_id: `message-${sn}`,
+            msg_timestamp: Date.now(),
+            extra: {},
+        },
+    };
+}
 
 function encryptWebhook(plain: string, encryptKey: string): string {
     const iv = Buffer.from("0123456789abcdef");

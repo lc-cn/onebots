@@ -1,4 +1,5 @@
 import { materializeMediaSource, type CommonTypes } from "onebots";
+import { KookError } from "./errors.js";
 import type { KookMessageType, KookSendMessage } from "./types.js";
 import { escapeKMarkdown, parseKMarkdown, stringValue } from "./utils.js";
 
@@ -18,7 +19,13 @@ export async function prepareKookOutboundMessage(
         segments.map(async segment => {
             if (!MEDIA_TYPES[segment.type]) return segment;
             const source = stringValue(segment.data.url || segment.data.file || segment.data.src);
-            if (!source) throw new Error(`KOOK ${segment.type} 消息必须提供 url 或 file`);
+            if (!source) {
+                throw KookError.invalid(
+                    `KOOK ${segment.type} 消息必须提供 url 或 file`,
+                    "KOOK_MEDIA_SOURCE_REQUIRED",
+                    { segment_type: segment.type },
+                );
+            }
             const media = await materializeMediaSource({
                 source,
                 filename: optionalString(segment.data.filename || segment.data.name),
@@ -35,7 +42,11 @@ export async function prepareKookOutboundMessage(
 export function assertKookEditableMessage(segments: CommonTypes.Segment[]): void {
     const type = buildKookOutboundMessage(segments).type;
     if (type !== 9 && type !== 10) {
-        throw new Error("KOOK 只支持更新 KMarkdown 或 Card 消息");
+        throw KookError.invalid(
+            "KOOK 只支持更新 KMarkdown 或 Card 消息",
+            "KOOK_MESSAGE_NOT_EDITABLE",
+            { message_type: type },
+        );
     }
 }
 
@@ -71,21 +82,22 @@ export function buildKookOutboundMessage(segments: CommonTypes.Segment[]): KookS
 
 export function projectKookMessageSegments(
     type: KookMessageType,
-    content: string,
+    content: unknown,
     mentions: string[] = [],
 ): CommonTypes.Segment[] {
     const segments: CommonTypes.Segment[] = mentions.map(userId => ({
         type: "at",
         data: { user_id: userId },
     }));
+    const text = stringValue(content);
     if (type === 1 || type === 9) {
-        if (content) segments.push({ type: "text", data: { text: parseKMarkdown(content) } });
-    } else if (type === 2) segments.push({ type: "image", data: { url: content } });
-    else if (type === 3) segments.push({ type: "video", data: { url: content } });
-    else if (type === 4) segments.push({ type: "file", data: { url: content } });
-    else if (type === 8) segments.push({ type: "audio", data: { url: content } });
+        if (text) segments.push({ type: "text", data: { text: parseKMarkdown(text) } });
+    } else if (type === 2) segments.push({ type: "image", data: { url: text } });
+    else if (type === 3) segments.push({ type: "video", data: { url: text } });
+    else if (type === 4) segments.push({ type: "file", data: { url: text } });
+    else if (type === 8) segments.push({ type: "audio", data: { url: text } });
     else if (type === 10) {
-        segments.push({ type: "card", data: { content, cards: parseJson(content) } });
+        segments.push({ type: "card", data: { content: text, cards: parseJson(text) } });
     } else segments.push({ type: "kook", data: { type, content } });
     return segments;
 }
@@ -140,7 +152,12 @@ function cardContent(data: Record<string, unknown>): string {
     const content = data.content;
     if (typeof content === "string") return content;
     const card = data.cards || data.card || content;
-    if (!card) throw new Error("KOOK card 消息必须提供 content、card 或 cards");
+    if (!card) {
+        throw KookError.invalid(
+            "KOOK card 消息必须提供 content、card 或 cards",
+            "KOOK_CARD_CONTENT_REQUIRED",
+        );
+    }
     return JSON.stringify(Array.isArray(card) ? card : [card]);
 }
 

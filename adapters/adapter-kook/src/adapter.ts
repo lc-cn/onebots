@@ -9,6 +9,7 @@ import {
 import { createKookAccount } from "./account.js";
 import { KookBot } from "./bot.js";
 import { kookCapabilities } from "./capabilities.js";
+import { KookError } from "./errors.js";
 import {
     assertKookEditableMessage,
     prepareKookOutboundMessage,
@@ -177,7 +178,12 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         uin: string,
         params?: Adapter.GetChannelListParams,
     ): Promise<Adapter.ChannelInfo[]> {
-        if (!params?.guild_id) throw new Error("KOOK get_channel_list 必须提供 guild_id");
+        if (!params?.guild_id) {
+            throw KookError.invalid(
+                "KOOK get_channel_list 必须提供 guild_id",
+                "KOOK_GUILD_ID_REQUIRED",
+            );
+        }
         const channels = await this.listAll<KookChannel>(this.requireBot(uin), "/v3/channel/list", {
             guild_id: params.guild_id.string,
         });
@@ -273,7 +279,11 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
 
     private requireBot(uin: string): KookBot {
         const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        if (!account) {
+            throw KookError.resource(`KOOK 账号不存在: ${uin}`, "KOOK_ACCOUNT_NOT_FOUND", {
+                account_id: uin,
+            });
+        }
         return account.client;
     }
 
@@ -285,7 +295,11 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         if (scene) return scene === "private" || scene === "direct" ? "direct" : "channel";
         const known = bot.getMessageScene(messageId);
         if (!known) {
-            throw new Error("KOOK 消息场景未知；请提供 scene_type，或先接收/发送该消息");
+            throw KookError.invalid(
+                "KOOK 消息场景未知；请提供 scene_type，或先接收/发送该消息",
+                "KOOK_MESSAGE_SCENE_REQUIRED",
+                { message_id: messageId },
+            );
         }
         return known;
     }
@@ -306,14 +320,24 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             });
         }
         if (!targetId) {
-            throw new Error("KOOK 私聊消息详情需要 scene_id（目标用户）或已知 chat_code");
+            throw KookError.invalid(
+                "KOOK 私聊消息详情需要 scene_id（目标用户）或已知 chat_code",
+                "KOOK_DIRECT_CONTEXT_REQUIRED",
+                { message_id: messageId },
+            );
         }
         const response = await bot.callApi<KookListResponse<KookMessageView>>(
             "/v3/direct-message/list",
             { query: { target_id: targetId, msg_id: messageId, flag: "around", page_size: 50 } },
         );
         const message = response.items.find(item => item.id === messageId);
-        if (!message) throw new Error(`KOOK 私聊消息不存在: ${messageId}`);
+        if (!message) {
+            throw KookError.resource(
+                `KOOK 私聊消息不存在: ${messageId}`,
+                "KOOK_DIRECT_MESSAGE_NOT_FOUND",
+                { message_id: messageId },
+            );
+        }
         return message;
     }
 

@@ -1,8 +1,11 @@
+import { materializeMediaSource } from "onebots";
 import type { KookBot } from "./bot.js";
+import { KookError } from "./errors.js";
 import type { KookApiRequestOptions } from "./types.js";
 
 export const KOOK_PLATFORM_ACTIONS = new Set([
     "call_kook_api",
+    "upload_asset",
     "get_message_reactions",
     "add_message_reaction",
     "remove_message_reaction",
@@ -32,6 +35,28 @@ export const KOOK_PLATFORM_ACTIONS = new Set([
     "list_invites",
     "create_invite",
     "delete_invite",
+    "list_invitees",
+    "list_channel_messages",
+    "send_pipe_message",
+    "list_direct_messages",
+    "list_user_chats",
+    "get_user_chat",
+    "create_user_chat",
+    "delete_user_chat",
+    "list_guild_emojis",
+    "create_guild_emoji",
+    "update_guild_emoji",
+    "delete_guild_emoji",
+    "get_intimacy",
+    "update_intimacy",
+    "list_games",
+    "create_game",
+    "update_game",
+    "delete_game",
+    "set_game_activity",
+    "delete_game_activity",
+    "list_message_templates",
+    "get_guild_badge",
     "list_thread_categories",
     "create_thread",
     "reply_thread",
@@ -85,6 +110,26 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     list_invites: { path: "/v3/invite/list", method: "GET" },
     create_invite: { path: "/v3/invite/create", method: "POST" },
     delete_invite: { path: "/v3/invite/delete", method: "POST" },
+    list_invitees: { path: "/v3/invite/invitees", method: "GET" },
+    list_channel_messages: { path: "/v3/message/list", method: "GET" },
+    send_pipe_message: { path: "/v3/message/send-pipemsg", method: "POST" },
+    list_direct_messages: { path: "/v3/direct-message/list", method: "GET" },
+    list_user_chats: { path: "/v3/user-chat/list", method: "GET" },
+    get_user_chat: { path: "/v3/user-chat/view", method: "GET" },
+    create_user_chat: { path: "/v3/user-chat/create", method: "POST" },
+    delete_user_chat: { path: "/v3/user-chat/delete", method: "POST" },
+    list_guild_emojis: { path: "/v3/guild-emoji/list", method: "GET" },
+    update_guild_emoji: { path: "/v3/guild-emoji/update", method: "POST" },
+    delete_guild_emoji: { path: "/v3/guild-emoji/delete", method: "POST" },
+    get_intimacy: { path: "/v3/intimacy/index", method: "GET" },
+    update_intimacy: { path: "/v3/intimacy/update", method: "POST" },
+    list_games: { path: "/v3/game", method: "GET" },
+    create_game: { path: "/v3/game/create", method: "POST" },
+    update_game: { path: "/v3/game/update", method: "POST" },
+    delete_game: { path: "/v3/game/delete", method: "POST" },
+    set_game_activity: { path: "/v3/game/activity", method: "POST" },
+    delete_game_activity: { path: "/v3/game/delete-activity", method: "POST" },
+    list_message_templates: { path: "/v3/template/list", method: "GET" },
     list_thread_categories: { path: "/v3/category/list", method: "GET" },
     create_thread: { path: "/v3/thread/create", method: "POST" },
     reply_thread: { path: "/v3/thread/reply", method: "POST" },
@@ -104,7 +149,7 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
 };
 
 /** 执行 KOOK 官方扩展动作；命名参数直接沿用开放平台字段。 */
-export function executeKookPlatformAction(
+export async function executeKookPlatformAction(
     bot: KookBot,
     action: string,
     params: Readonly<Record<string, unknown>>,
@@ -116,8 +161,52 @@ export function executeKookPlatformAction(
             body: bodyValue(params.body),
         });
     }
+    if (action === "upload_asset") {
+        const media = await mediaFromParams(params);
+        return {
+            url: await bot.uploadAsset(media.data, media.filename, media.contentType),
+        };
+    }
+    if (action === "create_guild_emoji") {
+        const guildId = requiredString(params.guild_id, "guild_id");
+        const media = await mediaFromParams(params, "emoji");
+        if (media.contentType !== "image/png" || media.data.byteLength > 256 * 1_024) {
+            throw KookError.invalid(
+                "KOOK 服务器表情必须是小于等于 256 KiB 的 PNG",
+                "KOOK_GUILD_EMOJI_INVALID",
+                { content_type: media.contentType, size: media.data.byteLength },
+            );
+        }
+        return bot.callMultipart(
+            "/v3/guild-emoji/create",
+            {
+                guild_id: guildId,
+                name: optionalString(params.name),
+            },
+            {
+                field: "emoji",
+                data: media.data,
+                filename: media.filename,
+                contentType: media.contentType,
+            },
+        );
+    }
+    if (action === "get_guild_badge") {
+        const result = await bot.download("/v3/badge/guild", {
+            guild_id: requiredString(params.guild_id, "guild_id"),
+            style: scalarValue(params.style, "style"),
+        });
+        return {
+            content_type: result.contentType,
+            data: `base64://${Buffer.from(result.data).toString("base64")}`,
+        };
+    }
     const route = ROUTES[action];
-    if (!route) throw new Error(`未实现 KOOK 平台动作: ${action}`);
+    if (!route) {
+        throw KookError.invalid(`未实现 KOOK 平台动作: ${action}`, "KOOK_ACTION_UNKNOWN", {
+            action,
+        });
+    }
     return bot.callApi(
         route.path,
         route.method === "GET"
@@ -129,9 +218,55 @@ export function executeKookPlatformAction(
     );
 }
 
+async function mediaFromParams(params: Readonly<Record<string, unknown>>, preferredKey = "file") {
+    const source =
+        optionalString(params[preferredKey]) ||
+        optionalString(params.file) ||
+        optionalString(params.url) ||
+        optionalString(params.src);
+    if (!source) {
+        throw KookError.invalid(
+            `KOOK 参数 ${preferredKey} 必须提供媒体来源`,
+            "KOOK_ACTION_MEDIA_REQUIRED",
+        );
+    }
+    return materializeMediaSource({
+        source,
+        filename: optionalString(params.filename) || optionalString(params.name),
+        contentType: optionalString(params.content_type) || optionalString(params.mime),
+    });
+}
+
+function requiredString(value: unknown, key: string): string {
+    const result = optionalString(value);
+    if (result) return result;
+    throw KookError.invalid(`KOOK 参数 ${key} 不能为空`, "KOOK_ACTION_PARAM_REQUIRED", {
+        key,
+    });
+}
+
+function optionalString(value: unknown): string | undefined {
+    return typeof value === "string" && value ? value : undefined;
+}
+
+function scalarValue(value: unknown, key: string): string | number | boolean | undefined {
+    if (value == null) return undefined;
+    if (["string", "number", "boolean"].includes(typeof value)) {
+        return value as string | number | boolean;
+    }
+    throw KookError.invalid(`KOOK 参数 ${key} 必须为标量`, "KOOK_ACTION_PARAM_INVALID", {
+        key,
+        value,
+    });
+}
+
 function requirePath(value: unknown): string {
     if (typeof value !== "string" || !value.startsWith("/v3/") || value.includes("..")) {
-        throw new Error("KOOK 参数 path 必须是 /v3/ 下的安全绝对路径");
+        throw KookError.invalid(
+            "KOOK 参数 path 必须是 /v3/ 下的安全绝对路径",
+            "KOOK_ACTION_PATH_INVALID",
+            { value },
+        );
     }
     return value;
 }
@@ -139,7 +274,11 @@ function requirePath(value: unknown): string {
 function methodValue(value: unknown): KookApiRequestOptions["method"] {
     const method = typeof value === "string" ? value.toUpperCase() : "GET";
     if (!["GET", "POST", "PUT", "DELETE"].includes(method)) {
-        throw new Error("KOOK 参数 method 不是受支持的 HTTP 方法");
+        throw KookError.invalid(
+            "KOOK 参数 method 不是受支持的 HTTP 方法",
+            "KOOK_ACTION_METHOD_INVALID",
+            { method },
+        );
     }
     return method as KookApiRequestOptions["method"];
 }
@@ -147,7 +286,7 @@ function methodValue(value: unknown): KookApiRequestOptions["method"] {
 function bodyValue(value: unknown): Record<string, unknown> | undefined {
     if (value == null) return undefined;
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("KOOK 参数 body 必须为对象");
+        throw KookError.invalid("KOOK 参数 body 必须为对象", "KOOK_ACTION_BODY_INVALID");
     }
     return value as Record<string, unknown>;
 }
@@ -157,7 +296,7 @@ function queryValue(
 ): Record<string, string | number | boolean | undefined> | undefined {
     if (value == null) return undefined;
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("KOOK 参数 query 必须为对象");
+        throw KookError.invalid("KOOK 参数 query 必须为对象", "KOOK_ACTION_QUERY_INVALID");
     }
     return scalarParams(value as Readonly<Record<string, unknown>>);
 }
@@ -170,7 +309,13 @@ function scalarParams(
         if (value == null) result[key] = undefined;
         else if (["string", "number", "boolean"].includes(typeof value)) {
             result[key] = value as string | number | boolean;
-        } else throw new Error(`KOOK query 参数 ${key} 必须为标量`);
+        } else {
+            throw KookError.invalid(
+                `KOOK query 参数 ${key} 必须为标量`,
+                "KOOK_ACTION_QUERY_VALUE_INVALID",
+                { key, value },
+            );
+        }
     }
     return result;
 }

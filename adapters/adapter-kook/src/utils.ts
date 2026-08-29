@@ -1,11 +1,19 @@
 import { createDecipheriv } from "node:crypto";
+import { KookError } from "./errors.js";
 import type { KookEvent, KookSignal } from "./types.js";
 
 /** 解密 KOOK Webhook 的 AES-256-CBC 载荷。 */
 export function decryptWebhookMessage(encryptedData: string, encryptKey: string): string {
-    if (!encryptKey) throw new Error("收到 KOOK 加密回调但未配置 encrypt_key");
+    if (!encryptKey) {
+        throw KookError.configuration(
+            "收到 KOOK 加密回调但未配置 encrypt_key",
+            "KOOK_ENCRYPT_KEY_REQUIRED",
+        );
+    }
     const packet = Buffer.from(encryptedData, "base64");
-    if (packet.length <= 16) throw new Error("KOOK 加密回调长度无效");
+    if (packet.length <= 16) {
+        throw KookError.invalid("KOOK 加密回调长度无效", "KOOK_ENCRYPTED_PAYLOAD_INVALID");
+    }
     const iv = packet.subarray(0, 16);
     const cipherText = Buffer.from(packet.subarray(16).toString("utf8"), "base64");
     const key = Buffer.alloc(32);
@@ -16,11 +24,17 @@ export function decryptWebhookMessage(encryptedData: string, encryptKey: string)
 
 export function parseSignal(value: unknown): KookSignal {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("KOOK Gateway 信令必须为对象");
+        throw new KookError("KOOK Gateway 信令必须为对象", {
+            code: "KOOK_SIGNAL_INVALID",
+            details: value,
+        });
     }
     const signal = value as Partial<KookSignal>;
     if (![0, 1, 2, 3, 5, 6].includes(Number(signal.s))) {
-        throw new Error("KOOK Gateway 信令类型无效");
+        throw new KookError("KOOK Gateway 信令类型无效", {
+            code: "KOOK_SIGNAL_INVALID",
+            details: { signal: signal.s },
+        });
     }
     return {
         ...signal,
@@ -31,11 +45,17 @@ export function parseSignal(value: unknown): KookSignal {
 
 export function parseEvent(value: unknown): KookEvent {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("KOOK 事件数据必须为对象");
+        throw new KookError("KOOK 事件数据必须为对象", {
+            code: "KOOK_EVENT_INVALID",
+            details: value,
+        });
     }
     const event = value as Partial<KookEvent>;
     if (typeof event.channel_type !== "string" || typeof event.type !== "number") {
-        throw new Error("KOOK 事件缺少 channel_type 或 type");
+        throw new KookError("KOOK 事件缺少 channel_type 或 type", {
+            code: "KOOK_EVENT_INVALID",
+            details: value,
+        });
     }
     return {
         ...event,
@@ -43,7 +63,7 @@ export function parseEvent(value: unknown): KookEvent {
         type: event.type,
         target_id: stringValue(event.target_id),
         author_id: stringValue(event.author_id),
-        content: stringValue(event.content),
+        content: event.content ?? "",
         msg_id: stringValue(event.msg_id),
         msg_timestamp: typeof event.msg_timestamp === "number" ? event.msg_timestamp : Date.now(),
         extra: objectValue(event.extra),

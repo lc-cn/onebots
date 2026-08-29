@@ -84,7 +84,7 @@ function projectMessage(
                   channel_id: context.createId(event.target_id),
               },
         message_id: context.createId(event.msg_id),
-        raw_message: event.content,
+        raw_message: stringValue(event.content),
         message: projectKookMessageSegments(event.type, event.content, event.extra.mention),
         extensions: {
             kook: {
