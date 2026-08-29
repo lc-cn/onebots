@@ -1,7 +1,10 @@
 import { EventEmitter } from "node:events";
 import { LineBotClient, validateSignature, type messagingApi } from "@line/bot-sdk";
+import type { LineBotEvents } from "./bot-events.js";
 import { LineApiError } from "./errors.js";
-import type { LineConfig, WebhookEvent, WebhookRequest } from "./types.js";
+import type { LineConfig, LineIngestResult, WebhookEvent, WebhookRequest } from "./types.js";
+
+export type { LineBotEvents } from "./bot-events.js";
 
 const DEFAULT_API_BASE = "https://api.line.me";
 const DEFAULT_DATA_API_BASE = "https://api-data.line.me";
@@ -13,7 +16,7 @@ export interface LineEventRepository {
 }
 
 /** 基于 LINE 官方 Node SDK 的客户端，只负责鉴权、收发和原始事件分发。 */
-export class LineBot extends EventEmitter {
+export class LineBot extends EventEmitter<LineBotEvents> {
     private readonly client: LineBotClient;
     private readonly processedEvents = new Set<string>();
 
@@ -22,6 +25,7 @@ export class LineBot extends EventEmitter {
         private readonly eventRepository?: LineEventRepository,
     ) {
         super();
+        assertLineConfig(config);
         this.client = LineBotClient.fromChannelAccessToken({
             channelAccessToken: config.channel_access_token,
             apiBaseURL: requireHttpsUrl(config.api_base_url || DEFAULT_API_BASE, "api_base_url"),
@@ -36,28 +40,81 @@ export class LineBot extends EventEmitter {
         return this.client;
     }
 
+    get receiveMode(): "webhook" | "manual" {
+        return this.config.receive_mode || "webhook";
+    }
+
     validateSignature(body: string | Buffer, signature: string): boolean {
+        if (!this.config.channel_secret) {
+            throw new LineApiError("LINE Webhook 验签需要 channel_secret", {
+                code: "LINE_CHANNEL_SECRET_REQUIRED",
+            });
+        }
         return validateSignature(body, this.config.channel_secret, signature);
     }
 
-    /** 验证未经修改的原始请求体，并将同一批事件依次交给统一分发路径。 */
-    ingest(body: string | Buffer, signature: string): number {
+    /** 最低层事件入口，可接收单个官方事件或完整 CallbackRequest。 */
+    ingest(rawEvent: unknown): LineIngestResult {
+        const request = parseIngestRequest(rawEvent);
+        if (
+            this.config.destination &&
+            request.destination &&
+            request.destination !== this.config.destination
+        ) {
+            throw new LineApiError("LINE Webhook destination 与当前机器人不匹配", {
+                code: "LINE_DESTINATION_MISMATCH",
+                status: 400,
+                details: { destination: request.destination },
+            });
+        }
+        const events: WebhookEvent[] = [];
+        let duplicate = 0;
+        for (const event of request.events) {
+            if (this.isDuplicate(event)) {
+                duplicate += 1;
+                continue;
+            }
+            this.emit("event", event);
+            this.markProcessed(event.webhookEventId);
+            events.push(event);
+        }
+        return { accepted: events.length, duplicate, events };
+    }
+
+    /** 验证未经修改的原始请求体，并交给与 manual 模式相同的 ingest 管线。 */
+    ingestHttp(body: string | Buffer, signature: string): LineIngestResult {
         if (!signature || !this.validateSignature(body, signature)) {
             throw new LineApiError("LINE Webhook 签名验证失败", {
                 code: "LINE_INVALID_SIGNATURE",
                 status: 401,
             });
         }
-        const request = parseWebhookRequest(body);
-        let accepted = 0;
-        for (const event of request.events) {
-            if (this.isDuplicate(event)) continue;
-            this.emit("event", event);
-            this.emit(event.type, event);
-            this.markProcessed(event.webhookEventId);
-            accepted += 1;
+        return this.ingest(parseWebhookRequest(body));
+    }
+
+    /** Fetch / WinterCG Host 可直接转交标准 Request，无需另开端口。 */
+    async acceptHttp(request: Request): Promise<Response> {
+        if (request.method !== "POST") {
+            return Response.json(
+                { error: { code: "LINE_METHOD_NOT_ALLOWED", message: "Method Not Allowed" } },
+                { status: 405, headers: { Allow: "POST" } },
+            );
         }
-        return accepted;
+        try {
+            const body = Buffer.from(await request.arrayBuffer());
+            const result = this.ingestHttp(body, request.headers.get("x-line-signature") || "");
+            return Response.json({
+                ok: true,
+                accepted: result.accepted,
+                duplicate: result.duplicate,
+            });
+        } catch (error) {
+            const wrapped = LineApiError.wrap(error, "LINE_WEBHOOK_ERROR");
+            return Response.json(
+                { error: { code: wrapped.code, message: wrapped.message } },
+                { status: wrapped.status || 500 },
+            );
+        }
     }
 
     async pushMessage(
@@ -108,6 +165,20 @@ export class LineBot extends EventEmitter {
         }
     }
 
+    /** 按官方 type 订阅具体事件，并返回取消订阅函数。 */
+    onEvent<K extends WebhookEvent["type"]>(
+        type: K,
+        listener: (event: Extract<WebhookEvent, { type: K }>) => void,
+    ): () => void {
+        const wrapped = (event: WebhookEvent) => {
+            if (event.type === type) {
+                listener(event as Extract<WebhookEvent, { type: K }>);
+            }
+        };
+        this.on("event", wrapped);
+        return () => this.off("event", wrapped);
+    }
+
     private isDuplicate(event: WebhookEvent): boolean {
         if (this.config.deduplicate_webhooks === false || !event.webhookEventId) return false;
         if (this.eventRepository) return this.eventRepository.has(event.webhookEventId);
@@ -133,6 +204,13 @@ export class LineBot extends EventEmitter {
     }
 }
 
+function parseIngestRequest(value: unknown): WebhookRequest {
+    if (isWebhookEvent(value)) {
+        return { destination: "", events: [value] };
+    }
+    return parseWebhookValue(value);
+}
+
 function parseWebhookRequest(body: string | Buffer): WebhookRequest {
     let parsed: unknown;
     try {
@@ -144,15 +222,48 @@ function parseWebhookRequest(body: string | Buffer): WebhookRequest {
             cause: error,
         });
     }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw invalidWebhookBody();
-    }
+    return parseWebhookValue(parsed);
+}
+
+function parseWebhookValue(parsed: unknown): WebhookRequest {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw invalidWebhookBody();
     const record = parsed as Record<string, unknown>;
     if (typeof record.destination !== "string" || !Array.isArray(record.events)) {
         throw invalidWebhookBody();
     }
     if (!record.events.every(isWebhookEvent)) throw invalidWebhookBody();
     return { destination: record.destination, events: record.events };
+}
+
+function assertLineConfig(config: LineConfig): void {
+    if (!config.account_id?.trim()) {
+        throw new LineApiError("LINE account_id 不能为空", { code: "LINE_ACCOUNT_ID_REQUIRED" });
+    }
+    if (!config.channel_access_token?.trim()) {
+        throw new LineApiError("LINE channel_access_token 不能为空", {
+            code: "LINE_ACCESS_TOKEN_REQUIRED",
+        });
+    }
+    const receiveMode = config.receive_mode || "webhook";
+    if (receiveMode !== "webhook" && receiveMode !== "manual") {
+        throw new LineApiError("LINE receive_mode 仅支持 webhook 或 manual", {
+            code: "LINE_RECEIVE_MODE_INVALID",
+        });
+    }
+    if (receiveMode === "webhook" && !config.channel_secret?.trim()) {
+        throw new LineApiError("LINE Webhook 模式必须配置 channel_secret", {
+            code: "LINE_CHANNEL_SECRET_REQUIRED",
+        });
+    }
+    if (
+        config.webhook_deduplication_limit !== undefined &&
+        (!Number.isInteger(config.webhook_deduplication_limit) ||
+            config.webhook_deduplication_limit < 100)
+    ) {
+        throw new LineApiError("LINE webhook_deduplication_limit 必须是大于等于 100 的整数", {
+            code: "LINE_DEDUPLICATION_LIMIT_INVALID",
+        });
+    }
 }
 
 function isWebhookEvent(value: unknown): value is WebhookEvent {
@@ -183,11 +294,18 @@ function requireMessages(messages: messagingApi.Message[]): messagingApi.Message
 }
 
 function requireHttpsUrl(value: string, name: string): string {
-    if (!URL.canParse(value) || new URL(value).protocol !== "https:") {
+    if (!URL.canParse(value)) {
         throw new LineApiError(`LINE 配置 ${name} 必须是有效 HTTPS URL`, {
             code: "LINE_INVALID_CONFIG_URL",
             details: value,
         });
     }
-    return value.replace(/\/$/u, "");
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+        throw new LineApiError(`LINE 配置 ${name} 必须是无凭据和查询语义的 HTTPS URL`, {
+            code: "LINE_INVALID_CONFIG_URL",
+            details: value,
+        });
+    }
+    return url.toString().replace(/\/$/u, "");
 }

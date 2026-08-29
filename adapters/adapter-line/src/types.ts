@@ -4,7 +4,11 @@ import type { messagingApi, webhook } from "@line/bot-sdk";
 export interface LineConfig {
     account_id: string;
     channel_access_token: string;
-    channel_secret: string;
+    channel_secret?: string;
+    /** Webhook 由 OneBots 接收，或由已有 Host/消息队列手动 ingest。 */
+    receive_mode?: "webhook" | "manual";
+    /** 可选的 LINE destination user ID，用于拒绝投递到其他机器人的请求。 */
+    destination?: string;
     /** 仅用于官方兼容实现或测试环境，生产环境应保留官方 HTTPS 地址。 */
     api_base_url?: string;
     /** 大文件与富菜单图片 API 地址。 */
@@ -13,6 +17,12 @@ export interface LineConfig {
     deduplicate_webhooks?: boolean;
     /** 进程内最多保留的已处理 webhookEventId 数量。 */
     webhook_deduplication_limit?: number;
+}
+
+export interface LineIngestResult {
+    accepted: number;
+    duplicate: number;
+    events: WebhookEvent[];
 }
 
 export type WebhookRequest = webhook.CallbackRequest;

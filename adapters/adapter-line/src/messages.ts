@@ -87,10 +87,7 @@ export function chunkLineMessages(messages: messagingApi.Message[]): messagingAp
     return chunks;
 }
 
-function compileNonTextSegment(
-    type: string,
-    data: Record<string, unknown>,
-): messagingApi.Message {
+function compileNonTextSegment(type: string, data: Record<string, unknown>): messagingApi.Message {
     if (type === "line_message" || type === "line") return nativeMessage(data);
     if (type === "image") {
         const originalContentUrl = httpsMediaUrl(data);

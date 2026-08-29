@@ -186,6 +186,8 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
                 account_id: config.account_id,
                 channel_access_token: config.channel_access_token,
                 channel_secret: config.channel_secret,
+                receive_mode: config.receive_mode,
+                destination: config.destination,
                 api_base_url: config.api_base_url,
                 data_api_base_url: config.data_api_base_url,
                 deduplicate_webhooks: config.deduplicate_webhooks,
@@ -198,12 +200,14 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
             },
         );
         const account = new Account<"line", LineBot>(this, bot, config);
-        this.app.router.post(`${account.path}/webhook`, ctx => {
-            const rawBody = (ctx.request as { rawBody?: unknown }).rawBody;
-            const response = this.handleWebhook(bot, rawBody, ctx.get("x-line-signature"));
-            ctx.status = response.status;
-            ctx.body = response.body;
-        });
+        if (bot.receiveMode === "webhook") {
+            this.app.router.post(`${account.path}/webhook`, ctx => {
+                const rawBody = (ctx.request as { rawBody?: unknown }).rawBody;
+                const response = this.handleWebhook(bot, rawBody, ctx.get("x-line-signature"));
+                ctx.status = response.status;
+                ctx.body = response.body;
+            });
+        }
         bot.on("event", (event: webhook.Event) => this.dispatchEvent(account, event));
         this.bindLifecycle(account, bot);
         return account;
@@ -221,8 +225,11 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
                     status: 400,
                 });
             }
-            bot.ingest(rawBody, signature);
-            return { status: 200, body: { ok: true } };
+            const result = bot.ingestHttp(rawBody, signature);
+            return {
+                status: 200,
+                body: { ok: true, accepted: result.accepted, duplicate: result.duplicate },
+            };
         } catch (error) {
             const wrapped = LineApiError.wrap(error, "LINE_WEBHOOK_ERROR");
             this.logger.error("LINE Webhook 处理失败", wrapped);

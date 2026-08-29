@@ -1,13 +1,14 @@
 import { AdapterRegistry, type Schema } from "onebots";
 
 export { LineAdapter } from "./adapter.js";
-export { LineBot, type LineEventRepository } from "./bot.js";
+export { LineBot, type LineBotEvents, type LineEventRepository } from "./bot.js";
 export { lineCapabilities } from "./capabilities.js";
 export { LineApiError, type LineApiErrorOptions } from "./errors.js";
 export { chunkLineMessages, compileLineMessages } from "./messages.js";
 export { projectLineEvent, projectMessageContent } from "./events.js";
 export type {
     LineConfig,
+    LineIngestResult,
     LineChatContext,
     WebhookRequest,
     WebhookEvent,
@@ -38,7 +39,7 @@ export type {
     GroupMemberCount,
 } from "./types.js";
 
-const lineSchema: Schema = {
+export const lineSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -54,13 +55,36 @@ const lineSchema: Schema = {
         description: "LINE Developers Console 的 Messaging API Channel Access Token",
         ui: { section: "credentials" },
     },
+    receive_mode: {
+        type: "string",
+        default: "webhook",
+        label: "事件接收方式",
+        choices: [
+            { value: "webhook", label: "Webhook" },
+            { value: "manual", label: "手动接入既有 Host/队列" },
+        ],
+        description: "manual 不注册路由，由现有连接调用 ingest()",
+        ui: { section: "transport" },
+    },
     channel_secret: {
         type: "string",
-        required: true,
         label: "Channel Secret",
         sensitive: true,
         description: "仅用于对原始 Webhook 请求体做 HMAC-SHA256 验签",
-        ui: { section: "credentials" },
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
+    },
+    destination: {
+        type: "string",
+        label: "Webhook Destination",
+        pattern: /^U[0-9a-f]{32}$/i,
+        description: "可选；校验 CallbackRequest.destination 确属当前机器人",
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     deduplicate_webhooks: {
         type: "boolean",
@@ -81,6 +105,7 @@ const lineSchema: Schema = {
         default: "https://api.line.me",
         label: "Messaging API Base URL",
         description: "仅官方兼容实现、私有代理或测试环境需要覆盖，必须使用 HTTPS",
+        pattern: /^https:\/\/[^\s?#]+$/,
         ui: { section: "advanced" },
     },
     data_api_base_url: {
@@ -88,6 +113,7 @@ const lineSchema: Schema = {
         default: "https://api-data.line.me",
         label: "Data API Base URL",
         description: "媒体内容与 Rich Menu 图片接口地址，必须使用 HTTPS",
+        pattern: /^https:\/\/[^\s?#]+$/,
         ui: { section: "advanced" },
     },
 };

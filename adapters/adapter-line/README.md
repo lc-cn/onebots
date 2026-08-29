@@ -12,6 +12,7 @@ pnpm add @onebots/adapter-line
 line.my-line-bot:
   channel_access_token: "..."
   channel_secret: "..."
+  receive_mode: webhook
   deduplicate_webhooks: true
 ```
 
@@ -24,13 +25,17 @@ https://your-domain.example/line/my-line-bot/webhook
 | 配置项                        | 说明                                                       |
 | ----------------------------- | ---------------------------------------------------------- |
 | `channel_access_token`        | Messaging API Channel Access Token                         |
-| `channel_secret`              | Webhook HMAC-SHA256 验签密钥                               |
+| `receive_mode`                | `webhook` 或 `manual`，默认 `webhook`                      |
+| `channel_secret`              | Webhook HMAC-SHA256 验签密钥；manual 模式无需配置          |
+| `destination`                 | 可选；校验 Webhook 确属当前机器人                          |
 | `deduplicate_webhooks`        | 按 `webhookEventId` 持久化忽略重复投递，默认 `true`        |
 | `webhook_deduplication_limit` | 每账号持久化去重窗口，默认 10000                           |
 | `api_base_url`                | Messaging API 地址，默认 `https://api.line.me`             |
 | `data_api_base_url`           | 媒体与 Rich Menu 图片地址，默认 `https://api-data.line.me` |
 
 两个 Base URL 只用于官方兼容实现、可信代理或测试环境，必须使用 HTTPS。官方 SDK 11.x 需要 Node.js 22+，OneBots 当前要求 Node.js 24+。
+
+已有 HTTP Host、消息队列或其他连接管理器时可使用 `receive_mode: manual`。该模式不会向 OneBots Router 注册 Webhook 路由，应用通过最低层 `ingest(rawEvent)` 投递单个官方事件或完整 CallbackRequest；发送 API 与账号身份仍由同一个 `LineBot` 提供。
 
 ## Webhook 安全与事件
 
@@ -114,4 +119,28 @@ const bot = new LineBot({
 await bot.pushMessage("U...", [{ type: "text", text: "Hello" }]);
 const officialClient = bot.getClient();
 const quota = await officialClient.getMessageQuota();
+```
+
+复用已有 Host：
+
+```ts
+const result = bot.ingest(rawEvent);
+
+// 已保留原始 body 与签名
+const verified = bot.ingestHttp(rawBody, xLineSignature);
+
+// Fetch / WinterCG 风格 Host
+const response = await bot.acceptHttp(request);
+```
+
+三种入口最终进入同一 typed `event` 管线并共享 `webhookEventId` 去重。`ingestHttp()` 返回 `{ accepted, duplicate, events }`，`acceptHttp()` 返回可直接写回的结构化 HTTP 响应。
+
+按事件类型订阅时使用真实的判别式 API：
+
+```ts
+const unsubscribe = bot.onEvent("message", event => {
+  // event 自动推断为官方 MessageEvent
+});
+
+unsubscribe();
 ```
