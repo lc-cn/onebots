@@ -6,6 +6,7 @@ import type {
     DiscordApiMessage,
     DiscordApiUser,
 } from "./types.js";
+import { DiscordError } from "./errors.js";
 
 export interface DiscordUser extends DiscordApiUser {
     displayAvatarURL(): string;
@@ -44,7 +45,7 @@ export function wrapDiscordUser(user: DiscordApiUser): DiscordUser {
 
 export function wrapDiscordMember(member: DiscordApiGuildMember): DiscordMember {
     if (!member.user) {
-        throw new Error("Discord 成员负载缺少 user");
+        throw DiscordError.invalid("Discord 成员负载缺少 user", "DISCORD_MEMBER_PAYLOAD_INVALID");
     }
     return {
         ...member,

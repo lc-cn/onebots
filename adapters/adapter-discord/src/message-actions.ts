@@ -1,10 +1,20 @@
 import { Adapter, CommonTypes } from "onebots";
 import { DiscordBot, type DiscordMessage } from "./bot.js";
 import { compileDiscordMessage } from "./messages.js";
+import { DiscordError } from "./errors.js";
 
 /** Discord 消息、用户与好友投影动作。 */
 export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord"> {
     protected abstract convertMessageToInfo(message: DiscordMessage): Adapter.MessageInfo;
+
+    /** 统一账号查找边界，避免各动作产生不同形态的空账号错误。 */
+    protected requireBot(uin: string): DiscordBot {
+        const account = this.getAccount(uin);
+        if (!account) {
+            throw DiscordError.resource(`Discord 账号 ${uin} 不存在`, "DISCORD_ACCOUNT_NOT_FOUND");
+        }
+        return account.client;
+    }
 
     // ============================================
     // 消息相关方法
@@ -18,10 +28,7 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const { scene_type, message } = params;
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
@@ -41,7 +48,10 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
                 // 频道消息 - scene_id 是频道 ID
                 sentMessage = await bot.sendMessage(channelId, body, files);
             } else {
-                throw new Error(`不支持的消息类型: ${scene_type}`);
+                throw DiscordError.invalid(
+                    `Discord 不支持消息场景 ${scene_type}`,
+                    "DISCORD_SCENE_UNSUPPORTED",
+                );
             }
 
             messageId = sentMessage.id;
@@ -59,10 +69,7 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
      * 删除/撤回消息
      */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const messageId = this.coerceId(
             params.message_id as CommonTypes.Id | string | number,
         ).string;
@@ -72,7 +79,10 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
                 : "";
 
         if (!channelId) {
-            throw new Error("删除消息需要提供 scene_id (频道ID)");
+            throw DiscordError.invalid(
+                "删除 Discord 消息需要提供 scene_id（频道 ID）",
+                "DISCORD_CHANNEL_ID_REQUIRED",
+            );
         }
 
         await bot.deleteMessage(channelId, messageId);
@@ -82,10 +92,7 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
      * 获取消息
      */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const messageId = this.coerceId(
             params.message_id as CommonTypes.Id | string | number,
         ).string;
@@ -95,7 +102,10 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
                 : "";
 
         if (!channelId) {
-            throw new Error("获取消息需要提供 scene_id (频道ID)");
+            throw DiscordError.invalid(
+                "获取 Discord 消息需要提供 scene_id（频道 ID）",
+                "DISCORD_CHANNEL_ID_REQUIRED",
+            );
         }
 
         const message = await bot.getMessage(channelId, messageId);
@@ -110,10 +120,7 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
         uin: string,
         params: Adapter.GetMessageHistoryParams,
     ): Promise<Adapter.MessageInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const channelId = this.coerceId(params.scene_id as CommonTypes.Id | string | number).string;
         const limit = params.limit || 50;
 
@@ -130,14 +137,11 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
      * 获取机器人信息
      */
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const user = bot.getBotUser();
 
         if (!user) {
-            throw new Error("Bot 未就绪");
+            throw DiscordError.resource("Discord Bot 尚未就绪", "DISCORD_BOT_NOT_READY");
         }
 
         return {
@@ -152,10 +156,7 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
      * 获取用户信息
      */
     async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const userId = params.user_id.string;
 
         const user = await bot.getUser(userId);
@@ -165,44 +166,6 @@ export abstract class DiscordMessageActions extends Adapter<DiscordBot, "discord
             user_name: user.username,
             user_displayname: user.global_name || user.username,
             avatar: user.displayAvatarURL(),
-        };
-    }
-
-    // ============================================
-    // 好友相关方法
-    // Discord 没有好友系统，返回空列表
-    // ============================================
-
-    /**
-     * 获取好友列表
-     * Discord 没有传统好友系统，返回空列表
-     */
-    async getFriendList(
-        _uin: string,
-        _params?: Adapter.GetFriendListParams,
-    ): Promise<Adapter.FriendInfo[]> {
-        return [];
-    }
-
-    /**
-     * 获取好友信息
-     * Discord 没有传统好友系统，返回用户信息
-     */
-    async getFriendInfo(
-        uin: string,
-        params: Adapter.GetFriendInfoParams,
-    ): Promise<Adapter.FriendInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const userId = params.user_id.string;
-
-        const user = await bot.getUser(userId);
-
-        return {
-            user_id: this.createId(user.id),
-            user_name: user.username,
         };
     }
 }

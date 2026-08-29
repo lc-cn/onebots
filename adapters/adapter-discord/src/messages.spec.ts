@@ -52,4 +52,19 @@ describe("Discord message compiler", () => {
             "不支持消息段 mystery",
         );
     });
+
+    it("可直接回发事件投影得到的规范化提及、频道与回复 ID", () => {
+        const id = (string: string) => ({ string, number: 1, source: string });
+        const result = compileDiscordMessage([
+            { type: "at", data: { user_id: id("42") } },
+            { type: "at", data: { role_id: id("43") } },
+            { type: "channel", data: { channel_id: id("44") } },
+            { type: "reply", data: { message_id: id("45") } },
+        ]);
+
+        expect(result.body).toMatchObject({
+            content: "<@42><@&43><#44>",
+            message_reference: { message_id: "45" },
+        });
+    });
 });

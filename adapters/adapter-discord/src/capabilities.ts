@@ -25,8 +25,6 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         get_message_history: { support: "native", scenes: ["private", "channel"] },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },
-        get_friend_list: { support: "emulated", note: "返回机器人可见用户" },
-        get_friend_info: { support: "emulated", note: "按 Discord 用户投影" },
         call_discord_api: {
             support: "native",
             availability: "context",
@@ -112,6 +110,10 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
             availability: "permission",
             permissions: ["MANAGE_NICKNAMES"],
         },
+        create_interaction_response: { support: "native" },
+        get_original_interaction_response: { support: "native" },
+        edit_original_interaction_response: { support: "native" },
+        create_followup_message: { support: "native" },
         get_guild_info: { support: "native" },
         get_guild_list: { support: "native" },
         get_guild_member_info: { support: "native" },
@@ -140,9 +142,9 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         get_supported_actions: { support: "native" },
     },
     events: {
-        message: { support: "native", scenes: ["private", "group", "channel"] },
-        group_member_increase: { support: "native", scenes: ["group"] },
-        group_member_decrease: { support: "native", scenes: ["group"] },
+        message: { support: "native", scenes: ["private", "channel"] },
+        member_joined: { support: "native" },
+        member_left: { support: "native" },
         message_updated: { support: "native" },
         message_deleted: { support: "native" },
         reaction_added: { support: "native" },
@@ -160,7 +162,8 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         file: { support: "native", direction: "both" },
         audio: { support: "native", direction: "both" },
         video: { support: "native", direction: "both" },
-        embed: { support: "native", direction: "send" },
+        embed: { support: "native", direction: "both" },
+        channel: { support: "native", direction: "both" },
         reply: { support: "native", direction: "both" },
         discord_message: {
             support: "native",
@@ -171,5 +174,10 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
     },
     transports: {
         gateway: { support: "native", mode: "websocket" },
+        interactions: {
+            support: "native",
+            mode: "webhook",
+            note: "复用 OneBots HTTP Host，不创建独立监听端口",
+        },
     },
 });

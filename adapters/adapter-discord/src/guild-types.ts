@@ -120,3 +120,15 @@ export interface DiscordApiGuildMember {
     permissions?: string;
     communication_disabled_until?: string | null;
 }
+
+/** Gateway GUILD_DELETE 的最小负载。 */
+export interface DiscordGuildDeleteData {
+    id: string;
+    unavailable?: boolean;
+}
+
+/** Gateway GUILD_MEMBER_REMOVE 不包含完整成员字段。 */
+export interface DiscordGuildMemberRemoveData {
+    guild_id: string;
+    user: DiscordApiUser;
+}

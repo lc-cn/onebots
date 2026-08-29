@@ -1,7 +1,7 @@
 import { Adapter, readPackageVersion } from "onebots";
-import { type DiscordBot } from "./bot.js";
 import { DiscordGuildActions } from "./guild-actions.js";
 import { DISCORD_PLATFORM_ACTIONS, executeDiscordPlatformAction } from "./platform-actions.js";
+import { DiscordError } from "./errors.js";
 
 /** Discord 频道、成员、媒体、系统和平台扩展动作。 */
 export abstract class DiscordActionAdapter extends DiscordGuildActions {
@@ -16,10 +16,7 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
         uin: string,
         params: Adapter.GetGuildInfoParams,
     ): Promise<Adapter.GuildInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const guildId = params.guild_id.string;
 
         const guild = await bot.getGuild(guildId);
@@ -35,11 +32,8 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
      * 获取频道服务器列表
      */
     async getGuildList(uin: string): Promise<Adapter.GuildInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const guilds = bot.getGuilds();
+        const bot = this.requireBot(uin);
+        const guilds = await bot.getGuilds();
 
         return [...guilds.values()].map(guild => ({
             guild_id: this.createId(guild.id),
@@ -55,10 +49,7 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
         uin: string,
         params: Adapter.GetGuildMemberInfoParams,
     ): Promise<Adapter.GuildMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const guildId = params.guild_id.string;
         const userId = params.user_id.string;
 
@@ -77,9 +68,7 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
         uin: string,
         params: Adapter.GetGuildMemberListParams,
     ): Promise<Adapter.GuildMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-        const members = await account.client.getGuildMembers(params.guild_id.string);
+        const members = await this.requireBot(uin).getGuildMembers(params.guild_id.string);
         return [...members.values()].map(member => ({
             guild_id: params.guild_id,
             user_id: this.createId(member.user.id),
@@ -96,16 +85,16 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
         uin: string,
         params: Adapter.GetChannelInfoParams,
     ): Promise<Adapter.ChannelInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const channelId = params.channel_id.string;
 
         const channel = await bot.getChannel(channelId);
 
         if (!channel) {
-            throw new Error(`频道 ${channelId} 不存在`);
+            throw DiscordError.resource(
+                `Discord 频道 ${channelId} 不存在`,
+                "DISCORD_CHANNEL_NOT_FOUND",
+            );
         }
 
         return {
@@ -123,14 +112,14 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
         uin: string,
         params?: Adapter.GetChannelListParams,
     ): Promise<Adapter.ChannelInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
         if (!params?.guild_id) {
-            throw new Error("获取频道列表需要提供 guild_id");
+            throw DiscordError.invalid(
+                "获取 Discord 频道列表需要提供 guild_id",
+                "DISCORD_GUILD_ID_REQUIRED",
+            );
         }
 
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const guildId = params.guild_id.string;
 
         const channels = await bot.getGuildChannels(guildId);
@@ -150,10 +139,7 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
         uin: string,
         params: Adapter.CreateChannelParams,
     ): Promise<Adapter.ChannelInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const guildId = params.guild_id.string;
 
         const channel = await bot.createTextChannel(guildId, params.channel_name, {
@@ -172,10 +158,7 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
      * 删除频道
      */
     async deleteChannel(uin: string, params: Adapter.DeleteChannelParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const channelId = params.channel_id.string;
 
         await bot.deleteChannel(channelId);
@@ -185,10 +168,7 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
      * 更新频道
      */
     async updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const channelId = params.channel_id.string;
 
         await bot.updateChannel(channelId, {
@@ -228,12 +208,6 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
 
     isPlatformActionImplemented(action: string): boolean {
         return DISCORD_PLATFORM_ACTIONS.has(action);
-    }
-
-    private requireBot(uin: string): DiscordBot {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-        return account.client;
     }
 
     // ============================================

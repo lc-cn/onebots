@@ -1,8 +1,4 @@
-import {
-    materializeMediaSource,
-    type MaterializedMedia,
-    type MediaSourceInput,
-} from "onebots";
+import { materializeMediaSource, type MaterializedMedia, type MediaSourceInput } from "onebots";
 
 /** Discord 待上传附件；source 支持 HTTP(S)、data URL、base64:// 和 Node.js 本地路径。 */
 export interface DiscordFileInput extends MediaSourceInput {

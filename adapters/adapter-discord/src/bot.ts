@@ -4,19 +4,14 @@
  */
 
 import { EventEmitter } from "node:events";
-import { DiscordLite, type DiscordLiteOptions } from "./lite/index.js";
+import { DiscordLite } from "./lite/index.js";
 import type { DiscordREST } from "./lite/rest.js";
 import type { DiscordConfig } from "./types.js";
 import type {
-    DiscordApiUser,
-    DiscordApiMessage,
-    DiscordApiGuild,
     DiscordApiChannel,
     DiscordApiGuildMember,
     DiscordRole,
     CreateMessageBody,
-    GatewayQueryOptions,
-    GatewayMemberQueryOptions,
 } from "./types.js";
 import {
     wrapDiscordMember,
@@ -28,8 +23,11 @@ import {
     type DiscordMessage,
     type DiscordUser,
 } from "./bot-model.js";
-import { resolveDiscordIntents } from "./intents.js";
 import { materializeDiscordFile, type DiscordFileInput } from "./media.js";
+import { DiscordError } from "./errors.js";
+import type { DiscordBotEvents } from "./bot-events.js";
+import { createDiscordLite } from "./bot-client.js";
+import { loadDiscordGuildMembers, loadDiscordGuilds, loadDiscordMessages } from "./resources.js";
 export type {
     DiscordAttachment,
     DiscordChannel,
@@ -38,7 +36,10 @@ export type {
     DiscordMessage,
     DiscordUser,
 } from "./bot-model.js";
-export class DiscordBot extends EventEmitter {
+
+export type { DiscordBotEvents } from "./bot-events.js";
+
+export class DiscordBot extends EventEmitter<DiscordBotEvents> {
     private client: DiscordLite;
     private config: DiscordConfig;
     private ready: boolean = false;
@@ -47,58 +48,56 @@ export class DiscordBot extends EventEmitter {
     constructor(config: DiscordConfig) {
         super();
         this.config = config;
-        // 解析 intents
-        const intents = resolveDiscordIntents(config.intents);
-        const clientOptions: DiscordLiteOptions = {
-            token: config.token,
-            intents,
-            proxy: config.proxy,
-            mode: "gateway",
-        };
-        this.client = new DiscordLite(clientOptions);
+        this.client = createDiscordLite(config);
         this.setupEventListeners();
     }
     private setupEventListeners(): void {
-        this.client.on("ready", (user: unknown) => {
+        this.client.on("ready", user => {
             this.ready = true;
-            this.user = wrapDiscordUser(user as DiscordApiUser);
+            this.user = wrapDiscordUser(user);
             this.emit("ready", this.user);
         });
-        this.client.on("messageCreate", (message: unknown) => {
-            this.emit("messageCreate", wrapDiscordMessage(message as DiscordApiMessage));
+        this.client.on("messageCreate", message => {
+            this.emit("messageCreate", wrapDiscordMessage(message));
         });
-        this.client.on("messageUpdate", (message: unknown) => {
-            this.emit("messageUpdate", null, wrapDiscordMessage(message as DiscordApiMessage));
+        this.client.on("messageUpdate", message => {
+            this.emit("messageUpdate", null, message);
         });
-        this.client.on("messageDelete", (data: unknown) => {
+        this.client.on("messageDelete", data => {
             this.emit("messageDelete", data);
         });
-        this.client.on("guildCreate", (guild: unknown) => {
-            const g = guild as DiscordApiGuild;
-            this.guilds.set(g.id, g);
+        this.client.on("guildCreate", guild => {
+            this.guilds.set(guild.id, guild);
             this.emit("guildCreate", guild);
         });
-        this.client.on("guildDelete", (guild: unknown) => {
-            const g = guild as DiscordApiGuild;
-            this.guilds.delete(g.id);
+        this.client.on("guildDelete", guild => {
+            this.guilds.delete(guild.id);
             this.emit("guildDelete", guild);
         });
-        this.client.on("guildMemberAdd", (member: unknown) => {
-            this.emit("guildMemberAdd", wrapDiscordMember(member as DiscordApiGuildMember));
+        this.client.on("guildMemberAdd", member => {
+            this.emit("guildMemberAdd", wrapDiscordMember(member));
         });
-        this.client.on("guildMemberRemove", (member: unknown) => {
-            this.emit("guildMemberRemove", wrapDiscordMember(member as DiscordApiGuildMember));
+        this.client.on("guildMemberRemove", member => {
+            this.emit("guildMemberRemove", member);
         });
-        this.client.on("interactionCreate", (interaction: unknown) => {
+        this.client.on("interactionCreate", interaction => {
             this.emit("interactionCreate", interaction);
         });
-        this.client.on("dispatch", (eventName: unknown, data: unknown) => {
-            this.emit("dispatch", String(eventName), data);
+        this.client.on("dispatch", (eventName, data, sequence, sessionId) => {
+            this.emit("dispatch", eventName, data, sequence, sessionId);
         });
-        this.client.on("error", (error: unknown) => {
-            this.emit("error", error);
+        this.client.on("client_error", error => {
+            this.emit("client_error", error);
         });
-        this.client.on("close", (code: unknown, reason: unknown) => {
+        this.client.on("reconnecting", error => {
+            this.ready = false;
+            this.emit("reconnecting", error);
+        });
+        this.client.on("resumed", () => {
+            this.ready = true;
+            this.emit("resumed");
+        });
+        this.client.on("close", (code, reason) => {
             this.ready = false;
             this.emit("close", code, reason);
         });
@@ -106,10 +105,19 @@ export class DiscordBot extends EventEmitter {
     // 生命周期管理
     async start(): Promise<void> {
         try {
+            if (this.config.receive_mode === "interactions") {
+                this.client.initInteractions();
+                const user = wrapDiscordUser(await this.getREST().getCurrentUser());
+                this.ready = true;
+                this.user = user;
+                this.emit("ready", user);
+                return;
+            }
             await this.client.start();
         } catch (error) {
-            this.emit("error", error);
-            throw error;
+            const wrapped = DiscordError.wrap(error, "DISCORD_START_FAILED");
+            this.emit("client_error", wrapped);
+            throw wrapped;
         }
     }
     async stop(): Promise<void> {
@@ -179,14 +187,7 @@ export class DiscordBot extends EventEmitter {
         limit: number = 50,
         before?: string,
     ): Promise<Map<string, DiscordMessage>> {
-        const query: GatewayQueryOptions = { limit };
-        if (before) query.before = before;
-        const messages = await this.getREST().getMessages(channelId, query);
-        const map = new Map<string, DiscordMessage>();
-        for (const msg of messages) {
-            map.set(msg.id, wrapDiscordMessage(msg));
-        }
-        return map;
+        return loadDiscordMessages(this.getREST(), channelId, limit, before);
     }
 
     async addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
@@ -233,8 +234,8 @@ export class DiscordBot extends EventEmitter {
 
     // 服务器（Guild）相关方法
 
-    getGuilds(): Map<string, DiscordGuild> {
-        return this.guilds;
+    async getGuilds(): Promise<Map<string, DiscordGuild>> {
+        return loadDiscordGuilds(this.getREST(), this.guilds);
     }
 
     async getGuild(guildId: string): Promise<DiscordGuild> {
@@ -244,16 +245,7 @@ export class DiscordBot extends EventEmitter {
     }
 
     async getGuildMembers(guildId: string, limit?: number): Promise<Map<string, DiscordMember>> {
-        const query: GatewayMemberQueryOptions = {};
-        if (limit) query.limit = limit;
-        const members = await this.getREST().getGuildMembers(guildId, query);
-        const map = new Map<string, DiscordMember>();
-        for (const member of members) {
-            if (member.user) {
-                map.set(member.user.id, wrapDiscordMember(member));
-            }
-        }
-        return map;
+        return loadDiscordGuildMembers(this.getREST(), guildId, limit);
     }
 
     async getGuildMember(guildId: string, userId: string): Promise<DiscordMember> {
@@ -261,8 +253,8 @@ export class DiscordBot extends EventEmitter {
         return wrapDiscordMember(result);
     }
 
-    async kickMember(guildId: string, userId: string, _reason?: string): Promise<void> {
-        await this.getREST().removeGuildMember(guildId, userId);
+    async kickMember(guildId: string, userId: string, reason?: string): Promise<void> {
+        await this.getREST().removeGuildMember(guildId, userId, reason);
     }
 
     async banMember(
@@ -272,12 +264,14 @@ export class DiscordBot extends EventEmitter {
     ): Promise<void> {
         await this.getREST().banGuildMember(guildId, userId, {
             delete_message_seconds: options?.deleteMessageSeconds,
+            reason: options?.reason,
         });
     }
 
-    async unbanMember(guildId: string, userId: string, _reason?: string): Promise<void> {
+    async unbanMember(guildId: string, userId: string, reason?: string): Promise<void> {
         await this.getREST().request(`/guilds/${guildId}/bans/${userId}`, {
             method: "DELETE",
+            reason,
         });
     }
 
@@ -285,7 +279,7 @@ export class DiscordBot extends EventEmitter {
         guildId: string,
         userId: string,
         duration: number,
-        _reason?: string,
+        reason?: string,
     ): Promise<DiscordMember> {
         const until = new Date(Date.now() + duration * 1000).toISOString();
         const result = await this.getREST().request<DiscordApiGuildMember>(
@@ -293,17 +287,19 @@ export class DiscordBot extends EventEmitter {
             {
                 method: "PATCH",
                 body: { communication_disabled_until: until },
+                reason,
             },
         );
         return wrapDiscordMember(result);
     }
 
-    async removeTimeout(guildId: string, userId: string, _reason?: string): Promise<DiscordMember> {
+    async removeTimeout(guildId: string, userId: string, reason?: string): Promise<DiscordMember> {
         const result = await this.getREST().request<DiscordApiGuildMember>(
             `/guilds/${guildId}/members/${userId}`,
             {
                 method: "PATCH",
                 body: { communication_disabled_until: null },
+                reason,
             },
         );
         return wrapDiscordMember(result);
@@ -313,13 +309,14 @@ export class DiscordBot extends EventEmitter {
         guildId: string,
         userId: string,
         nickname: string | null,
-        _reason?: string,
+        reason?: string,
     ): Promise<DiscordMember> {
         const result = await this.getREST().request<DiscordApiGuildMember>(
             `/guilds/${guildId}/members/${userId}`,
             {
                 method: "PATCH",
                 body: { nick: nickname },
+                reason,
             },
         );
         return wrapDiscordMember(result);
@@ -329,10 +326,11 @@ export class DiscordBot extends EventEmitter {
         guildId: string,
         userId: string,
         roleId: string,
-        _reason?: string,
+        reason?: string,
     ): Promise<DiscordMember> {
         await this.getREST().request(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
             method: "PUT",
+            reason,
         });
         return this.getGuildMember(guildId, userId);
     }
@@ -341,10 +339,11 @@ export class DiscordBot extends EventEmitter {
         guildId: string,
         userId: string,
         roleId: string,
-        _reason?: string,
+        reason?: string,
     ): Promise<DiscordMember> {
         await this.getREST().request(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
             method: "DELETE",
+            reason,
         });
         return this.getGuildMember(guildId, userId);
     }
@@ -354,8 +353,9 @@ export class DiscordBot extends EventEmitter {
     async getChannel(channelId: string): Promise<DiscordChannel | null> {
         try {
             return await this.getREST().getChannel(channelId);
-        } catch {
-            return null;
+        } catch (error) {
+            if (error instanceof DiscordError && error.status === 404) return null;
+            throw error;
         }
     }
 
@@ -460,5 +460,9 @@ export class DiscordBot extends EventEmitter {
 
     getClient(): DiscordLite {
         return this.client;
+    }
+
+    getReceiveMode(): "gateway" | "interactions" {
+        return this.config.receive_mode ?? "gateway";
     }
 }

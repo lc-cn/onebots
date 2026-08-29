@@ -18,4 +18,21 @@ describe("Discord 配置 Schema", () => {
         });
         expect(JSON.stringify(discordSchema)).not.toContain('"ui":{}');
     });
+
+    it("按接收模式展示 Gateway 或 Interactions 配置，并结构化编辑活动", () => {
+        const applicationId = discordSchema.application_id as ValidationRule;
+        const intents = discordSchema.intents as ValidationRule;
+        const presence = discordSchema.presence as Record<string, ValidationRule>;
+
+        expect(applicationId.ui?.visibleWhen).toEqual({
+            path: "receive_mode",
+            oneOf: ["interactions"],
+        });
+        expect(intents.ui?.visibleWhen).toEqual({ path: "receive_mode", oneOf: ["gateway"] });
+        expect(presence.activities.ui).toMatchObject({
+            widget: "record-list",
+            section: "delivery",
+            addLabel: "添加活动",
+        });
+    });
 });

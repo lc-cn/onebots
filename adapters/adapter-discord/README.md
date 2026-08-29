@@ -1,238 +1,170 @@
 # @onebots/adapter-discord
 
-onebots Discord 适配器 - 轻量版实现，直接封装 Discord API，无外部依赖。
+OneBots 的 Discord 官方 Bot 适配器。实现直接面向 Discord API v10，不依赖 `discord.js`，同时提供可独立使用的强类型 Lite 客户端。
 
-## 特性
+## 能力概览
 
-- ✅ **轻量级**：不依赖 discord.js，包体积小
-- ✅ **多运行时**：支持 Node.js、Cloudflare Workers、Vercel Edge
-- ✅ **原生 fetch**：使用原生 API，兼容性好
-- ✅ **代理支持**：使用 https-proxy-agent（可选）
+- Gateway WebSocket：无限重连、Resume、心跳 ACK 检测、Identify 限速、分片、Presence、AbortSignal。
+- Interactions Webhook：Ed25519 验签、重放时间窗、应用命令、组件、Modal、自动补全。
+- REST：Discord route/global rate limit、429 自动重试、AbortSignal、审计日志原因、附件上传和结构化错误。
+- 事件：消息编辑/删除与批量删除、Reaction、Guild 成员、Interaction；未知 Dispatch 仍通过 `raw_event` 无损交付。
+- 消息：文本、用户/角色/频道提及、回复、Embed、Sticker 与多媒体附件。
+- 平台扩展：公开常用 Guild、频道、角色、线程、邀请和 Reaction 动作，并保留受约束的完整 Discord v10 REST 入口。
+
+`ws` 作为适配器的可选依赖随包解析；HTTP(S) 与 SOCKS Agent 由 OneBots 共享代理层统一提供，不使用时不会加载。适配器不会引入 `discord.js`。
 
 ## 安装
 
 ```bash
-npm install @onebots/adapter-discord
-
-# Node.js Gateway 模式需要 ws
-npm install ws
-
-# 需要代理时
-npm install https-proxy-agent
+pnpm add @onebots/adapter-discord
 ```
 
-## 配置
+## OneBots 配置
 
-在 onebots 配置文件中添加 Discord 账号配置：
+### Gateway 模式
 
 ```yaml
-discord.your_bot_id:
-  token: "your_discord_bot_token" # Discord Bot Token，必填
-
-  # 代理配置（可选）
+discord.my_bot:
+  token: "your_discord_bot_token"
+  receive_mode: gateway
   proxy:
-    url: "http://127.0.0.1:7890"
-    # username: "user"  # 可选
-    # password: "pass"  # 可选
-
-  intents: # 可选，Gateway Intents
+    url: "socks5://127.0.0.1:7890"
+  intents:
     - Guilds
-    - GuildMessages
     - GuildMembers
+    - GuildMessages
     - GuildMessageReactions
     - DirectMessages
     - DirectMessageReactions
     - MessageContent
-  presence: # 可选，机器人状态
-    status: online # online, idle, dnd, invisible
+  shard:
+    id: 0
+    total: 2
+  presence:
+    status: online
     activities:
-      - name: "正在运行 onebots"
-        type: 0 # 0: Playing, 1: Streaming, 2: Listening, 3: Watching, 5: Competing
+      - name: "正在运行 OneBots"
+        type: 0
 ```
 
-Web 管理端会把 Gateway Intents 渲染为可搜索、可增减的选项列表，并将凭据、事件订阅、发送表现与高级网络设置分区展示，无需手写数组 JSON。
+Web 管理端会将 Intents 渲染为受约束的选择列表，将 Presence activities 渲染为可动态增减的表单；分片、凭据和网络项按语义分区展示，无需手写数组 JSON。特权 Intent 仍须先在 Discord Developer Portal 开启。
 
-主适配器使用公开的 `resolveDiscordIntents()` 解析 Intent；独立 `DiscordLite` 需要名称配置时也应复用该函数。未知名称会在连接前报错，不会被静默忽略。默认订阅消息、成员与 Reaction 所需的核心 Intent，`MessageContent`、`GuildMembers` 等特权 Intent 仍需先在 Developer Portal 开启。
+### Interactions 模式
 
-独立使用只暴露一个深模块 `DiscordLite`；旧的 `DiscordLiteBot` 重复包装层已移除。Gateway 使用 `start()`，Interactions 使用 `handleRequest()`，REST 通过 `getREST()` 访问，不再维护第二套消息、成员与频道方法。
+```yaml
+discord.my_bot:
+  token: "your_discord_bot_token"
+  receive_mode: interactions
+  application_id: "123456789012345678"
+  public_key: "64位十六进制Application Public Key"
+```
 
-## 独立使用（不依赖 onebots）
+将 Developer Portal 的 Interactions Endpoint URL 指向：
 
-### Node.js Gateway 模式
+```text
+https://你的网关/discord/my_bot/interactions
+```
+
+该模式复用 OneBots 已有 HTTP Host，不创建独立端口。请求必须保留未经修改的 `rawBody`，否则适配器会拒绝无法验签的载荷。适配器会在 Discord 的 3 秒窗口内返回 deferred 确认，再把 Interaction 分发给已配置协议；下游可从 `raw_event` 取得 Interaction token 并通过 Discord Webhook API 编辑原始回复。Gateway 适合完整消息和 Guild 事件；Interactions 模式只接收 Discord 的应用交互。
+
+## 独立使用 Lite SDK
+
+### Gateway
 
 ```typescript
 import { DiscordLite, GatewayIntents } from "@onebots/adapter-discord/lite";
 
 const client = new DiscordLite({
-  token: process.env.DISCORD_TOKEN,
-  intents: GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.MessageContent,
+  token: process.env.DISCORD_TOKEN!,
   mode: "gateway",
-  proxy: { url: "http://127.0.0.1:7890" }, // 可选
+  intents: GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.MessageContent,
 });
 
-client.on("ready", user => {
-  console.log(`已登录为 ${user.username}`);
+client.on("client_error", error => logger.error(error));
+client.on("messageCreate", message => {
+  if (message.content === "!ping") void client.sendMessage(message.channel_id, "Pong!");
 });
 
-client.on("messageCreate", async message => {
-  if (message.content === "!ping") {
-    await client.sendMessage(message.channel_id, "Pong!");
-  }
-});
-
-await client.start();
+const abort = new AbortController();
+await client.start(abort.signal);
+// abort.abort() 会停止 Gateway 及后续重连。
 ```
 
-### Cloudflare Workers 模式
+### Interactions 与已有 HTTP Host
 
 ```typescript
 import { InteractionsHandler } from "@onebots/adapter-discord/lite";
 
+const interactions = new InteractionsHandler({
+  publicKey: process.env.DISCORD_PUBLIC_KEY!,
+  token: process.env.DISCORD_TOKEN!,
+  applicationId: process.env.DISCORD_APP_ID!,
+});
+
+interactions.onCommand("ping", () => InteractionsHandler.messageResponse("Pong!"));
+interactions.onAutocomplete("search", async interaction => searchChoices(interaction));
+
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const handler = new InteractionsHandler({
-      publicKey: env.DISCORD_PUBLIC_KEY,
-      token: env.DISCORD_TOKEN,
-      applicationId: env.DISCORD_APP_ID,
-    });
-
-    handler.onCommand("ping", async () => {
-      return InteractionsHandler.messageResponse("🏓 Pong!");
-    });
-
-    return handler.handleRequest(request);
-  },
+  fetch: (request: Request) => interactions.acceptHttp(request),
 };
 ```
 
-### 直接使用 REST API
+若宿主并不使用 Web Fetch API，可调用 `ingestHttp({ body, signature, timestamp })` 获得 `{ status, headers, body }` 结构化响应。已经验证或来自既有连接的事件可直接交给 `ingest(rawInteraction)`，两者都不会创建监听端口。
+
+使用统一 `DiscordLite` 时，对应方法为 `handleRequest()`、`ingestInteractionHttp()` 和 `ingestInteraction()`；同一个客户端会继续发出 `interactionCreate` 与统一 `dispatch` 事件。
+
+### REST 与自定义传输
 
 ```typescript
 import { DiscordREST } from "@onebots/adapter-discord/lite";
 
-const rest = new DiscordREST({ token: process.env.DISCORD_TOKEN });
+const rest = new DiscordREST({
+  token: process.env.DISCORD_TOKEN!,
+  apiBaseUrl: "https://discord.com/api/v10",
+  maxRateLimitRetries: 5,
+  // transport: existingTransport,
+});
 
-// 发送消息
-await rest.createMessage("channel_id", "Hello!");
-
-// 获取用户
-const user = await rest.getUser("user_id");
+await rest.createMessage("123456789012345678", "Hello!");
 ```
 
-## 消息与附件
+`transport` 可注入已有 HTTP 栈；默认实现不会在代理初始化失败时静默直连。所有非成功响应均抛出 `DiscordError`，其中保留 HTTP 状态、Discord code、retry_after、global 标记和请求 ID。
 
-通用 `send_message` 支持 `text`、`at`、`reply`、`embed`、`share`、`face`、`image`、`file`、`audio`、`record` 和 `video`。媒体段通过 Discord 官方 `multipart/form-data` 上传，不会退化成文本链接或被静默丢弃：
+## 通用消息段
+
+`send_message` 支持 `text`、`at`、`channel`、`reply`、`embed`、`share`、`face`、`image`、`file`、`audio`、`record`、`video` 与原生 `discord_message`。角色提及使用 `at.data.role_id`，频道提及使用 `channel.data.channel_id`。
 
 ```typescript
 [
-  { type: "text", data: { text: "构建产物" } },
-  { type: "file", data: { file: "/srv/build/app.zip", name: "app.zip" } },
-  { type: "image", data: { file: "base64://...", name: "preview.png", alt: "预览" } },
-]
+  { type: "text", data: { text: "构建产物 " } },
+  { type: "at", data: { role_id: "123456789012345678" } },
+  { type: "channel", data: { channel_id: "223456789012345678" } },
+  { type: "file", data: { file: "/srv/build/app.zip", filename: "app.zip" } },
+];
 ```
 
-`file` / `url` 支持 HTTP(S) URL、Node.js 本地路径、`file://`、Base64 data URL 和 `base64://`。URL 由 OneBots 下载后上传到 Discord，因此运行节点必须能访问该资源；附件数量和大小最终受 Discord 当前频道限制。需要完整 Create Message 字段时，可使用 `discord_message` 段并把官方 JSON 放入 `data.body`。
+媒体来源支持 HTTP(S)、Node.js 本地路径、`file://`、Base64 data URL 和 `base64://`。完整 Discord Create Message 字段可放入 `discord_message.data.body`。
 
-## 获取 Discord Bot Token
+## API 与平台扩展
 
-1. 前往 [Discord Developer Portal](https://discord.com/developers/applications)
-2. 点击 "New Application" 创建新应用
-3. 进入应用后，点击左侧 "Bot" 菜单
-4. 点击 "Reset Token" 获取 Bot Token
-5. 在 "Privileged Gateway Intents" 中启用需要的 Intents
+标准动作按 Discord 原生资源模型暴露为 `get_guild_*` 与 `get_channel_*`，不会把 Guild 伪装成通用 Group。扩展动作可由协议的 `get_supported_actions` 查询：
 
-## 支持的 API
-
-### 消息相关
-
-- ✅ sendMessage - 发送消息
-- ✅ deleteMessage - 删除消息
-- ✅ getMessage - 获取消息
-- ✅ getMessageHistory - 获取历史消息
-
-### 用户相关
-
-- ✅ getLoginInfo - 获取机器人信息
-- ✅ getUserInfo - 获取用户信息
-
-### 群组（服务器）相关
-
-- ✅ getGroupList - 获取服务器列表
-- ✅ getGroupInfo - 获取服务器信息
-- ✅ leaveGroup - 退出服务器
-- ✅ getGroupMemberList - 获取成员列表
-- ✅ getGroupMemberInfo - 获取成员信息
-- ✅ kickGroupMember - 踢出成员
-- ✅ muteGroupMember - 禁言成员
-- ✅ setGroupCard - 设置昵称
-
-### 频道相关
-
-- ✅ getChannelInfo - 获取频道信息
-- ✅ getChannelList - 获取频道列表
-- ✅ createChannel - 创建频道
-- ✅ deleteChannel - 删除频道
-- ✅ updateChannel - 更新频道
-
-### Discord 原生扩展
-
-能力列表可通过协议的 `get_supported_actions` 查询，所有协议都可以用 snake_case 动作名调用。扩展按 Discord v10 资源模型分组：
-
-- 成员：`ban_member`、`unban_member`、`get_guild_bans`
-- 角色：`get_guild_roles`、`create_guild_role`、`update_guild_role`、 `delete_guild_role`、`add_guild_member_role`、`remove_guild_member_role`
-- 消息：`bulk_delete_messages`、`crosspost_message`、`get_channel_pins`、 `pin_message`、`unpin_message`、`get_reaction_users`、`trigger_typing`
-- 线程：`create_thread`、`join_thread`、`leave_thread`、`add_thread_member`、 `remove_thread_member`、`list_thread_members`、`get_active_threads`
+- 成员：`ban_member`、`unban_member`、`get_guild_bans`、`kick_guild_member`、`timeout_guild_member`、`set_guild_member_nickname`
+- 角色：`get_guild_roles`、`create_guild_role`、`update_guild_role`、`delete_guild_role`、`add_guild_member_role`、`remove_guild_member_role`
+- 消息：`bulk_delete_messages`、`crosspost_message`、`get_channel_pins`、`pin_message`、`unpin_message`、`get_reaction_users`、`add_reaction`、`remove_own_reaction`、`trigger_typing`
+- 线程：`create_thread`、`join_thread`、`leave_thread`、`add_thread_member`、`remove_thread_member`、`list_thread_members`、`get_active_threads`
 - 邀请：`get_channel_invites`、`create_channel_invite`、`delete_invite`
-- 底层：`call_discord_api`（固定在 `https://discord.com/api/v10` 根下，支持 GET/POST/PUT/PATCH/DELETE）
+- Interaction：`create_interaction_response`、`get_original_interaction_response`、`edit_original_interaction_response`、`create_followup_message`
+- 底层：`call_discord_api`，只能访问配置的 Discord API HTTPS 根路径，拒绝外部 URL、路径穿越、内嵌 query 和 fragment
 
-Gateway 的消息编辑/删除、Reaction、成员变化和 Interaction 会投影为标准事件；其他 Dispatch 以 `notice.custom` + `raw_event` 无损交付。
+审计类动作可传 `reason`，适配器会按 Discord 要求编码到 `X-Audit-Log-Reason`。
 
-## 依赖说明
+## Discord 应用准备
 
-本适配器采用轻量级设计，核心功能无需外部依赖。以下为可选依赖：
-
-| 依赖                | 何时需要                           | 安装命令                        |
-| ------------------- | ---------------------------------- | ------------------------------- |
-| `ws`                | Node.js Gateway 模式               | `npm install ws`                |
-| `https-proxy-agent` | 使用 HTTP/HTTPS 代理（REST API）   | `npm install https-proxy-agent` |
-| `socks-proxy-agent` | 使用 SOCKS5 代理（WebSocket 推荐） | `npm install socks-proxy-agent` |
-
-### 常见问题
-
-#### 1. 连接超时 / ECONNRESET
-
-如果你在中国大陆等需要代理的地区，请配置代理：
-
-```yaml
-discord.your_bot:
-  token: "xxx"
-  proxy:
-    url: "http://127.0.0.1:7890" # 你的代理地址
-```
-
-并安装代理依赖：
-
-```bash
-# 推荐同时安装（WebSocket 使用 SOCKS5 更稳定）
-npm install https-proxy-agent socks-proxy-agent
-```
-
-#### 2. 缺少 ws 模块
-
-如果看到 `Cannot find module 'ws'` 错误：
-
-```bash
-npm install ws
-```
-
-> **注意**：Cloudflare Workers 模式（Interactions）不需要 `ws`
-
-#### 3. WebSocket 连接失败但 REST API 正常
-
-某些代理软件（如 Clash）的 HTTP 代理模式对 WebSocket 支持不佳。适配器会自动将 HTTP 代理转换为 SOCKS5，但需要：
-
-1. 确保代理软件开启了混合端口（同时支持 HTTP 和 SOCKS5）
-2. 安装 `socks-proxy-agent`：`npm install socks-proxy-agent`
+1. 在 [Discord Developer Portal](https://discord.com/developers/applications) 创建 Application。
+2. 在 Bot 页面创建 Bot 并取得 Token。
+3. Gateway 模式开启实际选择的 Privileged Gateway Intents。
+4. Interactions 模式复制 General Information 中的 Application ID 与 Public Key，并配置 Endpoint URL。
 
 ## 许可证
 

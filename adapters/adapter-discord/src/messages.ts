@@ -1,6 +1,7 @@
 import type { CommonTypes } from "onebots";
 import type { DiscordFileInput } from "./media.js";
 import type { CreateMessageBody, DiscordEmbed } from "./types.js";
+import { DiscordError } from "./errors.js";
 
 export interface CompiledDiscordMessage {
     body: CreateMessageBody;
@@ -16,9 +17,9 @@ export function compileDiscordMessage(message: CommonTypes.Segment[]): CompiledD
     if (!body.content) delete body.content;
     if (!body.embeds?.length) delete body.embeds;
     if (!hasMessageContent(body) && !files.length) {
-        throw new Error("Discord 消息不包含可发送内容");
+        throw invalidMessage("Discord 消息不包含可发送内容");
     }
-    if (files.length > 10) throw new Error("Discord 单条消息最多上传 10 个附件");
+    if (files.length > 10) throw invalidMessage("Discord 单条消息最多上传 10 个附件");
     return { body, files };
 }
 
@@ -33,10 +34,18 @@ function appendSegment(
             body.content = `${body.content || ""}${stringValue(data.text)}`;
             return;
         case "at": {
+            const roleId = data.role_id;
+            if (roleId !== undefined) {
+                body.content = `${body.content || ""}<@&${requiredString(roleId, "at.role_id")}>`;
+                return;
+            }
             const id = data.qq ?? data.user_id ?? data.id;
             body.content = `${body.content || ""}${id === "all" ? "@everyone" : `<@${requiredString(id, "at.id")}>`}`;
             return;
         }
+        case "channel":
+            body.content = `${body.content || ""}<#${requiredString(data.channel_id ?? data.id, "channel.id")}>`;
+            return;
         case "reply":
             body.message_reference = {
                 message_id: requiredString(data.message_id ?? data.id, "reply.message_id"),
@@ -63,7 +72,7 @@ function appendSegment(
             applyNativeBody(body, data.body ?? data);
             return;
         default:
-            throw new Error(`Discord 不支持消息段 ${segment.type}`);
+            throw invalidMessage(`Discord 不支持消息段 ${segment.type}`);
     }
 }
 
@@ -79,7 +88,7 @@ function mediaInput(data: Record<string, unknown>, type: string): DiscordFileInp
 
 function discordEmbed(value: unknown): DiscordEmbed {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("Discord embed 段必须提供对象");
+        throw invalidMessage("Discord embed 段必须提供对象");
     }
     return structuredClone(value) as DiscordEmbed;
 }
@@ -97,14 +106,14 @@ function shareEmbed(data: Record<string, unknown>): DiscordEmbed {
 function unicodeFace(value: unknown): string {
     const codePoint = Number(value);
     if (!Number.isSafeInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
-        throw new Error("Discord face.id 必须是有效 Unicode code point");
+        throw invalidMessage("Discord face.id 必须是有效 Unicode code point");
     }
     return String.fromCodePoint(codePoint);
 }
 
 function applyNativeBody(body: CreateMessageBody, value: unknown): void {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error("Discord discord_message.body 必须为对象");
+        throw invalidMessage("Discord discord_message.body 必须为对象");
     }
     Object.assign(body, structuredClone(value));
 }
@@ -132,10 +141,19 @@ function stringValue(value: unknown): string {
 
 function requiredString(value: unknown, name: string): string {
     const result = optionalString(value);
-    if (!result) throw new Error(`Discord ${name} 必须为非空字符串`);
+    if (!result) throw invalidMessage(`Discord ${name} 必须为非空字符串`);
     return result;
 }
 
 function optionalString(value: unknown): string | undefined {
-    return typeof value === "string" && value ? value : undefined;
+    if (typeof value === "string" && value) return value;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+        const string = (value as Record<string, unknown>).string;
+        if (typeof string === "string" && string) return string;
+    }
+    return undefined;
+}
+
+function invalidMessage(message: string): DiscordError {
+    return DiscordError.invalid(message, "DISCORD_MESSAGE_INVALID");
 }

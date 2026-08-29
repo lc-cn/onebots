@@ -169,6 +169,10 @@ export interface DiscordApiMessage {
     role_subscription_data?: Record<string, unknown>;
 }
 
+/** Gateway MESSAGE_UPDATE 仅保证消息与频道 ID，其余字段按实际变化出现。 */
+export type DiscordMessageUpdateData = Pick<DiscordApiMessage, "id" | "channel_id"> &
+    Partial<Omit<DiscordApiMessage, "id" | "channel_id">>;
+
 export interface DiscordChannelMention {
     id: string;
     guild_id: string;

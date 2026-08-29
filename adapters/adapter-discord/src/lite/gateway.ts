@@ -12,83 +12,27 @@ import type {
     DiscordApiGuildMember,
     DiscordApiMessage,
     DiscordMessageDeleteData,
+    DiscordMessageUpdateData,
     DiscordInteraction,
     GatewayHelloData,
     GatewayReadyData,
+    DiscordGuildDeleteData,
+    DiscordGuildMemberRemoveData,
 } from "../types.js";
+import { DiscordError } from "../errors.js";
+import { assertDiscordProxyConfig } from "../config-types.js";
+import {
+    GatewayOpcodes,
+    type DiscordGatewayEvents,
+    type GatewayOptions,
+    type GatewayPayload,
+    type WsWebSocket,
+    isFatalGatewayCloseCode,
+} from "./gateway-types.js";
+export { GatewayIntents, GatewayOpcodes } from "./gateway-types.js";
+export type { DiscordGatewayEvents, GatewayOptions } from "./gateway-types.js";
 
-// Gateway Opcodes
-export enum GatewayOpcodes {
-    Dispatch = 0,
-    Heartbeat = 1,
-    Identify = 2,
-    PresenceUpdate = 3,
-    VoiceStateUpdate = 4,
-    Resume = 6,
-    Reconnect = 7,
-    RequestGuildMembers = 8,
-    InvalidSession = 9,
-    Hello = 10,
-    HeartbeatAck = 11,
-}
-
-// Gateway Intents
-export enum GatewayIntents {
-    Guilds = 1 << 0,
-    GuildMembers = 1 << 1,
-    GuildModeration = 1 << 2,
-    GuildEmojisAndStickers = 1 << 3,
-    GuildIntegrations = 1 << 4,
-    GuildWebhooks = 1 << 5,
-    GuildInvites = 1 << 6,
-    GuildVoiceStates = 1 << 7,
-    GuildPresences = 1 << 8,
-    GuildMessages = 1 << 9,
-    GuildMessageReactions = 1 << 10,
-    GuildMessageTyping = 1 << 11,
-    DirectMessages = 1 << 12,
-    DirectMessageReactions = 1 << 13,
-    DirectMessageTyping = 1 << 14,
-    MessageContent = 1 << 15,
-    GuildScheduledEvents = 1 << 16,
-    AutoModerationConfiguration = 1 << 20,
-    AutoModerationExecution = 1 << 21,
-}
-
-export interface GatewayOptions {
-    token: string;
-    intents: number;
-    proxy?: {
-        url: string;
-        username?: string;
-        password?: string;
-    };
-}
-
-/**
- * Gateway 接收的消息结构
- */
-interface GatewayPayload {
-    op: number;
-    d: unknown;
-    s: number | null;
-    t: string | null;
-}
-
-/**
- * ws 模块的 WebSocket 实例接口
- */
-interface WsWebSocket {
-    readyState: number;
-    send(data: string): void;
-    close(): void;
-    removeAllListeners(): void;
-    on(event: string, listener: (...args: unknown[]) => void): void;
-}
-
-const FATAL_GATEWAY_CLOSE_CODES = new Set([4004, 4010, 4011, 4012, 4013, 4014]);
-
-export class DiscordGateway extends EventEmitter {
+export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
     private ws: WsWebSocket | null = null;
     private token: string;
     private intents: number;
@@ -103,13 +47,21 @@ export class DiscordGateway extends EventEmitter {
     private resumeOnHello = false;
     private rest: DiscordREST;
     private isReady = false;
+    private started = false;
+    private heartbeatAcknowledged = true;
+    private lastIdentifyAt = 0;
+    private readonly presence?: GatewayOptions["presence"];
+    private readonly shard?: GatewayOptions["shard"];
     private connectionManager: ConnectionManager;
 
     constructor(options: GatewayOptions) {
         super();
         this.token = options.token;
         this.intents = options.intents;
+        this.presence = options.presence;
+        this.shard = options.shard;
 
+        assertDiscordProxyConfig(options.proxy);
         if (options.proxy?.url) {
             this.proxyUrl = buildProxyUrl(options.proxy);
         }
@@ -126,8 +78,10 @@ export class DiscordGateway extends EventEmitter {
                             true,
                         );
                         return;
-                    } catch {
-                        // 恢复失败，降级到完整连接
+                    } catch (error) {
+                        this.sessionId = null;
+                        this.resumeGatewayUrl = null;
+                        throw DiscordError.wrap(error, "DISCORD_GATEWAY_RESUME_FAILED");
                     }
                 }
                 const { url } = await this.rest.getGatewayBot();
@@ -141,7 +95,15 @@ export class DiscordGateway extends EventEmitter {
     /**
      * 连接 Gateway
      */
-    async connect(): Promise<void> {
+    async connect(signal?: AbortSignal): Promise<void> {
+        if (this.started) return;
+        if (signal?.aborted) {
+            throw new DiscordError("Discord Gateway 启动已取消", {
+                code: "DISCORD_GATEWAY_ABORTED",
+            });
+        }
+        signal?.addEventListener("abort", () => this.disconnect(), { once: true });
+        this.started = true;
         await this.connectionManager.start();
     }
 
@@ -156,9 +118,13 @@ export class DiscordGateway extends EventEmitter {
         const wsOptions: { agent?: Agent } = {};
         if (this.proxyUrl) {
             const agent = await createProxyAgent({ url: this.proxyUrl }, true);
-            if (agent) {
-                wsOptions.agent = agent as Agent;
+            if (!agent) {
+                throw DiscordError.configuration(
+                    "Discord Gateway 代理不可用",
+                    "DISCORD_PROXY_UNAVAILABLE",
+                );
             }
+            wsOptions.agent = agent as Agent;
         }
 
         return new Promise((resolve, reject) => {
@@ -192,8 +158,10 @@ export class DiscordGateway extends EventEmitter {
                     const buffer = data as Buffer;
                     this.handleMessage(JSON.parse(buffer.toString()));
                 } catch (error) {
-                    const reason = error instanceof Error ? error : new Error(String(error));
-                    this.emit("error", reason);
+                    this.emit(
+                        "client_error",
+                        DiscordError.wrap(error, "DISCORD_GATEWAY_PAYLOAD_INVALID"),
+                    );
                 }
             });
 
@@ -203,27 +171,34 @@ export class DiscordGateway extends EventEmitter {
                 const closeReason = Buffer.isBuffer(reason)
                     ? reason.toString()
                     : String(reason ?? "");
-                const error = new Error(`WebSocket closed with code ${closeCode}`);
-                const fatal = FATAL_GATEWAY_CLOSE_CODES.has(closeCode);
+                const error = new DiscordError(
+                    `Discord Gateway 已关闭（${closeCode}${closeReason ? `：${closeReason}` : ""}）`,
+                    {
+                        code: isFatalGatewayCloseCode(closeCode)
+                            ? "DISCORD_GATEWAY_FATAL_CLOSE"
+                            : "DISCORD_GATEWAY_CLOSED",
+                    },
+                );
+                const fatal = isFatalGatewayCloseCode(closeCode);
                 if (fatal) this.connectionManager.stop();
                 this.cleanup(error);
                 this.emit("close", closeCode, closeReason);
-
-                if (!fatal) {
-                    this.connectionManager.scheduleReconnect(error);
-                }
+                if (fatal) this.emit("client_error", error);
+                else this.scheduleReconnect(error);
             });
 
             socket.on("error", (error: unknown) => {
                 if (this.ws !== socket) return;
-                const err = error instanceof Error ? error : new Error(String(error));
-                this.emit("error", err);
-                this.cleanup(err);
+                this.scheduleReconnect(DiscordError.wrap(error, "DISCORD_GATEWAY_SOCKET_ERROR"));
             });
 
             timeout = setTimeout(() => {
                 if (!settled && this.ws === socket) {
-                    this.cleanup(new Error("Gateway 连接超时"));
+                    this.scheduleReconnect(
+                        new DiscordError("Discord Gateway 连接超时", {
+                            code: "DISCORD_GATEWAY_TIMEOUT",
+                        }),
+                    );
                 }
             }, 30000);
 
@@ -246,6 +221,7 @@ export class DiscordGateway extends EventEmitter {
         switch (op) {
             case GatewayOpcodes.Hello: {
                 const helloData = d as GatewayHelloData;
+                this.heartbeatAcknowledged = true;
                 this.startHeartbeat(helloData.heartbeat_interval);
                 if (this.resumeOnHello) this.resume();
                 else this.identify();
@@ -253,7 +229,7 @@ export class DiscordGateway extends EventEmitter {
             }
 
             case GatewayOpcodes.HeartbeatAck:
-                // 心跳确认
+                this.heartbeatAcknowledged = true;
                 break;
 
             case GatewayOpcodes.Heartbeat:
@@ -261,12 +237,15 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case GatewayOpcodes.Dispatch:
-                this.handleDispatch(t!, d);
+                if (typeof t === "string") this.handleDispatch(t, d);
                 break;
 
             case GatewayOpcodes.Reconnect:
-                this.cleanup(new Error("Discord requested reconnect"));
-                this.connectionManager.scheduleReconnect(new Error("Discord requested reconnect"));
+                this.scheduleReconnect(
+                    new DiscordError("Discord 要求重新连接 Gateway", {
+                        code: "DISCORD_GATEWAY_RECONNECT_REQUESTED",
+                    }),
+                );
                 break;
 
             case GatewayOpcodes.InvalidSession: {
@@ -279,10 +258,14 @@ export class DiscordGateway extends EventEmitter {
                     }, 1000);
                 } else {
                     this.sessionId = null;
-                    this.sessionRetryTimer = setTimeout(() => {
-                        this.sessionRetryTimer = null;
-                        this.identify();
-                    }, 1000);
+                    this.sequence = null;
+                    this.sessionRetryTimer = setTimeout(
+                        () => {
+                            this.sessionRetryTimer = null;
+                            this.identify();
+                        },
+                        1_000 + Math.random() * 4_000,
+                    );
                 }
                 break;
             }
@@ -293,14 +276,17 @@ export class DiscordGateway extends EventEmitter {
      * 处理 Dispatch 事件
      */
     private handleDispatch(eventName: string, data: unknown) {
+        if (eventName === "READY") {
+            const ready = data as GatewayReadyData;
+            this.sessionId = ready.session_id;
+            this.resumeGatewayUrl = ready.resume_gateway_url;
+        }
         // 所有 Gateway Dispatch 都先走统一原始事件通道；具名事件只是便捷别名。
         // Adapter 以此保证 Discord 新增事件不会在 SDK 更新前被静默丢弃。
-        this.emit("dispatch", eventName, data);
+        this.emit("dispatch", eventName, data, this.sequence, this.sessionId);
         switch (eventName) {
             case "READY": {
                 const readyData = data as GatewayReadyData;
-                this.sessionId = readyData.session_id;
-                this.resumeGatewayUrl = readyData.resume_gateway_url;
                 this.isReady = true;
                 this.emit("connected");
                 this.emit("ready", readyData.user);
@@ -318,7 +304,7 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case "MESSAGE_UPDATE":
-                this.emit("messageUpdate", data as DiscordApiMessage);
+                this.emit("messageUpdate", data as DiscordMessageUpdateData);
                 break;
 
             case "MESSAGE_DELETE":
@@ -330,7 +316,7 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case "GUILD_DELETE":
-                this.emit("guildDelete", data as DiscordApiGuild);
+                this.emit("guildDelete", data as DiscordGuildDeleteData);
                 break;
 
             case "GUILD_MEMBER_ADD":
@@ -338,7 +324,7 @@ export class DiscordGateway extends EventEmitter {
                 break;
 
             case "GUILD_MEMBER_REMOVE":
-                this.emit("guildMemberRemove", data as DiscordApiGuildMember);
+                this.emit("guildMemberRemove", data as DiscordGuildMemberRemoveData);
                 break;
 
             case "INTERACTION_CREATE":
@@ -355,6 +341,16 @@ export class DiscordGateway extends EventEmitter {
      * 发送 Identify
      */
     private identify() {
+        const delay = Math.max(0, 5_000 - (Date.now() - this.lastIdentifyAt));
+        if (delay > 0) {
+            if (this.sessionRetryTimer) clearTimeout(this.sessionRetryTimer);
+            this.sessionRetryTimer = setTimeout(() => {
+                this.sessionRetryTimer = null;
+                this.identify();
+            }, delay);
+            return;
+        }
+        this.lastIdentifyAt = Date.now();
         this.send({
             op: GatewayOpcodes.Identify,
             d: {
@@ -365,6 +361,8 @@ export class DiscordGateway extends EventEmitter {
                     browser: "onebots-lite",
                     device: "onebots-lite",
                 },
+                presence: this.presence,
+                shard: this.shard,
             },
         });
     }
@@ -421,10 +419,19 @@ export class DiscordGateway extends EventEmitter {
      * 发送心跳
      */
     private sendHeartbeat() {
+        if (!this.heartbeatAcknowledged) {
+            this.scheduleReconnect(
+                new DiscordError("Discord Gateway 心跳确认超时", {
+                    code: "DISCORD_GATEWAY_HEARTBEAT_TIMEOUT",
+                }),
+            );
+            return;
+        }
         this.send({
             op: GatewayOpcodes.Heartbeat,
             d: this.sequence,
         });
+        this.heartbeatAcknowledged = false;
     }
 
     /**
@@ -434,6 +441,13 @@ export class DiscordGateway extends EventEmitter {
         if (this.ws && this.ws.readyState === 1) {
             this.ws.send(JSON.stringify(data));
         }
+    }
+
+    private scheduleReconnect(error: DiscordError): void {
+        this.cleanup(error);
+        this.emit("client_error", error);
+        this.emit("reconnecting", error);
+        this.connectionManager.scheduleReconnect(error);
     }
 
     /**
@@ -449,6 +463,7 @@ export class DiscordGateway extends EventEmitter {
             this.sessionRetryTimer = null;
         }
         this.isReady = false;
+        this.heartbeatAcknowledged = true;
         this.resumeOnHello = false;
 
         if (this.ws) {
@@ -464,10 +479,13 @@ export class DiscordGateway extends EventEmitter {
      * 断开连接
      */
     disconnect() {
+        this.started = false;
         this.connectionManager.stop();
         this.sessionId = null;
         this.resumeGatewayUrl = null;
-        this.cleanup(new Error("Discord Gateway 已停止"));
+        this.cleanup(
+            new DiscordError("Discord Gateway 已停止", { code: "DISCORD_GATEWAY_STOPPED" }),
+        );
     }
 
     /**

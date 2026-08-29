@@ -12,7 +12,10 @@ interface GatewayHarness {
     sequence: number | null;
     sessionId: string | null;
     resumeOnHello: boolean;
+    heartbeatAcknowledged: boolean;
+    connectionManager: { scheduleReconnect(error?: Error): void; stop(): void };
     handleMessage(payload: unknown): void;
+    sendHeartbeat(): void;
 }
 
 afterEach(() => {
@@ -21,6 +24,17 @@ afterEach(() => {
 });
 
 describe("DiscordGateway lifecycle", () => {
+    it("在网络连接前响应已取消的 AbortSignal", async () => {
+        const abort = new AbortController();
+        abort.abort();
+        const gateway = new DiscordGateway({ token: "token", intents: 1 });
+
+        await expect(gateway.connect(abort.signal)).rejects.toMatchObject({
+            name: "DiscordError",
+            code: "DISCORD_GATEWAY_ABORTED",
+        });
+    });
+
     it("HELLO 后恢复会话，并在 stop 时清除心跳与会话延迟任务", async () => {
         vi.useFakeTimers();
         vi.spyOn(Math, "random").mockReturnValue(0);
@@ -40,7 +54,9 @@ describe("DiscordGateway lifecycle", () => {
         harness.sequence = 0;
         harness.resumeOnHello = true;
         const resumed = vi.fn();
+        const dispatch = vi.fn();
         gateway.on("resumed", resumed);
+        gateway.on("dispatch", dispatch);
 
         harness.handleMessage({
             op: GatewayOpcodes.Hello,
@@ -69,8 +85,37 @@ describe("DiscordGateway lifecycle", () => {
         await vi.runAllTimersAsync();
 
         expect(resumed).toHaveBeenCalledOnce();
+        expect(dispatch).toHaveBeenCalledWith("RESUMED", {}, 1, "session");
         expect(send).toHaveBeenCalledOnce();
         expect(removeAllListeners).toHaveBeenCalledOnce();
         expect(close).toHaveBeenCalledOnce();
+    });
+
+    it("未收到上一次心跳 ACK 时立即结束旧连接并安排重连", () => {
+        const gateway = new DiscordGateway({ token: "token", intents: 1 });
+        const harness = gateway as unknown as GatewayHarness;
+        const scheduleReconnect = vi.fn();
+        const removeAllListeners = vi.fn();
+        const close = vi.fn();
+        harness.connectionManager = { scheduleReconnect, stop: vi.fn() };
+        harness.ws = {
+            readyState: 1,
+            send: vi.fn(),
+            close,
+            removeAllListeners,
+            on: vi.fn(),
+        };
+        harness.heartbeatAcknowledged = false;
+        const reconnecting = vi.fn();
+        gateway.on("reconnecting", reconnecting);
+
+        harness.sendHeartbeat();
+
+        expect(removeAllListeners).toHaveBeenCalledOnce();
+        expect(close).toHaveBeenCalledOnce();
+        expect(scheduleReconnect).toHaveBeenCalledOnce();
+        expect(reconnecting.mock.calls[0][0]).toMatchObject({
+            code: "DISCORD_GATEWAY_HEARTBEAT_TIMEOUT",
+        });
     });
 });

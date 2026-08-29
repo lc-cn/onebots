@@ -1,8 +1,3 @@
-/**
- * Discord Interactions Webhook 处理器
- * 用于 Cloudflare Workers / Vercel 等 Serverless 环境
- */
-
 import { DiscordREST } from "./rest.js";
 import type {
     DiscordInteraction,
@@ -12,6 +7,7 @@ import type {
     CreateMessageBody,
     EditMessageBody,
 } from "../types.js";
+import { DiscordError } from "../errors.js";
 
 // Interaction Types
 export enum InteractionType {
@@ -38,12 +34,35 @@ export interface InteractionWebhookOptions {
     publicKey: string;
     token: string;
     applicationId: string;
+    /** 防止已签名请求被长期重放；设为 0 可关闭时间窗校验。 */
+    maxTimestampAgeMs?: number;
+    /** 在路由处理前观察已验证的 Interaction。 */
+    onInteraction?: (interaction: DiscordInteraction) => void;
+    /** 未注册本地处理器时的响应策略。 */
+    onUnhandled?: (
+        interaction: DiscordInteraction,
+        message: string,
+    ) => DiscordInteractionResponse | Promise<DiscordInteractionResponse>;
+}
+
+export interface DiscordInteractionHttpRequest {
+    body: string;
+    signature?: string;
+    timestamp?: string;
+}
+
+export interface DiscordInteractionHttpResponse {
+    status: number;
+    headers: Readonly<Record<string, string>>;
+    body: unknown;
 }
 
 /**
  * Interaction 处理器回调函数类型
  */
-type InteractionHandler = (interaction: DiscordInteraction) => Promise<DiscordInteractionResponse>;
+export type InteractionHandler = (
+    interaction: DiscordInteraction,
+) => DiscordInteractionResponse | Promise<DiscordInteractionResponse>;
 
 /**
  * 验证 Discord Interaction 请求签名
@@ -56,12 +75,9 @@ export async function verifyInteractionSignature(
     body: string,
 ): Promise<boolean> {
     try {
-        // 将 hex 字符串转换为 Uint8Array
-        const hexToUint8Array = (hex: string) => {
-            const matches = hex.match(/.{1,2}/g);
-            return new Uint8Array(matches ? matches.map(byte => parseInt(byte, 16)) : []);
-        };
-
+        if (!/^[\da-f]{64}$/i.test(publicKey) || !/^[\da-f]{128}$/i.test(signature)) {
+            return false;
+        }
         const publicKeyBytes = hexToUint8Array(publicKey);
         const signatureBytes = hexToUint8Array(signature);
         const messageBytes = new TextEncoder().encode(timestamp + body);
@@ -87,71 +103,147 @@ export async function verifyInteractionSignature(
  */
 export class InteractionsHandler {
     private publicKey: string;
-    private token: string;
     private applicationId: string;
     private rest: DiscordREST;
     private handlers: Map<string, InteractionHandler> = new Map();
+    private readonly maxTimestampAgeMs: number;
+    private readonly onInteraction?: InteractionWebhookOptions["onInteraction"];
+    private readonly onUnhandled?: InteractionWebhookOptions["onUnhandled"];
 
     constructor(options: InteractionWebhookOptions) {
+        if (!/^[\da-f]{64}$/i.test(options.publicKey)) {
+            throw DiscordError.configuration(
+                "Discord Interaction publicKey 必须是 32 字节十六进制公钥",
+                "DISCORD_INTERACTION_PUBLIC_KEY_INVALID",
+            );
+        }
+        if (!options.token.trim() || !options.applicationId.trim()) {
+            throw DiscordError.configuration(
+                "Discord Interaction token 与 applicationId 不能为空",
+                "DISCORD_INTERACTION_CONFIG_REQUIRED",
+            );
+        }
+        if ((options.maxTimestampAgeMs ?? 300_000) < 0) {
+            throw DiscordError.configuration(
+                "maxTimestampAgeMs 不能小于 0",
+                "DISCORD_INTERACTION_TIMESTAMP_WINDOW_INVALID",
+            );
+        }
         this.publicKey = options.publicKey;
-        this.token = options.token;
         this.applicationId = options.applicationId;
         this.rest = new DiscordREST({ token: options.token });
+        this.maxTimestampAgeMs = options.maxTimestampAgeMs ?? 300_000;
+        this.onInteraction = options.onInteraction;
+        this.onUnhandled = options.onUnhandled;
     }
 
     /**
      * 注册命令处理器
      */
-    onCommand(name: string, handler: InteractionHandler) {
+    onCommand(name: string, handler: InteractionHandler): this {
         this.handlers.set(`command:${name}`, handler);
+        return this;
     }
 
     /**
      * 注册消息组件处理器
      */
-    onComponent(customId: string, handler: InteractionHandler) {
+    onComponent(customId: string, handler: InteractionHandler): this {
         this.handlers.set(`component:${customId}`, handler);
+        return this;
     }
 
     /**
      * 注册模态框提交处理器
      */
-    onModalSubmit(customId: string, handler: InteractionHandler) {
+    onModalSubmit(customId: string, handler: InteractionHandler): this {
         this.handlers.set(`modal:${customId}`, handler);
+        return this;
+    }
+
+    /** 注册应用命令自动补全处理器。 */
+    onAutocomplete(name: string, handler: InteractionHandler): this {
+        this.handlers.set(`autocomplete:${name}`, handler);
+        return this;
     }
 
     /**
      * 处理 HTTP 请求
      * 适用于 Cloudflare Workers / Vercel Edge Functions
      */
-    async handleRequest(request: Request): Promise<Response> {
-        // 验证签名
-        const signature = request.headers.get("x-signature-ed25519");
-        const timestamp = request.headers.get("x-signature-timestamp");
-        const body = await request.text();
-
-        if (!signature || !timestamp) {
-            return new Response("Missing signature", { status: 401 });
-        }
-
-        const isValid = await verifyInteractionSignature(
-            this.publicKey,
-            signature,
-            timestamp,
-            body,
-        );
-
-        if (!isValid) {
-            return new Response("Invalid signature", { status: 401 });
-        }
-
-        // 解析并处理 Interaction
-        const interaction = JSON.parse(body) as DiscordInteraction;
-        const response = await this.handleInteraction(interaction);
-
-        return new Response(JSON.stringify(response), {
-            headers: { "Content-Type": "application/json" },
+    async acceptHttp(request: Request): Promise<Response> {
+        const response = await this.ingestHttp({
+            signature: request.headers.get("x-signature-ed25519") ?? undefined,
+            timestamp: request.headers.get("x-signature-timestamp") ?? undefined,
+            body: await request.text(),
         });
+        return jsonResponse(response.status, response.body, response.headers);
+    }
+
+    /** Web Fetch API 的历史命名入口；行为与 acceptHttp 完全相同。 */
+    async handleRequest(request: Request): Promise<Response> {
+        return this.acceptHttp(request);
+    }
+
+    /** 接收任意已有 HTTP Host 提取出的原始请求数据，返回宿主无关的结构化响应。 */
+    async ingestHttp(
+        request: DiscordInteractionHttpRequest,
+    ): Promise<DiscordInteractionHttpResponse> {
+        const { signature, timestamp, body } = request;
+        if (!signature || !timestamp) return interactionHttpResponse(401, "missing_signature");
+        if (!this.isTimestampFresh(timestamp)) {
+            return interactionHttpResponse(401, "expired_signature");
+        }
+        if (!(await verifyInteractionSignature(this.publicKey, signature, timestamp, body))) {
+            return interactionHttpResponse(401, "invalid_signature");
+        }
+
+        let rawEvent: unknown;
+        try {
+            rawEvent = JSON.parse(body);
+        } catch {
+            // 外部请求体无效，直接映射为稳定的 400 响应。
+            return interactionHttpResponse(
+                400,
+                "DISCORD_INTERACTION_INVALID_JSON",
+                "Discord Interaction 请求体不是有效 JSON",
+            );
+        }
+        try {
+            return {
+                status: 200,
+                headers: JSON_HEADERS,
+                body: await this.ingest(rawEvent),
+            };
+        } catch (error) {
+            const wrapped = DiscordError.wrap(error, "DISCORD_INTERACTION_INGEST_FAILED");
+            return interactionHttpResponse(
+                wrapped.code === "DISCORD_INTERACTION_INVALID" ? 400 : 500,
+                wrapped.code,
+                wrapped.code === "DISCORD_INTERACTION_INVALID"
+                    ? wrapped.message
+                    : "Discord Interaction 处理失败",
+            );
+        }
+    }
+
+    /**
+     * 接收宿主已经验证或从既有连接获得的原始 Interaction。
+     * 此入口不创建监听端口，也不执行 HTTP 签名校验。
+     */
+    async ingest(rawEvent: unknown): Promise<DiscordInteractionResponse> {
+        if (!isDiscordInteraction(rawEvent)) {
+            throw DiscordError.invalid(
+                "Discord Interaction 缺少有效的 id、token、version 或 type",
+                "DISCORD_INTERACTION_INVALID",
+            );
+        }
+        try {
+            this.onInteraction?.(rawEvent);
+            return await this.handleInteraction(rawEvent);
+        } catch (error) {
+            throw DiscordError.wrap(error, "DISCORD_INTERACTION_HANDLER_FAILED");
+        }
     }
 
     /**
@@ -171,7 +263,7 @@ export class InteractionsHandler {
             if (handler) {
                 return handler(interaction);
             }
-            return this.defaultResponse("命令未找到");
+            return this.unhandled(interaction, "命令未找到");
         }
 
         // 消息组件
@@ -192,7 +284,7 @@ export class InteractionsHandler {
             if (handler) {
                 return handler(interaction);
             }
-            return this.defaultResponse("组件处理器未找到");
+            return this.unhandled(interaction, "组件处理器未找到");
         }
 
         // 模态框提交
@@ -201,7 +293,7 @@ export class InteractionsHandler {
             if (handler) {
                 return handler(interaction);
             }
-            return this.defaultResponse("模态框处理器未找到");
+            return this.unhandled(interaction, "模态框处理器未找到");
         }
 
         // 自动补全
@@ -216,7 +308,7 @@ export class InteractionsHandler {
             };
         }
 
-        return this.defaultResponse("未知的 Interaction 类型");
+        return this.unhandled(interaction, "未知的 Interaction 类型");
     }
 
     /**
@@ -232,6 +324,15 @@ export class InteractionsHandler {
         };
     }
 
+    private async unhandled(
+        interaction: DiscordInteraction,
+        message: string,
+    ): Promise<DiscordInteractionResponse> {
+        return this.onUnhandled
+            ? this.onUnhandled(interaction, message)
+            : this.defaultResponse(message);
+    }
+
     /**
      * 创建延迟响应
      */
@@ -240,6 +341,17 @@ export class InteractionsHandler {
             type: InteractionCallbackType.DeferredChannelMessageWithSource,
             data: ephemeral ? { flags: 64 } : {},
         };
+    }
+
+    /** 组件默认延迟更新原消息，其余交互默认延迟创建回复。 */
+    static deferUnhandled(
+        interaction: DiscordInteraction,
+        ephemeral = false,
+    ): DiscordInteractionResponse {
+        if (interaction.type === InteractionType.MessageComponent) {
+            return { type: InteractionCallbackType.DeferredUpdateMessage };
+        }
+        return InteractionsHandler.deferResponse(ephemeral);
     }
 
     /**
@@ -326,4 +438,62 @@ export class InteractionsHandler {
     async sendFollowup(interactionToken: string, content: CreateMessageBody) {
         return this.rest.createFollowupMessage(this.applicationId, interactionToken, content);
     }
+
+    private isTimestampFresh(timestamp: string): boolean {
+        if (!/^\d+$/.test(timestamp)) return false;
+        if (this.maxTimestampAgeMs === 0) return true;
+        const timestampMs = Number(timestamp) * 1000;
+        return (
+            Number.isSafeInteger(timestampMs) &&
+            Math.abs(Date.now() - timestampMs) <= this.maxTimestampAgeMs
+        );
+    }
+}
+
+function hexToUint8Array(hex: string): Uint8Array<ArrayBuffer> {
+    const bytes = new Uint8Array(new ArrayBuffer(hex.length / 2));
+    for (let index = 0; index < bytes.length; index++) {
+        bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+    }
+    return bytes;
+}
+
+function isDiscordInteraction(value: unknown): value is DiscordInteraction {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const interaction = value as Record<string, unknown>;
+    return (
+        typeof interaction.id === "string" &&
+        typeof interaction.application_id === "string" &&
+        typeof interaction.token === "string" &&
+        typeof interaction.type === "number" &&
+        Number.isInteger(interaction.type) &&
+        interaction.type >= InteractionType.Ping &&
+        interaction.type <= InteractionType.ModalSubmit &&
+        interaction.version === 1
+    );
+}
+
+const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" } as const;
+
+function interactionHttpResponse(
+    status: number,
+    error: string,
+    message?: string,
+): DiscordInteractionHttpResponse {
+    return {
+        status,
+        headers: JSON_HEADERS,
+        body: { error, ...(message ? { message } : {}) },
+    };
+}
+
+function jsonResponse(
+    status: number,
+    body: unknown,
+    headers: Readonly<Record<string, string>> = JSON_HEADERS,
+): Response {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers,
+    });
 }

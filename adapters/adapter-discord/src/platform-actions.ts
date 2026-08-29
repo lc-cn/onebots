@@ -1,5 +1,6 @@
 import type { DiscordBot } from "./bot.js";
 import { assertDiscordEndpoint } from "./lite/rest.js";
+import { DiscordError } from "./errors.js";
 
 const DISCORD_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 type DiscordMethod = (typeof DISCORD_METHODS)[number];
@@ -38,6 +39,10 @@ export const DISCORD_PLATFORM_ACTIONS = new Set([
     "kick_guild_member",
     "timeout_guild_member",
     "set_guild_member_nickname",
+    "create_interaction_response",
+    "get_original_interaction_response",
+    "edit_original_interaction_response",
+    "create_followup_message",
 ]);
 
 /** Discord v10 平台扩展动作，按官方资源边界直接映射 REST endpoint。 */
@@ -57,13 +62,15 @@ export async function executeDiscordPlatformAction(
                 method: methodValue(params.method),
                 body: optionalObject(params.body, "body"),
                 query: query(params),
+                reason: optionalString(params, "reason"),
             });
         case "ban_member":
             return bot.banMember(guildId(), userId(), {
                 deleteMessageSeconds: optionalInteger(params, "delete_message_seconds"),
+                reason: optionalString(params, "reason"),
             });
         case "unban_member":
-            return bot.unbanMember(guildId(), userId());
+            return bot.unbanMember(guildId(), userId(), optionalString(params, "reason"));
         case "get_guild_bans":
             return rest.request(`/guilds/${guildId()}/bans`, { query: query(params) });
         case "get_guild_roles":
@@ -159,18 +166,49 @@ export async function executeDiscordPlatformAction(
             return bot.kickMember(guildId(), userId(), optionalString(params, "reason"));
         case "timeout_guild_member": {
             const duration = optionalInteger(params, "duration") ?? 0;
-            return duration > 0
-                ? bot.timeoutMember(guildId(), userId(), duration)
+            const reason = optionalString(params, "reason");
+            if (duration > 0) {
+                return reason
+                    ? bot.timeoutMember(guildId(), userId(), duration, reason)
+                    : bot.timeoutMember(guildId(), userId(), duration);
+            }
+            return reason
+                ? bot.removeTimeout(guildId(), userId(), reason)
                 : bot.removeTimeout(guildId(), userId());
         }
-        case "set_guild_member_nickname":
-            return bot.setMemberNickname(
-                guildId(),
-                userId(),
-                optionalString(params, "nickname") ?? null,
+        case "set_guild_member_nickname": {
+            const args = [guildId(), userId(), optionalString(params, "nickname") ?? null] as const;
+            const reason = optionalString(params, "reason");
+            return reason ? bot.setMemberNickname(...args, reason) : bot.setMemberNickname(...args);
+        }
+        case "create_interaction_response":
+            return rest.createInteractionResponse(
+                requireSnowflake(params, "interaction_id"),
+                requireString(params, "interaction_token"),
+                requireObject(params, "response") as { type: number; data?: unknown },
+            );
+        case "get_original_interaction_response":
+            return rest.getOriginalInteractionResponse(
+                requireSnowflake(params, "application_id"),
+                requireString(params, "interaction_token"),
+            );
+        case "edit_original_interaction_response":
+            return rest.editOriginalInteractionResponse(
+                requireSnowflake(params, "application_id"),
+                requireString(params, "interaction_token"),
+                requireObject(params, "content"),
+            );
+        case "create_followup_message":
+            return rest.createFollowupMessage(
+                requireSnowflake(params, "application_id"),
+                requireString(params, "interaction_token"),
+                requireObject(params, "content"),
             );
         default:
-            throw new Error(`未实现 Discord 平台动作: ${action}`);
+            throw DiscordError.invalid(
+                `未实现 Discord 平台动作：${action}`,
+                "DISCORD_ACTION_UNSUPPORTED",
+            );
     }
 }
 
@@ -182,7 +220,7 @@ function requirePath(value: unknown): string {
 function methodValue(value: unknown): DiscordMethod {
     const method = typeof value === "string" ? value.toUpperCase() : "GET";
     if (!isDiscordMethod(method)) {
-        throw new Error("Discord 参数 method 不是受支持的 HTTP 方法");
+        throw invalidParameter("Discord 参数 method 不是受支持的 HTTP 方法");
     }
     return method;
 }
@@ -197,20 +235,22 @@ function optionalObject(
 ): Readonly<Record<string, unknown>> | undefined {
     if (value == null) return undefined;
     if (typeof value !== "object" || Array.isArray(value)) {
-        throw new Error(`Discord 参数 ${name} 必须为对象`);
+        throw invalidParameter(`Discord 参数 ${name} 必须为对象`);
     }
     return value as Readonly<Record<string, unknown>>;
 }
 
 function requireString(params: Readonly<Record<string, unknown>>, name: string): string {
     const value = params[name];
-    if (typeof value !== "string" || !value) throw new Error(`Discord 参数 ${name} 必须为字符串`);
+    if (typeof value !== "string" || !value) {
+        throw invalidParameter(`Discord 参数 ${name} 必须为字符串`);
+    }
     return value;
 }
 
 function requireSnowflake(params: Readonly<Record<string, unknown>>, name: string): string {
     const value = String(params[name] ?? "");
-    if (!/^\d+$/.test(value)) throw new Error(`Discord 参数 ${name} 必须为 Snowflake`);
+    if (!/^\d+$/.test(value)) throw invalidParameter(`Discord 参数 ${name} 必须为 Snowflake`);
     return value;
 }
 
@@ -229,11 +269,13 @@ function requireSnowflakeArray(
 ): string[] {
     const value = params[name];
     if (!Array.isArray(value) || value.length < minimum || value.length > maximum) {
-        throw new Error(`Discord 参数 ${name} 数量必须为 ${minimum}-${maximum}`);
+        throw invalidParameter(`Discord 参数 ${name} 数量必须为 ${minimum}-${maximum}`);
     }
     return value.map(item => {
         const snowflake = String(item);
-        if (!/^\d+$/.test(snowflake)) throw new Error(`Discord 参数 ${name} 包含无效 Snowflake`);
+        if (!/^\d+$/.test(snowflake)) {
+            throw invalidParameter(`Discord 参数 ${name} 包含无效 Snowflake`);
+        }
         return snowflake;
     });
 }
@@ -244,7 +286,7 @@ function requireObject(
 ): Readonly<Record<string, unknown>> {
     const value = params[name];
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        throw new Error(`Discord 参数 ${name} 必须为对象`);
+        throw invalidParameter(`Discord 参数 ${name} 必须为对象`);
     }
     return value as Readonly<Record<string, unknown>>;
 }
@@ -256,7 +298,7 @@ function optionalInteger(
     if (params[name] == null) return undefined;
     const value = Number(params[name]);
     if (!Number.isSafeInteger(value) || value < 0)
-        throw new Error(`Discord 参数 ${name} 必须为非负整数`);
+        throw invalidParameter(`Discord 参数 ${name} 必须为非负整数`);
     return value;
 }
 
@@ -266,7 +308,7 @@ function optionalString(
 ): string | undefined {
     if (params[name] == null) return undefined;
     const value = params[name];
-    if (typeof value !== "string") throw new Error(`Discord 参数 ${name} 必须为字符串`);
+    if (typeof value !== "string") throw invalidParameter(`Discord 参数 ${name} 必须为字符串`);
     return value;
 }
 
@@ -277,7 +319,7 @@ function query(params: Readonly<Record<string, unknown>>): Record<string, string
     for (const [key, value] of Object.entries(source)) {
         if (value == null) continue;
         if (!isScalar(value)) {
-            throw new Error(`Discord query 参数 ${key} 必须为标量`);
+            throw invalidParameter(`Discord query 参数 ${key} 必须为标量`);
         }
         result[key] = String(value);
     }
@@ -286,4 +328,8 @@ function query(params: Readonly<Record<string, unknown>>): Record<string, string
 
 function isScalar(value: unknown): value is string | number | boolean {
     return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+}
+
+function invalidParameter(message: string): DiscordError {
+    return DiscordError.invalid(message, "DISCORD_ACTION_PARAMS_INVALID");
 }

@@ -46,15 +46,42 @@
 
 import { EventEmitter } from "node:events";
 import { DiscordREST } from "./rest.js";
-import { DiscordGateway, GatewayIntents } from "./gateway.js";
-import { InteractionsHandler } from "./interactions.js";
-import type { DiscordApiUser, CreateMessageBody, EditMessageBody } from "../types.js";
+import type { DiscordHttpTransport } from "./rest-transport.js";
+import { DiscordGateway, GatewayIntents, type GatewayOptions } from "./gateway.js";
+import {
+    InteractionsHandler,
+    type DiscordInteractionHttpRequest,
+    type DiscordInteractionHttpResponse,
+    type InteractionWebhookOptions,
+} from "./interactions.js";
+import type {
+    CreateMessageBody,
+    DiscordApiGuild,
+    DiscordApiGuildMember,
+    DiscordApiMessage,
+    DiscordApiUser,
+    DiscordInteraction,
+    DiscordMessageDeleteData,
+    DiscordMessageUpdateData,
+    DiscordGuildDeleteData,
+    DiscordGuildMemberRemoveData,
+    EditMessageBody,
+} from "../types.js";
+import { DiscordError } from "../errors.js";
 
 // 重新导出
+export { DiscordREST, type RESTOptions } from "./rest.js";
 export {
-    DiscordREST,
-    type RESTOptions,
-} from "./rest.js";
+    DefaultDiscordHttpTransport,
+    type DiscordHttpRequest,
+    type DiscordHttpResponse,
+    type DiscordHttpTransport,
+} from "./rest-transport.js";
+export {
+    DiscordRateLimitCoordinator,
+    discordRouteKey,
+    type DiscordScheduledRequest,
+} from "./rest-rate-limit.js";
 export { buildDiscordMultipart, type DiscordMultipartBody } from "./multipart.js";
 export { DiscordGateway, GatewayIntents, GatewayOpcodes, type GatewayOptions } from "./gateway.js";
 export {
@@ -63,6 +90,9 @@ export {
     InteractionCallbackType,
     verifyInteractionSignature,
     type InteractionWebhookOptions,
+    type InteractionHandler,
+    type DiscordInteractionHttpRequest,
+    type DiscordInteractionHttpResponse,
 } from "./interactions.js";
 /**
  * 运行时类型
@@ -132,12 +162,36 @@ export interface DiscordLiteOptions {
     // Interactions 模式需要
     publicKey?: string;
     applicationId?: string;
+    presence?: GatewayOptions["presence"];
+    shard?: GatewayOptions["shard"];
+    apiBaseUrl?: string;
+    transport?: DiscordHttpTransport;
+    maxRateLimitRetries?: number;
+    unhandledInteractionHandler?: InteractionWebhookOptions["onUnhandled"];
+}
+
+export interface DiscordLiteEvents {
+    ready: [user: DiscordApiUser];
+    resumed: [];
+    stopped: [];
+    reconnecting: [error: DiscordError];
+    client_error: [error: DiscordError];
+    close: [code: number, reason: string];
+    dispatch: [eventName: string, data: unknown, sequence: number | null, sessionId: string | null];
+    messageCreate: [message: DiscordApiMessage];
+    messageUpdate: [message: DiscordMessageUpdateData];
+    messageDelete: [data: DiscordMessageDeleteData];
+    guildCreate: [guild: DiscordApiGuild];
+    guildDelete: [guild: DiscordGuildDeleteData];
+    guildMemberAdd: [member: DiscordApiGuildMember];
+    guildMemberRemove: [member: DiscordGuildMemberRemoveData];
+    interactionCreate: [interaction: DiscordInteraction];
 }
 
 /**
  * Discord Lite 统一客户端
  */
-export class DiscordLite extends EventEmitter {
+export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
     private options: DiscordLiteOptions;
     private gateway: DiscordGateway | null = null;
     private interactions: InteractionsHandler | null = null;
@@ -145,12 +199,22 @@ export class DiscordLite extends EventEmitter {
     private runtime: RuntimeType;
     private mode: "gateway" | "interactions";
     private user: DiscordApiUser | null = null;
+    private startPromise?: Promise<void>;
 
     constructor(options: DiscordLiteOptions) {
         super();
+        if (!options.token?.trim()) {
+            throw DiscordError.configuration("Discord token 不能为空", "DISCORD_TOKEN_REQUIRED");
+        }
         this.options = options;
         this.runtime = detectRuntime();
-        this.rest = new DiscordREST({ token: options.token, proxy: options.proxy });
+        this.rest = new DiscordREST({
+            token: options.token,
+            proxy: options.proxy,
+            apiBaseUrl: options.apiBaseUrl,
+            transport: options.transport,
+            maxRateLimitRetries: options.maxRateLimitRetries,
+        });
 
         // 确定运行模式
         if (options.mode === "auto" || !options.mode) {
@@ -163,13 +227,31 @@ export class DiscordLite extends EventEmitter {
     /**
      * 启动客户端（Gateway 模式）
      */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        if (this.gateway) return;
+        if (this.startPromise) return this.startPromise;
+        const start = this.startInternal(signal);
+        this.startPromise = start;
+        try {
+            await start;
+        } finally {
+            if (this.startPromise === start) this.startPromise = undefined;
+        }
+    }
+
+    private async startInternal(signal?: AbortSignal): Promise<void> {
         if (this.mode !== "gateway") {
-            throw new Error("start() 仅支持 Gateway 模式，Interactions 模式请使用 handleRequest()");
+            throw DiscordError.invalid(
+                "start() 仅支持 Gateway 模式，Interactions 模式请使用 handleRequest()",
+                "DISCORD_RECEIVE_MODE_INVALID",
+            );
         }
 
         if (!supportsGateway()) {
-            throw new Error(`当前运行时 ${this.runtime} 不支持 Gateway 模式`);
+            throw DiscordError.configuration(
+                `当前运行时 ${this.runtime} 不支持 Gateway 模式`,
+                "DISCORD_GATEWAY_RUNTIME_UNSUPPORTED",
+            );
         }
 
         const intents =
@@ -183,35 +265,34 @@ export class DiscordLite extends EventEmitter {
             token: this.options.token,
             intents,
             proxy: this.options.proxy,
+            presence: this.options.presence,
+            shard: this.options.shard,
         });
 
         // 转发事件
-        this.gateway.on("ready", (user: unknown) => {
-            this.user = user as DiscordApiUser;
+        this.gateway.on("ready", user => {
+            this.user = user;
             this.emit("ready", user);
         });
-
-        this.gateway.on("messageCreate", (message: unknown) => this.emit("messageCreate", message));
-        this.gateway.on("messageUpdate", (message: unknown) => this.emit("messageUpdate", message));
-        this.gateway.on("messageDelete", (data: unknown) => this.emit("messageDelete", data));
-        this.gateway.on("guildCreate", (guild: unknown) => this.emit("guildCreate", guild));
-        this.gateway.on("guildDelete", (guild: unknown) => this.emit("guildDelete", guild));
-        this.gateway.on("guildMemberAdd", (member: unknown) => this.emit("guildMemberAdd", member));
-        this.gateway.on("guildMemberRemove", (member: unknown) =>
-            this.emit("guildMemberRemove", member),
-        );
-        this.gateway.on("interactionCreate", (interaction: unknown) =>
+        this.gateway.on("resumed", () => this.emit("resumed"));
+        this.gateway.on("messageCreate", message => this.emit("messageCreate", message));
+        this.gateway.on("messageUpdate", message => this.emit("messageUpdate", message));
+        this.gateway.on("messageDelete", data => this.emit("messageDelete", data));
+        this.gateway.on("guildCreate", guild => this.emit("guildCreate", guild));
+        this.gateway.on("guildDelete", guild => this.emit("guildDelete", guild));
+        this.gateway.on("guildMemberAdd", member => this.emit("guildMemberAdd", member));
+        this.gateway.on("guildMemberRemove", member => this.emit("guildMemberRemove", member));
+        this.gateway.on("interactionCreate", interaction =>
             this.emit("interactionCreate", interaction),
         );
-        this.gateway.on("dispatch", (event: unknown, data: unknown) =>
-            this.emit("dispatch", event, data),
+        this.gateway.on("dispatch", (event, data, sequence, sessionId) =>
+            this.emit("dispatch", event, data, sequence, sessionId),
         );
-        this.gateway.on("error", (error: unknown) => this.emit("error", error));
-        this.gateway.on("close", (code: unknown, reason: unknown) =>
-            this.emit("close", code, reason),
-        );
+        this.gateway.on("client_error", error => this.emit("client_error", error));
+        this.gateway.on("reconnecting", error => this.emit("reconnecting", error));
+        this.gateway.on("close", (code, reason) => this.emit("close", code, reason));
 
-        await this.gateway.connect();
+        await this.gateway.connect(signal);
     }
 
     /**
@@ -221,6 +302,8 @@ export class DiscordLite extends EventEmitter {
         if (this.gateway) {
             this.gateway.disconnect();
             this.gateway = null;
+            this.user = null;
+            this.emit("stopped");
         }
     }
 
@@ -228,14 +311,23 @@ export class DiscordLite extends EventEmitter {
      * 初始化 Interactions 处理器
      */
     initInteractions(): InteractionsHandler {
+        if (this.interactions) return this.interactions;
         if (!this.options.publicKey || !this.options.applicationId) {
-            throw new Error("Interactions 模式需要 publicKey 和 applicationId");
+            throw DiscordError.configuration(
+                "Interactions 模式需要 publicKey 和 applicationId",
+                "DISCORD_INTERACTION_CONFIG_REQUIRED",
+            );
         }
 
         this.interactions = new InteractionsHandler({
             publicKey: this.options.publicKey,
             token: this.options.token,
             applicationId: this.options.applicationId,
+            onInteraction: interaction => {
+                this.emit("interactionCreate", interaction);
+                this.emit("dispatch", "INTERACTION_CREATE", interaction, null, null);
+            },
+            onUnhandled: this.options.unhandledInteractionHandler,
         });
 
         return this.interactions;
@@ -249,6 +341,18 @@ export class DiscordLite extends EventEmitter {
             this.initInteractions();
         }
         return this.interactions!.handleRequest(request);
+    }
+
+    /** 将已有连接取得的 Interaction 交给同一个客户端。 */
+    async ingestInteraction(rawEvent: unknown) {
+        return this.initInteractions().ingest(rawEvent);
+    }
+
+    /** 供 Koa、Hono 等已有 HTTP Host 复用的结构化入站接口。 */
+    async ingestInteractionHttp(
+        request: DiscordInteractionHttpRequest,
+    ): Promise<DiscordInteractionHttpResponse> {
+        return this.initInteractions().ingestHttp(request);
     }
 
     /**

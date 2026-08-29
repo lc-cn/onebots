@@ -11,12 +11,14 @@ describe("executeDiscordPlatformAction", () => {
             method: "post",
             query: { with_localizations: true },
             body: { name: "ping" },
+            reason: "sync commands",
         });
 
         expect(request).toHaveBeenCalledWith("/applications/1/commands", {
             method: "POST",
             query: { with_localizations: "true" },
             body: { name: "ping" },
+            reason: "sync commands",
         });
     });
 
@@ -98,5 +100,29 @@ describe("executeDiscordPlatformAction", () => {
         expect(kickMember).toHaveBeenCalledWith("100", "42", "spam");
         expect(timeoutMember).toHaveBeenCalledWith("100", "42", 60);
         expect(setMemberNickname).toHaveBeenCalledWith("100", "42", "Alice");
+    });
+
+    it("提供 Interaction 原始回复与 followup 的显式动作", async () => {
+        const editOriginalInteractionResponse = vi.fn().mockResolvedValue({ id: "3" });
+        const createFollowupMessage = vi.fn().mockResolvedValue({ id: "4" });
+        const bot = {
+            getREST: () => ({ editOriginalInteractionResponse, createFollowupMessage }),
+        } as never;
+
+        await executeDiscordPlatformAction(bot, "edit_original_interaction_response", {
+            application_id: "1",
+            interaction_token: "token",
+            content: { content: "done" },
+        });
+        await executeDiscordPlatformAction(bot, "create_followup_message", {
+            application_id: "1",
+            interaction_token: "token",
+            content: { content: "next" },
+        });
+
+        expect(editOriginalInteractionResponse).toHaveBeenCalledWith("1", "token", {
+            content: "done",
+        });
+        expect(createFollowupMessage).toHaveBeenCalledWith("1", "token", { content: "next" });
     });
 });
