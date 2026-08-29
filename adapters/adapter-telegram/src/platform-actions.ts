@@ -1,20 +1,87 @@
 import type { Bot } from "grammy";
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { TelegramBot } from "./bot.js";
 import { TelegramError } from "./errors.js";
 
-export const TELEGRAM_PLATFORM_ACTIONS = new Set([
-    "call_telegram_api",
-    "send_poll",
-    "forward_message",
-    "copy_message",
-    "set_message_reaction",
-    "pin_message",
-    "unpin_message",
-    "create_chat_invite_link",
-    "set_chat_description",
-    "get_chat_administrators",
-    "get_chat_member_count",
-]);
+type TelegramApiHandler = (
+    api: Bot["api"],
+    params: Readonly<Record<string, unknown>>,
+) => Promise<unknown>;
+
+const ACTION_HANDLERS = {
+    call_telegram_api: (bot, params) => {
+        const methodName = requireMethod(params.method);
+        return bot.callApi(methodName, () => callRawApi(bot.getBot().api, methodName, params));
+    },
+    send_poll: telegramAction("sendPoll", (api, params) =>
+        api.sendPoll(
+            requireStringOrNumber(params, "chat_id"),
+            requireString(params, "question"),
+            requireStringArray(params, "options"),
+            params.options_config as never,
+        ),
+    ),
+    forward_message: telegramAction("forwardMessage", (api, params) =>
+        api.forwardMessage(
+            requireStringOrNumber(params, "chat_id"),
+            requireStringOrNumber(params, "from_chat_id"),
+            requireInteger(params, "message_id"),
+            params.options as never,
+        ),
+    ),
+    copy_message: telegramAction("copyMessage", (api, params) =>
+        api.copyMessage(
+            requireStringOrNumber(params, "chat_id"),
+            requireStringOrNumber(params, "from_chat_id"),
+            requireInteger(params, "message_id"),
+            params.options as never,
+        ),
+    ),
+    set_message_reaction: telegramAction("setMessageReaction", (api, params) =>
+        api.setMessageReaction(
+            requireStringOrNumber(params, "chat_id"),
+            requireInteger(params, "message_id"),
+            requireStringArray(params, "reactions").map(emoji => ({
+                type: "emoji" as const,
+                emoji,
+            })) as never,
+        ),
+    ),
+    pin_message: telegramAction("pinChatMessage", (api, params) =>
+        api.pinChatMessage(
+            requireStringOrNumber(params, "chat_id"),
+            requireInteger(params, "message_id"),
+            { disable_notification: params.disable_notification === true },
+        ),
+    ),
+    unpin_message: telegramAction("unpinChatMessage", (api, params) =>
+        api.unpinChatMessage(
+            requireStringOrNumber(params, "chat_id"),
+            params.message_id == null ? undefined : requireInteger(params, "message_id"),
+        ),
+    ),
+    create_chat_invite_link: telegramAction("createChatInviteLink", (api, params) =>
+        api.createChatInviteLink(requireStringOrNumber(params, "chat_id"), params.options as never),
+    ),
+    set_chat_description: telegramAction("setChatDescription", (api, params) =>
+        api.setChatDescription(
+            requireStringOrNumber(params, "chat_id"),
+            requireString(params, "description"),
+        ),
+    ),
+    get_chat_administrators: telegramAction("getChatAdministrators", (api, params) =>
+        api.getChatAdministrators(requireStringOrNumber(params, "chat_id")),
+    ),
+    get_chat_member_count: telegramAction("getChatMemberCount", (api, params) =>
+        api.getChatMemberCount(requireStringOrNumber(params, "chat_id")),
+    ),
+} satisfies Readonly<Record<string, PlatformActionHandler<TelegramBot>>>;
+
+const PLATFORM_ACTIONS = definePlatformActions(ACTION_HANDLERS, action =>
+    TelegramError.invalid(`未实现 Telegram 平台动作: ${action}`, "TELEGRAM_ACTION_UNSUPPORTED"),
+);
+
+export const TELEGRAM_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** Telegram 专属动作均使用一个参数对象，供所有协议统一转发。 */
 export async function executeTelegramPlatformAction(
@@ -22,102 +89,31 @@ export async function executeTelegramPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    const method = telegramMethodName(action, params);
-    return bot.callApi(method, () => executeTelegramApi(bot.getBot().api, action, params));
+    return PLATFORM_ACTIONS.execute(bot, action, params);
 }
 
-const TELEGRAM_ACTION_METHODS: Readonly<Record<string, string>> = {
-    send_poll: "sendPoll",
-    forward_message: "forwardMessage",
-    copy_message: "copyMessage",
-    set_message_reaction: "setMessageReaction",
-    pin_message: "pinChatMessage",
-    unpin_message: "unpinChatMessage",
-    create_chat_invite_link: "createChatInviteLink",
-    set_chat_description: "setChatDescription",
-    get_chat_administrators: "getChatAdministrators",
-    get_chat_member_count: "getChatMemberCount",
-};
-
-function telegramMethodName(action: string, params: Readonly<Record<string, unknown>>): string {
-    return action === "call_telegram_api"
-        ? requireMethod(params.method)
-        : (TELEGRAM_ACTION_METHODS[action] ?? action);
+function telegramAction(
+    method: string,
+    handler: TelegramApiHandler,
+): PlatformActionHandler<TelegramBot> {
+    return (bot, params) => bot.callApi(method, () => handler(bot.getBot().api, params));
 }
 
-async function executeTelegramApi(
+function callRawApi(
     api: Bot["api"],
-    action: string,
+    methodName: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    if (action === "call_telegram_api") {
-        const methodName = requireMethod(params.method);
-        const raw = api.raw as unknown as Readonly<Record<string, unknown>>;
-        const method = raw[methodName];
-        if (typeof method !== "function") {
-            throw TelegramError.invalid(
-                `Telegram Bot API 方法不存在: ${methodName}`,
-                "TELEGRAM_API_METHOD_NOT_FOUND",
-            );
-        }
-        const payload = optionalObject(params.params, "params");
-        return Reflect.apply(method, raw, payload ? [payload] : []);
+    const raw = api.raw as unknown as Readonly<Record<string, unknown>>;
+    const method = raw[methodName];
+    if (typeof method !== "function") {
+        throw TelegramError.invalid(
+            `Telegram Bot API 方法不存在: ${methodName}`,
+            "TELEGRAM_API_METHOD_NOT_FOUND",
+        );
     }
-    const chatId = requireStringOrNumber(params, "chat_id");
-    switch (action) {
-        case "send_poll":
-            return api.sendPoll(
-                chatId,
-                requireString(params, "question"),
-                requireStringArray(params, "options"),
-                params.options_config as never,
-            );
-        case "forward_message":
-            return api.forwardMessage(
-                chatId,
-                requireStringOrNumber(params, "from_chat_id"),
-                requireInteger(params, "message_id"),
-                params.options as never,
-            );
-        case "copy_message":
-            return api.copyMessage(
-                chatId,
-                requireStringOrNumber(params, "from_chat_id"),
-                requireInteger(params, "message_id"),
-                params.options as never,
-            );
-        case "set_message_reaction":
-            return api.setMessageReaction(
-                chatId,
-                requireInteger(params, "message_id"),
-                requireStringArray(params, "reactions").map(emoji => ({
-                    type: "emoji" as const,
-                    emoji,
-                })) as never,
-            );
-        case "pin_message":
-            return api.pinChatMessage(chatId, requireInteger(params, "message_id"), {
-                disable_notification: params.disable_notification === true,
-            });
-        case "unpin_message":
-            return api.unpinChatMessage(
-                chatId,
-                params.message_id == null ? undefined : requireInteger(params, "message_id"),
-            );
-        case "create_chat_invite_link":
-            return api.createChatInviteLink(chatId, params.options as never);
-        case "set_chat_description":
-            return api.setChatDescription(chatId, requireString(params, "description"));
-        case "get_chat_administrators":
-            return api.getChatAdministrators(chatId);
-        case "get_chat_member_count":
-            return api.getChatMemberCount(chatId);
-        default:
-            throw TelegramError.invalid(
-                `未实现 Telegram 平台动作: ${action}`,
-                "TELEGRAM_ACTION_UNSUPPORTED",
-            );
-    }
+    const payload = optionalObject(params.params, "params");
+    return Reflect.apply(method, raw, payload ? [payload] : []);
 }
 
 function requireMethod(value: unknown): string {

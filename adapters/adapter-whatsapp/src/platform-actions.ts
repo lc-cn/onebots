@@ -1,28 +1,92 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import { WhatsAppApiError } from "./errors.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
-export const WHATSAPP_PLATFORM_ACTIONS = new Set([
-    "whatsapp_call",
-    "send_native_message",
-    "mark_message_read",
-    "get_phone_number_info",
-    "get_business_profile",
-    "update_business_profile",
-    "upload_media",
-    "get_media",
-    "download_media",
-    "delete_media",
-    "register_phone_number",
-    "deregister_phone_number",
-    "set_two_step_verification",
-    "block_user",
-    "unblock_user",
-    "list_blocked_users",
-    "list_message_templates",
-    "create_message_template",
-    "delete_message_template",
-]);
+const ACTION_HANDLERS = {
+    whatsapp_call: (client, params) => client.call(callOptions(params)),
+    send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
+    mark_message_read: (client, params) =>
+        client.markMessageRead(
+            requireString(params, "message_id"),
+            optionalBoolean(params, "typing_indicator") || false,
+        ),
+    get_phone_number_info: client => client.getPhoneNumberInfo(),
+    get_business_profile: (client, params) =>
+        client.getBusinessProfile(optionalString(params, "fields")),
+    update_business_profile: (client, params) =>
+        client.updateBusinessProfile(requireRecord(params, "profile")),
+    upload_media: (client, params) => uploadMedia(client, params),
+    get_media: (client, params) => client.getMedia(requireString(params, "media_id")),
+    download_media: async (client, params) => {
+        const info = await client.getMedia(requireString(params, "media_id"));
+        const data = await client.downloadMediaFrom(info);
+        return { ...info, data: data.toString("base64") };
+    },
+    delete_media: (client, params) => client.deleteMedia(requireString(params, "media_id")),
+    register_phone_number: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: `${client.config.phone_number_id}/register`,
+            body: { messaging_product: "whatsapp", pin: requirePin(params) },
+        }),
+    deregister_phone_number: client =>
+        client.call({
+            method: "POST",
+            resource: `${client.config.phone_number_id}/deregister`,
+            body: { messaging_product: "whatsapp" },
+        }),
+    set_two_step_verification: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: client.config.phone_number_id,
+            body: { pin: requirePin(params) },
+        }),
+    block_user: (client, params) => blockedUser(client, "POST", params),
+    unblock_user: (client, params) => blockedUser(client, "DELETE", params),
+    list_blocked_users: (client, params) =>
+        client.call({
+            resource: `${client.config.phone_number_id}/block_users`,
+            query: {
+                limit: optionalNumber(params, "limit"),
+                after: optionalString(params, "after"),
+            },
+        }),
+    list_message_templates: (client, params) =>
+        client.call({
+            resource: `${client.config.business_account_id}/message_templates`,
+            query: {
+                fields: optionalString(params, "fields"),
+                limit: optionalNumber(params, "limit"),
+                after: optionalString(params, "after"),
+            },
+        }),
+    create_message_template: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: `${client.config.business_account_id}/message_templates`,
+            body: requireRecord(params, "template"),
+        }),
+    delete_message_template: (client, params) =>
+        client.call({
+            method: "DELETE",
+            resource: `${client.config.business_account_id}/message_templates`,
+            query: {
+                name: requireString(params, "name"),
+                hsm_id: optionalString(params, "template_id"),
+            },
+        }),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+const PLATFORM_ACTIONS = definePlatformActions(
+    ACTION_HANDLERS,
+    action =>
+        new WhatsAppApiError(`未知 WhatsApp 平台动作: ${action}`, {
+            code: "WHATSAPP_UNKNOWN_ACTION",
+        }),
+);
+
+export const WHATSAPP_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** 显式暴露常用 Cloud API，并以 whatsapp_call 覆盖新增 Graph API。 */
 export async function executeWhatsAppPlatformAction(
@@ -30,96 +94,7 @@ export async function executeWhatsAppPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    switch (action) {
-        case "whatsapp_call":
-            return client.call(callOptions(params));
-        case "send_native_message":
-            return client.sendMessage(nativeMessage(params));
-        case "mark_message_read":
-            return client.markMessageRead(
-                requireString(params, "message_id"),
-                optionalBoolean(params, "typing_indicator") || false,
-            );
-        case "get_phone_number_info":
-            return client.getPhoneNumberInfo();
-        case "get_business_profile":
-            return client.getBusinessProfile(optionalString(params, "fields"));
-        case "update_business_profile":
-            return client.updateBusinessProfile(requireRecord(params, "profile"));
-        case "upload_media":
-            return uploadMedia(client, params);
-        case "get_media":
-            return client.getMedia(requireString(params, "media_id"));
-        case "download_media": {
-            const mediaId = requireString(params, "media_id");
-            const info = await client.getMedia(mediaId);
-            const data = await client.downloadMediaFrom(info);
-            return { ...info, data: data.toString("base64") };
-        }
-        case "delete_media":
-            return client.deleteMedia(requireString(params, "media_id"));
-        case "register_phone_number":
-            return client.call({
-                method: "POST",
-                resource: `${client.config.phone_number_id}/register`,
-                body: {
-                    messaging_product: "whatsapp",
-                    pin: requirePin(params),
-                },
-            });
-        case "deregister_phone_number":
-            return client.call({
-                method: "POST",
-                resource: `${client.config.phone_number_id}/deregister`,
-                body: { messaging_product: "whatsapp" },
-            });
-        case "set_two_step_verification":
-            return client.call({
-                method: "POST",
-                resource: `${client.config.phone_number_id}`,
-                body: { pin: requirePin(params) },
-            });
-        case "block_user":
-            return blockedUser(client, "POST", params);
-        case "unblock_user":
-            return blockedUser(client, "DELETE", params);
-        case "list_blocked_users":
-            return client.call({
-                resource: `${client.config.phone_number_id}/block_users`,
-                query: {
-                    limit: optionalNumber(params, "limit"),
-                    after: optionalString(params, "after"),
-                },
-            });
-        case "list_message_templates":
-            return client.call({
-                resource: `${client.config.business_account_id}/message_templates`,
-                query: {
-                    fields: optionalString(params, "fields"),
-                    limit: optionalNumber(params, "limit"),
-                    after: optionalString(params, "after"),
-                },
-            });
-        case "create_message_template":
-            return client.call({
-                method: "POST",
-                resource: `${client.config.business_account_id}/message_templates`,
-                body: requireRecord(params, "template"),
-            });
-        case "delete_message_template":
-            return client.call({
-                method: "DELETE",
-                resource: `${client.config.business_account_id}/message_templates`,
-                query: {
-                    name: requireString(params, "name"),
-                    hsm_id: optionalString(params, "template_id"),
-                },
-            });
-        default:
-            throw new WhatsAppApiError(`未知 WhatsApp 平台动作: ${action}`, {
-                code: "WHATSAPP_UNKNOWN_ACTION",
-            });
-    }
+    return PLATFORM_ACTIONS.execute(client, action, params);
 }
 
 function callOptions(params: Readonly<Record<string, unknown>>): WhatsAppCallOptions {
