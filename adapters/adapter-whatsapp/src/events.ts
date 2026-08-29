@@ -100,7 +100,7 @@ export function projectMessageContent(message: WhatsAppMessageEvent): CommonType
         segments.push({ type: "reaction", data: message.reaction });
     } else if (message.interactive || message.button) {
         segments.push({
-            type: "interaction",
+            type: "interactive",
             data: { interactive: message.interactive, button: message.button },
         });
     } else {

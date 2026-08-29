@@ -53,11 +53,31 @@ export const whatsAppCapabilities: AdapterCapabilityManifest = defineAdapterCapa
     segments: {
         text: { support: "native", direction: "both" },
         reply: { support: "native", direction: "both" },
-        image: { support: "native", direction: "both" },
-        video: { support: "native", direction: "both" },
-        audio: { support: "native", direction: "both" },
-        file: { support: "native", direction: "both" },
-        sticker: { support: "native", direction: "both" },
+        image: {
+            support: "native",
+            direction: "both",
+            note: "media_id/HTTPS 直发，本地、HTTP 与 Base64 自动上传",
+        },
+        video: {
+            support: "native",
+            direction: "both",
+            note: "media_id/HTTPS 直发，本地、HTTP 与 Base64 自动上传",
+        },
+        audio: {
+            support: "native",
+            direction: "both",
+            note: "media_id/HTTPS 直发，本地、HTTP 与 Base64 自动上传",
+        },
+        file: {
+            support: "native",
+            direction: "both",
+            note: "media_id/HTTPS 直发，本地、HTTP 与 Base64 自动上传",
+        },
+        sticker: {
+            support: "native",
+            direction: "both",
+            note: "media_id/HTTPS 直发，本地、HTTP 与 Base64 自动上传",
+        },
         location: { support: "native", direction: "both" },
         contacts: { support: "native", direction: "both" },
         reaction: { support: "native", direction: "both" },

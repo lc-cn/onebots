@@ -34,9 +34,10 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
             );
         }
         const client = this.requireClient(uin);
-        const messages = compileWhatsAppMessages(
+        const messages = await compileWhatsAppMessages(
             this.coerceId(params.scene_id).string,
             params.message,
+            client,
         );
         let firstMessageId: string | undefined;
         for (const message of messages) {
@@ -87,12 +88,12 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
         return WHATSAPP_PLATFORM_ACTIONS.has(action);
     }
 
-    async getVersion(): Promise<Adapter.VersionInfo> {
+    async getVersion(uin: string): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots WhatsApp Adapter",
             app_version: await readPackageVersion(import.meta.url),
-            impl: "WhatsApp Cloud API",
-            version: "Graph API",
+            impl: "Meta WhatsApp Cloud API",
+            version: this.requireClient(uin).apiVersion,
         };
     }
 
