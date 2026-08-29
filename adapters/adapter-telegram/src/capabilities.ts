@@ -18,10 +18,6 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
             permissions: ["can_change_info"],
         },
         leave_group: { support: "native" },
-        get_group_member_list: {
-            support: "emulated",
-            note: "Bot API 只能枚举管理员，结果不是完整成员列表",
-        },
         get_group_member_info: { support: "native" },
         kick_group_member: {
             support: "native",
@@ -78,6 +74,8 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
             availability: "permission",
             permissions: ["can_change_info"],
         },
+        get_chat_administrators: { support: "native" },
+        get_chat_member_count: { support: "native" },
         get_version: { support: "native" },
         get_status: { support: "native" },
         get_supported_actions: { support: "native" },

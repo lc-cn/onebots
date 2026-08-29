@@ -10,6 +10,8 @@ export const TELEGRAM_PLATFORM_ACTIONS = new Set([
     "unpin_message",
     "create_chat_invite_link",
     "set_chat_description",
+    "get_chat_administrators",
+    "get_chat_member_count",
 ]);
 
 /** Telegram 专属动作均使用一个参数对象，供所有协议统一转发。 */
@@ -73,6 +75,10 @@ export async function executeTelegramPlatformAction(
             return api.createChatInviteLink(chatId, params.options as never);
         case "set_chat_description":
             return api.setChatDescription(chatId, requireString(params, "description"));
+        case "get_chat_administrators":
+            return api.getChatAdministrators(chatId);
+        case "get_chat_member_count":
+            return api.getChatMemberCount(chatId);
         default:
             throw new Error(`未实现 Telegram 平台动作: ${action}`);
     }

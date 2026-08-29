@@ -138,29 +138,6 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     }
 
     /**
-     * 获取群成员列表
-     */
-    async getGroupMemberList(
-        uin: string,
-        params: Adapter.GetGroupMemberListParams,
-    ): Promise<Adapter.GroupMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const chatId = params.group_id.string;
-        const administrators = await bot.getChatAdministrators(chatId);
-
-        return administrators.map(admin => ({
-            group_id: params.group_id,
-            user_id: this.createId(admin.user.id.toString()),
-            user_name: admin.user.username || "",
-            card: admin.user.first_name || "",
-            role: admin.status === "creator" ? "owner" : "admin",
-        }));
-    }
-
-    /**
      * 获取群成员信息
      */
     async getGroupMemberInfo(
@@ -200,6 +177,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         const chatId = params.group_id.string;
         const userId = parseInt(params.user_id.string);
         await bot.banChatMember(chatId, userId);
+        if (!params.reject_add_request) await bot.unbanChatMember(chatId, userId);
     }
 
     async muteGroupMember(uin: string, params: Adapter.MuteGroupMemberParams): Promise<void> {

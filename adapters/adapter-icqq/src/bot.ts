@@ -226,9 +226,7 @@ export class ICQQBot extends EventEmitter {
         return this.client.getMsg(messageId);
     }
 
-    // ============================================
     // 好友 API
-    // ============================================
 
     /**
      * 获取好友列表

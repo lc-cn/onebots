@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Bot } from "grammy";
-import {
-    executeTelegramPlatformAction,
-    TELEGRAM_PLATFORM_ACTIONS,
-} from "./platform-actions.js";
+import { executeTelegramPlatformAction, TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 describe("Telegram 平台扩展动作", () => {
     it("将强类型快捷动作转发给 Telegram Bot API", async () => {
@@ -62,5 +59,18 @@ describe("Telegram 平台扩展动作", () => {
 
     it("将原生入口纳入统一能力集合", () => {
         expect(TELEGRAM_PLATFORM_ACTIONS.has("call_telegram_api")).toBe(true);
+    });
+
+    it("以明确动作公开管理员目录与成员总数", async () => {
+        const getChatAdministrators = vi.fn().mockResolvedValue([{ status: "creator" }]);
+        const getChatMemberCount = vi.fn().mockResolvedValue(42);
+        const api = { getChatAdministrators, getChatMemberCount } as unknown as Bot["api"];
+
+        await expect(
+            executeTelegramPlatformAction(api, "get_chat_administrators", { chat_id: -100 }),
+        ).resolves.toEqual([{ status: "creator" }]);
+        await expect(
+            executeTelegramPlatformAction(api, "get_chat_member_count", { chat_id: -100 }),
+        ).resolves.toBe(42);
     });
 });
