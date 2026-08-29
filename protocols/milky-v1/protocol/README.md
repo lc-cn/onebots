@@ -188,8 +188,8 @@ onebots 主动连接到配置的 WebSocket 地址。
 - `set_group_avatar` - 设置群头像
 - `set_group_whole_mute` - 设置全员禁言
 - `send_group_announcement` - 发送群公告
-- `set_group_essence_message` / `delete_group_essence_message` - 管理精华消息
-- `send_group_message_reaction` - 发送群消息表态
+- `set_group_essence_message` - 通过 `is_set` 设置或取消精华消息
+- `send_group_message_reaction` - 通过 `reaction`、`reaction_type`、`is_add` 添加或删除群消息表态
 
 邀请好友入群：
 

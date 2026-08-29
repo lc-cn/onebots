@@ -279,7 +279,13 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         if (message.group_id !== this.numericId(params.group_id.string, "group_id")) {
             throw new TypeError("消息不属于指定群");
         }
-        await client.pickGroup(message.group_id).setReaction(message.seq, String(params.face_id));
+        const group = client.pickGroup(message.group_id);
+        const reactionType = params.reaction_type === "face" ? 1 : 2;
+        if (params.is_add) {
+            await group.setReaction(message.seq, params.reaction, reactionType);
+        } else {
+            await group.delReaction(message.seq, params.reaction, reactionType);
+        }
     }
 
     async sendGroupAnnouncement(

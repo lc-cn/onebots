@@ -752,7 +752,7 @@ describe('Milky V1 - 群聊 API', () => {
 
     const { status, data } = await callMilkyAPI(CONFIG, 'set_group_avatar', {
       group_id: 123456789,
-      file: 'base64://...'  // 实际应该是 base64 图片数据
+      image_uri: 'base64://...'  // 实际应该是 base64 图片数据
     });
 
     if (status === 200) {
@@ -796,8 +796,7 @@ describe('Milky V1 - 群聊 API', () => {
     const { status, data } = await callMilkyAPI(CONFIG, 'set_group_member_special_title', {
       group_id: 123456789,
       user_id: 987654321,
-      special_title: 'VIP',
-      duration: -1  // -1 表示永久
+      special_title: 'VIP'
     });
 
     if (status === 200) {
@@ -819,7 +818,7 @@ describe('Milky V1 - 群聊 API', () => {
     const { status, data } = await callMilkyAPI(CONFIG, 'set_group_member_admin', {
       group_id: 123456789,
       user_id: 987654321,
-      enable: true
+      is_set: true
     });
 
     if (status === 200) {
@@ -840,7 +839,7 @@ describe('Milky V1 - 群聊 API', () => {
 
     const { status, data } = await callMilkyAPI(CONFIG, 'set_group_whole_mute', {
       group_id: 123456789,
-      enable: false
+      is_mute: false
     });
 
     if (status === 200) {
@@ -947,7 +946,8 @@ describe('Milky V1 - 群聊 API', () => {
 
     const { status, data } = await callMilkyAPI(CONFIG, 'set_group_essence_message', {
       group_id: 123456789,
-      message_seq: 1
+      message_seq: 1,
+      is_set: true
     });
 
     if (status === 200) {
@@ -960,23 +960,24 @@ describe('Milky V1 - 群聊 API', () => {
     }
   });
 
-  test('delete_group_essence_message - 删除精华消息', async () => {
+  test('set_group_essence_message - 取消精华消息', async () => {
     if (!serverAvailable) {
       console.log('⏭️  跳过测试：服务器不可用');
       return;
     }
 
-    const { status, data } = await callMilkyAPI(CONFIG, 'delete_group_essence_message', {
+    const { status, data } = await callMilkyAPI(CONFIG, 'set_group_essence_message', {
       group_id: 123456789,
-      message_seq: 1
+      message_seq: 1,
+      is_set: false
     });
 
     if (status === 200) {
       if (data.status === 'ok') {
-        console.log('✅ delete_group_essence_message 成功');
+        console.log('✅ 取消精华消息成功');
       } else {
-        console.log('⚠️  delete_group_essence_message 失败:', data.message);
-        unsupportedApis.push('delete_group_essence_message - ' + data.message);
+        console.log('⚠️  取消精华消息失败:', data.message);
+        unsupportedApis.push('set_group_essence_message(is_set=false) - ' + data.message);
       }
     }
   });
@@ -988,8 +989,7 @@ describe('Milky V1 - 群聊 API', () => {
     }
 
     const { status, data } = await callMilkyAPI(CONFIG, 'quit_group', {
-      group_id: 123456789,
-      is_dismiss: false
+      group_id: 123456789
     });
 
     if (status === 200) {
@@ -1011,7 +1011,9 @@ describe('Milky V1 - 群聊 API', () => {
     const { status, data } = await callMilkyAPI(CONFIG, 'send_group_message_reaction', {
       group_id: 123456789,
       message_seq: 1,
-      face_id: 1  // 表情 ID
+      reaction: '14',
+      reaction_type: 'face',
+      is_add: true
     });
 
     if (status === 200) {

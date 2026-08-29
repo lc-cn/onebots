@@ -181,10 +181,14 @@ export abstract class DiscordGuildActions extends DiscordMessageActions {
             params.message_id as CommonTypes.Id | string | number,
         ).string;
 
-        // Discord 使用 Unicode emoji 或自定义 emoji 格式
-        const emoji = String.fromCodePoint(params.face_id);
-
-        await bot.addReaction(channelId, messageId, emoji);
+        if (params.reaction_type !== "emoji") {
+            throw new TypeError("Discord 只支持 emoji 类型的消息回应");
+        }
+        if (params.is_add) {
+            await bot.addReaction(channelId, messageId, params.reaction);
+        } else {
+            await bot.removeReaction(channelId, messageId, params.reaction);
+        }
     }
 
     // 辅助方法

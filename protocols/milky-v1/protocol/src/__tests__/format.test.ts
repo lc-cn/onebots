@@ -107,8 +107,12 @@ function createProtocol() {
         getFriendRequests: vi.fn(),
         sendGroupNudge: vi.fn(),
         getGroupNotifications: vi.fn(),
+        setGroupAvatar: vi.fn(),
         muteGroupAll: vi.fn(),
         sendGroupAnnouncement: vi.fn(),
+        setGroupEssenceMessage: vi.fn(),
+        deleteGroupEssenceMessage: vi.fn(),
+        sendGroupMessageReaction: vi.fn(),
         getGroupFiles: vi.fn(),
         uploadFile: vi.fn(),
         getFileDownloadUrl: vi.fn(),
@@ -556,7 +560,7 @@ describe("Milky V1 protocol", () => {
             protocol.apply("send_profile_like", { user_id: 10001, count: 2 }),
         ).resolves.toMatchObject({ status: "ok" });
         await expect(
-            protocol.apply("set_group_whole_mute", { group_id: 20001, enable: false }),
+            protocol.apply("set_group_whole_mute", { group_id: 20001, is_mute: false }),
         ).resolves.toMatchObject({ status: "ok" });
         await expect(
             protocol.apply("get_group_files", { group_id: 20001, parent_folder_id: "/" }),
@@ -578,6 +582,80 @@ describe("Milky V1 protocol", () => {
             "bot",
             expect.objectContaining({ data: "aGVsbG8=", scene_type: "private" }),
         );
+    });
+
+    test("群管理动作使用 canonical 字段、默认值和空对象响应", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await expect(
+            protocol.apply("set_group_avatar", {
+                group_id: 20001,
+                image_uri: "file:///avatar.png",
+            }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+        await expect(
+            protocol.apply("set_group_member_admin", { group_id: 20001, user_id: 10001 }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+        await expect(
+            protocol.apply("set_group_member_mute", { group_id: 20001, user_id: 10001 }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+        await expect(
+            protocol.apply("set_group_essence_message", {
+                group_id: 20001,
+                message_seq: 9001,
+                is_set: false,
+            }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+        await expect(
+            protocol.apply("send_group_message_reaction", {
+                group_id: 20001,
+                message_seq: 9001,
+                reaction: "128077",
+                reaction_type: "emoji",
+                is_add: false,
+            }),
+        ).resolves.toMatchObject({ status: "ok", data: {} });
+
+        expect(adapter.setGroupAvatar).toHaveBeenCalledWith("bot", {
+            group_id: expect.objectContaining({ number: 20001 }),
+            file: "file:///avatar.png",
+        });
+        expect(adapter.setGroupAdmin).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ enable: true }),
+        );
+        expect(adapter.muteGroupMember).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ duration: 0 }),
+        );
+        expect(adapter.deleteGroupEssenceMessage).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ message_id: expect.objectContaining({ number: 9001 }) }),
+        );
+        expect(adapter.sendGroupMessageReaction).toHaveBeenCalledWith("bot", {
+            group_id: expect.objectContaining({ number: 20001 }),
+            message_id: expect.objectContaining({ number: 9001 }),
+            reaction: "128077",
+            reaction_type: "emoji",
+            is_add: false,
+        });
+    });
+
+    test("群管理动作拒绝旧字段和无法兑现的公告图片", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await expect(
+            protocol.apply("set_group_avatar", { group_id: 20001, file: "avatar.png" }),
+        ).resolves.toMatchObject({ status: "failed" });
+        await expect(
+            protocol.apply("send_group_announcement", {
+                group_id: 20001,
+                content: "公告",
+                image_uri: "file:///announcement.png",
+            }),
+        ).resolves.toMatchObject({ status: "failed" });
+        expect(adapter.setGroupAvatar).not.toHaveBeenCalled();
+        expect(adapter.sendGroupAnnouncement).not.toHaveBeenCalled();
     });
 
     test("文件动作仅接受并返回 canonical Milky 字段", async () => {

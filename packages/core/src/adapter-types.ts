@@ -276,7 +276,9 @@ declare module "./adapter.js" {
         export interface SendGroupMessageReactionParams {
             group_id: CommonTypes.Id;
             message_id: CommonTypes.Id;
-            face_id: number;
+            reaction: string;
+            reaction_type: "face" | "emoji";
+            is_add: boolean;
         }
         export interface GroupInfo {
             group_id: CommonTypes.Id;

@@ -15,6 +15,7 @@ import { createHmac } from "crypto";
 import { WebSocket } from "ws";
 import { projectMilkyEvent } from "./event-projector.js";
 import { executeMilkyAccountAction, MILKY_ACCOUNT_ACTIONS } from "./account-actions.js";
+import { executeMilkyGroupAction, MILKY_GROUP_ACTIONS } from "./group-actions.js";
 import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 
 const milkySchema: Schema = {
@@ -225,6 +226,9 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         if (MILKY_ACCOUNT_ACTIONS.has(action)) {
             return executeMilkyAccountAction(this.adapter, this.account.account_id, action, params);
         }
+        if (MILKY_GROUP_ACTIONS.has(action)) {
+            return executeMilkyGroupAction(this.adapter, this.account.account_id, action, params);
+        }
         switch (action) {
             case "send_private_message":
                 return this.sendPrivateMessage(params);
@@ -272,38 +276,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.getGroupMemberInfo(params);
             case "get_group_member_list":
                 return this.getGroupMemberList(params);
-            case "kick_group_member":
-                return this.kickGroupMember(params);
-            case "invite_friend_to_group":
-                return this.inviteFriendToGroup(params);
-            case "set_group_member_mute":
-                return this.setGroupMemberMute(params);
-            case "set_group_member_admin":
-                return this.setGroupMemberAdmin(params);
-            case "set_group_member_card":
-                return this.setGroupMemberCard(params);
-            case "set_group_member_special_title":
-                return this.setGroupMemberSpecialTitle(params);
-            case "set_group_name":
-                return this.setGroupName(params);
-            case "quit_group":
-                return this.quitGroup(params);
-            case "send_group_nudge":
-                return this.sendGroupNudge(params);
             case "get_group_notifications":
                 return this.getGroupNotifications(params);
-            case "set_group_avatar":
-                return this.setGroupAvatar(params);
-            case "set_group_whole_mute":
-                return this.setGroupWholeMute(params);
-            case "send_group_announcement":
-                return this.sendGroupAnnouncement(params);
-            case "set_group_essence_message":
-                return this.setGroupEssenceMessage(params, false);
-            case "delete_group_essence_message":
-                return this.setGroupEssenceMessage(params, true);
-            case "send_group_message_reaction":
-                return this.sendGroupMessageReaction(params);
             case "accept_friend_request":
                 return this.handleFriendRequest(params, true);
             case "reject_friend_request":
@@ -677,112 +651,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         };
     }
 
-    private async kickGroupMember(params: Record<string, unknown>): Promise<void> {
-        const { group_id, user_id, reject_add_request } = params as {
-            group_id: number;
-            user_id: number;
-            reject_add_request?: boolean;
-        };
-        await this.adapter.kickGroupMember(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            user_id: this.adapter.resolveId(user_id),
-            reject_add_request,
-        });
-    }
-
-    /** OneBots 扩展：邀请机器人好友加入指定群。 */
-    private async inviteFriendToGroup(
-        params: Record<string, unknown>,
-    ): Promise<Record<string, never>> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        const userId = requirePositiveIntegerParam(params, "user_id");
-        await this.adapter.inviteGroupMember(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            user_id: this.adapter.resolveId(userId),
-        });
-        return {};
-    }
-
-    private async setGroupMemberMute(params: Record<string, unknown>): Promise<void> {
-        const { group_id, user_id, duration } = params as {
-            group_id: number;
-            user_id: number;
-            duration: number;
-        };
-        await this.adapter.muteGroupMember(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            user_id: this.adapter.resolveId(user_id),
-            duration,
-        });
-    }
-
-    private async setGroupMemberAdmin(params: Record<string, unknown>): Promise<void> {
-        const { group_id, user_id, enable } = params as {
-            group_id: number;
-            user_id: number;
-            enable: boolean;
-        };
-        await this.adapter.setGroupAdmin(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            user_id: this.adapter.resolveId(user_id),
-            enable,
-        });
-    }
-
-    private async setGroupMemberCard(params: Record<string, unknown>): Promise<void> {
-        const { group_id, user_id, card } = params as {
-            group_id: number;
-            user_id: number;
-            card: string;
-        };
-        await this.adapter.setGroupCard(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            user_id: this.adapter.resolveId(user_id),
-            card,
-        });
-    }
-
-    private async setGroupMemberSpecialTitle(params: Record<string, unknown>): Promise<void> {
-        const duration = params.duration === undefined ? -1 : Number(params.duration);
-        if (!Number.isSafeInteger(duration) || duration < -1) {
-            throw new TypeError("duration 必须是 -1 或非负整数");
-        }
-        await this.adapter.setGroupSpecialTitle(this.account.account_id, {
-            group_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
-            user_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
-            special_title: requireNonEmptyStringParam(params, "special_title"),
-            duration,
-        });
-    }
-
-    private async setGroupName(params: Record<string, unknown>): Promise<void> {
-        const { group_id, new_group_name } = params as {
-            group_id: number;
-            new_group_name: string;
-        };
-        await this.adapter.setGroupName(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            group_name: new_group_name,
-        });
-    }
-
-    private async quitGroup(params: Record<string, unknown>): Promise<void> {
-        const { group_id, is_dismiss } = params as { group_id: number; is_dismiss?: boolean };
-        await this.adapter.leaveGroup(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            is_dismiss,
-        });
-    }
-
-    private async sendGroupNudge(params: Record<string, unknown>): Promise<void> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        const userId = requirePositiveIntegerParam(params, "user_id");
-        await this.adapter.sendGroupNudge(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            user_id: this.adapter.resolveId(userId),
-        });
-    }
-
     private async getGroupNotifications(
         params: Record<string, unknown>,
     ): Promise<{ notifications: Record<string, unknown>[] }> {
@@ -806,56 +674,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 is_filtered: false,
             })),
         };
-    }
-
-    private async setGroupAvatar(params: Record<string, unknown>): Promise<void> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        await this.adapter.setGroupAvatar(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            file: requireNonEmptyStringParam(params, "file"),
-        });
-    }
-
-    private async setGroupWholeMute(params: Record<string, unknown>): Promise<void> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        await this.adapter.muteGroupAll(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            enable: requireBooleanParam(params, "enable"),
-        });
-    }
-
-    private async sendGroupAnnouncement(params: Record<string, unknown>): Promise<void> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        await this.adapter.sendGroupAnnouncement(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            content: requireNonEmptyStringParam(params, "content"),
-        });
-    }
-
-    private async setGroupEssenceMessage(
-        params: Record<string, unknown>,
-        remove: boolean,
-    ): Promise<void> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        const messageSequence = requirePositiveIntegerParam(params, "message_seq");
-        const action = remove
-            ? this.adapter.deleteGroupEssenceMessage.bind(this.adapter)
-            : this.adapter.setGroupEssenceMessage.bind(this.adapter);
-        await action(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            message_id: this.adapter.resolveId(messageSequence),
-        });
-    }
-
-    private async sendGroupMessageReaction(params: Record<string, unknown>): Promise<void> {
-        const groupId = requirePositiveIntegerParam(params, "group_id");
-        const messageSequence = requirePositiveIntegerParam(params, "message_seq");
-        const faceId = requirePositiveIntegerParam(params, "face_id");
-        await this.adapter.sendGroupMessageReaction(this.account.account_id, {
-            group_id: this.adapter.resolveId(groupId),
-            message_id: this.adapter.resolveId(messageSequence),
-            face_id: faceId,
-        });
     }
 
     private async getGroupFiles(params: Record<string, unknown>): Promise<unknown> {
