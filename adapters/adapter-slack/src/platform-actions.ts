@@ -1,4 +1,5 @@
 import type { SlackBot } from "./bot.js";
+import { SlackError } from "./errors.js";
 
 export const SLACK_PLATFORM_ACTIONS = new Set([
     "call_slack_api",
@@ -60,13 +61,18 @@ export async function executeSlackPlatformAction(
         return bot.call(method, requireObject(params.params, "params", {}));
     }
     const method = METHOD_BY_ACTION[action];
-    if (!method) throw new Error(`未实现 Slack 平台动作: ${action}`);
+    if (!method) {
+        throw SlackError.invalid(`未实现 Slack 平台动作: ${action}`, "SLACK_ACTION_UNSUPPORTED");
+    }
     return bot.call(method, { ...params });
 }
 
 function requireMethod(value: unknown): string {
     if (typeof value !== "string" || !/^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)+$/.test(value)) {
-        throw new Error("Slack 参数 method 必须为合法的 Web API 方法名");
+        throw SlackError.invalid(
+            "Slack 参数 method 必须为合法的 Web API 方法名",
+            "SLACK_METHOD_INVALID",
+        );
     }
     return value;
 }
@@ -78,7 +84,9 @@ function requireObject(
 ): Record<string, unknown> {
     if (value == null && fallback) return fallback;
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        throw new Error(`Slack 参数 ${name} 必须为对象`);
+        throw SlackError.invalid(`Slack 参数 ${name} 必须为对象`, "SLACK_PARAM_INVALID", {
+            name,
+        });
     }
     return value as Record<string, unknown>;
 }

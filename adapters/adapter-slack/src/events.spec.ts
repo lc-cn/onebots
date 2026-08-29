@@ -89,4 +89,46 @@ describe("projectSlackEvent", () => {
             extensions: { slack: { event_type: "message" } },
         });
     });
+
+    it("投影 Bot 消息、工作区用户与原生交互", () => {
+        const botMessage: SlackEvent = {
+            type: "message",
+            subtype: "bot_message",
+            event_ts: "1710000004",
+            ts: "1710000004",
+            channel: "C1",
+            bot_id: "B2",
+            text: "automation",
+        };
+        expect(projectSlackEvent(botMessage, { event: botMessage }, context)).toMatchObject({
+            type: "message",
+            sender: { id: { string: "B2" } },
+        });
+
+        const teamJoin: SlackEvent = {
+            type: "team_join",
+            event_ts: "1710000005",
+            user: { id: "U2", name: "Ada" },
+        };
+        expect(projectSlackEvent(teamJoin, { event: teamJoin }, context)).toMatchObject({
+            type: "notice",
+            notice_type: "user_added",
+            user: { id: { string: "U2" }, name: "Ada" },
+        });
+
+        const interaction: SlackEvent = {
+            type: "block_actions",
+            event_ts: "1710000006",
+            user: { id: "U3", name: "Lin" },
+            channel: { id: "C2" },
+            trigger_id: "trigger",
+        };
+        expect(projectSlackEvent(interaction, interaction, context)).toMatchObject({
+            type: "notice",
+            notice_type: "interaction",
+            user: { id: { string: "U3" } },
+            group: { channel_id: { string: "C2" } },
+            extensions: { slack: { trigger_id: "trigger" } },
+        });
+    });
 });

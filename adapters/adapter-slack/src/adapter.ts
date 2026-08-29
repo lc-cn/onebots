@@ -13,6 +13,7 @@ import { createSlackAccount } from "./account.js";
 import { executeSlackPlatformAction, SLACK_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { compileSlackMessage } from "./messages.js";
 import { projectSlackMessageSegments } from "./events.js";
+import { SlackError } from "./errors.js";
 
 export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     constructor(app: BaseApp) {
@@ -28,8 +29,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         if (!SLACK_PLATFORM_ACTIONS.has(action)) {
             return super.executePlatformAction(uin, action, params);
         }
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
         return executeSlackPlatformAction(account.client, action, params);
     }
 
@@ -48,8 +48,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
@@ -58,7 +57,13 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         const result = files.length
             ? await bot.sendFiles(channelId, files, text, options)
             : await bot.sendMessage(channelId, text, options);
-        if (!result.ts) throw new Error("Slack 发送响应缺少消息时间戳");
+        if (!result.ts) {
+            throw SlackError.protocol(
+                "Slack 发送响应缺少消息时间戳",
+                "SLACK_MESSAGE_TIMESTAMP_MISSING",
+                result,
+            );
+        }
         bot.rememberMessage(result.ts, channelId, options.thread_ts);
 
         return {
@@ -70,8 +75,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      * 删除/撤回消息
      */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
@@ -81,7 +85,12 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
                 ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
                 : context?.channel || "";
 
-        if (!channelId) throw new Error("Slack 删除消息需要 scene_id（频道 ID）");
+        if (!channelId) {
+            throw SlackError.invalid(
+                "Slack 删除消息需要 scene_id（频道 ID）",
+                "SLACK_SCENE_ID_REQUIRED",
+            );
+        }
         await bot.deleteMessage(channelId, msgId);
     }
 
@@ -89,12 +98,16 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      * 获取消息
      */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
         const timestamp = params.message_id.string;
         const context = account.client.getMessageContext(timestamp);
         const channel = params.scene_id?.string || context?.channel;
-        if (!channel) throw new Error("Slack 获取消息需要 scene_id（频道 ID）或已知消息上下文");
+        if (!channel) {
+            throw SlackError.invalid(
+                "Slack 获取消息需要 scene_id（频道 ID）或已知消息上下文",
+                "SLACK_SCENE_ID_REQUIRED",
+            );
+        }
         const result = await account.client.call("conversations.replies", {
             channel,
             ts: context?.threadTs || timestamp,
@@ -105,7 +118,13 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         });
         const response = result as { messages?: SlackMessage[] };
         const message = response.messages?.find(item => item.ts === timestamp);
-        if (!message?.ts) throw new Error(`Slack 消息 ${timestamp} 不存在或当前 token 无权读取`);
+        if (!message?.ts) {
+            throw SlackError.resource(
+                `Slack 消息 ${timestamp} 不存在或当前 token 无权读取`,
+                "SLACK_MESSAGE_NOT_FOUND",
+                { message_id: timestamp, channel },
+            );
+        }
         const privateScene = channel.startsWith("D");
         return {
             message_id: this.createId(message.ts),
@@ -125,8 +144,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      * 更新消息
      */
     async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
@@ -139,10 +157,25 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
                 ? this.coerceId(rawScene as CommonTypes.Id | string | number).string
                 : context?.channel || "";
 
-        if (!channelId) throw new Error("Slack 更新消息需要 scene_id（频道 ID）");
+        if (!channelId) {
+            throw SlackError.invalid(
+                "Slack 更新消息需要 scene_id（频道 ID）",
+                "SLACK_SCENE_ID_REQUIRED",
+            );
+        }
         const { text, options, files } = compileSlackMessage(params.message);
-        if (files.length) throw new Error("Slack 更新消息不支持新增文件，请使用 call_slack_api");
-        if (options.thread_ts) throw new Error("Slack 更新消息不能改变所属线程");
+        if (files.length) {
+            throw SlackError.invalid(
+                "Slack 更新消息不支持新增文件，请使用 call_slack_api",
+                "SLACK_UPDATE_FILE_UNSUPPORTED",
+            );
+        }
+        if (options.thread_ts) {
+            throw SlackError.invalid(
+                "Slack 更新消息不能改变所属线程",
+                "SLACK_UPDATE_THREAD_UNSUPPORTED",
+            );
+        }
         await bot.updateMessage(channelId, msgId, text, options);
     }
 
@@ -154,8 +187,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      * 获取机器人自身信息
      */
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const me = bot.getCachedMe();
@@ -172,8 +204,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      * 获取用户信息
      */
     async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const userId = params.user_id.string;
@@ -198,8 +229,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         _params?: Adapter.GetFriendListParams,
     ): Promise<Adapter.FriendInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
         const users = await account.client.getUserList();
         return users
             .filter(user => !user.is_bot)
@@ -217,8 +247,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         params: Adapter.GetFriendInfoParams,
     ): Promise<Adapter.FriendInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const userId = params.user_id.string;
@@ -242,8 +271,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         _params?: Adapter.GetChannelListParams,
     ): Promise<Adapter.ChannelInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const channels = await bot.getChannelList();
@@ -261,8 +289,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         params: Adapter.GetChannelInfoParams,
     ): Promise<Adapter.ChannelInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const channelId = params.channel_id.string;
@@ -278,8 +305,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         params: Adapter.CreateChannelParams,
     ): Promise<Adapter.ChannelInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const channel = await account.client.createChannel(params.channel_name);
         return {
@@ -289,10 +315,19 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     }
 
     async updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> {
-        if (params.parent_id) throw new TypeError("Slack 不支持移动频道层级");
-        if (!params.channel_name) throw new TypeError("Slack 更新频道需要 channel_name");
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        if (params.parent_id) {
+            throw SlackError.invalid(
+                "Slack 不支持移动频道层级",
+                "SLACK_CHANNEL_PARENT_UNSUPPORTED",
+            );
+        }
+        if (!params.channel_name) {
+            throw SlackError.invalid(
+                "Slack 更新频道需要 channel_name",
+                "SLACK_CHANNEL_NAME_REQUIRED",
+            );
+        }
+        const account = this.requireAccount(uin);
         await account.client.call("conversations.rename", {
             channel: params.channel_id.string,
             name: params.channel_name,
@@ -300,8 +335,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     }
 
     async deleteChannel(uin: string, params: Adapter.DeleteChannelParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
         await account.client.call("conversations.archive", { channel: params.channel_id.string });
     }
 
@@ -309,8 +343,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         params: Adapter.InviteChannelMemberParams,
     ): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
         await account.client.call("conversations.invite", {
             channel: params.channel_id.string,
             users: params.user_id.string,
@@ -318,8 +351,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     }
 
     async kickChannelMember(uin: string, params: Adapter.KickChannelMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
         await account.client.kickChannelMember(params.channel_id.string, params.user_id.string);
     }
 
@@ -330,8 +362,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         params: Adapter.GetChannelMemberListParams,
     ): Promise<Adapter.ChannelMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const channelId = params.channel_id.string;
@@ -363,8 +394,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         uin: string,
         params: Adapter.GetChannelMemberInfoParams,
     ): Promise<Adapter.ChannelMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        const account = this.requireAccount(uin);
 
         const bot = account.client;
         const userId = params.user_id.string;
@@ -407,6 +437,16 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
             online: account?.status === AccountStatus.Online,
             good: account?.status === AccountStatus.Online,
         };
+    }
+
+    private requireAccount(uin: string): Account<"slack", SlackBot> {
+        const account = this.getAccount(uin);
+        if (!account) {
+            throw SlackError.resource(`Slack 账号 ${uin} 不存在`, "SLACK_ACCOUNT_NOT_FOUND", {
+                account_id: uin,
+            });
+        }
+        return account;
     }
 
     createAccount(config: Account.Config<"slack">): Account<"slack", SlackBot> {

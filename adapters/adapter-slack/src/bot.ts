@@ -5,11 +5,15 @@
 import { EventEmitter } from "node:events";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { SocketModeClient } from "@slack/socket-mode";
-import { WebClient } from "@slack/web-api";
-import { materializeMediaSource, type Next, type RouterContext } from "onebots";
-import { slackUploadMessageTimestamp, type SlackFileInput } from "./messages.js";
+import type { WebClient } from "@slack/web-api";
+import { type Next, type RouterContext } from "onebots";
+import { SlackError } from "./errors.js";
+import { parseSlackInbound } from "./inbound.js";
+import type { SlackFileInput } from "./messages.js";
+import { SlackWebApi } from "./web-api.js";
 import type {
     SlackConfig,
+    SlackEvent,
     SlackUser,
     SlackChannel,
     SlackWebhookBody,
@@ -25,59 +29,55 @@ interface SocketModeEnvelope {
 }
 
 function isSocketModeEnvelope(value: unknown): value is SocketModeEnvelope {
-    return typeof value === "object" && value !== null && "ack" in value;
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "ack" in value &&
+        typeof value.ack === "function"
+    );
 }
 
-export class SlackBot extends EventEmitter {
-    private config: SlackConfig;
-    private client: WebClient;
+export interface SlackBotEvents {
+    ready: [];
+    stopped: [];
+    raw_event: [rawEvent: SlackWebhookBody];
+    event: [event: SlackEvent, rawEvent: SlackWebhookBody];
+    client_error: [error: SlackError];
+    transport_state: [state: "connected" | "reconnecting" | "disconnected"];
+}
+
+export class SlackBot extends EventEmitter<SlackBotEvents> {
+    private readonly api: SlackWebApi;
     private socketClient?: SocketModeClient;
     private me: SlackUser | null = null;
-    private readonly messageContexts = new Map<
-        string,
-        { channel: string; threadTs?: string }
-    >();
+    private startPromise?: Promise<void>;
+    private running = false;
+    private generation = 0;
+    private readonly messageContexts = new Map<string, { channel: string; threadTs?: string }>();
+    private readonly receivedEventIds = new Map<string, number>();
 
-    constructor(config: SlackConfig) {
+    constructor(readonly config: SlackConfig) {
         super();
-        this.config = config;
+        this.api = new SlackWebApi(config.token);
+    }
 
-        // 创建 Slack WebClient 实例
-        this.client = new WebClient(config.token);
-        if (config.socket_mode) {
-            if (!config.app_token) {
-                throw new Error("Slack Socket Mode 需要 app_token");
-            }
-            this.socketClient = new SocketModeClient({
-                appToken: config.app_token,
-                autoReconnectEnabled: true,
-            });
-            this.socketClient.on("slack_event", async (payload: unknown) => {
-                if (!isSocketModeEnvelope(payload)) return;
-                await payload.ack();
-                this.emitWebhookBody(payload.body ?? { type: payload.type });
-            });
-        }
+    get receiveMode(): "socket" | "webhook" {
+        return this.config.receive_mode || "socket";
     }
 
     /**
      * 启动 Bot
      */
     async start(): Promise<void> {
+        if (this.running) return;
+        if (this.startPromise) return this.startPromise;
+        const generation = this.generation;
+        const start = this.startInternal(generation);
+        this.startPromise = start;
         try {
-            // 获取 Bot 信息
-            const authTest = await this.client.auth.test();
-
-            this.me = {
-                id: authTest.user_id || "",
-                name: authTest.user || "",
-            };
-
-            if (this.socketClient) await this.socketClient.start();
-            this.emit("ready");
-        } catch (error) {
-            this.emit("error", error);
-            throw error;
+            await start;
+        } finally {
+            if (this.startPromise === start) this.startPromise = undefined;
         }
     }
 
@@ -85,20 +85,154 @@ export class SlackBot extends EventEmitter {
      * 停止 Bot
      */
     async stop(): Promise<void> {
-        if (this.socketClient) await this.socketClient.disconnect();
-        this.emit("stopped");
+        const wasActive = this.running || Boolean(this.startPromise || this.socketClient);
+        this.generation += 1;
+        this.running = false;
+        this.startPromise = undefined;
+        const socket = this.socketClient;
+        this.socketClient = undefined;
+        if (socket) {
+            try {
+                await socket.disconnect();
+            } catch (error) {
+                this.emit(
+                    "client_error",
+                    SlackError.wrap(error, "socket.disconnect", "SLACK_SOCKET_STOP_FAILED"),
+                );
+            }
+        }
+        if (wasActive) this.emit("stopped");
+    }
+
+    private async startInternal(generation: number): Promise<void> {
+        try {
+            this.validateReceiveConfig();
+            const authTest = await this.api.getBotInfo();
+            if (generation !== this.generation) return;
+            this.me = authTest;
+            if (this.receiveMode === "socket") await this.startSocket(generation);
+            if (generation !== this.generation) return;
+            this.running = true;
+            this.emit("ready");
+        } catch (error) {
+            if (generation === this.generation) {
+                const socket = this.socketClient;
+                this.running = false;
+                this.socketClient = undefined;
+                if (socket) {
+                    try {
+                        await socket.disconnect();
+                    } catch (disconnectError) {
+                        this.emit(
+                            "client_error",
+                            SlackError.wrap(
+                                disconnectError,
+                                "socket.disconnect",
+                                "SLACK_SOCKET_STOP_FAILED",
+                            ),
+                        );
+                    }
+                }
+            }
+            const wrapped = SlackError.wrap(error, "start", "SLACK_START_FAILED");
+            this.emit("client_error", wrapped);
+            throw wrapped;
+        }
+    }
+
+    private async startSocket(generation: number): Promise<void> {
+        const socket = new SocketModeClient({
+            appToken: this.config.app_token || "",
+            autoReconnectEnabled: true,
+        });
+        this.socketClient = socket;
+        socket.on("slack_event", async (payload: unknown) => {
+            if (!this.isCurrentSocket(socket, generation) || !isSocketModeEnvelope(payload)) return;
+            try {
+                await payload.ack();
+                this.ingest(payload.body ?? { type: payload.type });
+            } catch (error) {
+                this.emit(
+                    "client_error",
+                    SlackError.wrap(error, "socket.event", "SLACK_SOCKET_EVENT_FAILED"),
+                );
+            }
+        });
+        socket.on("error", error => {
+            if (!this.isCurrentSocket(socket, generation)) return;
+            this.emit("client_error", SlackError.wrap(error, "socket", "SLACK_SOCKET_ERROR"));
+        });
+        socket.on("connected", () => {
+            if (this.isCurrentSocket(socket, generation)) this.emit("transport_state", "connected");
+        });
+        socket.on("reconnecting", () => {
+            if (this.isCurrentSocket(socket, generation)) {
+                this.emit("transport_state", "reconnecting");
+            }
+        });
+        socket.on("disconnected", () => {
+            if (this.isCurrentSocket(socket, generation)) {
+                this.emit("transport_state", "disconnected");
+            }
+        });
+        await socket.start();
+        if (!this.isCurrentSocket(socket, generation)) await socket.disconnect();
+    }
+
+    private isCurrentSocket(socket: SocketModeClient, generation: number): boolean {
+        return generation === this.generation && this.socketClient === socket;
+    }
+
+    private validateReceiveConfig(): void {
+        if (this.receiveMode !== "socket" && this.receiveMode !== "webhook") {
+            throw SlackError.config(
+                `Slack receive_mode 无效: ${String(this.config.receive_mode)}`,
+                "SLACK_RECEIVE_MODE_INVALID",
+            );
+        }
+        if (this.receiveMode === "socket" && !this.config.app_token) {
+            throw SlackError.config(
+                "Slack Socket Mode 必须配置 app_token",
+                "SLACK_APP_TOKEN_REQUIRED",
+            );
+        }
+        if (this.receiveMode === "webhook" && !this.config.signing_secret) {
+            throw SlackError.config(
+                "Slack Webhook 模式必须配置 signing_secret",
+                "SLACK_SIGNING_SECRET_REQUIRED",
+            );
+        }
     }
 
     /**
      * 处理 Webhook 请求（Events API）
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        if (this.config.signing_secret && !this.verifyWebhookSignature(ctx)) {
+        if (!this.config.signing_secret) {
+            const error = SlackError.config(
+                "Slack Webhook 模式必须配置 signing_secret",
+                "SLACK_SIGNING_SECRET_REQUIRED",
+            );
+            this.emit("client_error", error);
+            ctx.status = 503;
+            ctx.body = { ok: false, error: error.code };
+            return;
+        }
+        if (!this.verifyWebhookSignature(ctx)) {
             ctx.status = 401;
             ctx.body = { ok: false, error: "invalid_signature" };
             return;
         }
-        const body = ctx.request.body as SlackWebhookBody;
+        let body: SlackWebhookBody;
+        try {
+            body = parseSlackInbound(ctx.request.body);
+        } catch (error) {
+            const wrapped = SlackError.wrap(error, "webhook", "SLACK_WEBHOOK_INVALID");
+            this.emit("client_error", wrapped);
+            ctx.status = 400;
+            ctx.body = { ok: false, error: wrapped.code };
+            return;
+        }
 
         // 处理 URL 验证（Slack 首次配置 webhook 时会发送验证请求）
         if (body.type === "url_verification") {
@@ -107,7 +241,7 @@ export class SlackBot extends EventEmitter {
         }
 
         // 处理事件
-        this.emitWebhookBody(body);
+        this.ingest(body);
 
         ctx.body = { ok: true };
         await next();
@@ -134,11 +268,13 @@ export class SlackBot extends EventEmitter {
     }
 
     /** 将 HTTP Events 与 Socket Mode 归一到同一个原始事件入口。 */
-    private emitWebhookBody(body: SlackWebhookBody): void {
+    ingest(rawEvent: unknown): SlackWebhookBody {
+        const body = parseSlackInbound(rawEvent);
         this.emit("raw_event", body);
+        if (this.isDuplicateEvent(body)) return body;
         if (body.event) {
             this.emit("event", body.event, body);
-            return;
+            return body;
         }
         const eventType =
             typeof body.command === "string"
@@ -157,6 +293,27 @@ export class SlackBot extends EventEmitter {
                 body,
             );
         }
+        return body;
+    }
+
+    /** Slack 超时重试仍交付 raw_event，但不会重复派发 canonical 事件。 */
+    private isDuplicateEvent(body: SlackWebhookBody): boolean {
+        const eventId =
+            typeof body.event_id === "string"
+                ? body.event_id
+                : typeof body.envelope_id === "string"
+                  ? body.envelope_id
+                  : undefined;
+        if (!eventId) return false;
+        const now = Date.now();
+        const previous = this.receivedEventIds.get(eventId);
+        this.receivedEventIds.delete(eventId);
+        this.receivedEventIds.set(eventId, now);
+        for (const [id, receivedAt] of this.receivedEventIds) {
+            if (this.receivedEventIds.size <= 4_096 && now - receivedAt <= 10 * 60_000) break;
+            this.receivedEventIds.delete(id);
+        }
+        return previous !== undefined && now - previous <= 10 * 60_000;
     }
 
     /**
@@ -180,271 +337,85 @@ export class SlackBot extends EventEmitter {
         return this.messageContexts.get(ts);
     }
 
-    /**
-     * 获取 Bot 信息
-     */
     async getBotInfo(): Promise<SlackUser> {
-        const authTest = await this.client.auth.test();
-
-        return {
-            id: authTest.user_id || "",
-            name: authTest.user || "",
-        };
+        return this.api.getBotInfo();
     }
 
-    /**
-     * 发送消息
-     */
     async sendMessage(
         channel: string,
         text: string,
         options?: SlackMessageOptions,
     ): Promise<SlackChatResult> {
-        const result = await this.client.chat.postMessage({
-            channel,
-            text,
-            ...(options as Record<string, unknown>),
-        });
-
-        if (!result.ok) {
-            throw new Error(`发送消息失败: ${result.error}`);
-        }
-
-        return result as unknown as SlackChatResult;
+        return this.api.sendMessage(channel, text, options);
     }
 
-    /**
-     * 发送带 Blocks 的消息
-     */
     async sendBlocks(
         channel: string,
         blocks: SlackBlock[],
         text?: string,
     ): Promise<SlackChatResult> {
-        const result = await this.client.chat.postMessage({
-            channel,
-            blocks,
-            text: text || " ",
-        });
-
-        if (!result.ok) {
-            throw new Error(`发送消息失败: ${result.error}`);
-        }
-
-        return result as unknown as SlackChatResult;
+        return this.api.sendBlocks(channel, blocks, text);
     }
 
-    /** 使用 Slack 推荐的 filesUploadV2 上传并分享一条或多条文件。 */
     async sendFiles(
         channel: string,
         files: SlackFileInput[],
         text: string,
         options: Pick<SlackMessageOptions, "thread_ts" | "blocks"> = {},
     ): Promise<SlackChatResult> {
-        const media = await Promise.all(files.map(file => materializeMediaSource(file)));
-        const result = await this.client.filesUploadV2({
-            channel_id: channel,
-            thread_ts: options.thread_ts,
-            initial_comment: text || undefined,
-            blocks: text ? undefined : options.blocks,
-            file_uploads: media.map((item, index) => ({
-                file: Buffer.from(item.data),
-                filename: item.filename,
-                title: files[index].title,
-                alt_text: files[index].altText,
-            })),
-        });
-        const timestamp = slackUploadMessageTimestamp(result);
-        if (!timestamp) throw new Error("Slack 文件上传响应缺少消息时间戳");
-        return { ...result, ok: true, channel, ts: timestamp } as SlackChatResult;
+        return this.api.sendFiles(channel, files, text, options);
     }
 
-    /**
-     * 更新消息
-     */
     async updateMessage(
         channel: string,
         ts: string,
         text: string,
         options?: SlackMessageOptions,
     ): Promise<SlackChatResult> {
-        const result = await this.client.chat.update({
-            channel,
-            ts,
-            text,
-            ...(options as Record<string, unknown>),
-        });
-
-        if (!result.ok) {
-            throw new Error(`更新消息失败: ${result.error}`);
-        }
-
-        return result as unknown as SlackChatResult;
+        return this.api.updateMessage(channel, ts, text, options);
     }
 
-    /**
-     * 删除消息
-     */
     async deleteMessage(channel: string, ts: string): Promise<boolean> {
-        const result = await this.client.chat.delete({
-            channel,
-            ts,
-        });
-
-        if (!result.ok) {
-            throw new Error(`删除消息失败: ${result.error}`);
-        }
-
-        return result.ok;
+        return this.api.deleteMessage(channel, ts);
     }
 
-    /**
-     * 获取频道信息
-     */
     async getChannelInfo(channelId: string): Promise<SlackChannel> {
-        const result = await this.client.conversations.info({
-            channel: channelId,
-        });
-
-        if (!result.ok || !result.channel) {
-            throw new Error(`获取频道信息失败: ${result.error}`);
-        }
-
-        return result.channel as SlackChannel;
+        return this.api.getChannelInfo(channelId);
     }
 
-    /**
-     * 获取频道列表
-     */
     async getChannelList(types?: string, excludeArchived?: boolean): Promise<SlackChannel[]> {
-        const channels: SlackChannel[] = [];
-        let cursor: string | undefined;
-
-        do {
-            const result = await this.client.conversations.list({
-                types: types || "public_channel,private_channel",
-                exclude_archived: excludeArchived,
-                cursor,
-                limit: 200,
-            });
-
-            if (!result.ok) {
-                throw new Error(`获取频道列表失败: ${result.error}`);
-            }
-
-            if (result.channels) {
-                channels.push(...(result.channels as SlackChannel[]));
-            }
-
-            cursor = result.response_metadata?.next_cursor;
-        } while (cursor);
-
-        return channels;
+        return this.api.getChannelList(types, excludeArchived);
     }
 
-    /**
-     * 获取用户信息
-     */
     async getUserInfo(userId: string): Promise<SlackUser> {
-        const result = await this.client.users.info({
-            user: userId,
-        });
-
-        if (!result.ok || !result.user) {
-            throw new Error(`获取用户信息失败: ${result.error}`);
-        }
-
-        return result.user as SlackUser;
+        return this.api.getUserInfo(userId);
     }
 
-    /** 获取工作区用户；Slack 以用户目录而非“好友关系”建模。 */
     async getUserList(): Promise<SlackUser[]> {
-        const users: SlackUser[] = [];
-        let cursor: string | undefined;
-        do {
-            const result = await this.client.users.list({ cursor, limit: 200 });
-            if (!result.ok) throw new Error(`获取工作区用户失败: ${result.error}`);
-            users.push(...((result.members ?? []) as SlackUser[]));
-            cursor = result.response_metadata?.next_cursor || undefined;
-        } while (cursor);
-        return users;
+        return this.api.getUserList();
     }
 
-    /**
-     * 获取频道成员列表
-     */
     async getChannelMembers(channelId: string): Promise<string[]> {
-        const members: string[] = [];
-        let cursor: string | undefined;
-
-        do {
-            const result = await this.client.conversations.members({
-                channel: channelId,
-                cursor,
-                limit: 200,
-            });
-
-            if (!result.ok) {
-                throw new Error(`获取频道成员列表失败: ${result.error}`);
-            }
-
-            if (result.members) {
-                members.push(...result.members);
-            }
-
-            cursor = result.response_metadata?.next_cursor;
-        } while (cursor);
-
-        return members;
+        return this.api.getChannelMembers(channelId);
     }
 
-    /**
-     * 离开频道
-     */
     async leaveChannel(channelId: string): Promise<boolean> {
-        const result = await this.client.conversations.leave({
-            channel: channelId,
-        });
-
-        if (!result.ok) {
-            throw new Error(`离开频道失败: ${result.error}`);
-        }
-
-        return result.ok;
+        return this.api.leaveChannel(channelId);
     }
 
-    /** 创建工作区频道；Slack 的工作区由当前 token 隐式确定。 */
     async createChannel(name: string): Promise<SlackChannel> {
-        const result = await this.client.conversations.create({ name });
-        if (!result.ok || !result.channel?.id) {
-            throw new Error(`创建频道失败: ${result.error ?? "响应缺少频道信息"}`);
-        }
-        return {
-            id: result.channel.id,
-            name: result.channel.name ?? name,
-            is_channel: result.channel.is_channel,
-            is_private: result.channel.is_private,
-        };
+        return this.api.createChannel(name);
     }
 
-    /**
-     * 踢出频道成员
-     */
     async kickChannelMember(channelId: string, userId: string): Promise<boolean> {
-        const result = await this.client.conversations.kick({ channel: channelId, user: userId });
-        if (!result.ok) throw new Error(`移除频道成员失败: ${result.error}`);
-        return result.ok;
+        return this.api.kickChannelMember(channelId, userId);
     }
 
-    /**
-     * 获取 WebClient 实例（用于高级用法）
-     */
     getWebClient(): WebClient {
-        return this.client;
+        return this.api.rawClient;
     }
 
-    /** 调用 Slack Web API，供能力清单声明的平台扩展动作使用。 */
     async call(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
-        return this.client.apiCall(method, params);
+        return this.api.call(method, params);
     }
 }

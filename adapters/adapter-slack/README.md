@@ -15,11 +15,13 @@ pnpm add @onebots/adapter-slack
 ```yaml
 slack.your_bot_id:
   token: "xoxb-YOUR-BOT-TOKEN"
-  socket_mode: true
+  receive_mode: socket
   app_token: "xapp-YOUR-APP-TOKEN" # 需 connections:write
 ```
 
-使用 HTTP Events API 时改为 `socket_mode: false` 并配置 `signing_secret`。请求地址为账号路径下的 `/webhook`；启用 Signing Secret 后，适配器会校验原始请求体签名和五分钟时间窗。
+使用 HTTP Events API 时改为 `receive_mode: webhook` 并配置必需的 `signing_secret`。请求地址为账号路径下的 `/webhook`；适配器会校验原始请求体签名和五分钟时间窗。Web 管理端会按接收模式只显示相关凭据。
+
+`receive_mode` 是接收方式的唯一来源；旧的 `socket_mode` 布尔字段已移除，不再保留双配置语义。
 
 ## 使用
 
@@ -30,11 +32,15 @@ onebots -r slack
 ## 功能
 
 - HTTP Events API 与自动重连的 Socket Mode
+- Socket Mode 连接、重连与断开状态会同步到账号状态，普通 Web API 失败不会误判整号离线
 - 频道、私聊、线程消息以及文本、@、回复、附件收发
 - 消息查询、编辑、删除、定时消息、回复列表
 - Reaction、Pin、频道生命周期、成员邀请与移除、Bookmark
 - 消息编辑/删除、Reaction、成员变化等 canonical 事件投影
 - Slash Command、交互载荷及其他未知事件的 `raw_event` 无损交付
+- Events API、交互组件、Slash Command 与 Socket Mode 共用公开的 `SlackBot.ingest(rawEvent)` 入站管线
+- Slack 重试事件保留每次 `raw_event`，并按 `event_id` / `envelope_id` 去重 canonical 投影
+- Web API 失败统一抛出带 `code`、`category`、`operation` 与平台错误码的 `SlackError`
 
 ## 平台扩展 API
 

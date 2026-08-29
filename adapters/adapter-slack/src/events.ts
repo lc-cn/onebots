@@ -32,7 +32,10 @@ export function projectSlackEvent(
                 group: projectGroup(event.channel, context, envelope.team_id),
             });
         }
-        if (event.subtype && event.subtype !== "thread_broadcast") {
+        if (
+            event.subtype &&
+            !["thread_broadcast", "bot_message", "file_share", "me_message"].includes(event.subtype)
+        ) {
             return notice(envelope, event, context, "custom", extension(event));
         }
         return projectMessage(event as SlackMessage, envelope, context);
@@ -70,8 +73,43 @@ export function projectSlackEvent(
             );
         case "team_join": {
             const user = objectValue(event.user);
-            return notice(envelope, event, context, "friend_add", {
+            return notice(envelope, event, context, "user_added", {
                 user: projectUser(stringValue(user.id), context, stringValue(user.name)),
+            });
+        }
+        case "user_change": {
+            const user = objectValue(event.user);
+            return notice(envelope, event, context, "user_updated", {
+                user: projectUser(stringValue(user.id), context, stringValue(user.name)),
+            });
+        }
+        case "block_actions":
+        case "view_submission":
+        case "view_closed":
+        case "shortcut":
+        case "message_action":
+        case "slash_command": {
+            const user = objectValue(event.user);
+            const channel = objectValue(event.channel);
+            return notice(envelope, event, context, "interaction", {
+                user: projectUser(
+                    stringValue(user.id, stringValue(event.user_id)),
+                    context,
+                    stringValue(user.name, stringValue(event.user_name)),
+                ),
+                group: projectGroup(
+                    stringValue(channel.id, stringValue(event.channel_id)),
+                    context,
+                    envelope.team_id,
+                ),
+                extensions: {
+                    slack: {
+                        event_type: event.type,
+                        trigger_id: event.trigger_id,
+                        callback_id: event.callback_id,
+                        actions: event.actions,
+                    },
+                },
             });
         }
         case "app_rate_limited":
@@ -88,7 +126,7 @@ function projectMessage(
 ): CommonEvent.Event<SlackWebhookBody> {
     const channel = event.channel ?? "";
     const isPrivate = channel.startsWith("D");
-    const sender = projectUser(event.user, context);
+    const sender = projectUser(event.user ?? event.bot_id, context);
     if (!sender) {
         return notice(envelope, event, context, "custom", extension(event));
     }

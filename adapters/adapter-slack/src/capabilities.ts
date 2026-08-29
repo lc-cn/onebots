@@ -70,6 +70,9 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         reaction_removed: { support: "native" },
         member_joined: { support: "native" },
         member_left: { support: "native" },
+        user_added: { support: "native" },
+        user_updated: { support: "native" },
+        interaction: { support: "native" },
         native_event: {
             support: "native",
             note: "所有未标准化 Events API 事件以 custom notice 和 raw_event 无损交付",

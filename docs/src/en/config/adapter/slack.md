@@ -13,20 +13,20 @@ Slack adapter configuration guide.
 ### signing_secret
 
 - **Type**: `string`
-- **Required**: ❌
-- **Description**: Signing Secret (for verifying Events API requests)
+- **Required**: In HTTP Events API mode
+- **Description**: Signing Secret for request verification; shown only in this mode
 
 ### app_token
 
 - **Type**: `string`
-- **Required**: ❌
-- **Description**: App-Level Token (format: `xapp-...`, for Socket Mode)
+- **Required**: In Socket Mode
+- **Description**: App-Level Token (format: `xapp-...`); shown only in this mode
 
-### socket_mode
+### receive_mode
 
-- **Type**: `boolean`
-- **Default**: `false`
-- **Description**: Whether to use Socket Mode (requires app_token)
+- **Type**: `socket | webhook`
+- **Default**: `socket`
+- **Description**: The single event transport selector; the old `socket_mode` boolean is removed
 
 ## Configuration Example
 
@@ -35,7 +35,8 @@ Slack adapter configuration guide.
 ```yaml
 slack.my_bot:
   token: 'xoxb-your-bot-token'
-  signing_secret: 'your_signing_secret'  # Optional, but recommended
+  receive_mode: webhook
+  signing_secret: 'your_signing_secret'
 ```
 
 ### Socket Mode Configuration
@@ -43,12 +44,11 @@ slack.my_bot:
 ```yaml
 slack.my_bot:
   token: 'xoxb-your-bot-token'
+  receive_mode: socket
   app_token: 'xapp-your-app-token'
-  socket_mode: true
 ```
 
 ## Related Links
 
 - [Slack Platform](/en/platform/slack)
 - [Quick Start](/en/guide/start)
-

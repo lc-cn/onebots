@@ -45,9 +45,8 @@ pnpm add @onebots/adapter-slack @slack/web-api
 slack.your_bot_id:
   # Slack 平台配置
   token: 'xoxb-your-bot-token'  # Slack Bot Token，必填
-  signing_secret: 'your_signing_secret'  # 可选，用于验证请求
-  app_token: 'xapp-your-app-token'  # 可选，用于 Socket Mode
-  socket_mode: false  # 是否使用 Socket Mode，默认 false
+  receive_mode: socket  # socket（默认）或 webhook
+  app_token: 'xapp-your-app-token'  # Socket Mode 必填
   
   # OneBot V11 协议配置
   onebot.v11:
@@ -63,9 +62,9 @@ slack.your_bot_id:
 | 配置项 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | `token` | string | 是 | Slack Bot Token（xoxb-...） |
-| `signing_secret` | string | 否 | Signing Secret（用于验证请求） |
-| `app_token` | string | 否 | App-Level Token（用于 Socket Mode） |
-| `socket_mode` | boolean | 否 | 是否使用 Socket Mode，默认 false |
+| `receive_mode` | socket / webhook | 否 | 唯一事件接收方式，默认 socket |
+| `signing_secret` | string | Webhook 模式 | Signing Secret（用于验证请求） |
+| `app_token` | string | Socket 模式 | App-Level Token（用于 Socket Mode） |
 
 ## 获取 Bot Token
 
@@ -80,7 +79,7 @@ slack.your_bot_id:
    - `im:write` - 发送私聊消息
 4. 安装应用到工作区
 5. 获取 Bot User OAuth Token（xoxb-...）
-6. 在 "Event Subscriptions" 中配置 Webhook URL：`http://your-server:port/slack/{account_id}/webhook`
+6. Webhook 模式下，在 "Event Subscriptions" 中配置 HTTPS URL：`https://your-server/slack/{account_id}/webhook`
 7. 获取 Signing Secret（用于验证请求）
 
 ## 使用示例
@@ -137,4 +136,3 @@ await adapter.connect();
 - [Slack Bot 开发文档](https://api.slack.com/bot-users)
 - [@slack/web-api 文档](https://slack.dev/node-slack-sdk/web-api)
 - [Slack 适配器 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-slack)
-

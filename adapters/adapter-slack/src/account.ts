@@ -14,12 +14,12 @@ export function createSlackAccount(
         token: config.token,
         signing_secret: config.signing_secret,
         app_token: config.app_token,
-        socket_mode: config.socket_mode ?? false,
+        receive_mode: config.receive_mode ?? "socket",
     };
     const bot = new SlackBot(slackConfig);
     const account = new Account<"slack", SlackBot>(adapter, bot, config);
 
-    if (!slackConfig.socket_mode) {
+    if (slackConfig.receive_mode === "webhook") {
         adapter.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
     }
     bot.on("ready", () => {
@@ -29,13 +29,16 @@ export function createSlackAccount(
         account.avatar = me?.profile?.image_512 || me?.profile?.image_192 || adapter.icon;
         adapter.logger.info(`Slack Bot ${config.account_id} 已就绪`);
     });
-    bot.on("error", error => {
-        account.status = AccountStatus.OffLine;
+    bot.on("client_error", error => {
         adapter.logger.error(`Slack Bot ${config.account_id} 错误:`, error);
+    });
+    bot.on("transport_state", state => {
+        account.status = state === "connected" ? AccountStatus.Online : AccountStatus.OffLine;
+        adapter.logger.info(`Slack Bot ${config.account_id} Socket Mode 状态: ${state}`);
     });
     bot.on("event", (event: SlackEvent, envelope: SlackWebhookBody) => {
         try {
-            if (event.type === "message" && event.ts && event.channel) {
+            if (event.type === "message" && event.ts && typeof event.channel === "string") {
                 bot.rememberMessage(event.ts, event.channel, event.thread_ts);
             }
             const me = bot.getCachedMe();
@@ -61,6 +64,7 @@ export function createSlackAccount(
         } catch (error) {
             account.status = AccountStatus.OffLine;
             adapter.logger.error("启动 Slack Bot 失败:", error);
+            throw error;
         }
     });
     account.on("stop", async () => {

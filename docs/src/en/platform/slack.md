@@ -45,9 +45,8 @@ Configure Slack account in `config.yaml`:
 slack.your_bot_id:
   # Slack platform configuration
   token: 'xoxb-your-bot-token'  # Slack Bot Token, required
-  signing_secret: 'your_signing_secret'  # Optional, for request verification
-  app_token: 'xapp-your-app-token'  # Optional, for Socket Mode
-  socket_mode: false  # Whether to use Socket Mode, default false
+  receive_mode: socket  # socket (default) or webhook
+  app_token: 'xapp-your-app-token'  # Required in Socket Mode
   
   # OneBot V11 protocol configuration
   onebot.v11:
@@ -84,4 +83,3 @@ await client.connect({
 - [Slack Adapter Configuration](/en/config/adapter/slack)
 - [Quick Start](/en/guide/start)
 - [Client SDK Guide](/en/guide/client-sdk)
-

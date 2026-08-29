@@ -4,6 +4,8 @@
  */
 
 // 配置类型
+export type SlackReceiveMode = "socket" | "webhook";
+
 export interface SlackConfig {
     account_id: string;
     /** Bot Token（xoxb-…）。 */
@@ -12,7 +14,8 @@ export interface SlackConfig {
     signing_secret?: string;
     /** App-Level Token（xapp-…），用于 Socket Mode。 */
     app_token?: string;
-    socket_mode?: boolean;
+    /** 事件接收方式；Socket Mode 无需公网回调地址。 */
+    receive_mode?: SlackReceiveMode;
 }
 
 // Slack 用户类型
@@ -108,8 +111,8 @@ export interface SlackEvent {
     type: string;
     subtype?: string;
     event_ts: string;
-    user?: string;
-    channel?: string;
+    user?: string | { id?: string; name?: string; [key: string]: unknown };
+    channel?: string | { id?: string; name?: string; [key: string]: unknown };
     text?: string;
     ts?: string;
     thread_ts?: string;

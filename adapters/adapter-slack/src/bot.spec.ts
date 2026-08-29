@@ -1,6 +1,8 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
+import { ErrorCategory } from "onebots";
 import { SlackBot } from "./bot.js";
+import { SlackError } from "./errors.js";
 
 describe("SlackBot HTTP Events", () => {
     it("验证原始请求体签名后再接收事件", async () => {
@@ -45,6 +47,119 @@ describe("SlackBot HTTP Events", () => {
         expect(ctx.status).toBe(401);
         expect(ctx.body).toEqual({ ok: false, error: "invalid_signature" });
     });
+
+    it("Webhook 未配置签名密钥时明确拒绝接收", async () => {
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            receive_mode: "webhook",
+        });
+        const clientError = vi.fn();
+        bot.on("client_error", clientError);
+        const ctx = {
+            request: { rawBody: "{}", body: {} },
+            get: () => "",
+            status: 200,
+            body: undefined,
+        };
+
+        await bot.handleWebhook(ctx as never, vi.fn());
+
+        expect(ctx.status).toBe(503);
+        expect(ctx.body).toEqual({ ok: false, error: "SLACK_SIGNING_SECRET_REQUIRED" });
+        expect(clientError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "SLACK_SIGNING_SECRET_REQUIRED" }),
+        );
+    });
+
+    it("接收交互表单 payload 并汇入公开 ingest 管线", async () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        const event = vi.fn();
+        const rawEvent = vi.fn();
+        bot.on("event", event);
+        bot.on("raw_event", rawEvent);
+
+        const body = bot.ingest({
+            payload: JSON.stringify({ type: "block_actions", user: { id: "U1" } }),
+        });
+
+        expect(body).toMatchObject({ type: "block_actions", user: { id: "U1" } });
+        expect(rawEvent).toHaveBeenCalledWith(body);
+        expect(event).toHaveBeenCalledWith(
+            expect.objectContaining({ type: "block_actions" }),
+            body,
+        );
+    });
+
+    it("拒绝无法投影的非对象载荷", () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        expect(() => bot.ingest([])).toThrowError(
+            expect.objectContaining({ code: "SLACK_EVENT_INVALID" }),
+        );
+    });
+
+    it("保留 Slack 重试的原始事件但只投影一次", () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        const event = vi.fn();
+        const rawEvent = vi.fn();
+        bot.on("event", event);
+        bot.on("raw_event", rawEvent);
+        const body = {
+            type: "event_callback",
+            event_id: "Ev-repeat",
+            event: { type: "reaction_added", event_ts: "1" },
+        };
+
+        bot.ingest(body);
+        bot.ingest(body);
+
+        expect(rawEvent).toHaveBeenCalledTimes(2);
+        expect(event).toHaveBeenCalledOnce();
+    });
+});
+
+describe("SlackBot lifecycle", () => {
+    it("并发启动只鉴权一次且重复停止不重复发事件", async () => {
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            receive_mode: "webhook",
+            signing_secret: "secret",
+        });
+        const auth = vi.fn().mockResolvedValue({ ok: true, user_id: "B1", user: "bot" });
+        bot.getWebClient().auth.test = auth;
+        const ready = vi.fn();
+        const stopped = vi.fn();
+        bot.on("ready", ready);
+        bot.on("stopped", stopped);
+
+        await Promise.all([bot.start(), bot.start()]);
+        await bot.start();
+        await bot.stop();
+        await bot.stop();
+
+        expect(auth).toHaveBeenCalledOnce();
+        expect(ready).toHaveBeenCalledOnce();
+        expect(stopped).toHaveBeenCalledOnce();
+    });
+
+    it("启动失败抛出结构化错误而不是静默离线", async () => {
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            receive_mode: "webhook",
+            signing_secret: "secret",
+        });
+        bot.getWebClient().auth.test = vi.fn().mockRejectedValue(new Error("network down"));
+        const clientError = vi.fn();
+        bot.on("client_error", clientError);
+
+        await expect(bot.start()).rejects.toMatchObject({
+            code: "SLACK_API_ERROR",
+            operation: "auth.test",
+        });
+        expect(clientError).toHaveBeenCalledOnce();
+    });
 });
 
 describe("SlackBot conversations", () => {
@@ -69,7 +184,10 @@ describe("SlackBot conversations", () => {
         const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
         bot.getWebClient().conversations.create = vi.fn().mockResolvedValue({ ok: true });
 
-        await expect(bot.createChannel("general")).rejects.toThrow("响应缺少频道信息");
+        await expect(bot.createChannel("general")).rejects.toMatchObject({
+            code: "SLACK_CHANNEL_MISSING",
+            category: ErrorCategory.PROTOCOL,
+        });
     });
 
     it("通过 filesUploadV2 上传 Base64 文件并返回真实消息时间戳", async () => {
@@ -116,6 +234,24 @@ describe("SlackBot conversations", () => {
         expect(bot.getMessageContext("171.0002")).toEqual({
             channel: "C1",
             threadTs: "170.0001",
+        });
+    });
+
+    it("将 Slack 平台业务错误收敛为结构化错误", async () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        bot.getWebClient().apiCall = vi.fn().mockResolvedValue({
+            ok: false,
+            error: "channel_not_found",
+        });
+
+        const error = await bot
+            .call("conversations.info", { channel: "missing" })
+            .catch(value => value);
+        expect(error).toBeInstanceOf(SlackError);
+        expect(error).toMatchObject({
+            code: "SLACK_CHANNEL_NOT_FOUND",
+            platformCode: "channel_not_found",
+            operation: "conversations.info",
         });
     });
 });
