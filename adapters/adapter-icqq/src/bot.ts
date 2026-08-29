@@ -8,7 +8,7 @@ import type { FriendInfo, GroupInfo, MemberInfo } from "@icqqjs/icqq/lib/entitie
 import type { Sendable, PrivateMessage, GroupMessage } from "@icqqjs/icqq/lib/message";
 import type { MessageRet } from "@icqqjs/icqq/lib/events";
 import type { ICQQConfig, ICQQUser, ICQQFriend, ICQQGroup, ICQQGroupMember } from "./types.js";
-import { wireICQQClientEvents } from "./client-events.js";
+import { detachICQQClientListeners, wireICQQClientEvents } from "./client-events.js";
 import { buildICQQClientConfig, parseICQQUin } from "./client-config.js";
 
 export class ICQQBot extends EventEmitter {
@@ -16,10 +16,15 @@ export class ICQQBot extends EventEmitter {
     private client: Client | null = null;
     private ready: boolean = false;
     private loginInfo: ICQQUser | null = null;
+    private desiredRunning = false;
+    private lifecycleGeneration = 0;
+    private startPromise: Promise<void> | null = null;
+    private readonly clientFactory: typeof createClient;
 
-    constructor(config: ICQQConfig) {
+    constructor(config: ICQQConfig, deps?: { createClient?: typeof createClient }) {
         super();
         this.config = config;
+        this.clientFactory = deps?.createClient ?? createClient;
     }
 
     /**
@@ -47,30 +52,60 @@ export class ICQQBot extends EventEmitter {
      * 启动 Bot
      */
     async start(): Promise<void> {
+        if (this.startPromise) return this.startPromise;
+        if (this.desiredRunning && this.client) return;
+
+        this.desiredRunning = true;
+        const generation = ++this.lifecycleGeneration;
+        let promise: Promise<void>;
+        promise = this.startGeneration(generation).finally(() => {
+            if (this.startPromise === promise) this.startPromise = null;
+        });
+        this.startPromise = promise;
+        return promise;
+    }
+
+    private async startGeneration(generation: number): Promise<void> {
         const uin = parseICQQUin(this.config.account_id);
         const clientConfig = buildICQQClientConfig(this.config);
 
-        // 创建客户端
-        this.client = createClient(clientConfig);
+        const client = this.clientFactory(clientConfig);
+        if (!this.isCurrentGeneration(generation)) return;
+        this.client = client;
         // icqq 内部 setTimeout 调用 sendSsoHeartBeat 未 catch，超时会变成 UnhandledPromiseRejection 并拖垮进程
-        this.patchSsoHeartBeat(this.client);
+        this.patchSsoHeartBeat(client, generation);
 
-        wireICQQClientEvents(this.client, {
-            emit: (event, payload) => this.emit(event, payload),
+        wireICQQClientEvents(client, {
+            emit: (event, payload) => {
+                if (this.isCurrentClient(client, generation)) this.emit(event, payload);
+            },
             online: user => {
+                if (!this.isCurrentClient(client, generation)) return;
                 this.ready = true;
                 this.loginInfo = user;
             },
             offline: () => {
+                if (!this.isCurrentClient(client, generation)) return;
                 this.ready = false;
             },
         });
 
         // 登录（login 返回 Promise，必须吞掉 rejection，避免未处理导致进程退出）
-        const loginResult = this.config.password
-            ? this.client.login(uin, this.config.password)
-            : this.client.login(uin);
+        let loginResult: ReturnType<Client["login"]>;
+        try {
+            loginResult = this.config.password
+                ? client.login(uin, this.config.password)
+                : client.login(uin);
+        } catch (error) {
+            if (this.isCurrentClient(client, generation)) {
+                this.desiredRunning = false;
+                this.client = null;
+                detachICQQClientListeners(client);
+            }
+            throw error;
+        }
         void Promise.resolve(loginResult).catch((error: unknown) => {
+            if (!this.isCurrentClient(client, generation)) return;
             const message = error instanceof Error ? error.message : String(error);
             this.emit("login_error", { code: -1, message: message || "登录 Promise 被拒绝" });
         });
@@ -79,7 +114,7 @@ export class ICQQBot extends EventEmitter {
     /**
      * 包裹 SSO 心跳：超时后记录并继续下一轮，避免未处理 rejection 导致进程退出
      */
-    private patchSsoHeartBeat(client: Client): void {
+    private patchSsoHeartBeat(client: Client, generation: number): void {
         type HeartbeatClient = Omit<Client, "sendSsoHeartBeat" | "startSsoHeartBeat"> & {
             sendSsoHeartBeat?: () => boolean | Promise<boolean>;
             startSsoHeartBeat?: () => void;
@@ -89,10 +124,12 @@ export class ICQQBot extends EventEmitter {
         if (!original) return;
 
         hb.sendSsoHeartBeat = () => {
+            if (!this.isCurrentClient(client, generation)) return false;
             try {
                 const result = original();
                 if (result && typeof (result as Promise<boolean>).then === "function") {
                     return (result as Promise<boolean>).catch((error: unknown) => {
+                        if (!this.isCurrentClient(client, generation)) return false;
                         this.emit("heartbeat_error", error);
                         try {
                             hb.startSsoHeartBeat?.();
@@ -104,6 +141,7 @@ export class ICQQBot extends EventEmitter {
                 }
                 return result;
             } catch (error) {
+                if (!this.isCurrentClient(client, generation)) return false;
                 this.emit("heartbeat_error", error);
                 try {
                     hb.startSsoHeartBeat?.();
@@ -119,17 +157,30 @@ export class ICQQBot extends EventEmitter {
      * 停止 Bot
      */
     async stop(): Promise<void> {
-        if (this.client) {
+        this.desiredRunning = false;
+        this.lifecycleGeneration += 1;
+        const client = this.client;
+        this.client = null;
+        if (client) {
             try {
-                await Promise.resolve(this.client.logout());
-            } catch {
-                // 登出失败不影响清理
+                await Promise.resolve(client.logout());
+            } catch (error) {
+                this.emit("stop_error", error);
+            } finally {
+                detachICQQClientListeners(client);
             }
-            this.client = null;
         }
         this.ready = false;
         this.loginInfo = null;
         this.emit("stop");
+    }
+
+    private isCurrentGeneration(generation: number): boolean {
+        return this.desiredRunning && generation === this.lifecycleGeneration;
+    }
+
+    private isCurrentClient(client: Client, generation: number): boolean {
+        return this.isCurrentGeneration(generation) && this.client === client;
     }
 
     // ============================================

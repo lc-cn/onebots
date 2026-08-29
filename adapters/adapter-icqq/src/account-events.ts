@@ -83,6 +83,9 @@ export function wireICQQAccountEvents(
         const message = error instanceof Error ? error.message : String(error);
         context.logger.warn(`ICQQ SSO 心跳异常（已恢复调度）: ${message}`);
     });
+    bot.on("stop_error", (error: unknown) => {
+        context.logger.warn("ICQQ 登出失败，已强制清理本地客户端", error);
+    });
 
     const clearStatusCards = () => {
         clearVerification("offline");

@@ -14,6 +14,19 @@ export interface ICQQClientEventSink {
     offline(): void;
 }
 
+/** ICQQ 声明未公开 EventEmitter 清理方法，运行时支持时安全释放旧代次监听器。 */
+export function detachICQQClientListeners(client: Client): void {
+    const candidate: unknown = client;
+    if (
+        candidate &&
+        typeof candidate === "object" &&
+        "removeAllListeners" in candidate &&
+        typeof candidate.removeAllListeners === "function"
+    ) {
+        candidate.removeAllListeners();
+    }
+}
+
 /**
  * 将 ICQQ 客户端的细粒度事件桥接为稳定的 Bot 事件。
  * 此层只处理客户端语义和原始数据保真，不投影 OneBots 通用事件。
