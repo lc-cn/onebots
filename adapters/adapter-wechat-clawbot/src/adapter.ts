@@ -1,13 +1,13 @@
 /**
  * 微信 ClawBot（iLink Bot HTTP）适配器，平台标识 **`wechat-clawbot`**。
  */
-import { readFile } from "node:fs/promises";
 import {
     Account,
     AccountStatus,
     Adapter,
     AdapterRegistry,
     BaseApp,
+    readPackageVersion,
     type CommonTypes,
 } from "onebots";
 import { WechatIlinkBot } from "./bot.js";
@@ -217,7 +217,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
     async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots wechat-clawbot adapter",
-            app_version: await packageVersion(),
+            app_version: await readPackageVersion(import.meta.url),
             impl: this.platform,
             version: "iLink Bot HTTP",
         };
@@ -357,16 +357,6 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
 
         return account;
     }
-}
-
-async function packageVersion(): Promise<string> {
-    const raw = await readFile(new URL("../package.json", import.meta.url), "utf8");
-    const value: unknown = JSON.parse(raw);
-    return isRecord(value) && typeof value.version === "string" ? value.version : "unknown";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 declare module "onebots" {

@@ -4,6 +4,7 @@ import {
     Adapter,
     AdapterRegistry,
     BaseApp,
+    readPackageVersion,
     type CommonTypes,
 } from "onebots";
 import { HeychatBot } from "./bot.js";
@@ -333,6 +334,7 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
     async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots",
+            app_version: await readPackageVersion(import.meta.url),
             impl: "@onebots/adapter-heychat",
             version: "黑盒语音官方机器人 API",
         };

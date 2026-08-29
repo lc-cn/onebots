@@ -11,6 +11,7 @@ import {
     BaseApp,
     CommonTypes,
     defineAdapterCapabilities,
+    readPackageVersion,
     unixSecondsToEventMs,
     type AdapterCapabilityManifest,
     type CommonEvent,
@@ -253,6 +254,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
     async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots Mock Adapter",
+            app_version: await readPackageVersion(import.meta.url),
             impl: "mock",
         };
     }

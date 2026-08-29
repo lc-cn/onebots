@@ -1,10 +1,10 @@
-import { readFile } from "node:fs/promises";
 import {
     Account,
     AccountStatus,
     Adapter,
     AdapterRegistry,
     BaseApp,
+    readPackageVersion,
     type CommonTypes,
 } from "onebots";
 import { emailCapabilities } from "./capabilities.js";
@@ -124,7 +124,7 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
     async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots Email Adapter",
-            app_version: await packageVersion(),
+            app_version: await readPackageVersion(import.meta.url),
             impl: "SMTP / IMAP IDLE",
             version: "RFC 5321 / RFC 3501",
         };
@@ -225,12 +225,6 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
             };
         });
     }
-}
-
-async function packageVersion(): Promise<string> {
-    const raw = await readFile(new URL("../package.json", import.meta.url), "utf8");
-    const value: unknown = JSON.parse(raw);
-    return isRecord(value) && typeof value.version === "string" ? value.version : "unknown";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

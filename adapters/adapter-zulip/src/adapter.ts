@@ -1,10 +1,10 @@
-import { readFile } from "node:fs/promises";
 import {
     Account,
     AccountStatus,
     Adapter,
     AdapterRegistry,
     BaseApp,
+    readPackageVersion,
     type CommonTypes,
 } from "onebots";
 import { zulipCapabilities } from "./capabilities.js";
@@ -274,7 +274,7 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
     async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots Zulip Adapter",
-            app_version: await packageVersion(),
+            app_version: await readPackageVersion(import.meta.url),
             impl: "Zulip REST API / Event Queue",
             version: "v1",
         };
@@ -421,12 +421,6 @@ function stringValue(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-async function packageVersion(): Promise<string> {
-    const raw = await readFile(new URL("../package.json", import.meta.url), "utf8");
-    const value: unknown = JSON.parse(raw);
-    return isRecord(value) && typeof value.version === "string" ? value.version : "unknown";
 }
 
 declare module "onebots" {
