@@ -49,6 +49,7 @@ export interface TeamsContext {
 export class TeamsBot extends EventEmitter {
     private readonly adapter: CloudAdapter;
     private readonly botAudience: string;
+    private readonly graphBaseUrl: string;
     private me: TeamsUser;
     private graphToken?: { value: string; expiresAt: number };
 
@@ -61,12 +62,18 @@ export class TeamsBot extends EventEmitter {
             config.bot_audience || "https://api.botframework.com",
             "bot_audience",
         );
+        this.graphBaseUrl = requireHttpsConfigUrl(
+            config.graph_base_url || "https://graph.microsoft.com/v1.0",
+            "graph_base_url",
+        ).replace(/\/$/u, "");
         const authConfig: AuthConfiguration = {
             authType: AuthType.ClientSecret,
             clientId: config.app_id,
             clientSecret: config.app_password,
             tenantId: config.tenant_id || "botframework.com",
-            authorityEndpoint: config.authority_endpoint,
+            authorityEndpoint: config.authority_endpoint
+                ? requireHttpsConfigUrl(config.authority_endpoint, "authority_endpoint")
+                : undefined,
             scopes: [this.botAudience],
             validateIssuer: true,
         };
@@ -238,7 +245,7 @@ export class TeamsBot extends EventEmitter {
     }
 
     getGraphBaseUrl(): string {
-        return this.config.graph_base_url || "https://graph.microsoft.com/v1.0";
+        return this.graphBaseUrl;
     }
 
     async callGraphApi(
@@ -250,8 +257,7 @@ export class TeamsBot extends EventEmitter {
         },
     ): Promise<unknown> {
         const token = await this.getGraphToken();
-        const baseUrl = this.getGraphBaseUrl().replace(/\/$/u, "");
-        const url = new URL(`${baseUrl}/${path.replace(/^\//u, "")}`);
+        const url = new URL(`${this.graphBaseUrl}/${path.replace(/^\//u, "")}`);
         for (const [key, value] of Object.entries(options.query || {})) {
             url.searchParams.set(key, String(value));
         }

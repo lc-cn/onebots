@@ -36,6 +36,7 @@ export class KoaAgentsResponse implements WebResponse {
 
     end(): this {
         this.ended = true;
+        this.sent = true;
         return this;
     }
 }
@@ -82,7 +83,7 @@ export function graphErrorCode(value: unknown): string {
 }
 
 export function graphTokenAuthority(authority: string, tenantId: string): string {
-    const url = new URL(authority);
+    const url = new URL(requireHttpsConfigUrl(authority, "authority_endpoint"));
     return `${url.origin}/${encodeURIComponent(tenantId)}`;
 }
 

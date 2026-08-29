@@ -46,9 +46,20 @@ describe("TeamsBot 会话引用契约", () => {
             }),
         ).toThrow(/HTTPS/u);
     });
+
+    it("初始化时拒绝非 HTTPS 的 Graph 与 Entra 端点", () => {
+        expect(() => createBot({ graph_base_url: "http://127.0.0.1/v1.0" })).toThrow(
+            /graph_base_url.*HTTPS/u,
+        );
+        expect(() => createBot({ authority_endpoint: "http://127.0.0.1" })).toThrow(
+            /authority_endpoint.*HTTPS/u,
+        );
+    });
 });
 
-function createBot(): TeamsBot {
+function createBot(
+    overrides: Partial<ConstructorParameters<typeof TeamsBot>[0]> = {},
+): TeamsBot {
     const references = new Map<string, TeamsConversationReference>();
     return new TeamsBot(
         {
@@ -56,6 +67,7 @@ function createBot(): TeamsBot {
             app_id: "00000000-0000-0000-0000-000000000000",
             app_password: "secret",
             tenant_id: "organizations",
+            ...overrides,
         },
         {
             get: id => references.get(id),
