@@ -2,7 +2,7 @@ import { Account, AccountStatus } from "onebots";
 import type { Logger } from "@larksuiteoapi/node-sdk";
 import type { FeishuAdapter } from "./adapter.js";
 import { FeishuBot } from "./bot.js";
-import { projectFeishuEvent } from "./events.js";
+import { projectFeishuEvents } from "./events.js";
 import type { FeishuConfig, FeishuEvent, FeishuWebhookBody } from "./types.js";
 
 /** 组装飞书账号生命周期；Webhook 与官方长连接共用同一事件投影。 */
@@ -16,7 +16,7 @@ export function createFeishuAccount(
         app_secret: config.app_secret,
         encrypt_key: config.encrypt_key,
         verification_token: config.verification_token,
-        long_connection: config.long_connection ?? false,
+        receive_mode: config.receive_mode ?? "long_connection",
         endpoint: config.endpoint,
     };
     const bot = new FeishuBot(feishuConfig);
@@ -25,7 +25,7 @@ export function createFeishuAccount(
     const platformName = lark ? "Lark" : "飞书";
     const icon = lark ? "https://open.larksuite.com/favicon.ico" : adapter.icon;
 
-    if (feishuConfig.long_connection) {
+    if (feishuConfig.receive_mode === "long_connection") {
         bot.configureLongConnection(createSdkLogger(adapter));
     } else {
         adapter.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
@@ -43,11 +43,11 @@ export function createFeishuAccount(
     bot.on("event", (event: FeishuEvent, rawEvent: FeishuWebhookBody) => {
         try {
             if (isOwnMessage(event, bot.getCachedMe()?.open_id)) return;
-            const projected = projectFeishuEvent(event, rawEvent, {
+            const projected = projectFeishuEvents(event, rawEvent, {
                 botId: adapter.createId(config.account_id),
                 createId: value => adapter.createId(value),
             });
-            if (projected) account.dispatch(projected);
+            for (const item of projected) account.dispatch(item);
         } catch (error) {
             adapter.logger.error(`[${platformName}] 投影原始事件失败:`, error);
         }
@@ -59,6 +59,7 @@ export function createFeishuAccount(
         } catch (error) {
             account.status = AccountStatus.OffLine;
             adapter.logger.error(`启动 ${platformName} Bot 失败:`, error);
+            throw error;
         }
     });
     account.on("stop", async () => {

@@ -4,15 +4,15 @@
  */
 import {
     Account,
-    AdapterRegistry,
     AccountStatus,
+    Adapter,
+    AdapterRegistry,
+    BaseApp,
     readPackageVersion,
     toUnixSeconds,
+    type CommonTypes,
 } from "onebots";
-import { Adapter } from "onebots";
-import { BaseApp } from "onebots";
 import { FeishuBot } from "./bot.js";
-import { type CommonTypes } from "onebots";
 import { type FeishuConfig, type FeishuAPIResponse, type FeishuMessage } from "./types.js";
 import { feishuCapabilities } from "./capabilities.js";
 import { createFeishuAccount } from "./account.js";
@@ -126,8 +126,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const bot = this.requireBot(uin);
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
         // 飞书删除消息 API
-        const http = bot.getHttpClient();
-        await http.delete(`/im/v1/messages/${encodeURIComponent(msgId)}`);
+        await bot.delete(`/im/v1/messages/${encodeURIComponent(msgId)}`);
     }
 
     /**
@@ -138,8 +137,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         // 飞书获取消息 API
-        const http = bot.getHttpClient();
-        const response = await http.get<FeishuAPIResponse>(
+        const response = await bot.get<FeishuAPIResponse>(
             `/im/v1/messages/${encodeURIComponent(msgId)}`,
         );
 
@@ -298,9 +296,10 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
     /** 更新群名称。 */
     async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
-        await this.requireBot(uin).put(`/im/v1/chats/${params.group_id.string}`, {
-            name: params.group_name,
-        });
+        await this.requireBot(uin).put(
+            `/im/v1/chats/${encodeURIComponent(params.group_id.string)}`,
+            { name: params.group_name },
+        );
     }
 
     /**
@@ -316,7 +315,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
                 code: "FEISHU_IDENTITY_NOT_READY",
             });
         await bot.delete(
-            `/im/v1/chats/${chatId}/members`,
+            `/im/v1/chats/${encodeURIComponent(chatId)}/members`,
             { id_list: [me.open_id] },
             { member_id_type: "open_id" },
         );
@@ -351,13 +350,13 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     ): Promise<Adapter.GroupMemberInfo> {
         const bot = this.requireBot(uin);
         const userId = params.user_id.string;
-        const user = await bot.getUserInfo(userId);
+        const member = await bot.getChatMember(params.group_id.string, userId);
 
         return {
             group_id: params.group_id,
-            user_id: this.createId(user.user_id || user.open_id),
-            user_name: user.name || "",
-            card: user.nickname || user.name || "",
+            user_id: this.createId(member.user_id || member.open_id),
+            user_name: member.name || "",
+            card: member.nickname || member.name || "",
             role: "member",
         };
     }
@@ -371,7 +370,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const userId = params.user_id.string;
 
         await bot.delete(
-            `/im/v1/chats/${chatId}/members`,
+            `/im/v1/chats/${encodeURIComponent(chatId)}/members`,
             { id_list: [userId] },
             { member_id_type: "open_id" },
         );

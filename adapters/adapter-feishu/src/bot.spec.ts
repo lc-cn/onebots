@@ -1,6 +1,9 @@
 import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ErrorCategory } from "onebots";
 import { FeishuBot } from "./bot.js";
+import { FeishuError } from "./errors.js";
+import { FEISHU_LONG_CONNECTION_EVENT_TYPES } from "./long-connection.js";
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -111,6 +114,34 @@ describe("FeishuBot 目录分页", () => {
             page_token: "next",
         });
     });
+
+    it("群成员详情验证真实成员身份", async () => {
+        const bot = createBot();
+        vi.spyOn(bot, "get").mockResolvedValue({
+            data: {
+                code: 0,
+                msg: "ok",
+                data: { items: [{ open_id: "ou_1", name: "Alice" }], has_more: false },
+            },
+        } as never);
+
+        await expect(bot.getChatMember("oc_1", "ou_1")).resolves.toMatchObject({ name: "Alice" });
+        await expect(bot.getChatMember("oc_1", "ou_missing")).rejects.toMatchObject({
+            code: "FEISHU_GROUP_MEMBER_NOT_FOUND",
+            category: ErrorCategory.RESOURCE,
+        });
+    });
+
+    it("资源 ID 进入路径前会被编码", async () => {
+        const bot = createBot();
+        const get = vi.spyOn(bot, "get").mockResolvedValue({
+            data: { code: 0, msg: "ok", data: { chat_id: "oc/1" } },
+        } as never);
+
+        await bot.getChatInfo("oc/1");
+
+        expect(get).toHaveBeenCalledWith("/im/v1/chats/oc%2F1");
+    });
 });
 
 describe("FeishuBot 请求与事件边界", () => {
@@ -196,10 +227,126 @@ describe("FeishuBot 请求与事件边界", () => {
             expect.objectContaining({ code: "FEISHU_LISTENER_FAILED" }),
         );
     });
+
+    it("并发启动共享完整初始化且只触发一次 ready", async () => {
+        const request = vi
+            .fn()
+            .mockResolvedValueOnce(
+                jsonResponse({ code: 0, msg: "ok", tenant_access_token: "token", expire: 7200 }),
+            )
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    code: 0,
+                    msg: "ok",
+                    bot: { open_id: "ou_bot", app_name: "Bot" },
+                }),
+            );
+        vi.stubGlobal("fetch", request);
+        const bot = createBot();
+        const ready = vi.fn();
+        bot.on("ready", ready);
+
+        await Promise.all([bot.start(), bot.start()]);
+
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(ready).toHaveBeenCalledTimes(1);
+    });
+
+    it("stop 使尚未完成的启动代失效", async () => {
+        let release!: (response: Response) => void;
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(
+                () =>
+                    new Promise<Response>(resolve => {
+                        release = resolve;
+                    }),
+            ),
+        );
+        const bot = createBot();
+        const ready = vi.fn();
+        bot.on("ready", ready);
+
+        const starting = bot.start();
+        await bot.stop();
+        release(jsonResponse({ code: 0, msg: "ok", tenant_access_token: "token", expire: 7200 }));
+        await starting;
+
+        expect(ready).not.toHaveBeenCalled();
+    });
+
+    it("平台错误保留业务码并继承统一错误分类", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue(jsonResponse({ code: 12345, msg: "失败" })),
+        );
+        const bot = createBot();
+
+        const error = await bot
+            .callApi("/im/v1/test", { skipAuth: true })
+            .catch((reason: unknown) => reason);
+
+        expect(error).toBeInstanceOf(FeishuError);
+        expect(error).toMatchObject({
+            code: "FEISHU_API_ERROR",
+            category: ErrorCategory.ADAPTER,
+            platformCode: 12345,
+        });
+    });
+
+    it("拒绝可能泄露应用凭据的不安全 endpoint", () => {
+        expect(
+            () =>
+                new FeishuBot({
+                    account_id: "A1",
+                    app_id: "cli_1",
+                    app_secret: "secret",
+                    endpoint: "http://example.com/open-apis?target=evil",
+                }),
+        ).toThrowError(
+            expect.objectContaining({
+                code: "FEISHU_ENDPOINT_INVALID",
+                category: ErrorCategory.VALIDATION,
+            }),
+        );
+    });
+
+    it("长连接客户端未注入 SDK logger 时不会伪装 ready", async () => {
+        const bot = new FeishuBot({ account_id: "A1", app_id: "cli_1", app_secret: "secret" });
+
+        await expect(bot.start()).rejects.toMatchObject({
+            code: "FEISHU_LONG_CONNECTION_NOT_CONFIGURED",
+            category: ErrorCategory.CONFIG,
+        });
+    });
+
+    it("注册官方 SDK 当前声明的完整 IM 事件集合", () => {
+        expect(FEISHU_LONG_CONNECTION_EVENT_TYPES).toEqual([
+            "im.chat.access_event.bot_p2p_chat_entered_v1",
+            "im.chat.disbanded_v1",
+            "im.chat.member.bot.added_v1",
+            "im.chat.member.bot.deleted_v1",
+            "im.chat.member.user.added_v1",
+            "im.chat.member.user.deleted_v1",
+            "im.chat.member.user.withdrawn_v1",
+            "im.chat.updated_v1",
+            "im.message.message_read_v1",
+            "im.message.reaction.created_v1",
+            "im.message.reaction.deleted_v1",
+            "im.message.recalled_v1",
+            "im.message.receive_v1",
+            "application.bot.menu_v6",
+        ]);
+    });
 });
 
 function createBot(): FeishuBot {
-    return new FeishuBot({ account_id: "A1", app_id: "cli_1", app_secret: "secret" });
+    return new FeishuBot({
+        account_id: "A1",
+        app_id: "cli_1",
+        app_secret: "secret",
+        receive_mode: "webhook",
+    });
 }
 
 function jsonResponse(value: unknown, status = 200): Response {

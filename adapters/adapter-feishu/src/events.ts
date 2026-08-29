@@ -7,48 +7,92 @@ interface ProjectorContext {
 }
 
 /** 投影飞书 2.0 事件；未知事件仍以 custom notice 和 raw_event 无损交付。 */
-export function projectFeishuEvent(
+export function projectFeishuEvents(
     event: FeishuEvent,
     rawEvent: FeishuWebhookBody,
     context: ProjectorContext,
-): CommonEvent.Event<FeishuWebhookBody> | undefined {
+): CommonEvent.Event<FeishuWebhookBody>[] {
     const eventType = event.header.event_type;
     const payload = objectValue(event.event);
     switch (eventType) {
         case "im.message.receive_v1":
-            return projectMessage(event, rawEvent, payload, context);
+            return singleton(projectMessage(event, rawEvent, payload, context));
         case "im.message.recalled_v1":
-            return notice(event, rawEvent, context, "message_deleted", {
-                message_id: idValue(payload.message_id, context),
-                group: groupValue(payload.chat_id, context),
-            });
+            return [
+                notice(event, rawEvent, context, "message_deleted", {
+                    message_id: idValue(payload.message_id, context),
+                    group: groupValue(payload.chat_id, context),
+                }),
+            ];
         case "im.message.message_read_v1":
-            return notice(event, rawEvent, context, "custom", extension(eventType));
+            return [notice(event, rawEvent, context, "custom", extension(eventType))];
+        case "im.message.reaction.created_v1":
+        case "im.message.reaction.deleted_v1":
+            return [projectReaction(event, rawEvent, payload, context)];
         case "im.chat.member.user.added_v1":
         case "im.chat.member.user.deleted_v1": {
             const users = Array.isArray(payload.users) ? payload.users : [];
-            const first = objectValue(users[0]);
-            return notice(
-                event,
-                rawEvent,
-                context,
-                eventType.endsWith("added_v1") ? "member_joined" : "member_left",
-                {
-                    user: userValue(first, context),
-                    group: groupValue(payload.chat_id, context),
-                    extensions: { feishu: { users } },
-                },
-            );
+            return users.map((value, index) => {
+                const user = objectValue(value);
+                const projected = notice(
+                    event,
+                    rawEvent,
+                    context,
+                    eventType.endsWith("added_v1") ? "member_joined" : "member_left",
+                    {
+                        user: userValue(user, context),
+                        group: groupValue(payload.chat_id, context),
+                        extensions: { feishu: { users } },
+                    },
+                );
+                projected.id = context.createId(
+                    `${event.header.event_id}:${nativeUserId(user) || index}`,
+                );
+                return projected;
+            });
         }
         case "im.chat.disbanded_v1":
         case "im.chat.updated_v1":
-            return notice(event, rawEvent, context, "custom", {
-                group: groupValue(payload.chat_id, context),
-                ...extension(eventType),
-            });
+        case "im.chat.member.bot.added_v1":
+        case "im.chat.member.bot.deleted_v1":
+        case "im.chat.member.user.withdrawn_v1":
+            return [
+                notice(event, rawEvent, context, "custom", {
+                    group: groupValue(payload.chat_id, context),
+                    ...extension(eventType),
+                }),
+            ];
         default:
-            return notice(event, rawEvent, context, "custom", extension(eventType));
+            return [notice(event, rawEvent, context, "custom", extension(eventType))];
     }
+}
+
+function projectReaction(
+    event: FeishuEvent,
+    rawEvent: FeishuWebhookBody,
+    payload: Record<string, unknown>,
+    context: ProjectorContext,
+): CommonEvent.Notice<FeishuWebhookBody> {
+    const userId = objectValue(payload.user_id);
+    const reaction = objectValue(payload.reaction_type);
+    return notice(
+        event,
+        rawEvent,
+        context,
+        event.header.event_type.endsWith("created_v1") ? "reaction_added" : "reaction_removed",
+        {
+            message_id: idValue(payload.message_id, context),
+            user: userValue(userId, context),
+            extensions: {
+                feishu: {
+                    event_type: event.header.event_type,
+                    emoji_type: stringValue(reaction.emoji_type),
+                    operator_type: stringValue(payload.operator_type),
+                    action_time: stringValue(payload.action_time),
+                },
+            },
+        },
+    );
 }
 
 function projectMessage(
@@ -187,8 +231,21 @@ function userValue(
     value: Record<string, unknown>,
     context: ProjectorContext,
 ): CommonTypes.User | undefined {
-    const id = firstString(value.open_id, value.user_id, value.union_id, value.member_id);
+    const id = nativeUserId(value);
     return id ? { id: context.createId(id), name: stringValue(value.name, id) } : undefined;
+}
+
+function nativeUserId(value: Record<string, unknown>): string {
+    const nestedId = objectValue(value.user_id);
+    return firstString(
+        value.open_id,
+        typeof value.user_id === "string" ? value.user_id : undefined,
+        value.union_id,
+        value.member_id,
+        nestedId.open_id,
+        nestedId.user_id,
+        nestedId.union_id,
+    );
 }
 
 function idValue(value: unknown, context: ProjectorContext): CommonTypes.Id | undefined {
@@ -220,4 +277,8 @@ function stringValue(value: unknown, fallback: unknown = ""): string {
 function firstString(...values: unknown[]): string {
     for (const value of values) if (typeof value === "string" && value) return value;
     return "";
+}
+
+function singleton<T>(value: T | undefined): T[] {
+    return value === undefined ? [] : [value];
 }

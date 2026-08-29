@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectFeishuEvent } from "./events.js";
+import { projectFeishuEvents } from "./events.js";
 import type { FeishuEvent, FeishuWebhookBody } from "./types.js";
 
 const context = {
@@ -39,7 +39,7 @@ describe("projectFeishuEvent", () => {
         };
         const raw = event as FeishuWebhookBody;
 
-        expect(projectFeishuEvent(event, raw, context)).toMatchObject({
+        expect(projectFeishuEvents(event, raw, context)[0]).toMatchObject({
             type: "message",
             sender: { id: { string: "ou_sender" } },
             group: { id: { string: "oc_1" } },
@@ -55,19 +55,48 @@ describe("projectFeishuEvent", () => {
     it("投影成员事件并无损保留未知事件", () => {
         const member = makeEvent("im.chat.member.user.added_v1", {
             chat_id: "oc_1",
-            users: [{ open_id: "ou_1", name: "成员" }],
+            users: [
+                { user_id: { open_id: "ou_1" }, name: "成员一" },
+                { user_id: { open_id: "ou_2" }, name: "成员二" },
+            ],
         });
-        expect(projectFeishuEvent(member, member as FeishuWebhookBody, context)).toMatchObject({
+        const members = projectFeishuEvents(member, member as FeishuWebhookBody, context);
+        expect(members).toHaveLength(2);
+        expect(members[0]).toMatchObject({
             type: "notice",
             notice_type: "member_joined",
             user: { id: { string: "ou_1" } },
         });
+        expect(members[1]).toMatchObject({ user: { id: { string: "ou_2" } } });
+        expect(members[0]?.id).not.toEqual(members[1]?.id);
 
         const unknown = makeEvent("drive.file.bitable_record_changed_v1", { token: "x" });
-        expect(projectFeishuEvent(unknown, unknown as FeishuWebhookBody, context)).toMatchObject({
+        expect(
+            projectFeishuEvents(unknown, unknown as FeishuWebhookBody, context)[0],
+        ).toMatchObject({
             type: "notice",
             notice_type: "custom",
             extensions: { feishu: { event_type: "drive.file.bitable_record_changed_v1" } },
+        });
+    });
+
+    it("按官方载荷投影消息表情回复", () => {
+        const reaction = makeEvent("im.message.reaction.created_v1", {
+            message_id: "om_1",
+            user_id: { open_id: "ou_1" },
+            reaction_type: { emoji_type: "THUMBSUP" },
+            operator_type: "user",
+            action_time: "1710000000000",
+        });
+
+        expect(
+            projectFeishuEvents(reaction, reaction as FeishuWebhookBody, context)[0],
+        ).toMatchObject({
+            type: "notice",
+            notice_type: "reaction_added",
+            message_id: { string: "om_1" },
+            user: { id: { string: "ou_1" } },
+            extensions: { feishu: { emoji_type: "THUMBSUP" } },
         });
     });
 });

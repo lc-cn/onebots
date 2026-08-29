@@ -65,9 +65,10 @@ export async function fetchFeishuUser(
     userId: string,
     userIdType: "open_id" | "user_id" | "union_id" = "open_id",
 ): Promise<FeishuUser> {
-    const { data } = await client.get<FeishuUserAPIResponse>(`/contact/v3/users/${userId}`, {
-        user_id_type: userIdType,
-    });
+    const { data } = await client.get<FeishuUserAPIResponse>(
+        `/contact/v3/users/${encodeURIComponent(userId)}`,
+        { user_id_type: userIdType },
+    );
     if (!data.data?.user)
         throw missing("FEISHU_USER_MISSING", "获取用户信息失败: 响应缺少 user", data);
     return data.data.user;
@@ -77,7 +78,9 @@ export async function fetchFeishuChat(
     client: FeishuResourceClient,
     chatId: string,
 ): Promise<FeishuChat> {
-    const { data } = await client.get<FeishuChatAPIResponse>(`/im/v1/chats/${chatId}`);
+    const { data } = await client.get<FeishuChatAPIResponse>(
+        `/im/v1/chats/${encodeURIComponent(chatId)}`,
+    );
     if (!data.data) throw missing("FEISHU_CHAT_MISSING", "获取群组信息失败: 响应缺少 chat", data);
     return data.data;
 }
@@ -103,7 +106,7 @@ export async function fetchFeishuChatMembers(
     let pageToken: string | undefined;
     do {
         const { data } = await client.get<FeishuChatMembersAPIResponse>(
-            `/im/v1/chats/${chatId}/members`,
+            `/im/v1/chats/${encodeURIComponent(chatId)}/members`,
             { page_size: 100, ...(pageToken ? { page_token: pageToken } : {}) },
         );
         if (!data.data)
@@ -116,6 +119,24 @@ export async function fetchFeishuChatMembers(
         pageToken = data.data.has_more ? data.data.page_token : undefined;
     } while (pageToken);
     return members;
+}
+
+/** 在真实群成员目录中查找用户，避免把全局通讯录用户误报为群成员。 */
+export async function fetchFeishuChatMember(
+    client: FeishuResourceClient,
+    chatId: string,
+    userId: string,
+): Promise<FeishuUser> {
+    const member = (await fetchFeishuChatMembers(client, chatId)).find(user =>
+        [user.open_id, user.user_id, user.union_id].includes(userId),
+    );
+    if (!member) {
+        throw new FeishuError(`飞书用户 ${userId} 不是群 ${chatId} 的成员`, {
+            code: "FEISHU_GROUP_MEMBER_NOT_FOUND",
+            details: { group_id: chatId, user_id: userId },
+        });
+    }
+    return member;
 }
 
 async function fetchPages<T>(

@@ -10,6 +10,7 @@ export {
     type FeishuConfig,
     type FeishuEndpointType,
     type FeishuReceiveIdType,
+    type FeishuReceiveMode,
 } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
@@ -17,7 +18,7 @@ export { FeishuError, type FeishuErrorOptions } from "./errors.js";
 export { FeishuBot, type FeishuBotEvents } from "./bot.js";
 export { compileFeishuMessage, type CompiledFeishuMessage } from "./messages.js";
 
-const feishuSchema: Schema = {
+export const feishuSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -39,11 +40,15 @@ const feishuSchema: Schema = {
         sensitive: true,
         ui: { section: "credentials" },
     },
-    long_connection: {
-        type: "boolean",
-        default: false,
-        label: "官方长连接",
-        description: "无需公网 Webhook，由飞书官方 SDK 保持并自动恢复连接",
+    receive_mode: {
+        type: "string",
+        default: "long_connection",
+        label: "事件接收方式",
+        choices: [
+            { value: "long_connection", label: "官方长连接（推荐）" },
+            { value: "webhook", label: "Webhook" },
+        ],
+        description: "长连接无需公网地址，并由飞书官方 SDK 自动恢复连接",
         ui: { section: "transport" },
     },
     encrypt_key: {
@@ -51,18 +56,25 @@ const feishuSchema: Schema = {
         label: "事件加密 Key",
         sensitive: true,
         description: "Webhook 加密推送开启后必须配置",
-        ui: { section: "credentials" },
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     verification_token: {
         type: "string",
         label: "事件验证 Token",
         sensitive: true,
-        ui: { section: "credentials" },
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     endpoint: {
         type: "string",
         label: "API 端点",
         placeholder: FeishuEndpoint.FEISHU,
+        pattern: /^https:\/\/[^\s?#]+$/,
         description: `国内版使用 ${FeishuEndpoint.FEISHU}，国际版使用 ${FeishuEndpoint.LARK}`,
         ui: { section: "advanced" },
     },

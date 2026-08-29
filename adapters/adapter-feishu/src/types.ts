@@ -17,6 +17,7 @@ export const FeishuEndpoint = {
 
 export type FeishuEndpointType = (typeof FeishuEndpoint)[keyof typeof FeishuEndpoint];
 export type FeishuReceiveIdType = "open_id" | "user_id" | "union_id" | "email" | "chat_id";
+export type FeishuReceiveMode = "long_connection" | "webhook";
 
 /** 飞书开放平台底层请求选项。 */
 export interface FeishuApiRequestOptions {
@@ -40,8 +41,8 @@ export interface FeishuConfig {
     app_secret: string; // 应用 App Secret
     encrypt_key?: string; // 事件加密密钥（可选）
     verification_token?: string; // 事件验证 Token（可选）
-    /** 使用飞书官方长连接接收事件，无需公网 Webhook。 */
-    long_connection?: boolean;
+    /** 事件接收方式；默认使用官方长连接。 */
+    receive_mode?: FeishuReceiveMode;
     /**
      * API 端点，可选值：
      * - FeishuEndpoint.FEISHU (默认): 'https://open.feishu.cn/open-apis'

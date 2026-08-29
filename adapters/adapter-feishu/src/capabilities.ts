@@ -61,6 +61,8 @@ export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
         message_deleted: { support: "native" },
         member_joined: { support: "native" },
         member_left: { support: "native" },
+        reaction_added: { support: "native" },
+        reaction_removed: { support: "native" },
         native_event: {
             support: "native",
             note: "未标准化事件以 custom notice 和 raw_event 无损交付",

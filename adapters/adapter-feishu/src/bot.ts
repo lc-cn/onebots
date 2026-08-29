@@ -4,7 +4,6 @@
  */
 import { EventEmitter } from "node:events";
 import {
-    AESCipher,
     Domain,
     EventDispatcher,
     LoggerLevel,
@@ -25,18 +24,28 @@ import {
     type FeishuApiRequestOptions,
     type FeishuApiEnvelope,
 } from "./types.js";
-import { restoreLongConnectionEnvelope } from "./long-connection.js";
-import { isFeishuApiEnvelope, isFeishuEvent, isFeishuWebhookBody } from "./guards.js";
-import { buildFeishuApiUrl, serializeFeishuRequestBody } from "./http-input.js";
+import {
+    assertLongConnectionConfigured,
+    FEISHU_LONG_CONNECTION_EVENT_TYPES,
+    restoreLongConnectionEnvelope,
+} from "./long-connection.js";
+import { isFeishuApiEnvelope, isFeishuEvent } from "./guards.js";
+import {
+    buildFeishuApiUrl,
+    normalizeFeishuEndpoint,
+    serializeFeishuRequestBody,
+} from "./http-input.js";
 import {
     fetchFeishuBotInfo,
     fetchFeishuChat,
+    fetchFeishuChatMember,
     fetchFeishuChatMembers,
     fetchFeishuChats,
     fetchFeishuUser,
     fetchFeishuUsers,
     sendFeishuMessage,
 } from "./resources.js";
+import { resolveFeishuWebhook } from "./webhook.js";
 
 export interface FeishuBotEvents {
     ready: [];
@@ -53,36 +62,31 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     private me: FeishuUser | null = null;
     private wsClient?: WSClient;
     private eventDispatcher?: EventDispatcher;
+    private sdkLogger?: Logger;
+    private startPromise?: Promise<void>;
+    private running = false;
+    private generation = 0;
     /** 当前使用的 API 端点 */
     readonly endpoint: string;
 
     constructor(config: FeishuConfig) {
         super();
-        this.config = config;
+        this.config = { ...config, receive_mode: config.receive_mode ?? "long_connection" };
         // 使用配置的端点，默认为飞书（国内版）
-        this.endpoint = config.endpoint || FeishuEndpoint.FEISHU;
+        this.endpoint = normalizeFeishuEndpoint(config.endpoint || FeishuEndpoint.FEISHU);
     }
 
     /** 初始化官方长连接；所有已注册事件仍进入统一 raw event 投影链路。 */
     configureLongConnection(logger: Logger): void {
-        if (!this.config.long_connection || this.wsClient) return;
+        this.sdkLogger = logger;
+        if (this.config.receive_mode !== "long_connection" || this.wsClient) return;
         const dispatcher = new EventDispatcher({
             verificationToken: this.config.verification_token,
             encryptKey: this.config.encrypt_key,
             logger,
         });
-        const eventTypes = [
-            "im.message.receive_v1",
-            "im.message.recalled_v1",
-            "im.message.message_read_v1",
-            "im.chat.member.user.added_v1",
-            "im.chat.member.user.deleted_v1",
-            "im.chat.disbanded_v1",
-            "im.chat.updated_v1",
-            "application.bot.menu_v6",
-        ];
         const handlers: Record<string, (data: Record<string, unknown>) => void> = {};
-        for (const eventType of eventTypes) {
+        for (const eventType of FEISHU_LONG_CONNECTION_EVENT_TYPES) {
             handlers[eventType] = data => this.emitLongConnectionEvent(eventType, data);
         }
         dispatcher.register(handlers);
@@ -140,7 +144,12 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
             throw FeishuError.wrap(error, "FEISHU_NETWORK_ERROR", `${method} ${path}`);
         }
 
-        const text = await response.text();
+        let text: string;
+        try {
+            text = await response.text();
+        } catch (error) {
+            throw FeishuError.wrap(error, "FEISHU_NETWORK_ERROR", `${method} ${path}`);
+        }
         let result: unknown;
         try {
             result = text ? JSON.parse(text) : {};
@@ -172,6 +181,7 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
                     code: "FEISHU_HTTP_ERROR",
                     operation: `${method} ${path}`,
                     status: response.status,
+                    platformCode: result.code,
                     details: result,
                 },
             );
@@ -180,6 +190,7 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
             throw new FeishuError(`飞书 API ${method} ${path} 失败: ${result.msg}`, {
                 code: "FEISHU_API_ERROR",
                 operation: `${method} ${path}`,
+                platformCode: result.code,
                 details: result,
             });
         return result as unknown as T;
@@ -305,18 +316,52 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
      * 启动 Bot
      */
     async start(): Promise<void> {
+        if (this.running) return;
+        if (this.startPromise) return this.startPromise;
+        const generation = this.generation;
+        const start = this.startInternal(generation);
+        this.startPromise = start;
         try {
-            // 获取访问令牌
+            await start;
+        } finally {
+            if (this.startPromise === start) this.startPromise = undefined;
+        }
+    }
+
+    private async startInternal(generation: number): Promise<void> {
+        let startingWs: WSClient | undefined;
+        try {
+            assertLongConnectionConfigured(this.config, this.sdkLogger);
             await this.getTenantAccessToken();
+            if (generation !== this.generation) return;
 
-            // 获取 Bot 信息
             this.me = await this.getBotInfo();
+            if (generation !== this.generation) return;
 
-            if (this.wsClient && this.eventDispatcher) {
-                await this.wsClient.start({ eventDispatcher: this.eventDispatcher });
+            if (
+                this.config.receive_mode === "long_connection" &&
+                !this.wsClient &&
+                this.sdkLogger
+            ) {
+                this.configureLongConnection(this.sdkLogger);
             }
+            if (this.wsClient && this.eventDispatcher) {
+                startingWs = this.wsClient;
+                await startingWs.start({ eventDispatcher: this.eventDispatcher });
+            }
+            if (generation !== this.generation) {
+                startingWs?.close({ force: true });
+                return;
+            }
+            this.running = true;
             this.safeEmit("ready");
         } catch (error) {
+            if (startingWs && this.wsClient === startingWs) {
+                startingWs.close({ force: true });
+                this.wsClient = undefined;
+                this.eventDispatcher = undefined;
+            }
+            this.running = false;
             throw FeishuError.wrap(error, "FEISHU_START_FAILED", "start");
         }
     }
@@ -325,66 +370,30 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
      * 停止 Bot
      */
     async stop(): Promise<void> {
+        const wasActive = this.running || Boolean(this.startPromise);
+        this.generation += 1;
+        this.running = false;
+        this.startPromise = undefined;
         this.wsClient?.close({ force: true });
-        this.safeEmit("stopped");
+        this.wsClient = undefined;
+        this.eventDispatcher = undefined;
+        if (wasActive) this.safeEmit("stopped");
     }
 
     /**
      * 处理 Webhook 请求
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        const requestBody: unknown = ctx.request.body;
-        if (!isFeishuWebhookBody(requestBody)) {
-            ctx.status = 400;
-            ctx.body = { code: 1, msg: "飞书 Webhook body 必须为对象" };
-            return;
-        }
-        let body = requestBody;
-        if (body.encrypt) {
-            if (!this.config.encrypt_key) {
-                ctx.status = 400;
-                ctx.body = { code: 1, msg: "收到加密事件但未配置 encrypt_key" };
-                return;
-            }
-            try {
-                const decrypted: unknown = JSON.parse(
-                    new AESCipher(this.config.encrypt_key).decrypt(body.encrypt),
-                );
-                if (!isFeishuWebhookBody(decrypted))
-                    throw new FeishuError("飞书解密载荷不是对象", {
-                        code: "FEISHU_WEBHOOK_DECRYPT_FAILED",
-                        operation: "webhook",
-                        details: decrypted,
-                    });
-                body = decrypted;
-            } catch (error) {
-                this.safeEmit(
-                    "client_error",
-                    FeishuError.wrap(error, "FEISHU_WEBHOOK_DECRYPT_FAILED", "webhook"),
-                );
-                ctx.status = 400;
-                ctx.body = { code: 1, msg: "飞书事件解密失败" };
-                return;
-            }
-        }
-
-        // 验证事件（如果配置了 verification_token）
-        const token = body.header?.token ?? body.token;
-        if (this.config.verification_token && token !== this.config.verification_token) {
-            ctx.status = 401;
-            ctx.body = { code: 1, msg: "Invalid verification token" };
+        const resolved = resolveFeishuWebhook(ctx.request.body, this.config);
+        if ("response" in resolved) {
+            if (resolved.error) this.safeEmit("client_error", resolved.error);
+            if (resolved.response.status) ctx.status = resolved.response.status;
+            ctx.body = resolved.response.body;
             return;
         }
 
-        // 处理 URL 验证（飞书首次配置 webhook 时会发送验证请求）
-        if (body.type === "url_verification") {
-            ctx.body = { challenge: body.challenge };
-            return;
-        }
-
-        // 处理事件
         try {
-            this.ingest(body, body);
+            this.ingest(resolved.body, resolved.body);
         } catch (error) {
             this.safeEmit(
                 "client_error",
@@ -470,11 +479,9 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
         return fetchFeishuChatMembers(this, chatId);
     }
 
-    /**
-     * 获取 HTTP 客户端实例（返回 this 以便链式调用）
-     */
-    getHttpClient(): FeishuBot {
-        return this;
+    /** 只返回目标群中真实存在的成员。 */
+    async getChatMember(chatId: string, userId: string): Promise<FeishuUser> {
+        return fetchFeishuChatMember(this, chatId, userId);
     }
 
     private safeEmit<K extends keyof FeishuBotEvents>(name: K, ...args: FeishuBotEvents[K]): void {

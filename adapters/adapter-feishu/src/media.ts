@@ -70,6 +70,7 @@ async function upload(
                 code: response.ok ? "FEISHU_API_ERROR" : "FEISHU_HTTP_ERROR",
                 operation: `POST ${path}`,
                 status: response.status,
+                platformCode: payload.code,
                 details: payload,
             });
         }
