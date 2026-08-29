@@ -36,6 +36,45 @@ describe("FeishuBot webhook", () => {
         expect(listener).toHaveBeenCalledWith(event, event);
         expect(ctx.body).toEqual({ code: 0 });
     });
+
+    it("恢复长连接 EventDispatcher 展平的官方事件 envelope", () => {
+        const bot = new FeishuBot({
+            account_id: "A1",
+            app_id: "cli_configured",
+            app_secret: "secret",
+        });
+        const listener = vi.fn();
+        bot.on("event", listener);
+
+        bot["emitLongConnectionEvent"]("im.message.receive_v1", {
+            schema: "2.0",
+            event_id: "EV_LONG_1",
+            event_type: "im.message.receive_v1",
+            create_time: "1710000000123",
+            app_id: "cli_actual",
+            tenant_key: "tenant_actual",
+            token: "verify-token",
+            message: { message_id: "om_1", chat_id: "oc_1" },
+            sender: { sender_id: { open_id: "ou_1" } },
+        });
+
+        const restored = {
+            schema: "2.0",
+            header: {
+                event_id: "EV_LONG_1",
+                event_type: "im.message.receive_v1",
+                create_time: "1710000000123",
+                app_id: "cli_actual",
+                tenant_key: "tenant_actual",
+                token: "verify-token",
+            },
+            event: {
+                message: { message_id: "om_1", chat_id: "oc_1" },
+                sender: { sender_id: { open_id: "ou_1" } },
+            },
+        };
+        expect(listener).toHaveBeenCalledWith(restored, restored);
+    });
 });
 
 function encrypt(plaintext: string, encryptKey: string): string {
