@@ -42,9 +42,8 @@ export async function prepareWeComMediaSegments(
             const type = weComMediaType(segment.type);
             if (!type) return segment;
             const mediaId = existingMediaId(segment.data);
-            const input = mediaInput(segment.data, Boolean(mediaId));
-            if (mediaId && input) invalid(`${segment.type} 段不能同时提供 media_id 与媒体来源`);
             if (mediaId) return segment;
+            const input = mediaInput(segment.data, false);
             if (!input) return segment;
             const uploadedId = await uploadWeComMedia(client, type, input);
             return { ...segment, data: { ...segment.data, media_id: uploadedId } };
@@ -86,7 +85,7 @@ function stringCandidate(
 }
 
 function existingMediaId(data: Record<string, unknown>): string | undefined {
-    const direct = firstString(data.media_id);
+    const direct = firstString(data.media_id, data.file_id);
     if (direct) return direct;
     const file = firstString(data.file);
     if (!file) return undefined;

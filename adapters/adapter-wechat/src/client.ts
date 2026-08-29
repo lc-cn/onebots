@@ -147,6 +147,7 @@ export class WechatClient extends EventEmitter {
         message: WechatIncomingMessage,
         options: WechatIngressOptions = {},
     ): Promise<WechatOutboundMessage | undefined> {
+        validateIncomingMessage(message);
         const eventId = wechatEventId(message);
         const timeout = Math.max(0, Math.min(4_500, options.passiveReplyTimeoutMs || 0));
         let waiter: Promise<WechatOutboundMessage | undefined> | undefined;
@@ -187,12 +188,27 @@ export class WechatClient extends EventEmitter {
     ): Promise<{ type: string; media_id: string; created_at: number }> {
         const form = new FormData();
         form.set("media", data, filename);
-        return this.call({
+        const result = await this.call<{
+            type?: unknown;
+            media_id?: unknown;
+            created_at?: unknown;
+        }>({
             method: "POST",
             path: "/cgi-bin/media/upload",
             query: { type },
             body: form,
         });
+        if (typeof result.media_id !== "string" || !result.media_id) {
+            throw new WechatApiError("微信临时素材响应缺少 media_id", {
+                code: "WECHAT_INVALID_MEDIA_RESPONSE",
+                details: result,
+            });
+        }
+        return {
+            type: typeof result.type === "string" ? result.type : type,
+            media_id: result.media_id,
+            created_at: typeof result.created_at === "number" ? result.created_at : 0,
+        };
     }
 
     private async fetchAccessToken(): Promise<string> {
@@ -284,6 +300,28 @@ export class WechatClient extends EventEmitter {
             code: "WECHAT_HTTP_ERROR",
             status: response.status,
             path,
+        });
+    }
+}
+
+function validateIncomingMessage(message: WechatIncomingMessage): void {
+    if (
+        typeof message.ToUserName !== "string" ||
+        !message.ToUserName ||
+        typeof message.FromUserName !== "string" ||
+        !message.FromUserName ||
+        !Number.isFinite(message.CreateTime) ||
+        message.CreateTime <= 0 ||
+        typeof message.MsgType !== "string" ||
+        !message.MsgType
+    ) {
+        throw new WechatApiError("微信公众号事件缺少稳定的收发方、时间或消息类型", {
+            code: "WECHAT_INVALID_EVENT",
+        });
+    }
+    if (message.MsgType !== "event" && (!message.MsgId || typeof message.MsgId !== "string")) {
+        throw new WechatApiError("微信公众号消息缺少 MsgId", {
+            code: "WECHAT_INVALID_EVENT",
         });
     }
 }

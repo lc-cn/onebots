@@ -10,6 +10,7 @@ import { wechatCapabilities } from "./capabilities.js";
 import { WechatClient } from "./client.js";
 import { WechatApiError } from "./errors.js";
 import { projectWechatEvent } from "./events.js";
+import { prepareWechatMediaSegments } from "./media.js";
 import { compileWechatMessages } from "./messages.js";
 import { executeWechatPlatformAction, WECHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type { WechatConfig, WechatIncomingMessage, WechatUser } from "./types.js";
@@ -34,7 +35,8 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
             );
         }
         const client = this.requireClient(uin);
-        const compiled = compileWechatMessages(params.message);
+        const segments = await prepareWechatMediaSegments(client, params.message);
+        const compiled = compileWechatMessages(segments);
         if (compiled.replyEventId && client.hasPendingPassiveReply(compiled.replyEventId)) {
             if (compiled.messages.length !== 1) {
                 throw new WechatApiError("微信公众号被动回复只能包含一条原生消息", {
@@ -53,8 +55,10 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
         }
         const openid = this.coerceId(params.scene_id).string;
         let firstId: string | undefined;
-        for (const message of compiled.messages)
+        for (const message of compiled.messages) {
+            assertCustomMessage(message);
             firstId ||= await client.sendCustomMessage(openid, message);
+        }
         if (!firstId)
             throw new WechatApiError("微信公众号未返回消息 ID", {
                 code: "WECHAT_EMPTY_SEND_RESPONSE",
@@ -197,6 +201,17 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
             user_name: user.nickname || user.openid,
             remark: user.remark,
         };
+    }
+}
+
+function assertCustomMessage(message: {
+    msgtype: string;
+    video?: { thumb_media_id?: string };
+}): void {
+    if (message.msgtype === "video" && !message.video?.thumb_media_id) {
+        throw new WechatApiError("微信公众号客服视频消息必须提供 thumb_media_id 或缩略图来源", {
+            code: "WECHAT_VIDEO_THUMB_REQUIRED",
+        });
     }
 }
 

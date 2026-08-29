@@ -93,4 +93,16 @@ describe("WechatClient", () => {
         expect(raw).toHaveBeenCalledWith(message);
         expect(messageListener).toHaveBeenCalledWith(message);
     });
+
+    it("ingest 拒绝无法稳定投影的外部消息", async () => {
+        const client = new WechatClient(config);
+        await expect(
+            client.ingest({
+                ToUserName: "bot",
+                FromUserName: "user",
+                CreateTime: 1,
+                MsgType: "text",
+            }),
+        ).rejects.toMatchObject({ code: "WECHAT_INVALID_EVENT" });
+    });
 });

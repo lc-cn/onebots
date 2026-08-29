@@ -31,7 +31,8 @@ https://bot.example.com/wechat/my_mp/webhook
 - 接收文本、图片、语音（含识别结果）、视频、短视频、位置和链接。
 - 接收所有公众号事件；标准事件会投影为 `CommonEvent`，完整解析结果与原始 XML 保存在 `raw_event`。
 - 发送文本、图片、语音、视频、图文及 `wechat_message` 原生消息。
-- 图片/语音/视频必须先上传并使用 `media_id` 或 `wechat://media/{media_id}`，不会把 URL 静默降级成文字。
+- 图片、语音和视频可直接使用 HTTPS URL、本地路径、`data:` URL 或 Base64；适配器会上传为当前公众号的临时素材。已有 `media_id`、`file_id` 或 `wechat://media/{media_id}` 会优先复用，入站段携带的 URL 仅作为元数据。
+- 客服视频需要 `thumb_media_id`，也可用 `thumb_url`、`thumb_path`、`thumb_data` 或 `thumb` 自动上传 JPG 缩略图；被动回复仍遵循微信原生视频格式。
 - `reply` 段的 `message_id`/`event_id` 会在当前 Webhook 窗口内产生被动回复；窗口失效后改走客服消息。
 
 ```ts
@@ -68,7 +69,7 @@ await adapter.callAction("my_mp", "wechat_call", {
 
 ## 底层接入
 
-`WechatWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂到已有 Koa 风格 Host；`WechatClient.ingest()` 则允许现有连接把解析后的微信事件交给同一个客户端。适配器本身不会另开端口。
+`WechatWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂到已有 Koa 风格 Host；`WechatClient.ingest()` 则允许现有连接把含稳定收发方、时间与消息 ID 的解析事件交给同一个客户端。适配器本身不会另开端口。
 
 ## 权限
 

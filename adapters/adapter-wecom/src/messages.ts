@@ -50,7 +50,9 @@ export function compileWeComMessages(
         const mediaType = weComMediaType(segment.type);
         if (mediaType) {
             const mediaId =
-                stringValue(segment.data.media_id) || mediaIdFromFile(segment.data.file);
+                stringValue(segment.data.media_id) ||
+                stringValue(segment.data.file_id) ||
+                mediaIdFromFile(segment.data.file);
             if (!mediaId) invalid(`${segment.type} 段必须提供 media_id 或 wecom://media/{id}`);
             messages.push(mediaMessage(mediaType, mediaId, segment.data));
             continue;

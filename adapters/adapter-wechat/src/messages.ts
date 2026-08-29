@@ -1,5 +1,6 @@
 import type { CommonTypes } from "onebots";
 import { WechatApiError } from "./errors.js";
+import { messageMediaType } from "./media.js";
 import type { WechatOutboundMessage } from "./types.js";
 
 export interface CompiledWechatMessages {
@@ -44,10 +45,12 @@ export function compileWechatMessages(
             messages.push(nativeMessage(segment.data));
             continue;
         }
-        const mediaType = mediaMessageType(segment.type);
+        const mediaType = messageMediaType(segment.type);
         if (mediaType) {
             const mediaId =
-                stringValue(segment.data.media_id) || mediaIdFromFile(segment.data.file);
+                stringValue(segment.data.media_id) ||
+                stringValue(segment.data.file_id) ||
+                mediaIdFromFile(segment.data.file);
             if (!mediaId) {
                 invalid(`${segment.type} 段必须提供已上传的 media_id 或 wechat://media/{id}`);
             }
@@ -92,13 +95,6 @@ function mediaMessage(
             description: stringValue(data.description),
         },
     };
-}
-
-function mediaMessageType(type: string): "image" | "voice" | "video" | undefined {
-    if (type === "image") return "image";
-    if (type === "voice" || type === "audio" || type === "record") return "voice";
-    if (type === "video") return "video";
-    return undefined;
 }
 
 function mediaIdFromFile(value: unknown): string | undefined {

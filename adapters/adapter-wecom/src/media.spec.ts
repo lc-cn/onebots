@@ -39,18 +39,20 @@ describe("企业微信临时素材管线", () => {
         expect(uploadTemporaryMedia).not.toHaveBeenCalled();
     });
 
-    it("拒绝同时提供多个媒体来源或 media_id 与来源", async () => {
+    it("拒绝多个外部来源，但平台素材 ID 优先于 URL 元数据", async () => {
         const uploadTemporaryMedia = vi.fn();
         await expect(
             prepareWeComMediaSegments({ uploadTemporaryMedia }, [
                 { type: "file", data: { url: "https://example.com/a", data: "YWJj" } },
             ]),
         ).rejects.toMatchObject({ code: "WECOM_INVALID_MEDIA" });
+        const canonical = {
+            type: "image",
+            data: { file_id: "m1", url: "https://example.com/inbound.jpg" },
+        };
         await expect(
-            prepareWeComMediaSegments({ uploadTemporaryMedia }, [
-                { type: "file", data: { media_id: "m1", path: "/tmp/a" } },
-            ]),
-        ).rejects.toMatchObject({ code: "WECOM_INVALID_MEDIA" });
+            prepareWeComMediaSegments({ uploadTemporaryMedia }, [canonical]),
+        ).resolves.toEqual([canonical]);
         expect(uploadTemporaryMedia).not.toHaveBeenCalled();
     });
 });
