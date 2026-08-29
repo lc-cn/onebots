@@ -7,7 +7,9 @@
 - 发送和接收文本、回复、图片、视频、音频、文档、Sticker、位置、联系人、Reaction
 - 通过 `whatsapp_message` 原生段发送 Template、Interactive、Flow 等完整 Cloud API 消息
 - 展开同一 Webhook 批次中的全部消息和状态，未知 change 也作为原始事件交付
+- 一个 App Webhook 承载多个号码时，按 `metadata.phone_number_id` 自动分流到对应 Client
 - 将投递、已读、失败投影为明确的 `message_status`，不会与消息内容编辑混淆
+- 将 Reaction 增删投影为 canonical `reaction_added` / `reaction_removed` notice
 - 使用原始请求体校验 `X-Hub-Signature-256`，并过滤 Meta 重投递
 - 媒体上传、查询、下载、删除，消息已读与 typing indicator
 - Business Profile、号码注册、两步验证、用户屏蔽和消息模板管理

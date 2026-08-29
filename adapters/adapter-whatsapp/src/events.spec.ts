@@ -60,6 +60,44 @@ describe("WhatsApp Webhook 投影", () => {
         expect(result[2]).toMatchObject({ notice_type: "custom" });
         expect(result[2]?.timestamp).toBeLessThanOrEqual(Date.now());
     });
+
+    it("将空 emoji 的 Reaction 投影为移除 notice", () => {
+        const [event] = projectWhatsAppWebhook(
+            {
+                object: "whatsapp_business_account",
+                entry: [
+                    {
+                        id: "waba",
+                        changes: [
+                            {
+                                field: "messages",
+                                value: {
+                                    messages: [
+                                        {
+                                            id: "reaction-1",
+                                            from: "86123",
+                                            timestamp: "10",
+                                            type: "reaction",
+                                            reaction: { message_id: "wamid.1", emoji: "" },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+            context,
+        );
+
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "reaction_removed",
+            message_id: { string: "wamid.1" },
+            user: { id: { string: "86123" } },
+            extensions: { whatsapp: { emoji: "" } },
+        });
+    });
 });
 
 function id(value: string): CommonTypes.Id {

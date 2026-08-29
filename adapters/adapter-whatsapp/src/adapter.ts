@@ -14,9 +14,12 @@ import { compileWhatsAppMessages } from "./messages.js";
 import { executeWhatsAppPlatformAction, WHATSAPP_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type { WhatsAppConfig, WhatsAppPhoneNumberInfo, WhatsAppWebhookEvent } from "./types.js";
 import { WhatsAppWebhookHost, type WhatsAppHttpContext } from "./webhook-host.js";
+import { WhatsAppWebhookRouter } from "./webhook-routing.js";
 
 /** Meta WhatsApp Cloud API 适配器。 */
 export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
+    private readonly webhookRouter = new WhatsAppWebhookRouter();
+
     constructor(app: BaseApp) {
         super(app, "whatsapp", whatsAppCapabilities);
         this.icon = "https://static.whatsapp.net/rsrc.php/v3/yz/r/ujTY9i_Jhs7.png";
@@ -109,7 +112,12 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const online = this.getAccount(uin)?.status === AccountStatus.Online;
-        return { online, good: online };
+        const client = this.requireClient(uin);
+        return {
+            online,
+            good: online,
+            bots: [{ self: this.createId(client.config.phone_number_id), online }],
+        };
     }
 
     async canSendImage(): Promise<boolean> {
@@ -124,12 +132,21 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
         const whatsappConfig = normalizeConfig(config);
         const client = new WhatsAppClient(whatsappConfig);
         const account = new Account<"whatsapp", WhatsAppClient>(this, client, config);
-        const webhook = new WhatsAppWebhookHost(whatsappConfig, client, error =>
-            this.logger.error("WhatsApp Webhook 处理失败", error),
+        const webhook = new WhatsAppWebhookHost(
+            whatsappConfig,
+            client,
+            error => this.logger.error("WhatsApp Webhook 处理失败", error),
+            request =>
+                this.webhookRouter.ingest(client, request, (phoneNumberId, changes) =>
+                    this.logger.warn(
+                        `WhatsApp Phone Number ID ${phoneNumberId} 未配置，忽略 ${changes} 个 change`,
+                    ),
+                ),
         );
+        this.webhookRouter.register(client);
         client.on("webhook", (event: WhatsAppWebhookEvent) => {
             for (const projected of projectWhatsAppWebhook(event, {
-                botId: this.createId(config.account_id),
+                botId: this.createId(config.phone_number_id),
                 createId: value => this.createId(value),
             })) {
                 account.dispatch(projected);
@@ -158,6 +175,7 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
             } catch (error) {
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 WhatsApp Bot ${config.account_id} 失败`, error);
+                throw error;
             }
         });
         account.on("stop", () => {

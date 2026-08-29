@@ -51,6 +51,8 @@ export const whatsAppCapabilities: AdapterCapabilityManifest = defineAdapterCapa
     events: {
         message: { support: "native", scenes: ["private"] },
         message_status: { support: "native", scenes: ["private"] },
+        reaction_added: { support: "native", scenes: ["private"] },
+        reaction_removed: { support: "native", scenes: ["private"] },
         raw_event: { support: "native" },
         webhook_change: { support: "native" },
     },

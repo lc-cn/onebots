@@ -12,6 +12,11 @@ export {
     type WhatsAppPlatformAction,
 } from "./platform-actions.js";
 export { WhatsAppWebhookHost } from "./webhook-host.js";
+export {
+    routeWhatsAppWebhook,
+    WhatsAppWebhookRouter,
+    type WhatsAppWebhookDelivery,
+} from "./webhook-routing.js";
 export type { WhatsAppHttpContext } from "./webhook-host.js";
 export type {
     WhatsAppAPIResponse,
@@ -36,6 +41,7 @@ export type {
     WhatsAppWebhookRequest,
     WhatsAppWebhookResponse,
     WhatsAppWebhookValue,
+    WhatsAppVerifiedWebhook,
 } from "./types.js";
 
 export const whatsappSchema: Schema = {

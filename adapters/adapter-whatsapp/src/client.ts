@@ -11,6 +11,7 @@ import type {
     WhatsAppPhoneNumberInfo,
     WhatsAppSendMessageParams,
     WhatsAppWebhookEvent,
+    WhatsAppVerifiedWebhook,
 } from "./types.js";
 import {
     acceptWhatsAppVerification,
@@ -20,6 +21,7 @@ import {
     verifyWhatsAppSignature,
     whatsAppErrorResponse,
 } from "./webhook.js";
+import { WhatsAppClientLifecycle } from "./client-lifecycle.js";
 
 const DEFAULT_API_BASE_URL = "https://graph.facebook.com";
 const DEFAULT_DEDUPLICATION_LIMIT = 10_000;
@@ -30,6 +32,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly apiBaseUrl: string;
     private readonly contacts = new Map<string, WhatsAppObservedContact>();
     private readonly processedEvents = new Set<string>();
+    private readonly lifecycle = new WhatsAppClientLifecycle<WhatsAppPhoneNumberInfo>();
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -42,13 +45,14 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     }
 
     async start(): Promise<WhatsAppPhoneNumberInfo> {
-        const info = await this.getPhoneNumberInfo();
-        this.emit("ready", info);
-        return info;
+        return this.lifecycle.start(
+            () => this.getPhoneNumberInfo(),
+            info => this.emit("ready", info),
+        );
     }
 
     stop(): void {
-        this.emit("stop");
+        if (this.lifecycle.stop()) this.emit("stop");
     }
 
     get receiveMode(): "webhook" | "manual" {
@@ -66,6 +70,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
                 changes: 0,
                 messages: 0,
                 statuses: 0,
+                ignoredChanges: 0,
                 event,
             };
         }
@@ -96,15 +101,25 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
             changes,
             messages,
             statuses,
+            ignoredChanges: 0,
             event,
         };
     }
 
     /** 校验原始请求体签名，并交给与 manual 模式相同的 ingest 管线。 */
     ingestHttp(body: string | Buffer, signature?: string): WhatsAppIngestResult {
+        const verified = this.verifyHttp(body, signature);
+        return this.ingest(verified.event, verified.deduplicationKey);
+    }
+
+    /** 只完成签名与结构校验，供 Adapter 在一次验签后按号码分流。 */
+    verifyHttp(body: string | Buffer, signature?: string): WhatsAppVerifiedWebhook {
         const rawBody = Buffer.isBuffer(body) ? body : Buffer.from(body);
         verifyWhatsAppSignature(rawBody, signature, this.config.app_secret);
-        return this.ingest(parseWhatsAppWebhookBody(rawBody), digestWhatsAppPayload(rawBody));
+        return {
+            event: parseWhatsAppWebhookBody(rawBody),
+            deduplicationKey: digestWhatsAppPayload(rawBody),
+        };
     }
 
     /** Fetch / WinterCG Host 可直接转交标准 Request，无需另开端口。 */

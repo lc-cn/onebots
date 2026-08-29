@@ -35,13 +35,33 @@ function projectChange(
     const events: Array<CommonEvent.Event<WhatsAppWebhookChange>> = [];
     const metadata = change.value.metadata;
     for (const message of change.value.messages || []) {
-        events.push(projectMessage(message, change.value, change, context));
+        events.push(
+            message.reaction
+                ? projectReaction(message, change, context)
+                : projectMessage(message, change.value, change, context),
+        );
     }
     for (const status of change.value.statuses || []) {
         events.push(projectStatus(status, metadata, change, context));
     }
     if (!events.length) events.push(projectCustom(entryId, change, context));
     return events;
+}
+
+function projectReaction(
+    message: WhatsAppMessageEvent,
+    change: WhatsAppWebhookChange,
+    context: WhatsAppProjectionContext,
+): CommonEvent.Notice<WhatsAppWebhookChange> {
+    const reaction = message.reaction!;
+    return {
+        ...base(message.id, message.timestamp, change, context),
+        type: "notice",
+        notice_type: reaction.emoji ? "reaction_added" : "reaction_removed",
+        message_id: context.createId(reaction.message_id),
+        user: { id: context.createId(message.from), name: message.from },
+        extensions: { whatsapp: { emoji: reaction.emoji } },
+    };
 }
 
 function projectMessage(

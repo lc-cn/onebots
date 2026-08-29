@@ -98,7 +98,7 @@ export function resolveWhatsAppVerification(
 export function whatsAppErrorResponse(error: WhatsAppApiError): Response {
     return Response.json(
         { error: { code: error.code, message: error.message } },
-        { status: error.status || 400 },
+        { status: error.status || 500 },
     );
 }
 

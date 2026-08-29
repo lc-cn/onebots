@@ -40,6 +40,7 @@ export type WhatsAppMessageType =
     | "order"
     | "request_welcome"
     | "system"
+    | "unknown"
     | "unsupported";
 
 export type WhatsAppMessageStatus = "sent" | "delivered" | "read" | "failed" | "deleted";
@@ -218,7 +219,14 @@ export interface WhatsAppIngestResult {
     changes: number;
     messages: number;
     statuses: number;
+    /** 已验签但没有对应已配置 Phone Number Client 的 change 数量。 */
+    ignoredChanges: number;
     event: WhatsAppWebhookEvent;
+}
+
+export interface WhatsAppVerifiedWebhook {
+    event: WhatsAppWebhookEvent;
+    deduplicationKey: string;
 }
 
 /** WhatsAppClient 对外事件表，参数保持 Cloud API 原始类型。 */

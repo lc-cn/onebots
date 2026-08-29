@@ -20,6 +20,10 @@ export class WhatsAppWebhookHost {
         private readonly config: WhatsAppConfig,
         private readonly client: WhatsAppClient,
         private readonly errorListener: (error: WhatsAppApiError) => void = () => undefined,
+        private readonly eventIngestor: (
+            request: WhatsAppWebhookRequest,
+        ) => ReturnType<WhatsAppClient["ingestHttp"]> = request =>
+            this.client.ingestHttp(request.body, request.signature),
     ) {
         this.path = config.webhook_path || `/whatsapp/${config.account_id}/webhook`;
         if (!/^\/(?!\/)(?:[^?#\u0000-\u001f\u007f])*$/u.test(this.path)) {
@@ -34,7 +38,7 @@ export class WhatsAppWebhookHost {
     }
 
     async ingest(request: WhatsAppWebhookRequest): Promise<WhatsAppWebhookResponse> {
-        const result = this.client.ingestHttp(request.body, request.signature);
+        const result = this.eventIngestor(request);
         return {
             status: 200,
             body: {
@@ -42,6 +46,7 @@ export class WhatsAppWebhookHost {
                 accepted: result.accepted,
                 duplicate: result.duplicate,
                 changes: result.changes,
+                ignored_changes: result.ignoredChanges,
             },
         };
     }
@@ -58,7 +63,7 @@ export class WhatsAppWebhookHost {
         } catch (error) {
             const wrapped = WhatsAppApiError.wrap(error, "WHATSAPP_WEBHOOK_ERROR");
             this.errorListener(wrapped);
-            ctx.status = wrapped.status || 400;
+            ctx.status = wrapped.status || 500;
             ctx.type = "application/json";
             ctx.body = { error: { code: wrapped.code, message: wrapped.message } };
         }

@@ -15,6 +15,40 @@ const config: WhatsAppConfig = {
 };
 
 describe("WhatsAppClient", () => {
+    it("并发启动共享请求，stop 使迟到结果失效且允许重新启动", async () => {
+        let release: ((response: Response) => void) | undefined;
+        const firstResponse = new Promise<Response>(resolve => {
+            release = resolve;
+        });
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockReturnValueOnce(firstResponse)
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ id: "phone", verified_name: "OneBots" }), {
+                    headers: { "content-type": "application/json" },
+                }),
+            );
+        const client = new WhatsAppClient(config, fetcher);
+        const ready = vi.fn();
+        client.on("ready", ready);
+
+        const first = client.start();
+        const concurrent = client.start();
+        client.stop();
+        const restarted = client.start();
+        await expect(restarted).resolves.toMatchObject({ verified_name: "OneBots" });
+        release?.(
+            new Response(JSON.stringify({ id: "phone" }), {
+                headers: { "content-type": "application/json" },
+            }),
+        );
+
+        await expect(first).rejects.toMatchObject({ code: "WHATSAPP_START_CANCELLED" });
+        await expect(concurrent).rejects.toMatchObject({ code: "WHATSAPP_START_CANCELLED" });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect(ready).toHaveBeenCalledOnce();
+    });
+
     it("使用版本化 Graph API 路径并携带 Bearer Token", async () => {
         const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
             new Response(JSON.stringify({ id: "phone" }), {
@@ -200,6 +234,28 @@ describe("WhatsAppClient", () => {
         );
         expect(verification.status).toBe(200);
         expect(await verification.text()).toBe("42");
+    });
+
+    it("业务处理失败返回 500，促使 Meta 重投而不是误报入参错误", async () => {
+        const client = new WhatsAppClient(config);
+        client.on("webhook", () => {
+            throw new Error("downstream unavailable");
+        });
+        const body = JSON.stringify({ object: "whatsapp_business_account", entry: [] });
+        const signature = `sha256=${createHmac("sha256", "secret").update(body).digest("hex")}`;
+
+        const response = await client.acceptHttp(
+            new Request("https://example.test/whatsapp", {
+                method: "POST",
+                body,
+                headers: { "x-hub-signature-256": signature },
+            }),
+        );
+
+        expect(response.status).toBe(500);
+        await expect(response.json()).resolves.toMatchObject({
+            error: { code: "WHATSAPP_WEBHOOK_ERROR" },
+        });
     });
 
     it("严格拒绝带凭据、路径或查询的 Graph API Base URL", () => {
