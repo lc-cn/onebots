@@ -18,7 +18,11 @@ export const whatsAppCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         send_message: { support: "native", scenes: ["private"] },
         mark_message_as_read: { support: "native", scenes: ["private"] },
         get_login_info: { support: "native" },
-        get_user_info: { support: "emulated", note: "Cloud API 不提供任意联系人查询" },
+        get_user_info: {
+            support: "emulated",
+            availability: "context",
+            note: "仅返回 Webhook 中实际观察到的联系人资料",
+        },
         can_send_image: { support: "native" },
         can_send_record: { support: "native" },
         get_version: { support: "native" },

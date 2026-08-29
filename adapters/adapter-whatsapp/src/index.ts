@@ -21,6 +21,7 @@ export type {
     WhatsAppMessageStatus,
     WhatsAppMessageStatusEvent,
     WhatsAppMessageType,
+    WhatsAppObservedContact,
     WhatsAppPhoneNumberInfo,
     WhatsAppSendMessageParams,
     WhatsAppWebhookChange,

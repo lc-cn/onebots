@@ -5,6 +5,7 @@ import type {
     WhatsAppCallOptions,
     WhatsAppConfig,
     WhatsAppMediaInfo,
+    WhatsAppObservedContact,
     WhatsAppPhoneNumberInfo,
     WhatsAppSendMessageParams,
     WhatsAppWebhookEvent,
@@ -16,6 +17,7 @@ const DEFAULT_API_BASE_URL = "https://graph.facebook.com";
 export class WhatsAppClient extends EventEmitter {
     readonly apiVersion: string;
     readonly apiBaseUrl: string;
+    private readonly contacts = new Map<string, WhatsAppObservedContact>();
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -38,6 +40,7 @@ export class WhatsAppClient extends EventEmitter {
 
     /** 最底层事件入口，供共享 Webhook Host 或其他可信连接复用同一个 Client。 */
     ingest(event: WhatsAppWebhookEvent): number {
+        this.observeContacts(event);
         this.emit("raw_event", event);
         this.emit("webhook", event);
         let count = 0;
@@ -55,6 +58,25 @@ export class WhatsAppClient extends EventEmitter {
             }
         }
         return count;
+    }
+
+    /** 返回 Webhook 中真实出现过的联系人；Cloud API 不支持任意号码资料查询。 */
+    getObservedContact(userId: string): WhatsAppObservedContact | undefined {
+        const contact = this.contacts.get(userId);
+        return contact ? { ...contact } : undefined;
+    }
+
+    private observeContacts(event: WhatsAppWebhookEvent): void {
+        for (const entry of event.entry) {
+            for (const change of entry.changes) {
+                for (const contact of change.value.contacts || []) {
+                    this.contacts.set(contact.wa_id, {
+                        id: contact.wa_id,
+                        name: contact.profile.name || contact.wa_id,
+                    });
+                }
+            }
+        }
     }
 
     /** 调用任意经过路径约束的 Graph API 资源。 */
@@ -189,13 +211,8 @@ export class WhatsAppClient extends EventEmitter {
         resource: string,
         query?: Readonly<Record<string, string | number | boolean | undefined>>,
     ): URL {
-        const normalized = resource.replace(/^\/+|\/+$/gu, "");
-        if (
-            !normalized ||
-            normalized.includes("..") ||
-            /%2e/iu.test(normalized) ||
-            /^(?:https?|ftp):\/\//iu.test(normalized)
-        ) {
+        const normalized = resource.replace(/\/+$/gu, "");
+        if (!isSafeGraphResource(resource, normalized)) {
             throw new WhatsAppApiError("WhatsApp Graph API resource 必须是安全的相对路径", {
                 code: "WHATSAPP_INVALID_RESOURCE",
                 resource,
@@ -206,6 +223,37 @@ export class WhatsAppClient extends EventEmitter {
             if (value !== undefined) url.searchParams.set(name, String(value));
         }
         return url;
+    }
+}
+
+function isSafeGraphResource(resource: string, normalized: string): boolean {
+    if (
+        !normalized ||
+        resource.startsWith("/") ||
+        resource.includes("?") ||
+        resource.includes("#") ||
+        resource.includes("\\") ||
+        /[\u0000-\u001f\u007f]/u.test(resource) ||
+        /^(?:https?|ftp):\/\//iu.test(resource)
+    ) {
+        return false;
+    }
+    try {
+        return normalized.split("/").every(segment => {
+            const decoded = decodeURIComponent(segment);
+            return (
+                decoded.length > 0 &&
+                decoded !== "." &&
+                decoded !== ".." &&
+                !decoded.includes("/") &&
+                !decoded.includes("\\") &&
+                !decoded.includes("?") &&
+                !decoded.includes("#") &&
+                !/[\u0000-\u001f\u007f]/u.test(decoded)
+            );
+        });
+    } catch {
+        return false;
     }
 }
 

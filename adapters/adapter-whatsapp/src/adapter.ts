@@ -65,11 +65,21 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
         return this.toLoginInfo(await this.requireClient(uin).getPhoneNumberInfo());
     }
 
-    async getUserInfo(_uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
+    async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
+        const contact = this.requireClient(uin).getObservedContact(params.user_id.string);
+        if (!contact) {
+            throw new WhatsAppApiError(
+                `WhatsApp 联系人 ${params.user_id.string} 尚未出现在 Webhook 中`,
+                {
+                    code: "WHATSAPP_USER_NOT_OBSERVED",
+                    status: 404,
+                },
+            );
+        }
         return {
             user_id: params.user_id,
-            user_name: params.user_id.string,
-            user_displayname: params.user_id.string,
+            user_name: contact.name,
+            user_displayname: contact.name,
         };
     }
 

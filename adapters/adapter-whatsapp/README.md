@@ -7,11 +7,14 @@
 - 发送和接收文本、回复、图片、视频、音频、文档、Sticker、位置、联系人、Reaction
 - 通过 `whatsapp_message` 原生段发送 Template、Interactive、Flow 等完整 Cloud API 消息
 - 展开同一 Webhook 批次中的全部消息和状态，未知 change 也作为原始事件交付
+- 将投递、已读、失败投影为明确的 `message_status`，不会与消息内容编辑混淆
 - 使用原始请求体校验 `X-Hub-Signature-256`，并过滤 Meta 重投递
 - 媒体上传、查询、下载、删除，消息已读与 typing indicator
 - Business Profile、号码注册、两步验证、用户屏蔽和消息模板管理
 - 通用 `whatsapp_call`，无需等待适配器升级即可调用新的 Graph API 资源
 - `WhatsAppClient.ingest(rawEvent)`，让外部可信连接复用同一事件分发链路
+
+`getUserInfo` 只返回 Webhook 中真实观察到的联系人名称；Cloud API 不提供任意号码资料查询，尚未出现过的号码会返回结构化 `WHATSAPP_USER_NOT_OBSERVED`，不会用号码伪造用户资料。
 
 通用 `image`、`video`、`audio`、`file`、`sticker` 段可直接使用 `media_id` 或公开 HTTPS URL；本地路径、HTTP URL、data URL 与 `base64://` 会先上传到当前 Phone Number，再用真实 media ID 发送。`template` 与 `interactive` 可直接作为结构化消息段发送，也可使用 `whatsapp_message` 承载任意原生负载。一条通用消息拆成多个 Cloud API 请求时，所有请求都会保留同一个 `reply` 上下文。
 

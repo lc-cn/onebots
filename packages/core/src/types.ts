@@ -104,6 +104,7 @@ export namespace CommonEvent {
         | "group_admin"
         | "group_ban"
         | "friend_add"
+        | "message_status"
         | "message_updated"
         | "message_deleted"
         | "reaction_added"

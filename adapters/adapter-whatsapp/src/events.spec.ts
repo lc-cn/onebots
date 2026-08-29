@@ -56,8 +56,9 @@ describe("WhatsApp Webhook 投影", () => {
             message: [{ type: "text", data: { text: "hello" } }],
         });
         expect(result[0]?.raw_event).toBe(webhook.entry[0]?.changes[0]);
-        expect(result[1]).toMatchObject({ notice_type: "message_updated" });
+        expect(result[1]).toMatchObject({ notice_type: "message_status" });
         expect(result[2]).toMatchObject({ notice_type: "custom" });
+        expect(result[2]?.timestamp).toBeLessThanOrEqual(Date.now());
     });
 });
 

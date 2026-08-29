@@ -131,6 +131,12 @@ export interface WhatsAppWebhookValue extends Record<string, unknown> {
     errors?: WhatsAppErrorData[];
 }
 
+/** Webhook 中已经由 Meta 确认过的联系人资料。 */
+export interface WhatsAppObservedContact {
+    readonly id: string;
+    readonly name: string;
+}
+
 export interface WhatsAppWebhookChange {
     field: string;
     value: WhatsAppWebhookValue;

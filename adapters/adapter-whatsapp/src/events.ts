@@ -123,7 +123,7 @@ function projectStatus(
             context,
         ),
         type: "notice",
-        notice_type: status.status === "deleted" ? "message_deleted" : "message_updated",
+        notice_type: status.status === "deleted" ? "message_deleted" : "message_status",
         message_id: context.createId(status.id),
         user: { id: context.createId(status.recipient_id), name: status.recipient_id },
         extensions: {
@@ -157,10 +157,11 @@ function base(
     change: WhatsAppWebhookChange,
     context: WhatsAppProjectionContext,
 ): CommonEvent.Base<WhatsAppWebhookChange> {
-    const seconds = typeof timestamp === "string" ? Number(timestamp) : timestamp;
+    const numeric = typeof timestamp === "string" ? Number(timestamp) : timestamp;
+    const milliseconds = numeric >= 1_000_000_000_000 ? numeric : numeric * 1000;
     return {
         id: context.createId(id),
-        timestamp: Number.isFinite(seconds) ? seconds * 1000 : Date.now(),
+        timestamp: Number.isFinite(milliseconds) ? milliseconds : Date.now(),
         platform: "whatsapp",
         bot_id: context.botId,
         type: "custom",

@@ -34,6 +34,16 @@ describe("WhatsAppClient", () => {
         } satisfies Partial<WhatsAppApiError>);
     });
 
+    it.each(["/phone", "phone?fields=id", "phone#token", "phone/../me", "phone/%2e%2e/me"])(
+        "拒绝夹带 URL 语义的 resource: %s",
+        async resource => {
+            const client = new WhatsAppClient(config);
+            await expect(client.call({ resource })).rejects.toMatchObject({
+                code: "WHATSAPP_INVALID_RESOURCE",
+            });
+        },
+    );
+
     it("允许 Graph API 的 upload: 资源 ID", async () => {
         const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
             new Response(JSON.stringify({ id: "upload:session" }), {
@@ -98,5 +108,33 @@ describe("WhatsAppClient", () => {
         expect(raw).toHaveBeenCalledWith(event);
         expect(message).toHaveBeenCalledTimes(1);
         expect(status).toHaveBeenCalledTimes(1);
+        expect(client.getObservedContact("1")).toBeUndefined();
+    });
+
+    it("只记录 Webhook 实际提供的联系人资料", () => {
+        const client = new WhatsAppClient(config);
+        const observedDuringDispatch = vi.fn();
+        client.on("webhook", () => {
+            observedDuringDispatch(client.getObservedContact("86123"));
+        });
+        client.ingest({
+            object: "whatsapp_business_account",
+            entry: [
+                {
+                    id: "waba",
+                    changes: [
+                        {
+                            field: "messages",
+                            value: {
+                                contacts: [{ profile: { name: "Alice" }, wa_id: "86123" }],
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+        expect(client.getObservedContact("86123")).toEqual({ id: "86123", name: "Alice" });
+        expect(client.getObservedContact("unknown")).toBeUndefined();
+        expect(observedDuringDispatch).toHaveBeenCalledWith({ id: "86123", name: "Alice" });
     });
 });
