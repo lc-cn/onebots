@@ -5,12 +5,16 @@ import { FeishuEndpoint } from "./types.js";
 
 export {
     FeishuEndpoint,
+    type FeishuApiEnvelope,
     type FeishuApiRequestOptions,
     type FeishuConfig,
     type FeishuEndpointType,
+    type FeishuReceiveIdType,
 } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
+export { FeishuError, type FeishuErrorOptions } from "./errors.js";
+export { FeishuBot, type FeishuBotEvents } from "./bot.js";
 export { compileFeishuMessage, type CompiledFeishuMessage } from "./messages.js";
 
 const feishuSchema: Schema = {

@@ -19,6 +19,7 @@ import { createFeishuAccount } from "./account.js";
 import { executeFeishuPlatformAction, FEISHU_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { projectFeishuMessageSegments } from "./events.js";
 import { compileFeishuMessage } from "./messages.js";
+import { FeishuError, invalidFeishuParam } from "./errors.js";
 
 export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     constructor(app: BaseApp) {
@@ -33,6 +34,17 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         return endpoint.includes("larksuite.com");
     }
 
+    /** 统一账号查找与错误语义，业务方法只处理平台动作。 */
+    private requireBot(uin: string): FeishuBot {
+        const account = this.getAccount(uin);
+        if (!account)
+            throw new FeishuError(`飞书账号 ${uin} 不存在`, {
+                code: "FEISHU_ACCOUNT_NOT_FOUND",
+                details: { uin },
+            });
+        return account.client;
+    }
+
     executePlatformAction(
         uin: string,
         action: string,
@@ -41,9 +53,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         if (!FEISHU_PLATFORM_ACTIONS.has(action)) {
             return super.executePlatformAction(uin, action, params);
         }
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-        return executeFeishuPlatformAction(account.client, action, params);
+        return executeFeishuPlatformAction(this.requireBot(uin), action, params);
     }
 
     isPlatformActionImplemented(action: string): boolean {
@@ -61,13 +71,10 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const { scene_type } = params;
         if (scene_type === "channel") {
-            throw new TypeError("飞书 chat 不是 canonical Channel，请使用 group 场景");
+            throw invalidFeishuParam("飞书 chat 不是 canonical Channel，请使用 group 场景");
         }
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
         const compiled = await compileFeishuMessage(params.message, {
@@ -101,7 +108,10 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         const messageId = result.data?.message_id;
         if (!messageId) {
-            throw new Error("发送消息失败: 响应中缺少 message_id");
+            throw new FeishuError("发送消息失败: 响应中缺少 message_id", {
+                code: "FEISHU_MESSAGE_ID_MISSING",
+                details: result,
+            });
         }
 
         return {
@@ -113,10 +123,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      * 删除/撤回消息
      */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
         // 飞书删除消息 API
         const http = bot.getHttpClient();
@@ -127,10 +134,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      * 获取消息
      */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         // 飞书获取消息 API
@@ -139,15 +143,14 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             `/im/v1/messages/${encodeURIComponent(msgId)}`,
         );
 
-        if (response.data.code !== 0) {
-            throw new Error(`获取消息失败: ${response.data.msg}`);
-        }
-
         const dataPayload = response.data.data as { items?: FeishuMessage[] } | undefined;
         const items = dataPayload?.items;
         const msg = Array.isArray(items) && items.length > 0 ? items[0] : undefined;
         if (!msg) {
-            throw new Error("获取消息失败: 响应中无消息内容");
+            throw new FeishuError("获取消息失败: 响应中无消息内容", {
+                code: "FEISHU_MESSAGE_MISSING",
+                details: response.data,
+            });
         }
 
         const senderId = msg.sender?.id ?? "";
@@ -170,19 +173,16 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      * 更新消息
      */
     async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
 
         const compiled = await compileFeishuMessage(params.message, {
             client: bot,
             resolveUserId: value => String(this.resolveId(value).source),
         });
-        if (compiled.replyTo) throw new Error("飞书更新消息不能改变回复关系");
+        if (compiled.replyTo) throw invalidFeishuParam("飞书更新消息不能改变回复关系");
         if (compiled.msgType !== "interactive") {
-            throw new Error("飞书开放平台只支持更新 interactive 消息卡片");
+            throw invalidFeishuParam("飞书开放平台只支持更新 interactive 消息卡片");
         }
 
         await bot.callApi(`/im/v1/messages/${encodeURIComponent(msgId)}`, {
@@ -201,10 +201,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      * 获取机器人自身信息
      */
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const me = bot.getCachedMe();
 
         return {
@@ -219,10 +216,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      * 获取用户信息
      */
     async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const userId = params.user_id.string;
         const user = await bot.getUserInfo(userId);
 
@@ -243,9 +237,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         uin: string,
         _params?: Adapter.GetFriendListParams,
     ): Promise<Adapter.FriendInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-        const users = await account.client.getUserList();
+        const users = await this.requireBot(uin).getUserList();
         return users.map(user => ({
             user_id: this.createId(user.open_id || user.user_id),
             user_name: user.name || "",
@@ -260,10 +252,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         uin: string,
         params: Adapter.GetFriendInfoParams,
     ): Promise<Adapter.FriendInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const userId = params.user_id.string;
         const user = await bot.getUserInfo(userId);
 
@@ -283,9 +272,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         uin: string,
         _params?: Adapter.GetGroupListParams,
     ): Promise<Adapter.GroupInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-        const chats = await account.client.getChatList();
+        const chats = await this.requireBot(uin).getChatList();
         return chats.map(chat => ({
             group_id: this.createId(chat.chat_id),
             group_name: chat.name || "",
@@ -299,10 +286,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         uin: string,
         params: Adapter.GetGroupInfoParams,
     ): Promise<Adapter.GroupInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const chatId = params.group_id.string;
         const chat = await bot.getChatInfo(chatId);
 
@@ -314,9 +298,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
     /** 更新群名称。 */
     async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-        await account.client.put(`/im/v1/chats/${params.group_id.string}`, {
+        await this.requireBot(uin).put(`/im/v1/chats/${params.group_id.string}`, {
             name: params.group_name,
         });
     }
@@ -325,14 +307,14 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      * 退出群组
      */
     async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const chatId = params.group_id.string;
 
         const me = bot.getCachedMe();
-        if (!me?.open_id) throw new Error("飞书机器人身份尚未初始化");
+        if (!me?.open_id)
+            throw new FeishuError("飞书机器人身份尚未初始化", {
+                code: "FEISHU_IDENTITY_NOT_READY",
+            });
         await bot.delete(
             `/im/v1/chats/${chatId}/members`,
             { id_list: [me.open_id] },
@@ -347,10 +329,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         uin: string,
         params: Adapter.GetGroupMemberListParams,
     ): Promise<Adapter.GroupMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const chatId = params.group_id.string;
         const members = await bot.getChatMembers(chatId);
 
@@ -370,10 +349,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         uin: string,
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const userId = params.user_id.string;
         const user = await bot.getUserInfo(userId);
 
@@ -390,10 +366,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      * 踢出群成员
      */
     async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
+        const bot = this.requireBot(uin);
         const chatId = params.group_id.string;
         const userId = params.user_id.string;
 

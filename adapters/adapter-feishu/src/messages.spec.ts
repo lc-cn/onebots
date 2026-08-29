@@ -4,6 +4,7 @@ import { compileFeishuMessage } from "./messages.js";
 const client = {
     endpoint: "https://open.feishu.cn/open-apis",
     getTenantAccessToken: vi.fn().mockResolvedValue("tenant-token"),
+    invalidateTenantAccessToken: vi.fn(),
 };
 
 describe("飞书消息编译器", () => {
@@ -71,6 +72,36 @@ describe("飞书消息编译器", () => {
             "https://open.feishu.cn/open-apis/im/v1/images",
             expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
         );
+    });
+
+    it("媒体上传遇到失效令牌时刷新并重试一次", async () => {
+        const request = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ code: 99991663, msg: "token invalid" })),
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ code: 0, data: { image_key: "img_new" } })),
+            );
+        vi.stubGlobal("fetch", request);
+        const getTenantAccessToken = vi
+            .fn()
+            .mockResolvedValueOnce("old-token")
+            .mockResolvedValueOnce("new-token");
+        const invalidateTenantAccessToken = vi.fn();
+
+        await expect(
+            compileFeishuMessage([{ type: "image", data: { file: "base64://aW1hZ2U=" } }], {
+                client: {
+                    endpoint: client.endpoint,
+                    getTenantAccessToken,
+                    invalidateTenantAccessToken,
+                },
+                resolveUserId: String,
+            }),
+        ).resolves.toMatchObject({ content: { image_key: "img_new" } });
+        expect(invalidateTenantAccessToken).toHaveBeenCalledWith("old-token");
+        expect(request).toHaveBeenCalledTimes(2);
     });
 
     it("已有媒体 key 不重复上传，并拒绝未知或有损组合", async () => {

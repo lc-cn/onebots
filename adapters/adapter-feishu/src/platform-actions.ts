@@ -1,4 +1,5 @@
 import type { FeishuBot } from "./bot.js";
+import { FeishuError, invalidFeishuParam } from "./errors.js";
 
 export const FEISHU_PLATFORM_ACTIONS = new Set([
     "call_feishu_api",
@@ -87,7 +88,10 @@ export async function executeFeishuPlatformAction(
         case "get_pin_list":
             return bot.callApi("/im/v1/pins", { params: queryValue(params) });
         default:
-            throw new Error(`未实现飞书平台动作: ${action}`);
+            throw new FeishuError(`未实现飞书平台动作: ${action}`, {
+                code: "FEISHU_ACTION_NOT_IMPLEMENTED",
+                operation: action,
+            });
     }
 }
 
@@ -117,7 +121,7 @@ function urgent(
 
 function requirePath(value: unknown): string {
     if (typeof value !== "string" || !value.startsWith("/") || value.includes("..")) {
-        throw new Error("飞书参数 path 必须为安全绝对路径");
+        throw invalidFeishuParam("飞书参数 path 必须为安全绝对路径", value);
     }
     return value;
 }
@@ -125,7 +129,7 @@ function requirePath(value: unknown): string {
 function requireMethod(value: unknown): Method {
     const method = typeof value === "string" ? value.toUpperCase() : "GET";
     if (!["GET", "POST", "PUT", "DELETE", "PATCH"].includes(method)) {
-        throw new Error("飞书参数 method 不是受支持的 HTTP 方法");
+        throw invalidFeishuParam("飞书参数 method 不是受支持的 HTTP 方法", value);
     }
     return method as Method;
 }
@@ -133,7 +137,7 @@ function requireMethod(value: unknown): Method {
 function segment(params: Readonly<Record<string, unknown>>, name: string): string {
     const value = params[name];
     if (typeof value !== "string" || !value || !/^[A-Za-z0-9._:-]+$/.test(value)) {
-        throw new Error(`飞书参数 ${name} 必须为合法 ID`);
+        throw invalidFeishuParam(`飞书参数 ${name} 必须为合法 ID`, value);
     }
     return encodeURIComponent(value);
 }
@@ -141,7 +145,7 @@ function segment(params: Readonly<Record<string, unknown>>, name: string): strin
 function bodyValue(value: unknown): Record<string, unknown> | undefined {
     if (value == null) return undefined;
     if (typeof value !== "object" || Array.isArray(value))
-        throw new Error("飞书参数 body 必须为对象");
+        throw invalidFeishuParam("飞书参数 body 必须为对象", value);
     return value as Record<string, unknown>;
 }
 
@@ -150,11 +154,11 @@ function queryValue(
 ): Record<string, string | number | boolean> | undefined {
     if (value == null) return undefined;
     if (typeof value !== "object" || Array.isArray(value))
-        throw new Error("飞书参数 query 必须为对象");
+        throw invalidFeishuParam("飞书参数 query 必须为对象", value);
     const query: Record<string, string | number | boolean> = {};
     for (const [key, item] of Object.entries(value)) {
         if (!["string", "number", "boolean"].includes(typeof item)) {
-            throw new Error(`飞书 query 参数 ${key} 必须为标量`);
+            throw invalidFeishuParam(`飞书 query 参数 ${key} 必须为标量`, item);
         }
         query[key] = item as string | number | boolean;
     }
@@ -178,7 +182,7 @@ function stringArray(value: unknown, name: string): string[] {
         !value.length ||
         !value.every(item => typeof item === "string" && item)
     ) {
-        throw new Error(`飞书参数 ${name} 必须为非空字符串数组`);
+        throw invalidFeishuParam(`飞书参数 ${name} 必须为非空字符串数组`, value);
     }
     return value;
 }

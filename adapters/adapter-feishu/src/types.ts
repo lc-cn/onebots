@@ -16,6 +16,7 @@ export const FeishuEndpoint = {
 } as const;
 
 export type FeishuEndpointType = (typeof FeishuEndpoint)[keyof typeof FeishuEndpoint];
+export type FeishuReceiveIdType = "open_id" | "user_id" | "union_id" | "email" | "chat_id";
 
 /** 飞书开放平台底层请求选项。 */
 export interface FeishuApiRequestOptions {
@@ -24,6 +25,12 @@ export interface FeishuApiRequestOptions {
     body?: string | Record<string, unknown>;
     params?: Record<string, string | number | boolean>;
     skipAuth?: boolean;
+}
+
+/** 飞书开放平台所有 JSON API 响应共享的最小结构。 */
+export interface FeishuApiEnvelope {
+    code: number;
+    msg: string;
 }
 
 // 配置类型
@@ -157,9 +164,7 @@ export interface FeishuEvent {
 }
 
 // 访问令牌响应
-export interface FeishuTokenResponse {
-    code: number;
-    msg: string;
+export interface FeishuTokenResponse extends FeishuApiEnvelope {
     tenant_access_token?: string;
     app_access_token?: string;
     expire: number;
@@ -168,7 +173,6 @@ export interface FeishuTokenResponse {
 // 发送消息请求
 export interface FeishuSendMessageRequest {
     receive_id: string;
-    receive_id_type: "open_id" | "user_id" | "union_id" | "email" | "chat_id";
     msg_type:
         | "text"
         | "post"
@@ -185,26 +189,20 @@ export interface FeishuSendMessageRequest {
 }
 
 // 发送消息响应
-export interface FeishuSendMessageResponse {
-    code: number;
-    msg: string;
+export interface FeishuSendMessageResponse extends FeishuApiEnvelope {
     data: {
         message_id: string;
     };
 }
 
 // 飞书通用 API 响应
-export interface FeishuAPIResponse {
-    code: number;
-    msg: string;
+export interface FeishuAPIResponse extends FeishuApiEnvelope {
     data?: unknown;
     [key: string]: unknown;
 }
 
 // 飞书用户信息 API 响应
-export interface FeishuUserAPIResponse {
-    code: number;
-    msg: string;
+export interface FeishuUserAPIResponse extends FeishuApiEnvelope {
     data?: {
         user?: FeishuUser;
         [key: string]: unknown;
@@ -212,18 +210,14 @@ export interface FeishuUserAPIResponse {
 }
 
 // 飞书群组信息 API 响应
-export interface FeishuChatAPIResponse {
-    code: number;
-    msg: string;
+export interface FeishuChatAPIResponse extends FeishuApiEnvelope {
     data?: FeishuChat & {
         [key: string]: unknown;
     };
 }
 
 // 飞书群组成员 API 响应
-export interface FeishuChatMembersAPIResponse {
-    code: number;
-    msg: string;
+export interface FeishuChatMembersAPIResponse extends FeishuApiEnvelope {
     data?: {
         items?: FeishuUser[];
         page_token?: string;

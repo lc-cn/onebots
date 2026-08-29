@@ -80,6 +80,8 @@ onebots -r feishu
 - 真实机器人身份、通讯录用户、群列表、群详情和成员列表
 - 消息撤回、成员变化等 canonical 事件投影；未知事件通过 `raw_event` 无损交付
 - 飞书和 Lark 双端点以及私有化开放平台端点
+- `FeishuBot.ingest(rawEvent)` 可把已有 WebSocket、队列或宿主连接收到的 2.0 事件交给同一客户端
+- 并发 tenant token 请求合并、失效令牌自动刷新一次，所有 API/媒体失败使用 `FeishuError.code` 分类
 
 ## 消息与媒体
 
@@ -104,6 +106,8 @@ onebots -r feishu
 ```
 
 动作执行权限由当前 tenant token scopes 和目标资源上下文决定。
+
+底层调用返回非零 `code`、非 2xx HTTP 或无效 JSON 时会抛出导出的 `FeishuError`。调用方可依据 `code`、`operation`、`status` 和 `details` 稳定处理错误；适配器不会把平台失败伪装成成功响应。
 
 ## 获取应用凭证
 

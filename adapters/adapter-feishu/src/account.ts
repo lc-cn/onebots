@@ -37,8 +37,7 @@ export function createFeishuAccount(
         account.avatar = me?.avatar_url || icon;
         adapter.logger.info(`${platformName} Bot ${config.account_id} 已就绪`);
     });
-    bot.on("error", error => {
-        account.status = AccountStatus.OffLine;
+    bot.on("client_error", error => {
         adapter.logger.error(`${platformName} Bot ${config.account_id} 错误:`, error);
     });
     bot.on("event", (event: FeishuEvent, rawEvent: FeishuWebhookBody) => {

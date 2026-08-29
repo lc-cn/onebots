@@ -1,5 +1,6 @@
 import type { CommonTypes, MediaSourceInput } from "onebots";
 import { uploadFeishuFile, uploadFeishuImage, type FeishuMediaClient } from "./media.js";
+import { FeishuError, invalidFeishuParam } from "./errors.js";
 
 export interface CompiledFeishuMessage {
     msgType: "text" | "post" | "image" | "file" | "audio" | "media" | "sticker" | "interactive";
@@ -19,11 +20,11 @@ export async function compileFeishuMessage(
 ): Promise<CompiledFeishuMessage> {
     const contentSegments = segments.filter(segment => segment.type !== "reply");
     const replies = segments.filter(segment => segment.type === "reply");
-    if (replies.length > 1) throw new Error("飞书消息只能包含一个 reply 段");
+    if (replies.length > 1) throw invalidFeishuParam("飞书消息只能包含一个 reply 段");
     const replyTo = replies[0]
         ? requiredString(replies[0].data.message_id ?? replies[0].data.id, "reply.message_id")
         : undefined;
-    if (!contentSegments.length) throw new Error("飞书消息不包含可发送内容");
+    if (!contentSegments.length) throw invalidFeishuParam("飞书消息不包含可发送内容");
 
     if (contentSegments.length === 1) {
         const native = await compileSingle(contentSegments[0], context);
@@ -32,13 +33,13 @@ export async function compileFeishuMessage(
     if (contentSegments.every(segment => ["text", "at", "image"].includes(segment.type))) {
         return { msgType: "post", content: await compilePost(contentSegments, context), replyTo };
     }
-    throw new Error("飞书无法在单条消息中无损混合这些消息段，请拆分发送");
+    throw invalidFeishuParam("飞书无法在单条消息中无损混合这些消息段，请拆分发送");
 }
 
 function textContent(segment: CommonTypes.Segment, context: FeishuMessageCompilerContext): string {
     if (segment.type === "text") return stringValue(segment.data.text);
     const rawId = segment.data.id ?? segment.data.user_id ?? segment.data.qq;
-    if (rawId == null) throw new Error("飞书 at 段缺少 id/user_id");
+    if (rawId == null) throw invalidFeishuParam("飞书 at 段缺少 id/user_id");
     const id = rawId === "all" ? "all" : context.resolveUserId(idInput(rawId));
     const name = requiredString(segment.data.name ?? (id === "all" ? "所有人" : id), "at.name");
     return `<at user_id="${escapeAttribute(id)}">${escapeText(name)}</at>`;
@@ -82,7 +83,10 @@ async function compileSingle(
             content: { file_key: requiredString(segment.data.file_key, "sticker.file_key") },
         };
     }
-    throw new Error(`飞书不支持消息段 ${segment.type}`);
+    throw new FeishuError(`飞书不支持消息段 ${segment.type}`, {
+        code: "FEISHU_UNSUPPORTED_SEGMENT",
+        details: segment.type,
+    });
 }
 
 async function compilePost(
@@ -95,7 +99,7 @@ async function compilePost(
             line.push({ tag: "text", text: stringValue(segment.data.text) });
         else if (segment.type === "at") {
             const rawId = segment.data.id ?? segment.data.user_id ?? segment.data.qq;
-            if (rawId == null) throw new Error("飞书 at 段缺少 id/user_id");
+            if (rawId == null) throw invalidFeishuParam("飞书 at 段缺少 id/user_id");
             const userId = rawId === "all" ? "all" : context.resolveUserId(idInput(rawId));
             line.push({ tag: "at", user_id: userId, user_name: optionalString(segment.data.name) });
         } else {
@@ -140,10 +144,20 @@ function mediaInput(segment: CommonTypes.Segment, name: string): MediaSourceInpu
 function objectContent(segment: CommonTypes.Segment): Record<string, unknown> {
     const value = segment.data.content ?? segment.data.card ?? segment.data;
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new Error(`飞书 ${segment.type}.content 必须是对象`);
+        throw invalidFeishuParam(`飞书 ${segment.type}.content 必须是对象`, value);
     }
-    const content = structuredClone(value as Record<string, unknown>);
-    if (!Object.keys(content).length) throw new Error(`飞书 ${segment.type}.content 不能为空`);
+    let content: Record<string, unknown>;
+    try {
+        content = structuredClone(value as Record<string, unknown>);
+    } catch (error) {
+        throw new FeishuError(`飞书 ${segment.type}.content 无法序列化`, {
+            code: "FEISHU_INVALID_PARAM",
+            details: value,
+            cause: error,
+        });
+    }
+    if (!Object.keys(content).length)
+        throw invalidFeishuParam(`飞书 ${segment.type}.content 不能为空`);
     return content;
 }
 
@@ -159,12 +173,12 @@ function idInput(value: unknown): string | number {
         const record = value as Record<string, unknown>;
         return requiredString(record.string ?? record.source, "at.id");
     }
-    throw new Error("飞书 at.id 必须为字符串或数字");
+    throw invalidFeishuParam("飞书 at.id 必须为字符串或数字", value);
 }
 
 function requiredString(value: unknown, name: string): string {
     const result = optionalString(value) || (typeof value === "number" ? String(value) : "");
-    if (!result) throw new Error(`飞书 ${name} 必须为非空字符串`);
+    if (!result) throw invalidFeishuParam(`飞书 ${name} 必须为非空字符串`, value);
     return result;
 }
 

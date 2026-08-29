@@ -20,6 +20,6 @@ describe("executeFeishuPlatformAction", () => {
             executeFeishuPlatformAction({ callApi: vi.fn() } as never, "call_feishu_api", {
                 path: "/im/v1/../auth",
             }),
-        ).rejects.toThrow("安全绝对路径");
+        ).rejects.toMatchObject({ code: "FEISHU_INVALID_PARAM" });
     });
 });

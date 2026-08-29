@@ -11,29 +11,45 @@ import {
     WSClient,
     type Logger,
 } from "@larksuiteoapi/node-sdk";
-import type { Next, RouterContext } from "onebots";
+import { isSafeAbsoluteApiPath, type Next, type RouterContext } from "onebots";
+import { FeishuError } from "./errors.js";
 import {
     FeishuEndpoint,
     type FeishuConfig,
     type FeishuTokenResponse,
-    type FeishuSendMessageRequest,
     type FeishuSendMessageResponse,
     type FeishuEvent,
     type FeishuUser,
-    type FeishuChat,
     type FeishuWebhookBody,
     type FeishuAPIResponse,
-    type FeishuUserAPIResponse,
-    type FeishuChatAPIResponse,
-    type FeishuChatMembersAPIResponse,
     type FeishuApiRequestOptions,
+    type FeishuApiEnvelope,
 } from "./types.js";
 import { restoreLongConnectionEnvelope } from "./long-connection.js";
+import { isFeishuApiEnvelope, isFeishuEvent, isFeishuWebhookBody } from "./guards.js";
+import { buildFeishuApiUrl, serializeFeishuRequestBody } from "./http-input.js";
+import {
+    fetchFeishuBotInfo,
+    fetchFeishuChat,
+    fetchFeishuChatMembers,
+    fetchFeishuChats,
+    fetchFeishuUser,
+    fetchFeishuUsers,
+    sendFeishuMessage,
+} from "./resources.js";
 
-export class FeishuBot extends EventEmitter {
+export interface FeishuBotEvents {
+    ready: [];
+    stopped: [];
+    event: [event: FeishuEvent, rawEvent: FeishuWebhookBody];
+    client_error: [error: FeishuError];
+}
+
+export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     private config: FeishuConfig;
     private tenantAccessToken = "";
     private tokenExpireTime = 0;
+    private tokenRequest?: Promise<string>;
     private me: FeishuUser | null = null;
     private wsClient?: WSClient;
     private eventDispatcher?: EventDispatcher;
@@ -78,33 +94,27 @@ export class FeishuBot extends EventEmitter {
             logger,
             loggerLevel: LoggerLevel.warn,
             autoReconnect: true,
-            onError: error => this.emit("error", error),
+            onError: error =>
+                this.safeEmit("client_error", FeishuError.wrap(error, "FEISHU_WS_ERROR", "ws")),
         });
     }
 
     private emitLongConnectionEvent(eventType: string, data: Record<string, unknown>): void {
         const body = restoreLongConnectionEnvelope(eventType, data, this.config.app_id);
-        this.emit("event", body, body);
+        this.ingest(body, body);
     }
 
     /**
      * 发送 HTTP 请求
      */
-    private async request<T = unknown>(
+    private async request<T extends FeishuApiEnvelope = FeishuAPIResponse>(
         path: string,
         options: FeishuApiRequestOptions = {},
+        retryAuth = true,
     ): Promise<T> {
         const { method = "GET", headers = {}, body, params, skipAuth = false } = options;
 
-        // 构建 URL
-        let url = `${this.endpoint}${path}`;
-        if (params) {
-            const searchParams = new URLSearchParams();
-            for (const [key, value] of Object.entries(params)) {
-                searchParams.append(key, String(value));
-            }
-            url += `?${searchParams.toString()}`;
-        }
+        const url = buildFeishuApiUrl(this.endpoint, path, params);
 
         // 构建请求头
         const requestHeaders: Record<string, string> = {
@@ -112,47 +122,86 @@ export class FeishuBot extends EventEmitter {
             ...headers,
         };
 
+        const requestBody = serializeFeishuRequestBody(body, `${method} ${path}`);
+
         // 添加认证 token（除了获取 token 的请求）
-        if (!skipAuth) {
-            const token = await this.getTenantAccessToken();
-            requestHeaders.Authorization = `Bearer ${token}`;
-        }
+        const requestToken = skipAuth ? undefined : await this.getTenantAccessToken();
+        if (requestToken) requestHeaders.Authorization = `Bearer ${requestToken}`;
 
         // 发送请求
-        const response = await fetch(url, {
-            method,
-            headers: requestHeaders,
-            body: body ? JSON.stringify(body) : undefined,
-        });
+        let response: Response;
+        try {
+            response = await fetch(url, {
+                method,
+                headers: requestHeaders,
+                body: requestBody,
+            });
+        } catch (error) {
+            throw FeishuError.wrap(error, "FEISHU_NETWORK_ERROR", `${method} ${path}`);
+        }
 
         const text = await response.text();
         let result: unknown;
         try {
             result = text ? JSON.parse(text) : {};
         } catch (error) {
-            throw new Error(`飞书 API ${method} ${path} 返回了无效 JSON`, { cause: error });
+            throw new FeishuError(`飞书 API ${method} ${path} 返回了无效 JSON`, {
+                code: "FEISHU_INVALID_RESPONSE",
+                operation: `${method} ${path}`,
+                status: response.status,
+                cause: error,
+            });
+        }
+        if (!isFeishuApiEnvelope(result)) {
+            throw new FeishuError(`飞书 API ${method} ${path} 返回结构无效`, {
+                code: "FEISHU_INVALID_RESPONSE",
+                operation: `${method} ${path}`,
+                status: response.status,
+                details: result,
+            });
+        }
+        if (result.code === 99991663 && requestToken && retryAuth) {
+            // 只清除本次请求使用的旧令牌，不能覆盖并发请求已经刷新的新令牌。
+            if (this.tenantAccessToken === requestToken) this.clearTenantAccessToken();
+            return this.request<T>(path, options, false);
         }
         if (!response.ok) {
-            const message =
-                typeof result === "object" && result && "msg" in result
-                    ? String(result.msg)
-                    : response.statusText;
-            throw new Error(`飞书 API ${method} ${path} 失败 (${response.status}): ${message}`);
+            throw new FeishuError(
+                `飞书 API ${method} ${path} 失败 (${response.status}): ${result.msg}`,
+                {
+                    code: "FEISHU_HTTP_ERROR",
+                    operation: `${method} ${path}`,
+                    status: response.status,
+                    details: result,
+                },
+            );
         }
-        return result as T;
+        if (result.code !== 0)
+            throw new FeishuError(`飞书 API ${method} ${path} 失败: ${result.msg}`, {
+                code: "FEISHU_API_ERROR",
+                operation: `${method} ${path}`,
+                details: result,
+            });
+        return result as unknown as T;
     }
 
     /** 调用飞书开放平台 API，供能力清单声明的平台扩展动作使用。 */
-    async callApi<T = unknown>(path: string, options: FeishuApiRequestOptions = {}): Promise<T> {
-        if (!path.startsWith("/") || path.includes(".."))
-            throw new Error("飞书 API path 必须为安全绝对路径");
+    async callApi<T extends FeishuApiEnvelope = FeishuAPIResponse>(
+        path: string,
+        options: FeishuApiRequestOptions = {},
+    ): Promise<T> {
+        if (!isSafeAbsoluteApiPath(path))
+            throw new FeishuError("飞书 API path 必须为安全绝对路径", {
+                code: "FEISHU_UNSAFE_API_PATH",
+                details: path,
+            });
         return this.request<T>(path, options);
     }
 
     /**
      * GET 请求
      */
-    async get<T = unknown>(
+    async get<T extends FeishuApiEnvelope = FeishuAPIResponse>(
         path: string,
         params?: Record<string, string | number | boolean>,
     ): Promise<{ data: T }> {
@@ -163,7 +212,7 @@ export class FeishuBot extends EventEmitter {
     /**
      * POST 请求
      */
-    async post<T = unknown>(
+    async post<T extends FeishuApiEnvelope = FeishuAPIResponse>(
         path: string,
         body?: string | Record<string, unknown>,
         params?: Record<string, string | number | boolean>,
@@ -175,7 +224,7 @@ export class FeishuBot extends EventEmitter {
     /**
      * PUT 请求
      */
-    async put<T = unknown>(
+    async put<T extends FeishuApiEnvelope = FeishuAPIResponse>(
         path: string,
         body?: string | Record<string, unknown>,
     ): Promise<{ data: T }> {
@@ -186,7 +235,7 @@ export class FeishuBot extends EventEmitter {
     /**
      * DELETE 请求
      */
-    async delete<T = unknown>(
+    async delete<T extends FeishuApiEnvelope = FeishuAPIResponse>(
         path: string,
         body?: Record<string, unknown>,
         params?: Record<string, string | number | boolean>,
@@ -203,6 +252,22 @@ export class FeishuBot extends EventEmitter {
             return this.tenantAccessToken;
         }
 
+        if (this.tokenRequest) return this.tokenRequest;
+        const request = this.loadTenantAccessToken();
+        this.tokenRequest = request;
+        try {
+            return await request;
+        } finally {
+            if (this.tokenRequest === request) this.tokenRequest = undefined;
+        }
+    }
+
+    /** 仅当调用方持有的确是当前令牌时才失效缓存，避免并发刷新相互覆盖。 */
+    invalidateTenantAccessToken(token: string): void {
+        if (this.tenantAccessToken === token) this.clearTenantAccessToken();
+    }
+
+    private async loadTenantAccessToken(): Promise<string> {
         const data = await this.request<FeishuTokenResponse>(
             "/auth/v3/tenant_access_token/internal",
             {
@@ -215,14 +280,25 @@ export class FeishuBot extends EventEmitter {
             },
         );
 
-        if (data.code !== 0) {
-            throw new Error(`获取租户访问令牌失败: ${data.msg}`);
-        }
-
-        this.tenantAccessToken = data.tenant_access_token || "";
-        this.tokenExpireTime = Date.now() + (data.expire - 60) * 1000; // 提前60秒刷新
+        if (!data.tenant_access_token)
+            throw new FeishuError("获取租户访问令牌失败: 响应缺少 tenant_access_token", {
+                code: "FEISHU_TOKEN_MISSING",
+                details: data,
+            });
+        if (!Number.isFinite(data.expire) || data.expire <= 0)
+            throw new FeishuError("获取租户访问令牌失败: expire 无效", {
+                code: "FEISHU_TOKEN_EXPIRE_INVALID",
+                details: data,
+            });
+        this.tenantAccessToken = data.tenant_access_token;
+        this.tokenExpireTime = Date.now() + Math.max(data.expire - 60, 1) * 1000;
 
         return this.tenantAccessToken;
+    }
+
+    private clearTenantAccessToken(): void {
+        this.tenantAccessToken = "";
+        this.tokenExpireTime = 0;
     }
 
     /**
@@ -239,10 +315,9 @@ export class FeishuBot extends EventEmitter {
             if (this.wsClient && this.eventDispatcher) {
                 await this.wsClient.start({ eventDispatcher: this.eventDispatcher });
             }
-            this.emit("ready");
+            this.safeEmit("ready");
         } catch (error) {
-            this.emit("error", error);
-            throw error;
+            throw FeishuError.wrap(error, "FEISHU_START_FAILED", "start");
         }
     }
 
@@ -251,14 +326,20 @@ export class FeishuBot extends EventEmitter {
      */
     async stop(): Promise<void> {
         this.wsClient?.close({ force: true });
-        this.emit("stopped");
+        this.safeEmit("stopped");
     }
 
     /**
      * 处理 Webhook 请求
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        let body = ctx.request.body as FeishuWebhookBody;
+        const requestBody: unknown = ctx.request.body;
+        if (!isFeishuWebhookBody(requestBody)) {
+            ctx.status = 400;
+            ctx.body = { code: 1, msg: "飞书 Webhook body 必须为对象" };
+            return;
+        }
+        let body = requestBody;
         if (body.encrypt) {
             if (!this.config.encrypt_key) {
                 ctx.status = 400;
@@ -266,11 +347,21 @@ export class FeishuBot extends EventEmitter {
                 return;
             }
             try {
-                body = JSON.parse(
+                const decrypted: unknown = JSON.parse(
                     new AESCipher(this.config.encrypt_key).decrypt(body.encrypt),
-                ) as FeishuWebhookBody;
+                );
+                if (!isFeishuWebhookBody(decrypted))
+                    throw new FeishuError("飞书解密载荷不是对象", {
+                        code: "FEISHU_WEBHOOK_DECRYPT_FAILED",
+                        operation: "webhook",
+                        details: decrypted,
+                    });
+                body = decrypted;
             } catch (error) {
-                this.emit("error", error);
+                this.safeEmit(
+                    "client_error",
+                    FeishuError.wrap(error, "FEISHU_WEBHOOK_DECRYPT_FAILED", "webhook"),
+                );
                 ctx.status = 400;
                 ctx.body = { code: 1, msg: "飞书事件解密失败" };
                 return;
@@ -292,8 +383,17 @@ export class FeishuBot extends EventEmitter {
         }
 
         // 处理事件
-        const event = body as unknown as FeishuEvent;
-        this.emit("event", event, body);
+        try {
+            this.ingest(body, body);
+        } catch (error) {
+            this.safeEmit(
+                "client_error",
+                FeishuError.wrap(error, "FEISHU_WEBHOOK_INVALID", "webhook"),
+            );
+            ctx.status = 400;
+            ctx.body = { code: 1, msg: "飞书事件结构无效" };
+            return;
+        }
 
         ctx.body = { code: 0 };
         await next();
@@ -306,26 +406,22 @@ export class FeishuBot extends EventEmitter {
         return this.me;
     }
 
+    /** 将 Webhook、官方长连接或外部连接的事件交给同一校验入口。 */
+    ingest(event: unknown, rawEvent?: FeishuWebhookBody): void {
+        if (!isFeishuEvent(event)) {
+            throw new FeishuError("飞书事件缺少有效的 2.0 header", {
+                code: "FEISHU_INVALID_EVENT",
+                details: event,
+            });
+        }
+        this.safeEmit("event", event, rawEvent ?? event);
+    }
+
     /**
      * 获取 Bot 信息
      */
     async getBotInfo(): Promise<FeishuUser> {
-        const response = await this.get<
-            FeishuAPIResponse & {
-                bot?: { open_id?: string; app_name?: string; avatar_url?: string };
-            }
-        >("/bot/v3/info");
-
-        if (response.data.code !== 0 || !response.data.bot?.open_id) {
-            throw new Error(`获取 Bot 信息失败: ${response.data.msg}`);
-        }
-
-        return {
-            user_id: response.data.bot.open_id,
-            open_id: response.data.bot.open_id,
-            name: response.data.bot.app_name || "Feishu Bot",
-            avatar_url: response.data.bot.avatar_url,
-        };
+        return fetchFeishuBotInfo(this);
     }
 
     /**
@@ -335,31 +431,9 @@ export class FeishuBot extends EventEmitter {
         receiveId: string,
         receiveIdType: "open_id" | "user_id" | "union_id" | "email" | "chat_id",
         content: string | Record<string, unknown>,
-        msgType: string = "text",
+        msgType: Parameters<typeof sendFeishuMessage>[4] = "text",
     ): Promise<FeishuSendMessageResponse> {
-        const request: FeishuSendMessageRequest = {
-            receive_id: receiveId,
-            receive_id_type: receiveIdType,
-            msg_type: msgType as FeishuSendMessageRequest["msg_type"],
-            content:
-                typeof content === "string"
-                    ? JSON.stringify({ text: content })
-                    : JSON.stringify(content),
-        };
-
-        const response = await this.post<FeishuSendMessageResponse>(
-            "/im/v1/messages",
-            request as unknown as Record<string, unknown>,
-            {
-                receive_id_type: receiveIdType,
-            },
-        );
-
-        if (response.data.code !== 0) {
-            throw new Error(`发送消息失败: ${response.data.msg}`);
-        }
-
-        return response.data;
+        return sendFeishuMessage(this, receiveId, receiveIdType, content, msgType);
     }
 
     /**
@@ -369,92 +443,31 @@ export class FeishuBot extends EventEmitter {
         userId: string,
         userIdType: "open_id" | "user_id" | "union_id" = "open_id",
     ): Promise<FeishuUser> {
-        const response = await this.get<FeishuUserAPIResponse>(`/contact/v3/users/${userId}`, {
-            user_id_type: userIdType,
-        });
-
-        if (response.data.code !== 0 || !response.data.data?.user) {
-            throw new Error(`获取用户信息失败: ${response.data.msg}`);
-        }
-
-        return response.data.data.user;
+        return fetchFeishuUser(this, userId, userIdType);
     }
 
     /**
      * 获取群组信息
      */
-    async getChatInfo(chatId: string): Promise<FeishuChat> {
-        const response = await this.get<FeishuChatAPIResponse>(`/im/v1/chats/${chatId}`);
-
-        if (response.data.code !== 0 || !response.data.data) {
-            throw new Error(`获取群组信息失败: ${response.data.msg}`);
-        }
-
-        return response.data.data as FeishuChat;
+    async getChatInfo(chatId: string): Promise<import("./types.js").FeishuChat> {
+        return fetchFeishuChat(this, chatId);
     }
 
     /** 获取机器人可见的群列表。 */
-    async getChatList(): Promise<FeishuChat[]> {
-        const chats: FeishuChat[] = [];
-        let pageToken: string | undefined;
-        do {
-            const response = await this.get<
-                FeishuAPIResponse & {
-                    data?: { items?: FeishuChat[]; page_token?: string; has_more?: boolean };
-                }
-            >("/im/v1/chats", {
-                page_size: 100,
-                ...(pageToken ? { page_token: pageToken } : {}),
-            });
-            if (response.data.code !== 0) throw new Error(`获取群列表失败: ${response.data.msg}`);
-            chats.push(...(response.data.data?.items ?? []));
-            pageToken = response.data.data?.has_more ? response.data.data.page_token : undefined;
-        } while (pageToken);
-        return chats;
+    async getChatList(): Promise<import("./types.js").FeishuChat[]> {
+        return fetchFeishuChats(this);
     }
 
     /** 获取根部门下可见用户，供通用好友目录投影。 */
     async getUserList(): Promise<FeishuUser[]> {
-        const users: FeishuUser[] = [];
-        let pageToken: string | undefined;
-        do {
-            const response = await this.get<
-                FeishuAPIResponse & {
-                    data?: { items?: FeishuUser[]; page_token?: string; has_more?: boolean };
-                }
-            >("/contact/v3/users/find_by_department", {
-                department_id: "0",
-                user_id_type: "open_id",
-                department_id_type: "department_id",
-                page_size: 50,
-                ...(pageToken ? { page_token: pageToken } : {}),
-            });
-            if (response.data.code !== 0)
-                throw new Error(`获取通讯录用户失败: ${response.data.msg}`);
-            users.push(...(response.data.data?.items ?? []));
-            pageToken = response.data.data?.has_more ? response.data.data.page_token : undefined;
-        } while (pageToken);
-        return users;
+        return fetchFeishuUsers(this);
     }
 
     /**
      * 获取群组成员列表
      */
     async getChatMembers(chatId: string): Promise<FeishuUser[]> {
-        const members: FeishuUser[] = [];
-        let pageToken: string | undefined;
-        do {
-            const response = await this.get<FeishuChatMembersAPIResponse>(
-                `/im/v1/chats/${chatId}/members`,
-                { page_size: 100, ...(pageToken ? { page_token: pageToken } : {}) },
-            );
-            if (response.data.code !== 0 || !response.data.data) {
-                throw new Error(`获取群组成员列表失败: ${response.data.msg}`);
-            }
-            members.push(...(response.data.data.items ?? []));
-            pageToken = response.data.data.has_more ? response.data.data.page_token : undefined;
-        } while (pageToken);
-        return members;
+        return fetchFeishuChatMembers(this, chatId);
     }
 
     /**
@@ -462,5 +475,19 @@ export class FeishuBot extends EventEmitter {
      */
     getHttpClient(): FeishuBot {
         return this;
+    }
+
+    private safeEmit<K extends keyof FeishuBotEvents>(name: K, ...args: FeishuBotEvents[K]): void {
+        for (const listener of this.rawListeners(String(name))) {
+            try {
+                Reflect.apply(listener, this, args);
+            } catch (error) {
+                if (name !== "client_error")
+                    this.safeEmit(
+                        "client_error",
+                        FeishuError.wrap(error, "FEISHU_LISTENER_FAILED", String(name)),
+                    );
+            }
+        }
     }
 }
