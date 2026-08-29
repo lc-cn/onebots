@@ -66,6 +66,9 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         const bot = account.client;
         const { scene_type } = params;
+        if (scene_type === "channel") {
+            throw new TypeError("飞书 chat 不是 canonical Channel，请使用 group 场景");
+        }
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
         const compiled = await compileFeishuMessage(params.message, {
             client: bot,
@@ -77,7 +80,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         if (scene_type === "private" || scene_type === "direct") {
             receiveIdType = "open_id";
-        } else if (scene_type === "group" || scene_type === "channel") {
+        } else if (scene_type === "group") {
             receiveIdType = "chat_id";
         }
 

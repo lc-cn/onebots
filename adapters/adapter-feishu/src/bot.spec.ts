@@ -77,6 +77,37 @@ describe("FeishuBot webhook", () => {
     });
 });
 
+describe("FeishuBot 目录分页", () => {
+    it("遍历群成员 page_token 直到 has_more 结束", async () => {
+        const bot = new FeishuBot({ account_id: "A1", app_id: "cli_1", app_secret: "secret" });
+        const get = vi.spyOn(bot, "get");
+        get.mockResolvedValueOnce({
+            data: {
+                code: 0,
+                msg: "ok",
+                data: {
+                    items: [{ open_id: "ou_1", name: "Alice" }],
+                    has_more: true,
+                    page_token: "next",
+                },
+            },
+        } as never);
+        get.mockResolvedValueOnce({
+            data: {
+                code: 0,
+                msg: "ok",
+                data: { items: [{ open_id: "ou_2", name: "Bob" }], has_more: false },
+            },
+        } as never);
+
+        await expect(bot.getChatMembers("oc_1")).resolves.toHaveLength(2);
+        expect(get).toHaveBeenNthCalledWith(2, "/im/v1/chats/oc_1/members", {
+            page_size: 100,
+            page_token: "next",
+        });
+    });
+});
+
 function encrypt(plaintext: string, encryptKey: string): string {
     const key = createHash("sha256").update(encryptKey).digest();
     const iv = randomBytes(16);

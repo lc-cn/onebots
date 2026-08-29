@@ -441,15 +441,20 @@ export class FeishuBot extends EventEmitter {
      * 获取群组成员列表
      */
     async getChatMembers(chatId: string): Promise<FeishuUser[]> {
-        const response = await this.get<FeishuChatMembersAPIResponse>(
-            `/im/v1/chats/${chatId}/members`,
-        );
-
-        if (response.data.code !== 0 || !response.data.data) {
-            throw new Error(`获取群组成员列表失败: ${response.data.msg}`);
-        }
-
-        return response.data.data.items || [];
+        const members: FeishuUser[] = [];
+        let pageToken: string | undefined;
+        do {
+            const response = await this.get<FeishuChatMembersAPIResponse>(
+                `/im/v1/chats/${chatId}/members`,
+                { page_size: 100, ...(pageToken ? { page_token: pageToken } : {}) },
+            );
+            if (response.data.code !== 0 || !response.data.data) {
+                throw new Error(`获取群组成员列表失败: ${response.data.msg}`);
+            }
+            members.push(...(response.data.data.items ?? []));
+            pageToken = response.data.data.has_more ? response.data.data.page_token : undefined;
+        } while (pageToken);
+        return members;
     }
 
     /**

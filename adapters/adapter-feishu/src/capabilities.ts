@@ -3,7 +3,7 @@ import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebo
 /** 飞书开放平台实现当前可用的能力。 */
 export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { support: "native", scenes: ["private", "group", "channel"] },
+        send_message: { support: "native", scenes: ["private", "group"] },
         delete_message: { support: "native" },
         get_message: { support: "native" },
         update_message: {
@@ -57,7 +57,7 @@ export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
         get_supported_actions: { support: "native" },
     },
     events: {
-        message: { support: "native", scenes: ["private", "group", "channel"] },
+        message: { support: "native", scenes: ["private", "group"] },
         message_deleted: { support: "native" },
         member_joined: { support: "native" },
         member_left: { support: "native" },

@@ -226,6 +226,8 @@ export interface FeishuChatMembersAPIResponse {
     msg: string;
     data?: {
         items?: FeishuUser[];
+        page_token?: string;
+        has_more?: boolean;
         [key: string]: unknown;
     };
 }
