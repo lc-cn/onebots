@@ -10,6 +10,7 @@ import { weComCapabilities } from "./capabilities.js";
 import { WeComClient } from "./client.js";
 import { WeComApiError } from "./errors.js";
 import { projectWeComEvent } from "./events.js";
+import { prepareWeComMediaSegments, uploadWeComMedia } from "./media.js";
 import { compileWeComMessages } from "./messages.js";
 import { executeWeComPlatformAction, WECOM_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type { WeComAppChat, WeComConfig, WeComEvent, WeComUser } from "./types.js";
@@ -28,7 +29,10 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
     ): Promise<Adapter.SendMessageResult> {
         const client = this.requireClient(uin);
         const target = this.coerceId(params.scene_id).string;
-        const messages = compileWeComMessages(params.message);
+        const segments = await prepareWeComMediaSegments(client, params.message);
+        const messages = compileWeComMessages(segments, value =>
+            String(this.resolveId(value).source),
+        );
         let firstId: string | undefined;
         for (const message of messages) {
             const id =
@@ -97,10 +101,14 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
         const client = this.requireClient(uin);
-        const [chat, user] = await Promise.all([
-            client.getAppChat(params.group_id.string),
-            client.getUserInfo(params.user_id.string),
-        ]);
+        const chat = await client.getAppChat(params.group_id.string);
+        const userId = params.user_id.string;
+        if (!chat.userlist.includes(userId)) {
+            throw new WeComApiError(`成员 ${userId} 不在应用群聊 ${chat.chatid} 中`, {
+                code: "WECOM_APPCHAT_MEMBER_NOT_FOUND",
+            });
+        }
+        const user = await client.getUserInfo(userId);
         return {
             group_id: params.group_id,
             user_id: this.createId(user.userid),
@@ -128,6 +136,23 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
     }
     async canSendRecord(): Promise<boolean> {
         return true;
+    }
+
+    async uploadFile(uin: string, params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> {
+        const sources = [params.url, params.path, params.data].filter(
+            (value): value is string => typeof value === "string" && value.length > 0,
+        );
+        if (sources.length !== 1) {
+            throw new WeComApiError("upload_file 必须且只能提供 url/path/data 之一", {
+                code: "WECOM_INVALID_MEDIA",
+            });
+        }
+        const source = params.url || params.path || asBase64Source(params.data!);
+        const mediaId = await uploadWeComMedia(this.requireClient(uin), "file", {
+            source,
+            filename: params.name,
+        });
+        return { file_id: this.createId(mediaId), file_name: params.name };
     }
 
     async getVersion(): Promise<Adapter.VersionInfo> {
@@ -207,6 +232,10 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
             member_count: chat.userlist.length,
         };
     }
+}
+
+function asBase64Source(value: string): string {
+    return /^(?:base64:\/\/|data:)/u.test(value) ? value : `base64://${value}`;
 }
 
 async function mapConcurrent<T, R>(

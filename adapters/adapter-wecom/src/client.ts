@@ -136,15 +136,29 @@ export class WeComClient extends EventEmitter {
     ): Promise<{ media_id: string; created_at: string }> {
         const form = new FormData();
         form.set("media", data, filename);
-        return this.call({
+        const result = await this.call<{ media_id?: unknown; created_at?: unknown }>({
             method: "POST",
             path: "/cgi-bin/media/upload",
             query: { type },
             body: form,
         });
+        if (typeof result.media_id !== "string" || !result.media_id) {
+            throw new WeComApiError("企业微信临时素材响应缺少 media_id", {
+                code: "WECOM_INVALID_MEDIA_RESPONSE",
+                details: result,
+            });
+        }
+        return {
+            media_id: result.media_id,
+            created_at:
+                typeof result.created_at === "string" || typeof result.created_at === "number"
+                    ? String(result.created_at)
+                    : "",
+        };
     }
 
     ingest(event: WeComEvent): void {
+        validateEvent(event);
         this.emit("raw_event", event);
         const isEvent = event.MsgType === "event";
         this.emit(isEvent ? "event" : "message", event);
@@ -235,6 +249,30 @@ export class WeComClient extends EventEmitter {
             code: "WECOM_HTTP_ERROR",
             status: response.status,
             path,
+        });
+    }
+}
+
+function validateEvent(event: WeComEvent): void {
+    if (typeof event.MsgType !== "string" || !event.MsgType) {
+        throw new WeComApiError("企业微信事件缺少 MsgType", {
+            code: "WECOM_INVALID_EVENT",
+        });
+    }
+    if (!Number.isFinite(event.CreateTime) || Number(event.CreateTime) <= 0) {
+        throw new WeComApiError("企业微信事件缺少有效 CreateTime", {
+            code: "WECOM_INVALID_EVENT",
+        });
+    }
+    const identity = event.MsgId || event.FromUserName || event.UserID;
+    if (typeof identity !== "string" || !identity) {
+        throw new WeComApiError("企业微信事件缺少稳定身份字段", {
+            code: "WECOM_INVALID_EVENT",
+        });
+    }
+    if (event.MsgType !== "event" && (!event.FromUserName || !event.MsgId)) {
+        throw new WeComApiError("企业微信消息缺少 FromUserName 或 MsgId", {
+            code: "WECOM_INVALID_EVENT",
         });
     }
 }

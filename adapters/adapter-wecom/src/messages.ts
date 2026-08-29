@@ -1,5 +1,6 @@
 import type { CommonTypes } from "onebots";
 import { WeComApiError } from "./errors.js";
+import { weComMediaType } from "./media.js";
 
 export interface WeComOutboundMessage extends Record<string, unknown> {
     msgtype: string;
@@ -8,6 +9,7 @@ export interface WeComOutboundMessage extends Record<string, unknown> {
 /** 将通用消息段编译为顺序明确的企业微信原生消息。 */
 export function compileWeComMessages(
     input: ReadonlyArray<CommonTypes.Segment | string>,
+    resolveUserId: (value: string | number) => string = value => String(value),
 ): WeComOutboundMessage[] {
     const messages: WeComOutboundMessage[] = [];
     let text = "";
@@ -26,13 +28,12 @@ export function compileWeComMessages(
             continue;
         }
         if (segment.type === "at") {
-            const user =
-                stringValue(segment.data.user_id) ||
-                stringValue(segment.data.id) ||
-                stringValue(segment.data.qq);
-            if (!user) invalid("at 段必须提供 user_id");
+            const user = identifierValue(
+                segment.data.user_id ?? segment.data.id ?? segment.data.qq,
+            );
+            if (user === undefined) invalid("at 段必须提供 user_id");
             // 自建应用与 appchat 没有独立的提及字段，只能保留可读文本。
-            text += `@${user}`;
+            text += `@${resolveUserId(user)}`;
             continue;
         }
         flushText();
@@ -46,7 +47,7 @@ export function compileWeComMessages(
             messages.push({ msgtype: "markdown", markdown: { content } });
             continue;
         }
-        const mediaType = normalizeMediaType(segment.type);
+        const mediaType = weComMediaType(segment.type);
         if (mediaType) {
             const mediaId =
                 stringValue(segment.data.media_id) || mediaIdFromFile(segment.data.file);
@@ -90,11 +91,6 @@ function mediaMessage(
     };
 }
 
-function normalizeMediaType(type: string): "image" | "voice" | "video" | "file" | undefined {
-    if (type === "image" || type === "video" || type === "file") return type;
-    return type === "voice" || type === "audio" || type === "record" ? "voice" : undefined;
-}
-
 function mediaIdFromFile(value: unknown): string | undefined {
     const file = stringValue(value);
     if (!file) return undefined;
@@ -104,6 +100,10 @@ function mediaIdFromFile(value: unknown): string | undefined {
 
 function stringValue(value: unknown): string | undefined {
     return typeof value === "string" && value ? value : undefined;
+}
+
+function identifierValue(value: unknown): string | number | undefined {
+    return (typeof value === "string" && value) || typeof value === "number" ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

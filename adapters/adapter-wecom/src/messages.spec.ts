@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { compileWeComMessages } from "./messages.js";
 
 describe("compileWeComMessages", () => {
@@ -36,5 +36,13 @@ describe("compileWeComMessages", () => {
         expect(() =>
             compileWeComMessages([{ type: "image", data: { url: "https://example.com/a.png" } }]),
         ).toThrowError(expect.objectContaining({ code: "WECOM_INVALID_MESSAGE" }));
+    });
+
+    it("将统一用户 ID 还原为企业微信 userid", () => {
+        const resolveUserId = vi.fn(value => `userid:${value}`);
+        expect(
+            compileWeComMessages([{ type: "at", data: { user_id: 42 } }], resolveUserId),
+        ).toEqual([{ msgtype: "text", text: { content: "@userid:42" } }]);
+        expect(resolveUserId).toHaveBeenCalledWith(42);
     });
 });

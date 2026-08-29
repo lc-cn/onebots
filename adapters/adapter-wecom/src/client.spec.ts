@@ -74,11 +74,19 @@ describe("WeComClient", () => {
         const event: WeComEvent = {
             MsgType: "text",
             MsgId: "m1",
+            CreateTime: 1_777_000_000,
             FromUserName: "u1",
             Content: "hi",
         };
         client.ingest(event);
         expect(raw).toHaveBeenCalledWith(event);
         expect(message).toHaveBeenCalledWith(event);
+    });
+
+    it("ingest 拒绝无法稳定投影的外部事件", () => {
+        const client = new WeComClient(config);
+        expect(() => client.ingest({ MsgType: "text", Content: "hi" })).toThrowError(
+            expect.objectContaining({ code: "WECOM_INVALID_EVENT" }),
+        );
     });
 });

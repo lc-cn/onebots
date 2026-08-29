@@ -24,6 +24,7 @@ export const weComCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         get_group_info: { ...permission, note: "仅应用创建的 appchat" },
         get_group_member_list: { ...permission, note: "仅应用创建的 appchat" },
         get_group_member_info: { ...permission, note: "仅应用创建的 appchat" },
+        upload_file: { ...permission, scenes: ["private", "direct", "group"] },
         can_send_image: { support: "native" },
         can_send_record: { support: "native" },
         get_status: { support: "native" },

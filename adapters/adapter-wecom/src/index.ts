@@ -5,6 +5,8 @@ export { weComCapabilities } from "./capabilities.js";
 export { WeComClient } from "./client.js";
 export { WeComApiError } from "./errors.js";
 export { projectWeComEvent, projectWeComSegments } from "./events.js";
+export { prepareWeComMediaSegments, uploadWeComMedia, weComMediaType } from "./media.js";
+export type { WeComMediaType } from "./media.js";
 export { compileWeComMessages } from "./messages.js";
 export type { WeComOutboundMessage } from "./messages.js";
 export { executeWeComPlatformAction, WECOM_PLATFORM_ACTIONS } from "./platform-actions.js";

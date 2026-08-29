@@ -27,7 +27,8 @@ wecom.internal_app:
 - `private` / `direct` 使用 `/cgi-bin/message/send` 向成员发送应用消息。
 - `group` 指真实的应用群聊 `appchat`，使用 `/cgi-bin/appchat/send`；部门和标签不会伪装成群聊。
 - 支持文本、图片、语音、视频、文件、Markdown 和任意 `wecom_message` 原生消息。通用 `at` 段会保留为 `@userid` 可读文本，但企业微信自建应用 API 不保证产生提醒。
-- 媒体必须先上传并使用 `media_id` 或 `wecom://media/{media_id}`，不会降级成 URL 占位文本。
+- 图片、语音、视频和文件可直接使用 HTTPS URL、本地路径、`data:` URL 或 Base64；适配器会物化来源并上传为当前企业的临时素材。已有 `media_id` 或 `wecom://media/{media_id}` 会直接复用，不会重复上传或降级成 URL 文本。
+- `upload_file` 使用同一条临时素材管线并返回可直接发送的 `media_id`。素材格式和大小会在请求发出前按企业微信限制校验。
 - `delete_message` 调用 `/cgi-bin/message/recall` 撤回返回服务端 `msgid` 且符合时限的应用消息；`appchat/send` 不返回 `msgid`，因此群消息不可通过该接口撤回。
 
 ## 原生 API
@@ -46,7 +47,7 @@ access token 自动缓存，并在企业微信报告失效时刷新且只重试�
 
 ## 底层接入
 
-`WeComWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂载到已有 Koa 风格 Host；`WeComClient.ingest()` 可接收已经解密/解析的事件。适配器不会自行监听端口。
+`WeComWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂载到已有 Koa 风格 Host；`WeComClient.ingest()` 可接收已经解密/解析且含稳定时间与身份字段的事件。适配器不会自行监听端口。
 
 事件统一保留 `raw_event`，其中 `RawXml` 是解密后的完整 XML，`EncryptedXml` 是收到的密文外层 XML。
 
