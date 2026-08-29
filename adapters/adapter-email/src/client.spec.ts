@@ -28,8 +28,15 @@ describe("EmailClient", () => {
 
     it("要求密码或 OAuth2 token", () => {
         expect(() => new EmailClient({ ...config, auth: { user: "bot@example.com" } })).toThrow(
-            "必须配置 password 或 access_token",
+            "必须配置 auth.password",
         );
+        expect(
+            () =>
+                new EmailClient({
+                    ...config,
+                    auth: { user: "bot@example.com", method: "oauth2" },
+                }),
+        ).toThrow("必须配置 auth.access_token");
     });
 
     it("在创建连接前拒绝非法地址、端口和代理", () => {
@@ -42,6 +49,17 @@ describe("EmailClient", () => {
         expect(() => new EmailClient({ ...config, proxy: { url: "not-a-url" } })).toThrow(
             "邮件代理地址不是有效 URL",
         );
+        expect(
+            () =>
+                new EmailClient({
+                    ...config,
+                    imap: {
+                        ...config.imap,
+                        retry_initial_delay_ms: 2_000,
+                        retry_max_delay_ms: 1_000,
+                    },
+                }),
+        ).toThrow("不能大于 retry_max_delay_ms");
     });
 
     it("重连成功瞬间再次关闭也会继续恢复", async () => {

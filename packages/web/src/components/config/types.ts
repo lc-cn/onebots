@@ -19,6 +19,10 @@ export type SchemaFieldDef = {
         dependencyKey: string;
         oneOf: Array<string | number | boolean>;
     };
+    valueInference?: Array<{
+        path: string[];
+        value: string | number | boolean;
+    }>;
 };
 
 export type SchemaGroup = {

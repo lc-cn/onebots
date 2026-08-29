@@ -1,6 +1,8 @@
 /** 邮件服务认证。密码与 OAuth2 access token 至少配置一项。 */
 export interface EmailAuthConfig {
     user: string;
+    /** 显式选择认证方式；未设置时按已提供凭据确定。 */
+    method?: "password" | "oauth2";
     password?: string;
     access_token?: string;
 }

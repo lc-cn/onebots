@@ -8,7 +8,11 @@ export { parseEmailSource, projectEmailEvent, type EmailProjectionContext } from
 export { compileEmailMessage, createEmailSendOptions, type CompiledEmail } from "./messages.js";
 export { createImapMessageId, parseImapMessageId, type ImapMessageLocation } from "./message-id.js";
 export { EMAIL_PLATFORM_ACTIONS, executeEmailPlatformAction } from "./platform-actions.js";
-export type { EmailSmtpTransport } from "./transports.js";
+export {
+    resolveEmailAuthMode,
+    validateEmailConfig,
+    type EmailSmtpTransport,
+} from "./transports.js";
 export type * from "./types.js";
 
 const securityChoices = [
@@ -17,7 +21,7 @@ const securityChoices = [
     { value: "plain", label: "明文（不推荐）" },
 ];
 
-const emailSchema: Schema = {
+export const emailSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -45,6 +49,22 @@ const emailSchema: Schema = {
         ui: { section: "delivery" },
     },
     auth: {
+        method: {
+            type: "string",
+            default: "password",
+            label: "认证方式",
+            choices: [
+                { value: "password", label: "密码 / 应用专用密码" },
+                { value: "oauth2", label: "OAuth2 Access Token" },
+            ],
+            ui: {
+                section: "credentials",
+                inferValueFromPresence: [
+                    { path: "auth.access_token", value: "oauth2" },
+                    { path: "auth.password", value: "password" },
+                ],
+            },
+        },
         user: {
             type: "string",
             required: true,
@@ -56,15 +76,21 @@ const emailSchema: Schema = {
             type: "string",
             label: "密码或应用专用密码",
             sensitive: true,
-            description: "password 与 access_token 至少填写一项",
-            ui: { section: "credentials" },
+            description: "选择密码认证时必填",
+            ui: {
+                section: "credentials",
+                visibleWhen: { path: "auth.method", oneOf: ["password"] },
+            },
         },
         access_token: {
             type: "string",
             label: "OAuth2 Access Token",
             sensitive: true,
-            description: "配置后 SMTP 与 IMAP 均优先使用 OAuth2",
-            ui: { section: "credentials" },
+            description: "选择 OAuth2 认证时必填，SMTP 与 IMAP 共用",
+            ui: {
+                section: "credentials",
+                visibleWhen: { path: "auth.method", oneOf: ["oauth2"] },
+            },
         },
     },
     smtp: {

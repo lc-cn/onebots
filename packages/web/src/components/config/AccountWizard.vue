@@ -20,6 +20,7 @@ import {
     getValueByPath,
     setValueByPath,
     resolveStructuredFieldDisplay,
+    resolveSchemaFieldInitialValue,
     parseStructuredFieldValue,
     isSchemaFieldVisible,
     protocolTitle,
@@ -114,8 +115,7 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
                 );
                 return;
             }
-            accountFormModel[field.key] =
-                currentValue ?? field.rule.default ?? (field.rule.type === "boolean" ? false : "");
+            accountFormModel[field.key] = resolveSchemaFieldInitialValue(configObject, field);
         });
     });
 
@@ -125,8 +125,7 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
             accountFormModel[field.key] = resolveStructuredFieldDisplay(currentValue, field.rule);
             return;
         }
-        accountFormModel[field.key] =
-            currentValue ?? field.rule.default ?? (field.rule.type === "boolean" ? false : "");
+        accountFormModel[field.key] = resolveSchemaFieldInitialValue(configObject, field);
     });
 };
 

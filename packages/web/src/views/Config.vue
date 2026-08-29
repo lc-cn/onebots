@@ -22,6 +22,7 @@ import {
     deleteValueByPath,
     setValueByPath,
     resolveStructuredFieldDisplay,
+    resolveSchemaFieldInitialValue,
     parseStructuredFieldValue,
     isSchemaFieldVisible,
     normalizeSchema,
@@ -60,8 +61,7 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
                 formModel[field.key] = resolveStructuredFieldDisplay(currentValue, field.rule);
                 return;
             }
-            formModel[field.key] =
-                currentValue ?? field.rule.default ?? (field.rule.type === "boolean" ? false : "");
+            formModel[field.key] = resolveSchemaFieldInitialValue(configObject, field);
         });
     });
 };

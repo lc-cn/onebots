@@ -6,7 +6,10 @@ const validSchema: Schema = {
         type: "string",
         label: "接收方式",
         choices: [{ label: "Webhook", value: "webhook" }],
-        ui: { section: "transport" },
+        ui: {
+            section: "transport",
+            inferValueFromPresence: [{ path: "access_token", value: "webhook" }],
+        },
     },
     access_token: {
         type: "string",
@@ -62,6 +65,19 @@ describe("schema form contract", () => {
                 },
             }),
         ).toThrow("不存在的显示依赖");
+        expect(() =>
+            assertSchemaFormContract({
+                mode: {
+                    type: "string",
+                    label: "方式",
+                    choices: [{ label: "自动", value: "auto" }],
+                    ui: {
+                        section: "transport",
+                        inferValueFromPresence: [{ path: "missing", value: "auto" }],
+                    },
+                },
+            }),
+        ).toThrow("不存在的推断来源");
         expect(() =>
             assertSchemaFormContract({
                 access_token: {

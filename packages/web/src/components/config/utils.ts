@@ -244,12 +244,32 @@ export const buildSchemaFields = (
                           oneOf: rule.ui.visibleWhen.oneOf,
                       }
                     : undefined,
+                valueInference: rule.ui?.inferValueFromPresence?.map(source => ({
+                    path: [...schemaRootPath, ...source.path.split(".").filter(Boolean)],
+                    value: source.value,
+                })),
             });
         } else {
             fields.push(...buildSchemaFields(rule as Schema, currentPath, schemaRootPath));
         }
     });
     return fields;
+};
+
+/** 保留已有值；字段缺失时先按同一 Schema 内的现存配置推断，再使用静态默认。 */
+export const resolveSchemaFieldInitialValue = (
+    configObject: Record<string, unknown>,
+    field: SchemaFieldDef,
+): unknown => {
+    const currentValue = getValueByPath(configObject, field.path);
+    if (currentValue !== undefined) return currentValue;
+    for (const source of field.valueInference ?? []) {
+        const sourceValue = getValueByPath(configObject, source.path);
+        if (sourceValue !== undefined && sourceValue !== null && sourceValue !== "") {
+            return source.value;
+        }
+    }
+    return field.rule.default ?? (field.rule.type === "boolean" ? false : "");
 };
 
 /** Schema 声明是显示与持久化的唯一来源，两个配置入口共用同一判断。 */

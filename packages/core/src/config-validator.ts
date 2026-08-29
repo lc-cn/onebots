@@ -59,6 +59,11 @@ export interface ValidationRule<T = unknown> {
             path: string;
             oneOf: Array<string | number | boolean>;
         };
+        /** 当前字段缺失时，按同一 Schema 根下已存在的字段推断初始选择。 */
+        inferValueFromPresence?: Array<{
+            path: string;
+            value: string | number | boolean;
+        }>;
     };
 }
 
@@ -100,6 +105,18 @@ export function assertSchemaFormContract(schema: Schema): void {
         }
         if (visibility && visibility.oneOf.length === 0) {
             throw new ValidationError(`配置字段 ${path} 的显示条件 oneOf 不能为空`);
+        }
+        const inference = rule.ui.inferValueFromPresence;
+        if (inference?.length === 0) {
+            throw new ValidationError(`配置字段 ${path} 的推断来源不能为空`);
+        }
+        for (const source of inference ?? []) {
+            if (!paths.has(source.path)) {
+                throw new ValidationError(`配置字段 ${path} 引用了不存在的推断来源 ${source.path}`);
+            }
+            if (rule.choices && !rule.choices.some(choice => choice.value === source.value)) {
+                throw new ValidationError(`配置字段 ${path} 的推断值未包含在 choices 中`);
+            }
         }
         if (
             (rule.ui.widget === "endpoint-list" ||

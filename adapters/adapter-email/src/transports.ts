@@ -46,6 +46,7 @@ export function createSmtpTransport(config: EmailConfig): EmailSmtpTransport {
 /** 创建开启自动 IDLE、证书校验和代理支持的 IMAP 客户端。 */
 export function createImapClient(config: EmailConfig): ImapFlow {
     const security = config.imap.security || "tls";
+    const authMode = resolveEmailAuthMode(config);
     return new ImapFlow({
         host: config.imap.host,
         port: config.imap.port || (security === "tls" ? 993 : 143),
@@ -53,8 +54,8 @@ export function createImapClient(config: EmailConfig): ImapFlow {
         doSTARTTLS: security === "starttls" ? true : security === "plain" ? false : undefined,
         auth: {
             user: config.auth.user,
-            pass: config.auth.password,
-            accessToken: config.auth.access_token,
+            pass: authMode === "password" ? config.auth.password : undefined,
+            accessToken: authMode === "oauth2" ? config.auth.access_token : undefined,
         },
         proxy: resolveProxyUrl(config),
         tls: { rejectUnauthorized: config.imap.reject_unauthorized !== false },
@@ -68,12 +69,8 @@ export function createImapClient(config: EmailConfig): ImapFlow {
 
 /** 校验运行时配置中无法由静态 Schema 表达的互斥条件。 */
 export function validateEmailConfig(config: EmailConfig): void {
-    if (!config.auth?.password && !config.auth?.access_token) {
-        throw new EmailError("邮件认证必须配置 password 或 access_token", {
-            code: "EMAIL_AUTH_REQUIRED",
-        });
-    }
     for (const [field, value] of [
+        ["account_id", config.account_id],
         ["address", config.address],
         ["auth.user", config.auth?.user],
         ["smtp.host", config.smtp?.host],
@@ -90,6 +87,33 @@ export function validateEmailConfig(config: EmailConfig): void {
     validateSecurity("imap.security", config.imap.security);
     validatePort("smtp.port", config.smtp.port);
     validatePort("imap.port", config.imap.port);
+    const authMode = resolveEmailAuthMode(config);
+    if (authMode === "password" && !config.auth.password?.trim()) {
+        throw new EmailError("password 认证方式必须配置 auth.password", {
+            code: "EMAIL_AUTH_REQUIRED",
+        });
+    }
+    if (authMode === "oauth2" && !config.auth.access_token?.trim()) {
+        throw new EmailError("oauth2 认证方式必须配置 auth.access_token", {
+            code: "EMAIL_AUTH_REQUIRED",
+        });
+    }
+    for (const [field, value, minimum] of [
+        ["smtp.max_connections", config.smtp.max_connections, 1],
+        ["smtp.max_messages", config.smtp.max_messages, 1],
+        ["smtp.connection_timeout_ms", config.smtp.connection_timeout_ms, 1],
+        ["smtp.greeting_timeout_ms", config.smtp.greeting_timeout_ms, 1],
+        ["smtp.socket_timeout_ms", config.smtp.socket_timeout_ms, 1],
+        ["imap.poll_interval_ms", config.imap.poll_interval_ms, 0],
+        ["imap.retry_initial_delay_ms", config.imap.retry_initial_delay_ms, 100],
+        ["imap.retry_max_delay_ms", config.imap.retry_max_delay_ms, 1_000],
+        ["imap.connection_timeout_ms", config.imap.connection_timeout_ms, 1],
+        ["imap.greeting_timeout_ms", config.imap.greeting_timeout_ms, 1],
+        ["imap.socket_timeout_ms", config.imap.socket_timeout_ms, 1],
+        ["imap.max_idle_time_ms", config.imap.max_idle_time_ms, 1_000],
+    ] as const) {
+        validateIntegerMinimum(field, value, minimum);
+    }
     if (
         config.imap.retry_initial_delay_ms !== undefined &&
         config.imap.retry_max_delay_ms !== undefined &&
@@ -100,6 +124,17 @@ export function validateEmailConfig(config: EmailConfig): void {
         });
     }
     resolveProxyUrl(config);
+}
+
+/** 解析最终认证方式，供 SMTP 与 IMAP 共用同一决策。 */
+export function resolveEmailAuthMode(config: EmailConfig): "password" | "oauth2" {
+    const method = config.auth?.method;
+    if (method !== undefined && method !== "password" && method !== "oauth2") {
+        throw new EmailError("auth.method 必须是 password 或 oauth2", {
+            code: "EMAIL_CONFIG_INVALID",
+        });
+    }
+    return method || (config.auth?.access_token ? "oauth2" : "password");
 }
 
 function validateSecurity(field: string, value: unknown): void {
@@ -116,6 +151,14 @@ function validatePort(field: string, value: unknown): void {
         (!Number.isInteger(value) || Number(value) < 1 || Number(value) > 65535)
     ) {
         throw new EmailError(`${field} 必须是 1 到 65535 之间的整数`, {
+            code: "EMAIL_CONFIG_INVALID",
+        });
+    }
+}
+
+function validateIntegerMinimum(field: string, value: unknown, minimum: number): void {
+    if (value !== undefined && (!Number.isInteger(value) || Number(value) < minimum)) {
+        throw new EmailError(`${field} 必须是大于等于 ${minimum} 的整数`, {
             code: "EMAIL_CONFIG_INVALID",
         });
     }
@@ -146,7 +189,7 @@ function normalizeSendResult(value: unknown): EmailSendResult {
 }
 
 function smtpAuth(config: EmailConfig): SMTPTransport.Options["auth"] {
-    return config.auth.access_token
+    return resolveEmailAuthMode(config) === "oauth2"
         ? { type: "OAuth2", user: config.auth.user, accessToken: config.auth.access_token }
         : { user: config.auth.user, pass: config.auth.password };
 }

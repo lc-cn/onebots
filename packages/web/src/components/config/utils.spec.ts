@@ -7,6 +7,7 @@ import {
     isSchemaFieldVisible,
     parseStructuredFieldValue,
     resolveStructuredFieldDisplay,
+    resolveSchemaFieldInitialValue,
 } from "./utils.js";
 import type { SchemaBundle, ValidationRule } from "./types.js";
 
@@ -168,6 +169,39 @@ describe("config form generation", () => {
         expect(isSchemaFieldVisible(webhookUrl, { "telegram::receive_mode": "webhook" })).toBe(
             true,
         );
+    });
+
+    test("infers a missing selector from existing sibling configuration", () => {
+        const fields = buildSchemaFields(
+            {
+                auth: {
+                    method: {
+                        type: "string",
+                        default: "password",
+                        ui: {
+                            inferValueFromPresence: [
+                                { path: "auth.access_token", value: "oauth2" },
+                            ],
+                        },
+                    },
+                    access_token: { type: "string" },
+                },
+            },
+            ["email"],
+        );
+        const method = fields.find(field => field.path.join(".") === "email.auth.method");
+        if (!method) throw new Error("missing auth method field");
+
+        expect(
+            resolveSchemaFieldInitialValue(
+                { email: { auth: { access_token: "existing-token" } } },
+                method,
+            ),
+        ).toBe("oauth2");
+        expect(resolveSchemaFieldInitialValue({ email: { auth: {} } }, method)).toBe("password");
+        expect(
+            resolveSchemaFieldInitialValue({ email: { auth: { method: "password" } } }, method),
+        ).toBe("password");
     });
 
     test("removes hidden values and empty parent objects", () => {
