@@ -20,7 +20,7 @@ export const QQ_INTENTS = {
 } as const;
 
 export type QQIntent = keyof typeof QQ_INTENTS;
-export type QQReceiveMode = "websocket" | "webhook";
+export type QQReceiveMode = "websocket" | "webhook" | "manual";
 
 export interface QQConfig {
     account_id: string;

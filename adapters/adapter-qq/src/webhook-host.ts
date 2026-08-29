@@ -10,7 +10,7 @@ import { QQApiError } from "./errors.js";
 
 export type QQRawEventListener = (eventType: string, data: unknown) => void | Promise<void>;
 
-interface QQHttpContext {
+export interface QQHttpContext {
     request: { body?: unknown; rawBody?: unknown };
     headers: Record<string, unknown>;
     status: number;

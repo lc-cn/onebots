@@ -158,7 +158,7 @@ export interface DiscordLiteOptions {
         username?: string;
         password?: string;
     };
-    mode?: "gateway" | "interactions" | "auto";
+    mode?: "gateway" | "interactions" | "manual" | "auto";
     // Interactions 模式需要
     publicKey?: string;
     applicationId?: string;
@@ -197,7 +197,7 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
     private interactions: InteractionsHandler | null = null;
     private rest: DiscordREST;
     private runtime: RuntimeType;
-    private mode: "gateway" | "interactions";
+    private mode: "gateway" | "interactions" | "manual";
     private user: DiscordApiUser | null = null;
     private startPromise?: Promise<void>;
 
@@ -312,7 +312,10 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
      */
     initInteractions(): InteractionsHandler {
         if (this.interactions) return this.interactions;
-        if (!this.options.publicKey || !this.options.applicationId) {
+        if (
+            this.mode === "interactions" &&
+            (!this.options.publicKey || !this.options.applicationId)
+        ) {
             throw DiscordError.configuration(
                 "Interactions 模式需要 publicKey 和 applicationId",
                 "DISCORD_INTERACTION_CONFIG_REQUIRED",
@@ -320,9 +323,10 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
         }
 
         this.interactions = new InteractionsHandler({
-            publicKey: this.options.publicKey,
+            publicKey: this.options.publicKey ?? "",
             token: this.options.token,
-            applicationId: this.options.applicationId,
+            applicationId: this.options.applicationId ?? "",
+            trustedIngress: this.mode === "manual",
             onInteraction: interaction => {
                 this.emit("interactionCreate", interaction);
                 this.emit("dispatch", "INTERACTION_CREATE", interaction, null, null);
@@ -379,7 +383,7 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
     /**
      * 获取当前模式
      */
-    getMode(): "gateway" | "interactions" {
+    getMode(): "gateway" | "interactions" | "manual" {
         return this.mode;
     }
 

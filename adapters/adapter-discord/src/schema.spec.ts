@@ -20,10 +20,16 @@ describe("Discord 配置 Schema", () => {
     });
 
     it("按接收模式展示 Gateway 或 Interactions 配置，并结构化编辑活动", () => {
+        const receiveMode = discordSchema.receive_mode as ValidationRule;
         const applicationId = discordSchema.application_id as ValidationRule;
         const intents = discordSchema.intents as ValidationRule;
         const presence = discordSchema.presence as Record<string, ValidationRule>;
 
+        expect(receiveMode.choices?.map(choice => choice.value)).toEqual([
+            "gateway",
+            "interactions",
+            "manual",
+        ]);
         expect(applicationId.ui?.visibleWhen).toEqual({
             path: "receive_mode",
             oneOf: ["interactions"],

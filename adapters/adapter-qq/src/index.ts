@@ -28,7 +28,7 @@ export * from "@tencent-connect/qqbot-nodejs";
 
 const intentChoices = Object.keys(QQ_INTENTS).map(value => ({ value, label: value }));
 
-const qqSchema: Schema = {
+export const qqSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -59,6 +59,7 @@ const qqSchema: Schema = {
         choices: [
             { value: "websocket", label: "WebSocket 正向连接" },
             { value: "webhook", label: "Webhook 回调" },
+            { value: "manual", label: "手动接入已有 HTTP Host" },
         ],
         ui: { section: "transport" },
     },
@@ -67,7 +68,10 @@ const qqSchema: Schema = {
         label: "Webhook 路径",
         placeholder: "/qq/{account_id}/webhook",
         description: "仅 Webhook 模式使用；留空时自动生成账号隔离路径",
-        ui: { section: "transport" },
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     intents: {
         type: "array",

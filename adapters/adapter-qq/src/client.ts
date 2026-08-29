@@ -1,7 +1,9 @@
 import { QQBot, type QQBotOptions } from "@tencent-connect/qqbot-nodejs";
+import type { WebhookRequest, WebhookResponse } from "@tencent-connect/qqbot-nodejs/protocol";
 import { ErrorCategory } from "onebots";
 import { QQApiError } from "./errors.js";
 import type { QQPlatformCall } from "./types.js";
+import { QQWebhookHost, type QQHttpContext } from "./webhook-host.js";
 
 const RETRY_DELAYS = [1_000, 2_000, 5_000, 10_000, 30_000, 60_000] as const;
 
@@ -17,6 +19,7 @@ export class QQClient extends QQBot {
     constructor(
         options: QQBotOptions,
         private readonly adapterLogger: ClientLogger,
+        readonly webhookHost?: QQWebhookHost,
     ) {
         super(options);
     }
@@ -55,6 +58,28 @@ export class QQClient extends QQBot {
     close(): void {
         this.runController?.abort();
         super.stop();
+    }
+
+    /** 将现有 HTTP Host 提取出的原始请求交给官方 SDK 的验签与事件分发管线。 */
+    async ingest(request: WebhookRequest): Promise<WebhookResponse> {
+        if (!this.webhookHost) {
+            throw new QQApiError("QQ Client 未配置 Webhook 接收器", {
+                code: "QQ_WEBHOOK_UNAVAILABLE",
+                category: ErrorCategory.CONFIG,
+            });
+        }
+        return this.webhookHost.ingest(request);
+    }
+
+    /** Koa/OneBots Host 适配入口；manual 与 webhook 模式行为一致。 */
+    async acceptHttp(ctx: QQHttpContext): Promise<void> {
+        if (!this.webhookHost) {
+            throw new QQApiError("QQ Client 未配置 Webhook 接收器", {
+                code: "QQ_WEBHOOK_UNAVAILABLE",
+                category: ErrorCategory.CONFIG,
+            });
+        }
+        await this.webhookHost.acceptHttp(ctx);
     }
 
     /** 经 SDK 认证与结构化错误处理调用任意 QQ OpenAPI。 */

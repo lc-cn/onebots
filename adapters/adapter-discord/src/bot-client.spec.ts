@@ -2,6 +2,25 @@ import { describe, expect, it } from "vitest";
 import { createDiscordLite } from "./bot-client.js";
 
 describe("createDiscordLite", () => {
+    it("manual 模式无需 HTTP 验签凭据即可接收上游已验证事件", async () => {
+        const client = createDiscordLite({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+
+        expect(client.getMode()).toBe("manual");
+        await expect(
+            client.ingestInteraction({
+                id: "2",
+                application_id: "1",
+                type: 1,
+                token: "interaction-token",
+                version: 1,
+            }),
+        ).resolves.toEqual({ type: 1 });
+    });
+
     it("将 Interactions 接收模式闭合到统一客户端", async () => {
         const client = createDiscordLite({
             account_id: "bot",

@@ -78,11 +78,13 @@ export const discordSchema: Schema = {
         type: "string",
         default: "gateway",
         label: "事件接收方式",
-        description: "Gateway 接收完整事件；Interactions 复用 OneBots HTTP Host 接收应用命令",
         choices: [
             { value: "gateway", label: "Gateway WebSocket" },
             { value: "interactions", label: "Interactions Webhook" },
+            { value: "manual", label: "手动接入已验签事件" },
         ],
+        description:
+            "Gateway 接收完整事件；Interactions 复用 OneBots HTTP Host；manual 由现有 Host 调用 ingestInteraction()",
         ui: { section: "transport" },
     },
     application_id: {

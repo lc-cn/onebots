@@ -72,7 +72,7 @@ export enum ActivityType {
 export interface DiscordConfig {
     account_id: string;
     token: string;
-    receive_mode?: "gateway" | "interactions";
+    receive_mode?: "gateway" | "interactions" | "manual";
     /** Discord Application ID；Interactions 模式必填。 */
     application_id?: string;
     /** Discord Application Public Key；Interactions 模式必填。 */

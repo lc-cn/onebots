@@ -138,5 +138,6 @@ export const qqCapabilities: AdapterCapabilityManifest = defineAdapterCapabiliti
     transports: {
         gateway: { support: "native", mode: "websocket" },
         webhook: { support: "native", mode: "webhook" },
+        manual: { support: "native", mode: "native", note: "通过 Client.ingest() 接入既有 Host" },
     },
 });

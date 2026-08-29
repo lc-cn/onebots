@@ -31,9 +31,11 @@ export enum InteractionCallbackType {
 }
 
 export interface InteractionWebhookOptions {
-    publicKey: string;
+    publicKey?: string;
     token: string;
-    applicationId: string;
+    applicationId?: string;
+    /** 仅允许注入已经由上游验签的事件；本实例不会接受 HTTP 请求。 */
+    trustedIngress?: boolean;
     /** 防止已签名请求被长期重放；设为 0 可关闭时间窗校验。 */
     maxTimestampAgeMs?: number;
     /** 在路由处理前观察已验证的 Interaction。 */
@@ -111,13 +113,13 @@ export class InteractionsHandler {
     private readonly onUnhandled?: InteractionWebhookOptions["onUnhandled"];
 
     constructor(options: InteractionWebhookOptions) {
-        if (!/^[\da-f]{64}$/i.test(options.publicKey)) {
+        if (!options.trustedIngress && !/^[\da-f]{64}$/i.test(options.publicKey ?? "")) {
             throw DiscordError.configuration(
                 "Discord Interaction publicKey 必须是 32 字节十六进制公钥",
                 "DISCORD_INTERACTION_PUBLIC_KEY_INVALID",
             );
         }
-        if (!options.token.trim() || !options.applicationId.trim()) {
+        if (!options.token.trim() || (!options.trustedIngress && !options.applicationId?.trim())) {
             throw DiscordError.configuration(
                 "Discord Interaction token 与 applicationId 不能为空",
                 "DISCORD_INTERACTION_CONFIG_REQUIRED",
@@ -129,8 +131,8 @@ export class InteractionsHandler {
                 "DISCORD_INTERACTION_TIMESTAMP_WINDOW_INVALID",
             );
         }
-        this.publicKey = options.publicKey;
-        this.applicationId = options.applicationId;
+        this.publicKey = options.publicKey ?? "";
+        this.applicationId = options.applicationId ?? "";
         this.rest = new DiscordREST({ token: options.token });
         this.maxTimestampAgeMs = options.maxTimestampAgeMs ?? 300_000;
         this.onInteraction = options.onInteraction;
@@ -189,6 +191,13 @@ export class InteractionsHandler {
     async ingestHttp(
         request: DiscordInteractionHttpRequest,
     ): Promise<DiscordInteractionHttpResponse> {
+        if (!this.publicKey) {
+            return interactionHttpResponse(
+                503,
+                "DISCORD_INTERACTION_PUBLIC_KEY_REQUIRED",
+                "Discord manual 模式未启用本地 HTTP 验签",
+            );
+        }
         const { signature, timestamp, body } = request;
         if (!signature || !timestamp) return interactionHttpResponse(401, "missing_signature");
         if (!this.isTimestampFresh(timestamp)) {
@@ -426,7 +435,7 @@ export class InteractionsHandler {
      */
     async editFollowup(interactionToken: string, content: EditMessageBody) {
         return this.rest.editOriginalInteractionResponse(
-            this.applicationId,
+            this.requireApplicationId(),
             interactionToken,
             content,
         );
@@ -436,7 +445,19 @@ export class InteractionsHandler {
      * 发送后续消息
      */
     async sendFollowup(interactionToken: string, content: CreateMessageBody) {
-        return this.rest.createFollowupMessage(this.applicationId, interactionToken, content);
+        return this.rest.createFollowupMessage(
+            this.requireApplicationId(),
+            interactionToken,
+            content,
+        );
+    }
+
+    private requireApplicationId(): string {
+        if (this.applicationId) return this.applicationId;
+        throw DiscordError.configuration(
+            "Discord Interaction 跟进操作需要 applicationId",
+            "DISCORD_INTERACTION_APPLICATION_ID_REQUIRED",
+        );
     }
 
     private isTimestampFresh(timestamp: string): boolean {

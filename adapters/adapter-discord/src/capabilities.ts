@@ -179,5 +179,10 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
             mode: "webhook",
             note: "复用 OneBots HTTP Host，不创建独立监听端口",
         },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 ingestInteraction() 接入上游已验签的事件",
+        },
     },
 });

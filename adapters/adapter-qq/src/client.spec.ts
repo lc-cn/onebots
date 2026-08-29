@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { QQClient } from "./client.js";
 import { QQApiError } from "./errors.js";
 import { resolveIntentMask } from "./types.js";
+import { QQWebhookHost } from "./webhook-host.js";
 
 describe("QQClient", () => {
     it("拒绝绝对 OpenAPI URL，避免凭据越界", async () => {
@@ -49,5 +50,23 @@ describe("QQClient", () => {
         });
 
         expect(request).toHaveBeenCalledWith("/resource?cursor=next&enabled=true", { value: 1 });
+    });
+
+    it("将已有 HTTP Host 的原始请求委托给同一 Webhook 管线", async () => {
+        const host = new QQWebhookHost("/qq/test/webhook", "test", vi.fn());
+        await host.listen(0, "/ignored", async request => ({
+            status: 200,
+            body: request.body.toString("utf8"),
+        }));
+        const client = new QQClient(
+            { appId: "app", appSecret: "secret" },
+            { warn: vi.fn(), error: vi.fn() },
+            host,
+        );
+
+        await expect(client.ingest({ body: Buffer.from("{}"), headers: {} })).resolves.toEqual({
+            status: 200,
+            body: "{}",
+        });
     });
 });

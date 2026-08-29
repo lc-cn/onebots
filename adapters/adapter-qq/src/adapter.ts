@@ -274,6 +274,8 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         const host = new QQWebhookHost(webhookPath, config.account_id, (type, data) => {
             account.dispatch(this.projectRaw(account, type, data));
         });
+        const webhookMode =
+            qqConfig.receive_mode === "webhook" || qqConfig.receive_mode === "manual";
         const client = new QQClient(
             {
                 appId: qqConfig.appid,
@@ -283,11 +285,8 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
                 baseUrl: qqConfig.api_base_url,
                 tokenBaseUrl: qqConfig.token_base_url,
                 intents: resolveIntentMask(qqConfig.intents),
-                transport: qqConfig.receive_mode === "webhook" ? "webhook" : "websocket",
-                webhook:
-                    qqConfig.receive_mode === "webhook"
-                        ? { path: webhookPath, port: 0, server: host }
-                        : undefined,
+                transport: webhookMode ? "webhook" : "websocket",
+                webhook: webhookMode ? { path: webhookPath, port: 0, server: host } : undefined,
                 logger: {
                     info: (message, meta) => this.logger.info(message, meta),
                     warn: (message, meta) => this.logger.warn(message, meta),
@@ -296,6 +295,7 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
                 },
             },
             this.logger,
+            webhookMode ? host : undefined,
         );
         account = new Account(this, client, config);
         if (qqConfig.receive_mode === "webhook") {

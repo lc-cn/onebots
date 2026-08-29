@@ -46,6 +46,17 @@ qq.my_bot:
 
 QQ 开放平台回调地址应指向 OneBots 主端口，例如 `https://bot.example.com/qq/my_bot/webhook`。反向代理必须保留原始请求体，否则 Ed25519 验签会被拒绝。
 
+已有 HTTP Host 可改用手动接入，不注册 OneBots 路由：
+
+```yaml
+qq.my_bot:
+  appid: "your_app_id"
+  secret: "your_app_secret"
+  receive_mode: manual
+```
+
+宿主将原始请求组装为官方 SDK 的 `WebhookRequest` 后调用 `account.client.ingest(request)`，可获得结构化 `WebhookResponse`；Koa 风格宿主也可调用 `account.client.acceptHttp(ctx)`。两种入口都复用官方 SDK 的验签和事件分发管线，不另开端口。
+
 旧字段 `mode`、`port`、`path`、`sandbox`、`apiBaseUrl` 和旧 intent 别名不再解释。配置 Schema 会直接生成接收方式、事件订阅和高级端点表单。
 
 ## 原生 Client 与 OpenAPI

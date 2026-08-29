@@ -67,6 +67,16 @@ https://你的网关/discord/my_bot/interactions
 
 该模式复用 OneBots 已有 HTTP Host，不创建独立端口。请求必须保留未经修改的 `rawBody`，否则适配器会拒绝无法验签的载荷。适配器会在 Discord 的 3 秒窗口内返回 deferred 确认，再把 Interaction 分发给已配置协议；下游可从 `raw_event` 取得 Interaction token 并通过 Discord Webhook API 编辑原始回复。Gateway 适合完整消息和 Guild 事件；Interactions 模式只接收 Discord 的应用交互。
 
+### 手动接入模式
+
+```yaml
+discord.my_bot:
+  token: "your_discord_bot_token"
+  receive_mode: manual
+```
+
+`manual` 不注册 Gateway 或 HTTP 路由。已有 Host 完成 Discord 验签后，将原始 Interaction 交给 `account.client.ingestInteraction(rawInteraction)`；此入口不会再次验签。若要由适配器完成 HTTP 验签，应使用 `interactions` 模式或直接构造带 Public Key 的 `InteractionsHandler`。
+
 ## 独立使用 Lite SDK
 
 ### Gateway
@@ -109,7 +119,7 @@ export default {
 };
 ```
 
-若宿主并不使用 Web Fetch API，可调用 `ingestHttp({ body, signature, timestamp })` 获得 `{ status, headers, body }` 结构化响应。已经验证或来自既有连接的事件可直接交给 `ingest(rawInteraction)`，两者都不会创建监听端口。
+若宿主并不使用 Web Fetch API，可调用 `ingestHttp({ body, signature, timestamp })` 获得 `{ status, headers, body }` 结构化响应。已经由上游验证的事件可直接交给 `ingest(rawInteraction)`，两者都不会创建监听端口。
 
 使用统一 `DiscordLite` 时，对应方法为 `handleRequest()`、`ingestInteractionHttp()` 和 `ingestInteraction()`；同一个客户端会继续发出 `interactionCreate` 与统一 `dispatch` 事件。
 

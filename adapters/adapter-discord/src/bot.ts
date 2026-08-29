@@ -105,7 +105,10 @@ export class DiscordBot extends EventEmitter<DiscordBotEvents> {
     // 生命周期管理
     async start(): Promise<void> {
         try {
-            if (this.config.receive_mode === "interactions") {
+            if (
+                this.config.receive_mode === "interactions" ||
+                this.config.receive_mode === "manual"
+            ) {
                 this.client.initInteractions();
                 const user = wrapDiscordUser(await this.getREST().getCurrentUser());
                 this.ready = true;
@@ -462,7 +465,7 @@ export class DiscordBot extends EventEmitter<DiscordBotEvents> {
         return this.client;
     }
 
-    getReceiveMode(): "gateway" | "interactions" {
+    getReceiveMode(): "gateway" | "interactions" | "manual" {
         return this.config.receive_mode ?? "gateway";
     }
 }

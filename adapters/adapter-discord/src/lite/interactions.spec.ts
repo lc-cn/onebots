@@ -38,6 +38,31 @@ describe("Discord Interactions ingestion", () => {
         });
     });
 
+    it("manual 仅接收上游已验签事件，不会退化为无验签 HTTP 入口", async () => {
+        const handler = new InteractionsHandler({ token: "token", trustedIngress: true });
+
+        await expect(
+            handler.ingest({
+                id: "2",
+                application_id: "1",
+                type: InteractionType.Ping,
+                token: "interaction-token",
+                version: 1,
+            }),
+        ).resolves.toEqual({ type: InteractionCallbackType.Pong });
+        await expect(handler.ingestHttp({ body: "{}" })).resolves.toEqual({
+            status: 503,
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+            body: {
+                error: "DISCORD_INTERACTION_PUBLIC_KEY_REQUIRED",
+                message: "Discord manual 模式未启用本地 HTTP 验签",
+            },
+        });
+        await expect(handler.sendFollowup("token", { content: "test" })).rejects.toMatchObject({
+            code: "DISCORD_INTERACTION_APPLICATION_ID_REQUIRED",
+        });
+    });
+
     it("将用户处理器异常闭合为 DiscordError", async () => {
         const handler = new InteractionsHandler({ publicKey, token: "token", applicationId: "1" });
         handler.onCommand("broken", () => {
