@@ -233,15 +233,32 @@ export class ICQQBot extends EventEmitter {
      * 获取好友列表
      */
     async getFriendList(): Promise<ICQQFriend[]> {
-        if (!this.client) throw new Error("Bot not connected");
-        const friends = this.client.fl;
+        const client = this.client;
+        if (!client) throw new Error("Bot not connected");
+        const friends = client.fl;
         return Array.from(friends.values()).map((friend: FriendInfo) => ({
             user_id: friend.user_id,
             nickname: friend.nickname,
             sex: friend.sex,
             remark: friend.remark,
             class_id: friend.class_id,
+            class_name: client.classes.get(friend.class_id) ?? "",
         }));
+    }
+
+    /** 获取好友资料；不存在时不降级为陌生人资料。 */
+    async getFriendInfo(userId: number): Promise<ICQQFriend | undefined> {
+        if (!this.client) throw new Error("Bot not connected");
+        const friend = this.client.fl.get(userId);
+        if (!friend) return undefined;
+        return {
+            user_id: friend.user_id,
+            nickname: friend.nickname,
+            sex: friend.sex,
+            remark: friend.remark,
+            class_id: friend.class_id,
+            class_name: this.client.classes.get(friend.class_id) ?? "",
+        };
     }
 
     /**

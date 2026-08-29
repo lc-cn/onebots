@@ -27,6 +27,8 @@ import {
     getMilkyFriendRequests,
     MILKY_FRIEND_REQUEST_ACTIONS,
 } from "./friend-requests.js";
+import { projectMilkyFriend } from "./friend-entities.js";
+import { projectMilkyIncomingMessage } from "./message-entities.js";
 import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 
 const milkySchema: Schema = {
@@ -269,6 +271,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 return this.getMessage(params);
             case "get_history_messages":
                 return this.getHistoryMessages(params);
+            case "get_resource_temp_url":
+                return this.getResourceTempUrl(params);
             case "mark_message_as_read":
                 return this.markMessageAsRead(params);
             case "get_forwarded_messages":
@@ -342,10 +346,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async sendPrivateMessage(
         params: Record<string, unknown>,
     ): Promise<Milky.SendMessageResult> {
-        const { user_id, message } = params as { user_id: string; message: Milky.Segment[] };
+        const message = params.message as Milky.Segment[];
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "private",
-            scene_id: this.adapter.resolveId(user_id),
+            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
             message: compileMilkySegments(
                 message,
                 sequence => this.adapter.resolveId(sequence).string,
@@ -357,10 +361,10 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async sendGroupMessage(
         params: Record<string, unknown>,
     ): Promise<Milky.SendMessageResult> {
-        const { group_id, message } = params as { group_id: string; message: Milky.Segment[] };
+        const message = params.message as Milky.Segment[];
         const result = await this.adapter.sendMessage(this.account.account_id, {
             scene_type: "group",
-            scene_id: this.adapter.resolveId(group_id),
+            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
             message: compileMilkySegments(
                 message,
                 sequence => this.adapter.resolveId(sequence).string,
@@ -372,72 +376,80 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async recallMessage(
         scene: "friend" | "group",
         params: Record<string, unknown>,
-    ): Promise<void> {
-        const { message_seq, user_id, group_id } = params as {
-            message_seq: number;
-            user_id?: number;
-            group_id?: number;
-        };
+    ): Promise<Record<string, never>> {
+        const messageSequence = requirePositiveIntegerParam(params, "message_seq");
+        const sceneKey = scene === "friend" ? "user_id" : "group_id";
         await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_seq),
+            message_id: this.adapter.resolveId(messageSequence),
             scene_type: scene === "friend" ? "private" : "group",
-            scene_id: this.adapter.resolveId(scene === "friend" ? user_id! : group_id!),
+            scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, sceneKey)),
         });
+        return {};
     }
 
-    private async getMessage(params: Record<string, unknown>): Promise<Milky.MessageInfo> {
-        const messageId =
-            typeof params.message_id === "string"
-                ? this.adapter.resolveId(params.message_id)
-                : this.adapter.resolveId(requirePositiveIntegerParam(params, "message_seq"));
+    private async getMessage(
+        params: Record<string, unknown>,
+    ): Promise<{ message: Milky.MessageInfo }> {
+        const scene = this.requireMilkyMessageScene(params);
+        const peerId = this.adapter.resolveId(requirePositiveIntegerParam(params, "peer_id"));
+        const messageId = this.adapter.resolveId(
+            requirePositiveIntegerParam(params, "message_seq"),
+        );
         const msg = await this.adapter.getMessage(this.account.account_id, {
             message_id: messageId,
+            scene_type: scene,
+            scene_id: peerId,
         });
-        return this.toMilkyMessageInfo(msg);
+        return {
+            message: await projectMilkyIncomingMessage(this.adapter, this.account.account_id, msg),
+        };
     }
 
     private async getHistoryMessages(
         params: Record<string, unknown>,
-    ): Promise<{ messages: Milky.MessageInfo[] }> {
+    ): Promise<{ messages: Milky.MessageInfo[]; next_message_seq?: number }> {
         const scene = this.requireMilkyMessageScene(params);
+        const limit = params.limit === undefined ? 20 : requireHistoryLimit(params.limit);
         const messages = await this.adapter.getMessageHistory(this.account.account_id, {
             scene_type: scene,
             scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "peer_id")),
-            limit:
-                params.limit === undefined
-                    ? undefined
-                    : requirePositiveIntegerParam(params, "limit"),
-            offset:
+            limit,
+            start_message_id:
                 params.start_message_seq === undefined
                     ? undefined
-                    : requirePositiveIntegerParam(params, "start_message_seq"),
+                    : this.adapter.resolveId(
+                          requirePositiveIntegerParam(params, "start_message_seq"),
+                      ),
         });
-        return { messages: messages.map(message => this.toMilkyMessageInfo(message)) };
+        return {
+            messages: await Promise.all(
+                messages.map(message =>
+                    projectMilkyIncomingMessage(this.adapter, this.account.account_id, message),
+                ),
+            ),
+            ...(messages.length < limit || messages[0] === undefined
+                ? {}
+                : { next_message_seq: messages[0].message_id.number }),
+        };
     }
 
-    private async markMessageAsRead(params: Record<string, unknown>): Promise<void> {
+    private async markMessageAsRead(
+        params: Record<string, unknown>,
+    ): Promise<Record<string, never>> {
         const scene = this.requireMilkyMessageScene(params);
         await this.adapter.markMessageAsRead(this.account.account_id, {
             scene_type: scene,
             scene_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "peer_id")),
-            message_id:
-                params.message_seq === undefined
-                    ? undefined
-                    : this.adapter.resolveId(requirePositiveIntegerParam(params, "message_seq")),
+            message_id: this.adapter.resolveId(requirePositiveIntegerParam(params, "message_seq")),
         });
+        return {};
     }
 
-    private toMilkyMessageInfo(msg: Adapter.MessageInfo): Milky.MessageInfo {
+    private async getResourceTempUrl(params: Record<string, unknown>): Promise<{ url: string }> {
         return {
-            time: msg.time || Math.floor(Date.now() / 1000),
-            message_type: msg.sender.scene_type as "private" | "group",
-            message_id: msg.message_id.string,
-            real_id: 0,
-            sender: {
-                user_id: msg.sender.sender_id.string,
-                nickname: msg.sender.sender_name,
-            },
-            message: projectMilkySegments(msg.message),
+            url: await this.adapter.getResourceTempUrl(this.account.account_id, {
+                resource_id: requireNonEmptyStringParam(params, "resource_id"),
+            }),
         };
     }
 
@@ -450,16 +462,17 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private async getForwardMessage(
         params: Record<string, unknown>,
     ): Promise<{ messages: Record<string, unknown>[] }> {
-        const resourceId = requireNonEmptyStringParam(params, "resource_id");
+        const resourceId = requireNonEmptyStringParam(params, "forward_id");
         const messages = await this.adapter.getForwardMessage(this.account.account_id, {
             resource_id: resourceId,
         });
         return {
             messages: messages.map(message => ({
-                sender_id: message.sender.sender_id.number,
+                message_seq: message.message_id.number,
                 sender_name: message.sender.sender_name,
+                avatar_url: `https://q1.qlogo.cn/g?b=qq&nk=${message.sender.sender_id.number}&s=640`,
                 time: message.time,
-                segments: message.message,
+                segments: projectMilkySegments(message.message),
             })),
         };
     }
@@ -504,24 +517,12 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         const info = await this.adapter.getFriendInfo(this.account.account_id, {
             user_id: this.adapter.resolveId(user_id),
         });
-        return {
-            friend: {
-                user_id: info.user_id.number,
-                nickname: info.user_name,
-                remark: info.remark ?? "",
-            },
-        };
+        return { friend: projectMilkyFriend(info) };
     }
 
     private async getFriendList(): Promise<{ friends: Milky.FriendInfo[] }> {
         const result = await this.adapter.getFriendList(this.account.account_id);
-        return {
-            friends: result.map(info => ({
-                user_id: info.user_id.number,
-                nickname: info.user_name,
-                remark: info.remark || "",
-            })),
-        };
+        return { friends: result.map(projectMilkyFriend) };
     }
 
     private async getCookies(params: Record<string, unknown>): Promise<{ cookies: string }> {
@@ -955,6 +956,13 @@ function requireNonNegativeInteger(value: unknown, field: string): number {
 function requirePositiveId(value: unknown, field: string): number {
     if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
         throw new TypeError(`Adapter 返回的 ${field} 必须是正整数 ID`);
+    }
+    return value;
+}
+
+function requireHistoryLimit(value: unknown): number {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1 || value > 30) {
+        throw new TypeError("limit 必须是 1 到 30 的整数");
     }
     return value;
 }

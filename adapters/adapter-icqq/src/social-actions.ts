@@ -10,6 +10,8 @@ import { materializeICQQMediaSource } from "./media.js";
 
 /** 消息、用户与好友动作，以及所有原生动作共用的客户端边界。 */
 export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
+    private resourceUrls?: Map<string, string>;
+
     constructor(app: BaseApp) {
         super(app, "icqq", icqqCapabilities);
         this.icon = "https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png";
@@ -104,10 +106,13 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         const client = this.requireNativeClient(uin);
         const sceneId = this.numericId(params.scene_id.string, "scene_id");
         const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
-        const messages =
-            params.scene_type === "group"
-                ? await client.pickGroup(sceneId).getChatHistory(params.offset, limit)
-                : await client.pickUser(sceneId).getChatHistory(params.offset, limit);
+        const messages = params.start_message_id
+            ? (await client.getChatHistory(params.start_message_id.string, limit + 1))
+                  .filter(message => message.message_id !== params.start_message_id?.string)
+                  .slice(-limit)
+            : params.scene_type === "group"
+              ? await client.pickGroup(sceneId).getChatHistory(params.offset, limit)
+              : await client.pickUser(sceneId).getChatHistory(params.offset, limit);
         return messages.map(message => this.convertNativeMessage(message));
     }
 
@@ -136,6 +141,15 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         } else {
             await client.pickUser(sceneId).markRead();
         }
+    }
+
+    async getResourceTempUrl(
+        _uin: string,
+        params: Adapter.GetResourceTempUrlParams,
+    ): Promise<string> {
+        const url = this.resourceUrls?.get(params.resource_id);
+        if (!url) throw new TypeError(`资源 ${params.resource_id} 不存在或临时链接已过期`);
+        return url;
     }
 
     // ============================================
@@ -226,6 +240,9 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
             user_id: this.createId(friend.user_id.toString()),
             user_name: friend.nickname,
             remark: friend.remark,
+            sex: friend.sex,
+            category_id: friend.class_id,
+            category_name: friend.class_name,
         }));
     }
 
@@ -241,11 +258,16 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
 
         const bot = account.client;
         const userId = this.numericId(params.user_id.string, "user_id");
-        const info = await bot.getStrangerInfo(userId);
+        const info = await bot.getFriendInfo(userId);
+        if (!info) throw new TypeError(`好友 ${userId} 不存在`);
 
         return {
             user_id: this.createId(info.user_id.toString()),
             user_name: info.nickname,
+            remark: info.remark,
+            sex: info.sex,
+            category_id: info.class_id,
+            category_name: info.class_name,
         };
     }
 
@@ -358,6 +380,8 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         const messageId = "message_id" in message ? message.message_id : fallbackMessageId;
         if (!messageId) throw new TypeError("ICQQ 消息缺少可用的 message_id");
         const senderName = "sender" in message ? message.sender?.nickname : message.nickname;
+        const segments = projectICQQMessageSegments(message.message);
+        this.rememberResourceUrls(segments);
         return {
             message_id: this.createId(messageId),
             time: message.time,
@@ -368,7 +392,26 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
                 sender_name: senderName ?? "",
                 scene_name: isGroup && "group_name" in message ? message.group_name : "",
             },
-            message: projectICQQMessageSegments(message.message),
+            message: segments,
         };
+    }
+
+    private rememberResourceUrls(segments: CommonTypes.Segment[]): void {
+        const resources = (this.resourceUrls ??= new Map());
+        for (const segment of segments) {
+            if (segment.type !== "image" && segment.type !== "record" && segment.type !== "video") {
+                continue;
+            }
+            const id = segment.data.file;
+            const url = segment.data.url;
+            if (typeof id !== "string" || !id || typeof url !== "string" || !url) continue;
+            resources.delete(id);
+            resources.set(id, url);
+        }
+        while (resources.size > 1000) {
+            const oldest = resources.keys().next().value;
+            if (typeof oldest !== "string") break;
+            resources.delete(oldest);
+        }
     }
 }

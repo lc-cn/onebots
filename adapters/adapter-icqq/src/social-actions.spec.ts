@@ -9,6 +9,55 @@ function createActions(client: Client): ICQQSocialActions {
 }
 
 describe("ICQQ 账号资料动作", () => {
+    it("好友资料使用好友缓存并保留分组，不降级为陌生人", async () => {
+        const bot = {
+            getFriendList: vi.fn().mockResolvedValue([
+                {
+                    user_id: 10001,
+                    nickname: "Alice",
+                    sex: "female",
+                    remark: "A",
+                    class_id: 2,
+                    class_name: "朋友",
+                },
+            ]),
+            getFriendInfo: vi.fn().mockResolvedValue({
+                user_id: 10001,
+                nickname: "Alice",
+                sex: "female",
+                remark: "A",
+                class_id: 2,
+                class_name: "朋友",
+            }),
+        };
+        const actions = Object.create(ICQQSocialActions.prototype) as ICQQSocialActions;
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: bot }) },
+            numericId: { value: (value: string) => Number(value) },
+            createId: {
+                value: (value: string | number) => ({
+                    string: String(value),
+                    number: Number(value),
+                    source: value,
+                }),
+            },
+        });
+
+        await expect(actions.getFriendList("bot")).resolves.toEqual([
+            expect.objectContaining({
+                sex: "female",
+                remark: "A",
+                category_id: 2,
+                category_name: "朋友",
+            }),
+        ]);
+        await expect(
+            actions.getFriendInfo("bot", {
+                user_id: { string: "10001", number: 10001, source: 10001 },
+            }),
+        ).resolves.toEqual(expect.objectContaining({ category_id: 2, category_name: "朋友" }));
+    });
+
     it("以真实 QQ UID 列出并处理好友请求", async () => {
         const request = {
             request_type: "friend",
@@ -88,5 +137,96 @@ describe("ICQQ 账号资料动作", () => {
 
         expect(setAvatar).toHaveBeenCalledOnce();
         expect(setAvatar.mock.calls[0]?.[0]).toEqual(Buffer.from("hello"));
+    });
+});
+
+describe("ICQQ 消息资源与历史游标", () => {
+    it("从投影过的媒体消息解析临时链接", async () => {
+        const bot = {
+            getMessage: vi.fn().mockResolvedValue({
+                message_id: "message-id",
+                time: 100,
+                user_id: 10001,
+                nickname: "Alice",
+                message: [
+                    {
+                        type: "image",
+                        file: "resource-id",
+                        url: "https://example.com/image.jpg",
+                    },
+                ],
+            }),
+        };
+        const actions = Object.create(ICQQSocialActions.prototype) as ICQQSocialActions;
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: bot }) },
+            createId: {
+                value: (value: string | number) => ({
+                    string: String(value),
+                    number: typeof value === "number" ? value : 9001,
+                    source: value,
+                }),
+            },
+            coerceId: {
+                value: (value: { string: string }) => value,
+            },
+        });
+
+        await actions.getMessage("bot", {
+            message_id: { string: "message-id", number: 9001, source: "message-id" },
+        });
+
+        await expect(
+            actions.getResourceTempUrl("bot", { resource_id: "resource-id" }),
+        ).resolves.toBe("https://example.com/image.jpg");
+        await expect(actions.getResourceTempUrl("bot", { resource_id: "unknown" })).rejects.toThrow(
+            "不存在或临时链接已过期",
+        );
+    });
+
+    it("按排他性 start_message_id 向历史方向分页", async () => {
+        const startMessage = {
+            message_id: "start-message",
+            time: 101,
+            user_id: 10001,
+            nickname: "Alice",
+            message: [{ type: "text", text: "start" }],
+        };
+        const olderMessage = {
+            ...startMessage,
+            message_id: "older-message",
+            time: 100,
+            message: [{ type: "text", text: "older" }],
+        };
+        const client = {
+            getChatHistory: vi.fn().mockResolvedValue([olderMessage, startMessage]),
+        } as unknown as Client;
+        const actions = createActions(client);
+        Object.defineProperties(actions, {
+            numericId: { value: (value: string) => Number(value) },
+            createId: {
+                value: (value: string | number) => ({
+                    string: String(value),
+                    number: value === "older-message" ? 9000 : 9001,
+                    source: value,
+                }),
+            },
+        });
+
+        await expect(
+            actions.getMessageHistory("bot", {
+                scene_type: "private",
+                scene_id: { string: "10001", number: 10001, source: 10001 },
+                limit: 1,
+                start_message_id: {
+                    string: "start-message",
+                    number: 9001,
+                    source: "start-message",
+                },
+            }),
+        ).resolves.toEqual([
+            expect.objectContaining({ message_id: expect.objectContaining({ number: 9000 }) }),
+        ]);
+        expect(client.getChatHistory).toHaveBeenCalledWith("start-message", 2);
     });
 });

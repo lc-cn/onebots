@@ -85,6 +85,7 @@ declare module "./adapter.js" {
             scene_id: CommonTypes.Id;
             limit?: number;
             offset?: number;
+            start_message_id?: CommonTypes.Id;
         }
         export interface UpdateMessageParams {
             message_id: CommonTypes.Id;
@@ -175,6 +176,10 @@ declare module "./adapter.js" {
             user_id: CommonTypes.Id;
             user_name: string;
             remark?: string;
+            sex?: "male" | "female" | "unknown";
+            qid?: string;
+            category_id?: number;
+            category_name?: string;
         }
         export interface FriendRequest {
             request_id: CommonTypes.Id;

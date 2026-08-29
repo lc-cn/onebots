@@ -483,7 +483,7 @@ describe('Milky V1 - 消息 API', () => {
     }
 
     const { status, data } = await callMilkyAPI(CONFIG, 'get_forwarded_messages', {
-      resource_id: 'test_forward_resource_id'
+      forward_id: 'test_forward_resource_id'
     });
 
     if (status === 200) {

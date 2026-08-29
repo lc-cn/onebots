@@ -157,14 +157,23 @@ export namespace Milky {
     /**
      * Message info
      */
-    export interface MessageInfo {
+    export interface MessageInfoBase {
         time: number;
-        message_type: "private" | "group";
-        message_id: string;
-        real_id: number;
-        sender: User;
-        message: Segment[];
+        peer_id: number;
+        message_seq: number;
+        sender_id: number;
+        segments: Segment[];
     }
+    export interface FriendMessageInfo extends MessageInfoBase {
+        message_scene: "friend";
+        friend: FriendInfo;
+    }
+    export interface GroupMessageInfo extends MessageInfoBase {
+        message_scene: "group";
+        group: GroupInfo;
+        group_member: GroupMemberInfo;
+    }
+    export type MessageInfo = FriendMessageInfo | GroupMessageInfo;
 
     /**
      * Forward message node
@@ -216,7 +225,13 @@ export namespace Milky {
     export interface FriendInfo {
         user_id: number;
         nickname: string;
+        sex: "male" | "female" | "unknown";
+        qid: string;
         remark: string;
+        category: {
+            category_id: number;
+            category_name: string;
+        };
     }
 
     /**

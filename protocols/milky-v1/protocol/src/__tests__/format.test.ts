@@ -87,11 +87,14 @@ function createProtocol() {
         setGroupName: vi.fn(),
         leaveGroup: vi.fn(),
         getLoginInfo: vi.fn(),
+        getFriendInfo: vi.fn(),
         getFriendList: vi.fn(),
         getGroupList: vi.fn(),
         getGroupMemberList: vi.fn(),
         getMessage: vi.fn(),
         getMessageHistory: vi.fn(),
+        getForwardMessage: vi.fn(),
+        getResourceTempUrl: vi.fn(),
         markMessageAsRead: vi.fn(),
         getVersion: vi.fn(),
         getStatus: vi.fn(),
@@ -411,6 +414,14 @@ describe("Milky V1 protocol", () => {
         };
         adapter.getMessage.mockResolvedValue(message);
         adapter.getMessageHistory.mockResolvedValue([message]);
+        adapter.getFriendInfo.mockResolvedValue({
+            user_id: { string: "friend", number: 10001 },
+            user_name: "Alice",
+            sex: "female",
+            remark: "A",
+            category_id: 2,
+            category_name: "朋友",
+        });
 
         await expect(
             protocol.apply("get_message", {
@@ -418,14 +429,26 @@ describe("Milky V1 protocol", () => {
                 peer_id: 10001,
                 message_seq: 9001,
             }),
-        ).resolves.toMatchObject({ data: { message_id: "native-message" } });
+        ).resolves.toMatchObject({
+            data: {
+                message: {
+                    message_scene: "friend",
+                    peer_id: 10001,
+                    message_seq: 9001,
+                    sender_id: 10001,
+                    segments: [{ type: "text", data: { text: "hello" } }],
+                },
+            },
+        });
         await expect(
             protocol.apply("get_history_messages", {
                 message_scene: "friend",
                 peer_id: 10001,
                 limit: 20,
             }),
-        ).resolves.toMatchObject({ data: { messages: [{ message_id: "native-message" }] } });
+        ).resolves.toMatchObject({
+            data: { messages: [{ message_scene: "friend", message_seq: 9001 }] },
+        });
         await expect(
             protocol.apply("mark_message_as_read", {
                 message_scene: "friend",
@@ -440,6 +463,49 @@ describe("Milky V1 protocol", () => {
                 message_id: expect.objectContaining({ number: 9001 }),
             }),
         );
+        expect(adapter.getMessageHistory).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({ limit: 20, start_message_id: undefined }),
+        );
+    });
+
+    test("资源临时链接与合并转发使用 canonical 字段", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getResourceTempUrl.mockResolvedValue("https://example.com/temp");
+        adapter.getForwardMessage.mockResolvedValue([
+            {
+                message_id: { string: "forward-message", number: 9002 },
+                time: 1_700_000_000,
+                sender: {
+                    scene_type: "private",
+                    sender_id: { string: "10001", number: 10001 },
+                    scene_id: { string: "10001", number: 10001 },
+                    sender_name: "Alice",
+                    scene_name: "",
+                },
+                message: [{ type: "text", data: { text: "hello" } }],
+            },
+        ]);
+
+        await expect(
+            protocol.apply("get_resource_temp_url", { resource_id: "resource-id" }),
+        ).resolves.toMatchObject({ data: { url: "https://example.com/temp" } });
+        await expect(
+            protocol.apply("get_forwarded_messages", { forward_id: "forward-id" }),
+        ).resolves.toMatchObject({
+            data: {
+                messages: [
+                    {
+                        message_seq: 9002,
+                        sender_name: "Alice",
+                        segments: [{ type: "text", data: { text: "hello" } }],
+                    },
+                ],
+            },
+        });
+        expect(adapter.getForwardMessage).toHaveBeenCalledWith("bot", {
+            resource_id: "forward-id",
+        });
     });
 
     test("apply maps native recall and group administration actions", async () => {
@@ -907,6 +973,9 @@ describe("Milky V1 protocol", () => {
                 user_id: { string: "friend", number: 10001 },
                 user_name: "Alice",
                 remark: "A",
+                sex: "female",
+                category_id: 2,
+                category_name: "朋友",
             },
         ]);
         adapter.getGroupList.mockResolvedValue([
@@ -937,7 +1006,15 @@ describe("Milky V1 protocol", () => {
             data: { uin: 12345678, nickname: "Milky Bot" },
         });
         await expect(protocol.apply("get_friend_list", {})).resolves.toMatchObject({
-            data: { friends: [{ user_id: 10001 }] },
+            data: {
+                friends: [
+                    {
+                        user_id: 10001,
+                        sex: "female",
+                        category: { category_id: 2, category_name: "朋友" },
+                    },
+                ],
+            },
         });
         await expect(protocol.apply("get_group_list", {})).resolves.toMatchObject({
             data: { groups: [{ group_id: 20001 }] },

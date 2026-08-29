@@ -100,6 +100,8 @@ export interface ICQQFriend extends ICQQUser {
     remark?: string;
     /** 分组 ID */
     class_id?: number;
+    /** 分组名称 */
+    class_name?: string;
 }
 
 // ============================================
