@@ -95,7 +95,53 @@ describe("ICQQBot 生命周期", () => {
         await bot.start();
         await expect(bot.stop()).resolves.toBeUndefined();
         expect(bot.getClient()).toBeNull();
-        expect(stopError).toHaveBeenCalledOnce();
+        expect(stopError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "ICQQ_STOP_FAILED", operation: "stop" }),
+        );
+    });
+
+    it("未连接调用 API 时返回结构化错误", async () => {
+        const bot = new ICQQBot({ account_id: "123456" });
+        await expect(bot.sendPrivateMessage(10001, "hello")).rejects.toMatchObject({
+            code: "ICQQ_NOT_CONNECTED",
+            operation: "sendPrivateMessage",
+        });
+    });
+
+    it("标准化离线事件并为心跳失败保留错误代码", async () => {
+        const client = new FakeClient();
+        client.sendSsoHeartBeat.mockImplementation(() => {
+            throw new Error("heartbeat failed");
+        });
+        const bot = new ICQQBot({ account_id: "123456" }, { createClient: factoryFor(client) });
+        const offline = vi.fn();
+        const heartbeatError = vi.fn();
+        bot.on("offline", offline);
+        bot.on("heartbeat_error", heartbeatError);
+        await bot.start();
+
+        client.emit("system.offline.kickoff", { message: "kicked" });
+        expect(offline).toHaveBeenCalledWith({ uin: 123456, message: "kicked" });
+        expect(client.sendSsoHeartBeat()).toBe(false);
+        expect(heartbeatError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "ICQQ_HEARTBEAT_FAILED" }),
+        );
+    });
+
+    it("隔离上层事件监听器异常", async () => {
+        const client = new FakeClient();
+        const bot = new ICQQBot({ account_id: "123456" }, { createClient: factoryFor(client) });
+        const clientError = vi.fn();
+        bot.on("client_error", clientError);
+        bot.on("ready", () => {
+            throw new Error("listener failed");
+        });
+        await bot.start();
+
+        expect(() => client.emit("system.online")).not.toThrow();
+        expect(clientError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "ICQQ_LISTENER_FAILED", operation: "ready" }),
+        );
     });
 
     it("将目录刷新意图传递给 ICQQ 原生客户端", async () => {

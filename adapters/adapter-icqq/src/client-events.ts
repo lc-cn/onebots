@@ -1,15 +1,17 @@
 import type { Client, GroupMessageEvent, PrivateMessageEvent } from "@icqqjs/icqq";
 import type { MessageElem } from "@icqqjs/icqq/lib/message";
 import { compileICQQReply } from "./messages.js";
+import type { ICQQBotEvents } from "./bot-events.js";
 import type {
     ICQQGroupMessageEvent,
     ICQQMessageElement,
+    ICQQOfflineEvent,
     ICQQPrivateMessageEvent,
     ICQQUser,
 } from "./types.js";
 
 export interface ICQQClientEventSink {
-    emit(event: string, payload?: unknown): void;
+    emit<K extends keyof ICQQBotEvents>(event: K, ...args: ICQQBotEvents[K]): void;
     online(user: ICQQUser): void;
     offline(): void;
 }
@@ -59,16 +61,16 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
     };
     client.on("system.offline.network", event => {
         markLeafHandled();
-        sink.emit("offline_network", event);
+        sink.emit("offline_network", projectOffline(client, event));
     });
     client.on("system.offline.kickoff", event => {
         markLeafHandled();
-        sink.emit("offline", event);
+        sink.emit("offline", projectOffline(client, event));
     });
     client.on("system.offline", event => {
         if (offlineLeafHandled) return;
         sink.offline();
-        sink.emit("offline", event);
+        sink.emit("offline", projectOffline(client, event));
     });
 
     client.on("message.private", event => {
@@ -197,6 +199,10 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             time: Date.now() / 1000,
         });
     });
+}
+
+function projectOffline(client: Client, event?: { message?: string }): ICQQOfflineEvent {
+    return { uin: client.uin, message: event?.message ?? "账号已离线" };
 }
 
 function projectPrivateMessage(event: PrivateMessageEvent): ICQQPrivateMessageEvent {

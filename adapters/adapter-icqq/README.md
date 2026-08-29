@@ -181,6 +181,8 @@ ICQQ 的能力通过统一 Adapter 接口暴露，协议层只会调用当前适
 
 账号客户端采用 generation 隔离：并发启动只创建一个 ICQQ Client，停止或快速重启后，旧客户端迟到的上线、离线、登录失败和心跳回调都不会覆盖新状态。
 
+底层 `ICQQBot` 和完整 `ICQQBotEvents` 类型已从包入口导出。未连接调用、启动、心跳和停止故障会使用 `ICQQError` 返回稳定的 `code` 与 `operation`；原生离线事件会在客户端桥接层补齐当前 QQ 号，不再依赖上游偶然存在的字段。
+
 ### ICQQ 原生扩展动作
 
 通用 Adapter 无法准确表达的能力通过 `executePlatformAction()` 暴露，并全部进入能力清单。主要包括：

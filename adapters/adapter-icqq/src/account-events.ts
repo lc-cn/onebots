@@ -88,6 +88,9 @@ export function wireICQQAccountEvents(
     bot.on("stop_error", (error: unknown) => {
         context.logger.warn("ICQQ 登出失败，已强制清理本地客户端", error);
     });
+    bot.on("client_error", error => {
+        context.logger.error(`ICQQ 事件监听器 ${error.operation ?? "unknown"} 执行失败`, error);
+    });
 
     const clearStatusCards = () => {
         clearVerification("offline");
