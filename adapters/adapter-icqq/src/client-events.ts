@@ -17,6 +17,7 @@ import type {
     ICQQUser,
 } from "./types.js";
 import type { ICQQDiscussMessageEvent, ICQQGuildMessageEvent } from "./extended-event-types.js";
+import { encodeICQQGuildMessageId } from "./guild-message-id.js";
 
 export interface ICQQClientEventSink {
     emit<K extends keyof ICQQBotEvents>(event: K, ...args: ICQQBotEvents[K]): void;
@@ -335,7 +336,13 @@ function projectDiscussMessage(event: DiscussMessageEvent): ICQQDiscussMessageEv
 }
 
 function projectGuildMessage(event: GuildMessageEvent): ICQQGuildMessageEvent {
-    const messageId = `${event.guild_id}:${event.channel_id}:${event.seq}:${event.rand}:${event.time}`;
+    const messageId = encodeICQQGuildMessageId({
+        guild_id: event.guild_id,
+        channel_id: event.channel_id,
+        seq: event.seq,
+        rand: event.rand,
+        time: event.time,
+    });
     return {
         raw_event: event,
         guild_id: event.guild_id,

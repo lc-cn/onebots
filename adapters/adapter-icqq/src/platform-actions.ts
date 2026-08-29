@@ -1,4 +1,5 @@
 import type { Client } from "@icqqjs/icqq";
+import type { GfsDirStat, GfsFileStat } from "@icqqjs/icqq/lib/gfs";
 import { definePlatformActions, type CommonTypes, type PlatformActionHandler } from "onebots";
 import { compileICQQMessage } from "./messages.js";
 import { ICQQError, icqqResourceNotFound, invalidICQQParam } from "./errors.js";
@@ -111,6 +112,34 @@ const PLATFORM_ACTIONS = definePlatformActions(
                 requiredQQNumber(params.discuss_id, "discuss_id"),
                 platformMessage(params.message),
             ),
+        send_channel_share: sendChannelShare,
+        get_group_file_system_info: async (client: Client, params: Params) =>
+            client.acquireGfs(requiredQQNumber(params.group_id, "group_id")).df(),
+        get_group_file_info: async (client: Client, params: Params) =>
+            client
+                .acquireGfs(requiredQQNumber(params.group_id, "group_id"))
+                .stat(requiredString(params.file_id, "file_id")),
+        forward_group_file: forwardGroupFile,
+        get_offline_file_info: async (client: Client, params: Params) =>
+            client
+                .pickUser(requiredQQNumber(params.user_id, "user_id"))
+                .getFileInfo(requiredString(params.file_id, "file_id")),
+        forward_offline_file: async (client: Client, params: Params) =>
+            client
+                .pickFriend(requiredQQNumber(params.user_id, "user_id"))
+                .forwardFile(
+                    requiredString(params.file_id, "file_id"),
+                    optionalQQNumber(params.group_id),
+                    optionalBoolean(params.send),
+                ),
+        forward_offline_file_to_group: async (client: Client, params: Params) =>
+            client
+                .acquireGfs(requiredQQNumber(params.group_id, "group_id"))
+                .forwardOfflineFile(
+                    requiredString(params.file_id, "file_id"),
+                    optionalString(params.name),
+                    optionalBoolean(params.send),
+                ),
     },
     action =>
         new ICQQError(`未实现 ICQQ 平台动作: ${action}`, {
@@ -305,4 +334,71 @@ async function deleteGroupMessageReaction(
             String(stringOrInteger(params.face_id, "face_id")),
             optionalInteger(params.face_type),
         );
+}
+
+async function sendChannelShare(client: Client, params: Params): Promise<void> {
+    const guildId = requiredString(params.guild_id, "guild_id");
+    const channelId = requiredString(params.channel_id, "channel_id");
+    const channel = client.pickGuild(guildId).channels.get(channelId);
+    if (!channel)
+        throw icqqResourceNotFound("子频道", { guild_id: guildId, channel_id: channelId });
+    await channel.share(channelShareContent(params), channelShareConfig(params.config));
+}
+
+async function forwardGroupFile(client: Client, params: Params): Promise<unknown> {
+    const sourceGroupId = requiredQQNumber(params.source_group_id, "source_group_id");
+    const targetGroupId =
+        params.target_group_id === undefined
+            ? sourceGroupId
+            : requiredQQNumber(params.target_group_id, "target_group_id");
+    const file = await client
+        .acquireGfs(sourceGroupId)
+        .stat(requiredString(params.file_id, "file_id"));
+    if (!isGfsFile(file)) {
+        throw invalidICQQParam("forward_group_file 只能转发文件", params.file_id);
+    }
+    return client
+        .acquireGfs(targetGroupId)
+        .forward(
+            file,
+            optionalString(params.target_folder_id),
+            optionalString(params.name),
+            optionalBoolean(params.send),
+        );
+}
+
+function channelShareContent(params: Params) {
+    return {
+        url: requiredString(params.url, "url"),
+        title: requiredString(params.title, "title"),
+        summary: optionalString(params.summary),
+        content: optionalString(params.content),
+        image: optionalString(params.image),
+        audio: optionalString(params.audio),
+    };
+}
+
+function channelShareConfig(value: unknown) {
+    if (value === undefined) return undefined;
+    const config = record(value, "config");
+    return {
+        appid: requiredInteger(config.appid, "config.appid"),
+        appname: optionalString(config.appname),
+        appsign: optionalString(config.appsign),
+    };
+}
+
+function record(value: unknown, field: string): Readonly<Record<string, unknown>> {
+    if (!isRecord(value)) {
+        throw invalidICQQParam(`${field} 必须是对象`, value);
+    }
+    return value;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isGfsFile(value: GfsFileStat | GfsDirStat): value is GfsFileStat {
+    return !value.is_dir && "size" in value;
 }

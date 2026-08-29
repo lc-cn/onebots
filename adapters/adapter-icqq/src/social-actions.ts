@@ -7,6 +7,7 @@ import { icqqCapabilities } from "./capabilities.js";
 import { parseICQQNumericId } from "./client-config.js";
 import { compileICQQMessage, projectICQQMessageSegments } from "./messages.js";
 import { materializeICQQMediaSource } from "./media.js";
+import { encodeICQQGuildMessageId, requireICQQGuildMessageId } from "./guild-message-id.js";
 import {
     ICQQError,
     icqqOperationRejected,
@@ -34,7 +35,6 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const bot = this.requireBot(uin);
         const { scene_type, message } = params;
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
@@ -43,30 +43,33 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
 
         let messageId: string;
         if (scene_type === "private") {
-            const result = await bot.sendPrivateMessage(
+            const result = await this.requireBot(uin).sendPrivateMessage(
                 this.numericId(sceneId.string, "scene_id"),
                 icqqMessage,
             );
             messageId = result.message_id || result.seq?.toString() || "";
         } else if (scene_type === "group") {
-            const result = await bot.sendGroupMessage(
+            const result = await this.requireBot(uin).sendGroupMessage(
                 this.numericId(sceneId.string, "scene_id"),
                 icqqMessage,
             );
             messageId = result.message_id || result.seq?.toString() || "";
         } else if (scene_type === "channel") {
-            const [guildId, channelId, ...rest] = sceneId.string.split(":");
-            if (!guildId || !channelId || rest.length > 0) {
-                throw invalidICQQParam("ICQQ 频道 scene_id 必须为 {guild_id}:{channel_id}", {
-                    scene_id: sceneId.string,
-                });
-            }
+            const guildId = params.guild_id?.string;
+            if (!guildId) throw invalidICQQParam("ICQQ 频道发送需要显式 guild_id", params);
+            const channelId = sceneId.string;
             const result = await this.requireNativeClient(uin).sendGuildMsg(
                 guildId,
                 channelId,
                 icqqMessage,
             );
-            messageId = `${guildId}:${channelId}:${result.seq}:${result.rand}:${result.time}`;
+            messageId = encodeICQQGuildMessageId({
+                guild_id: guildId,
+                channel_id: channelId,
+                seq: result.seq,
+                rand: result.rand,
+                time: result.time,
+            });
         } else {
             throw invalidICQQParam(`ICQQ 不支持消息场景 ${scene_type}`, { scene_type });
         }
@@ -86,10 +89,28 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
      * 删除/撤回消息
      */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
+        const messageId = this.coerceId(
+            params.message_id as CommonTypes.Id | string | number,
+        ).string;
+        const guildMessage = messageId.startsWith("icqq-guild.")
+            ? requireICQQGuildMessageId(messageId)
+            : undefined;
+        if (guildMessage) {
+            const client = this.requireNativeClient(uin);
+            const channel = client
+                .pickGuild(guildMessage.guild_id)
+                .channels.get(guildMessage.channel_id);
+            if (!channel) {
+                throw icqqResourceNotFound("子频道", {
+                    guild_id: guildMessage.guild_id,
+                    channel_id: guildMessage.channel_id,
+                });
+            }
+            this.assertNativeAccepted(await channel.recallMsg(guildMessage.seq), "撤回频道消息");
+            return;
+        }
         const bot = this.requireBot(uin);
-        const accepted = await bot.recallMessage(
-            this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
-        );
+        const accepted = await bot.recallMessage(messageId);
         this.assertNativeAccepted(accepted, "撤回消息");
     }
 

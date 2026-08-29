@@ -88,4 +88,110 @@ describe("ICQQ 平台扩展动作", () => {
             }),
         ).rejects.toThrow("消息不属于指定群");
     });
+
+    it("发送频道原生分享并严格校验应用配置", async () => {
+        const share = vi.fn().mockResolvedValue(undefined);
+        const client = {
+            pickGuild: vi.fn(() => ({ channels: new Map([["channel", { share }]]) })),
+        } as unknown as Client;
+
+        await executeICQQPlatformAction(client, "send_channel_share", {
+            guild_id: "guild",
+            channel_id: "channel",
+            url: "https://example.com",
+            title: "OneBots",
+            summary: "统一 IM 网关",
+            config: { appid: 100, appname: "OneBots" },
+        });
+
+        expect(share).toHaveBeenCalledWith(
+            expect.objectContaining({ url: "https://example.com", title: "OneBots" }),
+            { appid: 100, appname: "OneBots", appsign: undefined },
+        );
+        await expect(
+            executeICQQPlatformAction(client, "send_channel_share", {
+                guild_id: "guild",
+                channel_id: "channel",
+                url: "https://example.com",
+                title: "OneBots",
+                config: { appid: "100" },
+            }),
+        ).rejects.toThrow("config.appid 必须是安全整数");
+    });
+
+    it("读取群文件系统并跨群转发文件", async () => {
+        const file = {
+            fid: "file",
+            pid: "/",
+            name: "demo.txt",
+            user_id: 1,
+            create_time: 1,
+            modify_time: 1,
+            is_dir: false,
+            size: 5,
+            busid: 1,
+            md5: "md5",
+            sha1: "sha1",
+            duration: 0,
+            download_times: 0,
+        };
+        const df = vi.fn().mockResolvedValue({ total: 100, used: 5, free: 95 });
+        const stat = vi.fn().mockResolvedValue(file);
+        const forward = vi.fn().mockResolvedValue({ ...file, fid: "forwarded" });
+        const client = {
+            acquireGfs: vi.fn((groupId: number) => (groupId === 1 ? { df, stat } : { forward })),
+        } as unknown as Client;
+
+        await expect(
+            executeICQQPlatformAction(client, "get_group_file_system_info", { group_id: 1 }),
+        ).resolves.toEqual({ total: 100, used: 5, free: 95 });
+        await expect(
+            executeICQQPlatformAction(client, "get_group_file_info", {
+                group_id: 1,
+                file_id: "file",
+            }),
+        ).resolves.toEqual(file);
+        await executeICQQPlatformAction(client, "forward_group_file", {
+            source_group_id: 1,
+            target_group_id: 2,
+            file_id: "file",
+            target_folder_id: "/target",
+            name: "copy.txt",
+            send: true,
+        });
+
+        expect(forward).toHaveBeenCalledWith(file, "/target", "copy.txt", true);
+    });
+
+    it("保留 ICQQ 离线文件查询与转发能力", async () => {
+        const getFileInfo = vi.fn().mockResolvedValue({ fid: "file", url: "https://file" });
+        const forwardFile = vi.fn().mockResolvedValue("forwarded");
+        const forwardOfflineFile = vi.fn().mockResolvedValue({ fid: "group-file" });
+        const client = {
+            pickUser: vi.fn(() => ({ getFileInfo })),
+            pickFriend: vi.fn(() => ({ forwardFile })),
+            acquireGfs: vi.fn(() => ({ forwardOfflineFile })),
+        } as unknown as Client;
+
+        await executeICQQPlatformAction(client, "get_offline_file_info", {
+            user_id: 1,
+            file_id: "file",
+        });
+        await executeICQQPlatformAction(client, "forward_offline_file", {
+            user_id: 1,
+            file_id: "file",
+            group_id: 2,
+            send: true,
+        });
+        await executeICQQPlatformAction(client, "forward_offline_file_to_group", {
+            group_id: 2,
+            file_id: "file",
+            name: "copy.txt",
+            send: false,
+        });
+
+        expect(getFileInfo).toHaveBeenCalledWith("file");
+        expect(forwardFile).toHaveBeenCalledWith("file", 2, true);
+        expect(forwardOfflineFile).toHaveBeenCalledWith("file", "copy.txt", false);
+    });
 });

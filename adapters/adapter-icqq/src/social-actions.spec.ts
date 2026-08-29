@@ -2,6 +2,12 @@ import type { Client } from "@icqqjs/icqq";
 import { describe, expect, it, vi } from "vitest";
 import { ICQQSocialActions } from "./social-actions.js";
 
+const id = (value: string | number) => ({
+    string: String(value),
+    source: value,
+    number: typeof value === "number" ? value : Number(value) || 0,
+});
+
 function createActions(client: Client): ICQQSocialActions {
     const actions = Object.create(ICQQSocialActions.prototype) as ICQQSocialActions;
     Object.defineProperty(actions, "requireNativeClient", { value: () => client });
@@ -144,6 +150,58 @@ describe("ICQQ 账号资料动作", () => {
 });
 
 describe("ICQQ 消息资源与历史游标", () => {
+    it("频道发送使用独立 guild/channel，并可由结构化消息 ID 撤回", async () => {
+        const recallMsg = vi.fn().mockResolvedValue(true);
+        const sendGuildMsg = vi.fn().mockResolvedValue({ seq: 12, rand: 34, time: 56 });
+        const client = {
+            sendGuildMsg,
+            pickGuild: vi.fn(() => ({ channels: new Map([["channel", { recallMsg }]]) })),
+        } as unknown as Client;
+        const actions = createActions(client);
+        Object.defineProperties(actions, {
+            coerceId: { value: (value: unknown) => value },
+            createId: { value: (value: string) => id(value) },
+        });
+
+        const sent = await actions.sendMessage("bot", {
+            scene_type: "channel",
+            scene_id: id("channel"),
+            guild_id: id("guild"),
+            message: [{ type: "text", data: { text: "hello" } }],
+        });
+        await actions.deleteMessage("bot", { message_id: sent.message_id });
+
+        expect(sendGuildMsg).toHaveBeenCalledWith("guild", "channel", ["hello"]);
+        expect(recallMsg).toHaveBeenCalledWith(12);
+    });
+
+    it("频道发送不再接受复合 scene_id 代替 guild_id", async () => {
+        const actions = createActions({} as Client);
+        Object.defineProperty(actions, "coerceId", { value: (value: unknown) => value });
+
+        await expect(
+            actions.sendMessage("bot", {
+                scene_type: "channel",
+                scene_id: id("guild:channel"),
+                message: [{ type: "text", data: { text: "hello" } }],
+            }),
+        ).rejects.toThrow("需要显式 guild_id");
+    });
+
+    it("拒绝损坏的保留频道消息 ID，不降级调用普通撤回", async () => {
+        const recallMessage = vi.fn();
+        const actions = Object.create(ICQQSocialActions.prototype) as ICQQSocialActions;
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: { recallMessage } }) },
+            coerceId: { value: (value: unknown) => value },
+        });
+
+        await expect(
+            actions.deleteMessage("bot", { message_id: id("icqq-guild.broken") }),
+        ).rejects.toThrow("无效的 ICQQ 频道 message_id");
+        expect(recallMessage).not.toHaveBeenCalled();
+    });
+
     it("原生撤回拒绝和空消息 ID 不会被伪装成成功", async () => {
         const bot = {
             recallMessage: vi.fn().mockResolvedValue(false),

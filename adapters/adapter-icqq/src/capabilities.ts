@@ -9,7 +9,7 @@ const platformActions = Object.fromEntries(
 export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
         send_message: { support: "native", scenes: ["private", "group", "channel"] },
-        delete_message: { support: "native", scenes: ["private", "group"] },
+        delete_message: { support: "native", scenes: ["private", "group", "channel"] },
         get_message: { support: "native", scenes: ["private", "group"] },
         get_message_history: { support: "native", scenes: ["private", "group"] },
         get_forward_message: { support: "native" },
