@@ -1,168 +1,122 @@
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { WeComClient } from "./client.js";
 import { WeComApiError } from "./errors.js";
 import type { WeComCallOptions } from "./types.js";
 
-export const WECOM_PLATFORM_ACTIONS = new Set([
-    "wecom_call",
-    "send_native_message",
-    "send_appchat_message",
-    "recall_message",
-    "update_template_card",
-    "get_agent",
-    "set_agent",
-    "list_agents",
-    "upload_temporary_media",
-    "get_temporary_media",
-    "create_appchat",
-    "update_appchat",
-    "get_appchat",
-    "create_department",
-    "update_department",
-    "delete_department",
-    "list_departments",
-    "create_user",
-    "update_user",
-    "delete_user",
-    "batch_delete_users",
-    "list_department_users",
-    "list_department_user_ids",
-    "create_tag",
-    "update_tag",
-    "delete_tag",
-    "get_tag",
-    "list_tags",
-    "add_tag_users",
-    "delete_tag_users",
-    "invite_users",
-    "get_join_qrcode",
-    "get_api_domain_ips",
-    "get_callback_ips",
-]);
+type Params = Readonly<Record<string, unknown>>;
+type Handler = PlatformActionHandler<WeComClient>;
 
-/** 常用自建应用 API 的稳定动作入口；wecom_call 覆盖新增接口。 */
-export function executeWeComPlatformAction(
-    client: WeComClient,
-    action: string,
-    params: Readonly<Record<string, unknown>>,
-): Promise<unknown> {
-    switch (action) {
-        case "wecom_call":
-            return client.call(callOptions(params));
-        case "send_native_message":
-            return client.sendApplicationMessage(requireRecord(params, "message"));
-        case "send_appchat_message":
-            return client.sendAppChatMessage(
+const PLATFORM_ACTIONS = definePlatformActions(
+    {
+        wecom_call: async (client: WeComClient, params: Params) => client.call(callOptions(params)),
+        send_native_message: async (client: WeComClient, params: Params) =>
+            client.sendApplicationMessage(requireRecord(params, "message")),
+        send_appchat_message: async (client: WeComClient, params: Params) =>
+            client.sendAppChatMessage(
                 requireString(params, "chat_id"),
                 requireRecord(params, "message"),
-            );
-        case "recall_message":
-            return client.recallMessage(requireString(params, "message_id"));
-        case "update_template_card":
-            return post(
-                client,
-                "/cgi-bin/message/update_template_card",
-                withAgent(client, requireRecord(params, "request")),
-            );
-        case "get_agent":
-            return client.getAgent();
-        case "set_agent":
-            return post(
-                client,
-                "/cgi-bin/agent/set",
-                withAgent(client, requireRecord(params, "agent")),
-            );
-        case "list_agents":
-            return client.call({ path: "/cgi-bin/agent/list" });
-        case "upload_temporary_media":
-            return uploadMedia(client, params);
-        case "get_temporary_media":
-            return client.call({
+            ),
+        recall_message: async (client: WeComClient, params: Params) =>
+            client.recallMessage(requireString(params, "message_id")),
+        update_template_card: postAction("/cgi-bin/message/update_template_card", "request", true),
+        get_agent: async (client: WeComClient) => client.getAgent(),
+        set_agent: postAction("/cgi-bin/agent/set", "agent", true),
+        list_agents: staticCall("/cgi-bin/agent/list"),
+        upload_temporary_media: uploadMedia,
+        get_temporary_media: async (client: WeComClient, params: Params) =>
+            client.call({
                 path: "/cgi-bin/media/get",
                 query: { media_id: requireString(params, "media_id") },
                 response_type: "buffer",
-            });
-        case "create_appchat":
-            return post(client, "/cgi-bin/appchat/create", requireRecord(params, "chat"));
-        case "update_appchat":
-            return post(client, "/cgi-bin/appchat/update", requireRecord(params, "chat"));
-        case "get_appchat":
-            return client.getAppChat(requireString(params, "chat_id"));
-        case "create_department":
-            return post(client, "/cgi-bin/department/create", requireRecord(params, "department"));
-        case "update_department":
-            return post(client, "/cgi-bin/department/update", requireRecord(params, "department"));
-        case "delete_department":
-            return client.call({
-                path: "/cgi-bin/department/delete",
-                query: { id: requireNumber(params, "department_id") },
-            });
-        case "list_departments":
-            return client.call({
+            }),
+        create_appchat: postAction("/cgi-bin/appchat/create", "chat"),
+        update_appchat: postAction("/cgi-bin/appchat/update", "chat"),
+        get_appchat: async (client: WeComClient, params: Params) =>
+            client.getAppChat(requireString(params, "chat_id")),
+        create_department: postAction("/cgi-bin/department/create", "department"),
+        update_department: postAction("/cgi-bin/department/update", "department"),
+        delete_department: numberQueryAction("/cgi-bin/department/delete", "department_id", "id"),
+        list_departments: async (client: WeComClient, params: Params) =>
+            client.call({
                 path: "/cgi-bin/department/list",
                 query: { id: optionalNumber(params, "department_id") },
-            });
-        case "create_user":
-            return post(client, "/cgi-bin/user/create", requireRecord(params, "user"));
-        case "update_user":
-            return post(client, "/cgi-bin/user/update", requireRecord(params, "user"));
-        case "delete_user":
-            return client.call({
-                path: "/cgi-bin/user/delete",
-                query: { userid: requireString(params, "user_id") },
-            });
-        case "batch_delete_users":
-            return post(client, "/cgi-bin/user/batchdelete", {
+            }),
+        create_user: postAction("/cgi-bin/user/create", "user"),
+        update_user: postAction("/cgi-bin/user/update", "user"),
+        delete_user: stringQueryAction("/cgi-bin/user/delete", "user_id", "userid"),
+        batch_delete_users: async (client: WeComClient, params: Params) =>
+            post(client, "/cgi-bin/user/batchdelete", {
                 useridlist: requireStringArray(params, "user_ids"),
-            });
-        case "list_department_users":
-            return client.listDepartmentUsers(
+            }),
+        list_department_users: async (client: WeComClient, params: Params) =>
+            client.listDepartmentUsers(
                 requireNumber(params, "department_id"),
                 optionalBoolean(params, "fetch_child") || false,
-            );
-        case "list_department_user_ids":
-            return client.call({
+            ),
+        list_department_user_ids: async (client: WeComClient, params: Params) =>
+            client.call({
                 path: "/cgi-bin/user/simplelist",
                 query: {
                     department_id: requireNumber(params, "department_id"),
                     fetch_child: optionalBoolean(params, "fetch_child") ? 1 : 0,
                 },
-            });
-        case "create_tag":
-            return post(client, "/cgi-bin/tag/create", requireRecord(params, "tag"));
-        case "update_tag":
-            return post(client, "/cgi-bin/tag/update", requireRecord(params, "tag"));
-        case "delete_tag":
-            return client.call({
-                path: "/cgi-bin/tag/delete",
-                query: { tagid: requireNumber(params, "tag_id") },
-            });
-        case "get_tag":
-            return client.call({
-                path: "/cgi-bin/tag/get",
-                query: { tagid: requireNumber(params, "tag_id") },
-            });
-        case "list_tags":
-            return client.call({ path: "/cgi-bin/tag/list" });
-        case "add_tag_users":
-            return tagUsers(client, "/cgi-bin/tag/addtagusers", params);
-        case "delete_tag_users":
-            return tagUsers(client, "/cgi-bin/tag/deltagusers", params);
-        case "invite_users":
-            return post(client, "/cgi-bin/batch/invite", requireRecord(params, "invitation"));
-        case "get_join_qrcode":
-            return client.call({
+            }),
+        create_tag: postAction("/cgi-bin/tag/create", "tag"),
+        update_tag: postAction("/cgi-bin/tag/update", "tag"),
+        delete_tag: numberQueryAction("/cgi-bin/tag/delete", "tag_id", "tagid"),
+        get_tag: numberQueryAction("/cgi-bin/tag/get", "tag_id", "tagid"),
+        list_tags: staticCall("/cgi-bin/tag/list"),
+        add_tag_users: tagAction("/cgi-bin/tag/addtagusers"),
+        delete_tag_users: tagAction("/cgi-bin/tag/deltagusers"),
+        invite_users: postAction("/cgi-bin/batch/invite", "invitation"),
+        get_join_qrcode: async (client: WeComClient, params: Params) =>
+            client.call({
                 path: "/cgi-bin/corp/get_join_qrcode",
                 query: { size_type: optionalNumber(params, "size_type") },
-            });
-        case "get_api_domain_ips":
-            return client.call({ path: "/cgi-bin/get_api_domain_ip" });
-        case "get_callback_ips":
-            return client.call({ path: "/cgi-bin/getcallbackip" });
-        default:
-            throw new WeComApiError(`未知企业微信平台动作: ${action}`, {
-                code: "WECOM_UNKNOWN_ACTION",
-            });
-    }
+            }),
+        get_api_domain_ips: staticCall("/cgi-bin/get_api_domain_ip"),
+        get_callback_ips: staticCall("/cgi-bin/getcallbackip"),
+    },
+    action =>
+        new WeComApiError(`未知企业微信平台动作: ${action}`, {
+            code: "WECOM_UNKNOWN_ACTION",
+        }),
+);
+
+export const WECOM_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
+
+/** 常用自建应用 API 的稳定动作入口；wecom_call 覆盖新增接口。 */
+export function executeWeComPlatformAction(
+    client: WeComClient,
+    action: string,
+    params: Params,
+): Promise<unknown> {
+    return PLATFORM_ACTIONS.execute(client, action, params);
+}
+
+function staticCall(path: string): Handler {
+    return async client => client.call({ path });
+}
+
+function postAction(path: string, parameter: string, agent = false): Handler {
+    return async (client, params) => {
+        const body = requireRecord(params, parameter);
+        return post(client, path, agent ? withAgent(client, body) : body);
+    };
+}
+
+function stringQueryAction(path: string, parameter: string, query: string): Handler {
+    return async (client, params) =>
+        client.call({ path, query: { [query]: requireString(params, parameter) } });
+}
+
+function numberQueryAction(path: string, parameter: string, query: string): Handler {
+    return async (client, params) =>
+        client.call({ path, query: { [query]: requireNumber(params, parameter) } });
+}
+
+function tagAction(path: string): Handler {
+    return async (client, params) => tagUsers(client, path, params);
 }
 
 function callOptions(params: Readonly<Record<string, unknown>>): WeComCallOptions {
