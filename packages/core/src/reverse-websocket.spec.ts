@@ -19,7 +19,6 @@ describe("ReverseWebSocketSession", () => {
         const sockets: FakeSocket[] = [];
         const session = new ReverseWebSocketSession({
             url: "wss://example.com/events",
-            headers: {},
             logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
             reconnectDelayMs: 100,
             onMessage: vi.fn(),
@@ -42,11 +41,37 @@ describe("ReverseWebSocketSession", () => {
         expect(sockets).toHaveLength(2);
     });
 
+    it("忽略被替换连接上的迟到消息", async () => {
+        vi.useFakeTimers();
+        const sockets: FakeSocket[] = [];
+        const onMessage = vi.fn();
+        const session = new ReverseWebSocketSession({
+            url: "wss://example.com/events",
+            logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+            reconnectDelayMs: 100,
+            onMessage,
+            createSocket: () => {
+                const socket = new FakeSocket();
+                sockets.push(socket);
+                return socket as never;
+            },
+        });
+
+        session.start();
+        sockets[0].emit("close");
+        vi.advanceTimersByTime(100);
+        sockets[0].emit("message", Buffer.from("stale"));
+        sockets[1].emit("message", Buffer.from("current"));
+        await Promise.resolve();
+
+        expect(onMessage).toHaveBeenCalledOnce();
+        expect(onMessage).toHaveBeenCalledWith(Buffer.from("current"));
+    });
+
     it("只在已连接时发送事件", () => {
         const socket = new FakeSocket();
         const session = new ReverseWebSocketSession({
             url: "wss://example.com/events",
-            headers: {},
             logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
             onMessage: vi.fn(),
             createSocket: () => socket as never,

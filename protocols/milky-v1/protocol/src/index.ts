@@ -6,6 +6,7 @@ import {
     requireBooleanParam,
     requireNonEmptyStringParam,
     requirePositiveIntegerParam,
+    ReverseWebSocketSession,
 } from "onebots";
 import type { CommonEvent, Schema } from "onebots";
 import { Milky } from "./types.js";
@@ -102,6 +103,7 @@ ProtocolRegistry.registerSchema("milky.v1", milkySchema);
 export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     public readonly name = "milky";
     public readonly version = "v1" as const;
+    private readonly reverseWebSocketCleanups = new Set<() => void>();
 
     constructor(
         public adapter: Adapter,
@@ -139,7 +141,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     async stop(_force?: boolean): Promise<void> {
         this.logger.info(`Stopping Milky protocol v1`);
-        // Clean up Milky protocol resources
+        for (const cleanup of this.reverseWebSocketCleanups) cleanup();
+        this.reverseWebSocketCleanups.clear();
         this.removeAllListeners();
     }
 
@@ -1164,79 +1167,41 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
 
     private startWsReverse(config: MilkyConfig.WsReverseConfig): void {
         this.logger.info(`Starting Milky WebSocket reverse: ${config.url}`);
-
-        let ws: WebSocket | null = null;
-        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-        const connect = () => {
-            try {
-                // Add access token to URL if configured
-                let wsUrl = config.url;
-                const token = config.access_token || this.config.access_token;
-                if (token) {
-                    const separator = wsUrl.includes("?") ? "&" : "?";
-                    wsUrl = `${wsUrl}${separator}access_token=${token}`;
-                }
-
-                ws = new WebSocket(wsUrl, {
-                    headers: {
-                        "User-Agent": "Milky/1.0",
-                        "X-Self-ID": this.account.account_id,
-                        "X-Client-Role": "Universal",
-                    },
-                });
-
-                ws.on("open", () => {
-                    this.logger.info(`Milky WebSocket reverse connected to ${config.url}`);
-
-                    // Clear reconnect timer
-                    if (reconnectTimer) {
-                        clearTimeout(reconnectTimer);
-                        reconnectTimer = null;
-                    }
-                });
-
-                ws.on("message", async (data: Buffer) => {
-                    try {
-                        const request = JSON.parse(data.toString());
-                        const { action, params, echo } = request;
-
-                        const result = await this.apply(action, params);
-                        ws.send(JSON.stringify({ ...result, echo }));
-                    } catch (error) {
-                        this.logger.error("WebSocket reverse message error:", error);
-                    }
-                });
-
-                ws.on("close", () => {
-                    // 移除派发监听，避免重连后监听器累积导致事件重复发送
-                    this.off("dispatch", onDispatch);
-                    const interval = (config.reconnect_interval || 5) * 1000;
-                    this.logger.warn(
-                        `Milky WebSocket reverse disconnected from ${config.url}, reconnecting in ${config.reconnect_interval || 5}s...`,
-                    );
-                    reconnectTimer = setTimeout(connect, interval);
-                });
-
-                ws.on("error", (error: Error) => {
-                    this.logger.error("Milky WebSocket reverse error:", error);
-                });
-
-                // Listen for dispatch events and send to server
-                const onDispatch = (data: string) => {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(data);
-                    }
-                };
-                this.on("dispatch", onDispatch);
-            } catch (error) {
-                this.logger.error(`Milky WebSocket reverse connection failed:`, error);
-                const interval = (config.reconnect_interval || 5) * 1000;
-                reconnectTimer = setTimeout(connect, interval);
-            }
+        const wsUrl = new URL(config.url);
+        const token = config.access_token || this.config.access_token;
+        if (token) {
+            wsUrl.searchParams.set("access_token", token);
+        }
+        const session = new ReverseWebSocketSession({
+            url: wsUrl.toString(),
+            headers: {
+                "User-Agent": "Milky/1.0",
+                "X-Self-ID": this.account.account_id,
+                "X-Client-Role": "Universal",
+            },
+            logger: this.logger,
+            reconnectDelayMs: (config.reconnect_interval || 5) * 1_000,
+            onMessage: async data => {
+                const request = JSON.parse(data.toString()) as Record<string, unknown>;
+                const action = requireNonEmptyStringParam(request, "action");
+                const params =
+                    request.params && typeof request.params === "object"
+                        ? (request.params as Record<string, unknown>)
+                        : undefined;
+                const result = await this.apply(action, params);
+                const response =
+                    request.echo !== undefined ? { ...result, echo: request.echo } : result;
+                session.send(JSON.stringify(response));
+            },
+        });
+        const onDispatch = (data: string) => session.send(data);
+        const cleanup = () => {
+            this.off("dispatch", onDispatch);
+            session.stop();
         };
-
-        connect();
+        this.on("dispatch", onDispatch);
+        this.reverseWebSocketCleanups.add(cleanup);
+        session.start();
     }
 }
 

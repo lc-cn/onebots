@@ -3,6 +3,7 @@ import {
     ProtocolRegistry,
     requireNonEmptyStringParam,
     requirePositiveIntegerParam,
+    ReverseWebSocketSession,
 } from "onebots";
 import type { Schema } from "onebots";
 import { Account } from "onebots";
@@ -12,7 +13,6 @@ import { OneBotV12 } from "./types.js";
 import { WebSocket } from "ws";
 import { OneBotV12Config } from "./config.js";
 import { projectOneBotV12Actions } from "./supported-actions.js";
-import { ReverseWebSocketSession } from "./reverse-websocket.js";
 
 const onebotV12Schema: Schema = {
     use_http: { type: "boolean", default: true, label: "启用 HTTP", ui: { section: "transport" } },

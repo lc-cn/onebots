@@ -12,6 +12,7 @@ export * from "./wechat-callback.js";
 export * from "./protocol-params.js";
 export * from "./message-utils.js";
 export * from "./package-metadata.js";
+export * from "./reverse-websocket.js";
 export * from "./protocol.js";
 export * from "./event-filter.js";
 export * from "./registry.js";

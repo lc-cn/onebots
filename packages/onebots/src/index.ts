@@ -26,8 +26,10 @@ export {
     type WsServer,
     type AdapterCapabilityManifest,
     type CapabilityDescriptor,
+    type ReverseWebSocketOptions,
     // Infrastructure
     ConnectionManager,
+    ReverseWebSocketSession,
     RetryPresets,
     // Utilities
     yaml,
