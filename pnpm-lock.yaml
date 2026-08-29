@@ -230,16 +230,19 @@ importers:
 
   adapters/adapter-kook:
     dependencies:
-      kook-client:
-        specifier: ^1.0.4
-        version: 1.0.4
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
+      ws:
+        specifier: ^8.21.3
+        version: 8.21.3
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
         version: 24.12.0
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       tsc-alias:
         specifier: latest
         version: 1.9.2
@@ -3077,10 +3080,6 @@ packages:
   dot-case@3.0.4:
     resolution: {integrity: sha512-Kv5nKlh6yRrdrGvxeJ2e5y2eRUpkUosIW4A2AS38zwSz27zu7ufDwQPi5Jhs3XAlGNetl3bmnGhQsMtkKJnj3w==}
 
-  dotenv@17.3.1:
-    resolution: {integrity: sha512-IO8C/dzEb6O3F9/twg6ZLXz164a2fhTnEWb95H23Dm4OuN+92NmEAlTrupP9VW6Jm3sO26tQlqyvyi4CsnY9GA==}
-    engines: {node: '>=12'}
-
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -3754,10 +3753,6 @@ packages:
     resolution: {integrity: sha512-e7IpWJrnanNUroVK2taAgMxoEZvHLXdQiNjeExSu/DEIWm83jaKGBgb7tLmu2rMYpA027qFB3iLR/k3AVpFRnA==}
     engines: {node: '>= 18'}
 
-  kook-client@1.0.4:
-    resolution: {integrity: sha512-iIIEysc0aWig3SWv0tJnl4svk907u8k61OhTENS294dH+RDAvuDNntkfRvjxUA1v9ZGTYDnb5f99VaFP3vMeLg==}
-    engines: {node: '>=16'}
-
   layout-base@1.0.2:
     resolution: {integrity: sha512-8h2oVEZNktL4BH2JCOI90iD1yXwL6iNW7KcCKT2QZgQJR2vbqDsldCTPRU9NifTCqHZci57XvQQ15YTu+sTYPg==}
 
@@ -4077,10 +4072,6 @@ packages:
       encoding:
         optional: true
 
-  node-persist@4.0.4:
-    resolution: {integrity: sha512-8sPAz/7tw1mCCc8xBG4f0wi+flHkSSgQeX998iQ75Pu27evA6UUWCjSE7xnrYTg2q33oU5leJ061EKPDv6BocQ==}
-    engines: {node: '>=10.12.0'}
-
   node-windows@1.0.0-beta.8:
     resolution: {integrity: sha512-uLekXnSeem3nW5escID224Fd0U/1VtvE796JpSpOY+c73Cslz/Qn2WUHRJyPQJEMrNGAy/FMRFjjhh4z1alZTA==}
 
@@ -4396,9 +4387,6 @@ packages:
   readdirp@4.1.2:
     resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
     engines: {node: '>= 14.18.0'}
-
-  reconnecting-websocket@4.4.0:
-    resolution: {integrity: sha512-D2E33ceRPga0NvTDhJmphEgJ7FUYF0v4lr1ki0csq06OdlxKfugGzN0dSkxM/NfqCxYELK4KcaTOUOjTV6Dcng==}
 
   reflect-metadata@0.1.14:
     resolution: {integrity: sha512-ZhYeb6nRaXCfhnndflDK8qI6ZQ/YcWZCISRAWICW9XYqMUwjZM9Z0DveWX/ABN01oxSHwVxKQmxeYZSsm0jh5A==}
@@ -7487,8 +7475,6 @@ snapshots:
       no-case: 3.0.4
       tslib: 2.8.1
 
-  dotenv@17.3.1: {}
-
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -8277,21 +8263,6 @@ snapshots:
       type-is: 2.0.1
       vary: 1.1.2
 
-  kook-client@1.0.4:
-    dependencies:
-      axios: 1.19.0(debug@4.4.3)
-      dotenv: 17.3.1
-      formdata-node: 6.0.3
-      log4js: 6.9.1
-      node-persist: 4.0.4
-      reconnecting-websocket: 4.4.0
-      ws: 8.21.3
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - supports-color
-      - utf-8-validate
-
   layout-base@1.0.2: {}
 
   layout-base@2.0.1: {}
@@ -8597,10 +8568,6 @@ snapshots:
   node-fetch@2.7.0:
     dependencies:
       whatwg-url: 5.0.0
-
-  node-persist@4.0.4:
-    dependencies:
-      p-limit: 3.1.0
 
   node-windows@1.0.0-beta.8:
     dependencies:
@@ -8928,8 +8895,6 @@ snapshots:
 
   readdirp@4.1.2:
     optional: true
-
-  reconnecting-websocket@4.4.0: {}
 
   reflect-metadata@0.1.14: {}
 

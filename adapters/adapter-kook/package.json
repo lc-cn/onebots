@@ -27,6 +27,7 @@
   ],
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
     "tsc-alias": "latest",
     "typescript": "catalog:"
   },
@@ -34,7 +35,7 @@
     "onebots": "workspace:*"
   },
   "dependencies": {
-    "kook-client": "^1.0.4"
+    "ws": "^8.21.3"
   },
   "repository": {
     "type": "git",

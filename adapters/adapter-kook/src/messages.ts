@@ -1,0 +1,123 @@
+import type { CommonTypes } from "onebots";
+import type { KookMessageType, KookSendMessage } from "./types.js";
+import { escapeKMarkdown, parseKMarkdown, stringValue } from "./utils.js";
+
+const MEDIA_TYPES: Record<string, KookMessageType> = {
+    image: 2,
+    video: 3,
+    file: 4,
+    audio: 8,
+};
+
+/** 将统一消息段编译为 KOOK 原生消息；混合富媒体使用 Card，避免降级成 URL 文本。 */
+export function buildKookOutboundMessage(segments: CommonTypes.Segment[]): KookSendMessage {
+    let quote: string | undefined;
+    const contentSegments = segments.filter(segment => {
+        if (segment.type !== "reply") return true;
+        quote = stringValue(segment.data.message_id || segment.data.id);
+        return false;
+    });
+    if (contentSegments.length === 1) {
+        const segment = contentSegments[0];
+        const mediaType = MEDIA_TYPES[segment.type];
+        const url = stringValue(segment.data.url || segment.data.file);
+        if (mediaType && url) return { type: mediaType as 2 | 3 | 4 | 8, content: url, quote };
+        if (segment.type === "card") {
+            return { type: 10, content: cardContent(segment.data), quote };
+        }
+        if (segment.type === "kmarkdown" || segment.type === "markdown") {
+            return {
+                type: 9,
+                content: stringValue(segment.data.content || segment.data.text),
+                quote,
+            };
+        }
+    }
+    if (contentSegments.some(segment => MEDIA_TYPES[segment.type] || segment.type === "card")) {
+        return { type: 10, content: JSON.stringify(buildCard(contentSegments)), quote };
+    }
+    return { type: 9, content: buildKMarkdown(contentSegments), quote };
+}
+
+export function projectKookMessageSegments(
+    type: KookMessageType,
+    content: string,
+    mentions: string[] = [],
+): CommonTypes.Segment[] {
+    const segments: CommonTypes.Segment[] = mentions.map(userId => ({
+        type: "at",
+        data: { user_id: userId },
+    }));
+    if (type === 1 || type === 9) {
+        if (content) segments.push({ type: "text", data: { text: parseKMarkdown(content) } });
+    } else if (type === 2) segments.push({ type: "image", data: { url: content } });
+    else if (type === 3) segments.push({ type: "video", data: { url: content } });
+    else if (type === 4) segments.push({ type: "file", data: { url: content } });
+    else if (type === 8) segments.push({ type: "audio", data: { url: content } });
+    else if (type === 10) {
+        segments.push({ type: "card", data: { content, cards: parseJson(content) } });
+    } else segments.push({ type: "kook", data: { type, content } });
+    return segments;
+}
+
+function buildKMarkdown(segments: CommonTypes.Segment[]): string {
+    let result = "";
+    for (const segment of segments) {
+        if (segment.type === "text") result += escapeKMarkdown(stringValue(segment.data.text));
+        else if (segment.type === "at") {
+            const id = stringValue(segment.data.user_id || segment.data.id || segment.data.qq);
+            if (id) result += `(met)${id}(/met)`;
+        } else if (segment.type === "role") {
+            const id = stringValue(segment.data.role_id || segment.data.id);
+            if (id) result += `(rol)${id}(/rol)`;
+        } else if (segment.type === "channel") {
+            const id = stringValue(segment.data.channel_id || segment.data.id);
+            if (id) result += `(chn)${id}(/chn)`;
+        } else if (segment.type === "kmarkdown" || segment.type === "markdown") {
+            result += stringValue(segment.data.content || segment.data.text);
+        } else if (segment.type === "face") {
+            const name = stringValue(segment.data.name, stringValue(segment.data.id));
+            const id = stringValue(segment.data.id);
+            result += id ? `(emj)${name}(/emj)[${id}]` : `:${name}:`;
+        }
+    }
+    return result;
+}
+
+function buildCard(segments: CommonTypes.Segment[]): Array<Record<string, unknown>> {
+    const modules: Array<Record<string, unknown>> = [];
+    const markdown = buildKMarkdown(segments.filter(segment => !MEDIA_TYPES[segment.type]));
+    if (markdown) modules.push({ type: "section", text: { type: "kmarkdown", content: markdown } });
+    const images = segments
+        .filter(segment => segment.type === "image")
+        .map(segment => ({ type: "image", src: stringValue(segment.data.url), alt: "图片" }))
+        .filter(image => image.src);
+    if (images.length) modules.push({ type: "container", elements: images });
+    for (const segment of segments) {
+        if (!["file", "audio", "video"].includes(segment.type)) continue;
+        const src = stringValue(segment.data.url || segment.data.file);
+        if (!src) continue;
+        modules.push({
+            type: segment.type,
+            src,
+            title: stringValue(segment.data.name || segment.data.filename, segment.type),
+        });
+    }
+    return [{ type: "card", theme: "none", size: "lg", modules }];
+}
+
+function cardContent(data: Record<string, unknown>): string {
+    const content = data.content;
+    if (typeof content === "string") return content;
+    const card = data.cards || data.card || content;
+    if (!card) throw new Error("KOOK card 消息必须提供 content、card 或 cards");
+    return JSON.stringify(Array.isArray(card) ? card : [card]);
+}
+
+function parseJson(value: string): unknown {
+    try {
+        return JSON.parse(value) as unknown;
+    } catch {
+        return undefined;
+    }
+}

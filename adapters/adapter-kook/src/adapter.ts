@@ -1,25 +1,17 @@
-/**
- * KOOK (开黑了) 适配器
- * 继承 Adapter 基类，实现 KOOK 平台功能
- * - 消息收发（sendMessage）
- * - 服务器管理（getGroupList, getGroupInfo 等，对应 KOOK 的服务器）
- * - 频道管理（getChannelList, getChannelInfo 等）
- * - 用户管理（getFriendList, getUserInfo 等）
- */
-import { Account, AdapterRegistry, AccountStatus } from "onebots";
-import { Adapter } from "onebots";
-import { BaseApp } from "onebots";
+import { readFile } from "node:fs/promises";
+import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
+import { createKookAccount } from "./account.js";
 import { KookBot } from "./bot.js";
-import { CommonEvent, type CommonTypes } from "onebots";
-import type {
-    KookConfig,
-    KookMessageType,
-    KookTransformedChannelEvent,
-    KookTransformedPrivateEvent,
-    KookEvent,
-} from "./types.js";
-import { parseKMarkdown, mentionUser, mentionAll, mentionHere } from "./utils.js";
 import { kookCapabilities } from "./capabilities.js";
+import { buildKookOutboundMessage, projectKookMessageSegments } from "./messages.js";
+import { executeKookPlatformAction, KOOK_PLATFORM_ACTIONS } from "./platform-actions.js";
+import type {
+    KookChannel,
+    KookGuild,
+    KookListResponse,
+    KookMessageView,
+    KookUser,
+} from "./types.js";
 
 export class KookAdapter extends Adapter<KookBot, "kook"> {
     constructor(app: BaseApp) {
@@ -27,410 +19,390 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         this.icon = "https://www.kookapp.cn/favicon.ico";
     }
 
-    // ============================================
-    // 消息相关方法
-    // ============================================
-
-    /**
-     * 发送消息
-     * KOOK 支持频道消息和私聊消息
-     */
     async sendMessage(
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const { scene_type, message } = params;
-        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
-
-        // 解析消息内容
-        let content = "";
-        let messageType: KookMessageType = 9; // 默认使用 KMarkdown
-
-        for (const seg of message) {
-            if (typeof seg === "string") {
-                content += seg;
-            } else if (seg.type === "text") {
-                content += seg.data.text || "";
-            } else if (seg.type === "at") {
-                if (seg.data.qq === "all") {
-                    content += mentionAll();
-                } else if (seg.data.qq === "here") {
-                    content += mentionHere();
-                } else {
-                    content += mentionUser(seg.data.qq || seg.data.id || "");
-                }
-            } else if (seg.type === "image") {
-                // 图片消息需要单独发送
-                if (seg.data.url) {
-                    content += `[图片](${seg.data.url})`;
-                }
-            } else if (seg.type === "face") {
-                // 表情
-                content += `:${seg.data.id || "smile"}:`;
-            }
-        }
-
-        let result: { msg_id: string; msg_timestamp: number; nonce: string };
-
-        if (scene_type === "private" || scene_type === "direct") {
-            // 私聊消息
-            result = (await bot.sendDirectMessage(sceneId.string, content)) as unknown as {
-                msg_id: string;
-                msg_timestamp: number;
-                nonce: string;
-            };
-        } else if (scene_type === "channel") {
-            // 频道消息
-            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as {
-                msg_id: string;
-                msg_timestamp: number;
-                nonce: string;
-            };
-        } else if (scene_type === "group") {
-            // 群组消息也发送到频道
-            result = (await bot.sendChannelMessage(sceneId.string, content)) as unknown as {
-                msg_id: string;
-                msg_timestamp: number;
-                nonce: string;
-            };
-        } else {
-            throw new Error(`KOOK 不支持的消息场景类型: ${scene_type}`);
-        }
-
-        return {
-            message_id: this.createId(result.msg_id),
-        };
+        const bot = this.requireBot(uin);
+        const direct = params.scene_type === "private" || params.scene_type === "direct";
+        const result = direct
+            ? await bot.sendDirectMessage(
+                  params.scene_id.string,
+                  buildKookOutboundMessage(params.message),
+              )
+            : await bot.sendChannelMessage(
+                  params.scene_id.string,
+                  buildKookOutboundMessage(params.message),
+              );
+        bot.rememberMessageScene(
+            result.msg_id,
+            direct ? "direct" : "channel",
+            params.scene_id.string,
+        );
+        return { message_id: this.createId(result.msg_id) };
     }
 
-    /**
-     * 删除/撤回消息
-     */
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
-
-        const channelId =
-            params.scene_id != null
-                ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
-                : "";
-        if (channelId) {
-            await bot.deleteMessage(channelId, msgId);
-        } else {
-            // 没有 scene_id 时，直接通过消息 ID 删除
-            await bot.deleteMessageById(msgId);
-        }
+        const bot = this.requireBot(uin);
+        const id = params.message_id.string;
+        const scene = this.messageScene(bot, id, params.scene_type);
+        await bot.callApi(`/v3/${scene === "direct" ? "direct-message" : "message"}/delete`, {
+            method: "POST",
+            body: { msg_id: id },
+        });
     }
 
-    /**
-     * 获取消息
-     */
     async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
-        const channelId =
-            params.scene_id != null
-                ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
-                : "";
-
-        // getMessage returns kook-client's Message type which has message_id, timestamp, author, raw_message
-        const msg = (await bot.getMessage(channelId, msgId)) as unknown as {
-            message_id: string;
-            timestamp: number;
-            author: { id: string; username: string };
-            raw_message: string;
-        };
-
+        const bot = this.requireBot(uin);
+        const id = params.message_id.string;
+        const scene = this.messageScene(bot, id, params.scene_type);
+        const context = bot.getMessageContext(id);
+        const message =
+            scene === "direct"
+                ? await this.getDirectMessage(
+                      bot,
+                      id,
+                      context?.chatCode,
+                      params.scene_id?.string || context?.targetId,
+                  )
+                : await bot.callApi<KookMessageView>("/v3/message/view", {
+                      query: { msg_id: id },
+                  });
+        const authorId = message.author?.id || message.author_id || context?.targetId || "";
+        bot.rememberMessageScene(
+            id,
+            scene,
+            params.scene_id?.string || context?.targetId,
+            context?.chatCode,
+        );
+        const sceneId =
+            params.scene_id?.string ||
+            (scene === "direct"
+                ? context?.targetId || authorId
+                : message.channel_id || context?.targetId || "");
         return {
-            message_id: this.createId(msg.message_id),
-            time: msg.timestamp,
+            message_id: this.createId(message.id || id),
+            time: normaliseTimestamp(message.create_at),
             sender: {
-                scene_type: "channel",
-                sender_id: this.createId(msg.author.id),
-                scene_id: this.createId(msg.message_id),
-                sender_name: msg.author.username,
+                scene_type: scene === "direct" ? "private" : "channel",
+                sender_id: this.createId(authorId),
+                scene_id: this.createId(sceneId),
+                sender_name: message.author?.nickname || message.author?.username || authorId,
                 scene_name: "",
             },
-            message: [
-                {
-                    type: "text",
-                    data: { text: parseKMarkdown(msg.raw_message) },
-                },
-            ],
+            message: projectKookMessageSegments(message.type, message.content),
         };
     }
 
-    /**
-     * 更新消息
-     */
     async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
-
-        // 解析消息内容
-        let content = "";
-        for (const seg of params.message) {
-            if (typeof seg === "string") {
-                content += seg;
-            } else if (seg.type === "text") {
-                content += seg.data.text || "";
-            }
-        }
-
-        // 更新消息需要 channelId，但参数中没有，尝试从消息中获取
-        // 如果无法获取，则使用第一个可用的频道（简化处理）
-        const rawScene = (
-            params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }
-        ).scene_id;
-        const channelId =
-            rawScene != null
-                ? this.coerceId(rawScene as CommonTypes.Id | string | number).string
-                : "";
-        if (!channelId) {
-            throw new Error("更新消息需要 channel_id，但参数中未提供");
-        }
-        await bot.updateMessage(channelId, msgId, content);
+        const bot = this.requireBot(uin);
+        const id = params.message_id.string;
+        const scene = this.messageScene(bot, id);
+        const message = buildKookOutboundMessage(params.message);
+        await bot.callApi(`/v3/${scene === "direct" ? "direct-message" : "message"}/update`, {
+            method: "POST",
+            body: { msg_id: id, content: message.content, quote: message.quote },
+        });
     }
 
-    // ============================================
-    // 用户相关方法
-    // ============================================
-
-    /**
-     * 获取机器人自身信息
-     */
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const me = (await bot.getMe()) as unknown as {
-            id: string;
-            username: string;
-            nickname: string;
-            avatar: string;
-        };
-
-        return {
-            user_id: this.createId(me.id),
-            user_name: me.username,
-            user_displayname: me.nickname,
-            avatar: me.avatar,
-        };
+        const bot = this.requireBot(uin);
+        const me = bot.getCachedMe() || (await bot.callApi<KookUser>("/v3/user/me"));
+        return this.toUserInfo(me);
     }
 
-    /**
-     * 获取用户信息
-     */
     async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const userId = params.user_id.string;
-        const user = (await bot.getUser(userId)) as unknown as {
-            id: string;
-            username: string;
-            nickname: string;
-            avatar: string;
-        };
-
-        return {
-            user_id: this.createId(user.id),
-            user_name: user.username,
-            user_displayname: user.nickname,
-            avatar: user.avatar,
-        };
+        const user = await this.requireBot(uin).callApi<KookUser>("/v3/user/view", {
+            query: { user_id: params.user_id.string },
+        });
+        return this.toUserInfo(user);
     }
 
-    // ============================================
-    // 好友（私聊会话）相关方法
-    // ============================================
-
-    /**
-     * 获取好友列表（私聊会话列表）
-     */
-    async getFriendList(
-        uin: string,
-        params?: Adapter.GetFriendListParams,
-    ): Promise<Adapter.FriendInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const friends: Adapter.FriendInfo[] = [];
-        let page = 1;
-
-        // KOOK 不提供私聊会话列表 API，返回空数组
-        // 如果需要获取私聊用户，需要通过其他方式（如消息记录）
-        return [];
-
-        return friends;
+    async getGroupList(uin: string): Promise<Adapter.GroupInfo[]> {
+        return (await this.listAll<KookGuild>(this.requireBot(uin), "/v3/guild/list")).map(
+            guild => ({
+                group_id: this.createId(guild.id),
+                group_name: guild.name,
+            }),
+        );
     }
 
-    /**
-     * 获取好友信息
-     */
-    async getFriendInfo(
-        uin: string,
-        params: Adapter.GetFriendInfoParams,
-    ): Promise<Adapter.FriendInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const userId = params.user_id.string;
-        const user = await bot.getUser(userId);
-
-        return {
-            user_id: this.createId(user.id),
-            user_name: user.username,
-            remark: user.nickname,
-        };
-    }
-
-    // ============================================
-    // 群组（服务器）相关方法
-    // ============================================
-
-    /**
-     * 获取群列表（服务器列表）
-     */
-    async getGroupList(
-        uin: string,
-        params?: Adapter.GetGroupListParams,
-    ): Promise<Adapter.GroupInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const groups: Adapter.GroupInfo[] = [];
-        let page = 1;
-
-        do {
-            const result = await bot.getGuildList(page, 50);
-
-            for (const guild of result.items) {
-                groups.push({
-                    group_id: this.createId(guild.id),
-                    group_name: guild.name,
-                });
-            }
-
-            if (page >= result.meta.page_total) break;
-            page++;
-        } while (true);
-
-        return groups;
-    }
-
-    /**
-     * 获取群信息（服务器信息）
-     */
     async getGroupInfo(
         uin: string,
         params: Adapter.GetGroupInfoParams,
     ): Promise<Adapter.GroupInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const guildId = params.group_id.string;
-        const guild = await bot.getGuild(guildId);
-        if (!guild?.id) {
-            throw new Error(`获取群信息失败：无效的 guild 响应（guild_id=${guildId}）`);
-        }
-        return {
-            group_id: this.createId(guild.id),
-            group_name: guild.name,
-        };
+        const guild = await this.guild(uin, params.group_id.string);
+        return { group_id: this.createId(guild.id), group_name: guild.name };
     }
 
-    /**
-     * 退出群组（退出服务器）
-     */
     async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.leaveGuild(params.group_id.string);
+        await this.requireBot(uin).callApi("/v3/guild/leave", {
+            method: "POST",
+            body: { guild_id: params.group_id.string },
+        });
     }
 
-    /**
-     * 获取群成员列表（服务器成员列表）
-     */
     async getGroupMemberList(
         uin: string,
         params: Adapter.GetGroupMemberListParams,
     ): Promise<Adapter.GroupMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const guildId = params.group_id.string;
-        const members: Adapter.GroupMemberInfo[] = [];
-        let page = 1;
-
-        do {
-            const result = await bot.getGuildMemberList(
-                guildId,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                page,
-                50,
-            );
-
-            for (const user of result.items) {
-                members.push({
-                    group_id: params.group_id,
-                    user_id: this.createId(user.id),
-                    user_name: user.username,
-                    card: user.nickname,
-                    role: "member",
-                });
-            }
-
-            if (page >= result.meta.page_total) break;
-            page++;
-        } while (true);
-
-        return members;
+        const users = await this.listAll<KookUser>(this.requireBot(uin), "/v3/guild/user-list", {
+            guild_id: params.group_id.string,
+        });
+        return users.map(user => this.toGroupMember(user, params.group_id));
     }
 
-    /**
-     * 获取群成员信息
-     */
     async getGroupMemberInfo(
         uin: string,
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
+        const user = await this.requireBot(uin).callApi<KookUser>("/v3/user/view", {
+            query: { user_id: params.user_id.string, guild_id: params.group_id.string },
+        });
+        return this.toGroupMember(user, params.group_id);
+    }
+
+    async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
+        await this.requireBot(uin).callApi("/v3/guild/kickout", {
+            method: "POST",
+            body: { guild_id: params.group_id.string, target_id: params.user_id.string },
+        });
+    }
+
+    async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
+        await this.requireBot(uin).callApi("/v3/guild/nickname", {
+            method: "POST",
+            body: {
+                guild_id: params.group_id.string,
+                user_id: params.user_id.string,
+                nickname: params.card,
+            },
+        });
+    }
+
+    async getGuildList(uin: string): Promise<Adapter.GuildInfo[]> {
+        return (await this.listAll<KookGuild>(this.requireBot(uin), "/v3/guild/list")).map(
+            guild => ({
+                guild_id: this.createId(guild.id),
+                guild_name: guild.name,
+            }),
+        );
+    }
+
+    async getGuildInfo(
+        uin: string,
+        params: Adapter.GetGuildInfoParams,
+    ): Promise<Adapter.GuildInfo> {
+        const guild = await this.guild(uin, params.guild_id.string);
+        return { guild_id: this.createId(guild.id), guild_name: guild.name };
+    }
+
+    async getGuildMemberList(
+        uin: string,
+        params: Adapter.GetGuildMemberListParams,
+    ): Promise<Adapter.GuildMemberInfo[]> {
+        const users = await this.listAll<KookUser>(this.requireBot(uin), "/v3/guild/user-list", {
+            guild_id: params.guild_id.string,
+        });
+        return users.map(user => ({
+            guild_id: params.guild_id,
+            user_id: this.createId(user.id),
+            user_name: user.username,
+            nickname: user.nickname,
+            role: user.roles?.join(","),
+        }));
+    }
+
+    async getGuildMemberInfo(
+        uin: string,
+        params: Adapter.GetGuildMemberInfoParams,
+    ): Promise<Adapter.GuildMemberInfo> {
+        const user = await this.requireBot(uin).callApi<KookUser>("/v3/user/view", {
+            query: { user_id: params.user_id.string, guild_id: params.guild_id.string },
+        });
+        return {
+            guild_id: params.guild_id,
+            user_id: this.createId(user.id),
+            user_name: user.username,
+            nickname: user.nickname,
+            role: user.roles?.join(","),
+        };
+    }
+
+    async getChannelList(
+        uin: string,
+        params?: Adapter.GetChannelListParams,
+    ): Promise<Adapter.ChannelInfo[]> {
+        if (!params?.guild_id) throw new Error("KOOK get_channel_list 必须提供 guild_id");
+        const channels = await this.listAll<KookChannel>(this.requireBot(uin), "/v3/channel/list", {
+            guild_id: params.guild_id.string,
+        });
+        return channels.map(channel => this.toChannelInfo(channel));
+    }
+
+    async getChannelInfo(
+        uin: string,
+        params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
+        const channel = await this.requireBot(uin).callApi<KookChannel>("/v3/channel/view", {
+            query: { target_id: params.channel_id.string },
+        });
+        return this.toChannelInfo(channel);
+    }
+
+    async createChannel(
+        uin: string,
+        params: Adapter.CreateChannelParams,
+    ): Promise<Adapter.ChannelInfo> {
+        const channel = await this.requireBot(uin).callApi<KookChannel>("/v3/channel/create", {
+            method: "POST",
+            body: {
+                guild_id: params.guild_id.string,
+                name: params.channel_name,
+                type: params.channel_type || 1,
+                parent_id: params.parent_id?.string,
+            },
+        });
+        return this.toChannelInfo(channel);
+    }
+
+    async updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> {
+        await this.requireBot(uin).callApi("/v3/channel/update", {
+            method: "POST",
+            body: {
+                channel_id: params.channel_id.string,
+                name: params.channel_name,
+                parent_id: params.parent_id?.string,
+            },
+        });
+    }
+
+    async deleteChannel(uin: string, params: Adapter.DeleteChannelParams): Promise<void> {
+        await this.requireBot(uin).callApi("/v3/channel/delete", {
+            method: "POST",
+            body: { channel_id: params.channel_id.string },
+        });
+    }
+
+    async getChannelMemberList(
+        uin: string,
+        params: Adapter.GetChannelMemberListParams,
+    ): Promise<Adapter.ChannelMemberInfo[]> {
+        const response = await this.requireBot(uin).callApi<KookListResponse<KookUser>>(
+            "/v3/channel/user-list",
+            { query: { channel_id: params.channel_id.string } },
+        );
+        return response.items.map(user => ({
+            channel_id: params.channel_id,
+            user_id: this.createId(user.id),
+            user_name: user.username,
+            role: "member",
+        }));
+    }
+
+    executePlatformAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!KOOK_PLATFORM_ACTIONS.has(action))
+            return super.executePlatformAction(uin, action, params);
+        return executeKookPlatformAction(this.requireBot(uin), action, params);
+    }
+
+    async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+        const version = await readPackageVersion(new URL("../package.json", import.meta.url));
+        return { app_name: "onebots KOOK Adapter", app_version: version, impl: "kook", version };
+    }
+
+    async getStatus(uin: string): Promise<Adapter.StatusInfo> {
+        const online = this.getAccount(uin)?.status === AccountStatus.Online;
+        return { online, good: online };
+    }
+
+    createAccount(config: Account.Config<"kook">): Account<"kook", KookBot> {
+        return createKookAccount(this, config);
+    }
+
+    private requireBot(uin: string): KookBot {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
+        return account.client;
+    }
 
-        const bot = account.client;
-        const guildId = params.group_id.string;
-        const userId = params.user_id.string;
-        const user = await bot.getUser(userId, guildId);
+    private messageScene(
+        bot: KookBot,
+        messageId: string,
+        scene?: "private" | "group" | "channel" | "direct",
+    ): "channel" | "direct" {
+        if (scene) return scene === "private" || scene === "direct" ? "direct" : "channel";
+        const known = bot.getMessageScene(messageId);
+        if (!known) {
+            throw new Error("KOOK 消息场景未知；请提供 scene_type，或先接收/发送该消息");
+        }
+        return known;
+    }
 
+    private async guild(uin: string, guildId: string): Promise<KookGuild> {
+        return this.requireBot(uin).callApi("/v3/guild/view", { query: { guild_id: guildId } });
+    }
+
+    private async getDirectMessage(
+        bot: KookBot,
+        messageId: string,
+        chatCode?: string,
+        targetId?: string,
+    ): Promise<KookMessageView> {
+        if (chatCode) {
+            return bot.callApi("/v3/direct-message/view", {
+                query: { chat_code: chatCode, msg_id: messageId },
+            });
+        }
+        if (!targetId) {
+            throw new Error("KOOK 私聊消息详情需要 scene_id（目标用户）或已知 chat_code");
+        }
+        const response = await bot.callApi<KookListResponse<KookMessageView>>(
+            "/v3/direct-message/list",
+            { query: { target_id: targetId, msg_id: messageId, flag: "around", page_size: 50 } },
+        );
+        const message = response.items.find(item => item.id === messageId);
+        if (!message) throw new Error(`KOOK 私聊消息不存在: ${messageId}`);
+        return message;
+    }
+
+    private async listAll<T>(
+        bot: KookBot,
+        path: string,
+        query: Record<string, string | number | boolean | undefined> = {},
+    ): Promise<T[]> {
+        const items: T[] = [];
+        let page = 1;
+        do {
+            const response = await bot.callApi<KookListResponse<T>>(path, {
+                query: { ...query, page, page_size: 100 },
+            });
+            items.push(...response.items);
+            if (!response.meta?.page_total || page >= response.meta.page_total) break;
+            page++;
+        } while (true);
+        return items;
+    }
+
+    private toUserInfo(user: KookUser): Adapter.UserInfo {
         return {
-            group_id: params.group_id,
+            user_id: this.createId(user.id),
+            user_name: user.username,
+            user_displayname: user.nickname || user.username,
+            avatar: user.avatar,
+        };
+    }
+
+    private toGroupMember(
+        user: KookUser,
+        groupId: Adapter.GroupMemberInfo["group_id"],
+    ): Adapter.GroupMemberInfo {
+        return {
+            group_id: groupId,
             user_id: this.createId(user.id),
             user_name: user.username,
             card: user.nickname,
@@ -438,606 +410,34 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         };
     }
 
-    /**
-     * 踢出群成员
-     */
-    async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.kickGuildMember(params.group_id.string, params.user_id.string);
-    }
-
-    /**
-     * 设置群名片（设置服务器昵称）
-     */
-    async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.setGuildNickname(params.group_id.string, params.card, params.user_id.string);
-    }
-
-    // ============================================
-    // 频道相关方法
-    // ============================================
-
-    /**
-     * 获取频道列表
-     */
-    async getChannelList(
-        uin: string,
-        params?: Adapter.GetChannelListParams,
-    ): Promise<Adapter.ChannelInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const guildId = params?.guild_id?.string;
-        if (!guildId) throw new Error("guild_id is required");
-
-        const channels: Adapter.ChannelInfo[] = [];
-        let page = 1;
-
-        do {
-            const result = await bot.getChannelList(guildId, undefined, page, 50);
-
-            for (const channel of result.items) {
-                channels.push({
-                    channel_id: this.createId(channel.id),
-                    channel_name: channel.name,
-                    channel_type: channel.type,
-                    parent_id: channel.parent_id ? this.createId(channel.parent_id) : undefined,
-                });
-            }
-
-            if (page >= result.meta.page_total) break;
-            page++;
-        } while (true);
-
-        return channels;
-    }
-
-    /**
-     * 获取频道信息
-     */
-    async getChannelInfo(
-        uin: string,
-        params: Adapter.GetChannelInfoParams,
-    ): Promise<Adapter.ChannelInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const channel = await bot.getChannel(params.channel_id.string);
-
+    private toChannelInfo(channel: KookChannel): Adapter.ChannelInfo {
         return {
             channel_id: this.createId(channel.id),
             channel_name: channel.name,
             channel_type: channel.type,
             parent_id: channel.parent_id ? this.createId(channel.parent_id) : undefined,
         };
-    }
-
-    /**
-     * 创建频道
-     */
-    async createChannel(
-        uin: string,
-        params: Adapter.CreateChannelParams,
-    ): Promise<Adapter.ChannelInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const channel = await bot.createChannel(
-            params.guild_id.string,
-            params.channel_name,
-            params.channel_type as 1 | 2,
-            params.parent_id?.string,
-        );
-
-        return {
-            channel_id: this.createId(channel.id),
-            channel_name: channel.name,
-            channel_type: channel.type,
-            parent_id: channel.parent_id ? this.createId(channel.parent_id) : undefined,
-        };
-    }
-
-    /**
-     * 更新频道
-     */
-    async updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.updateChannel(params.channel_id.string, params.channel_name);
-    }
-
-    /**
-     * 删除频道
-     */
-    async deleteChannel(uin: string, params: Adapter.DeleteChannelParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        await bot.deleteChannel(params.channel_id.string);
-    }
-
-    /**
-     * 获取频道成员列表
-     */
-    async getChannelMemberList(
-        uin: string,
-        params: Adapter.GetChannelMemberListParams,
-    ): Promise<Adapter.ChannelMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const result = await bot.getChannelUserList(params.channel_id.string);
-
-        return result.items.map(user => ({
-            channel_id: params.channel_id,
-            user_id: this.createId(user.id),
-            user_name: user.username,
-            role: "member" as const,
-        }));
-    }
-
-    // ============================================
-    // 服务器（公会）相关方法
-    // ============================================
-
-    /**
-     * 获取服务器列表
-     */
-    async getGuildList(uin: string): Promise<Adapter.GuildInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const guilds: Adapter.GuildInfo[] = [];
-        let page = 1;
-
-        do {
-            const result = await bot.getGuildList(page, 50);
-
-            for (const guild of result.items) {
-                guilds.push({
-                    guild_id: this.createId(guild.id),
-                    guild_name: guild.name,
-                });
-            }
-
-            if (page >= result.meta.page_total) break;
-            page++;
-        } while (true);
-
-        return guilds;
-    }
-
-    /**
-     * 获取服务器信息
-     */
-    async getGuildInfo(
-        uin: string,
-        params: Adapter.GetGuildInfoParams,
-    ): Promise<Adapter.GuildInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const guild = await bot.getGuild(params.guild_id.string);
-        if (!guild?.id) {
-            throw new Error(
-                `获取服务器信息失败：无效的 guild 响应（guild_id=${params.guild_id.string}）`,
-            );
-        }
-        return {
-            guild_id: this.createId(guild.id),
-            guild_name: guild.name,
-        };
-    }
-
-    /**
-     * 获取服务器成员信息
-     */
-    async getGuildMemberInfo(
-        uin: string,
-        params: Adapter.GetGuildMemberInfoParams,
-    ): Promise<Adapter.GuildMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const user = await bot.getUser(params.user_id.string, params.guild_id.string);
-
-        return {
-            guild_id: params.guild_id,
-            user_id: this.createId(user.id),
-            user_name: user.username,
-            nickname: user.nickname,
-        };
-    }
-
-    // ============================================
-    // 系统相关方法
-    // ============================================
-
-    /**
-     * 获取版本信息
-     */
-    async getVersion(uin: string): Promise<Adapter.VersionInfo> {
-        return {
-            app_name: "onebots KOOK Adapter",
-            app_version: "1.0.0",
-            impl: "kook",
-            version: "1.0.0",
-        };
-    }
-
-    /**
-     * 获取运行状态
-     */
-    async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const account = this.getAccount(uin);
-        return {
-            online: account?.status === AccountStatus.Online,
-            good: account?.status === AccountStatus.Online,
-        };
-    }
-
-    // ============================================
-    // 账号创建
-    // ============================================
-
-    createAccount(config: Account.Config<"kook">): Account<"kook", KookBot> {
-        const kookConfig: KookConfig = {
-            account_id: config.account_id,
-            token: config.token,
-            verifyToken: config.verifyToken,
-            encryptKey: config.encryptKey,
-            mode: config.mode || "websocket",
-        };
-
-        const bot = new KookBot(kookConfig);
-        const account = new Account<"kook", KookBot>(this, bot, config);
-
-        // Webhook 路由
-        if (kookConfig.mode === "webhook") {
-            this.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
-        }
-
-        // 监听 Bot 事件
-        bot.on("ready", () => {
-            this.logger.info(`KOOK Bot ${config.account_id} 已就绪`);
-        });
-
-        bot.on("error", error => {
-            this.logger.error(`KOOK Bot ${config.account_id} 错误:`, error);
-        });
-
-        // 监听频道消息
-        bot.on("channel_message", (event: KookTransformedChannelEvent) => {
-            // 忽略自己发送的消息
-            const me = bot.getCachedMe();
-            if (me && event.author_id === me.id) return;
-
-            // 打印消息接收日志
-            const content = event.content || "";
-            const contentPreview =
-                content.length > 100 ? content.substring(0, 100) + "..." : content;
-            const channelId = event.channel_id || "";
-            this.logger.info(
-                `[KOOK] 收到频道消息 | 消息ID: ${event.msg_id} | 频道: ${channelId} | ` +
-                    `发送者: ${event.extra?.author?.username || event.author_id} | 内容: ${contentPreview}`,
-            );
-
-            // 构建消息段
-            const messageSegments: CommonTypes.Segment[] = [];
-            const rawContent = event.content || "";
-            switch (event.type) {
-                case 1: // 文字消息
-                case 9: // KMarkdown
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: parseKMarkdown(rawContent) },
-                    });
-                    break;
-                case 2: // 图片
-                    messageSegments.push({
-                        type: "image",
-                        data: { url: rawContent },
-                    });
-                    break;
-                case 3: // 视频
-                    messageSegments.push({
-                        type: "video",
-                        data: { url: rawContent },
-                    });
-                    break;
-                case 4: // 文件
-                    messageSegments.push({
-                        type: "file",
-                        data: { url: rawContent },
-                    });
-                    break;
-                case 8: // 音频
-                    messageSegments.push({
-                        type: "audio",
-                        data: { url: rawContent },
-                    });
-                    break;
-                case 10: // 卡片消息
-                    messageSegments.push({
-                        type: "card",
-                        data: { content: rawContent },
-                    });
-                    break;
-                default:
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: rawContent },
-                    });
-            }
-
-            // 处理 @
-            if (event.extra?.mention) {
-                for (const userId of event.extra.mention) {
-                    messageSegments.unshift({
-                        type: "at",
-                        data: { qq: userId },
-                    });
-                }
-            }
-
-            // 转换为 CommonEvent 格式
-            const commonEvent: CommonEvent.Message = {
-                id: this.createId(event.msg_id),
-                timestamp: event.msg_timestamp,
-                platform: "kook",
-                bot_id: this.createId(config.account_id),
-                type: "message",
-                message_type: "channel",
-                sender: {
-                    id: this.createId(event.author_id),
-                    name: event.extra?.author?.username || event.author_id,
-                    avatar: event.extra?.author?.avatar,
-                },
-                group: {
-                    id: this.createId(event.extra?.guild_id || event.channel_id || ""),
-                    name: "",
-                },
-                message_id: this.createId(event.msg_id),
-                raw_message: rawContent,
-                message: messageSegments,
-            };
-
-            // 派发到协议层
-            account.dispatch(commonEvent);
-        });
-
-        // 监听私聊消息
-        bot.on("direct_message", (event: KookTransformedPrivateEvent) => {
-            // 忽略自己发送的消息
-            const me = bot.getCachedMe();
-            if (me && event.author_id === me.id) return;
-
-            // 打印消息接收日志
-            const content = event.content || "";
-            const contentPreview =
-                content.length > 100 ? content.substring(0, 100) + "..." : content;
-            this.logger.info(
-                `[KOOK] 收到私聊消息 | 消息ID: ${event.msg_id} | ` +
-                    `发送者: ${event.extra?.author?.username || event.author_id} | 内容: ${contentPreview}`,
-            );
-
-            // 构建消息段
-            const messageSegments: CommonTypes.Segment[] = [];
-            const rawContent = event.content || "";
-
-            switch (event.type) {
-                case 1:
-                case 9:
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: parseKMarkdown(rawContent) },
-                    });
-                    break;
-                case 2:
-                    messageSegments.push({
-                        type: "image",
-                        data: { url: rawContent },
-                    });
-                    break;
-                default:
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: rawContent },
-                    });
-            }
-
-            // 转换为 CommonEvent 格式
-            const commonEvent: CommonEvent.Message = {
-                id: this.createId(event.msg_id),
-                timestamp: event.msg_timestamp,
-                platform: "kook",
-                bot_id: this.createId(config.account_id),
-                type: "message",
-                message_type: "private",
-                sender: {
-                    id: this.createId(event.author_id),
-                    name: event.extra?.author?.username || event.author_id,
-                    avatar: event.extra?.author?.avatar,
-                },
-                message_id: this.createId(event.msg_id),
-                raw_message: rawContent,
-                message: messageSegments,
-            };
-
-            // 派发到协议层
-            account.dispatch(commonEvent);
-        });
-
-        // 监听成员加入服务器
-        bot.on("system.joined_guild", (event: KookEvent) => {
-            this.logger.info(`用户加入服务器: ${event.extra?.body?.user_id}`);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(event.msg_id),
-                timestamp: event.msg_timestamp,
-                platform: "kook",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "group_increase",
-                user: {
-                    id: this.createId(event.extra?.body?.user_id || ""),
-                    name: "",
-                },
-                group: {
-                    id: this.createId(event.target_id),
-                    name: "",
-                },
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听成员离开服务器
-        bot.on("system.exited_guild", (event: KookEvent) => {
-            this.logger.info(`用户离开服务器: ${event.extra?.body?.user_id}`);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(event.msg_id),
-                timestamp: event.msg_timestamp,
-                platform: "kook",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "group_decrease",
-                user: {
-                    id: this.createId(event.extra?.body?.user_id || ""),
-                    name: "",
-                },
-                group: {
-                    id: this.createId(event.target_id),
-                    name: "",
-                },
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听表情回应
-        bot.on("system.added_reaction", (event: KookEvent) => {
-            this.logger.debug(`添加表情回应:`, event);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(event.msg_id),
-                timestamp: event.msg_timestamp,
-                platform: "kook",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "reaction_added",
-                user: {
-                    id: this.createId(event.extra?.body?.user_id || ""),
-                    name: "",
-                },
-                message_id: this.createId(event.extra?.body?.msg_id || event.msg_id),
-                emoji: event.extra?.body?.emoji,
-                raw_event: event,
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听消息更新
-        bot.on("system.updated_message", (event: KookEvent) => {
-            this.logger.debug(`消息更新:`, event);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(event.msg_id),
-                timestamp: event.msg_timestamp,
-                platform: "kook",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "message_updated",
-                message_id: this.createId(event.extra?.body?.msg_id || event.msg_id),
-                content: event.extra?.body?.content,
-                raw_event: event,
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听消息删除
-        bot.on("system.deleted_message", (event: KookEvent) => {
-            this.logger.debug(`消息删除:`, event);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(event.msg_id),
-                timestamp: event.msg_timestamp,
-                platform: "kook",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "message_deleted",
-                message_id: this.createId(event.extra?.body?.msg_id || event.msg_id),
-                raw_event: event,
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 启动时初始化 Bot
-        account.on("start", async () => {
-            try {
-                await bot.start();
-                account.status = AccountStatus.Online;
-                const me = bot.getCachedMe();
-                account.nickname = me?.username || "KOOK Bot";
-                account.avatar = me?.avatar || this.icon;
-            } catch (error) {
-                this.logger.error(`启动 KOOK Bot 失败:`, error);
-                account.status = AccountStatus.OffLine;
-            }
-        });
-
-        account.on("stop", async () => {
-            await bot.stop();
-            account.status = AccountStatus.OffLine;
-        });
-
-        return account;
     }
 }
 
-declare module "onebots" {
-    export namespace Adapter {
-        export interface Configs {
-            kook: KookConfig;
-        }
+async function readPackageVersion(url: URL): Promise<string> {
+    const metadata: unknown = JSON.parse(await readFile(url, "utf8"));
+    if (!metadata || typeof metadata !== "object" || !("version" in metadata)) {
+        throw new TypeError(`包元数据缺少 version: ${url.pathname}`);
     }
+    return String(metadata.version);
+}
+
+function normaliseTimestamp(value: number): number {
+    return value < 10_000_000_000 ? value * 1_000 : value;
 }
 
 AdapterRegistry.register("kook", KookAdapter, {
     name: "kook",
-    displayName: "KOOK官方机器人",
-    description: "KOOK官方机器人适配器，支持频道、群聊和私聊",
+    displayName: "KOOK 官方机器人",
+    description: "KOOK 官方机器人适配器，支持 Gateway、Webhook 与完整开放平台扩展动作",
     icon: "https://www.kookapp.cn/favicon.ico",
-    homepage: "https://www.kookapp.cn/",
+    homepage: "https://developer.kookapp.cn/",
     author: "凉菜",
     capabilities: kookCapabilities,
 });
-
-declare module "@/adapter.js" {
-    namespace Adapter {
-        interface Configs {
-            kook: KookConfig;
-        }
-    }
-}
