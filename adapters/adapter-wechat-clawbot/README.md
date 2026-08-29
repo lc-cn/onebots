@@ -61,6 +61,8 @@ const event = await client.ingest(rawEvent); // BOT 回送副本返回 undefined
 await client.stopPolling();
 ```
 
+`IlinkBot` 导出完整 `IlinkBotEvents`，`message`、媒体分型、登录、凭证失效、轮询与监听器错误均保留精确参数类型；`GatewayFault` 继承 OneBots 核心错误并携带分类与操作上下文。
+
 ## 安装与启动
 
 ```bash

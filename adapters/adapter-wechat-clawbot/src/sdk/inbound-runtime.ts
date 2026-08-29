@@ -1,4 +1,5 @@
 import type { EventEmitter } from "node:events";
+import type { IlinkBotEvents, IlinkInboundEventName } from "./ilink-events.js";
 import type { NormalizedChatEvent } from "./protocol/chat-event.js";
 import type { OnTextListener } from "./protocol/chat-event.js";
 import { mapInboundWirePacket } from "./protocol/inbound-mapper.js";
@@ -85,8 +86,8 @@ export function resolveRecentMedia(
 
 /** 逐个等待监听器，并把监听异常转成 listener_error 而非终止接收循环。 */
 export async function emitInboundSafely(
-    emitter: EventEmitter,
-    eventName: string,
+    emitter: EventEmitter<IlinkBotEvents>,
+    eventName: IlinkInboundEventName,
     event: NormalizedChatEvent,
 ): Promise<void> {
     for (const listener of emitter.rawListeners(eventName)) {
@@ -99,7 +100,7 @@ export async function emitInboundSafely(
 }
 
 export function reportListenerError(
-    emitter: EventEmitter,
+    emitter: EventEmitter<IlinkBotEvents>,
     eventName: string,
     error: unknown,
 ): void {
@@ -111,7 +112,7 @@ export function reportListenerError(
 }
 
 export async function runTextBindings(
-    emitter: EventEmitter,
+    emitter: EventEmitter<IlinkBotEvents>,
     bindings: readonly RegexBinding[],
     event: NormalizedChatEvent,
 ): Promise<void> {

@@ -3,6 +3,7 @@ import { IlinkBot } from "./sdk/ilink-bot.js";
 import type { WechatIlinkRuntimeConfig } from "./types.js";
 import type { StaleCredentialFault } from "./sdk/internal/errors.js";
 import { GatewayFault } from "./sdk/internal/errors.js";
+import { assertWechatClawbotConfig } from "./config.js";
 import type { ClawbotContextTokenStore } from "./context-token-store.js";
 import type { SessionStore } from "./sdk/protocol/chat-event.js";
 
@@ -36,6 +37,7 @@ export class WechatIlinkBot extends IlinkBot {
             sessionStore?: SessionStore;
         },
     ) {
+        assertWechatClawbotConfig(config);
         const initial =
             config.token && config.ilink_bot_id
                 ? {

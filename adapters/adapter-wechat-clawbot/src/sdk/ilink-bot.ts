@@ -48,8 +48,9 @@ import {
     type RegexBinding,
 } from "./inbound-runtime.js";
 import { IlinkTypingRuntime } from "./typing-runtime.js";
+import type { IlinkBotEvents } from "./ilink-events.js";
 
-export class IlinkBot extends EventEmitter {
+export class IlinkBot extends EventEmitter<IlinkBotEvents> {
     private readonly store: SessionStore;
     private readonly transport: IlinkJsonTransport;
     private snapshot: CredentialBlob | null = null;

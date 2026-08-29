@@ -2,13 +2,26 @@ import { AdapterRegistry } from "onebots";
 import type { Schema } from "onebots";
 
 export type { WechatClawbotConfig, WechatIlinkRuntimeConfig } from "./types.js";
+export { assertWechatClawbotConfig } from "./config.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
 export * from "./events.js";
 export * from "./messages.js";
 export * from "./platform-actions.js";
 export * from "./sdk/ilink-bot.js";
+export type {
+    IlinkBotEvents,
+    IlinkInboundEventName,
+    IlinkListenerErrorEvent,
+    IlinkQrEvent,
+} from "./sdk/ilink-events.js";
 export * from "./sdk/ilink-types.js";
+export {
+    GatewayFault,
+    MissingReplyLaneFault,
+    StaleCredentialFault,
+    type GatewayFaultOptions,
+} from "./sdk/internal/errors.js";
 export {
     ensureWechatClawbotContextTokenTable,
     SqliteClawbotContextTokenStore,
@@ -17,7 +30,7 @@ export {
 export type { ClawbotContextTokenStore } from "./context-token-store.js";
 
 /** 配置表单字段（端点 / 扫码等见适配器约定，README） */
-const WechatClawbotSchema: Schema = {
+export const wechatClawbotSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -56,4 +69,4 @@ const WechatClawbotSchema: Schema = {
     },
 };
 
-AdapterRegistry.registerSchema("wechat-clawbot", WechatClawbotSchema);
+AdapterRegistry.registerSchema("wechat-clawbot", wechatClawbotSchema);
