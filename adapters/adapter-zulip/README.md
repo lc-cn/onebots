@@ -22,9 +22,9 @@ zulip.team-bot:
   email: onebots-bot@example.zulipchat.com
   api_key: your-api-key
   default_topic: general
+  receive_mode: event_queue
 
   event_queue:
-    enabled: true
     all_public_streams: false
     retry_initial_delay_ms: 1000
     retry_max_delay_ms: 30000
@@ -33,9 +33,11 @@ zulip.team-bot:
     access_token: your-token
 ```
 
-`server_url` 是组织根地址，不应包含 `/api/v1`。生产地址必须使用 HTTPS，仅本机回环地址允许 HTTP。`api_key` 在 Web 表单中按敏感字段处理。旧的 `serverUrl`、`apiKey` 和 `websocket` 不是 Zulip 官方模型，已移除。
+`server_url` 是组织根地址，不应包含 `/api/v1`。生产地址必须使用 HTTPS，仅本机回环地址允许 HTTP。`api_key` 在 Web 表单中按敏感字段处理。旧的 `serverUrl`、`apiKey`、`websocket` 和 `event_queue.enabled` 已移除；是否建立 Event Queue 统一由顶层 `receive_mode` 决定。
 
 事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。
+
+已有 Event Queue、消息代理或测试连接可配置 `receive_mode: manual`。客户端仍会调用 `users/me` 验证 API 凭据并缓存 Bot 身份，但不会注册或轮询服务器队列；外部系统调用 `account.client.ingest(rawEvent)` 即可进入相同的类型化事件管线。
 
 ## 场景 ID
 
@@ -54,6 +56,7 @@ const client = new ZulipClient({
   server_url: "https://example.zulipchat.com",
   email: "onebots-bot@example.zulipchat.com",
   api_key: process.env.ZULIP_API_KEY!,
+  receive_mode: "event_queue",
 });
 
 client.on("message", event => {

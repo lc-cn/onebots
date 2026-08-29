@@ -7,8 +7,6 @@ export interface ZulipProxyConfig {
 
 /** Zulip Event Queue 配置。 */
 export interface ZulipEventQueueConfig {
-    /** 是否消费实时事件，默认开启。 */
-    enabled?: boolean;
     /** 订阅的官方事件类型；默认覆盖消息、反应、成员、频道和状态事件。 */
     event_types?: ZulipEventType[];
     /** 是否接收所有可访问公共频道的消息。 */
@@ -22,6 +20,8 @@ export interface ZulipEventQueueConfig {
 /** Zulip 账号配置。 */
 export interface ZulipConfig {
     account_id: string;
+    /** 使用官方 Event Queue 长轮询，或由外部连接手动投递事件。 */
+    receive_mode?: "event_queue" | "manual";
     /** 组织根地址，例如 https://chat.zulip.org。 */
     server_url: string;
     /** Bot 的 Zulip API 邮箱。 */

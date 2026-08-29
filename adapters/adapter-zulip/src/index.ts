@@ -3,7 +3,7 @@ import { ZULIP_EVENT_TYPES } from "./types.js";
 
 export { ZulipAdapter } from "./adapter.js";
 export { ZulipClient, type ZulipClientEvents, type ZulipClientOptions } from "./client.js";
-export { assertZulipConfig } from "./config.js";
+export { assertZulipConfig, resolveZulipReceiveMode } from "./config.js";
 export { zulipCapabilities } from "./capabilities.js";
 export { ZulipError } from "./errors.js";
 export { projectZulipEvent, projectZulipMessage } from "./events.js";
@@ -39,6 +39,17 @@ export const zulipSchema: Schema = {
         description: "OneBots 内部使用的稳定账号 ID",
         ui: { section: "credentials" },
     },
+    receive_mode: {
+        type: "string",
+        default: "event_queue",
+        label: "事件接收方式",
+        choices: [
+            { value: "event_queue", label: "Zulip Event Queue" },
+            { value: "manual", label: "手动接入已有事件源" },
+        ],
+        description: "manual 不注册事件队列，由现有连接调用 ZulipClient.ingest()",
+        ui: { section: "transport" },
+    },
     server_url: {
         type: "string",
         required: true,
@@ -70,12 +81,6 @@ export const zulipSchema: Schema = {
         ui: { section: "delivery" },
     },
     event_queue: {
-        enabled: {
-            type: "boolean",
-            default: true,
-            label: "启用实时事件队列",
-            ui: { section: "transport" },
-        },
         event_types: {
             type: "array",
             label: "事件类型",
@@ -87,7 +92,7 @@ export const zulipSchema: Schema = {
             ui: {
                 section: "filter",
                 widget: "choice-list",
-                visibleWhen: { path: "event_queue.enabled", oneOf: [true] },
+                visibleWhen: { path: "receive_mode", oneOf: ["event_queue"] },
             },
         },
         all_public_streams: {
@@ -97,7 +102,7 @@ export const zulipSchema: Schema = {
             description: "开启后接收 Bot 未订阅但有权访问的公共频道消息",
             ui: {
                 section: "filter",
-                visibleWhen: { path: "event_queue.enabled", oneOf: [true] },
+                visibleWhen: { path: "receive_mode", oneOf: ["event_queue"] },
             },
         },
         retry_initial_delay_ms: {
@@ -107,7 +112,7 @@ export const zulipSchema: Schema = {
             label: "初始重试延迟（毫秒）",
             ui: {
                 section: "advanced",
-                visibleWhen: { path: "event_queue.enabled", oneOf: [true] },
+                visibleWhen: { path: "receive_mode", oneOf: ["event_queue"] },
             },
         },
         retry_max_delay_ms: {
@@ -117,7 +122,7 @@ export const zulipSchema: Schema = {
             label: "最大重试延迟（毫秒）",
             ui: {
                 section: "advanced",
-                visibleWhen: { path: "event_queue.enabled", oneOf: [true] },
+                visibleWhen: { path: "receive_mode", oneOf: ["event_queue"] },
             },
         },
     },

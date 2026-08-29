@@ -314,7 +314,7 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
             account.status = AccountStatus.Pending;
             try {
                 await client.start();
-                const me = await client.getMe();
+                const me = client.getCachedMe() || (await client.getMe());
                 selfId = me.user_id;
                 account.nickname = me.full_name;
                 account.avatar = me.avatar_url || "";
@@ -394,6 +394,7 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
 function normalizeConfig(config: Account.Config<"zulip">): ZulipConfig {
     return {
         account_id: config.account_id,
+        receive_mode: config.receive_mode,
         server_url: config.server_url,
         email: config.email,
         api_key: config.api_key,

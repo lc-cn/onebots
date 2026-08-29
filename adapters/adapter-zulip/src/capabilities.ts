@@ -71,5 +71,10 @@ export const zulipCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
     },
     transports: {
         event_queue: { support: "native", mode: "polling" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 ZulipClient.ingest() 接入已有 Event Queue 或事件代理",
+        },
     },
 });

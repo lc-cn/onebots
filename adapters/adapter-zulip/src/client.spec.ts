@@ -98,7 +98,7 @@ describe("ZulipClient", () => {
 
     it("隔离调用方监听器异常并继续投递原始事件", () => {
         const client = new ZulipClient(
-            { ...config, event_queue: { enabled: false } },
+            { ...config, receive_mode: "manual" },
             { transport: async () => ({}) },
         );
         const seen = vi.fn();
@@ -116,6 +116,25 @@ describe("ZulipClient", () => {
         expect(seen).toHaveBeenCalledOnce();
         expect(sameEventSeen).toHaveBeenCalledOnce();
         expect(errors[0]?.code).toBe("ZULIP_LISTENER_FAILED");
+    });
+
+    it("manual 模式只认证身份，不注册队列并缓存认证结果", async () => {
+        const requests: ZulipHttpRequest[] = [];
+        const client = new ZulipClient(
+            { ...config, receive_mode: "manual" },
+            {
+                transport: async request => {
+                    requests.push(request);
+                    return user();
+                },
+            },
+        );
+
+        await client.start();
+
+        expect(requests.map(request => request.path)).toEqual(["users/me"]);
+        expect(client.getCachedMe()).toEqual(user());
+        await client.stop();
     });
 
     it("空事件选择回落到默认订阅，并投递官方命名事件", async () => {

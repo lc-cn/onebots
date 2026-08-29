@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { randomBytes } from "node:crypto";
-import { assertZulipConfig } from "./config.js";
+import { assertZulipConfig, resolveZulipReceiveMode } from "./config.js";
 import { isBadEventQueue, ZulipError } from "./errors.js";
 import { assertZulipApiPath, createZulipTransport, type ZulipTransport } from "./http.js";
 import {
@@ -77,6 +77,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
     private startRequest?: Promise<void>;
     private pollRequest?: Promise<void>;
     private registration?: ZulipQueueRegistration;
+    private me?: ZulipUser;
     private started = false;
 
     constructor(
@@ -110,8 +111,8 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         this.lifecycleAbort = controller;
         this.started = true;
         try {
-            await this.getMe(controller.signal);
-            if (this.config.event_queue?.enabled !== false) {
+            this.me = await this.getMe(controller.signal);
+            if (resolveZulipReceiveMode(this.config) === "event_queue") {
                 this.registration = await this.registerQueue(controller.signal);
                 this.safeEmit("connected", this.registration);
                 this.pollRequest = this.pollEvents(generation, controller.signal);
@@ -181,6 +182,11 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         this.safeEmit("raw_event", event);
         if (EVENT_TYPE_SET.has(event.type)) this.safeEmitName(event.type, event);
         this.safeEmit("event", event);
+    }
+
+    /** 返回启动认证阶段取得的 Bot 身份，不额外发起 HTTP 请求。 */
+    getCachedMe(): ZulipUser | undefined {
+        return this.me ? { ...this.me } : undefined;
     }
 
     /** 获取当前 Bot 身份。 */

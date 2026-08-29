@@ -11,7 +11,7 @@ const config: Account.Config<"zulip"> = {
     server_url: "https://example.zulipchat.com",
     email: "bot@example.com",
     api_key: "secret",
-    event_queue: { enabled: false },
+    receive_mode: "manual",
 };
 
 describe("ZulipAdapter", () => {

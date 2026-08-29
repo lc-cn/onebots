@@ -5,6 +5,7 @@ const EVENT_TYPES: ReadonlySet<string> = new Set(ZULIP_EVENT_TYPES);
 
 /** 在创建传输或发起认证请求前闭合 Zulip 配置。 */
 export function assertZulipConfig(config: ZulipConfig): void {
+    resolveZulipReceiveMode(config);
     for (const [name, value] of [
         ["account_id", config.account_id],
         ["server_url", config.server_url],
@@ -19,6 +20,9 @@ export function assertZulipConfig(config: ZulipConfig): void {
     assertServerUrl(config.server_url);
 
     const queue = config.event_queue;
+    if (queue && "enabled" in queue) {
+        invalidConfig("event_queue.enabled 已移除，请使用顶层 receive_mode");
+    }
     if (queue?.event_types) {
         const unique = new Set<string>();
         for (const eventType of queue.event_types) {
@@ -37,6 +41,14 @@ export function assertZulipConfig(config: ZulipConfig): void {
         invalidConfig("retry_initial_delay_ms 不能大于 retry_max_delay_ms");
     }
     if (config.proxy?.url !== undefined) assertUrl(config.proxy.url, "proxy.url");
+}
+
+export function resolveZulipReceiveMode(config: ZulipConfig): "event_queue" | "manual" {
+    const mode = config.receive_mode || "event_queue";
+    if (mode !== "event_queue" && mode !== "manual") {
+        invalidConfig("receive_mode 仅支持 event_queue 或 manual");
+    }
+    return mode;
 }
 
 function assertServerUrl(value: string): void {

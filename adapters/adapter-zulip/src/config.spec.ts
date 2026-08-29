@@ -31,5 +31,14 @@ describe("Zulip 配置", () => {
                 event_queue: { retry_initial_delay_ms: 2_000, retry_max_delay_ms: 1_000 },
             }),
         ).toThrowError(expect.objectContaining({ code: "ZULIP_INVALID_CONFIG" }));
+        expect(() => assertZulipConfig({ ...config, receive_mode: "websocket" as never })).toThrow(
+            /仅支持 event_queue 或 manual/u,
+        );
+        expect(() =>
+            assertZulipConfig({
+                ...config,
+                event_queue: { enabled: false } as never,
+            }),
+        ).toThrow(/event_queue.enabled 已移除/u);
     });
 });

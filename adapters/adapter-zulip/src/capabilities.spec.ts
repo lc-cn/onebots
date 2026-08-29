@@ -40,5 +40,6 @@ describe("Zulip 能力清单", () => {
         }
         expect(zulipCapabilities.actions.get_friend_list).toBeUndefined();
         expect(zulipCapabilities.transports.event_queue?.mode).toBe("polling");
+        expect(zulipCapabilities.transports.manual?.support).toBe("native");
     });
 });
