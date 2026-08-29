@@ -1,37 +1,53 @@
-import type { Intent as SdkIntent } from 'qq-official-bot';
+import type {
+    InlineKeyboard,
+    QQBotInboundMessage,
+    SendMessageOptions,
+} from "@tencent-connect/qqbot-nodejs";
 
-/**
- * QQ 官方机器人适配器 — 配置类型
- * 运行时事件/API 类型均直接复用 `qq-official-bot` SDK
- */
-export type ReceiverMode = 'websocket' | 'webhook';
+export const QQ_INTENTS = {
+    GUILDS: 1,
+    GUILD_MEMBERS: 2,
+    GUILD_MESSAGES: 512,
+    GUILD_MESSAGE_REACTIONS: 1024,
+    DIRECT_MESSAGE: 4096,
+    GROUP_MEMBER: 16777216,
+    GROUP_AND_C2C_EVENT: 33554432,
+    INTERACTION: 67108864,
+    MESSAGE_AUDIT: 134217728,
+    FORUMS_EVENT: 268435456,
+    AUDIO_ACTION: 536870912,
+    PUBLIC_GUILD_MESSAGES: 1073741824,
+} as const;
 
-/**
- * 允许用户同时写 SDK 新名与历史旧名。
- * - 新名：直接透传给 SDK
- * - 旧名：在 mapIntents() 中转换并打印一次性弃用警告
- */
-export type QQLegacyIntent =
-    | 'GROUP_AT_MESSAGE_CREATE'
-    | 'C2C_MESSAGE_CREATE'
-    | 'OPEN_FORUMS_EVENT';
-
-export type QQIntent = SdkIntent | QQLegacyIntent;
+export type QQIntent = keyof typeof QQ_INTENTS;
+export type QQReceiveMode = "websocket" | "webhook";
 
 export interface QQConfig {
     account_id: string;
-    /** QQ 机器人 AppID（注意：原字段 `appId` 在 v4 中已重命名为 `appid`） */
     appid: string;
     secret: string;
-    /** 沙箱模式，映射到 SDK `apiBaseUrl: 'https://sandbox.api.sgroup.qq.com'` */
-    sandbox?: boolean;
+    receive_mode?: QQReceiveMode;
     intents?: QQIntent[];
-    /** 'websocket'（默认）或 'webhook' */
-    mode?: ReceiverMode;
-    /** 自定义 API 根地址（高级），优先级高于 `sandbox` */
-    apiBaseUrl?: string;
-    /** Webhook 模式必填：监听端口（与 onebots 主端口区分） */
-    port?: number;
-    /** Webhook 路径，默认 '/' */
-    path?: string;
+    markdown_support?: boolean;
+    api_base_url?: string;
+    token_base_url?: string;
+    webhook_path?: string;
+}
+
+export interface QQPlatformCall {
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+    path: string;
+    query?: Record<string, string | number | boolean>;
+    body?: unknown;
+}
+
+export interface QQMessagePayload extends Omit<SendMessageOptions, "target"> {
+    keyboard?: InlineKeyboard;
+}
+
+export type QQRawMessage = QQBotInboundMessage;
+
+export function resolveIntentMask(intents: readonly QQIntent[] | undefined): number | undefined {
+    if (!intents?.length) return undefined;
+    return intents.reduce((mask, intent) => mask + QQ_INTENTS[intent], 0);
 }

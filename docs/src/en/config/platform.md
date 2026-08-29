@@ -109,42 +109,30 @@ http://bot.example.com:6727/wechat/my_official_account/webhook
 - **Required**: ✅
 - **Description**: QQ Bot Secret
 
-#### mode
+#### receive_mode
 
 - **Type**: `string`
 - **Values**: `websocket` | `webhook`
 - **Default**: `websocket`
-- **Description**: Event receiving mode
-
-#### sandbox
-
-- **Type**: `boolean`
-- **Default**: `false`
-- **Description**: Whether to use sandbox environment
+- **Description**: Event transport; webhook reuses the OneBots HTTP host
 
 #### intents
 
 - **Type**: `string[]`
-- **Default**: `[]`
-- **Description**: Events to subscribe to (mainly relevant in websocket mode)
+- **Default**: Tencent SDK safe defaults
+- **Description**: Approved QQ Gateway intents
 
-#### apiBaseUrl
+#### api_base_url
 
 - **Type**: `string`
 - **Required**: ❌
-- **Description**: Override API base URL (advanced, takes precedence over `sandbox`)
+- **Description**: Compatible OpenAPI proxy or test endpoint
 
-#### port
-
-- **Type**: `number`
-- **Required**: Required in `webhook` mode
-- **Description**: Webhook listening port owned by the SDK; no longer reuses the onebots main HTTP route
-
-#### path
+#### webhook_path
 
 - **Type**: `string`
-- **Default**: `/`
-- **Description**: Webhook path
+- **Default**: `/qq/{account_id}/webhook`
+- **Description**: Callback path on the OneBots HTTP host
 ### Configuration Example
 
 ```yaml
@@ -157,8 +145,7 @@ qq.my_bot:
   # QQ platform configuration
   appid: your_app_id
   secret: your_app_secret
-  mode: websocket
-  sandbox: false
+  receive_mode: websocket
   intents:
     - GROUP_AND_C2C_EVENT
     - PUBLIC_GUILD_MESSAGES
@@ -170,12 +157,11 @@ qq.my_bot:
 qq.my_bot:
   appid: your_app_id
   secret: your_app_secret
-  mode: webhook
-  port: 18080
-  path: /qq/webhook
+  receive_mode: webhook
+  webhook_path: /qq/my_bot/webhook
 ```
 
-> Since v4, QQ webhook callbacks are handled by the SDK's own HTTP server. Configure the callback URL in the QQ Open Platform as `http://host:18080/qq/webhook`.
+> QQ Webhook uses the OneBots main HTTP port. Preserve the raw request body for Ed25519 verification.
 
 ## Other Platforms
 
@@ -196,4 +182,3 @@ For configuration details of other platforms, see:
 - [Global Configuration](/en/config/global)
 - [General Configuration](/en/config/general)
 - [Protocol Configuration](/en/config/protocol)
-

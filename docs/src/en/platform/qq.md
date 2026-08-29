@@ -1,102 +1,40 @@
 # QQ Adapter
 
-The QQ adapter connects onebots to the QQ Official Bot platform. Since v4, it has been refactored into a thin wrapper around [`qq-official-bot`](https://www.npmjs.com/package/qq-official-bot).
-
-## Status
-
-✅ **Implemented and Available**
+The QQ adapter uses Tencent's official `@tencent-connect/qqbot-nodejs` SDK. It supports C2C, group, guild-channel and guild-DM messaging while exposing the fully typed native client and authenticated OpenAPI gateway.
 
 ## Features
 
-- ✅ QQ channel messages (private / public)
-- ✅ QQ group messages
-- ✅ C2C private messages
-- ✅ channel direct messages
-- ✅ channel management
-- ✅ member management
-- ✅ reactions and interaction notices
-- ✅ WebSocket and Webhook receiver modes
+- WebSocket and shared-host Webhook transports
+- Text, image, voice, video, file and rich messages
+- Guilds, members, roles, permissions, announcements, reactions, schedules, threads and audio controls
+- C2C wake-up, typing and streaming messages
+- Lossless raw delivery for future Gateway events
+- Unlimited connection generations after the SDK exhausts an internal retry cycle
 
-## Installation
-
-```bash
-npm install @onebots/adapter-qq
-# or
-pnpm add @onebots/adapter-qq
-```
-
-## v4 Migration Notes
-
-- `appId` was renamed to `appid`
-- `token`, `maxRetry`, and `logLevel` were removed
-- webhook mode now starts its own HTTP server inside the SDK, so `port` is required
-- legacy intent names are auto-mapped, but should be updated in config files
-
-## Configuration Example
-
-### WebSocket mode
+## Configuration
 
 ```yaml
 qq.my_bot:
   appid: 'your_app_id'
   secret: 'your_app_secret'
-  mode: 'websocket'
-  sandbox: false
+  receive_mode: websocket
   intents:
-    - 'GROUP_AND_C2C_EVENT'
-    - 'DIRECT_MESSAGE'
-    - 'GUILDS'
-    - 'GUILD_MEMBERS'
-    - 'GUILD_MESSAGE_REACTIONS'
-    - 'INTERACTION'
-    - 'PUBLIC_GUILD_MESSAGES'
-    - 'FORUMS_EVENT'
+    - GROUP_AND_C2C_EVENT
+    - INTERACTION
+    - PUBLIC_GUILD_MESSAGES
 ```
 
-### Webhook mode
+Webhook mode reuses the OneBots HTTP port:
 
 ```yaml
 qq.my_bot:
   appid: 'your_app_id'
   secret: 'your_app_secret'
-  mode: 'webhook'
-  port: 18080
-  path: '/qq/webhook'
+  receive_mode: webhook
+  webhook_path: '/qq/my_bot/webhook'
 ```
 
-In v4, webhook callbacks must point to the SDK-owned HTTP server, for example:
+Configure `https://bot.example.com/qq/my_bot/webhook` in QQ Open Platform and preserve the raw request body for Ed25519 verification.
 
-`http://your-server:18080/qq/webhook`
-
-## Supported Intents
-
-Prefer the SDK names:
-
-| Intent | Description |
-|--------|-------------|
-| `GUILDS` | Channel change events |
-| `GUILD_MEMBERS` | Channel member change events |
-| `GUILD_MESSAGES` | Private bot channel message events |
-| `PUBLIC_GUILD_MESSAGES` | Public bot channel message events |
-| `GUILD_MESSAGE_REACTIONS` | Channel message reaction events |
-| `DIRECT_MESSAGE` | Channel direct message events |
-| `GROUP_AND_C2C_EVENT` | Group @ and C2C private message events |
-| `MESSAGE_AUDIT` | Message audit events |
-| `INTERACTION` | Interaction events |
-| `FORUMS_EVENT` | Forum events |
-| `AUDIO_ACTION` | Audio action events |
-
-Legacy names still accepted with a warning:
-
-| Legacy | New |
-|--------|-----|
-| `GROUP_AT_MESSAGE_CREATE` | `GROUP_AND_C2C_EVENT` |
-| `C2C_MESSAGE_CREATE` | `GROUP_AND_C2C_EVENT` |
-| `OPEN_FORUMS_EVENT` | `FORUMS_EVENT` |
-
-## Related Links
-
-- [QQ Adapter Configuration](/en/config/adapter/qq)
-- [Quick Start](/en/guide/start)
-- [Client SDK Guide](/en/guide/client-sdk)
-
+- [Configuration](/en/config/adapter/qq)
+- [Tencent Node.js SDK](https://github.com/tencent-connect/qqbot-nodejs)

@@ -109,42 +109,30 @@ http://bot.example.com:6727/wechat/my_official_account/webhook
 - **必填**: ✅
 - **说明**: QQ机器人Secret
 
-#### mode
+#### receive_mode
 
 - **类型**: `string`
 - **可选值**: `websocket` | `webhook`
 - **默认值**: `websocket`
-- **说明**: 连接模式
-
-#### sandbox
-
-- **类型**: `boolean`
-- **默认值**: `false`
-- **说明**: 是否沙箱环境
+- **说明**: 事件接收方式；Webhook 复用 OneBots 主 HTTP 服务
 
 #### intents
 
 - **类型**: `string[]`
-- **默认值**: `[]`
-- **说明**: 需要监听的事件（仅WebSocket模式需要）
+- **默认值**: 腾讯官方 SDK 安全默认值
+- **说明**: QQ 开放平台已批准的 Gateway Intent
 
-#### apiBaseUrl
+#### api_base_url
 
 - **类型**: `string`
 - **必填**: ❌
-- **说明**: 自定义 API 根地址（高级，优先级高于 `sandbox`）
+- **说明**: 自定义 OpenAPI 根地址（仅兼容代理或测试使用）
 
-#### port
-
-- **类型**: `number`
-- **必填**: `webhook` 模式必填
-- **说明**: SDK 独立监听的 Webhook 端口，不再复用 OneBots 主 HTTP 路由
-
-#### path
+#### webhook_path
 
 - **类型**: `string`
-- **默认值**: `/`
-- **说明**: Webhook 路径
+- **默认值**: `/qq/{account_id}/webhook`
+- **说明**: OneBots 主 HTTP 服务上的 Webhook 路径
 
 ### 配置示例
 
@@ -153,8 +141,7 @@ qq.my_bot:
   # QQ 平台配置
   appid: 'your_app_id'
   secret: 'your_secret'
-  mode: 'websocket'
-  sandbox: false
+  receive_mode: 'websocket'
   intents:
     - 'GROUP_AND_C2C_EVENT'
     - 'PUBLIC_GUILD_MESSAGES'
@@ -171,12 +158,11 @@ qq.my_bot:
 qq.my_bot:
   appid: 'your_app_id'
   secret: 'your_secret'
-  mode: 'webhook'
-  port: 18080
-  path: '/qq/webhook'
+  receive_mode: 'webhook'
+  webhook_path: '/qq/my_bot/webhook'
 ```
 
-> v4 起 QQ Webhook 不再挂载到 OneBots 主路由，QQ 开放平台回调地址应改为 `http://host:18080/qq/webhook`。
+> QQ Webhook 直接挂载在 OneBots 主端口；反向代理必须保留原始请求体用于 Ed25519 验签。
 
 详细配置请参考：[QQ 适配器配置](/config/adapter/qq)
 

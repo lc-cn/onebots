@@ -1,106 +1,45 @@
 # QQ 适配器
 
-QQ 适配器通过 QQ 官方 API 接入 onebots。自 v4 起，内部实现迁移为对 [`qq-official-bot`](https://www.npmjs.com/package/qq-official-bot) 的薄包装。
-
-## 状态
-
-✅ **已实现并可用**
+QQ 适配器基于腾讯官方 `@tencent-connect/qqbot-nodejs`，覆盖 C2C、群聊、频道和频道私信，并开放完整原生 Client 与认证后的 OpenAPI 入口。
 
 ## 功能支持
 
-- ✅ QQ 频道消息（公域 / 私域）
-- ✅ QQ 群消息
-- ✅ 单聊消息（C2C）
-- ✅ 频道私信（DMS）
-- ✅ 频道管理
-- ✅ 成员管理
-- ✅ 消息表态
-- ✅ 互动按钮
-- ✅ WebSocket 与 Webhook 双模式
+- ✅ WebSocket / 共享 HTTP Webhook
+- ✅ 文本、图片、语音、视频、文件和富消息
+- ✅ 频道、成员、角色、权限、公告、表态、日程、帖子与音频控制
+- ✅ C2C 主动唤醒、输入状态和流式消息
+- ✅ 未知 Gateway 事件无损透传
+- ✅ 无限连接代次恢复
 
-## 安装
-
-```bash
-npm install @onebots/adapter-qq
-# 或
-pnpm add @onebots/adapter-qq
-```
-
-## v4 迁移提示
-
-- `appId` 已改为 `appid`
-- `token` / `maxRetry` / `logLevel` 已删除
-- Webhook 模式改为 SDK 自己启动 HTTP 服务，必须显式配置 `port`
-- 旧 Intent 名会自动映射到 SDK 新名，但建议尽快改掉
-
-## 配置示例
-
-### WebSocket 模式
+## 配置
 
 ```yaml
 qq.my_bot:
   appid: 'your_app_id'
   secret: 'your_app_secret'
-  mode: 'websocket'
-  sandbox: false
+  receive_mode: websocket
   intents:
-    - 'GROUP_AND_C2C_EVENT'
-    - 'DIRECT_MESSAGE'
-    - 'GUILDS'
-    - 'GUILD_MEMBERS'
-    - 'GUILD_MESSAGE_REACTIONS'
-    - 'INTERACTION'
-    - 'PUBLIC_GUILD_MESSAGES'
-    - 'FORUMS_EVENT'
-
-  onebot.v11:
-    use_http: true
-    use_ws: true
-    access_token: 'your_token'
+    - GROUP_AND_C2C_EVENT
+    - INTERACTION
+    - PUBLIC_GUILD_MESSAGES
 ```
 
-### Webhook 模式
+Webhook 直接使用 OneBots 主端口：
 
 ```yaml
 qq.my_bot:
   appid: 'your_app_id'
   secret: 'your_app_secret'
-  mode: 'webhook'
-  port: 18080
-  path: '/qq/webhook'
+  receive_mode: webhook
+  webhook_path: '/qq/my_bot/webhook'
 ```
 
-> v4 起 Webhook 不再复用 OneBots 主路由，QQ 开放平台回调地址应填写 `http://your-server:18080/qq/webhook`。
+回调地址示例：`https://bot.example.com/qq/my_bot/webhook`。请求链必须保留原始请求体以完成 QQ Ed25519 验签。
 
-## 支持的 Intent
-
-推荐使用 SDK 新名：
-
-| Intent | 说明 |
-|--------|------|
-| `GUILDS` | 频道变更事件 |
-| `GUILD_MEMBERS` | 频道成员变更事件 |
-| `GUILD_MESSAGES` | 私域机器人频道消息事件 |
-| `PUBLIC_GUILD_MESSAGES` | 公域机器人频道消息事件 |
-| `GUILD_MESSAGE_REACTIONS` | 频道消息表态事件 |
-| `DIRECT_MESSAGE` | 频道私信事件 |
-| `GROUP_AND_C2C_EVENT` | 群聊 @ 消息与私聊消息事件 |
-| `MESSAGE_AUDIT` | 消息审核事件 |
-| `INTERACTION` | 互动事件 |
-| `FORUMS_EVENT` | 论坛事件 |
-| `AUDIO_ACTION` | 音频操作事件 |
-
-兼容旧名：
-
-| 旧值 | 新值 |
-|------|------|
-| `GROUP_AT_MESSAGE_CREATE` | `GROUP_AND_C2C_EVENT` |
-| `C2C_MESSAGE_CREATE` | `GROUP_AND_C2C_EVENT` |
-| `OPEN_FORUMS_EVENT` | `FORUMS_EVENT` |
+旧接收字段和 intent 别名不会自动转换，配置错误会在启动时直接暴露。
 
 ## 相关文档
 
 - [QQ 适配器配置](/config/adapter/qq)
-- [客户端 SDK 使用指南](/guide/client-sdk)
+- [腾讯官方 SDK](https://github.com/tencent-connect/qqbot-nodejs)
 - [QQ 开放平台](https://q.qq.com/)
-- [QQ 机器人文档](https://bot.q.qq.com/wiki/)
