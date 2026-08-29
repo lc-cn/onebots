@@ -11,6 +11,7 @@ import {
 import { HeychatWsClient } from "./ws/client.js";
 import type {
     HeychatApiRequestOptions,
+    HeychatCardClickData,
     HeychatChannelContext,
     HeychatConfig,
     HeychatOutboundMessage,
@@ -220,11 +221,12 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     }
 
     private observeEnvelope(envelope: HeychatWsEnvelope): void {
-        if (envelope.type !== "50") return;
-        const data = envelope.data as unknown as HeychatUseCommandData;
+        if (envelope.type !== "50" && envelope.type !== "card_message_btn_click") return;
+        const data = envelope.data as unknown as HeychatUseCommandData | HeychatCardClickData;
         const room = data.room_base_info;
         const channel = data.channel_base_info;
-        if (data.bot_id !== undefined) this.botId = data.bot_id;
+        const eventBotId = "bot_id" in data ? data.bot_id : undefined;
+        if (typeof eventBotId === "number") this.botId = eventBotId;
         if (!room?.room_id || !channel?.channel_id) return;
         const context: HeychatChannelContext = {
             room_id: room.room_id,
@@ -240,7 +242,6 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     private cacheChannelContext(context: HeychatChannelContext): void {
         setBounded(this.channelContexts, context.channel_id, context);
         setBounded(this.channelContexts, `${context.room_id}:${context.channel_id}`, context);
-        setBounded(this.channelContexts, context.room_id, context);
     }
 
     private cacheMessageContext(msgId: string, context: HeychatChannelContext): void {

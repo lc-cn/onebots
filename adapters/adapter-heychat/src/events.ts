@@ -90,13 +90,12 @@ function projectReaction(
         return null;
     }
     const context = options.getChannelContext?.(data.channel_id);
-    const groupId = context ? `${context.room_id}:${context.channel_id}` : data.channel_id;
     return {
         ...base(envelope, options),
         type: "notice",
         notice_type: data.is_add === 1 ? "reaction_added" : "reaction_removed",
         user: { id: options.createId(data.user_id) },
-        group: { id: options.createId(groupId), name: context?.channel_name },
+        group: projectChannelScene(data.channel_id, context, options),
         message_id: options.createId(data.msg_id),
         raw_event: envelope,
         extensions: { heychat: { emoji: data.emoji, channel_id: data.channel_id } },
@@ -144,17 +143,45 @@ function projectCardClick(
         ...(user ? { user: projectUser(user, options) } : {}),
         ...(room
             ? {
-                  group: {
-                      id: options.createId(
-                          channel ? `${room.room_id}:${channel.channel_id}` : room.room_id,
-                      ),
-                      name: channel?.channel_name || room.room_name,
-                  },
+                  group: channel
+                      ? projectChannelScene(
+                            channel.channel_id,
+                            {
+                                room_id: room.room_id,
+                                room_name: room.room_name,
+                                channel_id: channel.channel_id,
+                                channel_name: channel.channel_name,
+                                channel_type: channel.channel_type,
+                            },
+                            options,
+                        )
+                      : { id: options.createId(room.room_id), name: room.room_name },
               }
             : {}),
         ...(data.msg_id ? { message_id: options.createId(data.msg_id) } : {}),
         raw_event: envelope,
         extensions: { heychat: { interaction: data } },
+    };
+}
+
+function projectChannelScene(
+    nativeChannelId: string,
+    context: HeychatChannelContext | undefined,
+    options: HeychatEventProjectionOptions,
+): CommonTypes.Group {
+    const sceneId = context ? `${context.room_id}:${context.channel_id}` : nativeChannelId;
+    return {
+        id: options.createId(sceneId),
+        name: context?.channel_name,
+        channel_id: options.createId(sceneId),
+        native_channel_id: options.createId(nativeChannelId),
+        ...(context
+            ? {
+                  guild_id: options.createId(context.room_id),
+                  room_id: options.createId(context.room_id),
+                  channel_type: context.channel_type,
+              }
+            : {}),
     };
 }
 

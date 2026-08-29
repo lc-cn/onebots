@@ -1,5 +1,6 @@
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { HeychatBot } from "./bot.js";
+import { isSafeHeychatApiPath } from "./api-path.js";
 import { HeychatApiError } from "./errors.js";
 import { normalizeBase64Source, uploadHeychatMedia } from "./media.js";
 import type { HeychatApiRequestOptions } from "./types.js";
@@ -103,10 +104,10 @@ export async function executeHeychatPlatformAction(
 }
 
 function requireApiPath(value: unknown): string {
-    if (typeof value !== "string" || value.includes("..")) throw invalid("path 必须是安全路径");
-    const allowed = ["/chatroom/v2/", "/chatroom/v3/", "/chatroom/channel/"];
-    if (!allowed.some(prefix => value.startsWith(prefix))) {
-        throw invalid(`path 仅允许 ${allowed.join("、")} 下的官方接口`);
+    if (typeof value !== "string" || !isSafeHeychatApiPath(value)) {
+        throw invalid(
+            "path 必须是 /chatroom/v2/、/chatroom/v3/ 或 /chatroom/channel/ 下的安全绝对路径",
+        );
     }
     return value;
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Agent } from "node:http";
 import { createHttpsProxyAgent, ErrorCategory } from "onebots";
 import { HeychatApiError, normalizeHeychatErrorCode } from "../errors.js";
+import { isSafeHeychatApiPath } from "../api-path.js";
 import { createHeychatAckId } from "../utils.js";
 import type {
     HeychatApiRequestOptions,
@@ -75,7 +76,7 @@ export class HeychatHttpClient {
         const suffix = Buffer.from(`\r\n--${boundary}--\r\n`);
         const body = Buffer.concat([prefix, Buffer.from(data), suffix]);
         const result = await this.request<{ url?: string }>(
-            this.buildUrl("/upload", undefined, this.uploadBase),
+            this.buildUrl("/upload", undefined, this.uploadBase, "upload"),
             "POST",
             body,
             {
@@ -189,8 +190,9 @@ export class HeychatHttpClient {
         path: string,
         query?: Readonly<Record<string, string | number | boolean | undefined>>,
         base = this.apiBase,
+        namespace: "api" | "upload" = "api",
     ): URL {
-        if (!path.startsWith("/") || path.startsWith("//") || path.includes("..")) {
+        if (namespace === "upload" ? path !== "/upload" : !isSafeHeychatApiPath(path)) {
             throw HeychatApiError.invalid(
                 "API path 必须是安全绝对路径",
                 "HEYCHAT_INVALID_API_PATH",

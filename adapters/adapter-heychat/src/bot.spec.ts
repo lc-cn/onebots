@@ -51,4 +51,40 @@ describe("HeychatBot manual ingress", () => {
             expect.objectContaining({ code: "HEYCHAT_MANUAL_MODE_REQUIRED" }),
         );
     });
+
+    it("从命令与卡片交互维护精确频道上下文但不猜测房间目标", () => {
+        const bot = new HeychatBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        bot.ingest({
+            sequence: 1,
+            type: "50",
+            timestamp: 1_700_000_000,
+            data: {
+                bot_id: 99,
+                room_base_info: { room_id: "r1", room_name: "房间" },
+                channel_base_info: { channel_id: "c1", channel_name: "频道一" },
+            },
+        });
+        bot.ingest({
+            sequence: 2,
+            type: "card_message_btn_click",
+            timestamp: 1_700_000_001,
+            data: {
+                msg_id: "m2",
+                room_base_info: { room_id: "r1", room_name: "房间" },
+                channel_base_info: { channel_id: "c2", channel_name: "频道二" },
+            },
+        });
+
+        expect(bot.getBotId()).toBe(99);
+        expect(bot.resolveSendTarget("c1")).toEqual({ room_id: "r1", channel_id: "c1" });
+        expect(bot.resolveSendTarget("r1:c2")).toEqual({ room_id: "r1", channel_id: "c2" });
+        expect(bot.getMessageContext("m2")).toMatchObject({ channel_id: "c2" });
+        expect(() => bot.resolveSendTarget("r1")).toThrowError(
+            expect.objectContaining({ code: "HEYCHAT_SCENE_CONTEXT_REQUIRED" }),
+        );
+    });
 });

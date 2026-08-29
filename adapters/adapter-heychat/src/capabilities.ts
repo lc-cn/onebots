@@ -21,15 +21,15 @@ const platformActions = Object.fromEntries(
 /** 黑盒语音官方机器人 API 的真实能力边界。 */
 export const heychatCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { support: "native", scenes: ["private", "channel", "group"] },
+        send_message: { support: "native", scenes: ["private", "channel"] },
         update_message: {
             support: "native",
-            scenes: ["channel", "group"],
+            scenes: ["channel"],
             availability: "context",
         },
         delete_message: {
             support: "native",
-            scenes: ["channel", "group"],
+            scenes: ["channel"],
             availability: "context",
         },
         get_login_info: {

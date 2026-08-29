@@ -41,6 +41,7 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
     private readonly heartbeatIntervalMs: number;
     private readonly reconnectInitialDelayMs: number;
     private readonly reconnectMaxDelayMs: number;
+    private readonly handshakeTimeoutMs: number;
     private readonly proxy?: HeychatConfig["proxy"];
     private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -59,6 +60,7 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
         this.reconnectInitialDelayMs =
             config.reconnect_initial_delay_ms ?? DEFAULT_RECONNECT_INITIAL_DELAY;
         this.reconnectMaxDelayMs = config.reconnect_max_delay_ms ?? DEFAULT_RECONNECT_MAX_DELAY;
+        this.handshakeTimeoutMs = config.request_timeout_ms ?? 30_000;
         this.proxy = config.proxy;
     }
 
@@ -110,6 +112,7 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
     private async openSocket(generation: number): Promise<WebSocket> {
         const options: WebSocket.ClientOptions = {
             headers: { Accept: "application/json, text/plain, */*" },
+            handshakeTimeout: this.handshakeTimeoutMs,
         };
         if (this.proxy?.url) {
             const agent = await createProxyAgent(this.proxy, true);

@@ -63,7 +63,12 @@ describe("projectHeychatEvent", () => {
         expect(reaction).toMatchObject({
             type: "notice",
             notice_type: "reaction_added",
-            group: { id: { string: "r1:c1" } },
+            group: {
+                id: { string: "r1:c1" },
+                guild_id: { string: "r1" },
+                channel_id: { string: "r1:c1" },
+                native_channel_id: { string: "c1" },
+            },
         });
 
         const member = projectHeychatEvent(
@@ -77,10 +82,22 @@ describe("projectHeychatEvent", () => {
         expect(member).toMatchObject({ type: "notice", notice_type: "member_left" });
 
         const interaction = projectHeychatEvent(
-            envelope("card_message_btn_click", { msg_id: "m1", value: "confirm" }),
+            envelope("card_message_btn_click", {
+                msg_id: "m1",
+                value: "confirm",
+                room_base_info: { room_id: "r1", room_name: "房间" },
+                channel_base_info: { channel_id: "c1", channel_name: "频道" },
+            }),
             { accountId: "bot", createId },
         );
-        expect(interaction).toMatchObject({ type: "notice", notice_type: "interaction" });
+        expect(interaction).toMatchObject({
+            type: "notice",
+            notice_type: "interaction",
+            group: {
+                guild_id: { string: "r1" },
+                channel_id: { string: "r1:c1" },
+            },
+        });
     });
 
     it("未知推送作为 custom 无损交付", () => {

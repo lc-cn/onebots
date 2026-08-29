@@ -114,6 +114,16 @@ describe("HeychatHttpClient", () => {
                 }),
         ).toThrowError(expect.objectContaining({ code: "HEYCHAT_INVALID_CONFIG_URL" }));
     });
+
+    it("在 HTTP 客户端边界拒绝编码穿越与非 chatroom 路径", async () => {
+        const client = new HeychatHttpClient({ account_id: "bot", token: "secret" });
+        await expect(client.callApi("/chatroom/v2/%2e%2e/token")).rejects.toMatchObject({
+            code: "HEYCHAT_INVALID_API_PATH",
+        });
+        await expect(client.callApi("/open-apis/token")).rejects.toMatchObject({
+            code: "HEYCHAT_INVALID_API_PATH",
+        });
+    });
 });
 
 async function listen(handler: RequestListener): Promise<string> {

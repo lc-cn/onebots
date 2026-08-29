@@ -40,6 +40,11 @@ describe("executeHeychatPlatformAction", () => {
                 method: "DELETE",
             }),
         ).rejects.toBeInstanceOf(HeychatApiError);
+        await expect(
+            executeHeychatPlatformAction(bot, "call_heychat_api", {
+                path: "/chatroom/v2/%2e%2e/token",
+            }),
+        ).rejects.toMatchObject({ code: "HEYCHAT_INVALID_ACTION_PARAMS" });
     });
 
     it("上传动作解码 Base64 并返回 URL", async () => {

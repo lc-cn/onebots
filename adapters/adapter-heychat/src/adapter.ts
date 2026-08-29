@@ -1,6 +1,5 @@
 import {
     Account,
-    AccountStatus,
     Adapter,
     AdapterRegistry,
     UnsupportedCapabilityError,
@@ -9,7 +8,7 @@ import {
 import { HeychatActionBase } from "./action-base.js";
 import { HeychatBot } from "./bot.js";
 import { heychatCapabilities } from "./capabilities.js";
-import { projectHeychatEvent } from "./events.js";
+import { createHeychatAccount } from "./account.js";
 import { HeychatApiError } from "./errors.js";
 import { normalizeBase64Source, prepareHeychatMediaSegments, uploadHeychatMedia } from "./media.js";
 import { compileHeychatMessage } from "./messages.js";
@@ -20,12 +19,7 @@ import {
 } from "./models.js";
 import { executeHeychatPlatformAction, HEYCHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { extractRoomId } from "./utils.js";
-import type {
-    HeychatConfig,
-    HeychatSendMessageResult,
-    HeychatUserInfo,
-    HeychatWsEnvelope,
-} from "./types.js";
+import type { HeychatSendMessageResult, HeychatUserInfo } from "./types.js";
 
 export class HeychatAdapter extends HeychatActionBase {
     async sendMessage(
@@ -378,7 +372,10 @@ export class HeychatAdapter extends HeychatActionBase {
                 "HEYCHAT_MEDIA_SOURCE_REQUIRED",
             );
         }
-        const source = params.url || params.path || normalizeBase64Source(params.data!);
+        const source =
+            params.url ||
+            params.path ||
+            normalizeBase64Source(typeof params.data === "string" ? params.data : "");
         const url = await uploadHeychatMedia(this.requireBot(uin), {
             source,
             filename: params.name,
@@ -401,7 +398,12 @@ export class HeychatAdapter extends HeychatActionBase {
         return {
             online,
             good: online,
-            bots: [{ self: this.createId(account.config.account_id), online }],
+            bots: [
+                {
+                    self: this.createId(account.client.getBotId() ?? account.config.account_id),
+                    online,
+                },
+            ],
         };
     }
 
@@ -421,55 +423,7 @@ export class HeychatAdapter extends HeychatActionBase {
     }
 
     createAccount(config: Account.Config<"heychat">): Account<"heychat", HeychatBot> {
-        const bot = new HeychatBot(config);
-        const account = new Account<"heychat", HeychatBot>(this, bot, config);
-
-        bot.on("ready", () => {
-            account.status = AccountStatus.Online;
-            this.logger.info(`黑盒语音 Bot ${config.account_id} 已连接`);
-        });
-        bot.on("disconnected", details => {
-            account.status = AccountStatus.Pending;
-            this.logger.warn(`黑盒语音 Bot ${config.account_id} 连接中断`, details);
-        });
-        bot.on("reconnecting", ({ attempt, delay }) => {
-            this.logger.info(
-                `黑盒语音 Bot ${config.account_id} 将在 ${delay}ms 后进行第 ${attempt} 次重连`,
-            );
-        });
-        bot.on("error", error => {
-            this.logger.error(`黑盒语音 Bot ${config.account_id} 错误:`, error);
-        });
-        bot.on("stopped", () => {
-            account.status = AccountStatus.OffLine;
-        });
-        bot.on("event", (envelope: HeychatWsEnvelope) => {
-            try {
-                const event = projectHeychatEvent(envelope, {
-                    accountId: config.account_id,
-                    botId: bot.getBotId(),
-                    createId: value => this.createId(value),
-                    getChannelContext: channelId => bot.getChannelContext(channelId),
-                });
-                account.dispatch(event);
-            } catch (error) {
-                this.logger.error(`投影黑盒语音事件 type=${envelope.type} 失败:`, error);
-            }
-        });
-        account.on("start", async () => {
-            account.status = AccountStatus.Pending;
-            await bot.start();
-        });
-        account.on("stop", async () => bot.stop());
-        return account;
-    }
-}
-
-declare module "onebots" {
-    export namespace Adapter {
-        export interface Configs {
-            heychat: HeychatConfig;
-        }
+        return createHeychatAccount(this, config);
     }
 }
 

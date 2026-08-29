@@ -23,5 +23,7 @@ describe("黑盒语音能力清单", () => {
         expect(heychatCapabilities.transports.webhook).toBeUndefined();
         expect(heychatCapabilities.events.message?.note).toContain("type=50");
         expect(heychatCapabilities.segments.heychat_message?.support).toBe("native");
+        expect(heychatCapabilities.actions.send_message?.scenes).toEqual(["private", "channel"]);
+        expect(heychatCapabilities.actions.update_message?.scenes).toEqual(["channel"]);
     });
 });

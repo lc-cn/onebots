@@ -159,7 +159,8 @@ export const heychatSchema: Schema = {
         type: "number",
         default: 30000,
         min: 1000,
-        label: "REST 请求超时（毫秒）",
+        label: "网络请求超时（毫秒）",
+        description: "同时限制 REST 请求与 WebSocket 握手等待时间",
         ui: { section: "advanced" },
     },
     proxy: {
