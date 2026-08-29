@@ -241,8 +241,6 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 return this.getGuildInfo(params as unknown as OneBotV12.GetGuildInfoParams);
             case "get_guild_list":
                 return this.getGuildList();
-            case "set_guild_name":
-                return this.setGuildName(params as unknown as OneBotV12.SetGuildNameParams);
             case "get_guild_member_info":
                 return this.getGuildMemberInfo(
                     params as unknown as OneBotV12.GetGuildMemberInfoParams,
@@ -251,8 +249,6 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 return this.getGuildMemberList(
                     params as unknown as OneBotV12.GetGuildMemberListParams,
                 );
-            case "leave_guild":
-                return this.leaveGuild(params as unknown as OneBotV12.LeaveGuildParams);
 
             // Channel API
             case "get_channel_info":
@@ -269,8 +265,6 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                 return this.getChannelMemberList(
                     params as unknown as OneBotV12.GetChannelMemberListParams,
                 );
-            case "leave_channel":
-                return this.leaveChannel(params as unknown as OneBotV12.LeaveChannelParams);
 
             // File API
             case "upload_file":
@@ -391,6 +385,9 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             "get_guild_member_info",
             "get_channel_info",
             "get_channel_list",
+            "set_channel_name",
+            "get_channel_member_info",
+            "get_channel_member_list",
             "get_status",
             "get_version",
             "get_supported_actions",
@@ -547,11 +544,6 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         }));
     }
 
-    private async setGuildName(_params: OneBotV12.SetGuildNameParams): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_guild_name not implemented");
-    }
-
     private async getGuildMemberInfo(
         params: OneBotV12.GetGuildMemberInfoParams,
     ): Promise<OneBotV12.GuildMemberInfo> {
@@ -577,11 +569,6 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             user_name: member.user_name,
             user_displayname: member.nickname,
         }));
-    }
-
-    private async leaveGuild(_params: OneBotV12.LeaveGuildParams): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("leave_guild not implemented");
     }
 
     // ============ Channel API Implementations ============
@@ -612,28 +599,38 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         }));
     }
 
-    private async setChannelName(_params: OneBotV12.SetChannelNameParams): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("set_channel_name not implemented");
+    private async setChannelName(params: OneBotV12.SetChannelNameParams): Promise<void> {
+        await this.adapter.updateChannel(this.account.account_id, {
+            channel_id: this.adapter.resolveId(params.channel_id),
+            channel_name: params.channel_name,
+        });
     }
 
     private async getChannelMemberInfo(
-        _params: OneBotV12.GetChannelMemberInfoParams,
+        params: OneBotV12.GetChannelMemberInfoParams,
     ): Promise<OneBotV12.ChannelMemberInfo> {
-        // Implementation depends on adapter support
-        throw new Error("get_channel_member_info not implemented");
+        const member = await this.adapter.getChannelMemberInfo(this.account.account_id, {
+            channel_id: this.adapter.resolveId(params.channel_id),
+            user_id: this.adapter.resolveId(params.user_id),
+        });
+        return {
+            user_id: member.user_id.string,
+            user_name: member.user_name,
+            user_displayname: member.user_name,
+        };
     }
 
     private async getChannelMemberList(
-        _params: OneBotV12.GetChannelMemberListParams,
+        params: OneBotV12.GetChannelMemberListParams,
     ): Promise<OneBotV12.ChannelMemberInfo[]> {
-        // Implementation depends on adapter support
-        throw new Error("get_channel_member_list not implemented");
-    }
-
-    private async leaveChannel(_params: OneBotV12.LeaveChannelParams): Promise<void> {
-        // Implementation depends on adapter support
-        throw new Error("leave_channel not implemented");
+        const members = await this.adapter.getChannelMemberList(this.account.account_id, {
+            channel_id: this.adapter.resolveId(params.channel_id),
+        });
+        return members.map(member => ({
+            user_id: member.user_id.string,
+            user_name: member.user_name,
+            user_displayname: member.user_name,
+        }));
     }
 
     // ============ File API Implementations ============

@@ -71,6 +71,9 @@ function createProtocol() {
         inviteGroupMember: vi.fn(),
         handleFriendRequest: vi.fn(),
         getGuildMemberList: vi.fn(),
+        updateChannel: vi.fn(),
+        getChannelMemberInfo: vi.fn(),
+        getChannelMemberList: vi.fn(),
         describeCapabilities: vi.fn(() => ({
             actions: { send_poll: { support: "native" } },
         })),
@@ -423,6 +426,49 @@ describe("OneBot V12 protocol", () => {
                     user_displayname: "Moderator",
                 },
             ],
+        });
+    });
+
+    test("频道管理动作委托给 canonical Adapter 接口", async () => {
+        const { protocol, adapter } = createProtocol();
+        adapter.getChannelMemberInfo.mockResolvedValue({
+            user_id: { string: "user-1", number: 1 },
+            user_name: "Alice",
+        });
+        adapter.getChannelMemberList.mockResolvedValue([
+            { user_id: { string: "user-1", number: 1 }, user_name: "Alice" },
+        ]);
+
+        await expect(
+            protocol.apply("set_channel_name", {
+                guild_id: "guild-1",
+                channel_id: "channel-1",
+                channel_name: "general",
+            }),
+        ).resolves.toMatchObject({ status: "ok" });
+        expect(adapter.updateChannel).toHaveBeenCalledWith("bot", {
+            channel_id: expect.objectContaining({ string: "openid-123" }),
+            channel_name: "general",
+        });
+
+        await expect(
+            protocol.apply("get_channel_member_info", {
+                guild_id: "guild-1",
+                channel_id: "channel-1",
+                user_id: "user-1",
+            }),
+        ).resolves.toMatchObject({
+            status: "ok",
+            data: { user_id: "user-1", user_name: "Alice", user_displayname: "Alice" },
+        });
+        await expect(
+            protocol.apply("get_channel_member_list", {
+                guild_id: "guild-1",
+                channel_id: "channel-1",
+            }),
+        ).resolves.toMatchObject({
+            status: "ok",
+            data: [{ user_id: "user-1", user_name: "Alice", user_displayname: "Alice" }],
         });
     });
 
