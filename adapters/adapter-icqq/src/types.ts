@@ -83,7 +83,7 @@ export interface ICQQUser {
     /** 昵称 */
     nickname: string;
     /** 性别 */
-    sex?: 'male' | 'female' | 'unknown';
+    sex?: "male" | "female" | "unknown";
     /** 年龄 */
     age?: number;
     /** 头像 URL */
@@ -135,7 +135,7 @@ export interface ICQQGroupMember {
     /** 群名片 */
     card?: string;
     /** 性别 */
-    sex?: 'male' | 'female' | 'unknown';
+    sex?: "male" | "female" | "unknown";
     /** 年龄 */
     age?: number;
     /** 加群时间 */
@@ -145,7 +145,7 @@ export interface ICQQGroupMember {
     /** 等级 */
     level?: number;
     /** 角色 */
-    role?: 'owner' | 'admin' | 'member';
+    role?: "owner" | "admin" | "member";
     /** 专属头衔 */
     title?: string;
     /** 头衔过期时间 */
@@ -176,22 +176,25 @@ export interface ICQQMessageRet {
  * 消息段类型
  */
 export type ICQQMessageElement =
-    | { type: 'text'; text: string }
-    | { type: 'face' | 'sface'; id: number }
-    | { type: 'image'; file: string; url?: string }
-    | { type: 'record'; file: string; url?: string }
-    | { type: 'video'; file: string; url?: string }
-    | { type: 'at'; qq: number | 'all' }
-    | { type: 'share'; url: string; title: string; content?: string; image?: string }
-    | { type: 'json'; data: string }
-    | { type: 'xml'; data: string }
-    | { type: 'poke'; id: number }
-    | { type: 'reply'; id: string };
+    | { type: "text"; text: string }
+    | { type: "face" | "sface"; id: number }
+    | { type: "image"; file: string; url?: string }
+    | { type: "record"; file: string; url?: string }
+    | { type: "video"; file: string; url?: string }
+    | { type: "at"; qq: number | "all" }
+    | { type: "share"; url: string; title: string; content?: string; image?: string }
+    | { type: "json"; data: string }
+    | { type: "xml"; data: string }
+    | { type: "poke"; id: number }
+    | { type: "reply"; id: string }
+    | { type: "icqq_raw"; data: unknown };
 
 /**
  * 私聊消息事件
  */
 export interface ICQQPrivateMessageEvent {
+    /** ICQQ 原始事件 */
+    raw_event: unknown;
     /** 消息 ID */
     message_id: string;
     /** 发送者 QQ */
@@ -206,7 +209,7 @@ export interface ICQQPrivateMessageEvent {
     sender: {
         user_id: number;
         nickname: string;
-        sex?: 'male' | 'female' | 'unknown';
+        sex?: "male" | "female" | "unknown";
         age?: number;
     };
     /** 自动回复函数 */
@@ -217,6 +220,8 @@ export interface ICQQPrivateMessageEvent {
  * 群消息事件
  */
 export interface ICQQGroupMessageEvent {
+    /** ICQQ 原始事件 */
+    raw_event: unknown;
     /** 消息 ID */
     message_id: string;
     /** 群号 */
@@ -234,9 +239,9 @@ export interface ICQQGroupMessageEvent {
         user_id: number;
         nickname: string;
         card?: string;
-        sex?: 'male' | 'female' | 'unknown';
+        sex?: "male" | "female" | "unknown";
         age?: number;
-        role?: 'owner' | 'admin' | 'member';
+        role?: "owner" | "admin" | "member";
         title?: string;
     };
     /** 群信息 */
@@ -258,6 +263,7 @@ export interface ICQQGroupMessageEvent {
  * 好友申请事件
  */
 export interface ICQQFriendRequestEvent {
+    raw_event: unknown;
     /** 请求 ID */
     request_id: string;
     /** 申请人 QQ */
@@ -276,6 +282,7 @@ export interface ICQQFriendRequestEvent {
  * 群申请/邀请事件
  */
 export interface ICQQGroupRequestEvent {
+    raw_event: unknown;
     /** 请求 ID */
     request_id: string;
     /** 群号 */
@@ -285,7 +292,7 @@ export interface ICQQGroupRequestEvent {
     /** 昵称 */
     nickname: string;
     /** 请求类型 */
-    sub_type: 'add' | 'invite';
+    sub_type: "add" | "invite";
     /** 验证信息 */
     comment: string;
     /** 时间戳 */
@@ -296,6 +303,7 @@ export interface ICQQGroupRequestEvent {
  * 群成员增加事件
  */
 export interface ICQQGroupIncreaseEvent {
+    raw_event: unknown;
     /** 群号 */
     group_id: number;
     /** 新成员 QQ */
@@ -310,6 +318,7 @@ export interface ICQQGroupIncreaseEvent {
  * 群成员减少事件
  */
 export interface ICQQGroupDecreaseEvent {
+    raw_event: unknown;
     /** 群号 */
     group_id: number;
     /** 离开的成员 QQ */
@@ -317,7 +326,9 @@ export interface ICQQGroupDecreaseEvent {
     /** 操作者 QQ (踢人者) */
     operator_id?: number;
     /** 类型: leave 退群, kick 被踢 */
-    sub_type: 'leave' | 'kick' | 'kick_me';
+    sub_type: "leave" | "kick" | "kick_me";
+    /** 群主退群导致群解散 */
+    is_dismiss: boolean;
     /** 时间戳 */
     time: number;
 }
@@ -326,6 +337,7 @@ export interface ICQQGroupDecreaseEvent {
  * 群禁言事件
  */
 export interface ICQQGroupMuteEvent {
+    raw_event: unknown;
     /** 群号 */
     group_id: number;
     /** 被禁言的 QQ (0 表示全员禁言) */
@@ -342,12 +354,13 @@ export interface ICQQGroupMuteEvent {
  * 群管理员变动事件
  */
 export interface ICQQGroupAdminEvent {
+    raw_event: unknown;
     /** 群号 */
     group_id: number;
     /** QQ 号 */
     user_id: number;
     /** 类型: set 设置管理员, unset 取消管理员 */
-    sub_type: 'set' | 'unset';
+    sub_type: "set" | "unset";
     /** 时间戳 */
     time: number;
 }
@@ -356,6 +369,7 @@ export interface ICQQGroupAdminEvent {
  * 好友消息撤回事件
  */
 export interface ICQQFriendRecallEvent {
+    raw_event: unknown;
     /** 消息 ID */
     message_id: string;
     /** 好友 QQ */
@@ -368,6 +382,7 @@ export interface ICQQFriendRecallEvent {
  * 群消息撤回事件
  */
 export interface ICQQGroupRecallEvent {
+    raw_event: unknown;
     /** 消息 ID */
     message_id: string;
     /** 群号 */
@@ -384,6 +399,7 @@ export interface ICQQGroupRecallEvent {
  * 戳一戳事件
  */
 export interface ICQQPokeEvent {
+    raw_event: unknown;
     /** 群号 (私聊时为 0) */
     group_id?: number;
     /** 操作者 QQ */
@@ -473,4 +489,3 @@ export interface ICQQAuthEvent {
     url?: string;
     [key: string]: unknown;
 }
-

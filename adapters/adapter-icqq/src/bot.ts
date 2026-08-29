@@ -4,27 +4,12 @@
  */
 import { EventEmitter } from "node:events";
 import { createClient, Client, segment as Segment } from "@icqqjs/icqq";
-import type {
-    Config as ICQQClientConfig,
-    PrivateMessageEvent,
-    GroupMessageEvent,
-} from "@icqqjs/icqq";
 import type { FriendInfo, GroupInfo, MemberInfo } from "@icqqjs/icqq/lib/entities";
-import type { MessageElem, Sendable, PrivateMessage, GroupMessage } from "@icqqjs/icqq/lib/message";
+import type { Sendable, PrivateMessage, GroupMessage } from "@icqqjs/icqq/lib/message";
 import type { MessageRet } from "@icqqjs/icqq/lib/events";
-import type {
-    ICQQConfig,
-    ICQQProtocol,
-    ICQQUser,
-    ICQQFriend,
-    ICQQGroup,
-    ICQQGroupMember,
-    ICQQMessageElement,
-    ICQQMessageRet,
-    ICQQPrivateMessageEvent,
-    ICQQGroupMessageEvent,
-    Platform,
-} from "./types.js";
+import type { ICQQConfig, ICQQUser, ICQQFriend, ICQQGroup, ICQQGroupMember } from "./types.js";
+import { wireICQQClientEvents } from "./client-events.js";
+import { buildICQQClientConfig, parseICQQUin } from "./client-config.js";
 
 export class ICQQBot extends EventEmitter {
     private config: ICQQConfig;
@@ -62,44 +47,24 @@ export class ICQQBot extends EventEmitter {
      * 启动 Bot
      */
     async start(): Promise<void> {
-        const uin = parseInt(this.config.account_id);
-        if (isNaN(uin)) {
-            throw new Error("account_id 必须是有效的 QQ 号");
-        }
-
-        // 构建 ICQQ 配置
-        const protocol = this.config.protocol || {};
-        const clientConfig: ICQQClientConfig = {
-            platform: (protocol.platform ?? 2) as ICQQClientConfig["platform"],
-            sign_api_addr: protocol.sign_api_addr,
-            data_dir: protocol.data_dir,
-            ignore_self: protocol.ignore_self !== false,
-            resend: protocol.resend !== false,
-            reconn_interval: protocol.reconn_interval || 5,
-            cache_group_member: protocol.cache_group_member !== false,
-            auto_server: protocol.auto_server !== false,
-        };
-
-        if (protocol.ver) {
-            clientConfig.ver = protocol.ver;
-        }
-        if (protocol.log_config) {
-            clientConfig.log_config = protocol.log_config as ICQQClientConfig["log_config"];
-        }
-        if (protocol.ffmpeg_path) {
-            clientConfig.ffmpeg_path = protocol.ffmpeg_path;
-        }
-        if (protocol.ffprobe_path) {
-            clientConfig.ffprobe_path = protocol.ffprobe_path;
-        }
+        const uin = parseICQQUin(this.config.account_id);
+        const clientConfig = buildICQQClientConfig(this.config);
 
         // 创建客户端
         this.client = createClient(clientConfig);
         // icqq 内部 setTimeout 调用 sendSsoHeartBeat 未 catch，超时会变成 UnhandledPromiseRejection 并拖垮进程
         this.patchSsoHeartBeat(this.client);
 
-        // 绑定事件
-        this.setupEventListeners();
+        wireICQQClientEvents(this.client, {
+            emit: (event, payload) => this.emit(event, payload),
+            online: user => {
+                this.ready = true;
+                this.loginInfo = user;
+            },
+            offline: () => {
+                this.ready = false;
+            },
+        });
 
         // 登录（login 返回 Promise，必须吞掉 rejection，避免未处理导致进程退出）
         const loginResult = this.config.password
@@ -115,7 +80,7 @@ export class ICQQBot extends EventEmitter {
      * 包裹 SSO 心跳：超时后记录并继续下一轮，避免未处理 rejection 导致进程退出
      */
     private patchSsoHeartBeat(client: Client): void {
-        type HeartbeatClient = Client & {
+        type HeartbeatClient = Omit<Client, "sendSsoHeartBeat" | "startSsoHeartBeat"> & {
             sendSsoHeartBeat?: () => boolean | Promise<boolean>;
             startSsoHeartBeat?: () => void;
         };
@@ -165,288 +130,6 @@ export class ICQQBot extends EventEmitter {
         this.ready = false;
         this.loginInfo = null;
         this.emit("stop");
-    }
-
-    /**
-     * 设置事件监听器
-     */
-    private setupEventListeners(): void {
-        if (!this.client) return;
-
-        // 登录成功
-        this.client.on("system.login.qrcode", event => {
-            this.emit("qrcode", event);
-        });
-
-        this.client.on("system.login.slider", event => {
-            this.emit("slider", event);
-        });
-
-        this.client.on("system.login.device", event => {
-            this.emit("device", event);
-        });
-
-        this.client.on("system.login.auth", event => {
-            this.emit("auth", event);
-        });
-
-        this.client.on("system.login.error", event => {
-            this.emit("login_error", event);
-        });
-
-        this.client.on("system.online", () => {
-            this.ready = true;
-            this.loginInfo = {
-                user_id: this.client!.uin,
-                nickname: this.client!.nickname,
-                avatar: `https://q1.qlogo.cn/g?b=qq&nk=${this.client!.uin}&s=640`,
-            };
-            this.emit("ready", this.loginInfo);
-        });
-
-        // network / kickoff 会经 em() 冒泡到 system.offline；用标志区分，避免误推「重新登录」
-        let offlineLeafHandled = false;
-        this.client.on("system.offline.network", event => {
-            offlineLeafHandled = true;
-            this.ready = false;
-            this.emit("offline_network", event);
-            queueMicrotask(() => {
-                offlineLeafHandled = false;
-            });
-        });
-        this.client.on("system.offline.kickoff", event => {
-            offlineLeafHandled = true;
-            this.ready = false;
-            this.emit("offline", event);
-            queueMicrotask(() => {
-                offlineLeafHandled = false;
-            });
-        });
-        this.client.on("system.offline", event => {
-            if (offlineLeafHandled) return;
-            this.ready = false;
-            this.emit("offline", event);
-        });
-
-        // 私聊消息
-        this.client.on("message.private", event => {
-            this.emit("private_message", this.convertPrivateMessage(event));
-        });
-
-        // 群消息
-        this.client.on("message.group", event => {
-            this.emit("group_message", this.convertGroupMessage(event));
-        });
-
-        // 好友申请
-        this.client.on("request.friend", event => {
-            this.emit("friend_request", {
-                request_id: event.flag,
-                user_id: event.user_id,
-                nickname: event.nickname,
-                comment: event.comment,
-                source: event.source,
-                time: event.time,
-            });
-        });
-
-        // 群申请/邀请
-        this.client.on("request.group", event => {
-            this.emit("group_request", {
-                request_id: event.flag,
-                group_id: event.group_id,
-                user_id: event.user_id,
-                nickname: event.nickname,
-                sub_type: event.sub_type,
-                comment: "comment" in event ? event.comment : "",
-                time: event.time,
-            });
-        });
-
-        // 群成员增加
-        this.client.on("notice.group.increase", event => {
-            this.emit("group_increase", {
-                group_id: event.group_id,
-                user_id: event.user_id,
-                operator_id: undefined,
-                time: Date.now() / 1000,
-            });
-        });
-
-        // 群成员减少
-        this.client.on("notice.group.decrease", event => {
-            this.emit("group_decrease", {
-                group_id: event.group_id,
-                user_id: event.user_id,
-                operator_id: event.operator_id,
-                sub_type: event.dismiss ? "dismiss" : "leave",
-                time: Date.now() / 1000,
-            });
-        });
-
-        // 群禁言
-        this.client.on("notice.group.ban", event => {
-            this.emit("group_mute", {
-                group_id: event.group_id,
-                user_id: event.user_id,
-                operator_id: event.operator_id,
-                duration: event.duration,
-                time: Date.now() / 1000,
-            });
-        });
-
-        // 群管理员变动
-        this.client.on("notice.group.admin", event => {
-            this.emit("group_admin", {
-                group_id: event.group_id,
-                user_id: event.user_id,
-                sub_type: event.set ? "set" : "unset",
-                time: Date.now() / 1000,
-            });
-        });
-
-        // 好友消息撤回
-        this.client.on("notice.friend.recall", event => {
-            this.emit("friend_recall", {
-                message_id: event.message_id,
-                user_id: event.user_id,
-                time: event.time,
-            });
-        });
-
-        // 群消息撤回
-        this.client.on("notice.group.recall", event => {
-            this.emit("group_recall", {
-                message_id: event.message_id,
-                group_id: event.group_id,
-                user_id: event.user_id,
-                operator_id: event.operator_id,
-                time: event.time,
-            });
-        });
-
-        // 戳一戳
-        this.client.on("notice.friend.poke", event => {
-            this.emit("poke", {
-                operator_id: event.operator_id,
-                target_id: event.target_id,
-                action: event.action,
-                suffix: event.suffix,
-                time: Date.now() / 1000,
-            });
-        });
-
-        this.client.on("notice.group.poke", event => {
-            this.emit("poke", {
-                group_id: event.group_id,
-                operator_id: event.operator_id,
-                target_id: event.target_id,
-                action: event.action,
-                suffix: event.suffix,
-                time: Date.now() / 1000,
-            });
-        });
-    }
-
-    /**
-     * 转换私聊消息
-     */
-    private convertPrivateMessage(event: PrivateMessageEvent): ICQQPrivateMessageEvent {
-        return {
-            message_id: event.message_id,
-            user_id: event.user_id,
-            message: this.convertMessage(event.message),
-            raw_message: event.raw_message,
-            time: event.time,
-            sender: {
-                user_id: event.sender.user_id,
-                nickname: event.sender.nickname,
-            },
-            reply: (message: string | ICQQMessageElement[], quote?: boolean) => {
-                return event.reply(message, quote).then(r => ({
-                    message_id: r.message_id,
-                    seq: r.seq,
-                    rand: r.rand,
-                    time: r.time,
-                }));
-            },
-        };
-    }
-
-    /**
-     * 转换群消息
-     */
-    private convertGroupMessage(event: GroupMessageEvent): ICQQGroupMessageEvent {
-        return {
-            message_id: event.message_id,
-            group_id: event.group_id,
-            user_id: event.user_id,
-            message: this.convertMessage(event.message),
-            raw_message: event.raw_message,
-            time: event.time,
-            sender: {
-                user_id: event.sender.user_id,
-                nickname: event.sender.nickname,
-                card: event.sender.card,
-                sex: event.sender.sex,
-                age: event.sender.age,
-                role: event.sender.role,
-                title: event.sender.title,
-            },
-            group: {
-                group_id: event.group_id,
-                group_name: event.group_name,
-            },
-            atme: event.atme,
-            reply: (message: string | ICQQMessageElement[], quote?: boolean) => {
-                return event.reply(message, quote).then(r => ({
-                    message_id: r.message_id,
-                    seq: r.seq,
-                    rand: r.rand,
-                    time: r.time,
-                }));
-            },
-        };
-    }
-
-    /**
-     * 转换消息段
-     */
-    private convertMessage(message: MessageElem[]): ICQQMessageElement[] {
-        return message.map((elem: MessageElem) => {
-            switch (elem.type) {
-                case "text":
-                    return { type: "text", text: elem.text };
-                case "face":
-                    return { type: "face", id: elem.id };
-                case "image":
-                    return { type: "image", file: String(elem.file), url: elem.url };
-                case "record":
-                    return { type: "record", file: String(elem.file), url: elem.url };
-                case "video":
-                    return { type: "video", file: String(elem.file), url: undefined };
-                case "at":
-                    return { type: "at", qq: elem.qq };
-                case "share":
-                    return {
-                        type: "share",
-                        url: elem.url,
-                        title: elem.title,
-                        content: elem.content,
-                        image: elem.image,
-                    };
-                case "json":
-                    return { type: "json", data: elem.data };
-                case "xml":
-                    return { type: "xml", data: elem.data };
-                case "poke":
-                    return { type: "poke", id: elem.id };
-                case "reply":
-                    return { type: "reply", id: elem.id };
-                default:
-                    return { type: "text", text: `[${elem.type}]` };
-            }
-        });
     }
 
     // ============================================
@@ -683,7 +366,7 @@ export class ICQQBot extends EventEmitter {
     /**
      * 退出群
      */
-    async leaveGroup(groupId: number, dismiss?: boolean): Promise<boolean> {
+    async leaveGroup(groupId: number): Promise<boolean> {
         if (!this.client) throw new Error("Bot not connected");
         return this.client.setGroupLeave(groupId);
     }

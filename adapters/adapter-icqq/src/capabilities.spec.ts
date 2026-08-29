@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { assertAdapterCapabilities, listSupportedActions } from "onebots";
 import { ICQQAdapter } from "./adapter.js";
 import { icqqCapabilities } from "./capabilities.js";
+import { ICQQ_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 describe("ICQQ capability manifest", () => {
     test("declares the native capability contract", () => {
@@ -26,5 +27,15 @@ describe("ICQQ capability manifest", () => {
 
         expect(version.app_version).toMatch(/^\d+\.\d+\.\d+/);
         expect(version.impl_version).toMatch(/^\d+\.\d+\.\d+/);
+    });
+
+    test("every declared action resolves to a concrete implementation", () => {
+        const adapter = Object.create(ICQQAdapter.prototype) as ICQQAdapter;
+        for (const action of listSupportedActions(icqqCapabilities)) {
+            expect(adapter.isActionImplemented(action), action).toBe(true);
+        }
+        for (const action of ICQQ_PLATFORM_ACTIONS) {
+            expect(icqqCapabilities.actions[action]?.support, action).toBe("native");
+        }
     });
 });

@@ -1,4 +1,9 @@
 import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { ICQQ_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+const platformActions = Object.fromEntries(
+    [...ICQQ_PLATFORM_ACTIONS].map(action => [action, { support: "native" as const }]),
+);
 
 /** ICQQ 已通过通用 Adapter seam 暴露的原生能力。 */
 export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
@@ -25,7 +30,10 @@ export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
             availability: "permission",
             permissions: ["group.admin"],
         },
-        leave_group: { support: "native" },
+        leave_group: {
+            support: "native",
+            note: "支持主动退群；ICQQ 不提供群解散动作",
+        },
         get_group_member_list: { support: "native" },
         get_group_member_info: { support: "native" },
         kick_group_member: {
@@ -145,6 +153,7 @@ export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         get_csrf_token: { support: "native" },
         get_credentials: { support: "native" },
         clean_cache: { support: "native" },
+        ...platformActions,
     },
     events: {
         message: { support: "native", scenes: ["private", "group"] },
@@ -152,6 +161,10 @@ export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         group_request: { support: "native", scenes: ["group"] },
         group_member_increase: { support: "native", scenes: ["group"] },
         group_member_decrease: { support: "native", scenes: ["group"] },
+        group_ban: { support: "native", scenes: ["group"] },
+        group_admin: { support: "native", scenes: ["group"] },
+        message_deleted: { support: "native", scenes: ["private", "group"] },
+        interaction: { support: "native", scenes: ["private", "group"] },
     },
     segments: {
         text: { support: "native", direction: "both" },
@@ -165,6 +178,8 @@ export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         share: { support: "native", direction: "both" },
         json: { support: "native", direction: "both" },
         xml: { support: "native", direction: "both" },
+        icqq: { support: "native", direction: "send" },
+        icqq_raw: { support: "native", direction: "receive" },
     },
     transports: {
         native: { support: "native", mode: "native" },
