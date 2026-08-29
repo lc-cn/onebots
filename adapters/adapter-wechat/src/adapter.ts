@@ -1,593 +1,222 @@
-/**
- * 微信公众号适配器
- * 继承 Adapter 基类，重写支持的方法实现微信公众号功能
- * - 消息收发（sendMessage）
- * - 粉丝管理（getFriendList, getFriendInfo等，对应微信的关注用户）
- * - 标签管理（getGroupList, getGroupInfo等，对应微信的用户标签）
- */
-import { Account, AdapterRegistry, AccountStatus, unixSecondsToEventMs } from "onebots";
-import { Adapter } from "onebots";
-import { BaseApp } from "onebots";
-import { WechatBot } from "./bot.js";
-import { CommonEvent, type CommonTypes } from "onebots";
-import type { WechatConfig, WechatIncomingMessage } from "./types.js";
+import { readFile } from "node:fs/promises";
+import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
 import { wechatCapabilities } from "./capabilities.js";
+import { WechatClient } from "./client.js";
+import { WechatApiError } from "./errors.js";
+import { projectWechatEvent } from "./events.js";
+import { compileWechatMessages } from "./messages.js";
+import { executeWechatPlatformAction, WECHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
+import type { WechatConfig, WechatIncomingMessage, WechatUser } from "./types.js";
+import { WechatWebhookHost, type WechatHttpContext } from "./webhook-host.js";
 
-export class WechatAdapter extends Adapter<WechatBot, "wechat"> {
+/** 微信公众号官方 API 适配器。 */
+export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
     constructor(app: BaseApp) {
         super(app, "wechat", wechatCapabilities);
         this.icon = "https://res.wx.qq.com/a/wx_fed/assets/res/OTE0YTAw.png";
     }
 
-    // ============================================
-    // 消息相关方法
-    // ============================================
-
-    /**
-     * 发送消息
-     * 微信公众号只支持私聊消息（给关注用户发消息）
-     *
-     * 发送策略：
-     * 1. 优先使用被动回复（5秒内收到用户消息）- 无限制，订阅号可用
-     * 2. 否则使用客服消息（需要服务号权限）- 48小时内5条
-     */
     async sendMessage(
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const { scene_type, message } = params;
-        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
-
-        if (scene_type !== "private") {
-            throw new Error(`微信公众号只支持私聊消息 (private)，不支持 ${scene_type}`);
+        if (params.scene_type !== "private") {
+            return this.unsupported(
+                "send_message",
+                "platform_unsupported",
+                "微信公众号只存在用户私聊，不支持群组或频道会话",
+            );
         }
-
-        // id_map.string 存的是微信 openid；与 webhook 里 messageContext 的键一致
-        const openid = sceneId.string;
-        let messageId: string;
-
-        // 检查是否强制使用客服消息
-        const forceActive = "forceActive" in params && params.forceActive === true;
-
-        // 解析消息内容
-        if (typeof message === "string") {
-            messageId = await bot.sendText(openid, message, forceActive);
-        } else if (Array.isArray(message)) {
-            // 处理消息段，提取文本和图片
-            const textParts: string[] = [];
-
-            for (const seg of message) {
-                if (typeof seg === "string") {
-                    textParts.push(seg);
-                } else if (seg.type === "text") {
-                    textParts.push(seg.data.text || "");
-                } else if (seg.type === "at") {
-                    textParts.push(`@${seg.data.name || seg.data.qq || "user"}`);
-                } else if (seg.type === "image") {
-                    // 微信公众号图片需要先上传获取 media_id，这里简化处理
-                    if (seg.data.url) {
-                        textParts.push(`[图片: ${seg.data.url}]`);
-                    }
-                }
+        const client = this.requireClient(uin);
+        const compiled = compileWechatMessages(params.message);
+        if (compiled.replyEventId && client.hasPendingPassiveReply(compiled.replyEventId)) {
+            if (compiled.messages.length !== 1) {
+                throw new WechatApiError("微信公众号被动回复只能包含一条原生消息", {
+                    code: "WECHAT_INVALID_PASSIVE_REPLY",
+                });
             }
-
-            const content = textParts.join("");
-            if (content) {
-                messageId = await bot.sendText(openid, content, forceActive);
-            } else {
-                throw new Error("消息内容为空");
+            if (!isPassiveReplyType(compiled.messages[0]!.msgtype)) {
+                throw new WechatApiError(
+                    `微信公众号不支持 ${compiled.messages[0]!.msgtype} 被动回复`,
+                    { code: "WECHAT_UNSUPPORTED_PASSIVE_MESSAGE" },
+                );
             }
-        } else {
-            throw new Error("不支持的消息格式");
+            if (client.submitPassiveReply(compiled.replyEventId, compiled.messages[0]!)) {
+                return { message_id: this.createId(`passive:${compiled.replyEventId}`) };
+            }
         }
-
-        return {
-            message_id: this.createId(messageId),
-        };
+        const openid = this.coerceId(params.scene_id).string;
+        let firstId: string | undefined;
+        for (const message of compiled.messages)
+            firstId ||= await client.sendCustomMessage(openid, message);
+        if (!firstId)
+            throw new WechatApiError("微信公众号未返回消息 ID", {
+                code: "WECHAT_EMPTY_SEND_RESPONSE",
+            });
+        return { message_id: this.createId(firstId) };
     }
 
-    // ============================================
-    // 用户相关方法
-    // ============================================
-
-    /**
-     * 获取机器人信息（公众号自身信息）
-     */
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
+        if (!account) return this.accountNotFound(uin);
         return {
-            user_id: this.createId(uin),
+            user_id: this.createId(account.config.account_id),
             user_name: account.nickname || "微信公众号",
             avatar: account.avatar,
         };
     }
 
-    /**
-     * 获取用户信息（粉丝信息）
-     */
     async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const openid = params.user_id.string;
-        const user = await bot.getUserInfo(openid);
-
-        return {
-            user_id: this.createId(user.openid),
-            user_name: user.nickname || user.openid,
-            user_displayname: user.nickname,
-            avatar: user.headimgurl,
-        };
+        return this.toUserInfo(await this.requireClient(uin).getUserInfo(params.user_id.string));
     }
 
-    // ============================================
-    // 好友（粉丝）相关方法
-    // ============================================
-
-    /**
-     * 获取好友列表（粉丝列表）
-     */
-    async getFriendList(
-        uin: string,
-        params?: Adapter.GetFriendListParams,
-    ): Promise<Adapter.FriendInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const friends: Adapter.FriendInfo[] = [];
-        let nextOpenid: string | undefined;
-
-        // 分页获取所有粉丝
+    async getFriendList(uin: string): Promise<Adapter.FriendInfo[]> {
+        const client = this.requireClient(uin);
+        const result: Adapter.FriendInfo[] = [];
+        let cursor: string | undefined;
         do {
-            const userList = await bot.getUserList(nextOpenid);
-
-            if (userList.data && userList.data.openid && userList.data.openid.length > 0) {
-                // 批量获取用户详细信息
-                const users = await bot.batchGetUserInfo(userList.data.openid);
-
-                for (const user of users) {
-                    if (user.subscribe === 1) {
-                        // 只返回已关注的用户
-                        friends.push({
-                            user_id: this.createId(user.openid),
-                            user_name: user.nickname || user.openid,
-                            remark: user.remark,
-                        });
-                    }
-                }
+            const page = await client.getUserList(cursor);
+            for (const user of await client.batchGetUserInfo(page.data?.openid || [])) {
+                if (user.subscribe === 1) result.push(this.toFriendInfo(user));
             }
-
-            nextOpenid = userList.next_openid;
-        } while (nextOpenid);
-
-        return friends;
+            cursor = page.next_openid || undefined;
+        } while (cursor);
+        return result;
     }
 
-    /**
-     * 获取好友信息（粉丝信息）
-     */
     async getFriendInfo(
         uin: string,
         params: Adapter.GetFriendInfoParams,
     ): Promise<Adapter.FriendInfo> {
+        return this.toFriendInfo(await this.requireClient(uin).getUserInfo(params.user_id.string));
+    }
+
+    executePlatformAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!WECHAT_PLATFORM_ACTIONS.has(action))
+            return super.executePlatformAction(uin, action, params);
+        return executeWechatPlatformAction(this.requireClient(uin), action, params);
+    }
+
+    isPlatformActionImplemented(action: string): boolean {
+        return WECHAT_PLATFORM_ACTIONS.has(action);
+    }
+
+    async getVersion(): Promise<Adapter.VersionInfo> {
+        return {
+            app_name: "onebots WeChat Official Account Adapter",
+            app_version: await readPackageVersion(new URL("../package.json", import.meta.url)),
+            impl: "WeChat Official Account API",
+            version: "v1",
+        };
+    }
+
+    async getStatus(uin: string): Promise<Adapter.StatusInfo> {
+        const online = this.getAccount(uin)?.status === AccountStatus.Online;
+        return { online, good: online };
+    }
+
+    async canSendImage(): Promise<boolean> {
+        return true;
+    }
+    async canSendRecord(): Promise<boolean> {
+        return true;
+    }
+
+    createAccount(config: Account.Config<"wechat">): Account<"wechat", WechatClient> {
+        const wechatConfig = normalizeConfig(config);
+        const client = new WechatClient(wechatConfig);
+        const account = new Account<"wechat", WechatClient>(this, client, config);
+        const webhook = new WechatWebhookHost(wechatConfig, client, error =>
+            this.logger.error("微信公众号 Webhook 处理失败", error),
+        );
+
+        client.on("raw_event", (message: WechatIncomingMessage) => {
+            account.dispatch(
+                projectWechatEvent(message, {
+                    botId: this.createId(config.account_id),
+                    createId: value => this.createId(value),
+                }),
+            );
+        });
+        client.on("error", error => this.logger.error("微信公众号客户端错误", error));
+        this.app.router.all(webhook.path, ctx =>
+            webhook.acceptHttp(ctx as unknown as WechatHttpContext),
+        );
+
+        account.on("start", async () => {
+            try {
+                await client.start();
+                account.status = AccountStatus.Online;
+                account.nickname = config.account_id;
+                account.avatar = this.icon;
+                this.logger.info(`微信公众号 ${config.account_id} 已就绪`);
+            } catch (error) {
+                account.status = AccountStatus.OffLine;
+                this.logger.error(`启动微信公众号 ${config.account_id} 失败`, error);
+            }
+        });
+        account.on("stop", () => {
+            client.stop();
+            account.status = AccountStatus.OffLine;
+        });
+        return account;
+    }
+
+    private requireClient(uin: string): WechatClient {
         const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+        if (!account) return this.accountNotFound(uin);
+        return account.client;
+    }
 
-        const bot = account.client;
-        const openid = params.user_id.string;
-        const user = await bot.getUserInfo(openid);
+    private accountNotFound(uin: string): never {
+        throw new WechatApiError(`微信公众号账号 ${uin} 不存在`, { code: "ACCOUNT_NOT_FOUND" });
+    }
 
+    private toUserInfo(user: WechatUser): Adapter.UserInfo {
+        return {
+            user_id: this.createId(user.openid),
+            user_name: user.nickname || user.openid,
+            user_displayname: user.remark || user.nickname,
+            avatar: user.headimgurl,
+        };
+    }
+
+    private toFriendInfo(user: WechatUser): Adapter.FriendInfo {
         return {
             user_id: this.createId(user.openid),
             user_name: user.nickname || user.openid,
             remark: user.remark,
         };
     }
+}
 
-    // ============================================
-    // 群组（标签）相关方法
-    // 微信公众号使用"标签"来分组管理粉丝
-    // ============================================
+function isPassiveReplyType(type: string): boolean {
+    return ["text", "image", "voice", "video", "news"].includes(type);
+}
 
-    /**
-     * 获取群列表（标签列表）
-     */
-    async getGroupList(
-        uin: string,
-        params?: Adapter.GetGroupListParams,
-    ): Promise<Adapter.GroupInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
+function normalizeConfig(config: Account.Config<"wechat">): WechatConfig {
+    return {
+        account_id: config.account_id,
+        app_id: config.app_id,
+        app_secret: config.app_secret,
+        token: config.token,
+        encoding_aes_key: config.encoding_aes_key,
+        webhook_path: config.webhook_path,
+        passive_reply_timeout_ms: config.passive_reply_timeout_ms,
+        deduplicate_webhooks: config.deduplicate_webhooks,
+        webhook_deduplication_limit: config.webhook_deduplication_limit,
+        api_base_url: config.api_base_url,
+    };
+}
 
-        const bot = account.client;
-        const tags = await bot.getTags();
-
-        return tags.map(tag => ({
-            group_id: this.createId(tag.id),
-            group_name: tag.name,
-            member_count: tag.count,
-        }));
-    }
-
-    /**
-     * 获取群信息（标签信息）
-     */
-    async getGroupInfo(
-        uin: string,
-        params: Adapter.GetGroupInfoParams,
-    ): Promise<Adapter.GroupInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const tagId = params.group_id.number;
-        const tags = await bot.getTags();
-
-        const tag = tags.find(t => t.id === tagId);
-        if (!tag) {
-            throw new Error(`标签 ${tagId} 不存在`);
-        }
-
-        return {
-            group_id: this.createId(tag.id),
-            group_name: tag.name,
-            member_count: tag.count,
-        };
-    }
-
-    /**
-     * 设置群名称（标签名称）
-     */
-    async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const tagId = params.group_id.number;
-        await bot.updateTag(tagId, params.group_name);
-    }
-
-    /**
-     * 获取群成员列表（标签下的粉丝列表）
-     */
-    async getGroupMemberList(
-        uin: string,
-        params: Adapter.GetGroupMemberListParams,
-    ): Promise<Adapter.GroupMemberInfo[]> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const tagId = params.group_id.number;
-        const members: Adapter.GroupMemberInfo[] = [];
-        let nextOpenid: string | undefined;
-
-        // 分页获取标签下的所有用户
-        do {
-            const userList = await bot.getTagUsers(tagId, nextOpenid);
-
-            if (userList.data && userList.data.openid && userList.data.openid.length > 0) {
-                // 批量获取用户详细信息
-                const users = await bot.batchGetUserInfo(userList.data.openid);
-
-                for (const user of users) {
-                    members.push({
-                        group_id: params.group_id,
-                        user_id: this.createId(user.openid),
-                        user_name: user.nickname || user.openid,
-                        card: user.remark,
-                        role: "member",
-                    });
-                }
-            }
-
-            nextOpenid = userList.next_openid;
-        } while (nextOpenid);
-
-        return members;
-    }
-
-    /**
-     * 获取群成员信息（粉丝在标签中的信息）
-     */
-    async getGroupMemberInfo(
-        uin: string,
-        params: Adapter.GetGroupMemberInfoParams,
-    ): Promise<Adapter.GroupMemberInfo> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const openid = params.user_id.string;
-        const user = await bot.getUserInfo(openid);
-
-        return {
-            group_id: params.group_id,
-            user_id: this.createId(user.openid),
-            user_name: user.nickname || user.openid,
-            card: user.remark,
-            role: "member",
-        };
-    }
-
-    /**
-     * 设置群名片（设置用户备注）
-     */
-    async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        const account = this.getAccount(uin);
-        if (!account) throw new Error(`Account ${uin} not found`);
-
-        const bot = account.client;
-        const openid = params.user_id.string;
-        await bot.updateUserRemark(openid, params.card);
-    }
-
-    // ============================================
-    // 账号创建
-    // ============================================
-
-    createAccount(config: Account.Config<"wechat">): Account<"wechat", WechatBot> {
-        const wechatConfig: WechatConfig = {
-            account_id: config.account_id,
-            appId: config.appId,
-            appSecret: config.appSecret,
-            token: config.token,
-            encodingAESKey: config.encodingAESKey,
-        };
-
-        const bot = new WechatBot(wechatConfig);
-        const account = new Account<"wechat", WechatBot>(this, bot, config);
-        this.app.router.all(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
-        // 监听 Bot 事件
-        bot.on("ready", () => {
-            this.logger.info(`微信公众号 ${config.account_id} 已就绪`);
-        });
-
-        bot.on("error", error => {
-            this.logger.error(`微信公众号 ${config.account_id} 错误:`, error);
-        });
-
-        bot.on("token_refreshed", token => {
-            this.logger.debug(`Access Token 已刷新`);
-        });
-
-        // 监听消息事件
-        bot.on("message", (message: WechatIncomingMessage) => {
-            // 打印消息接收日志
-            const content = message.Content || message.MediaId || "";
-            const contentPreview =
-                content.length > 100 ? content.substring(0, 100) + "..." : content;
-            this.logger.info(
-                `[WECHAT] 收到消息 | 消息ID: ${message.MsgId || "N/A"} | 类型: ${message.MsgType} | ` +
-                    `发送者: ${message.FromUserName} | 内容: ${contentPreview}`,
-            );
-
-            // 构建消息段
-            const messageSegments: CommonTypes.Segment[] = [];
-            switch (message.MsgType) {
-                case "text":
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: message.Content || "" },
-                    });
-                    break;
-                case "image":
-                    messageSegments.push({
-                        type: "image",
-                        data: {
-                            file: message.MediaId,
-                            url: message.PicUrl,
-                        },
-                    });
-                    break;
-                case "voice":
-                    messageSegments.push({
-                        type: "voice",
-                        data: {
-                            file: message.MediaId,
-                            format: message.Format,
-                        },
-                    });
-                    break;
-                case "video":
-                    messageSegments.push({
-                        type: "video",
-                        data: {
-                            file: message.MediaId,
-                            thumb: message.ThumbMediaId,
-                        },
-                    });
-                    break;
-                default:
-                    messageSegments.push({
-                        type: "text",
-                        data: { text: "[不支持的消息类型]" },
-                    });
-            }
-
-            // 转换为 CommonEvent 格式
-            const commonEvent: CommonEvent.Message = {
-                id: this.createId(message.MsgId || Date.now().toString()),
-                timestamp: unixSecondsToEventMs(message.CreateTime),
-                platform: "wechat",
-                bot_id: this.createId(config.account_id),
-                type: "message",
-                message_type: "private" as const, // 公众号只有私聊
-                sender: {
-                    id: this.createId(message.FromUserName),
-                    name: message.FromUserName,
-                },
-                message_id: this.createId(message.MsgId),
-                raw_message: message.Content || message.MediaId || "",
-                message: messageSegments,
-            };
-
-            // 派发到协议层
-            account.dispatch(commonEvent);
-        });
-
-        // 监听关注事件
-        bot.on("event.subscribe", (message: WechatIncomingMessage) => {
-            this.logger.info(`用户关注: ${message.FromUserName}`);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(Date.now().toString()),
-                timestamp: unixSecondsToEventMs(message.CreateTime),
-                platform: "wechat",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "friend_add" as const,
-                user: {
-                    id: this.createId(message.FromUserName),
-                    name: message.FromUserName,
-                },
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听取消关注事件
-        bot.on("event.unsubscribe", (message: WechatIncomingMessage) => {
-            this.logger.info(`用户取消关注: ${message.FromUserName}`);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(Date.now().toString()),
-                timestamp: unixSecondsToEventMs(message.CreateTime),
-                platform: "wechat",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "custom" as const,
-                sub_type: "unsubscribe",
-                user: {
-                    id: this.createId(message.FromUserName),
-                    name: message.FromUserName,
-                },
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听扫码事件
-        bot.on("event.scan", (message: WechatIncomingMessage) => {
-            this.logger.info(`用户扫码: ${message.FromUserName}, EventKey: ${message.EventKey}`);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(Date.now().toString()),
-                timestamp: unixSecondsToEventMs(message.CreateTime),
-                platform: "wechat",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "custom" as const,
-                sub_type: "scan",
-                user: {
-                    id: this.createId(message.FromUserName),
-                    name: message.FromUserName,
-                },
-                event_key: message.EventKey,
-                ticket: message.Ticket,
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听位置事件
-        bot.on("event.location", (message: WechatIncomingMessage) => {
-            this.logger.debug(`用户上报位置: ${message.FromUserName}`);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(Date.now().toString()),
-                timestamp: unixSecondsToEventMs(message.CreateTime),
-                platform: "wechat",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "custom" as const,
-                sub_type: "location",
-                user: {
-                    id: this.createId(message.FromUserName),
-                    name: message.FromUserName,
-                },
-                latitude: message.Latitude,
-                longitude: message.Longitude,
-                precision: message.Precision,
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听菜单点击事件
-        bot.on("event.click", (message: WechatIncomingMessage) => {
-            this.logger.debug(`菜单点击: ${message.EventKey}`);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(Date.now().toString()),
-                timestamp: unixSecondsToEventMs(message.CreateTime),
-                platform: "wechat",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "custom" as const,
-                sub_type: "menu_click",
-                user: {
-                    id: this.createId(message.FromUserName),
-                    name: message.FromUserName,
-                },
-                event_key: message.EventKey,
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 监听菜单跳转事件
-        bot.on("event.view", (message: WechatIncomingMessage) => {
-            this.logger.debug(`菜单跳转: ${message.EventKey}`);
-
-            const commonEvent: CommonEvent.Notice = {
-                id: this.createId(Date.now().toString()),
-                timestamp: unixSecondsToEventMs(message.CreateTime),
-                platform: "wechat",
-                bot_id: this.createId(config.account_id),
-                type: "notice",
-                notice_type: "custom" as const,
-                sub_type: "menu_view",
-                user: {
-                    id: this.createId(message.FromUserName),
-                    name: message.FromUserName,
-                },
-                event_key: message.EventKey,
-            };
-
-            account.dispatch(commonEvent);
-        });
-
-        // 启动时初始化 Bot
-        account.on("start", async () => {
-            try {
-                await bot.start();
-                account.status = AccountStatus.Online;
-                account.nickname =
-                    ((config as unknown as Record<string, unknown>).nickname as string) ||
-                    "微信公众号";
-                account.avatar = this.icon;
-            } catch (error) {
-                this.logger.error(`启动微信公众号失败:`, error);
-                account.status = AccountStatus.OffLine;
-            }
-        });
-
-        account.on("stop", async () => {
-            await bot.stop();
-            account.status = AccountStatus.OffLine;
-        });
-
-        return account;
-    }
+async function readPackageVersion(url: URL): Promise<string> {
+    const value = JSON.parse(await readFile(url, "utf8")) as { version?: unknown };
+    if (typeof value.version !== "string") throw new Error(`package.json 缺少 version: ${url}`);
+    return value.version;
 }
 
 declare module "onebots" {
@@ -597,20 +226,13 @@ declare module "onebots" {
         }
     }
 }
+
 AdapterRegistry.register("wechat", WechatAdapter, {
     name: "wechat",
     displayName: "微信公众号",
-    description: "微信公众号适配器，支持私聊和群聊",
+    description: "微信公众平台官方 API 适配器，支持安全 Webhook、客服消息和原生管理 API",
     icon: "https://res.wx.qq.com/a/wx_fed/assets/res/OTE0YTAw.png",
-    homepage: "https://mp.weixin.qq.com/",
+    homepage: "https://developers.weixin.qq.com/doc/offiaccount/Getting_Started/Overview.html",
     author: "凉菜",
     capabilities: wechatCapabilities,
 });
-
-declare module "@/adapter.js" {
-    namespace Adapter {
-        interface Configs {
-            wechat: WechatConfig;
-        }
-    }
-}

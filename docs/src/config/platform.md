@@ -21,13 +21,13 @@
 
 ### 配置项
 
-#### appid
+#### app_id
 
 - **类型**: `string`
 - **必填**: ✅
 - **说明**: 微信公众号 AppID
 
-#### appsecret
+#### app_secret
 
 - **类型**: `string`
 - **必填**: ✅
@@ -45,26 +45,15 @@
 - **必填**: ❌
 - **说明**: 消息加解密密钥（启用加密模式时必填）
 
-#### encrypt_mode
-
-- **类型**: `string`
-- **可选值**: `plain` | `compatible` | `safe`
-- **默认值**: `plain`
-- **说明**: 消息加解密模式
-  - `plain`: 明文模式
-  - `compatible`: 兼容模式
-  - `safe`: 安全模式（加密）
-
 ### 配置示例
 
 ```yaml
 wechat.my_official_account:
   # 微信平台配置
-  appid: wx1234567890abcdef
-  appsecret: your_app_secret_here
+  app_id: wx1234567890abcdef
+  app_secret: your_app_secret_here
   token: your_token_here
   encoding_aes_key: your_aes_key_here
-  encrypt_mode: safe
   
   # 协议配置
   onebot.v11:
@@ -361,24 +350,24 @@ heychat.my_bot:
 ```yaml
 # 微信公众号 1
 wechat.mp1:
-  appid: wx111111111111
-  appsecret: secret1
+  app_id: wx111111111111
+  app_secret: secret1
   token: token1
   onebot.v11:
     use_http: true
 
 # 微信公众号 2
 wechat.mp2:
-  appid: wx222222222222
-  appsecret: secret2
+  app_id: wx222222222222
+  app_secret: secret2
   token: token2
   satori.v1:
     path: /satori
 
 # 微信公众号 3
 wechat.mp3:
-  appid: wx333333333333
-  appsecret: secret3
+  app_id: wx333333333333
+  app_secret: secret3
   token: token3
   milky.v1:
     use_http: true

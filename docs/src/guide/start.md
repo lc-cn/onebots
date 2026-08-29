@@ -135,11 +135,11 @@ onebots -r wechat -p onebot-v11 -p onebot-v12 -p satori-v1
 
 ```javascript
 import { App } from 'onebots';
-import { WeChatAdapter } from '@onebots/adapter-wechat';
+import { WechatAdapter } from '@onebots/adapter-wechat';
 import { OneBotV11Protocol } from '@onebots/protocol-onebot-v11';
 
 // 注册适配器和协议
-await App.registerAdapter('wechat', WeChatAdapter);
+await App.registerAdapter('wechat', WechatAdapter);
 await App.registerProtocol('onebot', OneBotV11Protocol, 'v11');
 
 // 创建并启动转换服务
@@ -248,4 +248,3 @@ ws://localhost:6727/{platform}/{account_id}/onebot/v11
 - 🔌 [开发自定义适配器](/zh/guide/adapter)
 - 📡 [协议说明](/zh/protocol/onebot-v11/index)
 - 🛠️ [API 参考](/zh/protocol/onebot-v11/action)
-

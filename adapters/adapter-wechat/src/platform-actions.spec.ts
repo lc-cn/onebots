@@ -1,0 +1,32 @@
+import { describe, expect, it, vi } from "vitest";
+import type { WechatClient } from "./client.js";
+import { executeWechatPlatformAction, WECHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+describe("微信公众号平台动作", () => {
+    it("将标签作为原生受众管理 API，而不是通用群聊", async () => {
+        const call = vi.fn().mockResolvedValue({ errcode: 0 });
+        const client = { call } as unknown as WechatClient;
+        await executeWechatPlatformAction(client, "tag_users", {
+            openids: ["u1", "u2"],
+            tag_id: 7,
+        });
+        expect(call).toHaveBeenCalledWith({
+            method: "POST",
+            path: "/cgi-bin/tags/members/batchtagging",
+            body: { openid_list: ["u1", "u2"], tagid: 7 },
+        });
+    });
+
+    it("提供通用安全调用覆盖未来接口", async () => {
+        const call = vi.fn().mockResolvedValue({ ok: true });
+        const client = { call } as unknown as WechatClient;
+        await executeWechatPlatformAction(client, "wechat_call", {
+            method: "POST",
+            path: "/cgi-bin/new/action",
+            body: { value: 1 },
+        });
+        expect(call).toHaveBeenCalledWith(expect.objectContaining({ path: "/cgi-bin/new/action" }));
+        expect(WECHAT_PLATFORM_ACTIONS.has("publish_draft")).toBe(true);
+        expect(WECHAT_PLATFORM_ACTIONS.has("mass_send_by_tag")).toBe(true);
+    });
+});

@@ -1,116 +1,38 @@
-# 微信适配器
+# 微信公众号适配器
 
-微信适配器支持通过微信公众号接入 onebots 服务。
+`@onebots/adapter-wechat` 使用微信公众平台官方 API，接收安全 Webhook，并通过 OneBots 协议层向下游提供事件与 API。
 
-## 状态
-
-✅ **已实现并可用**
-
-## 功能特性
-
-- ✅ 接收文本、图片、语音、视频消息
-- ✅ 发送文本、图片、语音、视频消息
-- ✅ 菜单事件、关注/取消关注事件
-- ✅ 模板消息推送
-- ✅ 自定义菜单管理
-
-## 安装
+## 安装与配置
 
 ```bash
-npm install @onebots/adapter-wechat
+pnpm add @onebots/adapter-wechat
 ```
-
-## 配置
-
-在 `config.yaml` 中添加微信公众号配置：
 
 ```yaml
-# 账号格式：wechat.{公众号ID}
 wechat.my_mp:
-  # 公众号配置
-  appid: your_appid           # 公众号 AppID
-  appsecret: your_appsecret   # 公众号 AppSecret
-  token: your_token           # 服务器配置的 Token
-  encoding_aes_key: your_key  # 消息加解密密钥（可选）
-  
-  # 协议配置
+  app_id: wx1234567890abcdef
+  app_secret: your_app_secret
+  token: your_webhook_token
+  encoding_aes_key: your_43_character_key
+  passive_reply_timeout_ms: 4500
+  deduplicate_webhooks: true
+
   onebot.v11:
     use_http: true
-    use_ws: false
+    use_ws: true
 ```
 
-## 获取配置信息
+在公众平台将服务器 URL 配置为 `https://bot.example.com/wechat/my_mp/webhook`。默认路径为 `/wechat/{account_id}/webhook`，可用 `webhook_path` 覆盖。生产环境建议启用安全模式并配置 `encoding_aes_key`。
 
-1. 登录 [微信公众平台](https://mp.weixin.qq.com/)
-2. 在"开发" - "基本配置"中获取：
-   - **AppID**
-   - **AppSecret**（需要管理员权限）
-3. 在"开发" - "基本配置" - "服务器配置"中设置：
-   - **URL**: `http://your-domain:6727/wechat/my_mp/webhook`
-   - **Token**: 自定义令牌（需与配置文件一致）
-   - **EncodingAESKey**: 随机生成或自定义
+## 能力边界
 
-## 启动服务
+- 公众号会话只有用户私聊，不存在群聊；用户标签不会被映射为群组。
+- 接收文本、图片、语音、视频、短视频、位置、链接以及所有事件通知。
+- 发送文本、媒体、图文和原生 `wechat_message`；媒体须先取得 `media_id`。
+- `reply` 段可在 Webhook 窗口内提交被动回复，超时后发送客服消息。
+- 用户、标签、黑名单、素材、草稿、发布、菜单、二维码、模板和群发均有原生动作。
+- 未命名的新接口可通过 `wechat_call` 调用，且仍使用统一 token 缓存与结构化错误。
 
-```bash
-# 注册微信适配器和 OneBot V11 协议
-onebots -r wechat -p onebot-v11
-```
+所有事件均保留 `raw_event`；嵌套 XML 的完整原文位于 `raw_event.RawXml`。
 
-## API 地址
-
-启动后，OneBot API 可通过以下地址访问：
-
-- **HTTP**: `http://localhost:6727/wechat/my_mp/onebot/v11/{action}`
-- **WebSocket**: `ws://localhost:6727/wechat/my_mp/onebot/v11`
-
-## 注意事项
-
-### 公网访问
-
-微信公众平台要求服务器配置的 URL 必须是公网可访问的地址。开发环境可使用：
-- [内网穿透工具](https://ngrok.com/)
-- [Cloudflare Tunnel](https://www.cloudflare.com/products/tunnel/)
-
-### 安全模式
-
-建议在生产环境启用消息加解密，配置 `encoding_aes_key` 并在公众平台设置为"安全模式"。
-
-### 接口权限
-
-不同类型的公众号拥有不同的接口权限：
-- **订阅号**: 基础消息收发
-- **服务号**: 完整接口权限（推荐）
-- **企业号**: 企业内部应用
-
-## 使用客户端SDK连接
-
-onebots 提供了 imhelper 客户端SDK，可以方便地连接微信适配器：
-
-```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot11Adapter } from '@imhelper/onebot-v11';
-
-const adapter = createOnebot11Adapter({
-  baseUrl: 'http://localhost:6727',
-  selfId: 'my_mp',
-  accessToken: 'your_token',
-  receiveMode: 'webhook', // 微信通常使用 webhook 模式
-  path: '/wechat/my_mp/onebot/v11',
-  wsUrl: 'ws://localhost:6727/wechat/my_mp/onebot/v11',
-  platform: 'wechat',
-});
-
-const helper = createImHelper(adapter);
-// Webhook 模式需要启动本地服务器接收事件
-await adapter.connect(8080);
-```
-
-详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)
-
-## 相关链接
-
-- [微信公众平台](https://mp.weixin.qq.com/)
-- [微信公众平台开发文档](https://developers.weixin.qq.com/doc/offiaccount/Getting_Started/Overview.html)
-- [@onebots/adapter-wechat 源码](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wechat)
-- [客户端SDK使用指南](/guide/client-sdk)
+完整动作和底层接入示例见 [包 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wechat)。

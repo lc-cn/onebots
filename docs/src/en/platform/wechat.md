@@ -1,89 +1,25 @@
-# WeChat Adapter
+# WeChat Official Account Adapter
 
-The WeChat adapter supports connecting to onebots service through WeChat Official Account API.
-
-## Status
-
-✅ **Implemented and Available**
-
-## Features
-
-- ✅ WeChat Official Account Messages
-- ✅ Text, Image, Video, Audio Messages
-- ✅ Rich Media Messages
-- ✅ Event Subscriptions
-- ✅ Menu Interactions
-
-## Installation
-
-```bash
-npm install @onebots/adapter-wechat
-# or
-pnpm add @onebots/adapter-wechat
-```
-
-## Configuration Example
+`@onebots/adapter-wechat` uses the official WeChat API, accepts signed/encrypted webhooks on the shared OneBots HTTP host, and exposes events and APIs through configured protocols.
 
 ```yaml
-wechat.my_official_account:
-  # Protocol configuration
+wechat.my_mp:
+  app_id: wx1234567890abcdef
+  app_secret: your_app_secret
+  token: your_webhook_token
+  encoding_aes_key: your_43_character_key
+  passive_reply_timeout_ms: 4500
+  deduplicate_webhooks: true
+
   onebot.v11:
     use_http: true
     use_ws: true
-    access_token: 'your_token'
-  
-  # WeChat platform configuration
-  appid: 'your_app_id'
-  appsecret: 'your_app_secret'
-  token: 'your_token'
-  encoding_aes_key: 'your_aes_key'  # Optional, for encryption mode
-  encrypt_mode: 'plain'             # 'plain', 'compatible', or 'safe'
 ```
 
-## Webhook Configuration
+Configure `https://bot.example.com/wechat/my_mp/webhook` in the WeChat console. The default path is `/wechat/{account_id}/webhook`; override it with `webhook_path`.
 
-Configure the webhook URL in WeChat Public Platform:
+The adapter receives every official-account message and event, preserves `raw_event` plus the complete `RawXml`, and supports active customer-service messages and correlated passive replies. Media must use an uploaded `media_id`; URLs are never silently converted into placeholder text.
 
-```
-http://your-domain:6727/wechat/{account_id}/webhook
-```
+WeChat user tags are audience-management objects, not chat groups. Native actions cover users, tags, blocklists, media, drafts, publishing, menus, QR codes, templates, and mass messaging. Use `wechat_call` for newly introduced or uncommon official endpoints.
 
-For example:
-```
-http://bot.example.com:6727/wechat/my_official_account/webhook
-```
-
-## Client SDK Usage
-
-```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
-
-const client = new ImHelper();
-
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'wechat',
-  account_id: 'my_official_account',
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/wechat/my_official_account/onebot/v11/ws',
-  access_token: 'your_access_token',
-});
-
-// Listen for messages
-client.on('message', (message) => {
-  console.log(`Received message: ${message.content}`);
-  // Auto reply
-  message.reply('Hello from WeChat bot!');
-});
-```
-
-## Related Links
-
-- [WeChat Adapter Configuration](/en/config/adapter/wechat)
-- [Quick Start](/en/guide/start)
-- [Client SDK Guide](/en/guide/client-sdk)
-
+See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wechat) for the complete API and embedding contract.

@@ -1,21 +1,13 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "strict": false,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "lib",
-    "rootDir": "src",
-    "composite": true,
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": ["./src/**/*"],
-  "exclude": ["node_modules", "lib"]
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "lib",
+        "rootDir": "src",
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["./src/*"]
+        }
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "lib", "src/**/*.spec.ts"]
 }

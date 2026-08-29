@@ -1,144 +1,43 @@
-/**
- * 微信公众号 API 类型定义
- */
-
-// 账号类型
-export type WechatAccountType = 'subscription' | 'service';
-
-// 配置类型
+/** 微信公众号账号配置。 */
 export interface WechatConfig {
     account_id: string;
-    appId: string;
-    appSecret: string;
+    app_id: string;
+    app_secret: string;
     token: string;
-    encodingAESKey?: string;
-    accountType?: WechatAccountType; // 账号类型，默认 subscription
+    /** 安全模式或兼容模式必填，43 位。 */
+    encoding_aes_key?: string;
+    webhook_path?: string;
+    /** 等待下游通过 reply 段提交被动回复的时间，默认 4500ms，0 表示立即确认。 */
+    passive_reply_timeout_ms?: number;
+    /** 是否按 MsgId/事件复合键过滤微信重试，默认开启。 */
+    deduplicate_webhooks?: boolean;
+    webhook_deduplication_limit?: number;
+    api_base_url?: string;
 }
 
-// 消息类型
-export type WechatMessageType = 'text' | 'image' | 'voice' | 'video' | 'music' | 'news' | 'mpnews' | 'msgmenu' | 'wxcard' | 'miniprogrampage' | 'event';
+export type WechatMessageType =
+    | "text"
+    | "image"
+    | "voice"
+    | "video"
+    | "shortvideo"
+    | "location"
+    | "link"
+    | "event";
 
-// 事件类型
-export type WechatEventType = 'subscribe' | 'unsubscribe' | 'SCAN' | 'LOCATION' | 'CLICK' | 'VIEW';
-
-// 用户信息
-export interface WechatUser {
-    subscribe: number;
-    openid: string;
-    nickname?: string;
-    sex?: number;
-    language?: string;
-    city?: string;
-    province?: string;
-    country?: string;
-    headimgurl?: string;
-    subscribe_time?: number;
-    unionid?: string;
-    remark?: string;
-    groupid?: number;
-    tagid_list?: number[];
-    subscribe_scene?: string;
-    qr_scene?: number;
-    qr_scene_str?: string;
-}
-
-// 用户列表
-export interface WechatUserList {
-    total: number;
-    count: number;
-    data: {
-        openid: string[];
-    };
-    next_openid: string;
-}
-
-// 用户标签
-export interface WechatTag {
-    id: number;
-    name: string;
-    count?: number;
-}
-
-// 用户分组（已废弃，但保留兼容）
-export interface WechatGroup {
-    id: number;
-    name: string;
-    count?: number;
-}
-
-// 消息内容
-export interface WechatTextMessage {
-    content: string;
-}
-
-export interface WechatImageMessage {
-    media_id: string;
-}
-
-export interface WechatVoiceMessage {
-    media_id: string;
-}
-
-export interface WechatVideoMessage {
-    media_id: string;
-    thumb_media_id?: string;
-    title?: string;
-    description?: string;
-}
-
-export interface WechatNewsArticle {
-    title: string;
-    description?: string;
-    url: string;
-    picurl?: string;
-}
-
-export interface WechatNewsMessage {
-    articles: WechatNewsArticle[];
-}
-
-// 模板消息
-export interface WechatTemplateMessage {
-    touser: string;
-    template_id: string;
-    url?: string;
-    miniprogram?: {
-        appid: string;
-        pagepath: string;
-    };
-    data: Record<string, {
-        value: string;
-        color?: string;
-    }>;
-}
-
-// 素材
-export interface WechatMedia {
-    type: 'image' | 'voice' | 'video' | 'thumb';
-    media_id: string;
-    created_at: number;
-}
-
-// Access Token
-export interface WechatAccessToken {
-    access_token: string;
-    expires_in: number;
-}
-
-// API 响应
-export interface WechatApiResponse<T = unknown> {
-    errcode?: number;
-    errmsg?: string;
-    data?: T;
-}
-
-// 接收到的消息
-export interface WechatIncomingMessage {
+/** 微信推送 XML 的扁平字段，未知字段会被完整保留。 */
+export interface WechatIncomingMessage extends Record<string, unknown> {
+    /** 完整原始 XML；嵌套事件字段无法扁平化时仍可无损处理。 */
+    RawXml?: string;
+    /** 安全模式收到的外层密文 XML。 */
+    EncryptedXml?: string;
     ToUserName: string;
     FromUserName: string;
     CreateTime: number;
-    MsgType: WechatMessageType;
+    MsgType: WechatMessageType | string;
     MsgId?: string;
+    MsgDataId?: string;
+    Idx?: string;
     Content?: string;
     MediaId?: string;
     PicUrl?: string;
@@ -152,10 +51,96 @@ export interface WechatIncomingMessage {
     Title?: string;
     Description?: string;
     Url?: string;
-    Event?: WechatEventType;
+    Event?: string;
     EventKey?: string;
     Ticket?: string;
     Latitude?: number;
     Longitude?: number;
     Precision?: number;
+    Status?: string;
+}
+
+export interface WechatUser {
+    subscribe: number;
+    openid: string;
+    nickname?: string;
+    sex?: number;
+    language?: string;
+    city?: string;
+    province?: string;
+    country?: string;
+    headimgurl?: string;
+    subscribe_time?: number;
+    unionid?: string;
+    remark?: string;
+    tagid_list?: number[];
+    subscribe_scene?: string;
+    qr_scene?: number;
+    qr_scene_str?: string;
+}
+
+export interface WechatUserList {
+    total: number;
+    count: number;
+    data?: { openid: string[] };
+    next_openid: string;
+}
+
+export interface WechatTag {
+    id: number;
+    name: string;
+    count?: number;
+}
+
+export interface WechatTemplateMessage extends Record<string, unknown> {
+    touser: string;
+    template_id: string;
+    url?: string;
+    miniprogram?: { appid: string; pagepath: string };
+    data: Record<string, { value: string; color?: string }>;
+}
+
+export interface WechatOutboundMessage extends Record<string, unknown> {
+    msgtype: string;
+    text?: { content: string };
+    image?: { media_id: string };
+    voice?: { media_id: string };
+    video?: { media_id: string; thumb_media_id?: string; title?: string; description?: string };
+    music?: Record<string, unknown>;
+    news?: { articles: WechatNewsArticle[] };
+    wxcard?: { card_id: string };
+    miniprogrampage?: Record<string, unknown>;
+}
+
+export interface WechatNewsArticle {
+    title: string;
+    description?: string;
+    url?: string;
+    picurl?: string;
+}
+
+export interface WechatApiCallOptions {
+    method?: "GET" | "POST";
+    path: string;
+    query?: Readonly<Record<string, string | number | boolean | undefined>>;
+    body?: unknown;
+    token?: boolean;
+    responseType?: "json" | "buffer";
+    signal?: AbortSignal;
+}
+
+export interface WechatWebhookRequest {
+    method: "GET" | "POST";
+    query: Readonly<Record<string, unknown>>;
+    body?: string | Buffer;
+}
+
+export interface WechatWebhookResponse {
+    status: number;
+    body: unknown;
+    contentType?: string;
+}
+
+export interface WechatIngressOptions {
+    passiveReplyTimeoutMs?: number;
 }

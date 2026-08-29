@@ -1,24 +1,34 @@
 import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { WECHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-/** 微信公众号接口当前可用的能力。 */
+const nativePermission = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["wechat.official_account.api"],
+};
+const platformActions = Object.fromEntries(
+    [...WECHAT_PLATFORM_ACTIONS].map(action => [action, nativePermission]),
+);
+
+/** 微信公众号当前实际可执行的能力；用户标签不伪装成聊天群组。 */
 export const wechatCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { support: "native", scenes: ["private"] },
-        get_login_info: { support: "native" },
-        get_user_info: {
+        send_message: {
             support: "native",
-            availability: "permission",
-            permissions: ["user.info"],
+            availability: "context",
+            scenes: ["private"],
+            note: "依赖被动回复窗口或微信客服消息会话窗口",
         },
-        get_friend_list: { support: "native", note: "返回公众号关注用户" },
-        get_friend_info: { support: "native", note: "返回公众号关注用户信息" },
-        get_group_list: { support: "emulated", note: "按公众号用户标签投影群组" },
-        get_group_info: { support: "emulated", note: "按公众号用户标签投影群组" },
-        set_group_name: { support: "emulated", note: "修改公众号用户标签名称" },
-        get_group_member_list: { support: "emulated", note: "返回指定公众号用户标签下的用户" },
-        get_group_member_info: { support: "emulated", note: "投影关注用户及其标签信息" },
-        set_group_card: { support: "emulated", note: "修改公众号关注用户备注" },
+        get_login_info: { support: "native" },
+        get_user_info: nativePermission,
+        get_friend_list: { ...nativePermission, note: "返回已关注用户" },
+        get_friend_info: { ...nativePermission, note: "返回已关注用户" },
+        can_send_image: { support: "native" },
+        can_send_record: { support: "native" },
+        get_version: { support: "native" },
+        get_status: { support: "native" },
         get_supported_actions: { support: "native" },
+        ...platformActions,
     },
     events: {
         message: { support: "native", scenes: ["private"] },
@@ -26,17 +36,21 @@ export const wechatCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
         unsubscribe: { support: "native", scenes: ["private"] },
         scan: { support: "native", scenes: ["private"] },
         location: { support: "native", scenes: ["private"] },
-        menu_click: { support: "native", scenes: ["private"] },
-        menu_view: { support: "native", scenes: ["private"] },
+        menu: { support: "native", scenes: ["private"] },
+        template_status: { support: "native", scenes: ["private"] },
+        mass_send_status: { support: "native" },
+        raw_event: { support: "native" },
     },
     segments: {
         text: { support: "native", direction: "both" },
+        reply: { support: "native", direction: "send" },
         image: { support: "native", direction: "both" },
-        audio: { support: "native", direction: "receive" },
-        video: { support: "native", direction: "receive" },
+        voice: { support: "native", direction: "both" },
+        video: { support: "native", direction: "both" },
+        location: { support: "native", direction: "receive" },
         link: { support: "native", direction: "receive" },
+        news: { support: "native", direction: "send" },
+        wechat_message: { support: "native", direction: "both" },
     },
-    transports: {
-        webhook: { support: "native", mode: "webhook" },
-    },
+    transports: { webhook: { support: "native", mode: "webhook" } },
 });
