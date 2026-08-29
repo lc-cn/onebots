@@ -40,7 +40,7 @@ export interface MockMember {
     user_id: string;
     nickname: string;
     card?: string;
-    role: 'owner' | 'admin' | 'member';
+    role: "owner" | "admin" | "member";
     join_time?: number;
     last_sent_time?: number;
 }
@@ -54,8 +54,7 @@ export interface MockMessage {
 }
 
 export interface MockEvent {
-    type: 'message' | 'notice' | 'request' | 'meta';
+    type: "message" | "notice" | "request" | "meta";
     detail_type: string;
     data: Record<string, unknown>;
 }
-

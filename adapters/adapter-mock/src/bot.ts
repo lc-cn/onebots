@@ -3,14 +3,15 @@
  * 模拟真实机器人行为，用于测试
  */
 
-import { EventEmitter } from 'node:events';
-import type { MockConfig, MockUser, MockGroup, MockMember, MockMessage } from './types.js';
+import { EventEmitter } from "node:events";
+import type { MockConfig, MockUser, MockGroup, MockMember, MockMessage } from "./types.js";
 
 export class MockBot extends EventEmitter {
     private config: MockConfig;
     private messageIdCounter = 0;
     private eventTimer: NodeJS.Timeout | null = null;
     private isRunning = false;
+    private generation = 0;
 
     // 模拟数据存储
     private friends: Map<string, MockUser> = new Map();
@@ -25,34 +26,32 @@ export class MockBot extends EventEmitter {
 
     private initMockData(): void {
         // 初始化默认好友
-        const defaultFriends: MockUser[] = this.config.friends || [
-            { user_id: '10001', nickname: '测试好友1', avatar: 'https://via.placeholder.com/100' },
-            { user_id: '10002', nickname: '测试好友2', avatar: 'https://via.placeholder.com/100' },
-            { user_id: '10003', nickname: '测试好友3', avatar: 'https://via.placeholder.com/100' },
+        const defaultFriends: MockUser[] = this.config.friends ?? [
+            { user_id: "10001", nickname: "测试好友1", avatar: "https://via.placeholder.com/100" },
+            { user_id: "10002", nickname: "测试好友2", avatar: "https://via.placeholder.com/100" },
+            { user_id: "10003", nickname: "测试好友3", avatar: "https://via.placeholder.com/100" },
         ];
         defaultFriends.forEach(f => this.friends.set(f.user_id, f));
 
         // 初始化默认群组
-        const defaultGroups: MockGroup[] = this.config.groups || [
+        const defaultGroups: MockGroup[] = this.config.groups ?? [
             {
-                group_id: '100001',
-                group_name: '测试群1',
+                group_id: "100001",
+                group_name: "测试群1",
                 member_count: 50,
                 max_member_count: 200,
                 members: [
-                    { user_id: '10001', nickname: '群主', role: 'owner', card: '大佬' },
-                    { user_id: '10002', nickname: '管理员', role: 'admin' },
-                    { user_id: '10003', nickname: '普通成员', role: 'member' },
+                    { user_id: "10001", nickname: "群主", role: "owner", card: "大佬" },
+                    { user_id: "10002", nickname: "管理员", role: "admin" },
+                    { user_id: "10003", nickname: "普通成员", role: "member" },
                 ],
             },
             {
-                group_id: '100002',
-                group_name: '测试群2',
+                group_id: "100002",
+                group_name: "测试群2",
                 member_count: 100,
                 max_member_count: 500,
-                members: [
-                    { user_id: this.config.account_id, nickname: '机器人', role: 'member' },
-                ],
+                members: [{ user_id: this.config.account_id, nickname: "机器人", role: "member" }],
             },
         ];
         defaultGroups.forEach(g => this.groups.set(g.group_id, g));
@@ -60,16 +59,18 @@ export class MockBot extends EventEmitter {
 
     async start(): Promise<void> {
         if (this.isRunning) return;
+        const generation = ++this.generation;
         this.isRunning = true;
 
         // 模拟启动延迟
-        await this.delay(this.config.latency || 100);
+        await this.delay(this.config.latency ?? 100);
+        if (!this.isRunning || generation !== this.generation) return;
 
         // 触发就绪事件
-        this.emit('ready', {
+        this.emit("ready", {
             user_id: this.config.account_id,
-            nickname: this.config.nickname || 'MockBot',
-            avatar: this.config.avatar || 'https://via.placeholder.com/100',
+            nickname: this.config.nickname ?? "MockBot",
+            avatar: this.config.avatar ?? "https://via.placeholder.com/100",
         });
 
         // 启动自动事件生成
@@ -80,15 +81,16 @@ export class MockBot extends EventEmitter {
 
     async stop(): Promise<void> {
         this.isRunning = false;
+        this.generation += 1;
         if (this.eventTimer) {
             clearInterval(this.eventTimer);
             this.eventTimer = null;
         }
-        this.emit('stopped');
+        this.emit("stopped");
     }
 
     private startEventGeneration(): void {
-        const interval = this.config.event_interval || 5000;
+        const interval = this.config.event_interval ?? 5000;
         this.eventTimer = setInterval(() => {
             if (!this.isRunning) return;
             this.generateRandomEvent();
@@ -96,21 +98,21 @@ export class MockBot extends EventEmitter {
     }
 
     private generateRandomEvent(): void {
-        const eventTypes = ['private_message', 'group_message', 'friend_request', 'heartbeat'];
+        const eventTypes = ["private_message", "group_message", "friend_request", "heartbeat"];
         const type = eventTypes[Math.floor(Math.random() * eventTypes.length)];
 
         switch (type) {
-            case 'private_message':
+            case "private_message":
                 this.emitPrivateMessage();
                 break;
-            case 'group_message':
+            case "group_message":
                 this.emitGroupMessage();
                 break;
-            case 'friend_request':
+            case "friend_request":
                 this.emitFriendRequest();
                 break;
-            case 'heartbeat':
-                this.emit('heartbeat', { time: Date.now() });
+            case "heartbeat":
+                this.emit("heartbeat", { time: Date.now() });
                 break;
         }
     }
@@ -128,8 +130,8 @@ export class MockBot extends EventEmitter {
         };
 
         this.messages.set(message.message_id, message);
-        this.emit('message', {
-            type: 'private',
+        this.emit("message", {
+            type: "private",
             message_id: message.message_id,
             user_id: friend.user_id,
             nickname: friend.nickname,
@@ -155,8 +157,8 @@ export class MockBot extends EventEmitter {
         };
 
         this.messages.set(message.message_id, message);
-        this.emit('message', {
-            type: 'group',
+        this.emit("message", {
+            type: "group",
             message_id: message.message_id,
             group_id: group.group_id,
             group_name: group.group_name,
@@ -169,11 +171,11 @@ export class MockBot extends EventEmitter {
     }
 
     private emitFriendRequest(): void {
-        this.emit('request', {
-            type: 'friend',
+        this.emit("request", {
+            type: "friend",
             user_id: String(100000 + Math.floor(Math.random() * 10000)),
             nickname: `新好友${Date.now()}`,
-            comment: '请求添加好友',
+            comment: "请求添加好友",
             flag: `flag_${Date.now()}`,
         });
     }
@@ -189,20 +191,20 @@ export class MockBot extends EventEmitter {
     // ========== API 方法 ==========
 
     async getLoginInfo(): Promise<{ user_id: string; nickname: string }> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         return {
             user_id: this.config.account_id,
-            nickname: this.config.nickname || 'MockBot',
+            nickname: this.config.nickname ?? "MockBot",
         };
     }
 
     async getFriendList(): Promise<MockUser[]> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         return Array.from(this.friends.values());
     }
 
     async getGroupList(): Promise<MockGroup[]> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         return Array.from(this.groups.values()).map(g => ({
             group_id: g.group_id,
             group_name: g.group_name,
@@ -212,38 +214,38 @@ export class MockBot extends EventEmitter {
     }
 
     async getGroupInfo(groupId: string): Promise<MockGroup | null> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         return this.groups.get(groupId) || null;
     }
 
     async getGroupMemberList(groupId: string): Promise<MockMember[]> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         const group = this.groups.get(groupId);
         return group?.members || [];
     }
 
     async getGroupMemberInfo(groupId: string, userId: string): Promise<MockMember | null> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         const group = this.groups.get(groupId);
         return group?.members?.find(m => m.user_id === userId) || null;
     }
 
     async getUserInfo(userId: string): Promise<MockUser | null> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         return this.friends.get(userId) || null;
     }
 
     async sendMessage(
         targetId: string,
         message: string,
-        type: 'private' | 'group' = 'private'
+        type: "private" | "group" = "private",
     ): Promise<{ message_id: string }> {
-        await this.delay(this.config.latency || 50);
+        await this.delay(this.config.latency ?? 50);
 
         const msg: MockMessage = {
             message_id: this.generateMessageId(),
             user_id: this.config.account_id,
-            group_id: type === 'group' ? targetId : undefined,
+            group_id: type === "group" ? targetId : undefined,
             content: message,
             time: Math.floor(Date.now() / 1000),
         };
@@ -253,7 +255,7 @@ export class MockBot extends EventEmitter {
         // 模拟回复
         if (this.config.auto_events) {
             setTimeout(() => {
-                this.emit('message_sent', {
+                this.emit("message_sent", {
                     message_id: msg.message_id,
                     target_id: targetId,
                     type,
@@ -265,12 +267,12 @@ export class MockBot extends EventEmitter {
     }
 
     async deleteMessage(messageId: string): Promise<boolean> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         return this.messages.delete(messageId);
     }
 
     async getMessage(messageId: string): Promise<MockMessage | null> {
-        await this.delay(this.config.latency || 10);
+        await this.delay(this.config.latency ?? 10);
         return this.messages.get(messageId) || null;
     }
 
@@ -311,7 +313,6 @@ export class MockBot extends EventEmitter {
         this.friends.clear();
         this.groups.clear();
         this.messages.clear();
-        this.initMockData();
     }
 
     /**

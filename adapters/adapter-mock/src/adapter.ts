@@ -22,18 +22,22 @@ export const mockCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
     actions: {
         send_message: { support: "native", scenes: ["private", "group"] },
         delete_message: { support: "native", scenes: ["private", "group"] },
+        get_message: { support: "native", scenes: ["private", "group"] },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },
         get_friend_list: { support: "native" },
+        get_friend_info: { support: "native" },
         get_group_list: { support: "native" },
         get_group_info: { support: "native" },
+        get_group_member_list: { support: "native" },
+        get_group_member_info: { support: "native" },
         get_status: { support: "native" },
         get_version: { support: "native" },
         get_supported_actions: { support: "native" },
     },
     events: {
         message: { support: "native", scenes: ["private", "group"] },
-        request: { support: "native" },
+        friend_request: { support: "native" },
         heartbeat: { support: "native" },
     },
     segments: {
@@ -81,7 +85,10 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
         const content = this.buildMessageContent(message);
-        const type = scene_type === "private" ? "private" : "group";
+        if (scene_type !== "private" && scene_type !== "group") {
+            throw new TypeError(`Mock 仅支持 private/group 场景，收到 ${scene_type}`);
+        }
+        const type = scene_type;
         const result = await bot.sendMessage(sceneId.string, content, type);
 
         return {
@@ -94,9 +101,30 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         if (!account) throw new Error(`Account ${uin} not found`);
 
         const bot = account.client;
-        await bot.deleteMessage(
+        const deleted = await bot.deleteMessage(
             this.coerceId(params.message_id as CommonTypes.Id | string | number).string,
         );
+        if (!deleted) throw new Error(`消息 ${params.message_id.string} 不存在`);
+    }
+
+    async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        const message = await account.client.getMessage(params.message_id.string);
+        if (!message) throw new Error(`消息 ${params.message_id.string} 不存在`);
+        const isGroup = Boolean(message.group_id);
+        return {
+            message_id: this.createId(message.message_id),
+            time: message.time,
+            sender: {
+                scene_type: isGroup ? "group" : "private",
+                sender_id: this.createId(message.user_id),
+                scene_id: this.createId(message.group_id ?? message.user_id),
+                sender_name: "",
+                scene_name: "",
+            },
+            message: [{ type: "text", data: { text: message.content } }],
+        };
     }
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
@@ -144,6 +172,19 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         }));
     }
 
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
+        const info = await this.requireBot(uin).getUserInfo(params.user_id.string);
+        if (!info) throw new Error(`Friend ${params.user_id.string} not found`);
+        return {
+            user_id: this.createId(info.user_id),
+            user_name: info.nickname,
+            remark: info.remark,
+        };
+    }
+
     async getGroupList(uin: string): Promise<Adapter.GroupInfo[]> {
         const account = this.getAccount(uin);
         if (!account) throw new Error(`Account ${uin} not found`);
@@ -181,6 +222,26 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         };
     }
 
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
+        const members = await this.requireBot(uin).getGroupMemberList(params.group_id.string);
+        return members.map(member => this.projectMember(params.group_id, member));
+    }
+
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
+        const member = await this.requireBot(uin).getGroupMemberInfo(
+            params.group_id.string,
+            params.user_id.string,
+        );
+        if (!member) throw new Error(`Member ${params.user_id.string} not found`);
+        return this.projectMember(params.group_id, member);
+    }
+
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const account = this.getAccount(uin);
         return {
@@ -216,7 +277,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
             this.logger.info(`Mock Bot ${user.nickname} (${user.user_id}) 已就绪`);
             account.status = AccountStatus.Online;
             account.nickname = user.nickname;
-            account.avatar = user.avatar;
+            account.avatar = user.avatar ?? "";
         });
 
         bot.on("stopped", () => {
@@ -300,13 +361,32 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
 
     private buildMessageContent(message: CommonTypes.Segment[]): string {
         return message
-            .map(seg => {
-                if (seg.type === "text") {
-                    return seg.data.text;
+            .map(segment => {
+                if (segment.type !== "text") {
+                    throw new TypeError(`Mock 不支持消息段 ${segment.type}`);
                 }
-                return `[${seg.type}]`;
+                return segment.data.text;
             })
             .join("");
+    }
+
+    private requireBot(uin: string): MockBot {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        return account.client;
+    }
+
+    private projectMember(
+        groupId: CommonTypes.Id,
+        member: import("./types.js").MockMember,
+    ): Adapter.GroupMemberInfo {
+        return {
+            group_id: groupId,
+            user_id: this.createId(member.user_id),
+            user_name: member.nickname,
+            card: member.card ?? "",
+            role: member.role,
+        };
     }
 }
 
