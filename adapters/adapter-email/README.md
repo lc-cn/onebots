@@ -1,16 +1,15 @@
 # @onebots/adapter-email
 
-onebots 邮件适配器，支持通过 SMTP 发送邮件和 IMAP 接收邮件。
+OneBots 邮件适配器。通过 SMTP 发送邮件，通过 IMAP IDLE 实时接收邮件，并提供线程、附件、搜索、标记和邮箱目录管理能力。
 
-## 特性
+## 能力
 
-- ✅ SMTP 发送邮件
-- ✅ IMAP 接收邮件
-- ✅ 支持 HTML 和纯文本邮件
-- ✅ 支持附件
-- ✅ 支持代理配置
-- ✅ 自动轮询新邮件
-- ✅ 支持回复邮件
+- SMTP 密码或 OAuth2 认证，连接池与 HTTP/HTTPS/SOCKS 代理
+- IMAP IDLE 实时接收、可选兜底轮询、无限指数退避重连
+- 纯文本、HTML、内联图片、普通附件、CC/BCC、Reply-To 与 RFC Message-ID 线程
+- 成功投影后再标记 `\\Seen`，避免处理失败时丢邮件
+- `EmailClient.ingest()` 可把外部解析的邮件交给同一事件管线
+- 结构化 `EmailError` 与白名单式 SMTP/IMAP 平台动作
 
 ## 安装
 
@@ -20,124 +19,54 @@ pnpm add @onebots/adapter-email
 
 ## 配置
 
+字段只使用 snake_case；SMTP 与 IMAP 共用认证和代理，避免重复配置。
+
 ```yaml
 email.my_bot:
-  # 发件人配置
-  from: 'bot@example.com'
-  fromName: '我的机器人'  # 可选
-  
-  # SMTP 配置（发送邮件）
+  address: bot@example.com
+  display_name: 我的机器人
+  default_subject: 来自 OneBots 的消息
+  auth:
+    user: bot@example.com
+    password: your-app-password
   smtp:
-    host: 'smtp.example.com'
+    host: smtp.example.com
     port: 587
-    secure: false
-    requireTLS: true
-    user: 'bot@example.com'
-    password: 'your_password'
-  
-  # IMAP 配置（接收邮件）
+    security: starttls
+    pool: true
   imap:
-    host: 'imap.example.com'
+    host: imap.example.com
     port: 993
-    tls: true
-    user: 'bot@example.com'
-    password: 'your_password'
-    pollInterval: 30000  # 轮询间隔（毫秒），默认 30 秒
-    mailbox: 'INBOX'    # 监听的邮箱文件夹，默认 INBOX
-  
-  # 协议配置
+    security: tls
+    mailbox: INBOX
+    mark_seen: true
+    poll_interval_ms: 60000
   onebot.v11:
-    access_token: 'your_token'
+    access_token: your-token
 ```
 
-## 使用示例
+`auth.access_token` 可替代 `auth.password`。证书默认严格校验；只有接入受控的自签名服务时才应关闭对应的 `reject_unauthorized`。
 
-### 发送邮件
+## 原生邮件段
 
-通过 OneBot 协议发送邮件：
+标准 `text`、`image`、`file` 和 `reply` 段均可发送。`email` 段用于设置邮件原生字段：
 
-```javascript
-// 发送邮件到 user@example.com
-await bot.sendMessage('user@example.com', {
-  scene_id: bot.createId('user@example.com'),
-  scene_type: 'private',
+```ts
+await adapter.sendMessage("my_bot", {
+  scene_type: "direct",
+  scene_id: adapter.createId("alice@example.com,bob@example.com"),
   message: [
-    { type: 'text', data: { text: '这是一封测试邮件' } }
-  ]
+    { type: "email", data: { subject: "发布通知", cc: ["owner@example.com"], priority: "high" } },
+    { type: "text", data: { text: "版本已经发布。" } },
+    { type: "file", data: { name: "report.pdf", path: "/srv/report.pdf" } },
+  ],
 });
 ```
 
-### 接收邮件
+接收事件在 `raw_event` 中保留完整 `EmailMessage`，在 `extensions.email` 中保留 UID、目录、主题、收件人和线程头。HTML 正文同时使用只读的 `email_html` 段保留，避免只留下有损生成的纯文本。
 
-邮件适配器会自动轮询新邮件，并将邮件转换为消息事件：
+## 平台动作
 
-```javascript
-bot.on('message', (event) => {
-  if (event.platform === 'email') {
-    console.log('收到邮件:', event.sender.name, event.message);
-  }
-});
-```
+通过 `callAction()` 可调用 `send_email`、`get_email`、`search_emails`、`list_mailboxes`、已读/星标、移动/删除邮件，以及创建、重命名、删除、订阅邮箱目录等动作。可用动作以 `get_supported_actions` 返回值为准。
 
-## 支持的邮件服务商
-
-### Gmail
-
-```yaml
-smtp:
-  host: 'smtp.gmail.com'
-  port: 587
-  user: 'your-email@gmail.com'
-  password: 'your-app-password'  # 需要使用应用专用密码
-
-imap:
-  host: 'imap.gmail.com'
-  port: 993
-  user: 'your-email@gmail.com'
-  password: 'your-app-password'
-```
-
-### Outlook/Hotmail
-
-```yaml
-smtp:
-  host: 'smtp-mail.outlook.com'
-  port: 587
-  user: 'your-email@outlook.com'
-  password: 'your-password'
-
-imap:
-  host: 'outlook.office365.com'
-  port: 993
-  user: 'your-email@outlook.com'
-  password: 'your-password'
-```
-
-### QQ 邮箱
-
-```yaml
-smtp:
-  host: 'smtp.qq.com'
-  port: 587
-  user: 'your-email@qq.com'
-  password: 'your-authorization-code'  # 需要使用授权码
-
-imap:
-  host: 'imap.qq.com'
-  port: 993
-  user: 'your-email@qq.com'
-  password: 'your-authorization-code'
-```
-
-## 注意事项
-
-1. **应用专用密码**：某些邮件服务商（如 Gmail）需要使用应用专用密码，而不是普通密码
-2. **授权码**：某些邮件服务商（如 QQ 邮箱）需要使用授权码
-3. **轮询间隔**：建议设置合理的轮询间隔，避免过于频繁的请求
-4. **代理配置**：如果需要通过代理访问邮件服务器，可以在配置中添加 `proxy` 字段
-
-## 相关链接
-
-- [适配器配置指南](/guide/adapter)
-- [邮件平台文档](/platform/email)
-
+`delete_message` 删除的是 IMAP 邮箱中的副本，不代表撤回已经投递给收件人的邮件。

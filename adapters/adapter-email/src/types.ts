@@ -1,137 +1,129 @@
-/**
- * 邮件适配器类型定义
- */
+/** 邮件服务认证。密码与 OAuth2 access token 至少配置一项。 */
+export interface EmailAuthConfig {
+    user: string;
+    password?: string;
+    access_token?: string;
+}
 
-/**
- * 代理配置
- */
-export interface ProxyConfig {
-    /** 代理服务器地址，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080 */
+/** SMTP 与 IMAP 共用的代理配置。 */
+export interface EmailProxyConfig {
     url: string;
-    /** 代理用户名（可选） */
     username?: string;
-    /** 代理密码（可选） */
     password?: string;
 }
 
-/**
- * SMTP 配置（发送邮件）
- */
-export interface SMTPConfig {
-    /** SMTP 服务器地址 */
+export type EmailConnectionSecurity = "tls" | "starttls" | "plain";
+
+/** SMTP 发送配置。 */
+export interface EmailSmtpConfig {
     host: string;
-    /** SMTP 端口，默认 587 */
     port?: number;
-    /** 是否使用 TLS，默认 true */
-    secure?: boolean;
-    /** 是否使用 STARTTLS，默认 true */
-    requireTLS?: boolean;
-    /** 用户名（通常是邮箱地址） */
-    user: string;
-    /** 密码或应用专用密码 */
-    password: string;
-    /** 代理配置（可选） */
-    proxy?: ProxyConfig;
+    security?: EmailConnectionSecurity;
+    /** 默认校验证书；仅明确接入自签名服务时关闭。 */
+    reject_unauthorized?: boolean;
+    pool?: boolean;
+    max_connections?: number;
+    max_messages?: number;
+    connection_timeout_ms?: number;
+    greeting_timeout_ms?: number;
+    socket_timeout_ms?: number;
 }
 
-/**
- * IMAP 配置（接收邮件）
- */
-export interface IMAPConfig {
-    /** IMAP 服务器地址 */
+/** IMAP 接收配置。 */
+export interface EmailImapConfig {
     host: string;
-    /** IMAP 端口，默认 993 */
     port?: number;
-    /** 是否使用 TLS，默认 true */
-    tls?: boolean;
-    /** 用户名（通常是邮箱地址） */
-    user: string;
-    /** 密码或应用专用密码 */
-    password: string;
-    /** 代理配置（可选） */
-    proxy?: ProxyConfig;
-    /** 轮询间隔（毫秒），默认 30000（30秒） */
-    pollInterval?: number;
-    /** 监听的邮箱文件夹，默认 'INBOX' */
+    security?: EmailConnectionSecurity;
+    /** 默认校验证书；仅明确接入自签名服务时关闭。 */
+    reject_unauthorized?: boolean;
     mailbox?: string;
+    mark_seen?: boolean;
+    poll_interval_ms?: number;
+    retry_initial_delay_ms?: number;
+    retry_max_delay_ms?: number;
+    connection_timeout_ms?: number;
+    greeting_timeout_ms?: number;
+    socket_timeout_ms?: number;
+    max_idle_time_ms?: number;
 }
 
-/**
- * 邮件适配器配置
- */
+/** 邮件适配器配置。字段使用统一 snake_case，不保留旧 camelCase 别名。 */
 export interface EmailConfig {
     account_id: string;
-    /** 发件人邮箱地址 */
-    from: string;
-    /** 发件人显示名称（可选） */
-    fromName?: string;
-    /** SMTP 配置（发送邮件） */
-    smtp: SMTPConfig;
-    /** IMAP 配置（接收邮件） */
-    imap: IMAPConfig;
+    address: string;
+    display_name?: string;
+    auth: EmailAuthConfig;
+    proxy?: EmailProxyConfig;
+    smtp: EmailSmtpConfig;
+    imap: EmailImapConfig;
+    default_subject?: string;
 }
 
-/**
- * 邮件消息类型
- */
+export interface EmailAddress {
+    address: string;
+    name?: string;
+}
+
+export interface EmailAttachment {
+    filename: string;
+    content_type: string;
+    content: Buffer;
+    size: number;
+    checksum?: string;
+    content_id?: string;
+    disposition?: string;
+    related?: boolean;
+}
+
+/** 已由 MailParser 解析的原生邮件。 */
 export interface EmailMessage {
-    /** 邮件 ID */
+    uid: number;
+    mailbox: string;
     id: string;
-    /** 主题 */
     subject: string;
-    /** 发件人 */
-    from: {
-        address: string;
-        name?: string;
-    };
-    /** 收件人列表 */
-    to: Array<{
-        address: string;
-        name?: string;
-    }>;
-    /** 抄送列表 */
-    cc?: Array<{
-        address: string;
-        name?: string;
-    }>;
-    /** 密送列表 */
-    bcc?: Array<{
-        address: string;
-        name?: string;
-    }>;
-    /** 邮件正文（HTML） */
+    from: EmailAddress;
+    to: EmailAddress[];
+    cc?: EmailAddress[];
+    bcc?: EmailAddress[];
+    reply_to?: EmailAddress[];
     html?: string;
-    /** 邮件正文（纯文本） */
     text?: string;
-    /** 附件列表 */
-    attachments?: Array<{
-        filename: string;
-        contentType: string;
-        content: Buffer;
-    }>;
-    /** 发送时间 */
+    attachments?: EmailAttachment[];
     date: Date;
-    /** 回复的邮件 ID（如果有） */
-    inReplyTo?: string;
-    /** 引用的邮件 ID（如果有） */
+    in_reply_to?: string;
     references?: string[];
+    headers: ReadonlyMap<string, unknown>;
 }
 
-/**
- * nodemailer SMTP 传输器配置
- * 由于 nodemailer 未提供 TypeScript 类型，手动定义关键字段
- */
-export interface SmtpTransportOptions {
-    host: string;
-    port?: number;
-    secure?: boolean;
-    requireTLS?: boolean;
-    auth?: {
-        user: string;
-        pass: string;
-    };
-    /** HTTPS/SOCKS 代理 agent */
-    agent?: unknown;
-    [key: string]: unknown;
+export interface EmailOutgoingAttachment {
+    filename: string;
+    content?: Buffer | string;
+    path?: string;
+    href?: string;
+    content_type?: string;
+    cid?: string;
+    disposition?: "attachment" | "inline";
 }
 
+/** 完整邮件发送参数，供平台动作与标准消息编译共用。 */
+export interface EmailSendOptions {
+    to: string | readonly string[];
+    cc?: string | readonly string[];
+    bcc?: string | readonly string[];
+    reply_to?: string | readonly string[];
+    subject: string;
+    text?: string;
+    html?: string;
+    attachments?: EmailOutgoingAttachment[];
+    in_reply_to?: string;
+    references?: readonly string[];
+    priority?: "high" | "normal" | "low";
+    headers?: Readonly<Record<string, string>>;
+}
+
+export interface EmailSendResult {
+    message_id: string;
+    accepted: string[];
+    rejected: string[];
+    response: string;
+}

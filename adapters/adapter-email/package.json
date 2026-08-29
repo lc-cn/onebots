@@ -28,6 +28,8 @@
   ],
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/mailparser": "^3.4.6",
+    "@types/nodemailer": "^8.0.1",
     "tsc-alias": "latest",
     "typescript": "catalog:"
   },
@@ -36,7 +38,7 @@
   },
   "dependencies": {
     "nodemailer": "^9.0.5",
-    "imap": "^0.8.19",
+    "imapflow": "^1.7.6",
     "mailparser": "^3.6.5"
   },
   "optionalDependencies": {

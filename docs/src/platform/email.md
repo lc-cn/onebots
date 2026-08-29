@@ -1,22 +1,6 @@
 # 邮件平台
 
-## 状态
-
-✅ **已实现并可用**
-
-## 简介
-
-邮件适配器支持通过 SMTP 发送邮件和 IMAP 接收邮件，可以将邮件作为消息事件处理。
-
-## 特性
-
-- ✅ SMTP 发送邮件
-- ✅ IMAP 接收邮件
-- ✅ 支持 HTML 和纯文本邮件
-- ✅ 支持附件
-- ✅ 支持代理配置
-- ✅ 自动轮询新邮件
-- ✅ 支持回复邮件
+邮件适配器通过 SMTP 发送、IMAP IDLE 接收邮件。它保留邮件线程、地址、附件与原始头信息，并在连接关闭后持续重连。
 
 ## 安装
 
@@ -24,138 +8,47 @@
 pnpm add @onebots/adapter-email
 ```
 
-## 配置
-
-### 基础配置
+## 配置示例
 
 ```yaml
 email.my_bot:
-  # 发件人配置
-  from: 'bot@example.com'
-  fromName: '我的机器人'  # 可选
-  
-  # SMTP 配置（发送邮件）
+  address: bot@example.com
+  display_name: 我的机器人
+  auth:
+    user: bot@example.com
+    password: your-app-password
   smtp:
-    host: 'smtp.example.com'
+    host: smtp.example.com
     port: 587
-    secure: false
-    requireTLS: true
-    user: 'bot@example.com'
-    password: 'your_password'
-  
-  # IMAP 配置（接收邮件）
+    security: starttls
+    pool: true
   imap:
-    host: 'imap.example.com'
+    host: imap.example.com
     port: 993
-    tls: true
-    user: 'bot@example.com'
-    password: 'your_password'
-    pollInterval: 30000  # 轮询间隔（毫秒），默认 30 秒
-    mailbox: 'INBOX'    # 监听的邮箱文件夹，默认 INBOX
-  
-  # 协议配置
+    security: tls
+    mailbox: INBOX
+    mark_seen: true
+    poll_interval_ms: 60000
   onebot.v11:
-    access_token: 'your_token'
+    access_token: your-token
 ```
 
-### Gmail 配置示例
+认证与代理由 SMTP、IMAP 共用。可用 `auth.access_token` 替代密码；`security` 可选 `tls`、`starttls` 或 `plain`。
 
-```yaml
-email.gmail_bot:
-  from: 'your-email@gmail.com'
-  fromName: 'Gmail 机器人'
-  
-  smtp:
-    host: 'smtp.gmail.com'
-    port: 587
-    secure: false
-    requireTLS: true
-    user: 'your-email@gmail.com'
-    password: 'your-app-password'  # 需要使用应用专用密码
-  
-  imap:
-    host: 'imap.gmail.com'
-    port: 993
-    tls: true
-    user: 'your-email@gmail.com'
-    password: 'your-app-password'
-    pollInterval: 30000
-  
-  onebot.v11:
-    access_token: 'your_token'
-```
+## 消息模型
 
-### QQ 邮箱配置示例
+- 单个收件人投影为 `private`，多个回复收件人投影为 `direct`。
+- 会话 ID 是逗号分隔的邮箱地址，可直接 reply-all。
+- RFC Message-ID 是通用 `message_id`；IMAP UID 和邮箱目录保留在 `extensions.email`。
+- 文本、图片和附件使用通用段；HTML 原文还会使用接收方向的 `email_html` 段无损保留。
+- 发送方向可用 `email` 段设置主题、HTML、CC、BCC、Reply-To、References、优先级与自定义头。
 
-```yaml
-email.qq_bot:
-  from: 'your-email@qq.com'
-  fromName: 'QQ 邮箱机器人'
-  
-  smtp:
-    host: 'smtp.qq.com'
-    port: 587
-    secure: false
-    requireTLS: true
-    user: 'your-email@qq.com'
-    password: 'your-authorization-code'  # 需要使用授权码
-  
-  imap:
-    host: 'imap.qq.com'
-    port: 993
-    tls: true
-    user: 'your-email@qq.com'
-    password: 'your-authorization-code'
-    pollInterval: 30000
-  
-  onebot.v11:
-    access_token: 'your_token'
-```
+## 原生动作
 
-## 使用客户端 SDK
+`callAction()` 提供完整邮件发送、搜索、目录列表、已读/未读、星标、移动、删除，以及邮箱目录创建、重命名、删除和订阅管理。动作由能力清单统一声明，可通过 `get_supported_actions` 查询。
 
-```typescript
-import { ImHelper } from '@onebots/imhelper';
-import { EmailAdapter } from '@onebots/adapter-email';
-import { OneBotV11Adapter } from '@onebots/protocol-onebot-v11';
+::: warning 删除语义
+`delete_message` 删除 IMAP 邮箱中的邮件副本，不是 SMTP 撤回。已经投递到收件方的邮件无法由标准邮件协议撤回。
+:::
 
-const helper = new ImHelper({
-  adapter: new OneBotV11Adapter({
-    baseUrl: 'http://localhost:6727',
-    basePath: '/email/my_bot/onebot/v11',
-    accessToken: 'your_token',
-    platform: 'email',
-    accountId: 'my_bot',
-  }),
-});
-
-// 监听邮件消息
-helper.on('message', async (message) => {
-  console.log('收到邮件:', message.sender.name, message.content);
-  
-  // 自动回复
-  await helper.sendMessage({
-    scene_id: message.sender.id,
-    scene_type: 'private',
-    message: [
-      { type: 'text', data: { text: '已收到您的邮件！' } }
-    ],
-  });
-});
-
-await helper.start();
-```
-
-## 注意事项
-
-1. **应用专用密码**：某些邮件服务商（如 Gmail）需要使用应用专用密码，而不是普通密码
-2. **授权码**：某些邮件服务商（如 QQ 邮箱）需要使用授权码
-3. **轮询间隔**：建议设置合理的轮询间隔（如 30 秒），避免过于频繁的请求
-4. **代理配置**：如果需要通过代理访问邮件服务器，可以在配置中添加 `proxy` 字段
-
-## 相关链接
-
-- [适配器配置](/config/adapter/email)
-- [快速开始](/guide/start)
-- [客户端 SDK](/guide/client-sdk)
-
+完整字段见[邮件适配器配置](/config/adapter/email)。

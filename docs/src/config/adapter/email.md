@@ -1,212 +1,66 @@
 # 邮件适配器配置
 
-邮件适配器配置说明。
+Web 管理端会按凭据、传输、投递、过滤与高级设置分区生成表单。配置只接受 snake_case 字段，不保留旧的重复 SMTP/IMAP 认证字段。
 
-## 配置项
+## 基础与认证
 
-### from
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `address` | 是 | 对外发件邮箱地址 |
+| `display_name` | 否 | 发件人显示名称 |
+| `default_subject` | 否 | 消息未携带主题时使用 |
+| `auth.user` | 是 | SMTP 与 IMAP 共用用户名 |
+| `auth.password` | 二选一 | 密码、授权码或应用专用密码 |
+| `auth.access_token` | 二选一 | OAuth2 Access Token，配置后优先使用 |
 
-- **类型**: `string`
-- **必填**: ✅
-- **说明**: 发件人邮箱地址
+## SMTP
 
-### fromName
+`smtp.host` 必填。`smtp.security` 可选 `tls`、`starttls`、`plain`，默认 `starttls`；未指定端口时分别使用 465 或 587。可配置连接池、最大连接数、单连接邮件数和三类超时。
 
-- **类型**: `string`
-- **必填**: ❌
-- **说明**: 发件人显示名称（可选）
+## IMAP
 
-### smtp
+`imap.host` 必填。`imap.security` 默认 `tls`，未指定端口时 TLS 使用 993，其余使用 143。`mailbox` 默认 `INBOX`，`mark_seen` 默认开启。
 
-SMTP 配置（发送邮件）。
+客户端以 IMAP IDLE 接收新邮件。`poll_interval_ms` 是 IDLE 的兜底检查，默认 60000；设为 0 仅关闭兜底轮询。断线重连默认从 1 秒指数退避至 30 秒且不会停止，可通过 `retry_initial_delay_ms` 和 `retry_max_delay_ms` 调整。
 
-#### smtp.host
+## TLS 与代理
 
-- **类型**: `string`
-- **必填**: ✅
-- **说明**: SMTP 服务器地址
+SMTP 和 IMAP 默认校验证书。只有接入受控的自签名服务器时才应关闭各自的 `reject_unauthorized`。
 
-#### smtp.port
-
-- **类型**: `number`
-- **默认值**: `587`
-- **说明**: SMTP 端口
-
-#### smtp.secure
-
-- **类型**: `boolean`
-- **默认值**: `false`
-- **说明**: 是否使用 TLS（端口 465 时设为 true）
-
-#### smtp.requireTLS
-
-- **类型**: `boolean`
-- **默认值**: `true`
-- **说明**: 是否使用 STARTTLS
-
-#### smtp.user
-
-- **类型**: `string`
-- **必填**: ✅
-- **说明**: SMTP 用户名（通常是邮箱地址）
-
-#### smtp.password
-
-- **类型**: `string`
-- **必填**: ✅
-- **说明**: SMTP 密码或应用专用密码
-
-#### smtp.proxy
-
-- **类型**: `object`
-- **必填**: ❌
-- **说明**: 代理配置（可选）
-
-### imap
-
-IMAP 配置（接收邮件）。
-
-#### imap.host
-
-- **类型**: `string`
-- **必填**: ✅
-- **说明**: IMAP 服务器地址
-
-#### imap.port
-
-- **类型**: `number`
-- **默认值**: `993`
-- **说明**: IMAP 端口
-
-#### imap.tls
-
-- **类型**: `boolean`
-- **默认值**: `true`
-- **说明**: 是否使用 TLS
-
-#### imap.user
-
-- **类型**: `string`
-- **必填**: ✅
-- **说明**: IMAP 用户名（通常是邮箱地址）
-
-#### imap.password
-
-- **类型**: `string`
-- **必填**: ✅
-- **说明**: IMAP 密码或应用专用密码
-
-#### imap.pollInterval
-
-- **类型**: `number`
-- **默认值**: `30000`
-- **说明**: 轮询间隔（毫秒）
-
-#### imap.mailbox
-
-- **类型**: `string`
-- **默认值**: `INBOX`
-- **说明**: 监听的邮箱文件夹
-
-#### imap.proxy
-
-- **类型**: `object`
-- **必填**: ❌
-- **说明**: 代理配置（可选）
-
-## 配置示例
-
-### 基础配置
+顶层 `proxy` 同时作用于 SMTP 与 IMAP，支持 HTTP、HTTPS、SOCKS4 和 SOCKS5：
 
 ```yaml
-email.my_bot:
-  from: 'bot@example.com'
-  fromName: '我的机器人'
-  
-  smtp:
-    host: 'smtp.example.com'
-    port: 587
-    secure: false
-    requireTLS: true
-    user: 'bot@example.com'
-    password: 'your_password'
-  
-  imap:
-    host: 'imap.example.com'
-    port: 993
-    tls: true
-    user: 'bot@example.com'
-    password: 'your_password'
-    pollInterval: 30000
-    mailbox: 'INBOX'
+proxy:
+  url: socks5://127.0.0.1:1080
+  username: optional-user
+  password: optional-password
 ```
 
-### Gmail 配置
+## 完整示例
 
 ```yaml
 email.gmail_bot:
-  from: 'your-email@gmail.com'
-  fromName: 'Gmail 机器人'
-  
+  address: your-email@gmail.com
+  display_name: Gmail 机器人
+  default_subject: 来自 OneBots 的消息
+  auth:
+    user: your-email@gmail.com
+    password: your-app-password
   smtp:
-    host: 'smtp.gmail.com'
+    host: smtp.gmail.com
     port: 587
-    secure: false
-    requireTLS: true
-    user: 'your-email@gmail.com'
-    password: 'your-app-password'
-  
+    security: starttls
+    pool: true
+    max_connections: 5
   imap:
-    host: 'imap.gmail.com'
+    host: imap.gmail.com
     port: 993
-    tls: true
-    user: 'your-email@gmail.com'
-    password: 'your-app-password'
-    pollInterval: 30000
+    security: tls
+    mailbox: INBOX
+    mark_seen: true
+    poll_interval_ms: 60000
+    retry_initial_delay_ms: 1000
+    retry_max_delay_ms: 30000
 ```
 
-### QQ 邮箱配置
-
-```yaml
-email.qq_bot:
-  from: 'your-email@qq.com'
-  fromName: 'QQ 邮箱机器人'
-  
-  smtp:
-    host: 'smtp.qq.com'
-    port: 587
-    secure: false
-    requireTLS: true
-    user: 'your-email@qq.com'
-    password: 'your-authorization-code'
-  
-  imap:
-    host: 'imap.qq.com'
-    port: 993
-    tls: true
-    user: 'your-email@qq.com'
-    password: 'your-authorization-code'
-    pollInterval: 30000
-```
-
-## 获取应用凭证
-
-### Gmail
-
-1. 访问 [Google Account](https://myaccount.google.com/)
-2. 启用"两步验证"
-3. 生成"应用专用密码"
-4. 使用应用专用密码作为 `smtp.password` 和 `imap.password`
-
-### QQ 邮箱
-
-1. 访问 [QQ 邮箱设置](https://mail.qq.com/)
-2. 开启"POP3/SMTP 服务"或"IMAP/SMTP 服务"
-3. 生成"授权码"
-4. 使用授权码作为 `smtp.password` 和 `imap.password`
-
-## 相关链接
-
-- [适配器配置指南](/guide/adapter)
-- [邮件平台文档](/platform/email)
-
+Gmail 通常需要应用专用密码或 OAuth2；QQ 邮箱通常使用 IMAP/SMTP 授权码。
