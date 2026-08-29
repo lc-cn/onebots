@@ -40,7 +40,9 @@ onebots -r slack
 
 能力清单中的扩展动作可以从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
 
-`add_reaction`、`remove_reaction`、`add_pin`、`remove_pin`、`get_thread_replies`、`open_conversation`、`create_channel`、`archive_channel`、`unarchive_channel`、`rename_channel`、`set_channel_topic`、`set_channel_purpose`、`join_channel`、`invite_channel_members`、`kick_channel_member`、`schedule_message`、`delete_scheduled_message`、`list_scheduled_messages` 以及 Bookmark 动作。
+`add_reaction`、`remove_reaction`、`add_pin`、`remove_pin`、`get_thread_replies`、`open_conversation`、`archive_channel`、`unarchive_channel`、`rename_channel`、`set_channel_topic`、`set_channel_purpose`、`join_channel`、`invite_channel_members`、`schedule_message`、`delete_scheduled_message`、`list_scheduled_messages` 以及 Bookmark 动作。
+
+创建频道与移除频道成员使用 canonical `create_channel`、`kick_channel_member`，参数分别为 `channel_name`，以及 `channel_id` + `user_id`。Slack 工作区由当前 Bot Token 隐式确定，因此 `create_channel` 的 `guild_id` 不参与平台请求。
 
 未封装的 Slack Web API 可使用 `call_slack_api`：
 

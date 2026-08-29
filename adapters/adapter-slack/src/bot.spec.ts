@@ -46,3 +46,29 @@ describe("SlackBot HTTP Events", () => {
         expect(ctx.body).toEqual({ ok: false, error: "invalid_signature" });
     });
 });
+
+describe("SlackBot conversations", () => {
+    it("创建频道并返回闭合的频道模型", async () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        const create = vi.fn().mockResolvedValue({
+            ok: true,
+            channel: { id: "C1", name: "general", is_channel: true, is_private: false },
+        });
+        bot.getWebClient().conversations.create = create;
+
+        await expect(bot.createChannel("general")).resolves.toEqual({
+            id: "C1",
+            name: "general",
+            is_channel: true,
+            is_private: false,
+        });
+        expect(create).toHaveBeenCalledWith({ name: "general" });
+    });
+
+    it("拒绝缺少频道信息的成功响应", async () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        bot.getWebClient().conversations.create = vi.fn().mockResolvedValue({ ok: true });
+
+        await expect(bot.createChannel("general")).rejects.toThrow("响应缺少频道信息");
+    });
+});

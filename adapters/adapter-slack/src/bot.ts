@@ -369,6 +369,20 @@ export class SlackBot extends EventEmitter {
         return result.ok;
     }
 
+    /** 创建工作区频道；Slack 的工作区由当前 token 隐式确定。 */
+    async createChannel(name: string): Promise<SlackChannel> {
+        const result = await this.client.conversations.create({ name });
+        if (!result.ok || !result.channel?.id) {
+            throw new Error(`创建频道失败: ${result.error ?? "响应缺少频道信息"}`);
+        }
+        return {
+            id: result.channel.id,
+            name: result.channel.name ?? name,
+            is_channel: result.channel.is_channel,
+            is_private: result.channel.is_private,
+        };
+    }
+
     /**
      * 踢出频道成员
      */

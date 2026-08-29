@@ -324,6 +324,29 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         await bot.leaveChannel(params.group_id.string);
     }
 
+    async createChannel(
+        uin: string,
+        params: Adapter.CreateChannelParams,
+    ): Promise<Adapter.ChannelInfo> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+
+        const channel = await account.client.createChannel(params.channel_name);
+        return {
+            channel_id: this.createId(channel.id),
+            channel_name: channel.name,
+        };
+    }
+
+    async kickChannelMember(
+        uin: string,
+        params: Adapter.KickChannelMemberParams,
+    ): Promise<void> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        await account.client.kickChannelMember(params.channel_id.string, params.user_id.string);
+    }
+
     /**
      * 获取群成员列表（频道成员列表）
      */
