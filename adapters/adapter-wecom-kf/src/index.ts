@@ -5,7 +5,7 @@ export { weComKfCapabilities } from "./capabilities.js";
 export { WeComKfClient } from "./client.js";
 export type { WeComKfClientEvents } from "./client.js";
 export { loadKfCursors, persistKfCursors } from "./cursor-store.js";
-export { WeComKfError } from "./errors.js";
+export { WeComKfError, type WeComKfErrorOptions } from "./errors.js";
 export { requireKfHttpsBase, resolveKfApiUrl } from "./http.js";
 export { projectKfCallback, projectKfItem, projectKfSegments } from "./events.js";
 export type { KfProjectionContext } from "./events.js";
@@ -39,7 +39,7 @@ export type {
     WeComKfConfig,
 } from "./types.js";
 
-const wecomKfSchema: Schema = {
+export const wecomKfSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -67,27 +67,46 @@ const wecomKfSchema: Schema = {
     },
     token: {
         type: "string",
-        required: true,
         min: 1,
         label: "回调 Token",
         sensitive: true,
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
+    },
+    receive_mode: {
+        type: "string",
+        default: "webhook",
+        label: "事件接收方式",
+        choices: [
+            { value: "webhook", label: "Webhook" },
+            { value: "manual", label: "手动接入既有 Host/同步器" },
+        ],
+        description: "manual 不注册路由；仍可启用补偿轮询或调用 Client.ingest()",
         ui: { section: "transport" },
     },
     encoding_aes_key: {
         type: "string",
-        required: true,
         min: 43,
         max: 43,
         label: "EncodingAESKey",
         sensitive: true,
-        ui: { section: "transport" },
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     webhook_path: {
         type: "string",
         label: "Webhook 路径",
         placeholder: "/wecom-kf/{account_id}/webhook",
         description: "复用 OneBots 主 HTTP Host；留空按账号生成",
-        ui: { section: "transport" },
+        pattern: /^\/(?!\/)[^?#\u0000-\u001f\u007f]*$/,
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     open_kfid: {
         type: "string",
@@ -128,13 +147,17 @@ const wecomKfSchema: Schema = {
         default: 30000,
         min: 5000,
         label: "轮询间隔（毫秒）",
-        ui: { section: "advanced" },
+        ui: {
+            section: "advanced",
+            visibleWhen: { path: "enable_sync_poll", oneOf: [true] },
+        },
     },
     api_base_url: {
         type: "string",
         default: "https://qyapi.weixin.qq.com",
         label: "API Base URL",
         description: "仅官方兼容 HTTPS 代理或测试入口需要覆盖",
+        pattern: /^https:\/\/[^\s?#]+$/,
         ui: { section: "advanced" },
     },
 };

@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { RefreshableValue } from "onebots";
 import { emitKfDataEvent, reportKfClientError } from "./client-events.js";
+import { assertWeComKfConfig } from "./config.js";
 import { loadKfCursors, persistKfCursors } from "./cursor-store.js";
 import {
     ensureKfNotAborted,
@@ -80,7 +81,12 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         private readonly fetcher: typeof fetch = fetch,
     ) {
         super();
+        assertWeComKfConfig(config);
         this.apiBaseUrl = requireKfHttpsBase(config.api_base_url || DEFAULT_API_BASE);
+    }
+
+    get receiveMode(): "webhook" | "manual" {
+        return this.config.receive_mode || "webhook";
     }
 
     /** 初始化凭证、游标与可选补偿轮询；重复调用保持幂等。 */

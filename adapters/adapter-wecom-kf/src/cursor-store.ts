@@ -21,9 +21,15 @@ export async function loadKfCursors(path?: string): Promise<Map<string, string>>
 
     try {
         const value: unknown = JSON.parse(source);
-        if (!isStringRecord(value)) throw new Error("游标文件必须是字符串键值对象");
+        if (!isStringRecord(value)) {
+            throw new WeComKfError("游标文件必须是字符串键值对象", {
+                code: "WECOM_KF_CURSOR_INVALID",
+                path,
+            });
+        }
         return new Map(Object.entries(value));
     } catch (error) {
+        if (error instanceof WeComKfError) throw error;
         throw new WeComKfError(`微信客服同步游标文件格式无效：${path}`, {
             code: "WECOM_KF_CURSOR_INVALID",
             path,

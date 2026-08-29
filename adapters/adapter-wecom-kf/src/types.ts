@@ -3,8 +3,10 @@ export interface WeComKfConfig {
     account_id: string;
     corp_id: string;
     corp_secret: string;
-    token: string;
-    encoding_aes_key: string;
+    token?: string;
+    encoding_aes_key?: string;
+    /** 由 OneBots 注册 Webhook，或由既有 Host/同步器手动接入。 */
+    receive_mode?: "webhook" | "manual";
     open_kfid?: string;
     webhook_path?: string;
     enable_sync_poll?: boolean;

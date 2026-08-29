@@ -147,9 +147,6 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
     createAccount(config: Account.Config<"wecom-kf">): Account<"wecom-kf", WeComKfClient> {
         const client = new WeComKfClient(normalizeConfig(config));
         const account = new Account<"wecom-kf", WeComKfClient>(this, client, config);
-        const webhook = new WeComKfWebhookHost(client.config, client, error =>
-            this.logger.error("微信客服 Webhook 处理失败", error),
-        );
         client.on("kf_item", ({ open_kfid, item }: { open_kfid: string; item: KfMsgItem }) => {
             const externalUserId =
                 item.external_userid || stringField(item.event, "external_userid");
@@ -177,9 +174,14 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
             );
         });
         client.on("client_error", error => this.logger.error("微信客服客户端错误", error));
-        this.app.router.all(webhook.path, ctx =>
-            webhook.acceptHttp(ctx as unknown as WeComKfHttpContext),
-        );
+        if (client.receiveMode === "webhook") {
+            const webhook = new WeComKfWebhookHost(client.config, client, error =>
+                this.logger.error("微信客服 Webhook 处理失败", error),
+            );
+            this.app.router.all(webhook.path, ctx =>
+                webhook.acceptHttp(ctx as unknown as WeComKfHttpContext),
+            );
+        }
         account.on("start", async () => {
             try {
                 await client.start();
@@ -226,6 +228,7 @@ function normalizeConfig(config: Account.Config<"wecom-kf">): WeComKfConfig {
         account_id: config.account_id,
         corp_id: config.corp_id,
         corp_secret: config.corp_secret,
+        receive_mode: config.receive_mode,
         token: config.token,
         encoding_aes_key: config.encoding_aes_key,
         open_kfid: config.open_kfid,

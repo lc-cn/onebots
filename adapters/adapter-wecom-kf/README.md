@@ -12,6 +12,7 @@ wecom-kf.customer_service:
   corp_secret: your_wecom_customer_service_secret
   token: your_callback_token
   encoding_aes_key: your_43_character_key
+  receive_mode: webhook
   open_kfid: wkxxxxxxxxxxxxxxxx # 可选默认客服账号
   cursor_store_path: ./data/wecom-kf-cursor.json
   deduplicate_messages: true
@@ -93,6 +94,19 @@ await adapter.callAction("customer_service", "wecom_kf_call", {
 - `WeComKfWebhookHost.acceptHttp()` 可挂到已有 Koa 风格 Host；
 - `WeComKfClient.ingest()` 可接收已有连接或其他同步器取得的原始 `sync_msg` 条目；
 - `WeComKfClient.call()` 对 JSON 与二进制响应提供闭合重载；JSON 返回 `KfJsonResponse`，素材下载返回 `Buffer`。
+
+已有 Host 或同步器负责接收事件时，可使用 manual 模式；OneBots 不注册 Webhook 路由，回调 Token/AES Key 也不再是必填项：
+
+```yaml
+wecom-kf.customer_service:
+  corp_id: ww1234567890abcdef
+  corp_secret: your_wecom_customer_service_secret
+  receive_mode: manual
+  open_kfid: wkxxxxxxxxxxxxxxxx
+  enable_sync_poll: true
+```
+
+manual 模式仍可按需构造 `WeComKfWebhookHost` 处理原始加密回调，或直接使用 `client.ingest(item)` 接入已有 `sync_msg` 同步器；所有条目继续进入同一个 typed Client 事件管线。
 
 适配器不会自行监听端口。发送窗口、5 条限制与“接口成功不等于最终送达”均由微信客服规则决定，最终失败通过 `sync_msg` 事件交付。
 

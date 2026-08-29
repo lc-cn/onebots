@@ -25,17 +25,27 @@ export interface WeComKfHttpContext {
 /** 微信客服回调接入层：只处理官方加密 XML，不依赖具体 HTTP 框架。 */
 export class WeComKfWebhookHost {
     readonly path: string;
+    private readonly token: string;
+    private readonly encodingAesKey: string;
 
     constructor(
         private readonly config: WeComKfConfig,
         private readonly client: WeComKfClient,
         private readonly errorListener: (error: WeComKfError) => void = () => undefined,
     ) {
+        if (!config.token || !config.encoding_aes_key) {
+            throw new WeComKfError("微信客服回调需要 token 和 encoding_aes_key", {
+                code: "WECOM_KF_WEBHOOK_CONFIG_REQUIRED",
+            });
+        }
+        this.token = config.token;
+        this.encodingAesKey = config.encoding_aes_key;
         this.path = config.webhook_path || `/wecom-kf/${config.account_id}/webhook`;
-        if (!this.path.startsWith("/"))
-            throw new WeComKfError("webhook_path 必须以 / 开头", {
+        if (!/^\/(?!\/)(?:[^?#\u0000-\u001f\u007f])*$/u.test(this.path)) {
+            throw new WeComKfError("webhook_path 必须是安全的绝对路径", {
                 code: "WECOM_KF_INVALID_WEBHOOK_PATH",
             });
+        }
     }
 
     /** 接收框架无关的 GET/POST 回调描述并返回结构化 HTTP 响应。 */
@@ -86,7 +96,7 @@ export class WeComKfWebhookHost {
         const echo = queryString(query, "echostr");
         if (
             !verifyWechatCallbackSignature(
-                this.config.token,
+                this.token,
                 queryString(query, "msg_signature"),
                 timestamp,
                 nonce,
@@ -96,7 +106,7 @@ export class WeComKfWebhookHost {
             return forbidden();
         return {
             status: 200,
-            body: decryptPayload(echo, this.config),
+            body: decryptPayload(echo, this.encodingAesKey, this.config.corp_id),
             contentType: "text/plain",
         };
     }
@@ -113,7 +123,7 @@ export class WeComKfWebhookHost {
         const nonce = queryString(request.query, "nonce");
         if (
             !verifyWechatCallbackSignature(
-                this.config.token,
+                this.token,
                 queryString(request.query, "msg_signature"),
                 timestamp,
                 nonce,
@@ -121,7 +131,7 @@ export class WeComKfWebhookHost {
             )
         )
             return forbidden();
-        const rawXml = decryptPayload(encrypted, this.config);
+        const rawXml = decryptPayload(encrypted, this.encodingAesKey, this.config.corp_id);
         const event = parseCallback(rawXml, encryptedXml);
         if (event.Event === "kf_msg_or_event") {
             if (!event.Token || !event.OpenKfId)
@@ -157,9 +167,9 @@ export class WeComKfWebhookHost {
     }
 }
 
-function decryptPayload(encrypted: string, config: WeComKfConfig): string {
+function decryptPayload(encrypted: string, encodingAesKey: string, corpId: string): string {
     try {
-        return decryptWechatCallbackFor(encrypted, config.encoding_aes_key, config.corp_id);
+        return decryptWechatCallbackFor(encrypted, encodingAesKey, corpId);
     } catch (error) {
         throw new WeComKfError("微信客服回调解密或 CorpID 校验失败", {
             code: "WECOM_KF_INVALID_ENCRYPTED_PAYLOAD",

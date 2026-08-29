@@ -1,28 +1,37 @@
+import { ErrorCategory, ErrorSeverity, OneBotsError } from "onebots";
+
+export interface WeComKfErrorOptions {
+    code?: string;
+    status?: number;
+    path?: string;
+    details?: unknown;
+    cause?: unknown;
+    category?: ErrorCategory;
+    severity?: ErrorSeverity;
+}
+
 /** 微信客服 API、同步与回调的结构化错误。 */
-export class WeComKfError extends Error {
-    readonly code: string;
+export class WeComKfError extends OneBotsError {
     readonly status?: number;
     readonly path?: string;
     readonly details?: unknown;
-    override readonly cause?: unknown;
 
-    constructor(
-        message: string,
-        options: {
-            code?: string;
-            status?: number;
-            path?: string;
-            details?: unknown;
-            cause?: unknown;
-        } = {},
-    ) {
-        super(message);
+    constructor(message: string, options: WeComKfErrorOptions = {}) {
+        super(message, {
+            code: options.code || "WECOM_KF_ERROR",
+            category: options.category ?? categoryFor(options),
+            severity: options.severity ?? ErrorSeverity.HIGH,
+            context: {
+                ...(options.status === undefined ? {} : { status: options.status }),
+                ...(options.path === undefined ? {} : { path: options.path }),
+                ...(options.details === undefined ? {} : { details: options.details }),
+            },
+            cause: options.cause instanceof Error ? options.cause : undefined,
+        });
         this.name = "WeComKfError";
-        this.code = options.code || "WECOM_KF_ERROR";
         this.status = options.status;
         this.path = options.path;
         this.details = options.details;
-        this.cause = options.cause;
     }
 
     static wrap(error: unknown, code = "WECOM_KF_ERROR"): WeComKfError {
@@ -32,6 +41,30 @@ export class WeComKfError extends Error {
             cause: error,
         });
     }
+}
+
+function categoryFor(options: WeComKfErrorOptions): ErrorCategory {
+    if (options.status === 400 || options.status === 422) return ErrorCategory.VALIDATION;
+    if (options.status === 401 || options.status === 403) return ErrorCategory.CONFIG;
+    if (options.status === 404) return ErrorCategory.RESOURCE;
+    if (options.status === 429 || (options.status ?? 0) >= 500) return ErrorCategory.NETWORK;
+    if (options.code?.includes("SIGNATURE") || options.code?.includes("CONFIG")) {
+        return ErrorCategory.CONFIG;
+    }
+    if (
+        options.code?.includes("INVALID") ||
+        options.code?.includes("REQUIRED") ||
+        options.code?.includes("EMPTY")
+    ) {
+        return ErrorCategory.VALIDATION;
+    }
+    if (options.code?.includes("WEBHOOK") || options.code?.includes("CALLBACK")) {
+        return ErrorCategory.PROTOCOL;
+    }
+    if (options.code?.includes("NETWORK") || options.code?.includes("HTTP")) {
+        return ErrorCategory.NETWORK;
+    }
+    return ErrorCategory.ADAPTER;
 }
 
 export function invalidKfParameter(message: string, path?: string): WeComKfError {
