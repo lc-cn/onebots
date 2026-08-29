@@ -1,215 +1,253 @@
 import type { DiscordBot } from "./bot.js";
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import { assertDiscordEndpoint } from "./lite/rest.js";
 import { DiscordError } from "./errors.js";
 
 const DISCORD_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 type DiscordMethod = (typeof DISCORD_METHODS)[number];
+type Params = Readonly<Record<string, unknown>>;
+type Handler = PlatformActionHandler<DiscordBot>;
 
-export const DISCORD_PLATFORM_ACTIONS = new Set([
-    "call_discord_api",
-    "ban_member",
-    "unban_member",
-    "get_guild_bans",
-    "get_guild_roles",
-    "create_guild_role",
-    "update_guild_role",
-    "delete_guild_role",
-    "add_guild_member_role",
-    "remove_guild_member_role",
-    "bulk_delete_messages",
-    "crosspost_message",
-    "get_channel_pins",
-    "pin_message",
-    "unpin_message",
-    "trigger_typing",
-    "create_thread",
-    "join_thread",
-    "leave_thread",
-    "add_thread_member",
-    "remove_thread_member",
-    "list_thread_members",
-    "get_active_threads",
-    "get_channel_invites",
-    "create_channel_invite",
-    "delete_invite",
-    "get_reaction_users",
-    "add_reaction",
-    "remove_own_reaction",
-    "leave_guild",
-    "kick_guild_member",
-    "timeout_guild_member",
-    "set_guild_member_nickname",
-    "create_interaction_response",
-    "get_original_interaction_response",
-    "edit_original_interaction_response",
-    "create_followup_message",
-]);
+const PLATFORM_ACTIONS = definePlatformActions(
+    {
+        call_discord_api: async (bot: DiscordBot, params: Params) =>
+            bot.getREST().request(requirePath(params.path), {
+                method: methodValue(params.method),
+                body: optionalObject(params.body, "body"),
+                query: query(params),
+                reason: optionalString(params, "reason"),
+            }),
+        ban_member: async (bot: DiscordBot, params: Params) =>
+            bot.banMember(guildId(params), userId(params), {
+                deleteMessageSeconds: optionalInteger(params, "delete_message_seconds"),
+                reason: optionalString(params, "reason"),
+            }),
+        unban_member: async (bot: DiscordBot, params: Params) =>
+            bot.unbanMember(
+                guildId(params),
+                userId(params),
+                optionalString(params, "reason"),
+            ),
+        get_guild_bans: restAction(params => `/guilds/${guildId(params)}/bans`, {
+            query: true,
+        }),
+        get_guild_roles: restAction(params => `/guilds/${guildId(params)}/roles`),
+        create_guild_role: restAction(params => `/guilds/${guildId(params)}/roles`, {
+            method: "POST",
+            body: "role",
+        }),
+        update_guild_role: restAction(
+            params =>
+                `/guilds/${guildId(params)}/roles/${requireSnowflake(params, "role_id")}`,
+            { method: "PATCH", body: "role" },
+        ),
+        delete_guild_role: restAction(
+            params =>
+                `/guilds/${guildId(params)}/roles/${requireSnowflake(params, "role_id")}`,
+            { method: "DELETE" },
+        ),
+        add_guild_member_role: guildMemberRole("PUT"),
+        remove_guild_member_role: guildMemberRole("DELETE"),
+        bulk_delete_messages: async (bot: DiscordBot, params: Params) =>
+            bot.getREST().request(`/channels/${channelId(params)}/messages/bulk-delete`, {
+                method: "POST",
+                body: { messages: requireSnowflakeArray(params, "message_ids", 2, 100) },
+            }),
+        crosspost_message: restAction(
+            params =>
+                `/channels/${channelId(params)}/messages/${messageId(params)}/crosspost`,
+            { method: "POST" },
+        ),
+        get_channel_pins: restAction(
+            params => `/channels/${channelId(params)}/messages/pins`,
+            { query: true },
+        ),
+        pin_message: pinAction("PUT"),
+        unpin_message: pinAction("DELETE"),
+        trigger_typing: restAction(params => `/channels/${channelId(params)}/typing`, {
+            method: "POST",
+        }),
+        create_thread: createThread,
+        join_thread: ownThreadMembership("PUT"),
+        leave_thread: ownThreadMembership("DELETE"),
+        add_thread_member: threadMembership("PUT"),
+        remove_thread_member: threadMembership("DELETE"),
+        list_thread_members: restAction(
+            params => `/channels/${channelId(params)}/thread-members`,
+            { query: true },
+        ),
+        get_active_threads: restAction(
+            params => `/guilds/${guildId(params)}/threads/active`,
+        ),
+        get_channel_invites: restAction(
+            params => `/channels/${channelId(params)}/invites`,
+        ),
+        create_channel_invite: async (bot: DiscordBot, params: Params) =>
+            bot.getREST().request(`/channels/${channelId(params)}/invites`, {
+                method: "POST",
+                body: optionalObject(params.invite, "invite") ?? {},
+            }),
+        delete_invite: restAction(params => `/invites/${requireString(params, "code")}`, {
+            method: "DELETE",
+        }),
+        get_reaction_users: reactionAction("GET"),
+        add_reaction: reactionAction("PUT", true),
+        remove_own_reaction: reactionAction("DELETE", true),
+        leave_guild: restAction(params => `/users/@me/guilds/${guildId(params)}`, {
+            method: "DELETE",
+        }),
+        kick_guild_member: async (bot: DiscordBot, params: Params) =>
+            bot.kickMember(guildId(params), userId(params), optionalString(params, "reason")),
+        timeout_guild_member: timeoutGuildMember,
+        set_guild_member_nickname: setGuildMemberNickname,
+        create_interaction_response: async (bot: DiscordBot, params: Params) =>
+            bot.getREST().createInteractionResponse(
+                requireSnowflake(params, "interaction_id"),
+                requireString(params, "interaction_token"),
+                requireObject(params, "response") as { type: number; data?: unknown },
+            ),
+        get_original_interaction_response: async (bot: DiscordBot, params: Params) =>
+            bot.getREST().getOriginalInteractionResponse(
+                requireSnowflake(params, "application_id"),
+                requireString(params, "interaction_token"),
+            ),
+        edit_original_interaction_response: async (bot: DiscordBot, params: Params) =>
+            bot.getREST().editOriginalInteractionResponse(
+                requireSnowflake(params, "application_id"),
+                requireString(params, "interaction_token"),
+                requireObject(params, "content"),
+            ),
+        create_followup_message: async (bot: DiscordBot, params: Params) =>
+            bot.getREST().createFollowupMessage(
+                requireSnowflake(params, "application_id"),
+                requireString(params, "interaction_token"),
+                requireObject(params, "content"),
+            ),
+    },
+    action =>
+        DiscordError.invalid(
+            `未实现 Discord 平台动作：${action}`,
+            "DISCORD_ACTION_UNSUPPORTED",
+            { action },
+        ),
+);
+
+export const DISCORD_PLATFORM_ACTIONS: ReadonlySet<string> = PLATFORM_ACTIONS.actions;
 
 /** Discord v10 平台扩展动作，按官方资源边界直接映射 REST endpoint。 */
 export async function executeDiscordPlatformAction(
     bot: DiscordBot,
     action: string,
-    params: Readonly<Record<string, unknown>>,
+    params: Params,
 ): Promise<unknown> {
-    const rest = bot.getREST();
-    const channelId = () => requireSnowflake(params, "channel_id");
-    const guildId = () => requireSnowflake(params, "guild_id");
-    const userId = () => requireSnowflake(params, "user_id");
-    const messageId = () => requireSnowflake(params, "message_id");
-    switch (action) {
-        case "call_discord_api":
-            return rest.request(requirePath(params.path), {
-                method: methodValue(params.method),
-                body: optionalObject(params.body, "body"),
-                query: query(params),
-                reason: optionalString(params, "reason"),
-            });
-        case "ban_member":
-            return bot.banMember(guildId(), userId(), {
-                deleteMessageSeconds: optionalInteger(params, "delete_message_seconds"),
-                reason: optionalString(params, "reason"),
-            });
-        case "unban_member":
-            return bot.unbanMember(guildId(), userId(), optionalString(params, "reason"));
-        case "get_guild_bans":
-            return rest.request(`/guilds/${guildId()}/bans`, { query: query(params) });
-        case "get_guild_roles":
-            return rest.request(`/guilds/${guildId()}/roles`);
-        case "create_guild_role":
-            return rest.request(`/guilds/${guildId()}/roles`, {
-                method: "POST",
-                body: requireObject(params, "role"),
-            });
-        case "update_guild_role":
-            return rest.request(
-                `/guilds/${guildId()}/roles/${requireSnowflake(params, "role_id")}`,
-                { method: "PATCH", body: requireObject(params, "role") },
-            );
-        case "delete_guild_role":
-            return rest.request(
-                `/guilds/${guildId()}/roles/${requireSnowflake(params, "role_id")}`,
-                { method: "DELETE" },
-            );
-        case "add_guild_member_role":
-        case "remove_guild_member_role":
-            return rest.request(
-                `/guilds/${guildId()}/members/${userId()}/roles/${requireSnowflake(params, "role_id")}`,
-                { method: action === "add_guild_member_role" ? "PUT" : "DELETE" },
-            );
-        case "bulk_delete_messages":
-            return rest.request(`/channels/${channelId()}/messages/bulk-delete`, {
-                method: "POST",
-                body: { messages: requireSnowflakeArray(params, "message_ids", 2, 100) },
-            });
-        case "crosspost_message":
-            return rest.request(`/channels/${channelId()}/messages/${messageId()}/crosspost`, {
-                method: "POST",
-            });
-        case "get_channel_pins":
-            return rest.request(`/channels/${channelId()}/messages/pins`, { query: query(params) });
-        case "pin_message":
-        case "unpin_message":
-            return rest.request(`/channels/${channelId()}/messages/pins/${messageId()}`, {
-                method: action === "pin_message" ? "PUT" : "DELETE",
-            });
-        case "trigger_typing":
-            return rest.request(`/channels/${channelId()}/typing`, { method: "POST" });
-        case "create_thread": {
-            const parent = channelId();
-            const sourceMessage = optionalSnowflake(params, "message_id");
-            return rest.request(
-                sourceMessage
-                    ? `/channels/${parent}/messages/${sourceMessage}/threads`
-                    : `/channels/${parent}/threads`,
-                { method: "POST", body: requireObject(params, "thread") },
-            );
-        }
-        case "join_thread":
-        case "leave_thread":
-            return rest.request(`/channels/${channelId()}/thread-members/@me`, {
-                method: action === "join_thread" ? "PUT" : "DELETE",
-            });
-        case "add_thread_member":
-        case "remove_thread_member":
-            return rest.request(`/channels/${channelId()}/thread-members/${userId()}`, {
-                method: action === "add_thread_member" ? "PUT" : "DELETE",
-            });
-        case "list_thread_members":
-            return rest.request(`/channels/${channelId()}/thread-members`, {
-                query: query(params),
-            });
-        case "get_active_threads":
-            return rest.request(`/guilds/${guildId()}/threads/active`);
-        case "get_channel_invites":
-            return rest.request(`/channels/${channelId()}/invites`);
-        case "create_channel_invite":
-            return rest.request(`/channels/${channelId()}/invites`, {
-                method: "POST",
-                body: optionalObject(params.invite, "invite") ?? {},
-            });
-        case "delete_invite":
-            return rest.request(`/invites/${requireString(params, "code")}`, { method: "DELETE" });
-        case "get_reaction_users":
-            return rest.request(
-                `/channels/${channelId()}/messages/${messageId()}/reactions/${encodeURIComponent(requireString(params, "emoji"))}`,
-                { query: query(params) },
-            );
-        case "add_reaction":
-        case "remove_own_reaction":
-            return rest.request(
-                `/channels/${channelId()}/messages/${messageId()}/reactions/${encodeURIComponent(requireString(params, "emoji"))}/@me`,
-                { method: action === "add_reaction" ? "PUT" : "DELETE" },
-            );
-        case "leave_guild":
-            return rest.request(`/users/@me/guilds/${guildId()}`, { method: "DELETE" });
-        case "kick_guild_member":
-            return bot.kickMember(guildId(), userId(), optionalString(params, "reason"));
-        case "timeout_guild_member": {
-            const duration = optionalInteger(params, "duration") ?? 0;
-            const reason = optionalString(params, "reason");
-            if (duration > 0) {
-                return reason
-                    ? bot.timeoutMember(guildId(), userId(), duration, reason)
-                    : bot.timeoutMember(guildId(), userId(), duration);
-            }
-            return reason
-                ? bot.removeTimeout(guildId(), userId(), reason)
-                : bot.removeTimeout(guildId(), userId());
-        }
-        case "set_guild_member_nickname": {
-            const args = [guildId(), userId(), optionalString(params, "nickname") ?? null] as const;
-            const reason = optionalString(params, "reason");
-            return reason ? bot.setMemberNickname(...args, reason) : bot.setMemberNickname(...args);
-        }
-        case "create_interaction_response":
-            return rest.createInteractionResponse(
-                requireSnowflake(params, "interaction_id"),
-                requireString(params, "interaction_token"),
-                requireObject(params, "response") as { type: number; data?: unknown },
-            );
-        case "get_original_interaction_response":
-            return rest.getOriginalInteractionResponse(
-                requireSnowflake(params, "application_id"),
-                requireString(params, "interaction_token"),
-            );
-        case "edit_original_interaction_response":
-            return rest.editOriginalInteractionResponse(
-                requireSnowflake(params, "application_id"),
-                requireString(params, "interaction_token"),
-                requireObject(params, "content"),
-            );
-        case "create_followup_message":
-            return rest.createFollowupMessage(
-                requireSnowflake(params, "application_id"),
-                requireString(params, "interaction_token"),
-                requireObject(params, "content"),
-            );
-        default:
-            throw DiscordError.invalid(
-                `未实现 Discord 平台动作：${action}`,
-                "DISCORD_ACTION_UNSUPPORTED",
-            );
+    return PLATFORM_ACTIONS.execute(bot, action, params);
+}
+
+interface RestActionOptions {
+    method?: DiscordMethod;
+    body?: string;
+    query?: boolean;
+}
+
+function restAction(
+    path: (params: Params) => string,
+    options: RestActionOptions = {},
+): Handler {
+    return async (bot, params) =>
+        bot.getREST().request(path(params), {
+            method: options.method,
+            body: options.body ? requireObject(params, options.body) : undefined,
+            query: options.query ? query(params) : undefined,
+        });
+}
+
+function guildMemberRole(method: "PUT" | "DELETE"): Handler {
+    return restAction(
+        params =>
+            `/guilds/${guildId(params)}/members/${userId(params)}/roles/${requireSnowflake(params, "role_id")}`,
+        { method },
+    );
+}
+
+function pinAction(method: "PUT" | "DELETE"): Handler {
+    return restAction(
+        params =>
+            `/channels/${channelId(params)}/messages/pins/${messageId(params)}`,
+        { method },
+    );
+}
+
+function ownThreadMembership(method: "PUT" | "DELETE"): Handler {
+    return restAction(params => `/channels/${channelId(params)}/thread-members/@me`, {
+        method,
+    });
+}
+
+function threadMembership(method: "PUT" | "DELETE"): Handler {
+    return restAction(
+        params => `/channels/${channelId(params)}/thread-members/${userId(params)}`,
+        { method },
+    );
+}
+
+function reactionAction(method: "GET" | "PUT" | "DELETE", own = false): Handler {
+    return restAction(
+        params =>
+            `/channels/${channelId(params)}/messages/${messageId(params)}/reactions/${encodeURIComponent(requireString(params, "emoji"))}${own ? "/@me" : ""}`,
+        { method: method === "GET" ? undefined : method, query: method === "GET" },
+    );
+}
+
+async function createThread(bot: DiscordBot, params: Params): Promise<unknown> {
+    const parent = channelId(params);
+    const sourceMessage = optionalSnowflake(params, "message_id");
+    return bot
+        .getREST()
+        .request(
+            sourceMessage
+                ? `/channels/${parent}/messages/${sourceMessage}/threads`
+                : `/channels/${parent}/threads`,
+            { method: "POST", body: requireObject(params, "thread") },
+        );
+}
+
+async function timeoutGuildMember(bot: DiscordBot, params: Params): Promise<unknown> {
+    const duration = optionalInteger(params, "duration") ?? 0;
+    const reason = optionalString(params, "reason");
+    if (duration > 0) {
+        return reason
+            ? bot.timeoutMember(guildId(params), userId(params), duration, reason)
+            : bot.timeoutMember(guildId(params), userId(params), duration);
     }
+    return reason
+        ? bot.removeTimeout(guildId(params), userId(params), reason)
+        : bot.removeTimeout(guildId(params), userId(params));
+}
+
+async function setGuildMemberNickname(bot: DiscordBot, params: Params): Promise<unknown> {
+    const args = [
+        guildId(params),
+        userId(params),
+        optionalString(params, "nickname") ?? null,
+    ] as const;
+    const reason = optionalString(params, "reason");
+    return reason ? bot.setMemberNickname(...args, reason) : bot.setMemberNickname(...args);
+}
+
+function channelId(params: Params): string {
+    return requireSnowflake(params, "channel_id");
+}
+
+function guildId(params: Params): string {
+    return requireSnowflake(params, "guild_id");
+}
+
+function userId(params: Params): string {
+    return requireSnowflake(params, "user_id");
+}
+
+function messageId(params: Params): string {
+    return requireSnowflake(params, "message_id");
 }
 
 function requirePath(value: unknown): string {
