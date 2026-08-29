@@ -45,7 +45,11 @@ export interface QQMessagePayload extends Omit<SendMessageOptions, "target"> {
     keyboard?: InlineKeyboard;
 }
 
-export type QQRawMessage = QQBotInboundMessage;
+/** 官方 SDK 对 Gateway 消息的归一化视图。 */
+export type QQInboundMessage = QQBotInboundMessage;
+
+/** QQ Gateway 未归一化的原始消息载荷，对应 CommonEvent.raw_event。 */
+export type QQRawMessage = QQBotInboundMessage["raw"];
 
 export function resolveIntentMask(intents: readonly QQIntent[] | undefined): number | undefined {
     if (!intents?.length) return undefined;

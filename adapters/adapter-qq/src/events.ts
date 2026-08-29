@@ -12,7 +12,7 @@ type QQMessageProjectionInput = Omit<QQBotInboundMessage, "replyTarget"> &
 export function projectQQMessage<TEvent extends QQMessageProjectionInput>(
     event: TEvent,
     context: QQProjectionContext,
-): CommonEvent.Message<TEvent> {
+): CommonEvent.Message<TEvent["raw"]> {
     const scene =
         event.kind === "c2c"
             ? "private"
@@ -44,7 +44,7 @@ export function projectQQMessage<TEvent extends QQMessageProjectionInput>(
         message_id: context.createId(event.messageId),
         raw_message: event.content,
         message: projectMessageSegments(event),
-        raw_event: event,
+        raw_event: event.raw,
         extensions: {
             qq: {
                 raw_event_type: event.rawEventType,
@@ -56,40 +56,6 @@ export function projectQQMessage<TEvent extends QQMessageProjectionInput>(
             },
         },
     };
-}
-
-/** SDK 不触发 Guild/DM message 事件，因此从无损 Gateway 事件补齐频道消息投影。 */
-export function projectQQGatewayMessage(
-    eventType: string,
-    raw: unknown,
-    context: QQProjectionContext,
-): CommonEvent.Message<QQMessageProjectionInput> | undefined {
-    if (eventType !== "AT_MESSAGE_CREATE" && eventType !== "DIRECT_MESSAGE_CREATE") {
-        return undefined;
-    }
-    const data = asRecord(raw);
-    const author = asRecord(data.author);
-    const messageId = text(data.id);
-    const guildId = text(data.guild_id);
-    const senderId = text(author.id);
-    if (!messageId || !guildId || !senderId) return undefined;
-    const direct = eventType === "DIRECT_MESSAGE_CREATE";
-    const channelId = direct ? undefined : text(data.channel_id);
-    if (!direct && !channelId) return undefined;
-    const event: QQMessageProjectionInput = {
-        rawEventType: eventType,
-        kind: direct ? "dm" : "guild",
-        senderId,
-        senderName: text(author.username),
-        content: text(data.content) || "",
-        messageId,
-        timestamp: text(data.timestamp) || new Date().toISOString(),
-        guildId,
-        channelId,
-        attachments: Array.isArray(data.attachments) ? data.attachments : undefined,
-        raw: raw as never,
-    };
-    return projectQQMessage(event, context);
 }
 
 export function projectQQRawEvent(

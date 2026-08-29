@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectQQGatewayMessage, projectQQMessage, projectQQRawEvent } from "./events.js";
+import { projectQQMessage, projectQQRawEvent } from "./events.js";
 
 const createId = (value: string | number) => ({ string: String(value), source: value, number: 1 });
 const context = { botId: createId("bot"), createId };
@@ -23,7 +23,7 @@ describe("QQ 事件投影", () => {
         expect(event.message_type).toBe("group");
         expect(event.group?.id.string).toBe("g1");
         expect(event.message.map(segment => segment.type)).toEqual(["at", "text", "image"]);
-        expect(event.raw_event).toBe(raw);
+        expect(event.raw_event).toBe(raw.raw);
     });
 
     it("未知平台事件仍以 custom notice 无损下发", () => {
@@ -33,36 +33,43 @@ describe("QQ 事件投影", () => {
     });
 
     it("频道消息分别保留 Guild 与 Channel 地址", () => {
-        const raw = {
-            id: "m1",
+        const platformEvent = { id: "m1", guild_id: "guild-1", channel_id: "channel-1" };
+        const message = {
+            rawEventType: "AT_MESSAGE_CREATE",
+            kind: "guild" as const,
+            senderId: "u1",
+            senderName: "Alice",
             content: "你好",
+            messageId: "m1",
             timestamp: "2026-08-29T00:00:00.000Z",
-            guild_id: "guild-1",
-            channel_id: "channel-1",
-            author: { id: "u1", username: "Alice" },
+            guildId: "guild-1",
+            channelId: "channel-1",
+            raw: platformEvent as never,
         };
 
-        expect(projectQQGatewayMessage("AT_MESSAGE_CREATE", raw, context)).toMatchObject({
+        expect(projectQQMessage(message, context)).toMatchObject({
             message_type: "channel",
             group: {
                 id: { string: "channel-1" },
                 guild_id: { string: "guild-1" },
                 channel_id: { string: "channel-1" },
             },
-            raw_event: expect.objectContaining({ raw: raw }),
+            raw_event: platformEvent,
         });
     });
 
-    it("频道私信从 Gateway 原始事件投影为 direct", () => {
+    it("频道私信从 SDK typed message 投影为 direct", () => {
         expect(
-            projectQQGatewayMessage(
-                "DIRECT_MESSAGE_CREATE",
+            projectQQMessage(
                 {
-                    id: "m1",
+                    rawEventType: "DIRECT_MESSAGE_CREATE",
+                    kind: "dm" as const,
+                    senderId: "u1",
                     content: "你好",
+                    messageId: "m1",
                     timestamp: "2026-08-29T00:00:00.000Z",
-                    guild_id: "dm-guild-1",
-                    author: { id: "u1" },
+                    guildId: "dm-guild-1",
+                    raw: { id: "m1", guild_id: "dm-guild-1" } as never,
                 },
                 context,
             ),
