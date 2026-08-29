@@ -14,6 +14,7 @@ import {
 import { LineBot } from "./bot.js";
 import { lineCapabilities } from "./capabilities.js";
 import { LineContextStore } from "./context-store.js";
+import { listLineFollowerIds, listLineMemberProfiles } from "./directory.js";
 import { LineApiError } from "./errors.js";
 import { projectLineEvent } from "./events.js";
 import { chunkLineMessages, compileLineMessages } from "./messages.js";
@@ -66,13 +67,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
 
     async getFriendList(uin: string): Promise<Adapter.FriendInfo[]> {
         const client = this.requireBot(uin).getClient();
-        const ids: string[] = [];
-        let start: string | undefined;
-        do {
-            const page = await client.getFollowers(start, 1_000);
-            ids.push(...page.userIds);
-            start = page.next;
-        } while (start);
+        const ids = await listLineFollowerIds(client);
         return ids.map(id => ({ user_id: this.createId(id), user_name: id }));
     }
 
@@ -124,26 +119,11 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     ): Promise<Adapter.GroupMemberInfo[]> {
         const id = params.group_id.string;
         const context = this.contexts.get(uin, id);
-        const client = this.requireBot(uin).getClient();
-        const userIds: string[] = [];
-        let start: string | undefined;
-        do {
-            const page =
-                context?.type === "room" || (!context && id.startsWith("R"))
-                    ? await client.getRoomMembersIds(id, start)
-                    : await client.getGroupMembersIds(id, start);
-            userIds.push(...page.memberIds);
-            start = page.next;
-        } while (start);
-        return Promise.all(
-            userIds.map(async userId => {
-                const profile =
-                    context?.type === "room" || (!context && id.startsWith("R"))
-                        ? await client.getRoomMemberProfile(id, userId)
-                        : await client.getGroupMemberProfile(id, userId);
-                return this.toMemberInfo(params.group_id, profile);
-            }),
-        );
+        const profiles = await listLineMemberProfiles(this.requireBot(uin).getClient(), {
+            id,
+            type: context?.type === "room" || (!context && id.startsWith("R")) ? "room" : "group",
+        });
+        return profiles.map(profile => this.toMemberInfo(params.group_id, profile));
     }
 
     async getGroupMemberInfo(

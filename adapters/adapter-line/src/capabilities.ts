@@ -16,7 +16,7 @@ export const lineCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         get_group_list: { support: "emulated", note: "持久化 Webhook 中已知的 group/room" },
         get_group_info: { support: "native", availability: "context" },
         leave_group: { support: "native" },
-        get_group_member_list: { support: "native" },
+        get_group_member_list: { support: "native", availability: "permission" },
         get_group_member_info: { support: "native", availability: "context" },
         push_message: { support: "native" },
         reply_message: { support: "native" },

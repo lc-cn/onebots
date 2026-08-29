@@ -16,11 +16,15 @@ export function projectLineEvent(
         return notice(event, context, "message_updated", {
             message_id: context.createId(event.message.id),
             message: projectMessageContent(event.message),
+            user: sourceUser(event.source, context),
+            group: sourceGroup(event.source, context),
         });
     }
     if (event.type === "unsend") {
         return notice(event, context, "message_deleted", {
             message_id: context.createId(event.unsend.messageId),
+            user: sourceUser(event.source, context),
+            group: sourceGroup(event.source, context),
         });
     }
     if (event.type === "follow") {

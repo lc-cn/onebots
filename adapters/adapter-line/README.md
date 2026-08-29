@@ -96,6 +96,7 @@ LINE 每次最多发送 5 条 Message。通用 `sendMessage` 会按 5 条自动�
 - LINE 不提供任意历史消息查询；媒体只能在收到 Webhook 后用消息 ID 下载，且会在一段时间后失效。
 - LINE 不提供“机器人所在全部群聊”接口；`getGroupList` 返回从 Webhook 持久化得到的已知 group/room。
 - `getFriendList` 映射官方 Get followers，能否调用取决于账号条件，不会伪造空列表。
+- followers 与群/room 成员目录会完整分页、去重并检测停滞游标；成员资料使用固定并发读取，避免大群一次性请求触发平台限流。
 
 参考：[Messaging API reference](https://developers.line.biz/en/reference/messaging-api/)、[Receive messages](https://developers.line.biz/en/docs/messaging-api/receiving-messages/)、[Rich menus](https://developers.line.biz/en/docs/messaging-api/rich-menus-overview/)。
 

@@ -61,7 +61,11 @@ describe("LINE 事件投影", () => {
                 },
                 context,
             ),
-        ).toMatchObject({ notice_type: "message_updated", message_id: { string: "M1" } });
+        ).toMatchObject({
+            notice_type: "message_updated",
+            message_id: { string: "M1" },
+            group: { id: { string: "G1" } },
+        });
         expect(
             projectLineEvent(
                 {
@@ -72,7 +76,11 @@ describe("LINE 事件投影", () => {
                 },
                 context,
             ),
-        ).toMatchObject({ notice_type: "message_deleted", message_id: { string: "M1" } });
+        ).toMatchObject({
+            notice_type: "message_deleted",
+            message_id: { string: "M1" },
+            group: { id: { string: "G1" } },
+        });
     });
 
     it("将 LINE mention 位置投影为标准 at 段", () => {
