@@ -91,6 +91,7 @@ export interface FeishuMessage {
     deleted?: boolean;
     updated?: boolean;
     chat_id: string;
+    chat_type?: string;
     sender: {
         id: string;
         id_type: string;

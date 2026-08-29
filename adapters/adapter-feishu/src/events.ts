@@ -22,10 +22,17 @@ export function projectFeishuEvents(
                 notice(event, rawEvent, context, "message_deleted", {
                     message_id: idValue(payload.message_id, context),
                     group: groupValue(payload.chat_id, context),
+                    extensions: {
+                        feishu: {
+                            event_type: eventType,
+                            recall_time: stringValue(payload.recall_time),
+                            recall_type: stringValue(payload.recall_type),
+                        },
+                    },
                 }),
             ];
         case "im.message.message_read_v1":
-            return [notice(event, rawEvent, context, "custom", extension(eventType))];
+            return projectMessageReads(event, rawEvent, payload, context);
         case "im.message.reaction.created_v1":
         case "im.message.reaction.deleted_v1":
             return [projectReaction(event, rawEvent, payload, context)];
@@ -41,8 +48,9 @@ export function projectFeishuEvents(
                     eventType.endsWith("added_v1") ? "member_joined" : "member_left",
                     {
                         user: userValue(user, context),
-                        group: groupValue(payload.chat_id, context),
-                        extensions: { feishu: { users } },
+                        operator: userValue(objectValue(payload.operator_id), context),
+                        group: groupValue(payload.chat_id, context, payload.name),
+                        extensions: { feishu: { event_type: eventType, users } },
                     },
                 );
                 projected.id = context.createId(
@@ -51,10 +59,14 @@ export function projectFeishuEvents(
                 return projected;
             });
         }
-        case "im.chat.disbanded_v1":
-        case "im.chat.updated_v1":
         case "im.chat.member.bot.added_v1":
+            return [projectBotMembership(event, rawEvent, payload, context, true)];
         case "im.chat.member.bot.deleted_v1":
+        case "im.chat.disbanded_v1":
+            return [projectBotMembership(event, rawEvent, payload, context, false)];
+        case "application.bot.menu_v6":
+            return [projectMenuInteraction(event, rawEvent, payload, context)];
+        case "im.chat.updated_v1":
         case "im.chat.member.user.withdrawn_v1":
             return [
                 notice(event, rawEvent, context, "custom", {
@@ -65,6 +77,83 @@ export function projectFeishuEvents(
         default:
             return [notice(event, rawEvent, context, "custom", extension(eventType))];
     }
+}
+
+function projectMessageReads(
+    event: FeishuEvent,
+    rawEvent: FeishuWebhookBody,
+    payload: Record<string, unknown>,
+    context: ProjectorContext,
+): CommonEvent.Notice<FeishuWebhookBody>[] {
+    const reader = objectValue(payload.reader);
+    const messageIds = Array.isArray(payload.message_id_list)
+        ? payload.message_id_list.filter(
+              (value): value is string => typeof value === "string" && !!value,
+          )
+        : [];
+    if (!messageIds.length) {
+        return [notice(event, rawEvent, context, "custom", extension(event.header.event_type))];
+    }
+    return messageIds.map(messageId => {
+        const projected = notice(event, rawEvent, context, "message_status", {
+            message_id: context.createId(messageId),
+            user: userValue(objectValue(reader.reader_id), context),
+            extensions: {
+                feishu: {
+                    event_type: event.header.event_type,
+                    status: "read",
+                    read_time: stringValue(reader.read_time),
+                    tenant_key: stringValue(reader.tenant_key),
+                },
+            },
+        });
+        projected.id = context.createId(`${event.header.event_id}:${messageId}`);
+        return projected;
+    });
+}
+
+function projectBotMembership(
+    event: FeishuEvent,
+    rawEvent: FeishuWebhookBody,
+    payload: Record<string, unknown>,
+    context: ProjectorContext,
+    joined: boolean,
+): CommonEvent.Notice<FeishuWebhookBody> {
+    return notice(event, rawEvent, context, joined ? "group_increase" : "group_decrease", {
+        user: { id: context.botId, name: "" },
+        operator: userValue(objectValue(payload.operator_id), context),
+        group: groupValue(payload.chat_id, context, payload.name),
+        sub_type: event.header.event_type,
+        extensions: {
+            feishu: {
+                event_type: event.header.event_type,
+                external: payload.external === true,
+                operator_tenant_key: stringValue(payload.operator_tenant_key),
+            },
+        },
+    });
+}
+
+function projectMenuInteraction(
+    event: FeishuEvent,
+    rawEvent: FeishuWebhookBody,
+    payload: Record<string, unknown>,
+    context: ProjectorContext,
+): CommonEvent.Notice<FeishuWebhookBody> {
+    const operator = objectValue(payload.operator);
+    const user = userValue(objectValue(operator.operator_id), context);
+    return notice(event, rawEvent, context, "interaction", {
+        user,
+        operator: user,
+        extensions: {
+            feishu: {
+                event_type: event.header.event_type,
+                event_key: stringValue(payload.event_key),
+                timestamp: typeof payload.timestamp === "number" ? payload.timestamp : undefined,
+                operator_name: stringValue(operator.operator_name),
+            },
+        },
+    });
 }
 
 function projectReaction(
@@ -222,9 +311,13 @@ function extension(eventType: string): { extensions: { feishu: { event_type: str
     return { extensions: { feishu: { event_type: eventType } } };
 }
 
-function groupValue(value: unknown, context: ProjectorContext): CommonTypes.Group | undefined {
+function groupValue(
+    value: unknown,
+    context: ProjectorContext,
+    name: unknown = "",
+): CommonTypes.Group | undefined {
     const id = stringValue(value);
-    return id ? { id: context.createId(id), name: "" } : undefined;
+    return id ? { id: context.createId(id), name: stringValue(name) } : undefined;
 }
 
 function userValue(

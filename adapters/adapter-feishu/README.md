@@ -79,7 +79,7 @@ onebots -r feishu
 - Webhook 加密事件解密与 Verification Token 校验
 - 单聊、群聊、线程回复以及文本、@、图片、文件、音频、视频、富文本和卡片
 - 真实机器人身份、通讯录用户、群列表、群详情和成员列表
-- 消息撤回、成员变化、消息表情增删等 canonical 事件投影；未知事件通过 `raw_event` 无损交付
+- 消息撤回、已读、成员/机器人群生命周期、菜单交互和消息表情增删等 canonical 事件投影；未知事件通过 `raw_event` 无损交付
 - 飞书和 Lark 双端点以及私有化开放平台端点
 - `FeishuBot.ingest(rawEvent)` 可把已有 WebSocket、队列或宿主连接收到的 2.0 事件交给同一客户端
 - 并发启动与 tenant token 请求合并，stop 会废弃在途启动；失效令牌自动刷新一次
@@ -87,9 +87,9 @@ onebots -r feishu
 
 长连接注册官方 SDK 当前声明的全部 IM v1 事件，包括消息、已读、撤回、表情回复、用户/机器人群成员变化、群更新与机器人单聊进入事件。其他业务域事件仍可通过 `FeishuBot.ingest()` 交给同一客户端。
 
-同一个成员变更事件包含多名用户时，适配器会为每名用户分发独立且 ID 稳定的 canonical notice，不再只投影数组第一项；完整原始数组仍保留在扩展字段中。
+同一个成员变更或消息已读事件包含多个对象时，适配器会逐个分发 ID 稳定的 canonical notice，不再只投影数组第一项；完整原始载荷仍通过 `raw_event` 无损保留。机器人进群、被移出与群解散会投影为群生命周期事件，自定义菜单点击会投影为交互事件。
 
-旧的 `long_connection` 布尔字段已由明确的 `receive_mode: long_connection | webhook` 取代，不再保留双配置语义。
+旧的 `long_connection` 布尔字段已由明确的 `receive_mode: long_connection | webhook | manual` 取代，不再保留双配置语义。
 
 ## 消息与媒体
 
@@ -101,7 +101,7 @@ onebots -r feishu
 
 下列动作可从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
 
-`reply_message`、`forward_message`、`add_reaction`、`delete_reaction`、`get_reactions`、`create_chat`、`update_chat`、`delete_chat`、`add_chat_members`、`remove_chat_members`、三种消息加急动作以及 Pin 管理动作。
+`reply_message`、`forward_message`、`merge_forward_messages`、`get_message_read_users`、`add_reaction`、`delete_reaction`、`get_reactions`、`create_chat`、`update_chat`、`delete_chat`、`add_chat_members`、`remove_chat_members`、三种消息加急动作以及 Pin 管理动作。
 
 其他开放平台能力可通过 `call_feishu_api` 调用：
 

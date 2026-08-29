@@ -99,6 +99,67 @@ describe("projectFeishuEvent", () => {
             extensions: { feishu: { emoji_type: "THUMBSUP" } },
         });
     });
+
+    it("将批量已读消息逐条投影为稳定的消息状态", () => {
+        const read = makeEvent("im.message.message_read_v1", {
+            reader: {
+                reader_id: { open_id: "ou_reader" },
+                read_time: "1710000000123",
+                tenant_key: "tenant",
+            },
+            message_id_list: ["om_1", "om_2"],
+        });
+
+        const notices = projectFeishuEvents(read, read as FeishuWebhookBody, context);
+        expect(notices).toHaveLength(2);
+        expect(notices[0]).toMatchObject({
+            id: { string: "EV:im.message.message_read_v1:om_1" },
+            notice_type: "message_status",
+            message_id: { string: "om_1" },
+            user: { id: { string: "ou_reader" } },
+            extensions: { feishu: { status: "read", read_time: "1710000000123" } },
+        });
+        expect(notices[1]).toMatchObject({ message_id: { string: "om_2" } });
+    });
+
+    it("投影机器人群生命周期、成员操作人与菜单交互", () => {
+        const botAdded = makeEvent("im.chat.member.bot.added_v1", {
+            chat_id: "oc_1",
+            name: "项目群",
+            operator_id: { open_id: "ou_operator" },
+            external: true,
+        });
+        expect(
+            projectFeishuEvents(botAdded, botAdded as FeishuWebhookBody, context)[0],
+        ).toMatchObject({
+            notice_type: "group_increase",
+            user: { id: { string: "BOT" } },
+            operator: { id: { string: "ou_operator" } },
+            group: { id: { string: "oc_1" }, name: "项目群" },
+        });
+
+        const disbanded = makeEvent("im.chat.disbanded_v1", {
+            chat_id: "oc_1",
+            operator_id: { open_id: "ou_operator" },
+        });
+        expect(
+            projectFeishuEvents(disbanded, disbanded as FeishuWebhookBody, context)[0],
+        ).toMatchObject({ notice_type: "group_decrease" });
+
+        const menu = makeEvent("application.bot.menu_v6", {
+            operator: {
+                operator_name: "测试用户",
+                operator_id: { open_id: "ou_operator" },
+            },
+            event_key: "open_settings",
+            timestamp: 1710000000,
+        });
+        expect(projectFeishuEvents(menu, menu as FeishuWebhookBody, context)[0]).toMatchObject({
+            notice_type: "interaction",
+            user: { id: { string: "ou_operator" } },
+            extensions: { feishu: { event_key: "open_settings" } },
+        });
+    });
 });
 
 function makeEvent(eventType: string, payload: Record<string, unknown>): FeishuEvent {

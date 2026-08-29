@@ -38,6 +38,12 @@ export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
         },
         reply_message: { support: "native", permissions: ["im:message"] },
         forward_message: { support: "native", permissions: ["im:message"] },
+        merge_forward_messages: { support: "native", permissions: ["im:message"] },
+        get_message_read_users: {
+            support: "native",
+            availability: "permission",
+            note: "仅可查询当前机器人七日内发送消息的已读用户",
+        },
         add_reaction: { support: "native", availability: "permission" },
         delete_reaction: { support: "native", availability: "permission" },
         get_reactions: { support: "native", availability: "permission" },
@@ -61,6 +67,10 @@ export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
         message_deleted: { support: "native" },
         member_joined: { support: "native" },
         member_left: { support: "native" },
+        group_increase: { support: "native", scenes: ["group"] },
+        group_decrease: { support: "native", scenes: ["group"] },
+        message_status: { support: "native", scenes: ["private"] },
+        interaction: { support: "native", scenes: ["private"] },
         reaction_added: { support: "native" },
         reaction_removed: { support: "native" },
         native_event: {

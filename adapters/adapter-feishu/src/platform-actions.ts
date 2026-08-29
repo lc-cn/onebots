@@ -1,4 +1,4 @@
-import { definePlatformActions, type PlatformActionHandler } from "onebots";
+import { definePlatformActions, isSafeAbsoluteApiPath, type PlatformActionHandler } from "onebots";
 import type { FeishuBot } from "./bot.js";
 import { FeishuError, invalidFeishuParam } from "./errors.js";
 
@@ -20,6 +20,26 @@ const ACTION_HANDLERS = {
         bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/forward`, {
             method: "POST",
             body: without(params, "message_id"),
+        }),
+    merge_forward_messages: (bot, params) =>
+        bot.callApi("/im/v1/messages/merge_forward", {
+            method: "POST",
+            params: {
+                receive_id_type: stringValue(params.receive_id_type, "open_id"),
+                ...(typeof params.uuid === "string" && params.uuid ? { uuid: params.uuid } : {}),
+            },
+            body: {
+                receive_id: requiredString(params.receive_id, "receive_id"),
+                message_id_list: stringArray(params.message_id_list, "message_id_list"),
+            },
+        }),
+    get_message_read_users: (bot, params) =>
+        bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/read_users`, {
+            params: queryValue({
+                user_id_type: stringValue(params.user_id_type, "open_id"),
+                ...(params.page_size === undefined ? {} : { page_size: params.page_size }),
+                ...(params.page_token === undefined ? {} : { page_token: params.page_token }),
+            }),
         }),
     add_reaction: (bot, params) =>
         bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/reactions`, {
@@ -103,8 +123,15 @@ function urgent(
 }
 
 function requirePath(value: unknown): string {
-    if (typeof value !== "string" || !value.startsWith("/") || value.includes("..")) {
+    if (typeof value !== "string" || !isSafeAbsoluteApiPath(value)) {
         throw invalidFeishuParam("飞书参数 path 必须为安全绝对路径", value);
+    }
+    return value;
+}
+
+function requiredString(value: unknown, name: string): string {
+    if (typeof value !== "string" || !value) {
+        throw invalidFeishuParam(`飞书参数 ${name} 必须为非空字符串`, value);
     }
     return value;
 }

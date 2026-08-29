@@ -157,7 +157,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             message_id: this.createId(msg.message_id),
             time: toUnixSeconds(msg.create_time),
             sender: {
-                scene_type: msg.chat_id ? "group" : "private",
+                scene_type: msg.chat_type === "group" ? "group" : "private",
                 sender_id: this.createId(senderId),
                 scene_id: this.createId(msg.chat_id || senderId),
                 sender_name: senderId,
