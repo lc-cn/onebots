@@ -17,6 +17,11 @@ export const ICQQ_PLATFORM_ACTIONS = new Set([
     "set_description",
     "set_signature",
     "get_profile",
+    "get_add_friend_setting",
+    "get_user_status",
+    "set_friend_remark",
+    "set_friend_group",
+    "search_same_groups",
     "set_avatar",
     "get_roaming_stamps",
     "delete_stamp",
@@ -33,7 +38,14 @@ export const ICQQ_PLATFORM_ACTIONS = new Set([
     "get_video_url",
     "get_group_share_json",
     "send_group_sign",
+    "get_group_at_all_remainder",
+    "get_group_mute_member_list",
+    "get_group_anonymous_info",
+    "set_group_message_rate_limit",
+    "set_group_join_type",
+    "set_group_remark",
     "set_group_member_screen",
+    "delete_group_message_reaction",
     "add_group_member_as_friend",
     "get_forum_url",
     "send_temp_message",
@@ -55,17 +67,20 @@ export async function executeICQQPlatformAction(
             return client.refreshNTPicRkey(optionalBoolean(params.force));
         case "uid_to_uin":
             return Array.isArray(params.uid)
-                ? client.uid2uins(stringArray(params.uid, "uid"), optionalInteger(params.group_id))
+                ? client.uid2uins(stringArray(params.uid, "uid"), optionalQQNumber(params.group_id))
                 : client.uid2uin(
                       requiredString(params.uid, "uid"),
-                      optionalInteger(params.group_id),
+                      optionalQQNumber(params.group_id),
                   );
         case "uin_to_uid":
             return Array.isArray(params.uin)
-                ? client.uin2uids(integerArray(params.uin, "uin"), optionalInteger(params.group_id))
+                ? client.uin2uids(
+                      qqNumberArray(params.uin, "uin"),
+                      optionalQQNumber(params.group_id),
+                  )
                 : client.uin2uid(
-                      requiredInteger(params.uin, "uin"),
-                      optionalInteger(params.group_id),
+                      requiredQQNumber(params.uin, "uin"),
+                      optionalQQNumber(params.group_id),
                   );
         case "get_online_status":
             return client.getOnlineStatus();
@@ -85,6 +100,24 @@ export async function executeICQQPlatformAction(
             return client.setSignature(optionalString(params.signature));
         case "get_profile":
             return client.getProfile(stringOrInteger(params.user_id, "user_id"));
+        case "get_add_friend_setting":
+            return client
+                .pickUser(requiredQQNumber(params.user_id, "user_id"))
+                .getAddFriendSetting();
+        case "get_user_status":
+            return client
+                .pickUser(requiredQQNumber(params.user_id, "user_id"))
+                .getStatusInfo(optionalBoolean(params.use_jce));
+        case "set_friend_remark":
+            return client
+                .pickFriend(requiredQQNumber(params.user_id, "user_id"))
+                .setRemark(requiredString(params.remark, "remark"));
+        case "set_friend_group":
+            return client
+                .pickFriend(requiredQQNumber(params.user_id, "user_id"))
+                .setClass(requiredInteger(params.group_id, "group_id"));
+        case "search_same_groups":
+            return client.pickFriend(requiredQQNumber(params.user_id, "user_id")).searchSameGroup();
         case "set_avatar":
             return client.setAvatar(requiredString(params.file, "file"));
         case "get_roaming_stamps":
@@ -120,19 +153,37 @@ export async function executeICQQPlatformAction(
                 requiredString(params.md5, "md5"),
             );
         case "get_group_share_json":
-            return client.getGroupShareJson(requiredInteger(params.group_id, "group_id"));
+            return client.getGroupShareJson(requiredQQNumber(params.group_id, "group_id"));
         case "send_group_sign":
-            return client.sendGroupSign(requiredInteger(params.group_id, "group_id"));
+            return client.sendGroupSign(requiredQQNumber(params.group_id, "group_id"));
+        case "get_group_at_all_remainder":
+            return client
+                .pickGroup(requiredQQNumber(params.group_id, "group_id"))
+                .getAtAllRemainder();
+        case "get_group_mute_member_list":
+            return client
+                .pickGroup(requiredQQNumber(params.group_id, "group_id"))
+                .getMuteMemberList();
+        case "get_group_anonymous_info":
+            return client.pickGroup(requiredQQNumber(params.group_id, "group_id")).getAnonyInfo();
+        case "set_group_message_rate_limit":
+            return setGroupMessageRateLimit(client, params);
+        case "set_group_join_type":
+            return setGroupJoinType(client, params);
+        case "set_group_remark":
+            return setGroupRemark(client, params);
         case "set_group_member_screen":
             return client.setGroupMemberScreenMsg(
-                requiredInteger(params.group_id, "group_id"),
-                requiredInteger(params.user_id, "user_id"),
+                requiredQQNumber(params.group_id, "group_id"),
+                requiredQQNumber(params.user_id, "user_id"),
                 optionalBoolean(params.enabled),
             );
+        case "delete_group_message_reaction":
+            return deleteGroupMessageReaction(client, params);
         case "add_group_member_as_friend":
             return client.addFriend(
-                requiredInteger(params.group_id, "group_id"),
-                requiredInteger(params.user_id, "user_id"),
+                requiredQQNumber(params.group_id, "group_id"),
+                requiredQQNumber(params.user_id, "user_id"),
                 optionalString(params.comment),
             );
         case "get_forum_url":
@@ -143,13 +194,13 @@ export async function executeICQQPlatformAction(
             );
         case "send_temp_message":
             return client.sendTempMsg(
-                requiredInteger(params.group_id, "group_id"),
-                requiredInteger(params.user_id, "user_id"),
+                requiredQQNumber(params.group_id, "group_id"),
+                requiredQQNumber(params.user_id, "user_id"),
                 platformMessage(params.message),
             );
         case "send_discuss_message":
             return client.sendDiscussMsg(
-                requiredInteger(params.discuss_id, "discuss_id"),
+                requiredQQNumber(params.discuss_id, "discuss_id"),
                 platformMessage(params.message),
             );
         default:
@@ -180,8 +231,20 @@ function requiredInteger(value: unknown, field: string): number {
     return value;
 }
 
+function requiredQQNumber(value: unknown, field: string): number {
+    if (typeof value === "string" && /^\d+$/u.test(value)) {
+        const parsed = Number(value);
+        if (Number.isSafeInteger(parsed)) return parsed;
+    }
+    return requiredInteger(value, field);
+}
+
 function optionalInteger(value: unknown): number | undefined {
     return value === undefined ? undefined : requiredInteger(value, "参数");
+}
+
+function optionalQQNumber(value: unknown): number | undefined {
+    return value === undefined ? undefined : requiredQQNumber(value, "group_id");
 }
 
 function optionalBoolean(value: unknown): boolean | undefined {
@@ -195,9 +258,9 @@ function stringArray(value: unknown, field: string): string[] {
     return value.map(item => requiredString(item, field));
 }
 
-function integerArray(value: unknown, field: string): number[] {
+function qqNumberArray(value: unknown, field: string): number[] {
     if (!Array.isArray(value)) throw new TypeError(`${field} 必须是整数数组`);
-    return value.map(item => requiredInteger(item, field));
+    return value.map(item => requiredQQNumber(item, field));
 }
 
 function stringOrStrings(value: unknown, field: string): string | string[] {
@@ -214,4 +277,81 @@ function gender(value: unknown): 0 | 1 | 2 {
         throw new TypeError("gender 只能是 0、1 或 2");
     }
     return result;
+}
+
+function groupMessageRate(value: unknown): 0 | 5 | 10 {
+    const result = requiredInteger(value, "times");
+    if (result !== 0 && result !== 5 && result !== 10) {
+        throw new TypeError("times 只能是 0、5 或 10");
+    }
+    return result;
+}
+
+function groupJoinType(value: unknown): "AnyOne" | "None" | "requireAuth" | "QAjoin" | "Correct" {
+    if (
+        value === "AnyOne" ||
+        value === "None" ||
+        value === "requireAuth" ||
+        value === "QAjoin" ||
+        value === "Correct"
+    ) {
+        return value;
+    }
+    throw new TypeError("type 必须是 AnyOne、None、requireAuth、QAjoin 或 Correct");
+}
+
+function setGroupMessageRateLimit(
+    client: Client,
+    params: Readonly<Record<string, unknown>>,
+): Promise<boolean> {
+    const groupId = requiredQQNumber(params.group_id, "group_id");
+    const times = groupMessageRate(params.times);
+    return client.pickGroup(groupId).setMessageRateLimit(times);
+}
+
+function setGroupJoinType(
+    client: Client,
+    params: Readonly<Record<string, unknown>>,
+): Promise<boolean | undefined> {
+    const groupId = requiredQQNumber(params.group_id, "group_id");
+    const type = groupJoinType(params.type);
+    const question = optionalString(params.question);
+    const answer = optionalString(params.answer);
+    if ((type === "QAjoin" || type === "Correct") && !question) {
+        throw new TypeError(`${type} 加群策略必须提供 question`);
+    }
+    if (type === "Correct" && !answer) {
+        throw new TypeError("Correct 加群策略必须提供 answer");
+    }
+    return client.pickGroup(groupId).setGroupJoinType(type, question, answer);
+}
+
+function setGroupRemark(client: Client, params: Readonly<Record<string, unknown>>): Promise<void> {
+    const groupId = requiredQQNumber(params.group_id, "group_id");
+    const remark = optionalString(params.remark);
+    return client.pickGroup(groupId).setRemark(remark);
+}
+
+async function deleteGroupMessageReaction(
+    client: Client,
+    params: Readonly<Record<string, unknown>>,
+): Promise<unknown> {
+    const messageId = requiredString(params.message_id, "message_id");
+    const message = await client.getMsg(messageId);
+    if (!message || message.message_type !== "group") {
+        throw new TypeError("删除群消息表态需要有效的群消息 ID");
+    }
+    if (
+        params.group_id !== undefined &&
+        message.group_id !== requiredQQNumber(params.group_id, "group_id")
+    ) {
+        throw new TypeError("消息不属于指定群");
+    }
+    return client
+        .pickGroup(message.group_id)
+        .delReaction(
+            message.seq,
+            String(stringOrInteger(params.face_id, "face_id")),
+            optionalInteger(params.face_type),
+        );
 }

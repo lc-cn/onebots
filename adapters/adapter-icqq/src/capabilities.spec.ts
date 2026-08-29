@@ -18,6 +18,10 @@ describe("ICQQ capability manifest", () => {
                 "upload_file",
                 "get_group_files",
                 "get_credentials",
+                "set_friend_remark",
+                "set_group_join_type",
+                "get_group_mute_member_list",
+                "delete_group_message_reaction",
             ]),
         );
     });
