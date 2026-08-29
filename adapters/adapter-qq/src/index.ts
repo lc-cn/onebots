@@ -29,6 +29,7 @@ const qqSchema: Schema = {
         required: true,
         label: "账号标识",
         description: "OneBots 内部区分 QQ 机器人的稳定标识，建议直接使用 AppID",
+        ui: { section: "credentials" },
     },
     appid: {
         type: "string",
@@ -41,6 +42,7 @@ const qqSchema: Schema = {
         type: "string",
         required: true,
         label: "App Secret",
+        sensitive: true,
         description: "QQ 开放平台机器人 AppSecret",
         ui: { section: "credentials" },
     },

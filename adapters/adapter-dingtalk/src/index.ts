@@ -17,6 +17,7 @@ const dingtalkSchema: Schema = {
         required: true,
         label: "账号标识",
         description: "OneBots 内部区分钉钉机器人连接的稳定标识",
+        ui: { section: "credentials" },
     },
     receive_mode: {
         type: "string",
@@ -38,6 +39,7 @@ const dingtalkSchema: Schema = {
     app_secret: {
         type: "string",
         label: "Client Secret / AppSecret",
+        sensitive: true,
         ui: { section: "credentials" },
     },
     robot_code: {
@@ -61,12 +63,14 @@ const dingtalkSchema: Schema = {
     token: {
         type: "string",
         label: "回调 Token",
+        sensitive: true,
         description: "HTTP 加密回调签名使用",
         ui: { section: "credentials" },
     },
     encrypt_key: {
         type: "string",
         label: "EncodingAESKey",
+        sensitive: true,
         description: "HTTP 加密回调使用的 43 字符 AES Key",
         ui: { section: "credentials" },
     },
@@ -80,6 +84,7 @@ const dingtalkSchema: Schema = {
     webhook_secret: {
         type: "string",
         label: "自定义机器人加签密钥",
+        sensitive: true,
         ui: { section: "credentials" },
     },
 };

@@ -27,6 +27,7 @@ const teamsSchema: Schema = {
         required: true,
         label: "账号标识",
         description: "OneBots 内部区分 Microsoft Teams Agent 的稳定标识",
+        ui: { section: "credentials" },
     },
     app_id: {
         type: "string",
@@ -39,6 +40,7 @@ const teamsSchema: Schema = {
         type: "string",
         required: true,
         label: "Client Secret",
+        sensitive: true,
         description: "Microsoft Entra 应用的客户端密钥值（不是 Secret ID）",
         ui: { section: "credentials" },
     },

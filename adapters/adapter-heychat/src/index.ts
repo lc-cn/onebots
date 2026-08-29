@@ -39,11 +39,13 @@ const heychatSchema: Schema = {
         required: true,
         label: "账号标识",
         description: "OneBots 内部区分黑盒语音机器人的稳定标识",
+        ui: { section: "credentials" },
     },
     token: {
         type: "string",
         required: true,
         label: "Bot Token",
+        sensitive: true,
         description: "黑盒语音机器人控制台签发的 Token",
         ui: { section: "credentials" },
     },
@@ -117,9 +119,15 @@ const heychatSchema: Schema = {
             type: "string",
             label: "代理地址",
             description: "HTTP(S) 与 WebSocket 共用的 HTTP/SOCKS 代理",
+            ui: { section: "advanced" },
         },
-        username: { type: "string", label: "代理用户名" },
-        password: { type: "string", label: "代理密码" },
+        username: { type: "string", label: "代理用户名", ui: { section: "advanced" } },
+        password: {
+            type: "string",
+            label: "代理密码",
+            sensitive: true,
+            ui: { section: "advanced" },
+        },
     },
 };
 

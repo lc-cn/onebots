@@ -32,6 +32,7 @@ const wecomSchema: Schema = {
         min: 1,
         label: "账号标识",
         description: "OneBots 内部区分企业应用的稳定标识",
+        ui: { section: "credentials" },
     },
     corp_id: {
         type: "string",

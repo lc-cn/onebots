@@ -18,6 +18,7 @@ const feishuSchema: Schema = {
         required: true,
         label: "账号标识",
         description: "OneBots 内部区分飞书/Lark 连接的稳定标识",
+        ui: { section: "credentials" },
     },
     app_id: {
         type: "string",
@@ -30,6 +31,7 @@ const feishuSchema: Schema = {
         type: "string",
         required: true,
         label: "App Secret",
+        sensitive: true,
         ui: { section: "credentials" },
     },
     long_connection: {
@@ -42,12 +44,14 @@ const feishuSchema: Schema = {
     encrypt_key: {
         type: "string",
         label: "事件加密 Key",
+        sensitive: true,
         description: "Webhook 加密推送开启后必须配置",
         ui: { section: "credentials" },
     },
     verification_token: {
         type: "string",
         label: "事件验证 Token",
+        sensitive: true,
         ui: { section: "credentials" },
     },
     endpoint: {

@@ -11,11 +11,13 @@ const kookSchema: Schema = {
         required: true,
         label: "账号标识",
         description: "OneBots 内部区分 KOOK 机器人连接的稳定标识",
+        ui: { section: "credentials" },
     },
     token: {
         type: "string",
         required: true,
         label: "Bot Token",
+        sensitive: true,
         description: "KOOK 开发者中心「机器人」页面生成的 Token",
         ui: { section: "credentials" },
     },
@@ -33,12 +35,14 @@ const kookSchema: Schema = {
     verify_token: {
         type: "string",
         label: "Webhook Verify Token",
+        sensitive: true,
         description: "仅 Webhook 模式使用，必须与开发者中心回调配置一致",
         ui: { section: "credentials" },
     },
     encrypt_key: {
         type: "string",
         label: "Webhook Encrypt Key",
+        sensitive: true,
         description: "仅在开发者中心启用 Webhook 加密时填写",
         ui: { section: "credentials" },
     },

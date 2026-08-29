@@ -12,17 +12,20 @@ const slackSchema: Schema = {
         required: true,
         label: "账号标识",
         description: "OneBots 内部用于区分 Slack 工作区连接的稳定标识",
+        ui: { section: "credentials" },
     },
     token: {
         type: "string",
         required: true,
         label: "Bot Token",
+        sensitive: true,
         placeholder: "xoxb-…",
         ui: { section: "credentials" },
     },
     signing_secret: {
         type: "string",
         label: "Signing Secret",
+        sensitive: true,
         description: "HTTP Events API 请求签名密钥",
         ui: { section: "credentials" },
     },
@@ -36,6 +39,7 @@ const slackSchema: Schema = {
     app_token: {
         type: "string",
         label: "App Token",
+        sensitive: true,
         placeholder: "xapp-…",
         description: "仅 Socket Mode 使用，需包含 connections:write scope",
         ui: { section: "credentials" },
