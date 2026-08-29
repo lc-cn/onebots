@@ -4,25 +4,9 @@ import { MILKY_GROUP_ACTIONS } from "./group-actions.js";
 import { MILKY_GROUP_REQUEST_ACTIONS } from "./group-requests.js";
 import { MILKY_FILE_ACTIONS } from "./file-actions.js";
 import { MILKY_MESSAGE_ACTIONS } from "./message-actions.js";
+import { MILKY_DIRECTORY_ACTIONS } from "./directory-actions.js";
 
-const DIRECT_ACTIONS = [
-    "get_login_info",
-    "get_impl_info",
-    "get_status",
-    "get_user_profile",
-    "get_friend_info",
-    "get_friend_list",
-    "get_cookies",
-    "get_csrf_token",
-    "send_friend_nudge",
-    "send_profile_like",
-    "get_friend_requests",
-    "get_group_info",
-    "get_group_list",
-    "get_group_member_info",
-    "get_group_member_list",
-    "get_group_notifications",
-] as const;
+const DIRECT_ACTIONS = ["get_friend_requests", "get_group_notifications"] as const;
 
 /** Milky 标准动作与 OneBots 明确扩展的唯一路由源。 */
 export const MILKY_ACTIONS = new Set<string>([
@@ -33,6 +17,7 @@ export const MILKY_ACTIONS = new Set<string>([
     ...MILKY_FRIEND_REQUEST_ACTIONS,
     ...MILKY_FILE_ACTIONS,
     ...MILKY_MESSAGE_ACTIONS,
+    ...MILKY_DIRECTORY_ACTIONS,
 ]);
 
 export function isMilkyAction(action: string): boolean {

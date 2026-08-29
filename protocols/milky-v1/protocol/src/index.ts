@@ -3,20 +3,16 @@ import {
     ProtocolRegistry,
     Account,
     Adapter,
-    requireBooleanParam,
     requireNonEmptyStringParam,
-    requirePositiveIntegerParam,
     ReverseWebSocketSession,
 } from "onebots";
 import type { CommonEvent, Schema } from "onebots";
 import { Milky } from "./types.js";
 import { MilkyConfig } from "./config.js";
-import { createHmac } from "crypto";
 import { WebSocket } from "ws";
 import { projectMilkyEvent } from "./event-projector.js";
 import { executeMilkyAccountAction, MILKY_ACCOUNT_ACTIONS } from "./account-actions.js";
 import { executeMilkyGroupAction, MILKY_GROUP_ACTIONS } from "./group-actions.js";
-import { projectMilkyGroup, projectMilkyGroupMember } from "./group-entities.js";
 import {
     executeMilkyGroupRequestAction,
     getMilkyGroupNotifications,
@@ -27,12 +23,12 @@ import {
     getMilkyFriendRequests,
     MILKY_FRIEND_REQUEST_ACTIONS,
 } from "./friend-requests.js";
-import { projectMilkyFriend } from "./friend-entities.js";
-import { projectMilkyImplInfo, projectMilkyUserProfile } from "./system-entities.js";
 import { isMilkyAction } from "./action-registry.js";
 import { MilkyActionNotFoundError, toMilkyFailure } from "./api-errors.js";
 import { executeMilkyFileAction, MILKY_FILE_ACTIONS } from "./file-actions.js";
 import { executeMilkyMessageAction, MILKY_MESSAGE_ACTIONS } from "./message-actions.js";
+import { executeMilkyDirectoryAction, MILKY_DIRECTORY_ACTIONS } from "./directory-actions.js";
+import { createMilkySignature, verifyMilkyToken } from "./auth.js";
 
 const milkySchema: Schema = {
     use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
@@ -264,37 +260,17 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         if (MILKY_MESSAGE_ACTIONS.has(action)) {
             return executeMilkyMessageAction(this.adapter, this.account.account_id, action, params);
         }
+        if (MILKY_DIRECTORY_ACTIONS.has(action)) {
+            return executeMilkyDirectoryAction(
+                this.adapter,
+                this.account.account_id,
+                action,
+                params,
+            );
+        }
         switch (action) {
-            case "get_login_info":
-                return this.getLoginInfo();
-            case "get_impl_info":
-                return this.getImplInfo();
-            case "get_status":
-                return this.getStatus();
-            case "get_user_profile":
-                return this.getStrangerInfo(params);
-            case "get_friend_info":
-                return this.getFriendInfo(params);
-            case "get_friend_list":
-                return this.getFriendList();
-            case "get_cookies":
-                return this.getCookies(params);
-            case "get_csrf_token":
-                return this.getCsrfToken();
-            case "send_friend_nudge":
-                return this.sendFriendNudge(params);
-            case "send_profile_like":
-                return this.sendProfileLike(params);
             case "get_friend_requests":
                 return getMilkyFriendRequests(this.adapter, this.account.account_id, params);
-            case "get_group_info":
-                return this.getGroupInfo(params);
-            case "get_group_list":
-                return this.getGroupList();
-            case "get_group_member_info":
-                return this.getGroupMemberInfo(params);
-            case "get_group_member_list":
-                return this.getGroupMemberList(params);
             case "get_group_notifications":
                 return getMilkyGroupNotifications(this.adapter, this.account.account_id, params);
             default:
@@ -311,138 +287,6 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     private isKnownAction(action: string): boolean {
         if (isMilkyAction(action)) return true;
         return Boolean(this.adapter.describeCapabilities(this.account.account_id).actions[action]);
-    }
-
-    private async getLoginInfo(): Promise<Milky.LoginInfo> {
-        const info = await this.adapter.getLoginInfo(this.account.account_id);
-        return {
-            uin: info.user_id.number,
-            nickname: info.user_name,
-        };
-    }
-
-    private async getImplInfo(): Promise<Milky.ImplInfo> {
-        const version = await this.adapter.getVersion(this.account.account_id);
-        return projectMilkyImplInfo(version);
-    }
-
-    private async getStatus(): Promise<Adapter.StatusInfo> {
-        return this.adapter.getStatus(this.account.account_id);
-    }
-
-    private async getStrangerInfo(params: Record<string, unknown>): Promise<Milky.UserProfile> {
-        const userId = requirePositiveIntegerParam(params, "user_id");
-        const info = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: this.adapter.resolveId(userId),
-        });
-        return projectMilkyUserProfile(info);
-    }
-
-    private async getFriendInfo(
-        params: Record<string, unknown>,
-    ): Promise<{ friend: Milky.FriendInfo }> {
-        const { user_id } = params as { user_id: string };
-        const info = await this.adapter.getFriendInfo(this.account.account_id, {
-            user_id: this.adapter.resolveId(user_id),
-        });
-        return { friend: projectMilkyFriend(info) };
-    }
-
-    private async getFriendList(): Promise<{ friends: Milky.FriendInfo[] }> {
-        const result = await this.adapter.getFriendList(this.account.account_id);
-        return { friends: result.map(projectMilkyFriend) };
-    }
-
-    private async getCookies(params: Record<string, unknown>): Promise<{ cookies: string }> {
-        const domain =
-            typeof params.domain === "string" && params.domain.trim() !== ""
-                ? params.domain
-                : undefined;
-        return {
-            cookies: await this.adapter.getCookies(this.account.account_id, { domain }),
-        };
-    }
-
-    private async getCsrfToken(): Promise<{ csrf_token: number }> {
-        return {
-            csrf_token: await this.adapter.getCsrfToken(this.account.account_id),
-        };
-    }
-
-    private async sendFriendNudge(params: Record<string, unknown>): Promise<void> {
-        const userId = requirePositiveIntegerParam(params, "user_id");
-        await this.adapter.sendFriendNudge(this.account.account_id, {
-            user_id: this.adapter.resolveId(userId),
-            is_self:
-                params.is_self === undefined ? undefined : requireBooleanParam(params, "is_self"),
-        });
-    }
-
-    private async sendProfileLike(params: Record<string, unknown>): Promise<void> {
-        const userId = requirePositiveIntegerParam(params, "user_id");
-        const count = requirePositiveIntegerParam(params, "count");
-        await this.adapter.sendLike(this.account.account_id, {
-            user_id: this.adapter.resolveId(userId),
-            count,
-        });
-    }
-
-    private async getGroupInfo(
-        params: Record<string, unknown>,
-    ): Promise<{ group: Milky.GroupInfo }> {
-        const { group_id } = params as { group_id: string };
-        const info = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-        });
-        return { group: projectMilkyGroup(info) };
-    }
-
-    private async getGroupList(): Promise<{ groups: Milky.GroupInfo[] }> {
-        const result = await this.adapter.getGroupList(this.account.account_id);
-        return { groups: result.map(projectMilkyGroup) };
-    }
-
-    private async getGroupMemberInfo(
-        params: Record<string, unknown>,
-    ): Promise<{ member: Milky.GroupMemberInfo }> {
-        const { group_id, user_id } = params as { group_id: string; user_id: string };
-        const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-            user_id: this.adapter.resolveId(user_id),
-        });
-        return { member: projectMilkyGroupMember(info) };
-    }
-
-    private async getGroupMemberList(
-        params: Record<string, unknown>,
-    ): Promise<{ members: Milky.GroupMemberInfo[] }> {
-        const { group_id } = params as { group_id: string };
-        const list = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: this.adapter.resolveId(group_id),
-        });
-        return { members: list.map(projectMilkyGroupMember) };
-    }
-
-    /**
-     * Verify access token
-     */
-    private verifyToken(token?: string): boolean {
-        const requiredToken = this.config.access_token;
-        if (!requiredToken) return true;
-        return token === requiredToken;
-    }
-
-    /**
-     * Verify signature
-     */
-    private verifySignature(body: string, signature?: string): boolean {
-        const secret = this.config.secret;
-        if (!secret) return true;
-        if (!signature) return false;
-
-        const hmac = createHmac("sha1", secret);
-        const expected = "sha1=" + hmac.update(body).digest("hex");
-        return signature === expected;
     }
 
     // Service implementations
@@ -463,7 +307,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 (typeof authHeader === "string"
                     ? authHeader.replace(/^Bearer\s+/i, "").trim()
                     : undefined) || ctx.query.access_token;
-            if (!this.verifyToken(token as string)) {
+            if (!verifyMilkyToken(this.config.access_token, token as string)) {
                 ctx.status = 401;
                 ctx.body = { status: "failed", retcode: 1403, message: "Unauthorized" };
                 return;
@@ -507,7 +351,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 url.searchParams.get("access_token") ||
                 request.headers.authorization?.replace("Bearer ", "");
 
-            if (!this.verifyToken(token as string)) {
+            if (!verifyMilkyToken(this.config.access_token, token as string)) {
                 ws.close(1008, "Unauthorized");
                 return;
             }
@@ -576,8 +420,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                 // Add signature if secret is configured
                 const secret = config.secret || this.config.secret;
                 if (secret) {
-                    const hmac = createHmac("sha1", secret);
-                    headers["X-Signature"] = "sha1=" + hmac.update(data).digest("hex");
+                    headers["X-Signature"] = createMilkySignature(secret, data);
                 }
 
                 const response = await fetch(config.url, {
