@@ -5,6 +5,7 @@ export type { WechatClawbotConfig, WechatIlinkRuntimeConfig } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
 export * from "./events.js";
+export * from "./messages.js";
 export * from "./platform-actions.js";
 export * from "./sdk/ilink-bot.js";
 export * from "./sdk/ilink-types.js";

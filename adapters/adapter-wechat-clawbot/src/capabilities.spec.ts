@@ -17,6 +17,8 @@ describe("微信 ClawBot 能力清单", () => {
 
     it("准确声明 context_token 与接收专用语音", () => {
         expect(wechatClawbotCapabilities.actions.send_message?.availability).toBe("context");
+        expect(wechatClawbotCapabilities.actions.can_send_image?.support).toBe("native");
+        expect(wechatClawbotCapabilities.actions.can_send_record?.support).toBe("native");
         expect(wechatClawbotCapabilities.segments.audio?.direction).toBe("receive");
         expect(wechatClawbotCapabilities.transports.ilink?.mode).toBe("polling");
     });

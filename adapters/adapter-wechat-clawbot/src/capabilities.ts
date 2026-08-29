@@ -14,6 +14,11 @@ export const wechatClawbotCapabilities: AdapterCapabilityManifest = defineAdapte
         get_status: { support: "native" },
         send_typing: { support: "native", availability: "context", scenes: ["private"] },
         download_media: { support: "native", availability: "context", scenes: ["private"] },
+        can_send_image: { support: "native" },
+        can_send_record: {
+            support: "native",
+            note: "iLink 当前仅支持接收语音，不能发送标准语音消息",
+        },
         get_supported_actions: { support: "native" },
     },
     events: {

@@ -81,7 +81,7 @@ export type NormalizedMedia = MediaPhoto | MediaVideo | MediaDocument | MediaVoi
 
 /** 适配器消费的统一消息视图 */
 export interface NormalizedChatEvent {
-    id: number | undefined;
+    id: string | number | undefined;
     seq: number | undefined;
     type: NormalizedFacet;
     chat: ChatHandle;

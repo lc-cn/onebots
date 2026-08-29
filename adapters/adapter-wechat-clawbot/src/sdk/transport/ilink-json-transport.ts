@@ -10,7 +10,7 @@ import {
 import { fuseAbortClock } from "../internal/async-tools.js";
 import { StaleCredentialFault, GatewayFault } from "../internal/errors.js";
 import { ephemeralWeixinHeaderTag } from "../internal/random-tags.js";
-import { withTrailingSlash } from "../internal/url-utils.js";
+import { normalizeServiceRoot, withTrailingSlash } from "../internal/url-utils.js";
 import type { WireChannelFingerprint } from "../protocol/wire-models.js";
 import type {
     CdnSlotGrant,
@@ -43,15 +43,28 @@ export class IlinkJsonTransport {
     routeTag?: string;
 
     constructor(seed: TransportRuntimePatch = {}) {
-        this.baseUrl = seed.baseUrl?.trim() || ILINK_HTTP_ORIGIN_DEFAULT;
-        this.cdnBaseUrl = seed.cdnBaseUrl?.trim() || ILINK_CDN_ROOT_DEFAULT;
+        this.baseUrl = normalizeServiceRoot(
+            seed.baseUrl?.trim() || ILINK_HTTP_ORIGIN_DEFAULT,
+            "iLink API 根地址",
+        );
+        this.cdnBaseUrl = normalizeServiceRoot(
+            seed.cdnBaseUrl?.trim() || ILINK_CDN_ROOT_DEFAULT,
+            "iLink CDN 根地址",
+        );
         this.token = seed.token?.trim() || undefined;
         this.routeTag = seed.routeTag?.trim() || undefined;
     }
 
     patchRuntimeTargets(patch: TransportRuntimePatch): void {
-        if (patch.baseUrl?.trim()) this.baseUrl = patch.baseUrl.trim();
-        if (patch.cdnBaseUrl?.trim()) this.cdnBaseUrl = patch.cdnBaseUrl.trim();
+        // 先完整校验再一次性更新，避免第二个地址无效时留下半应用状态。
+        const nextBaseUrl = patch.baseUrl?.trim()
+            ? normalizeServiceRoot(patch.baseUrl.trim(), "iLink API 根地址")
+            : this.baseUrl;
+        const nextCdnBaseUrl = patch.cdnBaseUrl?.trim()
+            ? normalizeServiceRoot(patch.cdnBaseUrl.trim(), "iLink CDN 根地址")
+            : this.cdnBaseUrl;
+        this.baseUrl = nextBaseUrl;
+        this.cdnBaseUrl = nextCdnBaseUrl;
         if (patch.token !== undefined) this.token = patch.token?.trim() || undefined;
         if (patch.routeTag !== undefined) this.routeTag = patch.routeTag?.trim() || undefined;
     }
@@ -101,14 +114,14 @@ export class IlinkJsonTransport {
             if (!response.ok) {
                 throw new GatewayFault(
                     "HTTP_ERROR",
-                    `HTTP ${response.status} ${response.statusText}: ${raw}`,
+                    `HTTP ${response.status} ${response.statusText}: ${summarizeBody(raw)}`,
                     {
                         operation: path,
                         status: response.status,
                     },
                 );
             }
-            return JSON.parse(raw) as T;
+            return parseJsonObject<T>(raw, path);
         } finally {
             disarm();
         }
@@ -133,10 +146,10 @@ export class IlinkJsonTransport {
             if (!response.ok) {
                 throw new GatewayFault(
                     "HTTP_ERROR",
-                    `HTTP ${response.status} ${response.statusText}: ${raw}`,
+                    `HTTP ${response.status} ${response.statusText}: ${summarizeBody(raw)}`,
                 );
             }
-            return JSON.parse(raw) as QrBitmapReply;
+            return parseJsonObject<QrBitmapReply>(raw, "ilink/bot/get_bot_qrcode");
         } finally {
             disarm();
         }
@@ -161,10 +174,10 @@ export class IlinkJsonTransport {
             if (!response.ok) {
                 throw new GatewayFault(
                     "HTTP_ERROR",
-                    `HTTP ${response.status} ${response.statusText}: ${raw}`,
+                    `HTTP ${response.status} ${response.statusText}: ${summarizeBody(raw)}`,
                 );
             }
-            return JSON.parse(raw) as QrPhaseReply;
+            return parseJsonObject<QrPhaseReply>(raw, "ilink/bot/get_qrcode_status");
         } catch (error) {
             if (params.signal?.aborted) throw params.signal.reason;
             if (clock.signal.aborted) {
@@ -290,4 +303,23 @@ export class IlinkJsonTransport {
         this.sniffCredentialFault(row);
         return row;
     }
+}
+
+function parseJsonObject<T>(raw: string, operation: string): T {
+    try {
+        const value: unknown = JSON.parse(raw);
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+            throw new TypeError("响应根必须是对象");
+        }
+        return value as T;
+    } catch (error) {
+        throw new GatewayFault("INVALID_JSON", `iLink ${operation} 返回无效 JSON`, {
+            cause: error,
+            operation,
+        });
+    }
+}
+
+function summarizeBody(raw: string): string {
+    return raw.slice(0, 500);
 }

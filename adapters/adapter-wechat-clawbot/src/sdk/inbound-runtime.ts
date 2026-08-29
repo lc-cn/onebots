@@ -3,10 +3,32 @@ import type { NormalizedChatEvent } from "./protocol/chat-event.js";
 import type { OnTextListener } from "./protocol/chat-event.js";
 import { mapInboundWirePacket } from "./protocol/inbound-mapper.js";
 import { GatewayFault } from "./internal/errors.js";
+import type { InboundWirePacket } from "./protocol/wire-models.js";
 
 export interface RegexBinding {
     pattern: RegExp;
     listener: OnTextListener;
+}
+
+/** SDK 边界只接受可定位、可回复的真实私聊消息，避免污染上下文与媒体缓存。 */
+export function assertInboundWirePacket(value: unknown): asserts value is InboundWirePacket {
+    if (!value || typeof value !== "object") {
+        throw new GatewayFault("INVALID_EVENT", "iLink 事件必须是对象");
+    }
+    const event = value as Record<string, unknown>;
+    if (typeof event.from_user_id !== "string" || !event.from_user_id.trim()) {
+        throw new GatewayFault("INVALID_EVENT", "iLink 事件缺少 from_user_id");
+    }
+    const hasNumericId =
+        (typeof event.message_id === "number" && Number.isFinite(event.message_id)) ||
+        (typeof event.seq === "number" && Number.isFinite(event.seq));
+    const hasClientId = typeof event.client_id === "string" && Boolean(event.client_id.trim());
+    if (!hasNumericId && !hasClientId) {
+        throw new GatewayFault("INVALID_EVENT", "iLink 事件缺少 message_id、seq 或 client_id");
+    }
+    if (event.item_list !== undefined && !Array.isArray(event.item_list)) {
+        throw new GatewayFault("INVALID_EVENT", "iLink 事件 item_list 必须是数组");
+    }
 }
 
 /** 维护有界事件缓存，供媒体下载动作按 message_id 定位原始句柄。 */

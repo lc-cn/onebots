@@ -29,6 +29,7 @@ import {
     ensureWechatClawbotContextTokenTable,
     SqliteClawbotContextTokenStore,
 } from "./context-token-store.js";
+import { compileWechatClawbotMessage } from "./messages.js";
 
 /** DNS / 超时等可恢复网络错误，轮询循环会自动重试 */
 function isTransientNetworkError(error: unknown): boolean {
@@ -162,44 +163,27 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         }
 
         const chatId = sceneId.string;
-        let lastId = "";
-
         if (!message || message.length === 0) {
             throw new Error("消息段为空");
         }
-
-        for (const seg of message) {
-            if (typeof seg === "string") {
-                const r = await bot.sendTextToUser(chatId, seg);
-                lastId = r.messageId;
-            } else if (seg.type === "text") {
-                const t = seg.data.text ?? "";
-                if (t) {
-                    const r = await bot.sendTextToUser(chatId, t);
-                    lastId = r.messageId;
-                }
-            } else if (seg.type === "image") {
-                const url = seg.data.url ?? seg.data.file;
-                if (!url) throw new Error("图片消息缺少 url 或 file");
-                const r = await bot.sendPhotoToUser(chatId, url, { caption: seg.data.summary });
-                lastId = r.messageId;
-            } else if (seg.type === "video") {
-                const url = seg.data.url ?? seg.data.file;
-                if (!url) throw new Error("视频消息缺少 url 或 file");
-                const r = await bot.sendVideoToUser(chatId, url, { caption: seg.data.summary });
-                lastId = r.messageId;
-            } else if (seg.type === "file") {
-                const url = seg.data.url ?? seg.data.file;
-                if (!url) throw new Error("文件消息缺少 url 或 file");
-                const r = await bot.sendDocumentToUser(chatId, url, { caption: seg.data.name });
-                lastId = r.messageId;
+        let lastId = "";
+        for (const operation of compileWechatClawbotMessage(message)) {
+            if (operation.kind === "text") {
+                lastId = (await bot.sendTextToUser(chatId, operation.text)).messageId;
+            } else if (operation.kind === "image") {
+                lastId = (await bot.sendPhotoToUser(chatId, operation.input, operation.options))
+                    .messageId;
+            } else if (operation.kind === "video") {
+                lastId = (await bot.sendVideoToUser(chatId, operation.input, operation.options))
+                    .messageId;
             } else {
-                throw new Error(`暂不支持的段类型: ${seg.type}`);
+                lastId = (await bot.sendDocumentToUser(chatId, operation.input, operation.options))
+                    .messageId;
             }
         }
 
         return {
-            message_id: this.createId(lastId || "0"),
+            message_id: this.createId(lastId),
         };
     }
 
@@ -212,6 +196,14 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             user_name: account.nickname || cfg.ilink_bot_id || this.platform,
             avatar: account.avatar || this.icon,
         };
+    }
+
+    async canSendImage(): Promise<boolean> {
+        return true;
+    }
+
+    async canSendRecord(): Promise<boolean> {
+        return false;
     }
 
     async getVersion(): Promise<Adapter.VersionInfo> {

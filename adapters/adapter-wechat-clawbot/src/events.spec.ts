@@ -80,4 +80,25 @@ describe("微信 ClawBot 事件投影", () => {
             { type: "wechat_clawbot_raw", data: { item: { type: 11 } } },
         ]);
     });
+
+    it("拒绝缺少稳定标识或发送者的非 canonical 消息", () => {
+        const base = {
+            id: undefined,
+            seq: undefined,
+            type: "unknown" as const,
+            chat: { id: "peer", type: "private" as const },
+            from: { id: "peer" },
+            date: undefined,
+            raw: { from_user_id: "peer", item_list: [] },
+        };
+        expect(() =>
+            projectWechatClawbotEvent(base, { accountId: id("bot"), createId: id }),
+        ).toThrow("稳定标识");
+        expect(() =>
+            projectWechatClawbotEvent(
+                { ...base, id: "client", from: { id: "" } },
+                { accountId: id("bot"), createId: id },
+            ),
+        ).toThrow("发送者");
+    });
 });

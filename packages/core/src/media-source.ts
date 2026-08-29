@@ -1,6 +1,6 @@
 /** 可由适配器统一读取的媒体来源。 */
 export interface MediaSourceInput {
-    source: string;
+    source: string | Uint8Array;
     filename?: string;
     contentType?: string;
 }
@@ -22,7 +22,9 @@ export async function materializeMediaSource(input: MediaSourceInput): Promise<M
     let inferredName = "attachment.bin";
     let inferredType: string | undefined;
 
-    if (source.startsWith("base64://")) {
+    if (source instanceof Uint8Array) {
+        data = new Uint8Array(source);
+    } else if (source.startsWith("base64://")) {
         data = decodeBase64(source.slice("base64://".length));
     } else if (source.startsWith("data:")) {
         const parsed = parseDataUrl(source);

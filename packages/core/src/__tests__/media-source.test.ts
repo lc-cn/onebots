@@ -22,4 +22,15 @@ describe("materializeMediaSource", () => {
             }),
         ).rejects.toThrow("content type 无效");
     });
+
+    it("直接物化字节并统一清理文件元数据", async () => {
+        const media = await materializeMediaSource({
+            source: Uint8Array.from([1, 2, 3]),
+            filename: '../unsafe"name.png',
+            contentType: "image/png",
+        });
+        expect([...media.data]).toEqual([1, 2, 3]);
+        expect(media.filename).toBe("unsafe_name.png");
+        expect(media.contentType).toBe("image/png");
+    });
 });

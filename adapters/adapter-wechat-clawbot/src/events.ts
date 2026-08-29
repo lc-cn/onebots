@@ -14,7 +14,10 @@ export function projectWechatClawbotEvent(
     event: IlinkBotMessage,
     context: WechatClawbotProjectionContext,
 ): CommonEvent.Message<IlinkBotMessage["raw"]> {
-    const messageId = String(event.id ?? event.seq ?? Date.now());
+    const stableId = event.id ?? event.seq;
+    if (stableId === undefined) throw new TypeError("iLink 消息缺少稳定标识");
+    if (!event.from.id.trim()) throw new TypeError("iLink 消息缺少发送者");
+    const messageId = String(stableId);
     return {
         id: context.createId(messageId),
         timestamp: ilinkTimeToMs(event.date),

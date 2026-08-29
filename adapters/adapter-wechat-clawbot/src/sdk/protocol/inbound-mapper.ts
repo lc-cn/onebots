@@ -5,11 +5,19 @@ import type { NormalizedChatEvent } from "./chat-event.js";
 /** 将线级 JSON 包映射为内部语义事件 */
 export function mapInboundWirePacket(packet: InboundWirePacket): NormalizedChatEvent {
     const parts = packet.item_list ?? [];
-    const textPart = parts.find((p) => p.type === ItemKind.Text && p.text_item?.text);
-    const imagePart = parts.find((p) => p.type === ItemKind.Image && p.image_item?.media?.encrypt_query_param);
-    const videoPart = parts.find((p) => p.type === ItemKind.Video && p.video_item?.media?.encrypt_query_param);
-    const filePart = parts.find((p) => p.type === ItemKind.File && p.file_item?.media?.encrypt_query_param);
-    const voicePart = parts.find((p) => p.type === ItemKind.Voice && p.voice_item?.media?.encrypt_query_param);
+    const textPart = parts.find(p => p.type === ItemKind.Text && p.text_item?.text);
+    const imagePart = parts.find(
+        p => p.type === ItemKind.Image && p.image_item?.media?.encrypt_query_param,
+    );
+    const videoPart = parts.find(
+        p => p.type === ItemKind.Video && p.video_item?.media?.encrypt_query_param,
+    );
+    const filePart = parts.find(
+        p => p.type === ItemKind.File && p.file_item?.media?.encrypt_query_param,
+    );
+    const voicePart = parts.find(
+        p => p.type === ItemKind.Voice && p.voice_item?.media?.encrypt_query_param,
+    );
 
     const literal = textPart?.text_item?.text ?? voicePart?.voice_item?.text;
     let facet: NormalizedChatEvent["type"] = "unknown";
@@ -59,7 +67,7 @@ export function mapInboundWirePacket(packet: InboundWirePacket): NormalizedChatE
 
     const peer = packet.from_user_id ?? "";
     return {
-        id: packet.message_id,
+        id: packet.message_id ?? packet.client_id,
         seq: packet.seq,
         type: facet,
         chat: { id: peer, type: "private" },

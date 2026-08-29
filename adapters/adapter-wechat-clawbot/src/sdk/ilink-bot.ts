@@ -23,7 +23,6 @@ import type {
 } from "./protocol/chat-event.js";
 import type { ClearSessionOptions, IlinkBotOptions } from "./ilink-options.js";
 import { mapInboundWirePacket } from "./protocol/inbound-mapper.js";
-import type { InboundWirePacket } from "./protocol/wire-models.js";
 import { allocateLoginTicket, awaitLoginTicketResolution } from "./login/qr-handshake.js";
 import {
     postFileBundle,
@@ -42,6 +41,7 @@ import type { ClawbotContextTokenStore } from "../context-token-store.js";
 import { runPollingLoop } from "./polling-loop.js";
 import {
     emitInboundSafely,
+    assertInboundWirePacket,
     rememberRecentMessage,
     runTextBindings,
     resolveRecentMedia,
@@ -414,7 +414,8 @@ export class IlinkBot extends EventEmitter {
      * 将一个原始 iLink 事件交给统一事件管线。
      * 长轮询、测试夹具和宿主已有连接均应调用此入口，确保 context_token 与 typed 事件一致。
      */
-    async ingest(rawEvent: InboundWirePacket): Promise<NormalizedChatEvent> {
+    async ingest(rawEvent: unknown): Promise<NormalizedChatEvent> {
+        assertInboundWirePacket(rawEvent);
         const evt = mapInboundWirePacket(rawEvent);
         rememberRecentMessage(this.recentMessages, evt);
         await this.memorizeReplyContext(evt.chat.id, evt.contextToken);
