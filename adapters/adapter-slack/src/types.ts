@@ -34,6 +34,8 @@ export interface SlackUser {
         email?: string;
     };
     is_bot?: boolean;
+    is_app_user?: boolean;
+    deleted?: boolean;
     is_admin?: boolean;
     is_owner?: boolean;
 }
@@ -130,6 +132,12 @@ export interface SlackWebhookBody {
     event_time?: number;
     event?: SlackEvent;
     [key: string]: unknown;
+}
+
+/** 已验签 HTTP 入站的结构化响应，可由不同 Host 直接写回。 */
+export interface SlackHttpResult {
+    status: number;
+    body: Record<string, unknown>;
 }
 
 // Slack message send options

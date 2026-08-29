@@ -3,12 +3,11 @@
  * 基于 @slack/web-api
  */
 import { EventEmitter } from "node:events";
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { SocketModeClient } from "@slack/socket-mode";
 import type { WebClient } from "@slack/web-api";
 import { type Next, type RouterContext } from "onebots";
 import { SlackError } from "./errors.js";
-import { parseSlackInbound } from "./inbound.js";
+import { parseSlackHttpBody, parseSlackInbound, verifySlackSignature } from "./inbound.js";
 import type { SlackFileInput } from "./messages.js";
 import { SlackWebApi } from "./web-api.js";
 import type {
@@ -20,11 +19,13 @@ import type {
     SlackBlock,
     SlackMessageOptions,
     SlackChatResult,
+    SlackHttpResult,
 } from "./types.js";
 
 interface SocketModeEnvelope {
     ack(): Promise<void>;
     body?: SlackWebhookBody;
+    envelope_id?: string;
     type?: string;
 }
 
@@ -150,7 +151,12 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
             if (!this.isCurrentSocket(socket, generation) || !isSocketModeEnvelope(payload)) return;
             try {
                 await payload.ack();
-                this.ingest(payload.body ?? { type: payload.type });
+                const body = payload.body ?? { type: payload.type };
+                this.ingest(
+                    payload.envelope_id && !body.envelope_id
+                        ? { ...body, envelope_id: payload.envelope_id }
+                        : body,
+                );
             } catch (error) {
                 this.emit(
                     "client_error",
@@ -208,72 +214,111 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
      * 处理 Webhook 请求（Events API）
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        if (!this.config.signing_secret) {
-            const error = SlackError.config(
-                "Slack Webhook 模式必须配置 signing_secret",
-                "SLACK_SIGNING_SECRET_REQUIRED",
-            );
-            this.emit("client_error", error);
-            ctx.status = 503;
-            ctx.body = { ok: false, error: error.code };
-            return;
-        }
-        if (!this.verifyWebhookSignature(ctx)) {
-            ctx.status = 401;
-            ctx.body = { ok: false, error: "invalid_signature" };
-            return;
-        }
-        let body: SlackWebhookBody;
         try {
-            body = parseSlackInbound(ctx.request.body);
+            const rawBody = ctx.request.rawBody;
+            if (typeof rawBody !== "string" && !Buffer.isBuffer(rawBody)) {
+                throw new SlackError("Slack Webhook 必须保留未经修改的 rawBody", {
+                    code: "SLACK_RAW_BODY_REQUIRED",
+                    status: 400,
+                });
+            }
+            const result = this.ingestHttp(rawBody, {
+                timestamp: ctx.get("x-slack-request-timestamp"),
+                signature: ctx.get("x-slack-signature"),
+                contentType: ctx.get("content-type"),
+            });
+            ctx.status = result.status;
+            ctx.body = result.body;
         } catch (error) {
             const wrapped = SlackError.wrap(error, "webhook", "SLACK_WEBHOOK_INVALID");
             this.emit("client_error", wrapped);
-            ctx.status = 400;
+            ctx.status = wrapped.status || 500;
             ctx.body = { ok: false, error: wrapped.code };
             return;
         }
-
-        // 处理 URL 验证（Slack 首次配置 webhook 时会发送验证请求）
-        if (body.type === "url_verification") {
-            ctx.body = { challenge: body.challenge };
-            return;
-        }
-
-        // 处理事件
-        this.ingest(body);
-
-        ctx.body = { ok: true };
         await next();
     }
 
-    private verifyWebhookSignature(ctx: RouterContext): boolean {
-        const timestamp = ctx.get("x-slack-request-timestamp");
-        const signature = ctx.get("x-slack-signature");
-        const rawBody = ctx.request.rawBody;
-        if (!timestamp || !signature || typeof rawBody !== "string") return false;
-        const timestampSeconds = Number(timestamp);
-        if (
-            !Number.isFinite(timestampSeconds) ||
-            Math.abs(Date.now() / 1000 - timestampSeconds) > 300
-        ) {
-            return false;
+    /** 验证原始 HTTP 请求并汇入与 Socket Mode / manual 相同的 ingest 管线。 */
+    ingestHttp(
+        rawBody: string | Buffer,
+        headers: { timestamp: string; signature: string; contentType?: string },
+    ): SlackHttpResult {
+        if (!this.config.signing_secret) {
+            throw new SlackError("Slack Webhook 模式必须配置 signing_secret", {
+                code: "SLACK_SIGNING_SECRET_REQUIRED",
+                status: 503,
+            });
         }
-        const digest = `v0=${createHmac("sha256", this.config.signing_secret ?? "")
-            .update(`v0:${timestamp}:${rawBody}`)
-            .digest("hex")}`;
-        const actual = Buffer.from(signature);
-        const expected = Buffer.from(digest);
-        return actual.length === expected.length && timingSafeEqual(actual, expected);
+        if (
+            !verifySlackSignature(
+                this.config.signing_secret,
+                rawBody,
+                headers.timestamp,
+                headers.signature,
+            )
+        ) {
+            throw new SlackError("Slack Webhook 签名无效或已过期", {
+                code: "SLACK_INVALID_SIGNATURE",
+                status: 401,
+            });
+        }
+        let body: SlackWebhookBody;
+        try {
+            body = parseSlackInbound(parseSlackHttpBody(rawBody, headers.contentType));
+        } catch (error) {
+            const wrapped = SlackError.wrap(error, "webhook", "SLACK_WEBHOOK_INVALID");
+            throw new SlackError(wrapped.message, {
+                code: wrapped.code,
+                status: wrapped.status || 400,
+                cause: wrapped,
+            });
+        }
+        if (body.type === "url_verification") {
+            if (typeof body.challenge !== "string" || !body.challenge) {
+                throw new SlackError("Slack URL verification 缺少 challenge", {
+                    code: "SLACK_CHALLENGE_REQUIRED",
+                    status: 400,
+                });
+            }
+            return { status: 200, body: { challenge: body.challenge } };
+        }
+        this.ingest(body);
+        return { status: 200, body: { ok: true } };
+    }
+
+    /** Fetch / WinterCG Host 可直接转交标准 Request，无需复刻验签与表单解析。 */
+    async acceptHttp(request: Request): Promise<Response> {
+        if (request.method !== "POST") {
+            return Response.json(
+                { ok: false, error: "SLACK_METHOD_NOT_ALLOWED" },
+                { status: 405, headers: { Allow: "POST" } },
+            );
+        }
+        try {
+            const result = this.ingestHttp(Buffer.from(await request.arrayBuffer()), {
+                timestamp: request.headers.get("x-slack-request-timestamp") || "",
+                signature: request.headers.get("x-slack-signature") || "",
+                contentType: request.headers.get("content-type") || undefined,
+            });
+            return Response.json(result.body, { status: result.status });
+        } catch (error) {
+            const wrapped = SlackError.wrap(error, "webhook", "SLACK_WEBHOOK_INVALID");
+            return Response.json(
+                { ok: false, error: wrapped.code, message: wrapped.message },
+                { status: wrapped.status || 500 },
+            );
+        }
     }
 
     /** 将 HTTP Events 与 Socket Mode 归一到同一个原始事件入口。 */
     ingest(rawEvent: unknown): SlackWebhookBody {
         const body = parseSlackInbound(rawEvent);
         this.emit("raw_event", body);
-        if (this.isDuplicateEvent(body)) return body;
+        if (this.hasProcessedEvent(body)) return body;
         if (body.event) {
             this.emit("event", body.event, body);
+            this.markEventProcessed(body);
             return body;
         }
         const eventType =
@@ -293,27 +338,28 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                 body,
             );
         }
+        this.markEventProcessed(body);
         return body;
     }
 
     /** Slack 超时重试仍交付 raw_event，但不会重复派发 canonical 事件。 */
-    private isDuplicateEvent(body: SlackWebhookBody): boolean {
-        const eventId =
-            typeof body.event_id === "string"
-                ? body.event_id
-                : typeof body.envelope_id === "string"
-                  ? body.envelope_id
-                  : undefined;
+    private hasProcessedEvent(body: SlackWebhookBody): boolean {
+        const eventId = eventIdentity(body);
         if (!eventId) return false;
         const now = Date.now();
         const previous = this.receivedEventIds.get(eventId);
-        this.receivedEventIds.delete(eventId);
-        this.receivedEventIds.set(eventId, now);
         for (const [id, receivedAt] of this.receivedEventIds) {
             if (this.receivedEventIds.size <= 4_096 && now - receivedAt <= 10 * 60_000) break;
             this.receivedEventIds.delete(id);
         }
         return previous !== undefined && now - previous <= 10 * 60_000;
+    }
+
+    private markEventProcessed(body: SlackWebhookBody): void {
+        const eventId = eventIdentity(body);
+        if (!eventId) return;
+        this.receivedEventIds.delete(eventId);
+        this.receivedEventIds.set(eventId, Date.now());
     }
 
     /**
@@ -418,4 +464,12 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     async call(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
         return this.api.call(method, params);
     }
+}
+
+function eventIdentity(body: SlackWebhookBody): string | undefined {
+    return typeof body.event_id === "string"
+        ? body.event_id
+        : typeof body.envelope_id === "string"
+          ? body.envelope_id
+          : undefined;
 }

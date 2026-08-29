@@ -1,4 +1,4 @@
-import { Account, AccountStatus } from "onebots";
+import { Account, AccountStatus, ConnectionManager, RetryPresets } from "onebots";
 import type { SlackAdapter } from "./adapter.js";
 import { SlackBot } from "./bot.js";
 import { projectSlackEvent } from "./events.js";
@@ -49,7 +49,7 @@ export function createSlackAccount(
                 return;
             }
             const projected = projectSlackEvent(event, envelope, {
-                botId: adapter.createId(config.account_id),
+                botId: adapter.createId(me?.id || config.account_id),
                 createId: value => adapter.createId(value),
             });
             if (projected) account.dispatch(projected);
@@ -58,16 +58,15 @@ export function createSlackAccount(
         }
     });
 
+    const manager = new ConnectionManager(() => bot.start(), RetryPresets.websocket, {
+        logger: adapter.logger,
+    });
     account.on("start", async () => {
-        try {
-            await bot.start();
-        } catch (error) {
-            account.status = AccountStatus.OffLine;
-            adapter.logger.error("启动 Slack Bot 失败:", error);
-            throw error;
-        }
+        account.status = AccountStatus.Pending;
+        await manager.start();
     });
     account.on("stop", async () => {
+        manager.stop();
         await bot.stop();
         account.status = AccountStatus.OffLine;
     });

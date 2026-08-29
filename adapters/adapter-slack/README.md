@@ -38,8 +38,8 @@ onebots -r slack
 - Reaction、Pin、频道生命周期、成员邀请与移除、Bookmark
 - 消息编辑/删除、Reaction、成员变化等 canonical 事件投影
 - Slash Command、交互载荷及其他未知事件的 `raw_event` 无损交付
-- Events API、交互组件、Slash Command 与 Socket Mode 共用公开的 `SlackBot.ingest(rawEvent)` 入站管线
-- Slack 重试事件保留每次 `raw_event`，并按 `event_id` / `envelope_id` 去重 canonical 投影
+- Events API、交互组件、Slash Command 与 Socket Mode 共用公开的 `SlackBot.ingest(rawEvent)` 入站管线；`ingestHttp(rawBody, headers)` 与 `acceptHttp(Request)` 可复用完整验签和 JSON / 表单解析
+- Slack 重试事件保留每次 `raw_event`，仅在业务监听器成功后按 `event_id` / `envelope_id` 提交 canonical 去重状态
 - Web API 失败统一抛出带 `code`、`category`、`operation` 与平台错误码的 `SlackError`
 
 ## 平台扩展 API
@@ -60,6 +60,8 @@ onebots -r slack
 ```
 
 动作能否执行仍由当前 token scopes 和 Slack 会话上下文决定；`get_supported_actions` 只声明适配器已实现的调用路径。
+
+已有 HTTP Host 可直接把标准 `Request` 交给 `bot.acceptHttp(request)`；其他 Node Host 可调用 `bot.ingestHttp(rawBody, { timestamp, signature, contentType })` 并把结构化的 `{ status, body }` 写回。manual 模式只关闭 OneBots 自建路由或 Socket 连接，不会削弱这些公开入口。
 
 ## 消息与文件
 

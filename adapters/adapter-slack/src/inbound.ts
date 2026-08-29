@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { SlackError } from "./errors.js";
 import type { SlackEvent, SlackWebhookBody } from "./types.js";
 
@@ -16,6 +17,44 @@ export function parseSlackInbound(value: unknown): SlackWebhookBody {
         }
     }
     return requireSlackBody(input);
+}
+
+/** 解析 Slack Events JSON 或 Slash Command / Interactivity 表单原始体。 */
+export function parseSlackHttpBody(rawBody: string | Buffer, contentType = ""): unknown {
+    const text = rawBody.toString();
+    if (contentType.toLowerCase().includes("application/x-www-form-urlencoded")) {
+        return Object.fromEntries(new URLSearchParams(text));
+    }
+    try {
+        return JSON.parse(text) as unknown;
+    } catch (error) {
+        throw SlackError.protocol("Slack Webhook 请求体不是有效 JSON", "SLACK_WEBHOOK_INVALID", {
+            cause: error instanceof Error ? error.message : String(error),
+        });
+    }
+}
+
+/** 验证 Slack v0 HMAC，并拒绝超过五分钟的重放请求。 */
+export function verifySlackSignature(
+    secret: string,
+    rawBody: string | Buffer,
+    timestamp: string,
+    signature: string,
+): boolean {
+    if (!timestamp || !signature) return false;
+    const timestampSeconds = Number(timestamp);
+    if (
+        !Number.isFinite(timestampSeconds) ||
+        Math.abs(Date.now() / 1000 - timestampSeconds) > 300
+    ) {
+        return false;
+    }
+    const hmac = createHmac("sha256", secret);
+    hmac.update(`v0:${timestamp}:`);
+    hmac.update(rawBody);
+    const actual = Buffer.from(signature);
+    const expected = Buffer.from(`v0=${hmac.digest("hex")}`);
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 function requireSlackBody(value: unknown): SlackWebhookBody {

@@ -129,9 +129,7 @@ export class SlackWebApi {
     }
 
     async getChannelList(types?: string, excludeArchived?: boolean): Promise<SlackChannel[]> {
-        const channels: SlackChannel[] = [];
-        let cursor: string | undefined;
-        do {
+        return collectCursor(async cursor => {
             const result = await this.execute("conversations.list", () =>
                 this.client.conversations.list({
                     types: types || "public_channel,private_channel",
@@ -140,10 +138,11 @@ export class SlackWebApi {
                     limit: 200,
                 }),
             );
-            channels.push(...((result.channels ?? []) as SlackChannel[]));
-            cursor = result.response_metadata?.next_cursor || undefined;
-        } while (cursor);
-        return channels;
+            return {
+                items: (result.channels ?? []) as SlackChannel[],
+                next: result.response_metadata?.next_cursor || undefined,
+            };
+        });
     }
 
     async getUserInfo(userId: string): Promise<SlackUser> {
@@ -161,29 +160,27 @@ export class SlackWebApi {
     }
 
     async getUserList(): Promise<SlackUser[]> {
-        const users: SlackUser[] = [];
-        let cursor: string | undefined;
-        do {
+        return collectCursor(async cursor => {
             const result = await this.execute("users.list", () =>
                 this.client.users.list({ cursor, limit: 200 }),
             );
-            users.push(...((result.members ?? []) as SlackUser[]));
-            cursor = result.response_metadata?.next_cursor || undefined;
-        } while (cursor);
-        return users;
+            return {
+                items: (result.members ?? []) as SlackUser[],
+                next: result.response_metadata?.next_cursor || undefined,
+            };
+        });
     }
 
     async getChannelMembers(channelId: string): Promise<string[]> {
-        const members: string[] = [];
-        let cursor: string | undefined;
-        do {
+        return collectCursor(async cursor => {
             const result = await this.execute("conversations.members", () =>
                 this.client.conversations.members({ channel: channelId, cursor, limit: 200 }),
             );
-            members.push(...(result.members ?? []));
-            cursor = result.response_metadata?.next_cursor || undefined;
-        } while (cursor);
-        return members;
+            return {
+                items: result.members ?? [],
+                next: result.response_metadata?.next_cursor || undefined,
+            };
+        });
     }
 
     async leaveChannel(channelId: string): Promise<boolean> {
@@ -247,4 +244,26 @@ export class SlackWebApi {
             throw SlackError.wrap(error, operation);
         }
     }
+}
+
+async function collectCursor<T>(
+    load: (cursor?: string) => Promise<{ items: T[]; next?: string }>,
+): Promise<T[]> {
+    const items: T[] = [];
+    const seen = new Set<string>();
+    let cursor: string | undefined;
+    do {
+        const page = await load(cursor);
+        items.push(...page.items);
+        if (page.next && seen.has(page.next)) {
+            throw SlackError.protocol(
+                "Slack 分页游标停滞，已终止目录读取",
+                "SLACK_CURSOR_STALLED",
+                { cursor: page.next },
+            );
+        }
+        cursor = page.next;
+        if (cursor) seen.add(cursor);
+    } while (cursor);
+    return items;
 }

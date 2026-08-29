@@ -45,7 +45,7 @@ describe("SlackBot HTTP Events", () => {
         await bot.handleWebhook(ctx as never, vi.fn());
 
         expect(ctx.status).toBe(401);
-        expect(ctx.body).toEqual({ ok: false, error: "invalid_signature" });
+        expect(ctx.body).toEqual({ ok: false, error: "SLACK_INVALID_SIGNATURE" });
     });
 
     it("Webhook 未配置签名密钥时明确拒绝接收", async () => {
@@ -115,6 +115,94 @@ describe("SlackBot HTTP Events", () => {
 
         expect(rawEvent).toHaveBeenCalledTimes(2);
         expect(event).toHaveBeenCalledOnce();
+    });
+
+    it("业务监听器失败时不提交去重状态，允许 Slack 重投递", () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        const body = {
+            type: "event_callback",
+            event_id: "Ev-retry",
+            event: { type: "reaction_added", event_ts: "1" },
+        };
+        const failure = (): void => {
+            throw new Error("downstream failed");
+        };
+        bot.on("event", failure);
+        expect(() => bot.ingest(body)).toThrow("downstream failed");
+        bot.off("event", failure);
+        const listener = vi.fn();
+        bot.on("event", listener);
+
+        bot.ingest(body);
+
+        expect(listener).toHaveBeenCalledOnce();
+    });
+
+    it("acceptHttp 验签并解析 Slash Command 表单", async () => {
+        const secret = "test-secret";
+        const timestamp = String(Math.floor(Date.now() / 1000));
+        const rawBody = "command=%2Fhello&user_id=U1&channel_id=C1";
+        const signature = `v0=${createHmac("sha256", secret)
+            .update(`v0:${timestamp}:${rawBody}`)
+            .digest("hex")}`;
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            signing_secret: secret,
+        });
+        const listener = vi.fn();
+        bot.on("event", listener);
+
+        const response = await bot.acceptHttp(
+            new Request("https://example.test/slack", {
+                method: "POST",
+                body: rawBody,
+                headers: {
+                    "content-type": "application/x-www-form-urlencoded",
+                    "x-slack-request-timestamp": timestamp,
+                    "x-slack-signature": signature,
+                },
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({ ok: true });
+        expect(listener).toHaveBeenCalledWith(
+            expect.objectContaining({ type: "slash_command", user_id: "U1" }),
+            expect.objectContaining({ command: "/hello" }),
+        );
+        expect((await bot.acceptHttp(new Request("https://example.test/slack"))).status).toBe(405);
+    });
+
+    it("acceptHttp 将已验签但损坏的载荷稳定映射为 400", async () => {
+        const secret = "test-secret";
+        const timestamp = String(Math.floor(Date.now() / 1000));
+        const rawBody = "not-json";
+        const signature = `v0=${createHmac("sha256", secret)
+            .update(`v0:${timestamp}:${rawBody}`)
+            .digest("hex")}`;
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            signing_secret: secret,
+        });
+
+        const response = await bot.acceptHttp(
+            new Request("https://example.test/slack", {
+                method: "POST",
+                body: rawBody,
+                headers: {
+                    "x-slack-request-timestamp": timestamp,
+                    "x-slack-signature": signature,
+                },
+            }),
+        );
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+            ok: false,
+            error: "SLACK_WEBHOOK_INVALID",
+        });
     });
 });
 
@@ -253,5 +341,16 @@ describe("SlackBot conversations", () => {
             platformCode: "channel_not_found",
             operation: "conversations.info",
         });
+    });
+
+    it("目录分页检测停滞游标而不是永久循环", async () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        bot.getWebClient().users.list = vi.fn().mockResolvedValue({
+            ok: true,
+            members: [],
+            response_metadata: { next_cursor: "same" },
+        });
+
+        await expect(bot.getUserList()).rejects.toMatchObject({ code: "SLACK_CURSOR_STALLED" });
     });
 });

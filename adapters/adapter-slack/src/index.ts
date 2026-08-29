@@ -2,11 +2,21 @@
 import { AdapterRegistry } from "onebots";
 import type { Schema } from "onebots";
 
-export type { SlackConfig, SlackReceiveMode } from "./types.js";
+export type {
+    SlackConfig,
+    SlackReceiveMode,
+    SlackHttpResult,
+    SlackWebhookBody,
+    SlackEvent,
+    SlackMessage,
+    SlackUser,
+    SlackChannel,
+} from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
 export { SlackBot, type SlackBotEvents } from "./bot.js";
 export { SlackError, type SlackErrorOptions } from "./errors.js";
+export { projectSlackEvent, projectSlackMessageSegments } from "./events.js";
 export { compileSlackMessage, type CompiledSlackMessage, type SlackFileInput } from "./messages.js";
 export {
     SLACK_PLATFORM_ACTIONS,

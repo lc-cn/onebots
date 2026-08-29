@@ -24,6 +24,14 @@ export function projectSlackEvent(
             return notice(envelope, event, context, "message_updated", {
                 message_id: context.createId(message.ts ?? event.ts ?? event.event_ts),
                 message: projectSlackMessageSegments(message),
+                user: projectUser(message.user, context),
+                group: projectGroup(event.channel, context, envelope.team_id),
+                extensions: {
+                    slack: {
+                        event_type: "message_changed",
+                        previous_message: event.previous_message,
+                    },
+                },
             });
         }
         if (event.subtype === "message_deleted") {

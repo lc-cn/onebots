@@ -232,7 +232,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         const account = this.requireAccount(uin);
         const users = await account.client.getUserList();
         return users
-            .filter(user => !user.is_bot)
+            .filter(user => !user.is_bot && !user.is_app_user && !user.deleted)
             .map(user => ({
                 user_id: this.createId(user.id),
                 user_name: user.name || "",
@@ -368,23 +368,15 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         const channelId = params.channel_id.string;
         const memberIds = await bot.getChannelMembers(channelId);
 
-        // 获取每个成员的详细信息
-        const members: Adapter.ChannelMemberInfo[] = [];
-        for (const memberId of memberIds) {
-            try {
-                const user = await bot.getUserInfo(memberId);
-                members.push({
-                    channel_id: params.channel_id,
-                    user_id: this.createId(user.id),
-                    user_name: user.display_name || user.real_name || user.name || "",
-                    role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
-                });
-            } catch (error) {
-                this.logger.error(`[Slack] 获取频道成员 ${memberId} 信息失败:`, error);
-            }
-        }
-
-        return members;
+        return mapWithConcurrency(memberIds, 8, async memberId => {
+            const user = await bot.getUserInfo(memberId);
+            return {
+                channel_id: params.channel_id,
+                user_id: this.createId(user.id),
+                user_name: user.display_name || user.real_name || user.name || "",
+                role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
+            } satisfies Adapter.ChannelMemberInfo;
+        });
     }
 
     /**
@@ -433,9 +425,13 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
      */
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
         return {
-            online: account?.status === AccountStatus.Online,
-            good: account?.status === AccountStatus.Online,
+            online,
+            good: online,
+            bots: account
+                ? [{ self: this.createId(account.client.getCachedMe()?.id || uin), online }]
+                : [],
         };
     }
 
@@ -452,6 +448,23 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     createAccount(config: Account.Config<"slack">): Account<"slack", SlackBot> {
         return createSlackAccount(this, config);
     }
+}
+
+async function mapWithConcurrency<T, R>(
+    values: readonly T[],
+    concurrency: number,
+    task: (value: T) => Promise<R>,
+): Promise<R[]> {
+    const result = new Array<R>(values.length);
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+        while (cursor < values.length) {
+            const index = cursor++;
+            result[index] = await task(values[index]);
+        }
+    });
+    await Promise.all(workers);
+    return result;
 }
 
 declare module "onebots" {

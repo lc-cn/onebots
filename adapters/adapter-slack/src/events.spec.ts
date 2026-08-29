@@ -73,6 +73,29 @@ describe("projectSlackEvent", () => {
         });
     });
 
+    it("消息编辑保留操作者、频道和旧消息上下文", () => {
+        const event: SlackEvent = {
+            type: "message",
+            subtype: "message_changed",
+            event_ts: "1710000002.000001",
+            channel: "C1",
+            message: { type: "message", ts: "1710000001.000001", user: "U1", text: "new" },
+            previous_message: { ts: "1710000001.000001", text: "old" },
+        };
+
+        expect(projectSlackEvent(event, { team_id: "T1", event }, context)).toMatchObject({
+            notice_type: "message_updated",
+            user: { id: { string: "U1" } },
+            group: {
+                guild_id: { string: "T1" },
+                channel_id: { string: "C1" },
+            },
+            extensions: {
+                slack: { previous_message: { text: "old" } },
+            },
+        });
+    });
+
     it("缺少发送者的消息降级为无损 custom notice", () => {
         const event: SlackEvent = {
             type: "message",
