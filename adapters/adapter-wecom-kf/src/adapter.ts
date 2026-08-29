@@ -1,5 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
+import {
+    Account,
+    AccountStatus,
+    Adapter,
+    AdapterRegistry,
+    BaseApp,
+    readPackageVersion,
+} from "onebots";
 import { weComKfCapabilities } from "./capabilities.js";
 import { WeComKfClient } from "./client.js";
 import { WeComKfError } from "./errors.js";
@@ -126,7 +133,7 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
     async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots WeCom Customer Service Adapter",
-            app_version: await readPackageVersion(new URL("../package.json", import.meta.url)),
+            app_version: await readPackageVersion(import.meta.url),
             impl: "WeCom Customer Service API",
             version: "v1",
         };
@@ -269,12 +276,6 @@ async function loadUpload(params: Adapter.UploadFileParams): Promise<{
     }
     assertKfUploadSize(bytes.length);
     return { bytes, filename: params.name || "upload.bin" };
-}
-
-async function readPackageVersion(url: URL): Promise<string> {
-    const value = JSON.parse(await readFile(url, "utf8")) as { version?: unknown };
-    if (typeof value.version !== "string") throw new Error(`package.json 缺少 version: ${url}`);
-    return value.version;
 }
 
 declare module "onebots" {

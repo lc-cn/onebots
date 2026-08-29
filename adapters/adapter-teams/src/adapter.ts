@@ -1,10 +1,10 @@
-import { readFile } from "node:fs/promises";
 import {
     Account,
     AccountStatus,
     Adapter,
     AdapterRegistry,
     BaseApp,
+    readPackageVersion,
     type CommonTypes,
 } from "onebots";
 import { compileTeamsActivity } from "./activity.js";
@@ -133,7 +133,7 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     }
 
     async getVersion(): Promise<Adapter.VersionInfo> {
-        const version = await readPackageVersion(new URL("../package.json", import.meta.url));
+        const version = await readPackageVersion(import.meta.url);
         return {
             app_name: "onebots Microsoft Teams Adapter",
             app_version: version,
@@ -276,12 +276,6 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
             role,
         };
     }
-}
-
-async function readPackageVersion(url: URL): Promise<string> {
-    const value = JSON.parse(await readFile(url, "utf8")) as { version?: unknown };
-    if (typeof value.version !== "string") throw new Error(`package.json 缺少 version: ${url}`);
-    return value.version;
 }
 
 declare module "onebots" {

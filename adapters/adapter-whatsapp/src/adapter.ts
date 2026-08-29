@@ -1,5 +1,11 @@
-import { readFile } from "node:fs/promises";
-import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
+import {
+    Account,
+    AccountStatus,
+    Adapter,
+    AdapterRegistry,
+    BaseApp,
+    readPackageVersion,
+} from "onebots";
 import { whatsAppCapabilities } from "./capabilities.js";
 import { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
@@ -84,7 +90,7 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
     async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots WhatsApp Adapter",
-            app_version: await readPackageVersion(new URL("../package.json", import.meta.url)),
+            app_version: await readPackageVersion(import.meta.url),
             impl: "WhatsApp Cloud API",
             version: "Graph API",
         };
@@ -187,12 +193,6 @@ function normalizeConfig(config: Account.Config<"whatsapp">): WhatsAppConfig {
         deduplicate_webhooks: config.deduplicate_webhooks,
         webhook_deduplication_limit: config.webhook_deduplication_limit,
     };
-}
-
-async function readPackageVersion(url: URL): Promise<string> {
-    const value = JSON.parse(await readFile(url, "utf8")) as { version?: unknown };
-    if (typeof value.version !== "string") throw new Error(`package.json 缺少 version: ${url}`);
-    return value.version;
 }
 
 declare module "onebots" {

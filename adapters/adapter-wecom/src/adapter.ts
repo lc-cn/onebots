@@ -1,5 +1,11 @@
-import { readFile } from "node:fs/promises";
-import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
+import {
+    Account,
+    AccountStatus,
+    Adapter,
+    AdapterRegistry,
+    BaseApp,
+    readPackageVersion,
+} from "onebots";
 import { weComCapabilities } from "./capabilities.js";
 import { WeComClient } from "./client.js";
 import { WeComApiError } from "./errors.js";
@@ -127,7 +133,7 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
     async getVersion(): Promise<Adapter.VersionInfo> {
         return {
             app_name: "onebots WeCom Adapter",
-            app_version: await readPackageVersion(new URL("../package.json", import.meta.url)),
+            app_version: await readPackageVersion(import.meta.url),
             impl: "WeCom Custom Application API",
             version: "v1",
         };
@@ -233,12 +239,6 @@ function normalizeConfig(config: Account.Config<"wecom">): WeComConfig {
         webhook_deduplication_limit: config.webhook_deduplication_limit,
         api_base_url: config.api_base_url,
     };
-}
-
-async function readPackageVersion(url: URL): Promise<string> {
-    const value = JSON.parse(await readFile(url, "utf8")) as { version?: unknown };
-    if (typeof value.version !== "string") throw new Error(`package.json 缺少 version: ${url}`);
-    return value.version;
 }
 
 declare module "onebots" {

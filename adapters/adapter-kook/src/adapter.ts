@@ -1,5 +1,11 @@
-import { readFile } from "node:fs/promises";
-import { Account, AccountStatus, Adapter, AdapterRegistry, BaseApp } from "onebots";
+import {
+    Account,
+    AccountStatus,
+    Adapter,
+    AdapterRegistry,
+    BaseApp,
+    readPackageVersion,
+} from "onebots";
 import { createKookAccount } from "./account.js";
 import { KookBot } from "./bot.js";
 import { kookCapabilities } from "./capabilities.js";
@@ -315,7 +321,7 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
     }
 
     async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
-        const version = await readPackageVersion(new URL("../package.json", import.meta.url));
+        const version = await readPackageVersion(import.meta.url);
         return { app_name: "onebots KOOK Adapter", app_version: version, impl: "kook", version };
     }
 
@@ -442,14 +448,6 @@ export function parseKookVoiceMembers(value: unknown): KookUser[] {
         }
         return item as KookUser;
     });
-}
-
-async function readPackageVersion(url: URL): Promise<string> {
-    const metadata: unknown = JSON.parse(await readFile(url, "utf8"));
-    if (!metadata || typeof metadata !== "object" || !("version" in metadata)) {
-        throw new TypeError(`包元数据缺少 version: ${url.pathname}`);
-    }
-    return String(metadata.version);
 }
 
 function normaliseTimestamp(value: number): number {

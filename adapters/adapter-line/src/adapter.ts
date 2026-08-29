@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import type { webhook } from "@line/bot-sdk";
 import {
     Account,
@@ -7,6 +6,7 @@ import {
     Adapter,
     AdapterRegistry,
     BaseApp,
+    readPackageVersion,
     type CommonTypes,
 } from "onebots";
 import { LineBot } from "./bot.js";
@@ -189,7 +189,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     }
 
     async getVersion(): Promise<Adapter.VersionInfo> {
-        const version = await readPackageVersion(new URL("../package.json", import.meta.url));
+        const version = await readPackageVersion(import.meta.url);
         return {
             app_name: "onebots LINE Adapter",
             app_version: version,
@@ -363,12 +363,6 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         }
         return account.client;
     }
-}
-
-async function readPackageVersion(url: URL): Promise<string> {
-    const value = JSON.parse(await readFile(url, "utf8")) as { version?: unknown };
-    if (typeof value.version !== "string") throw new Error(`package.json 缺少 version: ${url}`);
-    return value.version;
 }
 
 declare module "onebots" {
