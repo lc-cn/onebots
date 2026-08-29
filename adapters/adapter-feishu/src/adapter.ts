@@ -2,41 +2,21 @@
  * 飞书适配器
  * 继承 Adapter 基类，实现飞书平台功能
  */
-import {
-    Account,
-    AdapterRegistry,
-    AccountStatus,
-    unixSecondsToEventMs,
-    toUnixSeconds,
-} from "onebots";
+import { Account, AdapterRegistry, AccountStatus, toUnixSeconds } from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { FeishuBot } from "./bot.js";
-import { CommonEvent, type CommonTypes } from "onebots";
-import {
-    FeishuEndpoint,
-    type FeishuConfig,
-    type FeishuEvent,
-    type FeishuMessageReceiveEventPayload,
-    type FeishuAPIResponse,
-    type FeishuMessage,
-} from "./types.js";
+import { type CommonTypes } from "onebots";
+import { type FeishuConfig, type FeishuAPIResponse, type FeishuMessage } from "./types.js";
 import { feishuCapabilities } from "./capabilities.js";
+import { createFeishuAccount } from "./account.js";
+import { executeFeishuPlatformAction, FEISHU_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { projectFeishuMessageSegments } from "./events.js";
 
 export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     constructor(app: BaseApp) {
         super(app, "feishu", feishuCapabilities);
         this.icon = "https://open.feishu.cn/favicon.ico";
-    }
-
-    /**
-     * 根据端点获取对应的图标
-     */
-    private getIconForEndpoint(endpoint: string): string {
-        if (endpoint.includes("larksuite.com")) {
-            return "https://open.larksuite.com/favicon.ico";
-        }
-        return "https://open.feishu.cn/favicon.ico";
     }
 
     /**
@@ -46,17 +26,15 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         return endpoint.includes("larksuite.com");
     }
 
-    /**
-     * 解析飞书 IM 消息 body.content（通常为 JSON 字符串），非 JSON 时退回原文，避免事件链路因 JSON.parse 抛错中断
-     */
-    private parseFeishuImBodyText(raw: string | undefined): string {
-        if (typeof raw !== "string" || raw.length === 0) return "";
-        try {
-            const parsed = JSON.parse(raw) as { text?: string };
-            return parsed.text ?? "";
-        } catch {
-            return raw;
-        }
+    override async callAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!FEISHU_PLATFORM_ACTIONS.has(action)) return super.callAction(uin, action, params);
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        return executeFeishuPlatformAction(account.client, action, params);
     }
 
     // ============================================
@@ -77,9 +55,12 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const { scene_type, message } = params;
         const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
 
-        // 解析消息内容
+        const objectSegments = message.filter(segment => typeof segment !== "string");
+        const reply = objectSegments.find(segment => segment.type === "reply");
+        const native = objectSegments.filter(segment => segment.type !== "reply");
         let text = "";
-        const content: Record<string, unknown> = {};
+        let msgType = "text";
+        let content: Record<string, unknown> = {};
 
         for (const seg of message) {
             if (typeof seg === "string") {
@@ -94,15 +75,29 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
                     text += `<at user_id="${userId}">${seg.data.name || userId}</at>`;
                 }
             } else if (seg.type === "image") {
-                // 飞书图片消息需要先上传图片，这里简化处理
-                if (seg.data.url || seg.data.file) {
-                    text += `[图片: ${seg.data.url || seg.data.file}]`;
+                const imageKey = seg.data.image_key || seg.data.file;
+                if (native.length === 1 && imageKey) {
+                    msgType = "image";
+                    content = { image_key: imageKey };
+                } else if (seg.data.url) text += `[图片: ${seg.data.url}]`;
+            } else if (["file", "audio", "video"].includes(seg.type)) {
+                const fileKey = seg.data.file_key || seg.data.file;
+                if (native.length === 1 && fileKey) {
+                    msgType = seg.type === "video" ? "media" : seg.type;
+                    content = {
+                        file_key: fileKey,
+                        ...(seg.data.image_key ? { image_key: seg.data.image_key } : {}),
+                    };
+                } else if (seg.data.url) text += `[文件: ${seg.data.url}]`;
+            } else if (seg.type === "post" || seg.type === "interactive") {
+                if (native.length === 1) {
+                    msgType = seg.type;
+                    content = (seg.data.content as Record<string, unknown>) || seg.data;
                 }
             }
         }
 
-        // 构建飞书消息内容
-        content.text = text;
+        if (msgType === "text") content = { text };
 
         // 根据场景类型发送消息
         let receiveIdType: "open_id" | "user_id" | "union_id" | "email" | "chat_id" = "open_id";
@@ -113,7 +108,15 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             receiveIdType = "chat_id";
         }
 
-        const result = await bot.sendMessage(sceneId.string, receiveIdType, content, "text");
+        const result = reply
+            ? ((await bot.callApi(
+                  `/im/v1/messages/${String(reply.data.message_id || reply.data.id)}/reply`,
+                  {
+                      method: "POST",
+                      body: { msg_type: msgType, content: JSON.stringify(content) },
+                  },
+              )) as import("./types.js").FeishuSendMessageResponse)
+            : await bot.sendMessage(sceneId.string, receiveIdType, content, msgType);
 
         const messageId = result.data?.message_id;
         if (!messageId) {
@@ -134,11 +137,6 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
 
         const bot = account.client;
         const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
-        const chatId =
-            params.scene_id != null
-                ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
-                : "";
-
         // 飞书删除消息 API
         const http = bot.getHttpClient();
         await http.delete(`/im/v1/messages/${msgId}`);
@@ -169,8 +167,6 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
             throw new Error("获取消息失败: 响应中无消息内容");
         }
 
-        const text = this.parseFeishuImBodyText(msg.body?.content);
-
         const senderId = msg.sender?.id ?? "";
 
         return {
@@ -183,12 +179,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
                 sender_name: senderId,
                 scene_name: "",
             },
-            message: [
-                {
-                    type: "text",
-                    data: { text },
-                },
-            ],
+            message: projectFeishuMessageSegments(msg as unknown as Record<string, unknown>),
         };
     }
 
@@ -264,15 +255,19 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     // 好友（私聊会话）相关方法
     // ============================================
 
-    /**
-     * 获取好友列表（飞书不支持）
-     */
+    /** 获取应用可见范围内的通讯录用户。 */
     async getFriendList(
         uin: string,
-        params?: Adapter.GetFriendListParams,
+        _params?: Adapter.GetFriendListParams,
     ): Promise<Adapter.FriendInfo[]> {
-        // 飞书不提供好友列表 API
-        return [];
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        const users = await account.client.getUserList();
+        return users.map(user => ({
+            user_id: this.createId(user.open_id || user.user_id),
+            user_name: user.name || "",
+            remark: user.nickname || user.name || "",
+        }));
     }
 
     /**
@@ -300,15 +295,18 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     // 群组相关方法
     // ============================================
 
-    /**
-     * 获取群列表（飞书不支持）
-     */
+    /** 获取机器人所在的群聊列表。 */
     async getGroupList(
         uin: string,
-        params?: Adapter.GetGroupListParams,
+        _params?: Adapter.GetGroupListParams,
     ): Promise<Adapter.GroupInfo[]> {
-        // 飞书不提供群列表 API，需要通过事件订阅获取
-        return [];
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        const chats = await account.client.getChatList();
+        return chats.map(chat => ({
+            group_id: this.createId(chat.chat_id),
+            group_name: chat.name || "",
+        }));
     }
 
     /**
@@ -331,6 +329,15 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         };
     }
 
+    /** 更新群名称。 */
+    async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
+        const account = this.getAccount(uin);
+        if (!account) throw new Error(`Account ${uin} not found`);
+        await account.client.put(`/im/v1/chats/${params.group_id.string}`, {
+            name: params.group_name,
+        });
+    }
+
     /**
      * 退出群组
      */
@@ -341,9 +348,13 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const bot = account.client;
         const chatId = params.group_id.string;
 
-        // 飞书退出群组 API
-        const http = bot.getHttpClient();
-        await http.delete(`/im/v1/chats/${chatId}/members/me`);
+        const me = bot.getCachedMe();
+        if (!me?.open_id) throw new Error("飞书机器人身份尚未初始化");
+        await bot.delete(
+            `/im/v1/chats/${chatId}/members`,
+            { id_list: [me.open_id] },
+            { member_id_type: "open_id" },
+        );
     }
 
     /**
@@ -403,17 +414,11 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const chatId = params.group_id.string;
         const userId = params.user_id.string;
 
-        // 飞书踢出群成员 API
-        const http = bot.getHttpClient();
-        await http.delete(`/im/v1/chats/${chatId}/members/${userId}`);
-    }
-
-    /**
-     * 设置群名片（飞书不支持）
-     */
-    async setGroupCard(uin: string, params: Adapter.SetGroupCardParams): Promise<void> {
-        // 飞书不支持设置群名片
-        throw new Error("飞书不支持设置群名片");
+        await bot.delete(
+            `/im/v1/chats/${chatId}/members`,
+            { id_list: [userId] },
+            { member_id_type: "open_id" },
+        );
     }
 
     // ============================================
@@ -452,132 +457,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
     // ============================================
 
     createAccount(config: Account.Config<"feishu">): Account<"feishu", FeishuBot> {
-        const feishuConfig: FeishuConfig = {
-            account_id: config.account_id,
-            app_id: config.app_id,
-            app_secret: config.app_secret,
-            encrypt_key: config.encrypt_key,
-            verification_token: config.verification_token,
-            endpoint: config.endpoint,
-        };
-
-        const bot = new FeishuBot(feishuConfig);
-        const account = new Account<"feishu", FeishuBot>(this, bot, config);
-
-        // 根据端点判断是飞书还是 Lark
-        const isLark = this.isLarkEndpoint(bot.endpoint);
-        const platformName = isLark ? "Lark" : "飞书";
-        const accountIcon = this.getIconForEndpoint(bot.endpoint);
-
-        // Webhook 路由
-        this.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
-
-        // 监听 Bot 事件
-        bot.on("ready", () => {
-            this.logger.info(
-                `${platformName} Bot ${config.account_id} 已就绪 (endpoint: ${bot.endpoint})`,
-            );
-        });
-
-        bot.on("error", error => {
-            this.logger.error(`${platformName} Bot ${config.account_id} 错误:`, error);
-        });
-
-        // 监听飞书事件
-        bot.on("event", (event: FeishuEvent) => {
-            this.handleFeishuEvent(account, event);
-        });
-
-        // 启动时初始化 Bot
-        account.on("start", async () => {
-            try {
-                await bot.start();
-                account.status = AccountStatus.Online;
-                const me = bot.getCachedMe();
-                account.nickname = me?.name || `${platformName} Bot`;
-                account.avatar = me?.avatar_url || accountIcon;
-            } catch (error) {
-                this.logger.error(`启动 ${platformName} Bot 失败:`, error);
-                account.status = AccountStatus.OffLine;
-            }
-        });
-
-        account.on("stop", async () => {
-            await bot.stop();
-            account.status = AccountStatus.OffLine;
-        });
-
-        return account;
-    }
-
-    /**
-     * 处理飞书事件
-     */
-    private handleFeishuEvent(account: Account<"feishu", FeishuBot>, event: FeishuEvent): void {
-        const eventType = event.header.event_type;
-
-        // 处理消息事件
-        if (eventType === "im.message.receive_v1") {
-            const payload = event.event as FeishuMessageReceiveEventPayload;
-            const message = payload.message;
-            if (!message) return;
-
-            // 忽略自己发送的消息
-            const bot = account.client;
-            const me = bot.getCachedMe();
-            if (me && message.sender.id === me.open_id) return;
-
-            // 打印消息接收日志
-            const content = this.parseFeishuImBodyText(message.body?.content);
-            const contentPreview =
-                content.length > 100 ? content.substring(0, 100) + "..." : content;
-            this.logger.info(
-                `[飞书] 收到消息 | 消息ID: ${message.message_id} | ` +
-                    `发送者: ${message.sender.id} | 内容: ${contentPreview}`,
-            );
-
-            // 构建消息段
-            const messageSegments: CommonTypes.Segment[] = [];
-            if (content) {
-                messageSegments.push({
-                    type: "text",
-                    data: { text: content },
-                });
-            }
-
-            // 判断是私聊还是群聊
-            const isGroup = message.chat_id && message.chat_id !== message.sender.id;
-            const messageType = isGroup ? "group" : "private";
-
-            // 转换为 CommonEvent 格式
-            const commonEvent: CommonEvent.Message = {
-                id: this.createId(message.message_id),
-                timestamp: unixSecondsToEventMs(message.create_time),
-                platform: "feishu",
-                bot_id: this.createId(account.config.account_id),
-                type: "message",
-                message_type: messageType,
-                sender: {
-                    id: this.createId(message.sender.id),
-                    name: message.sender.id,
-                    avatar: undefined,
-                },
-                ...(isGroup
-                    ? {
-                          group: {
-                              id: this.createId(message.chat_id),
-                              name: "",
-                          },
-                      }
-                    : {}),
-                message_id: this.createId(message.message_id),
-                raw_message: content,
-                message: messageSegments,
-            };
-
-            // 派发到协议层
-            account.dispatch(commonEvent);
-        }
+        return createFeishuAccount(this, config);
     }
 }
 

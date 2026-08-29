@@ -10,20 +10,31 @@
  */
 export const FeishuEndpoint = {
     /** 飞书（国内版）API 端点 */
-    FEISHU: 'https://open.feishu.cn/open-apis',
+    FEISHU: "https://open.feishu.cn/open-apis",
     /** Lark（国际版）API 端点 */
-    LARK: 'https://open.larksuite.com/open-apis',
+    LARK: "https://open.larksuite.com/open-apis",
 } as const;
 
-export type FeishuEndpointType = typeof FeishuEndpoint[keyof typeof FeishuEndpoint];
+export type FeishuEndpointType = (typeof FeishuEndpoint)[keyof typeof FeishuEndpoint];
+
+/** 飞书开放平台底层请求选项。 */
+export interface FeishuApiRequestOptions {
+    method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+    headers?: Record<string, string>;
+    body?: string | Record<string, unknown>;
+    params?: Record<string, string | number | boolean>;
+    skipAuth?: boolean;
+}
 
 // 配置类型
 export interface FeishuConfig {
     account_id: string;
-    app_id: string;           // 应用 App ID
-    app_secret: string;       // 应用 App Secret
-    encrypt_key?: string;      // 事件加密密钥（可选）
+    app_id: string; // 应用 App ID
+    app_secret: string; // 应用 App Secret
+    encrypt_key?: string; // 事件加密密钥（可选）
     verification_token?: string; // 事件验证 Token（可选）
+    /** 使用飞书官方长连接接收事件，无需公网 Webhook。 */
+    long_connection?: boolean;
     /**
      * API 端点，可选值：
      * - FeishuEndpoint.FEISHU (默认): 'https://open.feishu.cn/open-apis'
@@ -157,8 +168,18 @@ export interface FeishuTokenResponse {
 // 发送消息请求
 export interface FeishuSendMessageRequest {
     receive_id: string;
-    receive_id_type: 'open_id' | 'user_id' | 'union_id' | 'email' | 'chat_id';
-    msg_type: 'text' | 'post' | 'image' | 'file' | 'audio' | 'media' | 'sticker' | 'interactive' | 'share_chat' | 'share_user';
+    receive_id_type: "open_id" | "user_id" | "union_id" | "email" | "chat_id";
+    msg_type:
+        | "text"
+        | "post"
+        | "image"
+        | "file"
+        | "audio"
+        | "media"
+        | "sticker"
+        | "interactive"
+        | "share_chat"
+        | "share_user";
     content: string | Record<string, unknown>;
     uuid?: string;
 }
@@ -211,8 +232,10 @@ export interface FeishuChatMembersAPIResponse {
 
 // 飞书 Webhook 请求体（URL 验证和事件）
 export interface FeishuWebhookBody {
+    encrypt?: string;
     type?: string;
     challenge?: string;
+    token?: string;
     header?: {
         token?: string;
         event_id?: string;
@@ -225,4 +248,3 @@ export interface FeishuWebhookBody {
     schema?: string;
     [key: string]: unknown;
 }
-

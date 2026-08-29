@@ -1,0 +1,223 @@
+import { CommonEvent, coerceUnixToEventMs, type CommonTypes } from "onebots";
+import type { FeishuEvent, FeishuWebhookBody } from "./types.js";
+
+interface ProjectorContext {
+    botId: CommonTypes.Id;
+    createId(value: string | number): CommonTypes.Id;
+}
+
+/** 投影飞书 2.0 事件；未知事件仍以 custom notice 和 raw_event 无损交付。 */
+export function projectFeishuEvent(
+    event: FeishuEvent,
+    rawEvent: FeishuWebhookBody,
+    context: ProjectorContext,
+): CommonEvent.Event<FeishuWebhookBody> | undefined {
+    const eventType = event.header.event_type;
+    const payload = objectValue(event.event);
+    switch (eventType) {
+        case "im.message.receive_v1":
+            return projectMessage(event, rawEvent, payload, context);
+        case "im.message.recalled_v1":
+            return notice(event, rawEvent, context, "message_deleted", {
+                message_id: idValue(payload.message_id, context),
+                group: groupValue(payload.chat_id, context),
+            });
+        case "im.message.message_read_v1":
+            return notice(event, rawEvent, context, "custom", extension(eventType));
+        case "im.chat.member.user.added_v1":
+        case "im.chat.member.user.deleted_v1": {
+            const users = Array.isArray(payload.users) ? payload.users : [];
+            const first = objectValue(users[0]);
+            return notice(
+                event,
+                rawEvent,
+                context,
+                eventType.endsWith("added_v1") ? "member_joined" : "member_left",
+                {
+                    user: userValue(first, context),
+                    group: groupValue(payload.chat_id, context),
+                    extensions: { feishu: { users } },
+                },
+            );
+        }
+        case "im.chat.disbanded_v1":
+        case "im.chat.updated_v1":
+            return notice(event, rawEvent, context, "custom", {
+                group: groupValue(payload.chat_id, context),
+                ...extension(eventType),
+            });
+        default:
+            return notice(event, rawEvent, context, "custom", extension(eventType));
+    }
+}
+
+function projectMessage(
+    event: FeishuEvent,
+    rawEvent: FeishuWebhookBody,
+    payload: Record<string, unknown>,
+    context: ProjectorContext,
+): CommonEvent.Message<FeishuWebhookBody> | undefined {
+    const message = objectValue(payload.message);
+    const messageId = stringValue(message.message_id);
+    if (!messageId) return undefined;
+    const sender = objectValue(payload.sender);
+    const senderId = objectValue(sender.sender_id);
+    const legacySender = objectValue(message.sender);
+    const userId = firstString(
+        senderId.open_id,
+        senderId.user_id,
+        senderId.union_id,
+        legacySender.id,
+    );
+    const chatId = stringValue(message.chat_id);
+    const chatType = stringValue(message.chat_type);
+    const isGroup = chatType === "group" || (chatType !== "p2p" && Boolean(chatId));
+    return {
+        ...base(event, rawEvent, context),
+        id: context.createId(messageId),
+        type: "message",
+        message_type: isGroup ? "group" : "private",
+        sender: { id: context.createId(userId), name: userId },
+        group: isGroup ? { id: context.createId(chatId), name: "" } : undefined,
+        message_id: context.createId(messageId),
+        raw_message: stringValue(message.content, objectValue(message.body).content),
+        message: projectFeishuMessageSegments(message),
+    };
+}
+
+export function projectFeishuMessageSegments(
+    message: Record<string, unknown>,
+): CommonTypes.Segment[] {
+    const segments: CommonTypes.Segment[] = [];
+    const parentId = stringValue(message.parent_id);
+    if (parentId) segments.push({ type: "reply", data: { message_id: parentId } });
+    const messageType = firstString(message.message_type, message.msg_type, "text");
+    const rawContent = stringValue(message.content, objectValue(message.body).content);
+    const content = parseContent(rawContent);
+    const mentions = Array.isArray(message.mentions) ? message.mentions.map(objectValue) : [];
+
+    if (messageType === "text") {
+        appendTextWithMentions(segments, stringValue(content.text, rawContent), mentions);
+    } else if (messageType === "image") {
+        segments.push({
+            type: "image",
+            data: { file: content.image_key, image_key: content.image_key },
+        });
+    } else if (["file", "audio", "media", "sticker"].includes(messageType)) {
+        const type = messageType === "media" ? "video" : messageType;
+        segments.push({
+            type,
+            data: {
+                file: content.file_key,
+                file_key: content.file_key,
+                image_key: content.image_key,
+                filename: content.file_name,
+            },
+        });
+    } else {
+        segments.push({ type: messageType, data: { content } });
+    }
+    return segments;
+}
+
+function appendTextWithMentions(
+    segments: CommonTypes.Segment[],
+    text: string,
+    mentions: Record<string, unknown>[],
+): void {
+    let remaining = text;
+    for (const mention of mentions) {
+        const key = stringValue(mention.key);
+        if (!key || !remaining.includes(key)) continue;
+        const [before, ...after] = remaining.split(key);
+        if (before) segments.push({ type: "text", data: { text: before } });
+        const mentionId = objectValue(mention.id);
+        segments.push({
+            type: "at",
+            data: {
+                user_id: firstString(mentionId.open_id, mentionId.user_id, mention.id),
+                name: stringValue(mention.name),
+            },
+        });
+        remaining = after.join(key);
+    }
+    if (remaining) segments.push({ type: "text", data: { text: remaining } });
+}
+
+function notice(
+    event: FeishuEvent,
+    rawEvent: FeishuWebhookBody,
+    context: ProjectorContext,
+    noticeType: CommonEvent.NoticeType,
+    fields: Omit<Partial<CommonEvent.Notice<FeishuWebhookBody>>, keyof CommonEvent.Base | "type">,
+): CommonEvent.Notice<FeishuWebhookBody> {
+    return {
+        ...base(event, rawEvent, context),
+        type: "notice",
+        notice_type: noticeType,
+        ...fields,
+    };
+}
+
+function base(
+    event: FeishuEvent,
+    rawEvent: FeishuWebhookBody,
+    context: ProjectorContext,
+): CommonEvent.Base<FeishuWebhookBody> {
+    return {
+        id: context.createId(event.header.event_id || `${event.header.event_type}:${Date.now()}`),
+        timestamp: coerceUnixToEventMs(event.header.create_time),
+        type: "custom",
+        platform: "feishu",
+        bot_id: context.botId,
+        raw_event: rawEvent,
+    };
+}
+
+function extension(eventType: string): { extensions: { feishu: { event_type: string } } } {
+    return { extensions: { feishu: { event_type: eventType } } };
+}
+
+function groupValue(value: unknown, context: ProjectorContext): CommonTypes.Group | undefined {
+    const id = stringValue(value);
+    return id ? { id: context.createId(id), name: "" } : undefined;
+}
+
+function userValue(
+    value: Record<string, unknown>,
+    context: ProjectorContext,
+): CommonTypes.User | undefined {
+    const id = firstString(value.open_id, value.user_id, value.union_id, value.member_id);
+    return id ? { id: context.createId(id), name: stringValue(value.name, id) } : undefined;
+}
+
+function idValue(value: unknown, context: ProjectorContext): CommonTypes.Id | undefined {
+    const id = stringValue(value);
+    return id ? context.createId(id) : undefined;
+}
+
+function parseContent(raw: string): Record<string, unknown> {
+    if (!raw) return {};
+    try {
+        return objectValue(JSON.parse(raw));
+    } catch {
+        return { text: raw };
+    }
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+    return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function stringValue(value: unknown, fallback: unknown = ""): string {
+    return typeof value === "string" && value
+        ? value
+        : typeof fallback === "string"
+          ? fallback
+          : "";
+}
+
+function firstString(...values: unknown[]): string {
+    for (const value of values) if (typeof value === "string" && value) return value;
+    return "";
+}

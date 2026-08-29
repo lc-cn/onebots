@@ -36,5 +36,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lc-cn/onebots.git"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.59.0"
   }
 }
