@@ -57,5 +57,8 @@ export const weComCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         link: { support: "native", direction: "receive" },
         wecom_message: { support: "native", direction: "both" },
     },
-    transports: { webhook: { support: "native", mode: "webhook" } },
+    transports: {
+        webhook: { support: "native", mode: "webhook" },
+        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
+    },
 });

@@ -13,6 +13,7 @@ wecom.internal_app:
   agent_id: "1000001"
   token: your_callback_token
   encoding_aes_key: your_43_character_key
+  receive_mode: webhook
   deduplicate_webhooks: true
 
   onebot.v11:
@@ -47,7 +48,31 @@ await adapter.callAction("internal_app", "wecom_call", {
 
 ## 底层接入
 
-`WeComWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂载到已有 Koa 风格 Host；`WeComClient.ingest()` 可接收已经解密/解析且含稳定时间与身份字段的事件。适配器不会自行监听端口。
+默认 Webhook、已有 Host 与消息队列最终进入同一个 `WeComClient`，共享事件校验、去重与 typed 分发：
+
+```ts
+const result = client.ingest(decryptedEvent);
+const verified = client.ingestHttp({ method, query, body: rawXml });
+const response = await client.acceptHttp(request);
+
+const unsubscribe = client.onEvent("change_contact", event => {
+  // 精确企业微信 Event 订阅
+});
+```
+
+`WeComWebhookHost` 只负责 Koa 上下文桥接，不再持有第二套解密或去重状态。`ingestHttp()` 返回结构化 HTTP 响应，并在 POST 响应的 `ingest` 字段中附带 `{ accepted, duplicate, eventId, event }`。
+
+已有 Host 已经完成验签解密，或事件来自可信队列时，可使用 manual 模式；此时无需回调 Token/AES Key，也不会在 OneBots Router 注册路由：
+
+```yaml
+wecom.internal_app:
+  corp_id: ww1234567890abcdef
+  corp_secret: your_application_secret
+  agent_id: "1000001"
+  receive_mode: manual
+```
+
+适配器不会自行监听端口。
 
 事件统一保留 `raw_event`，其中 `RawXml` 是解密后的完整 XML，`EncryptedXml` 是收到的密文外层 XML。通讯录成员变更投影为 `user_added` / `user_updated` / `user_removed`；菜单、进入应用和模板卡片回调统一投影为 `interaction`，精确企业微信事件名保留在 `sub_type`。
 

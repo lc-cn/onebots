@@ -3,7 +3,7 @@ import { AdapterRegistry, type Schema } from "onebots";
 export { WeComAdapter } from "./adapter.js";
 export { weComCapabilities } from "./capabilities.js";
 export { WeComClient } from "./client.js";
-export { WeComApiError } from "./errors.js";
+export { WeComApiError, type WeComApiErrorOptions } from "./errors.js";
 export { projectWeComEvent, projectWeComSegments } from "./events.js";
 export { prepareWeComMediaSegments, uploadWeComMedia, weComMediaType } from "./media.js";
 export type { WeComMediaType } from "./media.js";
@@ -17,9 +17,12 @@ export type {
     WeComAPIResponse,
     WeComAppChat,
     WeComCallOptions,
+    WeComClientEvents,
     WeComConfig,
     WeComDepartment,
     WeComEvent,
+    WeComIngestResult,
+    WeComNamedEvent,
     WeComSendMessageRequest,
     WeComSendMessageResponse,
     WeComUser,
@@ -27,7 +30,7 @@ export type {
     WeComWebhookResponse,
 } from "./types.js";
 
-const wecomSchema: Schema = {
+export const wecomSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -63,29 +66,48 @@ const wecomSchema: Schema = {
     },
     token: {
         type: "string",
-        required: true,
         min: 1,
         label: "回调 Token",
         description: "须与企业微信接收消息配置完全一致",
         sensitive: true,
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
+    },
+    receive_mode: {
+        type: "string",
+        default: "webhook",
+        label: "事件接收方式",
+        choices: [
+            { value: "webhook", label: "Webhook" },
+            { value: "manual", label: "手动接入既有 Host/队列" },
+        ],
+        description: "manual 不注册路由，由现有连接调用 ingest()",
         ui: { section: "transport" },
     },
     encoding_aes_key: {
         type: "string",
-        required: true,
         min: 43,
         max: 43,
         label: "EncodingAESKey",
         description: "企业微信加密回调的 43 位密钥",
         sensitive: true,
-        ui: { section: "transport" },
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     webhook_path: {
         type: "string",
         label: "Webhook 路径",
         placeholder: "/wecom/{account_id}/webhook",
         description: "复用 OneBots 主 HTTP 服务；留空按账号自动生成",
-        ui: { section: "transport" },
+        pattern: /^\/(?!\/)[^?#\u0000-\u001f\u007f]*$/,
+        ui: {
+            section: "transport",
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+        },
     },
     deduplicate_webhooks: {
         type: "boolean",
@@ -107,6 +129,7 @@ const wecomSchema: Schema = {
         default: "https://qyapi.weixin.qq.com",
         label: "API Base URL",
         description: "仅官方兼容 HTTPS 代理或测试入口需要覆盖",
+        pattern: /^https:\/\/[^\s?#]+$/,
         ui: { section: "advanced" },
     },
 };

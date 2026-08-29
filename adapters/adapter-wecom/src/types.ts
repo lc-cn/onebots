@@ -4,8 +4,10 @@ export interface WeComConfig {
     corp_id: string;
     corp_secret: string;
     agent_id: string;
-    token: string;
-    encoding_aes_key: string;
+    token?: string;
+    encoding_aes_key?: string;
+    /** Webhook 由 OneBots 接收，或由已有 Host/队列手动 ingest。 */
+    receive_mode?: "webhook" | "manual";
     webhook_path?: string;
     deduplicate_webhooks?: boolean;
     webhook_deduplication_limit?: number;
@@ -89,6 +91,11 @@ export interface WeComEvent extends Record<string, unknown> {
     ResponseCode?: string;
 }
 
+export interface WeComNamedEvent<TName extends string = string> extends WeComEvent {
+    MsgType: "event";
+    Event: TName;
+}
+
 export interface WeComAgent extends WeComAPIResponse {
     agentid: number;
     name?: string;
@@ -131,11 +138,26 @@ export interface WeComWebhookResponse {
     status: number;
     body: unknown;
     contentType?: string;
+    ingest?: WeComIngestResult;
 }
 
-export interface WeComChangeEvent extends WeComEvent {
-    MsgType: "event";
-    Event: "change_contact";
+export interface WeComIngestResult {
+    accepted: number;
+    duplicate: boolean;
+    eventId: string;
+    event: WeComEvent;
+}
+
+/** WeComClient 对外事件表；精确 Event 可通过 onEvent() 判别订阅。 */
+export interface WeComClientEvents {
+    ready: [agent: WeComAgent];
+    stop: [];
+    raw_event: [event: WeComEvent];
+    event: [event: WeComEvent];
+    message: [event: WeComEvent];
+}
+
+export interface WeComChangeEvent extends WeComNamedEvent<"change_contact"> {
     ChangeType: "create_user" | "update_user" | "delete_user";
     UserID: string;
 }

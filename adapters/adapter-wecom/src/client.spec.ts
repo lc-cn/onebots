@@ -118,9 +118,14 @@ describe("WeComClient", () => {
             FromUserName: "u1",
             Content: "hi",
         };
-        client.ingest(event);
+        expect(client.ingest(event)).toMatchObject({
+            accepted: 1,
+            duplicate: false,
+            eventId: "m1",
+        });
         expect(raw).toHaveBeenCalledWith(event);
         expect(message).toHaveBeenCalledWith(event);
+        expect(client.ingest(event).duplicate).toBe(true);
     });
 
     it("ingest 拒绝无法稳定投影的外部事件", () => {
@@ -128,5 +133,53 @@ describe("WeComClient", () => {
         expect(() => client.ingest({ MsgType: "text", Content: "hi" })).toThrowError(
             expect.objectContaining({ code: "WECOM_INVALID_EVENT" }),
         );
+    });
+
+    it("manual 模式无需回调凭据，并支持精确事件订阅", () => {
+        const client = new WeComClient({
+            ...config,
+            receive_mode: "manual",
+            token: undefined,
+            encoding_aes_key: undefined,
+        });
+        const listener = vi.fn();
+        const unsubscribe = client.onEvent("enter_agent", listener);
+        const event: WeComEvent = {
+            MsgType: "event",
+            Event: "enter_agent",
+            CreateTime: 1_777_000_001,
+            FromUserName: "u1",
+        };
+        expect(client.ingest(event).accepted).toBe(1);
+        expect(listener).toHaveBeenCalledWith(event);
+        unsubscribe();
+        client.ingest({ ...event, CreateTime: 1_777_000_002 });
+        expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("业务监听器失败时不提交去重状态，允许企业微信重投递", () => {
+        const client = new WeComClient({ ...config, receive_mode: "manual" });
+        const event: WeComEvent = {
+            MsgType: "event",
+            Event: "enter_agent",
+            CreateTime: 1_777_000_003,
+            FromUserName: "u1",
+        };
+        const failure = (): void => {
+            throw new Error("downstream failed");
+        };
+        client.on("raw_event", failure);
+        expect(() => client.ingest(event)).toThrow("downstream failed");
+        client.off("raw_event", failure);
+        expect(client.ingest(event).duplicate).toBe(false);
+    });
+
+    it("标准 Request Host 拒绝不支持的方法", async () => {
+        const client = new WeComClient(config);
+        const response = await client.acceptHttp(
+            new Request("https://example.test/wecom", { method: "PUT" }),
+        );
+        expect(response.status).toBe(405);
+        expect(response.headers.get("allow")).toBe("GET, POST");
     });
 });

@@ -186,10 +186,11 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
                 }),
             );
         });
-        client.on("error", error => this.logger.error("企业微信客户端错误", error));
-        this.app.router.all(webhook.path, ctx =>
-            webhook.acceptHttp(ctx as unknown as WeComHttpContext),
-        );
+        if (client.receiveMode === "webhook") {
+            this.app.router.all(webhook.path, ctx =>
+                webhook.acceptHttp(ctx as unknown as WeComHttpContext),
+            );
+        }
 
         account.on("start", async () => {
             try {
@@ -245,6 +246,7 @@ function normalizeConfig(config: Account.Config<"wecom">): WeComConfig {
         corp_id: config.corp_id,
         corp_secret: config.corp_secret,
         agent_id: config.agent_id,
+        receive_mode: config.receive_mode,
         token: config.token,
         encoding_aes_key: config.encoding_aes_key,
         webhook_path: config.webhook_path,

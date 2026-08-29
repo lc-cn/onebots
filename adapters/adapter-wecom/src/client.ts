@@ -6,29 +6,38 @@ import type {
     WeComAgent,
     WeComAppChat,
     WeComCallOptions,
+    WeComClientEvents,
     WeComConfig,
     WeComDepartmentMembersResponse,
     WeComEvent,
+    WeComIngestResult,
+    WeComNamedEvent,
     WeComSendMessageResponse,
     WeComTokenResponse,
     WeComUser,
+    WeComWebhookRequest,
+    WeComWebhookResponse,
 } from "./types.js";
+import { decodeWeComEvent, verifyWeComEndpoint, weComEventId } from "./webhook.js";
 
 const DEFAULT_API_BASE = "https://qyapi.weixin.qq.com";
 const TOKEN_MARGIN_MS = 120_000;
 const INVALID_TOKEN_CODES = new Set([40014, 42001, 42007, 42009]);
+const DEFAULT_DEDUPLICATION_LIMIT = 10_000;
 
 /** 企业微信自建应用 API 客户端与统一事件入口。 */
-export class WeComClient extends EventEmitter {
+export class WeComClient extends EventEmitter<WeComClientEvents> {
     readonly apiBaseUrl: string;
     private readonly tokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
     private agent?: WeComAgent;
+    private readonly processedEvents = new Set<string>();
 
     constructor(
         readonly config: WeComConfig,
         private readonly fetcher: typeof fetch = fetch,
     ) {
         super();
+        assertWeComConfig(config);
         if (!/^\d+$/u.test(config.agent_id)) {
             throw new WeComApiError("agent_id 必须是数字字符串", {
                 code: "WECOM_INVALID_AGENT_ID",
@@ -51,6 +60,10 @@ export class WeComClient extends EventEmitter {
 
     getCachedAgent(): WeComAgent | undefined {
         return this.agent;
+    }
+
+    get receiveMode(): "webhook" | "manual" {
+        return this.config.receive_mode || "webhook";
     }
 
     async getAccessToken(force = false): Promise<string> {
@@ -145,13 +158,89 @@ export class WeComClient extends EventEmitter {
         };
     }
 
-    ingest(event: WeComEvent): void {
+    /** 最底层明文事件入口，与加密 HTTP 回调共享校验、去重和 typed 分发。 */
+    ingest(rawEvent: unknown): WeComIngestResult {
+        const event = parseWeComEvent(rawEvent);
         validateEvent(event);
+        const eventId = weComEventId(event);
+        if (this.isDuplicate(eventId)) {
+            return { accepted: 0, duplicate: true, eventId, event };
+        }
         this.emit("raw_event", event);
         const isEvent = event.MsgType === "event";
         this.emit(isEvent ? "event" : "message", event);
-        const name = event.Event;
-        if (name) this.emit(`event.${name.toLowerCase()}`, event);
+        this.markProcessed(eventId);
+        return { accepted: 1, duplicate: false, eventId, event };
+    }
+
+    /** 按企业微信 Event 精确订阅，并返回取消订阅函数。 */
+    onEvent<K extends string>(name: K, listener: (event: WeComNamedEvent<K>) => void): () => void {
+        const wrapped = (event: WeComEvent) => {
+            if (event.Event?.toLowerCase() === name.toLowerCase()) {
+                listener(event as WeComNamedEvent<K>);
+            }
+        };
+        this.on("event", wrapped);
+        return () => this.off("event", wrapped);
+    }
+
+    /** 接收企业微信 GET 验证或 POST 加密回调。 */
+    ingestHttp(request: WeComWebhookRequest): WeComWebhookResponse {
+        if (request.method === "GET") {
+            const echo = verifyWeComEndpoint(this.config, request.query);
+            return echo === undefined
+                ? { status: 403, body: "Invalid msg_signature", contentType: "text/plain" }
+                : { status: 200, body: echo, contentType: "text/plain" };
+        }
+        try {
+            const ingest = this.ingest(decodeWeComEvent(this.config, request));
+            return { status: 200, body: "success", contentType: "text/plain", ingest };
+        } catch (error) {
+            if (error instanceof WeComApiError && error.code === "WECOM_INVALID_SIGNATURE") {
+                return { status: 403, body: "Invalid msg_signature", contentType: "text/plain" };
+            }
+            throw error;
+        }
+    }
+
+    /** Fetch / WinterCG Host 可直接转交标准 Request。 */
+    async acceptHttp(request: Request): Promise<Response> {
+        const method = request.method.toUpperCase();
+        if (method !== "GET" && method !== "POST") {
+            return Response.json(
+                { error: { code: "WECOM_METHOD_NOT_ALLOWED", message: "Method Not Allowed" } },
+                { status: 405, headers: { Allow: "GET, POST" } },
+            );
+        }
+        try {
+            const response = this.ingestHttp({
+                method,
+                query: Object.fromEntries(new URL(request.url).searchParams),
+                body: method === "POST" ? Buffer.from(await request.arrayBuffer()) : undefined,
+            });
+            return responseFromWebhook(response);
+        } catch (error) {
+            const wrapped = WeComApiError.wrap(error, "WECOM_WEBHOOK_ERROR");
+            return Response.json(
+                { error: { code: wrapped.code, message: wrapped.message } },
+                { status: wrapped.status || 400 },
+            );
+        }
+    }
+
+    private isDuplicate(eventId: string): boolean {
+        return this.config.deduplicate_webhooks !== false && this.processedEvents.has(eventId);
+    }
+
+    private markProcessed(eventId: string): void {
+        if (this.config.deduplicate_webhooks === false) return;
+        this.processedEvents.add(eventId);
+        const limit = this.config.webhook_deduplication_limit || DEFAULT_DEDUPLICATION_LIMIT;
+        while (this.processedEvents.size > limit) {
+            const oldest = this.processedEvents.values().next().value;
+            if (typeof oldest !== "string") break;
+            this.processedEvents.delete(oldest);
+        }
     }
 
     private async fetchToken(): Promise<{ value: string; ttlMs: number }> {
@@ -311,4 +400,61 @@ function requireHttpsBase(value: string): string {
         });
     }
     return `${url.origin}${url.pathname.replace(/\/+$/u, "")}`;
+}
+
+function assertWeComConfig(config: WeComConfig): void {
+    for (const [name, value] of [
+        ["account_id", config.account_id],
+        ["corp_id", config.corp_id],
+        ["corp_secret", config.corp_secret],
+        ["agent_id", config.agent_id],
+    ] as const) {
+        if (!value?.trim()) {
+            throw new WeComApiError(`企业微信 ${name} 不能为空`, {
+                code: "WECOM_CONFIG_REQUIRED",
+            });
+        }
+    }
+    const receiveMode = config.receive_mode || "webhook";
+    if (receiveMode !== "webhook" && receiveMode !== "manual") {
+        throw new WeComApiError("企业微信 receive_mode 仅支持 webhook 或 manual", {
+            code: "WECOM_INVALID_RECEIVE_MODE",
+        });
+    }
+    if (receiveMode === "webhook" && (!config.token?.trim() || !config.encoding_aes_key?.trim())) {
+        throw new WeComApiError("企业微信 Webhook 模式必须配置 token 和 encoding_aes_key", {
+            code: "WECOM_WEBHOOK_CONFIG_REQUIRED",
+        });
+    }
+    if (config.encoding_aes_key && config.encoding_aes_key.length !== 43) {
+        throw new WeComApiError("企业微信 encoding_aes_key 必须是 43 位", {
+            code: "WECOM_INVALID_ENCODING_AES_KEY",
+        });
+    }
+    if (
+        config.webhook_deduplication_limit !== undefined &&
+        (!Number.isInteger(config.webhook_deduplication_limit) ||
+            config.webhook_deduplication_limit < 100)
+    ) {
+        throw new WeComApiError("企业微信 webhook_deduplication_limit 必须是大于等于 100 的整数", {
+            code: "WECOM_INVALID_DEDUPLICATION_LIMIT",
+        });
+    }
+}
+
+function parseWeComEvent(value: unknown): WeComEvent {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new WeComApiError("企业微信事件必须是对象", { code: "WECOM_INVALID_EVENT" });
+    }
+    return value as WeComEvent;
+}
+
+function responseFromWebhook(response: WeComWebhookResponse): Response {
+    if (typeof response.body === "string") {
+        return new Response(response.body, {
+            status: response.status,
+            headers: { "Content-Type": response.contentType || "text/plain" },
+        });
+    }
+    return Response.json(response.body, { status: response.status });
 }
