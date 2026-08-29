@@ -61,7 +61,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
         this.api = new SlackWebApi(config.token);
     }
 
-    get receiveMode(): "socket" | "webhook" {
+    get receiveMode(): NonNullable<SlackConfig["receive_mode"]> {
         return this.config.receive_mode || "socket";
     }
 
@@ -184,7 +184,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     }
 
     private validateReceiveConfig(): void {
-        if (this.receiveMode !== "socket" && this.receiveMode !== "webhook") {
+        if (!["socket", "webhook", "manual"].includes(this.receiveMode)) {
             throw SlackError.config(
                 `Slack receive_mode 无效: ${String(this.config.receive_mode)}`,
                 "SLACK_RECEIVE_MODE_INVALID",

@@ -85,7 +85,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         }
     }
 
-    get receiveMode(): "stream" | "webhook" {
+    get receiveMode(): NonNullable<DingTalkConfig["receive_mode"]> {
         return this.config.receive_mode || "stream";
     }
 
@@ -235,7 +235,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 const signature = queryString(ctx.query.signature || ctx.query.msg_signature);
                 const plain = this.callbackCrypto.decrypt(encrypted, signature, timestamp, nonce);
                 const decoded = tryParseObject(plain);
-                if (decoded) this.emit("event", webhookEvent(decoded), body);
+                if (decoded) this.ingest(decoded, body);
                 ctx.body = this.callbackCrypto.encryptResponse(decoded ? "success" : plain);
                 return;
             }
@@ -244,12 +244,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 ctx.body = { error: "Invalid token" };
                 return;
             }
-            if (isRobotMessage(body)) {
-                this.rememberRobot(body);
-                this.emit("robot_message", body, body);
-            } else {
-                this.emit("event", webhookEvent(body), body);
-            }
+            this.ingest(body);
             ctx.body = { success: true };
             await next();
         } catch (error) {
@@ -262,6 +257,19 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
             ctx.status = 400;
             ctx.body = { error: callbackError.message, code: callbackError.code };
         }
+    }
+
+    /** 将已有 HTTP Host、消息队列或测试连接取得的解码载荷送入统一事件管线。 */
+    ingest(rawEvent: unknown, source: unknown = rawEvent): DingTalkRobotMessage | DingTalkEvent {
+        const body = objectValue(rawEvent, "钉钉事件");
+        if (isRobotMessage(body)) {
+            this.rememberRobot(body);
+            this.emit("robot_message", body, source);
+            return body;
+        }
+        const event = webhookEvent(body);
+        this.emit("event", event, source);
+        return event;
     }
 
     getCachedMe(): DingTalkUser | null {

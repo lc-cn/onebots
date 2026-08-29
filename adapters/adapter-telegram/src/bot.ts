@@ -202,7 +202,10 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
         try {
             await this.initBot();
             if (generation !== this.generation) return;
-            if (this.receiveConfig.mode === "webhook") {
+            if (this.receiveConfig.mode === "manual") {
+                await this.ensureBotInited();
+                this.me = this.bot.botInfo;
+            } else if (this.receiveConfig.mode === "webhook") {
                 await this.ensureBotInited();
                 this.me = this.bot.botInfo;
                 const receive = this.receiveConfig;
@@ -246,7 +249,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
             if (this.initialized && wasActive) {
                 if (this.receiveConfig.mode === "webhook") {
                     await this.callApi("deleteWebhook", () => this.bot.api.deleteWebhook());
-                } else if (this.bot.isRunning()) {
+                } else if (this.receiveConfig.mode === "polling" && this.bot.isRunning()) {
                     await this.bot.stop();
                 }
             }
@@ -306,8 +309,9 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
     }
 
     private async runPolling(generation: number, signal: AbortSignal): Promise<void> {
-        if (this.receiveConfig.mode !== "polling") return;
-        const pollingOptions = this.receiveConfig.options;
+        const receiveConfig = this.receiveConfig;
+        if (receiveConfig.mode !== "polling") return;
+        const pollingOptions = receiveConfig.options;
         let clearWebhook = true;
         let attempt = 0;
         while (generation === this.generation && !signal.aborted) {
@@ -317,7 +321,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
                     // 避免一次普通重连误删断线期间到达的 Update。
                     await this.callApi("deleteWebhook", () =>
                         this.bot.api.deleteWebhook({
-                            drop_pending_updates: this.receiveConfig.dropPendingUpdates,
+                            drop_pending_updates: receiveConfig.dropPendingUpdates,
                         }),
                     );
                     clearWebhook = false;

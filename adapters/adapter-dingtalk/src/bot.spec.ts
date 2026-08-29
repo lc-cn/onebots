@@ -7,6 +7,26 @@ import { DingTalkApiError, DingTalkError } from "./errors.js";
 describe("DingTalkBot", () => {
     afterEach(() => vi.unstubAllGlobals());
 
+    it("manual 模式通过 ingest 复用同一机器人消息管线", () => {
+        const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
+        const listener = vi.fn();
+        bot.on("robot_message", listener);
+        const message = {
+            conversationId: "cid",
+            conversationType: "2",
+            chatbotUserId: "bot-id",
+            msgId: "msg-1",
+            msgtype: "text",
+            createAt: 1,
+            senderId: "user-1",
+            text: { content: "hello" },
+        };
+
+        expect(bot.ingest(message)).toEqual(message);
+        expect(listener).toHaveBeenCalledWith(message, message);
+        expect(bot.getCachedMe()?.userid).toBe("bot-id");
+    });
+
     it("群消息使用 openConversationId 的企业机器人 API", async () => {
         const fetchMock = vi
             .fn()

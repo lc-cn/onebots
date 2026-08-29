@@ -43,7 +43,9 @@ export const telegramSchema: Schema = {
         choices: [
             { value: "polling", label: "长轮询" },
             { value: "webhook", label: "Webhook" },
+            { value: "manual", label: "手动接入已有连接" },
         ],
+        description: "manual 不创建连接或路由，由现有 Host/消息队列调用 ingest()",
         ui: { section: "transport" },
     },
     proxy: {

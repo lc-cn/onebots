@@ -113,5 +113,6 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
     transports: {
         webhook: { support: "native", mode: "webhook" },
         polling: { support: "native", mode: "polling" },
+        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
     },
 });

@@ -17,7 +17,7 @@ export const FeishuEndpoint = {
 
 export type FeishuEndpointType = (typeof FeishuEndpoint)[keyof typeof FeishuEndpoint];
 export type FeishuReceiveIdType = "open_id" | "user_id" | "union_id" | "email" | "chat_id";
-export type FeishuReceiveMode = "long_connection" | "webhook";
+export type FeishuReceiveMode = "long_connection" | "webhook" | "manual";
 
 /** 飞书开放平台底层请求选项。 */
 export interface FeishuApiRequestOptions {

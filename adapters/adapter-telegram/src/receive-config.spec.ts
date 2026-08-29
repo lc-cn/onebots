@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { resolveTelegramReceiveConfig } from "./receive-config.js";
 
 describe("resolveTelegramReceiveConfig", () => {
+    it("manual 模式不创建远端接收器", () => {
+        expect(
+            resolveTelegramReceiveConfig({
+                account_id: "bot",
+                token: "token",
+                receive_mode: "manual",
+            }),
+        ).toEqual({ mode: "manual" });
+    });
+
     it("默认生成完整订阅的长轮询计划并保留参数", () => {
         const receive = resolveTelegramReceiveConfig({
             account_id: "bot",

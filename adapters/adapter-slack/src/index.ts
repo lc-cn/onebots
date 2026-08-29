@@ -47,8 +47,9 @@ export const slackSchema: Schema = {
         choices: [
             { value: "socket", label: "Socket Mode（推荐）" },
             { value: "webhook", label: "HTTP Events API" },
+            { value: "manual", label: "手动接入已有连接" },
         ],
-        description: "Socket Mode 无需公网地址，并由 Slack 官方客户端自动恢复连接",
+        description: "manual 不创建连接或路由，由现有 Host/消息队列调用 ingest()",
         ui: { section: "transport" },
     },
     app_token: {

@@ -4,7 +4,7 @@
  */
 
 // 配置类型
-export type SlackReceiveMode = "socket" | "webhook";
+export type SlackReceiveMode = "socket" | "webhook" | "manual";
 
 export interface SlackConfig {
     account_id: string;

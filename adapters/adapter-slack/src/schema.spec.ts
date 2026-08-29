@@ -9,6 +9,7 @@ describe("Slack 配置 Schema", () => {
             choices: [
                 { value: "socket", label: expect.any(String) },
                 { value: "webhook", label: expect.any(String) },
+                { value: "manual", label: expect.any(String) },
             ],
         });
         expect(slackSchema.app_token.ui?.visibleWhen).toEqual({

@@ -99,5 +99,6 @@ export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
     transports: {
         webhook: { support: "native", mode: "webhook" },
         long_connection: { support: "native", mode: "websocket" },
+        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
     },
 });

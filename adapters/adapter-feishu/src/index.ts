@@ -52,8 +52,9 @@ export const feishuSchema: Schema = {
         choices: [
             { value: "long_connection", label: "官方长连接（推荐）" },
             { value: "webhook", label: "Webhook" },
+            { value: "manual", label: "手动接入已有连接" },
         ],
-        description: "长连接无需公网地址，并由飞书官方 SDK 自动恢复连接",
+        description: "manual 不创建连接或路由，由现有 Host/消息队列调用 ingest()",
         ui: { section: "transport" },
     },
     encrypt_key: {

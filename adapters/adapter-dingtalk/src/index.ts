@@ -17,7 +17,7 @@ export {
     type DingTalkPlatformAction,
 } from "./platform-actions.js";
 
-const dingtalkSchema: Schema = {
+export const dingtalkSchema: Schema = {
     account_id: {
         type: "string",
         required: true,
@@ -32,8 +32,9 @@ const dingtalkSchema: Schema = {
         choices: [
             { label: "Stream 长连接（推荐）", value: "stream" },
             { label: "HTTP 回调", value: "webhook" },
+            { label: "手动接入已有连接", value: "manual" },
         ],
-        description: "Stream 无需公网地址并由官方 SDK 自动恢复连接",
+        description: "manual 不创建连接或路由，由现有 Host/消息队列调用 ingest()",
         ui: { section: "transport" },
     },
     app_key: {

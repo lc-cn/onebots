@@ -9,6 +9,7 @@ describe("飞书配置 Schema", () => {
             choices: [
                 { value: "long_connection", label: expect.any(String) },
                 { value: "webhook", label: expect.any(String) },
+                { value: "manual", label: expect.any(String) },
             ],
         });
         expect(feishuSchema.verification_token.ui?.visibleWhen).toEqual({

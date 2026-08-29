@@ -3,6 +3,7 @@ import { TELEGRAM_UPDATE_TYPES, type TelegramConfig, type TelegramUpdateType } f
 import { TelegramError } from "./errors.js";
 
 export type TelegramReceiveConfig =
+    | { mode: "manual" }
     | { mode: "polling"; options: PollingOptions; dropPendingUpdates: boolean }
     | {
           mode: "webhook";
@@ -19,6 +20,8 @@ export type TelegramReceiveConfig =
  * 避免一端按 URL、另一端按开关判断而同时启动两种接收器。
  */
 export function resolveTelegramReceiveConfig(config: TelegramConfig): TelegramReceiveConfig {
+    if (config.receive_mode === "manual") return { mode: "manual" };
+
     const allowedUpdates = resolveAllowedUpdates(
         config.receive_mode === "webhook"
             ? config.webhook?.allowed_updates

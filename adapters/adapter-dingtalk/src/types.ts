@@ -1,5 +1,5 @@
 /** 钉钉事件接收方式。 */
-export type DingTalkReceiveMode = "stream" | "webhook";
+export type DingTalkReceiveMode = "stream" | "webhook" | "manual";
 
 /** 钉钉适配器配置。发送能力与接收方式相互独立。 */
 export interface DingTalkConfig {

@@ -12,6 +12,11 @@ const ruleAt = (...path: string[]): ValidationRule => {
 describe("Telegram 配置 Schema", () => {
     it("用接收模式动态隔离 Webhook 与长轮询字段", () => {
         expect(ruleAt("receive_mode").default).toBe("polling");
+        expect(ruleAt("receive_mode").choices?.map(choice => choice.value)).toEqual([
+            "polling",
+            "webhook",
+            "manual",
+        ]);
         expect(ruleAt("webhook", "url").ui?.visibleWhen).toEqual({
             path: "receive_mode",
             oneOf: ["webhook"],

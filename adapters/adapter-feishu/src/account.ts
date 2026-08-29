@@ -27,7 +27,7 @@ export function createFeishuAccount(
 
     if (feishuConfig.receive_mode === "long_connection") {
         bot.configureLongConnection(createSdkLogger(adapter));
-    } else {
+    } else if (feishuConfig.receive_mode === "webhook") {
         adapter.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
     }
     bot.on("ready", () => {

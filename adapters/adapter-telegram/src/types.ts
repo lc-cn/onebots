@@ -26,7 +26,7 @@ export interface ProxyConfig {
     password?: string;
 }
 
-export type TelegramReceiveMode = "polling" | "webhook";
+export type TelegramReceiveMode = "polling" | "webhook" | "manual";
 export type TelegramUpdateType = Exclude<keyof Update, "update_id">;
 
 /** 默认订阅完整 Bot API Update 集合，供运行时和配置 Schema 共用。 */
