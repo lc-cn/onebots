@@ -2,32 +2,57 @@
  * Slack Bot 客户端
  * 基于 @slack/web-api
  */
-import { EventEmitter } from 'node:events';
-import { WebClient } from '@slack/web-api';
-import type { RouterContext, Next } from 'onebots';
+import { EventEmitter } from "node:events";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { SocketModeClient } from "@slack/socket-mode";
+import { WebClient } from "@slack/web-api";
+import type { Next, RouterContext } from "onebots";
 import type {
     SlackConfig,
     SlackUser,
     SlackChannel,
-    SlackMessage,
-    SlackEvent,
     SlackWebhookBody,
     SlackBlock,
     SlackMessageOptions,
-    SlackChatResult
-} from './types.js';
+    SlackChatResult,
+} from "./types.js";
+
+interface SocketModeEnvelope {
+    ack(): Promise<void>;
+    body?: SlackWebhookBody;
+    type?: string;
+}
+
+function isSocketModeEnvelope(value: unknown): value is SocketModeEnvelope {
+    return typeof value === "object" && value !== null && "ack" in value;
+}
 
 export class SlackBot extends EventEmitter {
     private config: SlackConfig;
     private client: WebClient;
+    private socketClient?: SocketModeClient;
     private me: SlackUser | null = null;
 
     constructor(config: SlackConfig) {
         super();
         this.config = config;
-        
+
         // 创建 Slack WebClient 实例
         this.client = new WebClient(config.token);
+        if (config.socket_mode) {
+            if (!config.app_token) {
+                throw new Error("Slack Socket Mode 需要 app_token");
+            }
+            this.socketClient = new SocketModeClient({
+                appToken: config.app_token,
+                autoReconnectEnabled: true,
+            });
+            this.socketClient.on("slack_event", async (payload: unknown) => {
+                if (!isSocketModeEnvelope(payload)) return;
+                await payload.ack();
+                this.emitWebhookBody(payload.body ?? { type: payload.type });
+            });
+        }
     }
 
     /**
@@ -37,15 +62,16 @@ export class SlackBot extends EventEmitter {
         try {
             // 获取 Bot 信息
             const authTest = await this.client.auth.test();
-            
+
             this.me = {
-                id: authTest.user_id || '',
-                name: authTest.user || '',
+                id: authTest.user_id || "",
+                name: authTest.user || "",
             };
-            
-            this.emit('ready');
+
+            if (this.socketClient) await this.socketClient.start();
+            this.emit("ready");
         } catch (error) {
-            this.emit('error', error);
+            this.emit("error", error);
             throw error;
         }
     }
@@ -54,29 +80,78 @@ export class SlackBot extends EventEmitter {
      * 停止 Bot
      */
     async stop(): Promise<void> {
-        this.emit('stopped');
+        if (this.socketClient) await this.socketClient.disconnect();
+        this.emit("stopped");
     }
 
     /**
      * 处理 Webhook 请求（Events API）
      */
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
+        if (this.config.signing_secret && !this.verifyWebhookSignature(ctx)) {
+            ctx.status = 401;
+            ctx.body = { ok: false, error: "invalid_signature" };
+            return;
+        }
         const body = ctx.request.body as SlackWebhookBody;
-        
+
         // 处理 URL 验证（Slack 首次配置 webhook 时会发送验证请求）
-        if (body.type === 'url_verification') {
+        if (body.type === "url_verification") {
             ctx.body = { challenge: body.challenge };
             return;
         }
 
         // 处理事件
-        if (body.event) {
-            const event: SlackEvent = body.event;
-            this.emit('event', event);
-        }
+        this.emitWebhookBody(body);
 
         ctx.body = { ok: true };
         await next();
+    }
+
+    private verifyWebhookSignature(ctx: RouterContext): boolean {
+        const timestamp = ctx.get("x-slack-request-timestamp");
+        const signature = ctx.get("x-slack-signature");
+        const rawBody = ctx.request.rawBody;
+        if (!timestamp || !signature || typeof rawBody !== "string") return false;
+        const timestampSeconds = Number(timestamp);
+        if (
+            !Number.isFinite(timestampSeconds) ||
+            Math.abs(Date.now() / 1000 - timestampSeconds) > 300
+        ) {
+            return false;
+        }
+        const digest = `v0=${createHmac("sha256", this.config.signing_secret ?? "")
+            .update(`v0:${timestamp}:${rawBody}`)
+            .digest("hex")}`;
+        const actual = Buffer.from(signature);
+        const expected = Buffer.from(digest);
+        return actual.length === expected.length && timingSafeEqual(actual, expected);
+    }
+
+    /** 将 HTTP Events 与 Socket Mode 归一到同一个原始事件入口。 */
+    private emitWebhookBody(body: SlackWebhookBody): void {
+        this.emit("raw_event", body);
+        if (body.event) {
+            this.emit("event", body.event, body);
+            return;
+        }
+        const eventType =
+            typeof body.command === "string"
+                ? "slash_command"
+                : body.type && body.type !== "event_callback"
+                  ? body.type
+                  : undefined;
+        if (eventType) {
+            this.emit(
+                "event",
+                {
+                    ...body,
+                    type: eventType,
+                    event_ts: String(body.event_time ?? Date.now() / 1000),
+                },
+                body,
+            );
+        }
     }
 
     /**
@@ -91,17 +166,21 @@ export class SlackBot extends EventEmitter {
      */
     async getBotInfo(): Promise<SlackUser> {
         const authTest = await this.client.auth.test();
-        
+
         return {
-            id: authTest.user_id || '',
-            name: authTest.user || '',
+            id: authTest.user_id || "",
+            name: authTest.user || "",
         };
     }
 
     /**
      * 发送消息
      */
-    async sendMessage(channel: string, text: string, options?: SlackMessageOptions): Promise<SlackChatResult> {
+    async sendMessage(
+        channel: string,
+        text: string,
+        options?: SlackMessageOptions,
+    ): Promise<SlackChatResult> {
         const result = await this.client.chat.postMessage({
             channel,
             text,
@@ -118,11 +197,15 @@ export class SlackBot extends EventEmitter {
     /**
      * 发送带 Blocks 的消息
      */
-    async sendBlocks(channel: string, blocks: SlackBlock[], text?: string): Promise<SlackChatResult> {
+    async sendBlocks(
+        channel: string,
+        blocks: SlackBlock[],
+        text?: string,
+    ): Promise<SlackChatResult> {
         const result = await this.client.chat.postMessage({
             channel,
             blocks,
-            text: text || ' ',
+            text: text || " ",
         });
 
         if (!result.ok) {
@@ -135,7 +218,12 @@ export class SlackBot extends EventEmitter {
     /**
      * 更新消息
      */
-    async updateMessage(channel: string, ts: string, text: string, options?: SlackMessageOptions): Promise<SlackChatResult> {
+    async updateMessage(
+        channel: string,
+        ts: string,
+        text: string,
+        options?: SlackMessageOptions,
+    ): Promise<SlackChatResult> {
         const result = await this.client.chat.update({
             channel,
             ts,
@@ -190,7 +278,7 @@ export class SlackBot extends EventEmitter {
 
         do {
             const result = await this.client.conversations.list({
-                types: types || 'public_channel,private_channel',
+                types: types || "public_channel,private_channel",
                 exclude_archived: excludeArchived,
                 cursor,
                 limit: 200,
@@ -223,6 +311,19 @@ export class SlackBot extends EventEmitter {
         }
 
         return result.user as SlackUser;
+    }
+
+    /** 获取工作区用户；Slack 以用户目录而非“好友关系”建模。 */
+    async getUserList(): Promise<SlackUser[]> {
+        const users: SlackUser[] = [];
+        let cursor: string | undefined;
+        do {
+            const result = await this.client.users.list({ cursor, limit: 200 });
+            if (!result.ok) throw new Error(`获取工作区用户失败: ${result.error}`);
+            users.push(...((result.members ?? []) as SlackUser[]));
+            cursor = result.response_metadata?.next_cursor || undefined;
+        } while (cursor);
+        return users;
     }
 
     /**
@@ -272,8 +373,9 @@ export class SlackBot extends EventEmitter {
      * 踢出频道成员
      */
     async kickChannelMember(channelId: string, userId: string): Promise<boolean> {
-        // Slack 不直接支持踢出成员，需要通过其他方式
-        throw new Error('Slack 不支持直接踢出频道成员');
+        const result = await this.client.conversations.kick({ channel: channelId, user: userId });
+        if (!result.ok) throw new Error(`移除频道成员失败: ${result.error}`);
+        return result.ok;
     }
 
     /**
@@ -281,5 +383,10 @@ export class SlackBot extends EventEmitter {
      */
     getWebClient(): WebClient {
         return this.client;
+    }
+
+    /** 调用 Slack Web API，供能力清单声明的平台扩展动作使用。 */
+    async call(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
+        return this.client.apiCall(method, params);
     }
 }

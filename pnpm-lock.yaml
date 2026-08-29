@@ -86,10 +86,10 @@ importers:
         version: 5.9.3
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.1)(typescript@5.9.3)
+        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3)
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))
+        version: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
       ws:
         specifier: ^8.21.3
         version: 8.21.3
@@ -105,7 +105,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -131,7 +131,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -163,7 +163,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -179,7 +179,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -201,7 +201,7 @@ importers:
         version: 8.18.1
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -217,7 +217,7 @@ importers:
     devDependencies:
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -236,7 +236,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -256,7 +256,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -272,7 +272,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -291,13 +291,16 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
 
   adapters/adapter-slack:
     dependencies:
+      '@slack/socket-mode':
+        specifier: ^2.0.5
+        version: 2.0.7
       '@slack/web-api':
         specifier: ^7.0.0
         version: 7.15.0
@@ -310,7 +313,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -332,7 +335,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -355,7 +358,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -377,7 +380,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -393,7 +396,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -409,7 +412,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -425,13 +428,13 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))
+        version: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
 
   adapters/adapter-whatsapp:
     dependencies:
@@ -454,7 +457,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -483,7 +486,7 @@ importers:
         version: 24.12.0
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -590,16 +593,16 @@ importers:
         version: 3.6.2
       vite:
         specifier: ^7.3.6
-        version: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+        version: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
       vite-plugin-style-import:
         specifier: ^2.0.0
-        version: 2.0.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))
+        version: 2.0.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.1)(typescript@5.9.3)
+        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3)
       vitepress-plugin-mermaid:
         specifier: ^2.0.17
-        version: 2.0.17(mermaid@11.17.1)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.1)(typescript@5.9.3))
+        version: 2.0.17(mermaid@11.17.1)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3))
       vue:
         specifier: ^3.5.26
         version: 3.5.30(typescript@5.9.3)
@@ -657,13 +660,13 @@ importers:
         version: 8.18.1
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       tsconfig-paths:
         specifier: latest
         version: 4.2.0
       tsx:
         specifier: latest
-        version: 4.23.1
+        version: 4.23.12
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -682,7 +685,7 @@ importers:
         version: 8.18.1
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -735,13 +738,13 @@ importers:
         version: 19.2.17
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       tsconfig-paths:
         specifier: latest
         version: 4.2.0
       tsx:
         specifier: latest
-        version: 4.23.1
+        version: 4.23.12
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -787,13 +790,13 @@ importers:
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.3
-        version: 4.3.3(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))
+        version: 4.3.3(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
       '@types/qrcode':
         specifier: ^1.5.5
         version: 1.5.6
       '@vitejs/plugin-vue':
         specifier: ^6.0.8
-        version: 6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))(vue@3.5.30(typescript@5.9.3))
+        version: 6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -802,7 +805,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^7.3.6
-        version: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+        version: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
 
   protocols/mcp-v1/protocol:
     devDependencies:
@@ -839,7 +842,7 @@ importers:
         version: link:../../../packages/onebots
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -858,7 +861,7 @@ importers:
         version: 8.18.1
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -874,7 +877,7 @@ importers:
         version: link:../../../packages/onebots
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -893,7 +896,7 @@ importers:
         version: 8.18.1
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -909,7 +912,7 @@ importers:
         version: link:../../../packages/onebots
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -928,7 +931,7 @@ importers:
         version: 8.18.1
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -944,7 +947,7 @@ importers:
         version: link:../../../packages/onebots
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -963,7 +966,7 @@ importers:
         version: 8.18.1
       tsc-alias:
         specifier: latest
-        version: 1.9.1
+        version: 1.9.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1843,6 +1846,10 @@ packages:
 
   '@slack/logger@4.0.1':
     resolution: {integrity: sha512-6cmdPrV/RYfd2U0mDGiMK8S7OJqpCTm7enMLRR3edccsPX8j7zXTLnaEF4fhxxJJTAIOil6+qZrnUPTuaLvwrQ==}
+    engines: {node: '>= 18', npm: '>= 8.6.0'}
+
+  '@slack/socket-mode@2.0.7':
+    resolution: {integrity: sha512-qYy07je71WnEHgRwmw12DlAnZLi5HXmdlI2WUzUK2LH/rYXQpP6uEg462S5CwfE8FoCKUdIigHtYnOOfzZH1lQ==}
     engines: {node: '>= 18', npm: '>= 8.6.0'}
 
   '@slack/types@2.20.1':
@@ -4726,11 +4733,6 @@ packages:
     resolution: {integrity: sha512-q5W7tVM71e2xjHZTlgfTDoPF/SmqKG5hddq9SzR49CH2hayqRKJtQ4mtRlSxKaJlR/+9rEM+mnBHf7I2/BQcpQ==}
     engines: {node: '>=6.10'}
 
-  tsc-alias@1.9.1:
-    resolution: {integrity: sha512-sFZdVFthH8uvdplPJrOYGOHcxu6UPtcAcY678JPwEQiMzgLZYFO7Qc/rzELp7ingTc+OxtzH6n+8Pn2eVQep6w==}
-    engines: {node: '>=16.20.2'}
-    hasBin: true
-
   tsc-alias@1.9.2:
     resolution: {integrity: sha512-VTWQGMv0xXCEyHDLpmV2DEvGYHMxwsyx87dZeou2ynkM0+WOFdHe+KWiRucavMPUEdQysr7xSu60Y/WY0R4YKA==}
     engines: {node: '>=16.20.2'}
@@ -4747,8 +4749,8 @@ packages:
     resolution: {integrity: sha512-LxhtAkPDTkVCMQjt2h6eBVY28KCjikZqZfMcC15YBeNjkgUpdCfBu5HoiOTDu86v6smE8yOjyEktJ8hlbANHQA==}
     engines: {node: '>=0.6.x'}
 
-  tsx@4.23.1:
-    resolution: {integrity: sha512-GQHnkIfxyx1wYCOS/wonik5MVRZU9hi1TEZmzGZSCJB1y9YgoZ8H6itNE/u4suE+yLmOzuE4E5S4TZ/ZX2wcWQ==}
+  tsx@4.23.12:
+    resolution: {integrity: sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -5997,6 +5999,20 @@ snapshots:
     dependencies:
       '@types/node': 24.12.0
 
+  '@slack/socket-mode@2.0.7':
+    dependencies:
+      '@slack/logger': 4.0.1
+      '@slack/web-api': 7.15.0
+      '@types/node': 24.12.0
+      '@types/ws': 8.18.1
+      eventemitter3: 5.0.4
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - utf-8-validate
+
   '@slack/types@2.20.1': {}
 
   '@slack/web-api@7.15.0':
@@ -6089,12 +6105,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/vite@4.3.3(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))':
+  '@tailwindcss/vite@4.3.3(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
 
   '@types/accepts@1.3.7':
     dependencies:
@@ -6509,16 +6525,16 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-vue@6.0.8(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))(vue@3.5.30(typescript@5.9.3))':
+  '@vitejs/plugin-vue@6.0.8(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
       vue: 3.5.30(typescript@5.9.3)
 
-  '@vitejs/plugin-vue@6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))(vue@3.5.30(typescript@5.9.3))':
+  '@vitejs/plugin-vue@6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
       vue: 3.5.30(typescript@5.9.3)
 
   '@vitest/coverage-v8@4.1.11(vitest@4.1.11)':
@@ -6533,7 +6549,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))
+      vitest: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
 
   '@vitest/expect@4.1.11':
     dependencies:
@@ -6544,13 +6560,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  '@vitest/mocker@4.1.11(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))':
+  '@vitest/mocker@4.1.11(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))':
     dependencies:
       '@vitest/spy': 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
 
   '@vitest/pretty-format@4.1.11':
     dependencies:
@@ -6579,7 +6595,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))
+      vitest: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
 
   '@vitest/utils@4.1.11':
     dependencies:
@@ -9221,16 +9237,6 @@ snapshots:
 
   ts-dedent@2.2.0: {}
 
-  tsc-alias@1.9.1:
-    dependencies:
-      chokidar: 3.6.0
-      commander: 9.5.0
-      get-tsconfig: 4.13.7
-      globby: 11.1.0
-      mylas: 2.1.14
-      normalize-path: 3.0.0
-      plimit-lit: 1.6.1
-
   tsc-alias@1.9.2:
     dependencies:
       chokidar: 3.6.0
@@ -9251,7 +9257,7 @@ snapshots:
 
   tsscmp@1.0.6: {}
 
-  tsx@4.23.1:
+  tsx@4.23.12:
     dependencies:
       esbuild: 0.25.12
     optionalDependencies:
@@ -9355,7 +9361,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-plugin-style-import@2.0.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)):
+  vite-plugin-style-import@2.0.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)):
     dependencies:
       '@rollup/pluginutils': 4.2.1
       change-case: 4.1.2
@@ -9364,9 +9370,9 @@ snapshots:
       fs-extra: 10.1.0
       magic-string: 0.25.9
       pathe: 0.2.0
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
 
-  vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1):
+  vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
@@ -9380,9 +9386,9 @@ snapshots:
       jiti: 2.7.0
       lightningcss: 1.32.0
       sass: 1.98.0
-      tsx: 4.23.1
+      tsx: 4.23.12
 
-  vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1):
+  vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
@@ -9396,16 +9402,16 @@ snapshots:
       jiti: 2.7.0
       lightningcss: 1.32.0
       sass: 1.98.0
-      tsx: 4.23.1
+      tsx: 4.23.12
 
-  vitepress-plugin-mermaid@2.0.17(mermaid@11.17.1)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.1)(typescript@5.9.3)):
+  vitepress-plugin-mermaid@2.0.17(mermaid@11.17.1)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3)):
     dependencies:
       mermaid: 11.17.1
-      vitepress: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.1)(typescript@5.9.3)
+      vitepress: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3)
     optionalDependencies:
       '@mermaid-js/mermaid-mindmap': 9.3.0
 
-  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.1)(typescript@5.9.3):
+  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.49.2)(search-insights@2.17.3)
@@ -9414,7 +9420,7 @@ snapshots:
       '@shikijs/transformers': 2.5.0
       '@shikijs/types': 2.5.0
       '@types/markdown-it': 14.1.2
-      '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))(vue@3.5.30(typescript@5.9.3))
+      '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))
       '@vue/devtools-api': 7.7.9
       '@vue/shared': 3.5.30
       '@vueuse/core': 12.8.2(typescript@5.9.3)
@@ -9423,7 +9429,7 @@ snapshots:
       mark.js: 8.11.1
       minisearch: 7.2.0
       shiki: 2.5.0
-      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
       vue: 3.5.30(typescript@5.9.3)
     optionalDependencies:
       postcss: 8.5.26
@@ -9457,7 +9463,7 @@ snapshots:
       - universal-cookie
       - yaml
 
-  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.1)(typescript@5.9.3):
+  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.49.2)(search-insights@2.17.3)
@@ -9466,7 +9472,7 @@ snapshots:
       '@shikijs/transformers': 2.5.0
       '@shikijs/types': 2.5.0
       '@types/markdown-it': 14.1.2
-      '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))(vue@3.5.30(typescript@5.9.3))
+      '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))
       '@vue/devtools-api': 7.7.9
       '@vue/shared': 3.5.30
       '@vueuse/core': 12.8.2(typescript@5.9.3)
@@ -9475,7 +9481,7 @@ snapshots:
       mark.js: 8.11.1
       minisearch: 7.2.0
       shiki: 2.5.0
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
       vue: 3.5.30(typescript@5.9.3)
     optionalDependencies:
       postcss: 8.5.26
@@ -9509,10 +9515,10 @@ snapshots:
       - universal-cookie
       - yaml
 
-  vitest@4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)):
+  vitest@4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)):
     dependencies:
       '@vitest/expect': 4.1.11
-      '@vitest/mocker': 4.1.11(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1))
+      '@vitest/mocker': 4.1.11(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
       '@vitest/pretty-format': 4.1.11
       '@vitest/runner': 4.1.11
       '@vitest/snapshot': 4.1.11
@@ -9529,7 +9535,7 @@ snapshots:
       tinyexec: 1.0.4
       tinyglobby: 0.2.15
       tinyrainbow: 3.1.1
-      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.1)
+      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.12.0

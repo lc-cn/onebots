@@ -152,6 +152,8 @@ export class BaseApp extends Koa {
         this.use(
             KoaBody({
                 multipart: true,
+                // Webhook（如 Slack）必须使用未经解析的字节串验证签名。
+                includeUnparsed: true,
                 formidable: {
                     maxFileSize: 2 * 1024 * 1024,
                     keepExtensions: true,
