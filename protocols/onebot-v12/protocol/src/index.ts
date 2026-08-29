@@ -12,6 +12,7 @@ import { OneBotV12 } from "./types.js";
 import { WebSocket } from "ws";
 import { OneBotV12Config } from "./config.js";
 import { projectOneBotV12Actions } from "./supported-actions.js";
+import { ReverseWebSocketSession } from "./reverse-websocket.js";
 
 const onebotV12Schema: Schema = {
     use_http: { type: "boolean", default: true, label: "启用 HTTP", ui: { section: "transport" } },
@@ -85,6 +86,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
 
     // Heartbeat timer
     private heartbeatTimer?: NodeJS.Timeout;
+    private readonly reverseWebSocketCleanups = new Set<() => void>();
     constructor(adapter: Adapter, account: Account, config: OneBotV12Config.Config) {
         super(adapter, account, {
             ...config,
@@ -128,6 +130,9 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             clearInterval(this.heartbeatTimer);
             this.heartbeatTimer = undefined;
         }
+
+        for (const cleanup of this.reverseWebSocketCleanups) cleanup();
+        this.reverseWebSocketCleanups.clear();
 
         this.removeAllListeners();
     }
@@ -903,10 +908,10 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             };
             this.on("dispatch", onDispatch);
 
-            // Send connect meta event
-            this.dispatchMetaEvent("connect", {
-                version: this.getVersionInfo(),
-            });
+            // 版本查询是异步动作，必须解析后再序列化 connect 事件。
+            void this.getVersionInfo()
+                .then(version => this.dispatchMetaEvent("connect", { version }))
+                .catch(error => this.logger.error("OneBot V12 version query failed:", error));
 
             // Handle incoming API calls
             ws.on("message", async data => {
@@ -992,84 +997,46 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
      */
     private startWsReverse(url: string): void {
         this.logger.info(`Starting WebSocket reverse to ${url}`);
-
-        let ws: WebSocket | null = null;
-        let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-        const connect = () => {
-            try {
-                // Add access token to URL if configured
-                let wsUrl = url;
-                if (this.config.access_token) {
-                    const separator = url.includes("?") ? "&" : "?";
-                    wsUrl = `${url}${separator}access_token=${this.config.access_token}`;
-                }
-
-                ws = new WebSocket(wsUrl, {
-                    headers: {
-                        "User-Agent": "OneBot/12",
-                        "X-OneBot-Version": "12",
-                        "X-Impl": "onebots",
-                    },
-                });
-
-                ws.on("open", () => {
-                    this.logger.info(`WebSocket reverse connected to ${url}`);
-
-                    // Send connect meta event
-                    this.dispatchMetaEvent("connect", {
-                        version: this.getVersionInfo(),
-                    });
-
-                    // Clear reconnect timer
-                    if (reconnectTimer) {
-                        clearTimeout(reconnectTimer);
-                        reconnectTimer = null;
-                    }
-                });
-
-                ws.on("message", async (data: Buffer) => {
-                    try {
-                        const request = JSON.parse(data.toString());
-                        const { action, params, echo } = request;
-
-                        const result = await this.apply(action, params);
-
-                        // Add echo if present
-                        const response = echo !== undefined ? { ...result, echo } : result;
-                        ws.send(JSON.stringify(response));
-                    } catch (error) {
-                        this.logger.error("WebSocket reverse message error:", error);
-                    }
-                });
-
-                ws.on("close", () => {
-                    // 移除派发监听，避免重连后监听器累积导致事件重复发送
-                    this.off("dispatch", onDispatch);
-                    this.logger.warn(
-                        `WebSocket reverse disconnected from ${url}, reconnecting in 5s...`,
+        const wsUrl = new URL(url);
+        if (this.config.access_token) {
+            wsUrl.searchParams.set("access_token", this.config.access_token);
+        }
+        const session = new ReverseWebSocketSession({
+            url: wsUrl.toString(),
+            headers: {
+                "User-Agent": "OneBot/12",
+                "X-OneBot-Version": "12",
+                "X-Impl": "onebots",
+            },
+            logger: this.logger,
+            onOpen: () => {
+                void this.getVersionInfo()
+                    .then(version => this.dispatchMetaEvent("connect", { version }))
+                    .catch(error =>
+                        this.logger.error("OneBot V12 reverse version query failed:", error),
                     );
-                    reconnectTimer = setTimeout(connect, 5000);
-                });
-
-                ws.on("error", (error: Error) => {
-                    this.logger.error("WebSocket reverse error:", error);
-                });
-
-                // Listen for dispatch events and send to server
-                const onDispatch = (data: string) => {
-                    if (ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(data);
-                    }
-                };
-                this.on("dispatch", onDispatch);
-            } catch (error) {
-                this.logger.error(`WebSocket reverse connection failed:`, error);
-                reconnectTimer = setTimeout(connect, 5000);
-            }
+            },
+            onMessage: async data => {
+                const request = JSON.parse(data.toString()) as Record<string, unknown>;
+                const action = requireNonEmptyStringParam(request, "action");
+                const params =
+                    request.params && typeof request.params === "object"
+                        ? (request.params as Record<string, unknown>)
+                        : undefined;
+                const result = await this.apply(action, params);
+                const response =
+                    request.echo !== undefined ? { ...result, echo: request.echo } : result;
+                session.send(JSON.stringify(response));
+            },
+        });
+        const onDispatch = (data: string) => session.send(data);
+        const cleanup = () => {
+            this.off("dispatch", onDispatch);
+            session.stop();
         };
-
-        connect();
+        this.on("dispatch", onDispatch);
+        this.reverseWebSocketCleanups.add(cleanup);
+        session.start();
     }
 }
 
