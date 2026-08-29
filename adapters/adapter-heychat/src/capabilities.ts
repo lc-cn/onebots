@@ -63,6 +63,7 @@ export const heychatCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         create_channel: { support: "native", note: "需要管理频道权限" },
         update_channel: { support: "native", note: "支持修改频道名称" },
         delete_channel: { support: "native", note: "需要管理频道权限" },
+        upload_file: { support: "native" },
         can_send_image: { support: "native" },
         can_send_record: { support: "native" },
         get_version: { support: "native" },

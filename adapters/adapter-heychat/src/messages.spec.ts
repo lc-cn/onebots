@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { HeychatApiError } from "./errors.js";
 import { compileHeychatMessage } from "./messages.js";
 
@@ -52,5 +52,37 @@ describe("compileHeychatMessage", () => {
                 { type: "text", data: { text: "ambiguous" } },
             ]),
         ).toThrow(HeychatApiError);
+    });
+
+    it("拒绝重复回复、缺失提及 ID 和未知消息段", () => {
+        expect(() =>
+            compileHeychatMessage([
+                { type: "reply", data: { id: "m1" } },
+                { type: "reply", data: { id: "m2" } },
+            ]),
+        ).toThrow(HeychatApiError);
+        expect(() => compileHeychatMessage([{ type: "at", data: {} }])).toThrow(HeychatApiError);
+        expect(() =>
+            compileHeychatMessage([{ type: "future", data: { text: "不能降级" } }]),
+        ).toThrow(HeychatApiError);
+    });
+
+    it("拒绝非 HTTP(S) 或带凭据的图片 URL", () => {
+        expect(() =>
+            compileHeychatMessage([{ type: "image", data: { url: "file:///tmp/a.png" } }]),
+        ).toThrow(HeychatApiError);
+        expect(() =>
+            compileHeychatMessage([
+                { type: "image", data: { url: "https://user:pass@example.com/a.png" } },
+            ]),
+        ).toThrow(HeychatApiError);
+    });
+
+    it("提及保留数值统一 ID 类型供适配器反查", () => {
+        const resolveId = vi.fn(value => `platform:${value}`);
+        expect(
+            compileHeychatMessage([{ type: "at", data: { user_id: 42 } }], resolveId),
+        ).toMatchObject({ at_user_id: "platform:42" });
+        expect(resolveId).toHaveBeenCalledWith(42);
     });
 });

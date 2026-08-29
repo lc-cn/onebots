@@ -87,4 +87,14 @@ describe("projectHeychatEvent", () => {
             extensions: { heychat: { event_type: "future_event" } },
         });
     });
+
+    it("字段不完整的已知推送也不会丢失", () => {
+        const raw = envelope("50", { command_info: { name: "/broken" } });
+        expect(projectHeychatEvent(raw, { accountId: "bot", createId })).toMatchObject({
+            type: "notice",
+            notice_type: "custom",
+            raw_event: raw,
+            extensions: { heychat: { event_type: "50" } },
+        });
+    });
 });

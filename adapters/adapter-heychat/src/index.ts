@@ -6,6 +6,7 @@ export { heychatCapabilities } from "./capabilities.js";
 export { HeychatApiError, type HeychatApiErrorOptions } from "./errors.js";
 export { projectHeychatEvent, type HeychatEventProjectionOptions } from "./events.js";
 export { compileHeychatMessage } from "./messages.js";
+export { normalizeBase64Source, prepareHeychatMediaSegments, uploadHeychatMedia } from "./media.js";
 export { executeHeychatPlatformAction, HEYCHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 export { calculateHeychatReconnectDelay, HeychatWsClient } from "./ws/client.js";
 export { HeychatHttpClient } from "./http/client.js";

@@ -93,6 +93,27 @@ describe("HeychatHttpClient", () => {
             client.uploadMedia(Buffer.from("image-bytes"), "image.png", "image/png"),
         ).resolves.toBe("https://cdn.example/image.png");
     });
+
+    it("保留代理 Base URL 路径前缀并拒绝不安全端点", async () => {
+        const base = await listen((request, response) => {
+            expect(request.url).toContain("/proxy/chatroom/v2/room/view");
+            response.end(JSON.stringify({ status: "ok", result: { room_id: "r1" } }));
+        });
+        const client = new HeychatHttpClient({
+            account_id: "bot",
+            token: "secret",
+            api_base_url: `${base}/proxy`,
+        });
+        await expect(client.getRoomView("r1")).resolves.toMatchObject({ room_id: "r1" });
+        expect(
+            () =>
+                new HeychatHttpClient({
+                    account_id: "bot",
+                    token: "secret",
+                    api_base_url: "http://remote.example",
+                }),
+        ).toThrowError(expect.objectContaining({ code: "HEYCHAT_INVALID_CONFIG_URL" }));
+    });
 });
 
 async function listen(handler: RequestListener): Promise<string> {

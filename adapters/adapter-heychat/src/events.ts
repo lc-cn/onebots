@@ -21,14 +21,14 @@ export interface HeychatEventProjectionOptions {
 export function projectHeychatEvent(
     envelope: HeychatWsEnvelope,
     options: HeychatEventProjectionOptions,
-): CommonEvent.Event<HeychatWsEnvelope> | null {
+): CommonEvent.Event<HeychatWsEnvelope> {
     switch (envelope.type) {
         case "50":
-            return projectCommand(envelope, options);
+            return projectCommand(envelope, options) ?? customNotice(envelope, options);
         case "5003":
-            return projectReaction(envelope, options);
+            return projectReaction(envelope, options) ?? customNotice(envelope, options);
         case "3001":
-            return projectRoomMember(envelope, options);
+            return projectRoomMember(envelope, options) ?? customNotice(envelope, options);
         case "card_message_btn_click":
             return projectCardClick(envelope, options);
         default:

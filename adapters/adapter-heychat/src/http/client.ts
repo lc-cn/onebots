@@ -192,13 +192,13 @@ export class HeychatHttpClient {
         query?: Readonly<Record<string, string | number | boolean | undefined>>,
         base = this.apiBase,
     ): URL {
-        if (!path.startsWith("/") || path.includes("..")) {
+        if (!path.startsWith("/") || path.startsWith("//") || path.includes("..")) {
             throw new HeychatApiError("API path 必须是安全绝对路径", {
                 code: "HEYCHAT_INVALID_API_PATH",
                 details: path,
             });
         }
-        const url = new URL(path, `${base}/`);
+        const url = new URL(`${base}${path}`);
         const defaults: Record<string, string> = {
             client_type: "heybox_chat",
             x_client_type: "web",
@@ -298,13 +298,27 @@ function normalizeBaseUrl(value: string, name: string): string {
         });
     }
     const url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
-        throw new HeychatApiError(`配置 ${name} 必须是无凭据的 HTTP(S) URL`, {
-            code: "HEYCHAT_INVALID_CONFIG_URL",
-            details: value,
-        });
+    if (
+        !["http:", "https:"].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        (url.protocol === "http:" && !isLoopback(url.hostname))
+    ) {
+        throw new HeychatApiError(
+            `配置 ${name} 必须是无凭据、查询参数或片段的 HTTPS URL（本机测试可用 HTTP）`,
+            {
+                code: "HEYCHAT_INVALID_CONFIG_URL",
+                details: value,
+            },
+        );
     }
-    return value.replace(/\/$/u, "");
+    return `${url.origin}${url.pathname.replace(/\/+$/u, "")}`;
+}
+
+function isLoopback(hostname: string): boolean {
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
 
 function parseResponse(text: string, path: string): HeychatApiResponse {

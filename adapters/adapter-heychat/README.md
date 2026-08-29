@@ -66,7 +66,7 @@ heychat.my_bot:
 
 ## 消息段
 
-通用 `text`、`markdown`、`image`、`at`、`reply` 会编译成官方请求。图片必须是平台可访问的 URL；本地数据先通过 `upload_media` 上传。
+通用 `text`、`markdown`、`image`、`at`、`reply` 会编译成官方请求。图片可使用 HTTP(S) URL、本地路径、`data:` URL 或 Base64；适配器统一物化并上传到黑盒语音 CDN。`upload_file` 与 `upload_media` 使用同一条 25 MiB 上传管线。
 
 平台原生段可表达完整卡片或新消息类型：
 
@@ -110,7 +110,7 @@ heychat.my_bot:
 }
 ```
 
-`upload_media` 接收 `data`（Base64 或 Base64 data URL）、`filename` 和可选 `content_type`，最大 25 MiB。
+`upload_media` 接收 `data`（Base64、`base64://` 或 Base64 data URL）、`filename` 和可选 `content_type`，最大 25 MiB。文件名与 Content-Type 会在拼装 multipart 前校验，不能注入额外头部。
 
 ## 文档
 

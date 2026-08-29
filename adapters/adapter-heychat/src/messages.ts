@@ -81,18 +81,21 @@ function appendSegment(
             return;
         case "at": {
             const id = resolveId(data.id ?? data.user_id ?? data.qq);
-            if (id) parts.users.push(id);
+            if (!id) throw invalidMessage("at 消息段缺少 id/user_id/qq");
+            parts.users.push(id);
             return;
         }
-        case "reply":
-            parts.replyId = resolveId(data.id ?? data.message_id);
+        case "reply": {
+            if (parts.replyId) throw invalidMessage("一条消息只能包含一个 reply 消息段");
+            const id = resolveId(data.id ?? data.message_id);
+            if (!id) throw invalidMessage("reply 消息段缺少 id/message_id");
+            parts.replyId = id;
             return;
+        }
         case "image": {
             const url = stringValue(data.url ?? data.file);
-            if (!url || !URL.canParse(url)) {
-                throw invalidMessage(
-                    "图片消息需要可访问的 URL；本地或 Base64 文件请先调用 upload_media",
-                );
+            if (!url || !isSafeImageUrl(url)) {
+                throw invalidMessage("图片消息需要无凭据的 HTTP(S) URL");
             }
             parts.images.push({
                 url,
@@ -115,8 +118,14 @@ function appendSegment(
             parts.native = parseNativeMessage(data.body ?? data);
             return;
         default:
-            appendString(parts.text, data.text);
+            throw invalidMessage(`不支持消息段 ${segment.type}`);
     }
+}
+
+function isSafeImageUrl(value: string): boolean {
+    if (!URL.canParse(value)) return false;
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
 }
 
 function parseNativeMessage(value: unknown): HeychatOutboundMessage {

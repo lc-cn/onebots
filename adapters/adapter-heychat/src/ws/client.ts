@@ -146,6 +146,8 @@ export class HeychatWsClient extends EventEmitter {
     private attachSocket(ws: WebSocket, generation: number): void {
         this.disposeSocket();
         this.ws = ws;
+        // Heychat 没有跨连接 resume 游标；新连接的 sequence 从独立代次重新计数。
+        this.lastSequence = 0;
         ws.on("message", raw => this.handleMessage(raw.toString()));
         ws.on("ping", data => ws.pong(data));
         ws.on("pong", () => {
@@ -273,11 +275,29 @@ function isEnvelope(value: unknown): value is HeychatWsEnvelope {
 }
 
 function validateWsUrl(value: string): string {
-    if (!URL.canParse(value) || !["ws:", "wss:"].includes(new URL(value).protocol)) {
+    if (!URL.canParse(value)) {
         throw new HeychatApiError("ws_url 必须是有效的 ws:// 或 wss:// URL", {
             code: "HEYCHAT_INVALID_CONFIG_URL",
             details: value,
         });
     }
-    return value;
+    const url = new URL(value);
+    if (
+        !["ws:", "wss:"].includes(url.protocol) ||
+        url.username ||
+        url.password ||
+        url.search ||
+        url.hash ||
+        (url.protocol === "ws:" && !isLoopback(url.hostname))
+    ) {
+        throw new HeychatApiError(
+            "ws_url 必须是无凭据、查询参数或片段的 wss:// URL（本机测试可用 ws://）",
+            { code: "HEYCHAT_INVALID_CONFIG_URL", details: value },
+        );
+    }
+    return url.toString();
+}
+
+function isLoopback(hostname: string): boolean {
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }

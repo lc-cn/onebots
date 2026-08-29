@@ -10,6 +10,7 @@ import {
 import { HeychatBot } from "./bot.js";
 import { heychatCapabilities } from "./capabilities.js";
 import { projectHeychatEvent } from "./events.js";
+import { normalizeBase64Source, prepareHeychatMediaSegments, uploadHeychatMedia } from "./media.js";
 import { compileHeychatMessage } from "./messages.js";
 import { executeHeychatPlatformAction, HEYCHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { extractRoomId } from "./utils.js";
@@ -32,7 +33,8 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
         const bot = this.requireBot(uin);
-        const message = compileHeychatMessage(params.message, value => this.toPlatformId(value));
+        const segments = await prepareHeychatMediaSegments(bot, params.message);
+        const message = compileHeychatMessage(segments, value => this.toPlatformId(value));
         const sceneId = this.toPlatformId(params.scene_id);
         let result: HeychatSendMessageResult;
         if (params.scene_type === "private" || params.scene_type === "direct") {
@@ -49,7 +51,8 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
         const msgId = this.toPlatformId(params.message_id);
         const context = bot.getMessageContext(msgId);
         if (!context) throw new Error("更新频道消息需要已知消息上下文");
-        const message = compileHeychatMessage(params.message, value => this.toPlatformId(value));
+        const segments = await prepareHeychatMediaSegments(bot, params.message);
+        const message = compileHeychatMessage(segments, value => this.toPlatformId(value));
         await bot.callApi("/chatroom/v2/channel_msg/update", {
             method: "POST",
             body: {
@@ -60,7 +63,6 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
             },
         });
     }
-
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
         const bot = this.requireBot(uin);
         const msgId = this.toPlatformId(params.message_id);
@@ -326,9 +328,23 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
     async canSendImage(): Promise<boolean> {
         return true;
     }
-
     async canSendRecord(): Promise<boolean> {
         return false;
+    }
+
+    async uploadFile(uin: string, params: Adapter.UploadFileParams): Promise<Adapter.FileInfo> {
+        const sources = [params.url, params.path, params.data].filter(
+            (value): value is string => typeof value === "string" && value.length > 0,
+        );
+        if (sources.length !== 1) {
+            throw new Error("黑盒语音 upload_file 必须且只能提供 url/path/data 之一");
+        }
+        const source = params.url || params.path || normalizeBase64Source(params.data!);
+        const url = await uploadHeychatMedia(this.requireBot(uin), {
+            source,
+            filename: params.name,
+        });
+        return { file_id: this.createId(url), file_name: params.name, url };
     }
 
     async getVersion(): Promise<Adapter.VersionInfo> {
@@ -396,10 +412,6 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
                     createId: value => this.createId(value),
                     getChannelContext: channelId => bot.getChannelContext(channelId),
                 });
-                if (!event) {
-                    this.logger.warn(`忽略字段不完整的黑盒语音事件 type=${envelope.type}`);
-                    return;
-                }
                 account.dispatch(event);
             } catch (error) {
                 this.logger.error(`投影黑盒语音事件 type=${envelope.type} 失败:`, error);
@@ -424,11 +436,14 @@ export class HeychatAdapter extends Adapter<HeychatBot, "heychat"> {
     }
 
     private toPlatformId(value: unknown): string {
-        if (value && typeof value === "object" && "string" in value) {
-            const resolved = this.resolveId(value as CommonTypes.Id);
-            return String(resolved.source ?? resolved.string);
-        }
-        return String(value ?? "");
+        if (
+            typeof value !== "string" &&
+            typeof value !== "number" &&
+            !(value && typeof value === "object" && "string" in value)
+        )
+            throw new Error("黑盒语音 ID 必须是字符串、数字或统一 ID");
+        const resolved = this.resolveId(value as string | number | CommonTypes.Id);
+        return String(resolved.source ?? resolved.string);
     }
 
     private numericId(value: CommonTypes.Id): number {

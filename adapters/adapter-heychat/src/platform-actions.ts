@@ -1,5 +1,6 @@
 import type { HeychatBot } from "./bot.js";
 import { HeychatApiError } from "./errors.js";
+import { normalizeBase64Source, uploadHeychatMedia } from "./media.js";
 import type { HeychatApiRequestOptions } from "./types.js";
 
 interface ActionRoute {
@@ -71,10 +72,16 @@ export async function executeHeychatPlatformAction(
         });
     }
     if (action === "upload_media") {
-        const data = decodeBase64(requiredString(params.data, "data"));
+        const data = requiredString(params.data, "data");
         const filename = requiredString(params.filename, "filename");
         const contentType = optionalString(params.content_type, "content_type");
-        return { url: await bot.uploadMedia(data, filename, contentType) };
+        return {
+            url: await uploadHeychatMedia(bot, {
+                source: normalizeBase64Source(data),
+                filename,
+                contentType,
+            }),
+        };
     }
     const route = ROUTES[action];
     if (!route) throw new Error(`未实现黑盒语音平台动作: ${action}`);
@@ -144,17 +151,6 @@ function requiredString(value: unknown, name: string): string {
 function optionalString(value: unknown, name: string): string | undefined {
     if (value === undefined) return undefined;
     return requiredString(value, name);
-}
-
-function decodeBase64(value: string): Buffer {
-    const normalized = value.replace(/^data:[^;]+;base64,/u, "");
-    if (!/^[A-Za-z0-9+/]*={0,2}$/u.test(normalized) || normalized.length % 4 === 1) {
-        throw invalid("data 必须是有效 Base64 或 Base64 data URL");
-    }
-    const data = Buffer.from(normalized, "base64");
-    if (!data.byteLength) throw invalid("data 解码后为空");
-    if (data.byteLength > 25 * 1024 * 1024) throw invalid("upload_media 最大支持 25 MiB");
-    return data;
 }
 
 function invalid(message: string): HeychatApiError {
