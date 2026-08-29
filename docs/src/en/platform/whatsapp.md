@@ -1,124 +1,47 @@
 # WhatsApp Platform
 
-## Status
+The adapter uses Meta's official WhatsApp Cloud API, receives signed webhooks through the shared OneBots HTTP host, and calls the versioned Graph API for outbound operations.
 
-✅ **Implemented and Available**
+## Coverage
 
-## Introduction
+- Text, replies, images, video, audio, documents, stickers, locations, contacts, and reactions
+- Native Template, Interactive, Flow, and future Cloud API message payloads
+- Complete message-status projection with the original webhook change preserved
+- Media upload, metadata lookup, authenticated download, and deletion
+- Business profile, phone registration, two-step verification, blocked users, and templates
+- Generic `whatsapp_call` for newly introduced Graph API resources
+- `WhatsAppClient.ingest(rawEvent)` for feeding an existing trusted connection into the same client
 
-The WhatsApp adapter is based on WhatsApp Business API (Meta Graph API), supporting sending and receiving messages through the official API.
-
-Implementation references [Satori WhatsApp adapter](https://github.com/satorijs/satori/tree/main/adapters/whatsapp).
-
-## Features
-
-- ✅ Message sending and receiving
-- ✅ Support for text, image, video, audio, document, location message types
-- ✅ Webhook event handling
-- ✅ Message status tracking
-- ✅ Media file download
-- ✅ Proxy configuration support
-
-## Installation
-
-```bash
-pnpm add @onebots/adapter-whatsapp
-```
-
-## Prerequisites
-
-### 1. Create Meta App
-
-1. Visit [Meta for Developers](https://developers.facebook.com/)
-2. Create an app and add WhatsApp product
-3. Complete business verification (if required)
-
-### 2. Get Credentials
-
-You need to obtain the following credentials:
-
-- **Business Account ID**: WhatsApp Business Account ID
-- **Phone Number ID**: Phone Number ID
-- **Access Token**: Permanent or temporary token
-- **Webhook Verify Token**: Webhook verification token (custom)
-
-### 3. Configure Webhook
-
-1. Configure Webhook URL in Meta Developer Console:
-   ```
-   https://your-domain.com/whatsapp/{account_id}/webhook
-   ```
-2. Subscribe to fields: `messages`, `message_status`
+Cloud API does not expose ordinary WhatsApp groups, contact lists, or arbitrary message history, so the adapter does not emulate those capabilities.
 
 ## Configuration
 
-### Basic Configuration
-
 ```yaml
 whatsapp.my_bot:
-  # WhatsApp Business API configuration
-  businessAccountId: 'your_business_account_id'
-  phoneNumberId: 'your_phone_number_id'
-  accessToken: 'your_access_token'
-  webhookVerifyToken: 'your_verify_token'
-  apiVersion: 'v21.0'  # Optional, default v21.0
-  
-  # Webhook configuration
-  webhook:
-    url: 'https://your-domain.com/whatsapp/my_bot/webhook'
-    fields: ['messages', 'message_status']
-  
-  # Protocol configuration
-  onebot.v11:
-    access_token: 'your_token'
+  phone_number_id: "your_phone_number_id"
+  business_account_id: "your_business_account_id"
+  access_token: "your_long_lived_access_token"
+  app_secret: "your_meta_app_secret"
+  webhook_verify_token: "your_random_verify_token"
+  api_version: "v23.0"
 ```
 
-## Using Client SDK
+See the [configuration reference](/en/config/adapter/whatsapp) for all fields.
 
-```typescript
-import { ImHelper } from '@onebots/imhelper';
-import { OneBotV11Adapter } from '@onebots/protocol-onebot-v11';
+## Native payloads and APIs
 
-const helper = new ImHelper({
-  adapter: new OneBotV11Adapter({
-    baseUrl: 'http://localhost:6727',
-    basePath: '/whatsapp/my_bot/onebot/v11',
-    accessToken: 'your_token',
-    platform: 'whatsapp',
-    accountId: 'my_bot',
-  }),
+Use a `whatsapp_message` segment for Template, Interactive, Flow, or any other native message payload. Platform actions expose common operations, while `whatsapp_call` accepts a safe relative Graph API resource:
+
+```ts
+await adapter.callAction("my_bot", "whatsapp_call", {
+  method: "GET",
+  resource: "your-waba-id/message_templates",
+  query: { limit: 50 },
 });
-
-// Listen for messages
-helper.on('message', async (message) => {
-  console.log('Received WhatsApp message:', message.sender.name, message.content);
-  
-  // Auto-reply
-  await helper.sendMessage({
-    scene_id: message.sender.id,
-    scene_type: 'private',
-    message: [
-      { type: 'text', data: { text: 'Message received!' } }
-    ],
-  });
-});
-
-await helper.start();
 ```
 
-## Notes
+Absolute resource URLs are rejected so the access token cannot be sent to an unconfigured host. Permission-dependent actions declare either `whatsapp_business_management` or `whatsapp_business_messaging` in the capability manifest.
 
-1. **Phone Number Format**: Must include country code, e.g., `8613800138000` (China)
-2. **Message Templates**: Business-initiated messages require pre-approved templates
-3. **24-Hour Window**: Free replies within 24 hours after user-initiated messages
-4. **Webhook Verification**: Must correctly configure webhook verification token
-5. **API Limits**: Pay attention to WhatsApp API rate limits and quotas
-6. **Business Verification**: Some features require Meta business verification
+Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 
-## Related Links
-
-- [Adapter Configuration](/en/config/adapter/whatsapp)
-- [Quick Start](/en/guide/start)
-- [Client SDK](/en/guide/client-sdk)
-- [WhatsApp Business API Documentation](https://developers.facebook.com/docs/whatsapp)
-
+References: [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/), [Meta official Postman workspace](https://www.postman.com/meta/whatsapp-business-platform/overview/).

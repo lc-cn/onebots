@@ -1,32 +1,112 @@
-import { AdapterRegistry } from "onebots";
-import type { Schema } from "onebots";
+import { AdapterRegistry, type Schema } from "onebots";
 
 export { WhatsAppAdapter } from "./adapter.js";
-export * from "./capabilities.js";
+export { whatsAppCapabilities } from "./capabilities.js";
+export { WhatsAppClient } from "./client.js";
+export { WhatsAppApiError } from "./errors.js";
+export { projectMessageContent, projectWhatsAppWebhook } from "./events.js";
+export { compileWhatsAppMessages } from "./messages.js";
+export { executeWhatsAppPlatformAction, WHATSAPP_PLATFORM_ACTIONS } from "./platform-actions.js";
+export { WhatsAppWebhookHost } from "./webhook-host.js";
+export type { WhatsAppHttpContext, WhatsAppWebhookListener } from "./webhook-host.js";
 export type {
-    WhatsAppConfig,
-    WhatsAppMessageEvent,
-    WhatsAppWebhookEvent,
-    WhatsAppSendMessageParams,
     WhatsAppAPIResponse,
-    ProxyConfig,
+    WhatsAppCallOptions,
+    WhatsAppConfig,
+    WhatsAppContact,
+    WhatsAppErrorData,
+    WhatsAppMediaInfo,
+    WhatsAppMediaObject,
+    WhatsAppMessageEvent,
+    WhatsAppMessageStatus,
+    WhatsAppMessageStatusEvent,
+    WhatsAppMessageType,
+    WhatsAppPhoneNumberInfo,
+    WhatsAppSendMessageParams,
+    WhatsAppWebhookChange,
+    WhatsAppWebhookEvent,
+    WhatsAppWebhookMetadata,
+    WhatsAppWebhookRequest,
+    WhatsAppWebhookResponse,
+    WhatsAppWebhookValue,
 } from "./types.js";
 
 const whatsappSchema: Schema = {
-    account_id: { type: "string", required: true, label: "账号标识" },
-    businessAccountId: { type: "string", required: true, label: "Business Account ID" },
-    phoneNumberId: { type: "string", required: true, label: "Phone Number ID" },
-    accessToken: { type: "string", required: true, label: "Access Token" },
-    webhookVerifyToken: { type: "string", required: true, label: "Webhook 验证令牌" },
-    apiVersion: { type: "string", default: "v21.0", label: "API 版本" },
-    proxy: {
-        url: { type: "string", label: "代理地址" },
-        username: { type: "string", label: "代理用户名" },
-        password: { type: "string", label: "代理密码" },
+    account_id: {
+        type: "string",
+        required: true,
+        label: "账号标识",
+        description: "OneBots 内部区分 WhatsApp 号码的稳定标识",
     },
-    webhook: {
-        url: { type: "string", label: "Webhook URL" },
-        fields: { type: "array", label: "订阅字段" },
+    phone_number_id: {
+        type: "string",
+        required: true,
+        label: "Phone Number ID",
+        description: "WhatsApp > API Setup 中的 Phone Number ID",
+        ui: { section: "credentials" },
+    },
+    business_account_id: {
+        type: "string",
+        required: true,
+        label: "Business Account ID",
+        description: "WhatsApp Business Account ID，用于模板等管理 API",
+        ui: { section: "credentials" },
+    },
+    access_token: {
+        type: "string",
+        required: true,
+        label: "Access Token",
+        description: "建议使用系统用户生成的长期访问令牌",
+        ui: { section: "credentials" },
+    },
+    app_secret: {
+        type: "string",
+        required: true,
+        label: "App Secret",
+        description: "Meta 应用 Secret，仅用于校验 X-Hub-Signature-256",
+        ui: { section: "credentials" },
+    },
+    webhook_verify_token: {
+        type: "string",
+        required: true,
+        label: "Webhook Verify Token",
+        description: "自定义随机令牌，须与 Meta Webhook 配置完全一致",
+        ui: { section: "transport" },
+    },
+    webhook_path: {
+        type: "string",
+        label: "Webhook 路径",
+        placeholder: "/whatsapp/{account_id}/webhook",
+        description: "复用 OneBots 主 HTTP 服务；留空自动生成账号隔离路径",
+        ui: { section: "transport" },
+    },
+    api_version: {
+        type: "string",
+        required: true,
+        label: "Graph API 版本",
+        description: "按 Meta 应用当前已启用的版本填写，例如 v23.0，避免隐式版本漂移",
+        ui: { section: "advanced" },
+    },
+    api_base_url: {
+        type: "string",
+        default: "https://graph.facebook.com",
+        label: "Graph API Base URL",
+        description: "仅官方兼容代理或测试环境需要覆盖，必须使用 HTTPS",
+        ui: { section: "advanced" },
+    },
+    deduplicate_webhooks: {
+        type: "boolean",
+        default: true,
+        label: "过滤重复 Webhook",
+        description: "按原始负载哈希过滤 Meta 重投递",
+        ui: { section: "delivery" },
+    },
+    webhook_deduplication_limit: {
+        type: "number",
+        default: 10000,
+        label: "去重缓存上限",
+        description: "进程内保留的最近 Webhook 哈希数量，最低 100",
+        ui: { section: "advanced" },
     },
 };
 

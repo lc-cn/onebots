@@ -449,19 +449,9 @@ importers:
 
   adapters/adapter-whatsapp:
     dependencies:
-      axios:
-        specifier: ^1.19.0
-        version: 1.19.0(debug@4.4.3)
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
-    optionalDependencies:
-      https-proxy-agent:
-        specifier: ^7.0.6
-        version: 7.0.6
-      socks-proxy-agent:
-        specifier: ^8.0.4
-        version: 8.0.5
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

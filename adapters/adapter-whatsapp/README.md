@@ -1,136 +1,65 @@
 # @onebots/adapter-whatsapp
 
-onebots WhatsApp 适配器，基于 WhatsApp Business API (Meta Graph API)。
+基于 Meta 官方 WhatsApp Cloud API 的 OneBots 适配器。它复用 OneBots HTTP Host 接收 Webhook，不会自行监听额外端口。
 
-参考 [Satori WhatsApp 适配器](https://github.com/satorijs/satori/tree/main/adapters/whatsapp) 实现。
+## 能力
 
-## 特性
-
-- ✅ 消息发送与接收
-- ✅ 支持文本、图片、视频、音频、文档、位置等消息类型
-- ✅ Webhook 事件处理
-- ✅ 消息状态跟踪
-- ✅ 媒体文件下载
-- ✅ 代理配置支持
-
-## 安装
-
-```bash
-pnpm add @onebots/adapter-whatsapp
-```
+- 发送和接收文本、回复、图片、视频、音频、文档、Sticker、位置、联系人、Reaction
+- 通过 `whatsapp_message` 原生段发送 Template、Interactive、Flow 等完整 Cloud API 消息
+- 展开同一 Webhook 批次中的全部消息和状态，未知 change 也作为原始事件交付
+- 使用原始请求体校验 `X-Hub-Signature-256`，并过滤 Meta 重投递
+- 媒体上传、查询、下载、删除，消息已读与 typing indicator
+- Business Profile、号码注册、两步验证、用户屏蔽和消息模板管理
+- 通用 `whatsapp_call`，无需等待适配器升级即可调用新的 Graph API 资源
+- `WhatsAppClient.ingest(rawEvent)`，让外部可信连接复用同一事件分发链路
 
 ## 配置
 
-### 前置要求
-
-1. **创建 Meta 应用**
-   - 访问 [Meta for Developers](https://developers.facebook.com/)
-   - 创建应用并添加 WhatsApp 产品
-
-2. **获取凭证**
-   - Business Account ID
-   - Phone Number ID
-   - Access Token（永久令牌或临时令牌）
-   - Webhook Verify Token
-
-3. **配置 Webhook**
-   - 设置 Webhook URL: `https://your-domain.com/whatsapp/{account_id}/webhook`
-   - 订阅字段: `messages`, `message_status`
-
-### 配置示例
-
 ```yaml
 whatsapp.my_bot:
-  # WhatsApp Business API 配置
-  businessAccountId: 'your_business_account_id'
-  phoneNumberId: 'your_phone_number_id'
-  accessToken: 'your_access_token'
-  webhookVerifyToken: 'your_verify_token'
-  apiVersion: 'v21.0'  # 可选，默认 v21.0
-  
-  # Webhook 配置
-  webhook:
-    url: 'https://your-domain.com/whatsapp/my_bot/webhook'
-    fields: ['messages', 'message_status']
-  
-  # 代理配置（可选）
-  proxy:
-    url: 'http://127.0.0.1:7890'
-  
-  # 协议配置
+  phone_number_id: "your_phone_number_id"
+  business_account_id: "your_business_account_id"
+  access_token: "your_long_lived_access_token"
+  app_secret: "your_meta_app_secret"
+  webhook_verify_token: "your_random_verify_token"
+  api_version: "v23.0"
+
   onebot.v11:
-    access_token: 'your_token'
+    access_token: "your_onebots_token"
 ```
 
-## 使用示例
+默认回调路径是 `/whatsapp/my_bot/webhook`。将完整公网地址和同一个 `webhook_verify_token` 填入 Meta App Dashboard，并订阅 `messages` 字段。Koa 请求解析器必须保留未经修改的 `rawBody`，否则适配器会拒绝无法验签的请求。
 
-### 发送消息
+配置只使用上面的 snake_case 字段；旧的 camelCase、`webhook.url`、`webhook.fields` 和适配器私有代理配置不再使用。
 
-通过 OneBot 协议发送消息：
+## 原生消息
 
-```javascript
-// 发送文本消息
-await bot.sendMessage('8613800138000', {
-  scene_id: bot.createId('8613800138000'),
-  scene_type: 'private',
-  message: [
-    { type: 'text', data: { text: 'Hello from WhatsApp!' } }
-  ]
-});
-
-// 发送图片
-await bot.sendMessage('8613800138000', {
-  scene_id: bot.createId('8613800138000'),
-  scene_type: 'private',
-  message: [
-    { 
-      type: 'image', 
-      data: { 
-        url: 'https://example.com/image.jpg',
-        caption: 'Image caption'
-      } 
-    }
-  ]
+```ts
+await adapter.callAction("my_bot", "send_native_message", {
+  message: {
+    to: "8613800138000",
+    type: "template",
+    template: {
+      name: "hello_world",
+      language: { code: "en_US" },
+    },
+  },
 });
 ```
 
-### 接收消息
+## 通用 Graph API
 
-适配器会自动接收 Webhook 事件并转换为消息事件：
-
-```javascript
-bot.on('message', (event) => {
-  if (event.platform === 'whatsapp') {
-    console.log('收到 WhatsApp 消息:', event.sender.name, event.message);
-  }
+```ts
+await adapter.callAction("my_bot", "whatsapp_call", {
+  method: "GET",
+  resource: "your-waba-id/message_templates",
+  query: { limit: 50 },
 });
 ```
 
-## 消息类型支持
+`resource` 只能是相对 Graph API 路径，适配器拒绝绝对 URL，避免 Access Token 被发送到未配置域名。HTTP 和业务错误会抛出 `WhatsAppApiError`，其中保留 `code`、`status`、`resource` 与 Meta 错误详情。
 
-| 消息类型 | 支持 | 说明 |
-|---------|------|------|
-| 文本 | ✅ | 支持纯文本消息 |
-| 图片 | ✅ | 支持图片和图片说明 |
-| 视频 | ✅ | 支持视频和视频说明 |
-| 音频 | ✅ | 支持音频消息 |
-| 文档 | ✅ | 支持文档和文档说明 |
-| 位置 | ✅ | 支持位置信息 |
-| 联系人 | ✅ | 支持联系人卡片 |
-| 模板消息 | ✅ | 支持 WhatsApp 模板消息 |
+## 参考
 
-## 注意事项
-
-1. **电话号码格式**：必须包含国家代码，例如 `8613800138000`（中国）
-2. **消息模板**：业务发起的消息需要使用预审核的模板
-3. **24小时窗口**：用户主动发送消息后，24小时内可以自由回复
-4. **Webhook 验证**：必须正确配置 Webhook 验证令牌
-5. **API 限制**：注意 WhatsApp API 的速率限制和配额
-
-## 相关链接
-
-- [WhatsApp Business API 文档](https://developers.facebook.com/docs/whatsapp)
-- [Meta Graph API 文档](https://developers.facebook.com/docs/graph-api)
-- [适配器配置指南](/guide/adapter)
-- [WhatsApp 平台文档](/platform/whatsapp)
-
+- [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/)
+- [Meta 官方 Postman 集合](https://www.postman.com/meta/whatsapp-business-platform/overview/)

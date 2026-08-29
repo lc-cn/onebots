@@ -551,8 +551,9 @@ export type AdapterClient<T extends Adapter = Adapter> =
     T extends Adapter<infer C, keyof Adapter.Configs, BaseApp> ? C : never;
 
 export namespace Adapter {
-    export type Construct<T> = { new (...args: unknown[]): T };
-    export type Creator<T> = (...args: unknown[]) => T;
+    /** 注册表运行时始终只传入宿主应用，工厂类型必须与真实调用约定一致。 */
+    export type Construct<T> = { new (app: BaseApp): T };
+    export type Creator<T> = (app: BaseApp) => T;
     export type Factory<T extends Adapter = Adapter> = Construct<T> | Creator<T>;
     export function isClassAdapter<T extends Adapter = Adapter>(obj: unknown): obj is Construct<T> {
         return typeof obj === "function" && /^class\s/.test(Function.prototype.toString.call(obj));

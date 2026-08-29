@@ -1,323 +1,204 @@
-/**
- * WhatsApp 适配器类型定义
- * 基于 WhatsApp Business API (Meta Graph API)
- */
-
-/**
- * 代理配置
- */
-export interface ProxyConfig {
-    /** 代理服务器地址，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080 */
-    url: string;
-    /** 代理用户名（可选） */
-    username?: string;
-    /** 代理密码（可选） */
-    password?: string;
-}
-
-/**
- * WhatsApp Business API 配置
- */
+/** WhatsApp Cloud API 账号配置。 */
 export interface WhatsAppConfig {
     account_id: string;
-    /** WhatsApp Business Account ID */
-    businessAccountId: string;
-    /** Phone Number ID */
-    phoneNumberId: string;
-    /** Access Token (永久令牌或临时令牌) */
-    accessToken: string;
-    /** Webhook 验证令牌 */
-    webhookVerifyToken: string;
-    /** API 版本，默认 v21.0 */
-    apiVersion?: string;
-    /** 代理配置（可选） */
-    proxy?: ProxyConfig;
-    /** Webhook 配置 */
-    webhook?: {
-        /** Webhook URL */
-        url?: string;
-        /** 订阅的字段列表 */
-        fields?: string[];
-    };
+    /** Meta App Dashboard 中的应用 Secret，用于 Webhook HMAC-SHA256 验签。 */
+    app_secret: string;
+    /** WhatsApp Business Account ID。 */
+    business_account_id: string;
+    /** Cloud API Phone Number ID。 */
+    phone_number_id: string;
+    /** 具备 whatsapp_business_messaging 权限的访问令牌。 */
+    access_token: string;
+    /** Meta 配置 Webhook 回调时填写的自定义验证令牌。 */
+    webhook_verify_token: string;
+    /** 挂载到 OneBots HTTP Host 的路径，默认使用账号标准路径。 */
+    webhook_path?: string;
+    /** Graph API 版本，必须显式带 v 前缀。 */
+    api_version: string;
+    /** 官方兼容网关或测试环境的 Graph API 根地址。 */
+    api_base_url?: string;
+    /** 是否按 webhook payload 哈希过滤 Meta 重投递，默认开启。 */
+    deduplicate_webhooks?: boolean;
+    /** 进程内 Webhook 去重缓存上限。 */
+    webhook_deduplication_limit?: number;
 }
 
-/**
- * WhatsApp 消息类型
- */
-export type WhatsAppMessageType = 
-    | 'text'
-    | 'image'
-    | 'video'
-    | 'audio'
-    | 'document'
-    | 'location'
-    | 'contacts'
-    | 'sticker'
-    | 'reaction'
-    | 'interactive';
+export type WhatsAppMessageType =
+    | "text"
+    | "image"
+    | "video"
+    | "audio"
+    | "document"
+    | "location"
+    | "contacts"
+    | "sticker"
+    | "reaction"
+    | "interactive"
+    | "button"
+    | "order"
+    | "request_welcome"
+    | "system"
+    | "unsupported";
 
-/**
- * WhatsApp 消息状态
- */
-export type WhatsAppMessageStatus = 
-    | 'sent'
-    | 'delivered'
-    | 'read'
-    | 'failed';
+export type WhatsAppMessageStatus = "sent" | "delivered" | "read" | "failed" | "deleted";
 
-/**
- * WhatsApp 消息事件
- */
-export interface WhatsAppMessageEvent {
-    /** 消息 ID */
+export interface WhatsAppMediaObject {
     id: string;
-    /** 消息类型 */
+    mime_type?: string;
+    sha256?: string;
+    caption?: string;
+    filename?: string;
+    animated?: boolean;
+}
+
+/** messages Webhook 中的原始消息对象；未知扩展字段会被完整保留。 */
+export interface WhatsAppMessageEvent extends Record<string, unknown> {
+    id: string;
     type: WhatsAppMessageType;
-    /** 发送者电话号码（带国家代码，如 8613800138000） */
     from: string;
-    /** 时间戳 */
     timestamp: string;
-    /** 文本消息内容 */
-    text?: {
-        body: string;
-    };
-    /** 图片消息 */
-    image?: {
-        id: string;
-        mime_type: string;
-        sha256: string;
-        caption?: string;
-    };
-    /** 视频消息 */
-    video?: {
-        id: string;
-        mime_type: string;
-        sha256: string;
-        caption?: string;
-    };
-    /** 音频消息 */
-    audio?: {
-        id: string;
-        mime_type: string;
-    };
-    /** 文档消息 */
-    document?: {
-        id: string;
-        filename?: string;
-        mime_type: string;
-        sha256: string;
-        caption?: string;
-    };
-    /** 位置消息 */
+    text?: { body: string };
+    image?: WhatsAppMediaObject;
+    video?: WhatsAppMediaObject;
+    audio?: WhatsAppMediaObject & { voice?: boolean };
+    document?: WhatsAppMediaObject;
+    sticker?: WhatsAppMediaObject;
     location?: {
         latitude: number;
         longitude: number;
         name?: string;
         address?: string;
+        url?: string;
     };
-    /** 联系人消息 */
-    contacts?: Array<{
-        name: {
-            formatted_name: string;
-            first_name?: string;
-            last_name?: string;
-        };
-        phones?: Array<{
-            phone: string;
-            type?: string;
-        }>;
-    }>;
-    /** 贴纸消息 */
-    sticker?: {
-        id: string;
-        mime_type: string;
-        sha256: string;
-        animated: boolean;
-    };
-    /** 反应消息 */
-    reaction?: {
-        message_id: string;
-        emoji: string;
-    };
-    /** 交互式消息 */
+    contacts?: WhatsAppContact[];
+    reaction?: { message_id: string; emoji: string };
     interactive?: {
-        type: 'button_reply' | 'list_reply';
-        button_reply?: {
-            id: string;
-            title: string;
-        };
-        list_reply?: {
-            id: string;
-            title: string;
-            description?: string;
-        };
+        type: "button_reply" | "list_reply" | string;
+        button_reply?: { id: string; title: string };
+        list_reply?: { id: string; title: string; description?: string };
     };
-    /** 上下文（回复的消息） */
+    button?: { payload?: string; text?: string };
     context?: {
-        from: string;
+        from?: string;
         id: string;
-        referred_product?: {
-            product_retailer_id: string;
-        };
+        forwarded?: boolean;
+        frequently_forwarded?: boolean;
+        referred_product?: { catalog_id?: string; product_retailer_id: string };
     };
+    referral?: Record<string, unknown>;
+    errors?: WhatsAppErrorData[];
 }
 
-/**
- * WhatsApp Webhook 事件
- */
-export interface WhatsAppWebhookEvent {
-    object: 'whatsapp_business_account';
-    entry: Array<{
-        id: string;
-        changes: Array<{
-            value: {
-                messaging_product: 'whatsapp';
-                metadata: {
-                    display_phone_number: string;
-                    phone_number_id: string;
-                };
-                contacts?: Array<{
-                    profile: {
-                        name: string;
-                    };
-                    wa_id: string;
-                }>;
-                messages?: WhatsAppMessageEvent[];
-                statuses?: Array<{
-                    id: string;
-                    status: WhatsAppMessageStatus;
-                    timestamp: string;
-                    recipient_id: string;
-                    errors?: Array<{
-                        code: number;
-                        title: string;
-                        message?: string;
-                        error_data?: {
-                            details: string;
-                        };
-                    }>;
-                }>;
-            };
-            field: 'messages' | 'message_status' | 'message_reactions' | 'message_echo';
-        }>;
-    }>;
+export interface WhatsAppContact {
+    addresses?: Array<Record<string, unknown>>;
+    birthday?: string;
+    emails?: Array<Record<string, unknown>>;
+    name: { formatted_name: string; first_name?: string; last_name?: string };
+    org?: Record<string, unknown>;
+    phones?: Array<{ phone: string; type?: string; wa_id?: string }>;
+    urls?: Array<Record<string, unknown>>;
 }
 
-/**
- * WhatsApp 发送消息参数
- */
-export interface WhatsAppSendMessageParams {
-    /** 接收者电话号码（带国家代码） */
-    to: string;
-    /** 消息类型 */
-    type: WhatsAppMessageType;
-    /** 文本消息内容 */
-    text?: {
-        body: string;
-        preview_url?: boolean;
-    };
-    /** 图片消息 */
-    image?: {
-        link?: string;
-        id?: string;
-        caption?: string;
-    };
-    /** 视频消息 */
-    video?: {
-        link?: string;
-        id?: string;
-        caption?: string;
-    };
-    /** 音频消息 */
-    audio?: {
-        link?: string;
-        id?: string;
-    };
-    /** 文档消息 */
-    document?: {
-        link?: string;
-        id?: string;
-        filename?: string;
-        caption?: string;
-    };
-    /** 位置消息 */
-    location?: {
-        latitude: number;
-        longitude: number;
-        name?: string;
-        address?: string;
-    };
-    /** 联系人消息 */
-    contacts?: Array<{
-        name: {
-            formatted_name: string;
-            first_name?: string;
-            last_name?: string;
-        };
-        phones?: Array<{
-            phone: string;
-            type?: string;
-        }>;
-    }>;
-    /** 模板消息 */
-    template?: {
-        name: string;
-        language: {
-            code: string;
-        };
-        components?: Array<{
-            type: 'header' | 'body' | 'button';
-            parameters?: Array<{
-                type: 'text' | 'image' | 'video' | 'document';
-                text?: string;
-                image?: { link: string };
-                video?: { link: string };
-                document?: { link: string };
-            }>;
-        }>;
-    };
-    /** 上下文（回复的消息） */
-    context?: {
-        message_id: string;
-    };
+export interface WhatsAppErrorData {
+    code: number;
+    title?: string;
+    message?: string;
+    href?: string;
+    error_data?: { details?: string };
 }
 
-/**
- * WhatsApp API 响应
- */
-export interface WhatsAppAPIResponse {
-    messaging_product: 'whatsapp';
-    contacts: Array<{
-        input: string;
-        wa_id: string;
-    }>;
-    messages: Array<{
-        id: string;
-    }>;
+export interface WhatsAppMessageStatusEvent extends Record<string, unknown> {
+    id: string;
+    status: WhatsAppMessageStatus;
+    timestamp: string;
+    recipient_id: string;
+    conversation?: Record<string, unknown>;
+    pricing?: Record<string, unknown>;
+    errors?: WhatsAppErrorData[];
 }
 
-/**
- * WhatsApp Webhook metadata (display_phone_number, phone_number_id)
- */
 export interface WhatsAppWebhookMetadata {
     display_phone_number: string;
     phone_number_id: string;
 }
 
-/**
- * WhatsApp Message status update event (from 'statuses' in webhook)
- */
-export interface WhatsAppMessageStatusEvent {
+export interface WhatsAppWebhookValue extends Record<string, unknown> {
+    messaging_product?: "whatsapp";
+    metadata?: WhatsAppWebhookMetadata;
+    contacts?: Array<{ profile: { name: string }; wa_id: string }>;
+    messages?: WhatsAppMessageEvent[];
+    statuses?: WhatsAppMessageStatusEvent[];
+    errors?: WhatsAppErrorData[];
+}
+
+export interface WhatsAppWebhookChange {
+    field: string;
+    value: WhatsAppWebhookValue;
+}
+
+export interface WhatsAppWebhookEvent {
+    object: "whatsapp_business_account";
+    entry: Array<{ id: string; changes: WhatsAppWebhookChange[] }>;
+}
+
+export interface WhatsAppSendMessageParams extends Record<string, unknown> {
+    messaging_product?: "whatsapp";
+    recipient_type?: "individual";
+    to: string;
+    type: string;
+    context?: { message_id: string };
+    text?: { body: string; preview_url?: boolean };
+    image?: { link?: string; id?: string; caption?: string };
+    video?: { link?: string; id?: string; caption?: string };
+    audio?: { link?: string; id?: string };
+    document?: { link?: string; id?: string; filename?: string; caption?: string };
+    sticker?: { link?: string; id?: string };
+    location?: { latitude: number; longitude: number; name?: string; address?: string };
+    contacts?: WhatsAppContact[];
+    reaction?: { message_id: string; emoji: string };
+    interactive?: Record<string, unknown>;
+    template?: Record<string, unknown>;
+}
+
+export interface WhatsAppAPIResponse {
+    messaging_product: "whatsapp";
+    contacts?: Array<{ input: string; wa_id: string }>;
+    messages: Array<{ id: string; message_status?: string }>;
+}
+
+export interface WhatsAppPhoneNumberInfo {
     id: string;
-    status: WhatsAppMessageStatus;
-    timestamp: string;
-    recipient_id: string;
-    errors?: Array<{
-        code: number;
-        title: string;
-        message?: string;
-        error_data?: {
-            details: string;
-        };
-    }>;
+    display_phone_number?: string;
+    verified_name?: string;
+    quality_rating?: string;
+    code_verification_status?: string;
+}
+
+export interface WhatsAppMediaInfo {
+    id: string;
+    url: string;
+    mime_type?: string;
+    sha256?: string;
+    file_size?: number;
+    messaging_product?: "whatsapp";
+}
+
+export interface WhatsAppCallOptions {
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+    resource: string;
+    query?: Readonly<Record<string, string | number | boolean | undefined>>;
+    body?: unknown;
+    headers?: Readonly<Record<string, string>>;
+    signal?: AbortSignal;
+}
+
+export interface WhatsAppWebhookRequest {
+    body: string | Buffer;
+    signature?: string;
+}
+
+export interface WhatsAppWebhookResponse {
+    status: number;
+    body: unknown;
+    contentType?: string;
 }
