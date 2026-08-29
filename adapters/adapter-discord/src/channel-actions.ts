@@ -240,6 +240,12 @@ export abstract class DiscordActionAdapter extends DiscordGuildActions {
         return {
             online: bot.isReady(),
             good: bot.isReady(),
+            bots: [
+                {
+                    self: this.createId(bot.getBotUser()?.id || uin),
+                    online: bot.isReady(),
+                },
+            ],
         };
     }
 

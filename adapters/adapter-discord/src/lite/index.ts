@@ -47,7 +47,12 @@
 import { EventEmitter } from "node:events";
 import { DiscordREST } from "./rest.js";
 import type { DiscordHttpTransport } from "./rest-transport.js";
-import { DiscordGateway, GatewayIntents, type GatewayOptions } from "./gateway.js";
+import {
+    DiscordGateway,
+    GatewayIntents,
+    type DiscordGatewayCommand,
+    type GatewayOptions,
+} from "./gateway.js";
 import {
     InteractionsHandler,
     type DiscordInteractionHttpRequest,
@@ -68,6 +73,7 @@ import type {
     EditMessageBody,
 } from "../types.js";
 import { DiscordError } from "../errors.js";
+import { isFatalGatewayCloseCode } from "./gateway-types.js";
 
 // 重新导出
 export { DiscordREST, type RESTOptions } from "./rest.js";
@@ -84,6 +90,14 @@ export {
 } from "./rest-rate-limit.js";
 export { buildDiscordMultipart, type DiscordMultipartBody } from "./multipart.js";
 export { DiscordGateway, GatewayIntents, GatewayOpcodes, type GatewayOptions } from "./gateway.js";
+export {
+    compileDiscordGatewayCommand,
+    parseDiscordGatewayCommand,
+    type DiscordChannelInfoField,
+    type DiscordGatewayCommand,
+    type DiscordGatewayCommandPayload,
+    type DiscordPresenceStatus,
+} from "./gateway-commands.js";
 export {
     InteractionsHandler,
     InteractionType,
@@ -261,38 +275,49 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
                 GatewayIntents.DirectMessages |
                 GatewayIntents.MessageContent;
 
-        this.gateway = new DiscordGateway({
+        const gateway = new DiscordGateway({
             token: this.options.token,
             intents,
             proxy: this.options.proxy,
             presence: this.options.presence,
             shard: this.options.shard,
         });
+        this.gateway = gateway;
 
         // 转发事件
-        this.gateway.on("ready", user => {
+        gateway.on("ready", user => {
             this.user = user;
             this.emit("ready", user);
         });
-        this.gateway.on("resumed", () => this.emit("resumed"));
-        this.gateway.on("messageCreate", message => this.emit("messageCreate", message));
-        this.gateway.on("messageUpdate", message => this.emit("messageUpdate", message));
-        this.gateway.on("messageDelete", data => this.emit("messageDelete", data));
-        this.gateway.on("guildCreate", guild => this.emit("guildCreate", guild));
-        this.gateway.on("guildDelete", guild => this.emit("guildDelete", guild));
-        this.gateway.on("guildMemberAdd", member => this.emit("guildMemberAdd", member));
-        this.gateway.on("guildMemberRemove", member => this.emit("guildMemberRemove", member));
-        this.gateway.on("interactionCreate", interaction =>
-            this.emit("interactionCreate", interaction),
-        );
-        this.gateway.on("dispatch", (event, data, sequence, sessionId) =>
+        gateway.on("resumed", () => this.emit("resumed"));
+        gateway.on("messageCreate", message => this.emit("messageCreate", message));
+        gateway.on("messageUpdate", message => this.emit("messageUpdate", message));
+        gateway.on("messageDelete", data => this.emit("messageDelete", data));
+        gateway.on("guildCreate", guild => this.emit("guildCreate", guild));
+        gateway.on("guildDelete", guild => this.emit("guildDelete", guild));
+        gateway.on("guildMemberAdd", member => this.emit("guildMemberAdd", member));
+        gateway.on("guildMemberRemove", member => this.emit("guildMemberRemove", member));
+        gateway.on("interactionCreate", interaction => this.emit("interactionCreate", interaction));
+        gateway.on("dispatch", (event, data, sequence, sessionId) =>
             this.emit("dispatch", event, data, sequence, sessionId),
         );
-        this.gateway.on("client_error", error => this.emit("client_error", error));
-        this.gateway.on("reconnecting", error => this.emit("reconnecting", error));
-        this.gateway.on("close", (code, reason) => this.emit("close", code, reason));
+        gateway.on("client_error", error => this.emit("client_error", error));
+        gateway.on("reconnecting", error => this.emit("reconnecting", error));
+        gateway.on("close", (code, reason) => {
+            if (isFatalGatewayCloseCode(code) && this.gateway === gateway) {
+                this.gateway = null;
+                this.user = null;
+            }
+            this.emit("close", code, reason);
+        });
 
-        await this.gateway.connect(signal);
+        try {
+            await gateway.connect(signal);
+        } catch (error) {
+            gateway.disconnect();
+            if (this.gateway === gateway) this.gateway = null;
+            throw error;
+        }
     }
 
     /**
@@ -341,10 +366,15 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
      * 处理 HTTP 请求（Interactions 模式）
      */
     async handleRequest(request: Request): Promise<Response> {
+        return this.acceptHttp(request);
+    }
+
+    /** 标准 Fetch/WinterCG HTTP seam。 */
+    async acceptHttp(request: Request): Promise<Response> {
         if (!this.interactions) {
             this.initInteractions();
         }
-        return this.interactions!.handleRequest(request);
+        return this.interactions!.acceptHttp(request);
     }
 
     /** 将已有连接取得的 Interaction 交给同一个客户端。 */
@@ -385,6 +415,17 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
      */
     getMode(): "gateway" | "interactions" | "manual" {
         return this.mode;
+    }
+
+    /** 发送 Presence、Voice State 与资源请求等 Gateway 主动事件。 */
+    sendGatewayCommand(command: DiscordGatewayCommand): void {
+        if (this.mode !== "gateway" || !this.gateway) {
+            throw DiscordError.invalid(
+                "Gateway 主动事件仅可在已启动的 gateway 模式发送",
+                "DISCORD_GATEWAY_NOT_STARTED",
+            );
+        }
+        this.gateway.sendCommand(command);
     }
 
     // ============================================

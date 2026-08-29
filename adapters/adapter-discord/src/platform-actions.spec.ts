@@ -42,6 +42,30 @@ describe("executeDiscordPlatformAction", () => {
         ).rejects.toThrow("必须为标量");
     });
 
+    it("以受约束命令发送 Discord Gateway 主动事件", async () => {
+        const sendGatewayCommand = vi.fn();
+        const bot = { sendGatewayCommand } as never;
+
+        await executeDiscordPlatformAction(bot, "send_gateway_command", {
+            command: {
+                type: "request_channel_info",
+                guild_id: "100",
+                fields: ["status", "voice_start_time"],
+            },
+        });
+
+        expect(sendGatewayCommand).toHaveBeenCalledWith({
+            type: "request_channel_info",
+            guild_id: "100",
+            fields: ["status", "voice_start_time"],
+        });
+        await expect(
+            executeDiscordPlatformAction(bot, "send_gateway_command", {
+                command: { type: "request_channel_info", guild_id: "100", fields: ["unknown"] },
+            }),
+        ).rejects.toThrow("fields 必须包含");
+    });
+
     it("按 Discord v10 endpoint 创建消息线程", async () => {
         const request = vi.fn().mockResolvedValue({ id: "3" });
         const bot = { getREST: () => ({ request }) } as never;
@@ -105,8 +129,9 @@ describe("executeDiscordPlatformAction", () => {
     it("提供 Interaction 原始回复与 followup 的显式动作", async () => {
         const editOriginalInteractionResponse = vi.fn().mockResolvedValue({ id: "3" });
         const createFollowupMessage = vi.fn().mockResolvedValue({ id: "4" });
+        const request = vi.fn().mockResolvedValue({ id: "5" });
         const bot = {
-            getREST: () => ({ editOriginalInteractionResponse, createFollowupMessage }),
+            getREST: () => ({ request, editOriginalInteractionResponse, createFollowupMessage }),
         } as never;
 
         await executeDiscordPlatformAction(bot, "edit_original_interaction_response", {
@@ -119,10 +144,28 @@ describe("executeDiscordPlatformAction", () => {
             interaction_token: "token",
             content: { content: "next" },
         });
+        await executeDiscordPlatformAction(bot, "delete_original_interaction_response", {
+            application_id: "1",
+            interaction_token: "token/value",
+        });
+        await executeDiscordPlatformAction(bot, "edit_followup_message", {
+            application_id: "1",
+            interaction_token: "token/value",
+            message_id: "5",
+            content: { content: "updated" },
+        });
 
         expect(editOriginalInteractionResponse).toHaveBeenCalledWith("1", "token", {
             content: "done",
         });
         expect(createFollowupMessage).toHaveBeenCalledWith("1", "token", { content: "next" });
+        expect(request).toHaveBeenNthCalledWith(1, "/webhooks/1/token%2Fvalue/messages/@original", {
+            method: "DELETE",
+            body: undefined,
+        });
+        expect(request).toHaveBeenNthCalledWith(2, "/webhooks/1/token%2Fvalue/messages/5", {
+            method: "PATCH",
+            body: { content: "updated" },
+        });
     });
 });

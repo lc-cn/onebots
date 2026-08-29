@@ -1,11 +1,10 @@
-/**
- * Discord Bot 客户端
- * 轻量版实现，直接封装 Discord API，支持 Node.js 和 Cloudflare Workers
- */
-
 import { EventEmitter } from "node:events";
 import { DiscordLite } from "./lite/index.js";
 import type { DiscordREST } from "./lite/rest.js";
+import type {
+    DiscordInteractionHttpRequest,
+    DiscordInteractionHttpResponse,
+} from "./lite/interactions.js";
 import type { DiscordConfig } from "./types.js";
 import type {
     DiscordApiChannel,
@@ -27,6 +26,8 @@ import { materializeDiscordFile, type DiscordFileInput } from "./media.js";
 import { DiscordError } from "./errors.js";
 import type { DiscordBotEvents } from "./bot-events.js";
 import { createDiscordLite } from "./bot-client.js";
+import { isFatalGatewayCloseCode } from "./lite/gateway-types.js";
+import type { DiscordGatewayCommand } from "./lite/gateway-commands.js";
 import { loadDiscordGuildMembers, loadDiscordGuilds, loadDiscordMessages } from "./resources.js";
 export type {
     DiscordAttachment,
@@ -43,6 +44,7 @@ export class DiscordBot extends EventEmitter<DiscordBotEvents> {
     private client: DiscordLite;
     private config: DiscordConfig;
     private ready: boolean = false;
+    private running = false;
     private user: DiscordUser | null = null;
     private guilds: Map<string, DiscordGuild> = new Map();
     constructor(config: DiscordConfig) {
@@ -99,11 +101,14 @@ export class DiscordBot extends EventEmitter<DiscordBotEvents> {
         });
         this.client.on("close", (code, reason) => {
             this.ready = false;
+            if (isFatalGatewayCloseCode(code)) this.running = false;
             this.emit("close", code, reason);
         });
     }
     // 生命周期管理
     async start(): Promise<void> {
+        if (this.running) return;
+        this.running = true;
         try {
             if (
                 this.config.receive_mode === "interactions" ||
@@ -118,18 +123,40 @@ export class DiscordBot extends EventEmitter<DiscordBotEvents> {
             }
             await this.client.start();
         } catch (error) {
+            this.running = false;
             const wrapped = DiscordError.wrap(error, "DISCORD_START_FAILED");
             this.emit("client_error", wrapped);
             throw wrapped;
         }
     }
     async stop(): Promise<void> {
+        if (!this.running) return;
+        this.running = false;
         this.ready = false;
         this.client.stop();
         this.emit("stopped");
     }
     isReady(): boolean {
         return this.ready;
+    }
+
+    /** 将上游已验签的 Interaction 汇入同一客户端与事件投影。 */
+    ingest(rawEvent: unknown) {
+        return this.client.ingestInteraction(rawEvent);
+    }
+
+    /** 由任意 HTTP Host 转交原始请求字段并取得结构化响应。 */
+    ingestHttp(request: DiscordInteractionHttpRequest): Promise<DiscordInteractionHttpResponse> {
+        return this.client.ingestInteractionHttp(request);
+    }
+
+    /** 接收标准 Fetch/WinterCG Request，并返回标准 Response。 */
+    acceptHttp(request: Request): Promise<Response> {
+        return this.client.acceptHttp(request);
+    }
+
+    sendGatewayCommand(command: DiscordGatewayCommand): void {
+        this.client.sendGatewayCommand(command);
     }
     // 消息相关方法
     async sendMessage(

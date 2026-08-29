@@ -24,6 +24,8 @@ export enum GatewayOpcodes {
     InvalidSession = 9,
     Hello = 10,
     HeartbeatAck = 11,
+    RequestSoundboardSounds = 31,
+    RequestChannelInfo = 43,
 }
 
 /** Discord Gateway v10 intents 位标记。 */

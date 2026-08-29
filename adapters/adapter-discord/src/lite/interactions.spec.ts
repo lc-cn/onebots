@@ -105,6 +105,111 @@ describe("Discord Interactions ingestion", () => {
         await expect(stale.json()).resolves.toEqual({ error: "expired_signature" });
     });
 
+    it("标准 HTTP 入口拒绝非 POST 方法", async () => {
+        const handler = new InteractionsHandler({ publicKey, token: "token", applicationId: "1" });
+        const response = await handler.acceptHttp(
+            new Request("https://example.test", { method: "GET" }),
+        );
+        expect(response.status).toBe(405);
+        expect(response.headers.get("allow")).toBe("POST");
+        await expect(response.json()).resolves.toMatchObject({
+            error: "DISCORD_INTERACTION_METHOD_NOT_ALLOWED",
+        });
+    });
+
+    it("Discord 重投返回首次响应且不重复触发业务事件", async () => {
+        const onInteraction = vi.fn();
+        const handler = new InteractionsHandler({
+            publicKey,
+            token: "token",
+            applicationId: "1",
+            onInteraction,
+        });
+        const command = vi.fn(() => InteractionsHandler.messageResponse("first"));
+        handler.onCommand("ping", command);
+        const interaction = {
+            id: "replayed",
+            application_id: "1",
+            type: InteractionType.ApplicationCommand,
+            token: "interaction-token",
+            version: 1,
+            data: { name: "ping" },
+        };
+
+        const first = await handler.ingest(interaction);
+        if (first.data) first.data.content = "mutated";
+        await expect(handler.ingest(interaction)).resolves.toMatchObject({
+            data: { content: "first" },
+        });
+        expect(command).toHaveBeenCalledOnce();
+        expect(onInteraction).toHaveBeenCalledOnce();
+    });
+
+    it("并发重投共享同一次业务处理", async () => {
+        const handler = new InteractionsHandler({
+            token: "token",
+            trustedIngress: true,
+        });
+        let release: (() => void) | undefined;
+        const waiting = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const command = vi.fn(async () => {
+            await waiting;
+            return InteractionsHandler.messageResponse("once");
+        });
+        handler.onCommand("ping", command);
+        const interaction = {
+            id: "123",
+            application_id: "456",
+            type: InteractionType.ApplicationCommand,
+            version: 1,
+            token: "secret",
+            data: { name: "ping" },
+        };
+
+        const first = handler.ingest(interaction);
+        const second = handler.ingest(structuredClone(interaction));
+        release?.();
+
+        await expect(Promise.all([first, second])).resolves.toEqual([
+            InteractionsHandler.messageResponse("once"),
+            InteractionsHandler.messageResponse("once"),
+        ]);
+        expect(command).toHaveBeenCalledOnce();
+    });
+
+    it("处理失败不会提交 Interaction 响应缓存", async () => {
+        const handler = new InteractionsHandler({ publicKey, token: "token", applicationId: "1" });
+        const command = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("temporary"))
+            .mockReturnValueOnce(InteractionsHandler.messageResponse("recovered"));
+        handler.onCommand("retry", command);
+        const interaction = {
+            id: "retryable",
+            application_id: "1",
+            type: InteractionType.ApplicationCommand,
+            token: "interaction-token",
+            version: 1,
+            data: { name: "retry" },
+        };
+
+        await expect(handler.ingest(interaction)).rejects.toMatchObject({
+            code: "DISCORD_INTERACTION_HANDLER_FAILED",
+        });
+        await expect(handler.ingest(interaction)).resolves.toMatchObject({
+            data: { content: "recovered" },
+        });
+        expect(command).toHaveBeenCalledTimes(2);
+    });
+
+    it("公开 Activities 的 LAUNCH_ACTIVITY callback", () => {
+        expect(InteractionsHandler.launchActivityResponse()).toEqual({
+            type: InteractionCallbackType.LaunchActivity,
+        });
+    });
+
     it("畸形十六进制签名不会进入 Web Crypto", async () => {
         await expect(verifyInteractionSignature(publicKey, "zz", "1", "{}")).resolves.toBe(false);
     });

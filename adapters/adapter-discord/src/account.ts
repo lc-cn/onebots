@@ -35,12 +35,14 @@ export function createDiscordAccount(
                 };
                 return;
             }
-            const response = await bot.getClient().ingestInteractionHttp({
+            const response = await bot.ingestHttp({
+                method: ctx.method,
                 body: typeof rawBody === "string" ? rawBody : rawBody.toString("utf8"),
                 signature: ctx.get("x-signature-ed25519") || undefined,
                 timestamp: ctx.get("x-signature-timestamp") || undefined,
             });
             ctx.status = response.status;
+            for (const [name, value] of Object.entries(response.headers)) ctx.set(name, value);
             ctx.body = response.body;
             if (response.status >= 500) {
                 adapter.logger.error(
@@ -74,7 +76,7 @@ export function createDiscordAccount(
             const events = projectDiscordEvents(
                 { name: eventName, data, sequence, session_id: sessionId },
                 {
-                    botId: adapter.createId(config.account_id),
+                    botId: adapter.createId(bot.getBotUser()?.id || config.account_id),
                     createId: value => adapter.createId(value),
                 },
             );

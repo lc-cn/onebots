@@ -106,6 +106,31 @@ export function projectDiscordEvents(
                 }),
             ];
         }
+        case "MESSAGE_POLL_VOTE_ADD":
+        case "MESSAGE_POLL_VOTE_REMOVE": {
+            const vote = data as {
+                user_id: string;
+                channel_id: string;
+                message_id: string;
+                guild_id?: string;
+                answer_id: number;
+            };
+            return [
+                notice(
+                    rawEvent,
+                    context,
+                    name === "MESSAGE_POLL_VOTE_ADD" ? "reaction_added" : "reaction_removed",
+                    {
+                        user: { id: context.createId(vote.user_id), name: "" },
+                        group: vote.guild_id
+                            ? discordChannelGroup(vote.channel_id, vote.guild_id, context)
+                            : undefined,
+                        message_id: context.createId(vote.message_id),
+                        extensions: { discord: { poll_answer_id: vote.answer_id } },
+                    },
+                ),
+            ];
+        }
         case "GUILD_MEMBER_ADD":
         case "GUILD_MEMBER_REMOVE":
         case "GUILD_MEMBER_UPDATE": {

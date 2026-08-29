@@ -209,4 +209,27 @@ describe("projectDiscordEvents", () => {
             discord: { interaction_id: "10", data: { name: "hello" } },
         });
     });
+
+    it("将原生 Poll Vote 投影为可定位消息与选项的 reaction", () => {
+        const [event] = projectDiscordEvents(
+            {
+                name: "MESSAGE_POLL_VOTE_ADD",
+                data: {
+                    user_id: "40",
+                    channel_id: "20",
+                    guild_id: "30",
+                    message_id: "10",
+                    answer_id: 2,
+                },
+            },
+            context,
+        );
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "reaction_added",
+            user: { id: { string: "40" } },
+            message_id: { string: "10" },
+            extensions: { discord: { poll_answer_id: 2 } },
+        });
+    });
 });

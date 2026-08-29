@@ -4,7 +4,7 @@ OneBots 的 Discord 官方 Bot 适配器。实现直接面向 Discord API v10，
 
 ## 能力概览
 
-- Gateway WebSocket：无限重连、Resume、心跳 ACK 检测、Identify 限速、分片、Presence、AbortSignal。
+- Gateway WebSocket：无限重连、Resume、心跳 ACK 检测、Identify 限速、分片、Presence、AbortSignal，并支持全部 Gateway 主动事件。
 - Interactions Webhook：Ed25519 验签、重放时间窗、应用命令、组件、Modal、自动补全。
 - REST：Discord route/global rate limit、429 自动重试、AbortSignal、审计日志原因、附件上传和结构化错误。
 - 事件：消息编辑/删除与批量删除、Reaction、Guild 成员、Interaction；未知 Dispatch 仍通过 `raw_event` 无损交付。
@@ -75,7 +75,7 @@ discord.my_bot:
   receive_mode: manual
 ```
 
-`manual` 不注册 Gateway 或 HTTP 路由。已有 Host 完成 Discord 验签后，将原始 Interaction 交给 `account.client.ingestInteraction(rawInteraction)`；此入口不会再次验签。若要由适配器完成 HTTP 验签，应使用 `interactions` 模式或直接构造带 Public Key 的 `InteractionsHandler`。
+`manual` 不注册 Gateway 或 HTTP 路由。已有 Host 完成 Discord 验签后，将原始 Interaction 交给 `account.client.ingest(rawInteraction)`；此入口不会再次验签。`interactions` 模式还可直接调用 `account.client.acceptHttp(request)` 获取标准 `Response`，或调用 `account.client.ingestHttp({ method, body, signature, timestamp })` 获取结构化响应，均复用同一验签、去重和事件投影链。
 
 ## 独立使用 Lite SDK
 
@@ -97,6 +97,11 @@ client.on("messageCreate", message => {
 
 const abort = new AbortController();
 await client.start(abort.signal);
+client.sendGatewayCommand({
+  type: "request_channel_info",
+  guild_id: "123456789012345678",
+  fields: ["status", "voice_start_time"],
+});
 // abort.abort() 会停止 Gateway 及后续重连。
 ```
 
@@ -119,7 +124,7 @@ export default {
 };
 ```
 
-若宿主并不使用 Web Fetch API，可调用 `ingestHttp({ body, signature, timestamp })` 获得 `{ status, headers, body }` 结构化响应。已经由上游验证的事件可直接交给 `ingest(rawInteraction)`，两者都不会创建监听端口。
+若宿主并不使用 Web Fetch API，可调用 `ingestHttp({ method, body, signature, timestamp })` 获得 `{ status, headers, body }` 结构化响应。已经由上游验证的事件可直接交给 `ingest(rawInteraction)`，两者都不会创建监听端口。Discord 对同一 Interaction 的重投会返回首次成功生成的 callback，不会重复触发业务事件；处理失败则不提交缓存，允许后续重投恢复。
 
 使用统一 `DiscordLite` 时，对应方法为 `handleRequest()`、`ingestInteractionHttp()` 和 `ingestInteraction()`；同一个客户端会继续发出 `interactionCreate` 与统一 `dispatch` 事件。
 
@@ -164,10 +169,14 @@ await rest.createMessage("123456789012345678", "Hello!");
 - 消息：`bulk_delete_messages`、`crosspost_message`、`get_channel_pins`、`pin_message`、`unpin_message`、`get_reaction_users`、`add_reaction`、`remove_own_reaction`、`trigger_typing`
 - 线程：`create_thread`、`join_thread`、`leave_thread`、`add_thread_member`、`remove_thread_member`、`list_thread_members`、`get_active_threads`
 - 邀请：`get_channel_invites`、`create_channel_invite`、`delete_invite`
-- Interaction：`create_interaction_response`、`get_original_interaction_response`、`edit_original_interaction_response`、`create_followup_message`
+- Interaction：`create_interaction_response`、`get_original_interaction_response`、`edit_original_interaction_response`、`delete_original_interaction_response`
+- Followup：`create_followup_message`、`get_followup_message`、`edit_followup_message`、`delete_followup_message`
 - 底层：`call_discord_api`，只能访问配置的 Discord API HTTPS 根路径，拒绝外部 URL、路径穿越、内嵌 query 和 fragment
+- Gateway：`send_gateway_command`，覆盖 Presence、Voice State、Guild Members、Soundboard Sounds 与 Channel Info 五类官方主动事件，并在发送前校验 opcode 载荷
 
 审计类动作可传 `reason`，适配器会按 Discord 要求编码到 `X-Audit-Log-Reason`。
+
+Lite SDK 的 `InteractionsHandler.launchActivityResponse()` 可生成 Discord Activities 所需的 `LAUNCH_ACTIVITY`（callback type 12）。Gateway 的原生 Poll Vote 增删事件会投影为携带 `poll_answer_id` 的 reaction notice；其他尚无 canonical 语义的新 Dispatch 仍以 `custom` notice 无损交付。
 
 ## Discord 应用准备
 

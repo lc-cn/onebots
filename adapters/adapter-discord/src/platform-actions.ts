@@ -2,6 +2,7 @@ import type { DiscordBot } from "./bot.js";
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import { assertDiscordEndpoint } from "./lite/rest.js";
 import { DiscordError } from "./errors.js";
+import { parseDiscordGatewayCommand } from "./lite/gateway-commands.js";
 
 const DISCORD_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 type DiscordMethod = (typeof DISCORD_METHODS)[number];
@@ -17,6 +18,8 @@ const PLATFORM_ACTIONS = definePlatformActions(
                 query: query(params),
                 reason: optionalString(params, "reason"),
             }),
+        send_gateway_command: async (bot: DiscordBot, params: Params) =>
+            bot.sendGatewayCommand(parseDiscordGatewayCommand(params.command)),
         ban_member: async (bot: DiscordBot, params: Params) =>
             bot.banMember(guildId(params), userId(params), {
                 deleteMessageSeconds: optionalInteger(params, "delete_message_seconds"),
@@ -110,6 +113,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
                     requireString(params, "interaction_token"),
                     requireObject(params, "content"),
                 ),
+        delete_original_interaction_response: interactionWebhookMessage("DELETE", "@original"),
         create_followup_message: async (bot: DiscordBot, params: Params) =>
             bot
                 .getREST()
@@ -118,6 +122,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
                     requireString(params, "interaction_token"),
                     requireObject(params, "content"),
                 ),
+        get_followup_message: interactionWebhookMessage("GET"),
+        edit_followup_message: interactionWebhookMessage("PATCH"),
+        delete_followup_message: interactionWebhookMessage("DELETE"),
     },
     action =>
         DiscordError.invalid(`未实现 Discord 平台动作：${action}`, "DISCORD_ACTION_UNSUPPORTED", {
@@ -186,6 +193,21 @@ function reactionAction(method: "GET" | "PUT" | "DELETE", own = false): Handler 
             `/channels/${channelId(params)}/messages/${messageId(params)}/reactions/${encodeURIComponent(requireString(params, "emoji"))}${own ? "/@me" : ""}`,
         { method: method === "GET" ? undefined : method, query: method === "GET" },
     );
+}
+
+function interactionWebhookMessage(
+    method: "GET" | "PATCH" | "DELETE",
+    fixedMessageId?: "@original",
+): Handler {
+    return async (bot, params) => {
+        const applicationId = requireSnowflake(params, "application_id");
+        const token = encodeURIComponent(requireString(params, "interaction_token"));
+        const messageId = fixedMessageId ?? requireSnowflake(params, "message_id");
+        return bot.getREST().request(`/webhooks/${applicationId}/${token}/messages/${messageId}`, {
+            method: method === "GET" ? undefined : method,
+            body: method === "PATCH" ? requireObject(params, "content") : undefined,
+        });
+    };
 }
 
 async function createThread(bot: DiscordBot, params: Params): Promise<unknown> {

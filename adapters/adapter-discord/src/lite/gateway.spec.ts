@@ -13,6 +13,7 @@ interface GatewayHarness {
     sessionId: string | null;
     resumeOnHello: boolean;
     heartbeatAcknowledged: boolean;
+    isReady: boolean;
     connectionManager: { scheduleReconnect(error?: Error): void; stop(): void };
     handleMessage(payload: unknown): void;
     sendHeartbeat(): void;
@@ -116,6 +117,33 @@ describe("DiscordGateway lifecycle", () => {
         expect(scheduleReconnect).toHaveBeenCalledOnce();
         expect(reconnecting.mock.calls[0][0]).toMatchObject({
             code: "DISCORD_GATEWAY_HEARTBEAT_TIMEOUT",
+        });
+    });
+
+    it("仅在 READY 后发送已编译的主动事件", () => {
+        const gateway = new DiscordGateway({ token: "token", intents: 1 });
+        const harness = gateway as unknown as GatewayHarness;
+        const send = vi.fn();
+        harness.ws = {
+            readyState: 1,
+            send,
+            close: vi.fn(),
+            removeAllListeners: vi.fn(),
+            on: vi.fn(),
+        };
+
+        expect(() =>
+            gateway.sendCommand({
+                type: "request_soundboard_sounds",
+                guild_ids: ["1"],
+            }),
+        ).toThrow("尚未就绪");
+
+        harness.isReady = true;
+        gateway.sendCommand({ type: "request_soundboard_sounds", guild_ids: ["1"] });
+        expect(JSON.parse(send.mock.calls[0][0])).toEqual({
+            op: GatewayOpcodes.RequestSoundboardSounds,
+            d: { guild_ids: ["1"] },
         });
     });
 });

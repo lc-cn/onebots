@@ -1,8 +1,3 @@
-/**
- * Discord Gateway WebSocket 客户端
- * 用于 Node.js 环境
- */
-
 import { EventEmitter } from "node:events";
 import { DiscordREST } from "./rest.js";
 import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from "onebots";
@@ -29,8 +24,10 @@ import {
     type WsWebSocket,
     isFatalGatewayCloseCode,
 } from "./gateway-types.js";
+import { compileDiscordGatewayCommand, type DiscordGatewayCommand } from "./gateway-commands.js";
 export { GatewayIntents, GatewayOpcodes } from "./gateway-types.js";
 export type { DiscordGatewayEvents, GatewayOptions } from "./gateway-types.js";
+export type { DiscordGatewayCommand } from "./gateway-commands.js";
 
 export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
     private ws: WsWebSocket | null = null;
@@ -92,9 +89,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         );
     }
 
-    /**
-     * 连接 Gateway
-     */
     async connect(signal?: AbortSignal): Promise<void> {
         if (this.started) return;
         if (signal?.aborted) {
@@ -107,9 +101,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         await this.connectionManager.start();
     }
 
-    /**
-     * 连接到指定 Gateway URL
-     */
     private async connectToGateway(url: string, resume: boolean): Promise<void> {
         // 动态导入 ws
         const { WebSocket } = await import("ws");
@@ -206,9 +197,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         });
     }
 
-    /**
-     * 处理 Gateway 消息
-     */
     private handleMessage(rawPayload: unknown) {
         const payload = rawPayload as GatewayPayload;
         const { op, d, s, t } = payload;
@@ -272,9 +260,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         }
     }
 
-    /**
-     * 处理 Dispatch 事件
-     */
     private handleDispatch(eventName: string, data: unknown) {
         if (eventName === "READY") {
             const ready = data as GatewayReadyData;
@@ -337,9 +322,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         }
     }
 
-    /**
-     * 发送 Identify
-     */
     private identify() {
         const delay = Math.max(0, 5_000 - (Date.now() - this.lastIdentifyAt));
         if (delay > 0) {
@@ -441,6 +423,16 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         if (this.ws && this.ws.readyState === 1) {
             this.ws.send(JSON.stringify(data));
         }
+    }
+
+    /** 在已就绪连接上发送受约束的 Discord Gateway v10 主动事件。 */
+    sendCommand(command: DiscordGatewayCommand): void {
+        if (!this.isReady || !this.ws || this.ws.readyState !== 1) {
+            throw new DiscordError("Discord Gateway 尚未就绪", {
+                code: "DISCORD_GATEWAY_NOT_READY",
+            });
+        }
+        this.ws.send(JSON.stringify(compileDiscordGatewayCommand(command)));
     }
 
     private scheduleReconnect(error: DiscordError): void {
