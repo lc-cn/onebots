@@ -31,6 +31,25 @@ Every adapter exports and registers one runtime capability manifest. It describe
 
 Use `adapter.describeCapabilities(accountId)` for the complete manifest and `adapter.getSupportedActions(accountId)` for callable actions. OneBots verifies that every advertised action has a concrete adapter implementation, preventing capability metadata from drifting away from runtime behavior.
 
+### Native platform actions
+
+Capabilities outside the common protocol surface are called through `adapter.callAction(accountId, action, params)`. Each adapter package also exports a closed action set, its inferred action union, and a low-level executor. For QQ these are `QQ_PLATFORM_ACTIONS`, `QQPlatformAction`, and `executeQQPlatformAction()`. The set's `has()` accepts a dynamic string and narrows its type, so integrations do not need to duplicate action names or erase the native client type.
+
+```ts
+import {
+  QQ_PLATFORM_ACTIONS,
+  executeQQPlatformAction,
+  type QQClient,
+} from '@onebots/adapter-qq'
+
+async function callQQ(client: QQClient, action: string, params: Record<string, unknown>) {
+  if (!QQ_PLATFORM_ACTIONS.has(action)) throw new Error(`Unknown QQ action: ${action}`)
+  return executeQQPlatformAction(client, action, params)
+}
+```
+
+The Web console only lists adapters and protocols actually loaded with `-r` / `-p`. A plugin's registered schema is the single source for runtime validation, form sections, sensitive fields, and dynamic lists; the application does not maintain a second field catalog.
+
 ### Quick Links
 
 - [QQ Adapter Documentation](/en/platform/qq)

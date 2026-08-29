@@ -40,6 +40,25 @@ onebots 目前支持以下平台适配器：
 
 需要额外权限或会话上下文的能力还会声明 `permissions`、`availability` 和适用 `scenes`。调用 `adapter.describeCapabilities(accountId)` 可取得完整清单；调用 `adapter.getSupportedActions(accountId)` 可取得当前可调用动作。OneBots 会校验清单中的动作确有具体实现，防止能力声明与运行时漂移。
 
+### 平台原生动作
+
+标准协议没有覆盖的平台能力统一通过 `adapter.callAction(accountId, action, params)` 调用。每个适配器包同时导出闭合的动作集合、动作联合类型和底层执行器；以 QQ 为例，分别是 `QQ_PLATFORM_ACTIONS`、`QQPlatformAction` 与 `executeQQPlatformAction()`。集合的 `has()` 接受动态字符串并完成类型收窄，因此插件无需复制动作名，也不需要把原生 SDK 客户端擦成通用类型。
+
+```ts
+import {
+  QQ_PLATFORM_ACTIONS,
+  executeQQPlatformAction,
+  type QQClient,
+} from '@onebots/adapter-qq'
+
+async function callQQ(client: QQClient, action: string, params: Record<string, unknown>) {
+  if (!QQ_PLATFORM_ACTIONS.has(action)) throw new Error(`未知 QQ 动作：${action}`)
+  return executeQQPlatformAction(client, action, params)
+}
+```
+
+Web 管理端只展示启动时通过 `-r` / `-p` 实际加载的适配器和协议。插件自己的注册 Schema 是运行时校验、表单分区、敏感字段与动态列表的唯一来源；主程序不维护第二份配置字段清单。
+
 ### 快速链接
 
 - [QQ 适配器文档](/platform/qq)
