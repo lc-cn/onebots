@@ -133,12 +133,15 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
     }
 
     async getVersion(): Promise<Adapter.VersionInfo> {
-        const version = await readPackageVersion(import.meta.url);
+        const [appVersion, sdkVersion] = await Promise.all([
+            readPackageVersion(import.meta.url),
+            readPackageVersion(import.meta.resolve("@microsoft/agents-hosting")),
+        ]);
         return {
             app_name: "onebots Microsoft Teams Adapter",
-            app_version: version,
-            impl: "microsoft-365-agents-sdk",
-            version,
+            app_version: appVersion,
+            impl: "@microsoft/agents-hosting",
+            version: sdkVersion,
         };
     }
 

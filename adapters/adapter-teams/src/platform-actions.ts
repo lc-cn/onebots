@@ -13,6 +13,7 @@ export const TEAMS_PLATFORM_ACTIONS = new Set([
     "send_typing",
     "send_file_consent_card",
     "send_file_info_card",
+    "complete_file_consent_upload",
     "get_team_details",
     "list_team_channels",
     "get_conversation_member",
@@ -95,18 +96,19 @@ export async function executeTeamsPlatformAction(
         );
     }
     if (action === "send_file_info_card") {
-        return bot.sendActivity(
-            conversationId,
-            teamsCard(
-                "application/vnd.microsoft.teams.card.file.info",
-                {
-                    uniqueId: requireString(params.unique_id, "unique_id"),
-                    fileType: requireString(params.file_type, "file_type"),
-                },
-                requireString(params.file_name, "file_name"),
-                requireString(params.content_url, "content_url"),
-            ),
+        return bot.sendActivity(conversationId, fileInfoActivity(params));
+    }
+    if (action === "complete_file_consent_upload") {
+        const upload = await bot.uploadFileConsentContent(
+            requireHttpsUrl(params.upload_url, "upload_url"),
+            {
+                source: requireString(params.source, "source"),
+                filename: optionalString(params.file_name),
+                contentType: optionalString(params.content_type),
+            },
         );
+        const message = await bot.sendActivity(conversationId, fileInfoActivity(params));
+        return { upload, message };
     }
 
     return bot.withConversation(conversationId, async context => {
@@ -290,6 +292,18 @@ function teamsCard(
     const activity = new Activity(ActivityTypes.Message);
     activity.attachments = [{ contentType, content, name, contentUrl }];
     return activity;
+}
+
+function fileInfoActivity(params: Readonly<Record<string, unknown>>): Activity {
+    return teamsCard(
+        "application/vnd.microsoft.teams.card.file.info",
+        {
+            uniqueId: requireString(params.unique_id, "unique_id"),
+            fileType: requireString(params.file_type, "file_type"),
+        },
+        requireString(params.file_name, "file_name"),
+        requireHttpsUrl(params.content_url, "content_url"),
+    );
 }
 
 function scalarObject(value: unknown, name: string): Record<string, string | number | boolean> {

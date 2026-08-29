@@ -76,6 +76,49 @@ describe("Teams Activity 消息转换", () => {
             attachments: [{ contentType: "image/png", contentUrl: "https://example.com/a.png" }],
         });
     });
+
+    it("接收时投影回复，并生成标准 Teams 文件信息卡片", () => {
+        expect(projectTeamsSegments(baseActivity({ replyToId: "parent" }))[0]).toEqual({
+            type: "reply",
+            data: { message_id: "parent" },
+        });
+        const activity = compileTeamsActivity(
+            [
+                {
+                    type: "file",
+                    data: {
+                        url: "https://example.com/report.pdf",
+                        name: "report.pdf",
+                        unique_id: "drive-item",
+                        file_type: "pdf",
+                    },
+                },
+            ],
+            { resolveUserId: String },
+        );
+        expect(activity.attachments?.[0]).toEqual({
+            contentType: "application/vnd.microsoft.teams.card.file.info",
+            contentUrl: "https://example.com/report.pdf",
+            content: { uniqueId: "drive-item", fileType: "pdf" },
+            name: "report.pdf",
+        });
+    });
+
+    it("拒绝未知、无效和 Teams 无法拉取的媒体段", () => {
+        expect(() =>
+            compileTeamsActivity([{ type: "unknown", data: {} }], { resolveUserId: String }),
+        ).toThrow("不支持消息段 unknown");
+        expect(() =>
+            compileTeamsActivity([{ type: "adaptive_card", data: {} }], {
+                resolveUserId: String,
+            }),
+        ).toThrow("adaptive_card.content 必须是对象");
+        expect(() =>
+            compileTeamsActivity([{ type: "image", data: { file: "base64://aW1hZ2U=" } }], {
+                resolveUserId: String,
+            }),
+        ).toThrow("必须是可公开访问的 HTTPS URL");
+    });
 });
 
 function baseActivity(overrides: Partial<TeamsActivity>): TeamsActivity {

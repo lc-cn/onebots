@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TeamsBot } from "./bot.js";
 import { allowedServiceUrlHosts } from "./bot-utils.js";
 import { TeamsConversationReferenceError } from "./errors.js";
 import type { TeamsConversationReference } from "./types.js";
 
 describe("TeamsBot 会话引用契约", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
     it("只接受 HTTPS Connector 地址", () => {
         expect(allowedServiceUrlHosts(["https://connector.example.com/path"])).toEqual([
             "connector.example.com",
@@ -55,11 +57,40 @@ describe("TeamsBot 会话引用契约", () => {
             /authority_endpoint.*HTTPS/u,
         );
     });
+
+    it("按 Teams 文件 consent 协议上传真实字节", async () => {
+        const request = vi.fn().mockResolvedValue(
+            new Response(null, {
+                status: 201,
+                headers: { etag: '"file-etag"' },
+            }),
+        );
+        vi.stubGlobal("fetch", request);
+        const bot = createBot();
+
+        await expect(
+            bot.uploadFileConsentContent("https://upload.example.com/session?token=secret", {
+                source: "base64://aGVsbG8=",
+                filename: "hello.txt",
+                contentType: "text/plain",
+            }),
+        ).resolves.toEqual({ status: 201, etag: '"file-etag"' });
+        expect(request).toHaveBeenCalledWith(
+            new URL("https://upload.example.com/session?token=secret"),
+            expect.objectContaining({
+                method: "PUT",
+                headers: {
+                    "content-type": "application/octet-stream",
+                    "content-length": "5",
+                    "content-range": "bytes 0-4/5",
+                },
+                body: Buffer.from("hello"),
+            }),
+        );
+    });
 });
 
-function createBot(
-    overrides: Partial<ConstructorParameters<typeof TeamsBot>[0]> = {},
-): TeamsBot {
+function createBot(overrides: Partial<ConstructorParameters<typeof TeamsBot>[0]> = {}): TeamsBot {
     const references = new Map<string, TeamsConversationReference>();
     return new TeamsBot(
         {

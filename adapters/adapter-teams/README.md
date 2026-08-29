@@ -46,7 +46,9 @@ Teams 主动消息不能只依赖 conversation ID；微软要求同时保留 `se
 
 ## 消息与事件
 
-发送链路原生支持文本、Teams mention entity、回复、图片/音频/视频/文件附件、Adaptive Card、Hero/Thumbnail 等 Bot Card，以及 `teams_activity` 扩展选项。富媒体不会再降级为文本链接。
+发送链路原生支持文本、Teams mention entity、回复、图片/音频/视频附件、Adaptive Card、Hero/Thumbnail 等 Bot Card，以及 `teams_activity` 扩展选项。媒体附件必须提供 Teams 服务端可访问的 HTTPS URL；未知段、无效卡片和本地/Base64 媒体会明确失败，不会静默丢失。
+
+Teams 的“附件链接”和“真实文件上传”不是同一能力。个人聊天上传必须完成 file consent → OneDrive upload → file-info 卡片流程；频道和群聊文件依赖 Graph 与 SharePoint/OneDrive 权限。适配器为此提供 `send_file_consent_card`、`send_file_info_card` 和 `call_graph_api`，`file` 段也可用 `unique_id`、`file_type`、`name`、`url` 生成标准 file-info 卡片。
 
 入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；invoke 投影为 `interaction`；typing、installationUpdate、会议、read receipt 和其他 Activity 以 `custom` notice 无损交付。原始 Activity 始终位于 `raw_event`，Teams 上下文位于 `extensions.teams`。
 
@@ -65,6 +67,7 @@ Teams 主动消息不能只依赖 conversation ID；微软要求同时保留 `se
 
 - `send_file_consent_card`：`conversation_id`、`file_name`、`size_in_bytes`，可带 accept/decline context
 - `send_file_info_card`：上传完成后发送文件信息，需 `unique_id`、`file_type`、`file_name`、`content_url`
+- `complete_file_consent_upload`：在收到 consent accept invoke 后，用 `source`（支持 URL、本地路径、data URL、`base64://`）上传到 `upload_url`，再以 `content_url`、`unique_id`、`file_type`、`file_name` 发送 file-info 卡片
 
 Teams Connector：
 

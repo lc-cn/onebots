@@ -22,17 +22,13 @@ export function compileTeamsActivity(
     let text = "";
 
     for (const segment of segments) {
-        if (typeof segment === "string") {
-            text += segment;
-            continue;
-        }
         if (segment.type === "text") {
             text += stringValue(segment.data.text);
             continue;
         }
         if (segment.type === "at") {
             const rawId = segment.data.id ?? segment.data.user_id ?? segment.data.qq;
-            if (rawId == null) continue;
+            if (rawId == null) throw new Error("Teams at 段缺少 id/user_id");
             if (rawId === "all") {
                 // Teams Bot Connector 没有通用 @all mention entity，明确退化为可见文本。
                 text += `@${stringValue(segment.data.name || "所有人")}`;
@@ -50,21 +46,27 @@ export function compileTeamsActivity(
             continue;
         }
         if (segment.type === "reply") {
-            output.replyToId = stringValue(segment.data.id || segment.data.message_id);
+            output.replyToId = requiredString(
+                segment.data.id ?? segment.data.message_id,
+                "reply.message_id",
+            );
             continue;
         }
-        const attachment = compileAttachment(segment);
-        if (attachment) {
-            attachments.push(attachment);
+        if (["adaptive_card", "card", "image", "video", "audio", "file"].includes(segment.type)) {
+            attachments.push(compileAttachment(segment));
             continue;
         }
-        if (segment.type === "teams_activity") applyActivityOptions(output, segment.data);
+        if (segment.type === "teams_activity") {
+            applyActivityOptions(output, segment.data);
+            continue;
+        }
+        throw new Error(`Teams 不支持消息段 ${segment.type}`);
     }
 
     if (text) output.text = text;
     if (attachments.length > 0) output.attachments = attachments;
     if (entities.length > 0) output.entities = entities;
-    if (!output.text && !output.attachments?.length) output.text = "";
+    if (!output.text && !output.attachments?.length) throw new Error("Teams 消息不包含可发送内容");
 
     const activity = new Activity(ActivityTypes.Message);
     activity.text = output.text;
@@ -80,7 +82,11 @@ export function compileTeamsActivity(
 
 /** 将 Teams 文本中的 mention entity 与富附件投影为可逆消息段。 */
 export function projectTeamsSegments(activity: TeamsActivity): CommonTypes.Segment[] {
-    const segments = tokenizeMentions(activity.text || "", activity.entities || []);
+    const segments: CommonTypes.Segment[] = [];
+    if (activity.replyToId) {
+        segments.push({ type: "reply", data: { message_id: activity.replyToId } });
+    }
+    segments.push(...tokenizeMentions(activity.text || "", activity.entities || []));
     for (const attachment of activity.attachments || []) {
         const contentType = attachment.contentType || "application/octet-stream";
         if (contentType === "application/vnd.microsoft.card.adaptive") {
@@ -119,10 +125,10 @@ export function projectTeamsSegments(activity: TeamsActivity): CommonTypes.Segme
     return segments.length > 0 ? segments : [{ type: "text", data: { text: "" } }];
 }
 
-function compileAttachment(segment: CommonTypes.Segment): TeamsAttachment | undefined {
+function compileAttachment(segment: CommonTypes.Segment): TeamsAttachment {
     if (segment.type === "adaptive_card") {
         const content = segment.data.content ?? segment.data.card;
-        if (!content || typeof content !== "object") return undefined;
+        requireObject(content, "adaptive_card.content");
         return {
             contentType: "application/vnd.microsoft.card.adaptive",
             content,
@@ -130,23 +136,38 @@ function compileAttachment(segment: CommonTypes.Segment): TeamsAttachment | unde
         };
     }
     if (segment.type === "card") {
-        const cardType = stringValue(segment.data.card_type || segment.data.type || "hero");
+        const cardType = requiredString(
+            segment.data.card_type ?? segment.data.type ?? "hero",
+            "card.card_type",
+        );
         const content = segment.data.content ?? segment.data.card;
-        if (!content || typeof content !== "object") return undefined;
+        requireObject(content, "card.content");
         return {
             contentType: `application/vnd.microsoft.card.${cardType}`,
             content,
             name: optionalString(segment.data.name),
         };
     }
-    if (!["image", "video", "audio", "file"].includes(segment.type)) return undefined;
-    const contentUrl = optionalString(segment.data.url || segment.data.file);
-    const content = segment.data.content;
-    if (!contentUrl && content == null) return undefined;
+    const contentUrl = requireHttpsUrl(
+        segment.data.content_url ?? segment.data.url ?? segment.data.file,
+        `${segment.type}.url`,
+    );
+    const uniqueId = optionalString(segment.data.unique_id);
+    const fileType = optionalString(segment.data.file_type);
+    if (segment.type === "file" && (uniqueId || fileType)) {
+        if (!uniqueId || !fileType) {
+            throw new Error("Teams file 段必须同时提供 unique_id 与 file_type");
+        }
+        return {
+            contentType: "application/vnd.microsoft.teams.card.file.info",
+            contentUrl,
+            content: { uniqueId, fileType },
+            name: requiredString(segment.data.name ?? segment.data.filename, "file.name"),
+        };
+    }
     return {
         contentType: optionalString(segment.data.mime) || defaultMime(segment.type),
         contentUrl,
-        content,
         name: optionalString(segment.data.name || segment.data.filename),
         thumbnailUrl: optionalString(segment.data.thumbnail_url),
     };
@@ -212,6 +233,26 @@ function stringValue(value: unknown): string {
 function optionalString(value: unknown): string | undefined {
     const result = stringValue(value).trim();
     return result || undefined;
+}
+
+function requiredString(value: unknown, name: string): string {
+    const result = optionalString(value);
+    if (!result) throw new Error(`Teams ${name} 必须为非空字符串`);
+    return result;
+}
+
+function requireObject(value: unknown, name: string): asserts value is Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(`Teams ${name} 必须是对象`);
+    }
+}
+
+function requireHttpsUrl(value: unknown, name: string): string {
+    const result = requiredString(value, name);
+    if (!URL.canParse(result) || new URL(result).protocol !== "https:") {
+        throw new Error(`Teams ${name} 必须是可公开访问的 HTTPS URL`);
+    }
+    return result;
 }
 
 function escapeXml(value: string): string {

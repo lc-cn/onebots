@@ -16,7 +16,12 @@ import {
     type ConversationParameters,
     type ConversationReference,
 } from "@microsoft/agents-activity";
-import type { Next, RouterContext } from "onebots";
+import {
+    materializeMediaSource,
+    type MediaSourceInput,
+    type Next,
+    type RouterContext,
+} from "onebots";
 import { transformConversationReference, transformTeamsActivity } from "./activity-transform.js";
 import {
     allowedServiceUrlHosts,
@@ -173,6 +178,42 @@ export class TeamsBot extends EventEmitter {
         await this.withConversation(conversationId, context =>
             context.turn.deleteActivity(activityId),
         );
+    }
+
+    /** 将用户同意后的文件内容上传到 Teams 提供的 OneDrive 预授权地址。 */
+    async uploadFileConsentContent(
+        uploadUrl: string,
+        source: MediaSourceInput,
+    ): Promise<{ status: number; etag?: string }> {
+        if (!URL.canParse(uploadUrl)) {
+            throw new TeamsApiError("Teams 文件 upload_url 无效", {
+                code: "TEAMS_FILE_UPLOAD_URL_INVALID",
+            });
+        }
+        const url = new URL(uploadUrl);
+        if (url.protocol !== "https:" || url.username || url.password) {
+            throw new TeamsApiError("Teams 文件 upload_url 必须是无凭据的 HTTPS URL", {
+                code: "TEAMS_FILE_UPLOAD_URL_INVALID",
+            });
+        }
+        const media = await materializeMediaSource(source);
+        const response = await fetch(url, {
+            method: "PUT",
+            headers: {
+                "content-type": "application/octet-stream",
+                "content-length": String(media.data.byteLength),
+                "content-range": `bytes 0-${media.data.byteLength - 1}/${media.data.byteLength}`,
+            },
+            body: Buffer.from(media.data),
+        });
+        if (response.status !== 200 && response.status !== 201) {
+            throw new TeamsApiError(`Teams 文件上传失败: ${response.status}`, {
+                code: "TEAMS_FILE_UPLOAD_ERROR",
+                status: response.status,
+                details: await response.text(),
+            });
+        }
+        return { status: response.status, etag: response.headers.get("etag") || undefined };
     }
 
     /** 在恢复出的真实会话上下文中调用 Teams Connector、Graph 或发送接口。 */
