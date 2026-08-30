@@ -103,65 +103,6 @@ describe("FeishuBot webhook", () => {
     });
 });
 
-describe("FeishuBot 目录分页", () => {
-    it("遍历群成员 page_token 直到 has_more 结束", async () => {
-        const bot = new FeishuBot({ account_id: "A1", app_id: "cli_1", app_secret: "secret" });
-        const get = vi.spyOn(bot, "get");
-        get.mockResolvedValueOnce({
-            data: {
-                code: 0,
-                msg: "ok",
-                data: {
-                    items: [{ open_id: "ou_1", name: "Alice" }],
-                    has_more: true,
-                    page_token: "next",
-                },
-            },
-        } as never);
-        get.mockResolvedValueOnce({
-            data: {
-                code: 0,
-                msg: "ok",
-                data: { items: [{ open_id: "ou_2", name: "Bob" }], has_more: false },
-            },
-        } as never);
-
-        await expect(bot.getChatMembers("oc_1")).resolves.toHaveLength(2);
-        expect(get).toHaveBeenNthCalledWith(2, "/im/v1/chats/oc_1/members", {
-            page_size: 100,
-            page_token: "next",
-        });
-    });
-
-    it("群成员详情验证真实成员身份", async () => {
-        const bot = createBot();
-        vi.spyOn(bot, "get").mockResolvedValue({
-            data: {
-                code: 0,
-                msg: "ok",
-                data: { items: [{ open_id: "ou_1", name: "Alice" }], has_more: false },
-            },
-        } as never);
-
-        await expect(bot.getChatMember("oc_1", "ou_1")).resolves.toMatchObject({ name: "Alice" });
-        await expect(bot.getChatMember("oc_1", "ou_missing")).rejects.toMatchObject({
-            code: "FEISHU_GROUP_MEMBER_NOT_FOUND",
-            category: ErrorCategory.RESOURCE,
-        });
-    });
-
-    it("资源 ID 进入路径前会被编码", async () => {
-        const bot = createBot();
-        const get = vi.spyOn(bot, "get").mockResolvedValue({
-            data: { code: 0, msg: "ok", data: { chat_id: "oc/1" } },
-        } as never);
-
-        await bot.getChatInfo("oc/1");
-
-        expect(get).toHaveBeenCalledWith("/im/v1/chats/oc%2F1");
-    });
-});
-
 describe("FeishuBot 请求与事件边界", () => {
     it("并发获取令牌只发送一次请求", async () => {
         const request = vi

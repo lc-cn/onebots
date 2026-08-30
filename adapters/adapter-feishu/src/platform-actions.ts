@@ -19,13 +19,31 @@ const ACTION_HANDLERS = {
     forward_message: (bot, params) =>
         bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/forward`, {
             method: "POST",
+            params: {
+                receive_id_type: receiveIdType(params.receive_id_type),
+                ...optionalStringParam(params.uuid, "uuid"),
+            },
+            body: { receive_id: requiredString(params.receive_id, "receive_id") },
+        }),
+    forward_thread: (bot, params) =>
+        bot.callApi(`/im/v1/threads/${segment(params, "thread_id")}/forward`, {
+            method: "POST",
+            params: {
+                receive_id_type: receiveIdType(params.receive_id_type),
+                ...optionalStringParam(params.uuid, "uuid"),
+            },
+            body: { receive_id: requiredString(params.receive_id, "receive_id") },
+        }),
+    push_follow_up: (bot, params) =>
+        bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/push_follow_up`, {
+            method: "POST",
             body: without(params, "message_id"),
         }),
     merge_forward_messages: (bot, params) =>
         bot.callApi("/im/v1/messages/merge_forward", {
             method: "POST",
             params: {
-                receive_id_type: stringValue(params.receive_id_type, "open_id"),
+                receive_id_type: receiveIdType(params.receive_id_type),
                 ...optionalStringParam(params.uuid, "uuid"),
             },
             body: {
@@ -36,7 +54,7 @@ const ACTION_HANDLERS = {
     get_message_read_users: (bot, params) =>
         bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/read_users`, {
             params: queryValue({
-                user_id_type: stringValue(params.user_id_type, "open_id"),
+                user_id_type: userIdType(params.user_id_type),
                 ...(params.page_size === undefined ? {} : { page_size: params.page_size }),
                 ...(params.page_token === undefined ? {} : { page_token: params.page_token }),
             }),
@@ -55,17 +73,48 @@ const ACTION_HANDLERS = {
         bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/reactions`, {
             params: queryValue(without(params, "message_id")),
         }),
+    batch_get_reactions: (bot, params) =>
+        bot.callApi("/im/v1/messages/reactions/batch_query", {
+            method: "POST",
+            params: { user_id_type: userIdType(params.user_id_type) },
+            body: without(params, "user_id_type"),
+        }),
     create_chat: (bot, params) =>
-        bot.callApi("/im/v1/chats", { method: "POST", body: { ...params } }),
+        bot.callApi("/im/v1/chats", {
+            method: "POST",
+            params: compactQuery({
+                user_id_type: userIdType(params.user_id_type),
+                set_bot_manager: optionalBoolean(params.set_bot_manager, "set_bot_manager"),
+                uuid: optionalString(params.uuid, "uuid"),
+            }),
+            body: without(params, "user_id_type", "set_bot_manager", "uuid"),
+        }),
     update_chat: (bot, params) =>
         bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}`, {
             method: "PUT",
-            body: without(params, "chat_id"),
+            params: { user_id_type: userIdType(params.user_id_type) },
+            body: without(params, "chat_id", "user_id_type"),
         }),
     delete_chat: (bot, params) =>
         bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}`, { method: "DELETE" }),
     add_chat_members: (bot, params) => chatMembers(bot, params, "POST"),
     remove_chat_members: (bot, params) => chatMembers(bot, params, "DELETE"),
+    add_chat_managers: (bot, params) => chatManagers(bot, params, "add_managers"),
+    delete_chat_managers: (bot, params) => chatManagers(bot, params, "delete_managers"),
+    get_chat_link: (bot, params) =>
+        bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}/link`, {
+            method: "POST",
+            body: without(params, "chat_id"),
+        }),
+    get_chat_announcement: (bot, params) =>
+        bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}/announcement`, {
+            params: { user_id_type: userIdType(params.user_id_type) },
+        }),
+    update_chat_announcement: (bot, params) =>
+        bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}/announcement`, {
+            method: "PATCH",
+            body: without(params, "chat_id", "user_id_type"),
+        }),
     send_app_urgent: (bot, params) => urgent(bot, params, "urgent_app"),
     send_sms_urgent: (bot, params) => urgent(bot, params, "urgent_sms"),
     send_phone_urgent: (bot, params) => urgent(bot, params, "urgent_phone"),
@@ -74,6 +123,14 @@ const ACTION_HANDLERS = {
     delete_pin: (bot, params) =>
         bot.callApi(`/im/v1/pins/${segment(params, "message_id")}`, { method: "DELETE" }),
     get_pin_list: (bot, params) => bot.callApi("/im/v1/pins", { params: queryValue(params) }),
+    get_batch_message_read_stats: (bot, params) =>
+        bot.callApi(`/im/v1/batch_messages/${segment(params, "batch_message_id")}/read_user`),
+    delete_batch_message: (bot, params) =>
+        bot.callApi(`/im/v1/batch_messages/${segment(params, "batch_message_id")}`, {
+            method: "DELETE",
+        }),
+    get_batch_message_progress: (bot, params) =>
+        bot.callApi(`/im/v1/batch_messages/${segment(params, "batch_message_id")}/get_progress`),
 } satisfies Readonly<Record<string, PlatformActionHandler<FeishuBot>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
@@ -105,8 +162,24 @@ function chatMembers(
 ): Promise<unknown> {
     return bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}/members`, {
         method,
-        params: { member_id_type: stringValue(params.member_id_type, "open_id") },
+        params: compactQuery({
+            member_id_type: memberIdType(params.member_id_type),
+            succeed_type:
+                method === "POST" ? optionalNumber(params.succeed_type, "succeed_type") : undefined,
+        }),
         body: { id_list: stringArray(params.id_list, "id_list") },
+    });
+}
+
+function chatManagers(
+    bot: FeishuBot,
+    params: Readonly<Record<string, unknown>>,
+    operation: "add_managers" | "delete_managers",
+): Promise<unknown> {
+    return bot.callApi(`/im/v1/chats/${segment(params, "chat_id")}/managers/${operation}`, {
+        method: "POST",
+        params: { member_id_type: memberIdType(params.member_id_type) },
+        body: { manager_ids: stringArray(params.manager_ids, "manager_ids") },
     });
 }
 
@@ -117,7 +190,7 @@ function urgent(
 ): Promise<unknown> {
     return bot.callApi(`/im/v1/messages/${segment(params, "message_id")}/${kind}`, {
         method: "PATCH",
-        params: { user_id_type: stringValue(params.user_id_type, "open_id") },
+        params: { user_id_type: userIdType(params.user_id_type) },
         body: { user_id_list: stringArray(params.user_id_list, "user_id_list") },
     });
 }
@@ -186,14 +259,72 @@ function without(
     return Object.fromEntries(Object.entries(params).filter(([key]) => !keys.includes(key)));
 }
 
-function stringValue(value: unknown, fallback: string): string {
-    if (value === undefined) return fallback;
-    return requiredString(value, "可选字符串");
-}
-
 function optionalStringParam(value: unknown, name: string): Record<string, string> {
     if (value === undefined) return {};
     return { [name]: requiredString(value, name) };
+}
+
+function receiveIdType(value: unknown): string {
+    return enumString(
+        value,
+        "receive_id_type",
+        ["open_id", "user_id", "union_id", "email", "chat_id", "thread_id"],
+        "open_id",
+    );
+}
+
+function userIdType(value: unknown): string {
+    return enumString(value, "user_id_type", ["open_id", "user_id", "union_id"], "open_id");
+}
+
+function memberIdType(value: unknown): string {
+    return enumString(
+        value,
+        "member_id_type",
+        ["open_id", "user_id", "union_id", "app_id"],
+        "open_id",
+    );
+}
+
+function enumString(
+    value: unknown,
+    name: string,
+    allowed: readonly string[],
+    fallback: string,
+): string {
+    if (value === undefined) return fallback;
+    if (typeof value !== "string" || !allowed.includes(value)) {
+        throw invalidFeishuParam(`飞书参数 ${name} 必须是 ${allowed.join("、")} 之一`, value);
+    }
+    return value;
+}
+
+function optionalString(value: unknown, name: string): string | undefined {
+    return value === undefined ? undefined : requiredString(value, name);
+}
+
+function optionalBoolean(value: unknown, name: string): boolean | undefined {
+    if (value === undefined) return undefined;
+    if (typeof value !== "boolean")
+        throw invalidFeishuParam(`飞书参数 ${name} 必须为布尔值`, value);
+    return value;
+}
+
+function optionalNumber(value: unknown, name: string): number | undefined {
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isFinite(value))
+        throw invalidFeishuParam(`飞书参数 ${name} 必须为有限数字`, value);
+    return value;
+}
+
+function compactQuery(
+    value: Record<string, string | number | boolean | undefined>,
+): Record<string, string | number | boolean> {
+    return Object.fromEntries(
+        Object.entries(value).filter(
+            (entry): entry is [string, string | number | boolean] => entry[1] !== undefined,
+        ),
+    );
 }
 
 function stringArray(value: unknown, name: string): string[] {

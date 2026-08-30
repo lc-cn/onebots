@@ -1,4 +1,5 @@
 import { FeishuError } from "./errors.js";
+import { collectFeishuPages } from "./pagination.js";
 import type {
     FeishuApiEnvelope,
     FeishuAPIResponse,
@@ -102,9 +103,7 @@ export async function fetchFeishuChatMembers(
     client: FeishuResourceClient,
     chatId: string,
 ): Promise<FeishuUser[]> {
-    const members: FeishuUser[] = [];
-    let pageToken: string | undefined;
-    do {
+    return collectFeishuPages("获取群成员列表", async pageToken => {
         const { data } = await client.get<FeishuChatMembersAPIResponse>(
             `/im/v1/chats/${encodeURIComponent(chatId)}/members`,
             { page_size: 100, ...(pageToken ? { page_token: pageToken } : {}) },
@@ -115,10 +114,8 @@ export async function fetchFeishuChatMembers(
                 "获取群组成员列表失败: 响应缺少 data",
                 data,
             );
-        members.push(...(data.data.items ?? []));
-        pageToken = data.data.has_more ? data.data.page_token : undefined;
-    } while (pageToken);
-    return members;
+        return data.data;
+    });
 }
 
 /** 在真实群成员目录中查找用户，避免把全局通讯录用户误报为群成员。 */
@@ -144,18 +141,15 @@ async function fetchPages<T>(
     path: string,
     params: Record<string, string | number | boolean>,
 ): Promise<T[]> {
-    const items: T[] = [];
-    let pageToken: string | undefined;
-    do {
+    return collectFeishuPages(path, async pageToken => {
         const { data } = await client.get<
             FeishuAPIResponse & {
                 data?: { items?: T[]; page_token?: string; has_more?: boolean };
             }
         >(path, { ...params, ...(pageToken ? { page_token: pageToken } : {}) });
-        items.push(...(data.data?.items ?? []));
-        pageToken = data.data?.has_more ? data.data.page_token : undefined;
-    } while (pageToken);
-    return items;
+        if (!data.data) throw missing("FEISHU_PAGE_MISSING", `${path} 响应缺少 data`, data);
+        return data.data;
+    });
 }
 
 function missing(code: string, message: string, details: unknown): FeishuError {

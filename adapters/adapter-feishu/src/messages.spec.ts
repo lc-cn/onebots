@@ -131,4 +131,23 @@ describe("飞书消息编译器", () => {
             ),
         ).rejects.toThrow("无法在单条消息中无损混合");
     });
+
+    it("保留飞书原生群名片和个人名片消息", async () => {
+        await expect(
+            compileFeishuMessage([{ type: "share_chat", data: { chat_id: "oc_1" } }], {
+                client,
+                resolveUserId: String,
+            }),
+        ).resolves.toEqual({
+            msgType: "share_chat",
+            content: { chat_id: "oc_1" },
+            replyTo: undefined,
+        });
+        await expect(
+            compileFeishuMessage([{ type: "share_user", data: { user_id: "ou_1" } }], {
+                client,
+                resolveUserId: String,
+            }),
+        ).resolves.toMatchObject({ msgType: "share_user", content: { user_id: "ou_1" } });
+    });
 });

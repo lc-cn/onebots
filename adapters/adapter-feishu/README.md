@@ -78,12 +78,15 @@ onebots -r feishu
 - 统一 `receive_mode` 配置，Web 表单按模式动态展示 Webhook 凭据
 - Webhook 加密事件解密与 Verification Token 校验
 - 单聊、群聊、线程回复以及文本、@、图片、文件、音频、视频、富文本和卡片
+- 原生群名片、个人名片、消息跟随气泡、消息/话题转发与批量表情查询
 - 真实机器人身份、通讯录用户、群列表、群详情和成员列表
+- 群成员、管理员、分享链接、公告、加急、Pin 与批量消息状态管理
 - 消息撤回、已读、成员/机器人群生命周期、菜单交互和消息表情增删等 canonical 事件投影；未知事件通过 `raw_event` 无损交付
 - 飞书和 Lark 双端点以及私有化开放平台端点
 - `await FeishuBot.ingest(rawEvent)` 可把已有 WebSocket、队列或宿主连接收到的已认证 2.0 事件交给同一客户端，并在协议投递完成后返回
 - `ingestHttp({ method, body })` 返回 `{ status, headers, body, event? }`；`acceptHttp(Request)` 与 `acceptHttp(ctx)` 分别适配跨 realm Fetch/WinterCG 和 Koa Host，三者共用解密、认证与错误响应策略
 - 并发启动与 tenant token 请求合并，stop 会废弃在途启动；失效令牌自动刷新一次
+- 所有目录列表共用受约束的游标分页；平台返回缺失或重复游标时明确失败，不静默截断或无限请求
 - 所有 API/媒体失败继承 `OneBotsError`，并使用 `FeishuError.code` / `category` 分类
 
 长连接注册官方 SDK 当前声明的全部 IM v1 事件，包括消息、已读、撤回、表情回复、用户/机器人群成员变化、群更新与机器人单聊进入事件。其他业务域事件仍可通过 `FeishuBot.ingest()` 交给同一客户端。
@@ -106,7 +109,9 @@ onebots -r feishu
 
 下列动作可从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
 
-`reply_message`、`forward_message`、`merge_forward_messages`、`get_message_read_users`、`add_reaction`、`delete_reaction`、`get_reactions`、`create_chat`、`update_chat`、`delete_chat`、`add_chat_members`、`remove_chat_members`、三种消息加急动作以及 Pin 管理动作。
+`reply_message`、`forward_message`、`forward_thread`、`push_follow_up`、`merge_forward_messages`、`get_message_read_users`、表情回复、群创建/更新/删除、群成员与管理员、群分享链接、群公告、三种消息加急、Pin 以及批量消息状态管理动作。
+
+命名动作会严格按开放平台契约拆分 path、query 和 JSON body，例如 `forward_message` 的 `receive_id_type` 与 `uuid` 位于 query，而 `receive_id` 位于 body。需要使用其他 IM 或业务域能力时，再使用 `call_feishu_api`，无需绕过适配器的令牌刷新与结构化错误处理。
 
 其他开放平台能力可通过 `call_feishu_api` 调用：
 

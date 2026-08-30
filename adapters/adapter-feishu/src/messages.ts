@@ -3,7 +3,17 @@ import { uploadFeishuFile, uploadFeishuImage, type FeishuMediaClient } from "./m
 import { FeishuError, invalidFeishuParam } from "./errors.js";
 
 export interface CompiledFeishuMessage {
-    msgType: "text" | "post" | "image" | "file" | "audio" | "media" | "sticker" | "interactive";
+    msgType:
+        | "text"
+        | "post"
+        | "image"
+        | "file"
+        | "audio"
+        | "media"
+        | "sticker"
+        | "interactive"
+        | "share_chat"
+        | "share_user";
     content: Record<string, unknown>;
     replyTo?: string;
 }
@@ -52,9 +62,14 @@ async function compileSingle(
     if (segment.type === "text" || segment.type === "at") {
         return { msgType: "text", content: { text: textContent(segment, context) } };
     }
-    if (segment.type === "post" || segment.type === "interactive") {
+    if (
+        segment.type === "post" ||
+        segment.type === "interactive" ||
+        segment.type === "share_chat" ||
+        segment.type === "share_user"
+    ) {
         return {
-            msgType: segment.type === "post" ? "post" : "interactive",
+            msgType: segment.type,
             content: objectContent(segment),
         };
     }

@@ -8,23 +8,12 @@
 
 ## 功能特性
 
-- ✅ **消息收发**
-  - 单聊消息收发
-  - 群聊消息收发
-  - 支持文本、富文本、卡片等多种消息格式
-- ✅ **消息管理**
-  - 消息编辑
-  - 消息删除
-- ✅ **群组管理**
-  - 获取群组信息
-  - 获取群组成员列表和信息
-  - 离开群组
-  - 踢出成员
-- ✅ **用户管理**
-  - 获取用户信息
-- ✅ **事件订阅**
-  - Webhook 事件订阅
-  - 自动 Token 管理（应用访问令牌和租户访问令牌）
+- ✅ **消息与互动**：单聊、群聊、回复、消息/话题转发、富文本、卡片、媒体、名片、表情回复、跟随气泡、加急与 Pin
+- ✅ **消息管理**：获取、撤回、卡片更新、已读用户与批量消息状态管理
+- ✅ **群组管理**：群信息、成员、管理员、分享链接和群公告
+- ✅ **用户目录**：机器人身份、应用可见通讯录用户与真实群成员
+- ✅ **事件接入**：官方长连接、Webhook 和 manual 宿主接入；未知事件通过 `raw_event` 无损交付
+- ✅ **可靠性**：tenant token 合并与失效重试、事件去重、受约束游标分页和结构化平台错误
 - ✅ **多端点支持**
   - 飞书（国内版）
   - Lark（国际版）
@@ -47,6 +36,7 @@ pnpm add @onebots/adapter-feishu
 feishu.feishu_bot:
   app_id: 'your_app_id'  # 应用 App ID，必填
   app_secret: 'your_app_secret'  # 应用 App Secret，必填
+  receive_mode: long_connection  # long_connection | webhook | manual
   encrypt_key: 'your_encrypt_key'  # 可选，事件加密密钥
   verification_token: 'your_verification_token'  # 可选，事件验证 Token
   
@@ -71,6 +61,7 @@ feishu.lark_bot:
 |--------|------|------|------|
 | `app_id` | string | 是 | 飞书/Lark 应用 App ID |
 | `app_secret` | string | 是 | 飞书/Lark 应用 App Secret |
+| `receive_mode` | string | 否 | 事件接收方式，默认 `long_connection` |
 | `encrypt_key` | string | 否 | 事件加密密钥 |
 | `verification_token` | string | 否 | 事件验证 Token |
 | `endpoint` | string | 否 | API 端点，默认为飞书国内版 |
@@ -120,7 +111,7 @@ import { FeishuEndpoint } from '@onebots/adapter-feishu';
 1. 访问 [飞书开放平台](https://open.feishu.cn/)
 2. 创建企业自建应用
 3. 获取 `App ID` 和 `App Secret`
-4. 配置事件订阅 URL（Webhook）：`http://your-server:port/feishu/{account_id}/webhook`
+4. 选择官方长连接，或配置事件订阅 URL（Webhook）：`http://your-server:port/feishu/{account_id}/webhook`
 5. 配置应用权限（消息收发、通讯录等）
 
 ### Lark（国际版）
@@ -143,36 +134,29 @@ onebots -r feishu -p onebot.v11
 onebots 提供了 imhelper 客户端SDK，可以方便地连接飞书适配器：
 
 ```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot12Adapter } from '@imhelper/onebot-v12';
+import { createOnebot12Client } from '@imhelper/onebot-v12';
 
-// 创建适配器
-const adapter = createOnebot12Adapter({
-  baseUrl: 'http://localhost:6727',
+const client = createOnebot12Client({
+  baseUrl: 'http://localhost:6727/feishu/your_bot_id/onebot/v12',
+  apiBaseUrl: 'http://localhost:6727/feishu/your_bot_id/onebot/v12',
+  wsUrl: 'ws://localhost:6727/feishu/your_bot_id/onebot/v12',
   selfId: 'your_bot_id',
   accessToken: 'your_token',
   receiveMode: 'ws',
-  path: '/feishu/your_bot_id/onebot/v12',
-  wsUrl: 'ws://localhost:6727/feishu/your_bot_id/onebot/v12',
-  platform: 'feishu',
 });
-
-// 创建 ImHelper 实例
-const helper = createImHelper(adapter);
 
 // 监听消息事件
-helper.on('message.private', (message) => {
+client.on('message.private', async message => {
   console.log('收到私聊消息:', message.content);
-  message.reply([{ type: 'text', data: { text: '收到！' } }]);
+  await message.reply('收到！');
 });
 
-helper.on('message.group', (message) => {
+client.on('message.group', async message => {
   console.log('收到群聊消息:', message.content);
-  message.reply([{ type: 'text', data: { text: '收到！' } }]);
+  await message.reply('收到！');
 });
 
-// 连接
-await adapter.connect();
+await client.start();
 ```
 
 详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)
@@ -182,4 +166,3 @@ await adapter.connect();
 - [飞书开放平台](https://open.feishu.cn/)
 - [飞书 Bot 开发文档](https://open.feishu.cn/document/ukTMukTMukTM/uczM3QjL3MzN04yNzcDN)
 - [飞书适配器 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-feishu)
-
