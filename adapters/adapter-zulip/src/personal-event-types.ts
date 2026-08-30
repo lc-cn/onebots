@@ -85,3 +85,35 @@ export interface ZulipSavedSnippetsRemoveEvent extends ZulipPersonalBaseEvent {
 export type ZulipSavedSnippetsEvent =
     | ZulipSavedSnippetsChangedEvent
     | ZulipSavedSnippetsRemoveEvent;
+
+export interface ZulipDraft extends Record<string, unknown> {
+    id: number;
+    type: "" | "stream" | "private";
+    to: number[];
+    topic: string;
+    content: string;
+    timestamp: number;
+}
+
+export interface ZulipDraftsAddEvent extends ZulipPersonalBaseEvent {
+    type: "drafts";
+    op: "add";
+    drafts: ZulipDraft[];
+}
+
+export interface ZulipDraftsUpdateEvent extends ZulipPersonalBaseEvent {
+    type: "drafts";
+    op: "update";
+    draft: ZulipDraft;
+}
+
+export interface ZulipDraftsRemoveEvent extends ZulipPersonalBaseEvent {
+    type: "drafts";
+    op: "remove";
+    draft_id: number;
+}
+
+export type ZulipDraftsEvent =
+    | ZulipDraftsAddEvent
+    | ZulipDraftsUpdateEvent
+    | ZulipDraftsRemoveEvent;

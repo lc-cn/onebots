@@ -1,5 +1,6 @@
 import type { ZulipAttachment, ZulipEventMessageType, ZulipMessage } from "./types.js";
 import type {
+    ZulipDraftsEvent,
     ZulipRemindersEvent,
     ZulipSavedSnippetsEvent,
     ZulipScheduledMessagesEvent,
@@ -415,6 +416,7 @@ export type ZulipEvent =
     | ZulipScheduledMessagesEvent
     | ZulipRemindersEvent
     | ZulipSavedSnippetsEvent
+    | ZulipDraftsEvent
     | ZulipChannelFolderEvent
     | ZulipNavigationViewEvent
     | ZulipUserGroupEvent

@@ -51,6 +51,7 @@ export namespace CommonTypes {
         | "scheduled_message"
         | "reminder"
         | "saved_snippet"
+        | "draft"
         | "role"
         | "emoji"
         | "user_group";
@@ -165,6 +166,9 @@ export namespace CommonEvent {
         | "saved_snippet_created"
         | "saved_snippet_updated"
         | "saved_snippet_removed"
+        | "draft_created"
+        | "draft_updated"
+        | "draft_removed"
         | "guild_role_created"
         | "guild_role_updated"
         | "guild_role_deleted"

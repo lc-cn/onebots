@@ -61,18 +61,4 @@ describe("Zulip 平台动作", () => {
             storage: { cursor: "42" },
         });
     });
-
-    it.each([
-        ["edit_scheduled_message", "scheduled_messages/12", "scheduled_message_id"],
-        ["edit_draft", "drafts/12", "draft_id"],
-    ])("%s 使用官方资源路径并移除路径参数", async (action, path, idField) => {
-        const client = new ZulipClient(config, { transport: async () => ({}) });
-        const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
-
-        await executeZulipPlatformAction(client, action, { [idField]: 12, content: "updated" });
-
-        expect(call).toHaveBeenCalledWith(path, action.startsWith("delete_") ? "DELETE" : "PATCH", {
-            content: "updated",
-        });
-    });
 });

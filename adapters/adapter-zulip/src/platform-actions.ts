@@ -1,11 +1,5 @@
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
-import {
-    requireInteger,
-    requireMethod,
-    requireParams,
-    requireString,
-    without,
-} from "./action-params.js";
+import { requireMethod, requireParams, requireString } from "./action-params.js";
 import { ZULIP_ATTACHMENT_ACTION_HANDLERS } from "./attachment-actions.js";
 import { ZULIP_BOT_ACTION_HANDLERS } from "./bot-actions.js";
 import { ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS } from "./channel-folder-actions.js";
@@ -15,6 +9,7 @@ import { ZulipError } from "./errors.js";
 import { ZULIP_EMOJI_ACTION_HANDLERS } from "./emoji-actions.js";
 import { ZULIP_DOMAIN_ACTION_HANDLERS } from "./domain-actions.js";
 import { ZULIP_DATA_EXPORT_ACTION_HANDLERS } from "./data-export-actions.js";
+import { ZULIP_DRAFT_ACTION_HANDLERS } from "./draft-actions.js";
 import { ZULIP_INVITATION_ACTION_HANDLERS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_ACTION_HANDLERS } from "./linkifier-actions.js";
 import { ZULIP_MESSAGE_ACTION_HANDLERS } from "./message-actions.js";
@@ -47,16 +42,12 @@ const ACTION_HANDLERS = {
     send_typing_notification: (client, params) =>
         client.call("typing", "POST", requireParams(params)),
     get_server_settings: client => client.call("server_settings"),
-    get_drafts: client => client.call("drafts"),
-    create_drafts: (client, params) => client.call("drafts", "POST", requireParams(params)),
-    edit_draft: (client, params) => resourceAction(client, "drafts", "draft_id", "PATCH", params),
-    delete_draft: (client, params) =>
-        resourceAction(client, "drafts", "draft_id", "DELETE", params),
     ...ZULIP_BOT_ACTION_HANDLERS,
     ...ZULIP_ATTACHMENT_ACTION_HANDLERS,
     ...ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS,
     ...ZULIP_CHANNEL_ACTION_HANDLERS,
     ...ZULIP_DATA_EXPORT_ACTION_HANDLERS,
+    ...ZULIP_DRAFT_ACTION_HANDLERS,
     ...ZULIP_DOMAIN_ACTION_HANDLERS,
     ...ZULIP_EMOJI_ACTION_HANDLERS,
     ...ZULIP_INVITATION_ACTION_HANDLERS,
@@ -93,15 +84,4 @@ export async function executeZulipPlatformAction(
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
     return PLATFORM_ACTIONS.execute(client, action, params);
-}
-
-function resourceAction(
-    client: ZulipClient,
-    collection: string,
-    idField: string,
-    method: "PATCH" | "DELETE",
-    params: Readonly<Record<string, unknown>>,
-): Promise<unknown> {
-    const id = requireInteger(params[idField], idField);
-    return client.call(`${collection}/${id}`, method, without(params, idField));
 }

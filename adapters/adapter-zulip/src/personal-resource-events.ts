@@ -17,7 +17,29 @@ export function projectZulipPersonalResourceEvents(
     if (event.type === "scheduled_messages") return projectScheduledMessages(event, context);
     if (event.type === "reminders") return projectReminders(event, context);
     if (event.type === "saved_snippets") return projectSavedSnippets(event, context);
+    if (event.type === "drafts") return projectDrafts(event, context);
     return undefined;
+}
+
+function projectDrafts(
+    event: ZulipBaseEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent>[] {
+    const op = stringValue(event.op);
+    if (op === "add") {
+        const events = resources(event.drafts, "id").map(draft =>
+            personalNotice(event, context, "draft_created", "draft", "id", op, draft),
+        );
+        return events.length ? events : [customNotice(event, context)];
+    }
+    if (op === "update" && isRecord(event.draft) && numeric(event.draft.id) !== undefined) {
+        return [personalNotice(event, context, "draft_updated", "draft", "id", op, event.draft)];
+    }
+    const id = numeric(event.draft_id);
+    if (op === "remove" && id !== undefined) {
+        return [personalNotice(event, context, "draft_removed", "draft", "id", op, { id })];
+    }
+    return [customNotice(event, context)];
 }
 
 function projectSavedSnippets(
