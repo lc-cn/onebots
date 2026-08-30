@@ -73,7 +73,11 @@ export function optionalString(
     name: string,
 ): string | undefined {
     const value = params[name];
-    return typeof value === "string" && value ? value : undefined;
+    if (value === undefined) return undefined;
+    if (typeof value !== "string" || !value.trim()) {
+        throw invalidParams(`LINE 参数 ${name} 必须是非空字符串`);
+    }
+    return value;
 }
 
 export function requireStringArray(
@@ -90,9 +94,14 @@ export function optionalStringArray(
     name: string,
 ): string[] | undefined {
     const value = params[name];
-    return Array.isArray(value) && value.every(item => typeof item === "string")
-        ? value
-        : undefined;
+    if (value === undefined) return undefined;
+    if (
+        !Array.isArray(value) ||
+        !value.every(item => typeof item === "string" && item.trim().length > 0)
+    ) {
+        throw invalidParams(`LINE 参数 ${name} 必须是非空字符串数组`);
+    }
+    return [...value];
 }
 
 export function optionalBoolean(
@@ -100,7 +109,9 @@ export function optionalBoolean(
     name: string,
 ): boolean | undefined {
     const value = params[name];
-    return typeof value === "boolean" ? value : undefined;
+    if (value === undefined) return undefined;
+    if (typeof value !== "boolean") throw invalidParams(`LINE 参数 ${name} 必须是布尔值`);
+    return value;
 }
 
 export function optionalNumber(
@@ -108,10 +119,11 @@ export function optionalNumber(
     name: string,
 ): number | undefined {
     const value = params[name];
-    if (value == null) return undefined;
-    const number = Number(value);
-    if (!Number.isFinite(number)) throw invalidParams(`LINE 参数 ${name} 必须是数字`);
-    return number;
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw invalidParams(`LINE 参数 ${name} 必须是数字`);
+    }
+    return value;
 }
 
 export function requireInteger(params: Readonly<Record<string, unknown>>, name: string): number {

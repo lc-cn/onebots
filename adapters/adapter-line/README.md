@@ -84,7 +84,7 @@ LINE 每次最多发送 5 条 Message。通用 `sendMessage` 会按 5 条自动�
 
 ## 原生扩展动作
 
-平台动作使用显式白名单，不开放任意 SDK 方法反射调用。
+平台动作使用显式白名单，不开放任意 SDK 方法反射调用。能力发现直接由同一份领域动作注册表生成，新增动作不会出现“已经可以调用但 Web 与下游查询不到”的清单漂移。已提供但类型错误的可选参数会返回 `LINE_INVALID_ACTION_PARAMS`，不会被静默当成未提供。
 
 - 消息：`push_message`、`reply_message`、`multicast`、`broadcast`、`narrowcast`、请求校验、窄播进度、电话通知消息、`show_loading_animation`、两种已读动作；
 - 内容：下载原内容/预览、查询转码状态，二进制以 `data_base64` 返回；

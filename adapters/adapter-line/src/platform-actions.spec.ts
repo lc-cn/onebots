@@ -83,4 +83,16 @@ describe("LINE 平台动作注册表", () => {
         await expect(promise).rejects.toBeInstanceOf(LineApiError);
         await expect(promise).rejects.toMatchObject({ code: "LINE_ACTION_NOT_IMPLEMENTED" });
     });
+
+    it.each([
+        ["push_message", { to: "U1", messages: [{ type: "text", text: "hi" }], retry_key: 1 }],
+        ["multicast", { to: ["U1", ""], messages: [{ type: "text", text: "hi" }] }],
+        ["list_modules", { limit: "100" }],
+        ["show_loading_animation", { chat_id: "U1", loading_seconds: null }],
+    ])("拒绝 %s 中类型错误的可选参数", async (action, params) => {
+        const bot = { getClient: () => ({}) } as unknown as LineBot;
+        await expect(executeLinePlatformAction(bot, action, params)).rejects.toMatchObject({
+            code: "LINE_INVALID_ACTION_PARAMS",
+        });
+    });
 });
