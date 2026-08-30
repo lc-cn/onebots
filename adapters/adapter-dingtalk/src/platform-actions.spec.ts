@@ -151,6 +151,34 @@ describe("executeDingTalkPlatformAction", () => {
         ]);
     });
 
+    it("机器人文件动作严格兑换事件携带的临时下载码", async () => {
+        const callApi = vi.fn().mockResolvedValue({
+            downloadUrl: "https://static.dingtalk.com/temp/file.bin",
+        });
+        await expect(
+            executeDingTalkPlatformAction(
+                { config: { app_key: "default-robot" }, callApi } as never,
+                "get_robot_message_file_download_url",
+                { downloadCode: "download-code-1", robotCode: "event-robot" },
+            ),
+        ).resolves.toEqual({ downloadUrl: "https://static.dingtalk.com/temp/file.bin" });
+        expect(callApi).toHaveBeenCalledWith("/v1.0/robot/messageFiles/download", {
+            method: "POST",
+            body: { downloadCode: "download-code-1", robotCode: "event-robot" },
+        });
+        await expect(
+            executeDingTalkPlatformAction(
+                { config: { app_key: "default-robot" }, callApi } as never,
+                "get_robot_message_file_download_url",
+                { downloadCode: "" },
+            ),
+        ).rejects.toMatchObject({ code: "DINGTALK_ACTION_PARAM_INVALID" });
+        expect(dingTalkCapabilities.actions.get_resource_temp_url).toMatchObject({
+            support: "native",
+            permissions: ["qyapi_robot_sendmsg"],
+        });
+    });
+
     it("互动卡片动作映射到实例、投放、更新与流式端点", async () => {
         const callApi = vi.fn().mockResolvedValue({});
         const bot = { callApi } as never;

@@ -131,6 +131,11 @@ export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
             permissions: ["group.file"],
         },
         get_file_download_url: { support: "native", scenes: ["private", "group"] },
+        get_resource_temp_url: {
+            support: "emulated",
+            availability: "context",
+            note: "返回当前进程从消息详情中缓存的临时媒体 URL",
+        },
         move_group_file: {
             support: "native",
             availability: "permission",

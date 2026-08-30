@@ -171,8 +171,11 @@ function appendRichText(
 
 function mediaData(value: Record<string, unknown>): Record<string, unknown> {
     const content = objectValue(value.content);
+    const downloadCode = firstString(value.downloadCode, content.downloadCode);
     return {
-        download_code: value.downloadCode || content.downloadCode,
+        file: downloadCode || undefined,
+        resource_id: downloadCode || undefined,
+        download_code: downloadCode || undefined,
         file_name: value.fileName || content.fileName,
         duration: value.duration || content.duration,
         url: value.picUrl || value.photoURL || content.picUrl || content.photoURL,

@@ -1,126 +1,73 @@
 # 钉钉适配器
 
-钉钉适配器已完全实现，支持通过钉钉机器人接入 onebots 服务。
-
-## 状态
-
-✅ **已实现并可用**
-
-## 功能特性
-
-### 企业内部应用模式
-
-- ✅ **消息收发**
-  - 单聊消息收发
-  - 群聊消息收发
-  - 支持文本、Markdown、卡片等多种消息格式
-- ✅ **用户管理**
-  - 获取用户信息
-- ✅ **事件订阅**
-  - Webhook 事件订阅
-  - 自动 Token 管理
-
-### 自定义机器人模式（Webhook）
-
-- ✅ **群聊消息推送**
-  - 文本消息
-  - Markdown 消息
-  - @用户、@所有人
-  - 卡片消息（部分支持）
+`@onebots/adapter-dingtalk` 面向钉钉企业机器人，接收侧支持 Stream、HTTP 回调和手动接入，发送侧支持企业机器人 OpenAPI、会话 Webhook 与自定义群机器人。
 
 ## 安装
 
 ```bash
-npm install @onebots/adapter-dingtalk
-# 或
 pnpm add @onebots/adapter-dingtalk
 ```
 
-## 配置
-
-### 企业内部应用模式
-
-在 `config.yaml` 中配置：
+## Stream 配置
 
 ```yaml
-# 钉钉企业内部应用机器人配置
-dingtalk.your_bot_id:
-  # 钉钉平台配置
-  app_key: 'your_app_key'  # 应用 AppKey，必填
-  app_secret: 'your_app_secret'  # 应用 AppSecret，必填
-  agent_id: 'your_agent_id'  # 可选，企业内部应用的 AgentId
-  encrypt_key: 'your_encrypt_key'  # 可选，事件加密密钥
-  token: 'your_token'  # 可选，事件验证 Token
-  
-  # OneBot V11 协议配置
-  onebot.v11:
-    access_token: 'your_v11_token'
-  
-  # OneBot V12 协议配置
-  onebot.v12:
-    access_token: 'your_v12_token'
+dingtalk.my_bot:
+  account_id: my_bot
+  receive_mode: stream
+  app_key: dingxxxxxxxx
+  app_secret: xxxxxxxx
+  robot_code: dingxxxxxxxx # 可省略，默认使用 app_key
+  agent_id: "123456" # 仅工作通知需要
 ```
 
-### 自定义机器人模式（Webhook）
+在钉钉开发者后台为应用添加机器人能力、启用 Stream 并发布。Stream 不需要公网回调地址，事件会在全部协议出口处理完成后确认；处理失败不会提交去重记录，平台重投仍可恢复。
 
-在 `config.yaml` 中配置：
+## HTTP 与已有 Host
 
 ```yaml
-# 钉钉自定义机器人配置
-dingtalk.your_bot_id:
-  # 钉钉平台配置
-  webhook_url: 'https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN'
-  
-  # OneBot V11 协议配置
-  onebot.v11:
-    access_token: 'your_v11_token'
+dingtalk.my_bot:
+  account_id: my_bot
+  receive_mode: webhook
+  app_key: dingxxxxxxxx
+  app_secret: xxxxxxxx
+  corp_id: dingxxxxxxxx
+  token: callback-token
+  encrypt_key: 43-character-EncodingAESKey
 ```
 
-### 配置项说明
+OneBots 托管的回调地址为 `POST /dingtalk/{account_id}/webhook`。适配器会完成签名校验、AES 解密、CorpId 校验和加密响应。
 
-| 配置项 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| `app_key` | string | 是* | 应用 AppKey（企业内部应用模式必填） |
-| `app_secret` | string | 是* | 应用 AppSecret（企业内部应用模式必填） |
-| `agent_id` | string | 否 | 企业内部应用的 AgentId |
-| `encrypt_key` | string | 否 | 事件加密密钥 |
-| `token` | string | 否 | 事件验证 Token |
-| `webhook_url` | string | 是* | Webhook URL（自定义机器人模式必填） |
+已有 HTTP Host、消息队列或测试连接应配置 `receive_mode: manual`：
 
-*注：企业内部应用模式和自定义机器人模式二选一，不能同时使用。
+- 已验证载荷调用 `await bot.ingest(rawEvent)`；
+- Node Host 调用 `ingestHttp({ method, query, body })`；
+- Fetch/WinterCG Host 调用 `await bot.acceptHttp(request)`；
+- Koa Host 调用 `await bot.acceptHttp(ctx)`。
 
-## 获取应用凭证
+这些入口共享同一套验签、去重、并发控制和事件投影，不会由 SDK 另开端口。
 
-### 企业内部应用
+## 消息与媒体资源
 
-1. 访问 [钉钉开放平台](https://open.dingtalk.com/)
-2. 创建企业内部应用
-3. 获取 `AppKey` 和 `AppSecret`
-4. 获取 `AgentId`（可选）
-5. 配置事件订阅 URL（Webhook）：`http://your-server:port/dingtalk/{account_id}/webhook`
-6. 配置应用权限（消息收发、通讯录等）
+接收侧支持文本、富文本、图片、语音、视频和文件；发送侧支持文本、Markdown、图片 URL、链接与 ActionCard。入站媒体段同时包含：
 
-### 自定义机器人
-
-1. 在钉钉群聊中，点击"群设置" -> "智能群助手" -> "添加机器人"
-2. 选择"自定义"机器人
-3. 获取 Webhook URL
-
-## 使用示例
-
-### 启动服务
-
-```bash
-# 注册钉钉适配器和 OneBot V11 协议
-onebots -r dingtalk -p onebot.v11
+```json
+{
+  "file": "<downloadCode>",
+  "resource_id": "<downloadCode>",
+  "download_code": "<downloadCode>"
+}
 ```
 
-### 客户端 SDK 使用
+把 `resource_id` 交给统一 `get_resource_temp_url`，适配器会调用钉钉 `/v1.0/robot/messageFiles/download` 并返回临时 HTTPS 地址。平台动作 `get_robot_message_file_download_url` 提供同一能力，参数为 `downloadCode` 与可选的 `robotCode`。
 
-客户端应连接完整账号协议根，例如 `http://localhost:6727/dingtalk/{account_id}/onebot/v12`。创建 Client、选择接收模式、接入已有 Host 与调用 API 的统一说明见[客户端 SDK 使用指南](/guide/client-sdk)。
+## 平台能力
+
+适配器还提供企业机器人消息收发、撤回和已读状态，工作通知，用户/部门/角色管理，场景群与成员管理，以及互动卡片创建、投放、整体更新和 AI 流式更新。完整动作名称、参数和错误边界以[包 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-dingtalk)为准。
+
+`call_dingtalk_api` 是受约束的底层入口：仅接受以 `/` 开头、不含目录穿越或 URL 查询语义的开放平台路径。稳定能力应优先使用命名动作。
 
 ## 相关链接
 
+- [客户端 SDK 使用指南](/guide/client-sdk)
 - [钉钉开放平台](https://open.dingtalk.com/)
-- [钉钉机器人开发文档](https://open.dingtalk.com/document/robots/robot-overview)
-- [钉钉适配器 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-dingtalk)
+- [钉钉 Stream Node.js SDK](https://github.com/open-dingtalk/dingtalk-stream-sdk-nodejs)

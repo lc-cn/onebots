@@ -1,68 +1,65 @@
 # DingTalk Adapter
 
-The DingTalk adapter is fully implemented and supports connecting to onebots service through DingTalk bot.
-
-## Status
-
-✅ **Implemented and Available**
-
-## Features
-
-### Enterprise Internal App Mode
-
-- ✅ **Message Sending/Receiving**
-  - Private chat message sending/receiving
-  - Group chat message sending/receiving
-  - Supports text, Markdown, cards, and other message formats
-- ✅ **User Management**
-  - Get user information
-- ✅ **Event Subscription**
-  - Webhook event subscription
-  - Automatic token management
-
-### Custom Bot Mode (Webhook)
-
-- ✅ **Group Chat Message Push**
-  - Text messages
-  - Markdown messages
-  - @user, @all
-  - Card messages (partial support)
+`@onebots/adapter-dingtalk` targets DingTalk enterprise bots. It receives events through Stream, HTTP callbacks, or an existing host, and sends through the enterprise Robot OpenAPI, session webhooks, or a custom group robot.
 
 ## Installation
 
 ```bash
-npm install @onebots/adapter-dingtalk
-# or
 pnpm add @onebots/adapter-dingtalk
 ```
 
-## Configuration
-
-### Enterprise Internal App Mode
-
-Configure in `config.yaml`:
+## Stream mode
 
 ```yaml
-# DingTalk enterprise internal app bot configuration
-dingtalk.your_bot_id:
-  # DingTalk platform configuration
-  app_key: 'your_app_key'  # App AppKey, required
-  app_secret: 'your_app_secret'  # App AppSecret, required
-  agent_id: 'your_agent_id'  # Optional, enterprise internal app AgentId
-  encrypt_key: 'your_encrypt_key'  # Optional, event encryption key
-  token: 'your_token'  # Optional, event verification Token
-  
-  # OneBot V11 protocol configuration
-  onebot.v11:
-    access_token: 'your_v11_token'
+dingtalk.my_bot:
+  account_id: my_bot
+  receive_mode: stream
+  app_key: dingxxxxxxxx
+  app_secret: xxxxxxxx
+  robot_code: dingxxxxxxxx # optional; defaults to app_key
+  agent_id: "123456" # only required by work notifications
 ```
 
-## Client SDK Usage
+Add and publish the bot capability in the DingTalk developer console. Stream mode needs no public callback URL. OneBots acknowledges an event only after every protocol destination has attempted delivery; failed events remain eligible for DingTalk redelivery.
 
-Connect the client to the complete account protocol root, for example `http://localhost:6727/dingtalk/{account_id}/onebot/v12`. See the [Client SDK Guide](/en/guide/client-sdk) for Client creation, receive modes, existing-Host integration, and API calls.
+## HTTP callbacks and existing hosts
 
-## Related Links
+```yaml
+dingtalk.my_bot:
+  account_id: my_bot
+  receive_mode: webhook
+  app_key: dingxxxxxxxx
+  app_secret: xxxxxxxx
+  corp_id: dingxxxxxxxx
+  token: callback-token
+  encrypt_key: 43-character-EncodingAESKey
+```
 
-- [DingTalk Adapter Configuration](/en/config/adapter/dingtalk)
-- [Quick Start](/en/guide/start)
+The OneBots-managed callback is `POST /dingtalk/{account_id}/webhook`. The adapter verifies signatures, decrypts AES payloads, validates the CorpId, and produces the encrypted response required by DingTalk.
+
+Use `receive_mode: manual` when another HTTP host, queue, or connection owns ingress:
+
+- pass an already verified payload to `await bot.ingest(rawEvent)`;
+- use `ingestHttp({ method, query, body })` from a Node host;
+- use `await bot.acceptHttp(request)` from a Fetch/WinterCG host;
+- use `await bot.acceptHttp(ctx)` from Koa.
+
+All entry points share signature validation, deduplication, concurrency control, and event projection. The SDK does not open another port.
+
+## Messages and media resources
+
+Inbound messages support text, rich text, images, audio, video, and files. Outbound messages support text, Markdown, image URLs, links, and ActionCard. Every inbound media segment exposes the DingTalk download code as `file`, `resource_id`, and `download_code`.
+
+Pass `resource_id` to the canonical `get_resource_temp_url` action. The adapter exchanges it through `/v1.0/robot/messageFiles/download` and returns a temporary HTTPS URL. The named `get_robot_message_file_download_url` platform action exposes the same operation with `downloadCode` and an optional event-specific `robotCode`.
+
+## Platform capabilities
+
+The adapter also covers enterprise robot delivery, recall and read status, work notifications, users/departments/roles, scene groups and membership, and interactive-card creation, delivery, updates, and AI streaming. See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-dingtalk) for the complete named-action contract.
+
+`call_dingtalk_api` is a constrained low-level escape hatch. It accepts only absolute OpenAPI paths without traversal or embedded URL query semantics; prefer named actions for stable capabilities.
+
+## Related links
+
 - [Client SDK Guide](/en/guide/client-sdk)
+- [DingTalk Open Platform](https://open.dingtalk.com/)
+- [DingTalk Stream Node.js SDK](https://github.com/open-dingtalk/dingtalk-stream-sdk-nodejs)

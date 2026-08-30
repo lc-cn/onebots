@@ -48,6 +48,32 @@ describe("DingTalk event projection", () => {
         });
     });
 
+    it("将媒体 downloadCode 投影为可直接兑换的统一资源标识", () => {
+        const message: DingTalkRobotMessage = {
+            conversationId: "cid_private",
+            conversationType: "1",
+            msgId: "msg_file",
+            msgtype: "file",
+            createAt: 1710000000000,
+            senderId: "user_1",
+            content: { downloadCode: "download-code-1", fileName: "report.pdf" },
+        };
+
+        expect(projectDingTalkRobotMessage(message, message, context).message).toEqual([
+            {
+                type: "file",
+                data: {
+                    file: "download-code-1",
+                    resource_id: "download-code-1",
+                    download_code: "download-code-1",
+                    file_name: "report.pdf",
+                    duration: undefined,
+                    url: undefined,
+                },
+            },
+        ]);
+    });
+
     it("将批量群成员回调逐成员投影并保留操作者", () => {
         const event = makeEvent("chat_add_member", {
             UserId: ["user_1", "user_2"],

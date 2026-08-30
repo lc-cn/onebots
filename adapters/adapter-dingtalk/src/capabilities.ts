@@ -9,6 +9,9 @@ import { DINGTALK_CARD_ACTION_NAMES } from "./platform-actions-card.js";
 const platformActions = definePlatformActionCapabilities(DINGTALK_PLATFORM_ACTIONS, action => ({
     support: "native",
     availability: "permission",
+    ...(action === "get_robot_message_file_download_url"
+        ? { permissions: ["qyapi_robot_sendmsg"] }
+        : {}),
     ...(DINGTALK_CARD_ACTION_NAMES.has(action)
         ? {
               permissions: [
@@ -67,6 +70,12 @@ export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         },
         invite_group_member: { support: "native", availability: "permission" },
         kick_group_member: { support: "native", availability: "permission" },
+        get_resource_temp_url: {
+            support: "native",
+            availability: "permission",
+            permissions: ["qyapi_robot_sendmsg"],
+            note: "将入站媒体消息携带的 downloadCode 兑换为临时 HTTPS 下载地址",
+        },
         call_dingtalk_api: { support: "native", availability: "permission" },
         send_robot_private_message: { support: "native", availability: "permission" },
         send_robot_group_message: { support: "native", availability: "permission" },

@@ -13,6 +13,7 @@ import { dingTalkCapabilities } from "./capabilities.js";
 import { DingTalkError } from "./errors.js";
 import { buildDingTalkOutboundMessage, dingtalkMessageId } from "./messages.js";
 import { DINGTALK_PLATFORM_ACTIONS, executeDingTalkPlatformAction } from "./platform-actions.js";
+import { getDingTalkRobotFileDownloadUrl } from "./robot-files.js";
 import type { DingTalkUser } from "./types.js";
 
 interface SceneGroupResponse {
@@ -207,6 +208,18 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
             params.user_id.string,
             "delete",
         );
+    }
+
+    /** 将消息段中的 resource_id（钉钉 downloadCode）兑换为临时 HTTPS 地址。 */
+    async getResourceTempUrl(
+        uin: string,
+        params: Adapter.GetResourceTempUrlParams,
+    ): Promise<string> {
+        const result = await getDingTalkRobotFileDownloadUrl(
+            this.requireBot(uin),
+            params.resource_id,
+        );
+        return result.downloadUrl;
     }
 
     executePlatformAction(

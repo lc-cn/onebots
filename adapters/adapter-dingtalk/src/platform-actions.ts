@@ -3,6 +3,7 @@ import { requireDingTalkApiPath } from "./api-path.js";
 import type { DingTalkBot } from "./bot.js";
 import { DingTalkError } from "./errors.js";
 import { DINGTALK_CARD_ACTIONS } from "./platform-actions-card.js";
+import { getDingTalkRobotFileDownloadUrl } from "./robot-files.js";
 import type { DingTalkApiRequestOptions } from "./types.js";
 
 const ACTION_HANDLERS = {
@@ -43,6 +44,12 @@ const ACTION_HANDLERS = {
             method: "POST",
             body: { ...params },
         }),
+    get_robot_message_file_download_url: (bot, params) =>
+        getDingTalkRobotFileDownloadUrl(
+            bot,
+            requiredString(params.downloadCode, "downloadCode"),
+            optionalString(params.robotCode, "robotCode"),
+        ),
     send_work_notification: (bot, params) =>
         legacy(bot, "/topapi/message/corpconversation/asyncsend_v2", params),
     get_work_notification_result: (bot, params) =>
@@ -98,6 +105,22 @@ function legacy(
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
     return bot.callApi(path, { method: "POST", body: { ...params }, auth: "legacy" });
+}
+
+function requiredString(value: unknown, key: string): string {
+    if (typeof value !== "string" || !value) {
+        throw DingTalkError.invalid(
+            `钉钉参数 ${key} 必须为非空字符串`,
+            "DINGTALK_ACTION_PARAM_INVALID",
+            { key },
+        );
+    }
+    return value;
+}
+
+function optionalString(value: unknown, key: string): string | undefined {
+    if (value === undefined) return undefined;
+    return requiredString(value, key);
 }
 
 function methodValue(value: unknown): DingTalkApiRequestOptions["method"] {

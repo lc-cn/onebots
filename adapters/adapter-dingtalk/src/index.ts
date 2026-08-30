@@ -2,6 +2,10 @@ import { AdapterRegistry, type Schema } from "onebots";
 
 export { DingTalkBot, type DingTalkBotEvents, type DingTalkOutboundMessage } from "./bot.js";
 export * from "./errors.js";
+export {
+    getDingTalkRobotFileDownloadUrl,
+    type DingTalkRobotFileDownloadResult,
+} from "./robot-files.js";
 export type {
     DingTalkApiRequestOptions,
     DingTalkConfig,

@@ -74,6 +74,7 @@ dingtalk.my_bot:
 ## 消息与事件
 
 - 收消息：文本、富文本、图片、语音、视频和文件均投影为统一消息段。
+- 入站媒体段同时提供 `file`、`resource_id` 与原始 `download_code`；把该标识交给统一 `get_resource_temp_url` 即可兑换临时 HTTPS 下载地址。
 - 发消息：文本、Markdown、图片 URL、链接和 ActionCard 映射为钉钉原生 `msgKey`。
 - `@` 会映射到 `atUserIds` / `isAtAll`。
 - 图片与链接必须是钉钉服务端可访问的无凭据 HTTP(S) URL；未知段、空消息和平台无法无损表达的混合消息会明确失败。
@@ -89,6 +90,7 @@ dingtalk.my_bot:
 - `send_robot_private_message`、`send_robot_group_message`。
 - `recall_robot_private_messages`、`recall_robot_group_messages`：按 `processQueryKeys` 撤回企业机器人消息。
 - `get_robot_private_message_status`、`get_robot_group_message_status`：查询发送与已读状态。
+- `get_robot_message_file_download_url`：使用事件携带的 `downloadCode`（可选 `robotCode`）兑换临时下载地址。
 - `send_work_notification`、`get_work_notification_result`、`recall_work_notification`。
 - `get_user`、用户增删改、`get_department_users`、`get_sub_departments`、部门查询与增删改。
 - `get_role_list`、`get_role_users`、用户角色增删。

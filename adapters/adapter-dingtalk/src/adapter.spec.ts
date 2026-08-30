@@ -2,6 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 import { DingTalkAdapter } from "./adapter.js";
 
 describe("DingTalkAdapter", () => {
+    it("通过统一资源 API 兑换入站媒体的 downloadCode", async () => {
+        const callApi = vi
+            .fn()
+            .mockResolvedValue({ downloadUrl: "https://static.dingtalk.com/temp/image.jpg" });
+        const adapter = {
+            requireBot: vi.fn().mockReturnValue({ config: { robot_code: "robot-1" }, callApi }),
+        };
+
+        await expect(
+            DingTalkAdapter.prototype.getResourceTempUrl.call(adapter as never, "bot", {
+                resource_id: "download-code-1",
+            }),
+        ).resolves.toBe("https://static.dingtalk.com/temp/image.jpg");
+        expect(callApi).toHaveBeenCalledWith("/v1.0/robot/messageFiles/download", {
+            method: "POST",
+            body: { downloadCode: "download-code-1", robotCode: "robot-1" },
+        });
+    });
+
     it.each([
         ["private", undefined, "/v1.0/robot/otoMessages/batchRecall"],
         ["group", "cid_group", "/v1.0/robot/groupMessages/recall"],
