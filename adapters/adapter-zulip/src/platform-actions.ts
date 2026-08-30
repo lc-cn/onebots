@@ -24,6 +24,7 @@ import { ZULIP_SAVED_SNIPPET_ACTION_HANDLERS } from "./saved-snippet-actions.js"
 import { ZULIP_SCHEDULED_MESSAGE_ACTION_HANDLERS } from "./scheduled-message-actions.js";
 import { ZULIP_USER_ACTION_HANDLERS } from "./user-actions.js";
 import { ZULIP_USER_GROUP_ACTION_HANDLERS } from "./user-group-actions.js";
+import { ZULIP_VIDEO_CALL_ACTION_HANDLERS } from "./video-call-actions.js";
 
 const ACTION_HANDLERS = {
     call_zulip_api: (client, params) =>
@@ -55,6 +56,7 @@ const ACTION_HANDLERS = {
     ...ZULIP_SCHEDULED_MESSAGE_ACTION_HANDLERS,
     ...ZULIP_USER_ACTION_HANDLERS,
     ...ZULIP_USER_GROUP_ACTION_HANDLERS,
+    ...ZULIP_VIDEO_CALL_ACTION_HANDLERS,
 } satisfies Readonly<Record<string, PlatformActionHandler<ZulipClient>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
