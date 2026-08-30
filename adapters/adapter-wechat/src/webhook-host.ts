@@ -55,7 +55,11 @@ export class WechatWebhookHost {
             : this.receiveMessage(request);
     }
 
-    async acceptHttp(ctx: WechatHttpContext): Promise<void> {
+    async acceptHttp(request: Request): Promise<Response>;
+    async acceptHttp(context: WechatHttpContext): Promise<void>;
+    async acceptHttp(input: Request | WechatHttpContext): Promise<Response | void> {
+        if (isFetchRequest(input)) return this.acceptFetchRequest(input);
+        const ctx = input;
         try {
             const method = ctx.method.toUpperCase();
             if (method !== "GET" && method !== "POST") {
@@ -82,10 +86,51 @@ export class WechatWebhookHost {
             ctx.body = response.body;
         } catch (error) {
             const wrapped = WechatApiError.wrap(error, "WECHAT_WEBHOOK_ERROR");
-            this.errorListener(wrapped);
+            this.reportError(wrapped);
             ctx.status = wrapped.status || 400;
             ctx.type = "application/json";
             ctx.body = { error: { code: wrapped.code, message: wrapped.message } };
+        }
+    }
+
+    private async acceptFetchRequest(request: Request): Promise<Response> {
+        const method = request.method.toUpperCase();
+        if (method !== "GET" && method !== "POST") {
+            return Response.json(
+                {
+                    error: {
+                        code: "WECHAT_METHOD_NOT_ALLOWED",
+                        message: "微信公众号 Webhook 仅接受 GET 或 POST",
+                    },
+                },
+                { status: 405, headers: { Allow: "GET, POST" } },
+            );
+        }
+        try {
+            const response = await this.ingest({
+                method,
+                query: Object.fromEntries(new URL(request.url).searchParams),
+                body: method === "POST" ? Buffer.from(await request.arrayBuffer()) : undefined,
+            });
+            return new Response(String(response.body), {
+                status: response.status,
+                headers: { "Content-Type": response.contentType || "text/plain" },
+            });
+        } catch (error) {
+            const wrapped = WechatApiError.wrap(error, "WECHAT_WEBHOOK_ERROR");
+            this.reportError(wrapped);
+            return Response.json(
+                { error: { code: wrapped.code, message: wrapped.message } },
+                { status: wrapped.status || 400 },
+            );
+        }
+    }
+
+    private reportError(error: WechatApiError): void {
+        try {
+            this.errorListener(error);
+        } catch {
+            // 错误观察器不得反向破坏 HTTP 响应。
         }
     }
 
@@ -212,6 +257,18 @@ export class WechatWebhookHost {
         }
         return this.config.encoding_aes_key;
     }
+}
+
+/** 跨 realm 识别 Fetch/WinterCG Request，不依赖 instanceof。 */
+function isFetchRequest(value: unknown): value is Request {
+    if (!value || typeof value !== "object") return false;
+    const candidate = value as { method?: unknown; headers?: unknown; arrayBuffer?: unknown };
+    return (
+        typeof candidate.method === "string" &&
+        typeof candidate.arrayBuffer === "function" &&
+        Boolean(candidate.headers) &&
+        typeof (candidate.headers as { get?: unknown }).get === "function"
+    );
 }
 
 function queryString(query: Readonly<Record<string, unknown>>, name: string): string {

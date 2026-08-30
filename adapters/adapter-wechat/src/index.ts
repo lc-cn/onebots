@@ -2,7 +2,7 @@ import { AdapterRegistry, type Schema } from "onebots";
 
 export { WechatAdapter } from "./adapter.js";
 export { wechatCapabilities } from "./capabilities.js";
-export { WechatClient, wechatEventId } from "./client.js";
+export { WechatClient } from "./client.js";
 export { assertWechatConfig, requireWechatWebhookConfig } from "./config.js";
 export {
     decryptWechatPayload,
@@ -11,6 +11,8 @@ export {
     verifyWechatSignature,
 } from "./crypto.js";
 export { WechatApiError, type WechatApiErrorOptions } from "./errors.js";
+export { deliverWechatEvent } from "./event-delivery.js";
+export { assertWechatIncomingMessage, wechatEventId } from "./event-id.js";
 export { projectWechatEvent } from "./events.js";
 export { messageMediaType, prepareWechatMediaSegments, uploadWechatMedia } from "./media.js";
 export type { WechatMediaType } from "./media.js";
@@ -82,7 +84,7 @@ export const wechatSchema: Schema = {
         description: "须与公众平台服务器配置中的 Token 完全一致",
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     receive_mode: {
@@ -105,7 +107,7 @@ export const wechatSchema: Schema = {
         description: "安全模式或兼容模式使用的 43 位消息加解密密钥",
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     webhook_path: {

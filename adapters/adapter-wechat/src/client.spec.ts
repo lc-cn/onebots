@@ -216,4 +216,67 @@ describe("WechatClient", () => {
         await client.ingest({ ...event, Status: "success", MsgID: undefined, Extra: "second" });
         expect(listener).toHaveBeenCalledTimes(2);
     });
+
+    it("一个视图失败时仍尝试其他 raw、分类与精确事件出口", async () => {
+        const client = new WechatClient(config);
+        const failed = vi.fn().mockRejectedValueOnce(new Error("raw failed"));
+        const secondRaw = vi.fn();
+        const category = vi.fn();
+        const exact = vi.fn();
+        client.on("raw_event", failed);
+        client.on("raw_event", secondRaw);
+        client.on("event", category);
+        client.onEvent("subscribe", exact);
+        const event: WechatIncomingMessage = {
+            ToUserName: "bot",
+            FromUserName: "user",
+            CreateTime: 5,
+            MsgType: "event",
+            Event: "subscribe",
+        };
+
+        await expect(client.ingest(event)).rejects.toThrow("raw failed");
+        expect(secondRaw).toHaveBeenCalledOnce();
+        expect(category).toHaveBeenCalledOnce();
+        expect(exact).toHaveBeenCalledOnce();
+
+        await expect(client.ingest(event)).resolves.toBeUndefined();
+        expect(failed).toHaveBeenCalledTimes(2);
+        expect(secondRaw).toHaveBeenCalledTimes(2);
+        expect(category).toHaveBeenCalledTimes(2);
+        expect(exact).toHaveBeenCalledTimes(2);
+    });
+
+    it("并发启动幂等且 stop 使旧代次无法重新上线", async () => {
+        let resolveOld!: (response: Response) => void;
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockImplementationOnce(
+                () =>
+                    new Promise<Response>(resolve => {
+                        resolveOld = resolve;
+                    }),
+            )
+            .mockResolvedValueOnce(json({ access_token: "new", expires_in: 7200 }));
+        const client = new WechatClient(config, fetcher);
+        const ready = vi.fn();
+        const stopped = vi.fn();
+        client.on("ready", ready);
+        client.on("stop", stopped);
+
+        const first = client.start();
+        const concurrent = client.start();
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+        await client.stop();
+        resolveOld(json({ access_token: "old", expires_in: 7200 }));
+
+        await expect(first).rejects.toMatchObject({ code: "WECHAT_START_CANCELLED" });
+        await expect(concurrent).rejects.toMatchObject({ code: "WECHAT_START_CANCELLED" });
+        expect(ready).not.toHaveBeenCalled();
+        expect(stopped).toHaveBeenCalledOnce();
+
+        await client.start();
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect(ready).toHaveBeenCalledOnce();
+    });
 });

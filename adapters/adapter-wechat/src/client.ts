@@ -1,15 +1,15 @@
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
 import {
-    emitAwaited,
+    emitAllAwaited,
     isSafeAbsoluteApiPath,
     KeyedSingleFlight,
     RefreshableValue,
-    sha256Json,
-    sha256Text,
 } from "onebots";
 import { assertWechatConfig } from "./config.js";
 import { WechatApiError } from "./errors.js";
+import { deliverWechatEvent } from "./event-delivery.js";
+import { assertWechatIncomingMessage, wechatEventId } from "./event-id.js";
 import type {
     WechatApiCallOptions,
     WechatClientEvents,
@@ -44,6 +44,9 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         string,
         WechatOutboundMessage | undefined
     >();
+    private startPromise?: Promise<void>;
+    private running = false;
+    private generation = 0;
 
     constructor(
         readonly config: WechatConfig,
@@ -59,11 +62,23 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
     }
 
     async start(): Promise<void> {
-        await this.getAccessToken();
-        this.emit("ready");
+        if (this.running) return;
+        if (this.startPromise) return this.startPromise;
+        const generation = this.generation;
+        const start = this.startInternal(generation);
+        this.startPromise = start;
+        try {
+            await start;
+        } finally {
+            if (this.startPromise === start) this.startPromise = undefined;
+        }
     }
 
-    stop(): void {
+    async stop(): Promise<void> {
+        const wasActive = this.running || Boolean(this.startPromise || this.pendingReplies.size);
+        this.generation += 1;
+        this.running = false;
+        this.startPromise = undefined;
         this.tokens.clear();
         this.eventFlights.clear();
         for (const pending of this.pendingReplies.values()) {
@@ -71,7 +86,23 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
             pending.resolve(undefined);
         }
         this.pendingReplies.clear();
-        this.emit("stop");
+        if (wasActive) await emitAllAwaited(this, "stop");
+    }
+
+    private async startInternal(generation: number): Promise<void> {
+        await this.getAccessToken();
+        this.assertCurrentGeneration(generation);
+        await emitAllAwaited(this, "ready");
+        this.assertCurrentGeneration(generation);
+        this.running = true;
+    }
+
+    private assertCurrentGeneration(generation: number): void {
+        if (generation !== this.generation) {
+            throw new WechatApiError("微信公众号启动已被停止", {
+                code: "WECHAT_START_CANCELLED",
+            });
+        }
     }
 
     /** 获取并缓存 access_token；并发刷新只发起一个请求。 */
@@ -156,7 +187,7 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         message: WechatIncomingMessage,
         options: WechatIngressOptions = {},
     ): Promise<WechatOutboundMessage | undefined> {
-        validateIncomingMessage(message);
+        assertWechatIncomingMessage(message);
         const eventId = wechatEventId(message);
         if (this.isDuplicate(eventId)) return undefined;
         return this.eventFlights.run(eventId, () =>
@@ -182,11 +213,7 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
             });
         }
         try {
-            await emitAwaited(this, "raw_event", message);
-            await emitAwaited(this, message.MsgType === "event" ? "event" : "message", message);
-            if (message.MsgType === "event" && message.Event) {
-                await emitAwaited(this, `event.${message.Event.toLowerCase()}`, message);
-            }
+            await deliverWechatEvent(this, message);
             const reply = await waiter;
             this.markProcessed(eventId);
             return reply;
@@ -367,48 +394,6 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
             path,
         });
     }
-}
-
-function validateIncomingMessage(message: WechatIncomingMessage): void {
-    if (
-        typeof message.ToUserName !== "string" ||
-        !message.ToUserName ||
-        typeof message.FromUserName !== "string" ||
-        !message.FromUserName ||
-        !Number.isFinite(message.CreateTime) ||
-        message.CreateTime <= 0 ||
-        typeof message.MsgType !== "string" ||
-        !message.MsgType
-    ) {
-        throw new WechatApiError("微信公众号事件缺少稳定的收发方、时间或消息类型", {
-            code: "WECHAT_INVALID_EVENT",
-        });
-    }
-    if (message.MsgType !== "event" && (!message.MsgId || typeof message.MsgId !== "string")) {
-        throw new WechatApiError("微信公众号消息缺少 MsgId", {
-            code: "WECHAT_INVALID_EVENT",
-        });
-    }
-}
-
-export function wechatEventId(message: WechatIncomingMessage): string {
-    if (message.MsgId || message.MsgID) return message.MsgId || message.MsgID!;
-    const identity = [
-        message.FromUserName,
-        message.CreateTime,
-        message.Event || message.MsgType,
-        message.EventKey,
-    ]
-        .filter(value => value !== undefined && value !== "")
-        .join(":");
-    const digest = message.RawXml
-        ? sha256Text(message.RawXml)
-        : sha256Json(messageWithoutEncryptedXml(message));
-    return identity ? `${identity}:${digest.slice(0, 16)}` : digest;
-}
-
-function messageWithoutEncryptedXml(message: WechatIncomingMessage): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(message).filter(([key]) => key !== "EncryptedXml"));
 }
 
 async function parseJson(response: Response, path: string): Promise<unknown> {

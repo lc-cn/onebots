@@ -161,10 +161,11 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
             } catch (error) {
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动微信公众号 ${config.account_id} 失败`, error);
+                throw error;
             }
         });
-        account.on("stop", () => {
-            client.stop();
+        account.on("stop", async () => {
+            await client.stop();
             account.status = AccountStatus.OffLine;
         });
         return account;

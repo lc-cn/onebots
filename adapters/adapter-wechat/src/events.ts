@@ -1,5 +1,5 @@
 import { CommonEvent, type CommonTypes } from "onebots";
-import { wechatEventId } from "./client.js";
+import { wechatEventId } from "./event-id.js";
 import type { WechatIncomingMessage } from "./types.js";
 
 export interface WechatProjectionContext {

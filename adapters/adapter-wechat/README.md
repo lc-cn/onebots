@@ -27,7 +27,7 @@ https://bot.example.com/wechat/my_mp/webhook
 
 默认路径为 `/wechat/{account_id}/webhook`，可用 `webhook_path` 覆盖。`token` 与 `encoding_aes_key` 必须和公众平台配置一致。
 
-如事件已由既有 HTTP Host、消息队列或测试夹具接收，可改用 `receive_mode: manual`。此时适配器不注册 Webhook 路由，也不要求 `token`；将解析后的 `WechatIncomingMessage` 交给同一个 `WechatClient.ingest()` 即可。Webhook 与 manual 共用 Client 内的稳定身份、进行中合并、去重和 typed 分发；同步或异步监听器全部成功后才确认事件，失败不会污染去重状态。`onEvent(name, listener)` 可按微信原生 `Event` 精确订阅，并返回取消订阅函数。
+如事件已由既有 HTTP Host、消息队列或测试夹具接收，可改用 `receive_mode: manual`。此时适配器不注册 Webhook 路由。将已验证并解析的 `WechatIncomingMessage` 交给 `WechatClient.ingest()` 时不要求回调 `token`；若现有 Host 要复用 `WechatWebhookHost.acceptHttp(Request|ctx)` 的验签、解密和被动回复编码，则仍需配置 Token/AES Key，Web 表单会在 manual 模式提供。Webhook 与 manual 共用 Client 内的稳定身份、进行中合并、去重和 typed 分发；无损、分类与精确事件视图的同步或异步监听器都会完成尝试，任一失败都不会污染去重状态。`onEvent(name, listener)` 可按微信原生 `Event` 精确订阅，并返回取消订阅函数。
 
 ## 消息
 
@@ -77,7 +77,7 @@ await adapter.callAction("my_mp", "wechat_call", {
 
 ## 底层接入
 
-`WechatWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂到已有 Koa 风格 Host；`WechatClient.ingest()` 则允许现有连接把含稳定收发方、时间与消息 ID 的解析事件交给同一个客户端。Webhook Host 只负责验签、解密和被动回复编码，不再持有第二套投递状态。适配器本身不会另开端口。
+`WechatWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可直接接收标准 `Request` 或挂到已有 Koa 风格 Host；`WechatClient.ingest()` 则允许现有连接把含稳定收发方、时间与消息 ID 的解析事件交给同一个客户端。Webhook Host 只负责验签、解密和被动回复编码，不再持有第二套投递状态。适配器本身不会另开端口。
 
 ## 权限
 

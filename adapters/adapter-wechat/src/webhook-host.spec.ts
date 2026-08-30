@@ -92,6 +92,34 @@ describe("WechatWebhookHost", () => {
         });
     });
 
+    it("acceptHttp 接收标准 Request 并复用签名与事件管线", async () => {
+        const client = new WechatClient(config);
+        const listener = vi.fn();
+        client.on("raw_event", listener);
+        const host = new WechatWebhookHost(config, client);
+        const query = new URLSearchParams({
+            timestamp: "1",
+            nonce: "2",
+            signature: signWechatMessage("token", "1", "2"),
+        });
+
+        const response = await host.acceptHttp(
+            new Request(`https://example.test/wechat?${query}`, {
+                method: "POST",
+                body: xml,
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        await expect(response.text()).resolves.toBe("success");
+        expect(listener).toHaveBeenCalledOnce();
+        const rejected = await host.acceptHttp(
+            new Request("https://example.test/wechat", { method: "PUT" }),
+        );
+        expect(rejected.status).toBe(405);
+        expect(rejected.headers.get("allow")).toBe("GET, POST");
+    });
+
     it("业务监听失败时不确认且允许同一 Webhook 重投", async () => {
         const client = new WechatClient(config);
         const failure = vi.fn(async () => {
