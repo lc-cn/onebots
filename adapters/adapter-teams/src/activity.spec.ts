@@ -77,6 +77,138 @@ describe("Teams Activity 消息转换", () => {
         });
     });
 
+    it("双向保留 AI 实体、反馈回路与建议操作", () => {
+        const aiEntity = {
+            type: "https://schema.org/Message",
+            "@type": "Message",
+            additionalType: ["AIGeneratedContent"],
+            citation: [
+                {
+                    "@type": "Claim",
+                    position: 1,
+                    appearance: {
+                        "@type": "DigitalDocument",
+                        name: "规范",
+                        abstract: "官方规范",
+                    },
+                },
+            ],
+        };
+        const activity = compileTeamsActivity(
+            [
+                { type: "text", data: { text: "结论 [1]" } },
+                { type: "at", data: { id: "u1", name: "Ada" } },
+                {
+                    type: "teams_activity",
+                    data: {
+                        entities: [aiEntity],
+                        channel_data: { feedbackLoop: { type: "default" } },
+                        suggested_actions: {
+                            actions: [{ type: "imBack", title: "继续", value: "继续" }],
+                        },
+                        delivery_mode: "notification",
+                        locale: "zh-CN",
+                    },
+                },
+            ],
+            { resolveUserId: String },
+        );
+
+        expect(activity.entities).toEqual([
+            expect.objectContaining({ type: "mention" }),
+            aiEntity,
+        ]);
+        expect(activity).toMatchObject({
+            locale: "zh-CN",
+            deliveryMode: "notification",
+            channelData: { feedbackLoop: { type: "default" } },
+            suggestedActions: {
+                to: [],
+                actions: [{ type: "imBack", title: "继续", value: "继续" }],
+            },
+        });
+
+        expect(projectTeamsSegments(baseActivity(activity))).toContainEqual({
+            type: "teams_activity",
+            data: expect.objectContaining({
+                entities: [aiEntity],
+                channel_data: { feedbackLoop: { type: "default" } },
+                suggested_actions: activity.suggestedActions,
+                delivery_mode: "notification",
+                locale: "zh-CN",
+            }),
+        });
+    });
+
+    it("校验建议操作数量、附件冲突和受限枚举", () => {
+        expect(() =>
+            compileTeamsActivity(
+                [
+                    { type: "text", data: { text: "选择" } },
+                    {
+                        type: "teams_activity",
+                        data: { suggested_actions: { actions: [] } },
+                    },
+                ],
+                { resolveUserId: String },
+            ),
+        ).toThrow("必须包含 1 到 3 个操作");
+        expect(() =>
+            compileTeamsActivity(
+                [
+                    { type: "image", data: { url: "https://example.com/a.png" } },
+                    {
+                        type: "teams_activity",
+                        data: {
+                            suggested_actions: {
+                                actions: [{ type: "imBack", title: "继续" }],
+                            },
+                        },
+                    },
+                ],
+                { resolveUserId: String },
+            ),
+        ).toThrow("不能与附件同时发送");
+        expect(() =>
+            compileTeamsActivity(
+                [
+                    { type: "text", data: { text: "消息" } },
+                    { type: "teams_activity", data: { delivery_mode: "ephemeral" } },
+                ],
+                { resolveUserId: String },
+            ),
+        ).toThrow("delivery_mode 仅支持");
+        expect(() =>
+            compileTeamsActivity(
+                [
+                    { type: "text", data: { text: "AI" } },
+                    {
+                        type: "teams_activity",
+                        data: {
+                            entities: [
+                                { type: "https://schema.org/Message" },
+                                { type: "https://schema.org/Message" },
+                            ],
+                        },
+                    },
+                ],
+                { resolveUserId: String },
+            ),
+        ).toThrow("只能包含一个根 Message entity");
+        expect(() =>
+            compileTeamsActivity(
+                [
+                    { type: "text", data: { text: "反馈" } },
+                    {
+                        type: "teams_activity",
+                        data: { channel_data: { feedbackLoop: { type: "legacy" } } },
+                    },
+                ],
+                { resolveUserId: String },
+            ),
+        ).toThrow("feedbackLoop.type 仅支持");
+    });
+
     it("接收时投影回复，并生成标准 Teams 文件信息卡片", () => {
         expect(projectTeamsSegments(baseActivity({ replyToId: "parent" }))[0]).toEqual({
             type: "reply",

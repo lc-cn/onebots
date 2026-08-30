@@ -106,6 +106,37 @@ export function activityValue(value: unknown, name = "activity"): Record<string,
     return activity;
 }
 
+const OUTBOUND_ACTIVITY_MANAGED_FIELDS = new Set([
+    "id",
+    "timestamp",
+    "localTimestamp",
+    "callerId",
+    "serviceUrl",
+    "channelId",
+    "_channelId",
+    "from",
+    "recipient",
+    "conversation",
+    "relatesTo",
+]);
+
+/**
+ * 校验由调用方提供的出站 Activity，并保留会话引用负责的身份与路由字段。
+ * 这允许使用最新 Teams Activity 能力，而不会绕过适配器的可信会话边界。
+ */
+export function outboundActivityValue(value: unknown, name = "activity"): Activity {
+    const input = activityValue(value, name);
+    const managedField = Object.keys(input).find(field => OUTBOUND_ACTIVITY_MANAGED_FIELDS.has(field));
+    if (managedField) {
+        throw TeamsApiError.invalid(
+            `Teams 参数 ${name}.${managedField} 由可信 ConversationReference 管理`,
+            "TEAMS_ACTIVITY_CONTEXT_MANAGED",
+            { name: `${name}.${managedField}` },
+        );
+    }
+    return Activity.fromObject(input);
+}
+
 export function requireString(value: unknown, name: string): string {
     const result = optionalString(value);
     if (!result) {

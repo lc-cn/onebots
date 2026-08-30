@@ -51,7 +51,45 @@ Teams 主动消息不能只依赖 conversation ID；微软要求同时保留 `se
 
 ## 消息与事件
 
-发送链路原生支持文本、Teams mention entity、回复、图片/音频/视频附件、Adaptive Card、Hero/Thumbnail 等 Bot Card，以及 `teams_activity` 扩展选项。媒体附件必须提供 Teams 服务端可访问的 HTTPS URL；未知段、无效卡片和本地/Base64 媒体会明确失败，不会静默丢失。
+发送链路原生支持文本、Teams mention entity、回复、图片/音频/视频附件、Adaptive Card、Hero/Thumbnail 等 Bot Card，以及双向 `teams_activity` 扩展。后者集中承载 `entities`、`channel_data`、`suggested_actions`、locale、通知投递、附件布局和自定义 value，可表达 AI 生成标签、引用、敏感度标签、反馈按钮与流信息；接收时非 mention entity 和这些顶层字段也会投影回同一个段，不必从原始 Activity 中重新拼装。媒体附件必须提供 Teams 服务端可访问的 HTTPS URL；未知段、无效卡片和本地/Base64 媒体会明确失败，不会静默丢失。
+
+下面的消息会显示 Teams AI 标签、引用、默认反馈按钮和一个建议操作：
+
+```json
+[
+  { "type": "text", "data": { "text": "结论 [1]" } },
+  {
+    "type": "teams_activity",
+    "data": {
+      "entities": [
+        {
+          "type": "https://schema.org/Message",
+          "@type": "Message",
+          "additionalType": ["AIGeneratedContent"],
+          "citation": [
+            {
+              "@type": "Claim",
+              "position": 1,
+              "appearance": {
+                "@type": "DigitalDocument",
+                "name": "官方规范",
+                "abstract": "引用摘要",
+                "url": "https://learn.microsoft.com/"
+              }
+            }
+          ]
+        }
+      ],
+      "channel_data": { "feedbackLoop": { "type": "default" } },
+      "suggested_actions": {
+        "actions": [{ "type": "imBack", "title": "继续", "value": "继续" }]
+      }
+    }
+  }
+]
+```
+
+微软限制单条消息只有一个根 Message entity、最多 20 条引用、最多 3 个建议操作，且建议操作不能与附件一起发送；适配器会在请求到达 Connector 前明确校验这些约束。
 
 Teams 的“附件链接”和“真实文件上传”不是同一能力。个人聊天上传必须完成 file consent → OneDrive upload → file-info 卡片流程；频道和群聊文件依赖 Graph 与 SharePoint/OneDrive 权限。适配器为此提供 `send_file_consent_card`、`send_file_info_card` 和 `call_graph_api`，`file` 段也可用 `unique_id`、`file_type`、`name`、`url` 生成标准 file-info 卡片。
 
@@ -71,6 +109,7 @@ Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `await Team
 - `register_conversation_reference`
 - `create_personal_conversation`：`service_url`、`tenant_id`、`aad_object_id`、`message`
 - `send_adaptive_card`：`conversation_id`、`card`
+- `send_activity`：`conversation_id`、`activity`；发送由可信会话上下文补全路由的原生 Activity，适用于流式消息和新 Activity 扩展，禁止覆盖 `serviceUrl`、收发者与会话身份
 - `send_targeted_message`：`conversation_id`、`message`，可用 `user_id` 指定仅其可见的成员
 - `reply_to_activity`：使用当前 Connector 扁平 API 回复指定 Activity
 - `create_targeted_activity`、`update_targeted_activity`、`delete_targeted_activity`：完整的 targeted Activity 生命周期，直接接收官方 `activity` 对象
@@ -112,5 +151,8 @@ Graph 使用应用凭据流，必须有具体 Tenant ID：单租户复用 `tenan
 - [Node.js 迁移指南](https://learn.microsoft.com/microsoft-365/agents-sdk/bf-migration-nodejs)
 - [Teams 主动消息](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/conversations/send-proactive-messages)
 - [Adaptive Card Universal Action Model](https://learn.microsoft.com/adaptive-cards/authoring-cards/universal-action-model)
+- [AI 生成消息、引用与反馈](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/bot-messages-ai-generated-content)
+- [流式消息](https://learn.microsoft.com/microsoftteams/platform/bots/streaming-ux)
+- [建议操作](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/conversations/suggested-actions)
 - [Teams 文件](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/bots-filesv4)
 - [Teams RSC 权限](https://learn.microsoft.com/microsoftteams/platform/graph-api/app-permissions/teams-app-permissions)

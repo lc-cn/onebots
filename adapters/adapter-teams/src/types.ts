@@ -110,10 +110,14 @@ export interface TeamsActivity {
     text?: string;
     textFormat?: string;
     locale?: string;
+    inputHint?: string;
     importance?: string;
+    deliveryMode?: string;
     name?: string;
     action?: string;
     summary?: string;
+    attachmentLayout?: string;
+    suggestedActions?: TeamsSuggestedActions;
     channelData?: TeamsChannelData;
     entities?: TeamsEntity[];
     attachments?: TeamsAttachment[];
@@ -150,9 +154,31 @@ export interface TeamsOutboundActivity {
     replyToId?: string;
     summary?: string;
     importance?: string;
+    locale?: string;
+    inputHint?: string;
+    deliveryMode?: string;
+    attachmentLayout?: string;
+    suggestedActions?: TeamsSuggestedActions;
+    value?: unknown;
     attachments?: TeamsAttachment[];
     entities?: TeamsEntity[];
     channelData?: Record<string, unknown>;
+}
+
+export interface TeamsSuggestedAction {
+    type: string;
+    title: string;
+    image?: string;
+    text?: string;
+    displayText?: string;
+    value?: unknown;
+    channelData?: unknown;
+    imageAltText?: string;
+}
+
+export interface TeamsSuggestedActions {
+    to: string[];
+    actions: TeamsSuggestedAction[];
 }
 
 export interface TeamsSendOptions {

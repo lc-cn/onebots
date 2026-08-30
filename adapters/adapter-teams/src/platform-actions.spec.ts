@@ -14,9 +14,39 @@ describe("Teams 平台动作", () => {
             "create_targeted_activity",
             "update_targeted_activity",
             "delete_targeted_activity",
+            "send_activity",
         ]) {
             expect(TEAMS_PLATFORM_ACTIONS.has(action)).toBe(true);
         }
+    });
+
+    it("发送原生 Activity 并拒绝覆盖可信会话字段", async () => {
+        const sendRawActivity = vi.fn().mockResolvedValue({ id: "stream-1" });
+        const bot = { sendRawActivity };
+
+        await expect(
+            executeTeamsPlatformAction(bot as never, "send_activity", {
+                conversation_id: "C1",
+                activity: {
+                    type: "typing",
+                    text: "正在检索…",
+                    entities: [
+                        { type: "streaminfo", streamType: "informative", streamSequence: 1 },
+                    ],
+                },
+            }),
+        ).resolves.toEqual({ id: "stream-1" });
+        expect(sendRawActivity).toHaveBeenCalledWith(
+            "C1",
+            expect.objectContaining({ type: "typing", text: "正在检索…" }),
+        );
+
+        await expect(
+            executeTeamsPlatformAction(bot as never, "send_activity", {
+                conversation_id: "C1",
+                activity: { type: "message", text: "伪造", serviceUrl: "https://evil.example" },
+            }),
+        ).rejects.toMatchObject({ code: "TEAMS_ACTIVITY_CONTEXT_MANAGED" });
     });
 
     it("按原生参数调用 Activity 成员与 token exchange", async () => {

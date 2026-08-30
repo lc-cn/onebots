@@ -25,6 +25,24 @@ describe("TeamsBot 会话引用契约", () => {
         );
     });
 
+    it("原生流式 Activity 接受 Connector 的空中间响应", async () => {
+        const bot = createBot();
+        const sendActivity = vi.fn().mockResolvedValue(undefined);
+        vi.spyOn(bot, "withConversation").mockImplementation(async (_conversationId, logic) =>
+            logic({ turn: { sendActivity } } as never),
+        );
+        const activity = Activity.fromObject({
+            type: "typing",
+            text: "正在检索…",
+            entities: [{ type: "streaminfo", streamType: "informative", streamSequence: 1 }],
+        });
+
+        await expect(bot.sendRawActivity("c1", activity)).resolves.toBeUndefined();
+        await expect(bot.sendActivity("c1", activity)).rejects.toMatchObject({
+            code: "TEAMS_EMPTY_RESPONSE",
+        });
+    });
+
     it("允许导入并隔离返回的可信引用", () => {
         const bot = createBot();
         const reference: TeamsConversationReference = {

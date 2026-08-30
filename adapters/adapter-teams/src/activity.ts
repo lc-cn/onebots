@@ -1,5 +1,9 @@
 import { Activity, ActivityTypes, type Attachment, type Entity } from "@microsoft/agents-activity";
 import type { CommonTypes } from "onebots";
+import {
+    applyTeamsActivityOptions,
+    projectTeamsActivityOptions,
+} from "./activity-options.js";
 import { TeamsApiError } from "./errors.js";
 import type {
     TeamsActivity,
@@ -63,7 +67,7 @@ export function compileTeamsActivity(
             continue;
         }
         if (segment.type === "teams_activity") {
-            applyActivityOptions(output, segment.data);
+            applyTeamsActivityOptions(output, segment.data);
             continue;
         }
         throw TeamsApiError.invalid(
@@ -75,7 +79,7 @@ export function compileTeamsActivity(
 
     if (text) output.text = text;
     if (attachments.length > 0) output.attachments = attachments;
-    if (entities.length > 0) output.entities = entities;
+    if (entities.length > 0) output.entities = [...entities, ...(output.entities || [])];
     if (!output.text && !output.attachments?.length) {
         throw TeamsApiError.invalid("Teams 消息不包含可发送内容", "TEAMS_MESSAGE_EMPTY");
     }
@@ -86,9 +90,21 @@ export function compileTeamsActivity(
     activity.replyToId = output.replyToId;
     activity.summary = output.summary;
     activity.importance = output.importance;
+    activity.locale = output.locale;
+    activity.inputHint = output.inputHint;
+    activity.deliveryMode = output.deliveryMode;
+    activity.attachmentLayout = output.attachmentLayout;
+    activity.suggestedActions = output.suggestedActions;
+    activity.value = output.value;
     activity.attachments = output.attachments as Attachment[] | undefined;
     activity.entities = output.entities as Entity[] | undefined;
     activity.channelData = output.channelData;
+    if (activity.attachments?.length && activity.suggestedActions) {
+        throw TeamsApiError.invalid(
+            "Teams suggested actions 不能与附件同时发送",
+            "TEAMS_SUGGESTED_ACTIONS_WITH_ATTACHMENTS",
+        );
+    }
     return activity;
 }
 
@@ -131,9 +147,8 @@ export function projectTeamsSegments(activity: TeamsActivity): CommonTypes.Segme
             },
         });
     }
-    if (segments.length === 0 && activity.value != null) {
-        segments.push({ type: "teams_value", data: { value: activity.value } });
-    }
+    const nativeActivity = projectTeamsActivityOptions(activity);
+    if (nativeActivity) segments.push({ type: "teams_activity", data: nativeActivity });
     return segments.length > 0 ? segments : [{ type: "text", data: { text: "" } }];
 }
 
@@ -212,19 +227,6 @@ function tokenizeMentions(text: string, entities: TeamsEntity[]): CommonTypes.Se
     }
     if (cursor < text.length) segments.push({ type: "text", data: { text: text.slice(cursor) } });
     return segments;
-}
-
-function applyActivityOptions(output: TeamsOutboundActivity, data: Record<string, unknown>): void {
-    output.summary = optionalString(data.summary);
-    output.importance = optionalString(data.importance);
-    output.textFormat = optionalString(data.text_format) || output.textFormat;
-    if (
-        data.channel_data &&
-        typeof data.channel_data === "object" &&
-        !Array.isArray(data.channel_data)
-    ) {
-        output.channelData = data.channel_data as Record<string, unknown>;
-    }
 }
 
 function mediaSegmentType(contentType: string): string {

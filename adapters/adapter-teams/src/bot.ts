@@ -238,11 +238,22 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     }
 
     async sendActivity(conversationId: string, activity: Activity): Promise<ResourceResponse> {
+        const response = await this.sendRawActivity(conversationId, activity);
+        if (!response)
+            throw new TeamsApiError("Teams 未返回消息资源", { code: "TEAMS_EMPTY_RESPONSE" });
+        return response;
+    }
+
+    /**
+     * 发送原生 Activity。流式消息的中间帧按微软约定可以返回空响应，因此与普通消息分离。
+     */
+    async sendRawActivity(
+        conversationId: string,
+        activity: Activity,
+    ): Promise<ResourceResponse | undefined> {
         return this.withConversation(conversationId, async context => {
             const response = await context.turn.sendActivity(activity);
-            if (!response)
-                throw new TeamsApiError("Teams 未返回消息资源", { code: "TEAMS_EMPTY_RESPONSE" });
-            this.references.saveMessage(response.id, conversationId);
+            if (response) this.references.saveMessage(response.id, conversationId);
             return response;
         });
     }

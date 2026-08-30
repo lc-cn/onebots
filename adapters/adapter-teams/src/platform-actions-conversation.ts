@@ -9,6 +9,7 @@ import {
     fileInfoActivity,
     messageValue,
     objectValue,
+    outboundActivityValue,
     optionalNumber,
     optionalString,
     requireHttpsUrl,
@@ -27,6 +28,8 @@ export const TEAMS_CONVERSATION_ACTIONS = {
     register_conversation_reference: registerConversationReference,
     create_personal_conversation: createPersonalConversation,
     send_adaptive_card: sendAdaptiveCard,
+    send_activity: async (bot: TeamsBot, params: TeamsActionParams) =>
+        bot.sendRawActivity(conversationId(params), outboundActivityValue(params.activity)),
     send_targeted_message: sendTargetedMessage,
     reply_to_activity: replyToActivity,
     create_targeted_activity: createTargetedActivity,

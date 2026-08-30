@@ -37,6 +37,10 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
             permissions: ["Teams app installed for target user"],
         },
         send_adaptive_card: contextual,
+        send_activity: {
+            ...contextual,
+            note: "发送受会话边界保护的原生 Activity，支持流式消息、AI 实体与建议操作",
+        },
         send_targeted_message: { ...contextual, scenes: ["group", "channel"] },
         reply_to_activity: contextual,
         create_targeted_activity: { ...contextual, scenes: ["group", "channel"] },
@@ -142,8 +146,11 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         },
         adaptive_card: { support: "native", direction: "both" },
         card: { support: "native", direction: "both" },
-        teams_activity: { support: "native", direction: "send" },
-        teams_value: { support: "native", direction: "receive" },
+        teams_activity: {
+            support: "native",
+            direction: "both",
+            note: "保留 AI 标签、引用、敏感度、流信息、反馈回路、建议操作及 Activity 扩展",
+        },
     },
     transports: {
         webhook: { support: "native", mode: "webhook" },
