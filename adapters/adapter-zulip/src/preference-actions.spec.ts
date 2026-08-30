@@ -50,6 +50,30 @@ describe("Zulip 个人偏好动作", () => {
         });
     });
 
+    it("通过统一端点更新本人及管理员批量个人设置", async () => {
+        const { client, call } = mockClient();
+
+        await executeZulipPlatformAction(client, "update_user_settings", {
+            color_scheme: 2,
+            web_home_view: "inbox",
+            send_read_receipts: false,
+        });
+        await executeZulipPlatformAction(client, "update_user_settings_for_users", {
+            target_users: { group_ids: [4], skip_if_already_edited: true },
+            enable_drafts_synchronization: true,
+        });
+
+        expect(call).toHaveBeenNthCalledWith(1, "settings", "PATCH", {
+            color_scheme: 2,
+            web_home_view: "inbox",
+            send_read_receipts: false,
+        });
+        expect(call).toHaveBeenNthCalledWith(2, "settings", "PATCH", {
+            target_users: { group_ids: [4], skip_if_already_edited: true },
+            enable_drafts_synchronization: true,
+        });
+    });
+
     it.each([
         ["mute_user", { user_id: 12, unexpected: true }],
         ["add_alert_words", { alert_words: [] }],
@@ -57,6 +81,20 @@ describe("Zulip 个人偏好动作", () => {
         ["update_user_status", {}],
         ["update_user_status", { status_text: "x".repeat(61) }],
         ["update_status_for_user", { user_id: 12, reaction_type: "unknown" }],
+        ["update_user_settings", {}],
+        ["update_user_settings", { dense_mode: true }],
+        ["update_user_settings", { color_scheme: 4 }],
+        ["update_user_settings", { new_password: "new-secret" }],
+        ["update_user_settings", { target_users: { user_ids: [1] }, color_scheme: 2 }],
+        ["update_user_settings_for_users", { color_scheme: 2 }],
+        [
+            "update_user_settings_for_users",
+            { target_users: { skip_if_already_edited: true }, color_scheme: 2 },
+        ],
+        [
+            "update_user_settings_for_users",
+            { target_users: { user_ids: [1] }, full_name: "Other user" },
+        ],
     ])("%s 在请求前拒绝非官方参数", async (action, params) => {
         const { client, call } = mockClient();
 

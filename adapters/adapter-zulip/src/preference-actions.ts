@@ -10,6 +10,7 @@ import {
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 import type { ZulipParams } from "./types.js";
+import { userSettingsParams } from "./user-settings-params.js";
 
 const STATUS_FIELDS = ["status_text", "emoji_name", "emoji_code", "reaction_type"] as const;
 const REACTION_TYPES = new Set(["unicode_emoji", "realm_emoji", "zulip_extra_emoji"]);
@@ -17,6 +18,7 @@ const REACTION_TYPES = new Set(["unicode_emoji", "realm_emoji", "zulip_extra_emo
 /** 需要组织管理员权限的个人偏好领域动作。 */
 export const ZULIP_PREFERENCE_PERMISSION_ACTIONS: ReadonlySet<string> = new Set([
     "update_status_for_user",
+    "update_user_settings_for_users",
 ]);
 
 export const ZULIP_PREFERENCE_ACTION_HANDLERS = {
@@ -28,6 +30,13 @@ export const ZULIP_PREFERENCE_ACTION_HANDLERS = {
     },
     add_alert_words: (client, params) => alertWordsAction(client, params, "POST"),
     remove_alert_words: (client, params) => alertWordsAction(client, params, "DELETE"),
+    update_user_settings: (client, params) =>
+        client.call("settings", "PATCH", userSettingsParams(params)),
+    update_user_settings_for_users: (client, params) => {
+        const input = userSettingsParams(params, true);
+        if (input.target_users === undefined) invalid("Zulip 批量设置动作必须提供 target_users");
+        return client.call("settings", "PATCH", input);
+    },
     get_user_status: (client, params) => {
         const userId = requirePathId(params, "user_id");
         return client.call(`users/${userId}/status`);

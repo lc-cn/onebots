@@ -102,6 +102,8 @@ Navigation View 领域提供 `list_navigation_views`、`add_navigation_view`、`
 
 活动状态领域提供现代增量 Presence、单用户状态查询、个人话题可见性、消息撰写输入状态与消息编辑输入状态。Presence 不接受已废弃的 `slim_presence`；输入状态只接受 `direct` / `channel` 并按场景校验接收者或频道话题。Client 会展开批量 Presence，投影话题关注/静音变化与输入开始/停止通知，并默认订阅 `user_topic`。
 
+个人设置领域提供 `update_user_settings` 与管理员专用的 `update_user_settings_for_users`，覆盖 Zulip 12 统一 `/settings` 端点的显示、通知、隐私、输入和话题策略。字段由共享元数据表严格校验，已移除的 `dense_mode` 不再透传；批量动作要求明确用户或用户组，且不能借此修改姓名、邮箱或密码。Client 精确声明 `user_settings` 增量事件，并投影为机器人本人的 `user_updated/settings` 通知。
+
 频道发现领域提供 `get_channel_id`、`get_channel_topics`、`get_channel_subscriptions`、`get_channel_subscription_status`、`get_user_channels`、`list_zulip_channels`、`get_zulip_channel`、`get_channel_email_address` 与 `delete_channel_topic`，并将原有订阅、订阅者、创建、更新和归档动作收敛到独立频道模块。频道列表仅暴露现代 `include_all` 等参数，不接受已弃用的 `include_all_active`；归档使用官方 `DELETE /streams/{stream_id}`，不再伪装成 PATCH 属性更新。话题删除保留 Zulip 10+ 的空话题名语义。
 
 频道个人设置提供 `update_channel_subscription_settings` 和 `update_channel_subscription_property`，支持批量或单频道更新颜色、静音、置顶和通知开关。颜色严格校验为 6 位十六进制值，其余属性必须为布尔值；不接受仅为旧客户端保留的 `in_home_view`。

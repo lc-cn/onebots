@@ -140,6 +140,14 @@ export interface ZulipMutedUsersEvent extends ZulipBaseEvent {
     muted_users: Array<{ id: number; timestamp: number }>;
 }
 
+export interface ZulipUserSettingsEvent extends ZulipBaseEvent {
+    type: "user_settings";
+    op: "update";
+    property: string;
+    value: boolean | number | string;
+    language_name?: string;
+}
+
 export interface ZulipAttachmentChangedEvent extends ZulipBaseEvent {
     type: "attachment";
     op: "add" | "update";
@@ -419,6 +427,7 @@ export type ZulipEvent =
     | ZulipInvitesChangedEvent
     | ZulipAlertWordsEvent
     | ZulipMutedUsersEvent
+    | ZulipUserSettingsEvent
     | ZulipAttachmentEvent
     | ZulipStreamEvent
     | ZulipSubscriptionEvent

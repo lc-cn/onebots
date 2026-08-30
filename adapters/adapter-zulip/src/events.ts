@@ -21,6 +21,7 @@ import type {
     ZulipReactionEvent,
     ZulipUpdateMessageEvent,
     ZulipUpdateMessageFlagsEvent,
+    ZulipUserSettingsEvent,
 } from "./types.js";
 
 /** 将官方 Event Queue 事件无损投影为一个或多个通用事件。 */
@@ -33,6 +34,7 @@ export function projectZulipEvents(
     if (isDeleteEvent(event)) return [projectDelete(event, context)];
     if (isReactionEvent(event)) return [projectReaction(event, context)];
     if (isMessageFlagsEvent(event)) return [projectMessageFlags(event, context)];
+    if (isUserSettingsEvent(event)) return [projectUserSettings(event, context)];
     if (event.type === "heartbeat") {
         return [
             {
@@ -55,6 +57,25 @@ export function projectZulipEvents(
     const resourceEvent = projectZulipResourceEvent(event, context);
     if (resourceEvent) return [resourceEvent];
     return [customNotice(event, context)];
+}
+
+function projectUserSettings(
+    event: ZulipUserSettingsEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent> {
+    return {
+        ...base(event, context),
+        type: "notice",
+        notice_type: "user_updated",
+        sub_type: "settings",
+        user: {
+            id: context.botId,
+            changed_property: event.property,
+            [event.property]: event.value,
+            ...(event.language_name === undefined ? {} : { language_name: event.language_name }),
+        },
+        extensions: { zulip: event },
+    };
 }
 
 function projectMessageFlags(
@@ -395,6 +416,17 @@ function isMessageFlagsEvent(event: ZulipEvent): event is ZulipUpdateMessageFlag
         typeof event.flag === "string" &&
         Array.isArray(event.messages) &&
         event.messages.every(messageId => numeric(messageId) !== undefined)
+    );
+}
+
+function isUserSettingsEvent(event: ZulipEvent): event is ZulipUserSettingsEvent {
+    return (
+        event.type === "user_settings" &&
+        event.op === "update" &&
+        typeof event.property === "string" &&
+        (typeof event.value === "boolean" ||
+            typeof event.value === "number" ||
+            typeof event.value === "string")
     );
 }
 
