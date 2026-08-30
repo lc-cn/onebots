@@ -13,6 +13,7 @@ import { ZULIP_DATA_EXPORT_ACTION_HANDLERS } from "./data-export-actions.js";
 import { ZULIP_DRAFT_ACTION_HANDLERS } from "./draft-actions.js";
 import { ZULIP_INVITATION_ACTION_HANDLERS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_ACTION_HANDLERS } from "./linkifier-actions.js";
+import { ZULIP_LIFECYCLE_ACTION_HANDLERS } from "./lifecycle-actions.js";
 import { ZULIP_MESSAGE_ACTION_HANDLERS } from "./message-actions.js";
 import { ZULIP_NAVIGATION_VIEW_ACTION_HANDLERS } from "./navigation-view-actions.js";
 import { ZULIP_OWN_PROFILE_ACTION_HANDLERS } from "./own-profile-actions.js";
@@ -45,6 +46,7 @@ const ACTION_HANDLERS = {
     ...ZULIP_EMOJI_ACTION_HANDLERS,
     ...ZULIP_INVITATION_ACTION_HANDLERS,
     ...ZULIP_LINKIFIER_ACTION_HANDLERS,
+    ...ZULIP_LIFECYCLE_ACTION_HANDLERS,
     ...ZULIP_MESSAGE_ACTION_HANDLERS,
     ...ZULIP_NAVIGATION_VIEW_ACTION_HANDLERS,
     ...ZULIP_OWN_PROFILE_ACTION_HANDLERS,

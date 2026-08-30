@@ -14,6 +14,10 @@ import { ZULIP_DATA_EXPORT_MUTATION_ACTIONS } from "./data-export-actions.js";
 import { ZULIP_EMOJI_MUTATION_ACTIONS } from "./emoji-actions.js";
 import { ZULIP_INVITATION_ACTIONS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_MUTATION_ACTIONS } from "./linkifier-actions.js";
+import {
+    ZULIP_OWNER_DESTRUCTIVE_ACTIONS,
+    ZULIP_SELF_DESTRUCTIVE_ACTIONS,
+} from "./lifecycle-actions.js";
 import { ZULIP_OWN_PROFILE_PERMISSION_ACTIONS } from "./own-profile-actions.js";
 import { ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { ZULIP_PREFERENCE_PERMISSION_ACTIONS } from "./preference-actions.js";
@@ -37,6 +41,12 @@ const administratorPermission = {
     availability: "permission" as const,
     permissions: ["Zulip 组织管理员"],
 };
+const ownerPermission = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["Zulip 组织 Owner"],
+    note: "破坏性操作：成功后组织立即停用，并可能进入永久删除倒计时",
+};
 const permissionActions: ReadonlySet<string> = new Set([
     ...ZULIP_USER_GROUP_MUTATION_ACTIONS,
     ...ZULIP_USER_MUTATION_ACTIONS,
@@ -57,6 +67,10 @@ const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS,
     if (ZULIP_OWN_PROFILE_PERMISSION_ACTIONS.has(action)) return { ...ownProfilePermission };
     if (ZULIP_CHANNEL_FOLDER_MUTATION_ACTIONS.has(action)) return { ...administratorPermission };
     if (ZULIP_DEFAULT_CHANNEL_ADMIN_ACTIONS.has(action)) return { ...administratorPermission };
+    if (ZULIP_OWNER_DESTRUCTIVE_ACTIONS.has(action)) return { ...ownerPermission };
+    if (ZULIP_SELF_DESTRUCTIVE_ACTIONS.has(action)) {
+        return { support: "native", note: "破坏性操作：成功后当前账号立即停用" };
+    }
     return permissionActions.has(action) ? { ...permission } : { support: "native" };
 });
 
