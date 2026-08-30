@@ -80,6 +80,7 @@ onebots -r telegram
 - ✅ Bot 命令、名称、长短描述、菜单按钮与默认管理员权限
 - ✅ Callback、Inline、Shipping 与 Pre-checkout 查询应答
 - ✅ Callback/Inline/支付查询、消息编辑、机器人群生命周期、成员变化、入群申请的标准事件投影
+- ✅ 成员受限状态按 Bot API 的 `restricted.is_member` 判定真实加入/退出，不把全部 restricted 用户误算为在群
 - ✅ Reaction 增删与批量商业消息删除会拆成独立、唯一 ID 的标准事件
 - ✅ 其他 Telegram Update 以 `notice.custom` + `raw_event` 无损交付
 - ✅ **代理支持**（HTTP/HTTPS/SOCKS4/SOCKS5）

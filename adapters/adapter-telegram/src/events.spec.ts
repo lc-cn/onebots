@@ -159,6 +159,33 @@ describe("projectTelegramEvents", () => {
         }
     });
 
+    it("按 restricted.is_member 判断真实成员变化", () => {
+        const update = {
+            update_id: 19,
+            chat_member: {
+                chat: { id: -30, type: "supergroup", title: "group" },
+                from: { id: 40, is_bot: false, first_name: "Admin" },
+                date: 104,
+                old_chat_member: {
+                    status: "restricted",
+                    is_member: false,
+                    user: { id: 41, is_bot: false, first_name: "Alice" },
+                },
+                new_chat_member: {
+                    status: "restricted",
+                    is_member: true,
+                    user: { id: 41, is_bot: false, first_name: "Alice" },
+                },
+            },
+        } as Update;
+
+        expect(projectTelegramEvents(update, context)[0]).toMatchObject({
+            notice_type: "member_joined",
+            sub_type: "restricted",
+            user: { id: { string: "41" } },
+        });
+    });
+
     it("将服务消息里的批量成员变化逐人投影", () => {
         const update = {
             update_id: 17,

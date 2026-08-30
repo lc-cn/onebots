@@ -93,8 +93,14 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         message: { support: "native", scenes: ["private", "group", "channel"] },
         message_updated: { support: "native" },
         interaction: { support: "native" },
-        member_joined: { support: "native" },
-        member_left: { support: "native" },
+        member_joined: {
+            support: "native",
+            note: "包含 restricted 状态下由 is_member 表示的真实加入",
+        },
+        member_left: {
+            support: "native",
+            note: "包含 restricted 状态下由 is_member 表示的真实退出",
+        },
         group_increase: { support: "native" },
         group_decrease: { support: "native" },
         group_request: { support: "native" },
