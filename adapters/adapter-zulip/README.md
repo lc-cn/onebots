@@ -11,6 +11,7 @@
 - Zulip-flavored Markdown、用户提及、Emoji、图片和文件上传
 - 附件清单、删除、临时访问 URL、缩略图状态与实时生命周期事件
 - 真实频道订阅者查询、邀请、移除、退订与频道改名
+- 频道 ID、详情、话题、成员订阅状态、邮件入口与归档管理
 - 消息反应、成员变更、心跳及未知原始事件投影
 - 队列过期自动重建、无限指数退避、生命周期取消与成功后游标确认
 - 独立可嵌入的 `ZulipClient`、底层 `call()` 与 `ingest(rawEvent)`
@@ -90,6 +91,8 @@ Navigation View 领域提供 `list_navigation_views`、`add_navigation_view`、`
 附件领域提供 `get_attachments`、`remove_attachment`、`get_attachment_temporary_url` 与 `check_attachment_thumbnail`；临时 URL 与缩略图动作按官方 `path_id` 拆分 `realm_id_str` 和 `filename`，每个路径段独立编码并拒绝路径穿越。Client 默认订阅 `attachment` 增改删事件，投影为统一附件资源通知，同时保留 `path_id`、空间使用量与原始事件。事件协议类型已独立到专用模块，REST 数据与队列报文不再共同推高单文件维护成本。
 
 消息扩展领域提供 `update_message_flags`、`update_message_flags_for_narrow`、`check_messages_match_narrow` 与 `report_message`，并将原有反应、星标、历史、已读回执和 Markdown 渲染动作统一到独立消息模块。只允许客户端可修改的 `read`、`starred`、`collapsed` 标记；narrow 使用现代结构化条件，不暴露已弃用的全局已读端点。举报类型保留 Zulip 12 服务端动态 key，`other` 必须提供 1–1000 个 Unicode 字符的描述。Client 默认订阅精确 `update_message_flags` 事件，并投影为批量消息标记通知。
+
+频道发现领域提供 `get_channel_id`、`get_channel_topics`、`get_channel_subscriptions`、`get_channel_subscription_status`、`get_user_channels`、`list_zulip_channels`、`get_zulip_channel`、`get_channel_email_address` 与 `delete_channel_topic`，并将原有订阅、订阅者、创建、更新和归档动作收敛到独立频道模块。频道列表仅暴露现代 `include_all` 等参数，不接受已弃用的 `include_all_active`；归档使用官方 `DELETE /streams/{stream_id}`，不再伪装成 PATCH 属性更新。话题删除保留 Zulip 10+ 的空话题名语义。
 
 当前账号资料领域提供 `get_own_user`、`update_own_profile_data`、`remove_own_profile_data`、`upload_own_avatar` 与 `delete_own_avatar`；资料值严格遵循 Zulip 自定义字段类型，头像上传复用统一媒体来源并使用官方 `file` multipart 字段。资料和头像变更可能受组织权限策略限制。
 

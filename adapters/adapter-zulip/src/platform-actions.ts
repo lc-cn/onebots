@@ -9,6 +9,7 @@ import {
 import { ZULIP_ATTACHMENT_ACTION_HANDLERS } from "./attachment-actions.js";
 import { ZULIP_BOT_ACTION_HANDLERS } from "./bot-actions.js";
 import { ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS } from "./channel-folder-actions.js";
+import { ZULIP_CHANNEL_ACTION_HANDLERS } from "./channel-actions.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 import { ZULIP_EMOJI_ACTION_HANDLERS } from "./emoji-actions.js";
@@ -32,22 +33,6 @@ const ACTION_HANDLERS = {
             requireMethod(params.method),
             requireParams(params.params),
         ),
-    subscribe_channels: (client, params) =>
-        client.call("users/me/subscriptions", "POST", requireParams(params)),
-    unsubscribe_channels: (client, params) =>
-        client.call("users/me/subscriptions", "DELETE", requireParams(params)),
-    get_channel_subscribers: (client, params) =>
-        client.call(`streams/${requireInteger(params.stream_id, "stream_id")}/members`),
-    create_zulip_channel: (client, params) =>
-        client.call("channels/create", "POST", requireParams(params)),
-    update_zulip_channel: (client, params) =>
-        client.call(
-            `streams/${requireInteger(params.stream_id, "stream_id")}`,
-            "PATCH",
-            without(params, "stream_id"),
-        ),
-    archive_channel: (client, params) => archiveChannel(client, params, true),
-    unarchive_channel: (client, params) => archiveChannel(client, params, false),
     set_topic_visibility: (client, params) =>
         client.call("user_topics", "POST", requireParams(params)),
     update_presence: (client, params) =>
@@ -85,6 +70,7 @@ const ACTION_HANDLERS = {
     ...ZULIP_BOT_ACTION_HANDLERS,
     ...ZULIP_ATTACHMENT_ACTION_HANDLERS,
     ...ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS,
+    ...ZULIP_CHANNEL_ACTION_HANDLERS,
     ...ZULIP_DATA_EXPORT_ACTION_HANDLERS,
     ...ZULIP_DOMAIN_ACTION_HANDLERS,
     ...ZULIP_EMOJI_ACTION_HANDLERS,
@@ -119,16 +105,6 @@ export async function executeZulipPlatformAction(
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
     return PLATFORM_ACTIONS.execute(client, action, params);
-}
-
-function archiveChannel(
-    client: ZulipClient,
-    params: Readonly<Record<string, unknown>>,
-    archived: boolean,
-): Promise<unknown> {
-    return client.call(`streams/${requireInteger(params.stream_id, "stream_id")}`, "PATCH", {
-        is_archived: archived,
-    });
 }
 
 function resourceAction(

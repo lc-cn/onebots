@@ -5,6 +5,7 @@ import {
 } from "onebots";
 import { ZULIP_BOT_CREDENTIAL_ACTIONS } from "./bot-actions.js";
 import { ZULIP_CHANNEL_FOLDER_MUTATION_ACTIONS } from "./channel-folder-actions.js";
+import { ZULIP_CHANNEL_ADMIN_ACTIONS } from "./channel-actions.js";
 import { ZULIP_DOMAIN_MUTATION_ACTIONS } from "./domain-actions.js";
 import { ZULIP_DATA_EXPORT_MUTATION_ACTIONS } from "./data-export-actions.js";
 import { ZULIP_EMOJI_MUTATION_ACTIONS } from "./emoji-actions.js";
@@ -45,12 +46,9 @@ const permissionActions: ReadonlySet<string> = new Set([
     ...ZULIP_PLAYGROUND_MUTATION_ACTIONS,
     ...ZULIP_PROFILE_FIELD_MUTATION_ACTIONS,
     ...ZULIP_LINKIFIER_MUTATION_ACTIONS,
+    ...ZULIP_CHANNEL_ADMIN_ACTIONS,
     "subscribe_channels",
     "unsubscribe_channels",
-    "create_zulip_channel",
-    "update_zulip_channel",
-    "archive_channel",
-    "unarchive_channel",
 ]);
 const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS, action => {
     if (ZULIP_OWN_PROFILE_PERMISSION_ACTIONS.has(action)) return { ...ownProfilePermission };
