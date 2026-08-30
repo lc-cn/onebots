@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { Message } from "./message.js";
+import { UnsupportedAdapterOperationError } from "./adapter-error.js";
 import { Friend } from "./instances/friend.js";
 import { User } from "./instances/user.js";
 import { Group } from "./instances/group.js";
@@ -36,147 +37,161 @@ export abstract class Adapter<
     declare readonly [adapterType]: { id: Id; rawEvent: TRawEvent };
     /** 机器人自身ID */
     abstract readonly selfId: string;
+
+    protected unsupported(operation: string): never {
+        throw new UnsupportedAdapterOperationError(operation);
+    }
     /** 发送消息 */
-    sendMessage(options: Adapter.SendMessageOptions<Id>): Promise<Message.Ret> {
-        throw new Error("Not implemented");
+    async sendMessage(_options: Adapter.SendMessageOptions<Id>): Promise<Message.Ret> {
+        return this.unsupported("sendMessage");
     }
     /** 撤回消息 */
-    recallMessage(message_id: Id): Promise<boolean> {
-        throw new Error("Not implemented");
+    async recallMessage(_message_id: Id): Promise<boolean> {
+        return this.unsupported("recallMessage");
     }
     async getUserList(_options?: DirectoryQueryOptions): Promise<User<Id>[]> {
-        return [];
+        return this.unsupported("getUserList");
     }
-    getUserInfo(user_id: Id, _options?: DirectoryQueryOptions): Promise<User<Id>> {
-        throw new Error("Not implemented");
+    async getUserInfo(_user_id: Id, _options?: DirectoryQueryOptions): Promise<User<Id>> {
+        return this.unsupported("getUserInfo");
     }
-    getFriendInfo(user_id: Id, _options?: DirectoryQueryOptions): Promise<Friend<Id>> {
-        throw new Error("Not implemented");
+    async getFriendInfo(_user_id: Id, _options?: DirectoryQueryOptions): Promise<Friend<Id>> {
+        return this.unsupported("getFriendInfo");
     }
     async getGroupList(_options?: DirectoryQueryOptions): Promise<Group<Id>[]> {
-        return [];
+        return this.unsupported("getGroupList");
     }
-    getGroupInfo(group_id: Id, _options?: DirectoryQueryOptions): Promise<Group<Id>> {
-        throw new Error("Not implemented");
+    async getGroupInfo(_group_id: Id, _options?: DirectoryQueryOptions): Promise<Group<Id>> {
+        return this.unsupported("getGroupInfo");
     }
-    async getGroupMemberList(group_id: Id, _options?: DirectoryQueryOptions): Promise<User<Id>[]> {
-        return [];
+    async getGroupMemberList(_group_id: Id, _options?: DirectoryQueryOptions): Promise<User<Id>[]> {
+        return this.unsupported("getGroupMemberList");
     }
-    getGroupMemberInfo(
-        group_id: Id,
-        user_id: Id,
+    async getGroupMemberInfo(
+        _group_id: Id,
+        _user_id: Id,
         _options?: DirectoryQueryOptions,
     ): Promise<User<Id>> {
-        throw new Error("Not implemented");
+        return this.unsupported("getGroupMemberInfo");
     }
     async getChannelList(): Promise<Channel<Id>[]> {
-        return [];
+        return this.unsupported("getChannelList");
     }
-    getChannelInfo(channel_id: Id): Promise<Channel<Id>> {
-        throw new Error("Not implemented");
+    async getChannelInfo(_channel_id: Id): Promise<Channel<Id>> {
+        return this.unsupported("getChannelInfo");
     }
-    async getChannelMemberList(channel_id: Id): Promise<User<Id>[]> {
-        return [];
+    async getChannelMemberList(_channel_id: Id): Promise<User<Id>[]> {
+        return this.unsupported("getChannelMemberList");
     }
-    getChannelMemberInfo(channel_id: Id, user_id: Id): Promise<User<Id>> {
-        throw new Error("Not implemented");
+    async getChannelMemberInfo(_channel_id: Id, _user_id: Id): Promise<User<Id>> {
+        return this.unsupported("getChannelMemberInfo");
     }
-    kickGroupMember(group_id: Id, user_id: Id): Promise<void> {
-        throw new Error("Not implemented");
+    async kickGroupMember(_group_id: Id, _user_id: Id): Promise<void> {
+        return this.unsupported("kickGroupMember");
     }
-    setGroupMemberMute(group_id: Id, user_id: Id, duration: number): Promise<void> {
-        throw new Error("Not implemented");
+    async setGroupMemberMute(_group_id: Id, _user_id: Id, _duration: number): Promise<void> {
+        return this.unsupported("setGroupMemberMute");
     }
-    setChannelMemberAdmin(channel_id: Id, user_id: Id, admin: boolean = true): Promise<void> {
-        throw new Error("Not implemented");
+    async setChannelMemberAdmin(
+        _channel_id: Id,
+        _user_id: Id,
+        _admin: boolean = true,
+    ): Promise<void> {
+        return this.unsupported("setChannelMemberAdmin");
     }
-    setChannelMemberOwner(channel_id: Id, user_id: Id, owner: boolean = true): Promise<void> {
-        throw new Error("Not implemented");
+    async setChannelMemberOwner(
+        _channel_id: Id,
+        _user_id: Id,
+        _owner: boolean = true,
+    ): Promise<void> {
+        return this.unsupported("setChannelMemberOwner");
     }
-    setGroupMemberAdmin(group_id: Id, user_id: Id, admin: boolean = true): Promise<void> {
-        throw new Error("Not implemented");
+    async setGroupMemberAdmin(_group_id: Id, _user_id: Id, _admin: boolean = true): Promise<void> {
+        return this.unsupported("setGroupMemberAdmin");
     }
-    setGroupMemberOwner(group_id: Id, user_id: Id, owner: boolean = true): Promise<void> {
-        throw new Error("Not implemented");
+    async setGroupMemberOwner(_group_id: Id, _user_id: Id, _owner: boolean = true): Promise<void> {
+        return this.unsupported("setGroupMemberOwner");
     }
-    addMessageReaction(message_id: Id, reaction: string): Promise<void> {
-        throw new Error("Not implemented");
+    async addMessageReaction(_message_id: Id, _reaction: string): Promise<void> {
+        return this.unsupported("addMessageReaction");
     }
-    deleteMessageReaction(message_id: Id, reaction: string): Promise<void> {
-        throw new Error("Not implemented");
+    async deleteMessageReaction(_message_id: Id, _reaction: string): Promise<void> {
+        return this.unsupported("deleteMessageReaction");
     }
     /** 获取消息 */
-    getMessage(message_id: Id): Promise<MessageEvent<Id>> {
-        throw new Error("Not implemented");
+    async getMessage(_message_id: Id): Promise<MessageEvent<Id>> {
+        return this.unsupported("getMessage");
     }
     /** 编辑消息 */
-    updateMessage(message_id: Id, content: Message.Content): Promise<void> {
-        throw new Error("Not implemented");
+    async updateMessage(_message_id: Id, _content: Message.Content): Promise<void> {
+        return this.unsupported("updateMessage");
     }
     /** 设置群组名称 */
-    setGroupName(group_id: Id, name: string): Promise<void> {
-        throw new Error("Not implemented");
+    async setGroupName(_group_id: Id, _name: string): Promise<void> {
+        return this.unsupported("setGroupName");
     }
     /** 退出群组 */
-    leaveGroup(group_id: Id): Promise<void> {
-        throw new Error("Not implemented");
+    async leaveGroup(_group_id: Id): Promise<void> {
+        return this.unsupported("leaveGroup");
     }
     /** 设置频道名称 */
-    setChannelName(channel_id: Id, name: string): Promise<void> {
-        throw new Error("Not implemented");
+    async setChannelName(_channel_id: Id, _name: string): Promise<void> {
+        return this.unsupported("setChannelName");
     }
     /** 退出频道 */
-    leaveChannel(channel_id: Id): Promise<void> {
-        throw new Error("Not implemented");
+    async leaveChannel(_channel_id: Id): Promise<void> {
+        return this.unsupported("leaveChannel");
     }
     /** 设置群成员名片 */
-    setGroupMemberCard(group_id: Id, user_id: Id, card: string): Promise<void> {
-        throw new Error("Not implemented");
+    async setGroupMemberCard(_group_id: Id, _user_id: Id, _card: string): Promise<void> {
+        return this.unsupported("setGroupMemberCard");
     }
     /** 取消群成员管理员 */
-    unsetGroupMemberAdmin(group_id: Id, user_id: Id): Promise<void> {
-        throw new Error("Not implemented");
+    async unsetGroupMemberAdmin(_group_id: Id, _user_id: Id): Promise<void> {
+        return this.unsupported("unsetGroupMemberAdmin");
     }
     /** 取消群成员群主 */
-    unsetGroupMemberOwner(group_id: Id, user_id: Id): Promise<void> {
-        throw new Error("Not implemented");
+    async unsetGroupMemberOwner(_group_id: Id, _user_id: Id): Promise<void> {
+        return this.unsupported("unsetGroupMemberOwner");
     }
     /** 取消频道成员管理员 */
-    unsetChannelMemberAdmin(channel_id: Id, user_id: Id): Promise<void> {
-        throw new Error("Not implemented");
+    async unsetChannelMemberAdmin(_channel_id: Id, _user_id: Id): Promise<void> {
+        return this.unsupported("unsetChannelMemberAdmin");
     }
     /** 取消频道成员所有者 */
-    unsetChannelMemberOwner(channel_id: Id, user_id: Id): Promise<void> {
-        throw new Error("Not implemented");
+    async unsetChannelMemberOwner(_channel_id: Id, _user_id: Id): Promise<void> {
+        return this.unsupported("unsetChannelMemberOwner");
     }
     /** 删除好友 */
-    deleteFriend(user_id: Id): Promise<void> {
-        throw new Error("Not implemented");
+    async deleteFriend(_user_id: Id): Promise<void> {
+        return this.unsupported("deleteFriend");
     }
     /** 处理加好友请求 */
-    approveFriendRequest(request_id: Id, approve: boolean, comment?: string): Promise<void> {
-        throw new Error("Not implemented");
+    async approveFriendRequest(
+        _request_id: Id,
+        _approve: boolean,
+        _comment?: string,
+    ): Promise<void> {
+        return this.unsupported("approveFriendRequest");
     }
     /** 处理加群请求 */
-    approveGroupRequest(request_id: Id, approve: boolean, reason?: string): Promise<void> {
-        throw new Error("Not implemented");
+    async approveGroupRequest(_request_id: Id, _approve: boolean, _reason?: string): Promise<void> {
+        return this.unsupported("approveGroupRequest");
     }
     /** 上传文件 */
-    uploadFile(
-        file: File | Blob | Buffer,
-        filename?: string,
+    async uploadFile(
+        _file: File | Blob | Buffer,
+        _filename?: string,
     ): Promise<{ file_id: Id; url?: string }> {
-        throw new Error("Not implemented");
+        return this.unsupported("uploadFile");
     }
     /** 获取文件 */
-    getFile(file_id: Id): Promise<{ url: string; size?: number }> {
-        throw new Error("Not implemented");
+    async getFile(_file_id: Id): Promise<{ url: string; size?: number }> {
+        return this.unsupported("getFile");
     }
     /** 转换事件（可选，用于接收器） */
     transformEvent(event: TRawEvent): void {
-        // 默认实现：直接触发原始事件
-        // 使用 EventEmitter 的原始 emit 方法，因为 'event' 不在 EventMap 中
-        (this as EventEmitter).emit("event", event);
+        this.emit("event", event);
     }
 
     /** 启动适配器（可选） */

@@ -34,6 +34,8 @@ await client.start();
 
 HTTP 传输或协议调用失败会抛出 `ProtocolError`，其中包含 `protocol`、`operation`、`kind`、`httpStatus`、`code` 和原始 `response/cause` 等结构化上下文。
 
+协议适配器未实现的可选 API 会拒绝并抛出 `UnsupportedAdapterOperationError`，其 `code` 为 `IMHELPER_ADAPTER_OPERATION_UNSUPPORTED`，`operation` 指向具体方法。目录 API 不会再用空数组伪装成平台返回了空目录。
+
 四个协议包均导出具体 Client 和 factory：
 
 - `OneBotV11Client` / `createOnebot11Client()`

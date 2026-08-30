@@ -1,4 +1,5 @@
 export * from "./adapter.js";
+export * from "./adapter-error.js";
 export * from "./imhelper.js";
 export * from "./message.js";
 export * from "./instances/user.js";
