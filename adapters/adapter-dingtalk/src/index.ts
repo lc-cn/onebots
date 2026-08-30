@@ -6,9 +6,19 @@ export type {
     DingTalkApiRequestOptions,
     DingTalkConfig,
     DingTalkEvent,
+    DingTalkHttpContext,
+    DingTalkHttpRequest,
+    DingTalkHttpResponse,
     DingTalkReceiveMode,
     DingTalkRobotMessage,
 } from "./types.js";
+export {
+    applyDingTalkHttpResponse,
+    DINGTALK_JSON_HEADERS,
+    dingTalkMethodNotAllowed,
+    isDingTalkFetchRequest,
+    toDingTalkFetchResponse,
+} from "./http-bridge.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
 export {
@@ -67,7 +77,7 @@ export const dingtalkSchema: Schema = {
         description: "启用 HTTP 加密回调时用于校验回调归属",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     token: {
@@ -77,7 +87,7 @@ export const dingtalkSchema: Schema = {
         description: "HTTP 加密回调签名使用",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     encrypt_key: {
@@ -87,7 +97,7 @@ export const dingtalkSchema: Schema = {
         description: "HTTP 加密回调使用的 43 字符 AES Key",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     max_pending_event_handlers: {

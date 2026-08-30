@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { DWClient } from "dingtalk-stream";
-import { emitAwaited, ErrorCategory, type Next, type RouterContext } from "onebots";
+import { emitAllAwaited, ErrorCategory } from "onebots";
 import { DingTalkApiClient } from "./api-client.js";
 import { DingTalkCallbackCrypto } from "./crypto.js";
 import { assertDingTalkConfig } from "./config.js";
@@ -10,6 +10,13 @@ import {
     getDingTalkVisibleUsers,
 } from "./directory-api.js";
 import { DingTalkError } from "./errors.js";
+import {
+    applyDingTalkHttpResponse,
+    DINGTALK_JSON_HEADERS,
+    dingTalkMethodNotAllowed,
+    isDingTalkFetchRequest,
+    toDingTalkFetchResponse,
+} from "./http-bridge.js";
 import {
     isRobotMessage,
     objectValue,
@@ -22,6 +29,9 @@ import type {
     DingTalkApiRequestOptions,
     DingTalkConfig,
     DingTalkEvent,
+    DingTalkHttpContext,
+    DingTalkHttpRequest,
+    DingTalkHttpResponse,
     DingTalkRobotMessage,
     DingTalkSceneGroupMember,
     DingTalkSendResult,
@@ -106,7 +116,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         this.startPromise = undefined;
         this.streamClient?.disconnect();
         this.streamClient = undefined;
-        if (wasActive) this.emit("stopped");
+        if (wasActive) await emitAllAwaited(this, "stopped");
     }
 
     private async startInternal(generation: number): Promise<void> {
@@ -123,7 +133,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 name: "钉钉机器人",
             };
             this.running = true;
-            this.emit("ready");
+            await emitAllAwaited(this, "ready");
         } catch (error) {
             if (generation === this.generation) {
                 this.streamClient?.disconnect();
@@ -156,12 +166,11 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
             robot: (message, raw) => this.deliverRobot(message, raw),
             card: (event, raw) => this.deliverEvent(event, raw, "native_event"),
             event: (event, raw) => this.deliverEvent(event, raw, "event"),
-            error: error => this.emit("error", error),
+            error: error => this.reportError(error),
         });
         stream.on("error", error => {
             if (this.isCurrentStream(stream, generation)) {
-                this.emit(
-                    "error",
+                this.reportError(
                     DingTalkError.wrap(error, "DINGTALK_STREAM_ERROR", ErrorCategory.NETWORK),
                 );
             }
@@ -197,10 +206,12 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         }
     }
 
-    async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
+    /** 校验并处理 HTTP 回调，返回与具体 Web 框架无关的结构化响应。 */
+    async ingestHttp(request: DingTalkHttpRequest): Promise<DingTalkHttpResponse> {
+        if (request.method.toUpperCase() !== "POST") return dingTalkMethodNotAllowed();
         let dispatching = false;
         try {
-            const body = objectValue(ctx.request.body, "钉钉回调 body");
+            const body = objectValue(request.body, "钉钉回调 body");
             const encrypted = stringValue(body.encrypt);
             if (encrypted) {
                 if (!this.callbackCrypto) {
@@ -209,37 +220,82 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                         "DINGTALK_CALLBACK_CRYPTO_NOT_CONFIGURED",
                     );
                 }
-                const timestamp = queryString(ctx.query.timestamp || ctx.query.timeStamp);
-                const nonce = queryString(ctx.query.nonce);
-                const signature = queryString(ctx.query.signature || ctx.query.msg_signature);
+                const query = request.query || {};
+                const timestamp = queryString(query.timestamp || query.timeStamp);
+                const nonce = queryString(query.nonce);
+                const signature = queryString(query.signature || query.msg_signature);
                 const plain = this.callbackCrypto.decrypt(encrypted, signature, timestamp, nonce);
                 const decoded = tryParseObject(plain);
+                let event: DingTalkRobotMessage | DingTalkEvent | undefined;
                 if (decoded) {
                     dispatching = true;
-                    await this.ingest(decoded, body);
+                    event = await this.ingest(decoded, body);
                 }
-                ctx.body = this.callbackCrypto.encryptResponse(decoded ? "success" : plain);
-                return;
+                return {
+                    status: 200,
+                    headers: { ...DINGTALK_JSON_HEADERS },
+                    body: this.callbackCrypto.encryptResponse(decoded ? "success" : plain),
+                    event,
+                };
             }
             if (this.config.token && body.token !== this.config.token) {
-                ctx.status = 401;
-                ctx.body = { error: "Invalid token" };
-                return;
+                return {
+                    status: 401,
+                    headers: { ...DINGTALK_JSON_HEADERS },
+                    body: { error: "Invalid token", code: "DINGTALK_CALLBACK_TOKEN_INVALID" },
+                };
             }
             dispatching = true;
-            await this.ingest(body);
-            ctx.body = { success: true };
-            await next();
+            const event = await this.ingest(body);
+            return {
+                status: 200,
+                headers: { ...DINGTALK_JSON_HEADERS },
+                body: { success: true },
+                event,
+            };
         } catch (error) {
             const callbackError = DingTalkError.wrap(
                 error,
                 "DINGTALK_CALLBACK_INVALID",
                 ErrorCategory.PROTOCOL,
             );
-            this.emit("error", callbackError);
-            ctx.status = dispatching ? 500 : 400;
-            ctx.body = { error: callbackError.message, code: callbackError.code };
+            this.reportError(callbackError);
+            return {
+                status: dispatching ? 500 : 400,
+                headers: { ...DINGTALK_JSON_HEADERS },
+                body: { error: callbackError.message, code: callbackError.code },
+            };
         }
+    }
+
+    async acceptHttp(request: Request): Promise<Response>;
+    async acceptHttp(context: DingTalkHttpContext): Promise<void>;
+    async acceptHttp(input: Request | DingTalkHttpContext): Promise<Response | void> {
+        if (isDingTalkFetchRequest(input)) {
+            if (input.method.toUpperCase() !== "POST") {
+                return toDingTalkFetchResponse(dingTalkMethodNotAllowed());
+            }
+            let body: unknown;
+            try {
+                body = await input.json();
+            } catch (error) {
+                return toDingTalkFetchResponse(
+                    this.invalidHttpResponse(error, "钉钉回调 body 必须是 JSON"),
+                );
+            }
+            const query = Object.fromEntries(new URL(input.url).searchParams);
+            return toDingTalkFetchResponse(
+                await this.ingestHttp({ method: input.method, query, body }),
+            );
+        }
+        applyDingTalkHttpResponse(
+            input,
+            await this.ingestHttp({
+                method: input.method,
+                query: input.query,
+                body: input.request.body,
+            }),
+        );
     }
 
     /** 将已有 HTTP Host、消息队列或测试连接取得的解码载荷送入统一事件管线。 */
@@ -275,7 +331,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     private async deliverRobot(message: DingTalkRobotMessage, raw: unknown): Promise<void> {
         this.rememberRobot(message);
         await this.eventIngress.deliverRobot(message, () =>
-            emitAwaited(this, "robot_message", message, raw),
+            emitAllAwaited(this, "robot_message", message, raw),
         );
     }
 
@@ -284,7 +340,25 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         raw: unknown,
         channel: "event" | "native_event",
     ): Promise<void> {
-        await this.eventIngress.deliverEvent(event, () => emitAwaited(this, channel, event, raw));
+        await this.eventIngress.deliverEvent(event, () =>
+            emitAllAwaited(this, channel, event, raw),
+        );
+    }
+
+    private invalidHttpResponse(error: unknown, message: string): DingTalkHttpResponse {
+        const callbackError = DingTalkError.protocol(message, "DINGTALK_CALLBACK_INVALID", {
+            cause: error instanceof Error ? error.message : String(error),
+        });
+        this.reportError(callbackError);
+        return {
+            status: 400,
+            headers: { ...DINGTALK_JSON_HEADERS },
+            body: { error: callbackError.message, code: callbackError.code },
+        };
+    }
+
+    private reportError(error: DingTalkError): void {
+        if (this.listenerCount("error") > 0) this.emit("error", error);
     }
 
     hasAppCredentials(): boolean {

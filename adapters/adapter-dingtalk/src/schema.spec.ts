@@ -3,7 +3,7 @@ import { dingtalkSchema } from "./index.js";
 
 describe("钉钉配置 Schema", () => {
     it("按接收模式动态展示回调与 Stream 背压配置", () => {
-        const webhookCondition = { path: "receive_mode", oneOf: ["webhook"] };
+        const webhookCondition = { path: "receive_mode", oneOf: ["webhook", "manual"] };
         const streamCondition = { path: "receive_mode", oneOf: ["stream"] };
 
         expect(dingtalkSchema.receive_mode.choices).toContainEqual({

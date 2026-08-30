@@ -82,14 +82,12 @@ describe("DingTalkBot", () => {
         bot.on("robot_message", listener);
         bot.on("error", vi.fn());
         const message = robotMessage("msg-webhook-retry");
-        const first = { request: { body: message }, query: {}, body: undefined, status: 0 };
-        const second = { request: { body: message }, query: {}, body: undefined, status: 0 };
-
-        await bot.handleWebhook(first as never, vi.fn());
-        await bot.handleWebhook(second as never, vi.fn());
+        const first = await bot.ingestHttp({ method: "POST", body: message });
+        const second = await bot.ingestHttp({ method: "POST", body: message });
 
         expect(first.status).toBe(500);
         expect(second.body).toEqual({ success: true });
+        expect(second.event).toEqual(message);
         expect(listener).toHaveBeenCalledTimes(2);
     });
 
@@ -156,26 +154,22 @@ describe("DingTalkBot", () => {
         });
         const listener = vi.fn();
         bot.on("event", listener);
-        const ctx = {
-            request: { body: { encrypt: incoming.encrypt } },
+        const result = await bot.ingestHttp({
+            method: "POST",
+            body: { encrypt: incoming.encrypt },
             query: {
                 timestamp: incoming.timeStamp,
                 nonce: incoming.nonce,
                 msg_signature: incoming.msg_signature,
             },
-            body: undefined,
-            status: 200,
-        };
-
-        await bot.handleWebhook(ctx as never, vi.fn());
+        });
 
         expect(listener).toHaveBeenCalledWith(
             expect.objectContaining({ eventType: "user_add_org" }),
             { encrypt: incoming.encrypt },
         );
-        const response = ctx.body as unknown as ReturnType<
-            DingTalkCallbackCrypto["encryptResponse"]
-        >;
+        expect(result.status).toBe(200);
+        const response = result.body as ReturnType<DingTalkCallbackCrypto["encryptResponse"]>;
         expect(
             callbackCrypto.decrypt(
                 response.encrypt,
@@ -184,6 +178,92 @@ describe("DingTalkBot", () => {
                 response.nonce,
             ),
         ).toBe("success");
+    });
+
+    it("acceptHttp 接收标准 Request 并复用加密回调管线", async () => {
+        const key = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG";
+        const callbackCrypto = new DingTalkCallbackCrypto("token", key, "ding-corp");
+        const incoming = callbackCrypto.encryptResponse(
+            JSON.stringify({ EventType: "user_add_org", UserId: ["user_1"] }),
+            "1710000000000",
+            "nonce-1",
+        );
+        const bot = new DingTalkBot({
+            account_id: "bot",
+            receive_mode: "manual",
+            token: "token",
+            encrypt_key: key,
+            corp_id: "ding-corp",
+        });
+        const listener = vi.fn();
+        bot.on("event", listener);
+        const query = new URLSearchParams({
+            timestamp: incoming.timeStamp,
+            nonce: incoming.nonce,
+            msg_signature: incoming.msg_signature,
+        });
+
+        const response = await bot.acceptHttp(
+            new Request(`https://example.test/dingtalk?${query}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ encrypt: incoming.encrypt }),
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get("content-type")).toContain("application/json");
+        expect(listener).toHaveBeenCalledOnce();
+        const body = (await response.json()) as ReturnType<
+            DingTalkCallbackCrypto["encryptResponse"]
+        >;
+        expect(
+            callbackCrypto.decrypt(body.encrypt, body.msg_signature, body.timeStamp, body.nonce),
+        ).toBe("success");
+    });
+
+    it("acceptHttp 对方法、损坏 JSON 与 Koa Host 返回一致的结构化响应", async () => {
+        const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
+        const rejected = await bot.acceptHttp(new Request("https://example.test/dingtalk"));
+        expect(rejected.status).toBe(405);
+        expect(rejected.headers.get("allow")).toBe("POST");
+
+        const invalid = await bot.acceptHttp(
+            new Request("https://example.test/dingtalk", { method: "POST", body: "{" }),
+        );
+        expect(invalid.status).toBe(400);
+        await expect(invalid.json()).resolves.toMatchObject({
+            code: "DINGTALK_CALLBACK_INVALID",
+        });
+
+        const headers = new Map<string, string>();
+        const context = {
+            method: "POST",
+            query: {},
+            request: { body: robotMessage("msg-koa") },
+            status: 0,
+            body: undefined,
+            set: (name: string, value: string) => headers.set(name, value),
+        };
+        await bot.acceptHttp(context);
+        expect(context.status).toBe(200);
+        expect(context.body).toEqual({ success: true });
+        expect(headers.get("Content-Type")).toContain("application/json");
+    });
+
+    it("一个监听器失败时仍尝试其他事件出口并允许上游重投", async () => {
+        const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
+        const failed = vi.fn().mockRejectedValueOnce(new Error("first failed"));
+        const delivered = vi.fn();
+        bot.on("robot_message", failed);
+        bot.on("robot_message", delivered);
+        const message = robotMessage("msg-all-listeners");
+
+        await expect(bot.ingest(message)).rejects.toThrow("first failed");
+        expect(delivered).toHaveBeenCalledOnce();
+        await expect(bot.ingest(message)).resolves.toEqual(message);
+        expect(failed).toHaveBeenCalledTimes(2);
+        expect(delivered).toHaveBeenCalledTimes(2);
     });
 
     it("递归读取可见部门、完成分页并去重用户", async () => {

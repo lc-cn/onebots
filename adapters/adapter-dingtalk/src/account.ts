@@ -18,7 +18,7 @@ export function createDingTalkAccount(
     });
 
     if (bot.receiveMode === "webhook") {
-        adapter.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
+        adapter.app.router.post(`${account.path}/webhook`, ctx => bot.acceptHttp(ctx));
     }
 
     bot.on("ready", () => {

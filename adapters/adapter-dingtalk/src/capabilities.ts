@@ -105,6 +105,10 @@ export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapa
     transports: {
         stream: { support: "native", mode: "websocket" },
         webhook: { support: "native", mode: "webhook" },
-        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 ingest()、ingestHttp() 或 acceptHttp() 接入既有 Host",
+        },
     },
 });

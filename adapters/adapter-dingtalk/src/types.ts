@@ -25,6 +25,31 @@ export interface DingTalkConfig {
     webhook_secret?: string;
 }
 
+/** 与具体 HTTP 框架无关的钉钉回调输入。 */
+export interface DingTalkHttpRequest {
+    method: string;
+    query?: Record<string, unknown>;
+    body: unknown;
+}
+
+/** 可直接写回任意 HTTP Host 的钉钉回调响应。 */
+export interface DingTalkHttpResponse {
+    status: number;
+    headers: Record<string, string>;
+    body: unknown;
+    event?: DingTalkRobotMessage | DingTalkEvent;
+}
+
+/** OneBots/Koa 路由只依赖的最小上下文形状。 */
+export interface DingTalkHttpContext {
+    method: string;
+    query: Record<string, unknown>;
+    request: { body?: unknown };
+    status: number;
+    body?: unknown;
+    set(name: string, value: string): void;
+}
+
 export interface DingTalkApiRequestOptions {
     method?: "GET" | "POST" | "PUT" | "DELETE";
     headers?: Record<string, string>;
