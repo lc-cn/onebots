@@ -4,6 +4,10 @@ import type { messagingApi, webhook } from "@line/bot-sdk";
 export interface LineConfig {
     account_id: string;
     channel_access_token: string;
+    /** 是否启用 Channel Access Token 签发与凭据撤销动作。 */
+    manage_channel_tokens?: boolean;
+    /** LINE Developers Console 中的 Messaging API Channel ID；仅令牌签发/撤销需要。 */
+    channel_id?: string;
     channel_secret?: string;
     /** Webhook 由 OneBots 接收，或由已有 Host/消息队列手动 ingest。 */
     receive_mode?: "webhook" | "manual";

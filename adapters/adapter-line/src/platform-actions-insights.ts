@@ -27,9 +27,7 @@ export const LINE_INSIGHT_ACTIONS = {
     get_number_of_followers: lineAction(["date"], async ({ client }, params) =>
         client.getNumberOfFollowers(followerDate(params)),
     ),
-    get_friends_demographics: lineAction([], async ({ client }) =>
-        client.getFriendsDemographics(),
-    ),
+    get_friends_demographics: lineAction([], async ({ client }) => client.getFriendsDemographics()),
     get_number_of_message_deliveries: lineAction(["date"], async ({ client }, params) =>
         client.getNumberOfMessageDeliveries(requireLineDate(params)),
     ),
@@ -55,11 +53,7 @@ export const LINE_INSIGHT_ACTIONS = {
         ["rich_menu_id", "from", "to"],
         async ({ client }, params) => {
             const [from, to] = requireLineDateRange(params, 99);
-            return client.getRichMenuInsightDaily(
-                requireString(params, "rich_menu_id"),
-                from,
-                to,
-            );
+            return client.getRichMenuInsightDaily(requireString(params, "rich_menu_id"), from, to);
         },
     ),
 } satisfies Readonly<Record<string, LineActionHandler>>;

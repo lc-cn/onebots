@@ -18,51 +18,55 @@ import {
     requireString,
     streamResult,
 } from "./platform-action-params.js";
-import { lineAction, type LineActionContext, type LineActionHandler } from "./platform-action-context.js";
+import {
+    lineAction,
+    type LineActionContext,
+    type LineActionHandler,
+} from "./platform-action-context.js";
 
 /** 消息投递、内容读取、会话成员与 Webhook 管理动作。 */
 export const LINE_MESSAGING_ACTIONS = {
     push_message: lineAction(
         ["to", "messages", "retry_key", "notification_disabled", "custom_aggregation_units"],
         async ({ bot }, params) =>
-        bot.pushMessage(requireString(params, "to"), requireMessages(params), {
-            retryKey: optionalRetryKey(params),
-            notificationDisabled: optionalBoolean(params, "notification_disabled"),
-            customAggregationUnits: customAggregationUnits(params),
-        }),
+            bot.pushMessage(requireString(params, "to"), requireMessages(params), {
+                retryKey: optionalRetryKey(params),
+                notificationDisabled: optionalBoolean(params, "notification_disabled"),
+                customAggregationUnits: customAggregationUnits(params),
+            }),
     ),
     reply_message: lineAction(
         ["reply_token", "messages", "notification_disabled"],
         async ({ bot }, params) =>
-        bot.replyMessage(
-            requireString(params, "reply_token"),
-            requireMessages(params),
-            optionalBoolean(params, "notification_disabled"),
-        ),
+            bot.replyMessage(
+                requireString(params, "reply_token"),
+                requireMessages(params),
+                optionalBoolean(params, "notification_disabled"),
+            ),
     ),
     multicast: lineAction(
         ["to", "messages", "notification_disabled", "custom_aggregation_units", "retry_key"],
         async ({ client }, params) =>
-        client.multicast(
-            {
-                to: multicastRecipients(params),
-                messages: requireMessages(params),
-                notificationDisabled: optionalBoolean(params, "notification_disabled"),
-                customAggregationUnits: customAggregationUnits(params),
-            },
-            optionalRetryKey(params),
-        ),
+            client.multicast(
+                {
+                    to: multicastRecipients(params),
+                    messages: requireMessages(params),
+                    notificationDisabled: optionalBoolean(params, "notification_disabled"),
+                    customAggregationUnits: customAggregationUnits(params),
+                },
+                optionalRetryKey(params),
+            ),
     ),
     broadcast: lineAction(
         ["messages", "notification_disabled", "retry_key"],
         async ({ client }, params) =>
-        client.broadcast(
-            {
-                messages: requireMessages(params),
-                notificationDisabled: optionalBoolean(params, "notification_disabled"),
-            },
-            optionalRetryKey(params),
-        ),
+            client.broadcast(
+                {
+                    messages: requireMessages(params),
+                    notificationDisabled: optionalBoolean(params, "notification_disabled"),
+                },
+                optionalRetryKey(params),
+            ),
     ),
     narrowcast: lineAction(["request", "retry_key"], async ({ client }, params) =>
         client.narrowcast(narrowcastRequest(params), optionalRetryKey(params)),
@@ -86,7 +90,10 @@ export const LINE_MESSAGING_ACTIONS = {
         client.validateNarrowcast({ messages: requireMessages(params) }),
     ),
     push_messages_by_phone: lineAction(["request", "delivery_tag"], async ({ client }, params) =>
-        client.pushMessagesByPhone(pnpMessagesRequest(params), optionalString(params, "delivery_tag")),
+        client.pushMessagesByPhone(
+            pnpMessagesRequest(params),
+            optionalString(params, "delivery_tag"),
+        ),
     ),
     show_loading_animation: lineAction(["chat_id", "loading_seconds"], async ({ client }, params) =>
         client.showLoadingAnimation({
@@ -147,7 +154,10 @@ export const LINE_MESSAGING_ACTIONS = {
         client.getPNPMessageStatistics(requireLineDate(params)),
     ),
     get_aggregation_unit_name_list: lineAction(["limit", "start"], async ({ client }, params) =>
-        client.getAggregationUnitNameList(aggregationLimit(params), optionalString(params, "start")),
+        client.getAggregationUnitNameList(
+            aggregationLimit(params),
+            optionalString(params, "start"),
+        ),
     ),
     get_aggregation_unit_usage: lineAction([], async ({ client }) =>
         client.getAggregationUnitUsage(),

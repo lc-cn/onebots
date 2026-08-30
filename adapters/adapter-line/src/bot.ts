@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { LineBotClient, validateSignature, type messagingApi } from "@line/bot-sdk";
 import { emitAllAwaited, ReliableEventIngress } from "onebots";
 import type { LineBotEvents } from "./bot-events.js";
+import { LineChannelTokenClient } from "./channel-token.js";
 import { LineApiError } from "./errors.js";
 import {
     applyLineHttpResponse,
@@ -39,6 +40,7 @@ export interface LineBotDependencies {
 /** 基于 LINE 官方 Node SDK 的客户端，只负责鉴权、收发和原始事件分发。 */
 export class LineBot extends EventEmitter<LineBotEvents> {
     private readonly client: LineBotClient;
+    private readonly channelTokenClient: LineChannelTokenClient;
     private readonly processedEvents = new Set<string>();
     private readonly eventIngress: ReliableEventIngress<string>;
     private readonly dependencies: LineBotDependencies;
@@ -60,6 +62,7 @@ export class LineBot extends EventEmitter<LineBotEvents> {
                 "data_api_base_url",
             ),
         });
+        this.channelTokenClient = new LineChannelTokenClient(config);
         this.eventIngress = new ReliableEventIngress({
             has: eventId => this.hasProcessed(eventId),
             commit: eventId => this.markProcessed(eventId),
@@ -68,6 +71,10 @@ export class LineBot extends EventEmitter<LineBotEvents> {
 
     getClient(): LineBotClient {
         return this.client;
+    }
+
+    getChannelTokenClient(): LineChannelTokenClient {
+        return this.channelTokenClient;
     }
 
     get receiveMode(): "webhook" | "manual" {
@@ -307,6 +314,20 @@ function assertLineConfig(config: LineConfig): void {
         throw new LineApiError("LINE channel_access_token 不能为空", {
             code: "LINE_ACCESS_TOKEN_REQUIRED",
         });
+    }
+    if (config.channel_id !== undefined && !/^\d+$/u.test(config.channel_id)) {
+        throw new LineApiError("LINE channel_id 必须是数字形式的 Channel ID", {
+            code: "LINE_CHANNEL_ID_INVALID",
+        });
+    }
+    if (
+        config.manage_channel_tokens === true &&
+        (!config.channel_id?.trim() || !config.channel_secret?.trim())
+    ) {
+        throw new LineApiError(
+            "LINE 启用 Channel Token 管理时必须配置 channel_id 与 channel_secret",
+            { code: "LINE_CHANNEL_CREDENTIALS_REQUIRED" },
+        );
     }
     const receiveMode = config.receive_mode || "webhook";
     if (receiveMode !== "webhook" && receiveMode !== "manual") {

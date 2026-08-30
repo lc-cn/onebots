@@ -5,7 +5,7 @@ import { executeLinePlatformAction, LINE_PLATFORM_ACTIONS } from "./platform-act
 
 describe("LINE 平台动作注册表", () => {
     it("完整注册消息、Audience、LIFF、Module、Rich Menu 与统计动作", () => {
-        expect(LINE_PLATFORM_ACTIONS.size).toBe(100);
+        expect(LINE_PLATFORM_ACTIONS.size).toBe(109);
         expect(LINE_PLATFORM_ACTIONS).toEqual(
             expect.objectContaining({
                 has: expect.any(Function),
@@ -18,6 +18,7 @@ describe("LINE 平台动作注册表", () => {
         expect(LINE_PLATFORM_ACTIONS.has("create_liff_app")).toBe(true);
         expect(LINE_PLATFORM_ACTIONS.has("acquire_chat_control")).toBe(true);
         expect(LINE_PLATFORM_ACTIONS.has("get_group_summary")).toBe(true);
+        expect(LINE_PLATFORM_ACTIONS.has("issue_stateless_channel_token")).toBe(true);
         expect(LINE_PLATFORM_ACTIONS.has("leave_group")).toBe(false);
     });
 
@@ -35,9 +36,11 @@ describe("LINE 平台动作注册表", () => {
             addLIFFApp,
             acquireChatControl,
         };
+        const channelToken = {};
         const bot = {
             pushMessage,
             getClient: () => client,
+            getChannelTokenClient: () => channelToken,
         } as unknown as LineBot;
 
         await expect(
@@ -79,7 +82,10 @@ describe("LINE 平台动作注册表", () => {
     });
 
     it("未知动作返回稳定的结构化错误", async () => {
-        const bot = { getClient: () => ({}) } as unknown as LineBot;
+        const bot = {
+            getClient: () => ({}),
+            getChannelTokenClient: () => ({}),
+        } as unknown as LineBot;
         const promise = executeLinePlatformAction(bot, "missing_action", {});
         await expect(promise).rejects.toBeInstanceOf(LineApiError);
         await expect(promise).rejects.toMatchObject({ code: "LINE_ACTION_NOT_IMPLEMENTED" });
@@ -91,9 +97,29 @@ describe("LINE 平台动作注册表", () => {
         ["list_modules", { limit: "100" }],
         ["show_loading_animation", { chat_id: "U1", loading_seconds: null }],
     ])("拒绝 %s 中类型错误的可选参数", async (action, params) => {
-        const bot = { getClient: () => ({}) } as unknown as LineBot;
+        const bot = {
+            getClient: () => ({}),
+            getChannelTokenClient: () => ({}),
+        } as unknown as LineBot;
         await expect(executeLinePlatformAction(bot, action, params)).rejects.toMatchObject({
             code: "LINE_INVALID_ACTION_PARAMS",
         });
+    });
+
+    it("令牌动作不接受调用方覆盖渠道密钥", async () => {
+        const issueShortLived = vi.fn().mockResolvedValue({ access_token: "token" });
+        const bot = {
+            getClient: () => ({}),
+            getChannelTokenClient: () => ({ issueShortLived }),
+        } as unknown as LineBot;
+
+        await expect(
+            executeLinePlatformAction(bot, "issue_short_lived_channel_token", {}),
+        ).resolves.toEqual({ access_token: "token" });
+        await expect(
+            executeLinePlatformAction(bot, "issue_short_lived_channel_token", {
+                client_secret: "shadow",
+            }),
+        ).rejects.toMatchObject({ code: "LINE_INVALID_ACTION_PARAMS" });
     });
 });

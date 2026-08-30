@@ -15,9 +15,7 @@ import {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 
-export function optionalRetryKey(
-    params: Readonly<Record<string, unknown>>,
-): string | undefined {
+export function optionalRetryKey(params: Readonly<Record<string, unknown>>): string | undefined {
     const value = optionalString(params, "retry_key");
     if (value && !UUID_PATTERN.test(value)) {
         throw invalidParams("LINE 参数 retry_key 必须是规范 UUID");
@@ -45,9 +43,7 @@ export function multicastRecipients(params: Readonly<Record<string, unknown>>): 
     return values;
 }
 
-export function loadingSeconds(
-    params: Readonly<Record<string, unknown>>,
-): number | undefined {
+export function loadingSeconds(params: Readonly<Record<string, unknown>>): number | undefined {
     const value = optionalIntegerInRange(params, "loading_seconds", 5, 60);
     if (value !== undefined && value % 5 !== 0) {
         throw invalidParams("LINE 参数 loading_seconds 必须是 5 的倍数");
@@ -55,23 +51,16 @@ export function loadingSeconds(
     return value;
 }
 
-export function followersLimit(
-    params: Readonly<Record<string, unknown>>,
-): number | undefined {
+export function followersLimit(params: Readonly<Record<string, unknown>>): number | undefined {
     return optionalIntegerInRange(params, "limit", 1, 1000);
 }
 
 /** SDK 将查询参数声明成字符串；平台动作对外保持整数语义。 */
-export function aggregationLimit(
-    params: Readonly<Record<string, unknown>>,
-): string | undefined {
+export function aggregationLimit(params: Readonly<Record<string, unknown>>): string | undefined {
     return optionalIntegerInRange(params, "limit", 1, 1000)?.toString();
 }
 
-export function requireLineDate(
-    params: Readonly<Record<string, unknown>>,
-    name = "date",
-): string {
+export function requireLineDate(params: Readonly<Record<string, unknown>>, name = "date"): string {
     const value = requireString(params, name);
     if (!/^\d{8}$/u.test(value)) throw invalidParams(`LINE 参数 ${name} 必须使用 yyyyMMdd 格式`);
     const year = Number(value.slice(0, 4));

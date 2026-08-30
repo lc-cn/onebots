@@ -69,23 +69,16 @@ export const LINE_AUDIENCE_ACTIONS = {
         client.getSharedAudienceData(audienceId(params)),
     ),
     list_shared_audiences: lineAction(
-        [
-            "page",
-            "description",
-            "status",
-            "size",
-            "create_route",
-            "includes_owned_audience_groups",
-        ],
+        ["page", "description", "status", "size", "create_route", "includes_owned_audience_groups"],
         listSharedAudiences,
     ),
     update_audience_description: lineAction(
         ["audience_group_id", "request"],
         async ({ client }, params) =>
-        client.updateAudienceGroupDescription(
-            audienceId(params),
-            updateAudienceDescriptionRequest(params),
-        ),
+            client.updateAudienceGroupDescription(
+                audienceId(params),
+                updateAudienceDescriptionRequest(params),
+            ),
     ),
     delete_audience: lineAction(["audience_group_id"], async ({ client }, params) =>
         client.deleteAudienceGroup(audienceId(params)),

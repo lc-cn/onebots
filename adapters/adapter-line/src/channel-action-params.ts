@@ -65,10 +65,7 @@ function liffRequest(params: Readonly<Record<string, unknown>>): liff.UpdateLiff
     } as liff.UpdateLiffAppRequest;
 }
 
-function parseLiffView(
-    view: Readonly<Record<string, unknown>>,
-    required: true,
-): liff.LiffView;
+function parseLiffView(view: Readonly<Record<string, unknown>>, required: true): liff.LiffView;
 function parseLiffView(
     view: Readonly<Record<string, unknown>>,
     required: false,
@@ -94,9 +91,7 @@ function parseLiffView(
     } as liff.UpdateLiffView;
 }
 
-function parseFeatures(
-    request: Readonly<Record<string, unknown>>,
-): liff.LiffFeatures | undefined {
+function parseFeatures(request: Readonly<Record<string, unknown>>): liff.LiffFeatures | undefined {
     if (request.features === undefined) return undefined;
     const features = requireRecord(request, "features");
     exactParams(features, ["ble", "qrCode"]);
@@ -155,9 +150,7 @@ export function moduleLimit(params: Readonly<Record<string, unknown>>): number |
     return optionalIntegerInRange(params, "limit", 1, 100);
 }
 
-export function requireAuthorizationCodeGrant(
-    params: Readonly<Record<string, unknown>>,
-): string {
+export function requireAuthorizationCodeGrant(params: Readonly<Record<string, unknown>>): string {
     const value = requireString(params, "grant_type");
     if (value !== "authorization_code") {
         throw invalidParams("LINE Module grant_type 必须是 authorization_code");
@@ -190,7 +183,11 @@ function optionalEnumArray(
 ): string[] | undefined {
     const value = params[name];
     if (value === undefined) return undefined;
-    if (!Array.isArray(value) || value.length === 0 || !value.every(item => typeof item === "string")) {
+    if (
+        !Array.isArray(value) ||
+        value.length === 0 ||
+        !value.every(item => typeof item === "string")
+    ) {
         throw invalidParams(`LINE 参数 ${name} 必须是非空字符串数组`);
     }
     if (value.some(item => !allowed.has(item)) || new Set(value).size !== value.length) {

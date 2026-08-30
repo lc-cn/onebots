@@ -44,9 +44,9 @@ describe("LINE LIFF 与 Module 参数", () => {
         ).toThrow(/不受支持/u);
         expect(() => updateLiffRequest({ request: {} })).toThrow(/至少包含一个字段/u);
         expect(() => updateLiffRequest({ request: { view: {} } })).toThrow(/view 至少/u);
-        expect(() =>
-            updateLiffRequest({ request: { description: "app", unknown: true } }),
-        ).toThrow(/unknown/u);
+        expect(() => updateLiffRequest({ request: { description: "app", unknown: true } })).toThrow(
+            /unknown/u,
+        );
     });
 
     it("校验 Chat Control、Module 与 Mission Sticker 官方常量", () => {

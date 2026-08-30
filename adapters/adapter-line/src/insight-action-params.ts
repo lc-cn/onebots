@@ -1,4 +1,9 @@
-import { invalidParams, optionalIntegerInRange, requireBoundedString, requirePositiveInteger } from "./platform-action-params.js";
+import {
+    invalidParams,
+    optionalIntegerInRange,
+    requireBoundedString,
+    requirePositiveInteger,
+} from "./platform-action-params.js";
 import { optionalLineDate, requireLineDate } from "./messaging-action-params.js";
 
 const DAY_MILLISECONDS = 86_400_000;
@@ -7,15 +12,11 @@ export function membershipId(params: Readonly<Record<string, unknown>>): number 
     return requirePositiveInteger(params, "membership_id");
 }
 
-export function membershipLimit(
-    params: Readonly<Record<string, unknown>>,
-): number | undefined {
+export function membershipLimit(params: Readonly<Record<string, unknown>>): number | undefined {
     return optionalIntegerInRange(params, "limit", 1, 1000);
 }
 
-export function followerDate(
-    params: Readonly<Record<string, unknown>>,
-): string | undefined {
+export function followerDate(params: Readonly<Record<string, unknown>>): string | undefined {
     return optionalLineDate(params);
 }
 

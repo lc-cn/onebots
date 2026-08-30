@@ -4,6 +4,7 @@ import { LineApiError } from "./errors.js";
 import type { LineActionContext, LineActionParams } from "./platform-action-context.js";
 import { LINE_AUDIENCE_ACTIONS } from "./platform-actions-audience.js";
 import { LINE_CHANNEL_ACTIONS } from "./platform-actions-channel.js";
+import { LINE_CHANNEL_TOKEN_ACTIONS } from "./platform-actions-channel-token.js";
 import { LINE_INSIGHT_ACTIONS } from "./platform-actions-insights.js";
 import { LINE_MESSAGING_ACTIONS } from "./platform-actions-messaging.js";
 import { LINE_RICH_MENU_ACTIONS } from "./platform-actions-rich-menu.js";
@@ -15,6 +16,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         ...LINE_INSIGHT_ACTIONS,
         ...LINE_AUDIENCE_ACTIONS,
         ...LINE_CHANNEL_ACTIONS,
+        ...LINE_CHANNEL_TOKEN_ACTIONS,
     },
     action =>
         new LineApiError(`未实现 LINE 平台动作: ${action}`, {
@@ -33,7 +35,11 @@ export async function executeLinePlatformAction(
     action: string,
     params: LineActionParams,
 ): Promise<unknown> {
-    const context: LineActionContext = { bot, client: bot.getClient() };
+    const context: LineActionContext = {
+        bot,
+        client: bot.getClient(),
+        channelToken: bot.getChannelTokenClient(),
+    };
     try {
         return await PLATFORM_ACTIONS.execute(context, action, params);
     } catch (error) {

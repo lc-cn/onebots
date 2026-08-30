@@ -6,6 +6,11 @@ import {
 import { LINE_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const permissionActionPrefixes = [
+    "issue_short_lived_channel_token",
+    "issue_stateless_channel_token",
+    "issue_channel_token_v2_1",
+    "list_channel_token_key_ids_v2_1",
+    "revoke_channel_token_v2_1",
     "add_audience",
     "create_audience",
     "create_click_audience",

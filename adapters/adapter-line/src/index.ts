@@ -16,6 +16,7 @@ export {
 } from "./http-bridge.js";
 export { lineCapabilities } from "./capabilities.js";
 export { LineApiError, type LineApiErrorOptions } from "./errors.js";
+export { LineChannelTokenClient } from "./channel-token.js";
 export {
     chunkLineMessages,
     compileLineMessages,
@@ -79,6 +80,23 @@ export const lineSchema: Schema = {
         description: "LINE Developers Console 的 Messaging API Channel Access Token",
         ui: { section: "credentials" },
     },
+    manage_channel_tokens: {
+        type: "boolean",
+        default: false,
+        label: "启用 Channel Token 管理",
+        description: "仅需签发、校验或撤销其他 Channel Access Token 时开启",
+        ui: { section: "advanced" },
+    },
+    channel_id: {
+        type: "string",
+        label: "Channel ID",
+        pattern: /^\d+$/,
+        description: "仅签发短期/stateless token 或撤销 v2.1 token 时需要",
+        ui: {
+            section: "credentials",
+            visibleWhen: { path: "manage_channel_tokens", oneOf: [true] },
+        },
+    },
     receive_mode: {
         type: "string",
         default: "webhook",
@@ -94,7 +112,7 @@ export const lineSchema: Schema = {
         type: "string",
         label: "Channel Secret",
         sensitive: true,
-        description: "仅用于对原始 Webhook 请求体做 HMAC-SHA256 验签",
+        description: "用于 Webhook 验签，也与 Channel ID 一起用于令牌签发和凭据撤销",
         ui: {
             section: "credentials",
             visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },

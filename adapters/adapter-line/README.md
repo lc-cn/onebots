@@ -10,6 +10,8 @@ pnpm add @onebots/adapter-line
 
 ```yaml
 line.my-line-bot:
+  manage_channel_tokens: true
+  channel_id: "1234567890"
   channel_access_token: "..."
   channel_secret: "..."
   receive_mode: webhook
@@ -25,6 +27,8 @@ https://your-domain.example/line/my-line-bot/webhook
 | 配置项                        | 说明                                                        |
 | ----------------------------- | ----------------------------------------------------------- |
 | `channel_access_token`        | Messaging API Channel Access Token                          |
+| `manage_channel_tokens`       | 可选；动态启用 Channel Access Token 管理字段与动作          |
+| `channel_id`                  | 可选；签发/撤销 Channel Access Token 时使用                 |
 | `receive_mode`                | `webhook` 或 `manual`，默认 `webhook`                       |
 | `channel_secret`              | Webhook HMAC-SHA256 验签密钥；manual 仅直接 ingest 时可省略 |
 | `destination`                 | 可选；校验 Webhook 确属当前机器人                           |
@@ -100,6 +104,7 @@ LINE 每次最多发送 5 条 Message。通用 `sendMessage` 会按 5 条自动�
 - Coupon：创建、查询、分页列表与关闭；
 - 会员：计划列表、用户订阅、已加入用户；
 - 运维：Webhook 查询/设置/测试、消息配额、分类发送量、aggregation unit 与用量；
+- Channel Access Token：短期与 stateless token 签发、v2.1/JWT 签发与 key ID 查询、两类 token 校验和撤销；
 - 洞察：好友数/画像、消息送达、消息互动、aggregation unit、Rich Menu 汇总与逐日统计。
 
 各动作的参数名与完整清单可通过 `get_supported_actions` 和适配器能力清单获取。部分接口受 LINE Official Account 所在地区、认证状态、套餐或专项权限限制；适配器会保留官方 HTTP 状态和错误体并抛出 `LineApiError`。
@@ -111,6 +116,8 @@ Rich Menu 与 Coupon 动作使用共用的精确参数入口。图片只接受�
 消息动作同样采用精确参数契约：重试键使用 UUID，`multicast` 最多接收 500 个不重复用户，聚合单位只能有 1 个且不超过 30 字符，loading 时长为 5 到 60 秒并以 5 秒递增，投递统计日期使用有效的 `yyyyMMdd`。分页 `limit` 对调用者统一使用整数；`get_room_member_list` 会拉取全部页面并拒绝重复游标。
 
 LIFF、Module、Mission Sticker 与洞察动作会校验官方枚举、HTTPS LIFF URL、Chat Control TTL、分页上限及请求体字段。洞察日期统一使用有效的 `yyyyMMdd`，聚合统计最多跨 30 天，Rich Menu daily/summary 分别最多跨 99/396 天；空 LIFF 更新和未知嵌套字段会在本地返回结构化参数错误。
+
+Channel Access Token 动作由独立的官方客户端执行。使用 Client Secret 的签发与 v2.1 撤销只读取配置中的 `channel_id` / `channel_secret`，动作参数不能覆盖应用密钥；v2.1 与 stateless JWT 动作接收调用方生成的短生命周期 `client_assertion`。stateless token 按官方规则不可撤销，适配器不会提供伪造的撤销兼容。
 
 ## 官方限制
 

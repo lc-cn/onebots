@@ -20,7 +20,9 @@ describe("LINE 消息动作参数", () => {
             "campaign",
         ]);
         expect(() => optionalRetryKey({ retry_key: "retry" })).toThrow(/UUID/u);
-        expect(() => customAggregationUnits({ custom_aggregation_units: [] })).toThrow(/必须包含 1 个/u);
+        expect(() => customAggregationUnits({ custom_aggregation_units: [] })).toThrow(
+            /必须包含 1 个/u,
+        );
         expect(() => customAggregationUnits({ custom_aggregation_units: ["a", "b"] })).toThrow(
             /必须包含 1 个/u,
         );
@@ -75,9 +77,7 @@ describe("collectCursorPages", () => {
         await expect(
             collectCursorPages(undefined, async cursor => {
                 cursors.push(cursor);
-                return cursor
-                    ? { items: ["U2"] }
-                    : { items: ["U1"], next: "next-page" };
+                return cursor ? { items: ["U2"] } : { items: ["U1"], next: "next-page" };
             }),
         ).resolves.toEqual(["U1", "U2"]);
         expect(cursors).toEqual([undefined, "next-page"]);

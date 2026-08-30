@@ -8,6 +8,7 @@ export type LineActionParams = Readonly<Record<string, unknown>>;
 export interface LineActionContext {
     readonly bot: LineBot;
     readonly client: ReturnType<LineBot["getClient"]>;
+    readonly channelToken: ReturnType<LineBot["getChannelTokenClient"]>;
 }
 
 export type LineActionHandler = PlatformActionHandler<LineActionContext>;
