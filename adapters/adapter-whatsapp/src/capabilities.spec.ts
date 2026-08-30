@@ -65,5 +65,11 @@ describe("WhatsApp 能力清单", () => {
         expect(whatsAppCapabilities.actions.update_business_compliance_info?.permissions).toEqual([
             "whatsapp_business_management",
         ]);
+        expect(whatsAppCapabilities.actions.get_migration_intent?.permissions).toEqual([
+            "whatsapp_business_management",
+        ]);
+        expect(whatsAppCapabilities.actions.set_solution_migration_intent?.permissions).toEqual([
+            "whatsapp_business_management",
+        ]);
     });
 });

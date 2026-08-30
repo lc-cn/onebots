@@ -46,6 +46,23 @@ export {
 export { whatsAppCapabilities } from "./capabilities.js";
 export { WhatsAppClient } from "./client.js";
 export {
+    isWhatsAppSolutionMigrationAction,
+    WhatsAppSolutionMigration,
+    WHATSAPP_MIGRATION_INTENT_FIELDS,
+    WHATSAPP_MIGRATION_STATUSES,
+    WHATSAPP_SOLUTION_MIGRATION_ACTIONS,
+    WHATSAPP_SOLUTION_MIGRATION_INTENTS,
+    WHATSAPP_SOLUTION_MIGRATION_REQUEST_STATUSES,
+    type WhatsAppMigrationIntent,
+    type WhatsAppMigrationIntentField,
+    type WhatsAppMigrationStatus,
+    type WhatsAppSolutionMigrationAction,
+    type WhatsAppSolutionMigrationIntent,
+    type WhatsAppSolutionMigrationRequest,
+    type WhatsAppSolutionMigrationRequestStatus,
+    type WhatsAppSolutionMigrationResponse,
+} from "./solution-migration.js";
+export {
     isWhatsAppCallingAction,
     WhatsAppCalling,
     WHATSAPP_CALLING_ACTIONS,

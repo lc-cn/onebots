@@ -124,6 +124,8 @@ Business Profile 使用 `client.businessProfile` 或原有 `get_business_profile
 
 Business Compliance 使用 `client.businessCompliance` 或 `get_business_compliance_info` / `update_business_compliance_info`。读取字段同样使用可增减数组；写入会校验官方实体类型、法定名称、联系人邮箱与 E.164 电话，并执行 `OTHER` / `entity_type_custom` 及 `is_registered` 的跨字段约束。平台动作把完整写入对象放在 `info` 字段中，未知字段会被拒绝。
 
+Multi-Partner Solution 迁移使用 `client.solutionMigration` 或 `get_migration_intent` / `set_solution_migration_intent`。查询只接受官方 `id` / `status` 字段数组；设置动作的完整载荷放在 `request` 中，并校验 solution ID、迁移意图枚举、原因长度与 ISO 8601 调度时间。读取和设置使用不同的官方状态枚举，不会混为一类。
+
 ## 参考
 
 - [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/)

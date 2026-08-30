@@ -24,6 +24,13 @@ import {
     type WhatsAppBusinessComplianceUpdate,
     type WhatsAppBusinessComplianceUpdateResponse,
 } from "./business-compliance.js";
+import {
+    WhatsAppSolutionMigration,
+    type WhatsAppMigrationIntent,
+    type WhatsAppMigrationIntentField,
+    type WhatsAppSolutionMigrationRequest,
+    type WhatsAppSolutionMigrationResponse,
+} from "./solution-migration.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -74,6 +81,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly businessProfile: WhatsAppBusinessProfiles;
     /** Business Compliance 强类型读写与跨字段校验。 */
     readonly businessCompliance: WhatsAppBusinessCompliance;
+    /** WABA Multi-Partner Solution 迁移意图控制面。 */
+    readonly solutionMigration: WhatsAppSolutionMigration;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -91,6 +100,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.businessEncryption = new WhatsAppBusinessEncryption(this);
         this.businessProfile = new WhatsAppBusinessProfiles(this);
         this.businessCompliance = new WhatsAppBusinessCompliance(this);
+        this.solutionMigration = new WhatsAppSolutionMigration(this);
     }
 
     get apiVersion(): string {
@@ -283,6 +293,19 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         info: WhatsAppBusinessComplianceUpdate,
     ): Promise<WhatsAppBusinessComplianceUpdateResponse> {
         return this.businessCompliance.update(info);
+    }
+
+    getMigrationIntent(
+        migrationIntentId: string,
+        fields?: readonly WhatsAppMigrationIntentField[],
+    ): Promise<WhatsAppMigrationIntent> {
+        return this.solutionMigration.get(migrationIntentId, fields);
+    }
+
+    setSolutionMigrationIntent(
+        request: WhatsAppSolutionMigrationRequest,
+    ): Promise<WhatsAppSolutionMigrationResponse> {
+        return this.solutionMigration.set(request);
     }
 
     async uploadMedia(file: Blob, mimeType: string, filename = "upload"): Promise<{ id: string }> {

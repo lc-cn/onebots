@@ -79,6 +79,8 @@ Business Profile 通过 `client.businessProfile` 与同名固定平台动作管�
 
 Business Compliance 通过 `client.businessCompliance` 以及 `get_business_compliance_info` / `update_business_compliance_info` 管理。读取字段是可增减数组；写入严格验证实体类型、法定名称、联系人邮箱与 E.164 电话，并落实 `OTHER` 自定义类型和 `is_registered` 的官方跨字段规则。平台动作的更新对象使用 `info` 字段，额外字段不会透传。
 
+Multi-Partner Solution 迁移由 `client.solutionMigration` 与 `get_migration_intent` / `set_solution_migration_intent` 提供。查询字段固定为官方 `id` / `status` 集合；设置请求放在 `request` 中，校验纯数字 solution ID、迁移意图枚举、500 字符原因和 ISO 8601 时间。适配器区分迁移实体状态与请求处理状态，避免错误类型推断。
+
 新 Graph API 可通过 `whatsapp_call` 调用：
 
 ```ts
