@@ -3,8 +3,10 @@ import { AdapterRegistry, type Schema } from "onebots";
 export { WeComAdapter } from "./adapter.js";
 export { weComCapabilities } from "./capabilities.js";
 export { WeComClient } from "./client.js";
+export { WECOM_CUSTOMER_ENGAGEMENT_ACTIONS } from "./customer-engagement-actions.js";
 export { WeComApiError, type WeComApiErrorOptions } from "./errors.js";
 export { projectWeComEvent, projectWeComSegments } from "./events.js";
+export { WECOM_EXTERNAL_CONTACT_ACTIONS } from "./external-contact-actions.js";
 export { prepareWeComMediaSegments, uploadWeComMedia, weComMediaType } from "./media.js";
 export type { WeComMediaType } from "./media.js";
 export { compileWeComMessages } from "./messages.js";
@@ -14,6 +16,7 @@ export {
     WECOM_PLATFORM_ACTIONS,
     type WeComPlatformAction,
 } from "./platform-actions.js";
+export type { WeComActionParams } from "./platform-action-context.js";
 export { WeComWebhookHost, weComEventId } from "./webhook-host.js";
 export type { WeComHttpContext } from "./webhook-host.js";
 export type {

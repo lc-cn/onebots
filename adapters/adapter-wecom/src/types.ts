@@ -87,6 +87,12 @@ export interface WeComEvent extends Record<string, unknown> {
     Description?: string;
     Url?: string;
     UserID?: string;
+    ExternalUserID?: string;
+    ChatId?: string;
+    WelcomeCode?: string;
+    State?: string;
+    FailReason?: string;
+    UpdateDetail?: string;
     TaskId?: string;
     ResponseCode?: string;
 }

@@ -34,7 +34,15 @@ wecom.internal_app:
 
 ## 原生 API
 
-平台动作覆盖应用详情、临时素材、模板卡片更新、应用群聊、部门、成员、标签、邀请、加入企业二维码与回调 IP。`wecom_call` 可调用新增或低频接口：
+平台动作覆盖应用详情、临时素材、模板卡片更新、应用群聊、部门、成员、标签、邀请、加入企业二维码与回调 IP。客户联系能力不再藏在通用调用中，还提供以下可发现动作：
+
+- 客户：`list_follow_users`、`list_external_contacts`、`get_external_contact`、`batch_get_external_contacts`、`remark_external_contact`、`transfer_external_contacts`、`list_unassigned_external_contacts`。
+- 客户群：`list_external_contact_groups`、`get_external_contact_group`、`transfer_external_contact_groups`。
+- 联系我：`add_contact_way`、`get_contact_way`、`update_contact_way`、`delete_contact_way`、`list_contact_ways`、`close_temporary_contact`。
+- 欢迎语：`send_external_contact_welcome` 以及 `add/update/get/delete_group_welcome_template`。
+- 客户经营：客户标签、客户群发、客户朋友圈、客户群入群方式、客户行为和群聊统计均有独立动作，并由 `get_supported_actions` 动态发现。
+
+复杂的官方请求体通过 `request`、`contact_way`、`message` 或 `template` 原样传入；身份与分页字段使用动作参数显式校验。客户联系动作需要应用 Secret 已配置对应的“客户联系”权限和可见范围。`wecom_call` 继续覆盖新增或低频接口：
 
 ```ts
 await adapter.callAction("internal_app", "wecom_call", {
@@ -74,6 +82,6 @@ wecom.internal_app:
 
 适配器不会自行监听端口。
 
-事件统一保留 `raw_event`，其中 `RawXml` 是解密后的完整 XML，`EncryptedXml` 是收到的密文外层 XML。通讯录成员变更投影为 `user_added` / `user_updated` / `user_removed`；菜单、进入应用和模板卡片回调统一投影为 `interaction`，精确企业微信事件名保留在 `sub_type`。
+事件统一保留 `raw_event`，其中 `RawXml` 是解密后的完整 XML，`EncryptedXml` 是收到的密文外层 XML。`bot_id` 使用企业微信实际 `AgentID`，与 `get_login_info` 一致。通讯录成员变更投影为 `user_added` / `user_updated` / `user_removed`；新增、编辑和删除外部联系人投影为 `friend_add` / `user_updated` / `friend_remove`，并保留跟进成员、欢迎语凭证和 state；客户群变更保留群 ID 与 `UpdateDetail`。菜单、进入应用和模板卡片回调统一投影为 `interaction`，精确企业微信事件名保留在 `sub_type`。
 
 [企业微信开发者中心](https://developer.work.weixin.qq.com/)

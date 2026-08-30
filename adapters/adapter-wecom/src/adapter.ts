@@ -181,7 +181,7 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
         client.on("raw_event", (event: WeComEvent) => {
             account.dispatch(
                 projectWeComEvent(event, {
-                    botId: config.account_id,
+                    botId: config.agent_id,
                     createId: value => this.createId(value),
                 }),
             );

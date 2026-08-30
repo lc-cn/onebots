@@ -37,6 +37,14 @@ export const weComCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         user_added: { support: "native" },
         user_updated: { support: "native" },
         user_removed: { support: "native" },
+        friend_add: {
+            ...permission,
+            note: "客户联系 change_external_contact 新增客户事件",
+        },
+        friend_remove: {
+            ...permission,
+            note: "客户联系 change_external_contact 删除客户事件",
+        },
         interaction: { support: "native", scenes: ["private"] },
         raw_event: { support: "native" },
         custom: { support: "native" },

@@ -77,4 +77,50 @@ describe("projectWeComEvent", () => {
             },
         });
     });
+
+    it("使用实际 AgentID 作为 Bot 身份，并投影新增外部联系人", () => {
+        const event = projectWeComEvent(
+            {
+                MsgType: "event",
+                Event: "change_external_contact",
+                ChangeType: "add_external_contact",
+                CreateTime: 1_777_000_003,
+                AgentID: "1000001",
+                UserID: "zhangsan",
+                ExternalUserID: "wm-customer",
+                WelcomeCode: "welcome-code",
+            },
+            { botId: "fallback-agent", createId },
+        );
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "friend_add",
+            bot_id: { string: "1000001" },
+            user: { id: { string: "wm-customer" } },
+            operator: { id: { string: "zhangsan" } },
+            extensions: { wecom: { welcome_code: "welcome-code" } },
+        });
+    });
+
+    it("保留客户群变更的群身份和变更明细", () => {
+        const event = projectWeComEvent(
+            {
+                MsgType: "event",
+                Event: "change_external_chat",
+                ChangeType: "update",
+                UpdateDetail: "add_member",
+                CreateTime: 1_777_000_004,
+                ChatId: "wr-group",
+                UserID: "owner",
+            },
+            { botId: "1000001", createId },
+        );
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "custom",
+            group: { id: { string: "wr-group" } },
+            operator: { id: { string: "owner" } },
+            extensions: { wecom: { update_detail: "add_member" } },
+        });
+    });
 });

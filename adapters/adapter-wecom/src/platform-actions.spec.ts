@@ -19,6 +19,9 @@ describe("企业微信平台动作", () => {
     it("公开通讯录、媒体和通用 API 能力", () => {
         expect(WECOM_PLATFORM_ACTIONS.has("create_appchat")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("upload_temporary_media")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("batch_get_external_contacts")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("list_external_contact_groups")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("add_group_welcome_template")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("wecom_call")).toBe(true);
     });
 });

@@ -20,7 +20,7 @@ export function projectWeComEvent(
         id: context.createId(eventId),
         timestamp,
         platform: "wecom",
-        bot_id: context.createId(context.botId),
+        bot_id: context.createId(event.AgentID ?? context.botId),
         raw_event: event,
     };
 
@@ -49,6 +49,43 @@ export function projectWeComEvent(
             extensions: noticeType
                 ? undefined
                 : { wecom: { event_type: eventType, change_type: event.ChangeType } },
+        };
+    }
+
+    if (eventType === "change_external_contact") {
+        const noticeType = externalContactNoticeTypes[event.ChangeType ?? ""] ?? "custom";
+        return {
+            ...base,
+            type: "notice",
+            notice_type: noticeType,
+            user: event.ExternalUserID ? { id: context.createId(event.ExternalUserID) } : undefined,
+            operator: event.UserID ? { id: context.createId(event.UserID) } : undefined,
+            extensions: {
+                wecom: {
+                    event_type: eventType,
+                    change_type: event.ChangeType,
+                    state: event.State,
+                    welcome_code: event.WelcomeCode,
+                    fail_reason: event.FailReason,
+                },
+            },
+        };
+    }
+
+    if (eventType === "change_external_chat") {
+        return {
+            ...base,
+            type: "notice",
+            notice_type: "custom",
+            group: event.ChatId ? { id: context.createId(event.ChatId) } : undefined,
+            operator: event.UserID ? { id: context.createId(event.UserID) } : undefined,
+            extensions: {
+                wecom: {
+                    event_type: eventType,
+                    change_type: event.ChangeType,
+                    update_detail: event.UpdateDetail,
+                },
+            },
         };
     }
 
@@ -138,6 +175,13 @@ const contactNoticeTypes: Record<string, CommonEvent.NoticeType> = {
     create_user: "user_added",
     update_user: "user_updated",
     delete_user: "user_removed",
+};
+
+const externalContactNoticeTypes: Record<string, CommonEvent.NoticeType> = {
+    add_external_contact: "friend_add",
+    add_half_external_contact: "friend_add",
+    edit_external_contact: "user_updated",
+    del_external_contact: "friend_remove",
 };
 
 const interactionEvents = new Set([

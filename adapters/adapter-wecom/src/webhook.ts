@@ -77,6 +77,9 @@ export function weComEventId(event: WeComEvent): string {
         event.Event || event.MsgType,
         event.ChangeType,
         event.UserID,
+        event.ExternalUserID,
+        event.ChatId,
+        event.EventKey,
     ]
         .filter(Boolean)
         .join(":");
