@@ -1,4 +1,5 @@
 import type { ZulipAttachment, ZulipEventMessageType, ZulipMessage } from "./types.js";
+import type { ZulipActivityEvent } from "./activity-event-types.js";
 import type {
     ZulipDraftsEvent,
     ZulipRemindersEvent,
@@ -7,6 +8,7 @@ import type {
 } from "./personal-event-types.js";
 
 export * from "./personal-event-types.js";
+export * from "./activity-event-types.js";
 
 /** Zulip Event Queue 当前公开的事件类型。保留完整清单，供类型和配置界面共用。 */
 export const ZULIP_EVENT_TYPES = [
@@ -400,6 +402,7 @@ export interface ZulipRealmExportConsentEvent extends ZulipBaseEvent {
 }
 
 export type ZulipEvent =
+    | ZulipActivityEvent
     | ZulipMessageEvent
     | ZulipUpdateMessageEvent
     | ZulipDeleteMessageEvent

@@ -1,6 +1,7 @@
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import { requireMethod, requireParams, requireString } from "./action-params.js";
 import { ZULIP_ATTACHMENT_ACTION_HANDLERS } from "./attachment-actions.js";
+import { ZULIP_ACTIVITY_ACTION_HANDLERS } from "./activity-actions.js";
 import { ZULIP_BOT_ACTION_HANDLERS } from "./bot-actions.js";
 import { ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS } from "./channel-folder-actions.js";
 import { ZULIP_CHANNEL_ACTION_HANDLERS } from "./channel-actions.js";
@@ -31,18 +32,9 @@ const ACTION_HANDLERS = {
             requireMethod(params.method),
             requireParams(params.params),
         ),
-    set_topic_visibility: (client, params) =>
-        client.call("user_topics", "POST", requireParams(params)),
-    update_presence: (client, params) =>
-        client.call("users/me/presence", "POST", requireParams(params)),
-    get_user_presence: (client, params) =>
-        client.call(
-            `users/${encodeURIComponent(requireString(params.user_id_or_email, "user_id_or_email"))}/presence`,
-        ),
-    send_typing_notification: (client, params) =>
-        client.call("typing", "POST", requireParams(params)),
     get_server_settings: client => client.call("server_settings"),
     ...ZULIP_BOT_ACTION_HANDLERS,
+    ...ZULIP_ACTIVITY_ACTION_HANDLERS,
     ...ZULIP_ATTACHMENT_ACTION_HANDLERS,
     ...ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS,
     ...ZULIP_CHANNEL_ACTION_HANDLERS,

@@ -9,6 +9,7 @@ import {
     type ZulipProjectionContext,
 } from "./event-base.js";
 import { projectZulipChannelEvents } from "./channel-events.js";
+import { projectZulipActivityEvents } from "./activity-events.js";
 import { projectZulipResourceEvent } from "./resource-events.js";
 import { projectZulipPersonalResourceEvents } from "./personal-resource-events.js";
 import type {
@@ -45,6 +46,8 @@ export function projectZulipEvents(
     if (event.type === "realm_user") return [projectRealmUser(event, context)];
     if (event.type === "user_group") return projectUserGroup(event, context);
     if (event.type === "realm_emoji") return [projectRealmEmoji(event, context)];
+    const activityEvents = projectZulipActivityEvents(event, context);
+    if (activityEvents) return activityEvents;
     const channelEvents = projectZulipChannelEvents(event, context);
     if (channelEvents) return channelEvents;
     const personalResourceEvents = projectZulipPersonalResourceEvents(event, context);

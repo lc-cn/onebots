@@ -32,6 +32,7 @@ export const ZULIP_DEFAULT_EVENT_TYPES = [
     "presence",
     "user_status",
     "typing",
+    "user_topic",
     "restart",
 ] as const satisfies readonly ZulipEventType[];
 
@@ -57,6 +58,7 @@ export const ZULIP_EVENT_TYPE_LABELS: Readonly<Partial<Record<ZulipEventType, st
     presence: "在线状态",
     user_status: "用户状态",
     typing: "输入状态",
+    user_topic: "个人话题偏好",
     heartbeat: "心跳",
     invites_changed: "邀请变化",
     muted_users: "静音用户",
