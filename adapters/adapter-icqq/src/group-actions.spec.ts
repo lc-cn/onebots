@@ -48,6 +48,23 @@ describe("ICQQ 群动作", () => {
         ).rejects.toMatchObject({ code: "ICQQ_OPERATION_REJECTED", operation: "设置群名片" });
     });
 
+    it("群主解散群聊复用 ICQQ 原生退群动作并保留解散错误语义", async () => {
+        const leaveGroup = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+        const actions = Object.create(ICQQGroupActions.prototype) as ICQQGroupActions;
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: { leaveGroup } }) },
+            numericId: { value: (value: string) => Number(value) },
+        });
+
+        await expect(
+            actions.leaveGroup("bot", { group_id: id(20001), is_dismiss: true }),
+        ).resolves.toBeUndefined();
+        expect(leaveGroup).toHaveBeenCalledWith(20001);
+        await expect(
+            actions.leaveGroup("bot", { group_id: id(20001), is_dismiss: true }),
+        ).rejects.toMatchObject({ code: "ICQQ_OPERATION_REJECTED", operation: "解散群聊" });
+    });
+
     it("将系统消息投影为可翻页且可处理的 canonical 群通知", async () => {
         const requests = [
             {

@@ -46,6 +46,8 @@ icqq.123456789: # 你的 QQ 号
   protocol:
     # 登录平台: 1=安卓手机, 2=安卓平板, 3=安卓手表, 4=MacOS, 5=iPad, 6=Tim
     platform: 2
+    # ICQQ 日志等级
+    log_level: "info"
     # 签名服务器地址（重要！未配置可能导致登录失败）
     sign_api_addr: "http://your-sign-server:8080"
     # 数据存储目录
@@ -60,6 +62,10 @@ icqq.123456789: # 你的 QQ 号
     cache_group_member: true
     # 自动选择最优服务器
     auto_server: true
+    # 使用 QQNT 消息链路
+    QQNT: true
+    # NT 登录链路留空时由 ICQQ 自动决定
+    # NTLogin: true
 
   # OneBot V11 协议配置
   onebot.v11:
@@ -86,6 +92,7 @@ Web 管理端会根据 Schema 将账号凭据、连接、消息过滤、发送�
 | 配置项               | 类型    | 默认值   | 说明                       |
 | -------------------- | ------- | -------- | -------------------------- |
 | `platform`           | number  | 2        | 登录平台                   |
+| `log_level`          | string  | `info`   | ICQQ 日志等级              |
 | `sign_api_addr`      | string  | -        | 签名服务器地址             |
 | `data_dir`           | string  | `./data` | 数据存储目录               |
 | `ignore_self`        | boolean | true     | 群聊和频道中过滤自己的消息 |
@@ -93,6 +100,8 @@ Web 管理端会根据 Schema 将账号凭据、连接、消息过滤、发送�
 | `reconn_interval`    | number  | 5        | 重新登录间隔秒数           |
 | `cache_group_member` | boolean | true     | 是否缓存群员列表           |
 | `auto_server`        | boolean | true     | 自动选择最优服务器         |
+| `QQNT`               | boolean | true     | 使用 QQNT 消息链路         |
+| `NTLogin`            | boolean | -        | 显式选择 NT 登录链路       |
 | `ffmpeg_path`        | string  | -        | ffmpeg 路径                |
 | `ffprobe_path`       | string  | -        | ffprobe 路径               |
 
@@ -181,7 +190,7 @@ ICQQ 的能力通过统一 Adapter 接口暴露，协议层只会调用当前适
 | 文件    | 私聊/群文件上传与删除、群目录读取与管理、移动与重命名、下载地址                                      |
 | 系统    | 状态、版本、Cookies、CSRF、凭据、媒体发送能力、清理缓存                                              |
 
-权限受限动作仍可能被 QQ 服务端拒绝；适配器会把失败作为错误返回，不会伪造成功响应。动作层统一使用 `ICQQError` 区分无效参数、账号/连接缺失、资源不存在、原生操作拒绝和未知扩展动作。`leave_group` 仅表示主动退群，ICQQ 本身没有对应的群解散调用，因此 `is_dismiss: true` 会被明确拒绝。
+权限受限动作仍可能被 QQ 服务端拒绝；适配器会把失败作为错误返回，不会伪造成功响应。动作层统一使用 `ICQQError` 区分无效参数、账号/连接缺失、资源不存在、原生操作拒绝和未知扩展动作。ICQQ 使用同一个原生动作处理退群与解散：普通成员调用 `leave_group` 会退群，群主调用时会解散群聊；`is_dismiss: true` 用于明确表达解散意图，最终权限由 QQ 服务端校验。
 
 标准 `upload_file` 与 Milky 文件 URI 对齐，支持 HTTP(S)、本地路径/`file://` 和 Base64；所有来源在进入 ICQQ 上传前统一执行严格解码、空内容检查及安全文件名处理。
 

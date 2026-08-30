@@ -35,6 +35,23 @@ export const icqqSchema: Schema = {
         ui: { section: "credentials" },
     },
     protocol: {
+        log_level: {
+            type: "string",
+            default: "info",
+            label: "ICQQ 日志等级",
+            description: "高消息量账号可调高等级以减少日志开销",
+            choices: [
+                { value: "trace", label: "Trace" },
+                { value: "debug", label: "Debug" },
+                { value: "info", label: "Info" },
+                { value: "warn", label: "Warn" },
+                { value: "error", label: "Error" },
+                { value: "fatal", label: "Fatal" },
+                { value: "mark", label: "Mark" },
+                { value: "off", label: "关闭" },
+            ],
+            ui: { section: "advanced" },
+        },
         platform: {
             type: "number",
             default: Platform.AndroidPad,
@@ -118,6 +135,19 @@ export const icqqSchema: Schema = {
             default: true,
             label: "自动选择 QQ 服务器",
             ui: { section: "transport" },
+        },
+        QQNT: {
+            type: "boolean",
+            default: true,
+            label: "使用 QQNT 消息链路",
+            description: "建议保持开启；仅在排查旧链路兼容问题时关闭",
+            ui: { section: "transport" },
+        },
+        NTLogin: {
+            type: "boolean",
+            label: "使用 NT 登录链路",
+            description: "留空由 ICQQ 根据账号环境决定；显式设置仅用于登录链路调试",
+            ui: { section: "advanced" },
         },
         ffmpeg_path: {
             type: "string",

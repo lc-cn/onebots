@@ -18,6 +18,7 @@ export function parseICQQNumericId(value: string, field: string): number {
 export function buildICQQClientConfig(config: ICQQConfig): ICQQClientConfig {
     const protocol = config.protocol ?? {};
     const result: ICQQClientConfig = {
+        log_level: protocol.log_level,
         platform: (protocol.platform ?? 2) as ICQQClientConfig["platform"],
         sign_api_addr: protocol.sign_api_addr,
         data_dir: protocol.data_dir,
@@ -26,6 +27,8 @@ export function buildICQQClientConfig(config: ICQQConfig): ICQQClientConfig {
         reconn_interval: protocol.reconn_interval ?? 5,
         cache_group_member: protocol.cache_group_member ?? true,
         auto_server: protocol.auto_server ?? true,
+        QQNT: protocol.QQNT ?? true,
+        NTLogin: protocol.NTLogin,
     };
     if (protocol.ver) result.ver = protocol.ver;
     if (protocol.log_config) {

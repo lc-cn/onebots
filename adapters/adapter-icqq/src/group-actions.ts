@@ -52,15 +52,18 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
     }
 
     /**
-     * 退出群组
+     * 退出群组；ICQQ 会在当前账号为群主时解散该群。
+     *
+     * `is_dismiss` 表达调用方意图，但 SDK 使用同一个原生动作处理退群与解散，
+     * 最终权限和身份校验由 QQ 服务端完成。
      */
     async leaveGroup(uin: string, params: Adapter.LeaveGroupParams): Promise<void> {
-        if (params.is_dismiss) {
-            throw invalidICQQParam("ICQQ 不支持通过退出群动作解散群聊");
-        }
         const bot = this.requireBot(uin);
         const groupId = this.numericId(params.group_id.string, "group_id");
-        this.assertNativeAccepted(await bot.leaveGroup(groupId), "退出群聊");
+        this.assertNativeAccepted(
+            await bot.leaveGroup(groupId),
+            params.is_dismiss ? "解散群聊" : "退出群聊",
+        );
     }
 
     async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {

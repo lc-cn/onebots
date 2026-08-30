@@ -3,6 +3,8 @@
  * 基于 @icqqjs/icqq 库
  */
 
+import type { LogLevel } from "@icqqjs/icqq";
+
 // log4js Configuration type -- not importable directly, use unknown as passthrough
 type Log4jsConfiguration = unknown;
 
@@ -32,6 +34,8 @@ export enum Platform {
  * ICQQ 协议配置
  */
 export interface ICQQProtocol {
+    /** ICQQ 日志等级，默认 info */
+    log_level?: LogLevel;
     /** 登录平台，默认 2 (安卓平板) */
     platform?: Platform;
     /** 登录 Apk 版本 */
@@ -52,6 +56,10 @@ export interface ICQQProtocol {
     cache_group_member?: boolean;
     /** 自动选择最优服务器，默认 true */
     auto_server?: boolean;
+    /** 是否使用 QQNT 消息链路，默认 true */
+    QQNT?: boolean;
+    /** 是否使用 NT 登录链路；由 ICQQ 根据账号环境决定默认行为 */
+    NTLogin?: boolean;
     /** ffmpeg 路径，需自行安装 ffmpeg */
     ffmpeg_path?: string;
     /** ffprobe 路径，需自行安装 ffmpeg */

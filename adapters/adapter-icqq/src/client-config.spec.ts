@@ -7,11 +7,14 @@ describe("ICQQ 客户端配置", () => {
             buildICQQClientConfig({
                 account_id: "10000",
                 protocol: {
+                    log_level: "warn",
                     ignore_self: false,
                     resend: false,
                     reconn_interval: 0,
                     cache_group_member: false,
                     auto_server: false,
+                    QQNT: false,
+                    NTLogin: false,
                 },
             }),
         ).toMatchObject({
@@ -20,6 +23,9 @@ describe("ICQQ 客户端配置", () => {
             reconn_interval: 0,
             cache_group_member: false,
             auto_server: false,
+            log_level: "warn",
+            QQNT: false,
+            NTLogin: false,
         });
     });
 

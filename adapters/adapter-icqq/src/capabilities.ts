@@ -36,7 +36,7 @@ export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         },
         leave_group: {
             support: "native",
-            note: "支持主动退群；ICQQ 不提供群解散动作",
+            note: "普通成员主动退群；群主调用同一原生动作时解散群聊，解散需要群主权限",
         },
         get_group_member_list: { support: "native" },
         get_group_member_info: { support: "native" },
