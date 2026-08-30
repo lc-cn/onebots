@@ -5,6 +5,7 @@ import {
     assertAdapterCapabilityContract,
     assertSupportedActionsImplemented,
     defineAdapterCapabilities,
+    definePlatformActionCapabilities,
     listSupportedActions,
 } from "./adapter-capability.js";
 import { ValidationError } from "./errors.js";
@@ -48,6 +49,48 @@ function withoutConstructor<T extends Adapter>(prototype: T): T {
 }
 
 describe("adapter capability manifest", () => {
+    it("从平台动作集合派生不可变能力描述", () => {
+        const actions = definePlatformActionCapabilities(new Set(["send_card", "list_roles"]), {
+            support: "native",
+            availability: "permission",
+            permissions: ["room.manage"],
+        });
+
+        expect(actions).toEqual({
+            send_card: {
+                support: "native",
+                availability: "permission",
+                permissions: ["room.manage"],
+            },
+            list_roles: {
+                support: "native",
+                availability: "permission",
+                permissions: ["room.manage"],
+            },
+        });
+        expect(Object.isFrozen(actions)).toBe(true);
+        expect(Object.isFrozen(actions.send_card)).toBe(true);
+        expect(Object.isFrozen(actions.send_card.permissions)).toBe(true);
+    });
+
+    it("支持按动作解析能力并拒绝无效注册表", () => {
+        expect(
+            definePlatformActionCapabilities(["send", "admin"] as const, action => ({
+                support: "native",
+                availability: action === "admin" ? "permission" : "always",
+            })),
+        ).toEqual({
+            send: { support: "native", availability: "always" },
+            admin: { support: "native", availability: "permission" },
+        });
+        expect(() => definePlatformActionCapabilities(["send", "send"])).toThrowError(
+            "平台动作能力重复: send",
+        );
+        expect(() => definePlatformActionCapabilities([" "])).toThrowError(
+            "平台动作能力名称不能为空",
+        );
+    });
+
     it("只将 native 与 emulated 动作暴露为支持", () => {
         const manifest = defineAdapterCapabilities({
             actions: {

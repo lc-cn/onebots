@@ -14,7 +14,7 @@ import {
 export const WECHAT_AUDIENCE_ACTIONS = {
     get_user_list: async (client: WechatClient, params: WechatActionParams) =>
         client.getUserList(optionalString(params, "next_openid")),
-    get_user_info: async (client: WechatClient, params: WechatActionParams) =>
+    get_wechat_user_info: async (client: WechatClient, params: WechatActionParams) =>
         client.getUserInfo(
             requireString(params, "openid"),
             optionalString(params, "lang") || "zh_CN",

@@ -75,6 +75,34 @@ export function defineAdapterCapabilities(
     return Object.freeze(manifest);
 }
 
+export type PlatformActionCapabilityResolver<TAction extends string> =
+    | CapabilityDescriptor
+    | ((action: TAction) => CapabilityDescriptor);
+
+/**
+ * 从平台动作注册表生成能力描述。
+ *
+ * 平台动作名由可执行注册表产生，能力清单应从同一个集合派生，避免新增动作时遗漏
+ * Web 展示与 `get_supported_actions`。需要按动作区分权限或上下文时传入 resolver。
+ */
+export function definePlatformActionCapabilities<TAction extends string>(
+    actions: Iterable<TAction>,
+    descriptor: PlatformActionCapabilityResolver<TAction> = { support: "native" },
+): Readonly<Record<TAction, CapabilityDescriptor>> {
+    const definitions: Record<string, CapabilityDescriptor> = {};
+    for (const action of actions) {
+        if (!action.trim()) {
+            throw new ValidationError("平台动作能力名称不能为空");
+        }
+        if (Object.hasOwn(definitions, action)) {
+            throw new ValidationError(`平台动作能力重复: ${action}`);
+        }
+        definitions[action] = typeof descriptor === "function" ? descriptor(action) : descriptor;
+    }
+    validateDescriptorMap("actions", definitions);
+    return freezeDescriptors(definitions) as Readonly<Record<TAction, CapabilityDescriptor>>;
+}
+
 /** 返回原生或模拟实现的动作；明确标为 unsupported 的动作不会暴露给调用方。 */
 export function listSupportedActions(manifest: AdapterCapabilityManifest): string[] {
     return Object.entries(manifest.actions)

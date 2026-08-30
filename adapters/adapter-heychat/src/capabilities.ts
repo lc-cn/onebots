@@ -1,22 +1,17 @@
 import {
     defineAdapterCapabilities,
+    definePlatformActionCapabilities,
     type AdapterCapabilityManifest,
-    type CapabilityDescriptor,
 } from "onebots";
 import { HEYCHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = Object.fromEntries(
-    [...HEYCHAT_PLATFORM_ACTIONS].map(action => [
-        action,
-        {
-            support: "native",
-            note:
-                action === "call_heychat_api"
-                    ? "仅允许官方 chatroom API 路径"
-                    : "执行权限由黑盒语音房间权限与接口规则决定",
-        } satisfies CapabilityDescriptor,
-    ]),
-);
+const platformActions = definePlatformActionCapabilities(HEYCHAT_PLATFORM_ACTIONS, action => ({
+    support: "native",
+    note:
+        action === "call_heychat_api"
+            ? "仅允许官方 chatroom API 路径"
+            : "执行权限由黑盒语音房间权限与接口规则决定",
+}));
 
 /** 黑盒语音官方机器人 API 的真实能力边界。 */
 export const heychatCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

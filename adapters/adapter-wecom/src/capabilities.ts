@@ -1,4 +1,8 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { WECOM_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const permission = {
@@ -6,9 +10,7 @@ const permission = {
     availability: "permission" as const,
     permissions: ["企业微信应用可见范围/API 权限"],
 };
-const platformActions = Object.fromEntries(
-    [...WECOM_PLATFORM_ACTIONS].map(action => [action, permission]),
-);
+const platformActions = definePlatformActionCapabilities(WECOM_PLATFORM_ACTIONS, permission);
 
 /** 企业微信自建应用实际能力；部门与标签不再伪装成聊天群。 */
 export const weComCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

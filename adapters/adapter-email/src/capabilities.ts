@@ -1,17 +1,18 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { EMAIL_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = Object.fromEntries(
-    [...EMAIL_PLATFORM_ACTIONS].map(action => [
-        action,
-        action === "send_email"
-            ? { support: "native" as const }
-            : {
-                  support: "native" as const,
-                  availability: "context" as const,
-                  note: "仅 receive_mode=imap 且邮箱连接可用时执行",
-              },
-    ]),
+const platformActions = definePlatformActionCapabilities(EMAIL_PLATFORM_ACTIONS, action =>
+    action === "send_email"
+        ? { support: "native" }
+        : {
+              support: "native",
+              availability: "context",
+              note: "仅 receive_mode=imap 且邮箱连接可用时执行",
+          },
 );
 
 const imapContext = {

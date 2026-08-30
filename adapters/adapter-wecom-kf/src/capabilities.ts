@@ -1,4 +1,8 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { WECOM_KF_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const permission = {
@@ -6,9 +10,7 @@ const permission = {
     availability: "permission" as const,
     permissions: ["微信客服 API 权限/客服账号管理权"],
 };
-const platformActions = Object.fromEntries(
-    [...WECOM_KF_PLATFORM_ACTIONS].map(action => [action, { ...permission }]),
-);
+const platformActions = definePlatformActionCapabilities(WECOM_KF_PLATFORM_ACTIONS, permission);
 
 /** 微信客服官方 API 的实际能力，不声明普通企业微信或群聊能力。 */
 export const weComKfCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

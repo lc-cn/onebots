@@ -1,16 +1,15 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { WECHAT_CLAWBOT_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = Object.fromEntries(
-    [...WECHAT_CLAWBOT_PLATFORM_ACTIONS].map(action => [
-        action,
-        {
-            support: "native" as const,
-            availability: "context" as const,
-            scenes: ["private" as const],
-        },
-    ]),
-);
+const platformActions = definePlatformActionCapabilities(WECHAT_CLAWBOT_PLATFORM_ACTIONS, {
+    support: "native",
+    availability: "context",
+    scenes: ["private"],
+});
 
 /** 微信 iLink Bot 当前可用的能力。 */
 export const wechatClawbotCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

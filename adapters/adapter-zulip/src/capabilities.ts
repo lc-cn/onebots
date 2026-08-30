@@ -1,4 +1,8 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const permission = {
@@ -6,20 +10,17 @@ const permission = {
     availability: "permission" as const,
     permissions: ["Zulip 组织角色与频道权限"],
 };
-const platformActions = Object.fromEntries(
-    [...ZULIP_PLATFORM_ACTIONS].map(action => [
-        action,
-        [
-            "subscribe_channels",
-            "unsubscribe_channels",
-            "create_zulip_channel",
-            "update_zulip_channel",
-            "archive_channel",
-            "unarchive_channel",
-        ].includes(action)
-            ? { ...permission }
-            : { support: "native" as const },
-    ]),
+const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS, action =>
+    [
+        "subscribe_channels",
+        "unsubscribe_channels",
+        "create_zulip_channel",
+        "update_zulip_channel",
+        "archive_channel",
+        "unarchive_channel",
+    ].includes(action)
+        ? { ...permission }
+        : { support: "native" },
 );
 
 /** Zulip REST API 与 Event Queue 的真实能力。 */

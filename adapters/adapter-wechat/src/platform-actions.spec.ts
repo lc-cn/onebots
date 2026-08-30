@@ -30,6 +30,8 @@ describe("微信公众号平台动作", () => {
         expect(WECHAT_PLATFORM_ACTIONS.size).toBe(79);
         expect(WECHAT_PLATFORM_ACTIONS.has("publish_draft")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("mass_send_by_tag")).toBe(true);
+        expect(WECHAT_PLATFORM_ACTIONS.has("get_wechat_user_info")).toBe(true);
+        expect(WECHAT_PLATFORM_ACTIONS.has("get_user_info")).toBe(false);
         expect(WECHAT_PLATFORM_ACTIONS.has("list_customer_service_accounts")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("get_api_quota")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("get_api_request_details")).toBe(true);

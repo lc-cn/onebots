@@ -1,12 +1,14 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { DINGTALK_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = Object.fromEntries(
-    [...DINGTALK_PLATFORM_ACTIONS].map(action => [
-        action,
-        { support: "native" as const, availability: "permission" as const },
-    ]),
-);
+const platformActions = definePlatformActionCapabilities(DINGTALK_PLATFORM_ACTIONS, {
+    support: "native",
+    availability: "permission",
+});
 
 /** 钉钉开放平台当前由运行时真实实现的能力。 */
 export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

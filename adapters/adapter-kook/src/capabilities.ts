@@ -1,12 +1,14 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { KOOK_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = Object.fromEntries(
-    [...KOOK_PLATFORM_ACTIONS].map(action => [
-        action,
-        { support: "native" as const, availability: "permission" as const },
-    ]),
-);
+const platformActions = definePlatformActionCapabilities(KOOK_PLATFORM_ACTIONS, {
+    support: "native",
+    availability: "permission",
+});
 
 /** 与当前 KOOK 官方 API、Gateway 和 Webhook 实现逐项对应的能力清单。 */
 export const kookCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

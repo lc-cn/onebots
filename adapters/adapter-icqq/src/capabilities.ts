@@ -1,9 +1,11 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { ICQQ_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = Object.fromEntries(
-    [...ICQQ_PLATFORM_ACTIONS].map(action => [action, { support: "native" as const }]),
-);
+const platformActions = definePlatformActionCapabilities(ICQQ_PLATFORM_ACTIONS);
 
 /** ICQQ 已通过通用 Adapter seam 暴露的原生能力。 */
 export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

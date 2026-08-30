@@ -22,4 +22,6 @@ The adapter receives every official-account message and event, preserves `raw_ev
 
 WeChat user tags are audience-management objects, not chat groups. Native actions cover users, tags, blocklists, media, drafts, publishing, menus, QR codes, templates, mass messaging, API quota, RID diagnostics, API domains, and callback IPs. Access tokens use the stable-token endpoint. Webhook and manual ingress share awaited delivery, in-flight coalescing, and deduplication inside the client. Use `wechat_call` for newly introduced or uncommon official endpoints.
 
+The canonical `get_user_info` action accepts `user_id`. Use `get_wechat_user_info` with `openid` and optional `lang` when the native WeChat language parameter is required; the distinct name prevents the platform action from being shadowed by canonical routing.
+
 See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wechat) for the complete API and embedding contract.

@@ -34,6 +34,7 @@ wechat.my_mp:
 - 稳定版 access token 避免普通刷新使其他进程的凭据失效；配额、RID、API 域名和回调 IP 均有诊断动作。
 - Webhook 与 manual 接入共享 Client 内的异步确认、并发合并与去重状态。
 - 未命名的新接口可通过 `wechat_call` 调用，且仍使用统一 token 缓存与结构化错误。
+- 标准 `get_user_info` 接收 canonical `user_id`；需指定微信原生语言时使用 `get_wechat_user_info(openid, lang?)`，不会与标准动作重名。
 
 所有事件均保留 `raw_event`；嵌套 XML 的完整原文位于 `raw_event.RawXml`。
 

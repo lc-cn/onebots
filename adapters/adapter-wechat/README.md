@@ -61,6 +61,8 @@ await adapter.sendMessage("my_mp", {
 
 登录信息与事件 `bot_id` 统一使用公众号实际 `app_id`，`account_id` 只作为 OneBots 内部配置键，不再暴露成平台身份。多客服接口依赖公众号已开通对应客服能力；不可用时微信的结构化错误会原样返回。
 
+标准 `get_user_info` 使用 canonical `user_id` 参数；需要指定微信原生 `lang` 时使用 `get_wechat_user_info`，参数为 `openid` 与可选 `lang`。两者名称刻意分离，避免平台动作被标准动作路由遮蔽。
+
 关注者目录会完整分页、按 openid 去重并检测停滞游标，避免异常响应导致同步永久循环或重复拉取用户资料。
 
 `wechat_call` 可调用新增或低频接口：

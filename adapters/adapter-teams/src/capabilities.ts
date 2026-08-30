@@ -1,4 +1,8 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { TEAMS_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const contextual = {
@@ -7,9 +11,7 @@ const contextual = {
     note: "需要已持久化的真实 Teams ConversationReference",
 };
 
-const platformActions = Object.fromEntries(
-    [...TEAMS_PLATFORM_ACTIONS].map(action => [action, contextual]),
-);
+const platformActions = definePlatformActionCapabilities(TEAMS_PLATFORM_ACTIONS, contextual);
 
 /** Teams 能力以 Microsoft 365 Agents SDK 与 Connector API 的真实实现为准。 */
 export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

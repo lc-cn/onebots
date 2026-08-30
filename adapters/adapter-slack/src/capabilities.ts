@@ -1,12 +1,14 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { SLACK_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = Object.fromEntries(
-    [...SLACK_PLATFORM_ACTIONS].map(action => [
-        action,
-        { support: "native" as const, availability: "context" as const },
-    ]),
-);
+const platformActions = definePlatformActionCapabilities(SLACK_PLATFORM_ACTIONS, {
+    support: "native",
+    availability: "context",
+});
 
 /** Slack Web API/Events API 当前可用的能力。 */
 export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

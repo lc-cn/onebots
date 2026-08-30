@@ -1,12 +1,14 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { LINE_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = Object.fromEntries(
-    [...LINE_PLATFORM_ACTIONS].map(action => [
-        action,
-        { support: "native" as const, availability: "context" as const },
-    ]),
-);
+const platformActions = definePlatformActionCapabilities(LINE_PLATFORM_ACTIONS, {
+    support: "native",
+    availability: "context",
+});
 
 /** LINE Messaging API 与官方 SDK 11.x 的真实能力边界。 */
 export const lineCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

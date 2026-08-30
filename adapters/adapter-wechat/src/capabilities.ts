@@ -1,4 +1,8 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { WECHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const nativePermission = {
@@ -6,9 +10,7 @@ const nativePermission = {
     availability: "permission" as const,
     permissions: ["wechat.official_account.api"],
 };
-const platformActions = Object.fromEntries(
-    [...WECHAT_PLATFORM_ACTIONS].map(action => [action, nativePermission]),
-);
+const platformActions = definePlatformActionCapabilities(WECHAT_PLATFORM_ACTIONS, nativePermission);
 
 /** 微信公众号当前实际可执行的能力；用户标签不伪装成聊天群组。 */
 export const wechatCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
