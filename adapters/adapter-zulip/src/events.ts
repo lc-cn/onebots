@@ -8,6 +8,7 @@ import {
     stringValue,
     type ZulipProjectionContext,
 } from "./event-base.js";
+import { projectZulipChannelEvents } from "./channel-events.js";
 import { projectZulipResourceEvent } from "./resource-events.js";
 import type {
     ZulipBaseEvent,
@@ -43,6 +44,8 @@ export function projectZulipEvents(
     if (event.type === "realm_user") return [projectRealmUser(event, context)];
     if (event.type === "user_group") return projectUserGroup(event, context);
     if (event.type === "realm_emoji") return [projectRealmEmoji(event, context)];
+    const channelEvents = projectZulipChannelEvents(event, context);
+    if (channelEvents) return channelEvents;
     const resourceEvent = projectZulipResourceEvent(event, context);
     if (resourceEvent) return [resourceEvent];
     return [customNotice(event, context)];

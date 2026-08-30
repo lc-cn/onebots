@@ -146,6 +146,74 @@ export interface ZulipAttachmentRemovedEvent extends ZulipBaseEvent {
 
 export type ZulipAttachmentEvent = ZulipAttachmentChangedEvent | ZulipAttachmentRemovedEvent;
 
+export interface ZulipEventChannel extends Record<string, unknown> {
+    stream_id: number;
+    name: string;
+}
+
+export interface ZulipStreamCreateEvent extends ZulipBaseEvent {
+    type: "stream";
+    op: "create";
+    streams: ZulipEventChannel[];
+}
+
+export interface ZulipStreamDeleteEvent extends ZulipBaseEvent {
+    type: "stream";
+    op: "delete";
+    /** Zulip 10+ 的 canonical 删除字段；不声明已废弃的 streams。 */
+    stream_ids: number[];
+}
+
+export interface ZulipStreamUpdateEvent extends ZulipBaseEvent {
+    type: "stream";
+    op: "update";
+    stream_id: number;
+    name: string;
+    property: string;
+    value: unknown;
+    rendered_description?: string;
+    history_public_to_subscribers?: boolean;
+    is_web_public?: boolean;
+}
+
+export type ZulipStreamEvent =
+    | ZulipStreamCreateEvent
+    | ZulipStreamDeleteEvent
+    | ZulipStreamUpdateEvent;
+
+export interface ZulipSubscriptionAddEvent extends ZulipBaseEvent {
+    type: "subscription";
+    op: "add";
+    subscriptions: ZulipEventChannel[];
+}
+
+export interface ZulipSubscriptionRemoveEvent extends ZulipBaseEvent {
+    type: "subscription";
+    op: "remove";
+    subscriptions: Array<Pick<ZulipEventChannel, "stream_id" | "name">>;
+}
+
+export interface ZulipSubscriptionUpdateEvent extends ZulipBaseEvent {
+    type: "subscription";
+    op: "update";
+    stream_id: number;
+    property: string;
+    value: number | boolean | string;
+}
+
+export interface ZulipSubscriptionPeerEvent extends ZulipBaseEvent {
+    type: "subscription";
+    op: "peer_add" | "peer_remove";
+    stream_ids: number[];
+    user_ids: number[];
+}
+
+export type ZulipSubscriptionEvent =
+    | ZulipSubscriptionAddEvent
+    | ZulipSubscriptionRemoveEvent
+    | ZulipSubscriptionUpdateEvent
+    | ZulipSubscriptionPeerEvent;
+
 export interface ZulipChannelFolder {
     id: number;
     name: string;
@@ -335,6 +403,8 @@ export type ZulipEvent =
     | ZulipAlertWordsEvent
     | ZulipMutedUsersEvent
     | ZulipAttachmentEvent
+    | ZulipStreamEvent
+    | ZulipSubscriptionEvent
     | ZulipChannelFolderEvent
     | ZulipNavigationViewEvent
     | ZulipUserGroupEvent

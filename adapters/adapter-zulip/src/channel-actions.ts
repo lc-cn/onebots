@@ -8,6 +8,12 @@ import {
     requireText,
     without,
 } from "./action-params.js";
+import {
+    channelSubscribeParams,
+    channelSubscriptionsUpdateParams,
+    channelUnsubscribeParams,
+    channelUpdateParams,
+} from "./channel-params.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 
@@ -114,16 +120,22 @@ export const ZULIP_CHANNEL_ACTION_HANDLERS = {
         });
     },
     subscribe_channels: (client, params) =>
-        client.call("users/me/subscriptions", "POST", requireParams(params)),
+        client.call("users/me/subscriptions", "POST", channelSubscribeParams(params)),
+    update_channel_subscriptions: (client, params) =>
+        client.call("users/me/subscriptions", "PATCH", channelSubscriptionsUpdateParams(params)),
     unsubscribe_channels: (client, params) =>
-        client.call("users/me/subscriptions", "DELETE", requireParams(params)),
+        client.call("users/me/subscriptions", "DELETE", channelUnsubscribeParams(params)),
     get_channel_subscribers: (client, params) =>
         client.call(`streams/${onlyStreamId(params)}/members`),
     create_zulip_channel: (client, params) =>
         client.call("channels/create", "POST", requireParams(params)),
     update_zulip_channel: (client, params) => {
         const streamId = requireInteger(params.stream_id, "stream_id");
-        return client.call(`streams/${streamId}`, "PATCH", without(params, "stream_id"));
+        return client.call(
+            `streams/${streamId}`,
+            "PATCH",
+            channelUpdateParams(without(params, "stream_id")),
+        );
     },
     archive_channel: (client, params) => client.call(`streams/${onlyStreamId(params)}`, "DELETE"),
     unarchive_channel: (client, params) =>

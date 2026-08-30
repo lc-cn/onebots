@@ -114,6 +114,65 @@ describe("Zulip 频道资源动作", () => {
         });
     });
 
+    it("按现代契约订阅、更新与取消订阅频道", async () => {
+        const client = new ZulipClient(config, { transport: async () => ({}) });
+        const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
+
+        await executeZulipPlatformAction(client, "subscribe_channels", {
+            subscriptions: [{ name: "engineering", description: "Engineering" }],
+            principals: [11, 12],
+            topics_policy: "disable_empty_topic",
+            can_send_message_group: { direct_members: [11], direct_subgroups: [4] },
+        });
+        await executeZulipPlatformAction(client, "update_channel_subscriptions", {
+            delete: ["old"],
+            add: [{ name: "release", color: "#a1b2c3" }],
+        });
+        await executeZulipPlatformAction(client, "unsubscribe_channels", {
+            subscriptions: ["engineering"],
+            principals: [11],
+        });
+
+        expect(call).toHaveBeenNthCalledWith(1, "users/me/subscriptions", "POST", {
+            subscriptions: [{ name: "engineering", description: "Engineering" }],
+            principals: [11, 12],
+            topics_policy: "disable_empty_topic",
+            can_send_message_group: { direct_members: [11], direct_subgroups: [4] },
+        });
+        expect(call).toHaveBeenNthCalledWith(2, "users/me/subscriptions", "PATCH", {
+            delete: ["old"],
+            add: [{ name: "release", color: "#a1b2c3" }],
+        });
+        expect(call).toHaveBeenNthCalledWith(3, "users/me/subscriptions", "DELETE", {
+            subscriptions: ["engineering"],
+            principals: [11],
+        });
+    });
+
+    it("按现代契约更新频道及权限组", async () => {
+        const client = new ZulipClient(config, { transport: async () => ({}) });
+        const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
+
+        await executeZulipPlatformAction(client, "update_zulip_channel", {
+            stream_id: 7,
+            new_name: "platform",
+            folder_id: null,
+            can_administer_channel_group: {
+                old: 2,
+                new: { direct_members: [11], direct_subgroups: [] },
+            },
+        });
+
+        expect(call).toHaveBeenCalledWith("streams/7", "PATCH", {
+            new_name: "platform",
+            folder_id: null,
+            can_administer_channel_group: {
+                old: 2,
+                new: { direct_members: [11], direct_subgroups: [] },
+            },
+        });
+    });
+
     it.each([
         ["get_channel_id", { stream: "" }],
         ["get_channel_topics", { stream_id: 7, allow_empty_topic_name: "true" }],
@@ -129,6 +188,16 @@ describe("Zulip 频道资源动作", () => {
             { subscription_data: [{ stream_id: 7, property: "in_home_view", value: true }] },
         ],
         ["update_channel_subscription_property", { stream_id: 7, property: "color", value: "red" }],
+        ["subscribe_channels", { subscriptions: [{ name: "x" }], stream_post_policy: 1 }],
+        ["subscribe_channels", { subscriptions: [], principals: [1] }],
+        ["subscribe_channels", { subscriptions: [{ name: "x" }], folder_id: null }],
+        ["subscribe_channels", { subscriptions: [{ name: "x" }], principals: [1, "user@x"] }],
+        ["update_channel_subscriptions", {}],
+        ["update_channel_subscriptions", { add: [{ name: "x", color: "red" }] }],
+        ["unsubscribe_channels", { subscriptions: "engineering" }],
+        ["update_zulip_channel", { stream_id: 7, is_announcement_only: true }],
+        ["update_zulip_channel", { stream_id: 7, is_archived: true }],
+        ["update_zulip_channel", { stream_id: 7, can_send_message_group: { direct_members: [1] } }],
     ])("%s 在请求前拒绝无效参数", async (action, params) => {
         const client = new ZulipClient(config, { transport: async () => ({}) });
         const call = vi.spyOn(client, "call");
