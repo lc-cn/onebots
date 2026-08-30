@@ -17,7 +17,37 @@ export function projectZulipChannelEvents(
 ): CommonEvent.Notice<ZulipEvent>[] | undefined {
     if (event.type === "stream") return projectStreamEvent(event, context);
     if (event.type === "subscription") return projectSubscriptionEvent(event, context);
+    if (event.type === "default_streams") return projectDefaultChannelsEvent(event, context);
     return undefined;
+}
+
+function projectDefaultChannelsEvent(
+    event: ZulipBaseEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent>[] {
+    if (!isNonNegativeIntegerArray(event.default_streams)) {
+        return [customNotice(event, context)];
+    }
+    return [
+        {
+            ...base(event, context),
+            type: "notice",
+            notice_type: "default_channels_updated",
+            sub_type: "replaced",
+            channel_ids: event.default_streams.map(streamId => context.createId(streamId)),
+            extensions: { zulip: event },
+        },
+    ];
+}
+
+function isNonNegativeIntegerArray(value: unknown): value is number[] {
+    return (
+        Array.isArray(value) &&
+        value.every(
+            (streamId): streamId is number =>
+                typeof streamId === "number" && Number.isSafeInteger(streamId) && streamId >= 0,
+        )
+    );
 }
 
 function projectStreamEvent(

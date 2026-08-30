@@ -150,6 +150,7 @@ export namespace CommonEvent {
         | "channel_subscription_updated"
         | "channel_subscriber_added"
         | "channel_subscriber_removed"
+        | "default_channels_updated"
         | "channel_folder_created"
         | "channel_folder_updated"
         | "channel_folders_reordered"

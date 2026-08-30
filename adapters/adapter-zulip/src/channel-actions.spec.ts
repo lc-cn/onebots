@@ -88,6 +88,17 @@ describe("Zulip 频道资源动作", () => {
         });
     });
 
+    it("通过组织级端点增删默认频道", async () => {
+        const client = new ZulipClient(config, { transport: async () => ({}) });
+        const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
+
+        await executeZulipPlatformAction(client, "add_default_channel", { stream_id: 7 });
+        await executeZulipPlatformAction(client, "remove_default_channel", { stream_id: 7 });
+
+        expect(call).toHaveBeenNthCalledWith(1, "default_streams", "POST", { stream_id: 7 });
+        expect(call).toHaveBeenNthCalledWith(2, "default_streams", "DELETE", { stream_id: 7 });
+    });
+
     it("批量与单频道更新现代订阅属性", async () => {
         const client = new ZulipClient(config, { transport: async () => ({}) });
         const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
@@ -212,6 +223,8 @@ describe("Zulip 频道资源动作", () => {
         ["update_channel_subscriptions", {}],
         ["update_channel_subscriptions", { add: [{ name: "x", color: "red" }] }],
         ["unsubscribe_channels", { subscriptions: "engineering" }],
+        ["add_default_channel", {}],
+        ["remove_default_channel", { stream_id: 7, extra: true }],
         ["create_zulip_channel", { subscribers: [1] }],
         ["create_zulip_channel", { name: "x" }],
         ["create_zulip_channel", { name: "x", subscribers: [], stream_post_policy: 1 }],

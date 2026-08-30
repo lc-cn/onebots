@@ -5,7 +5,10 @@ import {
 } from "onebots";
 import { ZULIP_BOT_CREDENTIAL_ACTIONS } from "./bot-actions.js";
 import { ZULIP_CHANNEL_FOLDER_MUTATION_ACTIONS } from "./channel-folder-actions.js";
-import { ZULIP_CHANNEL_ADMIN_ACTIONS } from "./channel-actions.js";
+import {
+    ZULIP_CHANNEL_PERMISSION_ACTIONS,
+    ZULIP_DEFAULT_CHANNEL_ADMIN_ACTIONS,
+} from "./channel-actions.js";
 import { ZULIP_DOMAIN_MUTATION_ACTIONS } from "./domain-actions.js";
 import { ZULIP_DATA_EXPORT_MUTATION_ACTIONS } from "./data-export-actions.js";
 import { ZULIP_EMOJI_MUTATION_ACTIONS } from "./emoji-actions.js";
@@ -46,13 +49,14 @@ const permissionActions: ReadonlySet<string> = new Set([
     ...ZULIP_PLAYGROUND_MUTATION_ACTIONS,
     ...ZULIP_PROFILE_FIELD_MUTATION_ACTIONS,
     ...ZULIP_LINKIFIER_MUTATION_ACTIONS,
-    ...ZULIP_CHANNEL_ADMIN_ACTIONS,
+    ...ZULIP_CHANNEL_PERMISSION_ACTIONS,
     "subscribe_channels",
     "unsubscribe_channels",
 ]);
 const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS, action => {
     if (ZULIP_OWN_PROFILE_PERMISSION_ACTIONS.has(action)) return { ...ownProfilePermission };
     if (ZULIP_CHANNEL_FOLDER_MUTATION_ACTIONS.has(action)) return { ...administratorPermission };
+    if (ZULIP_DEFAULT_CHANNEL_ADMIN_ACTIONS.has(action)) return { ...administratorPermission };
     return permissionActions.has(action) ? { ...permission } : { support: "native" };
 });
 
@@ -101,6 +105,15 @@ export const zulipCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         user_group_member_removed: { support: "native" },
         user_group_subgroup_added: { support: "native" },
         user_group_subgroup_removed: { support: "native" },
+        channel_created: { support: "native" },
+        channel_updated: { support: "native" },
+        channel_deleted: { support: "native" },
+        channel_subscription_added: { support: "native" },
+        channel_subscription_removed: { support: "native" },
+        channel_subscription_updated: { support: "native" },
+        channel_subscriber_added: { support: "native" },
+        channel_subscriber_removed: { support: "native" },
+        default_channels_updated: { support: "native" },
         channel_folder_created: { support: "native" },
         channel_folder_updated: { support: "native" },
         channel_folders_reordered: { support: "native" },

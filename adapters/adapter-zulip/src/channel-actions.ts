@@ -37,12 +37,16 @@ const BOOLEAN_SUBSCRIPTION_PROPERTIES = new Set([
     "wildcard_mentions_notify",
 ]);
 
-export const ZULIP_CHANNEL_ADMIN_ACTIONS: ReadonlySet<string> = new Set([
+export const ZULIP_CHANNEL_PERMISSION_ACTIONS: ReadonlySet<string> = new Set([
     "create_zulip_channel",
     "update_zulip_channel",
     "archive_channel",
     "unarchive_channel",
     "delete_channel_topic",
+]);
+export const ZULIP_DEFAULT_CHANNEL_ADMIN_ACTIONS: ReadonlySet<string> = new Set([
+    "add_default_channel",
+    "remove_default_channel",
 ]);
 
 /** Zulip 频道、话题与订阅资源动作。 */
@@ -127,6 +131,8 @@ export const ZULIP_CHANNEL_ACTION_HANDLERS = {
         client.call("users/me/subscriptions", "DELETE", channelUnsubscribeParams(params)),
     get_channel_subscribers: (client, params) =>
         client.call(`streams/${onlyStreamId(params)}/members`),
+    add_default_channel: (client, params) => defaultChannelAction(client, params, "POST"),
+    remove_default_channel: (client, params) => defaultChannelAction(client, params, "DELETE"),
     create_zulip_channel: (client, params) =>
         client.call("channels/create", "POST", channelCreateParams(params)),
     update_zulip_channel: (client, params) => {
@@ -145,6 +151,16 @@ export const ZULIP_CHANNEL_ACTION_HANDLERS = {
 function onlyStreamId(params: Readonly<Record<string, unknown>>): number {
     const input = exactParams(params, ["stream_id"], ["stream_id"]);
     return requireInteger(input.stream_id, "stream_id");
+}
+
+function defaultChannelAction(
+    client: ZulipClient,
+    params: Readonly<Record<string, unknown>>,
+    method: "POST" | "DELETE",
+): Promise<unknown> {
+    const input = exactParams(params, ["stream_id"], ["stream_id"]);
+    requireInteger(input.stream_id, "stream_id");
+    return client.call("default_streams", method, input);
 }
 
 function validateSubscriptionData(value: unknown): void {

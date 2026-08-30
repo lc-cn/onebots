@@ -224,6 +224,12 @@ export type ZulipSubscriptionEvent =
     | ZulipSubscriptionUpdateEvent
     | ZulipSubscriptionPeerEvent;
 
+/** 组织管理员变更默认频道后推送的完整快照。 */
+export interface ZulipDefaultChannelsEvent extends ZulipBaseEvent {
+    type: "default_streams";
+    default_streams: number[];
+}
+
 export interface ZulipChannelFolder {
     id: number;
     name: string;
@@ -416,6 +422,7 @@ export type ZulipEvent =
     | ZulipAttachmentEvent
     | ZulipStreamEvent
     | ZulipSubscriptionEvent
+    | ZulipDefaultChannelsEvent
     | ZulipScheduledMessagesEvent
     | ZulipRemindersEvent
     | ZulipSavedSnippetsEvent

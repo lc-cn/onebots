@@ -11,7 +11,7 @@ const createId = (value: string | number) => ({
 const context = { botId: createId(1), botUserId: 1, createId };
 
 describe("Zulip 频道事件投影", () => {
-    it("Client 的 stream 与 subscription 监听器保留精确事件类型", () => {
+    it("Client 的频道领域监听器保留精确事件类型", () => {
         const config: ZulipConfig = {
             account_id: "bot",
             server_url: "https://example.zulipchat.com",
@@ -25,6 +25,9 @@ describe("Zulip 频道事件投影", () => {
         });
         client.on("subscription", event => {
             if (event.op === "peer_add") expect(event.user_ids).toEqual([11]);
+        });
+        client.on("default_streams", event => {
+            expect(event.default_streams).toEqual([7]);
         });
 
         client.emit("stream", {
@@ -42,6 +45,11 @@ describe("Zulip 频道事件投影", () => {
             op: "peer_add",
             stream_ids: [7],
             user_ids: [11],
+        });
+        client.emit("default_streams", {
+            id: 3,
+            type: "default_streams",
+            default_streams: [7],
         });
     });
 
@@ -157,8 +165,21 @@ describe("Zulip 频道事件投影", () => {
         expect(events.every(event => event.notice_type === "channel_subscriber_added")).toBe(true);
     });
 
+    it("将组织默认频道完整快照投影为单一策略通知", () => {
+        const event = projectZulipEvents(
+            { id: 8, type: "default_streams", default_streams: [7, 9] },
+            context,
+        )[0];
+
+        expect(event).toMatchObject({
+            notice_type: "default_channels_updated",
+            sub_type: "replaced",
+            channel_ids: [{ string: "7" }, { string: "9" }],
+        });
+    });
+
     it("异常频道报文退回 custom 且不丢失原始事件", () => {
-        const raw = { id: 8, type: "stream", op: "delete", streams: [{ stream_id: 7 }] };
+        const raw = { id: 9, type: "stream", op: "delete", streams: [{ stream_id: 7 }] };
         expect(projectZulipEvents(raw, context)[0]).toMatchObject({
             notice_type: "custom",
             sub_type: "delete",

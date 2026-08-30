@@ -49,6 +49,12 @@ describe("Zulip 能力清单", () => {
             availability: "permission",
             permissions: ["Zulip 组织管理员"],
         });
+        expect(zulipCapabilities.actions.add_default_channel).toMatchObject({
+            support: "native",
+            availability: "permission",
+            permissions: ["Zulip 组织管理员"],
+        });
+        expect(zulipCapabilities.events.default_channels_updated?.support).toBe("native");
         expect(zulipCapabilities.transports.event_queue?.mode).toBe("polling");
         expect(zulipCapabilities.transports.manual?.support).toBe("native");
     });
