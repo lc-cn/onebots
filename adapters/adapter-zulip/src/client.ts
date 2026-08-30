@@ -320,6 +320,11 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         );
     }
 
+    /** 上传当前认证账号的头像；字段名遵循 Zulip 的 users/me/avatar 契约。 */
+    uploadOwnAvatar(data: Uint8Array, filename: string, mimeType: string): Promise<unknown> {
+        return this.uploadMultipart("users/me/avatar", "file", data, filename, mimeType);
+    }
+
     private async uploadMultipart(
         path: string,
         field: string,

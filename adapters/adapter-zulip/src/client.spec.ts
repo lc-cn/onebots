@@ -376,6 +376,28 @@ describe("ZulipClient", () => {
         expect(request?.body?.toString("utf8")).toContain('name="filename"; filename="ready.png"');
     });
 
+    it("本人头像上传使用官方 file multipart 字段", async () => {
+        const transport = vi.fn<ZulipTransport>().mockResolvedValue({
+            result: "success",
+            msg: "",
+            avatar_url: "/user_avatars/2/avatar.png",
+        });
+        const client = new ZulipClient(config, { transport });
+
+        await client.uploadOwnAvatar(Buffer.from("png"), "avatar.png", "image/png");
+
+        expect(transport).toHaveBeenCalledWith(
+            expect.objectContaining({
+                method: "POST",
+                path: "users/me/avatar",
+                body: expect.any(Buffer),
+                contentType: expect.stringContaining("multipart/form-data"),
+            }),
+        );
+        const request = transport.mock.calls[0]?.[0];
+        expect(request?.body?.toString("utf8")).toContain('name="file"; filename="avatar.png"');
+    });
+
     it("在创建传输前拒绝不安全或不完整配置", () => {
         expect(
             () =>

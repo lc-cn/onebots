@@ -9,6 +9,7 @@ import { ZULIP_DATA_EXPORT_MUTATION_ACTIONS } from "./data-export-actions.js";
 import { ZULIP_EMOJI_MUTATION_ACTIONS } from "./emoji-actions.js";
 import { ZULIP_INVITATION_ACTIONS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_MUTATION_ACTIONS } from "./linkifier-actions.js";
+import { ZULIP_OWN_PROFILE_PERMISSION_ACTIONS } from "./own-profile-actions.js";
 import { ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { ZULIP_PREFERENCE_PERMISSION_ACTIONS } from "./preference-actions.js";
 import { ZULIP_PLAYGROUND_MUTATION_ACTIONS } from "./playground-actions.js";
@@ -21,29 +22,34 @@ const permission = {
     availability: "permission" as const,
     permissions: ["Zulip 组织角色与频道权限"],
 };
-const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS, action =>
-    ZULIP_USER_GROUP_MUTATION_ACTIONS.has(action) ||
-    ZULIP_USER_MUTATION_ACTIONS.has(action) ||
-    ZULIP_INVITATION_ACTIONS.has(action) ||
-    ZULIP_BOT_CREDENTIAL_ACTIONS.has(action) ||
-    ZULIP_DOMAIN_MUTATION_ACTIONS.has(action) ||
-    ZULIP_DATA_EXPORT_MUTATION_ACTIONS.has(action) ||
-    ZULIP_EMOJI_MUTATION_ACTIONS.has(action) ||
-    ZULIP_PREFERENCE_PERMISSION_ACTIONS.has(action) ||
-    ZULIP_PLAYGROUND_MUTATION_ACTIONS.has(action) ||
-    ZULIP_PROFILE_FIELD_MUTATION_ACTIONS.has(action) ||
-    ZULIP_LINKIFIER_MUTATION_ACTIONS.has(action) ||
-    [
-        "subscribe_channels",
-        "unsubscribe_channels",
-        "create_zulip_channel",
-        "update_zulip_channel",
-        "archive_channel",
-        "unarchive_channel",
-    ].includes(action)
-        ? { ...permission }
-        : { support: "native" },
-);
+const ownProfilePermission = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["Zulip 组织资料与头像修改策略"],
+};
+const permissionActions: ReadonlySet<string> = new Set([
+    ...ZULIP_USER_GROUP_MUTATION_ACTIONS,
+    ...ZULIP_USER_MUTATION_ACTIONS,
+    ...ZULIP_INVITATION_ACTIONS,
+    ...ZULIP_BOT_CREDENTIAL_ACTIONS,
+    ...ZULIP_DOMAIN_MUTATION_ACTIONS,
+    ...ZULIP_DATA_EXPORT_MUTATION_ACTIONS,
+    ...ZULIP_EMOJI_MUTATION_ACTIONS,
+    ...ZULIP_PREFERENCE_PERMISSION_ACTIONS,
+    ...ZULIP_PLAYGROUND_MUTATION_ACTIONS,
+    ...ZULIP_PROFILE_FIELD_MUTATION_ACTIONS,
+    ...ZULIP_LINKIFIER_MUTATION_ACTIONS,
+    "subscribe_channels",
+    "unsubscribe_channels",
+    "create_zulip_channel",
+    "update_zulip_channel",
+    "archive_channel",
+    "unarchive_channel",
+]);
+const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS, action => {
+    if (ZULIP_OWN_PROFILE_PERMISSION_ACTIONS.has(action)) return { ...ownProfilePermission };
+    return permissionActions.has(action) ? { ...permission } : { support: "native" };
+});
 
 /** Zulip REST API 与 Event Queue 的真实能力。 */
 export const zulipCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

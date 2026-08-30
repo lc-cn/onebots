@@ -39,6 +39,11 @@ describe("Zulip 能力清单", () => {
             expect(zulipCapabilities.actions[action]?.support).toBe("native");
         }
         expect(zulipCapabilities.actions.get_friend_list).toBeUndefined();
+        expect(zulipCapabilities.actions.upload_own_avatar).toMatchObject({
+            support: "native",
+            availability: "permission",
+            permissions: ["Zulip 组织资料与头像修改策略"],
+        });
         expect(zulipCapabilities.transports.event_queue?.mode).toBe("polling");
         expect(zulipCapabilities.transports.manual?.support).toBe("native");
     });

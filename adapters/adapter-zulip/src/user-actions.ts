@@ -4,14 +4,14 @@ import {
     exactParams,
     requireBoolean,
     requireInteger,
-    requireIntegerArray,
     requireString,
     requireText,
     requireZulipUserRole,
 } from "./action-params.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
-import type { ZulipParam, ZulipParams } from "./types.js";
+import { validateProfileData } from "./profile-data.js";
+import type { ZulipParams } from "./types.js";
 
 const UPDATE_FIELDS = ["full_name", "role", "profile_data", "new_email"] as const;
 const DEACTIVATION_ACTION_FIELDS = [
@@ -91,21 +91,6 @@ function reactivateUser(
     delete body.user_id;
     exactParams(body, []);
     return client.call(`users/${userId}/reactivate`, "POST");
-}
-
-function validateProfileData(value: unknown): void {
-    if (!Array.isArray(value)) invalid("Zulip 参数 profile_data 必须是数组");
-    for (const [index, item] of value.entries()) {
-        if (!isRecord(item)) invalid(`Zulip 参数 profile_data[${index}] 必须是对象`);
-        const field = exactParams(item, ["id", "value"], ["id", "value"]);
-        requireInteger(field.id, `profile_data[${index}].id`);
-        validateProfileValue(field.value, `profile_data[${index}].value`);
-    }
-}
-
-function validateProfileValue(value: ZulipParam | undefined, name: string): void {
-    if (value === null || typeof value === "string") return;
-    requireIntegerArray(value, name);
 }
 
 function validateDeactivationActions(value: unknown): void {
