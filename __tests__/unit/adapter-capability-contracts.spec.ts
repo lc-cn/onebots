@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
     Adapter,
-    adapterActionMethodName,
     assertAdapterCapabilities,
+    isCanonicalAdapterAction,
     listSupportedActions,
 } from "../../packages/core/src/index.js";
 import { AdapterRegistry } from "../../packages/core/src/registry.js";
@@ -54,10 +54,7 @@ describe("adapter capability manifests", () => {
     );
     const standardActions = [
         ...new Set(metadata.flatMap(item => Object.keys(item.capabilities?.actions ?? {}))),
-    ].filter(action => {
-        const method = Adapter.prototype[adapterActionMethodName(action) as keyof Adapter];
-        return typeof method === "function";
-    });
+    ].filter(isCanonicalAdapterAction);
 
     it("所有已注册适配器都公开同一份能力清单", () => {
         expect(metadata.map(item => item.name)).toEqual(platforms);
@@ -85,8 +82,9 @@ describe("adapter capability manifests", () => {
 
         const prototype = factory.prototype;
         for (const action of standardActions) {
-            const supported = item.capabilities.actions[action]?.support !== undefined
-                && item.capabilities.actions[action]?.support !== "unsupported";
+            const supported =
+                item.capabilities.actions[action]?.support !== undefined &&
+                item.capabilities.actions[action]?.support !== "unsupported";
             expect(prototype.isActionImplemented(action), `${item.name}.${action}`).toBe(supported);
         }
     });

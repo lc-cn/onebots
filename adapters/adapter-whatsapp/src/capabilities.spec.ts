@@ -12,5 +12,12 @@ describe("WhatsApp 能力清单", () => {
         for (const action of listSupportedActions(whatsAppCapabilities)) {
             expect(WhatsAppAdapter.prototype.isActionImplemented(action), action).toBe(true);
         }
+        expect(whatsAppCapabilities.actions.send_native_message?.scenes).toEqual(["private"]);
+        expect(whatsAppCapabilities.actions.create_flow?.permissions).toEqual([
+            "whatsapp_business_management",
+        ]);
+        expect(whatsAppCapabilities.actions.block_user?.permissions).toEqual([
+            "whatsapp_business_messaging",
+        ]);
     });
 });

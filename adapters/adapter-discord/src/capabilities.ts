@@ -1,4 +1,10 @@
-import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import {
+    defineAdapterCapabilities,
+    definePlatformActionCapabilities,
+    type AdapterCapabilityManifest,
+    type CapabilityDescriptor,
+} from "onebots";
+import { DISCORD_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const manageMessages = {
     support: "native" as const,
@@ -16,113 +22,102 @@ const manageThreads = {
     permissions: ["MANAGE_THREADS"],
 };
 
+const native: CapabilityDescriptor = { support: "native" };
+const platformActionDescriptors: Readonly<Record<string, CapabilityDescriptor>> = {
+    call_discord_api: {
+        support: "native",
+        availability: "context",
+        note: "受当前 Bot token 权限约束的完整 Discord v10 REST API 入口",
+    },
+    send_gateway_command: {
+        support: "native",
+        availability: "context",
+        note: "发送 Presence、Voice State、Guild Members、Soundboard Sounds 与 Channel Info Gateway 主动事件",
+    },
+    ban_member: {
+        support: "native",
+        availability: "permission",
+        permissions: ["BAN_MEMBERS"],
+    },
+    unban_member: {
+        support: "native",
+        availability: "permission",
+        permissions: ["BAN_MEMBERS"],
+    },
+    get_guild_bans: {
+        support: "native",
+        availability: "permission",
+        permissions: ["BAN_MEMBERS"],
+    },
+    create_guild_role: manageRoles,
+    update_guild_role: manageRoles,
+    delete_guild_role: manageRoles,
+    add_guild_member_role: manageRoles,
+    remove_guild_member_role: manageRoles,
+    bulk_delete_messages: manageMessages,
+    crosspost_message: {
+        support: "native",
+        availability: "permission",
+        permissions: ["SEND_MESSAGES"],
+    },
+    pin_message: {
+        support: "native",
+        availability: "permission",
+        permissions: ["PIN_MESSAGES"],
+    },
+    unpin_message: {
+        support: "native",
+        availability: "permission",
+        permissions: ["PIN_MESSAGES"],
+    },
+    create_thread: manageThreads,
+    remove_thread_member: manageThreads,
+    get_channel_invites: {
+        support: "native",
+        availability: "permission",
+        permissions: ["MANAGE_CHANNELS"],
+    },
+    create_channel_invite: {
+        support: "native",
+        availability: "permission",
+        permissions: ["CREATE_INSTANT_INVITE"],
+    },
+    delete_invite: {
+        support: "native",
+        availability: "permission",
+        permissions: ["MANAGE_CHANNELS"],
+    },
+    kick_guild_member: {
+        support: "native",
+        availability: "permission",
+        permissions: ["KICK_MEMBERS"],
+    },
+    timeout_guild_member: {
+        support: "native",
+        availability: "permission",
+        permissions: ["MODERATE_MEMBERS"],
+    },
+    set_guild_member_nickname: {
+        support: "native",
+        availability: "permission",
+        permissions: ["MANAGE_NICKNAMES"],
+    },
+};
+const platformActions = definePlatformActionCapabilities(
+    DISCORD_PLATFORM_ACTIONS,
+    action => platformActionDescriptors[action] ?? native,
+);
+
 /** Discord REST/Gateway 实现当前可用的能力。 */
 export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
+        ...platformActions,
         send_message: { support: "native", scenes: ["private", "channel"] },
         delete_message: { support: "native", scenes: ["private", "channel"] },
         get_message: { support: "native", scenes: ["private", "channel"] },
         get_message_history: { support: "native", scenes: ["private", "channel"] },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },
-        call_discord_api: {
-            support: "native",
-            availability: "context",
-            note: "受当前 Bot token 权限约束的完整 Discord v10 REST API 入口",
-        },
-        send_gateway_command: {
-            support: "native",
-            availability: "context",
-            note: "发送 Presence、Voice State、Guild Members、Soundboard Sounds 与 Channel Info Gateway 主动事件",
-        },
-        ban_member: {
-            support: "native",
-            availability: "permission",
-            permissions: ["BAN_MEMBERS"],
-        },
-        unban_member: {
-            support: "native",
-            availability: "permission",
-            permissions: ["BAN_MEMBERS"],
-        },
-        get_guild_bans: {
-            support: "native",
-            availability: "permission",
-            permissions: ["BAN_MEMBERS"],
-        },
-        get_guild_roles: { support: "native" },
-        create_guild_role: manageRoles,
-        update_guild_role: manageRoles,
-        delete_guild_role: manageRoles,
-        add_guild_member_role: manageRoles,
-        remove_guild_member_role: manageRoles,
-        bulk_delete_messages: manageMessages,
-        crosspost_message: {
-            support: "native",
-            availability: "permission",
-            permissions: ["SEND_MESSAGES"],
-        },
-        get_channel_pins: { support: "native" },
-        pin_message: {
-            support: "native",
-            availability: "permission",
-            permissions: ["PIN_MESSAGES"],
-        },
-        unpin_message: {
-            support: "native",
-            availability: "permission",
-            permissions: ["PIN_MESSAGES"],
-        },
-        trigger_typing: { support: "native" },
-        create_thread: manageThreads,
-        join_thread: { support: "native" },
-        leave_thread: { support: "native" },
-        add_thread_member: { support: "native" },
-        remove_thread_member: manageThreads,
-        list_thread_members: { support: "native" },
-        get_active_threads: { support: "native" },
-        get_channel_invites: {
-            support: "native",
-            availability: "permission",
-            permissions: ["MANAGE_CHANNELS"],
-        },
-        create_channel_invite: {
-            support: "native",
-            availability: "permission",
-            permissions: ["CREATE_INSTANT_INVITE"],
-        },
-        delete_invite: {
-            support: "native",
-            availability: "permission",
-            permissions: ["MANAGE_CHANNELS"],
-        },
-        get_reaction_users: { support: "native" },
-        add_reaction: { support: "native" },
-        remove_own_reaction: { support: "native" },
-        leave_guild: { support: "native" },
-        kick_guild_member: {
-            support: "native",
-            availability: "permission",
-            permissions: ["KICK_MEMBERS"],
-        },
-        timeout_guild_member: {
-            support: "native",
-            availability: "permission",
-            permissions: ["MODERATE_MEMBERS"],
-        },
-        set_guild_member_nickname: {
-            support: "native",
-            availability: "permission",
-            permissions: ["MANAGE_NICKNAMES"],
-        },
-        create_interaction_response: { support: "native" },
-        get_original_interaction_response: { support: "native" },
-        edit_original_interaction_response: { support: "native" },
-        delete_original_interaction_response: { support: "native" },
-        create_followup_message: { support: "native" },
-        get_followup_message: { support: "native" },
-        edit_followup_message: { support: "native" },
-        delete_followup_message: { support: "native" },
         get_guild_info: { support: "native" },
         get_guild_list: { support: "native" },
         get_guild_member_info: { support: "native" },

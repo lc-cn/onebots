@@ -1,8 +1,10 @@
 import {
     defineAdapterCapabilities,
+    definePlatformActionCapabilities,
     type AdapterCapabilityManifest,
     type CapabilityDescriptor,
 } from "onebots";
+import { QQ_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const manageGuild: CapabilityDescriptor = {
     support: "native",
@@ -16,9 +18,59 @@ const manageBotUi: CapabilityDescriptor = {
     permissions: ["bot.ui.manage"],
 };
 
+const manageGuildActions = new Set([
+    "approve_group_join_request",
+    "get_group_join_requests",
+    "get_group_restrict_chat",
+    "set_group_restrict_chat",
+    "get_group_join_approval_strategies",
+    "create_group_join_approval_strategy",
+    "update_group_join_approval_strategy",
+    "delete_group_join_approval_strategy",
+    "execute_group_join_approval_strategy",
+    "update_group_join_approval_whitelist",
+    "kick_guild_member",
+    "mute_guild_member",
+    "mute_guild",
+    "create_guild_role",
+    "update_guild_role",
+    "delete_guild_role",
+    "add_guild_member_role",
+    "remove_guild_member_role",
+    "set_channel_announce",
+    "pin_channel_message",
+    "unpin_channel_message",
+    "create_schedule",
+    "update_schedule",
+    "delete_schedule",
+    "delete_thread",
+    "control_channel_audio",
+    "put_channel_microphone",
+    "delete_channel_microphone",
+    "update_channel_permission_of_role",
+    "update_channel_member_permission",
+    "demand_guild_api_permission",
+]);
+const manageBotUiActions = new Set([
+    "update_bot_menu",
+    "create_bot_panel",
+    "update_bot_panel",
+    "delete_bot_panel",
+    "publish_bot_panel",
+]);
+const platformActions = definePlatformActionCapabilities(QQ_PLATFORM_ACTIONS, action => {
+    if (manageGuildActions.has(action)) return manageGuild;
+    if (manageBotUiActions.has(action)) return manageBotUi;
+    if (action === "send_wakeup" || action === "send_typing") {
+        return { support: "native", scenes: ["private"] };
+    }
+    return { support: "native" };
+});
+
 /** 腾讯 QQ 官方 SDK 与 OpenAPI 实际可执行能力。 */
 export const qqCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
+        ...platformActions,
         send_message: { support: "native", scenes: ["private", "group", "direct", "channel"] },
         delete_message: { support: "native", scenes: ["private", "group", "direct", "channel"] },
         get_message: { support: "native", scenes: ["direct", "channel"] },
@@ -40,65 +92,6 @@ export const qqCapabilities: AdapterCapabilityManifest = defineAdapterCapabiliti
         get_version: { support: "native" },
         get_status: { support: "native" },
         get_supported_actions: { support: "native" },
-
-        qq_call: { support: "native" },
-        send_wakeup: { support: "native", scenes: ["private"] },
-        send_typing: { support: "native", scenes: ["private"] },
-        acknowledge_interaction: { support: "native" },
-        approve_group_join_request: manageGuild,
-        get_group_join_requests: manageGuild,
-        get_group_restrict_chat: manageGuild,
-        set_group_restrict_chat: manageGuild,
-        get_group_bot_state: { support: "native" },
-        get_group_join_approval_strategies: manageGuild,
-        create_group_join_approval_strategy: manageGuild,
-        update_group_join_approval_strategy: manageGuild,
-        delete_group_join_approval_strategy: manageGuild,
-        execute_group_join_approval_strategy: manageGuild,
-        update_group_join_approval_whitelist: manageGuild,
-        kick_guild_member: manageGuild,
-        mute_guild_member: manageGuild,
-        mute_guild: manageGuild,
-        get_guild_roles: { support: "native" },
-        create_guild_role: manageGuild,
-        update_guild_role: manageGuild,
-        delete_guild_role: manageGuild,
-        add_guild_member_role: manageGuild,
-        remove_guild_member_role: manageGuild,
-        set_channel_announce: manageGuild,
-        get_channel_pins: { support: "native" },
-        pin_channel_message: manageGuild,
-        unpin_channel_message: manageGuild,
-        add_reaction: { support: "native" },
-        remove_reaction: { support: "native" },
-        get_reaction_members: { support: "native" },
-        get_schedules: { support: "native" },
-        get_schedule: { support: "native" },
-        create_schedule: manageGuild,
-        update_schedule: manageGuild,
-        delete_schedule: manageGuild,
-        get_channel_threads: { support: "native" },
-        get_channel_thread: { support: "native" },
-        publish_thread: { support: "native" },
-        delete_thread: manageGuild,
-        control_channel_audio: manageGuild,
-        put_channel_microphone: manageGuild,
-        delete_channel_microphone: manageGuild,
-        get_channel_permission_of_role: { support: "native" },
-        update_channel_permission_of_role: manageGuild,
-        get_channel_member_permission: { support: "native" },
-        update_channel_member_permission: manageGuild,
-        get_guild_api_permissions: { support: "native" },
-        demand_guild_api_permission: manageGuild,
-        generate_share_link: { support: "native" },
-        get_bot_menu: { support: "native" },
-        update_bot_menu: manageBotUi,
-        list_bot_panels: { support: "native" },
-        create_bot_panel: manageBotUi,
-        get_bot_panel: { support: "native" },
-        update_bot_panel: manageBotUi,
-        delete_bot_panel: manageBotUi,
-        publish_bot_panel: manageBotUi,
     },
     events: {
         message: { support: "native", scenes: ["private", "group", "direct", "channel"] },
