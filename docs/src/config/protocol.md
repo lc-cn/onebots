@@ -177,7 +177,7 @@ ws.on('open', () => {
 
 ## Milky
 
-轻量级协议，支持 HTTP 和 WebSocket。
+QQ 机器人协议，支持 HTTP、正向 WebSocket 与反向事件传输。
 
 ### 基础配置
 
@@ -189,18 +189,18 @@ milky.v1:
 
 ### HTTP API
 
-**访问地址**: `http://localhost:6727/{platform}/{account_id}/milky/v1/{action}`
+**访问地址**: `http://localhost:6727/{platform}/{account_id}/milky/v1/api/{action}`
 
 **配置项**:
 ```yaml
 milky.v1:
   use_http: true
-  timeout: 5000               # 请求超时（毫秒）
+  access_token: your_token
 ```
 
 ### WebSocket
 
-**访问地址**: `ws://localhost:6727/{platform}/{account_id}/milky/v1`
+**访问地址**: `ws://localhost:6727/{platform}/{account_id}/milky/v1/event`
 
 **配置项**:
 ```yaml

@@ -39,35 +39,10 @@ kook.my_bot:
 
 ## Client SDK Usage
 
-```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
-
-const client = new ImHelper();
-
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'kook',
-  account_id: 'my_bot',
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/kook/my_bot/onebot/v11/ws',
-  access_token: 'your_access_token',
-});
-
-// Listen for messages
-client.on('message', (message) => {
-  console.log(`Received message: ${message.content}`);
-  // Auto reply
-  message.reply('Hello from Kook bot!');
-});
-```
+Connect the client to the complete account protocol root, for example `http://localhost:6727/kook/{account_id}/onebot/v12`. See the [Client SDK Guide](/en/guide/client-sdk) for Client creation, receive modes, existing-Host integration, and API calls.
 
 ## Related Links
 
 - [Kook Adapter Configuration](/en/config/adapter/kook)
 - [Quick Start](/en/guide/start)
 - [Client SDK Guide](/en/guide/client-sdk)
-

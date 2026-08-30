@@ -23,7 +23,7 @@ general:
   milky.v1:
     use_http: true
     use_ws: true
-    token: ''
+    access_token: ''
 ```
 
 ## Protocol Configurations
@@ -37,4 +37,3 @@ general:
 
 - [Global Configuration](/en/config/global)
 - [Protocol Configuration](/en/config/protocol)
-

@@ -55,7 +55,7 @@ wechat.my_mp:
 
 ### HTTP API
 
-**URL Format**: `http://localhost:6727/{platform}/{account_id}/satori/v1/{action}`
+**URL Format**: `http://localhost:6727/{platform}/{account_id}/satori/v1/{resource}.{method}`
 
 ### WebSocket
 
@@ -64,22 +64,20 @@ wechat.my_mp:
 ## Client SDK Usage
 
 ```typescript
-import { ImHelper } from 'imhelper';
-import { SatoriV1Adapter } from '@imhelper/satori-v1';
+import { createSatoriClient } from '@imhelper/satori-v1';
 
-const client = new ImHelper();
-
-// Register Satori protocol adapter
-client.registerAdapter('satori.v1', SatoriV1Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'wechat',
-  account_id: 'my_mp',
-  protocol: 'satori.v1',
-  endpoint: 'ws://localhost:6727/wechat/my_mp/satori/v1/ws',
-  token: 'your_token',
+const client = createSatoriClient({
+  baseUrl: 'http://localhost:6727/discord/my-bot/satori/v1',
+  apiBaseUrl: 'http://localhost:6727/discord/my-bot/satori/v1',
+  wsUrl: 'ws://localhost:6727/discord/my-bot/satori/v1/events',
+  selfId: 'my-bot',
+  platform: 'discord',
+  accessToken: 'your-token',
+  receiveMode: 'ws',
 });
+
+client.on('message.channel', async message => message.reply('Received!'));
+await client.start();
 ```
 
 ## Related Links
@@ -87,4 +85,3 @@ await client.connect({
 - [Satori Configuration](/en/config/protocol/satori-v1)
 - [Quick Start](/en/guide/start)
 - [Client SDK Guide](/en/guide/client-sdk)
-

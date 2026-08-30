@@ -186,12 +186,13 @@ general:
 - **默认值**: `false`
 - **说明**: 是否启用 WebSocket
 
-### timeout
+### access_token
 
-- **类型**: `number`
-- **默认值**: `5000`
-- **单位**: 毫秒
-- **说明**: 请求超时时间
+- **类型**: `string`
+- **默认值**: 无
+- **说明**: HTTP、正向 WebSocket 与反向连接的默认访问令牌
+
+反向 HTTP、反向 WebSocket、签名和过滤器请参见 [Milky 配置](/config/protocol/milky-v1)。
 
 ## 配置示例
 

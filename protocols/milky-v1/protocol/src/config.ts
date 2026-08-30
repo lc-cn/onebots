@@ -10,24 +10,6 @@ declare module "onebots" {
 }
 export namespace MilkyConfig {
     /**
-     * HTTP configuration
-     */
-    export interface HttpConfig {
-        /** Enable HTTP server */
-        enabled?: boolean;
-        /** Server host */
-        host?: string;
-        /** Server port */
-        port?: number;
-        /** Access token for authentication */
-        access_token?: string;
-        /** Secret for signature verification */
-        secret?: string;
-        /** POST timeout in seconds */
-        post_timeout?: number;
-    }
-
-    /**
      * HTTP reverse (webhook) configuration
      */
     export interface HttpReverseConfig {
@@ -39,20 +21,6 @@ export namespace MilkyConfig {
         secret?: string;
         /** POST timeout in seconds */
         post_timeout?: number;
-    }
-
-    /**
-     * WebSocket configuration
-     */
-    export interface WsConfig {
-        /** Enable WebSocket server */
-        enabled?: boolean;
-        /** Server host */
-        host?: string;
-        /** Server port */
-        port?: number;
-        /** Access token */
-        access_token?: string;
     }
 
     /**
@@ -71,12 +39,12 @@ export namespace MilkyConfig {
      * Main Milky protocol configuration
      */
     export interface Config {
-        /** Enable HTTP server */
-        use_http?: boolean | HttpConfig;
+        /** 在 OneBots 共享 HTTP Host 上启用 Milky API。 */
+        use_http?: boolean;
         /** HTTP reverse (webhook) endpoints */
         http_reverse?: (string | HttpReverseConfig)[];
-        /** Enable WebSocket server */
-        use_ws?: boolean | WsConfig;
+        /** 在 OneBots 共享 HTTP Host 上启用 Milky 正向 WebSocket。 */
+        use_ws?: boolean;
         /** WebSocket reverse connections */
         ws_reverse?: (string | WsReverseConfig)[];
         /** Access token (global) */

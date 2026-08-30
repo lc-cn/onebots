@@ -1,216 +1,110 @@
-# Milky V1 协议配置
+# Milky v1 配置
 
-Milky V1 协议的完整配置项说明。
+Milky 与其他协议共享 OneBots 的 HTTP Host。正向 HTTP 和 WebSocket 只需要开关；反向目标使用可动态增减的端点列表。
 
-## 配置位置
-
-可以在 `general` 中设置默认值，也可以在账号级别单独配置：
+## 完整结构
 
 ```yaml
-# 全局默认配置
 general:
-  milky.v1:
-    use_http: true
-    use_ws: false
-
-# 账号级别配置（覆盖 general）
-{platform}.{account_id}:
   milky.v1:
     use_http: true
     use_ws: true
-```
-
-## 配置项说明
-
-| 字段名 | 类型 | 必填 | 描述 | 默认值 |
-|--------|------|------|------|--------|
-| `use_http` | `boolean` \| `HttpConfig` | 否 | 是否启用 HTTP API 或 HTTP 配置对象 | `true` |
-| `use_ws` | `boolean` \| `WsConfig` | 否 | 是否启用 WebSocket 或 WebSocket 配置对象 | `false` |
-| `access_token` | `string` | 否 | 访问令牌，用于鉴权 | - |
-| `secret` | `string` | 否 | HMAC 签名密钥 | - |
-| `heartbeat` | `number` | 否 | 心跳间隔（秒） | - |
-| `post_message_format` | `string` | 否 | 消息格式：`string` 或 `array` | `string` |
-| `http_reverse` | `string[]` \| `HttpReverseConfig[]` | 否 | HTTP 反向推送配置列表 | `[]` |
-| `ws_reverse` | `string[]` \| `WsReverseConfig[]` | 否 | WebSocket 反向连接配置列表 | `[]` |
-| `filters` | `any` | 否 | 事件过滤器 | - |
-
-### HttpConfig 对象
-
-当 `use_http` 为对象时，支持以下配置：
-
-| 字段名 | 类型 | 必填 | 描述 | 默认值 |
-|--------|------|------|------|--------|
-| `enabled` | `boolean` | 否 | 是否启用 | `true` |
-| `host` | `string` | 否 | 监听地址 | - |
-| `port` | `number` | 否 | 监听端口 | - |
-| `access_token` | `string` | 否 | 访问令牌（覆盖全局） | - |
-| `secret` | `string` | 否 | 签名密钥（覆盖全局） | - |
-| `timeout` | `number` | 否 | 请求超时时间（毫秒） | `5000` |
-
-### WsConfig 对象
-
-当 `use_ws` 为对象时，支持以下配置：
-
-| 字段名 | 类型 | 必填 | 描述 | 默认值 |
-|--------|------|------|------|--------|
-| `enabled` | `boolean` | 否 | 是否启用 | `true` |
-| `host` | `string` | 否 | 监听地址 | - |
-| `port` | `number` | 否 | 监听端口 | - |
-| `access_token` | `string` | 否 | 访问令牌（覆盖全局） | - |
-| `secret` | `string` | 否 | 签名密钥（覆盖全局） | - |
-
-### HttpReverseConfig 对象
-
-| 字段名 | 类型 | 必填 | 描述 | 默认值 |
-|--------|------|------|------|--------|
-| `url` | `string` | 是 | 推送地址 | - |
-| `access_token` | `string` | 否 | 访问令牌（覆盖全局） | - |
-| `secret` | `string` | 否 | 签名密钥（覆盖全局） | - |
-| `timeout` | `number` | 否 | 超时时间（毫秒） | `5000` |
-
-### WsReverseConfig 对象
-
-| 字段名 | 类型 | 必填 | 描述 | 默认值 |
-|--------|------|------|------|--------|
-| `url` | `string` | 是 | 连接地址 | - |
-| `access_token` | `string` | 否 | 访问令牌（覆盖全局） | - |
-| `secret` | `string` | 否 | 签名密钥（覆盖全局） | - |
-
-## 通信方式
-
-### HTTP API
-
-启用 HTTP API 后，提供 HTTP POST 接口调用 API。
-
-**访问地址**: `http://localhost:6727/{platform}/{account_id}/milky/v1/{action}`
-
-**配置示例**:
-```yaml
-milky.v1:
-  use_http: true
-  access_token: 'your_token'
-  # 或使用详细配置
-  use_http:
-    enabled: true
-    access_token: 'your_token'
-    timeout: 5000
-```
-
-### 正向 WebSocket
-
-客户端主动连接到 onebots，实时接收事件。
-
-**访问地址**: `ws://localhost:6727/{platform}/{account_id}/milky/v1`
-
-**配置示例**:
-```yaml
-milky.v1:
-  use_ws: true
-  access_token: 'your_token'
-  # 或使用详细配置
-  use_ws:
-    enabled: true
-    access_token: 'your_token'
-```
-
-### HTTP Reverse (Webhook)
-
-配置 HTTP Reverse 后，事件会推送到指定地址。
-
-**配置示例**:
-```yaml
-milky.v1:
-  http_reverse:
-    - url: 'http://localhost:5702/milky'
-      timeout: 5000
-      access_token: 'webhook_token'
-    - 'http://localhost:5703/milky'  # 简单字符串格式
-```
-
-### WebSocket Reverse
-
-配置 WebSocket Reverse 后，onebots 会主动连接到指定服务器。
-
-**配置示例**:
-```yaml
-milky.v1:
-  ws_reverse:
-    - url: 'ws://localhost:6702/milky'
-      access_token: 'ws_token'
-    - 'ws://localhost:6703/milky'  # 简单字符串格式
-```
-
-## 完整配置示例
-
-### 基础配置
-
-```yaml
-general:
-  milky.v1:
-    use_http: true
-    use_ws: false
-    access_token: 'default_token'
-```
-
-### 完整配置
-
-```yaml
-general:
-  milky.v1:
-    use_http:
-      enabled: true
-      timeout: 5000
-      access_token: 'http_token'
-    use_ws:
-      enabled: true
-      access_token: 'ws_token'
-    access_token: 'global_token'
-    secret: 'hmac_secret'
-    heartbeat: 15
-    post_message_format: 'array'
+    access_token: global-token
+    secret: webhook-signature-secret
     http_reverse:
-      - url: 'http://localhost:5702/milky'
-        timeout: 5000
+      - url: https://bot.example/events
+        access_token: downstream-token
+        secret: endpoint-secret
+        post_timeout: 5
     ws_reverse:
-      - url: 'ws://localhost:6702/milky'
-```
+      - url: wss://bot.example/events
+        access_token: downstream-token
+        reconnect_interval: 5
+    filters:
+      event_type:
+        - message_receive
+        - friend_request
 
-### 账号级别配置
-
-```yaml
-kook.zhin:
-  token: 'kook_token'
-  
+icqq.10001:
   milky.v1:
-    use_http: true
-    use_ws: true
-    access_token: 'milky_token'
-    post_message_format: 'array'
+    use_ws: false
 ```
 
-## 消息格式
+`general` 是协议默认值，`{platform}.{account_id}` 下的同名配置覆盖它。Web 管理端会根据协议 Schema 将反向端点和过滤器渲染为可增减表单，不需要手写 JSON。
 
-### string 格式
+## 字段
 
-使用字符串格式（类似 CQ 码）：
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `use_http` | `boolean` | `true` | 启用 `/api/{action}` |
+| `use_ws` | `boolean` | `false` | 启用 `/event` 正向 WebSocket |
+| `access_token` | `string` | - | HTTP、正向 WS 与反向连接的默认 Token |
+| `secret` | `string` | - | HTTP 反向上报的默认 HMAC Secret |
+| `http_reverse` | `Array<string | HttpReverseConfig>` | `[]` | HTTP 事件上报目标 |
+| `ws_reverse` | `Array<string | WsReverseConfig>` | `[]` | OneBots 主动建立的 WS 连接 |
+| `filters` | `EventFilter` | - | 事件过滤表达式 |
+
+`use_http` 和 `use_ws` 不接受端口或 Host 对象。监听地址属于 OneBots 全局 Host；在协议配置内重复声明不会生效，因此不属于公开配置契约。
+
+## 正向端点
+
+| 传输 | 地址 |
+| --- | --- |
+| HTTP API | `POST /{platform}/{account_id}/milky/v1/api/{action}` |
+| WebSocket | `GET /{platform}/{account_id}/milky/v1/event` |
+
+HTTP 只接受 `application/json`。Token 优先从 `Authorization: Bearer <token>` 读取，也支持 `?access_token=`。
+
+## HTTP 反向上报
 
 ```yaml
-milky.v1:
-  post_message_format: 'string'
+http_reverse:
+  - url: https://bot.example/events
+    access_token: endpoint-token
+    secret: endpoint-secret
+    post_timeout: 10
 ```
 
-### array 格式
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `url` | `string` | 必填 | 仅允许 HTTP/HTTPS |
+| `access_token` | `string` | 全局 Token | 作为 Bearer Token 发送 |
+| `secret` | `string` | 全局 Secret | 生成 `X-Signature` |
+| `post_timeout` | `number` | `5` | 请求超时，单位秒 |
 
-使用消息段数组格式：
+上报还会携带 `User-Agent: Milky/1.0` 和 `X-Self-ID`。
+
+## 反向 WebSocket
 
 ```yaml
-milky.v1:
-  post_message_format: 'array'
+ws_reverse:
+  - url: wss://bot.example/events
+    access_token: endpoint-token
+    reconnect_interval: 5
 ```
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `url` | `string` | 必填 | 仅允许 WS/WSS |
+| `access_token` | `string` | 全局 Token | 追加为查询参数 |
+| `reconnect_interval` | `number` | `5` | 重连间隔，单位秒 |
+
+反向连接支持接收 `{ action, params, echo? }` 动作请求，并在响应中保留 `echo`。
+
+## 事件过滤
+
+过滤器直接匹配 canonical Milky 事件，因此顶层字段应使用 `event_type`，消息场景使用 `data.message_scene`：
+
+```yaml
+filters:
+  event_type: message_receive
+  data:
+    message_scene: group
+```
+
+复杂的任意/全部条件、嵌套字段和排除规则可在 Web 管理端可视化编辑。过滤器的通用语义见[协议配置](/config/protocol)。
 
 ## 相关链接
 
-- [协议配置](/config/protocol)
-- [Milky 协议文档](/protocol/milky)
-- [客户端SDK使用指南](/guide/client-sdk)
-
+- [Milky v1 协议](/protocol/milky)
+- [客户端 SDK 使用指南](/guide/client-sdk)

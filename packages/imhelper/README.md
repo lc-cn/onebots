@@ -16,8 +16,8 @@ pnpm add imhelper @imhelper/onebot-v11
 import { createOnebot11Client } from "@imhelper/onebot-v11";
 
 const client = createOnebot11Client({
-  baseUrl: "http://localhost:6727/kook/zhin/onebot/v11",
-  apiBaseUrl: "http://localhost:6727/kook/zhin/onebot/v11",
+  baseUrl: "http://localhost:6727/icqq/10001/onebot/v11",
+  apiBaseUrl: "http://localhost:6727/icqq/10001/onebot/v11",
   selfId: "10001",
   accessToken: "your_token",
   receiveMode: "ws",
@@ -197,8 +197,8 @@ const client = createImHelper(new CustomAdapter());
 const controller = new AbortController();
 
 const client = createOnebot11Client({
-  baseUrl: "ws://localhost:6727/kook/zhin/onebot/v11",
-  selfId: "zhin",
+  baseUrl: "http://localhost:6727/icqq/10001/onebot/v11",
+  selfId: "10001",
   receiveMode: "ws",
   webSocket: {
     signal: controller.signal,

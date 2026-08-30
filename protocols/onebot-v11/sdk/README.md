@@ -95,7 +95,7 @@ const client = createOnebot11Client({
 const controller = new AbortController();
 
 const client = createOnebot11Client({
-  baseUrl: "ws://localhost:6700/onebot/v11",
+  baseUrl: "http://localhost:6700/onebot/v11",
   selfId: "123456789",
   receiveMode: "ws",
   webSocket: {

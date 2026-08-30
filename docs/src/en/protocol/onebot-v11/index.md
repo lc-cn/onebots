@@ -90,22 +90,19 @@ Supports two message formats:
 ## Client SDK Usage
 
 ```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
+import { createOnebot11Client } from '@imhelper/onebot-v11';
 
-const client = new ImHelper();
-
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'wechat',
-  account_id: 'my_mp',
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/wechat/my_mp/onebot/v11/ws',
-  access_token: 'your_access_token',
+const client = createOnebot11Client({
+  baseUrl: 'http://localhost:6727/icqq/10001/onebot/v11',
+  apiBaseUrl: 'http://localhost:6727/icqq/10001/onebot/v11',
+  wsUrl: 'ws://localhost:6727/icqq/10001/onebot/v11',
+  selfId: '10001',
+  accessToken: 'your-access-token',
+  receiveMode: 'ws',
 });
+
+client.on('message.private', async message => message.reply('Received!'));
+await client.start();
 ```
 
 ## Related Links
@@ -114,4 +111,3 @@ await client.connect({
 - [Actions Documentation](/en/protocol/onebot-v11/action)
 - [Events Documentation](/en/protocol/onebot-v11/event)
 - [CQ Code Documentation](/en/protocol/onebot-v11/cqcode)
-

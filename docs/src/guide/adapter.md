@@ -331,27 +331,7 @@ discord.bot1:
 
 ## 4. 使用客户端SDK连接
 
-配置好服务端后，可以使用 imhelper 客户端SDK 连接：
-
-```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot11Adapter } from '@imhelper/onebot-v11';
-
-const adapter = createOnebot11Adapter({
-  baseUrl: 'http://localhost:6727',
-  selfId: 'zhin',
-  accessToken: 'your_access_token',
-  receiveMode: 'ws',
-  path: '/kook/zhin/onebot/v11',
-  wsUrl: 'ws://localhost:6727/kook/zhin/onebot/v11',
-  platform: 'kook',
-});
-
-const helper = createImHelper(adapter);
-await adapter.connect();
-```
-
-详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)
+客户端连接地址必须是完整账号协议根，例如 `http://localhost:6727/kook/{account_id}/onebot/v12`。创建 Client、选择接收模式、接入已有 Host 与调用 API 的统一说明见[客户端 SDK 使用指南](/guide/client-sdk)。
 
 ## 下一步
 

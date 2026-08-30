@@ -154,34 +154,24 @@ npm install imhelper @imhelper/onebot-v11
 ### 使用示例
 
 ```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot11Adapter } from '@imhelper/onebot-v11';
+import { createOnebot11Client } from '@imhelper/onebot-v11';
 
-// 创建适配器
-const adapter = createOnebot11Adapter({
-  baseUrl: 'http://localhost:6727',
-  selfId: 'zhin',
+const client = createOnebot11Client({
+  baseUrl: 'http://localhost:6727/icqq/10001/onebot/v11',
+  apiBaseUrl: 'http://localhost:6727/icqq/10001/onebot/v11',
+  selfId: '10001',
   accessToken: 'your_token',
-  receiveMode: 'ws', // 'ws' | 'wss' | 'webhook' | 'sse'
-  path: '/kook/zhin/onebot/v11',
-  wsUrl: 'ws://localhost:6727/kook/zhin/onebot/v11',
-  platform: 'kook',
+  receiveMode: 'ws',
+  wsUrl: 'ws://localhost:6727/icqq/10001/onebot/v11',
 });
 
-// 创建 ImHelper 实例
-const helper = createImHelper(adapter);
-
-// 监听消息事件
-helper.on('message.private', (message) => {
+client.on('message.private', async message => {
   console.log('收到私聊消息:', message.content);
-  message.reply('收到！');
+  await message.reply('收到！');
 });
 
-// 连接
-await adapter.connect();
-
-// 发送消息
-await helper.sendPrivateMessage('123456', 'Hello!');
+await client.start();
+await client.sendPrivateMessage(123456, 'Hello!');
 ```
 
 详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)

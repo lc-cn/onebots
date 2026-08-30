@@ -102,22 +102,19 @@ OneBot V12 uses a unified message segment array format:
 ## Client SDK Usage
 
 ```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV12Adapter } from '@imhelper/onebot-v12';
+import { createOnebot12Client } from '@imhelper/onebot-v12';
 
-const client = new ImHelper();
-
-// Register OneBot V12 protocol adapter
-client.registerAdapter('onebot.v12', OneBotV12Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'wechat',
-  account_id: 'my_mp',
-  protocol: 'onebot.v12',
-  endpoint: 'ws://localhost:6727/wechat/my_mp/onebot/v12/ws',
-  access_token: 'your_access_token',
+const client = createOnebot12Client({
+  baseUrl: 'http://localhost:6727/qq/my-bot/onebot/v12',
+  apiBaseUrl: 'http://localhost:6727/qq/my-bot/onebot/v12',
+  wsUrl: 'ws://localhost:6727/qq/my-bot/onebot/v12',
+  selfId: 'my-bot',
+  accessToken: 'your-access-token',
+  receiveMode: 'ws',
 });
+
+client.on('message.group', async message => message.reply('Received!'));
+await client.start();
 ```
 
 ## Related Links
@@ -126,4 +123,3 @@ await client.connect({
 - [Actions Documentation](/en/protocol/onebot-v12/action)
 - [Events Documentation](/en/protocol/onebot-v12/event)
 - [Message Segments Documentation](/en/protocol/onebot-v12/segment)
-

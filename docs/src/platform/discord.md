@@ -115,25 +115,7 @@ onebots -r discord -p onebot-v11 -p onebot-v12 -c config.yaml
 
 ## 使用客户端SDK连接
 
-```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot11Adapter } from '@imhelper/onebot-v11';
-
-const adapter = createOnebot11Adapter({
-  baseUrl: 'http://localhost:6727',
-  selfId: 'your_bot_id',
-  accessToken: 'your_v11_token',
-  receiveMode: 'ws',
-  path: '/discord/your_bot_id/onebot/v11',
-  wsUrl: 'ws://localhost:6727/discord/your_bot_id/onebot/v11',
-  platform: 'discord',
-});
-
-const helper = createImHelper(adapter);
-await adapter.connect();
-```
-
-详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)
+客户端应连接完整账号协议根，例如 `http://localhost:6727/discord/{account_id}/onebot/v12`。创建 Client、选择接收模式、接入已有 Host 与调用 API 的统一说明见[客户端 SDK 使用指南](/guide/client-sdk)。
 
 ## 支持的 API
 
@@ -189,4 +171,3 @@ await adapter.connect();
 - [Discord.js 文档](https://discord.js.org/)
 - [@onebots/adapter-discord README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-discord)
 - [客户端SDK使用指南](/guide/client-sdk)
-

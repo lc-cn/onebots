@@ -129,24 +129,7 @@ protocol:
 
 ## Client SDK Usage
 
-```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
-
-const client = new ImHelper();
-
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'icqq',
-  account_id: '123456789',  // Your QQ number
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/icqq/123456789/onebot/v11/ws',
-  access_token: 'your_access_token',
-});
-```
+Connect the client to the complete account protocol root, for example `http://localhost:6727/icqq/{account_id}/onebot/v11`. See the [Client SDK Guide](/en/guide/client-sdk) for Client creation, receive modes, existing-Host integration, and API calls.
 
 ## Important Notes
 
@@ -162,4 +145,3 @@ await client.connect({
 - [ICQQ Adapter Configuration](/en/config/adapter/icqq)
 - [Quick Start](/en/guide/start)
 - [Client SDK Guide](/en/guide/client-sdk)
-

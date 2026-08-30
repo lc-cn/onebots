@@ -44,28 +44,10 @@ teams.my_teams_bot:
 
 ## Client SDK Usage
 
-```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
-
-const client = new ImHelper();
-
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'teams',
-  account_id: 'my_teams_bot',
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/teams/my_teams_bot/onebot/v11/ws',
-  access_token: 'your_access_token',
-});
-```
+Connect the client to the complete account protocol root, for example `http://localhost:6727/teams/{account_id}/onebot/v12`. See the [Client SDK Guide](/en/guide/client-sdk) for Client creation, receive modes, existing-Host integration, and API calls.
 
 ## Related Links
 
 - [Teams Adapter Configuration](/en/config/adapter/teams)
 - [Quick Start](/en/guide/start)
 - [Client SDK Guide](/en/guide/client-sdk)
-

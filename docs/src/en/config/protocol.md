@@ -84,11 +84,11 @@ Similar to OneBot V11, but with updated message format and API structure.
 
 ## Satori Protocol
 
-**Access URL**: `http://localhost:6727/{platform}/{account_id}/satori/v1/{action}`
+**Access URL**: `http://localhost:6727/{platform}/{account_id}/satori/v1/{resource}.{method}`
 
 ## Milky Protocol
 
-**Access URL**: `http://localhost:6727/{platform}/{account_id}/milky/v1/{action}`
+**Access URL**: `http://localhost:6727/{platform}/{account_id}/milky/v1/api/{action}`
 
 ## Related Links
 
@@ -98,4 +98,3 @@ Similar to OneBot V11, but with updated message format and API structure.
 - [Milky Configuration](/en/config/protocol/milky-v1)
 - [Global Configuration](/en/config/global)
 - [General Configuration](/en/config/general)
-

@@ -288,36 +288,24 @@ npm install imhelper @imhelper/onebot-v12
 ### 使用示例
 
 ```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot12Adapter } from '@imhelper/onebot-v12';
+import { createOnebot12Client } from '@imhelper/onebot-v12';
 
-// 创建适配器
-const adapter = createOnebot12Adapter({
-  baseUrl: 'http://localhost:6727',
+const client = createOnebot12Client({
+  baseUrl: 'http://localhost:6727/kook/zhin/onebot/v12',
+  apiBaseUrl: 'http://localhost:6727/kook/zhin/onebot/v12',
   selfId: 'zhin',
   accessToken: 'your_token',
   receiveMode: 'ws',
-  path: '/kook/zhin/onebot/v12',
   wsUrl: 'ws://localhost:6727/kook/zhin/onebot/v12',
-  platform: 'kook',
 });
 
-// 创建 ImHelper 实例
-const helper = createImHelper(adapter);
-
-// 监听消息事件
-helper.on('message.private', (message) => {
+client.on('message.private', async message => {
   console.log('收到私聊消息:', message.content);
-  message.reply([{ type: 'text', data: { text: '收到！' } }]);
+  await message.reply('收到！');
 });
 
-// 连接
-await adapter.connect();
-
-// 发送消息
-await helper.sendPrivateMessage('123456', [
-  { type: 'text', data: { text: 'Hello!' } }
-]);
+await client.start();
+await client.sendPrivateMessage('123456', 'Hello!');
 ```
 
 详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)

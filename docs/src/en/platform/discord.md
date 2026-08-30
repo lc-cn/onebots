@@ -74,28 +74,10 @@ discord.your_bot_id:
 
 ## Client SDK Usage
 
-```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
-
-const client = new ImHelper();
-
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'discord',
-  account_id: 'your_bot_id',
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/discord/your_bot_id/onebot/v11/ws',
-  access_token: 'your_access_token',
-});
-```
+Connect the client to the complete account protocol root, for example `http://localhost:6727/discord/{account_id}/onebot/v12`. See the [Client SDK Guide](/en/guide/client-sdk) for Client creation, receive modes, existing-Host integration, and API calls.
 
 ## Related Links
 
 - [Discord Adapter Configuration](/en/config/adapter/discord)
 - [Quick Start](/en/guide/start)
 - [Client SDK Guide](/en/guide/client-sdk)
-

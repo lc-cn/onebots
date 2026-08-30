@@ -117,42 +117,7 @@ onebots -r dingtalk -p onebot.v11
 
 ### 客户端 SDK 使用
 
-onebots 提供了 imhelper 客户端SDK，可以方便地连接钉钉适配器：
-
-```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot12Adapter } from '@imhelper/onebot-v12';
-
-// 创建适配器
-const adapter = createOnebot12Adapter({
-  baseUrl: 'http://localhost:6727',
-  selfId: 'your_bot_id',
-  accessToken: 'your_token',
-  receiveMode: 'ws',
-  path: '/dingtalk/your_bot_id/onebot/v12',
-  wsUrl: 'ws://localhost:6727/dingtalk/your_bot_id/onebot/v12',
-  platform: 'dingtalk',
-});
-
-// 创建 ImHelper 实例
-const helper = createImHelper(adapter);
-
-// 监听消息事件
-helper.on('message.private', (message) => {
-  console.log('收到私聊消息:', message.content);
-  message.reply([{ type: 'text', data: { text: '收到！' } }]);
-});
-
-helper.on('message.group', (message) => {
-  console.log('收到群聊消息:', message.content);
-  message.reply([{ type: 'text', data: { text: '收到！' } }]);
-});
-
-// 连接
-await adapter.connect();
-```
-
-详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)
+客户端应连接完整账号协议根，例如 `http://localhost:6727/dingtalk/{account_id}/onebot/v12`。创建 Client、选择接收模式、接入已有 Host 与调用 API 的统一说明见[客户端 SDK 使用指南](/guide/client-sdk)。
 
 ## 相关链接
 

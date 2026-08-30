@@ -1,41 +1,59 @@
-# Milky V1 Protocol Configuration
+# Milky v1 Configuration
 
-Complete configuration guide for Milky V1 protocol.
+Milky uses the shared OneBots HTTP host. Forward HTTP and WebSocket transports are boolean switches; reverse targets are dynamic endpoint lists in the Web UI.
 
-## Configuration Location
-
-Can be set in `general` as default values, or configured individually at account level:
+## Example
 
 ```yaml
-# Global default configuration
 general:
   milky.v1:
     use_http: true
-    use_ws: false
-
-# Account level configuration (overrides general)
-{platform}.{account_id}:
-  milky.v1:
-    use_http: true
     use_ws: true
+    access_token: global-token
+    secret: webhook-signature-secret
+    http_reverse:
+      - url: https://bot.example/events
+        access_token: downstream-token
+        secret: endpoint-secret
+        post_timeout: 5
+    ws_reverse:
+      - url: wss://bot.example/events
+        access_token: downstream-token
+        reconnect_interval: 5
+    filters:
+      event_type:
+        - message_receive
+        - friend_request
 ```
 
-## Configuration Fields
+Account-level `{platform}.{account_id}.milky.v1` values override `general.milky.v1`.
 
-| Field | Type | Required | Description | Default |
-|-------|------|----------|-------------|---------|
-| `use_http` | `boolean` \| `HttpConfig` | No | Whether to enable HTTP API or HTTP config object | `true` |
-| `use_ws` | `boolean` \| `WsConfig` | No | Whether to enable WebSocket or WebSocket config object | `false` |
-| `access_token` | `string` | No | Access token for authentication | - |
-| `secret` | `string` | No | HMAC signature key | - |
-| `heartbeat` | `number` | No | Heartbeat interval (seconds) | - |
-| `post_message_format` | `string` | No | Message format: `string` or `array` | `string` |
-| `http_reverse` | `string[]` \| `HttpReverseConfig[]` | No | HTTP reverse push configuration list | `[]` |
-| `ws_reverse` | `string[]` \| `WsReverseConfig[]` | No | WebSocket reverse connection configuration list | `[]` |
-| `filters` | `any` | No | Event filters | - |
+## Fields
 
-## Related Links
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `use_http` | `boolean` | `true` | Enable `/api/{action}` |
+| `use_ws` | `boolean` | `false` | Enable the `/event` forward WebSocket |
+| `access_token` | `string` | - | Default token for forward and reverse transports |
+| `secret` | `string` | - | Default HMAC secret for reverse HTTP |
+| `http_reverse` | endpoint array | `[]` | HTTP event delivery targets |
+| `ws_reverse` | endpoint array | `[]` | WebSocket targets opened by OneBots |
+| `filters` | event filter | - | Filter canonical Milky events |
 
-- [Milky Protocol](/en/protocol/milky)
-- [Global Configuration](/en/config/global)
+`use_http` and `use_ws` do not accept host or port objects. Listener ownership belongs to the shared OneBots host.
 
+## Endpoints
+
+| Transport | Endpoint |
+| --- | --- |
+| HTTP API | `POST /{platform}/{account_id}/milky/v1/api/{action}` |
+| WebSocket | `GET /{platform}/{account_id}/milky/v1/event` |
+
+HTTP reverse endpoint fields are `url`, `access_token`, `secret`, and `post_timeout` in seconds. Reverse WebSocket fields are `url`, `access_token`, and `reconnect_interval` in seconds. Per-endpoint credentials override global values.
+
+Filters match the canonical envelope. Use `event_type` at the root and nested `data.message_scene` for message scenes.
+
+## Links
+
+- [Milky v1 protocol](/en/protocol/milky)
+- [Client SDK guide](/en/guide/client-sdk)

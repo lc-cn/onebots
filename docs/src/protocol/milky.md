@@ -1,213 +1,146 @@
-# Milky 协议
+# Milky v1 协议
 
-Milky 是一个轻量级的机器人通信协议，专为简单场景设计。
+Milky 是面向 QQ 机器人的开放协议。OneBots 按 Milky 的 `event_type` 事件模型、消息场景和 `/api/{action}` 动作接口提供服务，并通过 Adapter 能力层映射到实际平台。
 
-## 协议简介
-
-Milky 协议的特点：
-
-- 🪶 **轻量级**: 最小化的协议设计
-- ⚡ **高性能**: 低开销的消息传输
-- 🎯 **简单易用**: 易于理解和实现
-- 🔌 **灵活**: 支持 HTTP 和 WebSocket
-
-## 安装
-
-### 服务端
+## 安装与注册
 
 ```bash
-npm install @onebots/protocol-milky-v1
+pnpm add @onebots/protocol-milky-v1
+onebots -r icqq -p milky-v1 -c config.yaml
 ```
 
-### 客户端SDK
+SDK 客户端需要同时安装公共核心：
 
 ```bash
-npm install imhelper @imhelper/milky-v1
+pnpm add imhelper @imhelper/milky-v1
 ```
 
 ## 配置
 
-在 `config.yaml` 中配置 Milky 协议：
-
 ```yaml
-# 全局默认配置
 general:
   milky.v1:
     use_http: true
-    use_ws: false
-
-# 账号配置
-wechat.my_mp:
-  milky.v1:
-    use_http: true
     use_ws: true
+    access_token: your-token
+
+icqq.10001:
+  milky.v1:
+    filters:
+      event_type:
+        - message_receive
+        - friend_request
 ```
 
-## 通信方式
+`general` 提供默认值，账号级配置覆盖默认值。HTTP 反向上报、反向 WebSocket 和可视化过滤器见 [Milky 配置参考](/config/protocol/milky-v1)。
 
-### HTTP API
+## 传输地址
 
-**地址格式**: `http://localhost:6727/{platform}/{account_id}/milky/v1/{action}`
+| 用途 | 地址 |
+| --- | --- |
+| HTTP API | `POST /{platform}/{account_id}/milky/v1/api/{action}` |
+| 正向 WebSocket | `GET /{platform}/{account_id}/milky/v1/event` |
 
-**示例**:
+HTTP 请求必须使用 `application/json`。Access Token 可通过 `Authorization: Bearer <token>` 或查询参数 `access_token` 传递。
+
+### HTTP 调用
+
 ```bash
-# 发送消息
-curl -X POST http://localhost:6727/wechat/my_mp/milky/v1/send \
-  -H "Content-Type: application/json" \
+curl -X POST http://localhost:6727/icqq/10001/milky/v1/api/send_private_message \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer your-token' \
   -d '{
-    "target": "123456",
-    "type": "private",
-    "content": "Hello World"
+    "user_id": 123456789,
+    "message": [{ "type": "text", "data": { "text": "你好" } }]
   }'
 ```
 
+成功与失败均返回结构化响应：
+
+```json
+{
+  "status": "ok",
+  "retcode": 0,
+  "data": {}
+}
+```
+
+未知动作返回 HTTP 404；不支持的 Content-Type 返回 415；鉴权失败返回 401。已识别动作的参数或平台失败通过 `status: "failed"`、`retcode` 和 `message` 表达。
+
 ### WebSocket
 
-**地址格式**: `ws://localhost:6727/{platform}/{account_id}/milky/v1`
-
-## 消息格式
-
-Milky 使用简单的 JSON 格式：
+WebSocket 同时承载事件和动作请求。动作请求可以携带 `echo`，响应会原样返回它：
 
 ```json
 {
-  "type": "message",
-  "target": "123456",
-  "message_type": "private",
-  "content": "Hello",
-  "timestamp": 1638360000000
+  "action": "get_group_list",
+  "params": {},
+  "echo": "request-1"
 }
 ```
 
-支持的内容类型：
+## 事件模型
 
-- 纯文本
-- 图片 URL
-- 简单的多媒体引用
-
-## API 列表
-
-### 基础 API
-
-- `send` - 发送消息
-- `recall` - 撤回消息
-- `get_info` - 获取信息
-- `get_list` - 获取列表
-
-Milky 协议保持最小 API 集合，只提供最常用的功能。
-
-## 事件类型
-
-基础事件类型：
-
-- `message` - 消息事件
-- `notice` - 通知事件
-- `request` - 请求事件
-
-每个事件包含基本字段：
+所有事件都使用统一 envelope：
 
 ```json
 {
-  "type": "message",
-  "time": 1638360000,
+  "time": 1788080000,
+  "self_id": 10001,
+  "event_type": "message_receive",
   "data": {
-    // 事件数据
+    "message_scene": "group",
+    "peer_id": 987654321,
+    "message_seq": 42,
+    "sender_id": 123456789,
+    "time": 1788080000,
+    "segments": [{ "type": "text", "data": { "text": "你好" } }]
   }
 }
 ```
 
-## 使用场景
+消息事件是 `event_type: "message_receive"`，场景由 `data.message_scene` 标识：`friend`、`group` 或 `temp`。申请事件使用 `friend_request`、`group_join_request`、`group_invited_join_request`；可表达的通知与机器人离线事件也保持各自 canonical `event_type`。原始事件不会改写成 OneBot 的 `post_type/message_type`。
 
-Milky 协议适合以下场景：
+## 动作能力
 
-- 🎯 **简单机器人**: 只需基础消息收发功能
-- ⚡ **性能敏感**: 需要最小通信开销
-- 🔧 **自定义框架**: 快速实现自己的机器人框架
-- 📱 **轻量级客户端**: 资源受限的环境
+OneBots 提供当前 Adapter 能力可实现的 Milky 动作，主要包括：
 
-## 不适合场景
+- 消息：发送、撤回、查询、历史、合并转发、已读和临时资源 URL
+- 目录：登录信息、实现信息、状态、好友、群和群成员
+- 群管理：邀请好友、踢人、禁言、管理员、名片、群名、头像、公告、精华和 reaction
+- 申请：好友申请、入群申请与群邀请的查询、同意和拒绝
+- 文件：私聊/群文件上传、下载、移动、重命名、持久化与文件夹管理
+- 账号扩展：资料修改、好友删除、自定义表情 URL、置顶会话等
 
-- ❌ 需要复杂的富文本消息
-- ❌ 需要详细的平台特性支持
-- ❌ 需要完整的类型系统
+动作已在协议中声明但当前平台不支持时返回明确失败，不伪造空结果。完整清单与参数以 [Milky 服务端 README](https://github.com/lc-cn/onebots/tree/master/protocols/milky-v1/protocol) 和运行中实例为准。
 
-对于这些场景，建议使用 OneBot V12 或 Satori。
-
-## 与其他协议对比
-
-| 特性 | Milky | OneBot V11 | OneBot V12 | Satori |
-|------|-------|-----------|-----------|--------|
-| 复杂度 | ⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| 功能完整性 | ⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| 性能 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
-| 易用性 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ |
-
-## 使用客户端SDK
-
-onebots 提供了 imhelper 客户端SDK，可以方便地连接 Milky 协议：
-
-### 使用示例
+## 客户端 SDK
 
 ```typescript
-import { createImHelper } from 'imhelper';
-import { createMilkyAdapter } from '@imhelper/milky-v1';
+import { createMilkyClient } from '@imhelper/milky-v1';
 
-// 创建适配器
-const adapter = createMilkyAdapter({
-  baseUrl: 'http://localhost:6727',
-  selfId: 'zhin',
-  accessToken: 'your_token',
+const client = createMilkyClient({
+  baseUrl: 'http://localhost:6727/icqq/10001/milky/v1',
+  selfId: '10001',
+  accessToken: 'your-token',
   receiveMode: 'ws',
-  path: '/kook/zhin/milky/v1',
-  wsUrl: 'ws://localhost:6727/kook/zhin/milky/v1',
-  platform: 'kook',
 });
 
-// 创建 ImHelper 实例
-const helper = createImHelper(adapter);
-
-// 监听消息事件
-helper.on('message.private', (message) => {
-  console.log('收到私聊消息:', message.content);
-  message.reply('收到！');
+client.on('message.private', async message => {
+  await message.reply('收到！');
 });
 
-// 连接
-await adapter.connect();
+client.on('event', event => {
+  if (event.event_type === 'friend_request') console.log(event.data);
+});
+
+await client.start();
 ```
 
-详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)
-
-## 快速开始（原生 WebSocket）
-
-如果你不想使用 SDK，也可以直接使用原生 WebSocket：
-
-```javascript
-// WebSocket 客户端示例
-const ws = new WebSocket('ws://localhost:6727/wechat/my_mp/milky/v1');
-
-ws.on('message', (data) => {
-  const event = JSON.parse(data);
-  
-  if (event.type === 'message') {
-    // 处理消息
-    console.log('收到消息:', event.data.content);
-    
-    // 回复
-    ws.send(JSON.stringify({
-      action: 'send',
-      params: {
-        target: event.data.sender,
-        type: 'private',
-        content: '收到！'
-      }
-    }));
-  }
-});
-```
+SDK 会从 `baseUrl` 自动派生 `/event`，API 自动使用 `/api/{action}`。已有 HTTP/WS Host 可使用 `receiveMode: 'manual'` 和 `ingest()`、`acceptHttp()`、`acceptWebSocket()`，详细说明见[客户端 SDK 使用指南](/guide/client-sdk)。
 
 ## 相关链接
 
-- [@onebots/protocol-milky-v1 README](https://github.com/lc-cn/onebots/tree/master/packages/protocol-milky-v1)
-- [源码](https://github.com/lc-cn/onebots/tree/master/packages/protocol-milky-v1/src)
-- [客户端SDK使用指南](/guide/client-sdk)
+- [Milky 官方协议](https://milky.ntqqrev.org/)
+- [Milky 配置参考](/config/protocol/milky-v1)
+- [客户端 SDK 使用指南](/guide/client-sdk)

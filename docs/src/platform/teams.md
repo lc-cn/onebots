@@ -62,34 +62,7 @@ accounts:
 
 ## 使用客户端 SDK
 
-使用 `imhelper` 客户端 SDK 连接 Teams Bot：
-
-```typescript
-import { ImHelper } from '@onebots/imhelper';
-import { TeamsAdapter } from '@onebots/adapter-teams';
-
-const helper = new ImHelper({
-  baseUrl: 'http://localhost:8080',
-  platform: 'teams',
-  accountId: 'my_teams_bot',
-  accessToken: 'your_access_token',
-});
-
-// 监听消息
-helper.on('message', (message) => {
-  console.log('收到消息:', message.content);
-  
-  // 自动回复
-  helper.sendMessage({
-    scene_id: message.scene_id,
-    scene_type: message.scene_type,
-    message: [{ type: 'text', data: { text: '收到！' } }],
-  });
-});
-
-// 连接
-await helper.connect();
-```
+客户端应连接完整账号协议根，例如 `http://localhost:6727/teams/{account_id}/onebot/v12`。创建 Client、选择接收模式、接入已有 Host 与调用 API 的统一说明见[客户端 SDK 使用指南](/guide/client-sdk)。
 
 ## Microsoft Teams 配置步骤
 
@@ -118,4 +91,3 @@ await helper.connect();
 - [适配器配置文档](/config/adapter/teams)
 - [Microsoft Bot Framework 文档](https://dev.botframework.com/)
 - [Teams Bot 开发文档](https://docs.microsoft.com/en-us/microsoftteams/platform/bots/what-are-bots)
-

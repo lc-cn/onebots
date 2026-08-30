@@ -169,31 +169,24 @@ onebots 提供了 imhelper 客户端SDK，可以方便地连接 Satori 协议：
 ### 使用示例
 
 ```typescript
-import { createImHelper } from 'imhelper';
-import { createSatoriAdapter } from '@imhelper/satori-v1';
+import { createSatoriClient } from '@imhelper/satori-v1';
 
-// 创建适配器
-const adapter = createSatoriAdapter({
-  baseUrl: 'http://localhost:6727',
+const client = createSatoriClient({
+  baseUrl: 'http://localhost:6727/kook/zhin/satori/v1',
+  apiBaseUrl: 'http://localhost:6727/kook/zhin/satori/v1',
   selfId: 'zhin',
-  token: 'your_token',
+  accessToken: 'your_token',
   receiveMode: 'ws',
-  path: '/kook/zhin/satori/v1',
-  wsUrl: 'ws://localhost:6727/kook/zhin/satori/v1',
+  wsUrl: 'ws://localhost:6727/kook/zhin/satori/v1/events',
   platform: 'kook',
 });
 
-// 创建 ImHelper 实例
-const helper = createImHelper(adapter);
-
-// 监听消息事件
-helper.on('message.channel', (message) => {
+client.on('message.channel', async message => {
   console.log('收到频道消息:', message.content);
-  message.reply('<text>收到！</text>');
+  await message.reply('收到！');
 });
 
-// 连接
-await adapter.connect();
+await client.start();
 ```
 
 详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)
