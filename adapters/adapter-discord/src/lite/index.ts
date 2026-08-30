@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { emitAllAwaited } from "onebots";
+import { emitAllAwaited, FailureCollector } from "onebots";
 import { DiscordREST } from "./rest.js";
 import type { DiscordHttpTransport } from "./rest-transport.js";
 import {
@@ -258,11 +258,21 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
      * 停止客户端
      */
     async stop(): Promise<void> {
-        if (this.gateway) {
-            await this.gateway.disconnect();
-            this.gateway = null;
-            this.user = null;
-            await emitAllAwaited(this, "stopped");
+        const gateway = this.gateway;
+        if (!gateway) return;
+
+        // 先使当前代次失效，避免关闭过程中的迟到事件继续使用旧连接。
+        this.gateway = null;
+        this.user = null;
+        const failures = new FailureCollector();
+        await failures.capture(() => gateway.disconnect());
+        await failures.capture(() => emitAllAwaited(this, "stopped"));
+        try {
+            failures.throwIfAny("Discord Lite 停止期间发生多个错误");
+        } catch (error) {
+            const wrapped = DiscordError.wrap(error, "DISCORD_STOP_FAILED");
+            this.emit("client_error", wrapped);
+            throw wrapped;
         }
     }
 

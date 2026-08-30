@@ -18,6 +18,7 @@ import {
 } from "@microsoft/agents-activity";
 import {
     ErrorCategory,
+    emitAllAwaited,
     emitAwaited,
     type MediaSourceInput,
     type Next,
@@ -133,13 +134,18 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     async start(): Promise<void> {
         if (this.running) return;
         this.running = true;
-        this.emit("ready");
+        try {
+            await emitAllAwaited(this, "ready");
+        } catch (error) {
+            this.running = false;
+            throw error;
+        }
     }
 
     async stop(): Promise<void> {
         if (!this.running) return;
         this.running = false;
-        this.emit("stopped");
+        await emitAllAwaited(this, "stopped");
     }
 
     /** 由任意 HTTP Host 调用，完成 JWT 校验并返回宿主无关的结构化响应。 */

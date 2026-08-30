@@ -10,7 +10,7 @@ import type {
     ChatMemberOwner,
     ChatMemberAdministrator,
 } from "grammy/types";
-import { createProxyAgent, emitAllAwaited, ReliableEventIngress } from "onebots";
+import { createProxyAgent, emitAllAwaited, FailureCollector, ReliableEventIngress } from "onebots";
 import { TelegramError } from "./errors.js";
 import type { TelegramCallbackQuery, TelegramConfig, TelegramMessage } from "./types.js";
 import { resolveTelegramReceiveConfig, type TelegramReceiveConfig } from "./receive-config.js";
@@ -184,25 +184,32 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
 
     async stop(): Promise<void> {
         const wasActive = this.running || Boolean(this.startPromise || this.pollingTask);
+        const pollingTask = this.pollingTask;
         this.generation += 1;
         this.running = false;
         this.startPromise = undefined;
         this.pollingAbort?.abort();
         this.pollingAbort = undefined;
+        this.pollingTask = undefined;
+        const failures = new FailureCollector();
         try {
             if (this.initialized && wasActive) {
                 if (this.receiveConfig.mode === "webhook") {
-                    await this.callApi("deleteWebhook", () => this.bot.api.deleteWebhook());
+                    await failures.capture(async () => {
+                        await this.callApi("deleteWebhook", () => this.bot.api.deleteWebhook());
+                    });
                 }
             }
-            await this.pollingTask;
-            this.pollingTask = undefined;
+            await failures.capture(() => pollingTask);
             if (wasActive) {
                 if (this.receiveConfig.mode === "polling") {
-                    this.emit("transport_state", "stopped");
+                    await failures.capture(() =>
+                        emitAllAwaited(this, "transport_state", "stopped"),
+                    );
                 }
-                this.emit("stopped");
+                await failures.capture(() => emitAllAwaited(this, "stopped"));
             }
+            failures.throwIfAny("Telegram 客户端停止期间发生多个错误");
         } catch (error) {
             const wrapped = TelegramError.wrap(error, "TELEGRAM_STOP_FAILED", "stop");
             this.emit("client_error", wrapped);

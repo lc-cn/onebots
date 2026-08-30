@@ -56,6 +56,26 @@ describe("createDiscordLite", () => {
         ).resolves.toEqual({ type: 5, data: {} });
     });
 
+    it("Gateway 断开失败时仍清除旧连接并完成停止通知", async () => {
+        const client = createDiscordLite({ account_id: "bot", token: "token" });
+        const disconnect = vi.fn().mockRejectedValue(new Error("socket broken"));
+        Object.assign(
+            client as unknown as {
+                gateway: { disconnect(): Promise<void> } | null;
+                user: { id: string } | null;
+            },
+            { gateway: { disconnect }, user: { id: "1" } },
+        );
+        const stopped = vi.fn(async () => undefined);
+        client.on("stopped", stopped);
+
+        await expect(client.stop()).rejects.toMatchObject({ code: "DISCORD_STOP_FAILED" });
+        await expect(client.stop()).resolves.toBeUndefined();
+        expect(disconnect).toHaveBeenCalledOnce();
+        expect(stopped).toHaveBeenCalledOnce();
+        expect(client.getUser()).toBeNull();
+    });
+
     it("在建立 Gateway 前拒绝非法分片", () => {
         expect(() =>
             createDiscordLite({

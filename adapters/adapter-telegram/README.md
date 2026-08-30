@@ -106,6 +106,8 @@ onebots -r telegram
 
 高级集成可直接构造 `TelegramBot`，通过 `await ingest(rawUpdate)` 把现有 HTTP 服务、队列或测试夹具收到的 Update 交给同一 grammY 中间件和去重链；Fetch / WinterCG Host 可直接调用 `acceptHttp(request)`，复用 secret 校验和结构化响应。`raw_update` 保留每次投递；canonical 与细分事件、全部协议出口都成功后才提交 `update_id`。失败的 Webhook 返回 500，polling 会重新拉取；相同 Update 的并发投递只执行一次。所有原生调用可经 `callApi(method, task)` 获得统一的 `TelegramError`，其中包含 Telegram `error_code`、`retry_after` 和 `migrate_to_chat_id`。
 
+`stop()` 会先终止当前接收代次，再完整等待 polling、远端 Webhook 删除和全部停止监听器；单一步骤失败不会跳过其余清理，最终保留精确的结构化步骤错误，多个步骤失败时汇总为 `TELEGRAM_STOP_FAILED`。
+
 ## 获取 Bot Token
 
 1. 在 Telegram 中搜索 [@BotFather](https://t.me/BotFather)

@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { emitAllAwaited } from "onebots";
+import { emitAllAwaited, FailureCollector } from "onebots";
 import type { DiscordBotEvents } from "./bot-events.js";
 import { createDiscordLite } from "./bot-client.js";
 import { wrapDiscordUser, type DiscordGuild, type DiscordUser } from "./bot-model.js";
@@ -114,8 +114,10 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
         if (!this.running) return;
         this.running = false;
         this.ready = false;
-        await this.client.stop();
-        await emitAllAwaited(this, "stopped");
+        const failures = new FailureCollector();
+        await failures.capture(() => this.client.stop());
+        await failures.capture(() => emitAllAwaited(this, "stopped"));
+        failures.throwIfAny("Discord 客户端停止期间发生多个错误");
     }
 
     isReady(): boolean {

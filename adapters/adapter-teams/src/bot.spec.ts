@@ -76,6 +76,42 @@ describe("TeamsBot 会话引用契约", () => {
         expect(stopped).toHaveBeenCalledOnce();
     });
 
+    it("等待异步生命周期监听器完成", async () => {
+        const bot = createBot();
+        let releaseReady!: () => void;
+        let releaseStopped!: () => void;
+        bot.on("ready", () => new Promise<void>(resolve => (releaseReady = resolve)));
+        bot.on("stopped", () => new Promise<void>(resolve => (releaseStopped = resolve)));
+
+        let started = false;
+        const start = bot.start().then(() => (started = true));
+        await Promise.resolve();
+        expect(started).toBe(false);
+        releaseReady();
+        await start;
+
+        let stopped = false;
+        const stop = bot.stop().then(() => (stopped = true));
+        await Promise.resolve();
+        expect(stopped).toBe(false);
+        releaseStopped();
+        await stop;
+    });
+
+    it("ready 监听器失败后允许重新启动", async () => {
+        const bot = createBot();
+        const failure = vi.fn().mockRejectedValue(new Error("projection unavailable"));
+        bot.on("ready", failure);
+
+        await expect(bot.start()).rejects.toThrow("projection unavailable");
+        bot.off("ready", failure);
+        const recovered = vi.fn(async () => undefined);
+        bot.on("ready", recovered);
+
+        await expect(bot.start()).resolves.toBeUndefined();
+        expect(recovered).toHaveBeenCalledOnce();
+    });
+
     it("公开 ingest 汇入同一管线并去重 canonical Activity", async () => {
         const bot = createBot();
         const message = vi.fn();

@@ -100,6 +100,39 @@ describe("TelegramBot 边界", () => {
         }
     });
 
+    it("Webhook 删除失败时仍完成停止通知并清除活动状态", async () => {
+        const deleteWebhook = vi.fn().mockRejectedValue(new Error("offline"));
+        const nativeBot = {
+            api: { deleteWebhook },
+            botInfo: botInfo(),
+            isInited: () => true,
+        } as unknown as Bot;
+        const bot = new TelegramBot({
+            account_id: "bot",
+            token: "1:token",
+            receive_mode: "webhook",
+            webhook: { url: "https://bot.example/hook", secret_token: "secret_1" },
+        });
+        Object.assign(
+            bot as unknown as {
+                initialized: boolean;
+                running: boolean;
+                bot: Bot;
+            },
+            { initialized: true, running: true, bot: nativeBot },
+        );
+        const stopped = vi.fn(async () => undefined);
+        bot.on("stopped", stopped);
+
+        await expect(bot.stop()).rejects.toMatchObject({
+            code: "TELEGRAM_API_ERROR",
+            method: "deleteWebhook",
+        });
+        await expect(bot.stop()).resolves.toBeUndefined();
+        expect(deleteWebhook).toHaveBeenCalledOnce();
+        expect(stopped).toHaveBeenCalledOnce();
+    });
+
     it("polling 只在 Update 业务成功后推进 offset", async () => {
         vi.useFakeTimers();
         try {

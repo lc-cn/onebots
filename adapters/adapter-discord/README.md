@@ -164,6 +164,8 @@ await rest.createMessage("123456789012345678", "Hello!");
 
 Gateway 默认无限重连；并发 `connect()` 会等待同一次启动，`disconnect()` 会解除传入的 `AbortSignal` 监听。每个 Dispatch 会串行等待 raw、具名事件和 OneBots 协议投影全部成功后才提交 Resume sequence；投递失败会断开并从最后成功序号恢复，避免确认后丢事件。鉴权、分片或 intents 等 fatal close 会结束当前生命周期，修正配置后可在同一实例上重新 `connect()`。
 
+`stop()` 会先使当前 Gateway 代次失效，再断开 socket 并等待全部 `stopped` 监听器。即使底层断开失败，客户端引用仍会清理、其余停止监听器仍会执行，最终以 `DISCORD_STOP_FAILED` 报告故障。
+
 ## 通用消息段
 
 `send_message` 支持 `text`、`at`、`channel`、`reply`、`embed`、`share`、`face`、`image`、`file`、`audio`、`record`、`video` 与原生 `discord_message`。角色提及使用 `at.data.role_id`，频道提及使用 `channel.data.channel_id`。
