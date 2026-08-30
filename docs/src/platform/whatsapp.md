@@ -14,6 +14,7 @@ WhatsApp 适配器使用 Meta 官方 Cloud API。事件通过安全 Webhook 进�
 - WABA 运维：账户资料、名称/时区更新和活动审计
 - WABA 号码资产：字段投影、过滤、排序、分页和号码入驻创建
 - WABA Schedule：业务时段、自动响应、Campaign、维护窗口和自定义时段
+- Marketing Messages 专用模板发送、产品策略和消息活动共享控制
 - 群管理：群资料/成员、改名、参与者增删、邀请链接、入群申请审批，以及生命周期/设置/冻结 Webhook
 - 呼叫控制：用户权限查询/申请、建立、预接受、接受、拒绝与终止；SDP/WebRTC 媒体平面由调用方负责
 - 投递诊断：按 WAMID 查询消息状态、Webhook 更新结果与分页事件时间线
@@ -83,6 +84,8 @@ WABA 号码资产由 `client.businessPhoneNumbers` 管理，并提供 `list_busi
 WABA Schedule 由 `client.schedules` 与 `list_business_schedules` / `create_business_schedule` 管理。字段、状态、类型、过滤器、排序、HH:MM、IANA 时区、星期和 recurrence 都在边界校验；统一的 Graph 分页解析拒绝非 HTTPS 或带凭据的链接。省略时区和启用状态时会明确使用 UTC / true；支持 `18:00 → 08:00` 这类官方跨午夜场景。WABA 必须先获准使用 Schedule Management。
 
 当前号码的 Official Business Account 审核由 `client.officialBusinessAccount` 管理，并提供 `get_official_business_account_status` / `submit_official_business_account_application`。申请严格使用 Meta v23 Schema 的官网、主要运营国家、语言、母品牌、5–10 条媒体佐证链接和补充说明；官网及佐证链接必须是无凭据 HTTPS URL。官方描述中的 `action/application_data` 示例与正式 Schema 冲突，因此适配器不虚构撤回或重提动作。OBA 获批也不代表 Groups API 已自动开通，仍须以能力资格为准。
+
+营销模板通过 `client.marketingMessages` 或 `send_marketing_message` 走专用 `/marketing_messages` 端点，而不是伪装成普通 `/messages`。请求固定为个人模板消息，支持 `CLOUD_API_FALLBACK` / `STRICT` 产品策略和显式 `message_activity_sharing`；模板语言、header/body/button、0–9 按钮索引及递归参数在发送前校验。响应保留 `accepted`、`held_for_quality_assessment`、`paused` 三种专用状态。模板仍须预先批准，发送资格、质量评估和用户同意策略由 Meta 执行。
 
 Calling API 使用 `get_call_permissions` / `request_call_permission` 与 `connect_call`、`pre_accept_call`、`accept_call`、`reject_call`、`terminate_call`。适配器严格区分 offer、answer 和 `call_id`，但不负责 WebRTC/SIP 媒体传输。调用前需要 Meta 为当前 Phone Number 开通 Cloud API Calling，并具备 `whatsapp_business_messaging` 权限。
 

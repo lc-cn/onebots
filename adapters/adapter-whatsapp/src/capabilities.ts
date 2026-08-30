@@ -26,6 +26,7 @@ import { isWhatsAppBusinessAccountAction } from "./business-account.js";
 import { isWhatsAppBusinessPhoneNumberAction } from "./business-phone-numbers.js";
 import { isWhatsAppScheduleAction } from "./schedules.js";
 import { isWhatsAppOfficialBusinessAccountAction } from "./official-business-account.js";
+import { isWhatsAppMarketingMessageAction } from "./marketing-messages.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -47,6 +48,12 @@ const scheduleAccess = {
 const officialBusinessAccountAccess = {
     ...businessManagement,
     note: "面向当前 Phone Number 的 OBA 状态与申请；审核由 Meta 完成，批准不等于自动开通 Groups API",
+};
+
+const marketingMessageAccess = {
+    ...businessMessaging,
+    scenes: ["private"] as const,
+    note: "要求使用已批准的 MARKETING 模板，并受 Meta 营销消息资格、质量评估与用户同意策略约束",
 };
 
 const groupsAccess = {
@@ -88,6 +95,7 @@ const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIO
     if (isWhatsAppBusinessPhoneNumberAction(action)) return businessManagement;
     if (isWhatsAppScheduleAction(action)) return scheduleAccess;
     if (isWhatsAppOfficialBusinessAccountAction(action)) return officialBusinessAccountAccess;
+    if (isWhatsAppMarketingMessageAction(action)) return marketingMessageAccess;
     if (action === "send_native_message" || action === "mark_message_read") {
         return { support: "native", scenes: ["private", "group"] };
     }

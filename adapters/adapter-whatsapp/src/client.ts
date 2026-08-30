@@ -25,6 +25,7 @@ import { WhatsAppBusinessAccounts } from "./business-account.js";
 import { WhatsAppBusinessPhoneNumbers } from "./business-phone-numbers.js";
 import { WhatsAppSchedules } from "./schedules.js";
 import { WhatsAppOfficialBusinessAccount } from "./official-business-account.js";
+import { WhatsAppMarketingMessages } from "./marketing-messages.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -100,6 +101,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly schedules: WhatsAppSchedules;
     /** 当前 Phone Number 的 Official Business Account 审核与申请。 */
     readonly officialBusinessAccount: WhatsAppOfficialBusinessAccount;
+    /** Marketing Messages 专用模板发送与产品策略控制。 */
+    readonly marketingMessages: WhatsAppMarketingMessages;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -130,6 +133,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.businessPhoneNumbers = new WhatsAppBusinessPhoneNumbers(this);
         this.schedules = new WhatsAppSchedules(this);
         this.officialBusinessAccount = new WhatsAppOfficialBusinessAccount(this);
+        this.marketingMessages = new WhatsAppMarketingMessages(this);
     }
 
     get apiVersion(): string {

@@ -220,6 +220,11 @@ export {
 } from "./official-business-account.js";
 export * from "./official-business-account-types.js";
 export {
+    isWhatsAppMarketingMessageAction,
+    WhatsAppMarketingMessages,
+} from "./marketing-messages.js";
+export * from "./marketing-message-types.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,

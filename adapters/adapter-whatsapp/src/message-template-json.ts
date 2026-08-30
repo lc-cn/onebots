@@ -15,6 +15,15 @@ export function parseTemplateComponents(
     return normalizeComponents(value, "response", root);
 }
 
+/** 规范化模板参数扩展面，同时拒绝循环、特殊原型和原型污染字段。 */
+export function normalizeTemplateJsonRecord(
+    value: unknown,
+    name: string,
+): Record<string, WhatsAppTemplateJson> {
+    if (!isRecord(value)) fail("parameter", `${name} 必须是对象`, value);
+    return jsonRecord(value, new Set(), "parameter", value);
+}
+
 type ValidationMode = "parameter" | "response";
 
 function normalizeComponents(
