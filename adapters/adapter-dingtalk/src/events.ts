@@ -104,10 +104,28 @@ export function projectDingTalkEvents(
                     event_type: event.eventType,
                     event_corp_id: event.eventCorpId,
                     user_ids: userIds,
+                    ...cardCallbackExtensions(event),
                 },
             },
         } satisfies CommonEvent.Notice<Record<string, unknown>>;
     });
+}
+
+function cardCallbackExtensions(event: DingTalkEvent): Readonly<Record<string, unknown>> {
+    if (
+        event.eventType !== "/v1.0/card/instances/callback" &&
+        typeof event.eventData.outTrackId !== "string"
+    ) {
+        return {};
+    }
+    return {
+        kind: "card_callback",
+        out_track_id: firstString(event.eventData.outTrackId),
+        user_id: firstString(event.eventData.userId),
+        space_id: firstString(event.eventData.spaceId),
+        space_type: firstString(event.eventData.spaceType),
+        action_data: structuredValue(event.eventData.cardActionData),
+    };
 }
 
 export function projectDingTalkSegments(message: DingTalkRobotMessage): CommonTypes.Segment[] {
@@ -165,6 +183,11 @@ function objectValue(value: unknown): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value)
         ? (value as Record<string, unknown>)
         : {};
+}
+
+function structuredValue(value: unknown): unknown {
+    if (value === undefined) return undefined;
+    return structuredClone(value);
 }
 
 function firstString(...values: unknown[]): string {

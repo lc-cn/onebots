@@ -70,6 +70,37 @@ describe("DingTalk event projection", () => {
             },
         ]);
     });
+
+    it("将互动卡片回调投影为可直接消费的结构化上下文", () => {
+        const event = makeEvent("/v1.0/card/instances/callback", {
+            outTrackId: "card-1",
+            userId: "user-1",
+            spaceId: "cid-1",
+            spaceType: "IM_GROUP",
+            cardActionData: {
+                cardPrivateData: { actionIds: ["approve"], params: { result: "yes" } },
+            },
+        });
+
+        expect(projectDingTalkEvents(event, context)[0]).toMatchObject({
+            notice_type: "custom",
+            extensions: {
+                dingtalk: {
+                    kind: "card_callback",
+                    out_track_id: "card-1",
+                    user_id: "user-1",
+                    space_id: "cid-1",
+                    space_type: "IM_GROUP",
+                    action_data: {
+                        cardPrivateData: {
+                            actionIds: ["approve"],
+                            params: { result: "yes" },
+                        },
+                    },
+                },
+            },
+        });
+    });
 });
 
 function makeEvent(

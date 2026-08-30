@@ -93,8 +93,12 @@ dingtalk.my_bot:
 - `get_user`、用户增删改、`get_department_users`、`get_sub_departments`、部门查询与增删改。
 - `get_role_list`、`get_role_users`、用户角色增删。
 - `get_scene_group`、场景群增改、场景群成员增删。
+- `create_card_instance`、`deliver_card_instance`、`create_and_deliver_card`：创建并投放互动卡片。
+- `update_card_instance`：整体更新卡片数据；`stream_card_instance`：按 `guid` 流式更新 AI 卡片内容。
 
 `auth` 可选 `modern`、`legacy`、`none`。路径必须是以 `/` 开头且不含目录穿越的开放平台路径。
+
+互动卡片动作原样采用官方 camelCase 请求字段。实例类动作需要 `Card.Instance.Write`，流式更新需要 `Card.Streaming.Write`。Stream 卡片回调会投影为 `custom` notice，并在 `extensions.dingtalk` 中保留 `kind: "card_callback"`、`out_track_id`、用户/场域地址与结构化 `action_data`，业务无需再从 `raw_event` 猜字段。
 
 统一 `delete_message` 同样支持企业机器人单聊和群聊撤回。`message_id` 必须是主动发送返回的 `processQueryKey`；群消息还需携带 `scene_type: "group"` 与群 `scene_id`。自定义机器人 Webhook 不返回该键，因此不会伪造“撤回成功”。成员增删和通讯录批量回调会逐用户生成 canonical notice，避免同一回调中的后续成员被漏掉。
 

@@ -4,11 +4,21 @@ import {
     type AdapterCapabilityManifest,
 } from "onebots";
 import { DINGTALK_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { DINGTALK_CARD_ACTION_NAMES } from "./platform-actions-card.js";
 
-const platformActions = definePlatformActionCapabilities(DINGTALK_PLATFORM_ACTIONS, {
+const platformActions = definePlatformActionCapabilities(DINGTALK_PLATFORM_ACTIONS, action => ({
     support: "native",
     availability: "permission",
-});
+    ...(DINGTALK_CARD_ACTION_NAMES.has(action)
+        ? {
+              permissions: [
+                  action === "stream_card_instance"
+                      ? "Card.Streaming.Write"
+                      : "Card.Instance.Write",
+              ],
+          }
+        : {}),
+}));
 
 /** 钉钉开放平台当前由运行时真实实现的能力。 */
 export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

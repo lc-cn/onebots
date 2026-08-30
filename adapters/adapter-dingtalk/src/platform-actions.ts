@@ -2,6 +2,7 @@ import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import { requireDingTalkApiPath } from "./api-path.js";
 import type { DingTalkBot } from "./bot.js";
 import { DingTalkError } from "./errors.js";
+import { DINGTALK_CARD_ACTIONS } from "./platform-actions-card.js";
 import type { DingTalkApiRequestOptions } from "./types.js";
 
 const ACTION_HANDLERS = {
@@ -69,6 +70,7 @@ const ACTION_HANDLERS = {
         legacy(bot, "/topapi/im/chat/scenegroup/member/add", params),
     remove_scene_group_members: (bot, params) =>
         legacy(bot, "/topapi/im/chat/scenegroup/member/delete", params),
+    ...DINGTALK_CARD_ACTIONS,
 } satisfies Readonly<Record<string, PlatformActionHandler<DingTalkBot>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(ACTION_HANDLERS, action =>

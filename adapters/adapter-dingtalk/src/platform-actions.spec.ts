@@ -150,4 +150,70 @@ describe("executeDingTalkPlatformAction", () => {
             ],
         ]);
     });
+
+    it("互动卡片动作映射到实例、投放、更新与流式端点", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+        await executeDingTalkPlatformAction(bot, "create_card_instance", {
+            cardTemplateId: "template-1",
+            outTrackId: "card-1",
+            cardData: { cardParamMap: { title: "构建" } },
+        });
+        await executeDingTalkPlatformAction(bot, "deliver_card_instance", {
+            outTrackId: "card-1",
+            openSpaceId: "dtv1.card//IM_GROUP.cid-1",
+            imGroupOpenDeliverModel: { robotCode: "robot-1" },
+        });
+        await executeDingTalkPlatformAction(bot, "create_and_deliver_card", {
+            cardTemplateId: "template-1",
+            outTrackId: "card-2",
+            openSpaceId: "dtv1.card//IM_ROBOT.user-1",
+        });
+        await executeDingTalkPlatformAction(bot, "update_card_instance", {
+            outTrackId: "card-1",
+            cardData: { cardParamMap: { title: "完成" } },
+        });
+        await executeDingTalkPlatformAction(bot, "stream_card_instance", {
+            outTrackId: "card-1",
+            guid: "chunk-1",
+            key: "content",
+            content: "处理中",
+            isFull: false,
+            isFinalize: false,
+            isError: false,
+        });
+
+        expect(callApi.mock.calls.map(call => [call[0], call[1].method])).toEqual([
+            ["/v1.0/card/instances", "POST"],
+            ["/v1.0/card/instances/deliver", "POST"],
+            ["/v1.0/card/instances/createAndDeliver", "POST"],
+            ["/v1.0/card/instances", "PUT"],
+            ["/v1.0/card/streaming", "PUT"],
+        ]);
+        expect(dingTalkCapabilities.actions.stream_card_instance).toMatchObject({
+            support: "native",
+            permissions: ["Card.Streaming.Write"],
+        });
+    });
+
+    it("互动卡片动作在请求前拒绝缺少稳定实例标识", async () => {
+        const callApi = vi.fn();
+        await expect(
+            executeDingTalkPlatformAction({ callApi } as never, "update_card_instance", {
+                cardData: { cardParamMap: {} },
+            }),
+        ).rejects.toMatchObject({ code: "DINGTALK_CARD_PARAM_INVALID" });
+        await expect(
+            executeDingTalkPlatformAction({ callApi } as never, "stream_card_instance", {
+                outTrackId: "card-1",
+                guid: "chunk-1",
+                key: "content",
+                content: "",
+                isFull: false,
+                isFinalize: "false",
+                isError: false,
+            }),
+        ).rejects.toMatchObject({ code: "DINGTALK_CARD_PARAM_INVALID" });
+        expect(callApi).not.toHaveBeenCalled();
+    });
 });
