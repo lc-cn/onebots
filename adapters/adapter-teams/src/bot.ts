@@ -18,7 +18,6 @@ import {
 } from "@microsoft/agents-activity";
 import {
     ErrorCategory,
-    materializeMediaSource,
     RecentEventDeduplicator,
     type MediaSourceInput,
     type Next,
@@ -37,6 +36,7 @@ import {
 } from "./bot-utils.js";
 import { TeamsApiError, TeamsConversationReferenceError } from "./errors.js";
 import { TeamsGraphClient, type TeamsGraphRequestOptions } from "./graph.js";
+import { TeamsFileConsentManager, type TeamsFileConsentResult } from "./file-consent.js";
 import type {
     TeamsConfig,
     TeamsConversationReference,
@@ -80,6 +80,7 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     private readonly adapter: CloudAdapter;
     private readonly botAudience: string;
     private readonly graph: TeamsGraphClient;
+    private readonly fileConsents: TeamsFileConsentManager;
     private me: TeamsUser;
     private running = false;
     private readonly receivedActivities = new RecentEventDeduplicator<string>();
@@ -94,6 +95,9 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
             "bot_audience",
         );
         this.graph = new TeamsGraphClient(config);
+        this.fileConsents = new TeamsFileConsentManager((conversationId, activity) =>
+            this.sendActivity(conversationId, activity),
+        );
         const authConfig: AuthConfiguration = {
             authType: AuthType.ClientSecret,
             clientId: config.app_id,
@@ -246,40 +250,12 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
         );
     }
 
-    /** 将用户同意后的文件内容上传到 Teams 提供的 OneDrive 预授权地址。 */
-    async uploadFileConsentContent(
-        uploadUrl: string,
+    /** 完成由已认证 fileConsent/invoke 建立的一次性文件上传。 */
+    completeFileConsentUpload(
+        consentActivityId: string,
         source: MediaSourceInput,
-    ): Promise<{ status: number; etag?: string }> {
-        if (!URL.canParse(uploadUrl)) {
-            throw new TeamsApiError("Teams 文件 upload_url 无效", {
-                code: "TEAMS_FILE_UPLOAD_URL_INVALID",
-            });
-        }
-        const url = new URL(uploadUrl);
-        if (url.protocol !== "https:" || url.username || url.password) {
-            throw new TeamsApiError("Teams 文件 upload_url 必须是无凭据的 HTTPS URL", {
-                code: "TEAMS_FILE_UPLOAD_URL_INVALID",
-            });
-        }
-        const media = await materializeMediaSource(source);
-        const response = await fetch(url, {
-            method: "PUT",
-            headers: {
-                "content-type": "application/octet-stream",
-                "content-length": String(media.data.byteLength),
-                "content-range": `bytes 0-${media.data.byteLength - 1}/${media.data.byteLength}`,
-            },
-            body: Buffer.from(media.data),
-        });
-        if (response.status !== 200 && response.status !== 201) {
-            throw new TeamsApiError(`Teams 文件上传失败: ${response.status}`, {
-                code: "TEAMS_FILE_UPLOAD_ERROR",
-                status: response.status,
-                details: await response.text(),
-            });
-        }
-        return { status: response.status, etag: response.headers.get("etag") || undefined };
+    ): Promise<TeamsFileConsentResult> {
+        return this.fileConsents.complete(consentActivityId, source);
     }
 
     /** 在恢复出的真实会话上下文中调用 Teams Connector、Graph 或发送接口。 */
@@ -386,6 +362,7 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
         this.captureReference(activity);
         this.emit("raw_activity", activity);
         if (activity.id && this.receivedActivities.has(activity.id)) return undefined;
+        this.fileConsents.capture(activity);
         const transformed = transformTeamsActivity(activity);
         if (transformed.recipient?.id) this.me = transformed.recipient;
         const event: TeamsEvent = {

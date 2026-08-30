@@ -125,4 +125,20 @@ describe("Teams 平台动作", () => {
             }),
         ).rejects.toMatchObject({ code: "TEAMS_PARAM_INVALID" });
     });
+
+    it("文件上传只引用已认证 consent Activity，不接受调用方提供目标 URL", async () => {
+        const completeFileConsentUpload = vi.fn().mockResolvedValue({ upload: { status: 201 } });
+        const bot = { completeFileConsentUpload };
+
+        await executeTeamsPlatformAction(bot as never, "complete_file_consent_upload", {
+            consent_activity_id: "consent-1",
+            source: "base64://aGVsbG8=",
+        });
+
+        expect(completeFileConsentUpload).toHaveBeenCalledWith("consent-1", {
+            source: "base64://aGVsbG8=",
+            filename: undefined,
+            contentType: undefined,
+        });
+    });
 });

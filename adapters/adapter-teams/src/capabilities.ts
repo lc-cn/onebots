@@ -45,7 +45,7 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         send_file_info_card: contextual,
         complete_file_consent_upload: {
             ...contextual,
-            note: "上传到 consent invoke 返回的 OneDrive URL，并发送标准 file-info 卡片",
+            note: "按已认证 consent Activity ID 消费一次性 OneDrive 上传会话并发送 file-info 卡片",
         },
         get_team_details: contextual,
         list_team_channels: contextual,

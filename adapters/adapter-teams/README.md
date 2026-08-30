@@ -76,7 +76,7 @@ Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `TeamsBot.i
 
 - `send_file_consent_card`：`conversation_id`、`file_name`、`size_in_bytes`，可带 accept/decline context
 - `send_file_info_card`：上传完成后发送文件信息，需 `unique_id`、`file_type`、`file_name`、`content_url`
-- `complete_file_consent_upload`：在收到 consent accept invoke 后，用 `source`（支持 URL、本地路径、data URL、`base64://`）上传到 `upload_url`，再以 `content_url`、`unique_id`、`file_type`、`file_name` 发送 file-info 卡片
+- `complete_file_consent_upload`：传入已认证 consent accept 事件的 `consent_activity_id` 与 `source`（支持 URL、本地路径、data URL、`base64://`）；适配器从该事件派生一次性 `uploadUrl`、会话与 file-info 元数据，不接受调用方指定上传目标
 
 Teams Connector：
 

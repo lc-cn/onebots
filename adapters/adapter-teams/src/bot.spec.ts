@@ -60,37 +60,6 @@ describe("TeamsBot 会话引用契约", () => {
         );
     });
 
-    it("按 Teams 文件 consent 协议上传真实字节", async () => {
-        const request = vi.fn().mockResolvedValue(
-            new Response(null, {
-                status: 201,
-                headers: { etag: '"file-etag"' },
-            }),
-        );
-        vi.stubGlobal("fetch", request);
-        const bot = createBot();
-
-        await expect(
-            bot.uploadFileConsentContent("https://upload.example.com/session?token=secret", {
-                source: "base64://aGVsbG8=",
-                filename: "hello.txt",
-                contentType: "text/plain",
-            }),
-        ).resolves.toEqual({ status: 201, etag: '"file-etag"' });
-        expect(request).toHaveBeenCalledWith(
-            new URL("https://upload.example.com/session?token=secret"),
-            expect.objectContaining({
-                method: "PUT",
-                headers: {
-                    "content-type": "application/octet-stream",
-                    "content-length": "5",
-                    "content-range": "bytes 0-4/5",
-                },
-                body: Buffer.from("hello"),
-            }),
-        );
-    });
-
     it("生命周期启动与停止保持幂等", async () => {
         const bot = createBot();
         const ready = vi.fn();

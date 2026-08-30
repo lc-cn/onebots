@@ -190,16 +190,14 @@ async function sendFileConsentCard(bot: TeamsBot, params: TeamsActionParams) {
 }
 
 async function completeFileConsentUpload(bot: TeamsBot, params: TeamsActionParams) {
-    const upload = await bot.uploadFileConsentContent(
-        requireHttpsUrl(params.upload_url, "upload_url"),
+    return bot.completeFileConsentUpload(
+        requireString(params.consent_activity_id, "consent_activity_id"),
         {
             source: requireString(params.source, "source"),
             filename: optionalString(params.file_name),
             contentType: optionalString(params.content_type),
         },
     );
-    const message = await bot.sendActivity(conversationId(params), fileInfoActivity(params));
-    return { upload, message };
 }
 
 async function updateReaction(bot: TeamsBot, params: TeamsActionParams, mode: "add" | "remove") {
