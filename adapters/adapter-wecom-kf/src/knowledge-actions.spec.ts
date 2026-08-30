@@ -61,6 +61,7 @@ describe("微信客服知识库动作", () => {
             path: "/cgi-bin/kf/knowledge/add_intent",
             body: request,
         });
+        expect(call.mock.calls[0]?.[0].body).not.toBe(request);
         await expect(
             executeWeComKfPlatformAction(client, "add_knowledge_intent", {
                 request: { answers: [] },

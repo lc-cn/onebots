@@ -49,11 +49,14 @@ const PLATFORM_ACTION_HANDLERS = {
         ),
     transfer_service_state: (client, params) =>
         client.transferServiceState(requireRecord(params, "request")),
-    get_customers: (client, params) =>
-        client.customerBatchGet(
-            requireStringArray(params, "external_userids"),
+    get_customers: (client, params) => {
+        const customerIds = requireStringArray(params, "external_userids");
+        if (customerIds.length > 100) invalid("external_userids 不能超过 100 项");
+        return client.customerBatchGet(
+            customerIds,
             optionalBoolean(params, "need_context") || false,
-        ),
+        );
+    },
     get_upgrade_service_config: client =>
         client.call({ path: "/cgi-bin/kf/customer/get_upgrade_service_config" }),
     upgrade_service: (client, params) =>
@@ -78,6 +81,41 @@ const PLATFORM_ACTION_HANDLERS = {
         }),
 } satisfies Readonly<Record<string, PlatformActionHandler<WeComKfClient>>>;
 
+const ACTION_PARAMETERS = {
+    wecom_kf_call: ["method", "path", "query", "body", "token", "response_type"],
+    sync_messages: ["open_kfid", "token"],
+    send_native_message: ["external_userid", "open_kfid", "message"],
+    send_message_on_event: ["code", "message"],
+    list_kf_accounts: [],
+    get_kf_account: ["open_kfid"],
+    add_kf_account: ["account"],
+    update_kf_account: ["account"],
+    delete_kf_account: ["open_kfid"],
+    add_contact_way: ["open_kfid", "scene"],
+    add_servicers: ["open_kfid", "user_ids", "department_ids"],
+    delete_servicers: ["open_kfid", "user_ids", "department_ids"],
+    list_servicers: ["open_kfid"],
+    get_service_state: ["open_kfid", "external_userid"],
+    transfer_service_state: ["request"],
+    get_customers: ["external_userids", "need_context"],
+    get_upgrade_service_config: [],
+    upgrade_service: ["request"],
+    cancel_upgrade_service: ["open_kfid", "external_userid"],
+    get_corp_statistic: ["request"],
+    get_servicer_statistic: ["request"],
+    get_corp_qualification: [],
+    add_knowledge_group: ["name"],
+    update_knowledge_group: ["group_id", "name"],
+    delete_knowledge_group: ["group_id"],
+    list_knowledge_groups: ["cursor", "limit", "group_id"],
+    add_knowledge_intent: ["request"],
+    update_knowledge_intent: ["request"],
+    delete_knowledge_intent: ["intent_id"],
+    list_knowledge_intents: ["cursor", "limit", "group_id", "intent_id"],
+    upload_temporary_media: ["type", "data", "mime_type", "filename"],
+    get_temporary_media: ["media_id"],
+} satisfies { readonly [TAction in keyof typeof PLATFORM_ACTION_HANDLERS]: readonly string[] };
+
 const PLATFORM_ACTIONS = definePlatformActions(
     PLATFORM_ACTION_HANDLERS,
     action =>
@@ -91,12 +129,22 @@ export type WeComKfPlatformAction =
     typeof WECOM_KF_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
 /** 微信客服常用原生动作；wecom_kf_call 覆盖后续新增接口。 */
-export function executeWeComKfPlatformAction(
+export async function executeWeComKfPlatformAction(
     client: WeComKfClient,
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
+    if (PLATFORM_ACTIONS.has(action)) assertKnownParams(action, params);
     return PLATFORM_ACTIONS.execute(client, action, params);
+}
+
+function assertKnownParams(
+    action: keyof typeof PLATFORM_ACTION_HANDLERS,
+    params: Readonly<Record<string, unknown>>,
+): void {
+    const accepted = new Set(ACTION_PARAMETERS[action]);
+    const unknown = Object.keys(params).find(key => !accepted.has(key));
+    if (unknown) invalid(`动作 ${action} 不接受参数 ${unknown}`);
 }
 
 function callOptions(params: Readonly<Record<string, unknown>>): KfCallOptions {
@@ -182,7 +230,7 @@ function requireRecord(
 ): Record<string, unknown> {
     const value = params[name];
     if (!isRecord(value)) invalid(`${name} 必须是对象`);
-    return value;
+    return structuredClone(value);
 }
 
 function requireStringArray(params: Readonly<Record<string, unknown>>, name: string): string[] {
@@ -209,7 +257,9 @@ function numberArray(params: Readonly<Record<string, unknown>>, name: string): n
     if (!Array.isArray(value)) invalid(`${name} 必须是数字数组`);
     const result: number[] = [];
     for (const item of value) {
-        if (typeof item !== "number" || !Number.isFinite(item)) invalid(`${name} 必须是数字数组`);
+        if (typeof item !== "number" || !Number.isSafeInteger(item) || item < 1) {
+            invalid(`${name} 必须是正整数数组`);
+        }
         result.push(item);
     }
     return result;

@@ -55,7 +55,7 @@ function officialRequest(
     const request = params.request;
     if (!isRecord(request)) invalid("request 必须是官方请求对象");
     requireString(request, requiredField);
-    return { ...request };
+    return structuredClone(request);
 }
 
 function pageRequest(

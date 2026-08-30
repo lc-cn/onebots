@@ -63,4 +63,22 @@ describe("微信客服平台动作", () => {
             executeWeComKfPlatformAction(client, "add_servicers", { open_kfid: "wk-1" }),
         ).rejects.toMatchObject({ code: "WECOM_KF_INVALID_PARAMETER" });
     });
+
+    it("命名动作拒绝未知字段、非法部门与超量客户", async () => {
+        const client = new WeComKfClient(config);
+        await expect(
+            executeWeComKfPlatformAction(client, "list_kf_accounts", { offset: 1 }),
+        ).rejects.toMatchObject({ code: "WECOM_KF_INVALID_PARAMETER" });
+        await expect(
+            executeWeComKfPlatformAction(client, "add_servicers", {
+                open_kfid: "wk-1",
+                department_ids: [1.5],
+            }),
+        ).rejects.toMatchObject({ code: "WECOM_KF_INVALID_PARAMETER" });
+        await expect(
+            executeWeComKfPlatformAction(client, "get_customers", {
+                external_userids: Array.from({ length: 101 }, (_, index) => `customer-${index}`),
+            }),
+        ).rejects.toMatchObject({ code: "WECOM_KF_INVALID_PARAMETER" });
+    });
 });
