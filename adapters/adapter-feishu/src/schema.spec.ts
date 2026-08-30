@@ -14,11 +14,11 @@ describe("飞书配置 Schema", () => {
         });
         expect(feishuSchema.verification_token.ui?.visibleWhen).toEqual({
             path: "receive_mode",
-            oneOf: ["webhook"],
+            oneOf: ["webhook", "manual"],
         });
         expect(feishuSchema.encrypt_key.ui?.visibleWhen).toEqual({
             path: "receive_mode",
-            oneOf: ["webhook"],
+            oneOf: ["webhook", "manual"],
         });
         expect(feishuSchema).not.toHaveProperty("long_connection");
     });

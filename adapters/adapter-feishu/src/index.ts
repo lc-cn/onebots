@@ -11,11 +11,21 @@ export {
     type FeishuEndpointType,
     type FeishuReceiveIdType,
     type FeishuReceiveMode,
+    type FeishuHttpContext,
+    type FeishuHttpRequest,
+    type FeishuHttpResponse,
 } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
 export { FeishuError, type FeishuErrorOptions } from "./errors.js";
 export { FeishuBot, type FeishuBotEvents } from "./bot.js";
+export {
+    applyFeishuHttpResponse,
+    FEISHU_JSON_HEADERS,
+    feishuMethodNotAllowed,
+    isFeishuFetchRequest,
+    toFeishuFetchResponse,
+} from "./http-bridge.js";
 export { compileFeishuMessage, type CompiledFeishuMessage } from "./messages.js";
 export {
     FEISHU_PLATFORM_ACTIONS,
@@ -64,7 +74,7 @@ export const feishuSchema: Schema = {
         description: "Webhook 加密推送开启后必须配置",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     verification_token: {
@@ -73,7 +83,7 @@ export const feishuSchema: Schema = {
         sensitive: true,
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     endpoint: {

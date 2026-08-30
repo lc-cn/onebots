@@ -6,7 +6,7 @@ import {
     WSClient,
     type Logger,
 } from "@larksuiteoapi/node-sdk";
-import { emitAwaited, type Next, type RouterContext } from "onebots";
+import { emitAllAwaited } from "onebots";
 import { FeishuApiTransport } from "./api-transport.js";
 import { FeishuError } from "./errors.js";
 import {
@@ -18,6 +18,9 @@ import {
     type FeishuAPIResponse,
     type FeishuApiRequestOptions,
     type FeishuApiEnvelope,
+    type FeishuHttpContext,
+    type FeishuHttpRequest,
+    type FeishuHttpResponse,
 } from "./types.js";
 import {
     assertLongConnectionConfigured,
@@ -36,6 +39,13 @@ import {
     sendFeishuMessage,
 } from "./resources.js";
 import { resolveFeishuWebhook } from "./webhook.js";
+import {
+    applyFeishuHttpResponse,
+    FEISHU_JSON_HEADERS,
+    feishuMethodNotAllowed,
+    isFeishuFetchRequest,
+    toFeishuFetchResponse,
+} from "./http-bridge.js";
 
 export interface FeishuBotEvents {
     ready: [];
@@ -207,7 +217,7 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
                 return;
             }
             this.running = true;
-            this.safeEmit("ready");
+            await emitAllAwaited(this, "ready");
         } catch (error) {
             if (startingWs && this.wsClient === startingWs) {
                 startingWs.close({ force: true });
@@ -230,37 +240,69 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
         this.wsClient?.close({ force: true });
         this.wsClient = undefined;
         this.eventDispatcher = undefined;
-        if (wasActive) this.safeEmit("stopped");
+        if (wasActive) await emitAllAwaited(this, "stopped");
     }
 
-    /**
-     * 处理 Webhook 请求
-     */
-    async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
-        const resolved = resolveFeishuWebhook(ctx.request.body, this.config);
+    /** 解密、认证、投递和响应映射共用一个宿主无关的 HTTP 边界。 */
+    async ingestHttp(request: FeishuHttpRequest): Promise<FeishuHttpResponse> {
+        if (request.method.toUpperCase() !== "POST") return feishuMethodNotAllowed();
+        const resolved = resolveFeishuWebhook(request.body, this.config);
         if ("response" in resolved) {
             if (resolved.error) this.safeEmit("client_error", resolved.error);
-            if (resolved.response.status) ctx.status = resolved.response.status;
-            ctx.body = resolved.response.body;
-            return;
+            return {
+                status: resolved.response.status ?? 200,
+                headers: FEISHU_JSON_HEADERS,
+                body: resolved.response.body,
+            };
         }
 
         try {
-            await this.ingest(resolved.body, resolved.body);
+            const event = await this.ingest(resolved.body, resolved.body);
+            return {
+                status: 200,
+                headers: FEISHU_JSON_HEADERS,
+                body: { code: 0 },
+                event,
+            };
         } catch (error) {
             const wrapped = FeishuError.wrap(error, "FEISHU_WEBHOOK_FAILED", "webhook");
             this.safeEmit("client_error", wrapped);
             const invalidEvent = wrapped.code === "FEISHU_INVALID_EVENT";
-            ctx.status = invalidEvent ? 400 : 500;
-            ctx.body = {
-                code: 1,
-                msg: invalidEvent ? "飞书事件结构无效" : "飞书事件处理失败",
+            return {
+                status: invalidEvent ? 400 : 500,
+                headers: FEISHU_JSON_HEADERS,
+                body: {
+                    code: 1,
+                    msg: invalidEvent ? "飞书事件结构无效" : "飞书事件处理失败",
+                },
             };
-            return;
         }
+    }
 
-        ctx.body = { code: 0 };
-        await next();
+    /** Fetch / WinterCG 与 Koa 风格 Host 都可直接复用同一 Webhook 管线。 */
+    async acceptHttp(request: Request): Promise<Response>;
+    async acceptHttp(context: FeishuHttpContext): Promise<void>;
+    async acceptHttp(input: Request | FeishuHttpContext): Promise<Response | void> {
+        if (isFeishuFetchRequest(input)) {
+            let body: unknown;
+            if (input.method.toUpperCase() === "POST") {
+                try {
+                    body = await input.json();
+                } catch (error) {
+                    const wrapped = FeishuError.wrap(
+                        error,
+                        "FEISHU_WEBHOOK_INVALID_JSON",
+                        "webhook",
+                    );
+                    this.safeEmit("client_error", wrapped);
+                }
+            }
+            return toFeishuFetchResponse(await this.ingestHttp({ method: input.method, body }));
+        }
+        applyFeishuHttpResponse(
+            input,
+            await this.ingestHttp({ method: input.method, body: input.request.body }),
+        );
     }
 
     /**
@@ -276,9 +318,9 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     }
 
     /** 将 Webhook、官方长连接或外部连接的事件交给同一校验入口。 */
-    async ingest(event: unknown, rawEvent?: FeishuWebhookBody): Promise<void> {
-        await this.eventIngress.ingest(event, parsed =>
-            emitAwaited(this, "event", parsed, rawEvent ?? { ...parsed }),
+    async ingest(event: unknown, rawEvent?: FeishuWebhookBody): Promise<FeishuEvent | undefined> {
+        return this.eventIngress.ingest(event, parsed =>
+            emitAllAwaited(this, "event", parsed, rawEvent ?? { ...parsed }),
         );
     }
 

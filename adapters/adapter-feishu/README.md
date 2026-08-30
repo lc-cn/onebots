@@ -27,7 +27,7 @@ feishu.lark_bot:
   endpoint: "https://open.larksuite.com/open-apis" # Lark 端点
 ```
 
-使用 Webhook 时设置 `receive_mode: webhook`，并配置 `verification_token`；启用加密推送时同时配置 `encrypt_key`。适配器会先解密再校验 token，Webhook 地址为账号路径下的 `/webhook`。Web 管理端会根据接收模式动态显示这些字段。
+使用 Webhook 时设置 `receive_mode: webhook`，并配置 `verification_token`；启用加密推送时同时配置 `encrypt_key`。适配器会先解密再校验 token，Webhook 地址为账号路径下的 `/webhook`。manual 模式若把已经认证的 2.0 事件直接交给 `ingest()`，这两个字段可省略；若复用 `ingestHttp()` / `acceptHttp()` 完成解密与 token 校验，则仍应配置。Web 管理端会根据接收模式动态显示这些字段。
 
 ### 端点配置
 
@@ -81,7 +81,8 @@ onebots -r feishu
 - 真实机器人身份、通讯录用户、群列表、群详情和成员列表
 - 消息撤回、已读、成员/机器人群生命周期、菜单交互和消息表情增删等 canonical 事件投影；未知事件通过 `raw_event` 无损交付
 - 飞书和 Lark 双端点以及私有化开放平台端点
-- `await FeishuBot.ingest(rawEvent)` 可把已有 WebSocket、队列或宿主连接收到的 2.0 事件交给同一客户端，并在协议投递完成后返回
+- `await FeishuBot.ingest(rawEvent)` 可把已有 WebSocket、队列或宿主连接收到的已认证 2.0 事件交给同一客户端，并在协议投递完成后返回
+- `ingestHttp({ method, body })` 返回 `{ status, headers, body, event? }`；`acceptHttp(Request)` 与 `acceptHttp(ctx)` 分别适配跨 realm Fetch/WinterCG 和 Koa Host，三者共用解密、认证与错误响应策略
 - 并发启动与 tenant token 请求合并，stop 会废弃在途启动；失效令牌自动刷新一次
 - 所有 API/媒体失败继承 `OneBotsError`，并使用 `FeishuError.code` / `category` 分类
 
@@ -89,7 +90,7 @@ onebots -r feishu
 
 同一个成员变更或消息已读事件包含多个对象时，适配器会逐个分发 ID 稳定的 canonical notice，不再只投影数组第一项；完整原始载荷仍通过 `raw_event` 无损保留。机器人进群、被移出与群解散会投影为群生命周期事件，自定义菜单点击会投影为交互事件。
 
-平台事件缺少 `event_id` 时，适配器会根据 canonical JSON 载荷生成确定性 SHA-256 身份；同一事件重试不会因接收时间或对象键顺序不同而产生新 ID。相同事件的并发重投会合并为一次处理，异步监听器或协议投递失败前不会提交去重状态。
+平台事件缺少 `event_id` 时，适配器会根据 canonical JSON 载荷生成确定性 SHA-256 身份；同一事件重试不会因接收时间或对象键顺序不同而产生新 ID。相同事件的并发重投会合并为一次处理，异步监听器或协议投递失败前不会提交去重状态；一个出口失败不会阻止其余协议出口收到本次事件，全部出口尝试完成后再统一向上游报告失败。
 
 旧的 `long_connection` 布尔字段已由明确的 `receive_mode: long_connection | webhook | manual` 取代，不再保留双配置语义。
 

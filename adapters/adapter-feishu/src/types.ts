@@ -52,6 +52,29 @@ export interface FeishuConfig {
     endpoint?: string;
 }
 
+/** 已有 HTTP Host 交给飞书客户端的宿主无关请求。 */
+export interface FeishuHttpRequest {
+    method: string;
+    body?: unknown;
+}
+
+/** 飞书 Webhook 的宿主无关结构化响应。 */
+export interface FeishuHttpResponse {
+    status: number;
+    headers: Readonly<Record<string, string>>;
+    body: Record<string, unknown>;
+    event?: FeishuEvent;
+}
+
+/** Koa 风格 Host 的最小桥接契约。 */
+export interface FeishuHttpContext {
+    method: string;
+    request: { body?: unknown };
+    set(name: string, value: string): void;
+    status: number;
+    body?: unknown;
+}
+
 // 飞书用户类型
 export interface FeishuUser {
     user_id: string;

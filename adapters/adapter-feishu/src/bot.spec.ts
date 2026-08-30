@@ -37,15 +37,14 @@ describe("FeishuBot webhook", () => {
         });
         const listener = vi.fn();
         bot.on("event", listener);
-        const ctx = {
-            request: { body: { encrypt: encrypt(JSON.stringify(event), encryptKey) } },
-            body: undefined,
-        };
 
-        await bot.handleWebhook(ctx as never, vi.fn());
+        const response = await bot.ingestHttp({
+            method: "POST",
+            body: { encrypt: encrypt(JSON.stringify(event), encryptKey) },
+        });
 
         expect(listener).toHaveBeenCalledWith(event, event);
-        expect(ctx.body).toEqual({ code: 0 });
+        expect(response).toMatchObject({ status: 200, body: { code: 0 }, event });
     });
 
     it("恢复长连接 EventDispatcher 展平的官方事件 envelope", async () => {
@@ -214,19 +213,29 @@ describe("FeishuBot 请求与事件边界", () => {
 
     it("Webhook 非对象或无效事件返回 400", async () => {
         const bot = createBot();
-        const nonObject = { request: { body: [] }, body: undefined, status: 0 };
-        await bot.handleWebhook(nonObject as never, vi.fn());
-        expect(nonObject).toMatchObject({ status: 400, body: { code: 1 } });
+        await expect(bot.ingestHttp({ method: "POST", body: [] })).resolves.toMatchObject({
+            status: 400,
+            body: { code: 1 },
+        });
 
-        const invalidEvent = { request: { body: { event: {} } }, body: undefined, status: 0 };
-        await bot.handleWebhook(invalidEvent as never, vi.fn());
-        expect(invalidEvent).toMatchObject({ status: 400, body: { code: 1 } });
+        const context = {
+            method: "POST",
+            request: { body: { event: {} } },
+            set: vi.fn(),
+            body: undefined as unknown,
+            status: 0,
+        };
+        await bot.acceptHttp(context);
+        expect(context).toMatchObject({ status: 400, body: { code: 1 } });
+        expect(context.set).toHaveBeenCalledWith("Content-Type", "application/json; charset=utf-8");
     });
 
     it("异步监听器失败时允许同一事件重投，成功后才去重", async () => {
         const bot = createBot();
         const listener = vi.fn().mockRejectedValueOnce(new Error("listener failed"));
+        const independentListener = vi.fn();
         bot.on("event", listener);
+        bot.on("event", independentListener);
         const event = {
             schema: "2.0",
             header: {
@@ -240,9 +249,10 @@ describe("FeishuBot 请求与事件边界", () => {
         };
 
         await expect(bot.ingest(event)).rejects.toThrow("listener failed");
+        await expect(bot.ingest(event)).resolves.toEqual(event);
         await expect(bot.ingest(event)).resolves.toBeUndefined();
-        await bot.ingest(event);
         expect(listener).toHaveBeenCalledTimes(2);
+        expect(independentListener).toHaveBeenCalledTimes(2);
     });
 
     it("合并同一事件的并发重投并等待业务监听器", async () => {
@@ -292,15 +302,41 @@ describe("FeishuBot 请求与事件边界", () => {
             },
             event: {},
         };
-        const first = { request: { body: event }, body: undefined, status: 0 };
-        const second = { request: { body: event }, body: undefined, status: 0 };
-
-        await bot.handleWebhook(first as never, vi.fn());
-        await bot.handleWebhook(second as never, vi.fn());
+        const first = await bot.ingestHttp({ method: "POST", body: event });
+        const second = await bot.ingestHttp({ method: "POST", body: event });
 
         expect(first).toMatchObject({ status: 500, body: { code: 1 } });
-        expect(second.body).toEqual({ code: 0 });
+        expect(second).toMatchObject({ status: 200, body: { code: 0 } });
         expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it("Fetch Host 返回标准响应并拒绝非 POST 方法", async () => {
+        const bot = createBot();
+        const event = {
+            schema: "2.0",
+            header: {
+                event_id: "EV_FETCH",
+                event_type: "custom",
+                create_time: "1",
+                app_id: "a",
+                tenant_key: "t",
+            },
+            event: {},
+        };
+        const response = await bot.acceptHttp(
+            new Request("https://example.test/feishu", {
+                method: "POST",
+                body: JSON.stringify(event),
+                headers: { "content-type": "application/json" },
+            }),
+        );
+        expect(response.status).toBe(200);
+        expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
+        expect(await response.json()).toEqual({ code: 0 });
+
+        const rejected = await bot.acceptHttp(new Request("https://example.test/feishu"));
+        expect(rejected.status).toBe(405);
+        expect(rejected.headers.get("allow")).toBe("POST");
     });
 
     it("并发启动共享完整初始化且只触发一次 ready", async () => {
