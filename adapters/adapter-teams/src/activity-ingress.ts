@@ -1,4 +1,4 @@
-import { RecentEventDeduplicator, sha256Json } from "onebots";
+import { ReliableEventIngress, sha256Json } from "onebots";
 import type { Activity } from "@microsoft/agents-activity";
 import { ActivityTypes } from "@microsoft/agents-activity";
 import { transformTeamsActivity } from "./activity-transform.js";
@@ -27,8 +27,7 @@ export interface TeamsActivityIngressResult {
 
 /** Teams HTTP、manual 与既有 Agents 连接共用的可靠 Activity 入口。 */
 export class TeamsActivityIngress {
-    private readonly received = new RecentEventDeduplicator<string>();
-    private readonly pending = new Map<string, Promise<void>>();
+    private readonly ingress = new ReliableEventIngress<string>();
 
     async ingest(
         activity: Activity,
@@ -47,24 +46,10 @@ export class TeamsActivityIngress {
             activity: transformed,
             raw_activity: activity,
         };
-        if (this.received.has(eventId)) return { event, delivered: false };
-        const pending = this.pending.get(eventId);
-        if (pending) {
-            await pending;
-            return { event, delivered: false };
-        }
-
-        const delivery = (async (): Promise<void> => {
+        const delivered = await this.ingress.deliver(eventId, async () => {
             await dispatch(event, activityDeliveries(event));
-            this.received.commit(eventId);
-        })();
-        this.pending.set(eventId, delivery);
-        try {
-            await delivery;
-            return { event, delivered: true };
-        } finally {
-            if (this.pending.get(eventId) === delivery) this.pending.delete(eventId);
-        }
+        });
+        return { event, delivered };
     }
 }
 

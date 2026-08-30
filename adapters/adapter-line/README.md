@@ -35,11 +35,11 @@ https://your-domain.example/line/my-line-bot/webhook
 
 两个 Base URL 只用于官方兼容实现、可信代理或测试环境，必须使用 HTTPS。官方 SDK 11.x 需要 Node.js 22+，OneBots 当前要求 Node.js 24+。
 
-已有 HTTP Host、消息队列或其他连接管理器时可使用 `receive_mode: manual`。该模式不会向 OneBots Router 注册 Webhook 路由，应用通过最低层 `ingest(rawEvent)` 投递单个官方事件或完整 CallbackRequest；发送 API 与账号身份仍由同一个 `LineBot` 提供。
+已有 HTTP Host、消息队列或其他连接管理器时可使用 `receive_mode: manual`。该模式不会向 OneBots Router 注册 Webhook 路由，应用通过最低层 `await ingest(rawEvent)` 投递单个官方事件或完整 CallbackRequest；发送 API 与账号身份仍由同一个 `LineBot` 提供。
 
 ## Webhook 安全与事件
 
-适配器只使用未经修改的 `rawBody` 验证 `x-line-signature`，不会对已经 JSON 解析再序列化的请求体做降级验签。LINE 重投递会按 `webhookEventId` 去重；所有投影事件都保留 `raw_event`。
+适配器只使用未经修改的 `rawBody` 验证 `x-line-signature`，不会对已经 JSON 解析再序列化的请求体做降级验签。LINE 重投递会按 `webhookEventId` 去重；只有事件抵达全部协议出口后才提交去重状态，失败会返回非 2xx 并允许 LINE 重投。相同事件的并发请求会合并为一次投递，等待者明确计入 `duplicate`；所有投影事件都保留 `raw_event`。
 
 已投影的标准事件包括：
 
@@ -129,22 +129,23 @@ const quota = await officialClient.getMessageQuota();
 复用已有 Host：
 
 ```ts
-const result = bot.ingest(rawEvent);
+const result = await bot.ingest(rawEvent);
 
 // 已保留原始 body 与签名
-const verified = bot.ingestHttp(rawBody, xLineSignature);
+const verified = await bot.ingestHttp(rawBody, xLineSignature);
 
 // Fetch / WinterCG 风格 Host
 const response = await bot.acceptHttp(request);
 ```
 
-三种入口最终进入同一 typed `event` 管线并共享 `webhookEventId` 去重。`ingestHttp()` 返回 `{ accepted, duplicate, events }`，`acceptHttp()` 返回可直接写回的结构化 HTTP 响应。
+三种入口最终进入同一可等待的 typed `event` 管线并共享 `webhookEventId` 去重。`ingestHttp()` 返回 `{ accepted, duplicate, events }`，`acceptHttp()` 返回可直接写回的结构化 HTTP 响应。
 
 按事件类型订阅时使用真实的判别式 API：
 
 ```ts
-const unsubscribe = bot.onEvent("message", event => {
+const unsubscribe = bot.onEvent("message", async event => {
   // event 自动推断为官方 MessageEvent
+  await consume(event);
 });
 
 unsubscribe();

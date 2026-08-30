@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { LineBotClient, validateSignature, type messagingApi } from "@line/bot-sdk";
+import { emitAllAwaited, ReliableEventIngress } from "onebots";
 import type { LineBotEvents } from "./bot-events.js";
 import { LineApiError } from "./errors.js";
 import type { LineConfig, LineIngestResult, WebhookEvent, WebhookRequest } from "./types.js";
@@ -19,6 +20,7 @@ export interface LineEventRepository {
 export class LineBot extends EventEmitter<LineBotEvents> {
     private readonly client: LineBotClient;
     private readonly processedEvents = new Set<string>();
+    private readonly eventIngress: ReliableEventIngress<string>;
     private botUserId?: string;
 
     constructor(
@@ -35,6 +37,10 @@ export class LineBot extends EventEmitter<LineBotEvents> {
                 config.data_api_base_url || DEFAULT_DATA_API_BASE,
                 "data_api_base_url",
             ),
+        });
+        this.eventIngress = new ReliableEventIngress({
+            has: eventId => this.hasProcessed(eventId),
+            commit: eventId => this.markProcessed(eventId),
         });
     }
 
@@ -61,7 +67,7 @@ export class LineBot extends EventEmitter<LineBotEvents> {
     }
 
     /** 最低层事件入口，可接收单个官方事件或完整 CallbackRequest。 */
-    ingest(rawEvent: unknown): LineIngestResult {
+    async ingest(rawEvent: unknown): Promise<LineIngestResult> {
         const request = parseIngestRequest(rawEvent);
         const expectedDestination = this.config.destination || this.botUserId;
         if (
@@ -79,19 +85,18 @@ export class LineBot extends EventEmitter<LineBotEvents> {
         const events: WebhookEvent[] = [];
         let duplicate = 0;
         for (const event of request.events) {
-            if (this.isDuplicate(event)) {
+            const delivered = await this.deliverEvent(event);
+            if (!delivered) {
                 duplicate += 1;
                 continue;
             }
-            this.emit("event", event);
-            this.markProcessed(event.webhookEventId);
             events.push(event);
         }
         return { accepted: events.length, duplicate, events };
     }
 
     /** 验证未经修改的原始请求体，并交给与 manual 模式相同的 ingest 管线。 */
-    ingestHttp(body: string | Buffer, signature: string): LineIngestResult {
+    async ingestHttp(body: string | Buffer, signature: string): Promise<LineIngestResult> {
         if (!signature || !this.validateSignature(body, signature)) {
             throw new LineApiError("LINE Webhook 签名验证失败", {
                 code: "LINE_INVALID_SIGNATURE",
@@ -111,7 +116,10 @@ export class LineBot extends EventEmitter<LineBotEvents> {
         }
         try {
             const body = Buffer.from(await request.arrayBuffer());
-            const result = this.ingestHttp(body, request.headers.get("x-line-signature") || "");
+            const result = await this.ingestHttp(
+                body,
+                request.headers.get("x-line-signature") || "",
+            );
             return Response.json({
                 ok: true,
                 accepted: result.accepted,
@@ -179,25 +187,32 @@ export class LineBot extends EventEmitter<LineBotEvents> {
     /** 按官方 type 订阅具体事件，并返回取消订阅函数。 */
     onEvent<K extends WebhookEvent["type"]>(
         type: K,
-        listener: (event: Extract<WebhookEvent, { type: K }>) => void,
+        listener: (event: Extract<WebhookEvent, { type: K }>) => void | PromiseLike<void>,
     ): () => void {
-        const wrapped = (event: WebhookEvent) => {
+        const wrapped = async (event: WebhookEvent): Promise<void> => {
             if (event.type === type) {
-                listener(event as Extract<WebhookEvent, { type: K }>);
+                await listener(event as Extract<WebhookEvent, { type: K }>);
             }
         };
         this.on("event", wrapped);
         return () => this.off("event", wrapped);
     }
 
-    private isDuplicate(event: WebhookEvent): boolean {
-        if (this.config.deduplicate_webhooks === false || !event.webhookEventId) return false;
-        if (this.eventRepository) return this.eventRepository.has(event.webhookEventId);
-        return this.processedEvents.has(event.webhookEventId);
+    private deliverEvent(event: WebhookEvent): Promise<boolean> {
+        const dispatch = () => emitAllAwaited(this, "event", event);
+        if (this.config.deduplicate_webhooks === false || !event.webhookEventId) {
+            return dispatch().then(() => true);
+        }
+        return this.eventIngress.deliver(event.webhookEventId, dispatch);
+    }
+
+    private hasProcessed(eventId: string): boolean {
+        return this.eventRepository
+            ? this.eventRepository.has(eventId)
+            : this.processedEvents.has(eventId);
     }
 
     private markProcessed(eventId: string): void {
-        if (this.config.deduplicate_webhooks === false || !eventId) return;
         const limit = Math.max(
             100,
             Math.floor(this.config.webhook_deduplication_limit || DEFAULT_DEDUPLICATION_LIMIT),

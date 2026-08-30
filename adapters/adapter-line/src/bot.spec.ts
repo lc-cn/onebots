@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LineBot } from "./bot.js";
 
 describe("LineBot Webhook 契约", () => {
-    it("基于原始请求体验签并按 webhookEventId 去重", () => {
+    it("基于原始请求体验签并按 webhookEventId 去重", async () => {
         const bot = createBot();
         const listener = vi.fn();
         bot.on("event", listener);
@@ -22,15 +22,21 @@ describe("LineBot Webhook 契约", () => {
         });
         const signature = createHmac("sha256", "secret").update(body).digest("base64");
 
-        expect(bot.ingestHttp(body, signature)).toMatchObject({ accepted: 1, duplicate: 0 });
+        await expect(bot.ingestHttp(body, signature)).resolves.toMatchObject({
+            accepted: 1,
+            duplicate: 0,
+        });
         expect(bot.getBotUserId()).toBe("U00000000000000000000000000000000");
-        expect(bot.ingestHttp(body, signature)).toMatchObject({ accepted: 0, duplicate: 1 });
+        await expect(bot.ingestHttp(body, signature)).resolves.toMatchObject({
+            accepted: 0,
+            duplicate: 1,
+        });
         expect(listener).toHaveBeenCalledTimes(1);
     });
 
-    it("拒绝篡改请求与非 HTTPS API 地址", () => {
+    it("拒绝篡改请求与非 HTTPS API 地址", async () => {
         const bot = createBot();
-        expect(() => bot.ingestHttp("{}", "invalid")).toThrow(/签名/u);
+        await expect(bot.ingestHttp("{}", "invalid")).rejects.toThrow(/签名/u);
         expect(
             () =>
                 new LineBot({
@@ -51,7 +57,7 @@ describe("LineBot Webhook 契约", () => {
         ).toThrow(/无凭据/u);
     });
 
-    it("事件分发失败时释放去重占位，允许 LINE 重投递", () => {
+    it("异步事件分发失败时释放去重占位，允许 LINE 重投递", async () => {
         const bot = createBot();
         const body = JSON.stringify({
             destination: "U00000000000000000000000000000000",
@@ -67,16 +73,14 @@ describe("LineBot Webhook 契约", () => {
             ],
         });
         const signature = createHmac("sha256", "secret").update(body).digest("base64");
-        const failure = (): void => {
-            throw new Error("downstream failed");
-        };
+        const failure = vi.fn().mockRejectedValue(new Error("downstream failed"));
         bot.on("event", failure);
-        expect(() => bot.ingestHttp(body, signature)).toThrow("downstream failed");
+        await expect(bot.ingestHttp(body, signature)).rejects.toThrow("downstream failed");
         bot.off("event", failure);
-        expect(bot.ingestHttp(body, signature).accepted).toBe(1);
+        await expect(bot.ingestHttp(body, signature)).resolves.toMatchObject({ accepted: 1 });
     });
 
-    it("manual ingest 接收单个原始事件且无需 channel_secret", () => {
+    it("manual ingest 接收单个原始事件且无需 channel_secret", async () => {
         const bot = new LineBot({
             account_id: "test",
             channel_access_token: "token",
@@ -85,11 +89,37 @@ describe("LineBot Webhook 契约", () => {
         const listener = vi.fn();
         const unsubscribe = bot.onEvent("unsend", listener);
         const event = webhookEvent("evt-manual");
-        expect(bot.ingest(event)).toMatchObject({ accepted: 1, duplicate: 0 });
+        await expect(bot.ingest(event)).resolves.toMatchObject({ accepted: 1, duplicate: 0 });
         expect(listener).toHaveBeenCalledWith(event);
         unsubscribe();
-        expect(bot.ingest(webhookEvent("evt-unsubscribed")).accepted).toBe(1);
+        await expect(bot.ingest(webhookEvent("evt-unsubscribed"))).resolves.toMatchObject({
+            accepted: 1,
+        });
         expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("合并并发重投且只让首个调用报告已接收", async () => {
+        const bot = createBot();
+        let release: (() => void) | undefined;
+        const listener = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
+        bot.on("event", listener);
+        const event = webhookEvent("evt-concurrent");
+
+        const first = bot.ingest(event);
+        const follower = bot.ingest(event);
+        await Promise.resolve();
+        expect(listener).toHaveBeenCalledOnce();
+        release?.();
+
+        await expect(Promise.all([first, follower])).resolves.toEqual([
+            { accepted: 1, duplicate: 0, events: [event] },
+            { accepted: 0, duplicate: 1, events: [] },
+        ]);
     });
 
     it("acceptHttp 返回结构化响应并拒绝错误方法", async () => {
@@ -111,19 +141,19 @@ describe("LineBot Webhook 契约", () => {
         expect((await bot.acceptHttp(new Request("https://example.test/line"))).status).toBe(405);
     });
 
-    it("可按 destination 拒绝发给其他机器人的 Webhook", () => {
+    it("可按 destination 拒绝发给其他机器人的 Webhook", async () => {
         const bot = new LineBot({
             account_id: "test",
             channel_access_token: "token",
             channel_secret: "secret",
             destination: "U11111111111111111111111111111111",
         });
-        expect(() =>
+        await expect(
             bot.ingest({
                 destination: "U22222222222222222222222222222222",
                 events: [webhookEvent("evt-other-bot")],
             }),
-        ).toThrow(/destination/u);
+        ).rejects.toThrow(/destination/u);
     });
 });
 

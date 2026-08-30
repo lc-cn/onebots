@@ -232,23 +232,27 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         );
         const account = new Account<"line", LineBot>(this, bot, config);
         if (bot.receiveMode === "webhook") {
-            this.app.router.post(`${account.path}/webhook`, ctx => {
+            this.app.router.post(`${account.path}/webhook`, async ctx => {
                 const rawBody = (ctx.request as { rawBody?: unknown }).rawBody;
-                const response = this.handleWebhook(bot, rawBody, ctx.get("x-line-signature"));
+                const response = await this.handleWebhook(
+                    bot,
+                    rawBody,
+                    ctx.get("x-line-signature"),
+                );
                 ctx.status = response.status;
                 ctx.body = response.body;
             });
         }
-        bot.on("event", (event: webhook.Event) => this.dispatchEvent(account, event));
+        bot.on("event", async (event: webhook.Event) => this.dispatchEvent(account, event));
         this.bindLifecycle(account, bot);
         return account;
     }
 
-    private handleWebhook(
+    private async handleWebhook(
         bot: LineBot,
         rawBody: unknown,
         signature: string,
-    ): { status: number; body: unknown } {
+    ): Promise<{ status: number; body: unknown }> {
         try {
             if (typeof rawBody !== "string" && !Buffer.isBuffer(rawBody)) {
                 throw new LineApiError("LINE Webhook 必须保留未经修改的 rawBody", {
@@ -256,7 +260,7 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
                     status: 400,
                 });
             }
-            const result = bot.ingestHttp(rawBody, signature);
+            const result = await bot.ingestHttp(rawBody, signature);
             return {
                 status: 200,
                 body: { ok: true, accepted: result.accepted, duplicate: result.duplicate },
@@ -271,14 +275,17 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
         }
     }
 
-    private dispatchEvent(account: Account<"line", LineBot>, event: webhook.Event): void {
+    private async dispatchEvent(
+        account: Account<"line", LineBot>,
+        event: webhook.Event,
+    ): Promise<void> {
         this.captureChat(account.config.account_id, event);
         this.captureMessageTokens(account.config.account_id, account.config, event);
         const projected = projectLineEvents(event, {
             botId: this.createId(account.client.getBotUserId() || account.config.account_id),
             createId: value => this.createId(value),
         });
-        for (const item of projected) account.dispatch(item);
+        for (const item of projected) await account.dispatchAwaited(item);
     }
 
     private captureMessageTokens(

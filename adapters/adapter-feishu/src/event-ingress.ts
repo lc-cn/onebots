@@ -1,4 +1,4 @@
-import { KeyedSingleFlight, RecentEventDeduplicator, sha256Json } from "onebots";
+import { ReliableEventIngress, sha256Json } from "onebots";
 import { FeishuError } from "./errors.js";
 import { isFeishuEvent } from "./guards.js";
 import type { FeishuEvent } from "./types.js";
@@ -9,8 +9,7 @@ import type { FeishuEvent } from "./types.js";
  * event_id 只在异步投递完整成功后提交，确保上游重投可以恢复一次失败的处理。
  */
 export class FeishuEventIngress {
-    private readonly receivedEvents = new RecentEventDeduplicator<string>();
-    private readonly deliveries = new KeyedSingleFlight<string, FeishuEvent | undefined>();
+    private readonly ingress = new ReliableEventIngress<string>();
 
     async ingest(
         event: unknown,
@@ -24,13 +23,9 @@ export class FeishuEventIngress {
         }
 
         const eventId = event.header.event_id || `sha256:${sha256Json(event)}`;
-        if (this.receivedEvents.has(eventId)) return undefined;
-
-        return this.deliveries.run(eventId, async () => {
-            if (this.receivedEvents.has(eventId)) return undefined;
+        const delivered = await this.ingress.deliver(eventId, async () => {
             await dispatch(event);
-            this.receivedEvents.commit(eventId);
-            return event;
         });
+        return delivered ? event : undefined;
     }
 }

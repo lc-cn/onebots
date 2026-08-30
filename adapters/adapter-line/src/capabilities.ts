@@ -111,6 +111,10 @@ export const lineCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
     },
     transports: {
         webhook: { support: "native", mode: "webhook" },
-        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 await ingest() 接入既有 Host 并等待协议投递",
+        },
     },
 });

@@ -72,7 +72,7 @@ export const lineSchema: Schema = {
             { value: "webhook", label: "Webhook" },
             { value: "manual", label: "手动接入既有 Host/队列" },
         ],
-        description: "manual 不注册路由，由现有连接调用 ingest()",
+        description: "manual 不注册路由，由现有连接调用并等待 ingest()",
         ui: { section: "transport" },
     },
     channel_secret: {

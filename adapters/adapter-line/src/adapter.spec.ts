@@ -32,7 +32,7 @@ describe("LINE 标准消息动作", () => {
             const markMessagesAsReadByToken = vi
                 .spyOn(account.client.getClient(), "markMessagesAsReadByToken")
                 .mockResolvedValue({});
-            account.client.ingest({
+            await account.client.ingest({
                 destination: "U00000000000000000000000000000000",
                 events: [
                     {

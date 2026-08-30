@@ -42,6 +42,7 @@ export {
     type PlatformActionParams,
     type PlatformActionRegistry,
     type RefreshableValueResult,
+    type EventDeliveryStore,
     // Infrastructure
     ConnectionManager,
     ReverseWebSocketSession,
@@ -69,6 +70,7 @@ export {
     mapConcurrent,
     RefreshableValue,
     RecentEventDeduplicator,
+    ReliableEventIngress,
     sha256Json,
     sha256Text,
     stableJsonStringify,
