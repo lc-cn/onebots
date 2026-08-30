@@ -22,7 +22,7 @@ import {
     type QQPlatformAction,
 } from "./platform-actions.js";
 import { resolveIntentMask, type QQConfig } from "./types.js";
-import { QQWebhookHost } from "./webhook-host.js";
+import { QQWebhookHost, type QQWebhookDispatchResult } from "./webhook-host.js";
 
 const appVersion = readPackageVersion(import.meta.url);
 const sdkVersion = readPackageVersion(import.meta.resolve("@tencent-connect/qqbot-nodejs"));
@@ -275,12 +275,12 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
     createAccount(config: Account.Config<"qq">): Account<"qq", QQClient> {
         const qqConfig = config as Account.Config<"qq"> & QQConfig;
         const webhookPath = qqConfig.webhook_path ?? `/qq/${config.account_id}/webhook`;
-        let account: Account<"qq", QQClient>;
-        const host = new QQWebhookHost(webhookPath, config.account_id, (type, data) => {
-            account.dispatch(this.projectRaw(account, type, data));
-        });
         const webhookMode =
             qqConfig.receive_mode === "webhook" || qqConfig.receive_mode === "manual";
+        let account: Account<"qq", QQClient>;
+        const host = new QQWebhookHost(webhookPath, config.account_id, result => {
+            this.dispatchWebhookResult(account, result);
+        });
         const client = new QQClient(
             {
                 appId: qqConfig.appid,
@@ -306,7 +306,7 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         if (qqConfig.receive_mode === "webhook") {
             this.app.router.post(webhookPath, ctx => host.acceptHttp(ctx));
         }
-        this.bindEvents(account, client);
+        this.bindEvents(account, client, webhookMode);
         account.on("start", () => {
             void client
                 .run()
@@ -319,7 +319,11 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         return account;
     }
 
-    private bindEvents(account: Account<"qq", QQClient>, client: QQClient): void {
+    private bindEvents(
+        account: Account<"qq", QQClient>,
+        client: QQClient,
+        webhookMode: boolean,
+    ): void {
         client.on("ready", data => {
             account.status = AccountStatus.Online;
             void this.refreshProfile(account);
@@ -333,17 +337,37 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
             account.status = AccountStatus.OffLine;
             this.logger.error(`QQ ${account.account_id} 连接错误`, error);
         });
-        client.on("message", (_context, event) =>
-            account.dispatch(projectQQMessage(event, this.projectionContext(account))),
-        );
-        client.on("interaction", (_context, event: InteractionEvent) =>
-            account.dispatch(this.projectRaw(account, "INTERACTION_CREATE", event)),
-        );
-        client.on("rawEvent", event => {
-            account.dispatch(
-                projectQQRawEvent(event.eventType, event.data, this.projectionContext(account)),
+        // Webhook 由 Host 同步分发并控制 HTTP ACK；Gateway 才订阅 SDK 的异步事件。
+        if (!webhookMode) {
+            client.on("message", (_context, event) =>
+                account.dispatch(projectQQMessage(event, this.projectionContext(account))),
             );
-        });
+            client.on("interaction", (_context, event: InteractionEvent) =>
+                account.dispatch(this.projectRaw(account, "INTERACTION_CREATE", event)),
+            );
+            client.on("rawEvent", event => {
+                account.dispatch(
+                    projectQQRawEvent(event.eventType, event.data, this.projectionContext(account)),
+                );
+            });
+        }
+    }
+
+    private dispatchWebhookResult(
+        account: Account<"qq", QQClient>,
+        result: QQWebhookDispatchResult,
+    ): void {
+        switch (result.action) {
+            case "message":
+                account.dispatch(projectQQMessage(result.msg, this.projectionContext(account)));
+                break;
+            case "interaction":
+                account.dispatch(this.projectRaw(account, "INTERACTION_CREATE", result.event));
+                break;
+            case "raw":
+                account.dispatch(this.projectRaw(account, result.type, result.data));
+                break;
+        }
     }
 
     private projectRaw(

@@ -13,7 +13,12 @@ export {
     QQ_PLATFORM_ACTIONS,
     type QQPlatformAction,
 } from "./platform-actions.js";
-export { QQWebhookHost } from "./webhook-host.js";
+export {
+    QQWebhookHost,
+    type QQHttpContext,
+    type QQWebhookDispatchListener,
+    type QQWebhookDispatchResult,
+} from "./webhook-host.js";
 export { QQ_INTENTS, resolveIntentMask } from "./types.js";
 export type {
     QQConfig,

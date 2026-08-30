@@ -10,15 +10,89 @@ describe("QQ 共享 Webhook Host", () => {
         );
     });
 
-    it("复用外部 HTTP Host 并补发 SDK 未投影的原始事件", async () => {
-        const onRawEvent = vi.fn();
-        const host = new QQWebhookHost("/qq/test/webhook", "test", onRawEvent);
+    it("复用外部 HTTP Host 并同步补发 SDK 未投影的原始事件", async () => {
+        const onDispatch = vi.fn();
+        const host = new QQWebhookHost("/qq/test/webhook", "test", onDispatch);
         await host.listen(0, "/ignored", async () => ({ status: 200, body: '{"op":12,"d":0}' }));
         const response = await host.ingest({
             body: Buffer.from(JSON.stringify({ op: 0, t: "FRIEND_ADD", d: { id: "e1" } })),
             headers: {},
         });
         expect(response.status).toBe(200);
-        expect(onRawEvent).toHaveBeenCalledWith("FRIEND_ADD", { id: "e1" });
+        expect(onDispatch).toHaveBeenCalledWith({
+            action: "raw",
+            type: "FRIEND_ADD",
+            data: { id: "e1" },
+        });
+    });
+
+    it("补齐官方 Webhook 内部会忽略的频道消息", async () => {
+        const onDispatch = vi.fn();
+        const host = new QQWebhookHost("/qq/test/webhook", "test", onDispatch);
+        await host.listen(0, "/ignored", async () => ({ status: 200, body: '{"op":12}' }));
+        await host.ingest({
+            body: Buffer.from(
+                JSON.stringify({
+                    op: 0,
+                    t: "AT_MESSAGE_CREATE",
+                    d: {
+                        id: "m1",
+                        content: "hello",
+                        timestamp: "2026-08-30T00:00:00Z",
+                        channel_id: "c1",
+                        guild_id: "g1",
+                        author: { id: "u1", username: "Alice" },
+                    },
+                }),
+            ),
+            headers: {},
+        });
+
+        expect(onDispatch).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: "message",
+                msg: expect.objectContaining({ kind: "guild", messageId: "m1" }),
+            }),
+        );
+    });
+
+    it("业务失败不确认，重投成功后才按内容哈希去重", async () => {
+        let attempts = 0;
+        const onDispatch = vi.fn(async () => {
+            attempts += 1;
+            if (attempts === 1) throw new Error("consumer failed");
+        });
+        const host = new QQWebhookHost("/qq/test/webhook", "test", onDispatch);
+        await host.listen(0, "/ignored", async () => ({ status: 200, body: '{"op":12}' }));
+        const request = {
+            body: Buffer.from(JSON.stringify({ op: 0, t: "FRIEND_ADD", d: { id: "e2" } })),
+            headers: {},
+        };
+
+        await expect(host.ingest(request)).rejects.toThrow("consumer failed");
+        await expect(host.ingest(request)).resolves.toMatchObject({ status: 200 });
+        await expect(host.ingest(request)).resolves.toMatchObject({ status: 200 });
+        expect(onDispatch).toHaveBeenCalledTimes(2);
+    });
+
+    it("HTTP Host 将业务投递错误报告为 500", async () => {
+        const host = new QQWebhookHost("/qq/test/webhook", "test", async () => {
+            throw new Error("consumer failed");
+        });
+        await host.listen(0, "/ignored", async () => ({ status: 200, body: '{"op":12}' }));
+        const body = Buffer.from(JSON.stringify({ op: 0, t: "FRIEND_ADD", d: { id: "e3" } }));
+        const context = {
+            request: { rawBody: body },
+            headers: {},
+            status: 0,
+            body: undefined as unknown,
+            type: "",
+            set: vi.fn(),
+        };
+
+        await host.acceptHttp(context);
+
+        expect(context.status).toBe(500);
+        expect(context.body).toContain("QQ_WEBHOOK_ERROR");
     });
 });

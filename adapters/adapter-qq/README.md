@@ -13,6 +13,7 @@ QQ 官方机器人适配器，基于腾讯官方 [`@tencent-connect/qqbot-nodejs
 - 所有未知 QQ Gateway 事件均通过 `raw_event` 无损下发
 - WebSocket 自动恢复；SDK 内部重试耗尽后仍会建立新的连接代次
 - Webhook 复用 OneBots 主 HTTP 服务，不另开端口
+- Webhook/manual 使用官方验签结果同步投影全部消息、交互与 raw 事件，补齐官方 SDK Webhook 内部忽略的频道和频道私信消息；仅在业务分发成功后确认内容哈希
 - `qq_call` 可调用尚未封装的任意 QQ OpenAPI 相对路径
 
 C2C、群聊、频道与频道私信统一从官方 SDK 的 typed `message` 事件投影，不再维护第二套 Gateway 消息猜测逻辑。`raw_event` 直接保存 QQ Gateway 原始载荷；需要 SDK 归一化视图时可使用导出的 `QQInboundMessage` 类型。`qq_call` 的 path 只接受无查询串、无目录穿越的安全相对路径，query 必须单独提供且只能包含字符串、数字或布尔值。
@@ -61,7 +62,7 @@ qq.my_bot:
   receive_mode: manual
 ```
 
-宿主将原始请求组装为官方 SDK 的 `WebhookRequest` 后调用 `account.client.ingest(request)`，可获得结构化 `WebhookResponse`；Koa 风格宿主也可调用 `account.client.acceptHttp(ctx)`。两种入口都复用官方 SDK 的验签和事件分发管线，不另开端口。
+宿主将原始请求组装为官方 SDK 的 `WebhookRequest` 后调用 `account.client.ingest(request)`，可获得结构化 `WebhookResponse`；Koa 风格宿主也可调用 `account.client.acceptHttp(ctx)`。两种入口都复用官方 SDK 的验签和事件解码，不另开端口。OneBots 的 canonical 分发会在 HTTP ACK 前完成：业务失败时 `ingest()` 拒绝、`acceptHttp()` 返回 500，QQ 可安全重投；成功事件进入有界内容哈希窗口，重复回调不会再次下发。
 
 旧字段 `mode`、`port`、`path`、`sandbox`、`apiBaseUrl` 和旧 intent 别名不再解释。配置 Schema 会直接生成接收方式、事件订阅和高级端点表单。
 
