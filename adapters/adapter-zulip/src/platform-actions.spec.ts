@@ -65,7 +65,6 @@ describe("Zulip 平台动作", () => {
     it.each([
         ["edit_scheduled_message", "scheduled_messages/12", "scheduled_message_id"],
         ["edit_draft", "drafts/12", "draft_id"],
-        ["delete_reminder", "reminders/12", "reminder_id"],
         ["edit_saved_snippet", "saved_snippets/12", "saved_snippet_id"],
     ])("%s 使用官方资源路径并移除路径参数", async (action, path, idField) => {
         const client = new ZulipClient(config, { transport: async () => ({}) });

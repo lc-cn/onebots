@@ -319,6 +319,7 @@ describe("ZulipClient", () => {
         expect(registration?.params?.event_types).toContain("navigation_view");
         expect(registration?.params?.event_types).toContain("update_message_flags");
         expect(registration?.params?.event_types).toContain("scheduled_messages");
+        expect(registration?.params?.event_types).toContain("reminders");
         expect(registration?.params?.event_types).toContain("heartbeat");
         expect(registration?.params?.event_types).toContain("restart");
         expect(registration?.params?.event_types).toContain("user_group");
