@@ -65,6 +65,15 @@ describe("compileEmailMessage", () => {
         ).toThrow("email.headers.X-Test");
     });
 
+    it("拒绝无效的原生优先级", () => {
+        expect(() =>
+            compileEmailMessage([
+                { type: "email", data: { priority: "urgent" } },
+                { type: "text", data: { text: "body" } },
+            ]),
+        ).toThrowError(expect.objectContaining({ code: "EMAIL_INVALID_SEGMENT" }));
+    });
+
     it("拒绝把无 RFC Message-ID 的 IMAP 标识伪装成线程头", () => {
         const messageId = createImapMessageId("INBOX", 42);
         expect(() =>

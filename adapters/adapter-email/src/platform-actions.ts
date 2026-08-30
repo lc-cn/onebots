@@ -2,6 +2,7 @@ import type { SearchObject } from "imapflow";
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { EmailClient } from "./client.js";
 import { EmailError } from "./errors.js";
+import { validateEmailHeaders } from "./messages.js";
 import type { EmailOutgoingAttachment, EmailSendOptions } from "./types.js";
 
 const ACTION_HANDLERS = {
@@ -10,12 +11,15 @@ const ACTION_HANDLERS = {
         params.uid === undefined
             ? client.findEmail(
                   requireString(params.message_id, "message_id"),
-                  optionalString(params.mailbox),
+                  optionalString(params.mailbox, "mailbox"),
               )
-            : client.getEmail(requireInteger(params.uid, "uid"), optionalString(params.mailbox)),
+            : client.getEmail(
+                  requireInteger(params.uid, "uid"),
+                  optionalString(params.mailbox, "mailbox"),
+              ),
     search_emails: (client, params) =>
         client.searchEmails(searchObject(params.query), {
-            mailbox: optionalString(params.mailbox),
+            mailbox: optionalString(params.mailbox, "mailbox"),
             limit: optionalInteger(params.limit, "limit"),
         }),
     list_mailboxes: client => client.listMailboxes(),
@@ -27,10 +31,33 @@ const ACTION_HANDLERS = {
         client.moveEmails(
             requireIntegers(params.uids, "uids"),
             requireString(params.destination, "destination"),
-            optionalString(params.mailbox),
+            optionalString(params.mailbox, "mailbox"),
+        ),
+    copy_email: (client, params) =>
+        client.copyEmails(
+            requireIntegers(params.uids, "uids"),
+            requireString(params.destination, "destination"),
+            optionalString(params.mailbox, "mailbox"),
+        ),
+    add_email_flags: (client, params) =>
+        client.updateFlags(
+            requireIntegers(params.uids, "uids"),
+            stringList(params.flags, "flags"),
+            "add",
+            optionalString(params.mailbox, "mailbox"),
+        ),
+    remove_email_flags: (client, params) =>
+        client.updateFlags(
+            requireIntegers(params.uids, "uids"),
+            stringList(params.flags, "flags"),
+            "remove",
+            optionalString(params.mailbox, "mailbox"),
         ),
     delete_email: (client, params) =>
-        client.deleteEmails(requireIntegers(params.uids, "uids"), optionalString(params.mailbox)),
+        client.deleteEmails(
+            requireIntegers(params.uids, "uids"),
+            optionalString(params.mailbox, "mailbox"),
+        ),
     create_mailbox: (client, params) =>
         client.manageMailbox("create", requireString(params.path, "path")),
     rename_mailbox: (client, params) =>
@@ -78,7 +105,7 @@ function updateFlag(
         requireIntegers(params.uids, "uids"),
         [flag],
         operation,
-        optionalString(params.mailbox),
+        optionalString(params.mailbox, "mailbox"),
     );
 }
 
@@ -86,15 +113,18 @@ function sendOptions(params: Readonly<Record<string, unknown>>): EmailSendOption
     return {
         to: stringList(params.to, "to"),
         subject: requireString(params.subject, "subject"),
-        text: optionalString(params.text),
-        html: optionalString(params.html),
+        text: optionalString(params.text, "text"),
+        html: optionalString(params.html, "html"),
         cc: optionalStringList(params.cc, "cc"),
         bcc: optionalStringList(params.bcc, "bcc"),
         reply_to: optionalStringList(params.reply_to, "reply_to"),
-        in_reply_to: optionalString(params.in_reply_to),
+        in_reply_to: optionalString(params.in_reply_to, "in_reply_to"),
         references: optionalStringList(params.references, "references"),
         priority: priority(params.priority),
-        headers: stringRecord(params.headers, "headers"),
+        headers:
+            params.headers === undefined
+                ? undefined
+                : validateEmailHeaders(params.headers, "headers"),
         attachments: attachments(params.attachments),
     };
 }
@@ -104,20 +134,20 @@ function attachments(value: unknown): EmailOutgoingAttachment[] | undefined {
     if (!Array.isArray(value)) throw invalid("attachments");
     return value.map((item, index) => {
         if (!isRecord(item)) throw invalid(`attachments[${index}]`);
+        const content = attachmentContent(item.content, index);
+        const path = optionalString(item.path, `attachments[${index}].path`);
+        const href = optionalString(item.href, `attachments[${index}].href`);
+        if ([content, path, href].filter(source => source !== undefined).length !== 1) {
+            throw invalid(`attachments[${index}].source`);
+        }
         return {
             filename: requireString(item.filename, `attachments[${index}].filename`),
-            content:
-                typeof item.content === "string" || Buffer.isBuffer(item.content)
-                    ? item.content
-                    : undefined,
-            path: optionalString(item.path),
-            href: optionalString(item.href),
-            content_type: optionalString(item.content_type),
-            cid: optionalString(item.cid),
-            disposition:
-                item.disposition === "inline" || item.disposition === "attachment"
-                    ? item.disposition
-                    : undefined,
+            content,
+            path,
+            href,
+            content_type: optionalString(item.content_type, `attachments[${index}].content_type`),
+            cid: optionalString(item.cid, `attachments[${index}].cid`),
+            disposition: attachmentDisposition(item.disposition, index),
         };
     });
 }
@@ -186,6 +216,7 @@ function priority(value: unknown): EmailSendOptions["priority"] {
 
 function stringList(value: unknown, field: string): string[] {
     const values = Array.isArray(value) ? value : [value];
+    if (!values.length) throw invalid(field);
     return values.map(item => requireString(item, field));
 }
 
@@ -195,6 +226,7 @@ function optionalStringList(value: unknown, field: string): string[] | undefined
 
 function requireIntegers(value: unknown, field: string): number[] {
     const values = Array.isArray(value) ? value : [value];
+    if (!values.length) throw invalid(field);
     return values.map(item => requireInteger(item, field));
 }
 
@@ -258,17 +290,24 @@ function requireString(value: unknown, field: string): string {
     return value.trim();
 }
 
-function optionalString(value: unknown): string | undefined {
-    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+function optionalString(value: unknown, field = "optional_string"): string | undefined {
+    if (value === undefined) return undefined;
+    return requireString(value, field);
 }
 
-function stringRecord(value: unknown, field: string): Record<string, string> | undefined {
+function attachmentDisposition(
+    value: unknown,
+    index: number,
+): EmailOutgoingAttachment["disposition"] {
     if (value === undefined) return undefined;
-    if (!isRecord(value)) throw invalid(field);
-    const result: Record<string, string> = {};
-    for (const [key, item] of Object.entries(value))
-        result[key] = requireString(item, `${field}.${key}`);
-    return result;
+    if (value === "inline" || value === "attachment") return value;
+    throw invalid(`attachments[${index}].disposition`);
+}
+
+function attachmentContent(value: unknown, index: number): Buffer | string | undefined {
+    if (value === undefined) return undefined;
+    if (typeof value === "string" || Buffer.isBuffer(value)) return value;
+    throw invalid(`attachments[${index}].content`);
 }
 
 function invalid(field: string): EmailError {

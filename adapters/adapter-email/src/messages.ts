@@ -147,8 +147,11 @@ function applyEmailMetadata(target: CompiledEmail, data: Record<string, unknown>
         target.references = addressList(data.references, "email.references");
     if (data.priority === "high" || data.priority === "normal" || data.priority === "low") {
         target.priority = data.priority;
+    } else if (data.priority !== undefined) {
+        throw invalidField("email.priority");
     }
-    if (data.headers !== undefined) target.headers = stringRecord(data.headers, "email.headers");
+    if (data.headers !== undefined)
+        target.headers = validateEmailHeaders(data.headers, "email.headers");
 }
 
 function addressList(value: unknown, field: string): string[] {
@@ -156,7 +159,8 @@ function addressList(value: unknown, field: string): string[] {
     return values.map(item => requiredString(item, field));
 }
 
-function stringRecord(value: unknown, field: string): Record<string, string> {
+/** 校验 RFC 兼容 Header 名称，并拒绝值中的换行注入。 */
+export function validateEmailHeaders(value: unknown, field: string): Record<string, string> {
     if (!isRecord(value)) throw invalidField(field);
     const result: Record<string, string> = {};
     for (const [key, item] of Object.entries(value)) {

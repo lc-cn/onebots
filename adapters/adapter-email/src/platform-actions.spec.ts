@@ -42,6 +42,60 @@ describe("email platform actions", () => {
             executeEmailPlatformAction(client, "search_emails", { query: { seen: "yes" } }),
         ).rejects.toMatchObject({ code: "EMAIL_INVALID_ACTION_PARAM" });
     });
+
+    it("复制邮件并支持任意 IMAP flags", async () => {
+        const copyEmails = vi.fn().mockResolvedValue(undefined);
+        const updateFlags = vi.fn().mockResolvedValue(undefined);
+        const client = { copyEmails, updateFlags } as never;
+
+        await executeEmailPlatformAction(client, "copy_email", {
+            uids: [1, 2],
+            destination: "Archive",
+            mailbox: "INBOX",
+        });
+        await executeEmailPlatformAction(client, "add_email_flags", {
+            uids: 1,
+            flags: ["$Forwarded", "\\Answered"],
+        });
+
+        expect(copyEmails).toHaveBeenCalledWith([1, 2], "Archive", "INBOX");
+        expect(updateFlags).toHaveBeenCalledWith(
+            [1],
+            ["$Forwarded", "\\Answered"],
+            "add",
+            undefined,
+        );
+    });
+
+    it("拒绝显式无效的可选参数和附件 disposition", async () => {
+        await expect(
+            executeEmailPlatformAction({ searchEmails: vi.fn() } as never, "search_emails", {
+                query: { all: true },
+                mailbox: null,
+            }),
+        ).rejects.toMatchObject({ code: "EMAIL_INVALID_ACTION_PARAM" });
+        await expect(
+            executeEmailPlatformAction({ sendEmail: vi.fn() } as never, "send_email", {
+                to: "alice@example.com",
+                subject: "test",
+                attachments: [{ filename: "a.txt", content: "a", disposition: "unknown" }],
+            }),
+        ).rejects.toMatchObject({ code: "EMAIL_INVALID_ACTION_PARAM" });
+        await expect(
+            executeEmailPlatformAction({ sendEmail: vi.fn() } as never, "send_email", {
+                to: "alice@example.com",
+                subject: "test",
+                attachments: [{ filename: "a.txt" }],
+            }),
+        ).rejects.toMatchObject({ code: "EMAIL_INVALID_ACTION_PARAM" });
+        await expect(
+            executeEmailPlatformAction({ sendEmail: vi.fn() } as never, "send_email", {
+                to: "alice@example.com",
+                subject: "test",
+                headers: { Subject: "ok\r\nBcc: victim@example.com" },
+            }),
+        ).rejects.toMatchObject({ code: "EMAIL_INVALID_SEGMENT" });
+    });
 });
 
 const config: EmailConfig = {

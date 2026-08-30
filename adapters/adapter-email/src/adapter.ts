@@ -143,6 +143,15 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
             good:
                 status?.started === true &&
                 (status.receive_mode === "manual" || status.receive_connected),
+            bots: account
+                ? [
+                      {
+                          self: this.createId(account.client.config.address),
+                          online:
+                              account.status === AccountStatus.Online && status?.started === true,
+                      },
+                  ]
+                : [],
         };
     }
 
@@ -183,7 +192,7 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
             return;
         account.dispatch(
             projectEmailEvent(email, {
-                accountId: this.createId(account.account_id),
+                accountId: this.createId(account.client.config.address),
                 ownAddress: account.client.config.address,
                 createId: value => this.createId(value),
             }),
@@ -200,7 +209,7 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
     private messageInfo(uin: string, email: EmailMessage): Adapter.MessageInfo {
         const client = this.requireClient(uin);
         const event = projectEmailEvent(email, {
-            accountId: this.createId(uin),
+            accountId: this.createId(client.config.address),
             ownAddress: client.config.address,
             createId: value => this.createId(value),
         });

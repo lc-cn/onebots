@@ -43,10 +43,9 @@ export async function syncUnseenMessages(options: SyncUnseenOptions): Promise<vo
     for (const item of fetched) {
         if (!item.source) continue;
         if (!options.deliveries.has(options.mailbox, uidValidity, item.uid)) {
+            let email: EmailMessage;
             try {
-                options.ingest(
-                    await parseEmailSource(item.uid, options.mailbox, item.source, uidValidity),
-                );
+                email = await parseEmailSource(item.uid, options.mailbox, item.source, uidValidity);
             } catch (error) {
                 options.reportError(
                     new EmailError(`隔离无法解析的邮件 ${options.mailbox} UID ${item.uid}`, {
@@ -56,6 +55,22 @@ export async function syncUnseenMessages(options: SyncUnseenOptions): Promise<vo
                         cause: error,
                     }),
                 );
+                options.deliveries.remember(options.mailbox, uidValidity, item.uid);
+                if (options.markSeen) markSeen.push(item.uid);
+                continue;
+            }
+            try {
+                options.ingest(email);
+            } catch (error) {
+                options.reportError(
+                    new EmailError(`邮件 ${options.mailbox} UID ${item.uid} 业务投递失败`, {
+                        code: "EMAIL_DELIVERY_FAILED",
+                        operation: "sync",
+                        details: { mailbox: options.mailbox, uid: item.uid },
+                        cause: error,
+                    }),
+                );
+                continue;
             }
             options.deliveries.remember(options.mailbox, uidValidity, item.uid);
         }

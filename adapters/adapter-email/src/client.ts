@@ -1,13 +1,10 @@
 import { EventEmitter } from "node:events";
 import { ImapFlow, type SearchObject } from "imapflow";
-import {
-    abortableSleep,
-    emailNotFound,
-    isAbortError,
-    mutableAddress,
-    parseFetched,
-} from "./client-utils.js";
+import { abortableSleep, emailNotFound, isAbortError, parseFetched } from "./client-utils.js";
 import { EmailError } from "./errors.js";
+import { EmailEventIngress } from "./event-ingress.js";
+import { manageEmailMailbox, type EmailMailboxOperation } from "./mailbox-operations.js";
+import { sendEmail } from "./send-email.js";
 import { parseEmailSource } from "./events.js";
 import { parseImapMessageId } from "./message-id.js";
 import { EmailDeliveryState, syncUnseenMessages } from "./sync.js";
@@ -58,6 +55,7 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     private syncAgain = false;
     private pollTimer?: NodeJS.Timeout;
     private readonly deliveries = new EmailDeliveryState();
+    private readonly eventIngress = new EmailEventIngress();
     private started = false;
     private receiveConnected = false;
 
@@ -170,42 +168,15 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
         if (!this.smtp) {
             throw new EmailError("邮件客户端尚未启动", { code: "EMAIL_NOT_STARTED" });
         }
-        const result = await this.smtp.sendMail({
-            from: { address: this.config.address, name: this.config.display_name || "" },
-            to: mutableAddress(options.to),
-            cc: mutableAddress(options.cc),
-            bcc: mutableAddress(options.bcc),
-            replyTo: mutableAddress(options.reply_to),
-            subject: options.subject,
-            text: options.text,
-            html: options.html,
-            attachments: options.attachments?.map(attachment => ({
-                filename: attachment.filename,
-                content: attachment.content,
-                path: attachment.path,
-                href: attachment.href,
-                contentType: attachment.content_type,
-                cid: attachment.cid,
-                contentDisposition: attachment.disposition,
-            })),
-            inReplyTo: options.in_reply_to,
-            references: options.references ? [...options.references] : undefined,
-            priority: options.priority,
-            headers: options.headers,
-        });
-        return result;
+        return sendEmail(this.smtp, this.config, options);
     }
 
     /** 将外部取得的邮件交给与 IMAP 相同的事件管线。 */
     ingest(email: EmailMessage): void {
-        if (!email.id || !email.from.address || !Number.isSafeInteger(email.uid)) {
-            throw new EmailError("原始邮件缺少 id、uid 或发件人", {
-                code: "EMAIL_INVALID_RAW_EVENT",
-                details: email,
-            });
-        }
-        this.safeEmit("raw_email", email);
-        this.safeEmit("email", email);
+        this.eventIngress.ingest(email, () => {
+            this.emit("raw_email", email);
+            this.emit("email", email);
+        });
     }
 
     /** 获取邮箱目录列表。 */
@@ -277,6 +248,17 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
         });
     }
 
+    /** 复制邮件到另一个目录。 */
+    async copyEmails(
+        uids: readonly number[],
+        destination: string,
+        mailbox = this.mailbox,
+    ): Promise<void> {
+        await this.withMailbox(mailbox, async imap => {
+            await imap.messageCopy([...uids], destination, { uid: true });
+        });
+    }
+
     /** 删除邮件。 */
     async deleteEmails(uids: readonly number[], mailbox = this.mailbox): Promise<void> {
         await this.withMailbox(mailbox, async imap => {
@@ -302,22 +284,11 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
 
     /** 创建、重命名、删除或订阅邮箱目录。 */
     async manageMailbox(
-        operation: "create" | "rename" | "delete" | "subscribe" | "unsubscribe",
+        operation: EmailMailboxOperation,
         path: string,
         newPath?: string,
     ): Promise<unknown> {
-        const imap = this.requireImap();
-        if (operation === "create") return imap.mailboxCreate(path);
-        if (operation === "rename") {
-            if (!newPath)
-                throw new EmailError("重命名邮箱目录需要 new_path", {
-                    code: "EMAIL_INVALID_PARAM",
-                });
-            return imap.mailboxRename(path, newPath);
-        }
-        if (operation === "delete") return imap.mailboxDelete(path);
-        if (operation === "subscribe") return imap.mailboxSubscribe(path);
-        return imap.mailboxUnsubscribe(path);
+        return manageEmailMailbox(this.requireImap(), operation, path, newPath);
     }
 
     private get mailbox(): string {

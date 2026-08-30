@@ -16,9 +16,27 @@ describe("EmailClient", () => {
         client.on("email", emailListener);
 
         client.ingest(raw);
+        client.ingest(raw);
 
         expect(rawListener).toHaveBeenCalledWith(raw);
         expect(emailListener).toHaveBeenCalledWith(raw);
+        expect(rawListener).toHaveBeenCalledTimes(1);
+        expect(emailListener).toHaveBeenCalledTimes(1);
+    });
+
+    it("业务监听器失败时允许同一邮件重投，成功后才去重", () => {
+        const client = new EmailClient(config);
+        const listener = vi.fn().mockImplementationOnce(() => {
+            throw new Error("dispatch failed");
+        });
+        client.on("email", listener);
+        const email = message();
+
+        expect(() => client.ingest(email)).toThrow("dispatch failed");
+        expect(() => client.ingest(email)).not.toThrow();
+        client.ingest(email);
+
+        expect(listener).toHaveBeenCalledTimes(2);
     });
 
     it("ingest 拒绝缺少稳定身份的原始事件", () => {
@@ -155,6 +173,33 @@ describe("EmailClient", () => {
 
         expect(imap.flagCalls).toEqual([[7], [7]]);
         expect(emailListener).toHaveBeenCalledTimes(1);
+        await client.stop();
+    });
+
+    it("业务投递失败不写 Seen，后续同步会重投同一邮件", async () => {
+        const imap = new FakeImap([
+            { uid: 8, source: mailSource({ id: "<delivery-retry@example.com>" }) },
+        ]);
+        const client = createClient(imap);
+        const listener = vi.fn().mockImplementationOnce(() => {
+            throw new Error("dispatch failed");
+        });
+        const errors: unknown[] = [];
+        client.on("email", listener);
+        client.on("client_error", error => errors.push(error));
+
+        await client.start();
+        expect(imap.flagCalls).toEqual([]);
+        expect(errors).toContainEqual(
+            expect.objectContaining({
+                code: "EMAIL_DELIVERY_FAILED",
+                details: { mailbox: "INBOX", uid: 8 },
+            }),
+        );
+
+        imap.emit("exists");
+        await vi.waitFor(() => expect(imap.flagCalls).toEqual([[8]]));
+        expect(listener).toHaveBeenCalledTimes(2);
         await client.stop();
     });
 
