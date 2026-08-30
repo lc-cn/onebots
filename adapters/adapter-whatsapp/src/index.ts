@@ -182,6 +182,18 @@ export {
     type WhatsAppMediaUploadResponse,
 } from "./media.js";
 export {
+    isWhatsAppConversationalAutomationAction,
+    WhatsAppConversationalAutomation,
+    WHATSAPP_BUSINESS_BOT_FIELDS,
+    WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTIONS,
+    type WhatsAppBusinessBot,
+    type WhatsAppBusinessBotCommand,
+    type WhatsAppBusinessBotField,
+    type WhatsAppConversationalAutomationAction,
+    type WhatsAppConversationalAutomationResponse,
+    type WhatsAppConversationalAutomationSettings,
+} from "./conversational-automation.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,

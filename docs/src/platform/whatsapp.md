@@ -9,6 +9,7 @@ WhatsApp 适配器使用 Meta 官方 Cloud API。事件通过安全 Webhook 进�
 - 消息状态：`sent`、`delivered`、`read`、`failed`、`deleted`
 - 媒体：上传、查询临时 URL、鉴权下载和删除
 - 管理：Business Profile、Commerce、Flow 生命周期、号码注册/注销、两步验证、用户屏蔽、消息模板
+- 对话自动化：欢迎消息、引导问题和 Bot 命令
 - 群管理：群资料/成员、改名、参与者增删、邀请链接、入群申请审批，以及生命周期/设置/冻结 Webhook
 - 呼叫控制：用户权限查询/申请、建立、预接受、接受、拒绝与终止；SDP/WebRTC 媒体平面由调用方负责
 - 投递诊断：按 WAMID 查询消息状态、Webhook 更新结果与分页事件时间线
@@ -66,6 +67,8 @@ const message = [{
 用户封禁由 `client.blockedUsers` 管理，使用 E.164 号码数组批量操作。返回值保留每个输入号码与 Meta 规范化 `wa_id` 的对应关系；列表响应和游标分页也会在边界校验。
 
 媒体由 `client.media` 管理，并通过 `upload_media`、`get_media`、`download_media`、`delete_media` 提供固定动作。上传校验官方 MIME 类型和大小限制；查询及删除使用当前 `phone_number_id` 做归属校验；临时 URL 仅向受信任的 Meta 域携带令牌。元数据保留官方字符串 `file_size`，删除返回结构化成功响应。
+
+Conversational Automation 由 `client.automation` 管理。固定动作可配置欢迎消息、最多 3 个引导问题和最多 30 个唯一命令，也能按独立 WABA Bot ID 与字段数组读取 Bot 配置。空数组用于清空 prompts/commands；Phone Number ID 与 Bot ID 不会混用。
 
 Calling API 使用 `get_call_permissions` / `request_call_permission` 与 `connect_call`、`pre_accept_call`、`accept_call`、`reject_call`、`terminate_call`。适配器严格区分 offer、answer 和 `call_id`，但不负责 WebRTC/SIP 媒体传输。调用前需要 Meta 为当前 Phone Number 开通 Cloud API Calling，并具备 `whatsapp_business_messaging` 权限。
 

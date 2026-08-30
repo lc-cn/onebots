@@ -32,6 +32,9 @@ describe("WhatsApp 能力清单", () => {
         expect(whatsAppCapabilities.actions.download_media?.permissions).toEqual([
             "whatsapp_business_messaging",
         ]);
+        expect(
+            whatsAppCapabilities.actions.configure_conversational_automation?.permissions,
+        ).toEqual(["whatsapp_business_management"]);
         expect(whatsAppCapabilities.actions.connect_call).toMatchObject({
             availability: "permission",
             permissions: ["whatsapp_business_messaging"],

@@ -52,6 +52,7 @@ import { WhatsAppMessageTemplates } from "./message-templates.js";
 import { WhatsAppFlows } from "./flows.js";
 import { WhatsAppBlockedUsers } from "./blocked-users.js";
 import { WhatsAppMedia } from "./media.js";
+import { WhatsAppConversationalAutomation } from "./conversational-automation.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -115,6 +116,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly blockedUsers: WhatsAppBlockedUsers;
     /** Phone Number 级媒体上传、元数据、下载与删除。 */
     readonly media: WhatsAppMedia;
+    /** Phone Number 欢迎消息、引导问题与 Bot 命令。 */
+    readonly automation: WhatsAppConversationalAutomation;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -139,6 +142,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.flows = new WhatsAppFlows(this);
         this.blockedUsers = new WhatsAppBlockedUsers(this);
         this.media = new WhatsAppMedia(this, this.graph);
+        this.automation = new WhatsAppConversationalAutomation(this);
     }
 
     get apiVersion(): string {
