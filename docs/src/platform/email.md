@@ -35,6 +35,8 @@ email.my_bot:
 
 认证与代理由 SMTP、IMAP 共用。可用 `auth.access_token` 替代密码；`security` 可选 `tls`、`starttls` 或 `plain`。
 
+已有邮件系统可使用 `receive_mode: manual` 并省略 IMAP，通过 `await account.client.ingest(email)` 可靠投递已解析邮件；SMTP 发送能力不受影响。
+
 ## 消息模型
 
 - 单个收件人投影为 `private`，多个回复收件人投影为 `direct`。

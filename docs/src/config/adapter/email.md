@@ -6,6 +6,7 @@ Web 管理端会按凭据、传输、投递、过滤与高级设置分区生成�
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
+| `receive_mode` | 否 | 默认 `imap`；`manual` 复用已有邮件接收器 |
 | `address` | 是 | 对外发件邮箱地址 |
 | `display_name` | 否 | 发件人显示名称 |
 | `default_subject` | 否 | 消息未携带主题时使用 |
@@ -19,9 +20,11 @@ Web 管理端会按凭据、传输、投递、过滤与高级设置分区生成�
 
 ## IMAP
 
-`imap.host` 必填。`imap.security` 默认 `tls`，未指定端口时 TLS 使用 993，其余使用 143。`mailbox` 默认 `INBOX`，`mark_seen` 默认开启。
+`receive_mode: imap` 时 `imap.host` 必填。`imap.security` 默认 `tls`，未指定端口时 TLS 使用 993，其余使用 143。`mailbox` 默认 `INBOX`，`mark_seen` 默认开启。
 
 客户端以 IMAP IDLE 接收新邮件。`poll_interval_ms` 是 IDLE 的兜底检查，默认 60000；设为 0 仅关闭兜底轮询。断线重连默认从 1 秒指数退避至 30 秒且不会停止，可通过 `retry_initial_delay_ms` 和 `retry_max_delay_ms` 调整。
+
+`receive_mode: manual` 时可省略整个 `imap`，SMTP 发送仍可用。已有接收器应调用 `await client.ingest(email)`；raw、canonical 监听器和协议投影全部成功后才提交去重状态。
 
 ## TLS 与代理
 
@@ -43,7 +46,9 @@ email.gmail_bot:
   address: your-email@gmail.com
   display_name: Gmail 机器人
   default_subject: 来自 OneBots 的消息
+  receive_mode: imap
   auth:
+    method: password
     user: your-email@gmail.com
     password: your-app-password
   smtp:

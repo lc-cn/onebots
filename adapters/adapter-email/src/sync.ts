@@ -28,7 +28,7 @@ export interface SyncUnseenOptions {
     mailbox: string;
     markSeen: boolean;
     deliveries: EmailDeliveryState;
-    ingest(email: EmailMessage): void;
+    ingest(email: EmailMessage): Promise<void>;
     reportError(error: EmailError): void;
 }
 
@@ -60,7 +60,7 @@ export async function syncUnseenMessages(options: SyncUnseenOptions): Promise<vo
                 continue;
             }
             try {
-                options.ingest(email);
+                await options.ingest(email);
             } catch (error) {
                 options.reportError(
                     new EmailError(`邮件 ${options.mailbox} UID ${item.uid} 业务投递失败`, {

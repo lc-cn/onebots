@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { ImapFlow, type SearchObject } from "imapflow";
 import { abortableSleep, emailNotFound, isAbortError, parseFetched } from "./client-utils.js";
 import { EmailError } from "./errors.js";
-import { EmailEventIngress } from "./event-ingress.js";
+import { deliverEmailEvent, EmailEventIngress } from "./event-ingress.js";
 import { manageEmailMailbox, type EmailMailboxOperation } from "./mailbox-operations.js";
 import { sendEmail } from "./send-email.js";
 import { parseEmailSource } from "./events.js";
@@ -172,11 +172,8 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     }
 
     /** 将外部取得的邮件交给与 IMAP 相同的事件管线。 */
-    ingest(email: EmailMessage): void {
-        this.eventIngress.ingest(email, () => {
-            this.emit("raw_email", email);
-            this.emit("email", email);
-        });
+    ingest(email: EmailMessage): Promise<boolean> {
+        return this.eventIngress.ingest(email, () => deliverEmailEvent(this, email));
     }
 
     /** 获取邮箱目录列表。 */
@@ -407,7 +404,7 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
                 mailbox: this.mailbox,
                 markSeen: this.imapConfig.mark_seen !== false,
                 deliveries: this.deliveries,
-                ingest: email => this.ingest(email),
+                ingest: email => this.ingest(email).then(() => undefined),
                 reportError: error => this.reportError(error),
             });
         });

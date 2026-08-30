@@ -299,7 +299,7 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
         client.on("event", (event: ZulipEvent) => {
             const selfId = client.getCachedMe()?.user_id;
             if (event.type === "message" && isOwnMessage(event, selfId)) return;
-            account.dispatch(
+            return account.dispatchAwaited(
                 projectZulipEvent(event, {
                     botId: this.createId(selfId ?? account.account_id),
                     botUserId: selfId,
@@ -328,6 +328,7 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
             } catch (error) {
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 Zulip Bot ${account.account_id} 失败`, error);
+                throw error;
             }
         });
         account.on("stop", async () => {

@@ -96,7 +96,7 @@ describe("ZulipClient", () => {
         await client.stop();
     });
 
-    it("监听器异常时不提交事件，重投成功后才去重", () => {
+    it("监听器异常时不提交事件，重投成功后才去重", async () => {
         const client = new ZulipClient(
             { ...config, receive_mode: "manual" },
             { transport: async () => ({}) },
@@ -111,12 +111,12 @@ describe("ZulipClient", () => {
         client.on("event", eventSeen);
 
         const event = { id: 1, type: "message", message: message() } as const;
-        expect(() => client.ingest(event)).toThrow("listener failed");
-        expect(client.ingest(event)).toBe(true);
-        expect(client.ingest(event)).toBe(false);
+        await expect(client.ingest(event)).rejects.toThrow("listener failed");
+        await expect(client.ingest(event)).resolves.toBe(true);
+        await expect(client.ingest(event)).resolves.toBe(false);
 
         expect(messageSeen).toHaveBeenCalledTimes(2);
-        expect(eventSeen).toHaveBeenCalledOnce();
+        expect(eventSeen).toHaveBeenCalledTimes(2);
     });
 
     it("队列仅在事件投递成功后推进游标", async () => {
@@ -266,7 +266,7 @@ describe("ZulipClient", () => {
         expect(registration?.params?.event_types).toContain("message");
         expect(registration?.params?.event_types).toContain("heartbeat");
         expect(registration?.params?.event_types).toContain("restart");
-        client.ingest({ id: 2, type: "subscription", op: "add" });
+        await client.ingest({ id: 2, type: "subscription", op: "add" });
         expect(subscription).toHaveBeenCalledOnce();
         await client.stop();
     });

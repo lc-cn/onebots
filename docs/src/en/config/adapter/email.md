@@ -15,9 +15,11 @@ The Web console groups these fields into credentials, transport, delivery, filte
 
 ## SMTP and IMAP
 
-`smtp.host` and `imap.host` are required. SMTP defaults to STARTTLS and IMAP defaults to direct TLS. Omitted ports resolve to 465/587 for SMTP and 993/143 for IMAP according to the security mode.
+`smtp.host` is always required. `imap.host` is required only when `receive_mode` is `imap` (the default). SMTP defaults to STARTTLS and IMAP defaults to direct TLS. Omitted ports resolve to 465/587 for SMTP and 993/143 for IMAP according to the security mode.
 
 IMAP IDLE provides real-time delivery. `poll_interval_ms` is a fallback check and defaults to 60000; set it to 0 to disable only that fallback. Reconnection uses an unlimited exponential backoff bounded by `retry_initial_delay_ms` and `retry_max_delay_ms`.
+
+Set `receive_mode: manual` to omit the entire `imap` block while retaining SMTP. Existing receivers call `await client.ingest(email)`; deduplication is committed only after raw, canonical, and protocol delivery succeeds.
 
 TLS certificates are verified by default. Disable `reject_unauthorized` only for a controlled, self-signed server.
 

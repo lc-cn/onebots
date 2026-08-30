@@ -14,8 +14,8 @@
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
+| `receive_mode` | `event_queue` | `event_queue` 使用官方长轮询；`manual` 由已有连接投递 |
 | `default_topic` | `general` | 发送目标只有频道 ID 时的话题 |
-| `event_queue.enabled` | `true` | 是否消费实时事件 |
 | `event_queue.event_types` | 内置集合 | 可在 Web 表单动态增减的官方事件类型 |
 | `event_queue.all_public_streams` | `false` | 是否接收所有可访问公共频道消息 |
 | `event_queue.retry_initial_delay_ms` | `1000` | 断线初始退避 |
@@ -27,8 +27,8 @@ zulip.team-bot:
   email: onebots-bot@example.zulipchat.com
   api_key: your-api-key
   default_topic: general
+  receive_mode: event_queue
   event_queue:
-    enabled: true
     event_types:
       - message
       - update_message
@@ -42,6 +42,8 @@ zulip.team-bot:
   onebot.v11:
     access_token: your-token
 ```
+
+`manual` 模式不注册或轮询 Event Queue。已有消费者应调用 `await client.ingest(rawEvent)`；raw、精确类型、canonical 监听器和协议投影全部成功后才提交去重状态。旧的 `event_queue.enabled` 不再接受。
 
 ## 代理
 

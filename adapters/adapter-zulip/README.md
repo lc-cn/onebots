@@ -37,7 +37,7 @@ zulip.team-bot:
 
 事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。事件只有在全部 canonical 监听器成功返回后才推进队列游标并写入本地去重窗口；监听器抛错会保留原游标，让 Event Queue 重投，不会静默丢失业务事件。
 
-已有 Event Queue、消息代理或测试连接可配置 `receive_mode: manual`。客户端仍会调用 `users/me` 验证 API 凭据并缓存 Bot 身份，但不会注册或轮询服务器队列；外部系统调用 `account.client.ingest(rawEvent)` 即可进入相同的类型化事件管线。
+已有 Event Queue、消息代理或测试连接可配置 `receive_mode: manual`。客户端仍会调用 `users/me` 验证 API 凭据并缓存 Bot 身份，但不会注册或轮询服务器队列；外部系统通过 `await account.client.ingest(rawEvent)` 进入相同的可靠类型化事件管线。
 
 ## 场景 ID
 
@@ -69,7 +69,7 @@ client.on("client_error", error => {
 await client.start();
 ```
 
-已有 Event Queue 或代理连接可调用 `client.ingest(rawEvent)`，与内置长轮询共用同一事件管线。`client.call(path, method, params)` 只允许当前组织 `/api/v1` 下的安全相对路径。
+已有 Event Queue 或代理连接可调用 `await client.ingest(rawEvent)`，与内置长轮询共用同一事件管线。返回值表示本次调用是否完成首次投递；raw、精确类型和 canonical 监听器全部完成后才提交去重状态。`client.call(path, method, params)` 只允许当前组织 `/api/v1` 下的安全相对路径。
 
 ## 平台扩展动作
 

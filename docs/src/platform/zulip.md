@@ -32,6 +32,6 @@ Zulip 适配器按官方 REST API 与 Event Queue 工作，支持频道（Channe
 
 适配器公开消息反应、星标、搜索、编辑历史、已读回执、Markdown 渲染、频道创建/更新/归档、订阅、话题可见性、Presence、用户状态、Typing、Emoji、附件与服务器信息动作。未封装端点可通过受限 `call_zulip_api` 调用。
 
-独立集成可直接使用包导出的 `ZulipClient`，并通过 `ingest(rawEvent)` 把已有连接的事件送入统一管线。
+独立集成可直接使用包导出的 `ZulipClient`，并通过 `await ingest(rawEvent)` 把已有连接的事件送入可靠管线；全部监听器完成后才确认去重状态。
 
 配置见 [Zulip 配置](/config/adapter/zulip)，完整用法见包内 README。

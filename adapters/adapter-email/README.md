@@ -9,7 +9,7 @@ OneBots 邮件适配器。通过 SMTP 发送邮件，通过 IMAP IDLE 实时接�
 - 纯文本、HTML、内联图片、普通附件、CC/BCC、Reply-To 与 RFC Message-ID 线程
 - 逐封隔离无法解析的邮件，正常邮件不会被同批毒邮件阻塞
 - 投影去重与 `\\Seen` 确认分离：业务投递失败保留未读并重投，标记失败只重试确认
-- `EmailClient.ingest()` 可把外部解析的邮件交给同一事件管线
+- 可等待的 `EmailClient.ingest()` 把外部邮件交给同一可靠事件管线
 - 结构化 `EmailError` 与白名单式 SMTP/IMAP 平台动作
 
 ## 安装
@@ -50,7 +50,7 @@ email.my_bot:
 
 `auth.method` 可选 `password` 或 `oauth2`，Web 表单只展示对应凭据；OAuth2 模式填写 `auth.access_token`。未显式设置方式的现有配置会根据 access token 是否存在确定认证方式。SMTP 与 IMAP 始终共用同一选择，不会把未选中的凭据发送给服务端。证书默认严格校验；只有接入受控的自签名服务时才应关闭对应的 `reject_unauthorized`。
 
-已有邮件接收器可配置 `receive_mode: manual` 并省略整个 `imap` 配置。客户端仍会验证和保留 SMTP 发送能力，但不会创建 IMAP 连接；外部系统将已解析的 `EmailMessage` 交给 `account.client.ingest(email)`，事件会进入与 IMAP 完全相同的“处理成功后提交”去重和投影管线。邮箱搜索、标记、复制、移动、删除及目录管理等 IMAP 动作会明确返回 `EMAIL_IMAP_DISABLED`。
+已有邮件接收器可配置 `receive_mode: manual` 并省略整个 `imap` 配置。客户端仍会验证和保留 SMTP 发送能力，但不会创建 IMAP 连接；外部系统通过 `await account.client.ingest(email)` 将已解析的 `EmailMessage` 交给与 IMAP 相同的可靠管线。全部 raw 与 canonical 监听器成功后才提交去重状态，失败会向调用方传播并允许重投。邮箱搜索、标记、复制、移动、删除及目录管理等 IMAP 动作会明确返回 `EMAIL_IMAP_DISABLED`。
 
 ## 原生邮件段
 

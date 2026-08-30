@@ -7,7 +7,7 @@ import type { EmailSmtpTransport } from "./transports.js";
 import type { EmailConfig, EmailMessage } from "./types.js";
 
 describe("EmailClient", () => {
-    it("ingest 将外部邮件送入与 IMAP 相同的事件管线", () => {
+    it("ingest 将外部邮件送入与 IMAP 相同的事件管线", async () => {
         const client = new EmailClient(config);
         const raw = message();
         const rawListener = vi.fn();
@@ -15,8 +15,8 @@ describe("EmailClient", () => {
         client.on("raw_email", rawListener);
         client.on("email", emailListener);
 
-        client.ingest(raw);
-        client.ingest(raw);
+        await client.ingest(raw);
+        await client.ingest(raw);
 
         expect(rawListener).toHaveBeenCalledWith(raw);
         expect(emailListener).toHaveBeenCalledWith(raw);
@@ -24,7 +24,7 @@ describe("EmailClient", () => {
         expect(emailListener).toHaveBeenCalledTimes(1);
     });
 
-    it("业务监听器失败时允许同一邮件重投，成功后才去重", () => {
+    it("业务监听器失败时允许同一邮件重投，成功后才去重", async () => {
         const client = new EmailClient(config);
         const listener = vi.fn().mockImplementationOnce(() => {
             throw new Error("dispatch failed");
@@ -32,11 +32,23 @@ describe("EmailClient", () => {
         client.on("email", listener);
         const email = message();
 
-        expect(() => client.ingest(email)).toThrow("dispatch failed");
-        expect(() => client.ingest(email)).not.toThrow();
-        client.ingest(email);
+        await expect(client.ingest(email)).rejects.toThrow("dispatch failed");
+        await expect(client.ingest(email)).resolves.toBe(true);
+        await expect(client.ingest(email)).resolves.toBe(false);
 
         expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it("一个邮件视图失败时仍投递另一个视图", async () => {
+        const client = new EmailClient(config);
+        const emailListener = vi.fn();
+        client.on("raw_email", () => {
+            throw new Error("raw failed");
+        });
+        client.on("email", emailListener);
+
+        await expect(client.ingest(message())).rejects.toThrow("raw failed");
+        expect(emailListener).toHaveBeenCalledOnce();
     });
 
     it("ingest 拒绝缺少稳定身份的原始事件", () => {

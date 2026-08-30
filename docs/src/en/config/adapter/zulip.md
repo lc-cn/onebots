@@ -16,8 +16,8 @@ zulip.team-bot:
   email: onebots-bot@example.zulipchat.com
   api_key: your-api-key
   default_topic: general
+  receive_mode: event_queue
   event_queue:
-    enabled: true
     event_types:
       - message
       - update_message
@@ -32,7 +32,9 @@ zulip.team-bot:
     access_token: your-token
 ```
 
-The Web form can add and remove event types directly. Reconnection is always unlimited; the delay grows exponentially from `retry_initial_delay_ms` up to `retry_max_delay_ms`.
+The Web form can add and remove event types directly. `receive_mode` is either `event_queue` (default) or `manual`; the removed `event_queue.enabled` field is not accepted. Reconnection is always unlimited; the delay grows exponentially from `retry_initial_delay_ms` up to `retry_max_delay_ms`.
+
+Manual mode does not register or poll a queue. Existing consumers call `await client.ingest(rawEvent)`; deduplication is committed only after raw, typed, canonical, and protocol delivery succeeds.
 
 Optional HTTP(S) and SOCKS proxy settings are available under `proxy.url`, `proxy.username`, and `proxy.password`. Missing proxy support fails startup explicitly instead of silently using a direct connection.
 

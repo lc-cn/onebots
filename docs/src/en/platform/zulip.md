@@ -17,6 +17,6 @@ Text uses Zulip-flavored Markdown. Mentions resolve the real member name and ID.
 
 The queue is recreated after `BAD_EVENT_QUEUE_ID`, retries forever with bounded exponential backoff, is cancelled through `AbortSignal`, and is deleted on shutdown. A consumer listener exception is reported as a structured client error without stopping queue consumption.
 
-The package exports a standalone typed `ZulipClient`. Existing queue consumers can feed events through `client.ingest(rawEvent)`, while `client.call(path, method, params)` provides a constrained escape hatch for official API endpoints under the configured organization.
+The package exports a standalone typed `ZulipClient`. Existing queue consumers can feed events through `await client.ingest(rawEvent)`; deduplication is committed only after every raw, typed, and canonical listener completes. `client.call(path, method, params)` provides a constrained escape hatch for official API endpoints under the configured organization.
 
 See [Zulip configuration](/en/config/adapter/zulip) and the package README for the complete native action list.

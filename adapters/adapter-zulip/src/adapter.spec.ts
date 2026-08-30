@@ -93,9 +93,9 @@ describe("ZulipAdapter", () => {
             email: config.email,
             full_name: "OneBots",
         });
-        const dispatch = vi.spyOn(account, "dispatch");
+        const dispatch = vi.spyOn(account, "dispatchAwaited");
 
-        account.client.ingest({
+        await account.client.ingest({
             id: 1,
             type: "message",
             message: {

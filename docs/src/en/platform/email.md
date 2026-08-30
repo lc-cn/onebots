@@ -35,6 +35,8 @@ email.my_bot:
 
 SMTP and IMAP share authentication and proxy settings. `auth.access_token` can replace the password. `security` accepts `tls`, `starttls`, or `plain`.
 
+Existing mail systems can set `receive_mode: manual`, omit IMAP, and reliably submit parsed messages with `await account.client.ingest(email)` while retaining SMTP sending.
+
 ## Message model
 
 - One recipient is a `private` scene; reply-all conversations use `direct`.

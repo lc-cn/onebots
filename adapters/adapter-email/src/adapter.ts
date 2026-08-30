@@ -178,6 +178,7 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
             } catch (error) {
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动邮件账号 ${account.account_id} 失败`, error);
+                throw error;
             }
         });
         account.on("stop", async () => {
@@ -187,10 +188,13 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
         return account;
     }
 
-    private dispatchEmail(account: Account<"email", EmailClient>, email: EmailMessage): void {
+    private dispatchEmail(
+        account: Account<"email", EmailClient>,
+        email: EmailMessage,
+    ): Promise<void> | undefined {
         if (email.from.address.toLowerCase() === account.client.config.address.toLowerCase())
             return;
-        account.dispatch(
+        return account.dispatchAwaited(
             projectEmailEvent(email, {
                 accountId: this.createId(account.client.config.address),
                 ownAddress: account.client.config.address,
