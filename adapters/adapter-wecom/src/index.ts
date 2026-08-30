@@ -65,6 +65,14 @@ export const wecomSchema: Schema = {
         sensitive: true,
         ui: { section: "credentials" },
     },
+    directory_secret: {
+        type: "string",
+        min: 1,
+        label: "通讯录同步 Secret",
+        description: "仅成员/部门写入和异步导入需要；不要填写应用 Secret",
+        sensitive: true,
+        ui: { section: "credentials" },
+    },
     agent_id: {
         type: "string",
         required: true,

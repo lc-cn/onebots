@@ -8,6 +8,13 @@ import {
 } from "onebots";
 import { WeComApiError } from "./errors.js";
 import { assertWeComConfig, resolveWeComApiBaseUrl } from "./client-config.js";
+import {
+    apiError,
+    apiErrorCode,
+    isJson,
+    parseJson,
+    responseFromWebhook,
+} from "./client-response.js";
 import { deliverWeComEvent } from "./event-delivery.js";
 import type {
     WeComAgent,
@@ -36,6 +43,7 @@ const DEFAULT_DEDUPLICATION_LIMIT = 10_000;
 export class WeComClient extends EventEmitter<WeComClientEvents> {
     readonly apiBaseUrl: string;
     private readonly tokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
+    private readonly directoryTokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
     private agent?: WeComAgent;
     private startPromise?: Promise<WeComAgent>;
     private generation = 0;
@@ -96,6 +104,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         this.startPromise = undefined;
         this.agent = undefined;
         this.tokens.clear();
+        this.directoryTokens.clear();
         this.eventFlights.clear();
         if (wasActive) await emitAllAwaited(this, "stop");
     }
@@ -117,11 +126,27 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     }
 
     async getAccessToken(force = false): Promise<string> {
-        return this.tokens.get(() => this.fetchToken(), force);
+        return this.tokens.get(() => this.fetchToken(this.config.corp_secret), force);
+    }
+
+    /** 获取独立的通讯录同步 token，避免以应用 token 伪装写通讯录权限。 */
+    async getDirectoryAccessToken(force = false): Promise<string> {
+        const secret = this.config.directory_secret;
+        if (!secret) {
+            throw new WeComApiError("通讯录写入动作需要配置 directory_secret", {
+                code: "WECOM_DIRECTORY_SECRET_REQUIRED",
+            });
+        }
+        return this.directoryTokens.get(() => this.fetchToken(secret), force);
     }
 
     call<T = unknown>(options: WeComCallOptions): Promise<T> {
-        return this.performCall<T>(options, true);
+        return this.performCall<T>(options, true, "application");
+    }
+
+    /** 使用通讯录同步 Secret 调用受限接口。 */
+    callDirectory<T = unknown>(options: WeComCallOptions): Promise<T> {
+        return this.performCall<T>(options, true, "directory");
     }
 
     getAgent(): Promise<WeComAgent> {
@@ -185,14 +210,35 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         data: Blob,
         filename = "upload",
     ): Promise<{ media_id: string; created_at: string }> {
+        return this.uploadMedia(type, data, filename, "application");
+    }
+
+    /** 上传供异步通讯录导入使用的 CSV 文件。 */
+    async uploadDirectoryFile(
+        data: Blob,
+        filename = "directory.csv",
+    ): Promise<{ media_id: string; created_at: string }> {
+        return this.uploadMedia("file", data, filename, "directory");
+    }
+
+    private async uploadMedia(
+        type: "image" | "voice" | "video" | "file",
+        data: Blob,
+        filename: string,
+        scope: WeComTokenScope,
+    ): Promise<{ media_id: string; created_at: string }> {
         const form = new FormData();
         form.set("media", data, filename);
-        const result = await this.call<{ media_id?: unknown; created_at?: unknown }>({
-            method: "POST",
-            path: "/cgi-bin/media/upload",
-            query: { type },
-            body: form,
-        });
+        const result = await this.performCall<{ media_id?: unknown; created_at?: unknown }>(
+            {
+                method: "POST",
+                path: "/cgi-bin/media/upload",
+                query: { type },
+                body: form,
+            },
+            true,
+            scope,
+        );
         if (typeof result.media_id !== "string" || !result.media_id) {
             throw new WeComApiError("企业微信临时素材响应缺少 media_id", {
                 code: "WECOM_INVALID_MEDIA_RESPONSE",
@@ -299,14 +345,15 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         }
     }
 
-    private async fetchToken(): Promise<{ value: string; ttlMs: number }> {
+    private async fetchToken(secret: string): Promise<{ value: string; ttlMs: number }> {
         const result = await this.performCall<WeComTokenResponse>(
             {
                 path: "/cgi-bin/gettoken",
                 token: false,
-                query: { corpid: this.config.corp_id, corpsecret: this.config.corp_secret },
+                query: { corpid: this.config.corp_id, corpsecret: secret },
             },
             false,
+            "application",
         );
         if (!result.access_token || !result.expires_in) {
             throw new WeComApiError("企业微信 access_token 响应缺少必要字段", {
@@ -317,9 +364,18 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         return { value: result.access_token, ttlMs: result.expires_in * 1000 };
     }
 
-    private async performCall<T>(options: WeComCallOptions, retryToken: boolean): Promise<T> {
+    private async performCall<T>(
+        options: WeComCallOptions,
+        retryToken: boolean,
+        scope: WeComTokenScope,
+    ): Promise<T> {
         const url = this.resolvePath(options.path, options.query);
-        const requestToken = options.token === false ? undefined : await this.getAccessToken();
+        const requestToken =
+            options.token === false
+                ? undefined
+                : scope === "directory"
+                  ? await this.getDirectoryAccessToken()
+                  : await this.getAccessToken();
         if (requestToken) url.searchParams.set("access_token", requestToken);
         const headers = new Headers();
         let body: BodyInit | undefined;
@@ -351,10 +407,12 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         const payload = await parseJson(response, options.path);
         const errorCode = apiErrorCode(payload);
         if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
-            if (requestToken && this.tokens.invalidate(requestToken)) {
-                await this.getAccessToken(true);
+            const tokenStore = scope === "directory" ? this.directoryTokens : this.tokens;
+            if (requestToken && tokenStore.invalidate(requestToken)) {
+                if (scope === "directory") await this.getDirectoryAccessToken(true);
+                else await this.getAccessToken(true);
             }
-            return this.performCall<T>(options, false);
+            return this.performCall<T>(options, false, scope);
         }
         if (!response.ok || errorCode !== 0) throw apiError(response, payload, options.path);
         return payload as T;
@@ -385,6 +443,8 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     }
 }
 
+type WeComTokenScope = "application" | "directory";
+
 function validateEvent(event: WeComEvent): void {
     if (typeof event.MsgType !== "string" || !event.MsgType) {
         throw new WeComApiError("企业微信事件缺少 MsgType", {
@@ -409,54 +469,9 @@ function validateEvent(event: WeComEvent): void {
     }
 }
 
-async function parseJson(response: Response, path: string): Promise<unknown> {
-    try {
-        return await response.json();
-    } catch (error) {
-        throw new WeComApiError("企业微信 API 返回无效 JSON", {
-            code: "WECOM_INVALID_RESPONSE",
-            status: response.status,
-            path,
-            cause: error,
-        });
-    }
-}
-
-function apiErrorCode(payload: unknown): number {
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return 0;
-    const value = (payload as Record<string, unknown>).errcode;
-    return typeof value === "number" ? value : 0;
-}
-
-function apiError(response: Response, payload: unknown, path: string): WeComApiError {
-    const record = payload as Record<string, unknown>;
-    const code = typeof record.errcode === "number" ? record.errcode : response.status;
-    const message = typeof record.errmsg === "string" ? record.errmsg : response.statusText;
-    return new WeComApiError(message || `企业微信 API 调用失败: ${code}`, {
-        code: `WECOM_${code}`,
-        status: response.status,
-        path,
-        details: payload,
-    });
-}
-
-function isJson(response: Response): boolean {
-    return (response.headers.get("content-type") || "").includes("json");
-}
-
 function parseWeComEvent(value: unknown): WeComEvent {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         throw new WeComApiError("企业微信事件必须是对象", { code: "WECOM_INVALID_EVENT" });
     }
     return value as WeComEvent;
-}
-
-function responseFromWebhook(response: WeComWebhookResponse): Response {
-    if (typeof response.body === "string") {
-        return new Response(response.body, {
-            status: response.status,
-            headers: { "Content-Type": response.contentType || "text/plain" },
-        });
-    }
-    return Response.json(response.body, { status: response.status });
 }

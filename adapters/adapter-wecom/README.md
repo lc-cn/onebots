@@ -10,6 +10,7 @@ OneBots 的企业微信自建应用官方 API 适配器。它复用 OneBots HTTP
 wecom.internal_app:
   corp_id: ww1234567890abcdef
   corp_secret: your_application_secret
+  directory_secret: your_address_book_sync_secret # 仅通讯录写入/导入需要
   agent_id: "1000001"
   token: your_callback_token
   encoding_aes_key: your_43_character_key
@@ -36,6 +37,8 @@ wecom.internal_app:
 
 平台动作覆盖应用详情、临时素材、模板卡片更新、应用群聊、部门、成员、标签、邀请、加入企业二维码与回调 IP。客户联系能力不再藏在通用调用中，还提供以下可发现动作：
 
+- 通讯录写入：成员与部门增删改、邀请、专用 CSV 上传、增量/全量异步导入及任务结果查询。此域严格使用可选的 `directory_secret` 获取独立 token；没有配置时返回 `WECOM_DIRECTORY_SECRET_REQUIRED`，绝不会拿应用 token 冒充写权限。
+
 - 协作办公：日历的创建/更新/查询/删除，日程的创建/更新/参与者增删/查询/取消，以及审批模板、提交、批量查询和详情。
 - 客户：`list_follow_users`、`list_external_contacts`、`get_external_contact`、`batch_get_external_contacts`、`remark_external_contact`、`transfer_external_contacts`、`list_unassigned_external_contacts`。
 - 客户群：`list_external_contact_groups`、`get_external_contact_group`、`transfer_external_contact_groups`。
@@ -54,6 +57,8 @@ await adapter.callAction("internal_app", "wecom_call", {
 ```
 
 `wecom_call.path` 只接受不含 query/fragment 的绝对 API 路径，查询参数应单独放在 `query`。access token 自动缓存，并在企业微信报告失效时刷新且只重试一次；旧请求的迟到错误不会清空已经刷新的凭证。所有非零 `errcode` 都会抛出保留 `details`、`path` 与错误码的 `WeComApiError`。
+
+通讯录同步新增或低频接口使用 `wecom_directory_call`，它与 `wecom_call` 采用相同的安全路径约束，但只使用 `directory_secret` 对应的独立 token。应用 token 与通讯录 token 分别缓存、失效和刷新，不会相互污染。
 
 ## 底层接入
 

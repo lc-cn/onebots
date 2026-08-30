@@ -82,6 +82,14 @@ export function requireRecord(params: WeComActionParams, name: string): Record<s
     return structuredClone(value);
 }
 
+export function optionalRecord(
+    params: WeComActionParams,
+    name: string,
+): Record<string, unknown> | undefined {
+    if (params[name] === undefined) return undefined;
+    return requireRecord(params, name);
+}
+
 export function requireStringArray(params: WeComActionParams, name: string): string[] {
     const result = stringArray(params, name);
     if (!result.length) invalid(`${name} 必须是非空字符串数组`);

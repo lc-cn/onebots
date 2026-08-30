@@ -12,6 +12,7 @@ import {
     numberQueryAction,
     optionalBoolean,
     optionalNumber,
+    optionalRecord,
     optionalString,
     post,
     requireNumber,
@@ -20,13 +21,14 @@ import {
     requireStringArray,
     staticCall,
     stringArray,
-    stringQueryAction,
 } from "./platform-action-params.js";
 
 const PLATFORM_ACTIONS = definePlatformActions(
     {
         wecom_call: async (client: WeComClient, params: WeComActionParams) =>
             client.call(callOptions(params)),
+        wecom_directory_call: async (client: WeComClient, params: WeComActionParams) =>
+            client.callDirectory(callOptions(params)),
         send_native_message: async (client: WeComClient, params: WeComActionParams) =>
             client.sendApplicationMessage(requireRecord(params, "message")),
         send_appchat_message: async (client: WeComClient, params: WeComActionParams) =>
@@ -41,6 +43,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         set_agent: postAction("/cgi-bin/agent/set", "agent", true),
         list_agents: staticCall("/cgi-bin/agent/list"),
         upload_temporary_media: uploadMedia,
+        upload_directory_file: uploadDirectoryFile,
         get_temporary_media: async (client: WeComClient, params: WeComActionParams) =>
             client.call({
                 path: "/cgi-bin/media/get",
@@ -51,20 +54,28 @@ const PLATFORM_ACTIONS = definePlatformActions(
         update_appchat: postAction("/cgi-bin/appchat/update", "chat"),
         get_appchat: async (client: WeComClient, params: WeComActionParams) =>
             client.getAppChat(requireString(params, "chat_id")),
-        create_department: postAction("/cgi-bin/department/create", "department"),
-        update_department: postAction("/cgi-bin/department/update", "department"),
-        delete_department: numberQueryAction("/cgi-bin/department/delete", "department_id", "id"),
+        create_department: directoryPostAction("/cgi-bin/department/create", "department"),
+        update_department: directoryPostAction("/cgi-bin/department/update", "department"),
+        delete_department: directoryNumberQueryAction(
+            "/cgi-bin/department/delete",
+            "department_id",
+            "id",
+        ),
         list_departments: async (client: WeComClient, params: WeComActionParams) =>
             client.call({
                 path: "/cgi-bin/department/list",
                 query: { id: optionalNumber(params, "department_id") },
             }),
-        create_user: postAction("/cgi-bin/user/create", "user"),
-        update_user: postAction("/cgi-bin/user/update", "user"),
-        delete_user: stringQueryAction("/cgi-bin/user/delete", "user_id", "userid"),
+        create_user: directoryPostAction("/cgi-bin/user/create", "user"),
+        update_user: directoryPostAction("/cgi-bin/user/update", "user"),
+        delete_user: directoryStringQueryAction("/cgi-bin/user/delete", "user_id", "userid"),
         batch_delete_users: async (client: WeComClient, params: WeComActionParams) =>
-            post(client, "/cgi-bin/user/batchdelete", {
-                useridlist: requireStringArray(params, "user_ids"),
+            client.callDirectory({
+                method: "POST",
+                path: "/cgi-bin/user/batchdelete",
+                body: {
+                    useridlist: requireStringArray(params, "user_ids"),
+                },
             }),
         list_department_users: async (client: WeComClient, params: WeComActionParams) =>
             client.listDepartmentUsers(
@@ -86,7 +97,21 @@ const PLATFORM_ACTIONS = definePlatformActions(
         list_tags: staticCall("/cgi-bin/tag/list"),
         add_tag_users: tagAction("/cgi-bin/tag/addtagusers"),
         delete_tag_users: tagAction("/cgi-bin/tag/deltagusers"),
-        invite_users: postAction("/cgi-bin/batch/invite", "invitation"),
+        invite_users: directoryPostAction("/cgi-bin/batch/invite", "invitation"),
+        sync_users_from_directory_file: directoryImportAction("/cgi-bin/batch/syncuser", true),
+        replace_users_from_directory_file: directoryImportAction(
+            "/cgi-bin/batch/replaceuser",
+            true,
+        ),
+        replace_departments_from_directory_file: directoryImportAction(
+            "/cgi-bin/batch/replaceparty",
+            false,
+        ),
+        get_directory_import_result: async (client: WeComClient, params: WeComActionParams) =>
+            client.callDirectory({
+                path: "/cgi-bin/batch/getresult",
+                query: { jobid: requireString(params, "job_id") },
+            }),
         get_join_qrcode: async (client: WeComClient, params: WeComActionParams) =>
             client.call({
                 path: "/cgi-bin/corp/get_join_qrcode",
@@ -124,6 +149,50 @@ function postAction(path: string, parameter: string, agent = false): WeComAction
     };
 }
 
+function directoryPostAction(path: string, parameter: string): WeComActionHandler {
+    return async (client, params) =>
+        client.callDirectory({
+            method: "POST",
+            path,
+            body: requireRecord(params, parameter),
+        });
+}
+
+function directoryStringQueryAction(
+    path: string,
+    parameter: string,
+    query: string,
+): WeComActionHandler {
+    return async (client, params) =>
+        client.callDirectory({ path, query: { [query]: requireString(params, parameter) } });
+}
+
+function directoryNumberQueryAction(
+    path: string,
+    parameter: string,
+    query: string,
+): WeComActionHandler {
+    return async (client, params) =>
+        client.callDirectory({ path, query: { [query]: requireNumber(params, parameter) } });
+}
+
+function directoryImportAction(path: string, includeInvite: boolean): WeComActionHandler {
+    return async (client, params) => {
+        const callback = optionalRecord(params, "callback");
+        return client.callDirectory({
+            method: "POST",
+            path,
+            body: {
+                media_id: requireString(params, "media_id"),
+                ...(includeInvite
+                    ? { to_invite: optionalBoolean(params, "invite") === false ? false : true }
+                    : {}),
+                ...(callback ? { callback } : {}),
+            },
+        });
+    };
+}
+
 function tagAction(path: string): WeComActionHandler {
     return async (client, params) => tagUsers(client, path, params);
 }
@@ -154,5 +223,21 @@ async function uploadMedia(client: WeComClient, params: WeComActionParams): Prom
             type: optionalString(params, "mime_type") || "application/octet-stream",
         }),
         optionalString(params, "filename") || "upload",
+    );
+}
+
+async function uploadDirectoryFile(
+    client: WeComClient,
+    params: WeComActionParams,
+): Promise<unknown> {
+    const data = requireString(params, "data");
+    if (!/^(?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{2}==|[A-Za-z\d+/]{3}=)?$/u.test(data)) {
+        invalid("data 必须是有效 Base64");
+    }
+    return client.uploadDirectoryFile(
+        new Blob([Uint8Array.from(Buffer.from(data, "base64"))], {
+            type: optionalString(params, "mime_type") || "text/csv",
+        }),
+        optionalString(params, "filename") || "directory.csv",
     );
 }

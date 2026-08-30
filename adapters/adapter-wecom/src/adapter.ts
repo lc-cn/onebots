@@ -246,6 +246,7 @@ function normalizeConfig(config: Account.Config<"wecom">): WeComConfig {
         account_id: config.account_id,
         corp_id: config.corp_id,
         corp_secret: config.corp_secret,
+        directory_secret: config.directory_secret,
         agent_id: config.agent_id,
         receive_mode: config.receive_mode,
         token: config.token,

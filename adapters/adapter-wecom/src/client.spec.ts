@@ -33,6 +33,44 @@ describe("WeComClient", () => {
         expect(String(fetcher.mock.calls[3]?.[0])).toContain("access_token=new");
     });
 
+    it("应用与通讯录调用使用独立 Secret 和 token 缓存", async () => {
+        const fetcher = vi.fn<typeof fetch>(async input => {
+            const url = String(input);
+            if (url.includes("/cgi-bin/gettoken")) {
+                return json({
+                    errcode: 0,
+                    access_token: url.includes("corpsecret=directory-secret")
+                        ? "directory-token"
+                        : "application-token",
+                    expires_in: 7200,
+                });
+            }
+            return json({ errcode: 0 });
+        });
+        const client = new WeComClient(
+            { ...config, directory_secret: "directory-secret" },
+            fetcher,
+        );
+        await client.call({ path: "/cgi-bin/agent/list" });
+        await client.callDirectory({ path: "/cgi-bin/department/delete", query: { id: 2 } });
+        await client.callDirectory({ path: "/cgi-bin/department/delete", query: { id: 3 } });
+
+        const urls = fetcher.mock.calls.map(call => String(call[0]));
+        expect(urls.filter(url => url.includes("corpsecret=secret"))).toHaveLength(1);
+        expect(urls.filter(url => url.includes("corpsecret=directory-secret"))).toHaveLength(1);
+        expect(urls.filter(url => url.includes("access_token=directory-token"))).toHaveLength(2);
+    });
+
+    it("通讯录写入缺少独立 Secret 时返回结构化错误", async () => {
+        const client = new WeComClient(config);
+        await expect(
+            client.callDirectory({ path: "/cgi-bin/department/delete", query: { id: 2 } }),
+        ).rejects.toMatchObject({ code: "WECOM_DIRECTORY_SECRET_REQUIRED" });
+        expect(() => new WeComClient({ ...config, directory_secret: " " })).toThrowError(
+            expect.objectContaining({ code: "WECOM_INVALID_DIRECTORY_SECRET" }),
+        );
+    });
+
     it.each([
         "https://evil.example",
         "//evil.example/path",

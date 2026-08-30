@@ -26,5 +26,53 @@ describe("企业微信平台动作", () => {
         expect(WECOM_PLATFORM_ACTIONS.has("create_schedule")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("get_approval_detail")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("wecom_call")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("wecom_directory_call")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("upload_directory_file")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("sync_users_from_directory_file")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("replace_users_from_directory_file")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("replace_departments_from_directory_file")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("get_directory_import_result")).toBe(true);
+    });
+
+    it("通讯录写入和异步导入只走独立凭据作用域", async () => {
+        const callDirectory = vi.fn().mockResolvedValue({ errcode: 0, jobid: "job-1" });
+        const client = { callDirectory } as unknown as WeComClient;
+        await executeWeComPlatformAction(client, "create_user", {
+            user: { userid: "member-1", name: "成员" },
+        });
+        await executeWeComPlatformAction(client, "sync_users_from_directory_file", {
+            media_id: "csv-1",
+            invite: false,
+            callback: { url: "https://callback.example.test" },
+        });
+        await executeWeComPlatformAction(client, "get_directory_import_result", {
+            job_id: "job-1",
+        });
+        expect(callDirectory.mock.calls).toEqual([
+            [
+                {
+                    method: "POST",
+                    path: "/cgi-bin/user/create",
+                    body: { userid: "member-1", name: "成员" },
+                },
+            ],
+            [
+                {
+                    method: "POST",
+                    path: "/cgi-bin/batch/syncuser",
+                    body: {
+                        media_id: "csv-1",
+                        to_invite: false,
+                        callback: { url: "https://callback.example.test" },
+                    },
+                },
+            ],
+            [
+                {
+                    path: "/cgi-bin/batch/getresult",
+                    query: { jobid: "job-1" },
+                },
+            ],
+        ]);
     });
 });

@@ -11,6 +11,11 @@ const permission = {
     permissions: ["企业微信应用可见范围/API 权限"],
 };
 const platformActions = definePlatformActionCapabilities(WECOM_PLATFORM_ACTIONS, permission);
+const directoryPermission = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["企业微信通讯录同步 Secret 与写权限"],
+};
 
 /** 企业微信自建应用实际能力；部门与标签不再伪装成聊天群。 */
 export const weComCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
@@ -33,6 +38,20 @@ export const weComCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         get_version: { support: "native" },
         get_supported_actions: { support: "native" },
         ...platformActions,
+        wecom_directory_call: directoryPermission,
+        upload_directory_file: directoryPermission,
+        create_department: directoryPermission,
+        update_department: directoryPermission,
+        delete_department: directoryPermission,
+        create_user: directoryPermission,
+        update_user: directoryPermission,
+        delete_user: directoryPermission,
+        batch_delete_users: directoryPermission,
+        invite_users: directoryPermission,
+        sync_users_from_directory_file: directoryPermission,
+        replace_users_from_directory_file: directoryPermission,
+        replace_departments_from_directory_file: directoryPermission,
+        get_directory_import_result: directoryPermission,
     },
     events: {
         message: { support: "native", scenes: ["private"] },

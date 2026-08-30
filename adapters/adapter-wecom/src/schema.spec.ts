@@ -23,6 +23,8 @@ describe("企业微信配置 Schema", () => {
         });
         expect(ruleAt("api_base_url").pattern?.test("https://qyapi.weixin.qq.com")).toBe(true);
         expect(ruleAt("api_base_url").pattern?.test("https://qyapi.weixin.qq.com?x=1")).toBe(false);
+        expect(ruleAt("directory_secret").sensitive).toBe(true);
+        expect(ruleAt("directory_secret").required).not.toBe(true);
     });
 });
 

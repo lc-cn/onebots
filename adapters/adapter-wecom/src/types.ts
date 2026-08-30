@@ -3,6 +3,8 @@ export interface WeComConfig {
     account_id: string;
     corp_id: string;
     corp_secret: string;
+    /** 可选的通讯录同步 Secret；仅用于通讯录写入和异步导入。 */
+    directory_secret?: string;
     agent_id: string;
     token?: string;
     encoding_aes_key?: string;

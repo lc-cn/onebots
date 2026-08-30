@@ -32,6 +32,11 @@ export function assertWeComConfig(config: WeComConfig): void {
             code: "WECOM_INVALID_ENCODING_AES_KEY",
         });
     }
+    if (config.directory_secret !== undefined && !config.directory_secret.trim()) {
+        throw new WeComApiError("企业微信 directory_secret 不能为空字符串", {
+            code: "WECOM_INVALID_DIRECTORY_SECRET",
+        });
+    }
     if (
         config.webhook_deduplication_limit !== undefined &&
         (!Number.isInteger(config.webhook_deduplication_limit) ||
