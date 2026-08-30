@@ -10,6 +10,10 @@ describe("Teams 平台动作", () => {
             "get_user_token_status",
             "sign_out_user",
             "exchange_user_token",
+            "reply_to_activity",
+            "create_targeted_activity",
+            "update_targeted_activity",
+            "delete_targeted_activity",
         ]) {
             expect(TEAMS_PLATFORM_ACTIONS.has(action)).toBe(true);
         }
@@ -52,5 +56,73 @@ describe("Teams 平台动作", () => {
             channelId: "msteams",
             exchangeRequest: { uri: "api://resource", token: "old-token" },
         });
+    });
+
+    it("调用当前 Teams API 的扁平 targeted activity 方法", async () => {
+        const replyToActivity = vi.fn().mockResolvedValue({ id: "reply-1" });
+        const createTargetedActivity = vi.fn().mockResolvedValue({ id: "target-1" });
+        const updateTargetedActivity = vi.fn().mockResolvedValue({ id: "target-1" });
+        const deleteTargetedActivity = vi.fn().mockResolvedValue(undefined);
+        const bot = {
+            withConversation: vi.fn(async (_conversationId, logic) =>
+                logic({
+                    client: {
+                        conversations: {
+                            replyToActivity,
+                            createTargetedActivity,
+                            updateTargetedActivity,
+                            deleteTargetedActivity,
+                        },
+                    },
+                }),
+            ),
+        };
+
+        await executeTeamsPlatformAction(bot as never, "reply_to_activity", {
+            conversation_id: "C1",
+            activity_id: "M1",
+            activity: { type: "message", text: "reply" },
+        });
+        await executeTeamsPlatformAction(bot as never, "create_targeted_activity", {
+            conversation_id: "C1",
+            activity: { type: "message", text: "private" },
+        });
+        await executeTeamsPlatformAction(bot as never, "update_targeted_activity", {
+            conversation_id: "C1",
+            activity_id: "M2",
+            activity: { type: "message", text: "updated" },
+        });
+        await executeTeamsPlatformAction(bot as never, "delete_targeted_activity", {
+            conversation_id: "C1",
+            activity_id: "M2",
+        });
+
+        expect(replyToActivity).toHaveBeenCalledWith("C1", "M1", {
+            type: "message",
+            text: "reply",
+        });
+        expect(createTargetedActivity).toHaveBeenCalledWith("C1", {
+            type: "message",
+            text: "private",
+        });
+        expect(updateTargetedActivity).toHaveBeenCalledWith("C1", "M2", {
+            type: "message",
+            text: "updated",
+        });
+        expect(deleteTargetedActivity).toHaveBeenCalledWith("C1", "M2");
+    });
+
+    it("拒绝类型错误的可选参数而不是静默忽略", async () => {
+        const bot = {
+            withConversation: vi.fn(async (_conversationId, logic) =>
+                logic({ client: { conversations: { getPagedMembers: vi.fn() } } }),
+            ),
+        };
+        await expect(
+            executeTeamsPlatformAction(bot as never, "list_conversation_members_paged", {
+                conversation_id: "C1",
+                page_size: "100",
+            }),
+        ).rejects.toMatchObject({ code: "TEAMS_PARAM_INVALID" });
     });
 });

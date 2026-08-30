@@ -68,6 +68,8 @@ Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `TeamsBot.i
 - `create_personal_conversation`：`service_url`、`tenant_id`、`aad_object_id`、`message`
 - `send_adaptive_card`：`conversation_id`、`card`
 - `send_targeted_message`：`conversation_id`、`message`，可用 `user_id` 指定仅其可见的成员
+- `reply_to_activity`：使用当前 Connector 扁平 API 回复指定 Activity
+- `create_targeted_activity`、`update_targeted_activity`、`delete_targeted_activity`：完整的 targeted Activity 生命周期，直接接收官方 `activity` 对象
 - `send_typing`：`conversation_id`
 
 文件与卡片：
@@ -95,6 +97,8 @@ Microsoft Graph：
 - `call_graph_api`：安全相对 `path`、`method`、`query`、`body`
 
 Graph 使用应用凭据流，必须有具体 Tenant ID：单租户复用 `tenant_id`，多租户 Bot 单独填写 `graph_tenant_id`。并发请求复用同一次 token 获取，401 只刷新并重试一次；公开 Graph 入口在最底层拒绝 query、fragment、编码分隔符与路径穿越。它只能调用管理员已授予相应 application permission 的资源。普通发送聊天消息不能用 app-only Graph 权限冒充；消息发送仍通过 Teams Connector 完成。
+
+平台动作按 Conversation/Connector、OAuth 与 Graph 拆分为独立领域模块，能力发现直接由同一注册表生成。已提供但类型错误的可选参数会返回结构化 `TEAMS_PARAM_INVALID`，不会被静默忽略。
 
 认证、Connector 和 Graph 错误统一抛出继承 OneBots 错误体系的 `TeamsApiError`，包含稳定 `code`、`category`、调用 `operation`、HTTP `status` 与 `details`；微软返回的动态错误码单独保存在 `platformCode`，不会污染稳定错误码。
 

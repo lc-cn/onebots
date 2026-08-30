@@ -1,4 +1,5 @@
 import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { TEAMS_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 const contextual = {
     support: "native" as const,
@@ -6,9 +7,14 @@ const contextual = {
     note: "需要已持久化的真实 Teams ConversationReference",
 };
 
+const platformActions = Object.fromEntries(
+    [...TEAMS_PLATFORM_ACTIONS].map(action => [action, contextual]),
+);
+
 /** Teams 能力以 Microsoft 365 Agents SDK 与 Connector API 的真实实现为准。 */
 export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
+        ...platformActions,
         send_message: { ...contextual, scenes: ["private", "direct", "group", "channel"] },
         update_message: contextual,
         delete_message: contextual,
@@ -30,6 +36,10 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         },
         send_adaptive_card: contextual,
         send_targeted_message: { ...contextual, scenes: ["group", "channel"] },
+        reply_to_activity: contextual,
+        create_targeted_activity: { ...contextual, scenes: ["group", "channel"] },
+        update_targeted_activity: { ...contextual, scenes: ["group", "channel"] },
+        delete_targeted_activity: { ...contextual, scenes: ["group", "channel"] },
         send_typing: contextual,
         send_file_consent_card: contextual,
         send_file_info_card: contextual,

@@ -20,6 +20,9 @@ export {
     executeTeamsPlatformAction,
     type TeamsPlatformAction,
 } from "./platform-actions.js";
+export { TEAMS_CONVERSATION_ACTIONS } from "./platform-actions-conversation.js";
+export { TEAMS_GRAPH_ACTIONS } from "./platform-actions-graph.js";
+export { TEAMS_OAUTH_ACTIONS } from "./platform-actions-oauth.js";
 export type {
     TeamsConfig,
     TeamsUser,
