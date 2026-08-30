@@ -1,4 +1,4 @@
-import { dateLikeToEventMs, type CommonEvent, type CommonTypes } from "onebots";
+import { dateLikeToEventMs, sha256Json, type CommonEvent, type CommonTypes } from "onebots";
 import { projectTeamsSegments } from "./activity.js";
 import type { TeamsActivity, TeamsEvent, TeamsUser } from "./types.js";
 
@@ -119,7 +119,7 @@ function createBase(
     rawEvent: TeamsEvent,
     context: TeamsProjectionContext,
 ): CommonEvent.Base<TeamsEvent> {
-    const fallbackId = `${activity.type}:${activity.timestamp}:${activity.conversation.id}:${activity.name || ""}`;
+    const fallbackId = `${activity.type}:sha256:${sha256Json(activity)}`;
     return {
         id: context.createId(activity.id || fallbackId),
         timestamp: dateLikeToEventMs(activity.timestamp),

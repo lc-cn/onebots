@@ -14,6 +14,13 @@ export {
     type TeamsApiErrorOptions,
 } from "./errors.js";
 export { TeamsGraphClient, type TeamsGraphRequestOptions } from "./graph.js";
+export {
+    createAdaptiveCardInvokeResponse,
+    createAdaptiveCardMessageResponse,
+    type TeamsAdaptiveCardInvokeBody,
+    type TeamsInvokeHandler,
+    type TeamsInvokeResponse,
+} from "./invoke-response.js";
 export { compileTeamsActivity, projectTeamsSegments } from "./activity.js";
 export {
     TEAMS_PLATFORM_ACTIONS,

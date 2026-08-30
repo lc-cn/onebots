@@ -266,18 +266,18 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         bot.on("reaction_removed", event =>
             this.dispatchTeamsEvent(account, "reaction_removed", event),
         );
-        bot.on("event", (event: TeamsEvent) => {
+        bot.on("event", async (event: TeamsEvent) => {
             const kind = resolveTeamsProjectionKind(event);
-            this.dispatchTeamsEvent(account, kind, event);
+            await this.dispatchTeamsEvent(account, kind, event);
         });
     }
 
-    private dispatchTeamsEvent(
+    private async dispatchTeamsEvent(
         account: Account<"teams", TeamsBot>,
         kind: TeamsProjectionKind,
         event: TeamsEvent,
-    ): void {
-        account.dispatch(
+    ): Promise<void> {
+        await account.dispatchAwaited(
             projectTeamsEvent(kind, event, {
                 botId: account.client.getCachedMe().id,
                 createId: value => this.createId(value),

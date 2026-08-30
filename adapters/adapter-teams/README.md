@@ -57,7 +57,9 @@ Teams 的“附件链接”和“真实文件上传”不是同一能力。个�
 
 入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；群会话中明确的机器人安装/卸载投影为 `group_increase/group_decrease`，个人安装和其他 installation 动作仍保持 `custom`；invoke 投影为 `interaction`；typing、会议、read receipt 和其他 Activity 以 `custom` notice 无损交付。Agents SDK 原始 Activity 位于 `raw_event.raw_activity`，稳定投影位于 `raw_event.activity`，Teams 上下文位于 `extensions.teams`。
 
-Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `TeamsBot.ingest(activity)` 入站管线。`ingestHttp()` 负责 Microsoft JWT 认证；`ingest(activity)` 只接收已由上游认证的 Activity。Connector 重试会继续触发 `raw_activity`，但同一 Activity ID 的 canonical 事件只投影一次；一个 Activity 携带多个 Reaction 时会逐项派发并生成不同事件 ID。
+Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `await TeamsBot.ingest(activity)` 入站管线。`ingestHttp()` 负责 Microsoft JWT 认证；`ingest(activity)` 只接收已由上游认证的 Activity。入口会等待 canonical 事件抵达全部协议出口后才确认成功；失败不会提交去重状态，可由 Connector 安全重试。并发的相同 Activity 会合并为一次投递；缺少 ID 的 Activity 使用稳定载荷指纹生成身份。`raw_activity` 仍会记录每次接收，一个 Activity 携带多个成员或 Reaction 时会逐项派发并生成不同事件 ID。
+
+`adaptiveCard/action`（Adaptive Card `Action.Execute`）默认返回符合 Universal Action Model 的 Invoke 响应。业务需要动态刷新卡片、鉴权或返回自定义状态时，可使用 `bot.setInvokeHandler(handler)` 注册唯一处理器，并用 `createAdaptiveCardInvokeResponse()` / `createAdaptiveCardMessageResponse()` 构造响应。成功响应按 Activity ID 缓存，Microsoft 重投不会重复执行处理器；更换处理器会建立新的缓存代际。未注册处理器的其他 Invoke 类型保持 Agents SDK 的明确 `501`，不会伪造成功。
 
 ## 平台扩展动作
 
@@ -107,5 +109,6 @@ Graph 使用应用凭据流，必须有具体 Tenant ID：单租户复用 `tenan
 - [Microsoft 365 Agents SDK](https://learn.microsoft.com/microsoft-365/agents-sdk/)
 - [Node.js 迁移指南](https://learn.microsoft.com/microsoft-365/agents-sdk/bf-migration-nodejs)
 - [Teams 主动消息](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/conversations/send-proactive-messages)
+- [Adaptive Card Universal Action Model](https://learn.microsoft.com/adaptive-cards/authoring-cards/universal-action-model)
 - [Teams 文件](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/bots-filesv4)
 - [Teams RSC 权限](https://learn.microsoft.com/microsoftteams/platform/graph-api/app-permissions/teams-app-permissions)

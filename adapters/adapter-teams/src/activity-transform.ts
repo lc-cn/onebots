@@ -121,7 +121,7 @@ function objectValue(value: unknown): Record<string, unknown> | undefined {
 
 function dateValue(value: Date | string | undefined): string {
     if (value instanceof Date) return value.toISOString();
-    return typeof value === "string" ? value : new Date().toISOString();
+    return typeof value === "string" ? value : "";
 }
 
 function optionalDateValue(value: Date | string | undefined): string | undefined {

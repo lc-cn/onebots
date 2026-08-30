@@ -76,7 +76,7 @@ describe("TeamsBot 会话引用契约", () => {
         expect(stopped).toHaveBeenCalledOnce();
     });
 
-    it("公开 ingest 汇入同一管线并去重 canonical Activity", () => {
+    it("公开 ingest 汇入同一管线并去重 canonical Activity", async () => {
         const bot = createBot();
         const message = vi.fn();
         const rawActivity = vi.fn();
@@ -84,30 +84,28 @@ describe("TeamsBot 会话引用契约", () => {
         bot.on("raw_activity", rawActivity);
         const activity = createActivity();
 
-        expect(bot.ingest(activity)).toMatchObject({ type: ActivityTypes.Message });
-        expect(bot.ingest(activity)).toBeUndefined();
+        await expect(bot.ingest(activity)).resolves.toMatchObject({ type: ActivityTypes.Message });
+        await expect(bot.ingest(activity)).resolves.toBeUndefined();
         expect(rawActivity).toHaveBeenCalledTimes(2);
         expect(message).toHaveBeenCalledOnce();
         expect(bot.getCachedMe()).toMatchObject({ id: "bot-1", name: "Agent" });
     });
 
-    it("canonical 派发失败时不提交去重窗口", () => {
+    it("异步 canonical 派发失败时不提交去重窗口", async () => {
         const bot = createBot();
-        const failing = vi.fn(() => {
-            throw new Error("consumer failed");
-        });
+        const failing = vi.fn().mockRejectedValue(new Error("consumer failed"));
         const activity = createActivity();
         bot.on("private_message", failing);
 
-        expect(() => bot.ingest(activity)).toThrow("consumer failed");
+        await expect(bot.ingest(activity)).rejects.toThrow("consumer failed");
         bot.off("private_message", failing);
         const recovered = vi.fn();
         bot.on("private_message", recovered);
-        expect(bot.ingest(activity)).toBeDefined();
+        await expect(bot.ingest(activity)).resolves.toBeDefined();
         expect(recovered).toHaveBeenCalledOnce();
     });
 
-    it("逐个派发同一 Activity 中的原生 Reaction", () => {
+    it("逐个派发同一 Activity 中的原生 Reaction", async () => {
         const bot = createBot();
         const reaction = vi.fn();
         bot.on("reaction_added", reaction);
@@ -115,12 +113,97 @@ describe("TeamsBot 会话引用契约", () => {
         activity.type = ActivityTypes.MessageReaction;
         activity.reactionsAdded = [{ type: "like" }, { type: "heart" }];
 
-        bot.ingest(activity);
+        await bot.ingest(activity);
 
         expect(reaction).toHaveBeenCalledTimes(2);
         expect(
             reaction.mock.calls.map(([event]) => event.activity.reactionsAdded?.[0]?.type),
         ).toEqual(["like", "heart"]);
+    });
+
+    it("合并同一 Activity 的并发重投并等待异步消费者", async () => {
+        const bot = createBot();
+        let release: (() => void) | undefined;
+        const message = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
+        bot.on("private_message", message);
+        const activity = createActivity();
+
+        const first = bot.ingest(activity);
+        const second = bot.ingest(activity);
+        await Promise.resolve();
+        expect(message).toHaveBeenCalledOnce();
+        release?.();
+        await expect(Promise.all([first, second])).resolves.toEqual([
+            expect.objectContaining({ activity: expect.objectContaining({ id: "activity-1" }) }),
+            undefined,
+        ]);
+        expect(message).toHaveBeenCalledOnce();
+    });
+
+    it("缺少 Activity ID 与时间时按稳定载荷生成身份", async () => {
+        const bot = createBot();
+        const message = vi.fn();
+        bot.on("private_message", message);
+        const first = createActivity();
+        first.id = undefined;
+        first.timestamp = undefined;
+        const retry = createActivity();
+        retry.id = undefined;
+        retry.timestamp = undefined;
+
+        const projected = await bot.ingest(first);
+        await bot.ingest(retry);
+
+        expect(projected?.activity.id).toMatch(/^message:sha256:[a-f0-9]{64}$/u);
+        expect(projected?.activity.timestamp).toBe("");
+        expect(message).toHaveBeenCalledOnce();
+    });
+
+    it("Adaptive Card Action.Execute 默认返回合规 Invoke 响应", async () => {
+        const bot = createBot();
+        const activity = createActivity();
+        activity.type = ActivityTypes.Invoke;
+        activity.name = "adaptiveCard/action";
+        activity.value = { action: { type: "Action.Execute", verb: "approve" } };
+        const sendActivity = vi.fn().mockResolvedValue({ id: "" });
+
+        await bot["handleTurn"]({ activity, sendActivity } as never);
+
+        expect(sendActivity).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: ActivityTypes.InvokeResponse,
+                value: {
+                    status: 200,
+                    body: {
+                        statusCode: 200,
+                        type: "application/vnd.microsoft.activity.message",
+                        value: "操作已接收",
+                    },
+                },
+            }),
+        );
+    });
+
+    it("自定义 Invoke 处理器的成功响应按 Activity ID 缓存", async () => {
+        const bot = createBot();
+        const handler = vi.fn().mockResolvedValue({ status: 200, body: { task: "ok" } });
+        bot.setInvokeHandler(handler);
+        const activity = createActivity();
+        activity.type = ActivityTypes.Invoke;
+        activity.name = "task/fetch";
+        const sendActivity = vi.fn().mockResolvedValue({ id: "" });
+        const context = { activity, sendActivity } as never;
+
+        await bot["handleTurn"](context);
+        await bot["handleTurn"](context);
+
+        expect(handler).toHaveBeenCalledOnce();
+        expect(sendActivity).toHaveBeenCalledTimes(2);
     });
 
     it("Webhook 对非法 Activity 返回结构化 400", async () => {

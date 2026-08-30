@@ -18,12 +18,13 @@ import {
 } from "@microsoft/agents-activity";
 import {
     ErrorCategory,
-    RecentEventDeduplicator,
+    emitAwaited,
     type MediaSourceInput,
     type Next,
     type RouterContext,
 } from "onebots";
-import { transformConversationReference, transformTeamsActivity } from "./activity-transform.js";
+import { transformConversationReference } from "./activity-transform.js";
+import { TeamsActivityIngress, type TeamsActivityIngressResult } from "./activity-ingress.js";
 import {
     allowedServiceUrlHosts,
     acceptTeamsFetchRequest,
@@ -37,6 +38,7 @@ import {
 import { TeamsApiError, TeamsConversationReferenceError } from "./errors.js";
 import { TeamsGraphClient, type TeamsGraphRequestOptions } from "./graph.js";
 import { TeamsFileConsentManager, type TeamsFileConsentResult } from "./file-consent.js";
+import { TeamsInvokeResponder, type TeamsInvokeHandler } from "./invoke-response.js";
 import type {
     TeamsConfig,
     TeamsConversationReference,
@@ -81,9 +83,10 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     private readonly botAudience: string;
     private readonly graph: TeamsGraphClient;
     private readonly fileConsents: TeamsFileConsentManager;
+    private readonly activityIngress = new TeamsActivityIngress();
+    private readonly invokeResponder = new TeamsInvokeResponder();
     private me: TeamsUser;
     private running = false;
-    private readonly receivedActivities = new RecentEventDeduplicator<string>();
 
     constructor(
         private readonly config: TeamsConfig,
@@ -223,6 +226,11 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
         this.references.save(structuredClone(reference));
     }
 
+    /** 注册当前 Turn 内生成 Invoke HTTP 响应的唯一处理器；传入 undefined 可恢复默认行为。 */
+    setInvokeHandler(handler?: TeamsInvokeHandler): void {
+        this.invokeResponder.setHandler(handler);
+    }
+
     async sendActivity(conversationId: string, activity: Activity): Promise<ResourceResponse> {
         return this.withConversation(conversationId, async context => {
             const response = await context.turn.sendActivity(activity);
@@ -358,92 +366,40 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     }
 
     /** 将已认证或既有 Agents SDK 连接中的 Activity 汇入统一事件管线。 */
-    ingest(activity: Activity): TeamsEvent | undefined {
-        this.captureReference(activity);
-        this.emit("raw_activity", activity);
-        if (activity.id && this.receivedActivities.has(activity.id)) return undefined;
-        this.fileConsents.capture(activity);
-        const transformed = transformTeamsActivity(activity);
-        if (transformed.recipient?.id) this.me = transformed.recipient;
-        const event: TeamsEvent = {
-            type: activity.type,
-            activity: transformed,
-            raw_activity: activity,
-        };
+    async ingest(activity: Activity): Promise<TeamsEvent | undefined> {
+        const result = await this.ingestActivity(activity);
+        return result.delivered ? result.event : undefined;
+    }
 
-        if (activity.type === ActivityTypes.Message) {
-            this.emit(isGroupActivity(transformed) ? "group_message" : "private_message", event);
-        } else if (activity.type === ActivityTypes.MessageUpdate)
-            this.emit("message_edited", event);
-        else if (activity.type === ActivityTypes.MessageDelete) this.emit("message_deleted", event);
-        else if (activity.type === ActivityTypes.ConversationUpdate) this.emitMembers(event);
-        else if (activity.type === ActivityTypes.MessageReaction) this.emitReactions(event);
-        else this.emit("event", event);
-        if (activity.id) this.receivedActivities.commit(activity.id);
-        return event;
+    private async ingestActivity(activity: Activity): Promise<TeamsActivityIngressResult> {
+        this.captureReference(activity);
+        await emitAwaited(this, "raw_activity", activity);
+        return this.activityIngress.ingest(activity, async (event, deliveries) => {
+            this.fileConsents.capture(activity);
+            if (event.activity.recipient?.id) this.me = event.activity.recipient;
+            for (const delivery of deliveries) {
+                await emitAwaited(this, delivery.channel, delivery.event);
+            }
+        });
     }
 
     private async handleTurn(context: TurnContext): Promise<void> {
-        this.ingest(context.activity);
+        const result = await this.ingestActivity(context.activity);
+        if (context.activity.type !== ActivityTypes.Invoke) return;
+        const response = await this.invokeResponder.respond(result.event);
+        if (!response) return;
+        await context.sendActivity(
+            Activity.fromObject({ type: ActivityTypes.InvokeResponse, value: response }),
+        );
     }
 
     private captureReference(activity: Activity): void {
         const reference = transformConversationReference(activity.getConversationReference());
+        validateReference(reference);
         this.references.save(reference);
         const activityId = activity.id;
         if (activityId) this.references.saveMessage(activityId, reference.conversation.id);
     }
-
-    private emitMembers(event: TeamsEvent): void {
-        for (const member of event.activity.membersAdded || []) {
-            this.emit("member_joined", {
-                ...event,
-                activity: { ...event.activity, membersAdded: [member], membersRemoved: [] },
-            });
-        }
-        for (const member of event.activity.membersRemoved || []) {
-            this.emit("member_left", {
-                ...event,
-                activity: { ...event.activity, membersAdded: [], membersRemoved: [member] },
-            });
-        }
-        if (!event.activity.membersAdded?.length && !event.activity.membersRemoved?.length) {
-            this.emit("event", event);
-        }
-    }
-
-    private emitReactions(event: TeamsEvent): void {
-        for (const reaction of event.activity.reactionsAdded || []) {
-            this.emit("reaction_added", {
-                ...event,
-                activity: {
-                    ...event.activity,
-                    reactionsAdded: [reaction],
-                    reactionsRemoved: [],
-                },
-            });
-        }
-        for (const reaction of event.activity.reactionsRemoved || []) {
-            this.emit("reaction_removed", {
-                ...event,
-                activity: {
-                    ...event.activity,
-                    reactionsAdded: [],
-                    reactionsRemoved: [reaction],
-                },
-            });
-        }
-        if (!event.activity.reactionsAdded?.length && !event.activity.reactionsRemoved?.length) {
-            this.emit("event", event);
-        }
-    }
-}
-
-function isGroupActivity(activity: TeamsEvent["activity"]): boolean {
-    return Boolean(
-        activity.conversation.isGroup ||
-        ["channel", "groupChat"].includes(activity.conversation.conversationType || ""),
-    );
 }
 
 function validateReference(reference: TeamsConversationReference): void {

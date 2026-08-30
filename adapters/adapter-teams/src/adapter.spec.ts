@@ -57,7 +57,7 @@ describe("Teams 会话资源分类", () => {
             activity.recipient = { id: "bot-native", name: "Agent" };
             activity.conversation = { id: "conversation-1", isGroup: false };
             activity.text = "hello";
-            account.client.ingest(activity);
+            await account.client.ingest(activity);
             expect(dispatch).toHaveBeenCalledWith(
                 expect.objectContaining({
                     event: expect.objectContaining({
