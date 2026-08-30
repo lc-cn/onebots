@@ -5,6 +5,7 @@ import { Adapter } from "onebots";
 import { CommonEvent, CommonTypes } from "onebots";
 import { WebSocket } from "ws";
 import { SatoriActionService } from "./actions.js";
+import { SatoriChannelRouteRegistry } from "./channel-routes.js";
 import { Satori } from "./types.js";
 import { SatoriConfig } from "./config.js";
 
@@ -54,6 +55,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     public readonly version = "v1" as const;
     private eventId = 0;
     private readonly actions: SatoriActionService;
+    private readonly channelRoutes: SatoriChannelRouteRegistry;
     private readonly webhookCleanups = new Set<() => void>();
 
     constructor(
@@ -66,8 +68,12 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             protocol: "satori",
             version: "v1",
         });
-        this.actions = new SatoriActionService(adapter, account, segments =>
-            this.convertMessageContent(segments),
+        this.channelRoutes = new SatoriChannelRouteRegistry(adapter, account.account_id);
+        this.actions = new SatoriActionService(
+            adapter,
+            account,
+            segments => this.convertMessageContent(segments),
+            this.channelRoutes,
         );
     }
 
@@ -163,19 +169,21 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private formatSatoriMessage(event: CommonEvent.Message): Satori.Event {
+        const route = this.channelRoutes.rememberEvent(event);
         return {
             id: this.eventId++,
             type: "message-created",
             platform: this.config.platform || event.platform,
             self_id: this.adapter.resolveId(this.account.account_id).string,
             timestamp: event.timestamp,
-            channel: event.group
-                ? {
-                      id: event.group.channel_id?.string || event.group.id.string,
-                      type: event.message_type === "group" ? 0 : 1,
-                      name: event.group.name,
-                  }
-                : undefined,
+            channel: {
+                id:
+                    event.group?.channel_id?.string ??
+                    event.group?.id.string ??
+                    event.sender.id.string,
+                type: route.scene_type === "private" || route.scene_type === "direct" ? 1 : 0,
+                name: event.group?.name,
+            },
             guild: event.group?.guild_id
                 ? { id: event.group.guild_id.string }
                 : event.message_type === "group" && event.group

@@ -1,6 +1,7 @@
 import type { Account, Adapter, CommonTypes } from "onebots";
 import { SatoriDirectoryActions } from "./actions-directory.js";
 import { SatoriMessageActions } from "./actions-message.js";
+import type { SatoriChannelRouteRegistry } from "./channel-routes.js";
 
 /** Satori 资源动作目录；仅暴露规范 resource.method 名称。 */
 export class SatoriActionService {
@@ -11,9 +12,10 @@ export class SatoriActionService {
         private readonly adapter: Adapter,
         private readonly account: Account,
         serializeMessage: (segments: CommonTypes.Segment[]) => string,
+        channelRoutes: SatoriChannelRouteRegistry,
     ) {
-        this.messages = new SatoriMessageActions(adapter, account, serializeMessage);
-        this.directory = new SatoriDirectoryActions(adapter, account);
+        this.messages = new SatoriMessageActions(adapter, account, serializeMessage, channelRoutes);
+        this.directory = new SatoriDirectoryActions(adapter, account, channelRoutes);
     }
 
     async execute(action: string, params: Record<string, unknown> = {}): Promise<unknown> {

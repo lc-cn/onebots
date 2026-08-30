@@ -76,6 +76,20 @@ function createProtocol() {
             ...resolvedId,
             string: typeof id === "string" ? id : resolvedId.string,
         })),
+        describeCapabilities: vi.fn().mockReturnValue({
+            actions: {
+                get_group_info: { support: "native" },
+                get_channel_info: { support: "native" },
+            },
+        }),
+        sendMessage: vi.fn().mockResolvedValue({
+            message_id: { string: "sent-1", number: 1, source: "sent-1" },
+        }),
+        getMessageHistory: vi.fn().mockResolvedValue([]),
+        createUserChannel: vi.fn().mockResolvedValue({
+            channel_id: { string: "direct-1", number: 1, source: "direct-1" },
+            channel_name: "Direct",
+        }),
         getLoginInfo: vi.fn().mockResolvedValue({
             user_id: { string: "runtime-bot", number: 12345678, source: "runtime-bot" },
             user_name: "Runtime Bot",
@@ -180,6 +194,10 @@ describe("Satori V1 protocol", () => {
             platform: "qq",
             self_id: "bot",
             timestamp: 1700000000000,
+            channel: {
+                id: "u10001",
+                type: 1,
+            },
             user: {
                 id: "u10001",
                 name: "Alice",
@@ -191,6 +209,57 @@ describe("Satori V1 protocol", () => {
                 created_at: 1700000000000,
             },
         });
+    });
+
+    test("消息动作复用事件登记的场景，不从 channel_id 形状猜测", async () => {
+        const { adapter, protocol } = createProtocol();
+        protocol["convertToSatoriFormat"](
+            textMsgEvent({
+                message_type: "group",
+                group: {
+                    id: { number: 20001, string: "opaque_channel", source: "opaque_channel" },
+                },
+            }) as unknown as CommonEvent.Event,
+        );
+
+        await protocol.apply("message.create", {
+            channel_id: "opaque_channel",
+            content: "hello",
+        });
+
+        expect(adapter.sendMessage).toHaveBeenCalledWith("bot", {
+            scene_type: "group",
+            scene_id: expect.objectContaining({ string: "opaque_channel" }),
+            guild_id: undefined,
+            message: [{ type: "text", data: { text: "hello" } }],
+        });
+    });
+
+    test("无上下文且目录能力有歧义时拒绝误投消息", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        const result = await protocol.apply("message.create", {
+            channel_id: "unknown",
+            content: "hello",
+        });
+
+        expect(result.message).toContain("无法确定 channel_id unknown 的消息场景");
+        expect(adapter.sendMessage).not.toHaveBeenCalled();
+    });
+
+    test("私信频道创建会登记 direct 路由", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        await protocol.apply("user.channel.create", { user_id: "user-1" });
+        await protocol.apply("message.create", { channel_id: "direct-1", content: "hello" });
+
+        expect(adapter.sendMessage).toHaveBeenCalledWith(
+            "bot",
+            expect.objectContaining({
+                scene_type: "direct",
+                scene_id: expect.objectContaining({ string: "direct-1" }),
+            }),
+        );
     });
 
     test("converts a group message with channel type 0", () => {
@@ -240,7 +309,7 @@ describe("Satori V1 protocol", () => {
         ).toMatchObject({
             type: "message-created",
             guild: { id: "guild-1" },
-            channel: { id: "channel-1", type: 1, name: "General" },
+            channel: { id: "channel-1", type: 0, name: "General" },
         });
     });
 

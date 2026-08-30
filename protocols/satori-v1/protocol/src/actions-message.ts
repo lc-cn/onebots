@@ -1,4 +1,5 @@
 import type { Account, Adapter, CommonTypes } from "onebots";
+import type { SatoriChannelRouteRegistry } from "./channel-routes.js";
 import { Satori } from "./types.js";
 
 function toSatoriChannelType(value?: number): Satori.ChannelType {
@@ -11,6 +12,7 @@ export class SatoriMessageActions {
         private readonly adapter: Adapter,
         private readonly account: Account,
         private readonly serializeMessage: (segments: CommonTypes.Segment[]) => string,
+        private readonly channelRoutes: SatoriChannelRouteRegistry,
     ) {}
 
     private convertMessageContent(segments: CommonTypes.Segment[]): string {
@@ -27,14 +29,12 @@ export class SatoriMessageActions {
             content: string | Satori.Element[];
         };
 
-        // Determine scene type: check if channel_id looks like a DM channel (dm_xxx or just user_id)
-        const isDM = channel_id.startsWith("dm_") || !channel_id.includes("_");
-        const sceneType: CommonTypes.Scene = isDM ? "private" : "group";
-        const sceneId = isDM ? channel_id.replace("dm_", "") : channel_id;
+        const route = this.channelRoutes.resolve(channel_id);
 
         const result = await this.adapter.sendMessage(this.account.account_id, {
-            scene_type: sceneType,
-            scene_id: this.adapter.resolveId(sceneId),
+            scene_type: route.scene_type,
+            scene_id: this.adapter.resolveId(route.scene_id),
+            guild_id: route.guild_id ? this.adapter.resolveId(route.guild_id) : undefined,
             message: this.parseMessageContent(content),
         });
 
@@ -100,14 +100,11 @@ export class SatoriMessageActions {
             limit?: number;
         };
 
-        // Determine scene type
-        const isDM = channel_id.startsWith("dm_") || !channel_id.includes("_");
-        const sceneType: CommonTypes.Scene = isDM ? "private" : "group";
-        const sceneId = isDM ? channel_id.replace("dm_", "") : channel_id;
+        const route = this.channelRoutes.resolve(channel_id);
 
         const messages = await this.adapter.getMessageHistory(this.account.account_id, {
-            scene_type: sceneType,
-            scene_id: this.adapter.resolveId(sceneId),
+            scene_type: route.scene_type,
+            scene_id: this.adapter.resolveId(route.scene_id),
             limit: limit || 20,
         });
 
@@ -131,6 +128,7 @@ export class SatoriMessageActions {
             channel_id: this.adapter.resolveId(channel_id),
             guild_id: guild_id ? this.adapter.resolveId(guild_id) : undefined,
         });
+        this.channelRoutes.rememberDirectoryChannel(channel_id, "channel", guild_id);
 
         return {
             id: info.channel_id.string,
@@ -150,6 +148,13 @@ export class SatoriMessageActions {
         const channels = await this.adapter.getChannelList(this.account.account_id, {
             guild_id: this.adapter.resolveId(guild_id),
         });
+        for (const channel of channels) {
+            this.channelRoutes.rememberDirectoryChannel(
+                channel.channel_id.string,
+                "channel",
+                guild_id,
+            );
+        }
 
         return {
             data: channels.map(channel => ({
@@ -178,6 +183,7 @@ export class SatoriMessageActions {
             channel_type: type,
             parent_id: parent_id ? this.adapter.resolveId(parent_id) : undefined,
         });
+        this.channelRoutes.rememberDirectoryChannel(channel.channel_id.string, "channel", guild_id);
 
         return {
             id: channel.channel_id.string,

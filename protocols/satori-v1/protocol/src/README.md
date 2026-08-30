@@ -6,6 +6,7 @@
 - `actions.ts`：只接受 Satori 规范的 `resource.method` 动作名并统一分派。
 - `actions-message.ts`：消息与频道资源。
 - `actions-directory.ts`：Guild、成员、用户、好友与登录资源。
+- `channel-routes.ts`：维护不透明 `channel_id` 到通用消息场景的显式路由。
 
 ## 传输
 
@@ -15,6 +16,8 @@
 - Webhook：可配置多个目标，每项可覆盖全局 Token
 
 HTTP 与 WebSocket 均使用 `Authorization: Bearer <token>`。WebSocket 客户端发送 IDENTIFY 后，READY 中的登录身份来自 Adapter 的真实 `getLoginInfo()` 结果。
+
+消息路由从真实事件和频道目录学习，不使用 ID 前缀或分隔符猜测。能力无法唯一判定的未知频道会明确拒绝，避免把消息投递到错误场景。
 
 ## 动作映射
 

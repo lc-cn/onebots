@@ -1,4 +1,5 @@
 import type { Account, Adapter } from "onebots";
+import type { SatoriChannelRouteRegistry } from "./channel-routes.js";
 import { Satori } from "./types.js";
 
 /** 公会、成员、用户、好友与登录资源动作。 */
@@ -6,6 +7,7 @@ export class SatoriDirectoryActions {
     constructor(
         private readonly adapter: Adapter,
         private readonly account: Account,
+        private readonly channelRoutes: SatoriChannelRouteRegistry,
     ) {}
 
     /**
@@ -131,6 +133,7 @@ export class SatoriDirectoryActions {
             user_id: this.adapter.resolveId(user_id),
             guild_id: guild_id ? this.adapter.resolveId(guild_id) : undefined,
         });
+        this.channelRoutes.rememberDirectoryChannel(channel.channel_id.string, "direct", guild_id);
 
         return {
             id: channel.channel_id.string,
