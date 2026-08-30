@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { QQBotInboundMessage } from "@tencent-connect/qqbot-nodejs";
 import { dateLikeToEventMs, type CommonEvent, type CommonTypes } from "onebots";
 
@@ -65,8 +66,8 @@ export function projectQQRawEvent(
 ): CommonEvent.Notice | CommonEvent.Request | CommonEvent.Meta {
     const data = asRecord(raw);
     const eventId =
-        firstText(data, "id", "event_id", "join_request_id", "request_id") ??
-        `${eventType}:${Date.now()}`;
+        firstText(data, "id", "event_id", "join_request_id", "request_id", "session_id") ??
+        rawEventIdentity(eventType, raw);
     const timestamp = dateLikeToEventMs(
         firstText(data, "timestamp", "time", "event_time", "apply_at") ?? Date.now(),
     );
@@ -85,6 +86,10 @@ export function projectQQRawEvent(
     const userId = firstText(data, "user_openid", "member_openid", "openid", "user_id");
     const groupId = firstText(data, "group_openid", "guild_id", "group_id");
     if (eventType === "GROUP_JOIN_REQUEST" || eventType === "GROUP_ADD_REQUEST") {
+        if (!userId || !groupId) {
+            // canonical request 必须具备申请人与目标群；畸形载荷保留为 custom notice，避免伪造身份。
+            return projectQQNotice(eventType, data, raw, eventId, timestamp, context);
+        }
         const verifyInfo = asRecord(data.verify_info);
         const applySource = text(data.apply_source);
         return {
@@ -96,10 +101,10 @@ export function projectQQRawEvent(
             request_type: "group",
             sub_type: applySource === "invited" ? "invite" : "add",
             user: {
-                id: context.createId(userId ?? "unknown"),
+                id: context.createId(userId),
                 name: text(data.username),
             },
-            group: groupId ? { id: context.createId(groupId) } : undefined,
+            group: { id: context.createId(groupId) },
             comment: text(verifyInfo.verify_message) ?? text(data.comment) ?? text(data.message),
             flag: firstText(data, "join_request_id", "request_id") ?? eventId,
             raw_event: raw,
@@ -306,7 +311,20 @@ function resolveNoticeType(eventType: string): CommonEvent.NoticeType {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-    return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+}
+
+function rawEventIdentity(eventType: string, raw: unknown): string {
+    // Gateway 与 Webhook 载荷均来自 JSON；不可序列化的手动输入应直接暴露调用错误。
+    const serialised = JSON.stringify(raw) ?? String(raw);
+    const digest = createHash("sha256")
+        .update(eventType)
+        .update("\0")
+        .update(serialised)
+        .digest("hex");
+    return `${eventType}:${digest}`;
 }
 
 function text(value: unknown): string | undefined {

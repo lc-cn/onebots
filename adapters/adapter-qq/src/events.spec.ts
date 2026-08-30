@@ -32,6 +32,26 @@ describe("QQ 事件投影", () => {
         expect(event).toMatchObject({ type: "notice", notice_type: "custom", raw_event: raw });
     });
 
+    it("为缺少平台 ID 的重复事件生成稳定身份", () => {
+        const raw = { guild_id: "guild", value: 1 };
+        const first = projectQQRawEvent("FUTURE_EVENT", raw, context);
+        const second = projectQQRawEvent("FUTURE_EVENT", raw, context);
+
+        expect(first.id).toEqual(second.id);
+        expect(first.id.string).toMatch(/^FUTURE_EVENT:[a-f0-9]{64}$/u);
+    });
+
+    it("群申请缺少申请人时保留 raw notice 而不伪造 unknown 用户", () => {
+        const event = projectQQRawEvent(
+            "GROUP_JOIN_REQUEST",
+            { request_id: "request", group_openid: "group" },
+            context,
+        );
+
+        expect(event).toMatchObject({ type: "notice", notice_type: "custom" });
+        expect("user" in event ? event.user : undefined).toBeUndefined();
+    });
+
     it("频道消息分别保留 Guild 与 Channel 地址", () => {
         const platformEvent = { id: "m1", guild_id: "guild-1", channel_id: "channel-1" };
         const message = {

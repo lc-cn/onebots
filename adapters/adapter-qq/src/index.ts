@@ -7,6 +7,7 @@ export { QQClient } from "./client.js";
 export { QQApiError, type QQApiErrorOptions } from "./errors.js";
 export { projectQQMessage, projectQQRawEvent } from "./events.js";
 export { compileMessage, sendQQMessage } from "./messages.js";
+export { toQQMessageInfo } from "./message-info.js";
 export { QQOpenApi } from "./open-api.js";
 export {
     executeQQPlatformAction,
@@ -28,6 +29,7 @@ export type {
     QQPlatformCall,
     QQRawMessage,
     QQReceiveMode,
+    QQUser,
 } from "./types.js";
 export * from "@tencent-connect/qqbot-nodejs";
 
@@ -73,6 +75,7 @@ export const qqSchema: Schema = {
         label: "Webhook 路径",
         placeholder: "/qq/{account_id}/webhook",
         description: "仅 Webhook 模式使用；留空时自动生成账号隔离路径",
+        pattern: /^\/(?!\/)[^?#]*$/u,
         ui: {
             section: "transport",
             visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
@@ -83,7 +86,9 @@ export const qqSchema: Schema = {
         label: "事件订阅",
         description: "仅选择机器人已在 QQ 开放平台获批的事件；留空使用官方 SDK 安全默认值",
         choices: intentChoices,
-        ui: { section: "filter" },
+        validator: value =>
+            Array.isArray(value) && new Set(value).size === value.length ? true : "Intent 不能重复",
+        ui: { widget: "choice-list", section: "filter" },
     },
     markdown_support: {
         type: "boolean",
@@ -97,6 +102,7 @@ export const qqSchema: Schema = {
         label: "OpenAPI Base URL",
         placeholder: "https://api.sgroup.qq.com",
         description: "官方兼容代理或测试环境才需要覆盖",
+        pattern: /^https?:\/\/[^\s]+$/u,
         ui: { section: "advanced" },
     },
     token_base_url: {
@@ -104,6 +110,7 @@ export const qqSchema: Schema = {
         label: "Token Base URL",
         placeholder: "https://bots.qq.com",
         description: "官方兼容代理或测试环境才需要覆盖",
+        pattern: /^https?:\/\/[^\s]+$/u,
         ui: { section: "advanced" },
     },
 };

@@ -41,6 +41,13 @@ export interface QQPlatformCall {
     body?: unknown;
 }
 
+/** QQ OpenAPI 返回的当前机器人身份。 */
+export interface QQUser {
+    id: string;
+    username?: string;
+    avatar?: string;
+}
+
 export interface QQMessagePayload extends Omit<SendMessageOptions, "target"> {
     keyboard?: InlineKeyboard;
 }
@@ -53,5 +60,6 @@ export type QQRawMessage = QQBotInboundMessage["raw"];
 
 export function resolveIntentMask(intents: readonly QQIntent[] | undefined): number | undefined {
     if (!intents?.length) return undefined;
-    return intents.reduce((mask, intent) => mask + QQ_INTENTS[intent], 0);
+    // Intent 是位标志。使用按位并集可保证重复配置不会改变最终权限集合。
+    return intents.reduce((mask, intent) => mask | QQ_INTENTS[intent], 0);
 }

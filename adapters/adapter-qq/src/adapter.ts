@@ -8,14 +8,14 @@ import {
     ErrorCategory,
     readPackageVersion,
     type CommonEvent,
-    type CommonTypes,
 } from "onebots";
 import { qqCapabilities } from "./capabilities.js";
-import { QQClient } from "./client.js";
+import { isQQSdkReconnectExhaustedLog, QQClient } from "./client.js";
 import { QQApiError } from "./errors.js";
 import { projectQQMessage, projectQQRawEvent } from "./events.js";
 import { sendQQMessage } from "./messages.js";
-import { QQOpenApi, type QQGuildMessage } from "./open-api.js";
+import { toQQMessageInfo } from "./message-info.js";
+import { QQOpenApi } from "./open-api.js";
 import {
     executeQQPlatformAction,
     QQ_PLATFORM_ACTIONS,
@@ -69,11 +69,14 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
             params.scene_id.string,
             params.message_id.string,
         );
-        return this.toMessageInfo(params.scene_type, params.scene_id, message);
+        return toQQMessageInfo(params.scene_type, params.scene_id, message, value =>
+            this.createId(value),
+        );
     }
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         const user = await this.openApi(uin).getSelf();
+        this.applyProfile(this.getAccount(uin), user);
         return {
             user_id: this.createId(user.id),
             user_name: user.username ?? "QQ机器人",
@@ -255,8 +258,14 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
     }
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
-        const online = this.getAccount(uin)?.status === AccountStatus.Online;
-        return { online, good: online };
+        const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
+        const self = account?.client.getCachedSelf();
+        return {
+            online,
+            good: online,
+            ...(self ? { bots: [{ self: this.createId(self.id), online }] } : {}),
+        };
     }
 
     isPlatformActionImplemented(action: string): boolean {
@@ -278,10 +287,11 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         const webhookMode =
             qqConfig.receive_mode === "webhook" || qqConfig.receive_mode === "manual";
         let account: Account<"qq", QQClient>;
+        let client: QQClient;
         const host = new QQWebhookHost(webhookPath, config.account_id, result => {
             this.dispatchWebhookResult(account, result);
         });
-        const client = new QQClient(
+        client = new QQClient(
             {
                 appId: qqConfig.appid,
                 appSecret: qqConfig.secret,
@@ -295,7 +305,13 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
                 logger: {
                     info: (message, meta) => this.logger.info(message, meta),
                     warn: (message, meta) => this.logger.warn(message, meta),
-                    error: (message, meta) => this.logger.error(message, meta),
+                    error: (message, meta) => {
+                        this.logger.error(message, meta);
+                        if (isQQSdkReconnectExhaustedLog(message)) {
+                            account.status = AccountStatus.OffLine;
+                            client.restartTransportGeneration();
+                        }
+                    },
                     debug: (message, meta) => this.logger.debug(message, meta),
                 },
             },
@@ -326,7 +342,7 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
     ): void {
         client.on("ready", data => {
             account.status = AccountStatus.Online;
-            void this.refreshProfile(account);
+            this.applyProfile(account, client.getCachedSelf());
             account.dispatch(this.projectRaw(account, "READY", data));
         });
         client.on("resumed", data => {
@@ -380,21 +396,18 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
 
     private projectionContext(account: Account<"qq", QQClient>) {
         return {
-            botId: this.createId(account.account_id),
+            botId: this.createId(account.client.getCachedSelf()?.id ?? account.account_id),
             createId: (value: string | number) => this.createId(value),
         };
     }
 
-    private async refreshProfile(account: Account<"qq", QQClient>): Promise<void> {
-        try {
-            const user = await new QQOpenApi(account.client).getSelf();
+    private applyProfile(
+        account: Account<"qq", QQClient> | undefined,
+        user: { username?: string; avatar?: string } | undefined,
+    ): void {
+        if (account && user) {
             account.nickname = user.username ?? "QQ机器人";
             account.avatar = user.avatar ?? this.icon;
-        } catch (error) {
-            this.logger.error(
-                `QQ ${account.account_id} 获取机器人资料失败`,
-                QQApiError.wrap(error),
-            );
         }
     }
 
@@ -424,31 +437,6 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
             channel_name: channel.name,
             channel_type: channel.type,
             parent_id: channel.parent_id ? this.createId(channel.parent_id) : undefined,
-        };
-    }
-
-    private toMessageInfo(
-        scene: "channel" | "direct",
-        sceneId: CommonTypes.Id,
-        message: QQGuildMessage,
-    ): Adapter.MessageInfo {
-        return {
-            message_id: this.createId(message.id),
-            time: message.timestamp ? Date.parse(message.timestamp) : Date.now(),
-            sender: {
-                scene_type: scene,
-                sender_id: this.createId(message.author?.id ?? "unknown"),
-                scene_id: sceneId,
-                sender_name: message.author?.username ?? "",
-                scene_name: "",
-            },
-            message: [
-                ...(message.content ? [{ type: "text", data: { text: message.content } }] : []),
-                ...(message.attachments ?? []).map(item => ({
-                    type: item.content_type?.startsWith("image/") ? "image" : "file",
-                    data: { url: item.url, name: item.filename },
-                })),
-            ],
         };
     }
 }

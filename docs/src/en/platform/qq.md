@@ -4,7 +4,7 @@ The QQ adapter uses Tencent's official `@tencent-connect/qqbot-nodejs` SDK. It s
 
 ## Features
 
-- WebSocket and shared-host Webhook transports
+- WebSocket, shared-host Webhook, and manual existing-host transports
 - Text, image, voice, video, file and rich messages
 - Guilds, members, roles, permissions, announcements, reactions, schedules, threads and audio controls
 - C2C wake-up, typing and streaming messages
@@ -35,6 +35,8 @@ qq.my_bot:
 ```
 
 Configure `https://bot.example.com/qq/my_bot/webhook` in QQ Open Platform and preserve the raw request body for Ed25519 verification.
+
+For an existing HTTP host, set `receive_mode: manual` and pass raw requests to `account.client.ingest(request)` or `acceptHttp(ctx)`. Startup resolves the real bot identity before receiving events, so canonical `bot_id` never substitutes the internal account alias once the transport is active.
 
 - [Configuration](/en/config/adapter/qq)
 - [Tencent Node.js SDK](https://github.com/tencent-connect/qqbot-nodejs)

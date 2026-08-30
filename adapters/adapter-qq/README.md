@@ -11,12 +11,14 @@ QQ 官方机器人适配器，基于腾讯官方 [`@tencent-connect/qqbot-nodejs
 - 好友增删、机器人进退群、群与 Guild 成员、消息接收/审核/删除状态、表态与交互事件的标准投影
 - 群申请完整投影验证信息与邀请来源；审批可拒绝并加入成员黑名单
 - 所有未知 QQ Gateway 事件均通过 `raw_event` 无损下发
-- WebSocket 自动恢复；SDK 内部重试耗尽后仍会建立新的连接代次
+- WebSocket 自动恢复；官方 SDK 内部重试耗尽后由 OneBots 结束旧 transport，并按无上限退避建立新代次
 - Webhook 复用 OneBots 主 HTTP 服务，不另开端口
 - Webhook/manual 使用官方验签结果同步投影全部消息、交互与 raw 事件，补齐官方 SDK Webhook 内部忽略的频道和频道私信消息；仅在业务分发成功后确认内容哈希
 - `qq_call` 可调用尚未封装的任意 QQ OpenAPI 相对路径
 
 C2C、群聊、频道与频道私信统一从官方 SDK 的 typed `message` 事件投影，不再维护第二套 Gateway 消息猜测逻辑。`raw_event` 直接保存 QQ Gateway 原始载荷；需要 SDK 归一化视图时可使用导出的 `QQInboundMessage` 类型。`qq_call` 的 path 只接受无查询串、无目录穿越的安全相对路径，query 必须单独提供且只能包含字符串、数字或布尔值。
+
+接收 transport 启动前会通过 `/users/@me` 验证并缓存真实机器人身份，事件 `bot_id`、状态列表与登录资料共享这一来源。缺少平台事件 ID 的 raw 事件会由事件类型和原始载荷生成稳定身份；无法满足 canonical 必填字段的畸形载荷保留为 `custom` notice，不伪造 `unknown` 用户。消息详情缺少有效时间或作者时会返回结构化错误，不拿当前时间掩盖平台响应缺陷。
 
 Gateway 生命周期事件会优先投影到 OneBots canonical notice：好友增删、机器人进退群、群与 Guild 成员增改删、消息接收/审核状态、消息删除、表态和交互分别使用 `friend_*`、`group_*`、`member_*`、`message_status`、`message_deleted`、`reaction_*` 与 `interaction`。群申请会保留验证方式、邀请来源、风险提示与自动审批状态。频道、Guild、论坛、音频及未来新增事件使用带结构化用户/频道地址的 `custom` notice；所有分支都保留完整 `raw_event` 与 `extensions.qq`，不会因为标准模型暂未覆盖而丢字段。
 

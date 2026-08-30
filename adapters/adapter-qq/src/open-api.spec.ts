@@ -20,4 +20,16 @@ describe("QQOpenApi", () => {
             query: { limit: 100, after: "g99" },
         });
     });
+
+    it("拒绝停滞的频道分页游标而不是静默返回截断列表", async () => {
+        const page = Array.from(
+            { length: 100 },
+            (_, index): QQGuild => ({ id: index === 99 ? "same" : `g${index}`, name: "Guild" }),
+        );
+        const call = vi.fn().mockResolvedValue(page);
+        const api = new QQOpenApi({ call } as unknown as QQClient);
+
+        await expect(api.listGuilds()).rejects.toMatchObject({ code: "QQ_PAGINATION_STALLED" });
+        expect(call).toHaveBeenCalledTimes(2);
+    });
 });

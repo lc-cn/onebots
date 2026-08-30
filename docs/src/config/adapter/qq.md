@@ -20,7 +20,7 @@ qq.my_bot:
 |---|---|---|---|
 | `appid` | string | 必填 | QQ 开放平台 AppID |
 | `secret` | string | 必填 | QQ 开放平台 AppSecret |
-| `receive_mode` | `websocket \| webhook` | `websocket` | 事件接收方式 |
+| `receive_mode` | `websocket \| webhook \| manual` | `websocket` | 事件接收方式 |
 | `intents` | string[] | SDK 安全默认值 | 已获批的 Gateway Intent |
 | `markdown_support` | boolean | `false` | 机器人是否已开通 Markdown 权限 |
 | `webhook_path` | string | `/qq/{account_id}/webhook` | OneBots 主服务上的回调路径 |
@@ -41,11 +41,15 @@ qq.my_bot:
 
 QQ 使用原始 HTTP 请求体进行 Ed25519 验签。反向代理和请求中间件必须保留 `rawBody`；如果只留下解析后的 JSON，对应请求会以结构化 `QQ_WEBHOOK_RAW_BODY_REQUIRED` 错误拒绝。
 
+已有 HTTP Host 可选择 `manual`，由宿主把原始请求交给 `account.client.ingest(request)` 或 `acceptHttp(ctx)`；该模式不注册 OneBots 路由，也不另开端口。
+
 ## Intent
 
 Web 表单提供以下官方订阅项：`GUILDS`、`GUILD_MEMBERS`、`GUILD_MESSAGES`、`GUILD_MESSAGE_REACTIONS`、`DIRECT_MESSAGE`、`GROUP_MEMBER`、`GROUP_AND_C2C_EVENT`、`INTERACTION`、`MESSAGE_AUDIT`、`FORUMS_EVENT`、`AUDIO_ACTION`、`PUBLIC_GUILD_MESSAGES`。
 
-只选择机器人已在 QQ 开放平台获批的 Intent。留空时使用腾讯 SDK 的安全默认组合；旧 intent 别名不会自动转换。
+只选择机器人已在 QQ 开放平台获批的 Intent。管理端以多选列表生成配置，重复项和未知项会在启动前拒绝；留空时使用腾讯 SDK 的安全默认组合。旧 intent 别名不会自动转换。
+
+适配器会在启动接收 transport 前通过 `/users/@me` 验证机器人身份。事件 `bot_id`、状态列表和登录资料均使用平台返回的真实 ID，不会把 OneBots 内部账号别名冒充为平台身份。
 
 ## 平台扩展
 

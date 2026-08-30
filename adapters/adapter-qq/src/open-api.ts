@@ -1,10 +1,6 @@
+import { QQApiError } from "./errors.js";
 import type { QQClient } from "./client.js";
-
-export interface QQUser {
-    id: string;
-    username?: string;
-    avatar?: string;
-}
+import type { QQUser } from "./types.js";
 
 export interface QQGuild {
     id: string;
@@ -43,7 +39,7 @@ export class QQOpenApi {
     constructor(private readonly client: QQClient) {}
 
     getSelf(): Promise<QQUser> {
-        return this.client.call({ method: "GET", path: "/users/@me" });
+        return this.client.fetchSelf();
     }
 
     async listGuilds(): Promise<QQGuild[]> {
@@ -58,7 +54,12 @@ export class QQOpenApi {
             });
             result.push(...page);
             after = page.length === 100 ? page.at(-1)?.id : undefined;
-            if (after && cursors.has(after)) break;
+            if (page.length === 100 && !after) {
+                throw invalidPage("QQ Guild 列表满页响应缺少末项 ID", "/users/@me/guilds");
+            }
+            if (after && cursors.has(after)) {
+                throw stalledPage("QQ Guild 列表分页游标未推进", "/users/@me/guilds", after);
+            }
             if (after) cursors.add(after);
         } while (after);
         return result;
@@ -104,7 +105,19 @@ export class QQOpenApi {
             });
             result.push(...page);
             after = page.length === 400 ? page.at(-1)?.user.id : undefined;
-            if (after && cursors.has(after)) break;
+            if (page.length === 400 && !after) {
+                throw invalidPage(
+                    "QQ Guild 成员列表满页响应缺少末项用户 ID",
+                    `/guilds/${guildId}/members`,
+                );
+            }
+            if (after && cursors.has(after)) {
+                throw stalledPage(
+                    "QQ Guild 成员列表分页游标未推进",
+                    `/guilds/${guildId}/members`,
+                    after,
+                );
+            }
             if (after) cursors.add(after);
         } while (after);
         return result;
@@ -173,4 +186,16 @@ export class QQOpenApi {
             body: { source_guild_id: guildId, recipient_id: userId },
         });
     }
+}
+
+function invalidPage(message: string, path: string): QQApiError {
+    return new QQApiError(message, { code: "QQ_INVALID_PAGE_RESPONSE", path });
+}
+
+function stalledPage(message: string, path: string, cursor: string): QQApiError {
+    return new QQApiError(message, {
+        code: "QQ_PAGINATION_STALLED",
+        path,
+        details: { cursor },
+    });
 }

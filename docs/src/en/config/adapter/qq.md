@@ -18,13 +18,15 @@ qq.my_bot:
 |---|---|---|---|
 | `appid` | string | required | QQ Open Platform AppID |
 | `secret` | string | required | QQ Open Platform AppSecret |
-| `receive_mode` | `websocket \| webhook` | `websocket` | Event transport |
+| `receive_mode` | `websocket \| webhook \| manual` | `websocket` | Event transport |
 | `intents` | string[] | SDK safe defaults | Approved Gateway intents |
 | `markdown_support` | boolean | `false` | Whether Markdown permission is enabled |
 | `webhook_path` | string | `/qq/{account_id}/webhook` | Callback path on the OneBots HTTP host |
 | `api_base_url` | string | SDK default | Compatible OpenAPI proxy/test endpoint |
 | `token_base_url` | string | SDK default | Compatible token proxy/test endpoint |
 
-Webhook does not open another port. Preserve the unmodified HTTP body because QQ verifies it with Ed25519. Legacy transport fields and intent aliases are intentionally not interpreted.
+Webhook does not open another port. Preserve the unmodified HTTP body because QQ verifies it with Ed25519. With `manual`, an existing host passes the raw request to `account.client.ingest(request)` or `acceptHttp(ctx)` and OneBots registers no route. Legacy transport fields and intent aliases are intentionally not interpreted.
+
+The generated form renders intents as a validated multi-select. The adapter also resolves `/users/@me` before starting its receive transport, so canonical events and status use the platform bot ID instead of the internal account alias.
 
 Use the `qq_call` platform action or `account.client.call()` for any authenticated QQ OpenAPI relative path that has not received a named wrapper yet.
