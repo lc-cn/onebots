@@ -49,6 +49,8 @@ Message QR codes are available through `client.qrCodes` and the five fixed QR-co
 
 Message templates are managed through `client.messageTemplates`, with fixed actions for listing, lookup by ID, namespace discovery, creation, editing, and deletion by name or template ID. Top-level fields and responses are validated, while typed components retain Meta's evolving OTP, Flow, Catalog, MPM, and media-handle JSON fields through a safe serializable extension surface.
 
+Flows are managed through `client.flows` instead of loose Graph payload forwarding. The module covers multipart creation and metadata updates, cross-WABA migration, controlled field projections, preview invalidation, endpoint metrics, Flow JSON upload and asset listing, plus publish, deprecate, and delete lifecycle transitions. Categories, fields, metric expressions, responses, and JSON serializability are validated at the seam.
+
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 
 References: [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/), [Meta official Postman workspace](https://www.postman.com/meta/whatsapp-business-platform/overview/).

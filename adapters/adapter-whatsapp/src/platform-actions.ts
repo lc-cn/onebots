@@ -13,6 +13,7 @@ import { WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS } from "./solution-migratio
 import { WHATSAPP_COMMERCE_ACTION_HANDLERS } from "./commerce.js";
 import { WHATSAPP_QR_CODE_ACTION_HANDLERS } from "./qr-codes.js";
 import { WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS } from "./message-templates.js";
+import { WHATSAPP_FLOW_ACTION_HANDLERS } from "./flows.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -38,6 +39,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_COMMERCE_ACTION_HANDLERS,
     ...WHATSAPP_QR_CODE_ACTION_HANDLERS,
     ...WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS,
+    ...WHATSAPP_FLOW_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>
@@ -62,46 +64,6 @@ const ACTION_HANDLERS = {
                 limit: optionalNumber(params, "limit"),
                 after: optionalString(params, "after"),
             },
-        }),
-    list_flows: (client, params) =>
-        client.call({
-            method: "GET",
-            resource: `${client.config.business_account_id}/flows`,
-            query: {
-                fields: optionalString(params, "fields"),
-                limit: optionalNumber(params, "limit"),
-                after: optionalString(params, "after"),
-            },
-        }),
-    create_flow: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: `${client.config.business_account_id}/flows`,
-            body: requireRecord(params, "flow"),
-        }),
-    get_flow: (client, params) =>
-        client.call({
-            method: "GET",
-            resource: requireResourceId(params, "flow_id"),
-            query: { fields: optionalString(params, "fields") },
-        }),
-    update_flow: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: requireResourceId(params, "flow_id"),
-            body: requireRecord(params, "flow"),
-        }),
-    delete_flow: (client, params) =>
-        client.call({ method: "DELETE", resource: requireResourceId(params, "flow_id") }),
-    publish_flow: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: `${requireResourceId(params, "flow_id")}/publish`,
-        }),
-    deprecate_flow: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: `${requireResourceId(params, "flow_id")}/deprecate`,
         }),
 } satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
 
@@ -190,14 +152,6 @@ function blockedUser(
 function requireString(params: Readonly<Record<string, unknown>>, name: string): string {
     const value = params[name];
     if (typeof value !== "string" || !value) invalidParameter(`${name} 必须是非空字符串`);
-    return value;
-}
-
-function requireResourceId(params: Readonly<Record<string, unknown>>, name: string): string {
-    const value = requireString(params, name);
-    if (!/^[A-Za-z\d._:-]+$/u.test(value)) {
-        invalidParameter(`${name} 必须是单段 Graph 资源 ID`);
-    }
     return value;
 }
 

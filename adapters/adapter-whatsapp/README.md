@@ -104,7 +104,7 @@ await adapter.callAction("my_bot", "whatsapp_call", {
 
 `resource` 只能是相对 Graph API 路径，适配器拒绝绝对 URL，避免 Access Token 被发送到未配置域名。HTTP 和业务错误会抛出 `WhatsAppApiError`，其中保留 `code`、`status`、`resource` 与 Meta 错误详情。
 
-Flow 的 `list_flows`、`create_flow`、`get_flow`、`update_flow`、`delete_flow`、`publish_flow`、`deprecate_flow`，Commerce 设置，以及消息二维码的增查改删均提供固定资源动作；权限仍由 Meta 的 `whatsapp_business_management` scope 决定。Commerce 也可通过强类型 `client.commerce` 使用，读取响应会校验官方 `data` 数组，更新仅接受购物车与目录可见性布尔字段，并拒绝空操作或任意附加参数。
+Flow 通过强类型 `client.flows` 管理。固定动作覆盖列表、multipart 创建与元数据更新、跨 WABA 迁移、受限字段查询、预览刷新、endpoint metrics、Flow JSON 上传与资产列表，以及发布、弃用和删除。分类、字段、指标表达式、响应与 JSON 可序列化性均在请求边界校验；权限仍由 Meta 的 `whatsapp_business_management` scope 决定。Commerce 设置以及消息二维码的增查改删也提供固定资源动作；Commerce 可通过 `client.commerce` 使用，读取响应会校验官方 `data` 数组，更新仅接受购物车与目录可见性布尔字段，并拒绝空操作或任意附加参数。
 
 消息二维码通过 `client.qrCodes` 或 `list_qr_codes` / `get_qr_code` / `create_qr_code` / `update_qr_code` / `delete_qr_code` 管理。查询 `fields` 是可增减数组，图片用独立的 `qr_image_format: "PNG" | "SVG"` 生成 Graph formatted field；列表还支持 `code`、1–25 的 `limit` 与 `after` cursor。创建图片使用 `generate_qr_image`，适配器会校验 14 位大写字母数字 code、140 字符预填消息、分页结构以及单项响应的单元素 `data` 数组。
 

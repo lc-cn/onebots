@@ -57,21 +57,6 @@ describe("WhatsApp 平台动作", () => {
         });
     });
 
-    it.each([
-        ["list_flows", "waba/flows", "GET"],
-        ["get_flow", "flow-1", "GET"],
-        ["publish_flow", "flow-1/publish", "POST"],
-        ["deprecate_flow", "flow-1/deprecate", "POST"],
-    ])("将 %s 固定映射到受控 Flow 资源", async (action, resource, method) => {
-        const call = vi.fn().mockResolvedValue({ success: true });
-        await executeWhatsAppPlatformAction(
-            { call, config } as never,
-            action,
-            action === "list_flows" ? {} : { flow_id: "flow-1" },
-        );
-        expect(call).toHaveBeenCalledWith(expect.objectContaining({ resource, method }));
-    });
-
     it("使用显式布尔值更新 Commerce 设置", async () => {
         const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ success: true }));
         const client = new WhatsAppClient(config, fetcher);
@@ -92,8 +77,9 @@ describe("WhatsApp 平台动作", () => {
     });
 
     it("固定 Flow 动作拒绝路径注入", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(
-            executeWhatsAppPlatformAction({ call: vi.fn(), config } as never, "publish_flow", {
+            executeWhatsAppPlatformAction(client, "publish_flow", {
                 flow_id: "flow/../other",
             }),
         ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
