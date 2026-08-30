@@ -34,22 +34,20 @@ describe("WhatsAppEncryptedMessages", () => {
         });
     });
 
-    it("固定平台动作不会转发额外明文字段", async () => {
-        const fetcher = vi
-            .fn<typeof fetch>()
-            .mockResolvedValue(Response.json({ encrypted_contents: responseJwe }));
+    it("固定平台动作拒绝额外明文字段并保留动作上下文", async () => {
+        const fetcher = vi.fn<typeof fetch>();
         const client = new WhatsAppClient(config, fetcher);
 
-        await executeWhatsAppPlatformAction(client, "send_encrypted_message", {
-            encrypted_contents: requestJwe,
-            to: "8613800138000",
-            text: { body: "不得转发" },
+        await expect(
+            executeWhatsAppPlatformAction(client, "send_encrypted_message", {
+                encrypted_contents: requestJwe,
+                text: { body: "不得静默忽略" },
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "send_encrypted_message", parameter: "text" },
         });
-
-        expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
-            messaging_product: "whatsapp",
-            encrypted_contents: requestJwe,
-        });
+        expect(fetcher).not.toHaveBeenCalled();
     });
 
     it.each([

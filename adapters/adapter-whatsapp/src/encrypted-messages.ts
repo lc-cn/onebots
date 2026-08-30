@@ -1,21 +1,10 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 
 export interface WhatsAppEncryptedMessageResponse {
     encrypted_contents: string;
-}
-
-export const WHATSAPP_ENCRYPTED_MESSAGE_ACTIONS = Object.freeze([
-    "send_encrypted_message",
-] as const);
-
-export type WhatsAppEncryptedMessageAction = (typeof WHATSAPP_ENCRYPTED_MESSAGE_ACTIONS)[number];
-
-export function isWhatsAppEncryptedMessageAction(
-    action: string,
-): action is WhatsAppEncryptedMessageAction {
-    return (WHATSAPP_ENCRYPTED_MESSAGE_ACTIONS as readonly string[]).includes(action);
 }
 
 /**
@@ -40,13 +29,27 @@ export class WhatsAppEncryptedMessages {
     }
 }
 
-export const WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_ENCRYPTED_MESSAGE_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.encryptedMessages.send(requiredText(params, "encrypted_contents")),
-    ]),
-) as Record<WhatsAppEncryptedMessageAction, PlatformActionHandler<WhatsAppClient>>;
+type EncryptedMessageActionParams = Readonly<Record<string, unknown>>;
+
+const ENCRYPTED_MESSAGE_ACTION_HANDLERS = {
+    send_encrypted_message: (client: WhatsAppClient, params: EncryptedMessageActionParams) =>
+        client.encryptedMessages.send(requiredText(params, "encrypted_contents")),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Payload Encryption 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    ENCRYPTED_MESSAGE_ACTION_HANDLERS,
+    { send_encrypted_message: ["encrypted_contents"] },
+);
+
+export type WhatsAppEncryptedMessageAction =
+    keyof typeof WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS;
+
+export function isWhatsAppEncryptedMessageAction(
+    action: string,
+): action is WhatsAppEncryptedMessageAction {
+    return Object.hasOwn(WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS, action);
+}
 
 function compactJwe(value: string): string {
     const token = value.trim();
