@@ -144,6 +144,27 @@ describe("ICQQBot 生命周期", () => {
         );
     });
 
+    it("异步监听器失败时继续其他出口并结构化报告 rejection", async () => {
+        const client = new FakeClient();
+        const bot = new ICQQBot({ account_id: "123456" }, { createClient: factoryFor(client) });
+        const clientError = vi.fn();
+        const delivered = vi.fn();
+        bot.on("client_error", clientError);
+        bot.on("ready", async () => {
+            await Promise.resolve();
+            throw new Error("async listener failed");
+        });
+        bot.on("ready", delivered);
+        await bot.start();
+
+        client.emit("system.online");
+        await vi.waitFor(() => expect(clientError).toHaveBeenCalledOnce());
+        expect(delivered).toHaveBeenCalledOnce();
+        expect(clientError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "ICQQ_LISTENER_FAILED", operation: "ready" }),
+        );
+    });
+
     it("将目录刷新意图传递给 ICQQ 原生客户端", async () => {
         const client = new FakeClient();
         client.getGroupInfo.mockResolvedValue({

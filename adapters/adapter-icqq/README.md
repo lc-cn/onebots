@@ -203,7 +203,7 @@ ICQQ 的能力通过统一 Adapter 接口暴露，协议层只会调用当前适
 
 频道消息遵循通用参数模型：`scene_id` 只填写 `channel_id`，所属频道服务器通过独立的 `guild_id` 传入。返回的 `message_id` 是适配器生成的 opaque ID，已经包含 ICQQ 撤回所需的 guild、channel 与 seq；调用方不得解析或自行拼接。
 
-账号客户端采用 generation 隔离：并发启动只创建一个 ICQQ Client，停止或快速重启后，旧客户端迟到的上线、离线、登录失败和心跳回调都不会覆盖新状态。
+账号客户端采用 generation 隔离：并发启动只创建一个 ICQQ Client，停止或快速重启后，旧客户端迟到的上线、离线、登录失败和心跳回调都不会覆盖新状态。Gateway 本身没有业务 ACK/重投机制，因此协议异步分发失败不会伪装成可重试确认；适配器会继续执行同事件的其他监听器，并将同步异常与 Promise rejection 统一包装为带原事件名的 `ICQQ_LISTENER_FAILED` 上报。
 
 底层 `ICQQBot`、`ICQQBotEvents`、全部事件模型与运行时 `Platform` 枚举均从包入口导出。接收消息直接使用 ICQQ SDK 的 `MessageElem` 联合类型，不再经过字段压缩；canonical 投影会保留 QQNT 媒体哈希、尺寸、时长、按钮、论坛、引用和转发节点。未连接调用、启动、心跳和停止故障会使用 `ICQQError` 返回稳定的 `code` 与 `operation`；原生离线事件会在客户端桥接层补齐当前 QQ 号，不再依赖上游偶然存在的字段。
 

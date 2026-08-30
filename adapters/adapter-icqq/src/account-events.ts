@@ -174,11 +174,15 @@ export function wireICQQAccountEvents(
         } catch (error) {
             context.logger.error("启动 ICQQ Bot 失败", error);
             account.status = AccountStatus.OffLine;
+            throw error;
         }
     });
     account.on("stop", async () => {
-        await bot.stop();
-        account.status = AccountStatus.OffLine;
+        try {
+            await bot.stop();
+        } finally {
+            account.status = AccountStatus.OffLine;
+        }
     });
 }
 
@@ -188,63 +192,65 @@ function wireProjectedEvents(
     projection: () => ICQQProjectionContext,
 ): void {
     const bot = account.client;
+    const dispatch = (event: Parameters<typeof account.dispatchAwaited>[0]) =>
+        account.dispatchAwaited(event);
     const onMessage = (event: ICQQPrivateMessageEvent | ICQQGroupMessageEvent) => {
         logInboundMessage(context.logger, event);
-        account.dispatch(projectICQQMessage(event, projection()));
+        return dispatch(projectICQQMessage(event, projection()));
     };
     bot.on("private_message", onMessage);
     bot.on("group_message", onMessage);
     bot.on("synced_private_message", (event: ICQQPrivateMessageEvent) => {
-        account.dispatch(projectICQQSyncedMessage(event, projection()));
+        return dispatch(projectICQQSyncedMessage(event, projection()));
     });
     bot.on("discuss_message", (event: ICQQDiscussMessageEvent) => {
-        account.dispatch(projectICQQDiscussMessage(event, projection()));
+        return dispatch(projectICQQDiscussMessage(event, projection()));
     });
     bot.on("guild_message", (event: ICQQGuildMessageEvent) => {
-        account.dispatch(projectICQQGuildMessage(event, projection()));
+        return dispatch(projectICQQGuildMessage(event, projection()));
     });
     bot.on("friend_request", (event: ICQQFriendRequestEvent) => {
-        account.dispatch(projectICQQRequest(event, projection()));
+        return dispatch(projectICQQRequest(event, projection()));
     });
     bot.on("group_request", (event: ICQQGroupRequestEvent) => {
-        account.dispatch(projectICQQRequest(event, projection()));
+        return dispatch(projectICQQRequest(event, projection()));
     });
     const onMembership = (event: ICQQGroupIncreaseEvent | ICQQGroupDecreaseEvent) => {
-        account.dispatch(projectICQQMembership(event, projection()));
+        return dispatch(projectICQQMembership(event, projection()));
     };
     bot.on("group_increase", onMembership);
     bot.on("group_decrease", onMembership);
     bot.on("group_mute", (event: ICQQGroupMuteEvent) => {
-        account.dispatch(projectICQQMute(event, projection()));
+        return dispatch(projectICQQMute(event, projection()));
     });
     bot.on("group_admin", (event: ICQQGroupAdminEvent) => {
-        account.dispatch(projectICQQAdmin(event, projection()));
+        return dispatch(projectICQQAdmin(event, projection()));
     });
     const onRecall = (event: ICQQFriendRecallEvent | ICQQGroupRecallEvent) => {
-        account.dispatch(projectICQQRecall(event, projection()));
+        return dispatch(projectICQQRecall(event, projection()));
     };
     bot.on("friend_recall", onRecall);
     bot.on("group_recall", onRecall);
     bot.on("group_reaction", (event: ICQQGroupReactionEvent) => {
-        account.dispatch(projectICQQReaction(event, projection()));
+        return dispatch(projectICQQReaction(event, projection()));
     });
     bot.on("friend_change", (event: ICQQFriendChangeEvent) => {
-        account.dispatch(projectICQQFriendChange(event, projection()));
+        return dispatch(projectICQQFriendChange(event, projection()));
     });
     bot.on("group_sign", (event: ICQQGroupSignEvent) => {
-        account.dispatch(projectICQQGroupSign(event, projection()));
+        return dispatch(projectICQQGroupSign(event, projection()));
     });
     bot.on("group_transfer", (event: ICQQGroupTransferEvent) => {
-        account.dispatch(projectICQQGroupTransfer(event, projection()));
+        return dispatch(projectICQQGroupTransfer(event, projection()));
     });
     bot.on("read_sync", (event: ICQQReadSyncEvent) => {
-        account.dispatch(projectICQQReadSync(event, projection()));
+        return dispatch(projectICQQReadSync(event, projection()));
     });
     bot.on("typing", (event: ICQQTypingEvent) => {
-        account.dispatch(projectICQQTyping(event, projection()));
+        return dispatch(projectICQQTyping(event, projection()));
     });
     bot.on("poke", (event: ICQQPokeEvent) => {
-        account.dispatch(projectICQQPoke(event, projection()));
+        return dispatch(projectICQQPoke(event, projection()));
     });
 }
 

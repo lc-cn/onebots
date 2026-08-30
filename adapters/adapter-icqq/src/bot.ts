@@ -169,7 +169,15 @@ export class ICQQBot extends EventEmitter<ICQQBotEvents> {
     private safeEmit<K extends keyof ICQQBotEvents>(name: K, ...args: ICQQBotEvents[K]): void {
         for (const listener of this.rawListeners(String(name))) {
             try {
-                Reflect.apply(listener, this, args);
+                const result: unknown = Reflect.apply(listener, this, args);
+                void Promise.resolve(result).catch(error => {
+                    if (name !== "client_error") {
+                        this.safeEmit(
+                            "client_error",
+                            ICQQError.wrap(error, "ICQQ_LISTENER_FAILED", String(name)),
+                        );
+                    }
+                });
             } catch (error) {
                 if (name !== "client_error")
                     this.safeEmit(
