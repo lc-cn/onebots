@@ -21,6 +21,8 @@ const STANDARD_ACTION_REQUIREMENTS: Readonly<Record<string, string>> = {
     leave_group: "leave_group",
     invite_friend_to_group: "invite_group_member",
     accept_friend_request: "handle_friend_request",
+    handle_friend_request: "handle_friend_request",
+    handle_group_request: "handle_group_request",
     get_guild_info: "get_guild_info",
     get_guild_list: "get_guild_list",
     get_guild_member_info: "get_guild_member_info",

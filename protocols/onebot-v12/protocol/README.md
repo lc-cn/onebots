@@ -202,6 +202,8 @@ onebots 主动连接到配置的 WebSocket 地址。
 
 - `invite_friend_to_group` - 邀请机器人好友加入群（OneBots 扩展）
 - `accept_friend_request` - 同意好友申请（OneBots 扩展）
+- `handle_friend_request` - 同意或拒绝好友申请，并透传备注、理由与阻止语义（OneBots 扩展）
+- `handle_group_request` - 同意或拒绝入群申请/邀请（OneBots 扩展）
 - `get_latest_events` - 获取最新事件列表
 - `get_supported_actions` - 获取支持的动作列表
 - `get_status` - 获取运行状态
@@ -211,12 +213,12 @@ onebots 主动连接到配置的 WebSocket 地址。
 
 ```json
 {
-  "group_id": 123456789,
-  "user_id": 987654321
+  "group_id": "123456789",
+  "user_id": "987654321"
 }
 ```
 
-两个字段必须为正整数。机器人需要是目标群成员，并具有平台侧允许邀请好友的权限。
+两个字段遵循 OneBot 12 的字符串 ID 约定。机器人需要是目标群成员，并具有平台侧允许邀请好友的权限。
 
 同意好友申请时传入 `{ "flag": "..." }`，可选传入 `remark`。`flag` 必须原样取自对应好友申请事件，不能使用用户 ID 或自行生成的请求 ID 代替。
 

@@ -43,6 +43,11 @@ vi.mock("onebots", () => {
             }
             return value;
         },
+        requireBooleanParam: (params: Record<string, unknown>, key: string) => {
+            const value = params[key];
+            if (typeof value !== "boolean") throw new TypeError("invalid boolean");
+            return value;
+        },
     };
 });
 
@@ -78,6 +83,7 @@ function createProtocol() {
         }),
         inviteGroupMember: vi.fn(),
         handleFriendRequest: vi.fn(),
+        handleGroupRequest: vi.fn(),
         getGuildMemberList: vi.fn(),
         updateChannel: vi.fn(),
         getChannelMemberInfo: vi.fn(),
@@ -87,6 +93,7 @@ function createProtocol() {
                 send_message: { support: "native" },
                 invite_group_member: { support: "native" },
                 handle_friend_request: { support: "native" },
+                handle_group_request: { support: "native" },
                 update_channel: { support: "native" },
                 get_channel_member_info: { support: "native" },
                 get_channel_member_list: { support: "native" },
@@ -311,6 +318,7 @@ describe("OneBot V12 protocol", () => {
             type: "request",
             detail_type: "friend",
             sub_type: "",
+            request_id: "e3",
             user_id: "u20002",
             comment: "hello",
             flag: "req-flag-001",
@@ -452,8 +460,8 @@ describe("OneBot V12 protocol", () => {
 
         expect(result).toMatchObject({ status: "ok", retcode: 0, data: {} });
         expect(adapter.inviteGroupMember).toHaveBeenCalledWith("bot", {
-            group_id: expect.objectContaining({ number: 20001 }),
-            user_id: expect.objectContaining({ number: 10001 }),
+            group_id: expect.objectContaining({ string: "20001" }),
+            user_id: expect.objectContaining({ string: "10001" }),
         });
         await expect(protocol.apply("get_supported_actions")).resolves.toMatchObject({
             data: expect.arrayContaining(["invite_friend_to_group"]),
@@ -476,6 +484,41 @@ describe("OneBot V12 protocol", () => {
         });
         await expect(protocol.apply("get_supported_actions")).resolves.toMatchObject({
             data: expect.arrayContaining(["accept_friend_request"]),
+        });
+    });
+
+    test("完整请求动作支持拒绝好友与区分群申请类型", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await protocol.apply("handle_friend_request", {
+            flag: "friend-flag",
+            approve: false,
+            reason: "拒绝",
+            block: true,
+        });
+        await protocol.apply("handle_group_request", {
+            flag: "group-flag",
+            sub_type: "invite",
+            approve: true,
+        });
+
+        expect(adapter.handleFriendRequest).toHaveBeenCalledWith("bot", {
+            flag: "friend-flag",
+            approve: false,
+            remark: undefined,
+            reason: "拒绝",
+            block: true,
+        });
+        expect(adapter.handleGroupRequest).toHaveBeenCalledWith("bot", {
+            flag: "group-flag",
+            sub_type: "invite",
+            type: "invitation",
+            approve: true,
+            reason: undefined,
+            block: undefined,
+        });
+        await expect(protocol.apply("get_supported_actions")).resolves.toMatchObject({
+            data: expect.arrayContaining(["handle_friend_request", "handle_group_request"]),
         });
     });
 

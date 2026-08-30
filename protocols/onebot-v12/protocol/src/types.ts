@@ -263,6 +263,10 @@ export namespace OneBotV12 {
      */
     export interface RequestEvent extends BaseEvent {
         type: "request";
+        /** OneBots 扩展：稳定请求 ID，供 SDK 将 typed event 与处理动作关联。 */
+        request_id?: string;
+        flag?: string;
+        comment?: string;
     }
 
     /**
@@ -506,6 +510,24 @@ export namespace OneBotV12 {
     export interface InviteFriendToGroupParams {
         group_id: string;
         user_id: string;
+    }
+
+    /** OneBots 扩展：完整处理好友请求，支持同意、拒绝和平台阻止语义。 */
+    export interface HandleFriendRequestParams {
+        flag: string;
+        approve: boolean;
+        remark?: string;
+        reason?: string;
+        block?: boolean;
+    }
+
+    /** OneBots 扩展：完整处理入群申请或机器人受邀入群。 */
+    export interface HandleGroupRequestParams {
+        flag: string;
+        sub_type: "add" | "invite";
+        approve: boolean;
+        reason?: string;
+        block?: boolean;
     }
 
     export interface AcceptFriendRequestParams {

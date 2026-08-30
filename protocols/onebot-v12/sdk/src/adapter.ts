@@ -78,6 +78,10 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
         private httpClient: HttpClient;
         private readonly receiveTransport: ReceiveTransport<string, OneBotV12Event>;
         private readonly friendRequestFlags = new Map<string, string>();
+        private readonly groupRequestContexts = new Map<
+            string,
+            { flag: string; subType: "add" | "invite" }
+        >();
 
         constructor() {
             super();
@@ -230,6 +234,11 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                     });
                 } else if (event.detail_type === "group" || event.detail_type === "group_request") {
                     const requestId = event.request_id ?? event.id;
+                    const subType = event.sub_type === "invite" ? "invite" : "add";
+                    this.groupRequestContexts.set(requestId, {
+                        flag: event.flag ?? requestId,
+                        subType,
+                    });
                     this.emit("request.group", {
                         timestamp: event.time,
                         bot_id: eventBotId,
@@ -237,8 +246,8 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                         group_id: event.group_id!,
                         user_id: event.user_id!,
                         comment: typeof event.message === "string" ? event.message : event.comment,
-                        flag: requestId,
-                        sub_type: event.sub_type === "invite" ? "invite" : "add",
+                        flag: event.flag ?? requestId,
+                        sub_type: subType,
                     });
                 }
             } else if (event.type === "meta") {
@@ -459,17 +468,40 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
             await this.httpClient.post("/accept_friend_request", { flag, remark });
         }
 
-        async approveFriendRequest(requestId: string, approve: boolean): Promise<void> {
-            if (!approve) {
+        async approveFriendRequest(
+            requestId: string,
+            approve: boolean,
+            comment?: string,
+        ): Promise<void> {
+            await this.httpClient.post("/handle_friend_request", {
+                flag: this.friendRequestFlags.get(requestId) ?? requestId,
+                approve,
+                ...(approve ? { remark: comment } : { reason: comment }),
+            });
+            this.friendRequestFlags.delete(requestId);
+        }
+
+        async approveGroupRequest(
+            requestId: string,
+            approve: boolean,
+            reason?: string,
+        ): Promise<void> {
+            const context = this.groupRequestContexts.get(requestId);
+            if (!context) {
                 throw new ProtocolError({
                     protocol: "onebot-v12",
-                    operation: "approveFriendRequest",
+                    operation: "approveGroupRequest",
                     kind: "validation",
-                    message: "OneBot V12 当前仅支持同意好友申请",
+                    message: `未知的 OneBot V12 群请求：${requestId}`,
                 });
             }
-            await this.acceptFriendRequest(this.friendRequestFlags.get(requestId) ?? requestId);
-            this.friendRequestFlags.delete(requestId);
+            await this.httpClient.post("/handle_group_request", {
+                flag: context.flag,
+                sub_type: context.subType,
+                approve,
+                reason,
+            });
+            this.groupRequestContexts.delete(requestId);
         }
 
         async setGroupName(group_id: string, name: string): Promise<void> {

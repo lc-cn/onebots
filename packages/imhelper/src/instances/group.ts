@@ -60,8 +60,8 @@ export class Group<Id extends string | number = string | number> {
 export namespace Group {
     export interface Data<Id extends string | number = string | number> {
         group_id: Id;
-        group_name: string;
-        avatar: string;
+        group_name?: string;
+        avatar?: string;
     }
     export const cache: WeakMap<Data<string | number>, Group<string | number>> = new WeakMap();
     export function from<Id extends string | number = string | number>(

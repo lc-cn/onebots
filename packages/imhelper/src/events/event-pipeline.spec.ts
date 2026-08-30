@@ -6,6 +6,10 @@ import { EventListenerUtils, EventUtils } from "./utils.js";
 
 class TestAdapter extends Adapter<string> {
     readonly selfId = "bot";
+
+    override async getUserInfo(userId: string) {
+        return { user_id: userId, user_name: "Alice", avatar: "https://example.test/alice.png" };
+    }
 }
 
 const privateMessage = {
@@ -89,5 +93,51 @@ describe("typed event pipeline", () => {
         adapter.emit("message.private", privateMessage);
 
         expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    test("observes event entities before exposing behavior-rich getters", async () => {
+        const client = createImHelper(new TestAdapter());
+        const event = EventFactory.createFromUnknown(
+            "message.group",
+            {
+                ...privateMessage,
+                message_type: "group",
+                group_id: "group-1",
+            },
+            client,
+        );
+
+        const sender = event.sender;
+        expect(sender.user_id).toBe("user-1");
+        expect(sender.user_name).toBeUndefined();
+        expect(event.group.group_id).toBe("group-1");
+        expect(event.member.user_id).toBe("user-1");
+
+        await sender.refresh();
+
+        expect(event.sender).toBe(sender);
+        expect(sender.user_name).toBe("Alice");
+    });
+
+    test("does not promote request applicants to friends or members", () => {
+        const client = createImHelper(new TestAdapter());
+        const event = EventFactory.createFromUnknown(
+            "request.group",
+            {
+                timestamp: privateMessage.timestamp,
+                bot_id: "bot",
+                request_id: "request-1",
+                user_id: "applicant-1",
+                group_id: "group-1",
+                flag: "flag-1",
+                sub_type: "add",
+            },
+            client,
+        );
+
+        expect(event.user.user_id).toBe("applicant-1");
+        expect(event.group.group_id).toBe("group-1");
+        expect(client.$friendMap.has("applicant-1")).toBe(false);
+        expect(client.$groupMemberMap.get("group-1")?.has("applicant-1")).not.toBe(true);
     });
 });

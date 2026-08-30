@@ -156,13 +156,45 @@ describe("OneBot V12 canonical event projection", () => {
                 flag: "opaque-request-flag",
             }),
         );
-        await client.approveFriendRequest("request-1", true);
-        expect(call).toHaveBeenCalledWith("accept_friend_request", {
+        await client.approveFriendRequest("request-1", false, "no");
+        expect(call).toHaveBeenCalledWith("handle_friend_request", {
             flag: "opaque-request-flag",
-            remark: undefined,
+            approve: false,
+            reason: "no",
         });
         expect(statusHandler).toHaveBeenCalledWith(
             expect.objectContaining({ status: { online: true, good: true } }),
         );
+    });
+
+    test("preserves group request flag and subtype for approval", async () => {
+        const call = vi.fn(async () => ({ status: "ok" as const, retcode: 0, data: {} }));
+        const client = createOnebot12Client({
+            baseUrl: "https://example.test",
+            selfId: "bot",
+            receiveMode: "manual",
+            call,
+        });
+
+        client.ingest({
+            id: "event-1",
+            request_id: "request-1",
+            time: 1,
+            type: "request",
+            detail_type: "group",
+            sub_type: "invite",
+            self: { platform: "test", user_id: "bot" },
+            user_id: "2",
+            group_id: "1",
+            flag: "opaque-group-flag",
+        });
+        await client.approveGroupRequest("request-1", true);
+
+        expect(call).toHaveBeenCalledWith("handle_group_request", {
+            flag: "opaque-group-flag",
+            sub_type: "invite",
+            approve: true,
+            reason: undefined,
+        });
     });
 });

@@ -1,6 +1,6 @@
 import {
+    requireBooleanParam,
     requireNonEmptyStringParam,
-    requirePositiveIntegerParam,
     type Adapter,
     type CommonTypes,
 } from "onebots";
@@ -145,8 +145,8 @@ export class OneBotV12ActionService {
             },
             invite_friend_to_group: async params => {
                 await adapter.inviteGroupMember(accountId, {
-                    group_id: adapter.resolveId(requirePositiveIntegerParam(params, "group_id")),
-                    user_id: adapter.resolveId(requirePositiveIntegerParam(params, "user_id")),
+                    group_id: adapter.resolveId(requireNonEmptyStringParam(params, "group_id")),
+                    user_id: adapter.resolveId(requireNonEmptyStringParam(params, "user_id")),
                 });
                 return {};
             },
@@ -155,6 +155,39 @@ export class OneBotV12ActionService {
                     flag: requireNonEmptyStringParam(params, "flag"),
                     approve: true,
                     remark: typeof params.remark === "string" ? params.remark : undefined,
+                });
+                return {};
+            },
+            handle_friend_request: async rawParams => {
+                const params = rawParams as unknown as OneBotV12.HandleFriendRequestParams;
+                await adapter.handleFriendRequest(accountId, {
+                    flag: requireNonEmptyStringParam(rawParams, "flag"),
+                    approve: requireBooleanParam(rawParams, "approve"),
+                    remark: typeof params.remark === "string" ? params.remark : undefined,
+                    reason: typeof params.reason === "string" ? params.reason : undefined,
+                    block:
+                        params.block === undefined
+                            ? undefined
+                            : requireBooleanParam(rawParams, "block"),
+                });
+                return {};
+            },
+            handle_group_request: async rawParams => {
+                const params = rawParams as unknown as OneBotV12.HandleGroupRequestParams;
+                const subType = requireNonEmptyStringParam(rawParams, "sub_type");
+                if (subType !== "add" && subType !== "invite") {
+                    throw new TypeError("sub_type 必须是 add 或 invite");
+                }
+                await adapter.handleGroupRequest(accountId, {
+                    flag: requireNonEmptyStringParam(rawParams, "flag"),
+                    sub_type: subType,
+                    type: subType === "invite" ? "invitation" : "request",
+                    approve: requireBooleanParam(rawParams, "approve"),
+                    reason: typeof params.reason === "string" ? params.reason : undefined,
+                    block:
+                        params.block === undefined
+                            ? undefined
+                            : requireBooleanParam(rawParams, "block"),
                 });
                 return {};
             },

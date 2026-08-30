@@ -65,8 +65,8 @@ export class Channel<Id extends string | number = string | number> {
 export namespace Channel {
     export interface Data<Id extends string | number = string | number> {
         channel_id: Id;
-        channel_name: string;
-        avatar: string;
+        channel_name?: string;
+        avatar?: string;
     }
 
     export const cache: WeakMap<Data<string | number>, Channel<string | number>> = new WeakMap();

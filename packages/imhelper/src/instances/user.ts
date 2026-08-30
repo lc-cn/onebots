@@ -41,8 +41,9 @@ export class User<Id extends string | number = string | number> {
 export namespace User {
     export interface Data<Id extends string | number = string | number> {
         user_id: Id;
-        user_name: string;
-        avatar: string;
+        /** 目录或事件未提供展示名时保持未知，不伪造空字符串。 */
+        user_name?: string;
+        avatar?: string;
     }
     export const cache: WeakMap<Data<string | number>, User<string | number>> = new WeakMap();
     export function from<Id extends string | number = string | number>(

@@ -16,6 +16,7 @@ import { ChannelMessageDeleteNoticeEvent } from "./notice/channel-message-delete
 import { PrivateMessageDeleteNoticeEvent } from "./notice/private-message-delete.js";
 import { FriendRequestEvent } from "./request/friend.js";
 import { GroupRequestEvent } from "./request/group.js";
+import { observeEventEntities } from "../entity-observer.js";
 
 type EventTypeMap<Id extends string | number> = {
     "message.private": PrivateMessageEvent<Id>;
@@ -76,7 +77,10 @@ const supportedEventTypes = [
     "meta.status_update",
 ] as const satisfies readonly SupportedEventType[];
 
-function assertEventData(type: string, data: unknown): asserts data is { timestamp: number } {
+function assertEventData(
+    type: string,
+    data: unknown,
+): asserts data is Record<string, unknown> & { timestamp: number } {
     if (typeof data !== "object" || data === null) {
         throw new TypeError(`事件 ${type} 的数据必须是对象`);
     }
@@ -91,6 +95,7 @@ function createKnownEvent<Id extends string | number>(
     helper: ImHelper<Id>,
 ): BaseEvent<Id> {
     assertEventData(type, data);
+    observeEventEntities(helper, type, data);
 
     // TypeScript 无法根据运行时 key 收窄关联的映射值；断言被限制在唯一的构造分派点。
     switch (type) {
