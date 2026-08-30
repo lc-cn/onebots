@@ -1,25 +1,26 @@
 import KoaRouter from "@koa/router";
-import { WebSocketServer, WebSocket, ServerOptions } from "ws";
-import { IncomingMessage, Server } from "http";
-import type {RouterContext as KoaRouterContext} from "@koa/router";
-import type { Request } from 'koa';
+import type { RouterContext as KoaRouterContext } from "@koa/router";
+import type { Request } from "koa";
+import type { IncomingMessage, Server } from "node:http";
+import type { Duplex } from "node:stream";
+import { WebSocket, WebSocketServer, type ServerOptions } from "ws";
 
 export type RouterContext = KoaRouterContext & {
     request: Request & {
         body: unknown;
     };
 };
-export type {Next} from "koa";
+export type { Next } from "koa";
+
 export class WsServer<
     T extends typeof WebSocket = typeof WebSocket,
     U extends typeof IncomingMessage = typeof IncomingMessage,
 > extends WebSocketServer<T, U> {
-    public readonly path: string = '';
+    declare public readonly path: string;
 
     constructor(options: WsServer.Options<T, U>) {
         super(options);
-        // 设置 path（基类可能不会自动设置，因为使用了 noServer: true）
-        (this as unknown as { path: string }).path = options.path;
+        (this as { path: string }).path = options.path;
     }
 }
 
@@ -32,168 +33,129 @@ export namespace WsServer {
     }
 }
 
+/**
+ * Koa HTTP Router 与同一 Server 上的 WebSocket upgrade 注册表。
+ *
+ * WebSocket 路径始终是客户端请求的绝对 pathname，不继承 Koa Router prefix。
+ * Router 拥有所有 WsServer，并负责在宿主停止时先拒绝新 upgrade、再终止现有连接。
+ */
 export class Router extends KoaRouter {
-    private wsMap: Map<string, WsServer> = new Map();
-    private upgradeHandler?: (request: IncomingMessage, socket: import('stream').Duplex, head: Buffer) => void;
-    private readonly server: Server;
+    private readonly wsMap = new Map<string, WsServer>();
+    private upgradeHandler?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 
-    constructor(server: Server, options?: ConstructorParameters<typeof KoaRouter>[0]) {
+    constructor(
+        private readonly server: Server,
+        options?: ConstructorParameters<typeof KoaRouter>[0],
+    ) {
         super(options);
-        this.server = server;
-        this.setupUpgradeHandler();
+        this.attachUpgradeHandler();
     }
 
-    /**
-     * 设置 WebSocket upgrade 处理器
-     */
-    private setupUpgradeHandler(): void {
-        this.upgradeHandler = (request: IncomingMessage, socket: import('stream').Duplex, head: Buffer) => {
+    private attachUpgradeHandler(): void {
+        this.upgradeHandler = (request, socket, head) => {
+            let pathname: string;
             try {
-                const url = new URL(request.url || "/", `http://localhost`);
-                const pathname = url.pathname;
-
-                // WebSocket upgrade 请求的路径是客户端直接请求的完整路径
-                // 不受 Koa router prefix 影响，所以直接使用 pathname 进行匹配
-                const wsServer = this.wsMap.get(pathname);
-
-                if (!wsServer) {
-                    // 没有找到匹配的 WebSocket 服务器，优雅地关闭连接
-                    socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
-                    socket.destroy();
-                    return;
-                }
-
-                // 处理 WebSocket 升级
-                wsServer.handleUpgrade(request, socket, head, (ws) => {
-                    wsServer.emit("connection", ws, request);
-                });
-            } catch (error) {
-                // 处理 URL 解析错误
-                socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
-                socket.destroy();
+                pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+            } catch {
+                this.rejectUpgrade(socket, 400, "Bad Request");
+                return;
             }
-        };
 
+            const wsServer = this.wsMap.get(pathname);
+            if (!wsServer) {
+                this.rejectUpgrade(socket, 404, "Not Found");
+                return;
+            }
+
+            wsServer.handleUpgrade(request, socket, head, ws => {
+                wsServer.emit("connection", ws, request);
+            });
+        };
         this.server.on("upgrade", this.upgradeHandler);
     }
 
-    /**
-     * 创建并注册一个新的 WebSocket 服务器
-     * @param path WebSocket 路径（客户端请求的完整路径，不受 router prefix 影响）
-     * @returns WebSocket 服务器实例
-     */
-    ws(path: string): WsServer {
-        // 规范化路径：确保以 / 开头
-        const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-        
-        // WebSocket 路径不受 Router prefix 影响
-        // 因为 WebSocket upgrade 是直接处理 HTTP upgrade 请求的，使用原始 pathname
-        // 所以直接使用传入的路径，不添加 prefix
-        const fullPath = normalizedPath;
+    private rejectUpgrade(socket: Duplex, status: number, reason: string): void {
+        socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\n\r\n`);
+    }
 
-        // 检查路径是否已存在
-        if (this.wsMap.has(fullPath)) {
-            throw new Error(`WebSocket server already exists at path: ${fullPath}`);
+    private detachUpgradeHandler(): void {
+        if (!this.upgradeHandler) return;
+        this.server.removeListener("upgrade", this.upgradeHandler);
+        this.upgradeHandler = undefined;
+    }
+
+    private normalizeWsPath(value: string): string {
+        const path = value.startsWith("/") ? value : `/${value}`;
+        if (path.startsWith("//") || path.includes("?") || path.includes("#")) {
+            throw new TypeError(`WebSocket 路径必须是绝对 pathname: ${value}`);
+        }
+        return path;
+    }
+
+    /** 注册不受 Koa prefix 影响的 WebSocket pathname。 */
+    ws(path: string): WsServer {
+        const normalized = this.normalizeWsPath(path);
+        if (this.wsMap.has(normalized)) {
+            throw new Error(`WebSocket server already exists at path: ${normalized}`);
         }
 
-        // 创建 WebSocket 服务器
-        const wsServer = new WsServer({ 
-            noServer: true, 
-            path: fullPath 
-        });
-
-        // 存储完整路径（客户端请求的路径，不受 prefix 影响）
-        this.wsMap.set(fullPath, wsServer);
-
+        const wsServer = new WsServer({ noServer: true, path: normalized });
+        this.wsMap.set(normalized, wsServer);
         return wsServer;
     }
 
-    /**
-     * 移除 WebSocket 服务器
-     * @param path WebSocket 路径（客户端请求的完整路径）
-     */
-    removeWs(path: string): boolean {
-        const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-        
-        // 尝试匹配完整路径或相对路径
-        let fullPath: string;
-        if (this.opts.prefix && !normalizedPath.startsWith(this.opts.prefix)) {
-            fullPath = `${this.opts.prefix}${normalizedPath}`;
-        } else {
-            fullPath = normalizedPath;
-        }
-
-        const wsServer = this.wsMap.get(fullPath) || this.wsMap.get(normalizedPath);
-        if (wsServer) {
-            // 关闭所有连接
-            wsServer.close();
-            this.wsMap.delete(fullPath);
-            if (fullPath !== normalizedPath && this.wsMap.has(normalizedPath)) {
-                this.wsMap.delete(normalizedPath);
-            }
-            return true;
-        }
-        return false;
+    private terminateClients(wsServer: WsServer): void {
+        for (const client of wsServer.clients) client.terminate();
     }
 
-    /**
-     * 清理所有 WebSocket 服务器和事件监听器
-     */
-    cleanup(): void {
-        // 关闭所有 WebSocket 服务器
-        for (const wsServer of this.wsMap.values()) {
-            try {
-                wsServer.close();
-            } catch (error) {
-                // 忽略关闭错误
-            }
-        }
-        this.wsMap.clear();
-
-        // 移除 upgrade 事件监听器
-        if (this.upgradeHandler) {
-            this.server.removeListener("upgrade", this.upgradeHandler);
-            this.upgradeHandler = undefined;
-        }
-    }
-    
-    /**
-     * 异步清理（返回 Promise）
-     */
-    async cleanupAsync(): Promise<void> {
-        return new Promise<void>((resolve) => {
-            // 关闭所有 WebSocket 服务器
-            const closePromises: Promise<void>[] = [];
-            for (const wsServer of this.wsMap.values()) {
-                closePromises.push(
-                    new Promise<void>((resolve) => {
-                        try {
-                            wsServer.close(() => resolve());
-                        } catch {
-                            resolve();
-                        }
-                    }),
-                );
-            }
-            
-            Promise.all(closePromises).then(() => {
-                this.wsMap.clear();
-                
-                // 移除 upgrade 事件监听器
-                if (this.upgradeHandler) {
-                    this.server.removeListener("upgrade", this.upgradeHandler);
-                    this.upgradeHandler = undefined;
+    private closeWsServer(wsServer: WsServer): Promise<void> {
+        this.terminateClients(wsServer);
+        return new Promise((resolve, reject) => {
+            wsServer.close(error => {
+                if (
+                    !error ||
+                    (error as NodeJS.ErrnoException).code === "WS_ERR_SERVER_NOT_RUNNING"
+                ) {
+                    resolve();
+                    return;
                 }
-                
-                resolve();
+                reject(error);
             });
         });
     }
 
-    /**
-     * 获取所有已注册的 WebSocket 路径
-     */
+    /** 移除一个 WebSocket pathname，并立即终止其现有连接。 */
+    removeWs(path: string): boolean {
+        const normalized = this.normalizeWsPath(path);
+        const wsServer = this.wsMap.get(normalized);
+        if (!wsServer) return false;
+
+        this.wsMap.delete(normalized);
+        this.terminateClients(wsServer);
+        wsServer.close();
+        return true;
+    }
+
+    /** 同步发起全部连接关闭；需要等待完成时使用 cleanupAsync。 */
+    cleanup(): void {
+        this.detachUpgradeHandler();
+        const servers = [...this.wsMap.values()];
+        this.wsMap.clear();
+        for (const wsServer of servers) {
+            this.terminateClients(wsServer);
+            wsServer.close();
+        }
+    }
+
+    /** 拒绝新 upgrade、终止现有连接，并等待所有 WebSocketServer 完成关闭。 */
+    async cleanupAsync(): Promise<void> {
+        this.detachUpgradeHandler();
+        const servers = [...this.wsMap.values()];
+        this.wsMap.clear();
+        await Promise.all(servers.map(wsServer => this.closeWsServer(wsServer)));
+    }
+
     getWsPaths(): string[] {
-        return Array.from(this.wsMap.keys());
+        return [...this.wsMap.keys()];
     }
 }
