@@ -2,18 +2,7 @@ import { EventEmitter } from "node:events";
 import { DiscordREST } from "./rest.js";
 import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from "onebots";
 import type { Agent } from "http";
-import type {
-    DiscordApiGuild,
-    DiscordApiGuildMember,
-    DiscordApiMessage,
-    DiscordMessageDeleteData,
-    DiscordMessageUpdateData,
-    DiscordInteraction,
-    GatewayHelloData,
-    GatewayReadyData,
-    DiscordGuildDeleteData,
-    DiscordGuildMemberRemoveData,
-} from "../types.js";
+import type { GatewayHelloData, GatewayReadyData } from "../types.js";
 import { DiscordError } from "../errors.js";
 import { assertDiscordProxyConfig } from "../config-types.js";
 import {
@@ -25,6 +14,7 @@ import {
     isFatalGatewayCloseCode,
 } from "./gateway-types.js";
 import { compileDiscordGatewayCommand, type DiscordGatewayCommand } from "./gateway-commands.js";
+import { emitDiscordGatewayEvent } from "./gateway-dispatch.js";
 export { GatewayIntents, GatewayOpcodes } from "./gateway-types.js";
 export type { DiscordGatewayEvents, GatewayOptions } from "./gateway-types.js";
 export type { DiscordGatewayCommand } from "./gateway-commands.js";
@@ -45,6 +35,8 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
     private rest: DiscordREST;
     private isReady = false;
     private started = false;
+    private connectPromise?: Promise<void>;
+    private abortSignal?: AbortSignal;
     private heartbeatAcknowledged = true;
     private lastIdentifyAt = 0;
     private readonly presence?: GatewayOptions["presence"];
@@ -92,16 +84,39 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
     }
 
     async connect(signal?: AbortSignal): Promise<void> {
-        if (this.started) return;
+        if (this.started) {
+            await this.connectPromise;
+            return;
+        }
         if (signal?.aborted) {
             throw new DiscordError("Discord Gateway 启动已取消", {
                 code: "DISCORD_GATEWAY_ABORTED",
             });
         }
-        signal?.addEventListener("abort", () => this.disconnect(), { once: true });
+        this.bindAbortSignal(signal);
         this.started = true;
-        await this.connectionManager.start();
+        const connecting = this.connectionManager.start();
+        this.connectPromise = connecting;
+        try {
+            await connecting;
+        } finally {
+            if (this.connectPromise === connecting) this.connectPromise = undefined;
+        }
     }
+
+    private bindAbortSignal(signal?: AbortSignal): void {
+        this.unbindAbortSignal();
+        if (!signal) return;
+        this.abortSignal = signal;
+        signal.addEventListener("abort", this.handleAbort, { once: true });
+    }
+
+    private unbindAbortSignal(): void {
+        this.abortSignal?.removeEventListener("abort", this.handleAbort);
+        this.abortSignal = undefined;
+    }
+
+    private readonly handleAbort = () => this.disconnect();
 
     private async connectToGateway(url: string, resume: boolean): Promise<void> {
         // 动态导入 ws
@@ -159,25 +174,11 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
             });
 
             socket.on("close", (code: unknown, reason: unknown) => {
-                if (this.ws !== socket) return;
                 const closeCode = code as number;
                 const closeReason = Buffer.isBuffer(reason)
                     ? reason.toString()
                     : String(reason ?? "");
-                const error = new DiscordError(
-                    `Discord Gateway 已关闭（${closeCode}${closeReason ? `：${closeReason}` : ""}）`,
-                    {
-                        code: isFatalGatewayCloseCode(closeCode)
-                            ? "DISCORD_GATEWAY_FATAL_CLOSE"
-                            : "DISCORD_GATEWAY_CLOSED",
-                    },
-                );
-                const fatal = isFatalGatewayCloseCode(closeCode);
-                if (fatal) this.connectionManager.stop();
-                this.cleanup(error);
-                this.emit("close", closeCode, closeReason);
-                if (fatal) this.emit("client_error", error);
-                else this.scheduleReconnect(error);
+                this.handleSocketClose(socket, closeCode, closeReason);
             });
 
             socket.on("error", (error: unknown) => {
@@ -197,6 +198,26 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
 
             this.once("connected", onReady);
         });
+    }
+
+    private handleSocketClose(socket: WsWebSocket, closeCode: number, closeReason: string): void {
+        if (this.ws !== socket) return;
+        const fatal = isFatalGatewayCloseCode(closeCode);
+        const error = new DiscordError(
+            `Discord Gateway 已关闭（${closeCode}${closeReason ? `：${closeReason}` : ""}）`,
+            {
+                code: fatal ? "DISCORD_GATEWAY_FATAL_CLOSE" : "DISCORD_GATEWAY_CLOSED",
+            },
+        );
+        if (fatal) {
+            this.started = false;
+            this.unbindAbortSignal();
+            this.connectionManager.stop();
+        }
+        this.cleanup(error);
+        this.emit("close", closeCode, closeReason);
+        if (fatal) this.emit("client_error", error);
+        else this.scheduleReconnect(error);
     }
 
     private handleMessage(rawPayload: unknown) {
@@ -286,40 +307,8 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
                 this.emit("resumed");
                 break;
 
-            case "MESSAGE_CREATE":
-                this.emit("messageCreate", data as DiscordApiMessage);
-                break;
-
-            case "MESSAGE_UPDATE":
-                this.emit("messageUpdate", data as DiscordMessageUpdateData);
-                break;
-
-            case "MESSAGE_DELETE":
-                this.emit("messageDelete", data as DiscordMessageDeleteData);
-                break;
-
-            case "GUILD_CREATE":
-                this.emit("guildCreate", data as DiscordApiGuild);
-                break;
-
-            case "GUILD_DELETE":
-                this.emit("guildDelete", data as DiscordGuildDeleteData);
-                break;
-
-            case "GUILD_MEMBER_ADD":
-                this.emit("guildMemberAdd", data as DiscordApiGuildMember);
-                break;
-
-            case "GUILD_MEMBER_REMOVE":
-                this.emit("guildMemberRemove", data as DiscordGuildMemberRemoveData);
-                break;
-
-            case "INTERACTION_CREATE":
-                this.emit("interactionCreate", data as DiscordInteraction);
-                break;
-
             default:
-                // 原始 dispatch 已在 switch 前发送。
+                emitDiscordGatewayEvent(this, eventName, data);
                 break;
         }
     }
@@ -479,6 +468,8 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
      */
     disconnect() {
         this.started = false;
+        this.connectPromise = undefined;
+        this.unbindAbortSignal();
         this.connectionManager.stop();
         this.sessionId = null;
         this.resumeGatewayUrl = null;

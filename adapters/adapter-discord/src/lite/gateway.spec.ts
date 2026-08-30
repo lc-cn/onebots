@@ -15,7 +15,17 @@ interface GatewayHarness {
     resumeOnHello: boolean;
     heartbeatAcknowledged: boolean;
     isReady: boolean;
-    connectionManager: { scheduleReconnect(error?: Error): void; stop(): void };
+    connectionManager: {
+        start(): Promise<void>;
+        scheduleReconnect(error?: Error): void;
+        stop(): void;
+    };
+    started: boolean;
+    handleSocketClose(
+        socket: NonNullable<GatewayHarness["ws"]>,
+        code: number,
+        reason: string,
+    ): void;
     handleMessage(payload: unknown): void;
     sendHeartbeat(): void;
 }
@@ -46,6 +56,63 @@ describe("DiscordGateway lifecycle", () => {
             name: "DiscordError",
             code: "DISCORD_GATEWAY_ABORTED",
         });
+    });
+
+    it("并发 connect 共享同一启动过程，stop 时解除 AbortSignal 绑定", async () => {
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const gateway = new DiscordGateway({ token: "token", intents: 1 });
+        const harness = gateway as unknown as GatewayHarness;
+        const start = vi.fn(() => pending);
+        harness.connectionManager = {
+            start,
+            scheduleReconnect: vi.fn(),
+            stop: vi.fn(),
+        };
+        const abort = new AbortController();
+        const removeEventListener = vi.spyOn(abort.signal, "removeEventListener");
+
+        const first = gateway.connect(abort.signal);
+        let secondSettled = false;
+        const second = gateway.connect().then(() => {
+            secondSettled = true;
+        });
+        await Promise.resolve();
+
+        expect(start).toHaveBeenCalledOnce();
+        expect(secondSettled).toBe(false);
+
+        release();
+        await Promise.all([first, second]);
+        gateway.disconnect();
+
+        expect(removeEventListener).toHaveBeenCalledWith("abort", expect.any(Function));
+    });
+
+    it("fatal close 结束当前生命周期并允许同一实例重新连接", async () => {
+        const gateway = new DiscordGateway({ token: "token", intents: 1 });
+        const harness = gateway as unknown as GatewayHarness;
+        const socket = {
+            readyState: 1,
+            send: vi.fn(),
+            close: vi.fn(),
+            removeAllListeners: vi.fn(),
+            on: vi.fn(),
+        };
+        const start = vi.fn(async () => undefined);
+        const stop = vi.fn();
+        harness.connectionManager = { start, scheduleReconnect: vi.fn(), stop };
+        harness.ws = socket;
+        harness.started = true;
+
+        harness.handleSocketClose(socket, 4004, "Authentication failed");
+
+        expect(stop).toHaveBeenCalledOnce();
+        expect(harness.started).toBe(false);
+        await gateway.connect();
+        expect(start).toHaveBeenCalledOnce();
     });
 
     it("HELLO 后恢复会话，并在 stop 时清除心跳与会话延迟任务", async () => {
@@ -110,7 +177,11 @@ describe("DiscordGateway lifecycle", () => {
         const scheduleReconnect = vi.fn();
         const removeAllListeners = vi.fn();
         const close = vi.fn();
-        harness.connectionManager = { scheduleReconnect, stop: vi.fn() };
+        harness.connectionManager = {
+            start: vi.fn(async () => undefined),
+            scheduleReconnect,
+            stop: vi.fn(),
+        };
         harness.ws = {
             readyState: 1,
             send: vi.fn(),

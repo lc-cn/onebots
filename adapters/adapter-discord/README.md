@@ -145,6 +145,8 @@ await rest.createMessage("123456789012345678", "Hello!");
 
 `transport` 可注入已有 HTTP 栈；默认实现不会在代理初始化失败时静默直连。`DiscordLite` 的 Gateway discovery 与业务 API 会复用同一个 REST 实例，因此自定义 `apiBaseUrl`、传输实现和已学习的限流 bucket 不会在建立 Gateway 时失效。直接构造 `DiscordGateway` 时也可通过 `rest` 注入同一实例。所有非成功响应均抛出 `DiscordError`，其中保留 HTTP 状态、Discord code、retry_after、global 标记和请求 ID。
 
+Gateway 默认无限重连；并发 `connect()` 会等待同一次启动，`disconnect()` 会解除传入的 `AbortSignal` 监听。鉴权、分片或 intents 等 fatal close 会结束当前生命周期，修正配置后可在同一实例上重新 `connect()`。
+
 ## 通用消息段
 
 `send_message` 支持 `text`、`at`、`channel`、`reply`、`embed`、`share`、`face`、`image`、`file`、`audio`、`record`、`video` 与原生 `discord_message`。角色提及使用 `at.data.role_id`，频道提及使用 `channel.data.channel_id`。
