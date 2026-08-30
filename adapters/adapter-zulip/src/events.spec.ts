@@ -87,6 +87,47 @@ describe("Zulip 事件投影", () => {
         });
     });
 
+    it("投影批量消息标记变化并保留未读详情", () => {
+        expect(
+            projectZulipEvents(
+                {
+                    id: 31,
+                    type: "update_message_flags",
+                    op: "remove",
+                    flag: "read",
+                    messages: [42, 43],
+                    message_details: {
+                        "42": { type: "stream", stream_id: 7, topic: "release" },
+                    },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "message_flags_updated",
+            sub_type: "remove:read",
+            message_ids: [{ string: "42" }, { string: "43" }],
+            flag: "read",
+            operation: "remove",
+            all: false,
+            message_details: {
+                "42": { type: "stream", stream_id: 7, topic: "release" },
+            },
+        });
+        expect(
+            projectZulipEvents(
+                {
+                    id: 32,
+                    type: "update_message_flags",
+                    op: "add",
+                    flag: "read",
+                    messages: [],
+                    all: true,
+                },
+                context,
+            )[0],
+        ).toMatchObject({ notice_type: "message_flags_updated", all: true, message_ids: [] });
+    });
+
     it("区分多人私聊并保留可回复的收件人场景", () => {
         const event = projectZulipEvents(
             {

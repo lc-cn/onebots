@@ -1,6 +1,5 @@
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import {
-    optionalString,
     requireInteger,
     requireMethod,
     requireParams,
@@ -17,6 +16,7 @@ import { ZULIP_DOMAIN_ACTION_HANDLERS } from "./domain-actions.js";
 import { ZULIP_DATA_EXPORT_ACTION_HANDLERS } from "./data-export-actions.js";
 import { ZULIP_INVITATION_ACTION_HANDLERS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_ACTION_HANDLERS } from "./linkifier-actions.js";
+import { ZULIP_MESSAGE_ACTION_HANDLERS } from "./message-actions.js";
 import { ZULIP_NAVIGATION_VIEW_ACTION_HANDLERS } from "./navigation-view-actions.js";
 import { ZULIP_OWN_PROFILE_ACTION_HANDLERS } from "./own-profile-actions.js";
 import { ZULIP_PREFERENCE_ACTION_HANDLERS } from "./preference-actions.js";
@@ -32,17 +32,6 @@ const ACTION_HANDLERS = {
             requireMethod(params.method),
             requireParams(params.params),
         ),
-    add_reaction: (client, params) => reaction(client, params, "add"),
-    remove_reaction: (client, params) => reaction(client, params, "remove"),
-    star_message: (client, params) => messageFlag(client, params, "add"),
-    unstar_message: (client, params) => messageFlag(client, params, "remove"),
-    get_messages: (client, params) => client.call("messages", "GET", requireParams(params)),
-    get_message_edit_history: (client, params) =>
-        client.call(`messages/${requireInteger(params.message_id, "message_id")}/history`),
-    get_message_read_receipts: (client, params) =>
-        client.call(`messages/${requireInteger(params.message_id, "message_id")}/read_receipts`),
-    render_message: (client, params) =>
-        client.call("messages/render", "POST", requireParams(params)),
     subscribe_channels: (client, params) =>
         client.call("users/me/subscriptions", "POST", requireParams(params)),
     unsubscribe_channels: (client, params) =>
@@ -101,6 +90,7 @@ const ACTION_HANDLERS = {
     ...ZULIP_EMOJI_ACTION_HANDLERS,
     ...ZULIP_INVITATION_ACTION_HANDLERS,
     ...ZULIP_LINKIFIER_ACTION_HANDLERS,
+    ...ZULIP_MESSAGE_ACTION_HANDLERS,
     ...ZULIP_NAVIGATION_VIEW_ACTION_HANDLERS,
     ...ZULIP_OWN_PROFILE_ACTION_HANDLERS,
     ...ZULIP_PREFERENCE_ACTION_HANDLERS,
@@ -129,32 +119,6 @@ export async function executeZulipPlatformAction(
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
     return PLATFORM_ACTIONS.execute(client, action, params);
-}
-
-function reaction(
-    client: ZulipClient,
-    params: Readonly<Record<string, unknown>>,
-    operation: "add" | "remove",
-): Promise<unknown> {
-    return client.setReaction(
-        requireInteger(params.message_id, "message_id"),
-        operation,
-        requireString(params.emoji_name, "emoji_name"),
-        optionalString(params.emoji_code),
-        optionalString(params.reaction_type),
-    );
-}
-
-function messageFlag(
-    client: ZulipClient,
-    params: Readonly<Record<string, unknown>>,
-    operation: "add" | "remove",
-): Promise<unknown> {
-    return client.updateMessageFlag(
-        [requireInteger(params.message_id, "message_id")],
-        operation,
-        "starred",
-    );
 }
 
 function archiveChannel(

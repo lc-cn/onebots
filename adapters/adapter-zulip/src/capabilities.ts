@@ -89,6 +89,7 @@ export const zulipCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         message: { support: "native", scenes: ["private", "direct", "group", "channel"] },
         message_updated: { support: "native" },
         message_deleted: { support: "native" },
+        message_flags_updated: { support: "native" },
         reaction_added: { support: "native" },
         reaction_removed: { support: "native" },
         user_added: { support: "native" },

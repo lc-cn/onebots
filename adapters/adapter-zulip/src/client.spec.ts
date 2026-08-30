@@ -304,10 +304,12 @@ describe("ZulipClient", () => {
         const attachment = vi.fn();
         const channelFolder = vi.fn();
         const navigationView = vi.fn();
+        const messageFlags = vi.fn();
         client.on("subscription", subscription);
         client.on("attachment", attachment);
         client.on("channel_folder", channelFolder);
         client.on("navigation_view", navigationView);
+        client.on("update_message_flags", messageFlags);
 
         await client.start();
         const registration = requests.find(request => request.path === "register");
@@ -315,6 +317,7 @@ describe("ZulipClient", () => {
         expect(registration?.params?.event_types).toContain("attachment");
         expect(registration?.params?.event_types).toContain("channel_folder");
         expect(registration?.params?.event_types).toContain("navigation_view");
+        expect(registration?.params?.event_types).toContain("update_message_flags");
         expect(registration?.params?.event_types).toContain("heartbeat");
         expect(registration?.params?.event_types).toContain("restart");
         expect(registration?.params?.event_types).toContain("user_group");
@@ -354,6 +357,14 @@ describe("ZulipClient", () => {
             op: "remove",
             fragment: "narrow/is/alerted",
         });
+        await client.ingest({
+            id: 6,
+            type: "update_message_flags",
+            op: "add",
+            flag: "starred",
+            messages: [42],
+            all: false,
+        });
         expect(subscription).toHaveBeenCalledOnce();
         expect(attachment).toHaveBeenCalledWith(
             expect.objectContaining({ op: "remove", attachment: { id: 7 } }),
@@ -363,6 +374,9 @@ describe("ZulipClient", () => {
         );
         expect(navigationView).toHaveBeenCalledWith(
             expect.objectContaining({ op: "remove", fragment: "narrow/is/alerted" }),
+        );
+        expect(messageFlags).toHaveBeenCalledWith(
+            expect.objectContaining({ op: "add", flag: "starred", messages: [42] }),
         );
         await client.stop();
     });

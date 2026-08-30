@@ -17,6 +17,7 @@ import type {
     ZulipMessageEvent,
     ZulipReactionEvent,
     ZulipUpdateMessageEvent,
+    ZulipUpdateMessageFlagsEvent,
 } from "./types.js";
 
 /** 将官方 Event Queue 事件无损投影为一个或多个通用事件。 */
@@ -28,6 +29,7 @@ export function projectZulipEvents(
     if (isUpdateEvent(event)) return [projectUpdate(event, context)];
     if (isDeleteEvent(event)) return [projectDelete(event, context)];
     if (isReactionEvent(event)) return [projectReaction(event, context)];
+    if (isMessageFlagsEvent(event)) return [projectMessageFlags(event, context)];
     if (event.type === "heartbeat") {
         return [
             {
@@ -44,6 +46,26 @@ export function projectZulipEvents(
     const resourceEvent = projectZulipResourceEvent(event, context);
     if (resourceEvent) return [resourceEvent];
     return [customNotice(event, context)];
+}
+
+function projectMessageFlags(
+    event: ZulipUpdateMessageFlagsEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent> {
+    const messageIds = event.messages.map(messageId => context.createId(messageId));
+    return {
+        ...base(event, context),
+        type: "notice",
+        notice_type: "message_flags_updated",
+        sub_type: `${event.op}:${event.flag}`,
+        ...(messageIds.length === 1 ? { message_id: messageIds[0] } : {}),
+        message_ids: messageIds,
+        flag: event.flag,
+        operation: event.op,
+        all: event.all === true,
+        ...(event.message_details === undefined ? {} : { message_details: event.message_details }),
+        extensions: { zulip: event },
+    };
 }
 
 function projectRealmEmoji(
@@ -354,6 +376,16 @@ function isReactionEvent(event: ZulipEvent): event is ZulipReactionEvent {
         event.type === "reaction" &&
         (event.op === "add" || event.op === "remove") &&
         typeof event.message_id === "number"
+    );
+}
+
+function isMessageFlagsEvent(event: ZulipEvent): event is ZulipUpdateMessageFlagsEvent {
+    return (
+        event.type === "update_message_flags" &&
+        (event.op === "add" || event.op === "remove") &&
+        typeof event.flag === "string" &&
+        Array.isArray(event.messages) &&
+        event.messages.every(messageId => numeric(messageId) !== undefined)
     );
 }
 

@@ -126,6 +126,7 @@ export namespace CommonEvent {
         | "message_status"
         | "message_updated"
         | "message_deleted"
+        | "message_flags_updated"
         | "reaction_added"
         | "reaction_removed"
         | "member_joined"

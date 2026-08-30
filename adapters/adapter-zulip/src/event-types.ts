@@ -96,6 +96,15 @@ export interface ZulipReactionEvent extends ZulipBaseEvent {
     user?: { email?: string; full_name?: string; user_id: number };
 }
 
+export interface ZulipUpdateMessageFlagsEvent extends ZulipBaseEvent {
+    type: "update_message_flags";
+    op: "add" | "remove";
+    flag: string;
+    messages: number[];
+    all?: boolean;
+    message_details?: Record<string, Record<string, unknown>>;
+}
+
 export interface ZulipHeartbeatEvent extends ZulipBaseEvent {
     type: "heartbeat";
 }
@@ -319,6 +328,7 @@ export type ZulipEvent =
     | ZulipUpdateMessageEvent
     | ZulipDeleteMessageEvent
     | ZulipReactionEvent
+    | ZulipUpdateMessageFlagsEvent
     | ZulipHeartbeatEvent
     | ZulipRealmUserEvent
     | ZulipInvitesChangedEvent
