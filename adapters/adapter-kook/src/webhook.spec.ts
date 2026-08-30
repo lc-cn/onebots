@@ -5,14 +5,29 @@ describe("KOOK Webhook receiver", () => {
     test("ingest 返回结构化响应并按 sn 去重", () => {
         const receiver = new KookWebhookReceiver({ verify_token: "verify" });
         const raw = eventSignal(42);
-        expect(receiver.ingest(raw)).toMatchObject({
+        expect(receiver.ingest(raw, () => undefined)).toMatchObject({
             status: 200,
             body: { success: true },
             event: { msg_id: "message" },
         });
-        expect(receiver.ingest(raw)).toEqual({
+        expect(receiver.ingest(raw, () => undefined)).toEqual({
             status: 200,
             body: { success: true, duplicate: true },
+        });
+    });
+
+    test("分发异常不提交 sn，允许同一 Webhook 重投", () => {
+        const receiver = new KookWebhookReceiver({ verify_token: "verify" });
+        const raw = eventSignal(43);
+        expect(() =>
+            receiver.ingest(raw, () => {
+                throw new Error("temporary failure");
+            }),
+        ).toThrow("temporary failure");
+        expect(receiver.ingest(raw, () => undefined).body).toEqual({ success: true });
+        expect(receiver.ingest(raw, () => undefined).body).toEqual({
+            success: true,
+            duplicate: true,
         });
     });
 
@@ -24,9 +39,29 @@ describe("KOOK Webhook receiver", () => {
                 body: JSON.stringify(eventSignal(1)),
                 headers: { "content-type": "application/json" },
             }),
+            () => undefined,
         );
         expect(response.status).toBe(200);
         expect(await response.json()).toEqual({ success: true });
+    });
+
+    test("acceptHttp 在业务分发失败时返回 500 并允许重投", async () => {
+        const receiver = new KookWebhookReceiver({ verify_token: "verify" });
+        const request = () =>
+            new Request("https://example.test/kook", {
+                method: "POST",
+                body: JSON.stringify(eventSignal(2)),
+                headers: { "content-type": "application/json" },
+            });
+        const failed = await receiver.acceptHttp(request(), () => {
+            throw new Error("temporary failure");
+        });
+        const retried = await receiver.acceptHttp(request(), () => undefined);
+
+        expect(failed.status).toBe(500);
+        expect(await failed.json()).toMatchObject({ code: "KOOK_EVENT_DELIVERY_FAILED" });
+        expect(retried.status).toBe(200);
+        expect(await retried.json()).toEqual({ success: true });
     });
 
     test("错误响应不泄漏 verify token", async () => {
@@ -36,6 +71,7 @@ describe("KOOK Webhook receiver", () => {
                 method: "POST",
                 body: "not-json",
             }),
+            () => undefined,
         );
         expect(response.status).toBe(400);
         expect(await response.text()).not.toContain("super-secret");
@@ -43,7 +79,10 @@ describe("KOOK Webhook receiver", () => {
 
     test("拒绝非 POST 请求", async () => {
         const receiver = new KookWebhookReceiver({});
-        const response = await receiver.acceptHttp(new Request("https://example.test/kook"));
+        const response = await receiver.acceptHttp(
+            new Request("https://example.test/kook"),
+            () => undefined,
+        );
         expect(response.status).toBe(405);
         expect(response.headers.get("allow")).toBe("POST");
     });

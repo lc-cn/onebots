@@ -17,7 +17,7 @@ import type {
     KookUser,
 } from "./types.js";
 import { parseEvent, parseSignal } from "./utils.js";
-import { KookWebhookReceiver, type KookIngestResult } from "./webhook.js";
+import { KookWebhookReceiver, kookWebhookErrorStatus, type KookIngestResult } from "./webhook.js";
 
 export type { KookBotEvents } from "./bot-events.js";
 
@@ -187,7 +187,10 @@ export class KookBot extends EventEmitter<KookBotEvents> {
                         this.handleSignal(signal, socket, generation);
                     }
                 } catch (error) {
-                    this.emit("error", error);
+                    this.reportError(error);
+                    if (error instanceof KookError && error.code === "KOOK_EVENT_DELIVERY_FAILED") {
+                        socket.terminate();
+                    }
                 }
             });
             socket.once("error", error => settle(error));
@@ -236,7 +239,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         ping();
         this.pingTimer = setInterval(ping, 25_000 + Math.floor(Math.random() * 10_001));
         socket.on("close", () => this.handleClose(socket, generation));
-        socket.on("error", error => this.emit("error", error));
+        socket.on("error", error => this.reportError(error));
     }
 
     private handleClose(socket: WebSocket, generation: number): void {
@@ -255,7 +258,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = undefined;
             void this.establish(generation).catch(error => {
-                this.emit("error", error);
+                this.reportError(error);
                 this.scheduleReconnect(generation);
             });
         }, delay);
@@ -286,9 +289,9 @@ export class KookBot extends EventEmitter<KookBotEvents> {
             ctx.status = result.status;
             ctx.body = result.body;
         } catch (error) {
-            this.emit("error", error);
-            ctx.status = 400;
+            this.reportError(error);
             const wrapped = KookError.wrap(error, "KOOK_WEBHOOK_INVALID");
+            ctx.status = kookWebhookErrorStatus(wrapped);
             ctx.body = { error: wrapped.message, code: wrapped.code };
         }
     }
@@ -309,9 +312,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
             }
             return this.ingestGatewaySignal(signal);
         }
-        const result = this.webhook.ingest(rawEvent);
-        if (result.event && result.signal) this.emit("event", result.event, result.signal);
-        return result;
+        return this.webhook.ingest(rawEvent, (event, signal) => this.emit("event", event, signal));
     }
 
     /** 上游已有连接进入全新 session 时重置手动接入的 sn 状态。 */
@@ -321,24 +322,37 @@ export class KookBot extends EventEmitter<KookBotEvents> {
 
     /** 接入 Fetch/标准 Request 风格的既有 HTTP Host。 */
     async acceptHttp(request: Request): Promise<Response> {
-        if (request.method !== "POST") return this.webhook.acceptHttp(request);
+        if (request.method !== "POST") {
+            return this.webhook.acceptHttp(request, () => undefined);
+        }
         try {
             const raw = (await request.json()) as unknown;
             const result = this.ingest(raw, "webhook");
             return Response.json(result.body, { status: result.status });
         } catch (error) {
             const wrapped = KookError.wrap(error, "KOOK_WEBHOOK_INVALID");
-            return Response.json({ error: wrapped.message, code: wrapped.code }, { status: 400 });
+            return Response.json(
+                { error: wrapped.message, code: wrapped.code },
+                { status: kookWebhookErrorStatus(wrapped) },
+            );
         }
     }
 
     private ingestGatewaySignal(signal: KookSignal): KookIngestResult {
         const sequenced = this.gatewaySequence.ingest(signal);
         const events: KookEvent[] = [];
-        for (const ready of sequenced.ready) {
+        let ready: KookSignal | undefined = sequenced.ready[0];
+        while (ready) {
             const event = parseEvent(ready.d);
+            try {
+                this.emit("event", event, ready);
+            } catch (error) {
+                throw KookError.wrap(error, "KOOK_EVENT_DELIVERY_FAILED", {
+                    details: { sn: ready.sn, message_id: event.msg_id },
+                });
+            }
             events.push(event);
-            this.emit("event", event, ready);
+            ready = this.gatewaySequence.commit(ready);
         }
         return {
             status: 200,
@@ -349,6 +363,11 @@ export class KookBot extends EventEmitter<KookBotEvents> {
             },
             ...(events.length ? { event: events.at(-1), events, signal } : {}),
         };
+    }
+
+    /** EventEmitter 的 error 无监听器时会再次抛错；SDK 生命周期错误保持显式可订阅。 */
+    private reportError(error: unknown): void {
+        if (this.listenerCount("error") > 0) this.emit("error", error);
     }
 
     async callApi<T = unknown>(path: string, options: KookApiRequestOptions = {}): Promise<T> {

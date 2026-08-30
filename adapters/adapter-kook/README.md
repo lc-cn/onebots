@@ -58,10 +58,14 @@ import { KookBot, KookWebhookReceiver } from "@onebots/adapter-kook";
 const receiver = new KookWebhookReceiver({ verify_token: process.env.KOOK_VERIFY_TOKEN });
 
 // Fetch / WinterCG 风格 Host
-const response = await receiver.acceptHttp(request);
+const response = await receiver.acceptHttp(request, (event, signal) => {
+  dispatchToApplication(event, signal);
+});
 
 // 已解析 JSON、消息队列或反向代理转交的事件
-const result = receiver.ingest(rawEvent);
+const result = receiver.ingest(rawEvent, (event, signal) => {
+  dispatchToApplication(event, signal);
+});
 
 // 使用完整 Bot 时，事件会进入该 Bot 的统一 event 管线
 const bot = new KookBot(config);
@@ -74,7 +78,7 @@ bot.ingest(rawSignal, "gateway");
 bot.resetIngest();
 ```
 
-`ingest()` 返回 `{ status, body, event?, signal? }` 结构化结果，包含 challenge、重复事件和鉴权失败等响应；调用方可按自己的 Web 框架写回状态与响应体。
+`ingest()` 返回 `{ status, body, event?, signal? }` 结构化结果，包含 challenge、重复事件和鉴权失败等响应；调用方可按自己的 Web 框架写回状态与响应体。Webhook 与 Gateway 都只在业务监听器成功返回后确认 `sn`；失败的 Webhook 返回 500，Gateway 则保留旧 `sn` 并重连 resume，确保平台能够重投。
 
 ## 消息与事件
 

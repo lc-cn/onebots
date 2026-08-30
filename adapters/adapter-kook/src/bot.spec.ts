@@ -63,6 +63,32 @@ describe("KOOK Bot", () => {
         expect(second).toMatchObject({ body: { success: true, duplicate: true } });
     });
 
+    test("Webhook 业务失败返回 500 且成功重投后才去重", async () => {
+        const bot = new KookBot({ account_id: "bot", token: "token", verify_token: "verify" });
+        let attempts = 0;
+        bot.on("error", vi.fn());
+        bot.on("event", () => {
+            attempts += 1;
+            if (attempts === 1) throw new Error("temporary failure");
+        });
+        const body = webhookSignal(77);
+        const first = { request: { body } } as never;
+        const second = { request: { body } } as never;
+        const duplicate = { request: { body } } as never;
+
+        await bot.handleWebhook(first, vi.fn());
+        await bot.handleWebhook(second, vi.fn());
+        await bot.handleWebhook(duplicate, vi.fn());
+
+        expect(first).toMatchObject({
+            status: 500,
+            body: { code: "KOOK_EVENT_DELIVERY_FAILED" },
+        });
+        expect(second).toMatchObject({ status: 200, body: { success: true } });
+        expect(duplicate).toMatchObject({ body: { success: true, duplicate: true } });
+        expect(attempts).toBe(2);
+    });
+
     test("REST 错误保留状态、平台错误码和路径", async () => {
         vi.stubGlobal(
             "fetch",
@@ -152,6 +178,24 @@ describe("KOOK Bot", () => {
         bot.resetIngest();
         expect(bot.ingest(gatewaySignal(1)).event?.msg_id).toBe("message-1");
     });
+
+    test("manual Gateway 投递失败时保留 sn 并允许原事件重投", () => {
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        let attempts = 0;
+        bot.on("event", () => {
+            attempts += 1;
+            if (attempts === 1) throw new Error("temporary failure");
+        });
+
+        expect(() => bot.ingest(gatewaySignal(20))).toThrow("temporary failure");
+        expect(bot.ingest(gatewaySignal(20)).body).toEqual({ success: true });
+        expect(bot.ingest(gatewaySignal(20)).body).toEqual({ success: true, duplicate: true });
+        expect(attempts).toBe(2);
+    });
 });
 
 function gatewaySignal(sn: number): Record<string, unknown> {
@@ -168,6 +212,13 @@ function gatewaySignal(sn: number): Record<string, unknown> {
             msg_timestamp: Date.now(),
             extra: {},
         },
+    };
+}
+
+function webhookSignal(sn: number): Record<string, unknown> {
+    return {
+        ...gatewaySignal(sn),
+        d: { ...(gatewaySignal(sn).d as Record<string, unknown>), verify_token: "verify" },
     };
 }
 
