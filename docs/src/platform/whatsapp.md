@@ -4,15 +4,16 @@ WhatsApp 适配器使用 Meta 官方 Cloud API。事件通过安全 Webhook 进�
 
 ## 平台能力
 
-- 私聊消息：文本、回复、图片、视频、音频、文档、Sticker、位置、联系人和 Reaction
+- 私聊与 Groups API 群消息：文本、回复、图片、视频、音频、文档、Sticker、位置、联系人和 Reaction
 - 原生消息：Template、Interactive、Flow 以及 Cloud API 后续新增类型
 - 消息状态：`sent`、`delivered`、`read`、`failed`、`deleted`
 - 媒体：上传、查询临时 URL、鉴权下载和删除
 - 管理：Business Profile、Commerce、Flow 生命周期、号码注册/注销、两步验证、用户屏蔽、消息模板
+- 群管理：群资料/成员、改名、参与者增删、邀请链接、入群申请审批，以及生命周期/设置/冻结 Webhook
 - 原始事件：所有 Webhook change 均保留在 `raw_event`
 - 嵌入式接入：`await WhatsAppClient.ingest(rawEvent)` 可把已有可信连接交给同一 Client；同步/异步监听器全部成功后才确认去重
 
-Cloud API 不提供普通 WhatsApp 群组、好友列表或任意历史消息查询，因此适配器不会伪造这些能力。
+Groups API 仅适用于符合 Meta 资格要求的 Official Business Account，以及当前 Phone Number 通过该 API 创建和管理的群；它不能访问普通消费者群组。Cloud API 也不提供好友列表或任意历史消息查询，因此适配器不会伪造这些能力。
 
 ## 安装与配置
 
@@ -53,7 +54,7 @@ const message = [{
 
 ## 平台动作
 
-常用动作包括 `send_native_message`、`mark_message_read`、`upload_media`、`download_media`、Business Profile、Commerce、Flow 生命周期、`block_user` 和消息模板管理。`get_supported_actions` 会返回当前完整清单。
+常用动作包括 `send_native_message`、`mark_message_read`、`upload_media`、`download_media`、Business Profile、Commerce、Flow 生命周期、`block_user` 和消息模板管理。Groups API 另有 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message`。`get_supported_actions` 会返回当前完整清单及资格要求。
 
 新 Graph API 可通过 `whatsapp_call` 调用：
 
@@ -72,5 +73,6 @@ await adapter.callAction("my_bot", "whatsapp_call", {
 - 电话号码使用带国家代码的纯数字格式。
 - 业务主动发起且超出客户服务窗口的消息通常需要已审核模板。
 - API 版本由 Meta 生命周期管理，`api_version` 必须按应用实际启用版本明确配置。
+- Groups API 需要 Meta 开通 Official Business Account 资格，并订阅 v23 定义的 `group_lifecycle_update`、`group_participant_update`、`group_settings_update` Webhook 字段。
 
 参考：[WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/)、[Meta 官方 Postman 集合](https://www.postman.com/meta/whatsapp-business-platform/overview/)。

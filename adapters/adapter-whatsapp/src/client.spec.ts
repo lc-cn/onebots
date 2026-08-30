@@ -199,6 +199,65 @@ describe("WhatsAppClient", () => {
         expect(observedDuringDispatch).toHaveBeenCalledWith({ id: "86123", name: "Alice" });
     });
 
+    it("用 BSUID 作为首选身份，并为 wa_id 与 username 保留可查询别名", async () => {
+        const client = new WhatsAppClient(config);
+        await client.ingest({
+            object: "whatsapp_business_account",
+            entry: [
+                {
+                    id: "waba",
+                    changes: [
+                        {
+                            field: "messages",
+                            value: {
+                                contacts: [
+                                    {
+                                        profile: { name: "Alice" },
+                                        user_id: "BR.123",
+                                        wa_id: "86123",
+                                        username: "alice",
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        const expected = { id: "BR.123", name: "Alice" };
+        expect(client.getObservedContact("BR.123")).toEqual(expected);
+        expect(client.getObservedContact("86123")).toEqual(expected);
+        expect(client.getObservedContact("alice")).toEqual(expected);
+    });
+
+    it("把每个 Groups webhook entry 投递到 typed group_update", async () => {
+        const client = new WhatsAppClient(config);
+        const groupUpdate = vi.fn();
+        client.on("group_update", groupUpdate);
+        const group = {
+            timestamp: "20",
+            group_id: "group@g.us",
+            type: "group_suspend" as const,
+        };
+
+        await expect(
+            client.ingest({
+                object: "whatsapp_business_account",
+                entry: [
+                    {
+                        id: "waba",
+                        changes: [{ field: "group_status_update", value: { groups: [group] } }],
+                    },
+                ],
+            }),
+        ).resolves.toMatchObject({ accepted: 1, groupUpdates: 1 });
+        expect(groupUpdate).toHaveBeenCalledWith(
+            group,
+            expect.objectContaining({ field: "group_status_update" }),
+        );
+    });
+
     it("manual 模式无需 Webhook 凭据并拒绝重复原始事件", async () => {
         const client = new WhatsAppClient({
             ...config,
@@ -277,10 +336,11 @@ describe("WhatsAppClient", () => {
     });
 
     it("等待全部生命周期监听器并在失败后允许重新启动", async () => {
-        const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
-            new Response(JSON.stringify({ id: "phone" }), {
-                headers: { "content-type": "application/json" },
-            }),
+        const fetcher = vi.fn<typeof fetch>().mockImplementation(
+            async () =>
+                new Response(JSON.stringify({ id: "phone" }), {
+                    headers: { "content-type": "application/json" },
+                }),
         );
         const client = new WhatsAppClient(config, fetcher);
         const laterReady = vi.fn();

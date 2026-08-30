@@ -38,6 +38,7 @@ export class WhatsAppWebhookRouter {
             changes: 0,
             messages: 0,
             statuses: 0,
+            groupUpdates: 0,
             ignoredChanges: 0,
             event: verified.event,
         };

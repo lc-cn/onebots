@@ -4,15 +4,16 @@ The adapter uses Meta's official WhatsApp Cloud API, receives signed webhooks th
 
 ## Coverage
 
-- Text, replies, images, video, audio, documents, stickers, locations, contacts, and reactions
+- Private and Groups API messages with text, replies, images, video, audio, documents, stickers, locations, contacts, and reactions
 - Native Template, Interactive, Flow, and future Cloud API message payloads
 - Complete message-status projection with the original webhook change preserved
 - Media upload, metadata lookup, authenticated download, and deletion
 - Business profile, commerce, Flow lifecycle, phone registration, two-step verification, blocked users, and templates
+- Groups API metadata and participants, settings, invite links, join approvals, and lifecycle/status webhooks
 - Generic `whatsapp_call` for newly introduced Graph API resources
 - `await WhatsAppClient.ingest(rawEvent)` for feeding an existing trusted connection into the same client, with deduplication committed only after all synchronous/asynchronous listeners succeed
 
-Cloud API does not expose ordinary WhatsApp groups, contact lists, or arbitrary message history, so the adapter does not emulate those capabilities.
+Groups API is limited to eligible Official Business Accounts and groups created and managed by the current Phone Number through that API; it does not expose ordinary consumer groups. Cloud API also does not expose contact lists or arbitrary message history, so the adapter does not emulate those capabilities.
 
 ## Configuration
 
@@ -41,6 +42,8 @@ await adapter.callAction("my_bot", "whatsapp_call", {
 ```
 
 Absolute resource URLs are rejected so the access token cannot be sent to an unconfigured host. Permission-dependent actions declare either `whatsapp_business_management` or `whatsapp_business_messaging` in the capability manifest.
+
+Fixed Groups actions cover create/get/list/update/delete, invite links, join-request approval, participant add/remove, and message pin/unpin. Subscribe the v23 fields `group_lifecycle_update`, `group_participant_update`, and `group_settings_update` in addition to `messages` when Groups API is enabled.
 
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 

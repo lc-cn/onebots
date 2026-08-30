@@ -5,6 +5,8 @@
 ## 能力
 
 - 发送和接收文本、回复、图片、视频、音频、文档、Sticker、位置、联系人、Reaction
+- 支持符合资格的 Official Business Account 使用 Groups API：群消息、群资料/成员、改名、参与者增删、邀请链接与入群审批
+- 将群成员增减和入群申请投影为 canonical 事件，生命周期、设置和冻结状态作为结构化群更新交付
 - 通过 `whatsapp_message` 原生段发送 Template、Interactive、Flow 等完整 Cloud API 消息
 - 展开同一 Webhook 批次中的全部消息和状态，未知 change 也作为原始事件交付
 - 一个 App Webhook 承载多个号码时，按 `metadata.phone_number_id` 自动分流到对应 Client
@@ -36,7 +38,7 @@ whatsapp.my_bot:
     access_token: "your_onebots_token"
 ```
 
-默认回调路径是 `/whatsapp/my_bot/webhook`。将完整公网地址和同一个 `webhook_verify_token` 填入 Meta App Dashboard，并订阅 `messages` 字段。Koa 请求解析器必须保留未经修改的 `rawBody`，否则适配器会拒绝无法验签的请求。
+默认回调路径是 `/whatsapp/my_bot/webhook`。将完整公网地址和同一个 `webhook_verify_token` 填入 Meta App Dashboard，并订阅 `messages` 字段。使用 Groups API 时还要订阅 v23 定义的 `group_lifecycle_update`、`group_participant_update`、`group_settings_update`。Koa 请求解析器必须保留未经修改的 `rawBody`，否则适配器会拒绝无法验签的请求。
 
 配置只使用上面的 snake_case 字段；旧的 camelCase、`webhook.url`、`webhook.fields` 和适配器私有代理配置不再使用。
 
@@ -96,6 +98,8 @@ await adapter.callAction("my_bot", "whatsapp_call", {
 `resource` 只能是相对 Graph API 路径，适配器拒绝绝对 URL，避免 Access Token 被发送到未配置域名。HTTP 和业务错误会抛出 `WhatsAppApiError`，其中保留 `code`、`status`、`resource` 与 Meta 错误详情。
 
 Flow 的 `list_flows`、`create_flow`、`get_flow`、`update_flow`、`delete_flow`、`publish_flow`、`deprecate_flow`，Commerce 设置，以及消息二维码的增查改删均提供固定资源动作；权限仍由 Meta 的 `whatsapp_business_management` scope 决定。
+
+Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message` 等固定动作。标准 `send_message`、群资料、群成员、改名、邀请/移除成员和 `handle_group_request` 也复用同一实现。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
 
 ## 参考
 

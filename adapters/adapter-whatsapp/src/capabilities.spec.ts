@@ -12,7 +12,17 @@ describe("WhatsApp 能力清单", () => {
         for (const action of listSupportedActions(whatsAppCapabilities)) {
             expect(WhatsAppAdapter.prototype.isActionImplemented(action), action).toBe(true);
         }
-        expect(whatsAppCapabilities.actions.send_native_message?.scenes).toEqual(["private"]);
+        expect(whatsAppCapabilities.actions.send_native_message?.scenes).toEqual([
+            "private",
+            "group",
+        ]);
+        expect(whatsAppCapabilities.actions.create_group?.permissions).toEqual([
+            "whatsapp_business_messaging",
+        ]);
+        expect(whatsAppCapabilities.actions.create_group?.note).toContain(
+            "Official Business Account",
+        );
+        expect(whatsAppCapabilities.actions.get_group_info?.scenes).toEqual(["group"]);
         expect(whatsAppCapabilities.actions.create_flow?.permissions).toEqual([
             "whatsapp_business_management",
         ]);

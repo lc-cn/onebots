@@ -12,7 +12,14 @@ import { WhatsAppApiError } from "./errors.js";
 import { projectWhatsAppWebhook } from "./events.js";
 import { compileWhatsAppMessages } from "./messages.js";
 import { executeWhatsAppPlatformAction, WHATSAPP_PLATFORM_ACTIONS } from "./platform-actions.js";
-import type { WhatsAppConfig, WhatsAppPhoneNumberInfo, WhatsAppWebhookEvent } from "./types.js";
+import type {
+    WhatsAppConfig,
+    WhatsAppGroupDetails,
+    WhatsAppGroupParticipant,
+    WhatsAppGroupSummary,
+    WhatsAppPhoneNumberInfo,
+    WhatsAppWebhookEvent,
+} from "./types.js";
 import { WhatsAppWebhookHost, type WhatsAppHttpContext } from "./webhook-host.js";
 import { WhatsAppWebhookRouter } from "./webhook-routing.js";
 
@@ -29,11 +36,11 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
         uin: string,
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
-        if (params.scene_type !== "private") {
+        if (params.scene_type !== "private" && params.scene_type !== "group") {
             return this.unsupported(
                 "send_message",
                 "platform_unsupported",
-                "WhatsApp Cloud API 当前仅支持 individual 会话",
+                "WhatsApp Cloud API 仅支持 individual 与 Groups API 会话",
             );
         }
         const client = this.requireClient(uin);
@@ -43,8 +50,12 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
             client,
         );
         let firstMessageId: string | undefined;
+        const recipientType = params.scene_type === "group" ? "group" : "individual";
         for (const message of messages) {
-            const response = await client.sendMessage(message);
+            const response = await client.sendMessage({
+                ...message,
+                recipient_type: recipientType,
+            });
             firstMessageId ||= response.messages[0]?.id;
         }
         if (!firstMessageId) {
@@ -84,6 +95,78 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
             user_name: contact.name,
             user_displayname: contact.name,
         };
+    }
+
+    async getGroupList(uin: string): Promise<Adapter.GroupInfo[]> {
+        const groups = await this.requireClient(uin).groups.listAll();
+        return groups.map(group => this.toGroupInfo(group));
+    }
+
+    async getGroupInfo(
+        uin: string,
+        params: Adapter.GetGroupInfoParams,
+    ): Promise<Adapter.GroupInfo> {
+        return this.toGroupInfo(await this.requireClient(uin).groups.get(params.group_id.string));
+    }
+
+    async setGroupName(uin: string, params: Adapter.SetGroupNameParams): Promise<void> {
+        await this.requireClient(uin).groups.update(params.group_id.string, {
+            subject: params.group_name,
+        });
+    }
+
+    async getGroupMemberList(
+        uin: string,
+        params: Adapter.GetGroupMemberListParams,
+    ): Promise<Adapter.GroupMemberInfo[]> {
+        const group = await this.requireClient(uin).groups.get(params.group_id.string);
+        return group.participants.map(participant => this.toGroupMember(group.id, participant));
+    }
+
+    async getGroupMemberInfo(
+        uin: string,
+        params: Adapter.GetGroupMemberInfoParams,
+    ): Promise<Adapter.GroupMemberInfo> {
+        const group = await this.requireClient(uin).groups.get(params.group_id.string);
+        return this.toGroupMember(group.id, requireGroupParticipant(group, params.user_id.string));
+    }
+
+    async kickGroupMember(uin: string, params: Adapter.KickGroupMemberParams): Promise<void> {
+        if (params.reject_add_request) {
+            throw new WhatsAppApiError("WhatsApp 移除群成员不支持同时拒绝后续申请", {
+                code: "WHATSAPP_UNSUPPORTED_SEMANTICS",
+            });
+        }
+        await this.requireClient(uin).groups.removeParticipants(params.group_id.string, [
+            params.user_id.string,
+        ]);
+    }
+
+    async inviteGroupMember(uin: string, params: Adapter.InviteGroupMemberParams): Promise<void> {
+        await this.requireClient(uin).groups.addParticipants(params.group_id.string, [
+            params.user_id.string,
+        ]);
+    }
+
+    async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
+        if (params.type !== "request" || params.block) {
+            throw new WhatsAppApiError(
+                params.block
+                    ? "WhatsApp 拒绝入群申请不支持 block 语义"
+                    : "WhatsApp Groups API 不支持处理管理员邀请事件",
+                { code: "WHATSAPP_UNSUPPORTED_SEMANTICS" },
+            );
+        }
+        const groupId = params.group_id?.string;
+        const requestId = params.request_id?.string || params.flag;
+        if (!groupId || !requestId) {
+            throw new WhatsAppApiError("WhatsApp 入群申请必须提供 group_id 和 request_id/flag", {
+                code: "WHATSAPP_INVALID_PARAMETER",
+            });
+        }
+        const groups = this.requireClient(uin).groups;
+        if (params.approve) await groups.approveJoinRequests(groupId, [requestId]);
+        else await groups.rejectJoinRequests(groupId, [requestId]);
     }
 
     executePlatformAction(
@@ -206,6 +289,63 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
             user_displayname: info.display_phone_number || name,
         };
     }
+
+    private toGroupInfo(group: WhatsAppGroupDetails | WhatsAppGroupSummary): Adapter.GroupInfo {
+        const isDetails = "creation_timestamp" in group;
+        const createdAt = isDetails ? group.creation_timestamp : group.created_at;
+        return {
+            group_id: this.createId(group.id),
+            group_name: group.subject,
+            description: isDetails ? group.description : undefined,
+            member_count: isDetails ? group.total_participant_count : undefined,
+            created_time: timestampSeconds(createdAt),
+        };
+    }
+
+    private toGroupMember(
+        groupId: string,
+        participant: WhatsAppGroupParticipant,
+    ): Adapter.GroupMemberInfo {
+        const id = participantIdentity(participant);
+        return {
+            group_id: this.createId(groupId),
+            user_id: this.createId(id),
+            user_name: participant.username || participant.wa_id || id,
+            role: "member",
+        };
+    }
+}
+
+function participantIdentity(participant: WhatsAppGroupParticipant): string {
+    if (participant.user_id) return participant.user_id;
+    if (participant.wa_id) return participant.wa_id;
+    if (participant.username) return participant.username;
+    throw new WhatsAppApiError("WhatsApp 群成员缺少身份标识", {
+        code: "WHATSAPP_INVALID_RESPONSE",
+    });
+}
+
+function requireGroupParticipant(
+    group: WhatsAppGroupDetails,
+    identity: string,
+): WhatsAppGroupParticipant {
+    const participant = group.participants.find(item =>
+        [item.user_id, item.wa_id, item.username].includes(identity),
+    );
+    if (participant) return participant;
+    throw new WhatsAppApiError(`WhatsApp 群 ${group.id} 中不存在成员 ${identity}`, {
+        code: "WHATSAPP_GROUP_MEMBER_NOT_FOUND",
+        status: 404,
+    });
+}
+
+function timestampSeconds(value: string | number): number | undefined {
+    const timestamp = Number(value);
+    if (!Number.isFinite(timestamp)) {
+        const milliseconds = typeof value === "string" ? Date.parse(value) : NaN;
+        return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : undefined;
+    }
+    return timestamp >= 1_000_000_000_000 ? Math.floor(timestamp / 1000) : timestamp;
 }
 
 function normalizeConfig(config: Account.Config<"whatsapp">): WhatsAppConfig {

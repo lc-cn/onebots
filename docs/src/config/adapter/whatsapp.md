@@ -2,6 +2,8 @@
 
 适配器直接接入 Meta WhatsApp Cloud API，并把 Webhook 挂载到 OneBots 现有 HTTP 服务。
 
+普通消息只需订阅 `messages`。启用符合资格的 Groups API 时，还需订阅 v23 定义的 `group_lifecycle_update`、`group_participant_update`、`group_settings_update`；这些字段会进入同一个 Webhook 路径和 Client 投递链。
+
 ## 配置示例
 
 ```yaml

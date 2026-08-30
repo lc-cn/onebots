@@ -1,5 +1,6 @@
 import { CommonEvent, sha256Json, type CommonTypes } from "onebots";
 import type {
+    WhatsAppGroupWebhookEntry,
     WhatsAppMessageEvent,
     WhatsAppMessageStatusEvent,
     WhatsAppWebhookChange,
@@ -38,11 +39,16 @@ function projectChange(
         events.push(
             message.reaction
                 ? projectReaction(message, change, context)
-                : projectMessage(message, change.value, change, context),
+                : message.pin
+                  ? projectPin(message, change, context)
+                  : projectMessage(message, change.value, change, context),
         );
     }
     for (const status of change.value.statuses || []) {
-        events.push(projectStatus(status, metadata, change, context));
+        events.push(projectStatus(status, change.value, metadata, change, context));
+    }
+    for (const group of change.value.groups || []) {
+        events.push(...projectGroupEntry(group, change, context));
     }
     if (!events.length) events.push(projectCustom(entryId, change, context));
     return events;
@@ -54,13 +60,36 @@ function projectReaction(
     context: WhatsAppProjectionContext,
 ): CommonEvent.Notice<WhatsAppWebhookChange> {
     const reaction = message.reaction!;
+    const group = message.group_id
+        ? { id: context.createId(message.group_id), name: message.group_id }
+        : undefined;
     return {
         ...base(message.id, message.timestamp, change, context),
         type: "notice",
         notice_type: reaction.emoji ? "reaction_added" : "reaction_removed",
         message_id: context.createId(reaction.message_id),
         user: { id: context.createId(message.from), name: message.from },
+        group,
         extensions: { whatsapp: { emoji: reaction.emoji } },
+    };
+}
+
+function projectPin(
+    message: WhatsAppMessageEvent,
+    change: WhatsAppWebhookChange,
+    context: WhatsAppProjectionContext,
+): CommonEvent.Notice<WhatsAppWebhookChange> {
+    const pin = message.pin!;
+    return {
+        ...base(message.id, message.timestamp, change, context),
+        type: "notice",
+        notice_type: "custom",
+        message_id: context.createId(pin.message_id),
+        user: { id: context.createId(message.from), name: message.from },
+        group: message.group_id
+            ? { id: context.createId(message.group_id), name: message.group_id }
+            : undefined,
+        extensions: { whatsapp: { pin } },
     };
 }
 
@@ -70,15 +99,21 @@ function projectMessage(
     change: WhatsAppWebhookChange,
     context: WhatsAppProjectionContext,
 ): CommonEvent.Message<WhatsAppWebhookChange> {
-    const contact = value.contacts?.find(item => item.wa_id === message.from);
+    const contact = value.contacts?.find(
+        item => item.user_id === message.from || item.wa_id === message.from,
+    );
+    const group = message.group_id
+        ? { id: context.createId(message.group_id), name: message.group_id }
+        : undefined;
     return {
         ...base(message.id, message.timestamp, change, context),
         type: "message",
-        message_type: "private",
+        message_type: group ? "group" : "private",
         sender: {
             id: context.createId(message.from),
-            name: contact?.profile.name || message.from,
+            name: contact?.profile.name || contact?.username || message.from,
         },
+        group,
         message_id: context.createId(message.id),
         message: projectMessageContent(message),
         raw_message: message.text?.body || interactionText(message),
@@ -131,10 +166,18 @@ export function projectMessageContent(message: WhatsAppMessageEvent): CommonType
 
 function projectStatus(
     status: WhatsAppMessageStatusEvent,
+    value: WhatsAppWebhookValue,
     metadata: WhatsAppWebhookMetadata | undefined,
     change: WhatsAppWebhookChange,
     context: WhatsAppProjectionContext,
 ): CommonEvent.Notice<WhatsAppWebhookChange> {
+    const participantId = status.recipient_participant_user_id;
+    const groupId = status.group_id || (participantId ? status.recipient_id : undefined);
+    const contact = participantId
+        ? value.contacts?.find(
+              item => item.user_id === participantId || item.wa_id === participantId,
+          )
+        : undefined;
     return {
         ...base(
             `${status.id}:${status.status}:${status.timestamp}`,
@@ -145,7 +188,12 @@ function projectStatus(
         type: "notice",
         notice_type: status.status === "deleted" ? "message_deleted" : "message_status",
         message_id: context.createId(status.id),
-        user: { id: context.createId(status.recipient_id), name: status.recipient_id },
+        user: {
+            id: context.createId(participantId || status.recipient_id),
+            name:
+                contact?.profile.name || contact?.username || participantId || status.recipient_id,
+        },
+        group: groupId ? { id: context.createId(groupId), name: groupId } : undefined,
         extensions: {
             whatsapp: {
                 status: status.status,
@@ -156,6 +204,81 @@ function projectStatus(
             },
         },
     };
+}
+
+function projectGroupEntry(
+    entry: WhatsAppGroupWebhookEntry,
+    change: WhatsAppWebhookChange,
+    context: WhatsAppProjectionContext,
+): Array<CommonEvent.Event<WhatsAppWebhookChange>> {
+    const group = { id: context.createId(entry.group_id), name: groupName(entry) };
+    const shared = {
+        ...base(
+            `${entry.group_id}:${entry.type}:${groupEntryIdentity(entry)}`,
+            entry.timestamp,
+            change,
+            context,
+        ),
+        group,
+        extensions: { whatsapp: { group_update: entry } },
+    };
+    if (entry.type === "group_add_participants") {
+        return (entry.added_participants || []).map(participant => ({
+            ...shared,
+            id: context.createId(
+                `${entry.group_id}:${entry.type}:${participant.wa_id}:${entry.timestamp}`,
+            ),
+            type: "notice",
+            notice_type: "group_increase",
+            user: { id: context.createId(participant.wa_id), name: participant.wa_id },
+        }));
+    }
+    if (entry.type === "group_remove_participants") {
+        return (entry.removed_participants || []).map(participant => ({
+            ...shared,
+            id: context.createId(
+                `${entry.group_id}:${entry.type}:${participant.input}:${entry.timestamp}`,
+            ),
+            type: "notice",
+            notice_type: "group_decrease",
+            user: { id: context.createId(participant.input), name: participant.input },
+        }));
+    }
+    if (entry.type === "group_join_request_created" && entry.wa_id && entry.join_request_id) {
+        return [
+            {
+                ...shared,
+                type: "request",
+                request_type: "group",
+                sub_type: "join_request",
+                user: { id: context.createId(entry.wa_id), name: entry.wa_id },
+                flag: entry.join_request_id,
+            },
+        ];
+    }
+    return [{ ...shared, type: "notice", notice_type: "custom" }];
+}
+
+function groupName(entry: WhatsAppGroupWebhookEntry): string {
+    if (entry.type === "group_create") return entry.subject || entry.group_id;
+    if (entry.type === "group_settings_update" && entry.group_subject?.update_successful) {
+        return entry.group_subject.text || entry.group_id;
+    }
+    return entry.group_id;
+}
+
+function groupEntryIdentity(entry: WhatsAppGroupWebhookEntry): string {
+    if ("request_id" in entry && typeof entry.request_id === "string" && entry.request_id) {
+        return entry.request_id;
+    }
+    if (
+        "join_request_id" in entry &&
+        typeof entry.join_request_id === "string" &&
+        entry.join_request_id
+    ) {
+        return entry.join_request_id;
+    }
+    return sha256Json(entry);
 }
 
 function projectCustom(

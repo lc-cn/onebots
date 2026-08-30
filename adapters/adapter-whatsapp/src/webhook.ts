@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { WhatsAppApiError } from "./errors.js";
+import { isWhatsAppGroupWebhookEntry } from "./group-webhook.js";
 import type { WhatsAppWebhookEvent, WhatsAppWebhookResponse } from "./types.js";
 
 /** 解析并验证 Cloud API 的 CallbackRequest 外层结构。 */
@@ -119,14 +120,24 @@ function isWhatsAppWebhookEvent(value: unknown): value is WhatsAppWebhookEvent {
                         return false;
                     }
                     const event = change as Record<string, unknown>;
+                    const eventValue = event.value;
                     return (
                         typeof event.field === "string" &&
-                        !!event.value &&
-                        typeof event.value === "object" &&
-                        !Array.isArray(event.value)
+                        isRecord(eventValue) &&
+                        validGroups(eventValue.groups)
                     );
                 })
             );
         })
     );
+}
+
+function validGroups(value: unknown): boolean {
+    return (
+        value === undefined || (Array.isArray(value) && value.every(isWhatsAppGroupWebhookEntry))
+    );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === "object" && !Array.isArray(value);
 }

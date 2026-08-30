@@ -3,6 +3,7 @@ import { emitAllAwaited, KeyedSingleFlight } from "onebots";
 import { WhatsAppApiError } from "./errors.js";
 import { deliverWhatsAppEvent } from "./event-delivery.js";
 import { WhatsAppGraphApi } from "./graph-api.js";
+import { WhatsAppGroups } from "./groups.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -35,6 +36,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     private readonly processedEvents = new Set<string>();
     private readonly processingEvents = new KeyedSingleFlight<string, WhatsAppIngestResult>();
     private readonly lifecycle = new WhatsAppClientLifecycle<WhatsAppPhoneNumberInfo>();
+    /** 受控 Groups API 领域入口；与通用 call() 共用同一 Graph 传输。 */
+    readonly groups: WhatsAppGroups;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -43,6 +46,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         super();
         assertWhatsAppConfig(config);
         this.graph = new WhatsAppGraphApi(config, fetcher);
+        this.groups = new WhatsAppGroups(this);
     }
 
     get apiVersion(): string {
@@ -80,14 +84,18 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
 
     private async deliver(event: WhatsAppWebhookEvent, key: string): Promise<WhatsAppIngestResult> {
         this.observeContacts(event);
-        const { changes, messages, statuses } = await deliverWhatsAppEvent(this, event);
+        const { changes, messages, statuses, groupUpdates } = await deliverWhatsAppEvent(
+            this,
+            event,
+        );
         this.markProcessed(key);
         return {
-            accepted: messages + statuses,
+            accepted: messages + statuses + groupUpdates,
             duplicate: false,
             changes,
             messages,
             statuses,
+            groupUpdates,
             ignoredChanges: 0,
             event,
         };
@@ -161,10 +169,15 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         for (const entry of event.entry) {
             for (const change of entry.changes) {
                 for (const contact of change.value.contacts || []) {
-                    this.contacts.set(contact.wa_id, {
-                        id: contact.wa_id,
-                        name: contact.profile.name || contact.wa_id,
-                    });
+                    const id = contact.user_id || contact.wa_id;
+                    if (!id) continue;
+                    const observed = {
+                        id,
+                        name: contact.profile.name || contact.username || id,
+                    };
+                    for (const identity of [contact.user_id, contact.wa_id, contact.username]) {
+                        if (identity) this.contacts.set(identity, observed);
+                    }
                 }
             }
         }
@@ -263,6 +276,7 @@ function duplicateResult(event: WhatsAppWebhookEvent): WhatsAppIngestResult {
         changes: 0,
         messages: 0,
         statuses: 0,
+        groupUpdates: 0,
         ignoredChanges: 0,
         event,
     };

@@ -2,6 +2,8 @@
 
 The adapter connects directly to Meta WhatsApp Cloud API and mounts its webhook on the existing OneBots HTTP host.
 
+Subscribe `messages` for normal delivery. Eligible Groups API accounts must additionally subscribe the v23 fields `group_lifecycle_update`, `group_participant_update`, and `group_settings_update`; all fields share the same webhook path and client delivery pipeline.
+
 ```yaml
 whatsapp.my_bot:
   phone_number_id: "your_phone_number_id"

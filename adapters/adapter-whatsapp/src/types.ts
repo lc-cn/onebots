@@ -35,6 +35,7 @@ export type WhatsAppMessageType =
     | "contacts"
     | "sticker"
     | "reaction"
+    | "pin"
     | "interactive"
     | "button"
     | "order"
@@ -59,6 +60,8 @@ export interface WhatsAppMessageEvent extends Record<string, unknown> {
     id: string;
     type: WhatsAppMessageType;
     from: string;
+    /** Groups API 群消息所在群；缺省表示个人会话。 */
+    group_id?: string;
     timestamp: string;
     text?: { body: string };
     image?: WhatsAppMediaObject;
@@ -75,6 +78,7 @@ export interface WhatsAppMessageEvent extends Record<string, unknown> {
     };
     contacts?: WhatsAppContact[];
     reaction?: { message_id: string; emoji: string };
+    pin?: { type: "pin" | "unpin"; message_id: string; expiration_days?: number };
     interactive?: {
         type: "button_reply" | "list_reply" | string;
         button_reply?: { id: string; title: string };
@@ -117,6 +121,10 @@ export interface WhatsAppMessageStatusEvent extends Record<string, unknown> {
     status: WhatsAppMessageStatus;
     timestamp: string;
     recipient_id: string;
+    /** Meta v23 群消息状态中的群 ID。 */
+    group_id?: string;
+    /** 新版 BSUID 状态载荷中的群成员身份。 */
+    recipient_participant_user_id?: string;
     conversation?: Record<string, unknown>;
     pricing?: Record<string, unknown>;
     errors?: WhatsAppErrorData[];
@@ -130,11 +138,213 @@ export interface WhatsAppWebhookMetadata {
 export interface WhatsAppWebhookValue extends Record<string, unknown> {
     messaging_product?: "whatsapp";
     metadata?: WhatsAppWebhookMetadata;
-    contacts?: Array<{ profile: { name: string }; wa_id: string }>;
+    contacts?: WhatsAppWebhookContact[];
     messages?: WhatsAppMessageEvent[];
     statuses?: WhatsAppMessageStatusEvent[];
+    groups?: WhatsAppGroupWebhookEntry[];
     errors?: WhatsAppErrorData[];
 }
+
+/** Webhook 用户身份；启用用户名后 wa_id 可能缺失，应优先使用稳定 BSUID。 */
+export interface WhatsAppWebhookContact {
+    profile: { name: string };
+    user_id?: string;
+    wa_id?: string;
+    username?: string;
+}
+
+export interface WhatsAppGroupWebhookError {
+    code: string | number;
+    message: string;
+    title?: string;
+    error_data?: { details?: string };
+}
+
+export interface WhatsAppGroupIdentityFields {
+    user_id?: string;
+    wa_id?: string;
+    username?: string;
+}
+
+type WhatsAppRequiredGroupIdentity = { user_id: string } | { wa_id: string } | { username: string };
+
+export type WhatsAppGroupParticipant = WhatsAppGroupIdentityFields &
+    WhatsAppRequiredGroupIdentity & {
+        parent_user_id?: string;
+    };
+
+export interface WhatsAppGroupDetails {
+    messaging_product?: "whatsapp";
+    id: string;
+    subject: string;
+    description?: string;
+    suspended: boolean;
+    creation_timestamp: string | number;
+    total_participant_count: number;
+    participants: WhatsAppGroupParticipant[];
+    join_approval_mode: "auto_approve" | "approval_required";
+}
+
+export interface WhatsAppGroupSummary {
+    id: string;
+    subject: string;
+    created_at: string;
+}
+
+export interface WhatsAppPaging {
+    cursors?: { before?: string; after?: string };
+    previous?: string;
+    next?: string;
+}
+
+export interface WhatsAppGroupListResponse {
+    data: { groups: WhatsAppGroupSummary[] };
+    paging?: WhatsAppPaging;
+}
+
+export interface WhatsAppGroupPagination {
+    limit?: number;
+    after?: string;
+    before?: string;
+}
+
+export interface WhatsAppGroupCreateParams {
+    subject: string;
+    description?: string;
+    join_approval_mode?: "auto_approve" | "approval_required";
+}
+
+export interface WhatsAppGroupUpdateParams {
+    subject?: string;
+    description?: string;
+    /** URL、data URL 或适配器支持的本地媒体来源。 */
+    profile_picture?: string;
+}
+
+export interface WhatsAppGroupOperationResponse {
+    request_id: string;
+}
+
+export interface WhatsAppGroupInviteLinkResponse {
+    messaging_product?: "whatsapp";
+    invite_link: string;
+}
+
+export interface WhatsAppGroupSuccessResponse {
+    success: true;
+}
+
+export interface WhatsAppGroupInviteLinkDeletedResponse {
+    messaging_product?: "whatsapp";
+    success: "true";
+}
+
+export interface WhatsAppGroupJoinRequestFailure {
+    join_request_id: string;
+    errors: WhatsAppGroupWebhookError[];
+}
+
+export interface WhatsAppGroupJoinRequestActionResponse {
+    messaging_product?: "whatsapp";
+    approved_join_requests?: string[];
+    rejected_join_requests?: string[];
+    failed_join_requests?: WhatsAppGroupJoinRequestFailure[];
+    errors?: WhatsAppGroupWebhookError[];
+}
+
+export type WhatsAppGroupJoinRequest = WhatsAppGroupIdentityFields &
+    WhatsAppRequiredGroupIdentity & {
+        join_request_id: string;
+        creation_timestamp: string | number;
+    };
+
+export interface WhatsAppGroupJoinRequestsResponse {
+    data: WhatsAppGroupJoinRequest[];
+    paging?: WhatsAppPaging;
+}
+
+export interface WhatsAppGroupLifecycleEntry extends Record<string, unknown> {
+    timestamp: string;
+    group_id: string;
+    type: "group_create" | "group_delete";
+    request_id: string;
+    subject?: string;
+    description?: string;
+    invite_link?: string;
+    join_approval_mode?: "auto_approve" | "approval_required";
+    errors?: WhatsAppGroupWebhookError[];
+}
+
+interface WhatsAppGroupParticipantsBase extends Record<string, unknown> {
+    timestamp: string;
+    group_id: string;
+    request_id?: string;
+    reason?: string;
+    initiated_by?: "business" | "participant";
+    failed_participants?: Array<{ input: string; errors: WhatsAppGroupWebhookError[] }>;
+    errors?: WhatsAppGroupWebhookError[];
+}
+
+export interface WhatsAppGroupParticipantsAddedEntry extends WhatsAppGroupParticipantsBase {
+    type: "group_add_participants";
+    request_id: string;
+    added_participants: Array<{ wa_id: string; input?: string }>;
+}
+
+export interface WhatsAppGroupParticipantsRemovedEntry extends WhatsAppGroupParticipantsBase {
+    type: "group_remove_participants";
+    request_id: string;
+    removed_participants: Array<{ input: string }>;
+}
+
+export interface WhatsAppGroupJoinRequestCreatedEntry extends WhatsAppGroupParticipantsBase {
+    type: "group_join_request_created";
+    join_request_id: string;
+    wa_id: string;
+}
+
+export interface WhatsAppGroupJoinRequestRevokedEntry extends WhatsAppGroupParticipantsBase {
+    type: "group_join_request_revoked";
+    join_request_id: string;
+    wa_id: string;
+}
+
+export type WhatsAppGroupParticipantsEntry =
+    | WhatsAppGroupParticipantsAddedEntry
+    | WhatsAppGroupParticipantsRemovedEntry
+    | WhatsAppGroupJoinRequestCreatedEntry
+    | WhatsAppGroupJoinRequestRevokedEntry;
+
+export interface WhatsAppGroupSettingResult {
+    update_successful: boolean;
+    mime_type?: string;
+    sha256?: string;
+    text?: string;
+    errors?: WhatsAppGroupWebhookError[];
+}
+
+export interface WhatsAppGroupSettingsEntry extends Record<string, unknown> {
+    timestamp: string;
+    group_id: string;
+    type: "group_settings_update";
+    request_id: string;
+    profile_picture?: WhatsAppGroupSettingResult;
+    group_subject?: WhatsAppGroupSettingResult;
+    group_description?: WhatsAppGroupSettingResult;
+    errors?: WhatsAppGroupWebhookError[];
+}
+
+export interface WhatsAppGroupStatusEntry extends Record<string, unknown> {
+    timestamp: string;
+    group_id: string;
+    type: "group_suspend" | "group_suspend_cleared";
+}
+
+export type WhatsAppGroupWebhookEntry =
+    | WhatsAppGroupLifecycleEntry
+    | WhatsAppGroupParticipantsEntry
+    | WhatsAppGroupSettingsEntry
+    | WhatsAppGroupStatusEntry;
 
 /** Webhook 中已经由 Meta 确认过的联系人资料。 */
 export interface WhatsAppObservedContact {
@@ -154,7 +364,7 @@ export interface WhatsAppWebhookEvent {
 
 export interface WhatsAppSendMessageParams extends Record<string, unknown> {
     messaging_product?: "whatsapp";
-    recipient_type?: "individual";
+    recipient_type?: "individual" | "group";
     to: string;
     type: string;
     context?: { message_id: string };
@@ -167,6 +377,7 @@ export interface WhatsAppSendMessageParams extends Record<string, unknown> {
     location?: { latitude: number; longitude: number; name?: string; address?: string };
     contacts?: WhatsAppContact[];
     reaction?: { message_id: string; emoji: string };
+    pin?: { type: "pin" | "unpin"; message_id: string; expiration_days?: number };
     interactive?: Record<string, unknown>;
     template?: Record<string, unknown>;
 }
@@ -221,6 +432,7 @@ export interface WhatsAppIngestResult {
     changes: number;
     messages: number;
     statuses: number;
+    groupUpdates: number;
     /** 已验签但没有对应已配置 Phone Number Client 的 change 数量。 */
     ignoredChanges: number;
     event: WhatsAppWebhookEvent;
@@ -248,4 +460,5 @@ export interface WhatsAppClientEvents {
         metadata: WhatsAppWebhookMetadata | undefined,
         change: WhatsAppWebhookChange,
     ];
+    group_update: [entry: WhatsAppGroupWebhookEntry, change: WhatsAppWebhookChange];
 }

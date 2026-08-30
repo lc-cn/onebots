@@ -6,6 +6,7 @@ export interface WhatsAppDeliveryStats {
     changes: number;
     messages: number;
     statuses: number;
+    groupUpdates: number;
 }
 
 type WhatsAppEventEmitter = Pick<EventEmitter<WhatsAppClientEvents>, "rawListeners">;
@@ -35,6 +36,7 @@ export async function deliverWhatsAppEvent(
     let changes = 0;
     let messages = 0;
     let statuses = 0;
+    let groupUpdates = 0;
     for (const entry of event.entry) {
         for (const change of entry.changes) {
             changes += 1;
@@ -51,6 +53,10 @@ export async function deliverWhatsAppEvent(
                     emitAllAwaited(emitter, "status", status, change.value.metadata, change),
                 );
             }
+            for (const group of change.value.groups || []) {
+                groupUpdates += 1;
+                await attempt(() => emitAllAwaited(emitter, "group_update", group, change));
+            }
         }
     }
 
@@ -58,5 +64,5 @@ export async function deliverWhatsAppEvent(
     if (failures.length > 1) {
         throw new AggregateError(failures, `${failures.length} 个 WhatsApp 事件视图投递失败`);
     }
-    return { changes, messages, statuses };
+    return { changes, messages, statuses, groupUpdates };
 }

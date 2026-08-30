@@ -4,6 +4,7 @@ import {
     type AdapterCapabilityManifest,
 } from "onebots";
 import { WHATSAPP_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { isWhatsAppGroupAction } from "./groups.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -15,6 +16,14 @@ const businessMessaging = {
     support: "native" as const,
     availability: "permission" as const,
     permissions: ["whatsapp_business_messaging"],
+};
+
+const groupsAccess = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["whatsapp_business_messaging"],
+    scenes: ["group"] as const,
+    note: "要求 Meta 为 Official Business Account 开通 Groups API；仅适用于当前 Phone Number 通过该 API 创建和管理的群",
 };
 
 const businessManagementActions = new Set([
@@ -46,10 +55,11 @@ const businessMessagingActions = new Set([
     "list_blocked_users",
 ]);
 const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIONS, action => {
+    if (isWhatsAppGroupAction(action)) return groupsAccess;
     if (businessManagementActions.has(action)) return businessManagement;
     if (businessMessagingActions.has(action)) return businessMessaging;
     if (action === "send_native_message" || action === "mark_message_read") {
-        return { support: "native", scenes: ["private"] };
+        return { support: "native", scenes: ["private", "group"] };
     }
     return { support: "native" };
 });
@@ -58,14 +68,22 @@ const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIO
 export const whatsAppCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
         ...platformActions,
-        send_message: { support: "native", scenes: ["private"] },
-        mark_message_as_read: { support: "native", scenes: ["private"] },
+        send_message: { support: "native", scenes: ["private", "group"] },
+        mark_message_as_read: { support: "native", scenes: ["private", "group"] },
         get_login_info: { support: "native" },
         get_user_info: {
             support: "emulated",
             availability: "context",
             note: "仅返回 Webhook 中实际观察到的联系人资料",
         },
+        get_group_list: groupsAccess,
+        get_group_info: groupsAccess,
+        set_group_name: groupsAccess,
+        get_group_member_list: groupsAccess,
+        get_group_member_info: groupsAccess,
+        kick_group_member: groupsAccess,
+        invite_group_member: groupsAccess,
+        handle_group_request: groupsAccess,
         can_send_image: { support: "native" },
         can_send_record: { support: "native" },
         get_version: { support: "native" },
@@ -73,10 +91,14 @@ export const whatsAppCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         get_supported_actions: { support: "native" },
     },
     events: {
-        message: { support: "native", scenes: ["private"] },
-        message_status: { support: "native", scenes: ["private"] },
-        reaction_added: { support: "native", scenes: ["private"] },
-        reaction_removed: { support: "native", scenes: ["private"] },
+        message: { support: "native", scenes: ["private", "group"] },
+        message_status: { support: "native", scenes: ["private", "group"] },
+        reaction_added: { support: "native", scenes: ["private", "group"] },
+        reaction_removed: { support: "native", scenes: ["private", "group"] },
+        group_increase: groupsAccess,
+        group_decrease: groupsAccess,
+        group_request: groupsAccess,
+        group_update: groupsAccess,
         raw_event: { support: "native" },
         webhook_change: { support: "native" },
     },
