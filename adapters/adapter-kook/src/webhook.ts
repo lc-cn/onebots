@@ -1,3 +1,4 @@
+import { ReliableEventIngress } from "onebots";
 import { KookError } from "./errors.js";
 import type { KookConfig, KookEvent, KookSignal } from "./types.js";
 import {
@@ -16,15 +17,15 @@ export interface KookIngestResult {
     signal?: KookSignal;
 }
 
-export type KookEventDispatch = (event: KookEvent, signal: KookSignal) => void;
+export type KookEventDispatch = (event: KookEvent, signal: KookSignal) => void | PromiseLike<void>;
 
 /** 可挂载到任意 HTTP Host 的 KOOK Webhook 接收器。 */
 export class KookWebhookReceiver {
-    private readonly sequences = new Set<number>();
+    private readonly ingress = new ReliableEventIngress<number>();
 
     constructor(private readonly config: Pick<KookConfig, "verify_token" | "encrypt_key">) {}
 
-    ingest(rawEvent: unknown, dispatch: KookEventDispatch): KookIngestResult {
+    async ingest(rawEvent: unknown, dispatch: KookEventDispatch): Promise<KookIngestResult> {
         const incoming = objectValue(rawEvent);
         const encrypted = stringValue(incoming.encrypt);
         const payload = encrypted ? this.decrypt(encrypted) : incoming;
@@ -41,15 +42,18 @@ export class KookWebhookReceiver {
         if (event.channel_type === "WEBHOOK_CHALLENGE") {
             return { status: 200, body: { challenge: event.challenge || "" } };
         }
-        if (typeof signal.sn === "number" && this.sequences.has(signal.sn)) {
-            return { status: 200, body: { success: true, duplicate: true } };
-        }
+        const sequence = signal.sn;
         try {
-            dispatch(event, signal);
+            const delivered =
+                typeof sequence === "number"
+                    ? await this.ingress.deliver(sequence, () => dispatch(event, signal))
+                    : await dispatchAndMark(dispatch, event, signal);
+            if (!delivered) {
+                return { status: 200, body: { success: true, duplicate: true } };
+            }
         } catch (error) {
             throw KookError.wrap(error, "KOOK_EVENT_DELIVERY_FAILED");
         }
-        if (typeof signal.sn === "number") this.rememberSequence(signal.sn);
         return { status: 200, body: { success: true }, event, signal };
     }
 
@@ -62,7 +66,7 @@ export class KookWebhookReceiver {
         }
         try {
             const raw = (await request.json()) as unknown;
-            const result = this.ingest(raw, dispatch);
+            const result = await this.ingest(raw, dispatch);
             return Response.json(result.body, { status: result.status });
         } catch (error) {
             const wrapped = KookError.wrap(error, "KOOK_WEBHOOK_INVALID");
@@ -82,14 +86,15 @@ export class KookWebhookReceiver {
             throw KookError.wrap(error, "KOOK_WEBHOOK_DECRYPT_FAILED");
         }
     }
+}
 
-    private rememberSequence(sn: number): void {
-        this.sequences.add(sn);
-        if (this.sequences.size > 2_048) {
-            const oldest = this.sequences.values().next().value;
-            if (typeof oldest === "number") this.sequences.delete(oldest);
-        }
-    }
+async function dispatchAndMark(
+    dispatch: KookEventDispatch,
+    event: KookEvent,
+    signal: KookSignal,
+): Promise<true> {
+    await dispatch(event, signal);
+    return true;
 }
 
 export function kookWebhookErrorStatus(error: KookError): number {

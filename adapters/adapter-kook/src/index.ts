@@ -40,7 +40,7 @@ export const kookSchema: Schema = {
             { value: "webhook", label: "HTTP Webhook" },
             { value: "manual", label: "手动接入既有连接" },
         ],
-        description: "manual 不创建事件连接或路由，由现有 Host/消息队列调用 ingest()",
+        description: "manual 不创建事件连接或路由，由现有 Host/消息队列调用并等待 ingest()",
         ui: { section: "transport" },
     },
     verify_token: {

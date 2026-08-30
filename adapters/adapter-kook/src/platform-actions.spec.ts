@@ -13,6 +13,42 @@ describe("KOOK 平台扩展动作", () => {
         });
     });
 
+    test("补齐消息模板与机器人语音生命周期", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await executeKookPlatformAction(bot, "create_message_template", {
+            title: "发布通知",
+            content: "{{ data.text }}",
+            msgtype: 1,
+        });
+        await executeKookPlatformAction(bot, "list_joined_voice_channels", { page: 2 });
+        await executeKookPlatformAction(bot, "join_voice_channel", {
+            channel_id: "voice-1",
+            audio_ssrc: "1111",
+            rtcp_mux: true,
+        });
+        await executeKookPlatformAction(bot, "keep_voice_channel_alive", {
+            channel_id: "voice-1",
+        });
+
+        expect(callApi).toHaveBeenNthCalledWith(1, "/v3/template/create", {
+            method: "POST",
+            body: { title: "发布通知", content: "{{ data.text }}", msgtype: 1 },
+        });
+        expect(callApi).toHaveBeenNthCalledWith(2, "/v3/voice/list", {
+            query: { page: 2 },
+        });
+        expect(callApi).toHaveBeenNthCalledWith(3, "/v3/voice/join", {
+            method: "POST",
+            body: { channel_id: "voice-1", audio_ssrc: "1111", rtcp_mux: true },
+        });
+        expect(callApi).toHaveBeenNthCalledWith(4, "/v3/voice/keep-alive", {
+            method: "POST",
+            body: { channel_id: "voice-1" },
+        });
+    });
+
     test("通用动作拒绝跳出 /v3 API", async () => {
         await expect(
             executeKookPlatformAction({ callApi: vi.fn() } as never, "call_kook_api", {

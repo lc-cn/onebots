@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { WebSocket } from "ws";
-import type { Next, RouterContext } from "onebots";
+import { emitAllAwaited, type Next, type RouterContext } from "onebots";
 import type { KookBotEvents } from "./bot-events.js";
 import { assertKookConfig } from "./config.js";
 import { KookError } from "./errors.js";
@@ -36,6 +36,8 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     private stopped = true;
     private startPromise?: Promise<void>;
     private readonly gatewaySequence = new KookGatewaySequence();
+    private gatewayDeliveryTail: Promise<void> = Promise.resolve();
+    private gatewayDeliveryGeneration = 0;
     private sessionId = "";
     private me: KookUser | null = null;
     private readonly webhook: KookWebhookReceiver;
@@ -81,6 +83,8 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         const socket = this.socket;
         this.socket = undefined;
         if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "OneBots stopped");
+        await this.gatewayDeliveryTail;
+        this.resetGatewaySession();
         this.emit("stopped");
     }
 
@@ -189,9 +193,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
                         }
                         this.sessionId = hello.session_id || "";
                         settle();
-                    } else {
-                        this.handleSignal(signal, socket, generation);
-                    }
+                    } else this.handleSignal(signal, socket, generation);
                 } catch (error) {
                     this.reportError(error);
                     if (error instanceof KookError && error.code === "KOOK_EVENT_DELIVERY_FAILED") {
@@ -215,7 +217,10 @@ export class KookBot extends EventEmitter<KookBotEvents> {
 
     private handleSignal(signal: KookSignal, socket: WebSocket, generation: number): void {
         if (signal.s === 0 && signal.d) {
-            this.ingestGatewaySignal(signal);
+            void this.enqueueGatewaySignal(signal).catch(error => {
+                this.reportError(error);
+                if (this.socket === socket) socket.terminate();
+            });
             return;
         }
         if (signal.s === 3) {
@@ -285,13 +290,15 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     }
 
     private resetGatewaySession(): void {
+        // reconnect 信令声明当前 session 及其尚未投递的队列全部失效。
+        this.gatewayDeliveryGeneration += 1;
         this.gatewaySequence.reset();
         this.sessionId = "";
     }
 
     async handleWebhook(ctx: RouterContext, _next: Next): Promise<void> {
         try {
-            const result = this.ingest(ctx.request.body, "webhook");
+            const result = await this.ingest(ctx.request.body, "webhook");
             ctx.status = result.status;
             ctx.body = result.body;
         } catch (error) {
@@ -303,10 +310,10 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     }
 
     /** 将既有 Webhook、反向 WS 或消息队列事件交给当前 Bot。 */
-    ingest(
+    async ingest(
         rawEvent: unknown,
         transport: "gateway" | "webhook" = this.receiveMode === "webhook" ? "webhook" : "gateway",
-    ): KookIngestResult {
+    ): Promise<KookIngestResult> {
         if (transport === "gateway") {
             const signal = parseSignal(rawEvent);
             if (signal.s !== 0 || !signal.d) {
@@ -316,13 +323,16 @@ export class KookBot extends EventEmitter<KookBotEvents> {
                     { signal: signal.s },
                 );
             }
-            return this.ingestGatewaySignal(signal);
+            return this.enqueueGatewaySignal(signal);
         }
-        return this.webhook.ingest(rawEvent, (event, signal) => this.emit("event", event, signal));
+        return this.webhook.ingest(rawEvent, (event, signal) =>
+            emitAllAwaited(this, "event", event, signal),
+        );
     }
 
     /** 上游已有连接进入全新 session 时重置手动接入的 sn 状态。 */
-    resetIngest(): void {
+    async resetIngest(): Promise<void> {
+        await this.gatewayDeliveryTail;
         this.resetGatewaySession();
     }
 
@@ -333,7 +343,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         }
         try {
             const raw = (await request.json()) as unknown;
-            const result = this.ingest(raw, "webhook");
+            const result = await this.ingest(raw, "webhook");
             return Response.json(result.body, { status: result.status });
         } catch (error) {
             const wrapped = KookError.wrap(error, "KOOK_WEBHOOK_INVALID");
@@ -344,14 +354,37 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         }
     }
 
-    private ingestGatewaySignal(signal: KookSignal): KookIngestResult {
+    private enqueueGatewaySignal(signal: KookSignal): Promise<KookIngestResult> {
+        const deliveryGeneration = this.gatewayDeliveryGeneration;
+        const delivery = this.gatewayDeliveryTail.then(() => {
+            if (deliveryGeneration !== this.gatewayDeliveryGeneration) {
+                throw new KookError("KOOK Gateway 旧投递队列已失效", {
+                    code: "KOOK_GATEWAY_DELIVERY_STALE",
+                });
+            }
+            return this.ingestGatewaySignal(signal);
+        });
+        const guarded = delivery.catch(error => {
+            if (deliveryGeneration === this.gatewayDeliveryGeneration) {
+                this.gatewayDeliveryGeneration += 1;
+            }
+            throw error;
+        });
+        this.gatewayDeliveryTail = guarded.then(
+            () => undefined,
+            () => undefined,
+        );
+        return guarded;
+    }
+
+    private async ingestGatewaySignal(signal: KookSignal): Promise<KookIngestResult> {
         const sequenced = this.gatewaySequence.ingest(signal);
         const events: KookEvent[] = [];
         let ready: KookSignal | undefined = sequenced.ready[0];
         while (ready) {
             const event = parseEvent(ready.d);
             try {
-                this.emit("event", event, ready);
+                await emitAllAwaited(this, "event", event, ready);
             } catch (error) {
                 throw KookError.wrap(error, "KOOK_EVENT_DELIVERY_FAILED", {
                     details: { sn: ready.sn, message_id: event.msg_id },

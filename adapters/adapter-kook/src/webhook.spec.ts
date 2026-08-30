@@ -1,33 +1,56 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { KookWebhookReceiver } from "./webhook.js";
 
 describe("KOOK Webhook receiver", () => {
-    test("ingest 返回结构化响应并按 sn 去重", () => {
+    test("ingest 返回结构化响应并按 sn 去重", async () => {
         const receiver = new KookWebhookReceiver({ verify_token: "verify" });
         const raw = eventSignal(42);
-        expect(receiver.ingest(raw, () => undefined)).toMatchObject({
+        await expect(receiver.ingest(raw, () => undefined)).resolves.toMatchObject({
             status: 200,
             body: { success: true },
             event: { msg_id: "message" },
         });
-        expect(receiver.ingest(raw, () => undefined)).toEqual({
+        await expect(receiver.ingest(raw, () => undefined)).resolves.toEqual({
             status: 200,
             body: { success: true, duplicate: true },
         });
     });
 
-    test("分发异常不提交 sn，允许同一 Webhook 重投", () => {
+    test("分发异常不提交 sn，允许同一 Webhook 重投", async () => {
         const receiver = new KookWebhookReceiver({ verify_token: "verify" });
         const raw = eventSignal(43);
-        expect(() =>
-            receiver.ingest(raw, () => {
+        await expect(
+            receiver.ingest(raw, async () => {
                 throw new Error("temporary failure");
             }),
-        ).toThrow("temporary failure");
-        expect(receiver.ingest(raw, () => undefined).body).toEqual({ success: true });
-        expect(receiver.ingest(raw, () => undefined).body).toEqual({
+        ).rejects.toThrow("temporary failure");
+        expect((await receiver.ingest(raw, () => undefined)).body).toEqual({ success: true });
+        expect((await receiver.ingest(raw, () => undefined)).body).toEqual({
             success: true,
             duplicate: true,
+        });
+    });
+
+    test("并发同 sn 合并为一次异步投递", async () => {
+        const receiver = new KookWebhookReceiver({ verify_token: "verify" });
+        const raw = eventSignal(44);
+        let release: (() => void) | undefined;
+        const dispatch = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
+
+        const first = receiver.ingest(raw, dispatch);
+        const follower = receiver.ingest(raw, dispatch);
+        await Promise.resolve();
+        expect(dispatch).toHaveBeenCalledOnce();
+        release?.();
+
+        await expect(first).resolves.toMatchObject({ body: { success: true } });
+        await expect(follower).resolves.toMatchObject({
+            body: { success: true, duplicate: true },
         });
     });
 

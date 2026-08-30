@@ -17,6 +17,9 @@ describe("KOOK 能力清单", () => {
         expect(KOOK_PLATFORM_ACTIONS.has("list_user_chats")).toBe(true);
         expect(KOOK_PLATFORM_ACTIONS.has("send_friend_request")).toBe(true);
         expect(KOOK_PLATFORM_ACTIONS.has("block_user")).toBe(true);
+        expect(KOOK_PLATFORM_ACTIONS.has("create_message_template")).toBe(true);
+        expect(KOOK_PLATFORM_ACTIONS.has("join_voice_channel")).toBe(true);
+        expect(KOOK_PLATFORM_ACTIONS.has("keep_voice_channel_alive")).toBe(true);
         expect(kookCapabilities.actions.get_friend_list?.support).toBe("native");
         expect(kookCapabilities.actions.handle_friend_request?.support).toBe("native");
         expect(kookCapabilities.events.group_increase?.support).toBe("native");

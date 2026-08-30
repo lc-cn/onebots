@@ -14,7 +14,7 @@ kook:
 
 `gateway` 是默认接收方式，无需公网回调地址。连接断开后会以带抖动的指数退避无限重连，并优先使用 KOOK session 和 sn 恢复事件流。
 
-已有 Web Host、消息队列或连接管理器时可使用 `receive_mode: manual`。该模式只初始化机器人身份和 REST API，不新建 Gateway，也不注册 Webhook 路由；应用通过 `ingest(rawEvent)` 把事件交给同一个 Bot。
+已有 Web Host、消息队列或连接管理器时可使用 `receive_mode: manual`。该模式只初始化机器人身份和 REST API，不新建 Gateway，也不注册 Webhook 路由；应用通过 `await ingest(rawEvent)` 把事件交给同一个 Bot。
 
 Webhook 配置示例：
 
@@ -58,27 +58,27 @@ import { KookBot, KookWebhookReceiver } from "@onebots/adapter-kook";
 const receiver = new KookWebhookReceiver({ verify_token: process.env.KOOK_VERIFY_TOKEN });
 
 // Fetch / WinterCG 风格 Host
-const response = await receiver.acceptHttp(request, (event, signal) => {
-  dispatchToApplication(event, signal);
+const response = await receiver.acceptHttp(request, async (event, signal) => {
+  await dispatchToApplication(event, signal);
 });
 
 // 已解析 JSON、消息队列或反向代理转交的事件
-const result = receiver.ingest(rawEvent, (event, signal) => {
-  dispatchToApplication(event, signal);
+const result = await receiver.ingest(rawEvent, async (event, signal) => {
+  await dispatchToApplication(event, signal);
 });
 
 // 使用完整 Bot 时，事件会进入该 Bot 的统一 event 管线
 const bot = new KookBot(config);
-bot.ingest(rawEvent, "webhook");
+await bot.ingest(rawEvent, "webhook");
 
 // 已升级 WS / 反向 WS 的 KOOK s=0 信令，复用 Gateway sn 保序器
-bot.ingest(rawSignal, "gateway");
+await bot.ingest(rawSignal, "gateway");
 
 // 上游建立全新 session（不是 resume）时重置 sn 锚点
-bot.resetIngest();
+await bot.resetIngest();
 ```
 
-`ingest()` 返回 `{ status, body, event?, signal? }` 结构化结果，包含 challenge、重复事件和鉴权失败等响应；调用方可按自己的 Web 框架写回状态与响应体。Webhook 与 Gateway 都只在业务监听器成功返回后确认 `sn`；失败的 Webhook 返回 500，Gateway 则保留旧 `sn` 并重连 resume，确保平台能够重投。
+`ingest()` 返回 `{ status, body, event?, signal? }` 结构化结果，包含 challenge、重复事件和鉴权失败等响应；调用方可按自己的 Web 框架写回状态与响应体。Webhook 与 Gateway 都会等待 canonical 事件及全部协议出口，只在它们完整成功后确认 `sn`；并发的相同 Webhook 只投递一次。失败的 Webhook 返回 500，Gateway 则保留旧 `sn` 并重连 resume，确保平台能够重投。
 
 ## 消息与事件
 
@@ -109,10 +109,10 @@ KOOK 的频道消息与私聊消息使用两套 API。`delete_message`、`get_me
 - 服务器表情：`list_guild_emojis`、`create_guild_emoji`、`update_guild_emoji`、`delete_guild_emoji`
 - 用户亲密度：`get_intimacy`、`update_intimacy`
 - 游戏与动态：`list_games`、`create_game`、`update_game`、`delete_game`、`set_game_activity`、`delete_game_activity`
-- 消息模板：`list_message_templates`
+- 消息模板：`list_message_templates`、`create_message_template`、`update_message_template`、`delete_message_template`
 - 服务器 Badge：`get_guild_badge`，返回 `content_type` 与 `base64://` 数据
 - 帖子：分区、创建、回复、详情、列表、删除和回复列表
-- 语音：移动/踢出用户、查询用户所在语音频道
+- 语音：`move_voice_user`、`kick_voice_user`、`get_joined_voice_channel`，以及 `join_voice_channel`、`list_joined_voice_channels`、`leave_voice_channel`、`keep_voice_channel_alive` 管理机器人推流生命周期
 - 机器人在线状态：上线、下线和查询状态
 - 好友：目录、申请列表、同意/拒绝、删除，以及 `send_friend_request`、`block_user`、`unblock_user`、`list_blocked_users`
 

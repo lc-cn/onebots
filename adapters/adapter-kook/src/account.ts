@@ -37,7 +37,7 @@ export function createKookAccount(
     bot.on("error", error => {
         adapter.logger.error(`KOOK Bot ${config.account_id} 错误:`, error);
     });
-    bot.on("event", (event: KookEvent, signal: KookSignal) => {
+    bot.on("event", async (event: KookEvent, signal: KookSignal) => {
         const me = bot.getCachedMe();
         if (event.type !== 255 && me && event.author_id === me.id) return;
         if (event.msg_id && event.type !== 255) {
@@ -53,7 +53,7 @@ export function createKookAccount(
             ...(me ? { selfId: adapter.createId(me.id) } : {}),
         };
         for (const projected of projectKookEvents(event, signal, context)) {
-            account.dispatch(projected);
+            await account.dispatchAwaited(projected);
         }
     });
 

@@ -193,7 +193,7 @@ describe("KOOK Bot", () => {
         await bot.stop();
     });
 
-    test("manual ingest 复用 Gateway sn 保序器", () => {
+    test("manual ingest 复用 Gateway sn 保序器", async () => {
         const bot = new KookBot({
             account_id: "bot",
             token: "token",
@@ -201,19 +201,22 @@ describe("KOOK Bot", () => {
         });
         const listener = vi.fn();
         bot.on("event", listener);
-        expect(bot.ingest(gatewaySignal(10)).body).toEqual({ success: true });
-        expect(bot.ingest(gatewaySignal(12)).body).toEqual({ success: true, buffered: true });
-        expect(bot.ingest(gatewaySignal(11)).events?.map(event => event.msg_id)).toEqual([
+        expect((await bot.ingest(gatewaySignal(10))).body).toEqual({ success: true });
+        expect((await bot.ingest(gatewaySignal(12))).body).toEqual({
+            success: true,
+            buffered: true,
+        });
+        expect((await bot.ingest(gatewaySignal(11))).events?.map(event => event.msg_id)).toEqual([
             "message-11",
             "message-12",
         ]);
         expect(listener).toHaveBeenCalledTimes(3);
 
-        bot.resetIngest();
-        expect(bot.ingest(gatewaySignal(1)).event?.msg_id).toBe("message-1");
+        await bot.resetIngest();
+        expect((await bot.ingest(gatewaySignal(1))).event?.msg_id).toBe("message-1");
     });
 
-    test("manual Gateway 投递失败时保留 sn 并允许原事件重投", () => {
+    test("manual Gateway 投递失败时保留 sn 并允许原事件重投", async () => {
         const bot = new KookBot({
             account_id: "bot",
             token: "token",
@@ -225,10 +228,73 @@ describe("KOOK Bot", () => {
             if (attempts === 1) throw new Error("temporary failure");
         });
 
-        expect(() => bot.ingest(gatewaySignal(20))).toThrow("temporary failure");
-        expect(bot.ingest(gatewaySignal(20)).body).toEqual({ success: true });
-        expect(bot.ingest(gatewaySignal(20)).body).toEqual({ success: true, duplicate: true });
+        await expect(bot.ingest(gatewaySignal(20))).rejects.toThrow("temporary failure");
+        expect((await bot.ingest(gatewaySignal(20))).body).toEqual({ success: true });
+        expect((await bot.ingest(gatewaySignal(20))).body).toEqual({
+            success: true,
+            duplicate: true,
+        });
         expect(attempts).toBe(2);
+    });
+
+    test("manual Gateway 等待异步协议出口后才确认 sn", async () => {
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        let release: (() => void) | undefined;
+        const listener = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
+        bot.on("event", listener);
+
+        const first = bot.ingest(gatewaySignal(30));
+        const duplicate = bot.ingest(gatewaySignal(30));
+        await Promise.resolve();
+        expect(listener).toHaveBeenCalledOnce();
+        release?.();
+
+        await expect(first).resolves.toMatchObject({ body: { success: true } });
+        await expect(duplicate).resolves.toMatchObject({
+            body: { success: true, duplicate: true },
+        });
+        expect(listener).toHaveBeenCalledOnce();
+    });
+
+    test("Gateway 投递失败使同批后续队列失效且不越过 sn", async () => {
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        const delivered: string[] = [];
+        let fail = true;
+        bot.on("event", async event => {
+            delivered.push(event.msg_id);
+            if (fail) {
+                fail = false;
+                throw new Error("protocol unavailable");
+            }
+        });
+
+        const first = bot.ingest(gatewaySignal(40));
+        const staleNext = bot.ingest(gatewaySignal(41));
+        await expect(first).rejects.toThrow("protocol unavailable");
+        await expect(staleNext).rejects.toMatchObject({
+            code: "KOOK_GATEWAY_DELIVERY_STALE",
+        });
+
+        await expect(bot.ingest(gatewaySignal(40))).resolves.toMatchObject({
+            body: { success: true },
+        });
+        await expect(bot.ingest(gatewaySignal(41))).resolves.toMatchObject({
+            body: { success: true },
+        });
+        expect(delivered).toEqual(["message-40", "message-40", "message-41"]);
     });
 });
 
