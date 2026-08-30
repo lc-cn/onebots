@@ -22,6 +22,7 @@ import { isWhatsAppBlockedUserAction } from "./blocked-users.js";
 import { isWhatsAppMediaAction } from "./media.js";
 import { isWhatsAppConversationalAutomationAction } from "./conversational-automation.js";
 import { isWhatsAppWebhookSubscriptionAction } from "./webhook-subscriptions.js";
+import { isWhatsAppBusinessAccountAction } from "./business-account.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -70,6 +71,7 @@ const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIO
     if (isWhatsAppMediaAction(action)) return businessMessaging;
     if (isWhatsAppConversationalAutomationAction(action)) return businessManagement;
     if (isWhatsAppWebhookSubscriptionAction(action)) return businessManagement;
+    if (isWhatsAppBusinessAccountAction(action)) return businessManagement;
     if (action === "send_native_message" || action === "mark_message_read") {
         return { support: "native", scenes: ["private", "group"] };
     }

@@ -11,6 +11,7 @@ The adapter uses Meta's official WhatsApp Cloud API, receives signed webhooks th
 - Business profile, commerce, Flow lifecycle, phone registration, two-step verification, blocked users, and templates
 - Conversational Automation welcome messages, prompts, and bot commands
 - WABA webhook App subscription inspection, subscription, and removal
+- WABA account details, controlled updates, and activity audit trails
 - Groups API metadata and participants, settings, invite links, join approvals, and lifecycle/status webhooks
 - Generic `whatsapp_call` for newly introduced Graph API resources
 - `await WhatsAppClient.ingest(rawEvent)` for feeding an existing trusted connection into the same client, with deduplication committed only after all synchronous/asynchronous listeners succeed
@@ -60,6 +61,8 @@ Media assets are managed through `client.media` and the four fixed media actions
 Conversational Automation is managed through `client.automation`. The fixed configuration action controls the welcome message, up to three prompts, and up to thirty uniquely named bot commands; empty arrays explicitly clear prompts or commands. Bot details are retrieved with a separate WABA Bot ID and a controlled field array, never by pretending that the Phone Number ID is the Bot ID.
 
 WABA webhook App subscriptions are managed through `client.webhookSubscriptions`. Callers can inspect subscriptions, subscribe with the App default callback, provide a credential-free HTTPS override callback, or explicitly remove the current App subscription. Field projection always retains the App ID, while `verify_token` is write-only and never appears in structured responses.
+
+WABA operations are managed through `client.businessAccount` and the `get_business_account`, `update_business_account`, and `list_business_account_activities` actions. Reads retain the account ID and name, writes are limited to the official name/timezone fields, and audit queries use controlled fields and enums with one-directional cursors, 1–100 item pages, and a maximum 90-day window. Audit results can contain actor IDs, IP addresses, and user agents and should be protected as security-audit data. Domain modules are the single typed client surface, avoiding duplicate forwarding APIs.
 
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 

@@ -10,50 +10,18 @@ import { WhatsAppSettings } from "./settings.js";
 import { WhatsAppEncryptedMessages } from "./encrypted-messages.js";
 import { WhatsAppPhoneNumbers } from "./phone-numbers.js";
 import { WhatsAppBusinessEncryption } from "./business-encryption.js";
-import {
-    WhatsAppBusinessProfiles,
-    type WhatsAppBusinessProfileField,
-    type WhatsAppBusinessProfileResponse,
-    type WhatsAppBusinessProfileUpdate,
-    type WhatsAppBusinessProfileUpdateResponse,
-} from "./business-profile.js";
-import {
-    WhatsAppBusinessCompliance,
-    type WhatsAppBusinessComplianceField,
-    type WhatsAppBusinessComplianceResponse,
-    type WhatsAppBusinessComplianceUpdate,
-    type WhatsAppBusinessComplianceUpdateResponse,
-} from "./business-compliance.js";
-import {
-    WhatsAppSolutionMigration,
-    type WhatsAppMigrationIntent,
-    type WhatsAppMigrationIntentField,
-    type WhatsAppSolutionMigrationRequest,
-    type WhatsAppSolutionMigrationResponse,
-} from "./solution-migration.js";
-import {
-    WhatsAppCommerce,
-    type WhatsAppCommerceSettingsResponse,
-    type WhatsAppCommerceSettingsUpdate,
-    type WhatsAppCommerceSettingsUpdateResponse,
-} from "./commerce.js";
-import {
-    WhatsAppQrCodes,
-    type WhatsAppQrCodeCreate,
-    type WhatsAppQrCodeDeleteResponse,
-    type WhatsAppQrCodeFieldSelection,
-    type WhatsAppQrCodeGetResponse,
-    type WhatsAppQrCodeListQuery,
-    type WhatsAppQrCodeListResponse,
-    type WhatsAppQrCodeMutationResponse,
-    type WhatsAppQrCodeUpdate,
-} from "./qr-codes.js";
+import { WhatsAppBusinessProfiles } from "./business-profile.js";
+import { WhatsAppBusinessCompliance } from "./business-compliance.js";
+import { WhatsAppSolutionMigration } from "./solution-migration.js";
+import { WhatsAppCommerce } from "./commerce.js";
+import { WhatsAppQrCodes } from "./qr-codes.js";
 import { WhatsAppMessageTemplates } from "./message-templates.js";
 import { WhatsAppFlows } from "./flows.js";
 import { WhatsAppBlockedUsers } from "./blocked-users.js";
 import { WhatsAppMedia } from "./media.js";
 import { WhatsAppConversationalAutomation } from "./conversational-automation.js";
 import { WhatsAppWebhookSubscriptions } from "./webhook-subscriptions.js";
+import { WhatsAppBusinessAccounts } from "./business-account.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -121,6 +89,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly automation: WhatsAppConversationalAutomation;
     /** WABA 对当前 Meta App 的 Webhook 订阅控制面。 */
     readonly webhookSubscriptions: WhatsAppWebhookSubscriptions;
+    /** WABA 身份、受控配置与活动审计控制面。 */
+    readonly businessAccount: WhatsAppBusinessAccounts;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -147,6 +117,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.media = new WhatsAppMedia(this, this.graph);
         this.automation = new WhatsAppConversationalAutomation(this);
         this.webhookSubscriptions = new WhatsAppWebhookSubscriptions(this);
+        this.businessAccount = new WhatsAppBusinessAccounts(this);
     }
 
     get apiVersion(): string {
@@ -315,76 +286,6 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
 
     getPhoneNumberInfo(): Promise<WhatsAppPhoneNumberInfo> {
         return this.phoneNumbers.getInfo();
-    }
-
-    getBusinessProfile(
-        fields?: readonly WhatsAppBusinessProfileField[],
-    ): Promise<WhatsAppBusinessProfileResponse> {
-        return this.businessProfile.get(fields);
-    }
-
-    updateBusinessProfile(
-        profile: WhatsAppBusinessProfileUpdate,
-    ): Promise<WhatsAppBusinessProfileUpdateResponse> {
-        return this.businessProfile.update(profile);
-    }
-
-    getBusinessComplianceInfo(
-        fields?: readonly WhatsAppBusinessComplianceField[],
-    ): Promise<WhatsAppBusinessComplianceResponse> {
-        return this.businessCompliance.get(fields);
-    }
-
-    updateBusinessComplianceInfo(
-        info: WhatsAppBusinessComplianceUpdate,
-    ): Promise<WhatsAppBusinessComplianceUpdateResponse> {
-        return this.businessCompliance.update(info);
-    }
-
-    getMigrationIntent(
-        migrationIntentId: string,
-        fields?: readonly WhatsAppMigrationIntentField[],
-    ): Promise<WhatsAppMigrationIntent> {
-        return this.solutionMigration.get(migrationIntentId, fields);
-    }
-
-    setSolutionMigrationIntent(
-        request: WhatsAppSolutionMigrationRequest,
-    ): Promise<WhatsAppSolutionMigrationResponse> {
-        return this.solutionMigration.set(request);
-    }
-
-    getCommerceSettings(): Promise<WhatsAppCommerceSettingsResponse> {
-        return this.commerce.get();
-    }
-
-    updateCommerceSettings(
-        settings: WhatsAppCommerceSettingsUpdate,
-    ): Promise<WhatsAppCommerceSettingsUpdateResponse> {
-        return this.commerce.update(settings);
-    }
-
-    listQrCodes(query?: WhatsAppQrCodeListQuery): Promise<WhatsAppQrCodeListResponse> {
-        return this.qrCodes.list(query);
-    }
-
-    getQrCode(
-        code: string,
-        selection?: WhatsAppQrCodeFieldSelection,
-    ): Promise<WhatsAppQrCodeGetResponse> {
-        return this.qrCodes.get(code, selection);
-    }
-
-    createQrCode(request: WhatsAppQrCodeCreate): Promise<WhatsAppQrCodeMutationResponse> {
-        return this.qrCodes.create(request);
-    }
-
-    updateQrCode(request: WhatsAppQrCodeUpdate): Promise<WhatsAppQrCodeMutationResponse> {
-        return this.qrCodes.update(request);
-    }
-
-    deleteQrCode(code: string): Promise<WhatsAppQrCodeDeleteResponse> {
-        return this.qrCodes.delete(code);
     }
 }
 

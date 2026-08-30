@@ -58,7 +58,7 @@ describe("WhatsAppQrCodes", () => {
         const client = new WhatsAppClient(config, fetcher);
 
         await expect(
-            client.getQrCode(code, {
+            client.qrCodes.get(code, {
                 fields: ["code", "prefilled_message", "deep_link_url"],
                 qr_image_format: "PNG",
             }),
@@ -83,7 +83,7 @@ describe("WhatsAppQrCodes", () => {
         const client = new WhatsAppClient(config, fetcher);
 
         await expect(
-            client.createQrCode({ prefilled_message: "Hello", generate_qr_image: "SVG" }),
+            client.qrCodes.create({ prefilled_message: "Hello", generate_qr_image: "SVG" }),
         ).resolves.toEqual({ ...details, qr_image_url: "https://cdn.test/qr.svg" });
         expect(requestJson(fetcher)).toEqual({
             prefilled_message: "Hello",
@@ -160,7 +160,7 @@ describe("WhatsAppQrCodes", () => {
 
     it("拒绝虚假删除成功", async () => {
         const client = new WhatsAppClient(config, jsonFetcher({ success: false }));
-        await expect(client.deleteQrCode(code)).rejects.toMatchObject({
+        await expect(client.qrCodes.delete(code)).rejects.toMatchObject({
             code: "WHATSAPP_INVALID_RESPONSE",
         });
     });

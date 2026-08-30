@@ -206,6 +206,8 @@ export {
     type WhatsAppWebhookSubscriptionRequest,
     type WhatsAppWebhookSubscriptionsResponse,
 } from "./webhook-subscriptions.js";
+export { isWhatsAppBusinessAccountAction, WhatsAppBusinessAccounts } from "./business-account.js";
+export * from "./business-account-types.js";
 export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
