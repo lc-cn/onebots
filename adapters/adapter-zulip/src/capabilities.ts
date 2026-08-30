@@ -16,6 +16,7 @@ import { ZULIP_INVITATION_ACTIONS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_MUTATION_ACTIONS } from "./linkifier-actions.js";
 import {
     ZULIP_OWNER_DESTRUCTIVE_ACTIONS,
+    ZULIP_SELF_CREDENTIAL_ACTIONS,
     ZULIP_SELF_DESTRUCTIVE_ACTIONS,
 } from "./lifecycle-actions.js";
 import { ZULIP_OWN_PROFILE_PERMISSION_ACTIONS } from "./own-profile-actions.js";
@@ -70,6 +71,12 @@ const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS,
     if (ZULIP_OWNER_DESTRUCTIVE_ACTIONS.has(action)) return { ...ownerPermission };
     if (ZULIP_SELF_DESTRUCTIVE_ACTIONS.has(action)) {
         return { support: "native", note: "破坏性操作：成功后当前账号立即停用" };
+    }
+    if (ZULIP_SELF_CREDENTIAL_ACTIONS.has(action)) {
+        return {
+            support: "native",
+            note: "敏感操作：成功后必须立即用返回的新 API Key 重配 Client",
+        };
     }
     return permissionActions.has(action) ? { ...permission } : { support: "native" };
 });

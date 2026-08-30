@@ -60,6 +60,7 @@ describe("Zulip 能力清单", () => {
             permissions: ["Zulip 组织 Owner"],
         });
         expect(zulipCapabilities.actions.deactivate_own_account?.note).toContain("破坏性操作");
+        expect(zulipCapabilities.actions.regenerate_own_api_key?.note).toContain("重配 Client");
         expect(zulipCapabilities.transports.event_queue?.mode).toBe("polling");
         expect(zulipCapabilities.transports.manual?.support).toBe("native");
     });

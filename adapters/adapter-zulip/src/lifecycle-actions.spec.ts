@@ -15,6 +15,7 @@ describe("Zulip 破坏性生命周期动作", () => {
         const client = new ZulipClient(config, { transport: async () => ({}) });
         const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
 
+        await executeZulipPlatformAction(client, "regenerate_own_api_key", {});
         await executeZulipPlatformAction(client, "deactivate_own_account", {});
         await executeZulipPlatformAction(client, "deactivate_organization", {
             deletion_delay_days: null,
@@ -23,16 +24,18 @@ describe("Zulip 破坏性生命周期动作", () => {
             deletion_delay_days: 30,
         });
 
-        expect(call).toHaveBeenNthCalledWith(1, "users/me", "DELETE");
-        expect(call).toHaveBeenNthCalledWith(2, "realm/deactivate", "POST", {
+        expect(call).toHaveBeenNthCalledWith(1, "users/me/api_key/regenerate", "POST");
+        expect(call).toHaveBeenNthCalledWith(2, "users/me", "DELETE");
+        expect(call).toHaveBeenNthCalledWith(3, "realm/deactivate", "POST", {
             deletion_delay_days: null,
         });
-        expect(call).toHaveBeenNthCalledWith(3, "realm/deactivate", "POST", {
+        expect(call).toHaveBeenNthCalledWith(4, "realm/deactivate", "POST", {
             deletion_delay_days: 30,
         });
     });
 
     it.each([
+        ["regenerate_own_api_key", { current: true }],
         ["deactivate_own_account", { confirm: true }],
         ["deactivate_organization", { deletion_delay_days: -1 }],
         ["deactivate_organization", { deletion_delay_days: "tomorrow" }],
