@@ -13,6 +13,78 @@ describe("KOOK 平台扩展动作", () => {
         });
     });
 
+    test("服务器角色动作只接受官方字段并校验范围", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await executeKookPlatformAction(bot, "update_guild_role", {
+            guild_id: "guild",
+            role_id: 7,
+            color: 0xff_ffff,
+            hoist: 1,
+            mentionable: 0,
+            permissions: 2_048,
+        });
+
+        expect(callApi).toHaveBeenCalledWith("/v3/guild-role/update", {
+            method: "POST",
+            body: {
+                guild_id: "guild",
+                role_id: 7,
+                color: 0xff_ffff,
+                hoist: 1,
+                mentionable: 0,
+                permissions: 2_048,
+            },
+        });
+        await expect(
+            executeKookPlatformAction(bot, "update_guild_role", {
+                guild_id: "guild",
+                role_id: 7,
+                color: 0x100_0000,
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "update_guild_role", {
+                guild_id: "guild",
+                role_id: 7,
+                position: 2,
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_UNKNOWN" });
+    });
+
+    test("频道权限动作验证目标类型与必填频道", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await executeKookPlatformAction(bot, "update_channel_permission", {
+            channel_id: "channel",
+            type: "role_id",
+            value: "7",
+            allow: 2_048,
+            deny: 0,
+        });
+        expect(callApi).toHaveBeenCalledWith("/v3/channel-role/update", {
+            method: "POST",
+            body: {
+                channel_id: "channel",
+                type: "role_id",
+                value: "7",
+                allow: 2_048,
+                deny: 0,
+            },
+        });
+        await expect(
+            executeKookPlatformAction(bot, "create_channel_permission", {
+                channel_id: "channel",
+                type: "guild_id",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "sync_channel_permissions", {}),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_REQUIRED" });
+    });
+
     test("补齐消息模板与机器人语音生命周期", async () => {
         const callApi = vi.fn().mockResolvedValue({});
         const bot = { callApi } as never;

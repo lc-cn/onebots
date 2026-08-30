@@ -8,6 +8,7 @@ import type { KookBot } from "./bot.js";
 import { KookError } from "./errors.js";
 import type { KookApiRequestOptions } from "./types.js";
 import { KOOK_FRIEND_PLATFORM_ACTIONS } from "./platform-actions-friend.js";
+import { KOOK_PERMISSION_PLATFORM_ACTIONS } from "./platform-actions-permission.js";
 
 interface ActionRoute {
     path: string;
@@ -23,17 +24,6 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     remove_direct_message_reaction: { path: "/v3/direct-message/delete-reaction", method: "POST" },
     pin_message: { path: "/v3/message/pin", method: "POST" },
     unpin_message: { path: "/v3/message/unpin", method: "POST" },
-    list_guild_roles: { path: "/v3/guild-role/list", method: "GET" },
-    create_guild_role: { path: "/v3/guild-role/create", method: "POST" },
-    update_guild_role: { path: "/v3/guild-role/update", method: "POST" },
-    delete_guild_role: { path: "/v3/guild-role/delete", method: "POST" },
-    grant_guild_role: { path: "/v3/guild-role/grant", method: "POST" },
-    revoke_guild_role: { path: "/v3/guild-role/revoke", method: "POST" },
-    get_channel_permissions: { path: "/v3/channel-role/index", method: "GET" },
-    create_channel_permission: { path: "/v3/channel-role/create", method: "POST" },
-    update_channel_permission: { path: "/v3/channel-role/update", method: "POST" },
-    sync_channel_permissions: { path: "/v3/channel-role/sync", method: "POST" },
-    delete_channel_permission: { path: "/v3/channel-role/delete", method: "POST" },
     list_blacklist: { path: "/v3/blacklist/list", method: "GET" },
     add_blacklist: { path: "/v3/blacklist/create", method: "POST" },
     remove_blacklist: { path: "/v3/blacklist/delete", method: "POST" },
@@ -117,6 +107,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         create_guild_emoji: createGuildEmoji,
         get_guild_badge: getGuildBadge,
         ...KOOK_FRIEND_PLATFORM_ACTIONS,
+        ...KOOK_PERMISSION_PLATFORM_ACTIONS,
         ...ROUTE_HANDLERS,
     },
     action =>
@@ -129,7 +120,7 @@ export const KOOK_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
 export type KookPlatformAction =
     typeof KOOK_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
-/** 执行 KOOK 官方扩展动作；命名参数直接沿用开放平台字段。 */
+/** 执行 KOOK 官方扩展动作；命名参数由对应的开放平台契约约束。 */
 export async function executeKookPlatformAction(
     bot: KookBot,
     action: string,
