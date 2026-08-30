@@ -1,9 +1,10 @@
 import { AdapterRegistry, type Schema } from "onebots";
 
 export { KookApiError, KookError } from "./errors.js";
-export { assertKookConfig } from "./config.js";
+export { assertKookConfig, assertKookOAuthConfig } from "./config.js";
 export { KookWebhookReceiver, type KookEventDispatch, type KookIngestResult } from "./webhook.js";
 export { KookRestClient, type KookBinaryResult, type KookHttpTransport } from "./rest-client.js";
+export { KookOAuthClient } from "./oauth.js";
 export { KookBot, type KookBotEvents } from "./bot.js";
 export { projectKookEvents, type KookRawEvent } from "./events.js";
 export type {
@@ -14,6 +15,11 @@ export type {
     KookInboundEvent,
     KookSignal,
     KookWebhookChallenge,
+    KookOAuthConfig,
+    KookOAuthDisabledConfig,
+    KookOAuthEnabledConfig,
+    KookOAuthScope,
+    KookOAuthToken,
 } from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
@@ -88,6 +94,66 @@ export const kookSchema: Schema = {
         label: "REST 限流重试次数",
         description: "收到 KOOK 429 后按官方限流响应头等待并重试",
         ui: { section: "advanced" },
+    },
+    oauth: {
+        enabled: {
+            type: "boolean",
+            default: false,
+            label: "启用用户 OAuth",
+            description: "仅需 KOOK 登录、用户资料或用户服务器列表时开启",
+            ui: { section: "advanced" },
+        },
+        client_id: {
+            type: "string",
+            required: true,
+            label: "OAuth Client ID",
+            description: "在 KOOK 开发者中心 OAuth2 页面获取",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
+        client_secret: {
+            type: "string",
+            required: true,
+            label: "OAuth Client Secret",
+            sensitive: true,
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
+        redirect_uri: {
+            type: "string",
+            required: true,
+            label: "OAuth 回调地址",
+            pattern: /^https:\/\/[^\s#]+$/,
+            description: "必须与开发者中心白名单及生成授权页时的地址完全一致",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
+        authorization_url: {
+            type: "string",
+            label: "OAuth Authorization URL",
+            placeholder: "https://www.kookapp.cn/app/oauth2/authorize",
+            pattern: /^https:\/\/[^\s?#]+$/,
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
+        token_url: {
+            type: "string",
+            label: "OAuth Token URL",
+            placeholder: "https://www.kookapp.cn/api/oauth2/token",
+            pattern: /^https:\/\/[^\s?#]+$/,
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
     },
 };
 

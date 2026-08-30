@@ -10,6 +10,12 @@ kook:
     account_id: my-bot
     token: your-bot-token
     receive_mode: gateway
+    # 仅使用 KOOK 登录或用户授权能力时配置
+    oauth:
+      enabled: true
+      client_id: your_oauth_client_id
+      client_secret: your_oauth_client_secret
+      redirect_uri: https://example.com/oauth/callback
 ```
 
 `gateway` 是默认接收方式，无需公网回调地址。连接断开后会以带抖动的指数退避无限重连，并优先使用 KOOK session 和 sn 恢复事件流。
@@ -47,6 +53,7 @@ Webhook 模式必须配置 `verify_token`，未验证的回调不会进入事件
 | `encrypt_key`  | Webhook 加密 Key；未启用加密时不填            |
 | `api_base_url` | API 根地址，默认 `https://www.kookapp.cn/api` |
 | `max_retries`  | REST 遇到 429 时的最大重试次数，默认 `3`      |
+| `oauth`        | 可选用户 OAuth2 应用凭据；默认关闭            |
 
 ## 复用已有连接与 HTTP Host
 
@@ -119,8 +126,11 @@ KOOK 的频道消息与私聊消息使用两套 API。`delete_message`、`get_me
 - 语音：`move_voice_user`、`kick_voice_user`、`get_joined_voice_channel`，以及 `join_voice_channel`、`list_joined_voice_channels`、`leave_voice_channel`、`keep_voice_channel_alive` 管理机器人推流生命周期
 - 机器人在线状态：上线、下线和查询状态
 - 好友：目录、申请列表、同意/拒绝、删除，以及 `send_friend_request`、`block_user`、`unblock_user`、`list_blocked_users`
+- 用户 OAuth2：`create_oauth_authorization_url`、`exchange_oauth_code`、`get_oauth_user_info`、`list_oauth_user_guilds`，以及受限 GET 底层动作 `call_kook_oauth_api`
 
 命名动作的参数字段与 KOOK 官方 API 保持一致。服务器管理、服务器角色和频道权限动作会在请求前校验官方字段、必填项、枚举、长度与整数范围，未知字段不会被静默转发；尚未收录的新字段应显式使用 `call_kook_api`。`list_guild_mutes` 固定请求官方 `detail` 结构，不保留旧返回格式。所有标准列表按 KOOK 官方单页上限 50 自动遍历，不依赖平台静默截断。统一好友接口会剔除当前账号主动发出的申请；KOOK 不返回申请时间，因此 `get_friend_requests` 的 `time` 明确为 `0`，不会伪造本地时间。权限不足、参数错误和限流会抛出结构化 `KookError` / `KookApiError`，其中包含错误分类、HTTP 状态、KOOK 错误码、请求路径和重试等待时间。REST 客户端按官方 route bucket / global 限流头串行调度，并支持 `AbortSignal`。
+
+OAuth2 使用与 Bot Token 完全隔离的客户端。授权地址动作要求调用方提供不可预测的 `state` 并在回调时自行核验；换码时应用密钥只进入官方 `application/x-www-form-urlencoded` 请求，用户资料与服务器列表只发送 `Authorization: Bearer`。KOOK 当前只支持授权码模式，访问令牌过期后需重新授权，不会伪造平台未提供的刷新流程。`scope` 仅接受官方 `get_user_info` 和 `get_user_guilds`。
 
 ## 参考
 

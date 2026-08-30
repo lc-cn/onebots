@@ -232,4 +232,49 @@ describe("KOOK 平台扩展动作", () => {
             }),
         ).rejects.toMatchObject({ code: "KOOK_FRIEND_REQUEST_GUILD_REQUIRED" });
     });
+
+    test("OAuth 动作保持应用凭据与用户令牌边界", async () => {
+        const buildOAuthAuthorizationUrl = vi.fn().mockReturnValue("https://oauth.test");
+        const exchangeOAuthCode = vi.fn().mockResolvedValue({ access_token: "token" });
+        const getOAuthUserInfo = vi.fn().mockResolvedValue({ id: "user" });
+        const listOAuthUserGuilds = vi.fn().mockResolvedValue({ items: [] });
+        const bot = {
+            buildOAuthAuthorizationUrl,
+            exchangeOAuthCode,
+            getOAuthUserInfo,
+            listOAuthUserGuilds,
+        } as never;
+
+        await executeKookPlatformAction(bot, "create_oauth_authorization_url", {
+            scope: ["get_user_info", "get_user_guilds"],
+            state: "csrf",
+        });
+        await executeKookPlatformAction(bot, "exchange_oauth_code", { code: "code" });
+        await executeKookPlatformAction(bot, "get_oauth_user_info", {
+            access_token: "user-token",
+        });
+        await executeKookPlatformAction(bot, "list_oauth_user_guilds", {
+            access_token: "user-token",
+            page: 2,
+            page_size: 50,
+        });
+
+        expect(buildOAuthAuthorizationUrl).toHaveBeenCalledWith(
+            ["get_user_info", "get_user_guilds"],
+            "csrf",
+        );
+        expect(exchangeOAuthCode).toHaveBeenCalledWith("code");
+        expect(getOAuthUserInfo).toHaveBeenCalledWith("user-token");
+        expect(listOAuthUserGuilds).toHaveBeenCalledWith("user-token", {
+            page: 2,
+            page_size: 50,
+            sort: undefined,
+        });
+        await expect(
+            executeKookPlatformAction(bot, "exchange_oauth_code", {
+                code: "code",
+                client_secret: "shadow",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_UNKNOWN" });
+    });
 });

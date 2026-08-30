@@ -33,4 +33,54 @@ export function assertKookConfig(config: KookConfig): void {
             { max_retries: config.max_retries },
         );
     }
+    assertKookOAuthConfig(config.oauth);
+}
+
+/** Bot 与独立 OAuth 客户端共用的应用凭据约束。 */
+export function assertKookOAuthConfig(config: KookConfig["oauth"]): void {
+    if (!config || config.enabled === false) return;
+    for (const [name, value] of Object.entries({
+        client_id: config.client_id,
+        client_secret: config.client_secret,
+        redirect_uri: config.redirect_uri,
+    })) {
+        if (!value?.trim()) {
+            throw KookError.configuration(
+                `KOOK oauth.${name} 不能为空`,
+                "KOOK_OAUTH_CONFIG_REQUIRED",
+                { field: name },
+            );
+        }
+    }
+    assertSecureUrl(config.redirect_uri, "oauth.redirect_uri", true);
+    if (config.authorization_url) {
+        assertSecureUrl(config.authorization_url, "oauth.authorization_url");
+    }
+    if (config.token_url) assertSecureUrl(config.token_url, "oauth.token_url");
+}
+
+function assertSecureUrl(value: string, field: string, allowQuery = false): void {
+    let url: URL;
+    try {
+        url = new URL(value);
+    } catch (error) {
+        throw KookError.configuration(`KOOK ${field} 无效`, "KOOK_OAUTH_URL_INVALID", {
+            field,
+            value,
+            cause: error instanceof Error ? error.message : String(error),
+        });
+    }
+    if (
+        url.protocol !== "https:" ||
+        url.username ||
+        url.password ||
+        url.hash ||
+        (!allowQuery && url.search)
+    ) {
+        throw KookError.configuration(
+            `KOOK ${field} 必须是无凭据${allowQuery ? "" : "、查询参数"}和片段的 HTTPS URL`,
+            "KOOK_OAUTH_URL_INVALID",
+            { field, value },
+        );
+    }
 }

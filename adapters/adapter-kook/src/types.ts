@@ -8,6 +8,35 @@ export interface KookConfig {
     api_base_url?: string;
     /** REST 触发限流后的最大自动重试次数，默认 3。 */
     max_retries?: number;
+    /** 用户 OAuth 应用凭据；仅在调用 OAuth 扩展动作时需要。 */
+    oauth?: KookOAuthConfig;
+}
+
+export type KookOAuthConfig = KookOAuthDisabledConfig | KookOAuthEnabledConfig;
+
+export interface KookOAuthDisabledConfig {
+    enabled: false;
+}
+
+export interface KookOAuthEnabledConfig {
+    /** 手写配置省略时视为启用。 */
+    enabled?: true;
+    client_id: string;
+    client_secret: string;
+    redirect_uri: string;
+    /** 默认使用 KOOK 官方授权页。 */
+    authorization_url?: string;
+    /** 默认使用 `${api_base_url}/oauth2/token`。 */
+    token_url?: string;
+}
+
+export type KookOAuthScope = "get_user_info" | "get_user_guilds";
+
+export interface KookOAuthToken {
+    access_token: string;
+    expires_in: number;
+    token_type: "Bearer";
+    scope: string;
 }
 
 export type KookMessageType = 1 | 2 | 3 | 4 | 8 | 9 | 10 | 12 | 255;

@@ -6,7 +6,7 @@ import {
 } from "onebots";
 import type { KookBot } from "./bot.js";
 import { KookError } from "./errors.js";
-import type { KookApiRequestOptions } from "./types.js";
+import type { KookApiRequestOptions, KookOAuthScope } from "./types.js";
 import { KOOK_FRIEND_PLATFORM_ACTIONS } from "./platform-actions-friend.js";
 import { KOOK_GUILD_PLATFORM_ACTIONS } from "./platform-actions-guild.js";
 import { KOOK_PERMISSION_PLATFORM_ACTIONS } from "./platform-actions-permission.js";
@@ -94,6 +94,41 @@ const PLATFORM_ACTIONS = definePlatformActions(
         upload_asset: async (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
             const media = await mediaFromParams(params);
             return { url: await bot.uploadAsset(media.data, media.filename, media.contentType) };
+        },
+        create_oauth_authorization_url: (
+            bot: KookBot,
+            params: Readonly<Record<string, unknown>>,
+        ) => {
+            assertAllowedParams(params, ["scope", "state"]);
+            return Promise.resolve({
+                url: bot.buildOAuthAuthorizationUrl(
+                    oauthScopes(params.scope),
+                    requiredString(params.state, "state"),
+                ),
+            });
+        },
+        exchange_oauth_code: (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["code"]);
+            return bot.exchangeOAuthCode(requiredString(params.code, "code"));
+        },
+        get_oauth_user_info: (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["access_token"]);
+            return bot.getOAuthUserInfo(requiredString(params.access_token, "access_token"));
+        },
+        list_oauth_user_guilds: (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["access_token", "page", "page_size", "sort"]);
+            return bot.listOAuthUserGuilds(
+                requiredString(params.access_token, "access_token"),
+                oauthGuildListQuery(params),
+            );
+        },
+        call_kook_oauth_api: (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["access_token", "path", "query"]);
+            return bot.callOAuthApi(
+                requiredString(params.access_token, "access_token"),
+                requirePath(params.path),
+                queryValue(params.query),
+            );
         },
         create_guild_emoji: createGuildEmoji,
         get_guild_badge: getGuildBadge,
@@ -189,6 +224,66 @@ function requiredString(value: unknown, key: string): string {
 
 function optionalString(value: unknown): string | undefined {
     return typeof value === "string" && value ? value : undefined;
+}
+
+function oauthScopes(value: unknown): KookOAuthScope[] {
+    const values = typeof value === "string" ? value.split(/\s+/u) : value;
+    if (!Array.isArray(values) || values.length === 0) {
+        throw KookError.invalid(
+            "KOOK OAuth scope 必须是非空字符串或字符串数组",
+            "KOOK_OAUTH_SCOPE_INVALID",
+        );
+    }
+    const allowed = new Set<KookOAuthScope>(["get_user_info", "get_user_guilds"]);
+    if (values.some(scope => typeof scope !== "string" || !allowed.has(scope as KookOAuthScope))) {
+        throw KookError.invalid(
+            "KOOK OAuth scope 仅支持 get_user_info、get_user_guilds",
+            "KOOK_OAUTH_SCOPE_INVALID",
+            { scope: values },
+        );
+    }
+    return values as KookOAuthScope[];
+}
+
+function oauthGuildListQuery(
+    params: Readonly<Record<string, unknown>>,
+): Record<string, string | number | undefined> {
+    return {
+        page: optionalPositiveInteger(params.page, "page"),
+        page_size: optionalPositiveInteger(params.page_size, "page_size", 50),
+        sort: optionalString(params.sort),
+    };
+}
+
+function optionalPositiveInteger(value: unknown, key: string, max?: number): number | undefined {
+    if (value === undefined) return undefined;
+    if (
+        typeof value !== "number" ||
+        !Number.isInteger(value) ||
+        value < 1 ||
+        (max !== undefined && value > max)
+    ) {
+        throw KookError.invalid(
+            `KOOK 参数 ${key} 必须是 1${max ? ` 到 ${max}` : " 以上"}的整数`,
+            "KOOK_ACTION_PARAM_INVALID",
+            { key, value },
+        );
+    }
+    return value;
+}
+
+function assertAllowedParams(
+    params: Readonly<Record<string, unknown>>,
+    allowed: readonly string[],
+): void {
+    const unknown = Object.keys(params).filter(key => !allowed.includes(key));
+    if (unknown.length) {
+        throw KookError.invalid(
+            `KOOK OAuth 动作不接受参数 ${unknown.join(", ")}`,
+            "KOOK_ACTION_PARAM_UNKNOWN",
+            { params: unknown },
+        );
+    }
 }
 
 function scalarValue(value: unknown, key: string): string | number | boolean | undefined {

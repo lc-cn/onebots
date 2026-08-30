@@ -27,6 +27,22 @@ describe("KOOK 配置 Schema", () => {
             label: "手动接入既有连接",
         });
     });
+
+    test("OAuth 凭据由显式开关控制显示", () => {
+        expect(ruleAt("oauth.enabled").default).toBe(false);
+        for (const field of ["client_id", "client_secret", "redirect_uri"]) {
+            expect(ruleAt(`oauth.${field}`).required).toBe(true);
+            expect(ruleAt(`oauth.${field}`).ui?.visibleWhen).toEqual({
+                path: "oauth.enabled",
+                oneOf: [true],
+            });
+        }
+        expect(ruleAt("oauth.client_secret").sensitive).toBe(true);
+        expect(ruleAt("oauth.redirect_uri").pattern?.test("https://example.test/cb?flow=1")).toBe(
+            true,
+        );
+        expect(ruleAt("oauth.redirect_uri").pattern?.test("http://example.test/cb")).toBe(false);
+    });
 });
 
 function ruleAt(path: string): ValidationRule {

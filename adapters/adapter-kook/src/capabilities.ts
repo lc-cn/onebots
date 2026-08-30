@@ -5,10 +5,17 @@ import {
 } from "onebots";
 import { KOOK_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = definePlatformActionCapabilities(KOOK_PLATFORM_ACTIONS, {
+const OAUTH_CONFIG_ACTIONS = new Set(["create_oauth_authorization_url", "exchange_oauth_code"]);
+
+const platformActions = definePlatformActionCapabilities(KOOK_PLATFORM_ACTIONS, action => ({
     support: "native",
     availability: "permission",
-});
+    note: OAUTH_CONFIG_ACTIONS.has(action)
+        ? "需要启用并配置 KOOK OAuth 应用凭据"
+        : action.includes("oauth")
+          ? "需要用户 OAuth 访问令牌及对应 scope"
+          : "执行权限由 KOOK 服务器权限与接口规则决定",
+}));
 
 /** 与当前 KOOK 官方 API、Gateway 和 Webhook 实现逐项对应的能力清单。 */
 export const kookCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

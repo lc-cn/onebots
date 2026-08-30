@@ -5,12 +5,18 @@ import type { KookBotEvents } from "./bot-events.js";
 import { assertKookConfig } from "./config.js";
 import { KookError } from "./errors.js";
 import { KookGatewaySequence } from "./gateway-sequence.js";
+import { KookMessageContextStore, type KookMessageContext } from "./message-context.js";
+import { KookOAuthClient } from "./oauth.js";
 import { KookRestClient, type KookBinaryResult } from "./rest-client.js";
 import type {
     KookApiRequestOptions,
     KookConfig,
     KookEvent,
     KookMessageResult,
+    KookGuild,
+    KookListResponse,
+    KookOAuthScope,
+    KookOAuthToken,
     KookSendMessage,
     KookSignal,
     KookUser,
@@ -41,16 +47,15 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     private me: KookUser | null = null;
     private readonly webhook: KookWebhookReceiver;
     private readonly rest: KookRestClient;
-    private readonly messageContexts = new Map<
-        string,
-        { scene: "channel" | "direct"; targetId?: string; chatCode?: string }
-    >();
+    private readonly oauth: KookOAuthClient;
+    private readonly messageContexts = new KookMessageContextStore();
 
     constructor(readonly config: KookConfig) {
         super();
         assertKookConfig(config);
         this.webhook = new KookWebhookReceiver(config);
         this.rest = new KookRestClient(config);
+        this.oauth = new KookOAuthClient(config);
     }
 
     get receiveMode(): "gateway" | "webhook" | "manual" {
@@ -107,22 +112,14 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         targetId?: string,
         chatCode?: string,
     ): void {
-        if (!messageId) return;
-        this.messageContexts.delete(messageId);
-        this.messageContexts.set(messageId, { scene, targetId, chatCode });
-        if (this.messageContexts.size > 4_096) {
-            const oldest = this.messageContexts.keys().next().value;
-            if (typeof oldest === "string") this.messageContexts.delete(oldest);
-        }
+        this.messageContexts.remember(messageId, { scene, targetId, chatCode });
     }
 
     getMessageScene(messageId: string): "channel" | "direct" | undefined {
-        return this.messageContexts.get(messageId)?.scene;
+        return this.getMessageContext(messageId)?.scene;
     }
 
-    getMessageContext(
-        messageId: string,
-    ): { scene: "channel" | "direct"; targetId?: string; chatCode?: string } | undefined {
+    getMessageContext(messageId: string): KookMessageContext | undefined {
         return this.messageContexts.get(messageId);
     }
 
@@ -426,6 +423,34 @@ export class KookBot extends EventEmitter<KookBotEvents> {
 
     async callApi<T = unknown>(path: string, options: KookApiRequestOptions = {}): Promise<T> {
         return this.rest.call(path, options);
+    }
+
+    /** 生成用户授权页；state 用于调用方校验 OAuth 回调来源。 */
+    buildOAuthAuthorizationUrl(scopes: readonly KookOAuthScope[], state: string): string {
+        return this.oauth.buildAuthorizationUrl(scopes, state);
+    }
+
+    exchangeOAuthCode(code: string): Promise<KookOAuthToken> {
+        return this.oauth.exchangeCode(code);
+    }
+
+    getOAuthUserInfo(accessToken: string): Promise<KookUser> {
+        return this.oauth.getUserInfo(accessToken);
+    }
+
+    listOAuthUserGuilds(
+        accessToken: string,
+        query?: Readonly<Record<string, string | number | boolean | undefined>>,
+    ): Promise<KookListResponse<KookGuild>> {
+        return this.oauth.listUserGuilds(accessToken, query);
+    }
+
+    callOAuthApi<T = unknown>(
+        accessToken: string,
+        path: string,
+        query?: Readonly<Record<string, string | number | boolean | undefined>>,
+    ): Promise<T> {
+        return this.oauth.call(accessToken, path, query);
     }
 
     sendChannelMessage(targetId: string, message: KookSendMessage): Promise<KookMessageResult> {

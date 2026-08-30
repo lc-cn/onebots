@@ -20,4 +20,32 @@ describe("KOOK 运行时配置", () => {
             assertKookConfig({ account_id: "bot", token: "token", receive_mode: "manual" }),
         ).not.toThrow();
     });
+
+    test("OAuth 关闭时不要求凭据，启用时闭合配置", () => {
+        expect(() =>
+            assertKookConfig({
+                account_id: "bot",
+                token: "token",
+                oauth: { enabled: false },
+            }),
+        ).not.toThrow();
+        expect(() =>
+            assertKookConfig({
+                account_id: "bot",
+                token: "token",
+                oauth: { enabled: true, client_id: "client" },
+            } as never),
+        ).toThrow("oauth.client_secret");
+        expect(() =>
+            assertKookConfig({
+                account_id: "bot",
+                token: "token",
+                oauth: {
+                    client_id: "client",
+                    client_secret: "secret",
+                    redirect_uri: "http://example.test/callback",
+                },
+            }),
+        ).toThrow("HTTPS");
+    });
 });
