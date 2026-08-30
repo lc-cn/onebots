@@ -110,10 +110,19 @@ describe("ICQQ 群动作", () => {
             group_id: id(20001),
             type: "request",
             sub_type: "add",
-            approve: true,
+            approve: false,
             is_filtered: false,
+            block: true,
         });
-        expect(setGroupAddRequest).toHaveBeenCalledWith("flag-1", true, undefined);
+        expect(setGroupAddRequest).toHaveBeenCalledWith("flag-1", false, undefined, true);
+        await expect(
+            actions.handleGroupRequest("bot", {
+                flag: "flag-1",
+                type: "request",
+                approve: true,
+                block: true,
+            }),
+        ).rejects.toMatchObject({ code: "ICQQ_INVALID_PARAM" });
     });
 
     it("保留群创建时间和完整成员资料", async () => {

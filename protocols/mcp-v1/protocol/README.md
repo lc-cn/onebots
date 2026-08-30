@@ -20,10 +20,10 @@ npm install @onebots/protocol-mcp-v1
 qq.my-bot:
   appid: "xxx"
   secret: "xxx"
-  mcp.v1:                              # 启用即可，下面都是可选项
-    access_token: "your-token"         # Bearer Token 鉴权
-    tools_whitelist: []                # 工具白名单（留空 = 全部启用）
-    tools_blacklist: []                # 工具黑名单
+  mcp.v1: # 启用即可，下面都是可选项
+    access_token: "your-token" # Bearer Token 鉴权
+    tools_whitelist: [] # 工具白名单（留空 = 全部启用）
+    tools_blacklist: [] # 工具黑名单
 ```
 
 ## 传输方式
@@ -46,6 +46,7 @@ onebots mcp --config config.yaml --account qq/my-bot
 ## AI Agent 配置
 
 ::: code-group
+
 ```json [Cursor (~/.cursor/mcp.json)]
 {
   "mcpServers": {
@@ -78,18 +79,21 @@ onebots mcp --config config.yaml --account qq/my-bot
   }
 }
 ```
+
 :::
 
 > 全局安装了 onebots 的用户可以将 `"command"` 改为 `"onebots"`，并从 `args` 中移除 `"onebots"`。
 
-## 可用工具（32 个）
+## 可用工具（31 个）
 
-| 分类 | 查询 | 操作 |
-| --- | --- | --- |
-| 消息 | `get_message` | `send_message` `delete_message` |
-| 用户 | `get_login_info` `get_user_info` | — |
-| 好友 | `get_friend_list` `get_friend_info` | `handle_friend_request` `delete_friend` |
-| 群组 | `get_group_list` `get_group_info` `get_group_member_list` `get_group_member_info` | `set_group_name` `leave_group` `kick_group_member` `mute_group_member` `mute_group_all` `set_group_admin` `set_group_card` `handle_group_request` |
-| 频道 | `get_guild_list` `get_guild_info` `get_channel_list` `get_channel_info` `get_guild_member_info` `get_channel_member_list` | — |
-| 文件 | — | `upload_file` |
-| 系统 | `get_supported_actions` `get_status` `get_version` | — |
+| 分类 | 查询                                                                                                                      | 操作                                                                                                                                              |
+| ---- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 消息 | `get_message`                                                                                                             | `send_message` `delete_message`                                                                                                                   |
+| 用户 | `get_login_info` `get_user_info`                                                                                          | —                                                                                                                                                 |
+| 好友 | `get_friend_list` `get_friend_info`                                                                                       | `handle_friend_request` `delete_friend`                                                                                                           |
+| 群组 | `get_group_list` `get_group_info` `get_group_member_list` `get_group_member_info`                                         | `set_group_name` `leave_group` `kick_group_member` `mute_group_member` `mute_group_all` `set_group_admin` `set_group_card` `handle_group_request` |
+| 频道 | `get_guild_list` `get_guild_info` `get_channel_list` `get_channel_info` `get_guild_member_info` `get_channel_member_list` | —                                                                                                                                                 |
+| 文件 | —                                                                                                                         | `upload_file`                                                                                                                                     |
+| 系统 | `get_supported_actions` `get_status` `get_version`                                                                        | —                                                                                                                                                 |
+
+工具参数遵循 JSON Schema 原生类型，布尔字段必须传 `true` / `false`，不会把字符串或其他 truthy 值静默转换。好友删除、好友申请和群申请工具支持可选 `block` 策略；不支持该语义的适配器会显式返回错误。

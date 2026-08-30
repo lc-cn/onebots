@@ -239,6 +239,9 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         const flag = params.flag ?? params.request_id?.string;
         if (!flag) throw invalidICQQParam("处理 ICQQ 群申请需要 request_id 或原始 flag", params);
         if (params.is_filtered) throw invalidICQQParam("ICQQ 不支持处理风险过滤群申请");
+        if (params.approve && params.block) {
+            throw invalidICQQParam("同意群申请时不能同时阻止后续申请");
+        }
 
         const client = this.requireNativeClient(uin);
         const request = (await client.getSystemMsg()).find(
@@ -256,7 +259,12 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
             throw invalidICQQParam("群申请类型与 notification_type 不一致", params);
         }
 
-        const accepted = await client.setGroupAddRequest(flag, params.approve, params.reason);
+        const accepted = await client.setGroupAddRequest(
+            flag,
+            params.approve,
+            params.reason,
+            params.block,
+        );
         this.assertNativeAccepted(accepted, `${params.approve ? "同意" : "拒绝"}群申请`);
     }
 

@@ -4,6 +4,19 @@ import { TelegramAdapter } from "./adapter.js";
 const id = (value: string) => ({ string: value, number: Number(value), source: value });
 
 describe("Telegram canonical 群动作", () => {
+    it("显式拒绝无法兑现的入群申请阻止策略", async () => {
+        const adapter = Object.create(TelegramAdapter.prototype) as TelegramAdapter;
+
+        await expect(
+            adapter.handleGroupRequest("bot", {
+                flag: "-100:42",
+                type: "request",
+                approve: false,
+                block: true,
+            }),
+        ).rejects.toMatchObject({ code: "TELEGRAM_JOIN_REQUEST_BLOCK_UNSUPPORTED" });
+    });
+
     it("踢出成员后按 reject_add_request 决定是否保留封禁", async () => {
         const banChatMember = vi.fn().mockResolvedValue(true);
         const unbanChatMember = vi.fn().mockResolvedValue(true);

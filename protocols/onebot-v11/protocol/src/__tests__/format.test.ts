@@ -75,6 +75,7 @@ function createProtocol() {
         })),
         inviteGroupMember: vi.fn(),
         handleFriendRequest: vi.fn(),
+        handleGroupRequest: vi.fn(),
         muteGroupAnonymous: vi.fn(),
         setGroupAnonymous: vi.fn(),
     };
@@ -456,12 +457,14 @@ describe("OneBot V11 message format conversion", () => {
                 flag: "opaque-standard-flag",
                 approve: false,
                 remark: "暂不添加",
+                block: true,
             }),
         ).resolves.toMatchObject({ status: "ok", retcode: 0, data: {} });
         expect(adapter.handleFriendRequest).toHaveBeenNthCalledWith(1, "bot", {
             flag: "opaque-standard-flag",
             approve: false,
             remark: "暂不添加",
+            block: true,
         });
 
         await expect(
@@ -471,6 +474,28 @@ describe("OneBot V11 message format conversion", () => {
             flag: "opaque-extension-flag",
             approve: true,
             remark: undefined,
+            block: undefined,
+        });
+    });
+
+    test("group request action preserves the native block policy", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await protocol.apply("set_group_add_request", {
+            flag: "opaque-group-flag",
+            sub_type: "add",
+            approve: false,
+            reason: "不符合要求",
+            block: true,
+        });
+
+        expect(adapter.handleGroupRequest).toHaveBeenCalledWith("bot", {
+            flag: "opaque-group-flag",
+            type: "request",
+            sub_type: "add",
+            approve: false,
+            reason: "不符合要求",
+            block: true,
         });
     });
 

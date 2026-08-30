@@ -22,11 +22,11 @@ export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         get_custom_face_url_list: { support: "native" },
         get_friend_list: { support: "native" },
         get_friend_info: { support: "native" },
-        delete_friend: { support: "native" },
+        delete_friend: { support: "native", note: "支持删除后同时加入黑名单" },
         send_friend_nudge: { support: "native" },
         send_like: { support: "native" },
         get_friend_requests: { support: "native" },
-        handle_friend_request: { support: "native" },
+        handle_friend_request: { support: "native", note: "拒绝时可同时加入黑名单" },
         get_group_list: { support: "native" },
         get_group_info: { support: "native" },
         set_group_name: {
@@ -90,6 +90,7 @@ export const icqqCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
             support: "native",
             availability: "permission",
             permissions: ["group.admin"],
+            note: "拒绝时可同时阻止后续申请",
         },
         get_group_notifications: { support: "native" },
         set_group_avatar: {

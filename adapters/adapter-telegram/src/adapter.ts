@@ -235,6 +235,12 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     }
 
     async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
+        if (params.block) {
+            throw TelegramError.invalid(
+                "Telegram 不支持拒绝入群申请后阻止后续申请",
+                "TELEGRAM_JOIN_REQUEST_BLOCK_UNSUPPORTED",
+            );
+        }
         const flag = params.flag ?? params.request_id?.string;
         const [chatId, userId] = String(flag ?? "").split(":");
         if (

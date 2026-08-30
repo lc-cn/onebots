@@ -262,15 +262,25 @@ export class ICQQBot extends EventEmitter<ICQQBotEvents> {
     /**
      * 处理好友申请
      */
-    async handleFriendRequest(flag: string, approve: boolean, remark?: string): Promise<boolean> {
-        return this.requireClient("handleFriendRequest").setFriendAddRequest(flag, approve, remark);
+    async handleFriendRequest(
+        flag: string,
+        approve: boolean,
+        remark?: string,
+        block?: boolean,
+    ): Promise<boolean> {
+        return this.requireClient("handleFriendRequest").setFriendAddRequest(
+            flag,
+            approve,
+            remark,
+            block,
+        );
     }
 
     /**
      * 删除好友
      */
-    async deleteFriend(userId: number): Promise<boolean> {
-        return this.requireClient("deleteFriend").deleteFriend(userId);
+    async deleteFriend(userId: number, block?: boolean): Promise<boolean> {
+        return this.requireClient("deleteFriend").deleteFriend(userId, block);
     }
 
     // ============================================

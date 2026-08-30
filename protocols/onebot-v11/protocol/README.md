@@ -176,6 +176,8 @@ onebots 主动连接到配置的 WebSocket 地址。
 
 两个好友申请 API 的 `flag` 都必须原样取自对应 `request.friend` 事件，不能使用好友 QQ 号或自行生成的请求 ID 代替。标准 API 可通过 `approve` 同意或拒绝；便捷扩展固定为同意。
 
+ICQQ 等支持黑名单语义的适配器可在 `set_friend_add_request`、`set_group_add_request` 中传入可选布尔参数 `block`；拒绝请求时会同时阻止后续申请。不支持该原生语义的平台必须显式拒绝 `block: true`，不会静默忽略。
+
 `set_group_anonymous` 与 `set_group_anonymous_ban` 会在 ICQQ 等原生支持的平台调用真实能力；`enable` 只接受布尔值，避免字符串等 truthy 值被错误转换。
 
 ### 获取信息 API

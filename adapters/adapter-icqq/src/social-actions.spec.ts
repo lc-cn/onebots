@@ -109,9 +109,30 @@ describe("ICQQ 账号资料动作", () => {
         await actions.handleFriendRequest("bot", {
             initiator_uid: "u_requester",
             is_filtered: false,
-            approve: true,
+            approve: false,
+            block: true,
         });
-        expect(handleFriendRequest).toHaveBeenCalledWith("opaque-flag", true, undefined);
+        expect(handleFriendRequest).toHaveBeenCalledWith("opaque-flag", false, undefined, true);
+
+        await expect(
+            actions.handleFriendRequest("bot", {
+                flag: "opaque-flag",
+                approve: true,
+                block: true,
+            }),
+        ).rejects.toMatchObject({ code: "ICQQ_INVALID_PARAM" });
+    });
+
+    it("删除好友时透传 ICQQ 原生黑名单语义", async () => {
+        const deleteFriend = vi.fn().mockResolvedValue(true);
+        const actions = createActions({ deleteFriend } as unknown as Client);
+        Object.defineProperty(actions, "numericId", {
+            value: (value: string) => Number(value),
+        });
+
+        await actions.deleteFriend("bot", { user_id: id(10001), block: true });
+
+        expect(deleteFriend).toHaveBeenCalledWith(10001, true);
     });
 
     it("设置昵称与个性签名时校验原生结果", async () => {

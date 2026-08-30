@@ -1,14 +1,17 @@
 import type { Adapter, CommonTypes } from "onebots";
+import { AUXILIARY_TOOL_REGISTRY } from "./auxiliary-tools.js";
+import type { ToolEntry } from "./tool-registry.js";
 import type { McpTool, McpToolCallResult } from "./types.js";
 
-interface ToolEntry {
-    description: string;
-    inputSchema: McpTool["inputSchema"];
-    handler: (adapter: Adapter, uin: string, args: Record<string, unknown>) => Promise<unknown>;
-}
-
-function toBool(v: unknown): boolean {
-    return v === true || v === "true" || v === "1";
+function booleanArg(
+    args: Record<string, unknown>,
+    key: string,
+    required = true,
+): boolean | undefined {
+    const value = args[key];
+    if (value === undefined && !required) return undefined;
+    if (typeof value !== "boolean") throw new TypeError(`${key} 必须是布尔值`);
+    return value;
 }
 
 const TOOL_REGISTRY: Record<string, ToolEntry> = {
@@ -144,16 +147,18 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
             type: "object",
             properties: {
                 flag: { type: "string", description: "请求标识" },
-                approve: { type: "string", description: "是否同意", enum: ["true", "false"] },
+                approve: { type: "boolean", description: "是否同意" },
                 remark: { type: "string", description: "备注名（同意时可选）" },
+                block: { type: "boolean", description: "拒绝时是否同时加入黑名单" },
             },
             required: ["flag", "approve"],
         },
         async handler(adapter, uin, args) {
             await adapter.handleFriendRequest(uin, {
                 flag: String(args.flag),
-                approve: toBool(args.approve),
+                approve: booleanArg(args, "approve") ?? false,
                 remark: args.remark ? String(args.remark) : undefined,
+                block: booleanArg(args, "block", false),
             });
             return { ok: true };
         },
@@ -163,11 +168,17 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
         description: "删除好友",
         inputSchema: {
             type: "object",
-            properties: { user_id: { type: "string", description: "好友用户 ID" } },
+            properties: {
+                user_id: { type: "string", description: "好友用户 ID" },
+                block: { type: "boolean", description: "删除后是否同时加入黑名单" },
+            },
             required: ["user_id"],
         },
         async handler(adapter, uin, args) {
-            await adapter.deleteFriend(uin, { user_id: adapter.resolveId(String(args.user_id)) });
+            await adapter.deleteFriend(uin, {
+                user_id: adapter.resolveId(String(args.user_id)),
+                block: booleanArg(args, "block", false),
+            });
             return { ok: true };
         },
     },
@@ -289,9 +300,8 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
                 group_id: { type: "string", description: "群 ID" },
                 user_id: { type: "string", description: "要踢出的用户 ID" },
                 reject_add_request: {
-                    type: "string",
+                    type: "boolean",
                     description: "是否拒绝再次加群",
-                    enum: ["true", "false"],
                 },
             },
             required: ["group_id", "user_id"],
@@ -300,7 +310,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
             await adapter.kickGroupMember(uin, {
                 group_id: adapter.resolveId(String(args.group_id)),
                 user_id: adapter.resolveId(String(args.user_id)),
-                reject_add_request: toBool(args.reject_add_request),
+                reject_add_request: booleanArg(args, "reject_add_request", false),
             });
             return { ok: true };
         },
@@ -334,9 +344,8 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
             properties: {
                 group_id: { type: "string", description: "群 ID" },
                 enable: {
-                    type: "string",
+                    type: "boolean",
                     description: "是否开启全员禁言",
-                    enum: ["true", "false"],
                 },
             },
             required: ["group_id", "enable"],
@@ -344,7 +353,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
         async handler(adapter, uin, args) {
             await adapter.muteGroupAll(uin, {
                 group_id: adapter.resolveId(String(args.group_id)),
-                enable: toBool(args.enable),
+                enable: booleanArg(args, "enable") ?? false,
             });
             return { ok: true };
         },
@@ -357,7 +366,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
             properties: {
                 group_id: { type: "string", description: "群 ID" },
                 user_id: { type: "string", description: "用户 ID" },
-                enable: { type: "string", description: "是否设为管理员", enum: ["true", "false"] },
+                enable: { type: "boolean", description: "是否设为管理员" },
             },
             required: ["group_id", "user_id", "enable"],
         },
@@ -365,7 +374,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
             await adapter.setGroupAdmin(uin, {
                 group_id: adapter.resolveId(String(args.group_id)),
                 user_id: adapter.resolveId(String(args.user_id)),
-                enable: toBool(args.enable),
+                enable: booleanArg(args, "enable") ?? false,
             });
             return { ok: true };
         },
@@ -399,8 +408,9 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
             properties: {
                 flag: { type: "string", description: "请求标识" },
                 type: { type: "string", description: "请求类型", enum: ["request", "invitation"] },
-                approve: { type: "string", description: "是否同意", enum: ["true", "false"] },
+                approve: { type: "boolean", description: "是否同意" },
                 reason: { type: "string", description: "拒绝理由（拒绝时可选）" },
+                block: { type: "boolean", description: "拒绝时是否阻止后续申请" },
             },
             required: ["flag", "type", "approve"],
         },
@@ -408,168 +418,15 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
             await adapter.handleGroupRequest(uin, {
                 flag: String(args.flag),
                 type: String(args.type) as "request" | "invitation",
-                approve: toBool(args.approve),
+                approve: booleanArg(args, "approve") ?? false,
                 reason: args.reason ? String(args.reason) : undefined,
+                block: booleanArg(args, "block", false),
             });
             return { ok: true };
         },
     },
 
-    // ---- 频道 / Guild ----
-    get_guild_list: {
-        description: "获取已加入的频道（Guild）列表",
-        inputSchema: { type: "object", properties: {} },
-        async handler(adapter, uin) {
-            const list = await adapter.getGuildList(uin);
-            return list.map(g => ({ guild_id: g.guild_id.string, guild_name: g.guild_name }));
-        },
-    },
-
-    get_guild_info: {
-        description: "获取频道（Guild）详情",
-        inputSchema: {
-            type: "object",
-            properties: { guild_id: { type: "string", description: "频道 ID" } },
-            required: ["guild_id"],
-        },
-        async handler(adapter, uin, args) {
-            const info = await adapter.getGuildInfo(uin, {
-                guild_id: adapter.resolveId(String(args.guild_id)),
-            });
-            return { guild_id: info.guild_id.string, guild_name: info.guild_name };
-        },
-    },
-
-    get_channel_list: {
-        description: "获取频道（Guild）下的子频道列表",
-        inputSchema: {
-            type: "object",
-            properties: { guild_id: { type: "string", description: "频道 ID" } },
-            required: ["guild_id"],
-        },
-        async handler(adapter, uin, args) {
-            const list = await adapter.getChannelList(uin, {
-                guild_id: adapter.resolveId(String(args.guild_id)),
-            });
-            return list.map(c => ({
-                channel_id: c.channel_id.string,
-                channel_name: c.channel_name,
-                channel_type: c.channel_type,
-            }));
-        },
-    },
-
-    get_channel_info: {
-        description: "获取子频道详情",
-        inputSchema: {
-            type: "object",
-            properties: { channel_id: { type: "string", description: "子频道 ID" } },
-            required: ["channel_id"],
-        },
-        async handler(adapter, uin, args) {
-            const info = await adapter.getChannelInfo(uin, {
-                channel_id: adapter.resolveId(String(args.channel_id)),
-            });
-            return {
-                channel_id: info.channel_id.string,
-                channel_name: info.channel_name,
-                channel_type: info.channel_type,
-            };
-        },
-    },
-
-    get_guild_member_info: {
-        description: "获取频道成员信息",
-        inputSchema: {
-            type: "object",
-            properties: {
-                guild_id: { type: "string", description: "频道 ID" },
-                user_id: { type: "string", description: "用户 ID" },
-            },
-            required: ["guild_id", "user_id"],
-        },
-        async handler(adapter, uin, args) {
-            const info = await adapter.getGuildMemberInfo(uin, {
-                guild_id: adapter.resolveId(String(args.guild_id)),
-                user_id: adapter.resolveId(String(args.user_id)),
-            });
-            return {
-                user_id: info.user_id.string,
-                user_name: info.user_name,
-                nickname: info.nickname,
-                role: info.role,
-            };
-        },
-    },
-
-    get_channel_member_list: {
-        description: "获取子频道成员列表",
-        inputSchema: {
-            type: "object",
-            properties: { channel_id: { type: "string", description: "子频道 ID" } },
-            required: ["channel_id"],
-        },
-        async handler(adapter, uin, args) {
-            const list = await adapter.getChannelMemberList(uin, {
-                channel_id: adapter.resolveId(String(args.channel_id)),
-            });
-            return list.map(m => ({
-                user_id: m.user_id.string,
-                user_name: m.user_name,
-                role: m.role,
-            }));
-        },
-    },
-
-    // ---- 文件 ----
-    upload_file: {
-        description: "上传文件（图片/视频/语音/文件）",
-        inputSchema: {
-            type: "object",
-            properties: {
-                scene_type: { type: "string", description: "场景类型", enum: ["group", "private"] },
-                scene_id: { type: "string", description: "场景 ID" },
-                name: { type: "string", description: "文件名" },
-                url: { type: "string", description: "文件 URL" },
-            },
-            required: ["scene_type", "scene_id", "name", "url"],
-        },
-        async handler(adapter, uin, args) {
-            const info = await adapter.uploadFile(uin, {
-                scene_type: String(args.scene_type) as CommonTypes.Scene,
-                scene_id: adapter.resolveId(String(args.scene_id)),
-                name: String(args.name),
-                url: String(args.url),
-            });
-            return { file_id: info.file_id.string, file_name: info.file_name, url: info.url };
-        },
-    },
-
-    // ---- 系统 ----
-    get_supported_actions: {
-        description: "获取当前平台支持的 API 列表",
-        inputSchema: { type: "object", properties: {} },
-        async handler(adapter, uin) {
-            return adapter.getSupportedActions(uin);
-        },
-    },
-
-    get_status: {
-        description: "获取当前机器人运行状态",
-        inputSchema: { type: "object", properties: {} },
-        async handler(adapter, uin) {
-            const status = await adapter.getStatus(uin);
-            return { online: status.online, good: status.good };
-        },
-    },
-
-    get_version: {
-        description: "获取实现版本信息",
-        inputSchema: { type: "object", properties: {} },
-        async handler(adapter, uin) {
-            return await adapter.getVersion(uin);
-        },
-    },
+    ...AUXILIARY_TOOL_REGISTRY,
 };
 
 // ============ 对外接口 ============
@@ -593,8 +450,8 @@ export async function executeTool(
     try {
         const result = await entry.handler(adapter, accountId, args);
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
         return { content: [{ type: "text", text: `错误: ${message}` }], isError: true };
     }
 }

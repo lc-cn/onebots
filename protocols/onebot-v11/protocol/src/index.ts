@@ -606,6 +606,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
             flag,
             approve,
             remark: typeof params.remark === "string" ? params.remark : undefined,
+            block: params.block === undefined ? undefined : requireBooleanParam(params, "block"),
         });
         return {};
     }
@@ -620,6 +621,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
             sub_type: subType,
             approve,
             reason: typeof params.reason === "string" ? params.reason : undefined,
+            block: params.block === undefined ? undefined : requireBooleanParam(params, "block"),
         });
     }
 

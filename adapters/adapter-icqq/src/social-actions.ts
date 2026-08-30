@@ -306,6 +306,9 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         const bot = this.requireBot(uin);
         if (params.is_filtered) throw invalidICQQParam("ICQQ 不支持处理风险过滤好友申请");
         if (!params.approve && params.reason) throw invalidICQQParam("ICQQ 不支持发送好友拒绝理由");
+        if (params.approve && params.block) {
+            throw invalidICQQParam("同意好友申请时不能同时加入黑名单");
+        }
 
         let flag = params.flag ?? params.request_id?.string;
         if (params.initiator_uid) {
@@ -319,7 +322,12 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         }
         if (!flag) throw icqqResourceNotFound("好友申请", params.request_id?.string);
 
-        const accepted = await bot.handleFriendRequest(flag, params.approve, params.remark);
+        const accepted = await bot.handleFriendRequest(
+            flag,
+            params.approve,
+            params.remark,
+            params.block,
+        );
         if (!accepted) {
             throw icqqOperationRejected(`${params.approve ? "同意" : "拒绝"}好友申请`);
         }
@@ -328,6 +336,7 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
     async deleteFriend(uin: string, params: Adapter.DeleteFriendParams): Promise<void> {
         const accepted = await this.requireNativeClient(uin).deleteFriend(
             this.numericId(params.user_id.string, "user_id"),
+            params.block,
         );
         this.assertNativeAccepted(accepted, "删除好友");
     }

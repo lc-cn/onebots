@@ -161,6 +161,8 @@ declare module "./adapter.js" {
         }
         export interface DeleteFriendParams {
             user_id: CommonTypes.Id;
+            /** 删除好友后同时加入黑名单；不支持该语义的平台必须显式拒绝 true。 */
+            block?: boolean;
         }
         export interface SendFriendNudgeParams {
             user_id: CommonTypes.Id;
@@ -183,6 +185,8 @@ declare module "./adapter.js" {
             approve: boolean;
             remark?: string;
             reason?: string;
+            /** 拒绝申请时同时加入黑名单；不支持该语义的平台必须显式拒绝 true。 */
+            block?: boolean;
         }
         export interface FriendInfo {
             user_id: CommonTypes.Id;
@@ -292,6 +296,8 @@ declare module "./adapter.js" {
             type: "request" | "invitation";
             approve: boolean;
             reason?: string;
+            /** 拒绝申请时同时阻止后续申请；不支持该语义的平台必须显式拒绝 true。 */
+            block?: boolean;
         }
         export interface GetGroupNotificationsParams {
             start_notification_id?: CommonTypes.Id;
