@@ -12,11 +12,11 @@ describe("微信公众号配置 Schema", () => {
         expect(wechatSchema.token?.required).not.toBe(true);
         expect(wechatSchema.token?.ui?.visibleWhen).toEqual({
             path: "receive_mode",
-            oneOf: ["webhook", "manual"],
+            oneOf: ["webhook"],
         });
         expect(wechatSchema.encoding_aes_key?.ui?.visibleWhen).toEqual({
             path: "receive_mode",
-            oneOf: ["webhook", "manual"],
+            oneOf: ["webhook"],
         });
         expect(wechatSchema.webhook_path?.ui?.visibleWhen).toEqual({
             path: "receive_mode",

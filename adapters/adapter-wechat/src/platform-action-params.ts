@@ -48,7 +48,7 @@ export function tagUsers(
 ): Promise<unknown> {
     return post(client, path, {
         openid_list: requireStringArray(params, "openids"),
-        tagid: requireNumber(params, "tag_id"),
+        tagid: requireInteger(params, "tag_id"),
     });
 }
 
@@ -135,6 +135,19 @@ export function requireNumber(params: WechatActionParams, name: string): number 
     return value;
 }
 
+export function requireInteger(
+    params: WechatActionParams,
+    name: string,
+    min = 0,
+    max = Number.MAX_SAFE_INTEGER,
+): number {
+    const value = requireNumber(params, name);
+    if (!Number.isSafeInteger(value) || value < min || value > max) {
+        invalid(`${name} 必须是 ${min} 到 ${max} 的安全整数`);
+    }
+    return value;
+}
+
 export function optionalBoolean(params: WechatActionParams, name: string): boolean | undefined {
     return typeof params[name] === "boolean" ? params[name] : undefined;
 }
@@ -142,6 +155,20 @@ export function optionalBoolean(params: WechatActionParams, name: string): boole
 export function optionalNumber(params: WechatActionParams, name: string): number | undefined {
     const value = params[name];
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+export function optionalInteger(
+    params: WechatActionParams,
+    name: string,
+    min = 0,
+    max = Number.MAX_SAFE_INTEGER,
+): number | undefined {
+    const value = params[name];
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) {
+        invalid(`${name} 必须是 ${min} 到 ${max} 的安全整数`);
+    }
+    return value;
 }
 
 export function requireStringArray(params: WechatActionParams, name: string): string[] {

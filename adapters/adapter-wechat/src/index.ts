@@ -18,6 +18,7 @@ export { messageMediaType, prepareWechatMediaSegments, uploadWechatMedia } from 
 export type { WechatMediaType } from "./media.js";
 export { compileWechatMessages } from "./messages.js";
 export { WECHAT_CUSTOMER_SERVICE_ACTIONS } from "./platform-actions-customer-service.js";
+export { WECHAT_CONTENT_ACTIONS } from "./platform-actions-content.js";
 export {
     executeWechatPlatformAction,
     WECHAT_PLATFORM_ACTIONS,
@@ -84,7 +85,7 @@ export const wechatSchema: Schema = {
         description: "须与公众平台服务器配置中的 Token 完全一致",
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
         },
     },
     receive_mode: {
@@ -107,7 +108,7 @@ export const wechatSchema: Schema = {
         description: "安全模式或兼容模式使用的 43 位消息加解密密钥",
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
         },
     },
     webhook_path: {

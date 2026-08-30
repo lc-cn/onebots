@@ -27,7 +27,7 @@ describe("微信公众号平台动作", () => {
             body: { value: 1 },
         });
         expect(call).toHaveBeenCalledWith(expect.objectContaining({ path: "/cgi-bin/new/action" }));
-        expect(WECHAT_PLATFORM_ACTIONS.size).toBe(79);
+        expect(WECHAT_PLATFORM_ACTIONS.size).toBe(88);
         expect(WECHAT_PLATFORM_ACTIONS.has("publish_draft")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("mass_send_by_tag")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("get_wechat_user_info")).toBe(true);
@@ -36,6 +36,22 @@ describe("微信公众号平台动作", () => {
         expect(WECHAT_PLATFORM_ACTIONS.has("get_api_quota")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("get_api_request_details")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("clear_api_quota_by_app_secret")).toBe(true);
+    });
+
+    it("命名动作拒绝静默忽略未知参数，低层调用仍可显式扩展", async () => {
+        const call = vi.fn().mockResolvedValue({ ok: true });
+        const client = { call } as unknown as WechatClient;
+        await expect(
+            executeWechatPlatformAction(client, "get_menu", { unexpected: true }),
+        ).rejects.toMatchObject({
+            code: "WECHAT_ACTION_PARAM_UNKNOWN",
+            details: { action: "get_menu", parameter: "unexpected" },
+        });
+        await executeWechatPlatformAction(client, "wechat_call", {
+            path: "/cgi-bin/future/action",
+            body: { future_field: true },
+        });
+        expect(call).toHaveBeenCalledOnce();
     });
 
     it("跨领域分派素材动作并保留未知动作错误", async () => {

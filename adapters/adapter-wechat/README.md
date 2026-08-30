@@ -27,7 +27,7 @@ https://bot.example.com/wechat/my_mp/webhook
 
 默认路径为 `/wechat/{account_id}/webhook`，可用 `webhook_path` 覆盖。`token` 与 `encoding_aes_key` 必须和公众平台配置一致。
 
-如事件已由既有 HTTP Host、消息队列或测试夹具接收，可改用 `receive_mode: manual`。此时适配器不注册 Webhook 路由。将已验证并解析的 `WechatIncomingMessage` 交给 `WechatClient.ingest()` 时不要求回调 `token`；若现有 Host 要复用 `WechatWebhookHost.acceptHttp(Request|ctx)` 的验签、解密和被动回复编码，则仍需配置 Token/AES Key，Web 表单会在 manual 模式提供。Webhook 与 manual 共用 Client 内的稳定身份、进行中合并、去重和 typed 分发；无损、分类与精确事件视图的同步或异步监听器都会完成尝试，任一失败都不会污染去重状态。`onEvent(name, listener)` 可按微信原生 `Event` 精确订阅，并返回取消订阅函数。
+如事件已由既有 HTTP Host、消息队列或测试夹具完成验签和解析，可改用 `receive_mode: manual`。此时适配器不注册 Webhook 路由，Web 表单也会隐藏仅用于回调验签/解密的 Token、AES Key 与路径。将 `WechatIncomingMessage` 交给 `WechatClient.ingest()` 不要求回调凭据；需要复用 `WechatWebhookHost.acceptHttp(Request|ctx)` 完成验签、解密和被动回复编码时，应使用包含 Token/AES Key 的 webhook 配置独立构造 Host。Webhook 与 manual 共用 Client 内的稳定身份、进行中合并、去重和 typed 分发；无损、分类与精确事件视图的同步或异步监听器都会完成尝试，任一失败都不会污染去重状态。`onEvent(name, listener)` 可按微信原生 `Event` 精确订阅，并返回取消订阅函数。
 
 ## 消息
 
@@ -53,7 +53,7 @@ await adapter.sendMessage("my_mp", {
 常用能力通过 `callAction(accountId, action, params)` 暴露，包括：
 
 - 用户、标签、黑名单与备注；
-- 临时/永久素材、草稿与发布；
+- 临时/永久素材、草稿、发布文章与留言生命周期；
 - 普通/个性化菜单、二维码；
 - 模板消息、客服输入状态与群发；
 - API 配额查询/清理、RID 请求诊断、API 域名与回调 IP 查询。
@@ -74,6 +74,8 @@ await adapter.callAction("my_mp", "wechat_call", {
   body: { button: [] },
 });
 ```
+
+所有命名动作只接受文档约定的顶层参数，拼错或过期字段会返回 `WECHAT_ACTION_PARAM_UNKNOWN`；复杂的菜单、草稿和群发 payload 仍在对应对象参数中无损传递。微信新增字段尚未进入命名动作时，应通过 `wechat_call` 显式调用，避免配置错误被静默吞掉。
 
 路径必须以 `/` 开头，查询参数必须通过 `query` 提供；适配器拒绝绝对 URL、路径穿越、内嵌 query/fragment。access token 使用微信稳定版 `/cgi-bin/stable_token`，普通刷新不会使其他进程正在使用的凭据失效；平台报告凭据失效时才执行一次强制刷新和重试，迟到的旧请求不会清空已经刷新的 token。
 
