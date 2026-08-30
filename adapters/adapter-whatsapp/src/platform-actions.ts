@@ -14,6 +14,7 @@ import { WHATSAPP_COMMERCE_ACTION_HANDLERS } from "./commerce.js";
 import { WHATSAPP_QR_CODE_ACTION_HANDLERS } from "./qr-codes.js";
 import { WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS } from "./message-templates.js";
 import { WHATSAPP_FLOW_ACTION_HANDLERS } from "./flows.js";
+import { WHATSAPP_BLOCKED_USER_ACTION_HANDLERS } from "./blocked-users.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -40,6 +41,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_QR_CODE_ACTION_HANDLERS,
     ...WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS,
     ...WHATSAPP_FLOW_ACTION_HANDLERS,
+    ...WHATSAPP_BLOCKED_USER_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>
@@ -55,16 +57,6 @@ const ACTION_HANDLERS = {
         return { ...info, data: data.toString("base64") };
     },
     delete_media: (client, params) => client.deleteMedia(requireString(params, "media_id")),
-    block_user: (client, params) => blockedUser(client, "POST", params),
-    unblock_user: (client, params) => blockedUser(client, "DELETE", params),
-    list_blocked_users: (client, params) =>
-        client.call({
-            resource: `${client.config.phone_number_id}/block_users`,
-            query: {
-                limit: optionalNumber(params, "limit"),
-                after: optionalString(params, "after"),
-            },
-        }),
 } satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
@@ -134,21 +126,6 @@ async function uploadMedia(
     );
 }
 
-function blockedUser(
-    client: WhatsAppClient,
-    method: "POST" | "DELETE",
-    params: Readonly<Record<string, unknown>>,
-): Promise<unknown> {
-    return client.call({
-        method,
-        resource: `${client.config.phone_number_id}/block_users`,
-        body: {
-            messaging_product: "whatsapp",
-            block_users: [{ user: requireString(params, "user_id") }],
-        },
-    });
-}
-
 function requireString(params: Readonly<Record<string, unknown>>, name: string): string {
     const value = params[name];
     if (typeof value !== "string" || !value) invalidParameter(`${name} 必须是非空字符串`);
@@ -169,14 +146,6 @@ function optionalBoolean(
 ): boolean | undefined {
     const value = params[name];
     return typeof value === "boolean" ? value : undefined;
-}
-
-function optionalNumber(
-    params: Readonly<Record<string, unknown>>,
-    name: string,
-): number | undefined {
-    const value = params[name];
-    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function requireRecord(

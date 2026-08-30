@@ -50,6 +50,7 @@ import {
 } from "./qr-codes.js";
 import { WhatsAppMessageTemplates } from "./message-templates.js";
 import { WhatsAppFlows } from "./flows.js";
+import { WhatsAppBlockedUsers } from "./blocked-users.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -110,6 +111,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly messageTemplates: WhatsAppMessageTemplates;
     /** WABA 级 Flow 生命周期、资产、迁移、预览与指标。 */
     readonly flows: WhatsAppFlows;
+    /** Phone Number 级批量用户封禁控制面。 */
+    readonly blockedUsers: WhatsAppBlockedUsers;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -132,6 +135,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.qrCodes = new WhatsAppQrCodes(this);
         this.messageTemplates = new WhatsAppMessageTemplates(this);
         this.flows = new WhatsAppFlows(this);
+        this.blockedUsers = new WhatsAppBlockedUsers(this);
     }
 
     get apiVersion(): string {

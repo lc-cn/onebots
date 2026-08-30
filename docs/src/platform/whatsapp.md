@@ -61,7 +61,9 @@ const message = [{
 
 ## 平台动作
 
-常用动作包括 `send_native_message`、`mark_message_read`、`upload_media`、`download_media`、Business Profile、Commerce、Flow 生命周期、`block_user` 和消息模板管理。Groups API 另有 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message`。`get_supported_actions` 会返回当前完整清单及资格要求。
+常用动作包括 `send_native_message`、`mark_message_read`、`upload_media`、`download_media`、Business Profile、Commerce、Flow 生命周期、批量 `block_users` / `unblock_users` 和消息模板管理。Groups API 另有 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message`。`get_supported_actions` 会返回当前完整清单及资格要求。
+
+用户封禁由 `client.blockedUsers` 管理，使用 E.164 号码数组批量操作。返回值保留每个输入号码与 Meta 规范化 `wa_id` 的对应关系；列表响应和游标分页也会在边界校验。
 
 Calling API 使用 `get_call_permissions` / `request_call_permission` 与 `connect_call`、`pre_accept_call`、`accept_call`、`reject_call`、`terminate_call`。适配器严格区分 offer、answer 和 `call_id`，但不负责 WebRTC/SIP 媒体传输。调用前需要 Meta 为当前 Phone Number 开通 Cloud API Calling，并具备 `whatsapp_business_messaging` 权限。
 

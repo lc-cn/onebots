@@ -51,6 +51,8 @@ Message templates are managed through `client.messageTemplates`, with fixed acti
 
 Flows are managed through `client.flows` instead of loose Graph payload forwarding. The module covers multipart creation and metadata updates, cross-WABA migration, controlled field projections, preview invalidation, endpoint metrics, Flow JSON upload and asset listing, plus publish, deprecate, and delete lifecycle transitions. Categories, fields, metric expressions, responses, and JSON serializability are validated at the seam.
 
+Blocked users are managed through `client.blockedUsers` and the bulk `block_users` / `unblock_users` actions. Inputs are deduplicated E.164 arrays, mutation responses retain Meta's normalized `wa_id` mapping, and list pagination is structurally validated.
+
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 
 References: [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/), [Meta official Postman workspace](https://www.postman.com/meta/whatsapp-business-platform/overview/).

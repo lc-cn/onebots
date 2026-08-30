@@ -110,6 +110,8 @@ Flow 通过强类型 `client.flows` 管理。固定动作覆盖列表、multipar
 
 消息模板通过 `client.messageTemplates` 管理，并提供列表、按 ID 查询、namespace、创建、编辑、按名称删除全部语言和按 ID 删除单一模板的固定动作。查询 `fields` 使用受限数组；模板顶层字段闭合，名称、locale、category、状态和分页响应均会校验。组件必须包含 `type`，其余 OTP、Flow、Catalog、MPM、媒体 handle 等平台字段使用递归可序列化 JSON 扩展面，循环引用、危险键、非有限数字和不可序列化值会在请求前被拒绝。
 
+用户封禁通过 `client.blockedUsers` 管理。`block_users` / `unblock_users` 接受去重后的 E.164 数组并保留 Meta 返回的输入号码到规范化 `wa_id` 映射；`list_blocked_users` 返回经过校验的用户与分页游标。单数动作不再存在，避免隐藏平台原生的批处理语义。
+
 Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message` 等固定动作。标准 `send_message`、群资料、群成员、改名、邀请/移除成员和 `handle_group_request` 也复用同一实现。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
 
 Calling API 提供 `get_call_permissions`、`request_call_permission`、`connect_call`、`pre_accept_call`、`accept_call`、`reject_call` 与 `terminate_call` 固定动作，也可直接使用 `client.calling` 获得完整类型。呼叫权限申请通过原生 `interactive.call_permission_request` 消息发送；`connect` 使用 offer SDP，`accept` 使用 answer SDP，`terminate` 使用 Meta 返回的 `call_id`。此模块只负责权限和呼叫信令，不会伪装成 WebRTC/SIP 媒体实现；媒体会话、ICE 与音频传输由调用方负责。当前 Phone Number 必须先获准启用 Cloud API Calling。

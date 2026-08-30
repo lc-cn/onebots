@@ -18,6 +18,7 @@ import { isWhatsAppCommerceAction } from "./commerce.js";
 import { isWhatsAppQrCodeAction } from "./qr-codes.js";
 import { isWhatsAppMessageTemplateAction } from "./message-templates.js";
 import { isWhatsAppFlowAction } from "./flows.js";
+import { isWhatsAppBlockedUserAction } from "./blocked-users.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -47,7 +48,6 @@ const callingAccess = {
     note: "要求当前 Phone Number 已开通 Cloud API Calling；这里只提供权限与信令控制，媒体平面由调用方实现",
 };
 
-const businessMessagingActions = new Set(["block_user", "unblock_user", "list_blocked_users"]);
 const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIONS, action => {
     if (isWhatsAppGroupAction(action)) return groupsAccess;
     if (isWhatsAppCallingAction(action)) return callingAccess;
@@ -63,7 +63,7 @@ const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIO
     if (isWhatsAppQrCodeAction(action)) return businessManagement;
     if (isWhatsAppMessageTemplateAction(action)) return businessManagement;
     if (isWhatsAppFlowAction(action)) return businessManagement;
-    if (businessMessagingActions.has(action)) return businessMessaging;
+    if (isWhatsAppBlockedUserAction(action)) return businessMessaging;
     if (action === "send_native_message" || action === "mark_message_read") {
         return { support: "native", scenes: ["private", "group"] };
     }

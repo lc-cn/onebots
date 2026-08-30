@@ -156,6 +156,19 @@ export {
     type WhatsAppFlowValidationError,
 } from "./flow-types.js";
 export {
+    isWhatsAppBlockedUserAction,
+    WhatsAppBlockedUsers,
+    WHATSAPP_BLOCKED_USER_ACTIONS,
+    type WhatsAppBlockedUser,
+    type WhatsAppBlockedUserAction,
+    type WhatsAppBlockedUserListQuery,
+    type WhatsAppBlockedUserListResponse,
+    type WhatsAppBlockedUserOperation,
+    type WhatsAppBlockedUserPaging,
+    type WhatsAppBlockUsersResponse,
+    type WhatsAppUnblockUsersResponse,
+} from "./blocked-users.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,

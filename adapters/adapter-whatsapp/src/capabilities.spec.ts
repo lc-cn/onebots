@@ -26,7 +26,7 @@ describe("WhatsApp 能力清单", () => {
         expect(whatsAppCapabilities.actions.create_flow?.permissions).toEqual([
             "whatsapp_business_management",
         ]);
-        expect(whatsAppCapabilities.actions.block_user?.permissions).toEqual([
+        expect(whatsAppCapabilities.actions.block_users?.permissions).toEqual([
             "whatsapp_business_messaging",
         ]);
         expect(whatsAppCapabilities.actions.connect_call).toMatchObject({
