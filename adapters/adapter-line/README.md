@@ -106,6 +106,8 @@ Audience 动作会在请求发出前闭合官方参数：JSON 上传要求 1 到
 
 Rich Menu 与 Coupon 动作使用共用的精确参数入口。图片只接受规范 Base64 编码、文件签名匹配的 PNG/JPEG 且不超过 1 MB；alias 遵循官方 1 到 32 位字符集；批量用户关联限制为 1 到 500 个不重复 ID。无参数动作以及 Coupon 查询同样拒绝多余字段，Coupon 创建必须显式提供 `coupon` 对象。
 
+消息动作同样采用精确参数契约：重试键使用 UUID，`multicast` 最多接收 500 个不重复用户，聚合单位只能有 1 个且不超过 30 字符，loading 时长为 5 到 60 秒并以 5 秒递增，投递统计日期使用有效的 `yyyyMMdd`。分页 `limit` 对调用者统一使用整数；`get_room_member_list` 会拉取全部页面并拒绝重复游标。
+
 ## 官方限制
 
 - LINE 不提供机器人撤回已发送消息的 API；`deleteMessage` 会返回结构化“不支持”错误。
