@@ -3,6 +3,7 @@ import { WhatsAppApiError } from "./errors.js";
 import { WHATSAPP_GROUP_ACTIONS, type WhatsAppGroupAction } from "./groups.js";
 import { WHATSAPP_CALLING_ACTION_HANDLERS } from "./calling.js";
 import { WHATSAPP_HISTORY_ACTION_HANDLERS } from "./history.js";
+import { WHATSAPP_SETTINGS_ACTION_HANDLERS } from "./settings.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -18,6 +19,7 @@ const ACTION_HANDLERS = {
     ...GROUP_ACTION_HANDLERS,
     ...WHATSAPP_CALLING_ACTION_HANDLERS,
     ...WHATSAPP_HISTORY_ACTION_HANDLERS,
+    ...WHATSAPP_SETTINGS_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>

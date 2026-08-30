@@ -17,6 +17,7 @@
 - Business Profile、Commerce、Flow 生命周期、号码注册、两步验证、用户屏蔽和消息模板管理
 - Calling API 权限查询/申请，以及 `connect`、`pre_accept`、`accept`、`reject`、`terminate` 信令控制
 - 消息投递历史：按 WAMID 查询状态、Webhook 更新结果与可完整遍历的事件时间线
+- 号码级设置：Calling/SIP/视频、身份变更通知、payload encryption 公钥与数据驻留
 - 通用 `whatsapp_call`，无需等待适配器升级即可调用新的 Graph API 资源
 - `ingest()`、`ingestHttp()` 与标准 `acceptHttp(Request)` 共用同一 typed 事件和去重链路
 
@@ -106,6 +107,8 @@ Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`�
 Calling API 提供 `get_call_permissions`、`request_call_permission`、`connect_call`、`pre_accept_call`、`accept_call`、`reject_call` 与 `terminate_call` 固定动作，也可直接使用 `client.calling` 获得完整类型。呼叫权限申请通过原生 `interactive.call_permission_request` 消息发送；`connect` 使用 offer SDP，`accept` 使用 answer SDP，`terminate` 使用 Meta 返回的 `call_id`。此模块只负责权限和呼叫信令，不会伪装成 WebRTC/SIP 媒体实现；媒体会话、ICE 与音频传输由调用方负责。当前 Phone Number 必须先获准启用 Cloud API Calling。
 
 消息历史通过 `list_message_history` 与 `list_message_history_events` 固定动作提供，也可使用 `client.history.list/listAll/listEvents/listAllEvents`。它保留投递状态、Webhook 更新状态、时间戳、应用与错误说明，并校验每一页的官方响应结构；完整遍历检测到重复 cursor 时会失败，不会返回看似成功的不完整列表。此能力是投递状态诊断接口，不是聊天内容归档或任意历史消息读取。
+
+号码设置使用 `get_phone_number_settings`、`update_calling_settings`、`update_user_identity_change_settings`、`update_payload_encryption_settings` 与 `update_storage_configuration_settings`，或直接使用强类型 `client.settings`。Meta 要求一次请求只能更新一个 feature，适配器为此提供独立方法并只发送对应字段；启用 payload encryption 时必须提供客户端公钥，关闭时不会携带密钥。读取 SIP 密码必须显式设置 `include_sip_credentials` 且由 Meta 权限控制，请避免记录该响应。
 
 ## 参考
 

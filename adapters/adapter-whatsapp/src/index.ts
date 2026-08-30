@@ -17,6 +17,12 @@ export {
     type WhatsAppHistoryAction,
 } from "./history.js";
 export { projectMessageContent, projectWhatsAppWebhook } from "./events.js";
+export {
+    isWhatsAppSettingsAction,
+    WhatsAppSettings,
+    WHATSAPP_SETTINGS_ACTIONS,
+    type WhatsAppSettingsAction,
+} from "./settings.js";
 export { isWhatsAppGroupWebhookEntry } from "./group-webhook.js";
 export { compileWhatsAppMessages } from "./messages.js";
 export {
@@ -37,6 +43,20 @@ export {
     type WhatsAppWebhookDelivery,
 } from "./webhook-routing.js";
 export type { WhatsAppHttpContext } from "./webhook-host.js";
+export type {
+    WhatsAppCallIconVisibility,
+    WhatsAppCallingSettings,
+    WhatsAppCallingSettingsUpdate,
+    WhatsAppFeatureStatus,
+    WhatsAppPayloadEncryptionSettings,
+    WhatsAppPayloadEncryptionUpdate,
+    WhatsAppPhoneNumberSettings,
+    WhatsAppSettingsUpdateResponse,
+    WhatsAppSipServer,
+    WhatsAppSrtpProtocol,
+    WhatsAppStorageConfigurationSettings,
+    WhatsAppStorageConfigurationUpdate,
+} from "./settings-types.js";
 export type {
     WhatsAppHistoryDeliveryStatus,
     WhatsAppHistoryEvent,
