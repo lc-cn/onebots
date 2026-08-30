@@ -104,7 +104,7 @@ await adapter.callAction("my_bot", "whatsapp_call", {
 
 `resource` 只能是相对 Graph API 路径，适配器拒绝绝对 URL，避免 Access Token 被发送到未配置域名。HTTP 和业务错误会抛出 `WhatsAppApiError`，其中保留 `code`、`status`、`resource` 与 Meta 错误详情。
 
-Flow 的 `list_flows`、`create_flow`、`get_flow`、`update_flow`、`delete_flow`、`publish_flow`、`deprecate_flow`，Commerce 设置，以及消息二维码的增查改删均提供固定资源动作；权限仍由 Meta 的 `whatsapp_business_management` scope 决定。
+Flow 的 `list_flows`、`create_flow`、`get_flow`、`update_flow`、`delete_flow`、`publish_flow`、`deprecate_flow`，Commerce 设置，以及消息二维码的增查改删均提供固定资源动作；权限仍由 Meta 的 `whatsapp_business_management` scope 决定。Commerce 也可通过强类型 `client.commerce` 使用，读取响应会校验官方 `data` 数组，更新仅接受购物车与目录可见性布尔字段，并拒绝空操作或任意附加参数。
 
 Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message` 等固定动作。标准 `send_message`、群资料、群成员、改名、邀请/移除成员和 `handle_group_request` 也复用同一实现。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
 

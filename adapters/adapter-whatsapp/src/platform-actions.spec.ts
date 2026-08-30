@@ -73,16 +73,15 @@ describe("WhatsApp 平台动作", () => {
     });
 
     it("使用显式布尔值更新 Commerce 设置", async () => {
-        const call = vi.fn().mockResolvedValue({ success: true });
-        await executeWhatsAppPlatformAction({ call, config } as never, "update_commerce_settings", {
+        const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ success: true }));
+        const client = new WhatsAppClient(config, fetcher);
+        await executeWhatsAppPlatformAction(client, "update_commerce_settings", {
             is_cart_enabled: false,
             is_catalog_visible: true,
         });
-        expect(call).toHaveBeenCalledWith({
-            method: "POST",
-            resource: "phone/whatsapp_commerce_settings",
-            query: { is_cart_enabled: false, is_catalog_visible: true },
-        });
+        expect(String(fetcher.mock.calls[0]?.[0])).toContain(
+            "/phone/whatsapp_commerce_settings?is_cart_enabled=false&is_catalog_visible=true",
+        );
     });
 
     it("用固定 Phone Number 资源管理消息二维码", async () => {
@@ -99,12 +98,9 @@ describe("WhatsApp 平台动作", () => {
     });
 
     it("Commerce 设置不能为空操作", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(
-            executeWhatsAppPlatformAction(
-                { call: vi.fn(), config } as never,
-                "update_commerce_settings",
-                {},
-            ),
+            executeWhatsAppPlatformAction(client, "update_commerce_settings", {}),
         ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
     });
 

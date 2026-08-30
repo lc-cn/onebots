@@ -10,6 +10,7 @@ import { WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS } from "./business-encrypt
 import { WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS } from "./business-profile.js";
 import { WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS } from "./business-compliance.js";
 import { WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS } from "./solution-migration.js";
+import { WHATSAPP_COMMERCE_ACTION_HANDLERS } from "./commerce.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -32,6 +33,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS,
     ...WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS,
     ...WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS,
+    ...WHATSAPP_COMMERCE_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>
@@ -39,14 +41,6 @@ const ACTION_HANDLERS = {
             requireString(params, "message_id"),
             optionalBoolean(params, "typing_indicator") || false,
         ),
-    get_commerce_settings: client =>
-        client.call({ resource: `${client.config.phone_number_id}/whatsapp_commerce_settings` }),
-    update_commerce_settings: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: `${client.config.phone_number_id}/whatsapp_commerce_settings`,
-            query: commerceSettings(params),
-        }),
     list_qr_codes: (client, params) =>
         client.call({
             method: "GET",
@@ -273,30 +267,6 @@ function optionalBoolean(
 ): boolean | undefined {
     const value = params[name];
     return typeof value === "boolean" ? value : undefined;
-}
-
-function commerceSettings(
-    params: Readonly<Record<string, unknown>>,
-): Record<string, boolean | undefined> {
-    const isCartEnabled = booleanParam(params, "is_cart_enabled");
-    const isCatalogVisible = booleanParam(params, "is_catalog_visible");
-    if (isCartEnabled === undefined && isCatalogVisible === undefined) {
-        invalidParameter("Commerce 设置至少需要 is_cart_enabled 或 is_catalog_visible");
-    }
-    return {
-        is_cart_enabled: isCartEnabled,
-        is_catalog_visible: isCatalogVisible,
-    };
-}
-
-function booleanParam(
-    params: Readonly<Record<string, unknown>>,
-    name: string,
-): boolean | undefined {
-    const value = params[name];
-    if (value === undefined) return undefined;
-    if (typeof value !== "boolean") invalidParameter(`${name} 必须是布尔值`);
-    return value;
 }
 
 function optionalNumber(

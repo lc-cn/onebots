@@ -46,6 +46,16 @@ export {
 export { whatsAppCapabilities } from "./capabilities.js";
 export { WhatsAppClient } from "./client.js";
 export {
+    isWhatsAppCommerceAction,
+    WhatsAppCommerce,
+    WHATSAPP_COMMERCE_ACTIONS,
+    type WhatsAppCommerceAction,
+    type WhatsAppCommerceSettingsEntry,
+    type WhatsAppCommerceSettingsResponse,
+    type WhatsAppCommerceSettingsUpdate,
+    type WhatsAppCommerceSettingsUpdateResponse,
+} from "./commerce.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,

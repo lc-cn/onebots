@@ -31,6 +31,12 @@ import {
     type WhatsAppSolutionMigrationRequest,
     type WhatsAppSolutionMigrationResponse,
 } from "./solution-migration.js";
+import {
+    WhatsAppCommerce,
+    type WhatsAppCommerceSettingsResponse,
+    type WhatsAppCommerceSettingsUpdate,
+    type WhatsAppCommerceSettingsUpdateResponse,
+} from "./commerce.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -83,6 +89,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly businessCompliance: WhatsAppBusinessCompliance;
     /** WABA Multi-Partner Solution 迁移意图控制面。 */
     readonly solutionMigration: WhatsAppSolutionMigration;
+    /** Phone Number 级 Commerce 显示与购物车设置。 */
+    readonly commerce: WhatsAppCommerce;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -101,6 +109,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.businessProfile = new WhatsAppBusinessProfiles(this);
         this.businessCompliance = new WhatsAppBusinessCompliance(this);
         this.solutionMigration = new WhatsAppSolutionMigration(this);
+        this.commerce = new WhatsAppCommerce(this);
     }
 
     get apiVersion(): string {
@@ -306,6 +315,16 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         request: WhatsAppSolutionMigrationRequest,
     ): Promise<WhatsAppSolutionMigrationResponse> {
         return this.solutionMigration.set(request);
+    }
+
+    getCommerceSettings(): Promise<WhatsAppCommerceSettingsResponse> {
+        return this.commerce.get();
+    }
+
+    updateCommerceSettings(
+        settings: WhatsAppCommerceSettingsUpdate,
+    ): Promise<WhatsAppCommerceSettingsUpdateResponse> {
+        return this.commerce.update(settings);
     }
 
     async uploadMedia(file: Blob, mimeType: string, filename = "upload"): Promise<{ id: string }> {

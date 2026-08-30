@@ -77,6 +77,8 @@ Flow/data-channel Business Encryption 使用 `client.businessEncryption` 或 `ge
 
 Business Profile 通过 `client.businessProfile` 与同名固定平台动作管理。读取字段使用可增减数组，更新只发送官方字段并校验长度、邮箱、HTTP(S) 网站和 vertical 枚举；头像字段使用 Resumable Upload API 产生的 `profile_picture_handle`。未知字段不会透传到 Meta。
 
+Commerce 设置由 `client.commerce` 或 `get_commerce_settings` / `update_commerce_settings` 管理。读取会校验官方 `data` 数组；更新只接受 `is_cart_enabled` 与 `is_catalog_visible` 布尔字段，至少设置一项，并拒绝未知字段。
+
 Business Compliance 通过 `client.businessCompliance` 以及 `get_business_compliance_info` / `update_business_compliance_info` 管理。读取字段是可增减数组；写入严格验证实体类型、法定名称、联系人邮箱与 E.164 电话，并落实 `OTHER` 自定义类型和 `is_registered` 的官方跨字段规则。平台动作的更新对象使用 `info` 字段，额外字段不会透传。
 
 Multi-Partner Solution 迁移由 `client.solutionMigration` 与 `get_migration_intent` / `set_solution_migration_intent` 提供。查询字段固定为官方 `id` / `status` 集合；设置请求放在 `request` 中，校验纯数字 solution ID、迁移意图枚举、500 字符原因和 ISO 8601 时间。适配器区分迁移实体状态与请求处理状态，避免错误类型推断。
