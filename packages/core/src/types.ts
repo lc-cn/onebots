@@ -46,11 +46,12 @@ export namespace CommonTypes {
         | "guild"
         | "channel"
         | "channel_folder"
+        | "navigation_view"
         | "role"
         | "emoji"
         | "user_group";
 
-    /** 通知所描述的 Guild、Channel、Channel Folder、Role、Emoji 或用户组资源。 */
+    /** 通知所描述的 Guild、Channel、Folder、Navigation View、Role、Emoji 或用户组资源。 */
     export interface Resource {
         type: ResourceType;
         id: Id;
@@ -140,6 +141,9 @@ export namespace CommonEvent {
         | "channel_folder_created"
         | "channel_folder_updated"
         | "channel_folders_reordered"
+        | "navigation_view_created"
+        | "navigation_view_updated"
+        | "navigation_view_removed"
         | "guild_role_created"
         | "guild_role_updated"
         | "guild_role_deleted"

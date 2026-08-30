@@ -281,6 +281,39 @@ export type ZulipChannelFolderEvent =
     | ZulipChannelFolderUpdateEvent
     | ZulipChannelFoldersReorderEvent;
 
+export interface ZulipNavigationView {
+    fragment: string;
+    is_pinned: boolean;
+    name?: string | null;
+}
+
+export interface ZulipNavigationViewAddEvent extends ZulipBaseEvent {
+    type: "navigation_view";
+    op: "add";
+    navigation_view: ZulipNavigationView;
+}
+
+export interface ZulipNavigationViewUpdateEvent extends ZulipBaseEvent {
+    type: "navigation_view";
+    op: "update";
+    fragment: string;
+    data: {
+        name?: string | null;
+        is_pinned?: boolean | null;
+    } & Record<string, unknown>;
+}
+
+export interface ZulipNavigationViewRemoveEvent extends ZulipBaseEvent {
+    type: "navigation_view";
+    op: "remove";
+    fragment: string;
+}
+
+export type ZulipNavigationViewEvent =
+    | ZulipNavigationViewAddEvent
+    | ZulipNavigationViewUpdateEvent
+    | ZulipNavigationViewRemoveEvent;
+
 export interface ZulipUserGroupEvent extends ZulipBaseEvent {
     type: "user_group";
     op:
@@ -398,6 +431,7 @@ export type ZulipEvent =
     | ZulipAlertWordsEvent
     | ZulipMutedUsersEvent
     | ZulipChannelFolderEvent
+    | ZulipNavigationViewEvent
     | ZulipUserGroupEvent
     | ZulipRealmEmojiAddEvent
     | ZulipRealmEmojiUpdateEvent

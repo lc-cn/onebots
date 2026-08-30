@@ -302,13 +302,16 @@ describe("ZulipClient", () => {
         );
         const subscription = vi.fn();
         const channelFolder = vi.fn();
+        const navigationView = vi.fn();
         client.on("subscription", subscription);
         client.on("channel_folder", channelFolder);
+        client.on("navigation_view", navigationView);
 
         await client.start();
         const registration = requests.find(request => request.path === "register");
         expect(registration?.params?.event_types).toContain("message");
         expect(registration?.params?.event_types).toContain("channel_folder");
+        expect(registration?.params?.event_types).toContain("navigation_view");
         expect(registration?.params?.event_types).toContain("heartbeat");
         expect(registration?.params?.event_types).toContain("restart");
         expect(registration?.params?.event_types).toContain("user_group");
@@ -335,9 +338,18 @@ describe("ZulipClient", () => {
             channel_folder_id: 2,
             data: { name: "Platform" },
         });
+        await client.ingest({
+            id: 4,
+            type: "navigation_view",
+            op: "remove",
+            fragment: "narrow/is/alerted",
+        });
         expect(subscription).toHaveBeenCalledOnce();
         expect(channelFolder).toHaveBeenCalledWith(
             expect.objectContaining({ op: "update", channel_folder_id: 2 }),
+        );
+        expect(navigationView).toHaveBeenCalledWith(
+            expect.objectContaining({ op: "remove", fragment: "narrow/is/alerted" }),
         );
         await client.stop();
     });

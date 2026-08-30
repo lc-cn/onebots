@@ -292,6 +292,61 @@ describe("Zulip 事件投影", () => {
         ).toMatchObject({ notice_type: "channel_folders_reordered" });
     });
 
+    it("投影 Navigation View 创建、更新与删除事件", () => {
+        expect(
+            projectZulipEvents(
+                {
+                    id: 25,
+                    type: "navigation_view",
+                    op: "add",
+                    navigation_view: {
+                        fragment: "narrow/is/alerted",
+                        is_pinned: true,
+                        name: "Alert Words",
+                    },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "navigation_view_created",
+            resource: {
+                type: "navigation_view",
+                id: { string: "narrow/is/alerted" },
+                name: "Alert Words",
+                is_pinned: true,
+            },
+        });
+        const updated = projectZulipEvents(
+            {
+                id: 26,
+                type: "navigation_view",
+                op: "update",
+                fragment: "narrow/is/alerted",
+                data: { name: null, is_pinned: false },
+            },
+            context,
+        )[0];
+        expect(updated).toMatchObject({
+            notice_type: "navigation_view_updated",
+            resource: { type: "navigation_view", is_pinned: false },
+        });
+        expect(updated?.type === "notice" ? updated.resource?.name : undefined).toBeUndefined();
+        expect(
+            projectZulipEvents(
+                {
+                    id: 27,
+                    type: "navigation_view",
+                    op: "remove",
+                    fragment: "narrow/is/alerted",
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "navigation_view_removed",
+            resource: { id: { string: "narrow/is/alerted" } },
+        });
+    });
+
     it("逐成员和子组拆分批量变化并生成稳定 ID", () => {
         const members = projectZulipEvents(
             {

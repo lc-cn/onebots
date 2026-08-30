@@ -1,4 +1,14 @@
 import { CommonEvent, type CommonTypes } from "onebots";
+import {
+    base,
+    customNotice,
+    isRecord,
+    numeric,
+    numericArray,
+    stringValue,
+    type ZulipProjectionContext,
+} from "./event-base.js";
+import { projectZulipResourceEvent } from "./resource-events.js";
 import type {
     ZulipBaseEvent,
     ZulipDeleteMessageEvent,
@@ -8,13 +18,6 @@ import type {
     ZulipReactionEvent,
     ZulipUpdateMessageEvent,
 } from "./types.js";
-
-interface ZulipProjectionContext {
-    botId: CommonTypes.Id;
-    botUserId?: number;
-    serverUrl?: string;
-    createId(value: string | number): CommonTypes.Id;
-}
 
 /** 将官方 Event Queue 事件无损投影为一个或多个通用事件。 */
 export function projectZulipEvents(
@@ -37,60 +40,10 @@ export function projectZulipEvents(
     }
     if (event.type === "realm_user") return [projectRealmUser(event, context)];
     if (event.type === "user_group") return projectUserGroup(event, context);
-    if (event.type === "channel_folder") return [projectChannelFolder(event, context)];
     if (event.type === "realm_emoji") return [projectRealmEmoji(event, context)];
+    const resourceEvent = projectZulipResourceEvent(event, context);
+    if (resourceEvent) return [resourceEvent];
     return [customNotice(event, context)];
-}
-
-function projectChannelFolder(
-    event: ZulipBaseEvent,
-    context: ZulipProjectionContext,
-): CommonEvent.Notice<ZulipEvent> {
-    const op = stringValue(event.op);
-    const folder = isRecord(event.channel_folder) ? event.channel_folder : undefined;
-    const data = isRecord(event.data) ? event.data : undefined;
-    const folderId = numeric(folder?.id) ?? numeric(event.channel_folder_id);
-    if (op === "reorder") {
-        const order = numericArray(event.order);
-        if (!Array.isArray(event.order) || order.length !== event.order.length) {
-            return customNotice(event, context);
-        }
-        return {
-            ...base(event, context),
-            type: "notice",
-            notice_type: "channel_folders_reordered",
-            sub_type: op,
-            resource: {
-                type: "channel_folder",
-                id: context.createId("channel_folders"),
-                order,
-            },
-            extensions: { zulip: event },
-        };
-    }
-    if ((op !== "add" && op !== "update") || folderId === undefined) {
-        return customNotice(event, context);
-    }
-    const createdAt = numeric(folder?.date_created);
-    return {
-        ...base(event, context, createdAt === undefined ? 0 : createdAt * 1000),
-        type: "notice",
-        notice_type: op === "add" ? "channel_folder_created" : "channel_folder_updated",
-        sub_type:
-            op === "update" && typeof data?.is_archived === "boolean"
-                ? data.is_archived
-                    ? "archived"
-                    : "unarchived"
-                : op,
-        resource: {
-            ...(folder || {}),
-            ...(data || {}),
-            type: "channel_folder",
-            id: context.createId(folderId),
-            name: stringValue(folder?.name) || stringValue(data?.name),
-        },
-        extensions: { zulip: event },
-    };
 }
 
 function projectRealmEmoji(
@@ -384,34 +337,6 @@ function noticeBase(
     };
 }
 
-function customNotice(
-    event: ZulipBaseEvent,
-    context: ZulipProjectionContext,
-): CommonEvent.Notice<ZulipEvent> {
-    return {
-        ...base(event, context),
-        type: "notice",
-        notice_type: "custom",
-        sub_type: stringValue(event.op) || event.type,
-        extensions: { zulip: event },
-    };
-}
-
-function base(
-    event: ZulipEvent,
-    context: ZulipProjectionContext,
-    timestamp = 0,
-): CommonEvent.Base<ZulipEvent> {
-    return {
-        id: context.createId(`event:${event.id}`),
-        timestamp,
-        platform: "zulip",
-        bot_id: context.botId,
-        type: "custom",
-        raw_event: event,
-    };
-}
-
 function isMessageEvent(event: ZulipEvent): event is ZulipMessageEvent {
     return event.type === "message" && isRecord(event.message);
 }
@@ -439,22 +364,4 @@ function imageExtension(name: string): boolean {
 function resolveMediaUrl(path: string, serverUrl: string | undefined): string {
     if (!serverUrl || /^https?:\/\//i.test(path)) return path;
     return new URL(path, serverUrl).toString();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function numeric(value: unknown): number | undefined {
-    return typeof value === "number" && Number.isSafeInteger(value) ? value : undefined;
-}
-
-function numericArray(value: unknown): number[] {
-    return Array.isArray(value)
-        ? value.filter((item): item is number => numeric(item) !== undefined)
-        : [];
-}
-
-function stringValue(value: unknown): string | undefined {
-    return typeof value === "string" ? value : undefined;
 }
