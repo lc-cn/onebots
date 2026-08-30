@@ -40,6 +40,7 @@ const DEFAULT_EVENT_TYPES = [
     "stream",
     "realm_user",
     "user_group",
+    "invites_changed",
     "presence",
     "user_status",
     "typing",

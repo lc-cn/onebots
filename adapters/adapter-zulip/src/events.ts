@@ -37,14 +37,7 @@ export function projectZulipEvents(
     }
     if (event.type === "realm_user") return [projectRealmUser(event, context)];
     if (event.type === "user_group") return projectUserGroup(event, context);
-    return [
-        {
-            ...base(event, context),
-            type: "notice",
-            notice_type: "custom",
-            extensions: { zulip: event },
-        },
-    ];
+    return [customNotice(event, context)];
 }
 
 /** 将 Zulip Markdown 消息及附件投影为通用消息段。 */
@@ -311,7 +304,7 @@ function customNotice(
         ...base(event, context),
         type: "notice",
         notice_type: "custom",
-        sub_type: stringValue(event.op),
+        sub_type: stringValue(event.op) || event.type,
         extensions: { zulip: event },
     };
 }

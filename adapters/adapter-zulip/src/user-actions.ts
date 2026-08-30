@@ -7,12 +7,12 @@ import {
     requireIntegerArray,
     requireString,
     requireText,
+    requireZulipUserRole,
 } from "./action-params.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 import type { ZulipParam, ZulipParams } from "./types.js";
 
-const USER_ROLES = new Set([100, 200, 300, 400, 600]);
 const UPDATE_FIELDS = ["full_name", "role", "profile_data", "new_email"] as const;
 const DEACTIVATION_ACTION_FIELDS = [
     "delete_profile",
@@ -43,11 +43,11 @@ export const ZULIP_USER_ACTION_HANDLERS = {
 } satisfies Readonly<Record<string, PlatformActionHandler<ZulipClient>>>;
 
 function createUserParams(params: Readonly<Record<string, unknown>>): ZulipParams {
-    const result = exactParams(params, ["email", "password", "full_name"], [
-        "email",
-        "password",
-        "full_name",
-    ]);
+    const result = exactParams(
+        params,
+        ["email", "password", "full_name"],
+        ["email", "password", "full_name"],
+    );
     requireString(result.email, "email");
     requireString(result.password, "password");
     requireString(result.full_name, "full_name");
@@ -60,7 +60,7 @@ function updateUserParams(params: Readonly<Record<string, unknown>>): ZulipParam
     const result = exactParams(body, UPDATE_FIELDS);
     assertHasAny(result, UPDATE_FIELDS);
     if (result.full_name !== undefined) requireString(result.full_name, "full_name");
-    if (result.role !== undefined) requireRole(result.role);
+    if (result.role !== undefined) requireZulipUserRole(result.role);
     if (result.profile_data !== undefined) validateProfileData(result.profile_data);
     if (result.new_email !== undefined) requireString(result.new_email, "new_email");
     return result;
@@ -91,11 +91,6 @@ function reactivateUser(
     delete body.user_id;
     exactParams(body, []);
     return client.call(`users/${userId}/reactivate`, "POST");
-}
-
-function requireRole(value: unknown): void {
-    const role = requireInteger(value, "role");
-    if (!USER_ROLES.has(role)) invalid("Zulip 参数 role 不是有效的组织角色");
 }
 
 function validateProfileData(value: unknown): void {

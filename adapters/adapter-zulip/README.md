@@ -76,7 +76,7 @@ await client.start();
 
 ## 平台扩展动作
 
-通过统一 `callAction` 可调用反应、星标、消息搜索与编辑历史、频道订阅/管理、话题可见性、Presence、用户状态、输入状态、定时消息、草稿、提醒、保存片段、附件、Emoji 和服务器信息等动作。组织成员领域提供 `create_user`、`update_user`、`deactivate_user` 与 `reactivate_user`，严格校验官方角色、自定义资料和 Zulip 12 停用策略；这些动作需要组织管理员或服务器授予 Bot 相应特殊权限。用户组领域提供 `list_user_groups`、`create_user_group`、`update_user_group`、`deactivate_user_group`、`update_user_group_members`、`update_user_group_subgroups`、`get_user_group_members`、`get_user_group_subgroups` 与 `get_user_group_membership`。所有命名动作都会拒绝未知字段；`call_zulip_api` 仅用于尚未封装的官方端点，且不会接受绝对 URL。
+通过统一 `callAction` 可调用反应、星标、消息搜索与编辑历史、频道订阅/管理、话题可见性、Presence、用户状态、输入状态、定时消息、草稿、提醒、保存片段、附件、Emoji 和服务器信息等动作。组织成员领域提供 `create_user`、`update_user`、`deactivate_user` 与 `reactivate_user`，严格校验官方角色、自定义资料和 Zulip 12 停用策略；这些动作需要组织管理员或服务器授予 Bot 相应特殊权限。邀请领域提供 `list_invitations`、`send_invitations`、`create_invitation_link`、`resend_email_invitation`、`revoke_email_invitation` 与 `revoke_invitation_link`，并默认订阅 `invites_changed` 以刷新邀请状态。用户组领域提供 `list_user_groups`、`create_user_group`、`update_user_group`、`deactivate_user_group`、`update_user_group_members`、`update_user_group_subgroups`、`get_user_group_members`、`get_user_group_subgroups` 与 `get_user_group_membership`。所有命名动作都会拒绝未知字段；`call_zulip_api` 仅用于尚未封装的官方端点，且不会接受绝对 URL。
 
 用户组创建、更新、停用/恢复会投影为标准 `user_group` 资源生命周期通知；成员和子组批量变化会拆成具有稳定 ID 的逐对象通知。Zulip 未提供时间的 Event Queue 事件使用明确的时间戳 `0`，不会伪造本机接收时间。平台新增字段不会被丢弃：每个投影事件都保留 `raw_event`，未建立通用语义的事件会以 `notice_type: "custom"` 分发。
 

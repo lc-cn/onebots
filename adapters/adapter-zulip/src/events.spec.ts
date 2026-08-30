@@ -79,6 +79,11 @@ describe("Zulip 事件投影", () => {
             timestamp: 0,
             type: "notice",
             notice_type: "custom",
+            sub_type: "start",
+        });
+        expect(projectZulipEvents({ id: 11, type: "invites_changed" }, context)[0]).toMatchObject({
+            notice_type: "custom",
+            sub_type: "invites_changed",
         });
     });
 

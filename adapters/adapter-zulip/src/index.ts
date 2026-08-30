@@ -29,6 +29,7 @@ const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
     user_status: "用户状态",
     typing: "输入状态",
     heartbeat: "心跳",
+    invites_changed: "邀请变化",
     restart: "服务器重启",
 };
 

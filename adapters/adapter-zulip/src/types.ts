@@ -222,6 +222,17 @@ export interface ZulipHeartbeatEvent extends ZulipBaseEvent {
     type: "heartbeat";
 }
 
+export interface ZulipRealmUserEvent extends ZulipBaseEvent {
+    type: "realm_user";
+    op: "add" | "update" | "remove";
+    person?: Record<string, unknown>;
+    person_id?: number;
+}
+
+export interface ZulipInvitesChangedEvent extends ZulipBaseEvent {
+    type: "invites_changed";
+}
+
 export interface ZulipUserGroupEvent extends ZulipBaseEvent {
     type: "user_group";
     op:
@@ -245,6 +256,8 @@ export type ZulipEvent =
     | ZulipDeleteMessageEvent
     | ZulipReactionEvent
     | ZulipHeartbeatEvent
+    | ZulipRealmUserEvent
+    | ZulipInvitesChangedEvent
     | ZulipUserGroupEvent
     | ZulipBaseEvent;
 

@@ -1,6 +1,8 @@
 import { ZulipError } from "./errors.js";
 import type { ZulipHttpMethod, ZulipParam, ZulipParams } from "./types.js";
 
+const ZULIP_USER_ROLES = new Set([100, 200, 300, 400, 600]);
+
 export function requireMethod(value: unknown): ZulipHttpMethod {
     if (value === undefined) return "GET";
     if (value === "GET" || value === "POST" || value === "PATCH" || value === "DELETE") {
@@ -78,6 +80,13 @@ export function requireIntegerArray(value: unknown, name: string): readonly numb
 export function requireBoolean(value: unknown, name: string): boolean {
     if (typeof value !== "boolean") invalid(`Zulip 参数 ${name} 必须是布尔值`);
     return value;
+}
+
+/** 校验 Zulip 组织角色并返回规范数字值。 */
+export function requireZulipUserRole(value: unknown, name = "role"): number {
+    const role = requireInteger(value, name);
+    if (!ZULIP_USER_ROLES.has(role)) invalid(`Zulip 参数 ${name} 不是有效的组织角色`);
+    return role;
 }
 
 export function assertHasAny(value: ZulipParams, fields: readonly string[]): void {
