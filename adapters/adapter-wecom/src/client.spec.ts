@@ -61,6 +61,23 @@ describe("WeComClient", () => {
         expect(urls.filter(url => url.includes("access_token=directory-token"))).toHaveLength(2);
     });
 
+    it("分别缓存企业与应用 JS-SDK ticket", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(json({ access_token: "app-token", expires_in: 7200 }))
+            .mockResolvedValueOnce(json({ ticket: "corp-ticket", expires_in: 7200 }))
+            .mockResolvedValueOnce(json({ ticket: "agent-ticket", expires_in: 7200 }))
+            .mockResolvedValueOnce(json({ ticket: "corp-ticket-2", expires_in: 7200 }));
+        const client = new WeComClient(config, fetcher);
+        await expect(client.getCorpJsApiTicket()).resolves.toBe("corp-ticket");
+        await expect(client.getCorpJsApiTicket()).resolves.toBe("corp-ticket");
+        await expect(client.getAgentJsApiTicket()).resolves.toBe("agent-ticket");
+        await expect(client.getCorpJsApiTicket(true)).resolves.toBe("corp-ticket-2");
+        expect(fetcher).toHaveBeenCalledTimes(4);
+        expect(String(fetcher.mock.calls[1]?.[0])).toContain("/cgi-bin/get_jsapi_ticket");
+        expect(String(fetcher.mock.calls[2]?.[0])).toContain("type=agent_config");
+    });
+
     it("通讯录写入缺少独立 Secret 时返回结构化错误", async () => {
         const client = new WeComClient(config);
         await expect(

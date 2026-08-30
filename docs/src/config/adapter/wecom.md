@@ -4,6 +4,7 @@
 wecom.internal_app:
   corp_id: ww1234567890abcdef
   corp_secret: your_application_secret
+  directory_secret: your_address_book_sync_secret # 仅通讯录写入/导入需要
   agent_id: '1000001'
   token: your_callback_token
   encoding_aes_key: your_43_character_key
@@ -18,6 +19,7 @@ wecom.internal_app:
 | --- | --- | --- | --- |
 | `corp_id` | 是 | - | 企业 ID，也是回调解密后的 receiveid 校验值 |
 | `corp_secret` | 是 | - | 自建应用 Secret |
+| `directory_secret` | 通讯录写入/导入 | - | 通讯录同步 Secret；使用独立 token，不会回退到应用 Secret |
 | `agent_id` | 是 | - | 数字形式的应用 AgentID |
 | `token` | Webhook | - | 接收消息回调签名 Token |
 | `encoding_aes_key` | Webhook | - | 43 位回调加解密密钥 |

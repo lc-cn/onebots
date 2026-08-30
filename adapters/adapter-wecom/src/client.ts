@@ -16,6 +16,7 @@ import {
     responseFromWebhook,
 } from "./client-response.js";
 import { deliverWeComEvent } from "./event-delivery.js";
+import { WeComJsApiTickets } from "./jsapi-tickets.js";
 import type {
     WeComAgent,
     WeComAppChat,
@@ -44,6 +45,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     readonly apiBaseUrl: string;
     private readonly tokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
     private readonly directoryTokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
+    private readonly jsApiTickets = new WeComJsApiTickets();
     private agent?: WeComAgent;
     private startPromise?: Promise<WeComAgent>;
     private generation = 0;
@@ -105,6 +107,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         this.agent = undefined;
         this.tokens.clear();
         this.directoryTokens.clear();
+        this.jsApiTickets.clear();
         this.eventFlights.clear();
         if (wasActive) await emitAllAwaited(this, "stop");
     }
@@ -138,6 +141,16 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
             });
         }
         return this.directoryTokens.get(() => this.fetchToken(secret), force);
+    }
+
+    /** 获取企业级 wx.config ticket；与应用级 agentConfig ticket 分开缓存。 */
+    getCorpJsApiTicket(force = false): Promise<string> {
+        return this.jsApiTickets.getCorp(options => this.call(options), force);
+    }
+
+    /** 获取当前自建应用的 wx.agentConfig ticket。 */
+    getAgentJsApiTicket(force = false): Promise<string> {
+        return this.jsApiTickets.getAgent(options => this.call(options), force);
     }
 
     call<T = unknown>(options: WeComCallOptions): Promise<T> {

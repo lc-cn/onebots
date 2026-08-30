@@ -12,6 +12,7 @@ export * from "./types.js";
 export * from "./utils.js";
 export * from "./timestamp.js";
 export * from "./wechat-callback.js";
+export * from "./wechat-js-sdk.js";
 export * from "./protocol-params.js";
 export * from "./message-utils.js";
 export * from "./media-source.js";

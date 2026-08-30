@@ -91,6 +91,9 @@ export {
     extractWechatEncryptedPayload,
     parseWechatXml,
     verifyWechatCallbackSignature,
+    createWechatJsApiSignature,
+    type WechatJsApiSignature,
+    type WechatJsApiSignatureOptions,
     // Proxy
     buildProxyUrl,
     maskProxyUrl,

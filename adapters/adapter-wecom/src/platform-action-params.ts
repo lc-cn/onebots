@@ -58,7 +58,9 @@ export function requireString(params: WeComActionParams, name: string): string {
 
 export function optionalString(params: WeComActionParams, name: string): string | undefined {
     const value = params[name];
-    return typeof value === "string" && value ? value : undefined;
+    if (value === undefined) return undefined;
+    if (typeof value !== "string" || !value) invalid(`${name} 必须是非空字符串`);
+    return value;
 }
 
 export function requireNumber(params: WeComActionParams, name: string): number {
@@ -69,11 +71,16 @@ export function requireNumber(params: WeComActionParams, name: string): number {
 
 export function optionalNumber(params: WeComActionParams, name: string): number | undefined {
     const value = params[name];
-    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isFinite(value)) invalid(`${name} 必须是数字`);
+    return value;
 }
 
 export function optionalBoolean(params: WeComActionParams, name: string): boolean | undefined {
-    return typeof params[name] === "boolean" ? params[name] : undefined;
+    const value = params[name];
+    if (value === undefined) return undefined;
+    if (typeof value !== "boolean") invalid(`${name} 必须是布尔值`);
+    return value;
 }
 
 export function requireRecord(params: WeComActionParams, name: string): Record<string, unknown> {

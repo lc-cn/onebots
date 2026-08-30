@@ -5,6 +5,7 @@ import { WECOM_CUSTOMER_ENGAGEMENT_ACTIONS } from "./customer-engagement-actions
 import { WeComApiError } from "./errors.js";
 import { WECOM_EXTERNAL_CONTACT_ACTIONS } from "./external-contact-actions.js";
 import type { WeComActionHandler, WeComActionParams } from "./platform-action-context.js";
+import { WECOM_WEB_ACTIONS } from "./web-actions.js";
 import {
     callOptions,
     invalid,
@@ -122,6 +123,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         ...WECOM_COLLABORATION_ACTIONS,
         ...WECOM_EXTERNAL_CONTACT_ACTIONS,
         ...WECOM_CUSTOMER_ENGAGEMENT_ACTIONS,
+        ...WECOM_WEB_ACTIONS,
     },
     action =>
         new WeComApiError(`未知企业微信平台动作: ${action}`, {

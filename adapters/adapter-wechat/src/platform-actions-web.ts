@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createWechatJsApiSignature } from "onebots";
 import type { WechatClient } from "./client.js";
 import { defineWechatActionContract } from "./platform-action-contract.js";
 import type { WechatActionHandler, WechatActionParams } from "./platform-action-context.js";
@@ -80,21 +80,16 @@ async function signJsApiConfig(
     client: WechatClient,
     params: WechatActionParams,
 ): Promise<Record<string, string | number>> {
-    const pageUrl = stripFragment(requireWebUrl(params, "url"));
-    const nonceStr = optionalString(params, "nonce_str") || randomUUID();
-    const timestamp = optionalInteger(params, "timestamp", 1) || Math.floor(Date.now() / 1000);
     const ticket = await client.getJsApiTicket(optionalBoolean(params, "force") || false);
-    const source = [
-        `jsapi_ticket=${ticket}`,
-        `noncestr=${nonceStr}`,
-        `timestamp=${timestamp}`,
-        `url=${pageUrl}`,
-    ].join("&");
+    const signed = createWechatJsApiSignature({
+        ticket,
+        url: requireWebUrl(params, "url"),
+        nonceStr: optionalString(params, "nonce_str"),
+        timestamp: optionalInteger(params, "timestamp", 1),
+    });
     return {
-        app_id: client.config.app_id,
-        timestamp,
-        nonce_str: nonceStr,
-        signature: createHash("sha1").update(source).digest("hex"),
+        appId: client.config.app_id,
+        ...signed,
     };
 }
 
@@ -114,12 +109,6 @@ function buildOAuthUrl(client: WechatClient, params: WechatActionParams): string
     if (state) url.searchParams.set("state", state);
     url.hash = "wechat_redirect";
     return url.toString();
-}
-
-/** JS-SDK 要求按浏览器看到的原始 URL 签名，仅删除不发送到服务端的 fragment。 */
-function stripFragment(value: string): string {
-    const index = value.indexOf("#");
-    return index === -1 ? value : value.slice(0, index);
 }
 
 function requireWebUrl(params: WechatActionParams, name: string): string {

@@ -80,7 +80,7 @@ await adapter.callAction("my_mp", "wechat_call", {
 
 网页授权动作将公众号全局 access token 与 OAuth access token 明确分开：`build_oauth_url` 生成授权地址，`exchange_oauth_code`、`refresh_oauth_access_token`、`get_oauth_user_info` 和 `check_oauth_access_token` 负责授权生命周期。OAuth token 仅通过 `oauth_access_token` 参数传入，不会写入公众号全局 token 缓存。
 
-`get_jsapi_ticket` 复用 Client 内的并发安全缓存；`sign_jsapi_config` 会移除页面 URL 的 fragment，并返回可直接传给 JS-SDK 配置的 AppID、时间戳、随机串和 SHA-1 签名。调用方无需接触 ticket 的拼接规则。
+`get_jsapi_ticket` 复用 Client 内的并发安全缓存；`sign_jsapi_config` 会保留页面 URL 的原始编码、移除 fragment，并按 JS-SDK 的 `appId`、`timestamp`、`nonceStr`、`signature` 字段返回配置。调用方无需接触 ticket 的拼接规则。
 
 路径必须以 `/` 开头，查询参数必须通过 `query` 提供；适配器拒绝绝对 URL、路径穿越、内嵌 query/fragment。access token 使用微信稳定版 `/cgi-bin/stable_token`，普通刷新不会使其他进程正在使用的凭据失效；平台报告凭据失效时才执行一次强制刷新和重试，迟到的旧请求不会清空已经刷新的 token。
 

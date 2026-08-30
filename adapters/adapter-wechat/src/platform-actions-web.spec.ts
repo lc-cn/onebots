@@ -95,9 +95,9 @@ describe("微信公众号网页动作", () => {
                 timestamp: 1_700_000_000,
             }),
         ).resolves.toEqual({
-            app_id: "wx-app",
+            appId: "wx-app",
             timestamp: 1_700_000_000,
-            nonce_str: "nonce",
+            nonceStr: "nonce",
             signature: "8f3f7c1734dbe082b71f1590c8bcccbc2e0f0fe7",
         });
     });

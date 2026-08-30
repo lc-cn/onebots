@@ -32,6 +32,8 @@ describe("企业微信平台动作", () => {
         expect(WECOM_PLATFORM_ACTIONS.has("replace_users_from_directory_file")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("replace_departments_from_directory_file")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("get_directory_import_result")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("get_oauth_user_identity")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("sign_agent_jsapi_config")).toBe(true);
     });
 
     it("通讯录写入和异步导入只走独立凭据作用域", async () => {
