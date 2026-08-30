@@ -18,11 +18,15 @@ import type {
     HeychatChannelContext,
     HeychatConfig,
     HeychatOutboundMessage,
+    HeychatOAuthToken,
+    HeychatOAuthUserInfo,
     HeychatRoomInfo,
     HeychatRoomUsersResult,
     HeychatRoomViewResult,
     HeychatSendMessageResult,
     HeychatUseCommandData,
+    HeychatVoiceDurationQuery,
+    HeychatVoiceDurationResult,
     HeychatWsEnvelope,
 } from "./types.js";
 
@@ -250,6 +254,36 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
 
     uploadMedia(data: Uint8Array, filename: string, contentType?: string): Promise<string> {
         return this.http.uploadMedia(data, filename, contentType);
+    }
+
+    buildOAuthAuthorizationUrl(scopes: readonly string[]): string {
+        return this.http.buildOAuthAuthorizationUrl(scopes);
+    }
+
+    exchangeOAuthCode(code: string): Promise<HeychatOAuthToken> {
+        return this.http.exchangeOAuthCode(code);
+    }
+
+    refreshOAuthToken(refreshToken: string): Promise<HeychatOAuthToken> {
+        return this.http.refreshOAuthToken(refreshToken);
+    }
+
+    getOAuthUserInfo(
+        accessToken: string | undefined,
+        query?: Readonly<Record<string, string | undefined>>,
+    ): Promise<HeychatOAuthUserInfo> {
+        return this.http.getOAuthUserInfo(accessToken, query);
+    }
+
+    requestOAuthUserInfo(userId: string, scopes: readonly string[]): Promise<HeychatOAuthUserInfo> {
+        return this.http.requestOAuthUserInfo(userId, scopes);
+    }
+
+    getOAuthVoiceDuration(
+        accessToken: string,
+        query: HeychatVoiceDurationQuery,
+    ): Promise<HeychatVoiceDurationResult> {
+        return this.http.getOAuthVoiceDuration(accessToken, query);
     }
 
     async sendChannelMessage(

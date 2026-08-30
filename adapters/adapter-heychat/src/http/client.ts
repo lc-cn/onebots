@@ -4,16 +4,29 @@ import { createHttpsProxyAgent, ErrorCategory } from "onebots";
 import { HeychatApiError, normalizeHeychatErrorCode } from "../errors.js";
 import { isSafeHeychatApiPath } from "../api-path.js";
 import { createHeychatAckId } from "../utils.js";
+import {
+    heychatPlatformMessage,
+    isSuccessfulHeychatPayload,
+    normalizeRoomInfo,
+    numericHeychatId,
+    parseHeychatResponse,
+    projectMessageResult,
+} from "./response.js";
+import { normalizeHeychatBaseUrl } from "./url.js";
+import { HeychatOAuthClient, type HeychatOAuthTransport } from "./oauth.js";
 import type {
     HeychatApiRequestOptions,
-    HeychatApiResponse,
     HeychatConfig,
+    HeychatOAuthToken,
+    HeychatOAuthUserInfo,
     HeychatOutboundMessage,
     HeychatRoomInfo,
     HeychatRoomListResult,
     HeychatRoomUsersResult,
     HeychatRoomViewResult,
     HeychatSendMessageResult,
+    HeychatVoiceDurationQuery,
+    HeychatVoiceDurationResult,
 } from "../types.js";
 
 const DEFAULT_API_BASE = "https://chat.xiaoheihe.cn";
@@ -35,17 +48,31 @@ export class HeychatHttpClient {
     private readonly chatVersion: string;
     private readonly timeoutMs: number;
     private readonly proxy?: HeychatConfig["proxy"];
+    private readonly oauth: HeychatOAuthClient;
 
     constructor(config: HeychatConfig) {
         this.token = config.token;
-        this.apiBase = normalizeBaseUrl(config.api_base_url || DEFAULT_API_BASE, "api_base_url");
-        this.uploadBase = normalizeBaseUrl(
+        this.apiBase = normalizeHeychatBaseUrl(
+            config.api_base_url || DEFAULT_API_BASE,
+            "api_base_url",
+        );
+        this.uploadBase = normalizeHeychatBaseUrl(
             config.upload_base_url || DEFAULT_UPLOAD_BASE,
             "upload_base_url",
         );
         this.chatVersion = config.chat_version || DEFAULT_CHAT_VERSION;
         this.timeoutMs = Math.max(1_000, config.request_timeout_ms || DEFAULT_TIMEOUT);
         this.proxy = config.proxy;
+        const oauthTransport: HeychatOAuthTransport = {
+            request: <T>(
+                url: URL,
+                method: "GET" | "POST",
+                body: Buffer | undefined,
+                headers: Record<string, string>,
+                includeBotToken?: boolean,
+            ) => this.request<T>(url, method, body, headers, includeBotToken),
+        };
+        this.oauth = new HeychatOAuthClient(config, this.apiBase, oauthTransport);
     }
 
     async callApi<T = unknown>(path: string, options: HeychatApiRequestOptions = {}): Promise<T> {
@@ -94,6 +121,37 @@ export class HeychatHttpClient {
         return result.url;
     }
 
+    /** 生成用户授权页，不发起网络请求。 */
+    buildOAuthAuthorizationUrl(scopes: readonly string[]): string {
+        return this.oauth.buildAuthorizationUrl(scopes);
+    }
+
+    exchangeOAuthCode(code: string): Promise<HeychatOAuthToken> {
+        return this.oauth.exchangeCode(code);
+    }
+
+    refreshOAuthToken(refreshToken: string): Promise<HeychatOAuthToken> {
+        return this.oauth.refreshToken(refreshToken);
+    }
+
+    getOAuthUserInfo(
+        accessToken: string | undefined,
+        query?: Readonly<Record<string, string | undefined>>,
+    ): Promise<HeychatOAuthUserInfo> {
+        return this.oauth.getUserInfo(accessToken, query);
+    }
+
+    requestOAuthUserInfo(userId: string, scopes: readonly string[]): Promise<HeychatOAuthUserInfo> {
+        return this.oauth.requestUserInfo(userId, scopes);
+    }
+
+    async getOAuthVoiceDuration(
+        accessToken: string,
+        query: HeychatVoiceDurationQuery,
+    ): Promise<HeychatVoiceDurationResult> {
+        return await this.oauth.getVoiceDuration(accessToken, query);
+    }
+
     async sendChannelMessage(
         roomId: string,
         channelId: string,
@@ -113,7 +171,7 @@ export class HeychatHttpClient {
                 },
             },
         );
-        return messageResult(result, ackId);
+        return projectMessageResult(result, ackId);
     }
 
     async sendPrivateMessage(
@@ -125,11 +183,11 @@ export class HeychatHttpClient {
             method: "POST",
             body: {
                 ...message,
-                to_user_id: numericId(userId, "to_user_id"),
+                to_user_id: numericHeychatId(userId, "to_user_id"),
                 heychat_ack_id: ackId,
             },
         });
-        return messageResult(result, ackId);
+        return projectMessageResult(result, ackId);
     }
 
     async deleteChannelMessage(roomId: string, channelId: string, msgId: string): Promise<void> {
@@ -142,13 +200,7 @@ export class HeychatHttpClient {
     async getRoomInfo(roomId: string): Promise<HeychatRoomInfo> {
         const result = await this.getRoomView(roomId);
         const room: Partial<HeychatRoomInfo> = result.room || {};
-        return {
-            ...room,
-            room_id: String(room.room_id || result.room_id || roomId),
-            room_name: stringProperty(room, "room_name", "name"),
-            room_avatar: stringProperty(room, "room_avatar", "avatar"),
-            member_count: numberProperty(room, "member_count", "user_count"),
-        };
+        return normalizeRoomInfo(room, String(result.room_id || roomId));
     }
 
     getRoomView(roomId: string): Promise<HeychatRoomViewResult> {
@@ -181,7 +233,7 @@ export class HeychatHttpClient {
                 room_id: roomId,
                 offset,
                 limit: userId ? 1 : Math.min(50, Math.max(1, limit)),
-                heybox_id: userId ? numericId(userId, "heybox_id") : undefined,
+                heybox_id: userId ? numericHeychatId(userId, "heybox_id") : undefined,
             },
         });
     }
@@ -221,16 +273,20 @@ export class HeychatHttpClient {
         method: "GET" | "POST",
         body: Buffer | undefined,
         headers: Record<string, string>,
+        includeBotToken = true,
     ): Promise<T> {
         let response: RawResponse;
         try {
-            response = await this.rawRequest(url, method, body, { ...headers, token: this.token });
+            response = await this.rawRequest(url, method, body, {
+                ...headers,
+                ...(includeBotToken ? { token: this.token } : {}),
+            });
         } catch (error) {
             throw HeychatApiError.wrap(error, "HEYCHAT_NETWORK_ERROR", ErrorCategory.NETWORK);
         }
 
-        const payload = parseResponse(response.text, url.pathname);
-        const message = platformMessage(payload);
+        const payload = parseHeychatResponse(response.text, url.pathname);
+        const message = heychatPlatformMessage(payload);
         if (response.status < 200 || response.status >= 300) {
             throw new HeychatApiError(
                 `黑盒语音 HTTP ${response.status}: ${message || response.statusText}`,
@@ -242,7 +298,7 @@ export class HeychatHttpClient {
                 },
             );
         }
-        if (!isSuccessfulPayload(payload)) {
+        if (!isSuccessfulHeychatPayload(payload)) {
             throw new HeychatApiError(`黑盒语音 API 错误: ${message || "请求失败"}`, {
                 code: normalizeHeychatErrorCode(message || String(payload.status)),
                 status: response.status,
@@ -289,105 +345,4 @@ export class HeychatHttpClient {
             request.end();
         });
     }
-}
-
-function normalizeBaseUrl(value: string, name: string): string {
-    if (!URL.canParse(value)) {
-        throw new HeychatApiError(`配置 ${name} 不是有效 URL`, {
-            code: "HEYCHAT_INVALID_CONFIG_URL",
-            category: ErrorCategory.CONFIG,
-            details: value,
-        });
-    }
-    const url = new URL(value);
-    if (
-        !["http:", "https:"].includes(url.protocol) ||
-        url.username ||
-        url.password ||
-        url.search ||
-        url.hash ||
-        (url.protocol === "http:" && !isLoopback(url.hostname))
-    ) {
-        throw new HeychatApiError(
-            `配置 ${name} 必须是无凭据、查询参数或片段的 HTTPS URL（本机测试可用 HTTP）`,
-            {
-                code: "HEYCHAT_INVALID_CONFIG_URL",
-                category: ErrorCategory.CONFIG,
-                details: value,
-            },
-        );
-    }
-    return `${url.origin}${url.pathname.replace(/\/+$/u, "")}`;
-}
-
-function isLoopback(hostname: string): boolean {
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-}
-
-function parseResponse(text: string, path: string): HeychatApiResponse {
-    if (!text) return {};
-    try {
-        const value = JSON.parse(text) as unknown;
-        if (value && typeof value === "object" && !Array.isArray(value)) {
-            return value as HeychatApiResponse;
-        }
-    } catch (error) {
-        throw new HeychatApiError("黑盒语音响应不是有效 JSON", {
-            code: "HEYCHAT_INVALID_RESPONSE",
-            category: ErrorCategory.PROTOCOL,
-            path,
-            details: text.slice(0, 500),
-            cause: error,
-        });
-    }
-    throw new HeychatApiError("黑盒语音响应结构无效", {
-        code: "HEYCHAT_INVALID_RESPONSE",
-        category: ErrorCategory.PROTOCOL,
-        path,
-        details: text.slice(0, 500),
-    });
-}
-
-function isSuccessfulPayload(payload: HeychatApiResponse): boolean {
-    return (
-        payload.status === undefined ||
-        payload.status === true ||
-        payload.status === "true" ||
-        payload.status === "ok"
-    );
-}
-
-function platformMessage(payload: HeychatApiResponse): string {
-    return typeof payload.msg === "string"
-        ? payload.msg
-        : typeof payload.message === "string"
-          ? payload.message
-          : "";
-}
-
-function messageResult(result: Record<string, unknown>, ackId: string): HeychatSendMessageResult {
-    return {
-        msg_id: String(result.msg_id || result.chatmobile_ack_id || result.heychat_ack_id || ackId),
-        heychat_ack_id: String(result.heychat_ack_id || ackId),
-    };
-}
-
-function numericId(value: string, name: string): number {
-    const id = Number(value);
-    if (!Number.isSafeInteger(id) || id < 0) {
-        throw HeychatApiError.invalid(`${name} 必须是安全整数 ID`, "HEYCHAT_INVALID_ID", value);
-    }
-    return id;
-}
-
-function stringProperty(value: object, ...keys: string[]): string | undefined {
-    const record = value as Record<string, unknown>;
-    for (const key of keys) if (typeof record[key] === "string") return record[key];
-    return undefined;
-}
-
-function numberProperty(value: object, ...keys: string[]): number | undefined {
-    const record = value as Record<string, unknown>;
-    for (const key of keys) if (typeof record[key] === "number") return record[key];
-    return undefined;
 }

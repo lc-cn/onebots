@@ -9,6 +9,7 @@ OneBots 的黑盒语音官方机器人适配器。它使用官方 REST API 发�
 - 查询已加入房间、房间详情与成员，修改昵称、踢人和退出房间
 - 管理角色、权限、房间表情、频道、邀请与语音成员
 - 向语音频道输入在线媒体流并停止推流
+- 完整接入用户 OAuth：生成授权地址、交换/刷新令牌、读取用户资料与房间语音/游戏时长
 - 投影斜杠命令、消息回应、成员加入/退出和卡片按钮事件；未知事件通过 `raw_event` 无损交付
 - WebSocket 默认无限重连，支持可配置心跳、指数退避、代理与握手超时
 - `receive_mode: manual` 不创建正向连接；`await HeychatBot.ingest(rawEvent)` 与 `acceptWebSocket(socket)` 可让现有 Host、反向代理或已升级 socket 复用同一校验、去重和事件管线
@@ -52,6 +53,12 @@ heychat.my_bot:
   request_timeout_ms: 30000
   proxy:
     url: socks5://127.0.0.1:1080
+  # 仅使用用户 OAuth 能力时配置
+  oauth:
+    enabled: true
+    client_id: your_oauth_client_id
+    client_secret: your_oauth_client_secret
+    redirect_uri: https://example.com/oauth/callback
 ```
 
 `api_base_url`、`upload_base_url` 和 `ws_url` 仅用于官方兼容代理、私有网关或测试环境，日常配置不应修改。
@@ -103,6 +110,7 @@ manual 模式仍保留 REST 出站能力，但不会建立 WebSocket、发送心
 - 房间与频道：`list_joined_rooms`、`get_room`、`leave_room`、`kick_room_member`、`rename_channel`、`update_channel_settings`、`set_channel_password`、`create_channel_invite`；创建和删除频道使用 canonical `create_channel` / `delete_channel`
 - 权限与语音：`set_room_ban`、`set_channel_permission`、`get_channel_permissions`、`move_voice_member`、`kick_voice_member`、`toggle_channel_microphone`、`toggle_room_microphone`、`toggle_room_speaker`、`get_user_voice_channel`、`list_voice_channel_members`
 - 媒体流：`start_voice_stream`、`stop_voice_stream`
+- 用户 OAuth：`create_oauth_authorization_url`、`exchange_oauth_code`、`refresh_oauth_token`、`get_oauth_user_info`、`request_oauth_user_info`、`get_oauth_voice_duration`、`get_oauth_game_duration`
 - 底层：`upload_media`、`call_heychat_api`
 
 扩展动作参数直接沿用官方字段。底层调用只允许 `/chatroom/v2/`、`/chatroom/v3/` 和 `/chatroom/channel/` 下的 `GET`/`POST`，不会成为任意 URL 代理：
@@ -119,6 +127,8 @@ manual 模式仍保留 REST 出站能力，但不会建立 WebSocket、发送心
 ```
 
 `upload_media` 接收 `data`（Base64、`base64://` 或 Base64 data URL）、`filename` 和可选 `content_type`，最大 25 MiB。文件名与 Content-Type 会在拼装 multipart 前校验，不能注入额外头部。
+
+OAuth 动作使用独立的 `oauth.client_id` / `client_secret` / `redirect_uri`，不会把应用密钥放进普通机器人请求或动作参数。先调用 `create_oauth_authorization_url` 获取授权页，回调收到 `code` 后用 `exchange_oauth_code` 换取令牌；访问令牌由调用方保存并传给资料或时长动作。`scope` 可传空格分隔字符串或字符串数组；时长查询的秒级时间范围会在本地校验为正序且不超过官方规定的 30 天。`request_oauth_user_info` 用于用户在线时触发平台授权提示。
 
 动作参数、账号与资源缺失、配置、平台响应和网络故障统一使用 `HeychatApiError`，并接入 OneBots 核心错误分类。调用方可以读取稳定的 `code`、HTTP `status`、API `path` 与 `details`，不需要解析错误文本。底层 `HeychatBot`、`HeychatWsClient` 及其完整事件映射类型均从包入口导出。
 

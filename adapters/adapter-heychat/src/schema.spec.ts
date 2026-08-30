@@ -19,5 +19,18 @@ describe("Heychat 配置 Schema", () => {
                 oneOf: ["websocket"],
             });
         }
+        expect(heychatSchema.oauth).toMatchObject({
+            enabled: { default: false },
+            client_id: { required: true },
+            client_secret: { required: true, sensitive: true },
+            redirect_uri: { required: true },
+        });
+        const oauth = heychatSchema.oauth as Record<string, { ui?: { visibleWhen?: unknown } }>;
+        for (const field of ["client_id", "client_secret", "redirect_uri", "api_base_url"]) {
+            expect(oauth[field]?.ui?.visibleWhen).toEqual({
+                path: "oauth.enabled",
+                oneOf: [true],
+            });
+        }
     });
 });

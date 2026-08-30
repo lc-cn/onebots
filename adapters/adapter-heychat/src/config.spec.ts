@@ -30,5 +30,23 @@ describe("Heychat 配置", () => {
                 reconnect_max_delay_ms: 1_000,
             }),
         ).toThrowError(expect.objectContaining({ code: "HEYCHAT_INVALID_CONFIG" }));
+        expect(() =>
+            assertHeychatConfig({
+                account_id: "bot",
+                token: "token",
+                oauth: {
+                    client_id: "client",
+                    client_secret: "",
+                    redirect_uri: "not-a-url",
+                },
+            }),
+        ).toThrowError(expect.objectContaining({ code: "HEYCHAT_INVALID_CONFIG" }));
+        expect(() =>
+            assertHeychatConfig({
+                account_id: "bot",
+                token: "token",
+                oauth: { enabled: false },
+            }),
+        ).not.toThrow();
     });
 });

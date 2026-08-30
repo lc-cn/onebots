@@ -20,6 +20,58 @@ export interface HeychatConfig {
     reconnect_max_delay_ms?: number;
     request_timeout_ms?: number;
     proxy?: ProxyConfig;
+    /** 用户 OAuth 应用凭据；仅在调用 OAuth 扩展动作时需要。 */
+    oauth?: HeychatOAuthConfig;
+}
+
+export type HeychatOAuthConfig = HeychatOAuthDisabledConfig | HeychatOAuthEnabledConfig;
+
+export interface HeychatOAuthDisabledConfig {
+    enabled: false;
+}
+
+export interface HeychatOAuthEnabledConfig {
+    /** 手写配置省略时视为启用。 */
+    enabled?: true;
+    client_id: string;
+    client_secret: string;
+    redirect_uri: string;
+    /** 授权页与令牌端点，默认使用 chat.xiaoheihe.cn。 */
+    api_base_url?: string;
+    /** 用户资料与时长端点，默认使用 api.xiaoheihe.cn。 */
+    resource_base_url?: string;
+}
+
+export interface HeychatOAuthToken {
+    access_token: string;
+    expires_in: number;
+    refresh_token: string;
+    scope: string;
+    token_type: "Bearer";
+}
+
+export interface HeychatOAuthUserInfo {
+    avatar: string;
+    username: string;
+}
+
+export interface HeychatVoiceDuration {
+    room_id: string | number;
+    user_id: number;
+    create_at: string;
+    update_at?: string;
+    duration: number;
+}
+
+export interface HeychatVoiceDurationResult {
+    durations: HeychatVoiceDuration[];
+}
+
+export interface HeychatVoiceDurationQuery {
+    room_id?: string;
+    begin_time?: number;
+    end_time?: number;
+    appid?: string;
 }
 
 export interface HeychatRoomBaseInfo {

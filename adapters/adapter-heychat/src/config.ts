@@ -29,6 +29,7 @@ export function assertHeychatConfig(config: HeychatConfig): void {
             maximum,
         });
     }
+    assertOAuthConfig(config.oauth);
 }
 
 export function resolveHeychatReceiveMode(
@@ -40,6 +41,20 @@ export function resolveHeychatReceiveMode(
 function assertInteger(name: string, value: number | undefined, minimum: number): void {
     if (value !== undefined && (!Number.isInteger(value) || value < minimum)) {
         throw configError(`${name} 必须是大于等于 ${minimum} 的整数`, value);
+    }
+}
+
+function assertOAuthConfig(config: HeychatConfig["oauth"]): void {
+    if (!config || config.enabled === false) return;
+    for (const [name, value] of Object.entries({
+        client_id: config.client_id,
+        client_secret: config.client_secret,
+        redirect_uri: config.redirect_uri,
+    })) {
+        if (!value?.trim()) throw configError(`oauth.${name} 不能为空`, name);
+    }
+    if (!URL.canParse(config.redirect_uri)) {
+        throw configError("oauth.redirect_uri 必须是有效 URL", config.redirect_uri);
     }
 }
 

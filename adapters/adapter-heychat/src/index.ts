@@ -31,6 +31,7 @@ export {
     type HeychatWsClientEvents,
 } from "./ws/client.js";
 export { HeychatHttpClient } from "./http/client.js";
+export { HeychatOAuthClient, type HeychatOAuthTransport } from "./http/oauth.js";
 export type {
     ProxyConfig,
     HeychatConfig,
@@ -53,6 +54,14 @@ export type {
     HeychatRoomViewResult,
     HeychatApiResponse,
     HeychatApiRequestOptions,
+    HeychatOAuthConfig,
+    HeychatOAuthDisabledConfig,
+    HeychatOAuthEnabledConfig,
+    HeychatOAuthToken,
+    HeychatOAuthUserInfo,
+    HeychatVoiceDuration,
+    HeychatVoiceDurationResult,
+    HeychatVoiceDurationQuery,
 } from "./types.js";
 
 export const heychatSchema: Schema = {
@@ -177,6 +186,63 @@ export const heychatSchema: Schema = {
             label: "代理密码",
             sensitive: true,
             ui: { section: "advanced" },
+        },
+    },
+    oauth: {
+        enabled: {
+            type: "boolean",
+            default: false,
+            label: "启用用户 OAuth",
+            description: "仅需读取用户资料或语音时长时开启",
+            ui: { section: "advanced" },
+        },
+        client_id: {
+            type: "string",
+            required: true,
+            label: "OAuth Client ID",
+            description: "仅用户授权相关动作需要；在黑盒语音开发者后台获取",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
+        client_secret: {
+            type: "string",
+            required: true,
+            label: "OAuth Client Secret",
+            sensitive: true,
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
+        redirect_uri: {
+            type: "string",
+            required: true,
+            label: "OAuth 回调地址",
+            description: "必须与开发者后台登记的回调地址一致",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
+        api_base_url: {
+            type: "string",
+            label: "OAuth API Base URL",
+            placeholder: "https://chat.xiaoheihe.cn",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
+        },
+        resource_base_url: {
+            type: "string",
+            label: "OAuth Resource Base URL",
+            placeholder: "https://api.xiaoheihe.cn",
+            ui: {
+                section: "advanced",
+                visibleWhen: { path: "oauth.enabled", oneOf: [true] },
+            },
         },
     },
 };

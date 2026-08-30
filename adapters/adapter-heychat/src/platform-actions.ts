@@ -3,7 +3,7 @@ import type { HeychatBot } from "./bot.js";
 import { isSafeHeychatApiPath } from "./api-path.js";
 import { HeychatApiError } from "./errors.js";
 import { normalizeBase64Source, uploadHeychatMedia } from "./media.js";
-import type { HeychatApiRequestOptions } from "./types.js";
+import type { HeychatApiRequestOptions, HeychatVoiceDurationQuery } from "./types.js";
 
 interface ActionRoute {
     path: string;
@@ -80,6 +80,48 @@ const PLATFORM_ACTIONS = definePlatformActions(
                 contentType: optionalString(params.content_type, "content_type"),
             }),
         }),
+        create_oauth_authorization_url: (
+            bot: HeychatBot,
+            params: Readonly<Record<string, unknown>>,
+        ) => {
+            assertAllowedParams(params, ["scope"]);
+            return Promise.resolve({
+                url: bot.buildOAuthAuthorizationUrl(scopeValue(params.scope)),
+            });
+        },
+        exchange_oauth_code: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["code"]);
+            return bot.exchangeOAuthCode(requiredString(params.code, "code"));
+        },
+        refresh_oauth_token: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["refresh_token"]);
+            return bot.refreshOAuthToken(requiredString(params.refresh_token, "refresh_token"));
+        },
+        get_oauth_user_info: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["access_token"]);
+            return bot.getOAuthUserInfo(requiredString(params.access_token, "access_token"));
+        },
+        request_oauth_user_info: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["user_id", "scope"]);
+            return bot.requestOAuthUserInfo(
+                requiredString(params.user_id, "user_id"),
+                scopeValue(params.scope),
+            );
+        },
+        get_oauth_voice_duration: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["access_token", ...DURATION_PARAMS]);
+            return bot.getOAuthVoiceDuration(
+                requiredString(params.access_token, "access_token"),
+                durationQuery(params),
+            );
+        },
+        get_oauth_game_duration: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
+            assertAllowedParams(params, ["access_token", ...DURATION_PARAMS]);
+            return bot.getOAuthVoiceDuration(requiredString(params.access_token, "access_token"), {
+                ...durationQuery(params),
+                appid: requiredString(params.appid, "appid"),
+            });
+        },
         ...ROUTE_HANDLERS,
     },
     action =>
@@ -159,6 +201,45 @@ function requiredString(value: unknown, name: string): string {
 function optionalString(value: unknown, name: string): string | undefined {
     if (value === undefined) return undefined;
     return requiredString(value, name);
+}
+
+const DURATION_PARAMS = ["room_id", "begin_time", "end_time", "appid"] as const;
+
+function scopeValue(value: unknown): string[] {
+    const scopes = typeof value === "string" ? value.split(/\s+/u) : value;
+    if (
+        !Array.isArray(scopes) ||
+        !scopes.length ||
+        scopes.some(scope => typeof scope !== "string" || !scope.trim())
+    ) {
+        throw invalid("scope 必须是非空字符串或非空字符串数组");
+    }
+    return scopes.map(scope => scope.trim());
+}
+
+function durationQuery(params: Readonly<Record<string, unknown>>): HeychatVoiceDurationQuery {
+    return {
+        room_id: optionalString(params.room_id, "room_id"),
+        begin_time: optionalTimestamp(params.begin_time, "begin_time"),
+        end_time: optionalTimestamp(params.end_time, "end_time"),
+        appid: optionalString(params.appid, "appid"),
+    };
+}
+
+function optionalTimestamp(value: unknown, name: string): number | undefined {
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+        throw invalid(`${name} 必须是非负秒级时间戳`);
+    }
+    return value;
+}
+
+function assertAllowedParams(
+    params: Readonly<Record<string, unknown>>,
+    allowed: readonly string[],
+): void {
+    const unknown = Object.keys(params).filter(key => !allowed.includes(key));
+    if (unknown.length) throw invalid(`不支持参数: ${unknown.join(", ")}`);
 }
 
 function invalid(message: string): HeychatApiError {

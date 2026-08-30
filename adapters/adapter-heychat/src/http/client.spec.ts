@@ -124,6 +124,94 @@ describe("HeychatHttpClient", () => {
             code: "HEYCHAT_INVALID_API_PATH",
         });
     });
+
+    it("以独立凭据闭合 OAuth 授权、令牌与用户资源请求", async () => {
+        const base = await listen((request, response) => {
+            const url = new URL(request.url || "/", "http://localhost");
+            response.setHeader("content-type", "application/json");
+            if (url.pathname === "/chatroom/api/token") {
+                expect(request.headers.token).toBeUndefined();
+                const chunks: Buffer[] = [];
+                request.on("data", chunk => chunks.push(Buffer.from(chunk)));
+                request.on("end", () => {
+                    const form = new URLSearchParams(Buffer.concat(chunks).toString());
+                    expect(form.get("grant_type")).toBe("authorization_code");
+                    expect(form.get("client_id")).toBe("client");
+                    expect(form.get("client_secret")).toBe("oauth-secret");
+                    expect(form.get("code")).toBe("code-1");
+                    response.end(
+                        JSON.stringify({
+                            access_token: "access",
+                            expires_in: 7200,
+                            refresh_token: "refresh",
+                            scope: "user_info_read",
+                            token_type: "Bearer",
+                        }),
+                    );
+                });
+                return;
+            }
+            expect(request.headers.token).toBe("secret");
+            if (url.pathname === "/chatroom/api/account/info") {
+                if (url.searchParams.has("client_id")) {
+                    expect(request.headers.authorization).toBeUndefined();
+                    expect(url.searchParams.get("client_id")).toBe("client");
+                    expect(url.searchParams.get("scope")).toBe("user_info_read");
+                } else {
+                    expect(request.headers.authorization).toBe("Bearer access");
+                }
+                response.end(
+                    JSON.stringify({
+                        status: "ok",
+                        result: { avatar: "https://cdn.example/avatar", username: "用户" },
+                    }),
+                );
+                return;
+            }
+            expect(request.headers.authorization).toBe("Bearer access");
+            expect(url.searchParams.get("room_id")).toBe("r1");
+            expect(url.searchParams.get("appid")).toBe("730");
+            response.end(JSON.stringify({ status: "ok", result: { durations: [] } }));
+        });
+        const client = new HeychatHttpClient({
+            account_id: "bot",
+            token: "secret",
+            oauth: {
+                client_id: "client",
+                client_secret: "oauth-secret",
+                redirect_uri: "https://example.com/callback",
+                api_base_url: base,
+                resource_base_url: base,
+            },
+        });
+
+        const authorization = new URL(
+            client.buildOAuthAuthorizationUrl(["user_info_read", "user_chat_duration_read"]),
+        );
+        expect(authorization.pathname).toBe("/account/bot_oauth");
+        expect(authorization.searchParams.get("client_id")).toBe("client");
+        expect(authorization.searchParams.get("scope")).toBe(
+            "user_info_read user_chat_duration_read",
+        );
+        await expect(client.exchangeOAuthCode("code-1")).resolves.toMatchObject({
+            access_token: "access",
+        });
+        await expect(client.getOAuthUserInfo("access")).resolves.toMatchObject({
+            username: "用户",
+        });
+        await expect(client.requestOAuthUserInfo("42", ["user_info_read"])).resolves.toMatchObject({
+            username: "用户",
+        });
+        await expect(
+            client.getOAuthVoiceDuration("access", { room_id: "r1", appid: "730" }),
+        ).resolves.toEqual({ durations: [] });
+        await expect(
+            client.getOAuthVoiceDuration("access", {
+                begin_time: 1,
+                end_time: 31 * 86400,
+            }),
+        ).rejects.toMatchObject({ code: "HEYCHAT_INVALID_ACTION_PARAMS" });
+    });
 });
 
 async function listen(handler: RequestListener): Promise<string> {

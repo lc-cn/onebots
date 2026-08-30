@@ -5,12 +5,23 @@ import {
 } from "onebots";
 import { HEYCHAT_PLATFORM_ACTIONS } from "./platform-actions.js";
 
+const OAUTH_CONFIG_ACTIONS = new Set([
+    "create_oauth_authorization_url",
+    "exchange_oauth_code",
+    "refresh_oauth_token",
+    "request_oauth_user_info",
+]);
+
 const platformActions = definePlatformActionCapabilities(HEYCHAT_PLATFORM_ACTIONS, action => ({
     support: "native",
     note:
         action === "call_heychat_api"
             ? "仅允许官方 chatroom API 路径"
-            : "执行权限由黑盒语音房间权限与接口规则决定",
+            : OAUTH_CONFIG_ACTIONS.has(action)
+              ? "需要配置 OAuth 应用凭据"
+              : action.includes("oauth")
+                ? "需要用户 OAuth 访问令牌"
+                : "执行权限由黑盒语音房间权限与接口规则决定",
 }));
 
 /** 黑盒语音官方机器人 API 的真实能力边界。 */

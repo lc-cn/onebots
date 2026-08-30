@@ -58,4 +58,43 @@ describe("executeHeychatPlatformAction", () => {
             }),
         ).resolves.toEqual({ url: "https://cdn.example/a.png" });
     });
+
+    it("显式分发 OAuth 动作并拒绝影子参数", async () => {
+        const buildOAuthAuthorizationUrl = vi.fn().mockReturnValue("https://oauth.example");
+        const getOAuthVoiceDuration = vi.fn().mockResolvedValue({ durations: [] });
+        const bot = {
+            buildOAuthAuthorizationUrl,
+            getOAuthVoiceDuration,
+        } as unknown as HeychatBot;
+
+        await expect(
+            executeHeychatPlatformAction(bot, "create_oauth_authorization_url", {
+                scope: ["user_info_read", "user_chat_duration_read"],
+            }),
+        ).resolves.toEqual({ url: "https://oauth.example" });
+        expect(buildOAuthAuthorizationUrl).toHaveBeenCalledWith([
+            "user_info_read",
+            "user_chat_duration_read",
+        ]);
+
+        await executeHeychatPlatformAction(bot, "get_oauth_game_duration", {
+            access_token: "access",
+            room_id: "r1",
+            begin_time: 100,
+            end_time: 200,
+            appid: "730",
+        });
+        expect(getOAuthVoiceDuration).toHaveBeenCalledWith("access", {
+            room_id: "r1",
+            begin_time: 100,
+            end_time: 200,
+            appid: "730",
+        });
+        await expect(
+            executeHeychatPlatformAction(bot, "get_oauth_user_info", {
+                access_token: "access",
+                client_secret: "不应由动作传入",
+            }),
+        ).rejects.toMatchObject({ code: "HEYCHAT_INVALID_ACTION_PARAMS" });
+    });
 });
