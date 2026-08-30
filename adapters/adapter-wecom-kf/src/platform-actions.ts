@@ -1,4 +1,4 @@
-import { definePlatformActions, type PlatformActionHandler } from "onebots";
+import { definePlatformActionContract, type PlatformActionHandler } from "onebots";
 import type { WeComKfClient } from "./client.js";
 import { WeComKfError } from "./errors.js";
 import { WECOM_KF_KNOWLEDGE_ACTION_HANDLERS } from "./knowledge-actions.js";
@@ -116,13 +116,16 @@ const ACTION_PARAMETERS = {
     get_temporary_media: ["media_id"],
 } satisfies { readonly [TAction in keyof typeof PLATFORM_ACTION_HANDLERS]: readonly string[] };
 
-const PLATFORM_ACTIONS = definePlatformActions(
-    PLATFORM_ACTION_HANDLERS,
-    action =>
+const PLATFORM_ACTIONS = definePlatformActionContract(PLATFORM_ACTION_HANDLERS, ACTION_PARAMETERS, {
+    unsupported: action =>
         new WeComKfError(`未知微信客服平台动作: ${action}`, {
             code: "WECOM_KF_UNKNOWN_ACTION",
         }),
-);
+    unexpectedParameter: (action, parameter) =>
+        new WeComKfError(`微信客服动作 ${action} 不接受参数 ${parameter}`, {
+            code: "WECOM_KF_INVALID_PARAMETER",
+        }),
+});
 
 export const WECOM_KF_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
 export type WeComKfPlatformAction =
@@ -134,17 +137,7 @@ export async function executeWeComKfPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    if (PLATFORM_ACTIONS.has(action)) assertKnownParams(action, params);
     return PLATFORM_ACTIONS.execute(client, action, params);
-}
-
-function assertKnownParams(
-    action: keyof typeof PLATFORM_ACTION_HANDLERS,
-    params: Readonly<Record<string, unknown>>,
-): void {
-    const accepted = new Set(ACTION_PARAMETERS[action]);
-    const unknown = Object.keys(params).find(key => !accepted.has(key));
-    if (unknown) invalid(`动作 ${action} 不接受参数 ${unknown}`);
 }
 
 function callOptions(params: Readonly<Record<string, unknown>>): KfCallOptions {
@@ -214,14 +207,19 @@ function optionalString(
     name: string,
 ): string | undefined {
     const value = params[name];
-    return typeof value === "string" && value ? value : undefined;
+    if (value === undefined) return undefined;
+    if (typeof value !== "string" || !value) invalid(`${name} 必须是非空字符串`);
+    return value;
 }
 
 function optionalBoolean(
     params: Readonly<Record<string, unknown>>,
     name: string,
 ): boolean | undefined {
-    return typeof params[name] === "boolean" ? params[name] : undefined;
+    const value = params[name];
+    if (value === undefined) return undefined;
+    if (typeof value !== "boolean") invalid(`${name} 必须是布尔值`);
+    return value;
 }
 
 function requireRecord(

@@ -91,7 +91,7 @@ await adapter.callAction("customer_service", "wecom_kf_call", {
 
 `path` 不得内嵌 query/fragment，查询参数应通过 `query` 提供。凭证刷新按请求实际使用的 token 代次失效，旧请求迟到时不会清空已经刷新的凭证。
 
-所有命名动作只接受约定的顶层参数；拼错或过期字段会返回 `WECOM_KF_INVALID_PARAMETER`，复杂官方请求体仍通过 `request`、`message` 或 `account` 无损传入。`get_customers` 按官方批量上限拒绝超过 100 个客户，接待部门 ID 只接受正整数。新增字段尚未进入命名动作时应显式使用 `wecom_kf_call`。
+所有命名动作只接受约定的顶层参数；拼错、过期字段以及类型错误的可选参数都会返回 `WECOM_KF_INVALID_PARAMETER`，复杂官方请求体仍通过 `request`、`message` 或 `account` 无损传入。动作表与参数契约由 core 的同一注册器闭合，新增动作不能遗漏参数声明。`get_customers` 按官方批量上限拒绝超过 100 个客户，接待部门 ID 只接受正整数。新增字段尚未进入命名动作时应显式使用 `wecom_kf_call`。
 
 ## 底层接入
 

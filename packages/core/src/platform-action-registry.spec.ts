@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { definePlatformActions } from "./platform-action-registry.js";
+import { definePlatformActionContract, definePlatformActions } from "./platform-action-registry.js";
 
 describe("definePlatformActions", () => {
     it("从同一 handler 表驱动发现、判断与执行", async () => {
@@ -44,5 +44,57 @@ describe("definePlatformActions", () => {
         ).toThrowError(
             "平台扩展动作不得与 canonical 动作重名: send_message, create_channel, get_supported_actions",
         );
+    });
+});
+
+describe("definePlatformActionContract", () => {
+    const errors = {
+        unsupported: (action: string) => new RangeError(`unknown:${action}`),
+        unexpectedParameter: (action: string, parameter: string) =>
+            new TypeError(`unexpected:${action}:${parameter}`),
+    };
+
+    it("在执行 handler 前拒绝未声明的顶层参数", async () => {
+        const handler = vi.fn(async () => "ok");
+        const registry = definePlatformActionContract(
+            { send: handler },
+            { send: ["message"] },
+            errors,
+        );
+
+        await expect(
+            registry.execute(undefined, "send", { message: {}, typo: true }),
+        ).rejects.toThrow("unexpected:send:typo");
+        expect(handler).not.toHaveBeenCalled();
+        await expect(registry.execute(undefined, "send", { message: {} })).resolves.toBe("ok");
+    });
+
+    it("保持未知动作错误优先于参数检查", async () => {
+        const registry = definePlatformActionContract(
+            { ping: async () => "pong" },
+            { ping: [] },
+            errors,
+        );
+
+        await expect(registry.execute(undefined, "missing", { typo: true })).rejects.toThrow(
+            "unknown:missing",
+        );
+    });
+
+    it("在运行时拒绝动作表漂移与重复参数", () => {
+        expect(() =>
+            definePlatformActionContract(
+                { ping: async () => "pong" },
+                {} as { readonly ping: readonly string[] },
+                errors,
+            ),
+        ).toThrow("missing=[ping]");
+        expect(() =>
+            definePlatformActionContract(
+                { ping: async () => "pong" },
+                { ping: ["value", "value"] },
+                errors,
+            ),
+        ).toThrow("平台动作 ping 的参数契约存在重复字段");
     });
 });

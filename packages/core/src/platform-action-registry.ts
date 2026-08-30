@@ -20,6 +20,17 @@ export interface PlatformActionRegistry<TContext, TAction extends string> {
     execute(context: TContext, action: string, params: PlatformActionParams): Promise<unknown>;
 }
 
+export type PlatformActionParameterMap<
+    THandlers extends Readonly<Record<string, AnyPlatformActionHandler>>,
+> = {
+    readonly [TAction in Extract<keyof THandlers, string>]: readonly string[];
+};
+
+export interface PlatformActionContractErrors {
+    unsupported(action: string): Error;
+    unexpectedParameter(action: string, parameter: string): Error;
+}
+
 type AnyPlatformActionHandler = PlatformActionHandler<never>;
 type HandlerContext<T> = T extends PlatformActionHandler<infer TContext> ? TContext : never;
 type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
@@ -60,6 +71,58 @@ export function definePlatformActions<
             const handler = handlers[action];
             if (!handler) throw unsupported(action);
             return Reflect.apply(handler, undefined, [context, params]) as unknown;
+        },
+    });
+}
+
+/**
+ * 在单一 handler 表之上闭合平台动作的顶层参数契约。
+ *
+ * 复杂官方请求体仍可作为一个参数无损透传；这里仅拒绝拼错、废弃或夹带的顶层字段。
+ * 参数集合在定义时编译并校验，避免每次执行临时创建 Set，也避免动作表与契约表漂移。
+ */
+export function definePlatformActionContract<
+    const THandlers extends Readonly<Record<string, AnyPlatformActionHandler>>,
+>(
+    handlers: THandlers,
+    parameters: PlatformActionParameterMap<THandlers>,
+    errors: PlatformActionContractErrors,
+): PlatformActionRegistry<RegistryContext<THandlers>, Extract<keyof THandlers, string>> {
+    type Action = Extract<keyof THandlers, string>;
+    const registry = definePlatformActions(handlers, errors.unsupported);
+    const actionNames = Object.keys(handlers) as Action[];
+    const parameterActions = Object.keys(parameters);
+    const missing = actionNames.filter(action => !Object.hasOwn(parameters, action));
+    const extra = parameterActions.filter(action => !Object.hasOwn(handlers, action));
+    if (missing.length || extra.length) {
+        throw new ValidationError(
+            `平台动作参数契约与 handler 不一致: missing=[${missing.join(", ")}], extra=[${extra.join(", ")}]`,
+        );
+    }
+    const accepted = new Map<Action, ReadonlySet<string>>();
+    for (const action of actionNames) {
+        const names = parameters[action];
+        const unique = new Set(names);
+        if (unique.size !== names.length) {
+            throw new ValidationError(`平台动作 ${action} 的参数契约存在重复字段`);
+        }
+        accepted.set(action, unique);
+    }
+
+    return Object.freeze({
+        actions: registry.actions,
+        has: registry.has,
+        async execute(
+            context: RegistryContext<THandlers>,
+            action: string,
+            params: PlatformActionParams,
+        ) {
+            if (registry.has(action)) {
+                const names = accepted.get(action);
+                const unexpected = Object.keys(params).find(name => !names?.has(name));
+                if (unexpected) throw errors.unexpectedParameter(action, unexpected);
+            }
+            return registry.execute(context, action, params);
         },
     });
 }
