@@ -214,6 +214,40 @@ export type ZulipSubscriptionEvent =
     | ZulipSubscriptionUpdateEvent
     | ZulipSubscriptionPeerEvent;
 
+export interface ZulipScheduledMessage extends Record<string, unknown> {
+    scheduled_message_id: number;
+    type: "stream" | "private";
+    to: number | number[];
+    topic?: string;
+    content: string;
+    rendered_content: string;
+    scheduled_delivery_timestamp: number;
+    failed: boolean;
+}
+
+export interface ZulipScheduledMessagesAddEvent extends ZulipBaseEvent {
+    type: "scheduled_messages";
+    op: "add";
+    scheduled_messages: ZulipScheduledMessage[];
+}
+
+export interface ZulipScheduledMessagesUpdateEvent extends ZulipBaseEvent {
+    type: "scheduled_messages";
+    op: "update";
+    scheduled_message: ZulipScheduledMessage;
+}
+
+export interface ZulipScheduledMessagesRemoveEvent extends ZulipBaseEvent {
+    type: "scheduled_messages";
+    op: "remove";
+    scheduled_message_id: number;
+}
+
+export type ZulipScheduledMessagesEvent =
+    | ZulipScheduledMessagesAddEvent
+    | ZulipScheduledMessagesUpdateEvent
+    | ZulipScheduledMessagesRemoveEvent;
+
 export interface ZulipChannelFolder {
     id: number;
     name: string;
@@ -405,6 +439,7 @@ export type ZulipEvent =
     | ZulipAttachmentEvent
     | ZulipStreamEvent
     | ZulipSubscriptionEvent
+    | ZulipScheduledMessagesEvent
     | ZulipChannelFolderEvent
     | ZulipNavigationViewEvent
     | ZulipUserGroupEvent

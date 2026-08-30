@@ -92,6 +92,8 @@ Navigation View 领域提供 `list_navigation_views`、`add_navigation_view`、`
 
 消息扩展领域提供 `update_message_flags`、`update_message_flags_for_narrow`、`check_messages_match_narrow` 与 `report_message`，并将原有反应、星标、历史、已读回执和 Markdown 渲染动作统一到独立消息模块。只允许客户端可修改的 `read`、`starred`、`collapsed` 标记；narrow 使用现代结构化条件，不暴露已弃用的全局已读端点。举报类型保留 Zulip 12 服务端动态 key，`other` 必须提供 1–1000 个 Unicode 字符的描述。Client 默认订阅精确 `update_message_flags` 事件，并投影为批量消息标记通知。
 
+定时消息领域提供查询、创建、编辑和删除动作，只接受现代 `direct` / `channel` 请求场景，并按场景校验收件人、频道、话题、正文和发送时间；不会继续鼓励 `private` / `stream` 请求别名，也不会静默接受 direct 消息的无效话题。Client 默认订阅 `scheduled_messages`，完整声明 add/update/remove 判别联合，并将批量新增拆成稳定的逐资源 canonical 通知。
+
 频道发现领域提供 `get_channel_id`、`get_channel_topics`、`get_channel_subscriptions`、`get_channel_subscription_status`、`get_user_channels`、`list_zulip_channels`、`get_zulip_channel`、`get_channel_email_address` 与 `delete_channel_topic`，并将原有订阅、订阅者、创建、更新和归档动作收敛到独立频道模块。频道列表仅暴露现代 `include_all` 等参数，不接受已弃用的 `include_all_active`；归档使用官方 `DELETE /streams/{stream_id}`，不再伪装成 PATCH 属性更新。话题删除保留 Zulip 10+ 的空话题名语义。
 
 频道个人设置提供 `update_channel_subscription_settings` 和 `update_channel_subscription_property`，支持批量或单频道更新颜色、静音、置顶和通知开关。颜色严格校验为 6 位十六进制值，其余属性必须为布尔值；不接受仅为旧客户端保留的 `in_home_view`。

@@ -23,6 +23,7 @@ import { ZULIP_OWN_PROFILE_ACTION_HANDLERS } from "./own-profile-actions.js";
 import { ZULIP_PREFERENCE_ACTION_HANDLERS } from "./preference-actions.js";
 import { ZULIP_PLAYGROUND_ACTION_HANDLERS } from "./playground-actions.js";
 import { ZULIP_PROFILE_FIELD_ACTION_HANDLERS } from "./profile-field-actions.js";
+import { ZULIP_SCHEDULED_MESSAGE_ACTION_HANDLERS } from "./scheduled-message-actions.js";
 import { ZULIP_USER_ACTION_HANDLERS } from "./user-actions.js";
 import { ZULIP_USER_GROUP_ACTION_HANDLERS } from "./user-group-actions.js";
 
@@ -44,13 +45,6 @@ const ACTION_HANDLERS = {
     send_typing_notification: (client, params) =>
         client.call("typing", "POST", requireParams(params)),
     get_server_settings: client => client.call("server_settings"),
-    get_scheduled_messages: client => client.call("scheduled_messages"),
-    create_scheduled_message: (client, params) =>
-        client.call("scheduled_messages", "POST", requireParams(params)),
-    edit_scheduled_message: (client, params) =>
-        resourceAction(client, "scheduled_messages", "scheduled_message_id", "PATCH", params),
-    delete_scheduled_message: (client, params) =>
-        resourceAction(client, "scheduled_messages", "scheduled_message_id", "DELETE", params),
     get_drafts: client => client.call("drafts"),
     create_drafts: (client, params) => client.call("drafts", "POST", requireParams(params)),
     edit_draft: (client, params) => resourceAction(client, "drafts", "draft_id", "PATCH", params),
@@ -82,6 +76,7 @@ const ACTION_HANDLERS = {
     ...ZULIP_PREFERENCE_ACTION_HANDLERS,
     ...ZULIP_PLAYGROUND_ACTION_HANDLERS,
     ...ZULIP_PROFILE_FIELD_ACTION_HANDLERS,
+    ...ZULIP_SCHEDULED_MESSAGE_ACTION_HANDLERS,
     ...ZULIP_USER_ACTION_HANDLERS,
     ...ZULIP_USER_GROUP_ACTION_HANDLERS,
 } satisfies Readonly<Record<string, PlatformActionHandler<ZulipClient>>>;

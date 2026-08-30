@@ -10,6 +10,7 @@ import {
 } from "./event-base.js";
 import { projectZulipChannelEvents } from "./channel-events.js";
 import { projectZulipResourceEvent } from "./resource-events.js";
+import { projectZulipScheduledMessageEvents } from "./scheduled-message-events.js";
 import type {
     ZulipBaseEvent,
     ZulipDeleteMessageEvent,
@@ -46,6 +47,8 @@ export function projectZulipEvents(
     if (event.type === "realm_emoji") return [projectRealmEmoji(event, context)];
     const channelEvents = projectZulipChannelEvents(event, context);
     if (channelEvents) return channelEvents;
+    const scheduledMessageEvents = projectZulipScheduledMessageEvents(event, context);
+    if (scheduledMessageEvents) return scheduledMessageEvents;
     const resourceEvent = projectZulipResourceEvent(event, context);
     if (resourceEvent) return [resourceEvent];
     return [customNotice(event, context)];
