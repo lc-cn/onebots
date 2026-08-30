@@ -104,6 +104,8 @@ LINE 每次最多发送 5 条 Message。通用 `sendMessage` 会按 5 条自动�
 
 Audience 动作会在请求发出前闭合官方参数：JSON 上传要求 1 到 10000 个仅含 `id` 的对象，文件上传固定为 `text/plain` 并验证规范 Base64，受众 ID 必须为正整数，列表分页限制为每页 1 到 40 条。外层及受众请求中的未知字段不会再被静默忽略；来源筛选同时支持当前官方的 `BUSINESS_MANAGER` 与 `YAHOO_DISPLAY_ADS`。
 
+Rich Menu 与 Coupon 动作使用共用的精确参数入口。图片只接受规范 Base64 编码、文件签名匹配的 PNG/JPEG 且不超过 1 MB；alias 遵循官方 1 到 32 位字符集；批量用户关联限制为 1 到 500 个不重复 ID。无参数动作以及 Coupon 查询同样拒绝多余字段，Coupon 创建必须显式提供 `coupon` 对象。
+
 ## 官方限制
 
 - LINE 不提供机器人撤回已发送消息的 API；`deleteMessage` 会返回结构化“不支持”错误。

@@ -34,6 +34,9 @@ export function couponStatuses(
 ): Set<"DRAFT" | "RUNNING" | "CLOSED"> | undefined {
     const values = optionalStringArray(params, "status");
     if (!values) return undefined;
+    if (values.length === 0) {
+        throw invalidParams("LINE 参数 status 不能为空数组");
+    }
     const allowed = new Set(["DRAFT", "RUNNING", "CLOSED"]);
     if (!values.every(value => allowed.has(value))) {
         throw invalidParams("LINE 参数 status 只能包含 DRAFT/RUNNING/CLOSED");
@@ -164,6 +167,14 @@ export function optionalIntegerInRange(
         throw invalidParams(`LINE 参数 ${name} 必须在 ${minimum} 到 ${maximum} 之间`);
     }
     return value;
+}
+
+export function optionalPositiveInteger(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+): number | undefined {
+    if (params[name] === undefined) return undefined;
+    return requirePositiveInteger(params, name);
 }
 
 export function requireBoundedString(
