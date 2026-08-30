@@ -24,6 +24,8 @@ dingtalk.my_bot:
 
 `DingTalkBot.start()` 是并发幂等的；启动期间调用 `stop()` 会使该代启动失效，延迟返回的令牌或连接不会再次触发 `ready`。Stream 首次连接失败会清理旧客户端，因此后续启动可以创建全新连接，而不会卡在未连接实例上。
 
+`stop()` 会先摘除当前 Stream 客户端，再尝试断开并等待全部异步停止监听器；即使 SDK 断开失败，账号状态和其余清理仍会完成，故障以 `DINGTALK_STOP_FAILED` 传播。
+
 事件处理完成后才会向 Stream 确认：这里的“完成”包含异步监听器与全部协议投递，而且单个出口失败不会阻止其他出口看到同一事件。机器人/卡片 CALLBACK 失败返回 `success: false`，普通 EVENT 失败返回 `LATER`。成功事件按 `msgId` 或 `eventId` 有界去重；处理失败不会提交去重记录，因此钉钉重投仍可恢复。缺少原生 ID 的 Webhook 会按 canonical JSON 载荷生成确定性身份，不再使用接收时钟。
 
 高吞吐场景可配置 `max_pending_event_handlers` 与 `max_pending_callback_handlers`。Web 表单只在 Stream 模式显示这两个背压上限，只在 Webhook 模式显示回调验签字段，避免无关配置淹没必要信息。

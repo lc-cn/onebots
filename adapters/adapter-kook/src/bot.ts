@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { WebSocket } from "ws";
-import { emitAllAwaited, type Next, type RouterContext } from "onebots";
+import { emitAllAwaited, FailureCollector, type Next, type RouterContext } from "onebots";
 import type { KookBotEvents } from "./bot-events.js";
 import { assertKookConfig } from "./config.js";
 import { KookError } from "./errors.js";
@@ -76,16 +76,26 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     }
 
     async stop(): Promise<void> {
+        const wasActive = !this.stopped || Boolean(this.startPromise || this.socket);
         this.stopped = true;
         this.generation++;
+        this.startPromise = undefined;
         this.clearTimers();
         this.me = null;
         const socket = this.socket;
         this.socket = undefined;
-        if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "OneBots stopped");
-        await this.gatewayDeliveryTail;
+        const failures = new FailureCollector();
+        if (socket && socket.readyState < WebSocket.CLOSING) {
+            await failures.capture(() => socket.close(1000, "OneBots stopped"));
+        }
+        await failures.capture(() => this.gatewayDeliveryTail);
         this.resetGatewaySession();
-        this.emit("stopped");
+        if (wasActive) await failures.capture(() => emitAllAwaited(this, "stopped"));
+        try {
+            failures.throwIfAny("KOOK 客户端停止期间发生多个错误");
+        } catch (error) {
+            throw KookError.wrap(error, "KOOK_STOP_FAILED");
+        }
     }
 
     getCachedMe(): KookUser | null {
@@ -122,7 +132,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         if (!this.me) this.me = await this.callApi<KookUser>("/v3/user/me");
         if (this.stopped || generation !== this.generation) return;
         if (this.receiveMode === "gateway") await this.connect(generation);
-        else this.emit("ready");
+        else await emitAllAwaited(this, "ready");
     }
 
     private async connect(generation: number): Promise<void> {
@@ -145,7 +155,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
             if (generation !== this.generation || this.stopped) return;
             this.reconnectAttempt = 0;
             this.armPing(socket, generation);
-            this.emit("ready");
+            await emitAllAwaited(this, "ready");
         } catch (error) {
             if (this.socket === socket) this.socket = undefined;
             socket.removeAllListeners();

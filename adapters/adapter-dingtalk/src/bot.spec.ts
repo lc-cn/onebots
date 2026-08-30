@@ -408,6 +408,24 @@ describe("DingTalkBot", () => {
         expect(ready).not.toHaveBeenCalled();
     });
 
+    it("Stream 断开失败时仍完成异步停止通知", async () => {
+        const bot = new DingTalkBot({ account_id: "bot" });
+        const disconnect = vi.fn(() => {
+            throw new Error("disconnect failed");
+        });
+        Object.assign(
+            bot as unknown as { running: boolean; streamClient: { disconnect(): void } },
+            { running: true, streamClient: { disconnect } },
+        );
+        const stopped = vi.fn(async () => undefined);
+        bot.on("stopped", stopped);
+
+        await expect(bot.stop()).rejects.toMatchObject({ code: "DINGTALK_STOP_FAILED" });
+        expect(disconnect).toHaveBeenCalledOnce();
+        expect(stopped).toHaveBeenCalledOnce();
+        await expect(bot.stop()).resolves.toBeUndefined();
+    });
+
     it("保留钉钉业务码、请求 ID 与稳定错误分类", async () => {
         vi.stubGlobal(
             "fetch",

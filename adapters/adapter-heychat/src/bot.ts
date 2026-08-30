@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import type WebSocket from "ws";
+import { emitAllAwaited, FailureCollector } from "onebots";
 import { assertHeychatConfig, resolveHeychatReceiveMode } from "./config.js";
 import { HeychatApiError } from "./errors.js";
 import { HeychatHttpClient } from "./http/client.js";
@@ -47,6 +48,7 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     private socketDeliveryTail: Promise<void> = Promise.resolve();
     private botId: number | null = null;
     private running = false;
+    private startPromise: Promise<void> | null = null;
     private readonly channelContexts = new Map<string, HeychatChannelContext>();
     private readonly messageContexts = new Map<string, HeychatChannelContext>();
 
@@ -57,21 +59,35 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     }
 
     async start(): Promise<void> {
+        if (this.startPromise) return this.startPromise;
         if (this.running) return;
-        this.running = true;
-        this.deliveryAbort = new AbortController();
-        this.deliveryGeneration += 1;
-        if (resolveHeychatReceiveMode(this.config) === "manual") {
-            this.ingress.reset();
-            this.emit("ready");
-            return;
-        }
+        const start = this.startInternal();
+        this.startPromise = start;
         try {
-            const ws = new HeychatWsClient(this.config);
-            this.ws = ws;
-            ws.on("ready", () => {
+            await start;
+        } finally {
+            if (this.startPromise === start) this.startPromise = null;
+        }
+    }
+
+    private async startInternal(): Promise<void> {
+        this.running = true;
+        const generation = ++this.deliveryGeneration;
+        const deliveryAbort = new AbortController();
+        this.deliveryAbort = deliveryAbort;
+        let startingWs: HeychatWsClient | null = null;
+        try {
+            if (resolveHeychatReceiveMode(this.config) === "manual") {
                 this.ingress.reset();
-                this.emit("ready");
+                await emitAllAwaited(this, "ready");
+                return;
+            }
+            const ws = new HeychatWsClient(this.config);
+            startingWs = ws;
+            this.ws = ws;
+            ws.on("ready", async () => {
+                this.ingress.reset();
+                await emitAllAwaited(this, "ready");
             });
             ws.on("disconnected", details => this.emit("disconnected", details));
             ws.on("reconnecting", details => this.emit("reconnecting", details));
@@ -79,26 +95,40 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
             ws.on("event", envelope => this.enqueueSocketEvent(envelope));
             await ws.connect();
         } catch (error) {
-            this.running = false;
-            this.deliveryGeneration += 1;
-            this.deliveryAbort?.abort(new DOMException("HeyChat 启动失败", "AbortError"));
-            this.deliveryAbort = null;
-            this.ws = null;
+            if (generation === this.deliveryGeneration) {
+                this.running = false;
+                this.deliveryGeneration += 1;
+                deliveryAbort.abort(new DOMException("HeyChat 启动失败", "AbortError"));
+                if (this.deliveryAbort === deliveryAbort) this.deliveryAbort = null;
+                if (this.ws === startingWs) this.ws = null;
+            }
             throw error;
         }
     }
 
     async stop(): Promise<void> {
-        if (!this.running) return;
+        const wasActive = this.running || Boolean(this.startPromise || this.ws);
+        if (!wasActive) return;
         this.running = false;
+        this.startPromise = null;
         this.deliveryGeneration += 1;
         this.deliveryAbort?.abort(new DOMException("HeyChat 已停止", "AbortError"));
         this.deliveryAbort = null;
-        this.detachAcceptedSocket?.();
+        const detachAcceptedSocket = this.detachAcceptedSocket;
         this.detachAcceptedSocket = null;
-        this.ws?.close();
+        const ws = this.ws;
         this.ws = null;
-        this.emit("stopped");
+        const deliveryTail = this.socketDeliveryTail;
+        const failures = new FailureCollector();
+        if (detachAcceptedSocket) await failures.capture(detachAcceptedSocket);
+        if (ws) await failures.capture(() => ws.close());
+        await failures.capture(() => deliveryTail);
+        await failures.capture(() => emitAllAwaited(this, "stopped"));
+        try {
+            failures.throwIfAny("黑盒语音客户端停止期间发生多个错误");
+        } catch (error) {
+            throw HeychatApiError.wrap(error, "HEYCHAT_STOP_FAILED");
+        }
     }
 
     isConnected(): boolean {

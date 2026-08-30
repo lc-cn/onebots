@@ -6,7 +6,7 @@ import {
     WSClient,
     type Logger,
 } from "@larksuiteoapi/node-sdk";
-import { emitAllAwaited } from "onebots";
+import { emitAllAwaited, FailureCollector } from "onebots";
 import { FeishuApiTransport } from "./api-transport.js";
 import { FeishuError } from "./errors.js";
 import {
@@ -219,12 +219,21 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
             this.running = true;
             await emitAllAwaited(this, "ready");
         } catch (error) {
-            if (startingWs && this.wsClient === startingWs) {
-                startingWs.close({ force: true });
-                this.wsClient = undefined;
-                this.eventDispatcher = undefined;
+            if (generation === this.generation) {
+                const failures = new FailureCollector();
+                failures.add(error);
+                if (startingWs && this.wsClient === startingWs) {
+                    this.wsClient = undefined;
+                    this.eventDispatcher = undefined;
+                    await failures.capture(() => startingWs?.close({ force: true }));
+                }
+                this.running = false;
+                try {
+                    failures.throwIfAny("飞书客户端启动回滚期间发生多个错误");
+                } catch (failure) {
+                    throw FeishuError.wrap(failure, "FEISHU_START_FAILED", "start");
+                }
             }
-            this.running = false;
             throw FeishuError.wrap(error, "FEISHU_START_FAILED", "start");
         }
     }
@@ -237,10 +246,17 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
         this.generation += 1;
         this.running = false;
         this.startPromise = undefined;
-        this.wsClient?.close({ force: true });
+        const wsClient = this.wsClient;
         this.wsClient = undefined;
         this.eventDispatcher = undefined;
-        if (wasActive) await emitAllAwaited(this, "stopped");
+        const failures = new FailureCollector();
+        if (wsClient) await failures.capture(() => wsClient.close({ force: true }));
+        if (wasActive) await failures.capture(() => emitAllAwaited(this, "stopped"));
+        try {
+            failures.throwIfAny("飞书客户端停止期间发生多个错误");
+        } catch (error) {
+            throw FeishuError.wrap(error, "FEISHU_STOP_FAILED", "stop");
+        }
     }
 
     /** 解密、认证、投递和响应映射共用一个宿主无关的 HTTP 边界。 */

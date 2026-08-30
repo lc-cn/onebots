@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import WebSocket from "ws";
-import { createProxyAgent, ErrorCategory } from "onebots";
+import { createProxyAgent, emitAllAwaited, ErrorCategory } from "onebots";
 import { assertHeychatConfig } from "../config.js";
 import { HeychatApiError } from "../errors.js";
 import { decodeHeychatEnvelope, isHeychatControlPayload } from "../ingress.js";
@@ -96,7 +96,7 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
             this.reconnectAttempt = 0;
             this.awaitingPong = false;
             this.startHeartbeat(generation);
-            this.emit("ready");
+            await emitAllAwaited(this, "ready");
         } catch (error) {
             if (this.closed || generation !== this.generation) return;
             const wrapped = HeychatApiError.wrap(

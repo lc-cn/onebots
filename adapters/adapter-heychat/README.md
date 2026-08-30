@@ -58,6 +58,8 @@ heychat.my_bot:
 
 manual 模式仍保留 REST 出站能力，但不会建立 WebSocket、发送心跳或负责重连。宿主可逐条 `await bot.ingest(rawEvent)`，也可将 `ws` 已升级实例交给 `bot.acceptWebSocket(socket)`；后者返回解除监听函数，socket 的心跳、关闭与重连所有权仍属于宿主。显式接入方应在 Promise 拒绝时保留原事件并重投；只有监听器与协议分发全部成功后，同一连接代次内的精确 `sequence` 才会被确认为重复事件。
 
+并发 `start()` 会共享同一次初始化并等待异步 `ready`；`stop()` 会先取消当前投递代次，再依次解除宿主 socket、关闭正向连接、等待本地事件队列和全部异步停止监听器，关闭失败不会留下仍可见的旧连接。
+
 ## 场景 ID
 
 频道消息需要同时携带房间 ID 与频道 ID。适配器使用稳定的 `room_id:channel_id` 复合 `scene_id`：

@@ -386,6 +386,27 @@ describe("FeishuBot 请求与事件边界", () => {
         expect(ready).not.toHaveBeenCalled();
     });
 
+    it("长连接关闭失败时仍完成异步停止通知", async () => {
+        const bot = createBot();
+        const close = vi.fn(() => {
+            throw new Error("close failed");
+        });
+        Object.assign(
+            bot as unknown as {
+                running: boolean;
+                wsClient: { close(options: { force: boolean }): void };
+            },
+            { running: true, wsClient: { close } },
+        );
+        const stopped = vi.fn(async () => undefined);
+        bot.on("stopped", stopped);
+
+        await expect(bot.stop()).rejects.toMatchObject({ code: "FEISHU_STOP_FAILED" });
+        expect(close).toHaveBeenCalledWith({ force: true });
+        expect(stopped).toHaveBeenCalledOnce();
+        await expect(bot.stop()).resolves.toBeUndefined();
+    });
+
     it("平台错误保留业务码并继承统一错误分类", async () => {
         vi.stubGlobal(
             "fetch",

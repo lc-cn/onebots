@@ -193,6 +193,48 @@ describe("KOOK Bot", () => {
         await bot.stop();
     });
 
+    test("等待异步生命周期监听器并在关闭失败后完成停止通知", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValue(
+                    new Response(
+                        JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } }),
+                    ),
+                ),
+        );
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        let releaseReady!: () => void;
+        bot.on("ready", () => new Promise<void>(resolve => (releaseReady = resolve)));
+        const starting = bot.start();
+        await vi.waitFor(() => expect(releaseReady).toBeTypeOf("function"));
+        let started = false;
+        void starting.then(() => (started = true));
+        expect(started).toBe(false);
+        releaseReady();
+        await starting;
+
+        const stopped = vi.fn(async () => undefined);
+        bot.on("stopped", stopped);
+        Object.assign(bot as unknown as { socket: object }, {
+            socket: {
+                readyState: 1,
+                close: vi.fn(() => {
+                    throw new Error("close failed");
+                }),
+            },
+        });
+
+        await expect(bot.stop()).rejects.toMatchObject({ code: "KOOK_STOP_FAILED" });
+        expect(stopped).toHaveBeenCalledOnce();
+        await expect(bot.stop()).resolves.toBeUndefined();
+    });
+
     test("manual ingest 复用 Gateway sn 保序器", async () => {
         const bot = new KookBot({
             account_id: "bot",

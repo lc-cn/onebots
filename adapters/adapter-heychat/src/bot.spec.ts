@@ -53,6 +53,79 @@ describe("HeychatBot manual ingress", () => {
         );
     });
 
+    it("并发启动共享异步 ready，并在停止前等待事件队列清空", async () => {
+        const bot = new HeychatBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        let releaseReady!: () => void;
+        bot.on("ready", () => new Promise<void>(resolve => (releaseReady = resolve)));
+
+        const first = bot.start();
+        const second = bot.start();
+        await Promise.resolve();
+        expect(releaseReady).toBeTypeOf("function");
+        releaseReady();
+        await Promise.all([first, second]);
+
+        let releaseDelivery!: () => void;
+        const delivery = new Promise<void>(resolve => (releaseDelivery = resolve));
+        Object.assign(bot as unknown as { socketDeliveryTail: Promise<void> }, {
+            socketDeliveryTail: delivery,
+        });
+        const stopped = vi.fn(async () => undefined);
+        bot.on("stopped", stopped);
+        const stopping = bot.stop();
+        await Promise.resolve();
+        expect(stopped).not.toHaveBeenCalled();
+        releaseDelivery();
+        await stopping;
+        expect(stopped).toHaveBeenCalledOnce();
+    });
+
+    it("旧启动迟到失败不会覆盖快速重启的新代次", async () => {
+        const bot = new HeychatBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        let rejectOld!: (error: Error) => void;
+        const staleReady = () =>
+            new Promise<void>((_resolve, reject) => {
+                rejectOld = reject;
+            });
+        bot.on("ready", staleReady);
+        const staleStart = bot.start();
+        await Promise.resolve();
+
+        await bot.stop();
+        bot.off("ready", staleReady);
+        await bot.start();
+        rejectOld(new Error("stale ready failed"));
+
+        await expect(staleStart).rejects.toThrow("stale ready failed");
+        expect(bot.isConnected()).toBe(true);
+        await bot.stop();
+    });
+
+    it("底层关闭失败时仍完成停止通知并清除连接", async () => {
+        const bot = new HeychatBot({ account_id: "bot", token: "token" });
+        const close = vi.fn(() => {
+            throw new Error("close failed");
+        });
+        Object.assign(bot as unknown as { running: boolean; ws: { close(): void } | null }, {
+            running: true,
+            ws: { close },
+        });
+        const stopped = vi.fn(async () => undefined);
+        bot.on("stopped", stopped);
+
+        await expect(bot.stop()).rejects.toMatchObject({ code: "HEYCHAT_STOP_FAILED" });
+        expect(stopped).toHaveBeenCalledOnce();
+        expect(bot.isConnected()).toBe(false);
+    });
+
     it("从命令与卡片交互维护精确频道上下文但不猜测房间目标", async () => {
         const bot = new HeychatBot({
             account_id: "bot",

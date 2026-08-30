@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { DWClient } from "dingtalk-stream";
-import { emitAllAwaited, ErrorCategory } from "onebots";
+import { emitAllAwaited, ErrorCategory, FailureCollector } from "onebots";
 import { DingTalkApiClient } from "./api-client.js";
 import { DingTalkCallbackCrypto } from "./crypto.js";
 import { assertDingTalkConfig } from "./config.js";
@@ -114,9 +114,16 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         this.generation += 1;
         this.running = false;
         this.startPromise = undefined;
-        this.streamClient?.disconnect();
+        const stream = this.streamClient;
         this.streamClient = undefined;
-        if (wasActive) await emitAllAwaited(this, "stopped");
+        const failures = new FailureCollector();
+        if (stream) await failures.capture(() => stream.disconnect());
+        if (wasActive) await failures.capture(() => emitAllAwaited(this, "stopped"));
+        try {
+            failures.throwIfAny("钉钉客户端停止期间发生多个错误");
+        } catch (error) {
+            throw DingTalkError.wrap(error, "DINGTALK_STOP_FAILED");
+        }
     }
 
     private async startInternal(generation: number): Promise<void> {
@@ -136,11 +143,19 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
             await emitAllAwaited(this, "ready");
         } catch (error) {
             if (generation === this.generation) {
-                this.streamClient?.disconnect();
+                const stream = this.streamClient;
                 this.streamClient = undefined;
                 this.running = false;
+                const failures = new FailureCollector();
+                failures.add(error);
+                if (stream) await failures.capture(() => stream.disconnect());
+                try {
+                    failures.throwIfAny("钉钉客户端启动回滚期间发生多个错误");
+                } catch (failure) {
+                    throw DingTalkError.wrap(failure, "DINGTALK_START_FAILED");
+                }
             }
-            throw error;
+            throw DingTalkError.wrap(error, "DINGTALK_START_FAILED");
         }
     }
 
