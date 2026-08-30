@@ -49,14 +49,24 @@ export async function runPollingLoop(context: PollingLoopContext): Promise<void>
                 try {
                     await context.ingest(event);
                 } catch (error) {
-                    // 单条畸形事件不能阻断同批后续消息；错误仍交给宿主完整记录。
-                    context.reportError(error);
+                    if (error instanceof GatewayFault && error.code === "INVALID_EVENT") {
+                        // 无法形成稳定身份的毒事件即使重拉也无法恢复，只隔离这一类输入。
+                        context.reportError(error);
+                        continue;
+                    }
+                    throw error;
                 }
             }
-            // 仅在整批事件均已尝试投递后提交游标，保证进程异常时至少一次交付。
+            // 只有全部非毒事件成功投递后才提交；持久化失败必须回滚内存游标。
             if (typeof batch.get_updates_buf === "string") {
+                const previousBuffer = context.session.syncBuffer;
                 context.session.syncBuffer = batch.get_updates_buf;
-                await context.persist();
+                try {
+                    await context.persist();
+                } catch (error) {
+                    context.session.syncBuffer = previousBuffer;
+                    throw error;
+                }
             }
             retryDelay = context.options.retryInitialDelayMs ?? ILINK_RETRY_INITIAL_MS;
         } catch (error) {

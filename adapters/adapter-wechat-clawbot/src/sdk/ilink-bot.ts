@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { RecentEventDeduplicator } from "onebots";
 
 import { ILINK_LONG_WAIT_MS, ILINK_QR_BOT_CLASS_DEFAULT } from "./internal/config.js";
 import { MissingReplyLaneFault, GatewayFault } from "./internal/errors.js";
@@ -40,8 +41,9 @@ import {
 import type { ClawbotContextTokenStore } from "../context-token-store.js";
 import { runPollingLoop } from "./polling-loop.js";
 import {
-    emitInboundSafely,
+    emitInbound,
     assertInboundWirePacket,
+    inboundEventKey,
     rememberRecentMessage,
     runTextBindings,
     resolveRecentMedia,
@@ -65,6 +67,7 @@ export class IlinkBot extends EventEmitter<IlinkBotEvents> {
     private readonly regexBindings: RegexBinding[] = [];
     private readonly typing: IlinkTypingRuntime;
     private readonly recentMessages = new Map<string, NormalizedChatEvent>();
+    private readonly receivedEvents = new RecentEventDeduplicator<string>();
     private readonly contextTokenStore?: ClawbotContextTokenStore;
     private readonly contextTokenAccountKey?: string;
     private didMigrateContextTokensFromFile = false;
@@ -403,14 +406,17 @@ export class IlinkBot extends EventEmitter<IlinkBotEvents> {
         assertInboundWirePacket(rawEvent);
         // getupdates 会回送 BOT 副本；将它投递为入站消息会造成自触发与上下文污染。
         if (rawEvent.message_type !== AuthorKind.Human) return undefined;
+        const eventKey = inboundEventKey(rawEvent);
+        if (this.receivedEvents.has(eventKey)) return undefined;
         const evt = mapInboundWirePacket(rawEvent);
         rememberRecentMessage(this.recentMessages, evt);
         await this.memorizeReplyContext(evt.chat.id, evt.contextToken);
-        await emitInboundSafely(this, "message", evt);
+        await emitInbound(this, "message", evt);
         if (evt.type !== "unknown") {
-            await emitInboundSafely(this, evt.type, evt);
+            await emitInbound(this, evt.type, evt);
         }
         await runTextBindings(this, this.regexBindings, evt);
+        this.receivedEvents.commit(eventKey);
         return evt;
     }
 

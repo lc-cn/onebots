@@ -28,26 +28,51 @@ describe("IlinkBot 接收与轮询生命周期", () => {
         expect(await bot.getLatestContextToken("peer")).toBe("ctx");
     });
 
-    it("监听器异常不会中断 ingest", async () => {
+    it("监听器异常阻止确认，同一事件可重投且成功后去重", async () => {
         const bot = new IlinkBot();
         const errors = vi.fn();
+        let attempts = 0;
         bot.on("message", () => {
-            throw new Error("handler failed");
-        });
-        bot.onText(/hello/, async () => {
-            throw new Error("matcher failed");
+            attempts += 1;
+            if (attempts === 1) throw new Error("handler failed");
         });
         bot.on("listener_error", errors);
 
-        await expect(
-            bot.ingest({
-                message_id: 8,
-                message_type: 1,
-                from_user_id: "peer",
-                item_list: [{ type: 1, text_item: { text: "hello" } }],
-            }),
-        ).resolves.toMatchObject({ id: 8 });
-        expect(errors).toHaveBeenCalledTimes(2);
+        const event = {
+            message_id: 8,
+            message_type: 1,
+            from_user_id: "peer",
+            item_list: [{ type: 1, text_item: { text: "hello" } }],
+        };
+        await expect(bot.ingest(event)).rejects.toMatchObject({ code: "EVENT_DELIVERY_FAILED" });
+        await expect(bot.ingest(event)).resolves.toMatchObject({ id: 8 });
+        await expect(bot.ingest(event)).resolves.toBeUndefined();
+
+        expect(attempts).toBe(2);
+        expect(errors).toHaveBeenCalledOnce();
+    });
+
+    it("文本绑定异常同样阻止确认，并保留重投机会", async () => {
+        const bot = new IlinkBot();
+        let attempts = 0;
+        bot.onText(/hello/, async () => {
+            attempts += 1;
+            if (attempts === 1) throw new Error("matcher failed");
+        });
+
+        const event = {
+            message_id: 9,
+            message_type: 1,
+            from_user_id: "peer",
+            item_list: [{ type: 1, text_item: { text: "hello" } }],
+        };
+        await expect(bot.ingest(event)).rejects.toMatchObject({
+            code: "EVENT_DELIVERY_FAILED",
+            operation: "text_match",
+        });
+        await expect(bot.ingest(event)).resolves.toMatchObject({ id: 9 });
+        await expect(bot.ingest(event)).resolves.toBeUndefined();
+        expect(attempts).toBe(2);
     });
 
     it("ingest 拒绝无法定位或无法回复的畸形事件", async () => {
