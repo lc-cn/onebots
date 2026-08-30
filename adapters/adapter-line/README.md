@@ -47,7 +47,9 @@ https://your-domain.example/line/my-line-bot/webhook
 - `messageEdited` → `message_updated`；
 - `unsend` → `message_deleted`；
 - follow / unfollow、机器人加入 / 离开会话、成员加入 / 离开、postback；
-- 批量成员事件会按用户拆成独立 typed notice；会员、Beacon、账号绑定、视频播放完成、模块生命周期等作为 `custom` 事件无损交付。
+- 批量成员事件会按用户拆成独立 typed notice；
+- 会员与账号绑定投影为 `user_updated`，电话通知送达投影为 `message_status`，Beacon 与视频播放完成投影为 `interaction`，并提供稳定 `sub_type`；
+- Module 控制、Bot suspend/resume 等没有准确通用语义的生命周期事件保留为带精确 `sub_type` 的 `custom`，关键原生载荷同时保存在 `extensions.line`。
 
 事件的 `bot_id` 使用 CallbackRequest 的 `destination` 或身份接口返回的 LINE Official Account user ID，不会把 OneBots 的账号配置别名伪装成平台身份。机器人离开 group/room 后，对应会话也会从已知群目录移除。
 

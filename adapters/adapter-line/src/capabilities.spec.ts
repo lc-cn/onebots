@@ -17,5 +17,7 @@ describe("LINE 能力清单", () => {
         expect(lineCapabilities.segments.line_message?.support).toBe("native");
         expect(lineCapabilities.events.group_increase?.support).toBe("native");
         expect(lineCapabilities.events.group_decrease?.support).toBe("native");
+        expect(lineCapabilities.events.user_updated?.support).toBe("native");
+        expect(lineCapabilities.events.message_status?.support).toBe("native");
     });
 });

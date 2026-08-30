@@ -85,10 +85,22 @@ export const lineCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         group_decrease: { support: "native", scenes: ["group"] },
         member_joined: { support: "native", scenes: ["group"] },
         member_left: { support: "native", scenes: ["group"] },
-        interaction: { support: "native" },
+        user_updated: {
+            support: "native",
+            scenes: ["private"],
+            note: "会员加入/续订/退出与账号绑定结果使用稳定 sub_type 投影",
+        },
+        message_status: {
+            support: "native",
+            note: "LINE notification messages 送达完成事件",
+        },
+        interaction: {
+            support: "native",
+            note: "Postback、Beacon 与视频播放完成事件使用稳定 sub_type 投影",
+        },
         custom: {
             support: "native",
-            note: "join/leave、会员、Beacon、账号绑定、视频播放完成及模块事件无损交付",
+            note: "Module 控制、Bot suspend/resume 等无对应通用语义的生命周期事件无损交付",
         },
     },
     segments: {

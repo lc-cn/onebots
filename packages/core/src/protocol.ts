@@ -125,6 +125,10 @@ export namespace Protocol {
                     ],
                 },
                 { path: "notice_type", label: "通知类型" },
+                {
+                    path: "sub_type",
+                    label: "事件子类型",
+                },
                 { path: "request_type", label: "请求类型" },
                 { path: "meta_type", label: "元事件类型" },
                 { path: "platform", label: "平台" },

@@ -168,4 +168,121 @@ describe("LINE 事件投影", () => {
             },
         ]);
     });
+
+    it("将会员与账号绑定投影为可过滤的用户变更", () => {
+        const base = {
+            timestamp: 6,
+            mode: "active" as const,
+            deliveryContext: { isRedelivery: false },
+            source: { type: "user" as const, userId: "U1" },
+        };
+        expect(
+            projectLineEvents(
+                {
+                    ...base,
+                    type: "membership",
+                    webhookEventId: "evt-membership",
+                    replyToken: "reply",
+                    membership: { type: "joined", membershipId: 7 },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "user_updated",
+            sub_type: "membership_joined",
+            user: { id: { string: "U1" } },
+            extensions: { line: { membership: { membershipId: 7 } } },
+        });
+        expect(
+            projectLineEvents(
+                {
+                    ...base,
+                    type: "accountLink",
+                    webhookEventId: "evt-link",
+                    link: { result: "failed", nonce: "nonce" },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "user_updated",
+            sub_type: "account_link_failed",
+            extensions: { line: { account_link: { nonce: "nonce" } } },
+        });
+    });
+
+    it("将 Beacon、视频完成与电话通知送达投影为精确通用事件", () => {
+        const base = {
+            timestamp: 7,
+            mode: "active" as const,
+            deliveryContext: { isRedelivery: false },
+            source: { type: "user" as const, userId: "U1" },
+        };
+        expect(
+            projectLineEvents(
+                {
+                    ...base,
+                    type: "beacon",
+                    webhookEventId: "evt-beacon",
+                    replyToken: "reply",
+                    beacon: { hwid: "beacon-1", type: "enter" },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "interaction",
+            sub_type: "beacon_enter",
+            extensions: { line: { beacon: { hwid: "beacon-1" } } },
+        });
+        expect(
+            projectLineEvents(
+                {
+                    ...base,
+                    type: "videoPlayComplete",
+                    webhookEventId: "evt-video",
+                    replyToken: "reply",
+                    videoPlayComplete: { trackingId: "video-1" },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "interaction",
+            sub_type: "video_play_complete",
+            extensions: { line: { video_play_complete: { trackingId: "video-1" } } },
+        });
+        expect(
+            projectLineEvents(
+                {
+                    ...base,
+                    type: "delivery",
+                    webhookEventId: "evt-delivery",
+                    delivery: { data: "delivery-tag" },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "message_status",
+            sub_type: "phone_message_delivered",
+            extensions: { line: { delivery: { data: "delivery-tag" } } },
+        });
+    });
+
+    it("为 Module 与 Bot 生命周期 custom 事件保留精确 sub_type", () => {
+        expect(
+            projectLineEvents(
+                {
+                    type: "module",
+                    timestamp: 8,
+                    mode: "active",
+                    webhookEventId: "evt-module",
+                    deliveryContext: { isRedelivery: false },
+                    module: { type: "attached", botId: "Ubot", scopes: ["chat_message.write"] },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "custom",
+            sub_type: "module_attached",
+            extensions: { line: { module: { botId: "Ubot" } } },
+        });
+    });
 });

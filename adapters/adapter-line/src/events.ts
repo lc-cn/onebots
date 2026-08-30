@@ -69,6 +69,70 @@ export function projectLineEvents(
             });
         });
     }
+    if (event.type === "membership") {
+        return [
+            notice(event, context, "user_updated", {
+                user: sourceUser(event.source, context),
+                sub_type: `membership_${event.membership.type}`,
+                extensions: {
+                    line: {
+                        membership: event.membership,
+                        reply_token: event.replyToken,
+                    },
+                },
+            }),
+        ];
+    }
+    if (event.type === "accountLink") {
+        return [
+            notice(event, context, "user_updated", {
+                user: sourceUser(event.source, context),
+                sub_type: `account_link_${event.link.result}`,
+                extensions: {
+                    line: {
+                        account_link: event.link,
+                        reply_token: event.replyToken,
+                    },
+                },
+            }),
+        ];
+    }
+    if (event.type === "beacon") {
+        return [
+            notice(event, context, "interaction", {
+                user: sourceUser(event.source, context),
+                sub_type: `beacon_${event.beacon.type}`,
+                extensions: {
+                    line: {
+                        beacon: event.beacon,
+                        reply_token: event.replyToken,
+                    },
+                },
+            }),
+        ];
+    }
+    if (event.type === "videoPlayComplete") {
+        return [
+            notice(event, context, "interaction", {
+                user: sourceUser(event.source, context),
+                sub_type: "video_play_complete",
+                extensions: {
+                    line: {
+                        video_play_complete: event.videoPlayComplete,
+                        reply_token: event.replyToken,
+                    },
+                },
+            }),
+        ];
+    }
+    if (event.type === "delivery") {
+        return [
+            notice(event, context, "message_status", {
+                sub_type: "phone_message_delivered",
+                extensions: { line: { delivery: event.delivery } },
+            }),
+        ];
+    }
     if (event.type === "postback") {
         return [
             notice(event, context, "interaction", {
@@ -82,7 +146,8 @@ export function projectLineEvents(
         notice(event, context, "custom", {
             user: sourceUser(event.source, context),
             group: sourceGroup(event.source, context),
-            extensions: { line: { kind: event.type, reply_token: replyToken(event) } },
+            sub_type: customEventSubtype(event),
+            extensions: { line: customEventExtension(event) },
         }),
     ];
 }
@@ -247,4 +312,25 @@ function replyToken(event: webhook.Event): string | undefined {
     return "replyToken" in event && typeof event.replyToken === "string"
         ? event.replyToken
         : undefined;
+}
+
+/** 为无法无损映射到 CommonEvent 的 LINE 生命周期事件提供稳定过滤键。 */
+function customEventSubtype(event: webhook.Event): string {
+    if (event.type === "module") return `module_${event.module.type}`;
+    if (event.type === "activated") return "module_control_activated";
+    if (event.type === "deactivated") return "module_control_deactivated";
+    if (event.type === "botResumed") return "bot_resumed";
+    if (event.type === "botSuspended") return "bot_suspended";
+    return event.type;
+}
+
+/** 把关键原生载荷放入 extensions，使支持扩展字段的协议无需解析 raw_event。 */
+function customEventExtension(event: webhook.Event): Record<string, unknown> {
+    const extension: Record<string, unknown> = {
+        kind: event.type,
+        reply_token: replyToken(event),
+    };
+    if (event.type === "module") extension.module = event.module;
+    if (event.type === "activated") extension.chat_control = event.chatControl;
+    return extension;
 }
