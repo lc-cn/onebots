@@ -11,7 +11,7 @@ import { zulipCapabilities } from "./capabilities.js";
 import { ZulipClient } from "./client.js";
 import { toGroupInfo, toGroupMember, toMessageInfo, toUserInfo } from "./entities.js";
 import { ZulipError } from "./errors.js";
-import { projectZulipEvent } from "./events.js";
+import { projectZulipEvents } from "./events.js";
 import { loadZulipUpload, resolveZulipMedia } from "./media.js";
 import { compileZulipMessage } from "./messages.js";
 import { executeZulipPlatformAction, ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
@@ -299,8 +299,8 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
         client.on("event", (event: ZulipEvent) => {
             const selfId = client.getCachedMe()?.user_id;
             if (event.type === "message" && isOwnMessage(event, selfId)) return;
-            return account.dispatchAwaited(
-                projectZulipEvent(event, {
+            return account.dispatchManyAwaited(
+                projectZulipEvents(event, {
                     botId: this.createId(selfId ?? account.account_id),
                     botUserId: selfId,
                     serverUrl: client.config.server_url,

@@ -177,6 +177,18 @@ export class Account<
             throw new AggregateError(failures, `${failures.length} 个协议投递失败`);
         }
     }
+
+    /**
+     * 顺序投递同一原始事件拆出的 canonical 事件，并确保单项失败不阻止其余项。
+     * 全部项均获得投递机会后，再将失败聚合反馈给可靠接入层。
+     */
+    async dispatchManyAwaited(commonEvents: readonly CommonEvent.Base[]): Promise<void> {
+        const failures = new FailureCollector();
+        for (const commonEvent of commonEvents) {
+            await failures.capture(() => this.dispatchAwaited(commonEvent));
+        }
+        failures.throwIfAny(`${failures.size} 个 canonical 事件投递失败`);
+    }
 }
 
 export enum AccountStatus {

@@ -16,30 +16,35 @@ interface ZulipProjectionContext {
     createId(value: string | number): CommonTypes.Id;
 }
 
-/** 将官方 Event Queue 事件无损投影为通用事件。 */
-export function projectZulipEvent(
+/** 将官方 Event Queue 事件无损投影为一个或多个通用事件。 */
+export function projectZulipEvents(
     event: ZulipEvent,
     context: ZulipProjectionContext,
-): CommonEvent.Event<ZulipEvent> {
-    if (isMessageEvent(event)) return projectMessage(event, context);
-    if (isUpdateEvent(event)) return projectUpdate(event, context);
-    if (isDeleteEvent(event)) return projectDelete(event, context);
-    if (isReactionEvent(event)) return projectReaction(event, context);
+): CommonEvent.Event<ZulipEvent>[] {
+    if (isMessageEvent(event)) return [projectMessage(event, context)];
+    if (isUpdateEvent(event)) return [projectUpdate(event, context)];
+    if (isDeleteEvent(event)) return [projectDelete(event, context)];
+    if (isReactionEvent(event)) return [projectReaction(event, context)];
     if (event.type === "heartbeat") {
-        return {
-            ...base(event, context),
-            type: "meta",
-            meta_type: "heartbeat",
-            sub_type: "event_queue",
-        };
+        return [
+            {
+                ...base(event, context),
+                type: "meta",
+                meta_type: "heartbeat",
+                sub_type: "event_queue",
+            },
+        ];
     }
-    if (event.type === "realm_user") return projectRealmUser(event, context);
-    return {
-        ...base(event, context),
-        type: "notice",
-        notice_type: "custom",
-        extensions: { zulip: event },
-    };
+    if (event.type === "realm_user") return [projectRealmUser(event, context)];
+    if (event.type === "user_group") return projectUserGroup(event, context);
+    return [
+        {
+            ...base(event, context),
+            type: "notice",
+            notice_type: "custom",
+            extensions: { zulip: event },
+        },
+    ];
 }
 
 /** 将 Zulip Markdown 消息及附件投影为通用消息段。 */
@@ -213,10 +218,100 @@ function projectRealmUser(
     };
 }
 
+function projectUserGroup(
+    event: ZulipBaseEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent>[] {
+    const op = stringValue(event.op) || "update";
+    const group = isRecord(event.group) ? event.group : undefined;
+    const data = isRecord(event.data) ? event.data : undefined;
+    const groupId = numeric(group?.id) ?? numeric(event.group_id);
+    if (groupId === undefined) return [customNotice(event, context)];
+    const resource: CommonTypes.Resource = {
+        ...(group || {}),
+        ...(data || {}),
+        type: "user_group",
+        id: context.createId(groupId),
+        name: stringValue(group?.name) || stringValue(data?.name),
+    };
+    const memberIds = numericArray(event.user_ids);
+    if (op === "add_members" || op === "remove_members") {
+        if (!memberIds.length) return [customNotice(event, context)];
+        return memberIds.map(userId => ({
+            ...noticeBase(event, context, resource, op, userId),
+            notice_type:
+                op === "add_members" ? "user_group_member_added" : "user_group_member_removed",
+            user: { id: context.createId(userId) },
+        }));
+    }
+    const subgroupIds = numericArray(event.direct_subgroup_ids);
+    if (op === "add_subgroups" || op === "remove_subgroups") {
+        if (!subgroupIds.length) return [customNotice(event, context)];
+        return subgroupIds.map(subgroupId => ({
+            ...noticeBase(event, context, resource, op, subgroupId),
+            notice_type:
+                op === "add_subgroups"
+                    ? "user_group_subgroup_added"
+                    : "user_group_subgroup_removed",
+            resource: { ...resource, related_user_group_id: context.createId(subgroupId) },
+        }));
+    }
+    const deactivated = data?.deactivated;
+    const noticeType: CommonEvent.NoticeType =
+        op === "add"
+            ? "user_group_created"
+            : op === "remove" || deactivated === true
+              ? "user_group_deactivated"
+              : deactivated === false
+                ? "user_group_reactivated"
+                : "user_group_updated";
+    const createdAt = numeric(group?.date_created);
+    return [
+        {
+            ...noticeBase(event, context, resource, op),
+            timestamp: createdAt === undefined ? 0 : createdAt * 1000,
+            notice_type: noticeType,
+        },
+    ];
+}
+
+function noticeBase(
+    event: ZulipBaseEvent,
+    context: ZulipProjectionContext,
+    resource: CommonTypes.Resource,
+    op: string,
+    relatedId?: number,
+): CommonEvent.Notice<ZulipEvent> {
+    return {
+        ...base(event, context),
+        ...(relatedId === undefined
+            ? {}
+            : { id: context.createId(`event:${event.id}:${relatedId}`) }),
+        type: "notice",
+        notice_type: "user_group_updated",
+        sub_type: op,
+        resource,
+        extensions: { zulip: event },
+    };
+}
+
+function customNotice(
+    event: ZulipBaseEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent> {
+    return {
+        ...base(event, context),
+        type: "notice",
+        notice_type: "custom",
+        sub_type: stringValue(event.op),
+        extensions: { zulip: event },
+    };
+}
+
 function base(
     event: ZulipEvent,
     context: ZulipProjectionContext,
-    timestamp = Date.now(),
+    timestamp = 0,
 ): CommonEvent.Base<ZulipEvent> {
     return {
         id: context.createId(`event:${event.id}`),
@@ -263,6 +358,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function numeric(value: unknown): number | undefined {
     return typeof value === "number" && Number.isSafeInteger(value) ? value : undefined;
+}
+
+function numericArray(value: unknown): number[] {
+    return Array.isArray(value)
+        ? value.filter((item): item is number => numeric(item) !== undefined)
+        : [];
 }
 
 function stringValue(value: unknown): string | undefined {

@@ -39,6 +39,7 @@ const DEFAULT_EVENT_TYPES = [
     "subscription",
     "stream",
     "realm_user",
+    "user_group",
     "presence",
     "user_status",
     "typing",
@@ -336,6 +337,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
                 apply_markdown: false,
                 client_capabilities: {
                     empty_topic_name: true,
+                    include_deactivated_groups: true,
                     user_avatar_url_field_optional: true,
                     user_list_incomplete: true,
                     simplified_presence_events: true,

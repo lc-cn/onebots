@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectZulipEvent } from "./events.js";
+import { projectZulipEvents } from "./events.js";
 
 const createId = (value: string | number) => ({
     string: String(value),
@@ -33,7 +33,7 @@ describe("Zulip 事件投影", () => {
             },
         };
 
-        const event = projectZulipEvent(raw, context);
+        const event = projectZulipEvents(raw, context)[0];
 
         expect(event).toMatchObject({
             type: "message",
@@ -55,7 +55,7 @@ describe("Zulip 事件投影", () => {
 
     it("投影反应、心跳和未知事件", () => {
         expect(
-            projectZulipEvent(
+            projectZulipEvents(
                 {
                     id: 8,
                     type: "reaction",
@@ -67,20 +67,23 @@ describe("Zulip 事件投影", () => {
                     user_id: 2,
                 },
                 context,
-            ),
+            )[0],
         ).toMatchObject({ type: "notice", notice_type: "reaction_removed" });
-        expect(projectZulipEvent({ id: 9, type: "heartbeat" }, context)).toMatchObject({
+        expect(projectZulipEvents({ id: 9, type: "heartbeat" }, context)[0]).toMatchObject({
             type: "meta",
             meta_type: "heartbeat",
         });
-        expect(projectZulipEvent({ id: 10, type: "typing", op: "start" }, context)).toMatchObject({
+        expect(
+            projectZulipEvents({ id: 10, type: "typing", op: "start" }, context)[0],
+        ).toMatchObject({
+            timestamp: 0,
             type: "notice",
             notice_type: "custom",
         });
     });
 
     it("区分多人私聊并保留可回复的收件人场景", () => {
-        const event = projectZulipEvent(
+        const event = projectZulipEvents(
             {
                 id: 11,
                 type: "message",
@@ -100,12 +103,96 @@ describe("Zulip 事件投影", () => {
                 },
             },
             context,
-        );
+        )[0];
 
         expect(event).toMatchObject({
             type: "message",
             message_type: "direct",
             extensions: { zulip: { scene_id: "2,3" } },
         });
+    });
+
+    it("投影用户组资源生命周期并使用平台创建时间", () => {
+        expect(
+            projectZulipEvents(
+                {
+                    id: 12,
+                    type: "user_group",
+                    op: "add",
+                    group: {
+                        id: 2,
+                        name: "backend",
+                        description: "Backend team",
+                        date_created: 1_717_484_476,
+                        members: [12],
+                    },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            timestamp: 1_717_484_476_000,
+            notice_type: "user_group_created",
+            resource: {
+                type: "user_group",
+                id: { string: "2" },
+                name: "backend",
+                members: [12],
+            },
+        });
+
+        expect(
+            projectZulipEvents(
+                {
+                    id: 13,
+                    type: "user_group",
+                    op: "update",
+                    group_id: 2,
+                    data: { deactivated: true },
+                },
+                context,
+            )[0],
+        ).toMatchObject({ timestamp: 0, notice_type: "user_group_deactivated" });
+    });
+
+    it("逐成员和子组拆分批量变化并生成稳定 ID", () => {
+        const members = projectZulipEvents(
+            {
+                id: 14,
+                type: "user_group",
+                op: "add_members",
+                group_id: 2,
+                user_ids: [10, 12],
+            },
+            context,
+        );
+        expect(members).toHaveLength(2);
+        expect(members[0]).toMatchObject({
+            id: { string: "event:14:10" },
+            notice_type: "user_group_member_added",
+            user: { id: { string: "10" } },
+        });
+        expect(members[1]).toMatchObject({ id: { string: "event:14:12" } });
+
+        const subgroups = projectZulipEvents(
+            {
+                id: 15,
+                type: "user_group",
+                op: "remove_subgroups",
+                group_id: 2,
+                direct_subgroup_ids: [3],
+            },
+            context,
+        );
+        expect(subgroups[0]).toMatchObject({
+            notice_type: "user_group_subgroup_removed",
+            resource: { related_user_group_id: { string: "3" } },
+        });
+
+        expect(
+            projectZulipEvents(
+                { id: 16, type: "user_group", op: "add_members", group_id: 2, user_ids: [] },
+                context,
+            )[0],
+        ).toMatchObject({ notice_type: "custom", sub_type: "add_members" });
     });
 });

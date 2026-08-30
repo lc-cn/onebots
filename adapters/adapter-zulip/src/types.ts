@@ -222,12 +222,30 @@ export interface ZulipHeartbeatEvent extends ZulipBaseEvent {
     type: "heartbeat";
 }
 
+export interface ZulipUserGroupEvent extends ZulipBaseEvent {
+    type: "user_group";
+    op:
+        | "add"
+        | "update"
+        | "remove"
+        | "add_members"
+        | "remove_members"
+        | "add_subgroups"
+        | "remove_subgroups";
+    group?: Record<string, unknown>;
+    group_id?: number;
+    data?: Record<string, unknown>;
+    user_ids?: number[];
+    direct_subgroup_ids?: number[];
+}
+
 export type ZulipEvent =
     | ZulipMessageEvent
     | ZulipUpdateMessageEvent
     | ZulipDeleteMessageEvent
     | ZulipReactionEvent
     | ZulipHeartbeatEvent
+    | ZulipUserGroupEvent
     | ZulipBaseEvent;
 
 export interface ZulipQueueRegistration extends ZulipApiEnvelope {

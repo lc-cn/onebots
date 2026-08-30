@@ -36,7 +36,7 @@ zulip.team-bot:
 
 `server_url` 是组织根地址，不应包含 `/api/v1`。生产地址必须使用 HTTPS，仅本机回环地址允许 HTTP。`api_key` 在 Web 表单中按敏感字段处理。旧的 `serverUrl`、`apiKey`、`websocket` 和 `event_queue.enabled` 已移除；是否建立 Event Queue 统一由顶层 `receive_mode` 决定。
 
-事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。事件只有在全部 canonical 监听器成功返回后才推进队列游标并写入本地去重窗口；监听器抛错会保留原游标，让 Event Queue 重投，不会静默丢失业务事件。
+事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、用户组、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。事件只有在全部 canonical 监听器成功返回后才推进队列游标并写入本地去重窗口；监听器抛错会保留原游标，让 Event Queue 重投，不会静默丢失业务事件。
 
 停止会等待轮询退出并尝试删除服务端事件队列；任一步骤失败都会在本地代次清理完成后以结构化错误传播。
 
@@ -78,7 +78,7 @@ await client.start();
 
 通过统一 `callAction` 可调用反应、星标、消息搜索与编辑历史、频道订阅/管理、话题可见性、Presence、用户状态、输入状态、定时消息、草稿、提醒、保存片段、附件、Emoji 和服务器信息等动作。用户组领域提供 `list_user_groups`、`create_user_group`、`update_user_group`、`deactivate_user_group`、`update_user_group_members`、`update_user_group_subgroups`、`get_user_group_members`、`get_user_group_subgroups` 与 `get_user_group_membership`；命名动作严格拒绝未知字段，并校验官方 ID、布尔值及成员数组。`call_zulip_api` 用于尚未封装的官方端点，但不会接受绝对 URL。
 
-平台新增字段不会被丢弃：每个投影事件都保留 `raw_event`，未建立通用语义的事件会以 `notice_type: "custom"` 分发。
+用户组创建、更新、停用/恢复会投影为标准 `user_group` 资源生命周期通知；成员和子组批量变化会拆成具有稳定 ID 的逐对象通知。Zulip 未提供时间的 Event Queue 事件使用明确的时间戳 `0`，不会伪造本机接收时间。平台新增字段不会被丢弃：每个投影事件都保留 `raw_event`，未建立通用语义的事件会以 `notice_type: "custom"` 分发。
 
 ## 官方文档
 

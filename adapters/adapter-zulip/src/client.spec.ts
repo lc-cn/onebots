@@ -308,6 +308,10 @@ describe("ZulipClient", () => {
         expect(registration?.params?.event_types).toContain("message");
         expect(registration?.params?.event_types).toContain("heartbeat");
         expect(registration?.params?.event_types).toContain("restart");
+        expect(registration?.params?.event_types).toContain("user_group");
+        expect(registration?.params?.client_capabilities).toMatchObject({
+            include_deactivated_groups: true,
+        });
         await client.ingest({ id: 2, type: "subscription", op: "add" });
         expect(subscription).toHaveBeenCalledOnce();
         await client.stop();

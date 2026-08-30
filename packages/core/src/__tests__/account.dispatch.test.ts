@@ -106,6 +106,17 @@ describe("Account.dispatch 调试旁路隔离", () => {
         expect(secondDispatch).toHaveBeenCalledOnce();
     });
 
+    it("dispatchManyAwaited 顺序尝试批次全部事件后聚合失败", async () => {
+        const { account, protocolDispatch } = createAccount(vi.fn());
+        const first = { type: "notice", id: "first" } as never;
+        const second = { type: "notice", id: "second" } as never;
+        protocolDispatch.mockRejectedValueOnce(new Error("first failed"));
+
+        await expect(account.dispatchManyAwaited([first, second])).rejects.toThrow("first failed");
+        expect(protocolDispatch).toHaveBeenNthCalledWith(1, first);
+        expect(protocolDispatch).toHaveBeenNthCalledWith(2, second);
+    });
+
     it("协议自身注册的 dispatch 监听器不受调试旁路监听器异常影响", () => {
         const { fakeProtocol } = createAccount(() => {
             throw new Error("调试旁路模拟异常");

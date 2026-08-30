@@ -6,7 +6,7 @@ export { ZulipClient, type ZulipClientEvents, type ZulipClientOptions } from "./
 export { assertZulipConfig, resolveZulipReceiveMode } from "./config.js";
 export { zulipCapabilities } from "./capabilities.js";
 export { ZulipError } from "./errors.js";
-export { projectZulipEvent, projectZulipMessage } from "./events.js";
+export { projectZulipEvents, projectZulipMessage } from "./events.js";
 export { compileZulipMessage, type ZulipMessageCompiler } from "./messages.js";
 export {
     executeZulipPlatformAction,
@@ -24,6 +24,7 @@ const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
     subscription: "频道订阅",
     stream: "频道",
     realm_user: "组织成员",
+    user_group: "用户组",
     presence: "在线状态",
     user_status: "用户状态",
     typing: "输入状态",
