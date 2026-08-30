@@ -67,12 +67,23 @@ describe("WhatsAppBlockedUsers", () => {
         expect(fetcher.mock.calls[0]?.[1]?.method).toBe("DELETE");
     });
 
+    it("封禁动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "list_blocked_users", {
+                fields: ["wa_id"],
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "list_blocked_users", parameter: "fields" },
+        });
+    });
+
     it.each([
         ["单个字符串", "block_users", { users: "+16505551234" }],
         ["非 E.164", "block_users", { users: ["16505551234"] }],
         ["空列表", "unblock_users", { users: [] }],
         ["非法分页", "list_blocked_users", { limit: 0 }],
-        ["附加字段", "list_blocked_users", { fields: ["wa_id"] }],
     ])("拒绝%s", async (_label, action, params) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(executeWhatsAppPlatformAction(client, action, params)).rejects.toMatchObject({

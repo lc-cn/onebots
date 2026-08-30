@@ -157,7 +157,6 @@ export {
 export {
     isWhatsAppBlockedUserAction,
     WhatsAppBlockedUsers,
-    WHATSAPP_BLOCKED_USER_ACTIONS,
     type WhatsAppBlockedUser,
     type WhatsAppBlockedUserAction,
     type WhatsAppBlockedUserListQuery,

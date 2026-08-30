@@ -1,13 +1,7 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
-
-export const WHATSAPP_BLOCKED_USER_ACTIONS = Object.freeze([
-    "list_blocked_users",
-    "block_users",
-    "unblock_users",
-] as const);
-export type WhatsAppBlockedUserAction = (typeof WHATSAPP_BLOCKED_USER_ACTIONS)[number];
 
 export interface WhatsAppBlockedUser {
     messaging_product: "whatsapp";
@@ -45,10 +39,6 @@ export interface WhatsAppUnblockUsersResponse {
     block_users: { removed_users: WhatsAppBlockedUserOperation[] };
 }
 
-export function isWhatsAppBlockedUserAction(action: string): action is WhatsAppBlockedUserAction {
-    return (WHATSAPP_BLOCKED_USER_ACTIONS as readonly string[]).includes(action);
-}
-
 /** Phone Number 级批量封禁控制面，保留 Meta 对输入号码的规范化结果。 */
 export class WhatsAppBlockedUsers {
     constructor(private readonly client: WhatsAppClient) {}
@@ -70,28 +60,6 @@ export class WhatsAppBlockedUsers {
         return unblockResponse(await this.mutate("DELETE", users));
     }
 
-    execute(
-        action: WhatsAppBlockedUserAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "list_blocked_users":
-                rejectUnknown(params, ["limit", "after"]);
-                return this.list({
-                    ...(params.limit === undefined ? {} : { limit: pageLimit(params.limit) }),
-                    ...(params.after === undefined
-                        ? {}
-                        : { after: nonemptyString(params.after, "after") }),
-                });
-            case "block_users":
-                rejectUnknown(params, ["users"]);
-                return this.block(userList(params.users));
-            case "unblock_users":
-                rejectUnknown(params, ["users"]);
-                return this.unblock(userList(params.users));
-        }
-    }
-
     private mutate(method: "POST" | "DELETE", users: readonly string[]): Promise<unknown> {
         return this.client.call<unknown>({
             method,
@@ -104,13 +72,35 @@ export class WhatsAppBlockedUsers {
     }
 }
 
-export const WHATSAPP_BLOCKED_USER_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_BLOCKED_USER_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.blockedUsers.execute(action, params),
-    ]),
-) as Record<WhatsAppBlockedUserAction, PlatformActionHandler<WhatsAppClient>>;
+type BlockedUserActionParams = Readonly<Record<string, unknown>>;
+
+const BLOCKED_USER_ACTION_HANDLERS = {
+    list_blocked_users: (client: WhatsAppClient, params: BlockedUserActionParams) =>
+        client.blockedUsers.list({
+            ...(params.limit === undefined ? {} : { limit: pageLimit(params.limit) }),
+            ...(params.after === undefined ? {} : { after: nonemptyString(params.after, "after") }),
+        }),
+    block_users: (client: WhatsAppClient, params: BlockedUserActionParams) =>
+        client.blockedUsers.block(userList(params.users)),
+    unblock_users: (client: WhatsAppClient, params: BlockedUserActionParams) =>
+        client.blockedUsers.unblock(userList(params.users)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Blocked Users 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_BLOCKED_USER_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    BLOCKED_USER_ACTION_HANDLERS,
+    {
+        list_blocked_users: ["limit", "after"],
+        block_users: ["users"],
+        unblock_users: ["users"],
+    },
+);
+
+export type WhatsAppBlockedUserAction = keyof typeof WHATSAPP_BLOCKED_USER_ACTION_HANDLERS;
+
+export function isWhatsAppBlockedUserAction(action: string): action is WhatsAppBlockedUserAction {
+    return Object.hasOwn(WHATSAPP_BLOCKED_USER_ACTION_HANDLERS, action);
+}
 
 function listQuery(value: unknown): Record<string, string | number> {
     const source = inputRecord(value, "Blocked User 查询");
