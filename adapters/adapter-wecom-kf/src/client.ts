@@ -1,24 +1,9 @@
 import { EventEmitter } from "node:events";
-import { RefreshableValue } from "onebots";
+import { KfApiTransport } from "./api-transport.js";
 import { emitKfDataEvent, reportKfClientError } from "./client-events.js";
 import { assertWeComKfConfig } from "./config.js";
 import { KfCursorState } from "./cursor-state.js";
-import {
-    ensureKfNotAborted,
-    invalidKfParameter,
-    isKfAborted,
-    kfAborted,
-    WeComKfError,
-} from "./errors.js";
-import {
-    createKfApiError,
-    createKfHttpError,
-    isKfJsonResponse,
-    kfApiErrorCode,
-    parseKfJson,
-    requireKfHttpsBase,
-    resolveKfApiUrl,
-} from "./http.js";
+import { ensureKfNotAborted, invalidKfParameter, isKfAborted, WeComKfError } from "./errors.js";
 import { resolveKfOpenKfId } from "./identity.js";
 import { assertKfUploadSize } from "./media.js";
 import { KfMessageDeduplicator } from "./message-deduplicator.js";
@@ -26,12 +11,10 @@ import { resolveKfMessageId } from "./message-id.js";
 import {
     decodeKfAccounts,
     decodeKfCustomers,
-    decodeKfEnvelope,
     decodeKfMediaUpload,
     decodeKfSend,
     decodeKfServiceState,
     decodeKfSync,
-    decodeKfToken,
 } from "./response-decoders.js";
 import type {
     KfAccount,
@@ -48,9 +31,6 @@ import type {
     WeComKfConfig,
 } from "./types.js";
 
-const DEFAULT_API_BASE = "https://qyapi.weixin.qq.com";
-const TOKEN_MARGIN_MS = 120_000;
-const INVALID_TOKEN_CODES = new Set([40014, 42001, 42007, 42009]);
 const MAX_SYNC_PAGES = 1000;
 const MAX_ACCOUNT_PAGES = 1000;
 
@@ -67,8 +47,7 @@ export interface WeComKfClientEvents {
 /** 微信客服 API 客户端、游标同步器与统一事件入口。 */
 export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     readonly apiBaseUrl: string;
-    private readonly tokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
-    private tokenGeneration = 0;
+    private readonly transport: KfApiTransport;
     private pollTimer?: ReturnType<typeof setInterval>;
     private lifecycleAbort?: AbortController;
     private lifecycleGeneration = 0;
@@ -81,11 +60,12 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
 
     constructor(
         readonly config: WeComKfConfig,
-        private readonly fetcher: typeof fetch = fetch,
+        fetcher: typeof fetch = fetch,
     ) {
         super();
         assertWeComKfConfig(config);
-        this.apiBaseUrl = requireKfHttpsBase(config.api_base_url || DEFAULT_API_BASE);
+        this.transport = new KfApiTransport(config, fetcher);
+        this.apiBaseUrl = this.transport.apiBaseUrl;
         this.cursorState = new KfCursorState(config.cursor_store_path);
         this.receivedMessages = new KfMessageDeduplicator(
             config.deduplicate_messages !== false,
@@ -138,13 +118,12 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         if (!this.started) return;
         this.started = false;
         this.lifecycleGeneration += 1;
-        this.tokenGeneration += 1;
         this.startRequest = undefined;
         if (this.pollTimer) clearInterval(this.pollTimer);
         this.pollTimer = undefined;
         this.lifecycleAbort?.abort();
         this.lifecycleAbort = undefined;
-        this.tokens.clear();
+        this.transport.stop();
         this.emit("stop");
     }
 
@@ -172,8 +151,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
 
     /** 获取缓存凭证；`force` 用于平台明确报告凭证失效后的单次刷新。 */
     async getAccessToken(force = false): Promise<string> {
-        const generation = this.tokenGeneration;
-        return this.tokens.get(() => this.fetchToken(generation), force);
+        return this.transport.getAccessToken(force);
     }
 
     /** 调用受限官方路径，并统一处理凭证、JSON、平台错误与一次失效重试。 */
@@ -181,7 +159,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     call(options: KfJsonCallOptions): Promise<KfJsonResponse>;
     call(options: KfCallOptions): Promise<KfJsonResponse | Buffer>;
     call(options: KfCallOptions): Promise<KfJsonResponse | Buffer> {
-        return this.performCall(options, true);
+        return this.transport.call(options);
     }
 
     /** 分页同步指定客服账号的消息与事件，返回去重后已投递的原始条目。 */
@@ -427,74 +405,5 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         for (const item of collected) this.ingest(item, openKfid);
         await this.cursorState.commit(openKfid, cursor);
         return collected;
-    }
-
-    private async fetchToken(generation: number): Promise<{ value: string; ttlMs: number }> {
-        const path = "/cgi-bin/gettoken";
-        const payload = await this.performCall(
-            {
-                path,
-                token: false,
-                query: { corpid: this.config.corp_id, corpsecret: this.config.corp_secret },
-            },
-            false,
-        );
-        if (Buffer.isBuffer(payload)) {
-            throw new WeComKfError("access_token API 意外返回二进制内容", {
-                code: "WECOM_KF_INVALID_RESPONSE",
-                path,
-            });
-        }
-        const result = decodeKfToken(payload, path);
-        if (generation !== this.tokenGeneration) throw kfAborted();
-        return { value: result.access_token, ttlMs: result.expires_in * 1000 };
-    }
-
-    private async performCall(
-        options: KfCallOptions,
-        retryToken: boolean,
-    ): Promise<KfJsonResponse | Buffer> {
-        const url = resolveKfApiUrl(this.apiBaseUrl, options.path, options.query);
-        const requestToken = options.token === false ? undefined : await this.getAccessToken();
-        if (requestToken) url.searchParams.set("access_token", requestToken);
-        const headers = new Headers();
-        let body: BodyInit | undefined;
-        if (options.body instanceof FormData || typeof options.body === "string")
-            body = options.body;
-        else if (options.body !== undefined) {
-            headers.set("Content-Type", "application/json; charset=utf-8");
-            body = JSON.stringify(options.body);
-        }
-        let response: Response;
-        try {
-            response = await this.fetcher(url, {
-                method: options.method || (body ? "POST" : "GET"),
-                headers,
-                body,
-                signal: options.signal,
-            });
-        } catch (error) {
-            if (options.signal?.aborted) throw kfAborted();
-            throw new WeComKfError("微信客服 API 网络请求失败", {
-                code: "WECOM_KF_NETWORK_ERROR",
-                path: options.path,
-                cause: error,
-            });
-        }
-        if (options.response_type === "buffer" && !isKfJsonResponse(response)) {
-            if (!response.ok) throw createKfHttpError(response, options.path);
-            return Buffer.from(await response.arrayBuffer());
-        }
-        const payload = decodeKfEnvelope(await parseKfJson(response, options.path), options.path);
-        const errorCode = kfApiErrorCode(payload);
-        if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
-            if (requestToken && this.tokens.invalidate(requestToken)) {
-                await this.getAccessToken(true);
-            }
-            return this.performCall(options, false);
-        }
-        if (!response.ok || errorCode !== 0)
-            throw createKfApiError(response, payload, options.path);
-        return payload;
     }
 }
