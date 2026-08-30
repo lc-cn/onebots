@@ -33,7 +33,7 @@
     "onebots": "workspace:*"
   },
   "dependencies": {
-    "grammy": "^1.24.0"
+    "grammy": "^1.46.0"
   },
   "repository": {
     "type": "git",

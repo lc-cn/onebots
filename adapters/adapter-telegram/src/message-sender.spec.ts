@@ -92,4 +92,12 @@ describe("sendTelegramMessage", () => {
             entities: undefined,
         });
     });
+
+    it("拒绝缺少 message_id 的不完整发送结果", async () => {
+        const bot = { sendMessage: vi.fn().mockResolvedValue({}) } as never;
+
+        await expect(
+            sendTelegramMessage(bot, "chat", [{ type: "text", data: { text: "hello" } }]),
+        ).rejects.toMatchObject({ code: "TELEGRAM_MESSAGE_ID_MISSING" });
+    });
 });

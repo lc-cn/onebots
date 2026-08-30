@@ -90,9 +90,14 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         get_supported_actions: { support: "native" },
     },
     events: {
-        message: { support: "native", scenes: ["private", "group", "channel"] },
+        message: {
+            support: "native",
+            scenes: ["private", "group", "channel"],
+            note: "包含 Bot API 10.0 guest_message，并在 extensions.telegram 保留 guest_query_id",
+        },
         message_updated: { support: "native" },
         interaction: { support: "native" },
+        user_updated: { support: "native", note: "包含 managed_bot 创建或归属变化" },
         member_joined: {
             support: "native",
             note: "包含 restricted 状态下由 is_member 表示的真实加入",
@@ -108,7 +113,7 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         message_deleted: { support: "native", note: "商业消息批量删除会拆分为独立事件" },
         native_update: {
             support: "native",
-            note: "未标准化的 Telegram Update 以 custom notice 和 raw_event 无损交付",
+            note: "订阅、生成中止及未标准化 Update 均保留明确 kind 和 raw_event",
         },
     },
     segments: {

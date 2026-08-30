@@ -13,7 +13,12 @@ export function projectTelegramEvents(
     update: Update,
     context: TelegramEventProjectorContext,
 ): CommonEvent.Event<Update>[] {
-    const message = update.message ?? update.channel_post ?? update.business_message ?? undefined;
+    const message =
+        update.message ??
+        update.channel_post ??
+        update.business_message ??
+        update.guest_message ??
+        undefined;
     if (message) {
         const membership = projectServiceMembership(update, message, context);
         if (membership.length) return membership;
@@ -140,6 +145,47 @@ export function projectTelegramEvents(
         );
     }
 
+    if (update.stopped_message_generation) {
+        const stopped = update.stopped_message_generation;
+        return [
+            projectNotice(update, context, "interaction", {
+                extensions: {
+                    telegram: {
+                        kind: "stopped_message_generation",
+                        chat_id: stopped.chat.id,
+                        message_thread_id: stopped.message_thread_id,
+                        draft_id: stopped.draft_id,
+                    },
+                },
+            }),
+        ];
+    }
+
+    if (update.managed_bot) {
+        return [
+            projectNotice(update, context, "user_updated", {
+                user: projectUser(update.managed_bot.bot, context),
+                operator: projectUser(update.managed_bot.user, context),
+                extensions: { telegram: { kind: "managed_bot" } },
+            }),
+        ];
+    }
+
+    if (update.subscription) {
+        return [
+            projectNotice(update, context, "custom", {
+                user: projectUser(update.subscription.user, context),
+                sub_type: update.subscription.state,
+                extensions: {
+                    telegram: {
+                        kind: "subscription",
+                        invoice_payload: update.subscription.invoice_payload,
+                    },
+                },
+            }),
+        ];
+    }
+
     // 其余原生 Update 仍作为 custom notice 无损交付，避免 SDK 升级前丢事件。
     const kind = Object.keys(update).find(key => key !== "update_id");
     if (!kind) return [];
@@ -228,6 +274,14 @@ function projectMessage(
         message: projectTelegramSegments(message, context),
         raw_message: message.text ?? message.caption ?? "",
         message_id: context.createId(message.message_id),
+        extensions: update.guest_message
+            ? {
+                  telegram: {
+                      kind: "guest_message",
+                      guest_query_id: message.guest_query_id,
+                  },
+              }
+            : undefined,
     };
 }
 
@@ -305,6 +359,7 @@ function serviceMessageKind(message: Message): string {
         "sender_boost_count",
         "sender_business_bot",
         "date",
+        "guest_query_id",
         "business_connection_id",
         "chat",
         "forward_origin",
@@ -373,6 +428,7 @@ function updateTimestamp(update: Update): number | undefined {
         update.channel_post ??
         update.edited_channel_post ??
         update.business_message ??
+        update.guest_message ??
         update.edited_business_message ??
         update.message_reaction ??
         update.chat_member ??

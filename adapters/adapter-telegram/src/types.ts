@@ -1,3 +1,4 @@
+import { API_CONSTANTS } from "grammy";
 import type { Update } from "grammy/types";
 import type {
     PhotoSize,
@@ -29,32 +30,12 @@ export interface ProxyConfig {
 export type TelegramReceiveMode = "polling" | "webhook" | "manual";
 export type TelegramUpdateType = Exclude<keyof Update, "update_id">;
 
-/** 默认订阅完整 Bot API Update 集合，供运行时和配置 Schema 共用。 */
-export const TELEGRAM_UPDATE_TYPES = [
-    "message",
-    "edited_message",
-    "channel_post",
-    "edited_channel_post",
-    "business_connection",
-    "business_message",
-    "edited_business_message",
-    "deleted_business_messages",
-    "message_reaction",
-    "message_reaction_count",
-    "inline_query",
-    "chosen_inline_result",
-    "callback_query",
-    "shipping_query",
-    "pre_checkout_query",
-    "poll",
-    "poll_answer",
-    "my_chat_member",
-    "chat_member",
-    "chat_join_request",
-    "chat_boost",
-    "removed_chat_boost",
-    "purchased_paid_media",
-] as const satisfies ReadonlyArray<TelegramUpdateType>;
+/**
+ * 默认订阅 grammY 当前认识的完整 Bot API Update 集合。
+ * 运行时、配置校验与 Web Schema 必须共享官方来源，避免升级 Bot API 后静默漏收事件。
+ */
+export const TELEGRAM_UPDATE_TYPES =
+    API_CONSTANTS.ALL_UPDATE_TYPES satisfies ReadonlyArray<TelegramUpdateType>;
 
 // 配置类型
 export interface TelegramConfig {
@@ -137,6 +118,8 @@ export interface TelegramMessage {
     message_id: number;
     from?: TelegramUser;
     date: number;
+    /** Guest Mode 查询 ID；回复时交给 answer_guest_query。 */
+    guest_query_id?: string;
     chat: TelegramChat;
     text?: string;
     caption?: string;

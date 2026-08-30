@@ -58,11 +58,29 @@ describe("Telegram 领域动作", () => {
         expect(answerCallbackQuery).toHaveBeenCalledWith("callback-1", { text: "完成" });
     });
 
+    it("使用 Guest Query ID 回复访客消息", async () => {
+        const answerGuestQuery = vi.fn().mockResolvedValue({ message_id: 8 });
+        await executeTelegramPlatformAction(
+            botWithApi({ answerGuestQuery } as unknown as Bot["api"]),
+            "answer_guest_query",
+            {
+                guest_query_id: "guest-1",
+                result: { type: "article", id: "reply-1", title: "回复" },
+            },
+        );
+        expect(answerGuestQuery).toHaveBeenCalledWith("guest-1", {
+            type: "article",
+            id: "reply-1",
+            title: "回复",
+        });
+    });
+
     it("所有新增动作进入同一个不可变能力集合", () => {
         expect(TELEGRAM_PLATFORM_ACTIONS.has("create_forum_topic")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("set_bot_commands")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("answer_inline_query")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("set_chat_permissions")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("answer_guest_query")).toBe(true);
     });
 
     it("在 API 调用前执行 Telegram 官方集合上限", async () => {

@@ -2,6 +2,7 @@ import type { PlatformActionHandler } from "onebots";
 import type { TelegramBot } from "./bot.js";
 import {
     requireBoolean,
+    requireObject,
     requireObjectArray,
     requireString,
     telegramAction,
@@ -36,6 +37,12 @@ export const TELEGRAM_INTERACTION_ACTIONS = {
             requireString(params, "pre_checkout_query_id"),
             requireBoolean(params, "ok"),
             params.options as never,
+        ),
+    ),
+    answer_guest_query: telegramAction("answerGuestQuery", (api, params) =>
+        api.answerGuestQuery(
+            requireString(params, "guest_query_id"),
+            requireObject(params, "result") as never,
         ),
     ),
 } satisfies Readonly<Record<string, Handler>>;

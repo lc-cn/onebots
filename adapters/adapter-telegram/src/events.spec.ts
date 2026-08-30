@@ -39,6 +39,83 @@ describe("projectTelegramEvents", () => {
         expect(event.message.map(segment => segment.type)).toEqual(["reply", "text", "image"]);
     });
 
+    it("将 Guest Mode 消息投影为普通消息并保留回复地址", () => {
+        const update = {
+            update_id: 20,
+            guest_message: {
+                message_id: 24,
+                date: 105,
+                guest_query_id: "guest-query-1",
+                chat: { id: 50, type: "private", first_name: "Guest" },
+                from: { id: 50, is_bot: false, first_name: "Guest" },
+                text: "hello",
+            },
+        } as Update;
+
+        const [event] = projectTelegramEvents(update, context);
+
+        expect(event).toMatchObject({
+            type: "message",
+            timestamp: 105000,
+            message_type: "private",
+            raw_message: "hello",
+            extensions: {
+                telegram: { kind: "guest_message", guest_query_id: "guest-query-1" },
+            },
+        });
+    });
+
+    it("将生成中止、托管 Bot 与订阅变化投影为可消费事件", () => {
+        const stopped = projectTelegramEvents(
+            {
+                update_id: 21,
+                stopped_message_generation: {
+                    chat: { id: 50, type: "private", first_name: "Guest" },
+                    draft_id: 7,
+                },
+            } as Update,
+            context,
+        )[0];
+        const managed = projectTelegramEvents(
+            {
+                update_id: 22,
+                managed_bot: {
+                    user: { id: 50, is_bot: false, first_name: "Owner" },
+                    bot: { id: 51, is_bot: true, first_name: "Managed" },
+                },
+            } as Update,
+            context,
+        )[0];
+        const subscription = projectTelegramEvents(
+            {
+                update_id: 23,
+                subscription: {
+                    user: { id: 50, is_bot: false, first_name: "Subscriber" },
+                    invoice_payload: "plan-pro",
+                    state: "active",
+                },
+            } as Update,
+            context,
+        )[0];
+
+        expect(stopped).toMatchObject({
+            notice_type: "interaction",
+            extensions: {
+                telegram: { kind: "stopped_message_generation", draft_id: 7 },
+            },
+        });
+        expect(managed).toMatchObject({
+            notice_type: "user_updated",
+            user: { id: { string: "51" } },
+            operator: { id: { string: "50" } },
+        });
+        expect(subscription).toMatchObject({
+            notice_type: "custom",
+            sub_type: "active",
+            extensions: { telegram: { kind: "subscription", invoice_payload: "plan-pro" } },
+        });
+    });
+
     it("将入群申请投影为可直接处理的 request flag", () => {
         const update = {
             update_id: 11,

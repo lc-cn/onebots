@@ -37,6 +37,10 @@ describe("resolveTelegramReceiveConfig", () => {
         if (receive.mode !== "polling") throw new Error("expected polling");
         expect(receive.options.allowed_updates).toContain("chat_member");
         expect(receive.options.allowed_updates).toContain("message_reaction");
+        expect(receive.options.allowed_updates).toContain("guest_message");
+        expect(receive.options.allowed_updates).toContain("stopped_message_generation");
+        expect(receive.options.allowed_updates).toContain("managed_bot");
+        expect(receive.options.allowed_updates).toContain("subscription");
     });
 
     it("闭合 Webhook URL、secret 与订阅", () => {

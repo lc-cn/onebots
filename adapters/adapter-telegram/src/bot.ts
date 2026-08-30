@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { timingSafeEqual } from "node:crypto";
-import { Bot, Context, InputFile } from "grammy";
-import type { Opts, MessageEntity } from "grammy/types";
+import { Bot, InputFile } from "grammy";
+import type { Message, Opts } from "grammy/types";
 import type { Update } from "grammy/types";
 import type {
     UserFromGetMe,
@@ -10,7 +10,6 @@ import type {
     ChatMemberOwner,
     ChatMemberAdministrator,
 } from "grammy/types";
-import type { Message } from "grammy/types";
 import { createProxyAgent, RecentEventDeduplicator } from "onebots";
 import { TelegramError } from "./errors.js";
 import type { TelegramCallbackQuery, TelegramConfig, TelegramMessage } from "./types.js";
@@ -23,6 +22,7 @@ import {
     pollingRetryDelay,
 } from "./runtime-utils.js";
 import { acceptTelegramHttp } from "./webhook.js";
+import { installTelegramLegacyEventHandlers } from "./legacy-events.js";
 
 export interface TelegramBotEvents {
     ready: [];
@@ -34,6 +34,7 @@ export interface TelegramBotEvents {
     private_message: [message: TelegramMessage];
     group_message: [message: TelegramMessage];
     channel_message: [message: TelegramMessage];
+    guest_message: [message: TelegramMessage];
     message_edited: [message: TelegramMessage];
     callback_query: [query: TelegramCallbackQuery];
 }
@@ -116,69 +117,19 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
             this.dispatchUpdate(ctx.update);
             await next();
         });
-
-        this.bot.on("message", async (ctx: Context) => {
-            const message = ctx.message;
-            if (!message) return;
-
-            if (message.from?.is_bot && message.from.id === this.me?.id) return;
-            const event = this.transformMessage(message, ctx);
-            if (message.chat.type === "private") {
-                this.emit("private_message", event);
-            } else {
-                this.emit("group_message", event);
-            }
-        });
-
-        this.bot.on("edited_message", async (ctx: Context) => {
-            const message = ctx.editedMessage;
-            if (!message) return;
-
-            const event = this.transformMessage(message, ctx);
-            this.emit("message_edited", event);
-        });
-
-        this.bot.on("channel_post", async (ctx: Context) => {
-            const message = ctx.channelPost;
-            if (!message) return;
-
-            const event = this.transformMessage(message, ctx);
-            this.emit("channel_message", event);
-        });
-
-        this.bot.on("callback_query", async (ctx: Context) => {
-            const query = ctx.callbackQuery;
-            if (!query) return;
-            this.emit("callback_query", query as unknown as TelegramCallbackQuery);
+        installTelegramLegacyEventHandlers(this.bot, {
+            getSelfId: () => this.me?.id,
+            privateMessage: message => this.emit("private_message", message),
+            groupMessage: message => this.emit("group_message", message),
+            channelMessage: message => this.emit("channel_message", message),
+            guestMessage: message => this.emit("guest_message", message),
+            editedMessage: message => this.emit("message_edited", message),
+            callbackQuery: query => this.emit("callback_query", query),
         });
 
         this.bot.catch(error => {
             this.emit("client_error", TelegramError.wrap(error, "TELEGRAM_UPDATE_HANDLER_ERROR"));
         });
-    }
-
-    private transformMessage(message: Message, ctx: Context): TelegramMessage {
-        return {
-            message_id: message.message_id,
-            from: message.from,
-            date: message.date,
-            chat: message.chat,
-            text: (message as Message.TextMessage).text,
-            caption: (message as Message & { caption?: string }).caption,
-            photo: (message as Message.PhotoMessage).photo,
-            video: (message as Message.VideoMessage).video,
-            audio: (message as Message.AudioMessage).audio,
-            document: (message as Message.DocumentMessage).document,
-            sticker: (message as Message.StickerMessage).sticker,
-            location: (message as Message.LocationMessage).location,
-            contact: (message as Message.ContactMessage).contact,
-            reply_to_message: message.reply_to_message as unknown as TelegramMessage,
-            entities: (message as Message.TextMessage).entities,
-            caption_entities: (message as Message & { caption_entities?: MessageEntity[] })
-                .caption_entities,
-            _original: message,
-            _ctx: ctx,
-        } as TelegramMessage;
     }
 
     async start(): Promise<void> {

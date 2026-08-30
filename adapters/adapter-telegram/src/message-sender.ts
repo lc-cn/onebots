@@ -178,6 +178,12 @@ export async function sendTelegramMessage(
         } as Opts<"sendMessage">);
         lastMessageId = result.message_id;
     }
+    if (lastMessageId == null) {
+        throw TelegramError.invalid(
+            "Telegram 发送结果缺少 message_id",
+            "TELEGRAM_MESSAGE_ID_MISSING",
+        );
+    }
     return lastMessageId;
 }
 
