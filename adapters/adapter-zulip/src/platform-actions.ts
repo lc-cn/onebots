@@ -24,6 +24,7 @@ import { ZULIP_PREFERENCE_ACTION_HANDLERS } from "./preference-actions.js";
 import { ZULIP_PLAYGROUND_ACTION_HANDLERS } from "./playground-actions.js";
 import { ZULIP_PROFILE_FIELD_ACTION_HANDLERS } from "./profile-field-actions.js";
 import { ZULIP_REMINDER_ACTION_HANDLERS } from "./reminder-actions.js";
+import { ZULIP_SAVED_SNIPPET_ACTION_HANDLERS } from "./saved-snippet-actions.js";
 import { ZULIP_SCHEDULED_MESSAGE_ACTION_HANDLERS } from "./scheduled-message-actions.js";
 import { ZULIP_USER_ACTION_HANDLERS } from "./user-actions.js";
 import { ZULIP_USER_GROUP_ACTION_HANDLERS } from "./user-group-actions.js";
@@ -51,13 +52,6 @@ const ACTION_HANDLERS = {
     edit_draft: (client, params) => resourceAction(client, "drafts", "draft_id", "PATCH", params),
     delete_draft: (client, params) =>
         resourceAction(client, "drafts", "draft_id", "DELETE", params),
-    get_saved_snippets: client => client.call("saved_snippets"),
-    create_saved_snippet: (client, params) =>
-        client.call("saved_snippets", "POST", requireParams(params)),
-    edit_saved_snippet: (client, params) =>
-        resourceAction(client, "saved_snippets", "saved_snippet_id", "PATCH", params),
-    delete_saved_snippet: (client, params) =>
-        resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
     ...ZULIP_BOT_ACTION_HANDLERS,
     ...ZULIP_ATTACHMENT_ACTION_HANDLERS,
     ...ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS,
@@ -74,6 +68,7 @@ const ACTION_HANDLERS = {
     ...ZULIP_PLAYGROUND_ACTION_HANDLERS,
     ...ZULIP_PROFILE_FIELD_ACTION_HANDLERS,
     ...ZULIP_REMINDER_ACTION_HANDLERS,
+    ...ZULIP_SAVED_SNIPPET_ACTION_HANDLERS,
     ...ZULIP_SCHEDULED_MESSAGE_ACTION_HANDLERS,
     ...ZULIP_USER_ACTION_HANDLERS,
     ...ZULIP_USER_GROUP_ACTION_HANDLERS,

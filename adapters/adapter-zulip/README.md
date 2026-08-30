@@ -96,6 +96,8 @@ Navigation View 领域提供 `list_navigation_views`、`add_navigation_view`、`
 
 消息提醒领域提供 `get_reminders`、`create_reminder` 与 `delete_reminder`，创建时严格要求原消息 ID 和发送时间，并支持 Zulip 11 的可选备注。Client 默认订阅 add/remove 精确事件，将批量新增拆成逐提醒资源通知，并保留 `reminder_target_message_id` 以关联原消息。定时消息与提醒共享个人资源事件模块，后续同类能力无需复制投影骨架。
 
+保存片段领域提供查询、创建、编辑与删除动作，标题和 Markdown 正文必须为非空字符串，局部编辑至少包含一个真实变更字段。Client 默认订阅 `saved_snippets` 的 add/update/remove 判别事件，并复用个人资源投影骨架生成统一生命周期通知。
+
 频道发现领域提供 `get_channel_id`、`get_channel_topics`、`get_channel_subscriptions`、`get_channel_subscription_status`、`get_user_channels`、`list_zulip_channels`、`get_zulip_channel`、`get_channel_email_address` 与 `delete_channel_topic`，并将原有订阅、订阅者、创建、更新和归档动作收敛到独立频道模块。频道列表仅暴露现代 `include_all` 等参数，不接受已弃用的 `include_all_active`；归档使用官方 `DELETE /streams/{stream_id}`，不再伪装成 PATCH 属性更新。话题删除保留 Zulip 10+ 的空话题名语义。
 
 频道个人设置提供 `update_channel_subscription_settings` 和 `update_channel_subscription_property`，支持批量或单频道更新颜色、静音、置顶和通知开关。颜色严格校验为 6 位十六进制值，其余属性必须为布尔值；不接受仅为旧客户端保留的 `in_home_view`。

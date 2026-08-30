@@ -62,3 +62,26 @@ export interface ZulipRemindersRemoveEvent extends ZulipPersonalBaseEvent {
 }
 
 export type ZulipRemindersEvent = ZulipRemindersAddEvent | ZulipRemindersRemoveEvent;
+
+export interface ZulipSavedSnippet extends Record<string, unknown> {
+    id: number;
+    title: string;
+    content: string;
+    date_created: number;
+}
+
+export interface ZulipSavedSnippetsChangedEvent extends ZulipPersonalBaseEvent {
+    type: "saved_snippets";
+    op: "add" | "update";
+    saved_snippet: ZulipSavedSnippet;
+}
+
+export interface ZulipSavedSnippetsRemoveEvent extends ZulipPersonalBaseEvent {
+    type: "saved_snippets";
+    op: "remove";
+    saved_snippet_id: number;
+}
+
+export type ZulipSavedSnippetsEvent =
+    | ZulipSavedSnippetsChangedEvent
+    | ZulipSavedSnippetsRemoveEvent;
