@@ -6,6 +6,7 @@ import {
     AdapterRegistry,
     BaseApp,
     ErrorCategory,
+    OrderedEventDeliveryQueue,
     readPackageVersion,
     type CommonEvent,
 } from "onebots";
@@ -319,17 +320,39 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
             webhookMode ? host : undefined,
         );
         account = new Account(this, client, config);
+        const gatewayDelivery = new OrderedEventDeliveryQueue<CommonEvent.Event>({
+            dispatch: event => account.dispatchAwaited(event),
+            onRetry: ({ event, error, attempt, delayMs, pending }) => {
+                this.logger.error("QQ Gateway 事件投递失败，将保持顺序重试", {
+                    account_id: account.account_id,
+                    event_id: event.id.string,
+                    event_type: event.type,
+                    attempt,
+                    retry_delay_ms: delayMs,
+                    pending,
+                    error: QQApiError.wrap(error, "QQ_EVENT_DELIVERY_FAILED").toJSON(),
+                });
+            },
+            onBacklog: pending => {
+                this.logger.warn("QQ Gateway 事件投递发生积压", {
+                    account_id: account.account_id,
+                    pending,
+                });
+            },
+        });
         if (qqConfig.receive_mode === "webhook") {
             this.app.router.post(webhookPath, ctx => host.acceptHttp(ctx));
         }
-        this.bindEvents(account, client, webhookMode);
+        this.bindEvents(account, client, webhookMode, gatewayDelivery);
         account.on("start", () => {
+            gatewayDelivery.start();
             void client
                 .run()
                 .catch(error => this.logger.error("QQ Client 已停止", QQApiError.wrap(error)));
         });
         account.on("stop", () => {
             client.close();
+            gatewayDelivery.stop();
             account.status = AccountStatus.OffLine;
         });
         return account;
@@ -339,15 +362,16 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         account: Account<"qq", QQClient>,
         client: QQClient,
         webhookMode: boolean,
+        gatewayDelivery: OrderedEventDeliveryQueue<CommonEvent.Event>,
     ): void {
-        client.on("ready", data => {
+        client.on("ready", async data => {
             account.status = AccountStatus.Online;
             this.applyProfile(account, client.getCachedSelf());
-            account.dispatch(this.projectRaw(account, "READY", data));
+            await gatewayDelivery.enqueue(this.projectRaw(account, "READY", data));
         });
-        client.on("resumed", data => {
+        client.on("resumed", async data => {
             account.status = AccountStatus.Online;
-            account.dispatch(this.projectRaw(account, "RESUMED", data));
+            await gatewayDelivery.enqueue(this.projectRaw(account, "RESUMED", data));
         });
         client.on("error", error => {
             account.status = AccountStatus.OffLine;
@@ -355,14 +379,18 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         });
         // Webhook 由 Host 同步分发并控制 HTTP ACK；Gateway 才订阅 SDK 的异步事件。
         if (!webhookMode) {
-            client.on("message", (_context, event) =>
-                account.dispatch(projectQQMessage(event, this.projectionContext(account))),
-            );
-            client.on("interaction", (_context, event: InteractionEvent) =>
-                account.dispatch(this.projectRaw(account, "INTERACTION_CREATE", event)),
-            );
-            client.on("rawEvent", event => {
-                account.dispatch(
+            client.on("message", async (_context, event) => {
+                await gatewayDelivery.enqueue(
+                    projectQQMessage(event, this.projectionContext(account)),
+                );
+            });
+            client.on("interaction", async (_context, event: InteractionEvent) => {
+                await gatewayDelivery.enqueue(
+                    this.projectRaw(account, "INTERACTION_CREATE", event),
+                );
+            });
+            client.on("rawEvent", async event => {
+                await gatewayDelivery.enqueue(
                     projectQQRawEvent(event.eventType, event.data, this.projectionContext(account)),
                 );
             });

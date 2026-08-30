@@ -12,6 +12,7 @@ QQ 官方机器人适配器，基于腾讯官方 [`@tencent-connect/qqbot-nodejs
 - 群申请完整投影验证信息与邀请来源；审批可拒绝并加入成员黑名单
 - 所有未知 QQ Gateway 事件均通过 `raw_event` 无损下发
 - WebSocket 自动恢复；官方 SDK 内部重试耗尽后由 OneBots 结束旧 transport，并按无上限退避建立新代次
+- Gateway 事件按平台顺序等待所有协议出口；投递失败会封顶退避并持续重试，后续事件不会越过失败事件，账号停止时取消旧投递代次
 - Webhook 复用 OneBots 主 HTTP 服务，不另开端口
 - Webhook/manual 使用官方验签结果同步投影全部消息、交互与 raw 事件，补齐官方 SDK Webhook 内部忽略的频道和频道私信消息；仅在业务分发成功后确认内容哈希
 - `qq_call` 可调用尚未封装的任意 QQ OpenAPI 相对路径

@@ -20,6 +20,7 @@ export * from "./platform-action-registry.js";
 export * from "./reverse-websocket.js";
 export * from "./recent-event-deduplicator.js";
 export * from "./reliable-event-ingress.js";
+export * from "./ordered-event-delivery-queue.js";
 export * from "./protocol.js";
 export * from "./event-filter.js";
 export * from "./registry.js";

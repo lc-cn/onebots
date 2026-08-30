@@ -43,6 +43,8 @@ export {
     type PlatformActionRegistry,
     type RefreshableValueResult,
     type EventDeliveryStore,
+    type EventDeliveryRetry,
+    type OrderedEventDeliveryQueueOptions,
     // Infrastructure
     ConnectionManager,
     ReverseWebSocketSession,
@@ -71,6 +73,7 @@ export {
     RefreshableValue,
     RecentEventDeduplicator,
     ReliableEventIngress,
+    OrderedEventDeliveryQueue,
     sha256Json,
     sha256Text,
     stableJsonStringify,
