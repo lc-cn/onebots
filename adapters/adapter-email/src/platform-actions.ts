@@ -1,77 +1,166 @@
 import type { SearchObject } from "imapflow";
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
+import {
+    canonicalBase64,
+    exactParams,
+    flagList,
+    invalid,
+    mailboxPath,
+    optionalFlagList,
+    optionalInteger,
+    optionalMailboxPath,
+    optionalString,
+    optionalStringList,
+    requireBoolean,
+    requireDate,
+    requireInteger,
+    requireIntegers,
+    requireString,
+    stringList,
+} from "./action-validation.js";
 import type { EmailClient } from "./client.js";
 import { EmailError } from "./errors.js";
 import { validateEmailHeaders } from "./messages.js";
+import type { EmailMailboxStatusQuery } from "./mailbox-native.js";
 import type { EmailOutgoingAttachment, EmailSendOptions } from "./types.js";
 
 const ACTION_HANDLERS = {
-    send_email: (client, params) => client.sendEmail(sendOptions(params)),
-    get_email: (client, params) =>
-        params.uid === undefined
-            ? client.findEmail(
-                  requireString(params.message_id, "message_id"),
-                  optionalString(params.mailbox, "mailbox"),
-              )
-            : client.getEmail(
-                  requireInteger(params.uid, "uid"),
-                  optionalString(params.mailbox, "mailbox"),
-              ),
-    search_emails: (client, params) =>
+    send_email: emailAction(
+        [
+            "to",
+            "subject",
+            "text",
+            "html",
+            "cc",
+            "bcc",
+            "reply_to",
+            "in_reply_to",
+            "references",
+            "priority",
+            "headers",
+            "attachments",
+        ],
+        (client, params) => client.sendEmail(sendOptions(params)),
+    ),
+    get_email: emailAction(["uid", "message_id", "mailbox"], (client, params) => {
+        const mailbox = optionalMailboxPath(params.mailbox, "mailbox");
+        const hasUid = params.uid !== undefined;
+        const hasMessageId = params.message_id !== undefined;
+        if (hasUid === hasMessageId) throw invalid("uid/message_id");
+        return hasUid
+            ? client.getEmail(requireInteger(params.uid, "uid"), mailbox)
+            : client.findEmail(requireString(params.message_id, "message_id"), mailbox);
+    }),
+    search_emails: emailAction(["query", "mailbox", "limit"], (client, params) =>
         client.searchEmails(searchObject(params.query), {
-            mailbox: optionalString(params.mailbox, "mailbox"),
+            mailbox: optionalMailboxPath(params.mailbox, "mailbox"),
             limit: optionalInteger(params.limit, "limit"),
         }),
-    list_mailboxes: client => client.listMailboxes(),
-    mark_email_read: (client, params) => updateFlag(client, params, "\\Seen", "add"),
-    mark_email_unread: (client, params) => updateFlag(client, params, "\\Seen", "remove"),
-    flag_email: (client, params) => updateFlag(client, params, "\\Flagged", "add"),
-    unflag_email: (client, params) => updateFlag(client, params, "\\Flagged", "remove"),
-    move_email: (client, params) =>
+    ),
+    list_mailboxes: emailAction([], client => client.listMailboxes()),
+    get_mailbox_status: emailAction(["path", "query"], (client, params) =>
+        client.executeMailboxNative({
+            type: "status",
+            path: mailboxPath(params.path, "path"),
+            query: mailboxStatusQuery(params.query),
+        }),
+    ),
+    get_mailbox_quota: emailAction(["path"], (client, params) =>
+        client.executeMailboxNative({
+            type: "quota",
+            path: optionalMailboxPath(params.path, "path"),
+        }),
+    ),
+    noop_imap: emailAction([], client => client.executeMailboxNative({ type: "noop" })),
+    append_raw_email: emailAction(
+        ["mailbox", "data_base64", "flags", "internal_date"],
+        (client, params) =>
+            client.executeMailboxNative({
+                type: "append",
+                path: mailboxPath(params.mailbox, "mailbox"),
+                content: canonicalBase64(params.data_base64, "data_base64"),
+                flags: optionalFlagList(params.flags, "flags"),
+                internalDate:
+                    params.internal_date === undefined
+                        ? undefined
+                        : requireDate(params.internal_date, "internal_date"),
+            }),
+    ),
+    mark_email_read: emailAction(["uids", "mailbox"], (client, params) =>
+        updateFlag(client, params, "\\Seen", "add"),
+    ),
+    mark_email_unread: emailAction(["uids", "mailbox"], (client, params) =>
+        updateFlag(client, params, "\\Seen", "remove"),
+    ),
+    flag_email: emailAction(["uids", "mailbox"], (client, params) =>
+        updateFlag(client, params, "\\Flagged", "add"),
+    ),
+    unflag_email: emailAction(["uids", "mailbox"], (client, params) =>
+        updateFlag(client, params, "\\Flagged", "remove"),
+    ),
+    move_email: emailAction(["uids", "destination", "mailbox"], (client, params) =>
         client.moveEmails(
             requireIntegers(params.uids, "uids"),
-            requireString(params.destination, "destination"),
-            optionalString(params.mailbox, "mailbox"),
+            mailboxPath(params.destination, "destination"),
+            optionalMailboxPath(params.mailbox, "mailbox"),
         ),
-    copy_email: (client, params) =>
+    ),
+    copy_email: emailAction(["uids", "destination", "mailbox"], (client, params) =>
         client.copyEmails(
             requireIntegers(params.uids, "uids"),
-            requireString(params.destination, "destination"),
-            optionalString(params.mailbox, "mailbox"),
+            mailboxPath(params.destination, "destination"),
+            optionalMailboxPath(params.mailbox, "mailbox"),
         ),
-    add_email_flags: (client, params) =>
+    ),
+    set_email_flags: emailAction(["uids", "flags", "mailbox"], (client, params) =>
         client.updateFlags(
             requireIntegers(params.uids, "uids"),
-            stringList(params.flags, "flags"),
+            flagList(params.flags, "flags"),
+            "set",
+            optionalMailboxPath(params.mailbox, "mailbox"),
+        ),
+    ),
+    add_email_flags: emailAction(["uids", "flags", "mailbox"], (client, params) =>
+        client.updateFlags(
+            requireIntegers(params.uids, "uids"),
+            flagList(params.flags, "flags"),
             "add",
-            optionalString(params.mailbox, "mailbox"),
+            optionalMailboxPath(params.mailbox, "mailbox"),
         ),
-    remove_email_flags: (client, params) =>
+    ),
+    remove_email_flags: emailAction(["uids", "flags", "mailbox"], (client, params) =>
         client.updateFlags(
             requireIntegers(params.uids, "uids"),
-            stringList(params.flags, "flags"),
+            flagList(params.flags, "flags"),
             "remove",
-            optionalString(params.mailbox, "mailbox"),
+            optionalMailboxPath(params.mailbox, "mailbox"),
         ),
-    delete_email: (client, params) =>
+    ),
+    delete_email: emailAction(["uids", "mailbox"], (client, params) =>
         client.deleteEmails(
             requireIntegers(params.uids, "uids"),
-            optionalString(params.mailbox, "mailbox"),
+            optionalMailboxPath(params.mailbox, "mailbox"),
         ),
-    create_mailbox: (client, params) =>
-        client.manageMailbox("create", requireString(params.path, "path")),
-    rename_mailbox: (client, params) =>
+    ),
+    create_mailbox: emailAction(["path"], (client, params) =>
+        client.manageMailbox("create", mailboxPath(params.path, "path")),
+    ),
+    rename_mailbox: emailAction(["path", "new_path"], (client, params) =>
         client.manageMailbox(
             "rename",
-            requireString(params.path, "path"),
-            requireString(params.new_path, "new_path"),
+            mailboxPath(params.path, "path"),
+            mailboxPath(params.new_path, "new_path"),
         ),
-    delete_mailbox: (client, params) =>
-        client.manageMailbox("delete", requireString(params.path, "path")),
-    subscribe_mailbox: (client, params) =>
-        client.manageMailbox("subscribe", requireString(params.path, "path")),
-    unsubscribe_mailbox: (client, params) =>
-        client.manageMailbox("unsubscribe", requireString(params.path, "path")),
+    ),
+    delete_mailbox: emailAction(["path"], (client, params) =>
+        client.manageMailbox("delete", mailboxPath(params.path, "path")),
+    ),
+    subscribe_mailbox: emailAction(["path"], (client, params) =>
+        client.manageMailbox("subscribe", mailboxPath(params.path, "path")),
+    ),
+    unsubscribe_mailbox: emailAction(["path"], (client, params) =>
+        client.manageMailbox("unsubscribe", mailboxPath(params.path, "path")),
+    ),
 } satisfies Readonly<Record<string, PlatformActionHandler<EmailClient>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
@@ -95,6 +184,16 @@ export async function executeEmailPlatformAction(
     return PLATFORM_ACTIONS.execute(client, action, params);
 }
 
+function emailAction(
+    fields: readonly string[],
+    handler: PlatformActionHandler<EmailClient>,
+): PlatformActionHandler<EmailClient> {
+    return async (client, params) => {
+        exactParams(params, fields);
+        return handler(client, params);
+    };
+}
+
 function updateFlag(
     client: EmailClient,
     params: Readonly<Record<string, unknown>>,
@@ -105,7 +204,7 @@ function updateFlag(
         requireIntegers(params.uids, "uids"),
         [flag],
         operation,
-        optionalString(params.mailbox, "mailbox"),
+        optionalMailboxPath(params.mailbox, "mailbox"),
     );
 }
 
@@ -134,6 +233,15 @@ function attachments(value: unknown): EmailOutgoingAttachment[] | undefined {
     if (!Array.isArray(value)) throw invalid("attachments");
     return value.map((item, index) => {
         if (!isRecord(item)) throw invalid(`attachments[${index}]`);
+        exactParams(item, [
+            "filename",
+            "content",
+            "path",
+            "href",
+            "content_type",
+            "cid",
+            "disposition",
+        ]);
         const content = attachmentContent(item.content, index);
         const path = optionalString(item.path, `attachments[${index}].path`);
         const href = optionalString(item.href, `attachments[${index}].href`);
@@ -154,6 +262,46 @@ function attachments(value: unknown): EmailOutgoingAttachment[] | undefined {
 
 function searchObject(value: unknown): SearchObject {
     if (!isRecord(value)) throw invalid("query");
+    exactParams(value, [
+        "answered",
+        "deleted",
+        "draft",
+        "flagged",
+        "seen",
+        "all",
+        "new",
+        "old",
+        "recent",
+        "from",
+        "to",
+        "cc",
+        "bcc",
+        "body",
+        "subject",
+        "text",
+        "keyword",
+        "unKeyword",
+        "gmraw",
+        "gmailraw",
+        "emailId",
+        "threadId",
+        "larger",
+        "smaller",
+        "seq",
+        "uid",
+        "modseq",
+        "before",
+        "on",
+        "since",
+        "sentBefore",
+        "sentOn",
+        "sentSince",
+        "header",
+        "not",
+        "or",
+        "labels",
+    ]);
+    if (Object.keys(value).length === 0) throw invalid("query");
     const result: SearchObject = {};
     for (const field of [
         "answered",
@@ -214,38 +362,6 @@ function priority(value: unknown): EmailSendOptions["priority"] {
     throw invalid("priority");
 }
 
-function stringList(value: unknown, field: string): string[] {
-    const values = Array.isArray(value) ? value : [value];
-    if (!values.length) throw invalid(field);
-    return values.map(item => requireString(item, field));
-}
-
-function optionalStringList(value: unknown, field: string): string[] | undefined {
-    return value === undefined ? undefined : stringList(value, field);
-}
-
-function requireIntegers(value: unknown, field: string): number[] {
-    const values = Array.isArray(value) ? value : [value];
-    if (!values.length) throw invalid(field);
-    return values.map(item => requireInteger(item, field));
-}
-
-function requireInteger(value: unknown, field: string): number {
-    if (!Number.isSafeInteger(value) || Number(value) <= 0) throw invalid(field);
-    return Number(value);
-}
-
-function requireBoolean(value: unknown, field: string): boolean {
-    if (typeof value !== "boolean") throw invalid(field);
-    return value;
-}
-
-function requireDate(value: unknown, field: string): string | Date {
-    if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-    if (typeof value === "string" && !Number.isNaN(Date.parse(value))) return value;
-    throw invalid(field);
-}
-
 function sequence(value: unknown, field: string): string | number | bigint {
     if (typeof value === "string" && value.trim()) return value.trim();
     if ((typeof value === "number" && Number.isSafeInteger(value)) || typeof value === "bigint") {
@@ -263,6 +379,7 @@ function bigInteger(value: unknown, field: string): bigint {
 
 function labelSearch(value: unknown): { has?: string[]; not?: string[] } {
     if (!isRecord(value)) throw invalid("query.labels");
+    exactParams(value, ["has", "not"]);
     return {
         has: optionalStringList(value.has, "query.labels.has"),
         not: optionalStringList(value.not, "query.labels.not"),
@@ -273,6 +390,7 @@ function searchHeaders(value: unknown): Record<string, boolean | string> {
     if (!isRecord(value)) throw invalid("query.header");
     const result: Record<string, boolean | string> = {};
     for (const [key, item] of Object.entries(value)) {
+        if (!/^[A-Za-z0-9-]+$/u.test(key)) throw invalid(`query.header.${key}`);
         if (typeof item !== "boolean" && typeof item !== "string") {
             throw invalid(`query.header.${key}`);
         }
@@ -281,18 +399,33 @@ function searchHeaders(value: unknown): Record<string, boolean | string> {
     return result;
 }
 
-function optionalInteger(value: unknown, field: string): number | undefined {
-    return value === undefined ? undefined : requireInteger(value, field);
-}
-
-function requireString(value: unknown, field: string): string {
-    if (typeof value !== "string" || !value.trim()) throw invalid(field);
-    return value.trim();
-}
-
-function optionalString(value: unknown, field = "optional_string"): string | undefined {
-    if (value === undefined) return undefined;
-    return requireString(value, field);
+function mailboxStatusQuery(value: unknown): EmailMailboxStatusQuery {
+    const defaults: EmailMailboxStatusQuery = {
+        messages: true,
+        recent: true,
+        uidNext: true,
+        uidValidity: true,
+        unseen: true,
+        highestModseq: true,
+    };
+    if (value === undefined) return defaults;
+    if (!isRecord(value)) throw invalid("query");
+    exactParams(value, [
+        "messages",
+        "recent",
+        "uidNext",
+        "uidValidity",
+        "unseen",
+        "highestModseq",
+        "size",
+        "deleted",
+    ]);
+    if (Object.keys(value).length === 0) throw invalid("query");
+    const result: EmailMailboxStatusQuery = {};
+    for (const field of Object.keys(value) as Array<keyof EmailMailboxStatusQuery>) {
+        result[field] = requireBoolean(value[field], `query.${field}`);
+    }
+    return result;
 }
 
 function attachmentDisposition(
@@ -308,10 +441,6 @@ function attachmentContent(value: unknown, index: number): Buffer | string | und
     if (value === undefined) return undefined;
     if (typeof value === "string" || Buffer.isBuffer(value)) return value;
     throw invalid(`attachments[${index}].content`);
-}
-
-function invalid(field: string): EmailError {
-    return new EmailError(`邮件动作参数 ${field} 无效`, { code: "EMAIL_INVALID_ACTION_PARAM" });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

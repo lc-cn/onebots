@@ -8,6 +8,13 @@ export { EmailError, type EmailErrorOptions } from "./errors.js";
 export { parseEmailSource, projectEmailEvent, type EmailProjectionContext } from "./events.js";
 export { compileEmailMessage, createEmailSendOptions, type CompiledEmail } from "./messages.js";
 export { createImapMessageId, parseImapMessageId, type ImapMessageLocation } from "./message-id.js";
+export type {
+    EmailAppendResult,
+    EmailMailboxNativeCommand,
+    EmailMailboxNativeResult,
+    EmailMailboxStatusResult,
+    EmailMailboxStatusQuery,
+} from "./mailbox-native.js";
 export {
     EMAIL_PLATFORM_ACTIONS,
     executeEmailPlatformAction,

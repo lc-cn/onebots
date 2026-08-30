@@ -7,6 +7,11 @@ import { abortableSleep, emailNotFound, isAbortError, parseFetched } from "./cli
 import { EmailError } from "./errors.js";
 import { deliverEmailEvent, EmailEventIngress } from "./event-ingress.js";
 import { manageEmailMailbox, type EmailMailboxOperation } from "./mailbox-operations.js";
+import {
+    executeEmailMailboxNativeCommand,
+    type EmailMailboxNativeCommand,
+    type EmailMailboxNativeResult,
+} from "./mailbox-native.js";
 import { sendEmail } from "./send-email.js";
 import { parseEmailSource } from "./events.js";
 import { parseImapMessageId } from "./message-id.js";
@@ -226,14 +231,16 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     async updateFlags(
         uids: readonly number[],
         flags: readonly string[],
-        operation: "add" | "remove",
+        operation: "add" | "remove" | "set",
         mailbox = this.mailbox,
     ): Promise<void> {
         await this.withMailbox(mailbox, async imap => {
             const method =
                 operation === "add"
                     ? imap.messageFlagsAdd.bind(imap)
-                    : imap.messageFlagsRemove.bind(imap);
+                    : operation === "remove"
+                      ? imap.messageFlagsRemove.bind(imap)
+                      : imap.messageFlagsSet.bind(imap);
             await method([...uids], [...flags], { uid: true });
         });
     }
@@ -290,6 +297,11 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
         newPath?: string,
     ): Promise<unknown> {
         return manageEmailMailbox(this.requireImap(), operation, path, newPath);
+    }
+
+    /** 执行已建模的稳定 IMAP 原生命令。 */
+    executeMailboxNative(command: EmailMailboxNativeCommand): Promise<EmailMailboxNativeResult> {
+        return executeEmailMailboxNativeCommand(this.requireImap(), command);
     }
 
     private get mailbox(): string {

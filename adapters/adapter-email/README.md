@@ -75,6 +75,8 @@ await adapter.sendMessage("my_bot", {
 
 ## 平台动作
 
-通过 `callAction()` 可调用 `send_email`、`get_email`、`search_emails`、`list_mailboxes`、已读/星标、任意 IMAP flags、复制/移动/删除邮件，以及创建、重命名、删除、订阅邮箱目录等动作。可用动作以 `get_supported_actions` 返回值为准。附件必须且只能提供 `content`、`path`、`href` 中的一种来源；自定义 Header 与标准消息入口共用名称和换行注入校验。
+通过 `callAction()` 可调用 `send_email`、`get_email`、`search_emails`、`list_mailboxes`、已读/星标、任意 IMAP flags、复制/移动/删除邮件，以及创建、重命名、删除、订阅邮箱目录等动作。另提供 `get_mailbox_status`、`get_mailbox_quota`、`noop_imap` 与 `append_raw_email`，用于读取目录计数/配额、探活和把规范 Base64 的 RFC822 原文追加到 Sent/Drafts 等目录；UIDVALIDITY 与 MODSEQ 会作为字符串返回，保证远程 JSON 可序列化。
+
+所有平台动作拒绝未知外层字段；IMAP 搜索条件、附件、STATUS query 与 flags 也使用闭合参数契约。`get_email` 必须且只能提供 `uid` 或 `message_id` 之一，原始邮件追加最大 50 MiB。可用动作以 `get_supported_actions` 返回值为准。附件必须且只能提供 `content`、`path`、`href` 中的一种来源；自定义 Header 与标准消息入口共用名称和换行注入校验。
 
 `delete_message` 删除的是 IMAP 邮箱中的副本，不代表撤回已经投递给收件人的邮件。
