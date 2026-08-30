@@ -3,6 +3,24 @@ import type { MessageElem, Sendable } from "@icqqjs/icqq/lib/message";
 import type { CommonTypes } from "onebots";
 import type { ICQQMessageElement } from "./types.js";
 import { ICQQError, invalidICQQParam } from "./errors.js";
+import {
+    optionalBoolean,
+    optionalInteger,
+    optionalString,
+    optionalStringArray,
+    requireFiniteNumber,
+    requireInteger,
+    requirePresent,
+    requireSegments,
+    requireString,
+} from "./message-input.js";
+import {
+    buttonContent,
+    markdownConfig,
+    optionalHeaders,
+    recordOptions,
+    videoOptions,
+} from "./message-structured-elements.js";
 
 /** 将通用消息段严格编译为 ICQQ Sendable；不静默丢弃未知段。 */
 export function compileICQQMessage(
@@ -15,28 +33,62 @@ export function compileICQQMessage(
             case "text":
                 return requireString(data.text, "text.text");
             case "at": {
+                const text = optionalString(data.text, "at.text");
+                const dummy = optionalBoolean(data.dummy, "at.dummy");
                 if (data.id !== undefined) {
                     const tinyId = requireString(data.id, "at.id");
-                    return segment.at(tinyId === "all" ? "all" : tinyId);
+                    return segment.at(tinyId === "all" ? "all" : tinyId, text, dummy);
                 }
                 const qq = data.qq ?? data.user_id;
-                return segment.at(qq === "all" ? "all" : requireInteger(qq, "at.qq"));
+                return segment.at(qq === "all" ? "all" : requireInteger(qq, "at.qq"), text, dummy);
             }
             case "image": {
                 const summary = optionalString(data.summary, "image.summary");
                 return {
-                    ...segment.image(resolveICQQMediaSource(data, "image")),
-                    asface: data.asface === true,
+                    ...segment.image(
+                        resolveICQQMediaSource(data, "image"),
+                        optionalBoolean(data.cache, "image.cache"),
+                        optionalInteger(data.timeout, "image.timeout"),
+                        optionalHeaders(data.headers, "image.headers"),
+                    ),
+                    asface: optionalBoolean(data.asface, "image.asface"),
+                    origin: optionalBoolean(data.origin, "image.origin"),
                     ...(summary ? { summary } : {}),
                 };
             }
-            case "flash":
-                return segment.flash(resolveICQQMediaSource(data, "flash"));
-            case "face":
+            case "flash": {
+                const summary = optionalString(data.summary, "flash.summary");
                 return {
-                    ...segment.face(requireInteger(data.id, "face.id")),
-                    big: data.is_large === true || data.big === true,
+                    ...segment.flash(
+                        resolveICQQMediaSource(data, "flash"),
+                        optionalBoolean(data.cache, "flash.cache"),
+                        optionalInteger(data.timeout, "flash.timeout"),
+                        optionalHeaders(data.headers, "flash.headers"),
+                    ),
+                    asface: optionalBoolean(data.asface, "flash.asface"),
+                    origin: optionalBoolean(data.origin, "flash.origin"),
+                    ...(summary ? { summary } : {}),
                 };
+            }
+            case "face": {
+                const id = requireInteger(data.id, "face.id");
+                const text = optionalString(data.text, "face.text");
+                if (
+                    data.variant !== undefined &&
+                    data.variant !== "face" &&
+                    data.variant !== "sface"
+                ) {
+                    throw invalidICQQParam("face.variant 只能是 face 或 sface", data.variant);
+                }
+                if (data.variant === "sface") return segment.sface(id, text);
+                return {
+                    ...segment.face(id),
+                    text,
+                    big: optionalBoolean(data.is_large ?? data.big, "face.is_large"),
+                    stickerId: optionalString(data.sticker_id, "face.sticker_id"),
+                    stickerType: optionalInteger(data.sticker_type, "face.sticker_type"),
+                };
+            }
             case "rps":
                 return segment.rps(optionalInteger(data.id, "rps.id"));
             case "dice":
@@ -48,13 +100,26 @@ export function compileICQQMessage(
                 );
             case "record":
             case "audio":
-                return segment.record(resolveICQQMediaSource(data, item.type));
+                return segment.record(
+                    resolveICQQMediaSource(data, item.type),
+                    recordOptions(data, item.type),
+                );
             case "video":
-                return segment.video(resolveICQQMediaSource(data, "video"));
+                return segment.video(
+                    resolveICQQMediaSource(data, "video"),
+                    videoOptions(data, "video"),
+                );
             case "bubble":
-                return segment.bubble(resolveICQQMediaSource(data, "bubble"));
+                return segment.bubble(
+                    resolveICQQMediaSource(data, "bubble"),
+                    videoOptions(data, "bubble"),
+                );
             case "reply":
-                return { type: "reply", id: requireString(data.id, "reply.id") } as MessageElem;
+                return {
+                    type: "reply",
+                    id: requireString(data.id, "reply.id"),
+                    text: optionalString(data.text, "reply.text"),
+                };
             case "share":
                 return segment.share(
                     requireString(data.url, "share.url"),
@@ -64,20 +129,34 @@ export function compileICQQMessage(
                     optionalString(data.audio, "share.audio"),
                 );
             case "location":
-                return segment.location(
-                    requireFiniteNumber(data.lat, "location.lat"),
-                    requireFiniteNumber(data.lng ?? data.lon, "location.lng"),
-                    requireString(data.address, "location.address"),
-                    optionalString(data.id, "location.id"),
-                );
+                return {
+                    ...segment.location(
+                        requireFiniteNumber(data.lat, "location.lat"),
+                        requireFiniteNumber(data.lng ?? data.lon, "location.lng"),
+                        requireString(data.address, "location.address"),
+                        optionalString(data.id, "location.id"),
+                    ),
+                    name: optionalString(data.name, "location.name"),
+                };
             case "poke":
-                return segment.poke(requireInteger(data.id, "poke.id"));
+                return {
+                    ...segment.poke(requireInteger(data.id, "poke.id")),
+                    text: optionalString(data.text, "poke.text"),
+                };
             case "json":
-                return segment.json(requireString(data.data, "json.data"));
+                return segment.json(requirePresent(data.data, "json.data"));
             case "xml":
-                return segment.xml(requireString(data.data, "xml.data"));
+                return segment.xml(
+                    requireString(data.data, "xml.data"),
+                    optionalInteger(data.id, "xml.id"),
+                );
             case "markdown":
-                return segment.markdown(requireString(data.content, "markdown.content"));
+                return segment.markdown(
+                    requireString(data.content, "markdown.content"),
+                    markdownConfig(data.config),
+                );
+            case "button":
+                return segment.button(buttonContent(data.content));
             case "mirai":
                 return segment.mirai(requireString(data.data, "mirai.data"));
             case "long_msg":
@@ -103,6 +182,27 @@ export function compileICQQMessage(
                     optionalInteger(data.rand, "node.rand"),
                     optionalString(data.preview, "node.preview"),
                 );
+            case "quote":
+                return {
+                    type: "quote",
+                    user_id: requireInteger(data.user_id, "quote.user_id"),
+                    time: requireInteger(data.time, "quote.time"),
+                    seq: requireInteger(data.seq, "quote.seq"),
+                    rand: requireInteger(data.rand, "quote.rand"),
+                    message: compileICQQMessage(requireSegments(data.message, "quote.message")),
+                };
+            case "file":
+                return {
+                    type: "file",
+                    file: resolveICQQMediaSource(data, "file"),
+                    name: optionalString(data.file_name ?? data.name, "file.name"),
+                    fid: optionalString(data.file_id ?? data.fid, "file.file_id"),
+                    md5: optionalString(data.md5, "file.md5"),
+                    sha1: optionalString(data.sha1, "file.sha1"),
+                    size: optionalInteger(data.file_size ?? data.size, "file.size"),
+                    duration: optionalInteger(data.duration, "file.duration"),
+                    temp: optionalBoolean(data.temp, "file.temp"),
+                };
             case "icqq":
                 return requireNativeElement(data.element);
             default:
@@ -128,6 +228,7 @@ export function projectICQQMessageSegments(
                     type: "face",
                     data: {
                         id: String(element.id),
+                        variant: element.type,
                         ...(element.text === undefined ? {} : { text: element.text }),
                         ...(element.big === undefined ? {} : { is_large: element.big }),
                         ...(element.stickerId === undefined
@@ -333,64 +434,6 @@ function requireNativeElement(value: unknown): MessageElem {
         throw invalidICQQParam("icqq.element 必须是原生消息元素", value);
     }
     return value as MessageElem;
-}
-
-function requireString(value: unknown, field: string): string {
-    if (typeof value !== "string" || !value)
-        throw invalidICQQParam(`${field} 必须是非空字符串`, value);
-    return value;
-}
-
-function optionalString(value: unknown, field: string): string | undefined {
-    if (value === undefined) return undefined;
-    return requireString(value, field);
-}
-
-function requireInteger(value: unknown, field: string): number {
-    const number = typeof value === "string" && value.trim() ? Number(value) : value;
-    if (typeof number !== "number" || !Number.isSafeInteger(number)) {
-        throw invalidICQQParam(`${field} 必须是安全整数`, value);
-    }
-    return number;
-}
-
-function optionalInteger(value: unknown, field: string): number | undefined {
-    return value === undefined ? undefined : requireInteger(value, field);
-}
-
-function requireFiniteNumber(value: unknown, field: string): number {
-    const number = typeof value === "string" && value.trim() ? Number(value) : value;
-    if (typeof number !== "number" || !Number.isFinite(number)) {
-        throw invalidICQQParam(`${field} 必须是有限数字`, value);
-    }
-    return number;
-}
-
-function optionalStringArray(value: unknown, field: string): string[] | undefined {
-    if (value === undefined) return undefined;
-    if (!Array.isArray(value)) throw invalidICQQParam(`${field} 必须是字符串数组`, value);
-    return value.map(item => requireString(item, field));
-}
-
-function requireSegments(value: unknown, field: string): CommonTypes.Segment[] {
-    if (!Array.isArray(value)) throw invalidICQQParam(`${field} 必须是消息段数组`, value);
-    return value.map((item, index) => {
-        if (!isRecord(item)) {
-            throw invalidICQQParam(`${field}[${index}] 必须是消息段对象`, item);
-        }
-        const data = item.data;
-        if (!isRecord(data)) {
-            throw invalidICQQParam(`${field}[${index}].data 必须是对象`, data);
-        }
-        return {
-            type: requireString(item.type, `${field}[${index}].type`),
-            data,
-        };
-    });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function mediaData(element: { file: unknown; url?: string; name?: string }) {
