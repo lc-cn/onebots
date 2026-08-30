@@ -217,7 +217,7 @@ export interface WhatsAppGroupCreateParams {
 export interface WhatsAppGroupUpdateParams {
     subject?: string;
     description?: string;
-    /** URL、data URL 或适配器支持的本地媒体来源。 */
+    /** URL、data URL 或本地来源；内容必须是 Groups API 接受的正方形 JPEG。 */
     profile_picture?: string;
 }
 
@@ -232,11 +232,6 @@ export interface WhatsAppGroupInviteLinkResponse {
 
 export interface WhatsAppGroupSuccessResponse {
     success: true;
-}
-
-export interface WhatsAppGroupInviteLinkDeletedResponse {
-    messaging_product?: "whatsapp";
-    success: "true";
 }
 
 export interface WhatsAppGroupJoinRequestFailure {

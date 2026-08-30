@@ -348,7 +348,6 @@ export type {
     WhatsAppGroupCreateParams,
     WhatsAppGroupDetails,
     WhatsAppGroupIdentityFields,
-    WhatsAppGroupInviteLinkDeletedResponse,
     WhatsAppGroupInviteLinkResponse,
     WhatsAppGroupJoinRequest,
     WhatsAppGroupJoinRequestActionResponse,

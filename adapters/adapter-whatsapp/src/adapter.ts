@@ -142,12 +142,6 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
         ]);
     }
 
-    async inviteGroupMember(uin: string, params: Adapter.InviteGroupMemberParams): Promise<void> {
-        await this.requireClient(uin).groups.addParticipants(params.group_id.string, [
-            params.user_id.string,
-        ]);
-    }
-
     async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
         if (params.type !== "request" || params.block) {
             throw new WhatsAppApiError(

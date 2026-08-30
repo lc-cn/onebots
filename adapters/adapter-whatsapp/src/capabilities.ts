@@ -120,7 +120,6 @@ export const whatsAppCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         get_group_member_list: groupsAccess,
         get_group_member_info: groupsAccess,
         kick_group_member: groupsAccess,
-        invite_group_member: groupsAccess,
         handle_group_request: groupsAccess,
         can_send_image: { support: "native" },
         can_send_record: { support: "native" },

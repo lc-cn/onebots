@@ -1,9 +1,9 @@
 import { materializeMediaSource } from "onebots";
 import { WhatsAppApiError } from "./errors.js";
 import type { WhatsAppClient } from "./client.js";
+import { validateGroupProfilePicture } from "./group-profile-picture.js";
 import {
     parseGroupInviteLinkResponse,
-    parseGroupInviteLinkDeletedResponse,
     parseGroupJoinRequestActionResponse,
     parseGroupOperationResponse,
     parseGroupSuccessResponse,
@@ -15,7 +15,6 @@ import type {
     WhatsAppAPIResponse,
     WhatsAppGroupCreateParams,
     WhatsAppGroupDetails,
-    WhatsAppGroupInviteLinkDeletedResponse,
     WhatsAppGroupInviteLinkResponse,
     WhatsAppGroupJoinRequestActionResponse,
     WhatsAppGroupJoinRequestsResponse,
@@ -43,12 +42,11 @@ export const WHATSAPP_GROUP_ACTIONS = Object.freeze([
     "list_groups",
     "update_group",
     "delete_group",
-    "create_group_invite_link",
-    "delete_group_invite_link",
+    "get_group_invite_link",
+    "reset_group_invite_link",
     "list_group_join_requests",
     "approve_group_join_requests",
     "reject_group_join_requests",
-    "add_group_participants",
     "remove_group_participants",
     "pin_message",
     "unpin_message",
@@ -136,9 +134,7 @@ export class WhatsAppGroups {
             );
         }
         const media = await materializeMediaSource({ source: profilePicture });
-        if (!media.contentType.startsWith("image/")) {
-            invalidParameter("profile_picture 必须是图片");
-        }
+        validateGroupProfilePicture(media.data, media.contentType);
         const form = new FormData();
         form.set("messaging_product", "whatsapp");
         if (subject !== undefined) form.set("subject", subject);
@@ -162,20 +158,18 @@ export class WhatsAppGroups {
         );
     }
 
-    async createInviteLink(groupId: string): Promise<WhatsAppGroupInviteLinkResponse> {
+    async getInviteLink(groupId: string): Promise<WhatsAppGroupInviteLinkResponse> {
         return parseGroupInviteLinkResponse(
             await this.client.call<unknown>({
-                method: "POST",
                 resource: `${resourceId(groupId, "group_id")}/invite_link`,
-                body: { messaging_product: "whatsapp" },
             }),
         );
     }
 
-    async deleteInviteLink(groupId: string): Promise<WhatsAppGroupInviteLinkDeletedResponse> {
-        return parseGroupInviteLinkDeletedResponse(
+    async resetInviteLink(groupId: string): Promise<WhatsAppGroupInviteLinkResponse> {
+        return parseGroupInviteLinkResponse(
             await this.client.call<unknown>({
-                method: "DELETE",
+                method: "POST",
                 resource: `${resourceId(groupId, "group_id")}/invite_link`,
                 body: { messaging_product: "whatsapp" },
             }),
@@ -206,17 +200,6 @@ export class WhatsAppGroups {
         requestIds: readonly string[],
     ): Promise<WhatsAppGroupJoinRequestActionResponse> {
         return this.joinRequestAction("DELETE", groupId, requestIds);
-    }
-
-    async addParticipants(
-        groupId: string,
-        participants: readonly string[],
-    ): Promise<WhatsAppGroupOperationResponse> {
-        return this.participantAction(
-            "POST",
-            groupId,
-            participants.map(user => ({ user })),
-        );
     }
 
     async removeParticipants(
@@ -275,18 +258,16 @@ export class WhatsAppGroups {
                 return this.update(groupId(), updateParams(params));
             case "delete_group":
                 return this.delete(groupId());
-            case "create_group_invite_link":
-                return this.createInviteLink(groupId());
-            case "delete_group_invite_link":
-                return this.deleteInviteLink(groupId());
+            case "get_group_invite_link":
+                return this.getInviteLink(groupId());
+            case "reset_group_invite_link":
+                return this.resetInviteLink(groupId());
             case "list_group_join_requests":
                 return this.listJoinRequests(groupId(), paginationParams(params));
             case "approve_group_join_requests":
                 return this.approveJoinRequests(groupId(), stringArray(params, "request_ids"));
             case "reject_group_join_requests":
                 return this.rejectJoinRequests(groupId(), stringArray(params, "request_ids"));
-            case "add_group_participants":
-                return this.addParticipants(groupId(), stringArray(params, "user_ids"));
             case "remove_group_participants":
                 return this.removeParticipants(groupId(), stringArray(params, "user_ids"));
             case "pin_message":

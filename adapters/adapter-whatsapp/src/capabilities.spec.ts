@@ -23,6 +23,10 @@ describe("WhatsApp 能力清单", () => {
             "Official Business Account",
         );
         expect(whatsAppCapabilities.actions.get_group_info?.scenes).toEqual(["group"]);
+        expect(WHATSAPP_PLATFORM_ACTIONS.has("get_group_invite_link")).toBe(true);
+        expect(WHATSAPP_PLATFORM_ACTIONS.has("reset_group_invite_link")).toBe(true);
+        expect(WHATSAPP_PLATFORM_ACTIONS.has("add_group_participants")).toBe(false);
+        expect(whatsAppCapabilities.actions.invite_group_member).toBeUndefined();
         expect(whatsAppCapabilities.actions.create_flow?.permissions).toEqual([
             "whatsapp_business_management",
         ]);

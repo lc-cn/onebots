@@ -48,7 +48,7 @@ await adapter.callAction("my_bot", "whatsapp_call", {
 
 Absolute resource URLs are rejected so the access token cannot be sent to an unconfigured host. Permission-dependent actions declare either `whatsapp_business_management` or `whatsapp_business_messaging` in the capability manifest.
 
-Fixed Groups actions cover create/get/list/update/delete, invite links, join-request approval, participant add/remove, and message pin/unpin. Subscribe the v23 fields `group_lifecycle_update`, `group_participant_update`, and `group_settings_update` in addition to `messages` when Groups API is enabled.
+Fixed Groups actions cover create/get/list/update/delete, invite-link get/reset, join-request approval, participant removal, and message pin/unpin. Meta does not expose an endpoint for directly adding participants; invite users with an approved group-invite-link template instead. Subscribe the v23 fields `group_lifecycle_update`, `group_participant_update`, and `group_settings_update` in addition to `messages` when Groups API is enabled.
 
 Message QR codes are available through `client.qrCodes` and the five fixed QR-code actions. Field selection uses an array, PNG/SVG image projection is explicit, and list queries support code filtering, a 1–25 limit, and cursor pagination. Requests and responses are validated against the Meta v23 shapes, including the single-item `data` array.
 

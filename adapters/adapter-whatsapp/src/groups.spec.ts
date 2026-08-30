@@ -37,17 +37,29 @@ describe("WhatsApp Groups API", () => {
         ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
     });
 
-    it("通过受控资源管理邀请链接与入群申请", async () => {
+    it("按官方 GET/POST 语义获取和重置邀请链接", async () => {
         const fetcher = vi
             .fn<typeof fetch>()
             .mockResolvedValueOnce(response({ invite_link: "https://chat.whatsapp.com/example" }))
+            .mockResolvedValueOnce(response({ invite_link: "https://chat.whatsapp.com/reset" }));
+        const client = new WhatsAppClient(config, fetcher);
+
+        await client.groups.getInviteLink("group@g.us");
+        expect(requestUrl(fetcher)).toBe("https://graph.facebook.com/v23.0/group@g.us/invite_link");
+        expect(fetcher.mock.calls[0]?.[1]?.method).toBe("GET");
+        expect(fetcher.mock.calls[0]?.[1]?.body).toBeUndefined();
+
+        await client.groups.resetInviteLink("group@g.us");
+        expect(fetcher.mock.calls[1]?.[1]?.method).toBe("POST");
+        expect(requestJson(fetcher)).toEqual({ messaging_product: "whatsapp" });
+    });
+
+    it("通过受控资源审批入群申请", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
             .mockResolvedValueOnce(response({ approved_join_requests: ["join-1", "join-2"] }))
             .mockImplementation(async () => response({ rejected_join_requests: ["join-3"] }));
         const client = new WhatsAppClient(config, fetcher);
-
-        await client.groups.createInviteLink("group@g.us");
-        expect(requestUrl(fetcher)).toBe("https://graph.facebook.com/v23.0/group@g.us/invite_link");
-        expect(requestJson(fetcher)).toEqual({ messaging_product: "whatsapp" });
 
         await client.groups.approveJoinRequests("group@g.us", ["join-1", "join-2"]);
         expect(requestJson(fetcher)).toEqual({
@@ -118,7 +130,7 @@ describe("WhatsApp Groups API", () => {
 
         await client.groups.update("group@g.us", {
             subject: "Renamed",
-            profile_picture: "data:image/png;base64,aW1hZ2U=",
+            profile_picture: jpegDataUrl(192, 192),
         });
 
         const form = fetcher.mock.calls[0]?.[1]?.body;
@@ -126,6 +138,24 @@ describe("WhatsApp Groups API", () => {
         expect((form as FormData).get("messaging_product")).toBe("whatsapp");
         expect((form as FormData).get("subject")).toBe("Renamed");
         expect((form as FormData).get("file")).toBeInstanceOf(Blob);
+    });
+
+    it("在请求前拒绝非 JPEG、非正方形或过小群头像", async () => {
+        const fetcher = jsonFetcher({ request_id: "unused" });
+        const client = new WhatsAppClient(config, fetcher);
+
+        await expect(
+            client.groups.update("group@g.us", {
+                profile_picture: "data:image/png;base64,aW1hZ2U=",
+            }),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
+        await expect(
+            client.groups.update("group@g.us", { profile_picture: jpegDataUrl(192, 200) }),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
+        await expect(
+            client.groups.update("group@g.us", { profile_picture: jpegDataUrl(191, 191) }),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
+        expect(fetcher).not.toHaveBeenCalled();
     });
 
     it("用群消息原生类型 pin 与 unpin，并保留 wamid", async () => {
@@ -202,4 +232,33 @@ function requestUrl(fetcher: ReturnType<typeof vi.fn<typeof fetch>>, index = 0):
 
 function requestJson(fetcher: ReturnType<typeof vi.fn<typeof fetch>>): unknown {
     return JSON.parse(String(fetcher.mock.calls.at(-1)?.[1]?.body));
+}
+
+function jpegDataUrl(width: number, height: number): string {
+    const bytes = Buffer.from([
+        0xff,
+        0xd8,
+        0xff,
+        0xc0,
+        0x00,
+        0x11,
+        0x08,
+        height >> 8,
+        height & 0xff,
+        width >> 8,
+        width & 0xff,
+        0x03,
+        0x01,
+        0x11,
+        0x00,
+        0x02,
+        0x11,
+        0x00,
+        0x03,
+        0x11,
+        0x00,
+        0xff,
+        0xd9,
+    ]);
+    return `data:image/jpeg;base64,${bytes.toString("base64")}`;
 }

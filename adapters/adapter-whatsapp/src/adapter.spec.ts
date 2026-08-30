@@ -77,14 +77,11 @@ describe("WhatsApp 标准群能力", () => {
         });
     });
 
-    it("复用 Groups 模块处理改名、加人、移除与入群申请", async () => {
+    it("复用 Groups 模块处理改名、移除与入群申请", async () => {
         await withAdapter(async (adapter, client) => {
             const update = vi
                 .spyOn(client.groups, "update")
                 .mockResolvedValue({ request_id: "update" });
-            const add = vi
-                .spyOn(client.groups, "addParticipants")
-                .mockResolvedValue({ request_id: "add" });
             const remove = vi
                 .spyOn(client.groups, "removeParticipants")
                 .mockResolvedValue({ request_id: "remove" });
@@ -95,10 +92,6 @@ describe("WhatsApp 标准群能力", () => {
             await adapter.setGroupName("bot", {
                 group_id: id("g1@g.us"),
                 group_name: "Renamed",
-            });
-            await adapter.inviteGroupMember("bot", {
-                group_id: id("g1@g.us"),
-                user_id: id("BR.1"),
             });
             await adapter.kickGroupMember("bot", {
                 group_id: id("g1@g.us"),
@@ -112,9 +105,24 @@ describe("WhatsApp 标准群能力", () => {
             });
 
             expect(update).toHaveBeenCalledWith("g1@g.us", { subject: "Renamed" });
-            expect(add).toHaveBeenCalledWith("g1@g.us", ["BR.1"]);
             expect(remove).toHaveBeenCalledWith("g1@g.us", ["BR.2"]);
             expect(approve).toHaveBeenCalledWith("g1@g.us", ["join-1"]);
+        });
+    });
+
+    it("拒绝伪装成直接拉人的标准邀请语义", async () => {
+        await withAdapter(async adapter => {
+            expect(() =>
+                adapter.inviteGroupMember("bot", {
+                    group_id: id("g1@g.us"),
+                    user_id: id("86123"),
+                }),
+            ).toThrowError(
+                expect.objectContaining({
+                    code: "ADAPTER_CAPABILITY_UNAVAILABLE",
+                    capability: "invite_group_member",
+                }),
+            );
         });
     });
 

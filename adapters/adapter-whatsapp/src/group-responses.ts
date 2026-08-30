@@ -4,7 +4,6 @@ import type {
     WhatsAppGroupJoinRequest,
     WhatsAppGroupJoinRequestsResponse,
     WhatsAppGroupInviteLinkResponse,
-    WhatsAppGroupInviteLinkDeletedResponse,
     WhatsAppGroupJoinRequestActionResponse,
     WhatsAppGroupListResponse,
     WhatsAppGroupOperationResponse,
@@ -27,14 +26,6 @@ export function parseGroupSuccessResponse(value: unknown): WhatsAppGroupSuccessR
     const record = requireRecord(value, "群成功响应");
     if (record.success !== true) invalidResponse("群成功响应 success 必须为 true");
     return { success: true };
-}
-
-export function parseGroupInviteLinkDeletedResponse(
-    value: unknown,
-): WhatsAppGroupInviteLinkDeletedResponse {
-    const record = requireRecord(value, "群邀请链接删除响应");
-    if (record.success !== "true") invalidResponse('群邀请链接删除响应 success 必须为 "true"');
-    return { success: "true" };
 }
 
 export function parseGroupJoinRequestActionResponse(
