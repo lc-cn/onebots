@@ -8,7 +8,8 @@
 
 ## 功能特性
 
-- ✅ **消息与互动**：单聊、群聊、回复、消息/话题转发、富文本、卡片、媒体、名片、表情回复、跟随气泡、加急与 Pin
+- ✅ **消息与互动**：单聊、群聊、回复、消息/话题转发、富文本、静态卡片、媒体、名片、表情回复、跟随气泡、加急与 Pin
+- ✅ **CardKit v1**：卡片实体创建与发送、全量/批量/配置更新、组件生命周期和流式文本更新
 - ✅ **消息管理**：获取、撤回、卡片更新、已读用户与批量消息状态管理
 - ✅ **群组管理**：群信息、成员、管理员、分享链接和群公告
 - ✅ **用户目录**：机器人身份、应用可见通讯录用户与真实群成员
@@ -158,6 +159,12 @@ client.on('message.group', async message => {
 
 await client.start();
 ```
+
+### CardKit 平台动作
+
+通过协议的统一平台动作入口调用 `create_card_entity`、`send_card_entity`、`update_card_entity`、`update_card_settings`、`batch_update_card`、`create_card_elements`、`update_card_element`、`patch_card_element`、`stream_card_element_content` 和 `delete_card_element`。这些动作接收结构化卡片对象，适配器会生成飞书要求的 JSON 字符串；更新动作必须携带递增的非负整数 `sequence`，可选 `uuid` 用于幂等。
+
+创建和更新需要应用权限 `cardkit:card:write`，发送实体卡片需要 `im:message`。完整参数与示例见[适配器 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-feishu)。
 
 详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)
 

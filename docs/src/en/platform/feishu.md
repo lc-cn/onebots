@@ -8,7 +8,8 @@ The Feishu adapter is fully implemented and supports connecting to onebots servi
 
 ## Features
 
-- ✅ **Messaging and interactions**: direct/group messages, replies, message/thread forwarding, rich posts, cards, media, contact cards, reactions, follow-up bubbles, urgent notifications, and pins
+- ✅ **Messaging and interactions**: direct/group messages, replies, message/thread forwarding, rich posts, static cards, media, contact cards, reactions, follow-up bubbles, urgent notifications, and pins
+- ✅ **CardKit v1**: card entity creation and delivery, full/batch/settings updates, element lifecycle, and streamed text updates
 - ✅ **Message management**: fetch, recall, card updates, read users, and batch-message status management
 - ✅ **Chat management**: chat details, members, managers, share links, and announcements
 - ✅ **Directories**: bot identity, visible contact users, and verified chat members
@@ -140,6 +141,12 @@ client.on('message.group', async message => {
 
 await client.start();
 ```
+
+### CardKit platform actions
+
+Use the protocols' shared platform-action entry point to call `create_card_entity`, `send_card_entity`, `update_card_entity`, `update_card_settings`, `batch_update_card`, `create_card_elements`, `update_card_element`, `patch_card_element`, `stream_card_element_content`, and `delete_card_element`. These actions accept structured card objects and serialize the JSON strings required by Feishu/Lark. Mutations require an explicit non-negative integer `sequence`; an optional `uuid` provides idempotency.
+
+Creating and mutating card entities requires `cardkit:card:write`; sending them requires `im:message`. See the [adapter README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-feishu) for the complete parameters and examples.
 
 ## Related Links
 

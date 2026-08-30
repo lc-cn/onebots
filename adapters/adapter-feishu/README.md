@@ -79,6 +79,7 @@ onebots -r feishu
 - Webhook 加密事件解密与 Verification Token 校验
 - 单聊、群聊、线程回复以及文本、@、图片、文件、音频、视频、富文本和卡片
 - 原生群名片、个人名片、消息跟随气泡、消息/话题转发与批量表情查询
+- CardKit v1 卡片实体创建、发送、全量/批量更新、配置更新、组件增改删与流式文本更新
 - 真实机器人身份、通讯录用户、群列表、群详情和成员列表
 - 群成员、管理员、分享链接、公告、加急、Pin 与批量消息状态管理
 - 消息撤回、已读、成员/机器人群生命周期、菜单交互和消息表情增删等 canonical 事件投影；未知事件通过 `raw_event` 无损交付
@@ -110,6 +111,33 @@ onebots -r feishu
 下列动作可从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
 
 `reply_message`、`forward_message`、`forward_thread`、`push_follow_up`、`merge_forward_messages`、`get_message_read_users`、表情回复、群创建/更新/删除、群成员与管理员、群分享链接、群公告、三种消息加急、Pin 以及批量消息状态管理动作。
+
+CardKit v1 使用 `create_card_entity`、`send_card_entity`、`update_card_entity`、`update_card_settings`、`batch_update_card`、`create_card_elements`、`update_card_element`、`patch_card_element`、`stream_card_element_content` 与 `delete_card_element` 形成完整生命周期。动作直接接收结构化 `card`、`settings`、`actions`、`elements` 对象，适配器负责转换开放平台要求的 JSON 字符串；更新动作要求显式提供非负整数 `sequence`，并可用 `uuid` 保证幂等。创建、更新需要 `cardkit:card:write`，发送需要 `im:message`。
+
+例如，先创建卡片实体，再把返回的 `card_id` 发给目标会话：
+
+```json
+{
+  "action": "create_card_entity",
+  "params": {
+    "card": {
+      "schema": "2.0",
+      "body": { "elements": [{ "tag": "markdown", "content": "正在生成…" }] }
+    }
+  }
+}
+```
+
+```json
+{
+  "action": "send_card_entity",
+  "params": {
+    "receive_id_type": "chat_id",
+    "receive_id": "oc_xxx",
+    "card_id": "AAqxxxxxxxx"
+  }
+}
+```
 
 命名动作会严格按开放平台契约拆分 path、query 和 JSON body，例如 `forward_message` 的 `receive_id_type` 与 `uuid` 位于 query，而 `receive_id` 位于 body。需要使用其他 IM 或业务域能力时，再使用 `call_feishu_api`，无需绕过适配器的令牌刷新与结构化错误处理。
 

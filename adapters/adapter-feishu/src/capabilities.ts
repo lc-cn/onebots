@@ -4,11 +4,24 @@ import {
     type AdapterCapabilityManifest,
 } from "onebots";
 import { FEISHU_PLATFORM_ACTIONS } from "./platform-actions.js";
+import {
+    FEISHU_CARDKIT_ACTION_NAMES,
+    FEISHU_CARDKIT_SEND_ACTION_NAMES,
+} from "./platform-actions-cardkit.js";
 
-const platformActions = definePlatformActionCapabilities(FEISHU_PLATFORM_ACTIONS, {
-    support: "native",
-    availability: "context",
-});
+const platformActions = definePlatformActionCapabilities(FEISHU_PLATFORM_ACTIONS, action =>
+    FEISHU_CARDKIT_ACTION_NAMES.has(action)
+        ? {
+              support: "native",
+              availability: "permission",
+              permissions: [
+                  FEISHU_CARDKIT_SEND_ACTION_NAMES.has(action)
+                      ? "im:message"
+                      : "cardkit:card:write",
+              ],
+          }
+        : { support: "native", availability: "context" },
+);
 
 /** 飞书开放平台实现当前可用的能力。 */
 export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

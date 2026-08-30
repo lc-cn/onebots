@@ -1,8 +1,25 @@
-import { definePlatformActions, isSafeAbsoluteApiPath, type PlatformActionHandler } from "onebots";
+import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import type { FeishuBot } from "./bot.js";
-import { FeishuError, invalidFeishuParam } from "./errors.js";
-
-type Method = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+import { FeishuError } from "./errors.js";
+import { FEISHU_CARDKIT_ACTIONS } from "./platform-actions-cardkit.js";
+import {
+    bodyValue,
+    compactQuery,
+    memberIdType,
+    optionalBoolean,
+    optionalNumber,
+    optionalString,
+    optionalStringParam,
+    queryValue,
+    receiveIdType,
+    requiredString,
+    requireMethod,
+    requirePath,
+    segment,
+    stringArray,
+    userIdType,
+    without,
+} from "./platform-action-input.js";
 
 const ACTION_HANDLERS = {
     call_feishu_api: (bot, params) =>
@@ -134,7 +151,7 @@ const ACTION_HANDLERS = {
 } satisfies Readonly<Record<string, PlatformActionHandler<FeishuBot>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
-    ACTION_HANDLERS,
+    { ...ACTION_HANDLERS, ...FEISHU_CARDKIT_ACTIONS },
     action =>
         new FeishuError(`未实现飞书平台动作: ${action}`, {
             code: "FEISHU_ACTION_NOT_IMPLEMENTED",
@@ -193,147 +210,4 @@ function urgent(
         params: { user_id_type: userIdType(params.user_id_type) },
         body: { user_id_list: stringArray(params.user_id_list, "user_id_list") },
     });
-}
-
-function requirePath(value: unknown): string {
-    if (typeof value !== "string" || !isSafeAbsoluteApiPath(value)) {
-        throw invalidFeishuParam("飞书参数 path 必须为安全绝对路径", value);
-    }
-    return value;
-}
-
-function requiredString(value: unknown, name: string): string {
-    if (typeof value !== "string" || !value) {
-        throw invalidFeishuParam(`飞书参数 ${name} 必须为非空字符串`, value);
-    }
-    return value;
-}
-
-function requireMethod(value: unknown): Method {
-    if (value === undefined) return "GET";
-    if (typeof value !== "string" || !value) {
-        throw invalidFeishuParam("飞书参数 method 必须为非空字符串", value);
-    }
-    const method = value.toUpperCase();
-    if (!["GET", "POST", "PUT", "DELETE", "PATCH"].includes(method)) {
-        throw invalidFeishuParam("飞书参数 method 不是受支持的 HTTP 方法", value);
-    }
-    return method as Method;
-}
-
-function segment(params: Readonly<Record<string, unknown>>, name: string): string {
-    const value = params[name];
-    if (typeof value !== "string" || !value || !/^[A-Za-z0-9._:-]+$/.test(value)) {
-        throw invalidFeishuParam(`飞书参数 ${name} 必须为合法 ID`, value);
-    }
-    return encodeURIComponent(value);
-}
-
-function bodyValue(value: unknown): Record<string, unknown> | undefined {
-    if (value === undefined) return undefined;
-    if (value === null || typeof value !== "object" || Array.isArray(value))
-        throw invalidFeishuParam("飞书参数 body 必须为对象", value);
-    return value as Record<string, unknown>;
-}
-
-function queryValue(
-    value: Readonly<Record<string, unknown>> | unknown,
-): Record<string, string | number | boolean> | undefined {
-    if (value === undefined) return undefined;
-    if (value === null || typeof value !== "object" || Array.isArray(value))
-        throw invalidFeishuParam("飞书参数 query 必须为对象", value);
-    const query: Record<string, string | number | boolean> = {};
-    for (const [key, item] of Object.entries(value)) {
-        if (!["string", "number", "boolean"].includes(typeof item)) {
-            throw invalidFeishuParam(`飞书 query 参数 ${key} 必须为标量`, item);
-        }
-        query[key] = item as string | number | boolean;
-    }
-    return query;
-}
-
-function without(
-    params: Readonly<Record<string, unknown>>,
-    ...keys: string[]
-): Record<string, unknown> {
-    return Object.fromEntries(Object.entries(params).filter(([key]) => !keys.includes(key)));
-}
-
-function optionalStringParam(value: unknown, name: string): Record<string, string> {
-    if (value === undefined) return {};
-    return { [name]: requiredString(value, name) };
-}
-
-function receiveIdType(value: unknown): string {
-    return enumString(
-        value,
-        "receive_id_type",
-        ["open_id", "user_id", "union_id", "email", "chat_id", "thread_id"],
-        "open_id",
-    );
-}
-
-function userIdType(value: unknown): string {
-    return enumString(value, "user_id_type", ["open_id", "user_id", "union_id"], "open_id");
-}
-
-function memberIdType(value: unknown): string {
-    return enumString(
-        value,
-        "member_id_type",
-        ["open_id", "user_id", "union_id", "app_id"],
-        "open_id",
-    );
-}
-
-function enumString(
-    value: unknown,
-    name: string,
-    allowed: readonly string[],
-    fallback: string,
-): string {
-    if (value === undefined) return fallback;
-    if (typeof value !== "string" || !allowed.includes(value)) {
-        throw invalidFeishuParam(`飞书参数 ${name} 必须是 ${allowed.join("、")} 之一`, value);
-    }
-    return value;
-}
-
-function optionalString(value: unknown, name: string): string | undefined {
-    return value === undefined ? undefined : requiredString(value, name);
-}
-
-function optionalBoolean(value: unknown, name: string): boolean | undefined {
-    if (value === undefined) return undefined;
-    if (typeof value !== "boolean")
-        throw invalidFeishuParam(`飞书参数 ${name} 必须为布尔值`, value);
-    return value;
-}
-
-function optionalNumber(value: unknown, name: string): number | undefined {
-    if (value === undefined) return undefined;
-    if (typeof value !== "number" || !Number.isFinite(value))
-        throw invalidFeishuParam(`飞书参数 ${name} 必须为有限数字`, value);
-    return value;
-}
-
-function compactQuery(
-    value: Record<string, string | number | boolean | undefined>,
-): Record<string, string | number | boolean> {
-    return Object.fromEntries(
-        Object.entries(value).filter(
-            (entry): entry is [string, string | number | boolean] => entry[1] !== undefined,
-        ),
-    );
-}
-
-function stringArray(value: unknown, name: string): string[] {
-    if (
-        !Array.isArray(value) ||
-        !value.length ||
-        !value.every(item => typeof item === "string" && item)
-    ) {
-        throw invalidFeishuParam(`飞书参数 ${name} 必须为非空字符串数组`, value);
-    }
-    return value;
 }

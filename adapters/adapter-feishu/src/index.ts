@@ -32,6 +32,11 @@ export {
     executeFeishuPlatformAction,
     type FeishuPlatformAction,
 } from "./platform-actions.js";
+export {
+    FEISHU_CARDKIT_ACTIONS,
+    type FeishuCardElementInsertType,
+    type FeishuCardSourceType,
+} from "./platform-actions-cardkit.js";
 
 export const feishuSchema: Schema = {
     account_id: {
