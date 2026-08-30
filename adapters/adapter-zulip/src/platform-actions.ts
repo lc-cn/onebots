@@ -1,7 +1,15 @@
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
+import {
+    optionalString,
+    requireInteger,
+    requireMethod,
+    requireParams,
+    requireString,
+    without,
+} from "./action-params.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
-import type { ZulipHttpMethod, ZulipParam, ZulipParams } from "./types.js";
+import { ZULIP_USER_GROUP_ACTION_HANDLERS } from "./user-group-actions.js";
 
 const ACTION_HANDLERS = {
     call_zulip_api: (client, params) =>
@@ -75,6 +83,7 @@ const ACTION_HANDLERS = {
         resourceAction(client, "saved_snippets", "saved_snippet_id", "PATCH", params),
     delete_saved_snippet: (client, params) =>
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
+    ...ZULIP_USER_GROUP_ACTION_HANDLERS,
 } satisfies Readonly<Record<string, PlatformActionHandler<ZulipClient>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
@@ -143,78 +152,4 @@ function resourceAction(
 ): Promise<unknown> {
     const id = requireInteger(params[idField], idField);
     return client.call(`${collection}/${id}`, method, without(params, idField));
-}
-
-function requireMethod(value: unknown): ZulipHttpMethod {
-    if (value === undefined) return "GET";
-    if (value === "GET" || value === "POST" || value === "PATCH" || value === "DELETE") {
-        return value;
-    }
-    throw new ZulipError("Zulip method 必须是 GET、POST、PATCH 或 DELETE", {
-        code: "ZULIP_INVALID_ACTION_PARAM",
-    });
-}
-
-function requireParams(value: unknown): ZulipParams {
-    const source = isRecord(value) && "params" in value ? value.params : value;
-    if (!isRecord(source)) {
-        throw new ZulipError("Zulip params 必须是对象", {
-            code: "ZULIP_INVALID_ACTION_PARAM",
-        });
-    }
-    const result: Record<string, ZulipParam | undefined> = {};
-    for (const [key, item] of Object.entries(source)) {
-        if (!isZulipParam(item)) {
-            throw new ZulipError(`Zulip 参数 ${key} 不是可编码的值`, {
-                code: "ZULIP_INVALID_ACTION_PARAM",
-            });
-        }
-        result[key] = item;
-    }
-    return result;
-}
-
-function without(value: Readonly<Record<string, unknown>>, key: string): ZulipParams {
-    const copy = { ...value };
-    delete copy[key];
-    return requireParams(copy);
-}
-
-function requireString(value: unknown, name: string): string {
-    if (typeof value !== "string" || !value.trim()) {
-        throw new ZulipError(`Zulip 参数 ${name} 必须是非空字符串`, {
-            code: "ZULIP_INVALID_ACTION_PARAM",
-        });
-    }
-    return value;
-}
-
-function optionalString(value: unknown): string | undefined {
-    return typeof value === "string" && value ? value : undefined;
-}
-
-function requireInteger(value: unknown, name: string): number {
-    const result = typeof value === "string" ? Number(value) : value;
-    if (typeof result !== "number" || !Number.isSafeInteger(result) || result < 0) {
-        throw new ZulipError(`Zulip 参数 ${name} 必须是非负整数`, {
-            code: "ZULIP_INVALID_ACTION_PARAM",
-        });
-    }
-    return result;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isZulipParam(value: unknown): value is ZulipParam | undefined {
-    return (
-        value === undefined ||
-        value === null ||
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean" ||
-        Array.isArray(value) ||
-        isRecord(value)
-    );
 }

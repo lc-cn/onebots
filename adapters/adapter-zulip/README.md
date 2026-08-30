@@ -7,6 +7,7 @@
 - 频道、话题与单人/多人私聊消息
 - 消息查询、历史、编辑、删除、已读与星标
 - 定时消息、草稿、提醒与保存片段管理
+- 用户组创建、权限更新、停用/恢复、成员与子组管理及成员关系查询
 - Zulip-flavored Markdown、用户提及、Emoji、图片和文件上传
 - 真实频道订阅者查询、邀请、移除、退订与频道改名
 - 消息反应、成员变更、心跳及未知原始事件投影
@@ -75,7 +76,7 @@ await client.start();
 
 ## 平台扩展动作
 
-通过统一 `callAction` 可调用反应、星标、消息搜索与编辑历史、频道订阅/管理、话题可见性、Presence、用户状态、输入状态、定时消息、草稿、提醒、保存片段、附件、Emoji 和服务器信息等动作。`call_zulip_api` 用于尚未封装的官方端点，但不会接受绝对 URL。
+通过统一 `callAction` 可调用反应、星标、消息搜索与编辑历史、频道订阅/管理、话题可见性、Presence、用户状态、输入状态、定时消息、草稿、提醒、保存片段、附件、Emoji 和服务器信息等动作。用户组领域提供 `list_user_groups`、`create_user_group`、`update_user_group`、`deactivate_user_group`、`update_user_group_members`、`update_user_group_subgroups`、`get_user_group_members`、`get_user_group_subgroups` 与 `get_user_group_membership`；命名动作严格拒绝未知字段，并校验官方 ID、布尔值及成员数组。`call_zulip_api` 用于尚未封装的官方端点，但不会接受绝对 URL。
 
 平台新增字段不会被丢弃：每个投影事件都保留 `raw_event`，未建立通用语义的事件会以 `notice_type: "custom"` 分发。
 

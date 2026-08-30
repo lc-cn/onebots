@@ -4,6 +4,7 @@ import {
     type AdapterCapabilityManifest,
 } from "onebots";
 import { ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { ZULIP_USER_GROUP_MUTATION_ACTIONS } from "./user-group-actions.js";
 
 const permission = {
     support: "native" as const,
@@ -11,6 +12,7 @@ const permission = {
     permissions: ["Zulip 组织角色与频道权限"],
 };
 const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS, action =>
+    ZULIP_USER_GROUP_MUTATION_ACTIONS.has(action) ||
     [
         "subscribe_channels",
         "unsubscribe_channels",
