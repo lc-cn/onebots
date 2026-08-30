@@ -5,10 +5,22 @@ import {
 } from "onebots";
 import { TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = definePlatformActionCapabilities(TELEGRAM_PLATFORM_ACTIONS, {
-    support: "native",
-    availability: "context",
-});
+const reactionManagementActions = new Set([
+    "delete_message_reaction",
+    "delete_all_message_reactions",
+]);
+
+const platformActions = definePlatformActionCapabilities(TELEGRAM_PLATFORM_ACTIONS, action =>
+    reactionManagementActions.has(action)
+        ? {
+              support: "native",
+              availability: "permission",
+              permissions: ["can_delete_messages"],
+          }
+        : action === "send_live_photo"
+          ? { support: "native", scenes: ["private", "group", "channel"] }
+          : { support: "native", availability: "context" },
+);
 
 /** Telegram Bot API 当前可用的能力。 */
 export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
@@ -137,6 +149,11 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
             support: "native",
             direction: "both",
             note: "Bot API 10.3 InputRichMessage/RichMessage 原生结构，发送时不能与普通内容段混用",
+        },
+        telegram_live_photo: {
+            support: "native",
+            direction: "receive",
+            note: "完整保留 Bot API LivePhoto 原生结构；发送使用 send_live_photo 双媒体动作",
         },
     },
     transports: {

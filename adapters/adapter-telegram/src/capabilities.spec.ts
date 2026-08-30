@@ -16,6 +16,11 @@ describe("Telegram 能力清单", () => {
         expect(telegramCapabilities.actions.answer_callback_query?.support).toBe("native");
         expect(telegramCapabilities.actions.send_rich_message?.support).toBe("native");
         expect(telegramCapabilities.segments.telegram_rich_message?.direction).toBe("both");
+        expect(telegramCapabilities.actions.send_live_photo?.support).toBe("native");
+        expect(telegramCapabilities.actions.delete_message_reaction?.permissions).toEqual([
+            "can_delete_messages",
+        ]);
+        expect(telegramCapabilities.segments.telegram_live_photo?.direction).toBe("receive");
     });
 
     it("所有声明动作均有真实入口", () => {

@@ -84,6 +84,129 @@ describe("Telegram 领域动作", () => {
         expect(TELEGRAM_PLATFORM_ACTIONS.has("send_rich_message")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("delete_ephemeral_message")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("answer_chat_join_request_query")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("send_live_photo")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("delete_message_reaction")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("delete_all_message_reactions")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("get_managed_bot_access_settings")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("set_managed_bot_access_settings")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("get_user_personal_chat_messages")).toBe(true);
+    });
+
+    it("按 actor 类型调用 Reaction 删除接口并拒绝歧义地址", async () => {
+        const deleteMessageReactionUser = vi.fn().mockResolvedValue(true);
+        const deleteMessageReactionChat = vi.fn().mockResolvedValue(true);
+        const deleteAllMessageReactionsUser = vi.fn().mockResolvedValue(true);
+        const deleteAllMessageReactionsChat = vi.fn().mockResolvedValue(true);
+        const bot = botWithApi({
+            deleteMessageReactionUser,
+            deleteMessageReactionChat,
+            deleteAllMessageReactionsUser,
+            deleteAllMessageReactionsChat,
+        } as unknown as Bot["api"]);
+
+        await executeTelegramPlatformAction(bot, "delete_message_reaction", {
+            chat_id: -100,
+            message_id: 7,
+            user_id: 42,
+        });
+        await executeTelegramPlatformAction(bot, "delete_message_reaction", {
+            chat_id: -100,
+            message_id: 8,
+            actor_chat_id: -200,
+        });
+        await executeTelegramPlatformAction(bot, "delete_all_message_reactions", {
+            chat_id: -100,
+            user_id: 42,
+        });
+        await executeTelegramPlatformAction(bot, "delete_all_message_reactions", {
+            chat_id: -100,
+            actor_chat_id: -200,
+        });
+
+        expect(deleteMessageReactionUser).toHaveBeenCalledWith(-100, 7, 42);
+        expect(deleteMessageReactionChat).toHaveBeenCalledWith(-100, 8, -200);
+        expect(deleteAllMessageReactionsUser).toHaveBeenCalledWith(-100, 42);
+        expect(deleteAllMessageReactionsChat).toHaveBeenCalledWith(-100, -200);
+        await expect(
+            executeTelegramPlatformAction(bot, "delete_message_reaction", {
+                chat_id: -100,
+                message_id: 9,
+                user_id: 42,
+                actor_chat_id: -200,
+            }),
+        ).rejects.toMatchObject({ code: "TELEGRAM_PARAM_INVALID" });
+        await expect(
+            executeTelegramPlatformAction(bot, "delete_all_message_reactions", {
+                chat_id: -100,
+            }),
+        ).rejects.toMatchObject({ code: "TELEGRAM_PARAM_INVALID" });
+    });
+
+    it("闭合 Managed Bot 与个人频道消息管理能力", async () => {
+        const getManagedBotAccessSettings = vi.fn().mockResolvedValue({});
+        const setManagedBotAccessSettings = vi.fn().mockResolvedValue(true);
+        const getUserPersonalChatMessages = vi.fn().mockResolvedValue([]);
+        const bot = botWithApi({
+            getManagedBotAccessSettings,
+            setManagedBotAccessSettings,
+            getUserPersonalChatMessages,
+        } as unknown as Bot["api"]);
+
+        await executeTelegramPlatformAction(bot, "get_managed_bot_access_settings", {
+            user_id: 42,
+        });
+        await executeTelegramPlatformAction(bot, "set_managed_bot_access_settings", {
+            user_id: 42,
+            is_access_restricted: true,
+            added_user_ids: [43, 44],
+        });
+        await executeTelegramPlatformAction(bot, "get_user_personal_chat_messages", {
+            user_id: 42,
+            limit: 20,
+        });
+
+        expect(getManagedBotAccessSettings).toHaveBeenCalledWith(42);
+        expect(setManagedBotAccessSettings).toHaveBeenCalledWith(42, true, {
+            added_user_ids: [43, 44],
+        });
+        expect(getUserPersonalChatMessages).toHaveBeenCalledWith(42, 20);
+        await expect(
+            executeTelegramPlatformAction(bot, "get_user_personal_chat_messages", {
+                user_id: 42,
+                limit: 21,
+            }),
+        ).rejects.toMatchObject({ code: "TELEGRAM_PARAM_INVALID" });
+        await expect(
+            executeTelegramPlatformAction(bot, "set_managed_bot_access_settings", {
+                user_id: 42,
+                is_access_restricted: false,
+                added_user_ids: Array.from({ length: 11 }, (_, index) => index + 1),
+            }),
+        ).rejects.toMatchObject({ code: "TELEGRAM_PARAM_INVALID" });
+        expect(setManagedBotAccessSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it("发送 Live Photo 双媒体并在调用前拒绝远程 URL", async () => {
+        const sendLivePhoto = vi.fn().mockResolvedValue({ message_id: 12 });
+        const bot = botWithApi({ sendLivePhoto } as unknown as Bot["api"]);
+
+        await executeTelegramPlatformAction(bot, "send_live_photo", {
+            chat_id: -100,
+            live_photo: "video-file-id",
+            photo: "photo-file-id",
+            options: { caption: "live" },
+        });
+        expect(sendLivePhoto).toHaveBeenCalledWith(-100, "video-file-id", "photo-file-id", {
+            caption: "live",
+        });
+        await expect(
+            executeTelegramPlatformAction(bot, "send_live_photo", {
+                chat_id: -100,
+                live_photo: "https://example.com/live.mp4",
+                photo: "photo-file-id",
+            }),
+        ).rejects.toMatchObject({ code: "TELEGRAM_MEDIA_REMOTE_URL_UNSUPPORTED" });
+        expect(sendLivePhoto).toHaveBeenCalledTimes(1);
     });
 
     it("闭合 Rich Message、Ephemeral Message 与入群查询动作", async () => {

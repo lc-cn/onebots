@@ -176,6 +176,31 @@ describe("projectTelegramEvents", () => {
         });
     });
 
+    it("无损投影 Live Photo 原生消息段", () => {
+        const livePhoto = {
+            id: "live-1",
+            live_photo: { file_id: "video-1", file_unique_id: "v1", width: 8, height: 8 },
+            photo: [{ file_id: "photo-1", file_unique_id: "p1", width: 8, height: 8 }],
+        };
+        const update = {
+            update_id: 25,
+            message: {
+                message_id: 26,
+                date: 107,
+                chat: { id: -30, type: "supergroup", title: "group" },
+                from: { id: 40, is_bot: false, first_name: "Alice" },
+                live_photo: livePhoto,
+            },
+        } as unknown as Update;
+
+        const [event] = projectTelegramEvents(update, context);
+
+        expect(event).toMatchObject({
+            type: "message",
+            message: [{ type: "telegram_live_photo", data: { live_photo: livePhoto } }],
+        });
+    });
+
     it("未知原生更新以 custom notice 无损投影", () => {
         const update = {
             update_id: 12,

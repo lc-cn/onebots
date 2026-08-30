@@ -91,6 +91,67 @@ export function requireInteger(params: Readonly<Record<string, unknown>>, name: 
     return value;
 }
 
+export function requireSignedInteger(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+): number {
+    const source = params[name];
+    const value = Number(source);
+    if (
+        (typeof source !== "string" && typeof source !== "number") ||
+        !Number.isSafeInteger(value) ||
+        value === 0
+    ) {
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为非零整数`,
+            "TELEGRAM_PARAM_INVALID",
+            { name },
+        );
+    }
+    return value;
+}
+
+export function requireIntegerRange(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+    minimum: number,
+    maximum: number,
+): number {
+    const value = requireInteger(params, name);
+    if (value < minimum || value > maximum) {
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为 ${minimum} 到 ${maximum} 的整数`,
+            "TELEGRAM_PARAM_INVALID",
+            { name },
+        );
+    }
+    return value;
+}
+
+export function optionalIntegerArray(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+    maximum: number,
+): number[] | undefined {
+    const value = params[name];
+    if (value == null) return undefined;
+    if (!isPositiveIntegerArray(value) || value.length > maximum) {
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为至多 ${maximum} 项的正整数数组`,
+            "TELEGRAM_PARAM_INVALID",
+            { name },
+        );
+    }
+    return [...value];
+}
+
+function isPositiveIntegerArray(value: unknown): value is number[] {
+    return (
+        Array.isArray(value) &&
+        value.every(item => typeof item === "number" && Number.isSafeInteger(item) && item > 0)
+    );
+}
+
 export function requireStringArray(
     params: Readonly<Record<string, unknown>>,
     name: string,

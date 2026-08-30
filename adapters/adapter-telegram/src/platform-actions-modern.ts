@@ -1,10 +1,16 @@
 import type { PlatformActionHandler } from "onebots";
 import type { TelegramBot } from "./bot.js";
+import { TelegramError } from "./errors.js";
+import { resolveTelegramInputFile } from "./message-sender.js";
 import {
     optionalObject,
+    optionalIntegerArray,
+    requireBoolean,
     requireHttpsUrl,
     requireInteger,
+    requireIntegerRange,
     requireObject,
+    requireSignedInteger,
     requireString,
     requireStringEnum,
     requireStringOrNumber,
@@ -13,8 +19,62 @@ import {
 
 type Handler = PlatformActionHandler<TelegramBot>;
 
-/** Bot API 10.1-10.3 的 Rich、Ephemeral 与 Join Request Query 动作。 */
+/** Bot API 10.0-10.3 的管理、Rich、Ephemeral 与 Join Request Query 动作。 */
 export const TELEGRAM_MODERN_ACTIONS = {
+    send_live_photo: telegramAction("sendLivePhoto", async (api, params) =>
+        api.sendLivePhoto(
+            requireStringOrNumber(params, "chat_id"),
+            await resolveTelegramInputFile(
+                { file: params.live_photo, filename: params.live_photo_filename },
+                { allowRemoteUrl: false },
+            ),
+            await resolveTelegramInputFile(
+                { file: params.photo, filename: params.photo_filename },
+                { allowRemoteUrl: false },
+            ),
+            optionalObject(params.options, "options") as never,
+        ),
+    ),
+    delete_message_reaction: telegramAction("deleteMessageReaction", (api, params) => {
+        const actor = requireReactionActor(params);
+        return actor.type === "user"
+            ? api.deleteMessageReactionUser(
+                  requireStringOrNumber(params, "chat_id"),
+                  requireInteger(params, "message_id"),
+                  actor.id,
+              )
+            : api.deleteMessageReactionChat(
+                  requireStringOrNumber(params, "chat_id"),
+                  requireInteger(params, "message_id"),
+                  actor.id,
+              );
+    }),
+    delete_all_message_reactions: telegramAction("deleteAllMessageReactions", (api, params) => {
+        const actor = requireReactionActor(params);
+        return actor.type === "user"
+            ? api.deleteAllMessageReactionsUser(requireStringOrNumber(params, "chat_id"), actor.id)
+            : api.deleteAllMessageReactionsChat(requireStringOrNumber(params, "chat_id"), actor.id);
+    }),
+    get_managed_bot_access_settings: telegramAction("getManagedBotAccessSettings", (api, params) =>
+        api.getManagedBotAccessSettings(requireInteger(params, "user_id")),
+    ),
+    set_managed_bot_access_settings: telegramAction(
+        "setManagedBotAccessSettings",
+        (api, params) => {
+            const addedUserIds = optionalIntegerArray(params, "added_user_ids", 10);
+            return api.setManagedBotAccessSettings(
+                requireInteger(params, "user_id"),
+                requireBoolean(params, "is_access_restricted"),
+                addedUserIds ? { added_user_ids: addedUserIds } : undefined,
+            );
+        },
+    ),
+    get_user_personal_chat_messages: telegramAction("getUserPersonalChatMessages", (api, params) =>
+        api.getUserPersonalChatMessages(
+            requireInteger(params, "user_id"),
+            requireIntegerRange(params, "limit", 1, 20),
+        ),
+    ),
     send_rich_message: telegramAction("sendRichMessage", (api, params) =>
         api.sendRichMessage(
             requireStringOrNumber(params, "chat_id"),
@@ -87,6 +147,24 @@ export const TELEGRAM_MODERN_ACTIONS = {
         ),
     ),
 } satisfies Readonly<Record<string, Handler>>;
+
+function requireReactionActor(params: Readonly<Record<string, unknown>>): {
+    type: "user" | "chat";
+    id: number;
+} {
+    const hasUser = params.user_id != null;
+    const hasChat = params.actor_chat_id != null;
+    if (hasUser === hasChat) {
+        throw TelegramError.invalid(
+            "Telegram Reaction 管理必须且只能提供 user_id 或 actor_chat_id",
+            "TELEGRAM_PARAM_INVALID",
+            { names: ["user_id", "actor_chat_id"] },
+        );
+    }
+    return hasUser
+        ? { type: "user", id: requireInteger(params, "user_id") }
+        : { type: "chat", id: requireSignedInteger(params, "actor_chat_id") };
+}
 
 function requireTextOrRichMessage(
     params: Readonly<Record<string, unknown>>,

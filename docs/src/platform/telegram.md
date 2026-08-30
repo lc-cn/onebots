@@ -1,110 +1,67 @@
 # Telegram 适配器
 
-Telegram 适配器已完全实现，支持通过 Telegram Bot API 接入 onebots 服务。
-
-## 状态
-
-✅ **已实现并可用**
-
-## 功能特性
-
-- ✅ **消息收发**
-  - 私聊消息收发
-  - 群组消息收发
-  - 频道消息收发
-  - 支持文本、图片、视频、音频、文件等多种消息格式
-- ✅ **消息管理**
-  - 消息编辑
-  - 消息删除
-- ✅ **群组管理**
-  - 获取群组信息
-  - 获取群组成员列表和信息
-  - 离开群组
-  - 踢出成员
-- ✅ **交互功能**
-  - Inline Keyboard（内联键盘）
-  - Callback Query（回调查询）
-  - 命令处理（/command）
-- ✅ **连接模式**
-  - 轮询模式（Polling，默认）
-  - Webhook 模式
+`@onebots/adapter-telegram` 基于 grammY 1.46 与 Telegram Bot API 10.3，支持私聊、群组和频道，并保留原始 Update。grammY 已作为运行依赖随适配器安装，无需重复添加。
 
 ## 安装
 
 ```bash
-npm install @onebots/adapter-telegram grammy
-# 或
-pnpm add @onebots/adapter-telegram grammy
+pnpm add @onebots/adapter-telegram
 ```
 
-## 配置
+## 接收配置
 
-在 `config.yaml` 中配置 Telegram 账号：
+`receive_mode` 是接收方式的唯一来源；Web 管理端会按所选模式动态展示字段。
 
 ```yaml
-# Telegram 机器人账号配置
 telegram.your_bot_id:
-  # Telegram 平台配置
-  token: 'your_telegram_bot_token'  # Telegram Bot Token，必填
-  
-  # 轮询模式（默认）
+  token: "YOUR_BOT_TOKEN"
+  receive_mode: polling # polling、webhook 或 manual
+
   polling:
-    enabled: true  # 是否启用轮询，默认 true
-    timeout: 30    # 轮询超时时间（秒）
-    limit: 100     # 每次获取的更新数量
-    allowed_updates: ['message', 'callback_query']  # 允许的更新类型
-  
-  # 或 Webhook 模式
+    timeout: 30
+    limit: 100
+    drop_pending_updates: false
+    allowed_updates: ["message", "callback_query", "chat_member"]
+
+  # receive_mode: webhook
   # webhook:
-  #   url: 'https://your-domain.com/webhook'
-  #   secret_token: 'your_secret_token'  # 可选，Webhook 密钥
-  #   allowed_updates: ['message', 'callback_query']  # 允许的更新类型
-  
-  # OneBot V11 协议配置
-  onebot.v11:
-    access_token: 'your_v11_token'
-  
-  # OneBot V12 协议配置
-  onebot.v12:
-    access_token: 'your_v12_token'
+  #   url: "https://bot.example/telegram/your_bot_id/webhook"
+  #   secret_token: "random-secret"
+  #   max_connections: 40
+  #   drop_pending_updates: false
+  #   allowed_updates: ["message", "callback_query"]
+
+  # 可选：HTTP(S)、SOCKS4 或 SOCKS5 代理
+  proxy:
+    url: "http://127.0.0.1:7890"
 ```
 
-### 配置项说明
+Webhook 必须使用 HTTPS URL，并建议配置随机 `secret_token`。切回 polling 时适配器会删除 Telegram 侧旧 Webhook，避免与 `getUpdates` 冲突。`manual` 不打开接收端口，可通过 `ingest(rawUpdate)` 接入队列、反向连接或已有服务，也可用 `acceptHttp(request)` 复用现有 Fetch/WinterCG Host 的校验和结构化响应。
 
-| 配置项 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| `token` | string | 是 | Telegram Bot Token |
-| `polling.enabled` | boolean | 否 | 是否启用轮询模式，默认 true |
-| `polling.timeout` | number | 否 | 轮询超时时间（秒），默认 30 |
-| `polling.limit` | number | 否 | 每次获取的更新数量，默认 100 |
-| `polling.allowed_updates` | string[] | 否 | 允许的更新类型 |
-| `webhook.url` | string | 否 | Webhook URL（Webhook 模式必填） |
-| `webhook.secret_token` | string | 否 | Webhook 密钥 |
-| `webhook.allowed_updates` | string[] | 否 | 允许的更新类型 |
+## 平台能力
 
-## 获取 Bot Token
+- 文本、@、图片、视频、音频、文件、贴纸、位置、联系人、回复与 Rich Message；媒体支持 `file_id`、远程 URL 和原生上传源。
+- 消息编辑/删除、Reaction、置顶、转发/复制、投票、Forum Topic、邀请链接和群权限。
+- Bot 命令与资料、Callback/Inline/支付查询、Guest Mode、Ephemeral Message 和 Join Request Query。
+- Bot API 10.x 的 Rich Message、Live Photo、Managed Bot、个人频道消息、订阅和生成中止事件。
+- 未标准化 Update 以 `notice.custom` 加 `raw_event` 无损交付；平台动作可由 `get_supported_actions` 动态发现。
 
-1. 在 Telegram 中搜索 [@BotFather](https://t.me/BotFather)
-2. 发送 `/newbot` 创建新机器人
-3. 按照提示设置机器人名称和用户名
-4. 获取 Bot Token（格式：`123456789:ABCdefGHIjklMNOpqrsTUVwxyz-YourTokenHere`）
+Telegram Bot API 不提供完整群成员目录，因此适配器只声明真实可用的管理员列表、成员数量和单成员查询，不把管理员列表伪装成 `get_group_member_list`。
 
-## 使用示例
+### Bot API 10.0 管理动作
 
-### 启动服务
+`delete_message_reaction` 与 `delete_all_message_reactions` 必须且只能提供 `user_id` 或 `actor_chat_id`。`get_managed_bot_access_settings`、`set_managed_bot_access_settings` 和 `get_user_personal_chat_messages` 使用官方强类型入口。
 
-```bash
-# 注册 Telegram 适配器和 OneBot V11 协议
-onebots -r telegram -p onebot.v11
-```
+`send_live_photo` 同时接收 `live_photo` 和 `photo`；两者可使用 Telegram `file_id`、本地路径、data URL 或 `base64://`。Telegram 官方接口不接受远程 URL，适配器会在调用前返回结构化校验错误。收到 Live Photo 时，完整结构保存在 `telegram_live_photo` 消息段中。
 
-### 客户端 SDK 使用
+仍未封装为命名动作的新 Bot API 可通过 `call_telegram_api` 调用，并共享统一的 `TelegramError`、限流和日志链路。
 
-客户端应连接完整账号协议根，例如 `http://localhost:6727/telegram/{account_id}/onebot/v12`。创建 Client、选择接收模式、接入已有 Host 与调用 API 的统一说明见[客户端 SDK 使用指南](/guide/client-sdk)。
+## 获取 Token
+
+在 Telegram 中联系 [@BotFather](https://t.me/BotFather)，发送 `/newbot` 并按提示创建机器人。
 
 ## 相关链接
 
-- [Telegram Bot API 文档](https://core.telegram.org/bots/api)
-- [Telegram Bot 开发文档](https://core.telegram.org/bots)
-- [grammy 文档](https://grammy.dev/)
-- [Telegram 适配器 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-telegram)
+- [Telegram Bot API](https://core.telegram.org/bots/api)
+- [grammY 文档](https://grammy.dev/)
+- [客户端 SDK 使用指南](/guide/client-sdk)

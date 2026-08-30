@@ -1,75 +1,59 @@
 # Telegram Adapter
 
-The Telegram adapter is fully implemented and supports connecting to onebots service through Telegram Bot API.
-
-## Status
-
-✅ **Implemented and Available**
-
-## Features
-
-- ✅ **Message Sending/Receiving**
-  - Private chat message sending/receiving
-  - Group message sending/receiving
-  - Channel message sending/receiving
-  - Supports text, images, video, audio, files, and other message formats
-- ✅ **Message Management**
-  - Message editing
-  - Message deletion
-- ✅ **Group Management**
-  - Get group information
-  - Get group member list and information
-  - Leave group
-  - Kick members
-- ✅ **Interactive Features**
-  - Inline Keyboard
-  - Callback Query
-  - Command handling (/command)
-- ✅ **Connection Modes**
-  - Polling mode (default)
-  - Webhook mode
+`@onebots/adapter-telegram` is built on grammY 1.46 and Telegram Bot API 10.3. It supports private chats, groups, channels, and lossless raw Update delivery. grammY is a runtime dependency of the adapter and does not need to be installed separately.
 
 ## Installation
 
 ```bash
-npm install @onebots/adapter-telegram grammy
-# or
-pnpm add @onebots/adapter-telegram grammy
+pnpm add @onebots/adapter-telegram
 ```
 
-## Configuration
+## Receiving Updates
 
-Configure Telegram account in `config.yaml`:
+`receive_mode` is the single source of truth. The Web console shows only fields relevant to the selected mode.
 
 ```yaml
-# Telegram bot account configuration
 telegram.your_bot_id:
-  # Telegram platform configuration
-  token: 'your_telegram_bot_token'  # Telegram Bot Token, required
-  
-  # Polling mode (default)
+  token: "YOUR_BOT_TOKEN"
+  receive_mode: polling # polling, webhook, or manual
+
   polling:
-    enabled: true  # Whether to enable polling, default true
-    timeout: 30    # Polling timeout (seconds)
-    limit: 100     # Number of updates to fetch per request
-    allowed_updates: ['message', 'callback_query']  # Allowed update types
-  
-  # Or Webhook mode
+    timeout: 30
+    limit: 100
+    drop_pending_updates: false
+    allowed_updates: ["message", "callback_query", "chat_member"]
+
+  # receive_mode: webhook
   # webhook:
-  #   url: 'https://your-domain.com/webhook'
-  #   secret_token: 'your_secret_token'  # Optional, webhook secret
-  
-  # Protocol configuration
-  onebot.v11:
-    access_token: 'your_v11_token'
+  #   url: "https://bot.example/telegram/your_bot_id/webhook"
+  #   secret_token: "random-secret"
+  #   max_connections: 40
+  #   drop_pending_updates: false
+
+  proxy:
+    url: "http://127.0.0.1:7890" # HTTP(S), SOCKS4, or SOCKS5
 ```
 
-## Client SDK Usage
+Webhook mode requires an HTTPS URL and should use a random `secret_token`. Switching back to polling removes the remote webhook to avoid conflicts with `getUpdates`. Manual mode opens no receiving port: use `ingest(rawUpdate)` for queues or existing connections, or `acceptHttp(request)` to reuse validation and structured responses in an existing Fetch/WinterCG host.
 
-Connect the client to the complete account protocol root, for example `http://localhost:6727/telegram/{account_id}/onebot/v12`. See the [Client SDK Guide](/en/guide/client-sdk) for Client creation, receive modes, existing-Host integration, and API calls.
+## Native Capabilities
 
-## Related Links
+- Text, mentions, media, files, stickers, locations, contacts, replies, and Rich Messages.
+- Message editing/deletion, reactions, pins, forwarding/copying, polls, forum topics, invite links, and chat permissions.
+- Bot profile and command management, interaction/payment answers, Guest Mode, Ephemeral Messages, and Join Request Queries.
+- Bot API 10.x Rich Messages, Live Photos, Managed Bots, personal-chat messages, subscriptions, and generation-stopped updates.
+- Unmapped updates remain available as `notice.custom` with `raw_event`; `get_supported_actions` discovers named platform actions at runtime.
 
-- [Telegram Adapter Configuration](/en/config/adapter/telegram)
-- [Quick Start](/en/guide/start)
+Telegram does not expose a complete group-member directory. The adapter therefore provides administrator listing, member count, and single-member lookup without misrepresenting administrators as `get_group_member_list`.
+
+Bot API 10.0 management actions include `delete_message_reaction`, `delete_all_message_reactions`, `get_managed_bot_access_settings`, `set_managed_bot_access_settings`, and `get_user_personal_chat_messages`. Reaction deletion accepts exactly one of `user_id` and `actor_chat_id`.
+
+`send_live_photo` accepts both `live_photo` and `photo` as Telegram file IDs, local paths, data URLs, or `base64://` sources. The official endpoint does not accept remote URLs, so the adapter rejects them before making the request. Received Live Photos retain their complete native structure in a `telegram_live_photo` segment.
+
+Use `call_telegram_api` for future Bot API methods that do not yet have a named action; it shares the adapter's structured `TelegramError`, rate-limit, and logging path.
+
+## Links
+
+- [Telegram Bot API](https://core.telegram.org/bots/api)
+- [grammY documentation](https://grammy.dev/)
 - [Client SDK Guide](/en/guide/client-sdk)

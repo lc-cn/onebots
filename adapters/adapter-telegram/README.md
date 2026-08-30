@@ -5,9 +5,9 @@ OneBots 的 Telegram Bot API 适配器。基于 grammY 1.46 / Telegram Bot API 1
 ## 安装
 
 ```bash
-npm install @onebots/adapter-telegram grammy
+npm install @onebots/adapter-telegram
 # 或
-pnpm add @onebots/adapter-telegram grammy
+pnpm add @onebots/adapter-telegram
 ```
 
 ## 配置
@@ -88,6 +88,9 @@ onebots -r telegram
 - ✅ Callback/Inline/支付查询、消息编辑、机器人群生命周期、成员变化、入群申请的标准事件投影
 - ✅ 成员受限状态按 Bot API 的 `restricted.is_member` 判定真实加入/退出，不把全部 restricted 用户误算为在群
 - ✅ Reaction 增删与批量商业消息删除会拆成独立、唯一 ID 的标准事件
+- ✅ Reaction 管理：按用户或匿名频道身份删除单个或全部 Reaction
+- ✅ Live Photo：双媒体原生上传，以及 `telegram_live_photo` 无损接收段
+- ✅ Managed Bot 访问控制和用户个人频道消息读取
 - ✅ 其他 Telegram Update 以 `notice.custom` + `raw_event` 无损交付
 - ✅ **代理支持**（HTTP/HTTPS/SOCKS4/SOCKS5）
 
@@ -107,6 +110,8 @@ onebots -r telegram
 ```
 
 扩展动作按消息、聊天/论坛、Bot 管理、交互应答和 Bot API 10.x 新能力组织，并全部进入同一不可变能力注册表。`set_message_reaction` 同时接受 emoji 字符串与官方 `ReactionType` 对象，因此 custom emoji 不会被压扁。Guest Mode 收到的 `extensions.telegram.guest_query_id` 可直接交给 `answer_guest_query`，其 `result` 使用官方 `InlineQueryResult` 结构。入群请求的 `extensions.telegram.query_id` 可交给 `answer_chat_join_request_query` 或 `send_chat_join_request_web_app`。完整动作可通过 `get_supported_actions` 动态查询；未来 Bot API 仍可由 `call_telegram_api` 无损调用。
+
+Bot API 10.0 的管理面提供 `delete_message_reaction`、`delete_all_message_reactions`、`get_managed_bot_access_settings`、`set_managed_bot_access_settings` 与 `get_user_personal_chat_messages`。Reaction 删除必须且只能指定 `user_id` 或 `actor_chat_id`；Live Photo 使用 `send_live_photo`，`live_photo` 与 `photo` 均接受 Telegram `file_id`、本地路径、data URL 或 `base64://`，官方接口不接受远程 URL，因此适配器会在请求前给出结构化错误。
 
 Rich Message 可直接作为统一消息中的单一原生段发送；`options` 继续接受 `disable_notification`、`ephemeral_message_parameters`、`reply_markup` 等官方字段：
 

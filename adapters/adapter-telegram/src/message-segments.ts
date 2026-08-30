@@ -18,6 +18,12 @@ export function projectTelegramSegments(
             data: { rich_message: structuredClone(message.rich_message) },
         });
     }
+    if (message.live_photo) {
+        segments.push({
+            type: "telegram_live_photo",
+            data: { live_photo: structuredClone(message.live_photo) },
+        });
+    }
     if (message.photo?.length) {
         segments.push({
             type: "image",

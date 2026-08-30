@@ -128,7 +128,7 @@ export async function sendTelegramMessage(
         const file =
             segment.type === "location" || segment.type === "contact"
                 ? undefined
-                : await telegramFile(segment.data);
+                : await resolveTelegramInputFile(segment.data);
         let result: { message_id: number } | undefined;
         let usedCaption = false;
         const captionOptions = {
@@ -219,9 +219,21 @@ export async function sendTelegramMessage(
     return lastMessageId;
 }
 
-async function telegramFile(data: Record<string, unknown>): Promise<string | InputFile> {
+/** 将 file_id 或本地/Base64 媒体源解析为 grammY 可发送输入。 */
+export async function resolveTelegramInputFile(
+    data: Record<string, unknown>,
+    options: { allowRemoteUrl?: boolean } = {},
+): Promise<string | InputFile> {
     const source = requiredString(data.url ?? data.file, "media.file");
-    if (/^https?:\/\//u.test(source)) return source;
+    if (/^https?:\/\//u.test(source)) {
+        if (options.allowRemoteUrl === false) {
+            throw TelegramError.invalid(
+                "Telegram 当前接口不接受远程媒体 URL",
+                "TELEGRAM_MEDIA_REMOTE_URL_UNSUPPORTED",
+            );
+        }
+        return source;
+    }
     if (!isMaterializedSource(source)) return source;
     const media = await materializeMediaSource({
         source,
