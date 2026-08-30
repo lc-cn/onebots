@@ -204,10 +204,13 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
         const account = this.getAccount(uin);
         if (!account) throw new GatewayFault("ACCOUNT_NOT_FOUND", `未找到账号 ${uin}`);
-        const cfg = account.client.getConfig();
+        const session = await account.client.getSession();
+        if (!session) {
+            throw new GatewayFault("SESSION_NOT_AVAILABLE", "iLink 会话尚未建立");
+        }
         return {
-            user_id: this.createId(cfg.ilink_bot_id ?? uin),
-            user_name: account.nickname || cfg.ilink_bot_id || this.platform,
+            user_id: this.createId(session.accountId),
+            user_name: account.nickname || session.accountId,
             avatar: account.avatar || this.icon,
         };
     }
@@ -326,9 +329,15 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             );
         });
 
-        bot.on("ready", () => {
+        bot.on("ready", async () => {
+            const session = await bot.getSession();
+            if (!session) {
+                throw new GatewayFault("SESSION_NOT_AVAILABLE", "iLink 就绪时缺少会话身份");
+            }
+            account.nickname = session.accountId;
+            account.avatar = this.icon;
             account.status = AccountStatus.Online;
-            this.logger.info(`[${this.platform}] ${config.account_id} 长轮询已启动`);
+            this.logger.info(`[${this.platform}] ${config.account_id} iLink 会话已就绪`);
         });
 
         bot.on("polling_error", (error: unknown) => {
@@ -349,14 +358,18 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             );
         });
 
-        bot.on("message", (m: IlinkBotMessage) => {
+        bot.on("message", async (m: IlinkBotMessage) => {
             const rawText = m.text ?? m.caption ?? "";
             const preview = rawText.length > 80 ? `${rawText.slice(0, 80)}...` : rawText;
             this.logger.info(`[${this.platform}] 收到私聊 | from=${m.from.id} | ${preview}`);
 
+            const session = await bot.getSession();
+            if (!session) {
+                throw new GatewayFault("SESSION_NOT_AVAILABLE", "iLink 消息缺少机器人会话身份");
+            }
             return account.dispatchAwaited(
                 projectWechatClawbotEvent(m, {
-                    accountId: this.createId(config.account_id),
+                    accountId: this.createId(session.accountId),
                     createId: value => this.createId(value),
                 }),
             );

@@ -19,7 +19,17 @@ const ACTION_HANDLERS = {
             file_name: result.fileName,
         };
     },
+    get_context_token: async (client, params) => ({
+        context_token:
+            (await client.getLatestContextToken(requireString(params.user_id, "user_id"))) ?? null,
+    }),
 } satisfies Readonly<Record<string, PlatformActionHandler<WechatIlinkBot>>>;
+
+const ACTION_PARAMETERS = {
+    send_typing: ["user_id", "context_token", "status"],
+    download_media: ["message_id", "item_index"],
+    get_context_token: ["user_id"],
+} satisfies { readonly [TAction in keyof typeof ACTION_HANDLERS]: readonly string[] };
 
 const PLATFORM_ACTIONS = definePlatformActions(
     ACTION_HANDLERS,
@@ -30,12 +40,22 @@ export const WECHAT_CLAWBOT_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
 export type WechatClawBotPlatformAction =
     typeof WECHAT_CLAWBOT_PLATFORM_ACTIONS extends ReadonlySet<infer T> ? T : never;
 
-export function executeWechatClawbotPlatformAction(
+export async function executeWechatClawbotPlatformAction(
     client: WechatIlinkBot,
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
+    if (PLATFORM_ACTIONS.has(action)) assertKnownParams(action, params);
     return PLATFORM_ACTIONS.execute(client, action, params);
+}
+
+function assertKnownParams(
+    action: keyof typeof ACTION_HANDLERS,
+    params: Readonly<Record<string, unknown>>,
+): void {
+    const accepted = new Set(ACTION_PARAMETERS[action]);
+    const unknown = Object.keys(params).find(key => !accepted.has(key));
+    if (unknown) invalid(`动作 ${action} 不接受参数 ${unknown}`);
 }
 
 function requireString(value: unknown, field: string): string {
@@ -56,10 +76,10 @@ function typingStatus(value: unknown): "active" | "idle" | undefined {
 
 function optionalInteger(value: unknown, field: string): number | undefined {
     if (value === undefined) return undefined;
-    if (!Number.isInteger(value) || Number(value) < 0) {
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
         invalid(`${field} 必须是非负整数`);
     }
-    return Number(value);
+    return value;
 }
 
 function invalid(message: string): never {
