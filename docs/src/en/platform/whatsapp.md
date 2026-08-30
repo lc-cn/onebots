@@ -53,6 +53,8 @@ Flows are managed through `client.flows` instead of loose Graph payload forwardi
 
 Blocked users are managed through `client.blockedUsers` and the bulk `block_users` / `unblock_users` actions. Inputs are deduplicated E.164 arrays, mutation responses retain Meta's normalized `wa_id` mapping, and list pagination is structurally validated.
 
+Media assets are managed through `client.media` and the four fixed media actions. Uploads enforce Meta's supported MIME types and size ceilings, while retrieval and deletion bind the media ID to the current `phone_number_id`. Temporary downloads only send the bearer token to trusted Meta hosts; metadata preserves the official string `file_size`, and deletion returns a validated structured result.
+
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 
 References: [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/), [Meta official Postman workspace](https://www.postman.com/meta/whatsapp-business-platform/overview/).

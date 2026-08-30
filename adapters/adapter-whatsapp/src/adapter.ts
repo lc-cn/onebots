@@ -47,7 +47,7 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
         const messages = await compileWhatsAppMessages(
             this.coerceId(params.scene_id).string,
             params.message,
-            client,
+            client.media,
         );
         let firstMessageId: string | undefined;
         const recipientType = params.scene_type === "group" ? "group" : "individual";

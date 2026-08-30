@@ -169,6 +169,19 @@ export {
     type WhatsAppUnblockUsersResponse,
 } from "./blocked-users.js";
 export {
+    isWhatsAppMediaAction,
+    isWhatsAppMediaMimeType,
+    WhatsAppMedia,
+    WHATSAPP_MEDIA_ACTIONS,
+    WHATSAPP_MEDIA_LIMITS,
+    type WhatsAppMediaAction,
+    type WhatsAppMediaDeleteResponse,
+    type WhatsAppMediaDownload,
+    type WhatsAppMediaInfo,
+    type WhatsAppMediaMimeType,
+    type WhatsAppMediaUploadResponse,
+} from "./media.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,
@@ -315,7 +328,6 @@ export type {
     WhatsAppGroupUpdateParams,
     WhatsAppGroupWebhookEntry,
     WhatsAppGroupWebhookError,
-    WhatsAppMediaInfo,
     WhatsAppMediaObject,
     WhatsAppIngestResult,
     WhatsAppMessageEvent,

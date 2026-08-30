@@ -403,15 +403,6 @@ export interface WhatsAppPhoneNumberInfo {
         | "NONE";
 }
 
-export interface WhatsAppMediaInfo {
-    id: string;
-    url: string;
-    mime_type?: string;
-    sha256?: string;
-    file_size?: number;
-    messaging_product?: "whatsapp";
-}
-
 export interface WhatsAppCallOptions {
     method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     resource: string;

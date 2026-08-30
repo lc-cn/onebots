@@ -51,13 +51,13 @@ import {
 import { WhatsAppMessageTemplates } from "./message-templates.js";
 import { WhatsAppFlows } from "./flows.js";
 import { WhatsAppBlockedUsers } from "./blocked-users.js";
+import { WhatsAppMedia } from "./media.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
     WhatsAppClientEvents,
     WhatsAppConfig,
     WhatsAppIngestResult,
-    WhatsAppMediaInfo,
     WhatsAppObservedContact,
     WhatsAppPhoneNumberInfo,
     WhatsAppSendMessageParams,
@@ -113,6 +113,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly flows: WhatsAppFlows;
     /** Phone Number 级批量用户封禁控制面。 */
     readonly blockedUsers: WhatsAppBlockedUsers;
+    /** Phone Number 级媒体上传、元数据、下载与删除。 */
+    readonly media: WhatsAppMedia;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -136,6 +138,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.messageTemplates = new WhatsAppMessageTemplates(this);
         this.flows = new WhatsAppFlows(this);
         this.blockedUsers = new WhatsAppBlockedUsers(this);
+        this.media = new WhatsAppMedia(this, this.graph);
     }
 
     get apiVersion(): string {
@@ -374,35 +377,6 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
 
     deleteQrCode(code: string): Promise<WhatsAppQrCodeDeleteResponse> {
         return this.qrCodes.delete(code);
-    }
-
-    async uploadMedia(file: Blob, mimeType: string, filename = "upload"): Promise<{ id: string }> {
-        const form = new FormData();
-        form.set("messaging_product", "whatsapp");
-        form.set("type", requireString(mimeType, "mime_type"));
-        form.set("file", file, filename);
-        return this.call({
-            method: "POST",
-            resource: `${this.config.phone_number_id}/media`,
-            body: form,
-        });
-    }
-
-    getMedia(mediaId: string): Promise<WhatsAppMediaInfo> {
-        return this.call({ resource: requireString(mediaId, "media_id") });
-    }
-
-    async downloadMedia(mediaId: string, signal?: AbortSignal): Promise<Buffer> {
-        return this.downloadMediaFrom(await this.getMedia(mediaId), signal);
-    }
-
-    /** 下载已经查询过临时 URL 的媒体，避免同一动作重复请求媒体元数据。 */
-    async downloadMediaFrom(media: WhatsAppMediaInfo, signal?: AbortSignal): Promise<Buffer> {
-        return this.graph.download(media.url, media.id, signal);
-    }
-
-    async deleteMedia(mediaId: string): Promise<void> {
-        await this.call({ method: "DELETE", resource: requireString(mediaId, "media_id") });
     }
 }
 

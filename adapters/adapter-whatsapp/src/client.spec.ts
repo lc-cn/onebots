@@ -69,26 +69,6 @@ describe("WhatsAppClient", () => {
         } satisfies Partial<WhatsAppApiError>);
     });
 
-    it("媒体下载只向 Graph 主机或 Meta 官方媒体域发送凭据", async () => {
-        const fetcher = vi.fn<typeof fetch>();
-        const client = new WhatsAppClient(config, fetcher);
-        await expect(
-            client.downloadMediaFrom({ id: "media", url: "https://evil.example/file" }),
-        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_MEDIA_URL" });
-        expect(fetcher).not.toHaveBeenCalled();
-
-        fetcher.mockResolvedValueOnce(new Response("media"));
-        await expect(
-            client.downloadMediaFrom({
-                id: "media",
-                url: "https://lookaside.fbsbx.com/whatsapp_business/attachments/file",
-            }),
-        ).resolves.toEqual(Buffer.from("media"));
-        expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("Authorization")).toBe(
-            "Bearer token",
-        );
-    });
-
     it.each(["/phone", "phone?fields=id", "phone#token", "phone/../me", "phone/%2e%2e/me"])(
         "拒绝夹带 URL 语义的 resource: %s",
         async resource => {

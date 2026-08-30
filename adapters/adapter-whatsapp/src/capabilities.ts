@@ -19,6 +19,7 @@ import { isWhatsAppQrCodeAction } from "./qr-codes.js";
 import { isWhatsAppMessageTemplateAction } from "./message-templates.js";
 import { isWhatsAppFlowAction } from "./flows.js";
 import { isWhatsAppBlockedUserAction } from "./blocked-users.js";
+import { isWhatsAppMediaAction } from "./media.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -64,6 +65,7 @@ const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIO
     if (isWhatsAppMessageTemplateAction(action)) return businessManagement;
     if (isWhatsAppFlowAction(action)) return businessManagement;
     if (isWhatsAppBlockedUserAction(action)) return businessMessaging;
+    if (isWhatsAppMediaAction(action)) return businessMessaging;
     if (action === "send_native_message" || action === "mark_message_read") {
         return { support: "native", scenes: ["private", "group"] };
     }

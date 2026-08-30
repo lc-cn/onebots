@@ -65,6 +65,8 @@ const message = [{
 
 用户封禁由 `client.blockedUsers` 管理，使用 E.164 号码数组批量操作。返回值保留每个输入号码与 Meta 规范化 `wa_id` 的对应关系；列表响应和游标分页也会在边界校验。
 
+媒体由 `client.media` 管理，并通过 `upload_media`、`get_media`、`download_media`、`delete_media` 提供固定动作。上传校验官方 MIME 类型和大小限制；查询及删除使用当前 `phone_number_id` 做归属校验；临时 URL 仅向受信任的 Meta 域携带令牌。元数据保留官方字符串 `file_size`，删除返回结构化成功响应。
+
 Calling API 使用 `get_call_permissions` / `request_call_permission` 与 `connect_call`、`pre_accept_call`、`accept_call`、`reject_call`、`terminate_call`。适配器严格区分 offer、answer 和 `call_id`，但不负责 WebRTC/SIP 媒体传输。调用前需要 Meta 为当前 Phone Number 开通 Cloud API Calling，并具备 `whatsapp_business_messaging` 权限。
 
 消息历史使用 `list_message_history` 与 `list_message_history_events`，用于诊断投递状态、Webhook 更新状态和失败原因。`client.history` 还提供沿 cursor 完整遍历的强类型入口；该 API 不包含聊天正文，不能当作聊天记录归档。

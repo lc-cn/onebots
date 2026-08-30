@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { compileWhatsAppMessages } from "./messages.js";
 
 const compiler = {
-    uploadMedia: async () => ({ id: "uploaded-media" }),
+    upload: async () => ({ id: "uploaded-media" }),
 };
 
 describe("WhatsApp 消息编译", () => {
@@ -45,7 +45,7 @@ describe("WhatsApp 消息编译", () => {
     });
 
     it("上传本地或 Base64 媒体，并直接支持 template/interactive 段", async () => {
-        const uploadMedia = vi.fn().mockResolvedValue({ id: "uploaded" });
+        const upload = vi.fn().mockResolvedValue({ id: "uploaded" });
         const result = await compileWhatsAppMessages(
             "86123",
             [
@@ -53,13 +53,23 @@ describe("WhatsApp 消息编译", () => {
                 { type: "template", data: { name: "hello", language: { code: "en_US" } } },
                 { type: "interactive", data: { type: "button", body: { text: "选择" } } },
             ],
-            { uploadMedia },
+            { upload },
         );
-        expect(uploadMedia).toHaveBeenCalledWith(expect.any(Blob), "image/png", "image.png");
+        expect(upload).toHaveBeenCalledWith(expect.any(Blob), "image/png", "image.png");
         expect(result).toMatchObject([
             { type: "image", image: { id: "uploaded" } },
             { type: "template", template: { name: "hello" } },
             { type: "interactive", interactive: { type: "button" } },
         ]);
+    });
+
+    it("上传前拒绝 Cloud API 不支持的媒体 MIME 类型", async () => {
+        await expect(
+            compileWhatsAppMessages(
+                "86123",
+                [{ type: "image", data: { file: "base64://aW1hZ2U=", mime_type: "image/gif" } }],
+                compiler,
+            ),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_SEGMENT" });
     });
 });

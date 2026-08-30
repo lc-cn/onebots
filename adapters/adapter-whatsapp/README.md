@@ -29,6 +29,8 @@
 
 通用 `image`、`video`、`audio`、`file`、`sticker` 段可直接使用 `media_id` 或公开 HTTPS URL；本地路径、HTTP URL、data URL 与 `base64://` 会先上传到当前 Phone Number，再用真实 media ID 发送。`template` 与 `interactive` 可直接作为结构化消息段发送，也可使用 `whatsapp_message` 承载任意原生负载。一条通用消息拆成多个 Cloud API 请求时，所有请求都会保留同一个 `reply` 上下文。
 
+媒体资产统一通过 `client.media` 管理。上传按官方 MIME 类型与大小上限在请求前校验；查询和删除始终携带当前 `phone_number_id`，避免误操作其他号码的媒体；元数据保留官方字符串 `file_size`，下载只会向配置的 Graph Origin 或 Meta 官方媒体域发送 Bearer Token。`delete_media` 返回经过校验的 `{ success: true }`，不再丢弃平台响应。
+
 ## 配置
 
 ```yaml

@@ -1,5 +1,6 @@
 import { materializeMediaSource, type CommonTypes } from "onebots";
 import { WhatsAppApiError } from "./errors.js";
+import { isWhatsAppMediaMimeType, type WhatsAppMediaMimeType } from "./media.js";
 import type { WhatsAppContact, WhatsAppSendMessageParams } from "./types.js";
 
 /** 将通用消息段编译为顺序明确的 WhatsApp Cloud API 消息。 */
@@ -7,7 +8,11 @@ export async function compileWhatsAppMessages(
     to: string,
     input: ReadonlyArray<CommonTypes.Segment>,
     context: {
-        uploadMedia(file: Blob, mimeType: string, filename?: string): Promise<{ id: string }>;
+        upload(
+            file: Blob,
+            mimeType: WhatsAppMediaMimeType,
+            filename?: string,
+        ): Promise<{ id: string }>;
     },
 ): Promise<WhatsAppSendMessageParams[]> {
     const messages: WhatsAppSendMessageParams[] = [];
@@ -48,7 +53,11 @@ async function compileNonText(
     data: Record<string, unknown>,
     replyContext: { message_id: string } | undefined,
     compiler: {
-        uploadMedia(file: Blob, mimeType: string, filename?: string): Promise<{ id: string }>;
+        upload(
+            file: Blob,
+            mimeType: WhatsAppMediaMimeType,
+            filename?: string,
+        ): Promise<{ id: string }>;
     },
 ): Promise<WhatsAppSendMessageParams> {
     if (type === "whatsapp_message" || type === "whatsapp") {
@@ -115,7 +124,11 @@ async function compileMedia(
     data: Record<string, unknown>,
     context: { message_id: string } | undefined,
     compiler: {
-        uploadMedia(file: Blob, mimeType: string, filename?: string): Promise<{ id: string }>;
+        upload(
+            file: Blob,
+            mimeType: WhatsAppMediaMimeType,
+            filename?: string,
+        ): Promise<{ id: string }>;
     },
 ): Promise<WhatsAppSendMessageParams> {
     const type = mediaType(segmentType);
@@ -133,7 +146,11 @@ async function compileMedia(
 async function mediaSource(
     data: Record<string, unknown>,
     compiler: {
-        uploadMedia(file: Blob, mimeType: string, filename?: string): Promise<{ id: string }>;
+        upload(
+            file: Blob,
+            mimeType: WhatsAppMediaMimeType,
+            filename?: string,
+        ): Promise<{ id: string }>;
     },
 ): Promise<{ id: string } | { link: string }> {
     const id = optionalString(data.media_id ?? data.id);
@@ -150,7 +167,10 @@ async function mediaSource(
         filename: optionalString(data.filename ?? data.name),
         contentType: optionalString(data.mime_type ?? data.mime ?? data.content_type),
     });
-    const uploaded = await compiler.uploadMedia(
+    if (!isWhatsAppMediaMimeType(media.contentType)) {
+        invalidSegment(`媒体 MIME 类型不受 Cloud API 支持: ${media.contentType}`);
+    }
+    const uploaded = await compiler.upload(
         new Blob([new Uint8Array(media.data)], { type: media.contentType }),
         media.contentType,
         media.filename,

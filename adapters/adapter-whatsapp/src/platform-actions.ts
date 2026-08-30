@@ -15,6 +15,7 @@ import { WHATSAPP_QR_CODE_ACTION_HANDLERS } from "./qr-codes.js";
 import { WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS } from "./message-templates.js";
 import { WHATSAPP_FLOW_ACTION_HANDLERS } from "./flows.js";
 import { WHATSAPP_BLOCKED_USER_ACTION_HANDLERS } from "./blocked-users.js";
+import { WHATSAPP_MEDIA_ACTION_HANDLERS } from "./media.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -42,6 +43,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS,
     ...WHATSAPP_FLOW_ACTION_HANDLERS,
     ...WHATSAPP_BLOCKED_USER_ACTION_HANDLERS,
+    ...WHATSAPP_MEDIA_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>
@@ -49,14 +51,6 @@ const ACTION_HANDLERS = {
             requireString(params, "message_id"),
             optionalBoolean(params, "typing_indicator") || false,
         ),
-    upload_media: (client, params) => uploadMedia(client, params),
-    get_media: (client, params) => client.getMedia(requireString(params, "media_id")),
-    download_media: async (client, params) => {
-        const info = await client.getMedia(requireString(params, "media_id"));
-        const data = await client.downloadMediaFrom(info);
-        return { ...info, data: data.toString("base64") };
-    },
-    delete_media: (client, params) => client.deleteMedia(requireString(params, "media_id")),
 } satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
@@ -100,30 +94,6 @@ function nativeMessage(params: Readonly<Record<string, unknown>>): WhatsAppSendM
     const type = optionalString(message, "type");
     if (!type) invalidParameter("message.type 不能为空");
     return { ...structuredClone(message), to, type };
-}
-
-async function uploadMedia(
-    client: WhatsAppClient,
-    params: Readonly<Record<string, unknown>>,
-): Promise<{ id: string }> {
-    const data = requireString(params, "data");
-    if (!/^(?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{2}==|[A-Za-z\d+/]{3}=)?$/u.test(data)) {
-        invalidParameter("data 必须是有效 Base64");
-    }
-    let bytes: Buffer;
-    try {
-        bytes = Buffer.from(data, "base64");
-    } catch (error) {
-        throw new WhatsAppApiError("data 必须是有效 Base64", {
-            code: "WHATSAPP_INVALID_PARAMETER",
-            cause: error,
-        });
-    }
-    return client.uploadMedia(
-        new Blob([Uint8Array.from(bytes)], { type: requireString(params, "mime_type") }),
-        requireString(params, "mime_type"),
-        optionalString(params, "filename") || "upload",
-    );
 }
 
 function requireString(params: Readonly<Record<string, unknown>>, name: string): string {
