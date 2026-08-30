@@ -47,6 +47,8 @@ Fixed Groups actions cover create/get/list/update/delete, invite links, join-req
 
 Message QR codes are available through `client.qrCodes` and the five fixed QR-code actions. Field selection uses an array, PNG/SVG image projection is explicit, and list queries support code filtering, a 1–25 limit, and cursor pagination. Requests and responses are validated against the Meta v23 shapes, including the single-item `data` array.
 
+Message templates are managed through `client.messageTemplates`, with fixed actions for listing, lookup by ID, namespace discovery, creation, editing, and deletion by name or template ID. Top-level fields and responses are validated, while typed components retain Meta's evolving OTP, Flow, Catalog, MPM, and media-handle JSON fields through a safe serializable extension surface.
+
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 
 References: [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/), [Meta official Postman workspace](https://www.postman.com/meta/whatsapp-business-platform/overview/).

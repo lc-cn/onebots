@@ -48,6 +48,7 @@ import {
     type WhatsAppQrCodeMutationResponse,
     type WhatsAppQrCodeUpdate,
 } from "./qr-codes.js";
+import { WhatsAppMessageTemplates } from "./message-templates.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -104,6 +105,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly commerce: WhatsAppCommerce;
     /** Phone Number 级消息二维码增查改删与图片生成。 */
     readonly qrCodes: WhatsAppQrCodes;
+    /** WABA 级消息模板查询、创建、编辑与删除。 */
+    readonly messageTemplates: WhatsAppMessageTemplates;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -124,6 +127,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.solutionMigration = new WhatsAppSolutionMigration(this);
         this.commerce = new WhatsAppCommerce(this);
         this.qrCodes = new WhatsAppQrCodes(this);
+        this.messageTemplates = new WhatsAppMessageTemplates(this);
     }
 
     get apiVersion(): string {

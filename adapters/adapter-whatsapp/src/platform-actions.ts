@@ -12,6 +12,7 @@ import { WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS } from "./business-complia
 import { WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS } from "./solution-migration.js";
 import { WHATSAPP_COMMERCE_ACTION_HANDLERS } from "./commerce.js";
 import { WHATSAPP_QR_CODE_ACTION_HANDLERS } from "./qr-codes.js";
+import { WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS } from "./message-templates.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -36,6 +37,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS,
     ...WHATSAPP_COMMERCE_ACTION_HANDLERS,
     ...WHATSAPP_QR_CODE_ACTION_HANDLERS,
+    ...WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>
@@ -59,30 +61,6 @@ const ACTION_HANDLERS = {
             query: {
                 limit: optionalNumber(params, "limit"),
                 after: optionalString(params, "after"),
-            },
-        }),
-    list_message_templates: (client, params) =>
-        client.call({
-            resource: `${client.config.business_account_id}/message_templates`,
-            query: {
-                fields: optionalString(params, "fields"),
-                limit: optionalNumber(params, "limit"),
-                after: optionalString(params, "after"),
-            },
-        }),
-    create_message_template: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: `${client.config.business_account_id}/message_templates`,
-            body: requireRecord(params, "template"),
-        }),
-    delete_message_template: (client, params) =>
-        client.call({
-            method: "DELETE",
-            resource: `${client.config.business_account_id}/message_templates`,
-            query: {
-                name: requireString(params, "name"),
-                hsm_id: optionalString(params, "template_id"),
             },
         }),
     list_flows: (client, params) =>
