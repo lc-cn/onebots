@@ -124,6 +124,8 @@ export default {
 };
 ```
 
+组件处理器支持 `custom_id` 前缀路由；精确项优先于前缀项，多个前缀重叠时选择最长前缀，因此路由结果不依赖注册顺序。
+
 若宿主并不使用 Web Fetch API，可调用 `ingestHttp({ method, body, signature, timestamp })` 获得 `{ status, headers, body }` 结构化响应。已经由上游验证的事件可直接交给 `ingest(rawInteraction)`，两者都不会创建监听端口。Discord 对同一 Interaction 的重投会返回首次成功生成的 callback，不会重复触发业务事件；处理失败则不提交缓存，允许后续重投恢复。
 
 使用统一 `DiscordLite` 时，对应方法为 `handleRequest()`、`ingestInteractionHttp()` 和 `ingestInteraction()`；同一个客户端会继续发出 `interactionCreate` 与统一 `dispatch` 事件。

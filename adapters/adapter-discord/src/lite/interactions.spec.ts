@@ -30,6 +30,27 @@ describe("Discord Interactions ingestion", () => {
         expect(command).toHaveBeenCalledOnce();
     });
 
+    it("组件路由优先精确匹配与最长前缀，不依赖注册顺序", async () => {
+        const handler = new InteractionsHandler({ token: "token", trustedIngress: true });
+        const broad = vi.fn(() => InteractionsHandler.messageResponse("broad"));
+        const specific = vi.fn(() => InteractionsHandler.messageResponse("specific"));
+        handler.onComponent("settings:", broad);
+        handler.onComponent("settings:admin:", specific);
+
+        await expect(
+            handler.ingest({
+                id: "component-1",
+                application_id: "1",
+                type: InteractionType.MessageComponent,
+                token: "interaction-token",
+                version: 1,
+                data: { custom_id: "settings:admin:delete" },
+            }),
+        ).resolves.toMatchObject({ data: { content: "specific" } });
+        expect(specific).toHaveBeenCalledOnce();
+        expect(broad).not.toHaveBeenCalled();
+    });
+
     it("拒绝无效原始事件并返回结构化错误", async () => {
         const handler = new InteractionsHandler({ publicKey, token: "token", applicationId: "1" });
         await expect(handler.ingest({ type: 2 })).rejects.toMatchObject({

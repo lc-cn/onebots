@@ -17,30 +17,12 @@ import {
     verifyInteractionSignature,
 } from "./interaction-http.js";
 import { InteractionResponseCache } from "./interaction-response-cache.js";
+import { InteractionRouter, type InteractionHandler } from "./interaction-router.js";
+import { InteractionCallbackType, InteractionType } from "./interaction-types.js";
 
 export { verifyInteractionSignature } from "./interaction-http.js";
-
-// Interaction Types
-export enum InteractionType {
-    Ping = 1,
-    ApplicationCommand = 2,
-    MessageComponent = 3,
-    ApplicationCommandAutocomplete = 4,
-    ModalSubmit = 5,
-}
-
-// Interaction Callback Types
-export enum InteractionCallbackType {
-    Pong = 1,
-    ChannelMessageWithSource = 4,
-    DeferredChannelMessageWithSource = 5,
-    DeferredUpdateMessage = 6,
-    UpdateMessage = 7,
-    ApplicationCommandAutocompleteResult = 8,
-    Modal = 9,
-    PremiumRequired = 10,
-    LaunchActivity = 12,
-}
+export { InteractionCallbackType, InteractionType } from "./interaction-types.js";
+export type { InteractionHandler } from "./interaction-router.js";
 
 export interface InteractionWebhookOptions {
     publicKey?: string;
@@ -73,20 +55,13 @@ export interface DiscordInteractionHttpResponse {
 }
 
 /**
- * Interaction 处理器回调函数类型
- */
-export type InteractionHandler = (
-    interaction: DiscordInteraction,
-) => DiscordInteractionResponse | Promise<DiscordInteractionResponse>;
-
-/**
  * Discord Interactions Webhook 处理器
  */
 export class InteractionsHandler {
     private publicKey: string;
     private applicationId: string;
     private rest: DiscordREST;
-    private handlers: Map<string, InteractionHandler> = new Map();
+    private readonly router = new InteractionRouter();
     private readonly maxTimestampAgeMs: number;
     private readonly onInteraction?: InteractionWebhookOptions["onInteraction"];
     private readonly onUnhandled?: InteractionWebhookOptions["onUnhandled"];
@@ -123,7 +98,7 @@ export class InteractionsHandler {
      * 注册命令处理器
      */
     onCommand(name: string, handler: InteractionHandler): this {
-        this.handlers.set(`command:${name}`, handler);
+        this.router.register("command", name, handler);
         return this;
     }
 
@@ -131,7 +106,7 @@ export class InteractionsHandler {
      * 注册消息组件处理器
      */
     onComponent(customId: string, handler: InteractionHandler): this {
-        this.handlers.set(`component:${customId}`, handler);
+        this.router.register("component", customId, handler);
         return this;
     }
 
@@ -139,13 +114,13 @@ export class InteractionsHandler {
      * 注册模态框提交处理器
      */
     onModalSubmit(customId: string, handler: InteractionHandler): this {
-        this.handlers.set(`modal:${customId}`, handler);
+        this.router.register("modal", customId, handler);
         return this;
     }
 
     /** 注册应用命令自动补全处理器。 */
     onAutocomplete(name: string, handler: InteractionHandler): this {
-        this.handlers.set(`autocomplete:${name}`, handler);
+        this.router.register("autocomplete", name, handler);
         return this;
     }
 
@@ -252,51 +227,26 @@ export class InteractionsHandler {
             return { type: InteractionCallbackType.Pong };
         }
 
+        const handler = this.router.resolve(interaction);
+        if (handler) return handler(interaction);
+
         // 应用命令
         if (type === InteractionType.ApplicationCommand && data) {
-            const handler = this.handlers.get(`command:${data.name}`);
-            if (handler) {
-                return handler(interaction);
-            }
             return this.unhandled(interaction, "命令未找到");
         }
 
         // 消息组件
         if (type === InteractionType.MessageComponent && data) {
-            // 尝试精确匹配
-            let handler = this.handlers.get(`component:${data.custom_id}`);
-
-            // 尝试前缀匹配
-            if (!handler) {
-                for (const [key, h] of this.handlers) {
-                    if (key.startsWith("component:") && data.custom_id?.startsWith(key.slice(10))) {
-                        handler = h;
-                        break;
-                    }
-                }
-            }
-
-            if (handler) {
-                return handler(interaction);
-            }
             return this.unhandled(interaction, "组件处理器未找到");
         }
 
         // 模态框提交
         if (type === InteractionType.ModalSubmit && data) {
-            const handler = this.handlers.get(`modal:${data.custom_id}`);
-            if (handler) {
-                return handler(interaction);
-            }
             return this.unhandled(interaction, "模态框处理器未找到");
         }
 
         // 自动补全
         if (type === InteractionType.ApplicationCommandAutocomplete && data) {
-            const handler = this.handlers.get(`autocomplete:${data.name}`);
-            if (handler) {
-                return handler(interaction);
-            }
             return {
                 type: InteractionCallbackType.ApplicationCommandAutocompleteResult,
                 data: { choices: [] },
