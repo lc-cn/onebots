@@ -3,6 +3,12 @@ import { AdapterRegistry, type Schema } from "onebots";
 export { WhatsAppAdapter } from "./adapter.js";
 export { whatsAppCapabilities } from "./capabilities.js";
 export { WhatsAppClient } from "./client.js";
+export {
+    isWhatsAppCallingAction,
+    WhatsAppCalling,
+    WHATSAPP_CALLING_ACTIONS,
+    type WhatsAppCallingAction,
+} from "./calling.js";
 export { WhatsAppApiError, type WhatsAppApiErrorOptions } from "./errors.js";
 export { projectMessageContent, projectWhatsAppWebhook } from "./events.js";
 export { isWhatsAppGroupWebhookEntry } from "./group-webhook.js";
@@ -25,6 +31,18 @@ export {
     type WhatsAppWebhookDelivery,
 } from "./webhook-routing.js";
 export type { WhatsAppHttpContext } from "./webhook-host.js";
+export type {
+    WhatsAppCallConnectParams,
+    WhatsAppCallManageParams,
+    WhatsAppCallPermissionAction,
+    WhatsAppCallPermissionActionName,
+    WhatsAppCallPermissionLimit,
+    WhatsAppCallPermissionResponse,
+    WhatsAppCallPermissionStatus,
+    WhatsAppCallResponse,
+    WhatsAppCallSession,
+    WhatsAppCallTerminateResponse,
+} from "./calling-types.js";
 export type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,

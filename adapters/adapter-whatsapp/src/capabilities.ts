@@ -5,6 +5,7 @@ import {
 } from "onebots";
 import { WHATSAPP_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { isWhatsAppGroupAction } from "./groups.js";
+import { isWhatsAppCallingAction } from "./calling.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -24,6 +25,14 @@ const groupsAccess = {
     permissions: ["whatsapp_business_messaging"],
     scenes: ["group"] as const,
     note: "要求 Meta 为 Official Business Account 开通 Groups API；仅适用于当前 Phone Number 通过该 API 创建和管理的群",
+};
+
+const callingAccess = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["whatsapp_business_messaging"],
+    scenes: ["private"] as const,
+    note: "要求当前 Phone Number 已开通 Cloud API Calling；这里只提供权限与信令控制，媒体平面由调用方实现",
 };
 
 const businessManagementActions = new Set([
@@ -56,6 +65,7 @@ const businessMessagingActions = new Set([
 ]);
 const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIONS, action => {
     if (isWhatsAppGroupAction(action)) return groupsAccess;
+    if (isWhatsAppCallingAction(action)) return callingAccess;
     if (businessManagementActions.has(action)) return businessManagement;
     if (businessMessagingActions.has(action)) return businessMessaging;
     if (action === "send_native_message" || action === "mark_message_read") {

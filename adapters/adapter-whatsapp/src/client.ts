@@ -4,6 +4,7 @@ import { WhatsAppApiError } from "./errors.js";
 import { deliverWhatsAppEvent } from "./event-delivery.js";
 import { WhatsAppGraphApi } from "./graph-api.js";
 import { WhatsAppGroups } from "./groups.js";
+import { WhatsAppCalling } from "./calling.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -38,6 +39,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     private readonly lifecycle = new WhatsAppClientLifecycle<WhatsAppPhoneNumberInfo>();
     /** 受控 Groups API 领域入口；与通用 call() 共用同一 Graph 传输。 */
     readonly groups: WhatsAppGroups;
+    /** Calling API 控制平面；媒体协商与传输由调用方负责。 */
+    readonly calling: WhatsAppCalling;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -47,6 +50,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         assertWhatsAppConfig(config);
         this.graph = new WhatsAppGraphApi(config, fetcher);
         this.groups = new WhatsAppGroups(this);
+        this.calling = new WhatsAppCalling(this);
     }
 
     get apiVersion(): string {
