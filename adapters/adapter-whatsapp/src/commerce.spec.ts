@@ -45,10 +45,21 @@ describe("WhatsAppCommerce", () => {
         expect(String(fetcher.mock.calls[0]?.[0])).toContain("is_catalog_visible=true");
     });
 
+    it("Commerce 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "get_commerce_settings", {
+                fields: ["is_cart_enabled"],
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "get_commerce_settings", parameter: "fields" },
+        });
+    });
+
     it.each([
         { label: "空更新", settings: {} },
         { label: "错误布尔类型", settings: { is_cart_enabled: "false" } },
-        { label: "未知字段", settings: { is_cart_enabled: true, catalog_id: "catalog" } },
     ])("拒绝非法设置：$label", async ({ settings }) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(

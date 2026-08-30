@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 
@@ -19,16 +20,6 @@ export interface WhatsAppCommerceSettingsUpdate {
 
 export interface WhatsAppCommerceSettingsUpdateResponse {
     success: true;
-}
-
-export const WHATSAPP_COMMERCE_ACTIONS = Object.freeze([
-    "get_commerce_settings",
-    "update_commerce_settings",
-] as const);
-export type WhatsAppCommerceAction = (typeof WHATSAPP_COMMERCE_ACTIONS)[number];
-
-export function isWhatsAppCommerceAction(action: string): action is WhatsAppCommerceAction {
-    return (WHATSAPP_COMMERCE_ACTIONS as readonly string[]).includes(action);
 }
 
 /** Phone Number 级 Commerce 显示与购物车设置。 */
@@ -54,27 +45,30 @@ export class WhatsAppCommerce {
         if (!isRecord(response) || response.success !== true) invalidResponse(response);
         return { success: true };
     }
-
-    execute(
-        action: WhatsAppCommerceAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_commerce_settings":
-                return this.get();
-            case "update_commerce_settings":
-                return this.update(actionUpdate(params));
-        }
-    }
 }
 
-export const WHATSAPP_COMMERCE_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_COMMERCE_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.commerce.execute(action, params),
-    ]),
-) as Record<WhatsAppCommerceAction, PlatformActionHandler<WhatsAppClient>>;
+type CommerceActionParams = Readonly<Record<string, unknown>>;
+
+const COMMERCE_ACTION_HANDLERS = {
+    get_commerce_settings: (client: WhatsAppClient) => client.commerce.get(),
+    update_commerce_settings: (client: WhatsAppClient, params: CommerceActionParams) =>
+        client.commerce.update(actionUpdate(params)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Commerce 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_COMMERCE_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    COMMERCE_ACTION_HANDLERS,
+    {
+        get_commerce_settings: [],
+        update_commerce_settings: ["is_cart_enabled", "is_catalog_visible"],
+    },
+);
+
+export type WhatsAppCommerceAction = keyof typeof WHATSAPP_COMMERCE_ACTION_HANDLERS;
+
+export function isWhatsAppCommerceAction(action: string): action is WhatsAppCommerceAction {
+    return Object.hasOwn(WHATSAPP_COMMERCE_ACTION_HANDLERS, action);
+}
 
 function settingsResponse(value: unknown): WhatsAppCommerceSettingsResponse {
     if (!isRecord(value) || !Array.isArray(value.data)) invalidResponse(value);

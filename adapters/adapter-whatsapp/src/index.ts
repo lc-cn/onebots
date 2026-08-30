@@ -47,7 +47,6 @@ export { WhatsAppClient } from "./client.js";
 export {
     isWhatsAppCommerceAction,
     WhatsAppCommerce,
-    WHATSAPP_COMMERCE_ACTIONS,
     type WhatsAppCommerceAction,
     type WhatsAppCommerceSettingsEntry,
     type WhatsAppCommerceSettingsResponse,
