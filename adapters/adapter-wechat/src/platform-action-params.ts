@@ -188,6 +188,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function invalid(message: string): never {
+export function invalid(message: string): never {
     throw new WechatApiError(`微信公众号 ${message}`, { code: "WECHAT_INVALID_PARAMETER" });
 }

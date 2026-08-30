@@ -71,8 +71,8 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
         const account = this.getAccount(uin);
         if (!account) return this.accountNotFound(uin);
         return {
-            user_id: this.createId(account.config.account_id),
-            user_name: account.nickname || "微信公众号",
+            user_id: this.createId(account.client.config.app_id),
+            user_name: account.nickname || account.client.config.app_id,
             avatar: account.avatar,
         };
     }
@@ -137,7 +137,7 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
         client.on("raw_event", (message: WechatIncomingMessage) => {
             account.dispatch(
                 projectWechatEvent(message, {
-                    botId: this.createId(config.account_id),
+                    botId: this.createId(config.app_id),
                     createId: value => this.createId(value),
                 }),
             );
@@ -155,7 +155,7 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
             try {
                 await client.start();
                 account.status = AccountStatus.Online;
-                account.nickname = config.account_id;
+                account.nickname = config.app_id;
                 account.avatar = this.icon;
                 this.logger.info(`微信公众号 ${config.account_id} 已就绪`);
             } catch (error) {

@@ -67,4 +67,37 @@ describe("projectWechatEvent", () => {
             message_id: { string: "status-message" },
         });
     });
+
+    it("完整保留模板与群发结果，并使用传入的真实公众号身份", () => {
+        const raw: WechatIncomingMessage = {
+            ToUserName: "gh_original",
+            FromUserName: "user",
+            CreateTime: 10,
+            MsgType: "event",
+            Event: "MASSSENDJOBFINISH",
+            MsgID: "status-message",
+            Status: "send success",
+            TotalCount: 10,
+            FilterCount: 1,
+            SentCount: 8,
+            ErrorCount: 1,
+            ErrorCode: "0",
+            CopyrightCheckResult: { Count: 0 },
+        };
+        expect(projectWechatEvent(raw, { ...context, botId: createId("wx-app") })).toMatchObject({
+            bot_id: { string: "wx-app" },
+            notice_type: "message_status",
+            message_id: { string: "status-message" },
+            extensions: {
+                wechat: {
+                    error_code: "0",
+                    total_count: 10,
+                    filter_count: 1,
+                    sent_count: 8,
+                    error_count: 1,
+                    copyright_check_result: { Count: 0 },
+                },
+            },
+        });
+    });
 });

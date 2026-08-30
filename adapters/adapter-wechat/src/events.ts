@@ -64,6 +64,12 @@ function projectNotice(
                 longitude: message.Longitude,
                 precision: message.Precision,
                 status: message.Status,
+                error_code: message.ErrorCode,
+                total_count: message.TotalCount,
+                filter_count: message.FilterCount,
+                sent_count: message.SentCount,
+                error_count: message.ErrorCount,
+                copyright_check_result: message.CopyrightCheckResult,
             },
         },
     };

@@ -68,6 +68,12 @@ export interface WechatIncomingMessage extends Record<string, unknown> {
     Longitude?: number;
     Precision?: number;
     Status?: string;
+    ErrorCode?: string;
+    TotalCount?: number;
+    FilterCount?: number;
+    SentCount?: number;
+    ErrorCount?: number;
+    CopyrightCheckResult?: Record<string, unknown>;
 }
 
 export interface WechatNamedEvent<TName extends string = string> extends WechatIncomingMessage {

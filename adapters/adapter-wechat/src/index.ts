@@ -15,6 +15,7 @@ export { projectWechatEvent } from "./events.js";
 export { messageMediaType, prepareWechatMediaSegments, uploadWechatMedia } from "./media.js";
 export type { WechatMediaType } from "./media.js";
 export { compileWechatMessages } from "./messages.js";
+export { WECHAT_CUSTOMER_SERVICE_ACTIONS } from "./platform-actions-customer-service.js";
 export {
     executeWechatPlatformAction,
     WECHAT_PLATFORM_ACTIONS,
