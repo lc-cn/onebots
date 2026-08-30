@@ -10,6 +10,13 @@ import { WhatsAppSettings } from "./settings.js";
 import { WhatsAppEncryptedMessages } from "./encrypted-messages.js";
 import { WhatsAppPhoneNumbers } from "./phone-numbers.js";
 import { WhatsAppBusinessEncryption } from "./business-encryption.js";
+import {
+    WhatsAppBusinessProfiles,
+    type WhatsAppBusinessProfileField,
+    type WhatsAppBusinessProfileResponse,
+    type WhatsAppBusinessProfileUpdate,
+    type WhatsAppBusinessProfileUpdateResponse,
+} from "./business-profile.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -56,6 +63,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly phoneNumbers: WhatsAppPhoneNumbers;
     /** Flow/data-channel Business Encryption 公钥与签名状态。 */
     readonly businessEncryption: WhatsAppBusinessEncryption;
+    /** Business Profile 强类型读取与受控更新。 */
+    readonly businessProfile: WhatsAppBusinessProfiles;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -71,6 +80,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.encryptedMessages = new WhatsAppEncryptedMessages(this);
         this.phoneNumbers = new WhatsAppPhoneNumbers(this);
         this.businessEncryption = new WhatsAppBusinessEncryption(this);
+        this.businessProfile = new WhatsAppBusinessProfiles(this);
     }
 
     get apiVersion(): string {
@@ -242,20 +252,15 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     }
 
     getBusinessProfile(
-        fields = "about,address,description,email,profile_picture_url,websites,vertical",
-    ): Promise<unknown> {
-        return this.call({
-            resource: `${this.config.phone_number_id}/whatsapp_business_profile`,
-            query: { fields },
-        });
+        fields?: readonly WhatsAppBusinessProfileField[],
+    ): Promise<WhatsAppBusinessProfileResponse> {
+        return this.businessProfile.get(fields);
     }
 
-    updateBusinessProfile(profile: Readonly<Record<string, unknown>>): Promise<unknown> {
-        return this.call({
-            method: "POST",
-            resource: `${this.config.phone_number_id}/whatsapp_business_profile`,
-            body: { messaging_product: "whatsapp", ...profile },
-        });
+    updateBusinessProfile(
+        profile: WhatsAppBusinessProfileUpdate,
+    ): Promise<WhatsAppBusinessProfileUpdateResponse> {
+        return this.businessProfile.update(profile);
     }
 
     async uploadMedia(file: Blob, mimeType: string, filename = "upload"): Promise<{ id: string }> {

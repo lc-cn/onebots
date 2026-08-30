@@ -21,6 +21,7 @@
 - Payload Encryption 加密消息：固定端点、compact JWE 结构校验与加密响应校验
 - 号码生命周期：状态资料、注册/注销、两步验证、短信或语音验证码申请与校验
 - Business Encryption：Flow/data-channel RSA 公钥上传、读取与签名状态校验
+- Business Profile：强类型资料读取、字段选择、更新约束与 Resumable Upload 头像 handle
 - 通用 `whatsapp_call`，无需等待适配器升级即可调用新的 Graph API 资源
 - `ingest()`、`ingestHttp()` 与标准 `acceptHttp(Request)` 共用同一 typed 事件和去重链路
 
@@ -118,6 +119,8 @@ Calling API 提供 `get_call_permissions`、`request_call_permission`、`connect
 号码生命周期由 `client.phoneNumbers` 管理，并提供 `get_phone_number_info`、`register_phone_number`、`deregister_phone_number`、`set_two_step_verification`、`request_phone_number_verification_code` 与 `verify_phone_number_code` 固定动作。注册支持官方迁移 `backup`；验证码方式仅接受 `SMS` / `VOICE` 和 `en_US` 形式的 locale。适配器不发送 v21 起弃用的数据驻留注册字段，注销也不会夹带规范外请求体。PIN、验证码与迁移 backup 都是敏感信息，请勿记录。
 
 Flow/data-channel 的 Business Encryption 与消息 payload encryption 是不同控制面。使用 `get_business_encryption_key` / `set_business_encryption_key` 或 `client.businessEncryption` 管理：上传必须是能被 Node crypto 解析的至少 2048 位 RSA PEM 公钥，并使用 Meta 要求的 multipart 字段；读取返回 `VALID` / `MISMATCH` 签名状态。适配器永远不接收或保存私钥。
+
+Business Profile 使用 `client.businessProfile` 或原有 `get_business_profile` / `update_business_profile` 动作。读取字段必须以数组显式增减，更新只接受 Meta 的 about、address、description、email、websites、vertical 和 `profile_picture_handle`，并校验长度、URL、邮箱与行业枚举；任意额外 JSON 字段会被拒绝。头像需先通过 Resumable Upload API 获得 handle，不能直接把图片 URL 当作 handle。
 
 ## 参考
 

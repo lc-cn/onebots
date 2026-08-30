@@ -11,6 +11,7 @@ import { isWhatsAppSettingsAction } from "./settings.js";
 import { isWhatsAppEncryptedMessageAction } from "./encrypted-messages.js";
 import { isWhatsAppPhoneNumberAction } from "./phone-numbers.js";
 import { isWhatsAppBusinessEncryptionAction } from "./business-encryption.js";
+import { isWhatsAppBusinessProfileAction } from "./business-profile.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -41,7 +42,6 @@ const callingAccess = {
 };
 
 const businessManagementActions = new Set([
-    "update_business_profile",
     "get_commerce_settings",
     "update_commerce_settings",
     "list_qr_codes",
@@ -69,6 +69,7 @@ const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIO
     if (isWhatsAppEncryptedMessageAction(action)) return businessMessaging;
     if (isWhatsAppPhoneNumberAction(action)) return businessMessaging;
     if (isWhatsAppBusinessEncryptionAction(action)) return businessMessaging;
+    if (isWhatsAppBusinessProfileAction(action)) return businessManagement;
     if (businessManagementActions.has(action)) return businessManagement;
     if (businessMessagingActions.has(action)) return businessMessaging;
     if (action === "send_native_message" || action === "mark_message_read") {

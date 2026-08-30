@@ -11,6 +11,20 @@ export {
     type WhatsAppBusinessEncryptionUpdateResponse,
     type WhatsAppBusinessPublicKeySignatureStatus,
 } from "./business-encryption.js";
+export {
+    isWhatsAppBusinessProfileAction,
+    WhatsAppBusinessProfiles,
+    WHATSAPP_BUSINESS_PROFILE_ACTIONS,
+    WHATSAPP_BUSINESS_PROFILE_FIELDS,
+    WHATSAPP_BUSINESS_VERTICALS,
+    type WhatsAppBusinessProfile,
+    type WhatsAppBusinessProfileAction,
+    type WhatsAppBusinessProfileField,
+    type WhatsAppBusinessProfileResponse,
+    type WhatsAppBusinessProfileUpdate,
+    type WhatsAppBusinessProfileUpdateResponse,
+    type WhatsAppBusinessVertical,
+} from "./business-profile.js";
 export { whatsAppCapabilities } from "./capabilities.js";
 export { WhatsAppClient } from "./client.js";
 export {

@@ -7,6 +7,7 @@ import { WHATSAPP_SETTINGS_ACTION_HANDLERS } from "./settings.js";
 import { WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS } from "./encrypted-messages.js";
 import { WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS } from "./phone-numbers.js";
 import { WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS } from "./business-encryption.js";
+import { WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS } from "./business-profile.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -26,6 +27,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS,
     ...WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS,
     ...WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS,
+    ...WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>
@@ -33,10 +35,6 @@ const ACTION_HANDLERS = {
             requireString(params, "message_id"),
             optionalBoolean(params, "typing_indicator") || false,
         ),
-    get_business_profile: (client, params) =>
-        client.getBusinessProfile(optionalString(params, "fields")),
-    update_business_profile: (client, params) =>
-        client.updateBusinessProfile(requireRecord(params, "profile")),
     get_commerce_settings: client =>
         client.call({ resource: `${client.config.phone_number_id}/whatsapp_commerce_settings` }),
     update_commerce_settings: (client, params) =>
