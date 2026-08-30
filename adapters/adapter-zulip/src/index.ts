@@ -33,6 +33,7 @@ const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
     invites_changed: "邀请变化",
     muted_users: "静音用户",
     custom_profile_fields: "自定义资料字段",
+    realm_domains: "允许注册的邮箱域名",
     realm_emoji: "组织自定义表情",
     realm_linkifiers: "组织链接规则",
     restart: "服务器重启",

@@ -300,6 +300,18 @@ export interface ZulipCustomProfileFieldsEvent extends ZulipBaseEvent {
     fields: ZulipCustomProfileField[];
 }
 
+export interface ZulipRealmDomain {
+    domain: string;
+    allow_subdomains: boolean;
+}
+
+export interface ZulipRealmDomainsEvent extends ZulipBaseEvent {
+    type: "realm_domains";
+    op: "add" | "change" | "remove";
+    realm_domain?: ZulipRealmDomain;
+    domain?: string;
+}
+
 export type ZulipEvent =
     | ZulipMessageEvent
     | ZulipUpdateMessageEvent
@@ -314,6 +326,7 @@ export type ZulipEvent =
     | ZulipRealmEmojiAddEvent
     | ZulipRealmEmojiUpdateEvent
     | ZulipCustomProfileFieldsEvent
+    | ZulipRealmDomainsEvent
     | ZulipBaseEvent;
 
 export interface ZulipQueueRegistration extends ZulipApiEnvelope {

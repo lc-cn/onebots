@@ -44,6 +44,7 @@ const DEFAULT_EVENT_TYPES = [
     "alert_words",
     "muted_users",
     "custom_profile_fields",
+    "realm_domains",
     "realm_emoji",
     "realm_linkifiers",
     "presence",
