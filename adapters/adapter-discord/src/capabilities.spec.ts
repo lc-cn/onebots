@@ -25,5 +25,11 @@ describe("Discord 能力清单", () => {
         expect(discordCapabilities.actions.call_discord_api?.availability).toBe("context");
         expect(discordCapabilities.actions.ban_member?.permissions).toEqual(["BAN_MEMBERS"]);
         expect(discordCapabilities.actions.create_thread?.permissions).toEqual(["MANAGE_THREADS"]);
+        expect(discordCapabilities.actions.create_auto_moderation_rule?.permissions).toEqual([
+            "MANAGE_GUILD",
+        ]);
+        expect(discordCapabilities.actions.create_scheduled_event?.availability).toBe("permission");
+        expect(discordCapabilities.actions.create_guild_emoji?.availability).toBe("permission");
+        expect(discordCapabilities.actions.list_scheduled_events?.availability).toBeUndefined();
     });
 });

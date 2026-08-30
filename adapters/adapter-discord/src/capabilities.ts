@@ -21,6 +21,39 @@ const manageThreads = {
     availability: "permission" as const,
     permissions: ["MANAGE_THREADS"],
 };
+const manageGuild = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["MANAGE_GUILD"],
+};
+const manageEvents = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["CREATE_EVENTS / MANAGE_EVENTS（取决于创建者与事件类型）"],
+};
+const manageExpressions = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["CREATE_GUILD_EXPRESSIONS / MANAGE_GUILD_EXPRESSIONS"],
+};
+
+const autoModerationActions = new Set([
+    "list_auto_moderation_rules",
+    "get_auto_moderation_rule",
+    "create_auto_moderation_rule",
+    "update_auto_moderation_rule",
+    "delete_auto_moderation_rule",
+]);
+const scheduledEventWriteActions = new Set([
+    "create_scheduled_event",
+    "update_scheduled_event",
+    "delete_scheduled_event",
+]);
+const emojiWriteActions = new Set([
+    "create_guild_emoji",
+    "update_guild_emoji",
+    "delete_guild_emoji",
+]);
 
 const native: CapabilityDescriptor = { support: "native" };
 const platformActionDescriptors: Readonly<Record<string, CapabilityDescriptor>> = {
@@ -103,10 +136,12 @@ const platformActionDescriptors: Readonly<Record<string, CapabilityDescriptor>> 
         permissions: ["MANAGE_NICKNAMES"],
     },
 };
-const platformActions = definePlatformActionCapabilities(
-    DISCORD_PLATFORM_ACTIONS,
-    action => platformActionDescriptors[action] ?? native,
-);
+const platformActions = definePlatformActionCapabilities(DISCORD_PLATFORM_ACTIONS, action => {
+    if (autoModerationActions.has(action)) return manageGuild;
+    if (scheduledEventWriteActions.has(action)) return manageEvents;
+    if (emojiWriteActions.has(action)) return manageExpressions;
+    return platformActionDescriptors[action] ?? native;
+});
 
 /** Discord REST/Gateway 实现当前可用的能力。 */
 export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({

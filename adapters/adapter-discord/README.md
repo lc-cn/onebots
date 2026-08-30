@@ -10,7 +10,7 @@ OneBots 的 Discord 官方 Bot 适配器。实现直接面向 Discord API v10，
 - REST：Discord route/global rate limit、429 自动重试、AbortSignal、审计日志原因、附件上传和结构化错误。
 - 事件：消息编辑/删除与批量删除、Reaction、Guild 成员、Interaction；未知 Dispatch 仍通过 `raw_event` 无损交付。
 - 消息：文本、用户/角色/频道提及、回复、Embed、Sticker 与多媒体附件。
-- 平台扩展：公开常用 Guild、频道、角色、线程、邀请和 Reaction 动作，并保留受约束的完整 Discord v10 REST 入口。
+- 平台扩展：公开常用 Guild、频道、角色、线程、邀请、Reaction、Auto Moderation、Scheduled Event 和 Guild Emoji 动作，并保留受约束的完整 Discord v10 REST 入口。
 
 `ws` 作为适配器的可选依赖随包解析；HTTP(S) 与 SOCKS Agent 由 OneBots 共享代理层统一提供，不使用时不会加载。适配器不会引入 `discord.js`。
 
@@ -190,6 +190,9 @@ Gateway 默认无限重连；并发 `connect()` 会等待同一次启动，`disc
 - 消息：`bulk_delete_messages`、`crosspost_message`、`get_channel_pins`、`pin_message`、`unpin_message`、`get_reaction_users`、`add_reaction`、`remove_own_reaction`、`trigger_typing`
 - 线程：`create_thread`、`join_thread`、`leave_thread`、`add_thread_member`、`remove_thread_member`、`list_thread_members`、`get_active_threads`
 - 邀请：`get_channel_invites`、`create_channel_invite`、`delete_invite`
+- Auto Moderation：`list_auto_moderation_rules`、`get_auto_moderation_rule`、`create_auto_moderation_rule`、`update_auto_moderation_rule`、`delete_auto_moderation_rule`
+- Scheduled Event：`list_scheduled_events`、`get_scheduled_event`、`create_scheduled_event`、`update_scheduled_event`、`delete_scheduled_event`、`get_scheduled_event_users`
+- Guild Emoji：`list_guild_emojis`、`get_guild_emoji`、`create_guild_emoji`、`update_guild_emoji`、`delete_guild_emoji`
 - Interaction：`create_interaction_response`、`get_original_interaction_response`、`edit_original_interaction_response`、`delete_original_interaction_response`
 - Followup：`create_followup_message`、`get_followup_message`、`edit_followup_message`、`delete_followup_message`
 - 底层：`call_discord_api`，只能访问配置的 Discord API HTTPS 根路径，拒绝外部 URL、路径穿越、内嵌 query 和 fragment

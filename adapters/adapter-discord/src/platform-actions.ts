@@ -3,14 +3,26 @@ import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import { assertDiscordEndpoint } from "./lite/rest.js";
 import { DiscordError } from "./errors.js";
 import { parseDiscordGatewayCommand } from "./lite/gateway-commands.js";
+import { DISCORD_COMMUNITY_ACTIONS } from "./platform-actions-community.js";
+import {
+    optionalInteger,
+    optionalSnowflake,
+    optionalString,
+    query,
+    requireObject,
+    requireSnowflake,
+    requireSnowflakeArray,
+    requireString,
+    type DiscordActionParams as Params,
+} from "./platform-action-params.js";
 
 const DISCORD_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 type DiscordMethod = (typeof DISCORD_METHODS)[number];
-type Params = Readonly<Record<string, unknown>>;
 type Handler = PlatformActionHandler<DiscordBot>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
     {
+        ...DISCORD_COMMUNITY_ACTIONS,
         call_discord_api: async (bot: DiscordBot, params: Params) =>
             bot.getREST().request(requirePath(params.path), {
                 method: methodValue(params.method),
@@ -288,96 +300,6 @@ function optionalObject(
         throw invalidParameter(`Discord 参数 ${name} 必须为对象`);
     }
     return value as Readonly<Record<string, unknown>>;
-}
-
-function requireString(params: Readonly<Record<string, unknown>>, name: string): string {
-    const value = params[name];
-    if (typeof value !== "string" || !value) {
-        throw invalidParameter(`Discord 参数 ${name} 必须为字符串`);
-    }
-    return value;
-}
-
-function requireSnowflake(params: Readonly<Record<string, unknown>>, name: string): string {
-    const value = String(params[name] ?? "");
-    if (!/^\d+$/.test(value)) throw invalidParameter(`Discord 参数 ${name} 必须为 Snowflake`);
-    return value;
-}
-
-function optionalSnowflake(
-    params: Readonly<Record<string, unknown>>,
-    name: string,
-): string | undefined {
-    return params[name] == null ? undefined : requireSnowflake(params, name);
-}
-
-function requireSnowflakeArray(
-    params: Readonly<Record<string, unknown>>,
-    name: string,
-    minimum: number,
-    maximum: number,
-): string[] {
-    const value = params[name];
-    if (!Array.isArray(value) || value.length < minimum || value.length > maximum) {
-        throw invalidParameter(`Discord 参数 ${name} 数量必须为 ${minimum}-${maximum}`);
-    }
-    return value.map(item => {
-        const snowflake = String(item);
-        if (!/^\d+$/.test(snowflake)) {
-            throw invalidParameter(`Discord 参数 ${name} 包含无效 Snowflake`);
-        }
-        return snowflake;
-    });
-}
-
-function requireObject(
-    params: Readonly<Record<string, unknown>>,
-    name: string,
-): Readonly<Record<string, unknown>> {
-    const value = params[name];
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        throw invalidParameter(`Discord 参数 ${name} 必须为对象`);
-    }
-    return value as Readonly<Record<string, unknown>>;
-}
-
-function optionalInteger(
-    params: Readonly<Record<string, unknown>>,
-    name: string,
-): number | undefined {
-    if (params[name] == null) return undefined;
-    const value = Number(params[name]);
-    if (!Number.isSafeInteger(value) || value < 0)
-        throw invalidParameter(`Discord 参数 ${name} 必须为非负整数`);
-    return value;
-}
-
-function optionalString(
-    params: Readonly<Record<string, unknown>>,
-    name: string,
-): string | undefined {
-    if (params[name] == null) return undefined;
-    const value = params[name];
-    if (typeof value !== "string") throw invalidParameter(`Discord 参数 ${name} 必须为字符串`);
-    return value;
-}
-
-function query(params: Readonly<Record<string, unknown>>): Record<string, string> {
-    const source = params.query;
-    if (typeof source !== "object" || source === null || Array.isArray(source)) return {};
-    const result: Record<string, string> = {};
-    for (const [key, value] of Object.entries(source)) {
-        if (value == null) continue;
-        if (!isScalar(value)) {
-            throw invalidParameter(`Discord query 参数 ${key} 必须为标量`);
-        }
-        result[key] = String(value);
-    }
-    return result;
-}
-
-function isScalar(value: unknown): value is string | number | boolean {
-    return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
 
 function invalidParameter(message: string): DiscordError {

@@ -168,4 +168,64 @@ describe("executeDiscordPlatformAction", () => {
             body: { content: "updated" },
         });
     });
+
+    it("按官方资源边界管理 Auto Moderation 规则", async () => {
+        const request = vi.fn().mockResolvedValue({ id: "7" });
+        const bot = { getREST: () => ({ request }) } as never;
+
+        await executeDiscordPlatformAction(bot, "update_auto_moderation_rule", {
+            guild_id: "100",
+            rule_id: "7",
+            rule: { enabled: false },
+            reason: "disable noisy rule",
+        });
+
+        expect(request).toHaveBeenCalledWith("/guilds/100/auto-moderation/rules/7", {
+            method: "PATCH",
+            body: { enabled: false },
+            query: undefined,
+            reason: "disable noisy rule",
+        });
+    });
+
+    it("完整传递 Scheduled Event 查询字段", async () => {
+        const request = vi.fn().mockResolvedValue([]);
+        const bot = { getREST: () => ({ request }) } as never;
+
+        await executeDiscordPlatformAction(bot, "get_scheduled_event_users", {
+            guild_id: "100",
+            event_id: "8",
+            query: { with_member: true, limit: 25 },
+        });
+
+        expect(request).toHaveBeenCalledWith("/guilds/100/scheduled-events/8/users", {
+            method: undefined,
+            body: undefined,
+            query: { with_member: "true", limit: "25" },
+            reason: undefined,
+        });
+    });
+
+    it("创建 Guild Emoji 前校验结构化载荷", async () => {
+        const request = vi.fn().mockResolvedValue({ id: "9" });
+        const bot = { getREST: () => ({ request }) } as never;
+
+        await executeDiscordPlatformAction(bot, "create_guild_emoji", {
+            guild_id: "100",
+            emoji: { name: "wave", image: "data:image/png;base64,AA==" },
+        });
+        expect(request).toHaveBeenCalledWith("/guilds/100/emojis", {
+            method: "POST",
+            body: { name: "wave", image: "data:image/png;base64,AA==" },
+            query: undefined,
+            reason: undefined,
+        });
+
+        await expect(
+            executeDiscordPlatformAction(bot, "create_guild_emoji", {
+                guild_id: "100",
+                emoji: "invalid",
+            }),
+        ).rejects.toThrow("emoji 必须为对象");
+    });
 });
