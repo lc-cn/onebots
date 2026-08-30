@@ -63,7 +63,9 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
             this.proxyUrl = buildProxyUrl(options.proxy);
         }
 
-        this.rest = new DiscordREST({ token: options.token, proxy: options.proxy });
+        // Gateway discovery 必须与业务 API 共享同一传输语义，避免绕过自定义基址、
+        // 宿主注入的 HTTP 栈或已经学习到的限流 bucket。
+        this.rest = options.rest ?? new DiscordREST({ token: options.token, proxy: options.proxy });
 
         // 使用 ConnectionManager 管理重连，支持指数退避
         this.connectionManager = new ConnectionManager(

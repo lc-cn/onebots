@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiscordGateway, GatewayOpcodes } from "./gateway.js";
+import { DiscordREST } from "./rest.js";
 
 interface GatewayHarness {
     ws: {
@@ -25,6 +26,17 @@ afterEach(() => {
 });
 
 describe("DiscordGateway lifecycle", () => {
+    it("复用宿主注入的 REST 传输和限流边界", () => {
+        const rest = new DiscordREST({
+            token: "token",
+            apiBaseUrl: "https://discord.example/api/v10",
+            transport: { request: vi.fn() },
+        });
+        const gateway = new DiscordGateway({ token: "token", intents: 1, rest });
+
+        expect(gateway.getREST()).toBe(rest);
+    });
+
     it("在网络连接前响应已取消的 AbortSignal", async () => {
         const abort = new AbortController();
         abort.abort();

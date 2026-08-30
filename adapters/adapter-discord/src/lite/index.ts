@@ -278,6 +278,7 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
         const gateway = new DiscordGateway({
             token: this.options.token,
             intents,
+            rest: this.rest,
             proxy: this.options.proxy,
             presence: this.options.presence,
             shard: this.options.shard,

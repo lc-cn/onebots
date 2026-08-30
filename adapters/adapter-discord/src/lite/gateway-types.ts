@@ -10,6 +10,7 @@ import type {
     DiscordGuildMemberRemoveData,
 } from "../types.js";
 import type { DiscordError } from "../errors.js";
+import type { DiscordREST } from "./rest.js";
 
 /** Discord Gateway v10 操作码。 */
 export enum GatewayOpcodes {
@@ -54,6 +55,8 @@ export enum GatewayIntents {
 export interface GatewayOptions {
     token: string;
     intents: number;
+    /** 复用已经配置好基址、传输和限流状态的 REST 客户端。 */
+    rest?: DiscordREST;
     proxy?: { url: string; username?: string; password?: string };
     presence?: {
         since?: number | null;
