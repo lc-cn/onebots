@@ -260,6 +260,28 @@ export interface ZulipUserGroupEvent extends ZulipBaseEvent {
     direct_subgroup_ids?: number[];
 }
 
+export interface ZulipRealmEmoji {
+    id: string;
+    name: string;
+    source_url: string;
+    still_url?: string | null;
+    deactivated: boolean;
+    author_id: number | null;
+}
+
+export interface ZulipRealmEmojiAddEvent extends ZulipBaseEvent {
+    type: "realm_emoji";
+    op: "add";
+    emoji: ZulipRealmEmoji;
+}
+
+export interface ZulipRealmEmojiUpdateEvent extends ZulipBaseEvent {
+    type: "realm_emoji";
+    op: "update_one";
+    emoji_id: string;
+    data: Partial<Pick<ZulipRealmEmoji, "deactivated">> & Record<string, unknown>;
+}
+
 export type ZulipEvent =
     | ZulipMessageEvent
     | ZulipUpdateMessageEvent
@@ -271,6 +293,8 @@ export type ZulipEvent =
     | ZulipAlertWordsEvent
     | ZulipMutedUsersEvent
     | ZulipUserGroupEvent
+    | ZulipRealmEmojiAddEvent
+    | ZulipRealmEmojiUpdateEvent
     | ZulipBaseEvent;
 
 export interface ZulipQueueRegistration extends ZulipApiEnvelope {

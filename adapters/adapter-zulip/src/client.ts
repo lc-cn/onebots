@@ -1,10 +1,10 @@
 import { EventEmitter } from "node:events";
-import { randomBytes } from "node:crypto";
 import { FailureCollector } from "onebots";
 import { assertZulipConfig, resolveZulipReceiveMode } from "./config.js";
 import { deliverZulipEvent, ZulipEventIngress } from "./event-ingress.js";
 import { isBadEventQueue, ZulipError } from "./errors.js";
 import { assertZulipApiPath, createZulipTransport, type ZulipTransport } from "./http.js";
+import { buildZulipMultipart } from "./multipart.js";
 import {
     parseZulipEventsResponse,
     parseZulipMessageResponse,
@@ -43,6 +43,7 @@ const DEFAULT_EVENT_TYPES = [
     "invites_changed",
     "alert_words",
     "muted_users",
+    "realm_emoji",
     "realm_linkifiers",
     "presence",
     "user_status",
@@ -313,19 +314,46 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         filename: string,
         mimeType?: string,
     ): Promise<ZulipUploadResponse> {
-        const boundary = `----onebots-${randomBytes(12).toString("hex")}`;
-        const prefix = Buffer.from(
-            `--${boundary}\r\nContent-Disposition: form-data; name="filename"; filename="${escapeFilename(filename)}"\r\nContent-Type: ${mimeType || "application/octet-stream"}\r\n\r\n`,
+        const response = await this.uploadMultipart(
+            "user_uploads",
+            "filename",
+            data,
+            filename,
+            mimeType,
         );
-        const suffix = Buffer.from(`\r\n--${boundary}--\r\n`);
-        const transport = await this.transportRequest;
-        const response = await transport({
-            method: "POST",
-            path: "user_uploads",
-            body: Buffer.concat([prefix, Buffer.from(data), suffix]),
-            contentType: `multipart/form-data; boundary=${boundary}`,
-        });
         return parseZulipUploadResponse(response);
+    }
+
+    /** 上传组织自定义表情；访问权限由 Zulip 组织配置决定。 */
+    uploadCustomEmoji(
+        emojiName: string,
+        data: Uint8Array,
+        filename: string,
+        mimeType: string,
+    ): Promise<unknown> {
+        return this.uploadMultipart(
+            `realm/emoji/${encodeURIComponent(emojiName)}`,
+            "filename",
+            data,
+            filename,
+            mimeType,
+        );
+    }
+
+    private async uploadMultipart(
+        path: string,
+        field: string,
+        data: Uint8Array,
+        filename: string,
+        mimeType?: string,
+    ): Promise<unknown> {
+        const multipart = buildZulipMultipart(field, data, filename, mimeType);
+        const transport = await this.transportRequest;
+        return transport({
+            method: "POST",
+            path,
+            ...multipart,
+        });
     }
 
     private async registerQueue(signal: AbortSignal): Promise<ZulipQueueRegistration> {
@@ -342,6 +370,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
                 client_capabilities: {
                     empty_topic_name: true,
                     include_deactivated_groups: true,
+                    individual_emoji_changes: true,
                     linkifier_url_template: true,
                     user_avatar_url_field_optional: true,
                     user_list_incomplete: true,
@@ -459,8 +488,4 @@ function abortableSleep(delayMs: number, signal: AbortSignal): Promise<void> {
         }, delayMs);
         signal.addEventListener("abort", onAbort, { once: true });
     });
-}
-
-function escapeFilename(filename: string): string {
-    return filename.replace(/["\r\n]/g, "_");
 }

@@ -10,6 +10,7 @@ import {
 import { ZULIP_BOT_ACTION_HANDLERS } from "./bot-actions.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
+import { ZULIP_EMOJI_ACTION_HANDLERS } from "./emoji-actions.js";
 import { ZULIP_INVITATION_ACTION_HANDLERS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_ACTION_HANDLERS } from "./linkifier-actions.js";
 import { ZULIP_PREFERENCE_ACTION_HANDLERS } from "./preference-actions.js";
@@ -60,7 +61,6 @@ const ACTION_HANDLERS = {
         ),
     send_typing_notification: (client, params) =>
         client.call("typing", "POST", requireParams(params)),
-    get_custom_emoji: client => client.call("realm/emoji"),
     get_attachments: client => client.call("attachments"),
     get_server_settings: client => client.call("server_settings"),
     get_scheduled_messages: client => client.call("scheduled_messages"),
@@ -87,6 +87,7 @@ const ACTION_HANDLERS = {
     delete_saved_snippet: (client, params) =>
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
     ...ZULIP_BOT_ACTION_HANDLERS,
+    ...ZULIP_EMOJI_ACTION_HANDLERS,
     ...ZULIP_INVITATION_ACTION_HANDLERS,
     ...ZULIP_LINKIFIER_ACTION_HANDLERS,
     ...ZULIP_PREFERENCE_ACTION_HANDLERS,

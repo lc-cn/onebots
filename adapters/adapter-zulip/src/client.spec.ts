@@ -312,9 +312,11 @@ describe("ZulipClient", () => {
         expect(registration?.params?.event_types).toContain("invites_changed");
         expect(registration?.params?.event_types).toContain("alert_words");
         expect(registration?.params?.event_types).toContain("muted_users");
+        expect(registration?.params?.event_types).toContain("realm_emoji");
         expect(registration?.params?.event_types).toContain("realm_linkifiers");
         expect(registration?.params?.client_capabilities).toMatchObject({
             include_deactivated_groups: true,
+            individual_emoji_changes: true,
             linkifier_url_template: true,
         });
         await client.ingest({ id: 2, type: "subscription", op: "add" });
@@ -341,6 +343,32 @@ describe("ZulipClient", () => {
                 contentType: expect.stringContaining("multipart/form-data"),
             }),
         );
+    });
+
+    it("自定义表情复用受控 multipart 并编码资源名", async () => {
+        const transport = vi.fn<ZulipTransport>().mockResolvedValue({
+            result: "success",
+            msg: "",
+        });
+        const client = new ZulipClient(config, { transport });
+
+        await client.uploadCustomEmoji(
+            "release ready",
+            Buffer.from("png"),
+            "ready.png",
+            "image/png",
+        );
+
+        expect(transport).toHaveBeenCalledWith(
+            expect.objectContaining({
+                method: "POST",
+                path: "realm/emoji/release%20ready",
+                body: expect.any(Buffer),
+                contentType: expect.stringContaining("multipart/form-data"),
+            }),
+        );
+        const request = transport.mock.calls[0]?.[0];
+        expect(request?.body?.toString("utf8")).toContain('name="filename"; filename="ready.png"');
     });
 
     it("在创建传输前拒绝不安全或不完整配置", () => {

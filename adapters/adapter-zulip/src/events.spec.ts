@@ -192,6 +192,48 @@ describe("Zulip 事件投影", () => {
         ).toMatchObject({ timestamp: 0, notice_type: "user_group_deactivated" });
     });
 
+    it("投影自定义表情创建和停用事件", () => {
+        expect(
+            projectZulipEvents(
+                {
+                    id: 19,
+                    type: "realm_emoji",
+                    op: "add",
+                    emoji: {
+                        id: "2",
+                        name: "release_ready",
+                        source_url: "/user_avatars/1/emoji/images/2.png",
+                        still_url: null,
+                        deactivated: false,
+                        author_id: 12,
+                    },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "emoji_created",
+            sub_type: "added",
+            resource: { type: "emoji", id: { string: "2" }, name: "release_ready" },
+        });
+
+        expect(
+            projectZulipEvents(
+                {
+                    id: 20,
+                    type: "realm_emoji",
+                    op: "update_one",
+                    emoji_id: "2",
+                    data: { deactivated: true },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "emoji_updated",
+            sub_type: "deactivated",
+            resource: { type: "emoji", id: { string: "2" }, deactivated: true },
+        });
+    });
+
     it("逐成员和子组拆分批量变化并生成稳定 ID", () => {
         const members = projectZulipEvents(
             {

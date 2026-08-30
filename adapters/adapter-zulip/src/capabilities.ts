@@ -4,6 +4,7 @@ import {
     type AdapterCapabilityManifest,
 } from "onebots";
 import { ZULIP_BOT_CREDENTIAL_ACTIONS } from "./bot-actions.js";
+import { ZULIP_EMOJI_MUTATION_ACTIONS } from "./emoji-actions.js";
 import { ZULIP_INVITATION_ACTIONS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_MUTATION_ACTIONS } from "./linkifier-actions.js";
 import { ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
@@ -21,6 +22,7 @@ const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS,
     ZULIP_USER_MUTATION_ACTIONS.has(action) ||
     ZULIP_INVITATION_ACTIONS.has(action) ||
     ZULIP_BOT_CREDENTIAL_ACTIONS.has(action) ||
+    ZULIP_EMOJI_MUTATION_ACTIONS.has(action) ||
     ZULIP_PREFERENCE_PERMISSION_ACTIONS.has(action) ||
     ZULIP_LINKIFIER_MUTATION_ACTIONS.has(action) ||
     [
@@ -79,6 +81,8 @@ export const zulipCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         user_group_member_removed: { support: "native" },
         user_group_subgroup_added: { support: "native" },
         user_group_subgroup_removed: { support: "native" },
+        emoji_created: { support: "native" },
+        emoji_updated: { support: "native" },
         heartbeat: { support: "native" },
         raw_event: { support: "native" },
         custom: { support: "native" },

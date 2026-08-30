@@ -37,7 +37,43 @@ export function projectZulipEvents(
     }
     if (event.type === "realm_user") return [projectRealmUser(event, context)];
     if (event.type === "user_group") return projectUserGroup(event, context);
+    if (event.type === "realm_emoji") return [projectRealmEmoji(event, context)];
     return [customNotice(event, context)];
+}
+
+function projectRealmEmoji(
+    event: ZulipBaseEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent> {
+    const op = stringValue(event.op);
+    const emoji = isRecord(event.emoji) ? event.emoji : undefined;
+    const data = isRecord(event.data) ? event.data : undefined;
+    const emojiId = stringValue(emoji?.id) || stringValue(event.emoji_id);
+    if ((op !== "add" && op !== "update_one") || !emojiId) {
+        return customNotice(event, context);
+    }
+    const deactivated = typeof data?.deactivated === "boolean" ? data.deactivated : undefined;
+    return {
+        ...base(event, context),
+        type: "notice",
+        notice_type: op === "add" ? "emoji_created" : "emoji_updated",
+        sub_type:
+            op === "add"
+                ? "added"
+                : deactivated === undefined
+                  ? "updated"
+                  : deactivated
+                    ? "deactivated"
+                    : "reactivated",
+        resource: {
+            ...(emoji || {}),
+            ...(data || {}),
+            type: "emoji",
+            id: context.createId(emojiId),
+            name: stringValue(emoji?.name),
+        },
+        extensions: { zulip: event },
+    };
 }
 
 /** 将 Zulip Markdown 消息及附件投影为通用消息段。 */
