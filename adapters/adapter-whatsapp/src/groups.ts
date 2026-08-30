@@ -1,4 +1,8 @@
-import { materializeMediaSource } from "onebots";
+import {
+    definePlatformActionHandlers,
+    materializeMediaSource,
+    type PlatformActionHandler,
+} from "onebots";
 import { WhatsAppApiError } from "./errors.js";
 import type { WhatsAppClient } from "./client.js";
 import { validateGroupProfilePicture } from "./group-profile-picture.js";
@@ -35,28 +39,6 @@ const GROUP_FIELDS = [
     "participants",
     "total_participant_count",
 ] as const;
-
-export const WHATSAPP_GROUP_ACTIONS = Object.freeze([
-    "create_group",
-    "get_group",
-    "list_groups",
-    "update_group",
-    "delete_group",
-    "get_group_invite_link",
-    "reset_group_invite_link",
-    "list_group_join_requests",
-    "approve_group_join_requests",
-    "reject_group_join_requests",
-    "remove_group_participants",
-    "pin_message",
-    "unpin_message",
-] as const);
-
-export type WhatsAppGroupAction = (typeof WHATSAPP_GROUP_ACTIONS)[number];
-
-export function isWhatsAppGroupAction(action: string): action is WhatsAppGroupAction {
-    return (WHATSAPP_GROUP_ACTIONS as readonly string[]).includes(action);
-}
 
 /**
  * WhatsApp Groups API 深模块。
@@ -242,45 +224,6 @@ export class WhatsAppGroups {
         });
     }
 
-    execute(
-        action: WhatsAppGroupAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        const groupId = (): string => requiredResourceId(params, "group_id");
-        switch (action) {
-            case "create_group":
-                return this.create(createParams(params));
-            case "get_group":
-                return this.get(groupId());
-            case "list_groups":
-                return this.list(paginationParams(params));
-            case "update_group":
-                return this.update(groupId(), updateParams(params));
-            case "delete_group":
-                return this.delete(groupId());
-            case "get_group_invite_link":
-                return this.getInviteLink(groupId());
-            case "reset_group_invite_link":
-                return this.resetInviteLink(groupId());
-            case "list_group_join_requests":
-                return this.listJoinRequests(groupId(), paginationParams(params));
-            case "approve_group_join_requests":
-                return this.approveJoinRequests(groupId(), stringArray(params, "request_ids"));
-            case "reject_group_join_requests":
-                return this.rejectJoinRequests(groupId(), stringArray(params, "request_ids"));
-            case "remove_group_participants":
-                return this.removeParticipants(groupId(), stringArray(params, "user_ids"));
-            case "pin_message":
-                return this.pinMessage(
-                    groupId(),
-                    requiredOpaqueId(params, "message_id"),
-                    requiredInteger(params, "expiration_days"),
-                );
-            case "unpin_message":
-                return this.unpinMessage(groupId(), requiredOpaqueId(params, "message_id"));
-        }
-    }
-
     private joinRequestAction(
         method: "POST" | "DELETE",
         groupId: string,
@@ -323,6 +266,87 @@ export class WhatsAppGroups {
     }): Promise<WhatsAppGroupJoinRequestActionResponse> {
         return parseGroupJoinRequestActionResponse(await this.client.call<unknown>(options));
     }
+}
+
+type GroupActionParams = Readonly<Record<string, unknown>>;
+
+const GROUP_ACTION_HANDLERS = {
+    create_group: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.create(createParams(params)),
+    get_group: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.get(requiredResourceId(params, "group_id")),
+    list_groups: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.list(paginationParams(params)),
+    update_group: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.update(requiredResourceId(params, "group_id"), updateParams(params)),
+    delete_group: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.delete(requiredResourceId(params, "group_id")),
+    get_group_invite_link: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.getInviteLink(requiredResourceId(params, "group_id")),
+    reset_group_invite_link: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.resetInviteLink(requiredResourceId(params, "group_id")),
+    list_group_join_requests: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.listJoinRequests(
+            requiredResourceId(params, "group_id"),
+            paginationParams(params),
+        ),
+    approve_group_join_requests: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.approveJoinRequests(
+            requiredResourceId(params, "group_id"),
+            stringArray(params, "request_ids"),
+        ),
+    reject_group_join_requests: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.rejectJoinRequests(
+            requiredResourceId(params, "group_id"),
+            stringArray(params, "request_ids"),
+        ),
+    remove_group_participants: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.removeParticipants(
+            requiredResourceId(params, "group_id"),
+            stringArray(params, "user_ids"),
+        ),
+    pin_message: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.pinMessage(
+            requiredResourceId(params, "group_id"),
+            requiredOpaqueId(params, "message_id"),
+            requiredInteger(params, "expiration_days"),
+        ),
+    unpin_message: (client: WhatsAppClient, params: GroupActionParams) =>
+        client.groups.unpinMessage(
+            requiredResourceId(params, "group_id"),
+            requiredOpaqueId(params, "message_id"),
+        ),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Groups 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_GROUP_ACTION_HANDLERS = definePlatformActionHandlers(
+    GROUP_ACTION_HANDLERS,
+    {
+        create_group: ["subject", "description", "join_approval_mode"],
+        get_group: ["group_id"],
+        list_groups: ["limit", "after", "before"],
+        update_group: ["group_id", "subject", "description", "profile_picture"],
+        delete_group: ["group_id"],
+        get_group_invite_link: ["group_id"],
+        reset_group_invite_link: ["group_id"],
+        list_group_join_requests: ["group_id", "limit", "after", "before"],
+        approve_group_join_requests: ["group_id", "request_ids"],
+        reject_group_join_requests: ["group_id", "request_ids"],
+        remove_group_participants: ["group_id", "user_ids"],
+        pin_message: ["group_id", "message_id", "expiration_days"],
+        unpin_message: ["group_id", "message_id"],
+    },
+    (action, parameter) =>
+        new WhatsAppApiError(`WhatsApp 群动作 ${action} 不接受参数 ${parameter}`, {
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action, parameter },
+        }),
+);
+
+export type WhatsAppGroupAction = keyof typeof WHATSAPP_GROUP_ACTION_HANDLERS;
+
+export function isWhatsAppGroupAction(action: string): action is WhatsAppGroupAction {
+    return Object.hasOwn(WHATSAPP_GROUP_ACTION_HANDLERS, action);
 }
 
 function paginationParams(params: object): WhatsAppGroupPagination {

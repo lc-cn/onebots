@@ -84,4 +84,17 @@ describe("WhatsApp 平台动作", () => {
             }),
         ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
     });
+
+    it("群动作拒绝契约外顶层字段", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "get_group", {
+                group_id: "group@g.us",
+                groupId: "typo",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "get_group", parameter: "groupId" },
+        });
+    });
 });

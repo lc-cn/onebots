@@ -134,7 +134,7 @@ WABA Schedule 通过 `client.schedules` 管理，并提供 `list_business_schedu
 
 营销模板通过 `client.marketingMessages` 或 `send_marketing_message` 走专用 `/marketing_messages` 端点，而不是伪装成普通 `/messages`。请求固定为个人模板消息，支持 `CLOUD_API_FALLBACK` / `STRICT` 产品策略和显式 `message_activity_sharing`；模板语言、header/body/button、0–9 按钮索引及递归参数在发送前校验。响应保留 `accepted`、`held_for_quality_assessment`、`paused` 三种专用状态。模板仍须预先批准，发送资格、质量评估和用户同意策略由 Meta 执行。
 
-Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`get_group_invite_link`、`reset_group_invite_link`、入群申请审批、移除参与者以及 `pin_message` / `unpin_message` 等固定动作。标准 `send_message`、群资料、群成员、改名、移除成员和 `handle_group_request` 复用同一实现。群头像在发送前校验为不超过 5MB、至少 192×192 的正方形 JPEG。Meta 不允许通过 Groups API 直接拉人入群；应获取邀请链接，并使用已批准的群邀请链接模板发送给用户。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
+Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`get_group_invite_link`、`reset_group_invite_link`、入群申请审批、移除参与者以及 `pin_message` / `unpin_message` 等固定动作。动作执行、类型、能力识别和顶层参数契约来自同一个注册表，拼错或废弃字段不会被静默忽略。标准 `send_message`、群资料、群成员、改名、移除成员和 `handle_group_request` 复用同一实现。群头像在发送前校验为不超过 5MB、至少 192×192 的正方形 JPEG。Meta 不允许通过 Groups API 直接拉人入群；应获取邀请链接，并使用已批准的群邀请链接模板发送给用户。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
 
 Calling API 提供 `get_call_permissions`、`request_call_permission`、`connect_call`、`pre_accept_call`、`accept_call`、`reject_call` 与 `terminate_call` 固定动作，也可直接使用 `client.calling` 获得完整类型。呼叫权限申请通过原生 `interactive.call_permission_request` 消息发送；`connect` 使用 offer SDP，`accept` 使用 answer SDP，`terminate` 使用 Meta 返回的 `call_id`。此模块只负责权限和呼叫信令，不会伪装成 WebRTC/SIP 媒体实现；媒体会话、ICE 与音频传输由调用方负责。当前 Phone Number 必须先获准启用 Cloud API Calling。
 

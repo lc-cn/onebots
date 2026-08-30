@@ -281,12 +281,7 @@ export {
 } from "./settings.js";
 export { isWhatsAppGroupWebhookEntry } from "./group-webhook.js";
 export { compileWhatsAppMessages } from "./messages.js";
-export {
-    isWhatsAppGroupAction,
-    WhatsAppGroups,
-    WHATSAPP_GROUP_ACTIONS,
-    type WhatsAppGroupAction,
-} from "./groups.js";
+export { isWhatsAppGroupAction, WhatsAppGroups, type WhatsAppGroupAction } from "./groups.js";
 export {
     executeWhatsAppPlatformAction,
     WHATSAPP_PLATFORM_ACTIONS,

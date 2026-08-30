@@ -1,6 +1,6 @@
 import { definePlatformActions, type PlatformActionHandler } from "onebots";
 import { WhatsAppApiError } from "./errors.js";
-import { WHATSAPP_GROUP_ACTIONS, type WhatsAppGroupAction } from "./groups.js";
+import { WHATSAPP_GROUP_ACTION_HANDLERS } from "./groups.js";
 import { WHATSAPP_CALLING_ACTION_HANDLERS } from "./calling.js";
 import { WHATSAPP_HISTORY_ACTION_HANDLERS } from "./history.js";
 import { WHATSAPP_SETTINGS_ACTION_HANDLERS } from "./settings.js";
@@ -26,16 +26,8 @@ import { WHATSAPP_MARKETING_MESSAGE_ACTION_HANDLERS } from "./marketing-messages
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
-const GROUP_ACTION_HANDLERS = Object.fromEntries(
-    [...WHATSAPP_GROUP_ACTIONS].map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.groups.execute(action, params),
-    ]),
-) as Record<WhatsAppGroupAction, PlatformActionHandler<WhatsAppClient>>;
-
 const ACTION_HANDLERS = {
-    ...GROUP_ACTION_HANDLERS,
+    ...WHATSAPP_GROUP_ACTION_HANDLERS,
     ...WHATSAPP_CALLING_ACTION_HANDLERS,
     ...WHATSAPP_HISTORY_ACTION_HANDLERS,
     ...WHATSAPP_SETTINGS_ACTION_HANDLERS,
