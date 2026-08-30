@@ -69,6 +69,35 @@ describe("WechatIlinkBot 生命周期", () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it("停止通知失败时保持离线清理并向账号生命周期传播", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (input: string | URL, init?: RequestInit) => {
+                const url = String(input);
+                if (url.endsWith("getupdates")) {
+                    return new Promise<Response>((_resolve, reject) => {
+                        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
+                            once: true,
+                        });
+                    });
+                }
+                if (url.endsWith("notifystop")) {
+                    return new Response(JSON.stringify({ ret: 1, errmsg: "stop failed" }));
+                }
+                return new Response("{}", { status: 200 });
+            }),
+        );
+        const bot = new WechatIlinkBot(runtimeConfig(), {
+            sessionStore: new MemoryCredentialStore(),
+        });
+
+        await bot.start();
+        await expect(bot.stop()).rejects.toMatchObject({
+            code: "API_ERROR",
+            operation: "notifystop",
+        });
+    });
+
     it("stop 会取消进行中的扫码且不会启动轮询", async () => {
         const calls: string[] = [];
         vi.stubGlobal(

@@ -226,7 +226,7 @@ export class WechatIlinkBot extends IlinkBot {
         this.desiredRunning = false;
         this.lifecycleGeneration += 1;
         this.loginAbort?.abort(new DOMException("账号已停止", "AbortError"));
-        await this.startPromise?.catch(() => {});
+        await this.startPromise;
         if (resolveWechatClawbotReceiveMode(this.cfg) === "polling") {
             await this.stopPolling();
         }

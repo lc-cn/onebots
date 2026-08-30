@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { randomBytes } from "node:crypto";
+import { FailureCollector } from "onebots";
 import { assertZulipConfig, resolveZulipReceiveMode } from "./config.js";
 import { deliverZulipEvent, ZulipEventIngress } from "./event-ingress.js";
 import { isBadEventQueue, ZulipError } from "./errors.js";
@@ -134,6 +135,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
     /** 停止长轮询并删除服务器队列；重复调用安全。 */
     async stop(): Promise<void> {
         if (!this.started && !this.startRequest) return;
+        const failures = new FailureCollector();
         const registration = this.registration;
         const pollRequest = this.pollRequest;
         this.started = false;
@@ -147,14 +149,21 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         try {
             await pollRequest;
         } catch (error) {
-            this.reportError(ZulipError.wrap(error, "ZULIP_EVENT_QUEUE_STOP_FAILED"));
+            const wrapped = ZulipError.wrap(error, "ZULIP_EVENT_QUEUE_STOP_FAILED");
+            failures.add(wrapped);
+            this.reportError(wrapped);
         }
         if (registration?.queue_id) {
-            await this.call("events", "DELETE", { queue_id: registration.queue_id }).catch(error =>
-                this.reportError(ZulipError.wrap(error, "ZULIP_QUEUE_DELETE_FAILED")),
-            );
+            try {
+                await this.call("events", "DELETE", { queue_id: registration.queue_id });
+            } catch (error) {
+                const wrapped = ZulipError.wrap(error, "ZULIP_QUEUE_DELETE_FAILED");
+                failures.add(wrapped);
+                this.reportError(wrapped);
+            }
         }
         this.safeEmit("stop");
+        failures.throwIfAny("Zulip 客户端停止失败");
     }
 
     /** 调用官方相对 API 路径；路径、方法、编码和平台错误均统一校验。 */

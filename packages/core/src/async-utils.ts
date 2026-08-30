@@ -8,6 +8,46 @@ export interface RefreshableValueResult<T> {
 }
 
 /**
+ * 在关闭、回滚等必须完整尝试全部步骤的流程中收集失败。
+ *
+ * 单个步骤失败不会阻止后续清理；结束时单个错误保持原样传播，多个错误统一汇总。
+ */
+export class FailureCollector {
+    private readonly failures: unknown[] = [];
+
+    get size(): number {
+        return this.failures.length;
+    }
+
+    add(error: unknown): void {
+        this.failures.push(error);
+    }
+
+    async capture(
+        operation: () => void | PromiseLike<void>,
+        onFailure?: (error: unknown) => void,
+    ): Promise<void> {
+        try {
+            await operation();
+        } catch (error) {
+            this.failures.push(error);
+            if (onFailure) {
+                try {
+                    onFailure(error);
+                } catch (reportError) {
+                    this.failures.push(reportError);
+                }
+            }
+        }
+    }
+
+    throwIfAny(message: string): void {
+        if (this.failures.length === 1) throw this.failures[0];
+        if (this.failures.length > 1) throw new AggregateError(this.failures, message);
+    }
+}
+
+/**
  * 带提前刷新、单航班加载和代次安全失效的异步值缓存。
  *
  * `invalidate(expected)` 只清除调用方实际使用过的值，避免旧请求的迟到错误

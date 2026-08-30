@@ -68,6 +68,8 @@ onebots -r slack
 
 已有 HTTP Host 可直接把标准 `Request` 交给 `bot.acceptHttp(request)`；其他 Node Host 可调用 `bot.ingestHttp(rawBody, { timestamp, signature, contentType })` 并把结构化的 `{ status, headers, body }` 写回。manual 模式只关闭 OneBots 自建路由或 Socket 连接；直接调用 `ingest(rawEvent)` 不再次验签，若要在 manual 模式复用 `acceptHttp()` / `ingestHttp()`，仍需配置 `signing_secret`。
 
+Socket Mode 停止会始终通知本地 `stopped` 监听器；连接断开失败会保留为结构化错误并向账号生命周期传播。
+
 ## 消息与文件
 
 `image`、`file`、`audio`、`video` 会使用 Slack 当前推荐的 `filesUploadV2` 原生上传，不再退化成附件 URL 或 `[文件: …]` 文本。媒体 `file` / `url` 支持 HTTP(S)、Node.js 本地路径、`file://`、Base64 data URL 与 `base64://`；上传文件需要 `files:write` scope。

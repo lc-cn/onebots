@@ -69,6 +69,7 @@ export {
     emitAllAwaited,
     emitAwaited,
     KeyedSingleFlight,
+    FailureCollector,
     mapConcurrent,
     RefreshableValue,
     RecentEventDeduplicator,

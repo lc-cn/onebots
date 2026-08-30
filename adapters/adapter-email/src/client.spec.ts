@@ -82,6 +82,27 @@ describe("EmailClient", () => {
         await client.stop();
     });
 
+    it("IMAP 登出失败时仍关闭连接并传播结构化停止错误", async () => {
+        const imap = new FakeImap();
+        imap.logoutFailure = new Error("logout failed");
+        const client = createClient(imap);
+        const clientError = vi.fn();
+        const stopped = vi.fn();
+        client.on("client_error", clientError);
+        client.on("stop", stopped);
+
+        await client.start();
+        await expect(client.stop()).rejects.toMatchObject({
+            code: "EMAIL_IMAP_LOGOUT_FAILED",
+            operation: "logout",
+        });
+        expect(imap.usable).toBe(false);
+        expect(stopped).toHaveBeenCalledOnce();
+        expect(clientError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "EMAIL_IMAP_LOGOUT_FAILED" }),
+        );
+    });
+
     it("要求密码或 OAuth2 token", () => {
         expect(() => new EmailClient({ ...config, auth: { user: "bot@example.com" } })).toThrow(
             "必须配置 auth.password",
@@ -303,6 +324,7 @@ function mailSource(options: { id?: string; from?: string } = {}): Buffer {
 
 class FakeImap extends EventEmitter {
     usable = true;
+    logoutFailure?: Error;
     mailbox = { uidValidity: 100n };
     flagFailures = 0;
     readonly flagCalls: number[][] = [];
@@ -338,6 +360,7 @@ class FakeImap extends EventEmitter {
         return { release: () => undefined };
     }
     async logout() {
+        if (this.logoutFailure) throw this.logoutFailure;
         this.disconnect();
     }
     close() {

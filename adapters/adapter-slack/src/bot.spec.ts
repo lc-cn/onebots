@@ -258,6 +258,32 @@ describe("SlackBot lifecycle", () => {
         expect(stopped).toHaveBeenCalledOnce();
     });
 
+    it("Socket 停止失败时仍通知 stopped 并向账号生命周期传播", async () => {
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            receive_mode: "socket",
+            app_token: "xapp-test",
+        });
+        const disconnect = vi.fn().mockRejectedValue(new Error("disconnect failed"));
+        const stopped = vi.fn();
+        const clientError = vi.fn();
+        bot.on("stopped", stopped);
+        bot.on("client_error", clientError);
+        (
+            bot as unknown as {
+                socketClient: { disconnect(): Promise<void> };
+            }
+        ).socketClient = { disconnect };
+
+        await expect(bot.stop()).rejects.toThrow("disconnect failed");
+        expect(disconnect).toHaveBeenCalledOnce();
+        expect(stopped).toHaveBeenCalledOnce();
+        expect(clientError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "SLACK_SOCKET_STOP_FAILED" }),
+        );
+    });
+
     it("启动失败抛出结构化错误而不是静默离线", async () => {
         const bot = new SlackBot({
             account_id: "A1",

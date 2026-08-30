@@ -37,6 +37,8 @@ zulip.team-bot:
 
 事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。事件只有在全部 canonical 监听器成功返回后才推进队列游标并写入本地去重窗口；监听器抛错会保留原游标，让 Event Queue 重投，不会静默丢失业务事件。
 
+停止会等待轮询退出并尝试删除服务端事件队列；任一步骤失败都会在本地代次清理完成后以结构化错误传播。
+
 已有 Event Queue、消息代理或测试连接可配置 `receive_mode: manual`。客户端仍会调用 `users/me` 验证 API 凭据并缓存 Bot 身份，但不会注册或轮询服务器队列；外部系统通过 `await account.client.ingest(rawEvent)` 进入相同的可靠类型化事件管线。
 
 ## 场景 ID

@@ -1,5 +1,8 @@
 import { EventEmitter } from "node:events";
 import { ImapFlow, type SearchObject } from "imapflow";
+import { FailureCollector } from "onebots";
+import type { EmailClientEvents, EmailClientOptions } from "./client-contract.js";
+export type { EmailClientEvents, EmailClientOptions } from "./client-contract.js";
 import { abortableSleep, emailNotFound, isAbortError, parseFetched } from "./client-utils.js";
 import { EmailError } from "./errors.js";
 import { deliverEmailEvent, EmailEventIngress } from "./event-ingress.js";
@@ -23,22 +26,6 @@ import type {
     EmailSendOptions,
     EmailSendResult,
 } from "./types.js";
-
-export interface EmailClientEvents {
-    ready: [];
-    stop: [];
-    connected: [];
-    disconnected: [error: EmailError];
-    email: [email: EmailMessage];
-    raw_email: [email: EmailMessage];
-    client_error: [error: EmailError];
-}
-
-export interface EmailClientOptions {
-    createSmtp?: () => EmailSmtpTransport;
-    createImap?: () => ImapFlow;
-    sleep?: (delayMs: number, signal: AbortSignal) => Promise<void>;
-}
 
 /** 可独立嵌入的 SMTP、IMAP IDLE 与邮件管理客户端。 */
 export class EmailClient extends EventEmitter<EmailClientEvents> {
@@ -129,6 +116,7 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     /** 停止轮询、重连、IMAP 和 SMTP；重复调用安全。 */
     async stop(): Promise<void> {
         if (!this.started && !this.startRequest) return;
+        const failures = new FailureCollector();
         this.started = false;
         this.lifecycleGeneration += 1;
         this.lifecycleAbort?.abort();
@@ -141,26 +129,42 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
             try {
                 await imap.logout();
             } catch (error) {
-                this.reportError(EmailError.wrap(error, "EMAIL_IMAP_LOGOUT_FAILED", "logout"));
+                const wrapped = EmailError.wrap(error, "EMAIL_IMAP_LOGOUT_FAILED", "logout");
+                failures.add(wrapped);
+                this.reportError(wrapped);
                 imap.close();
             }
         } else {
             imap?.close();
         }
-        this.smtp?.close();
+        await failures.capture(
+            () => {
+                try {
+                    this.smtp?.close();
+                } catch (error) {
+                    throw EmailError.wrap(error, "EMAIL_SMTP_STOP_FAILED", "stop");
+                }
+            },
+            error => this.reportError(EmailError.wrap(error, "EMAIL_SMTP_STOP_FAILED", "stop")),
+        );
         this.smtp = undefined;
         await this.startRequest?.catch(error => {
             if (!isAbortError(error)) {
-                this.reportError(EmailError.wrap(error, "EMAIL_START_STOP_FAILED", "stop"));
+                const wrapped = EmailError.wrap(error, "EMAIL_START_STOP_FAILED", "stop");
+                failures.add(wrapped);
+                this.reportError(wrapped);
             }
         });
         await this.reconnectRequest?.catch(error => {
             if (!isAbortError(error)) {
-                this.reportError(EmailError.wrap(error, "EMAIL_RECONNECT_STOP_FAILED", "stop"));
+                const wrapped = EmailError.wrap(error, "EMAIL_RECONNECT_STOP_FAILED", "stop");
+                failures.add(wrapped);
+                this.reportError(wrapped);
             }
         });
         this.reconnectRequest = undefined;
         this.safeEmit("stop");
+        failures.throwIfAny("邮件客户端停止失败");
     }
 
     /** 发送完整邮件并返回 SMTP 接收与拒绝结果。 */

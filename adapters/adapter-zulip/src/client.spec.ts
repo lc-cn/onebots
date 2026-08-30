@@ -50,6 +50,48 @@ describe("ZulipClient", () => {
         ).toBe(40_000);
     });
 
+    it("删除事件队列失败时仍完成本地停止并传播结构化错误", async () => {
+        const transport: ZulipTransport = request => {
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: "queue-1",
+                    last_event_id: -1,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                return new Promise((_, reject) =>
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        {
+                            once: true,
+                        },
+                    ),
+                );
+            }
+            if (request.path === "events" && request.method === "DELETE") {
+                return Promise.reject(new Error("delete failed"));
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(config, { transport });
+        const clientError = vi.fn();
+        const stopped = vi.fn();
+        client.on("client_error", clientError);
+        client.on("stop", stopped);
+
+        await client.start();
+        await expect(client.stop()).rejects.toMatchObject({ code: "ZULIP_QUEUE_DELETE_FAILED" });
+        expect(stopped).toHaveBeenCalledOnce();
+        expect((client as unknown as { started: boolean }).started).toBe(false);
+        expect(clientError).toHaveBeenCalledWith(
+            expect.objectContaining({ code: "ZULIP_QUEUE_DELETE_FAILED" }),
+        );
+    });
+
     it("队列被回收后无限恢复并创建新 generation", async () => {
         let registrations = 0;
         let eventCalls = 0;

@@ -166,6 +166,8 @@ await account.dispatchAwaited(event);
 
 `Account.start()` 会等待账号的异步启动监听器完成后再启动协议，启动错误直接向调用方传播。`Account.stop()` 即使遇到单个协议停止失败，也会继续停止其余协议和账号客户端，清理监听器后再汇总错误。
 
+需要执行多步关闭或回滚时可使用 `FailureCollector`：`capture()` 会保留错误并继续后续步骤，`throwIfAny()` 在清理完成后传播单个原始错误或多个错误的 `AggregateError`，避免底层记录日志后误报正常关闭。
+
 无法等待异步 handler 的 Gateway/EventEmitter 可使用 `OrderedEventDeliveryQueue` 把事件串行交给 `account.dispatchAwaited()`。队列会在当前事件完整成功前阻止后续事件越过，按封顶退避持续重试，并在停止时取消当前代次；它不会用硬上限静默丢弃已经被上游提交游标的事件。
 
 ## 开发

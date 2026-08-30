@@ -3,10 +3,43 @@ import { describe, expect, it, vi } from "vitest";
 import {
     emitAllAwaited,
     emitAwaited,
+    FailureCollector,
     KeyedSingleFlight,
     mapConcurrent,
     RefreshableValue,
 } from "./async-utils.js";
+
+describe("FailureCollector", () => {
+    it("尝试全部清理步骤并汇总多个失败", async () => {
+        const failures = new FailureCollector();
+        const completed = vi.fn();
+        await failures.capture(async () => {
+            throw new Error("first");
+        });
+        await failures.capture(completed);
+        await failures.capture(
+            async () => {
+                throw new Error("second");
+            },
+            () => {
+                throw new Error("reporter");
+            },
+        );
+
+        expect(completed).toHaveBeenCalledOnce();
+        expect(failures.size).toBe(3);
+        expect(() => failures.throwIfAny("cleanup failed")).toThrow(
+            expect.objectContaining({ errors: expect.arrayContaining([expect.any(Error)]) }),
+        );
+    });
+
+    it("单个失败保持原始错误身份", async () => {
+        const expected = new Error("only");
+        const failures = new FailureCollector();
+        await failures.capture(() => Promise.reject(expected));
+        expect(() => failures.throwIfAny("cleanup failed")).toThrow(expected);
+    });
+});
 
 describe("RefreshableValue", () => {
     it("合并并发加载并只失效调用方实际使用的代次", async () => {

@@ -5,7 +5,7 @@ import { Logger } from "log4js";
 import { ProtocolRegistry } from "./registry.js";
 import { Protocol } from "./protocol.js";
 import { CommonEvent } from "./types.js";
-import { emitAllAwaited } from "./async-utils.js";
+import { emitAllAwaited, FailureCollector } from "./async-utils.js";
 
 export class NotFoundError extends Error {
     message = "不支持的API";
@@ -115,24 +115,16 @@ export class Account<
     }
 
     async stop(force?: boolean): Promise<void> {
-        const failures: unknown[] = [];
+        const failures = new FailureCollector();
         for (const protocol of this.protocols) {
-            try {
-                await protocol.stop(force);
-            } catch (error) {
-                failures.push(error);
-            }
+            await failures.capture(() => protocol.stop(force));
         }
         try {
-            await emitAllAwaited(this, "stop");
-        } catch (error) {
-            failures.push(error);
+            await failures.capture(() => emitAllAwaited(this, "stop"));
         } finally {
             this.removeAllListeners();
         }
-        if (failures.length === 1) throw failures[0];
-        if (failures.length > 1)
-            throw new AggregateError(failures, `${failures.length} 个账号停止操作失败`);
+        failures.throwIfAny(`${failures.size} 个账号停止操作失败`);
     }
 
     getGroupList() {

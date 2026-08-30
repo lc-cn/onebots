@@ -6,7 +6,13 @@ import { EventEmitter } from "node:events";
 import { SocketModeClient } from "@slack/socket-mode";
 import type { WebClient } from "@slack/web-api";
 import type { Dispatcher } from "undici";
-import { emitAllAwaited, ReliableEventIngress, type Next, type RouterContext } from "onebots";
+import {
+    emitAllAwaited,
+    FailureCollector,
+    ReliableEventIngress,
+    type Next,
+    type RouterContext,
+} from "onebots";
 import { SlackError } from "./errors.js";
 import { slackEventIdentity } from "./event-identity.js";
 import { parseSlackHttpBody, parseSlackInbound, verifySlackSignature } from "./inbound.js";
@@ -76,6 +82,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
      * 停止 Bot
      */
     async stop(): Promise<void> {
+        const failures = new FailureCollector();
         const wasActive = this.running || Boolean(this.startPromise || this.socketClient);
         this.generation += 1;
         this.running = false;
@@ -83,16 +90,17 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
         const socket = this.socketClient;
         this.socketClient = undefined;
         if (socket) {
-            try {
-                await socket.disconnect();
-            } catch (error) {
-                this.emit(
-                    "client_error",
-                    SlackError.wrap(error, "socket.disconnect", "SLACK_SOCKET_STOP_FAILED"),
-                );
-            }
+            await failures.capture(
+                () => socket.disconnect(),
+                error =>
+                    this.emit(
+                        "client_error",
+                        SlackError.wrap(error, "socket.disconnect", "SLACK_SOCKET_STOP_FAILED"),
+                    ),
+            );
         }
-        if (wasActive) await emitAllAwaited(this, "stopped");
+        if (wasActive) await failures.capture(() => emitAllAwaited(this, "stopped"));
+        failures.throwIfAny("Slack Bot 停止失败");
     }
 
     private async startInternal(generation: number): Promise<void> {

@@ -376,6 +376,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
                 await bot.stop();
             } catch (error) {
                 this.logger.error(`[${this.platform}] ${config.account_id} 停止失败:`, error);
+                throw error;
             } finally {
                 account.status = AccountStatus.OffLine;
             }

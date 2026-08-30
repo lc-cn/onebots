@@ -2,7 +2,8 @@ import { AdapterRegistry, type Schema } from "onebots";
 
 export { EmailAdapter } from "./adapter.js";
 export { emailCapabilities } from "./capabilities.js";
-export { EmailClient, type EmailClientEvents, type EmailClientOptions } from "./client.js";
+export { EmailClient } from "./client.js";
+export type { EmailClientEvents, EmailClientOptions } from "./client-contract.js";
 export { EmailError, type EmailErrorOptions } from "./errors.js";
 export { parseEmailSource, projectEmailEvent, type EmailProjectionContext } from "./events.js";
 export { compileEmailMessage, createEmailSendOptions, type CompiledEmail } from "./messages.js";

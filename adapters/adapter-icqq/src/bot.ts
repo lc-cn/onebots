@@ -7,6 +7,7 @@ import { createClient, Client, segment as Segment } from "@icqqjs/icqq";
 import type { FriendInfo, GroupInfo, MemberInfo } from "@icqqjs/icqq/lib/entities";
 import type { Sendable, PrivateMessage, GroupMessage } from "@icqqjs/icqq/lib/message";
 import type { MessageRet } from "@icqqjs/icqq/lib/events";
+import { FailureCollector } from "onebots";
 import type { ICQQConfig, ICQQUser, ICQQFriend, ICQQGroup, ICQQGroupMember } from "./types.js";
 import { detachICQQClientListeners, wireICQQClientEvents } from "./client-events.js";
 import { buildICQQClientConfig, parseICQQUin } from "./client-config.js";
@@ -131,22 +132,23 @@ export class ICQQBot extends EventEmitter<ICQQBotEvents> {
      * 停止 Bot
      */
     async stop(): Promise<void> {
+        const failures = new FailureCollector();
         this.desiredRunning = false;
         this.lifecycleGeneration += 1;
         const client = this.client;
         this.client = null;
         if (client) {
-            try {
-                await Promise.resolve(client.logout());
-            } catch (error) {
-                this.safeEmit("stop_error", ICQQError.wrap(error, "ICQQ_STOP_FAILED", "stop"));
-            } finally {
-                detachICQQClientListeners(client);
-            }
+            await failures.capture(
+                () => Promise.resolve(client.logout()),
+                error =>
+                    this.safeEmit("stop_error", ICQQError.wrap(error, "ICQQ_STOP_FAILED", "stop")),
+            );
+            detachICQQClientListeners(client);
         }
         this.ready = false;
         this.loginInfo = null;
         this.safeEmit("stop");
+        failures.throwIfAny("ICQQ Bot 停止失败");
     }
 
     private isCurrentGeneration(generation: number): boolean {

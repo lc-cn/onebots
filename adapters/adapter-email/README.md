@@ -9,6 +9,7 @@ OneBots 邮件适配器。通过 SMTP 发送邮件，通过 IMAP IDLE 实时接�
 - 纯文本、HTML、内联图片、普通附件、CC/BCC、Reply-To 与 RFC Message-ID 线程
 - 逐封隔离无法解析的邮件，正常邮件不会被同批毒邮件阻塞
 - 投影去重与 `\\Seen` 确认分离：业务投递失败保留未读并重投，标记失败只重试确认
+- 停止会完整尝试 IMAP、SMTP、启动与重连任务清理；非预期失败在本地清理完成后结构化传播
 - 可等待的 `EmailClient.ingest()` 把外部邮件交给同一可靠事件管线
 - 结构化 `EmailError` 与白名单式 SMTP/IMAP 平台动作
 

@@ -85,7 +85,7 @@ describe("ICQQBot 生命周期", () => {
         expect(loginError).not.toHaveBeenCalled();
     });
 
-    it("登出失败仍清理客户端并报告错误", async () => {
+    it("登出失败仍完成清理、报告结构化错误并向上游传播", async () => {
         const client = new FakeClient();
         client.logout.mockRejectedValue(new Error("logout failed"));
         const bot = new ICQQBot({ account_id: "123456" }, { createClient: factoryFor(client) });
@@ -93,7 +93,7 @@ describe("ICQQBot 生命周期", () => {
         bot.on("stop_error", stopError);
 
         await bot.start();
-        await expect(bot.stop()).resolves.toBeUndefined();
+        await expect(bot.stop()).rejects.toThrow("logout failed");
         expect(bot.getClient()).toBeNull();
         expect(stopError).toHaveBeenCalledWith(
             expect.objectContaining({ code: "ICQQ_STOP_FAILED", operation: "stop" }),
