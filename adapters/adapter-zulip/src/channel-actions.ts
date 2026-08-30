@@ -9,6 +9,7 @@ import {
     without,
 } from "./action-params.js";
 import type { ZulipClient } from "./client.js";
+import { ZulipError } from "./errors.js";
 
 const LIST_FIELDS = [
     "include_public",
@@ -20,6 +21,15 @@ const LIST_FIELDS = [
     "include_owner_subscribed",
     "include_can_access_content",
 ] as const;
+const BOOLEAN_SUBSCRIPTION_PROPERTIES = new Set([
+    "is_muted",
+    "pin_to_top",
+    "desktop_notifications",
+    "audible_notifications",
+    "push_notifications",
+    "email_notifications",
+    "wildcard_mentions_notify",
+]);
 
 export const ZULIP_CHANNEL_ADMIN_ACTIONS: ReadonlySet<string> = new Set([
     "create_zulip_channel",
@@ -77,6 +87,24 @@ export const ZULIP_CHANNEL_ACTION_HANDLERS = {
         if (query.sender_id !== undefined) requireInteger(query.sender_id, "sender_id");
         return client.call(`streams/${streamId}/email_address`, "GET", query);
     },
+    update_channel_subscription_settings: (client, params) => {
+        const input = exactParams(params, ["subscription_data"], ["subscription_data"]);
+        validateSubscriptionData(input.subscription_data);
+        return client.call("users/me/subscriptions/properties", "POST", input);
+    },
+    update_channel_subscription_property: (client, params) => {
+        const input = exactParams(
+            params,
+            ["stream_id", "property", "value"],
+            ["stream_id", "property", "value"],
+        );
+        const streamId = requireInteger(input.stream_id, "stream_id");
+        validateSubscriptionProperty(input.property, input.value);
+        return client.call(`users/me/subscriptions/${streamId}`, "PATCH", {
+            property: input.property,
+            value: input.value,
+        });
+    },
     delete_channel_topic: (client, params) => {
         const input = exactParams(params, ["stream_id", "topic_name"], ["stream_id", "topic_name"]);
         const streamId = requireInteger(input.stream_id, "stream_id");
@@ -105,4 +133,51 @@ export const ZULIP_CHANNEL_ACTION_HANDLERS = {
 function onlyStreamId(params: Readonly<Record<string, unknown>>): number {
     const input = exactParams(params, ["stream_id"], ["stream_id"]);
     return requireInteger(input.stream_id, "stream_id");
+}
+
+function validateSubscriptionData(value: unknown): void {
+    if (!Array.isArray(value) || !value.length) {
+        throwInvalid("Zulip 参数 subscription_data 必须是非空数组");
+    }
+    for (const [index, item] of value.entries()) {
+        if (!isRecord(item)) {
+            throwInvalid(`Zulip subscription_data[${index}] 必须是对象`);
+        }
+        if (
+            Object.keys(item).some(
+                key => key !== "stream_id" && key !== "property" && key !== "value",
+            )
+        ) {
+            throwInvalid(`Zulip subscription_data[${index}] 包含未知字段`);
+        }
+        requireInteger(item.stream_id, `subscription_data[${index}].stream_id`);
+        validateSubscriptionProperty(item.property, item.value, `subscription_data[${index}]`);
+    }
+}
+
+function validateSubscriptionProperty(
+    value: unknown,
+    setting: unknown,
+    name = "subscription",
+): void {
+    const property = requireString(value, `${name}.property`);
+    if (property === "color") {
+        const color = requireString(setting, `${name}.value`);
+        if (!/^#[0-9a-f]{6}$/i.test(color)) {
+            throwInvalid(`Zulip ${name}.value 必须是 6 位十六进制颜色`);
+        }
+        return;
+    }
+    if (!BOOLEAN_SUBSCRIPTION_PROPERTIES.has(property)) {
+        throwInvalid(`Zulip ${name}.property 不是现代订阅属性`);
+    }
+    requireBoolean(setting, `${name}.value`);
+}
+
+function throwInvalid(message: string): never {
+    throw new ZulipError(message, { code: "ZULIP_INVALID_ACTION_PARAM" });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }

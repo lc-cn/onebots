@@ -88,6 +88,32 @@ describe("Zulip 频道资源动作", () => {
         });
     });
 
+    it("批量与单频道更新现代订阅属性", async () => {
+        const client = new ZulipClient(config, { transport: async () => ({}) });
+        const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
+        const subscriptionData = [
+            { stream_id: 7, property: "is_muted", value: true },
+            { stream_id: 9, property: "color", value: "#a1B2c3" },
+        ];
+
+        await executeZulipPlatformAction(client, "update_channel_subscription_settings", {
+            subscription_data: subscriptionData,
+        });
+        await executeZulipPlatformAction(client, "update_channel_subscription_property", {
+            stream_id: 7,
+            property: "wildcard_mentions_notify",
+            value: false,
+        });
+
+        expect(call).toHaveBeenNthCalledWith(1, "users/me/subscriptions/properties", "POST", {
+            subscription_data: subscriptionData,
+        });
+        expect(call).toHaveBeenNthCalledWith(2, "users/me/subscriptions/7", "PATCH", {
+            property: "wildcard_mentions_notify",
+            value: false,
+        });
+    });
+
     it.each([
         ["get_channel_id", { stream: "" }],
         ["get_channel_topics", { stream_id: 7, allow_empty_topic_name: "true" }],
@@ -97,6 +123,12 @@ describe("Zulip 频道资源动作", () => {
         ["get_zulip_channel", { stream_id: 7, extra: true }],
         ["get_channel_email_address", { stream_id: 7, sender_id: -1 }],
         ["delete_channel_topic", { stream_id: 7 }],
+        ["update_channel_subscription_settings", { subscription_data: [] }],
+        [
+            "update_channel_subscription_settings",
+            { subscription_data: [{ stream_id: 7, property: "in_home_view", value: true }] },
+        ],
+        ["update_channel_subscription_property", { stream_id: 7, property: "color", value: "red" }],
     ])("%s 在请求前拒绝无效参数", async (action, params) => {
         const client = new ZulipClient(config, { transport: async () => ({}) });
         const call = vi.spyOn(client, "call");
