@@ -180,12 +180,22 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
             this.awaitingPong = false;
             return;
         }
+        let event: HeychatWsEnvelope;
         try {
-            this.emit("event", decodeHeychatEnvelope(raw));
+            event = decodeHeychatEnvelope(raw);
         } catch (error) {
             this.emit(
                 "error",
                 HeychatApiError.wrap(error, "HEYCHAT_INVALID_WS_EVENT", ErrorCategory.PROTOCOL),
+            );
+            return;
+        }
+        try {
+            this.emit("event", event);
+        } catch (error) {
+            this.emit(
+                "error",
+                HeychatApiError.wrap(error, "HEYCHAT_EVENT_DELIVERY_FAILED", ErrorCategory.ADAPTER),
             );
         }
     }

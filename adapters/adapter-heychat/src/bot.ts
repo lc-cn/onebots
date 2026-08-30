@@ -1,9 +1,11 @@
 import { EventEmitter } from "node:events";
+import { setTimeout as delay } from "node:timers/promises";
 import type WebSocket from "ws";
 import { assertHeychatConfig, resolveHeychatReceiveMode } from "./config.js";
 import { HeychatApiError } from "./errors.js";
 import { HeychatHttpClient } from "./http/client.js";
 import {
+    decodeHeychatEnvelope,
     HeychatEventIngress,
     isHeychatControlPayload,
     type HeychatIngestResult,
@@ -40,6 +42,9 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     private ws: HeychatWsClient | null = null;
     private readonly ingress = new HeychatEventIngress();
     private detachAcceptedSocket: (() => void) | null = null;
+    private deliveryAbort: AbortController | null = null;
+    private deliveryGeneration = 0;
+    private socketDeliveryTail: Promise<void> = Promise.resolve();
     private botId: number | null = null;
     private running = false;
     private readonly channelContexts = new Map<string, HeychatChannelContext>();
@@ -54,6 +59,8 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     async start(): Promise<void> {
         if (this.running) return;
         this.running = true;
+        this.deliveryAbort = new AbortController();
+        this.deliveryGeneration += 1;
         if (resolveHeychatReceiveMode(this.config) === "manual") {
             this.ingress.reset();
             this.emit("ready");
@@ -69,10 +76,13 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
             ws.on("disconnected", details => this.emit("disconnected", details));
             ws.on("reconnecting", details => this.emit("reconnecting", details));
             ws.on("error", error => this.emit("error", error));
-            ws.on("event", envelope => this.ingest(envelope));
+            ws.on("event", envelope => this.enqueueSocketEvent(envelope));
             await ws.connect();
         } catch (error) {
             this.running = false;
+            this.deliveryGeneration += 1;
+            this.deliveryAbort?.abort(new DOMException("HeyChat 启动失败", "AbortError"));
+            this.deliveryAbort = null;
             this.ws = null;
             throw error;
         }
@@ -81,6 +91,9 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     async stop(): Promise<void> {
         if (!this.running) return;
         this.running = false;
+        this.deliveryGeneration += 1;
+        this.deliveryAbort?.abort(new DOMException("HeyChat 已停止", "AbortError"));
+        this.deliveryAbort = null;
         this.detachAcceptedSocket?.();
         this.detachAcceptedSocket = null;
         this.ws?.close();
@@ -95,13 +108,17 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     }
 
     /** 将宿主收到的结构化事件或 WS 文本帧交给统一事件管线。 */
-    ingest(rawEvent: unknown): HeychatIngestResult {
-        const result = this.ingress.ingest(rawEvent);
-        if (!result.duplicate) {
-            this.observeEnvelope(result.event);
-            this.emit("event", result.event);
-        }
-        return result;
+    ingest(rawEvent: unknown): Promise<HeychatIngestResult> {
+        return this.ingress.ingest(rawEvent, async event => {
+            this.observeEnvelope(event);
+            for (const listener of this.rawListeners("event")) {
+                try {
+                    await Reflect.apply(listener, this, [event]);
+                } catch (error) {
+                    throw HeychatApiError.wrap(error, "HEYCHAT_EVENT_DELIVERY_FAILED");
+                }
+            }
+        });
     }
 
     /**
@@ -119,7 +136,7 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
         const onMessage = (data: WebSocket.RawData): void => {
             if (isHeychatControlPayload(data)) return;
             try {
-                this.ingest(data);
+                this.enqueueSocketEvent(decodeHeychatEnvelope(data));
             } catch (error) {
                 const wrapped = HeychatApiError.wrap(error, "HEYCHAT_INVALID_WS_EVENT");
                 socket.close(
@@ -138,6 +155,37 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
             detach();
             if (this.detachAcceptedSocket === detach) this.detachAcceptedSocket = null;
         };
+    }
+
+    /** Socket 没有业务 ACK，故本地按序保留事件并以有界退避重试到成功或账号停止。 */
+    private enqueueSocketEvent(rawEvent: HeychatWsEnvelope): void {
+        const generation = this.deliveryGeneration;
+        const signal = this.deliveryAbort?.signal;
+        const delivery = this.socketDeliveryTail.then(async () => {
+            let retryDelay = this.config.reconnect_initial_delay_ms ?? 1_000;
+            const retryMax = Math.max(retryDelay, this.config.reconnect_max_delay_ms ?? 30_000);
+            while (this.running && generation === this.deliveryGeneration && !signal?.aborted) {
+                try {
+                    await this.ingest(rawEvent);
+                    return;
+                } catch (error) {
+                    const wrapped = HeychatApiError.wrap(error, "HEYCHAT_EVENT_DELIVERY_FAILED");
+                    this.emit("error", wrapped);
+                    try {
+                        await delay(retryDelay, undefined, { signal });
+                    } catch (delayError) {
+                        if (signal?.aborted) return;
+                        throw delayError;
+                    }
+                    retryDelay = Math.min(retryDelay * 2, retryMax);
+                }
+            }
+        });
+        this.socketDeliveryTail = delivery.catch(error => {
+            if (!signal?.aborted) {
+                this.emit("error", HeychatApiError.wrap(error, "HEYCHAT_EVENT_DELIVERY_FAILED"));
+            }
+        });
     }
 
     getBotId(): number | null {

@@ -32,18 +32,14 @@ export function createHeychatAccount(
         account.status = AccountStatus.OffLine;
     });
     bot.on("event", (envelope: HeychatWsEnvelope) => {
-        try {
-            account.dispatch(
-                projectHeychatEvent(envelope, {
-                    accountId: config.account_id,
-                    botId: bot.getBotId(),
-                    createId: value => adapter.createId(value),
-                    getChannelContext: channelId => bot.getChannelContext(channelId),
-                }),
-            );
-        } catch (error) {
-            adapter.logger.error(`投影黑盒语音事件 type=${envelope.type} 失败:`, error);
-        }
+        account.dispatch(
+            projectHeychatEvent(envelope, {
+                accountId: config.account_id,
+                botId: bot.getBotId(),
+                createId: value => adapter.createId(value),
+                getChannelContext: channelId => bot.getChannelContext(channelId),
+            }),
+        );
     });
     account.on("start", async () => {
         account.status = AccountStatus.Pending;

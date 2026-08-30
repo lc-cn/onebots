@@ -1,4 +1,4 @@
-import { ErrorCategory } from "onebots";
+import { ErrorCategory, RecentEventDeduplicator } from "onebots";
 import { HeychatApiError } from "./errors.js";
 import type { HeychatWsEnvelope } from "./types.js";
 
@@ -9,21 +9,37 @@ export interface HeychatIngestResult {
     duplicate: boolean;
 }
 
+export type HeychatEventConsumer = (event: HeychatWsEnvelope) => void | Promise<void>;
+
 /**
- * 连接无关的 Heychat 事件入口。每次连接代次应调用 reset()，因为官方 sequence 不跨连接续传。
+ * 连接无关的 Heychat 事件入口。
+ *
+ * 解码、串行投递与成功确认由同一模块闭合：官方 sequence 只在当前连接代次内稳定，
+ * 因此 reset() 开启新的键空间；消费失败不会确认，后续重投仍可恢复。
  */
 export class HeychatEventIngress {
-    private lastSequence: number | null = null;
+    private generation = 0;
+    private readonly receivedEvents = new RecentEventDeduplicator<string>();
+    private deliveryTail: Promise<void> = Promise.resolve();
 
     reset(): void {
-        this.lastSequence = null;
+        this.generation += 1;
     }
 
-    ingest(rawEvent: unknown): HeychatIngestResult {
+    async ingest(rawEvent: unknown, consume: HeychatEventConsumer): Promise<HeychatIngestResult> {
         const event = decodeHeychatEnvelope(rawEvent);
-        const duplicate = this.lastSequence !== null && event.sequence <= this.lastSequence;
-        if (!duplicate) this.lastSequence = event.sequence;
-        return { event, duplicate };
+        const eventKey = `${this.generation}:${event.sequence}`;
+        const delivery = this.deliveryTail.then(async () => {
+            if (this.receivedEvents.has(eventKey)) return { event, duplicate: true };
+            await consume(event);
+            this.receivedEvents.commit(eventKey);
+            return { event, duplicate: false };
+        });
+        this.deliveryTail = delivery.then(
+            () => undefined,
+            () => undefined,
+        );
+        return await delivery;
     }
 }
 

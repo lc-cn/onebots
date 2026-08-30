@@ -12,6 +12,7 @@ export {
     HeychatEventIngress,
     isHeychatEnvelope,
     isHeychatControlPayload,
+    type HeychatEventConsumer,
     type HeychatIngestResult,
 } from "./ingress.js";
 export { heychatCapabilities } from "./capabilities.js";
