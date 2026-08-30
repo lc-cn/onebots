@@ -126,7 +126,9 @@ export function requireString(
 
 export function optionalString(params: WechatActionParams, name: string): string | undefined {
     const value = params[name];
-    return typeof value === "string" && value ? value : undefined;
+    if (value === undefined) return undefined;
+    if (typeof value !== "string" || !value) invalid(`${name} 必须是非空字符串`);
+    return value;
 }
 
 export function requireNumber(params: WechatActionParams, name: string): number {
@@ -149,12 +151,17 @@ export function requireInteger(
 }
 
 export function optionalBoolean(params: WechatActionParams, name: string): boolean | undefined {
-    return typeof params[name] === "boolean" ? params[name] : undefined;
+    const value = params[name];
+    if (value === undefined) return undefined;
+    if (typeof value !== "boolean") invalid(`${name} 必须是布尔值`);
+    return value;
 }
 
 export function optionalNumber(params: WechatActionParams, name: string): number | undefined {
     const value = params[name];
-    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isFinite(value)) invalid(`${name} 必须是数字`);
+    return value;
 }
 
 export function optionalInteger(

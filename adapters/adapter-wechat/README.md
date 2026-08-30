@@ -55,8 +55,9 @@ await adapter.sendMessage("my_mp", {
 - 用户、标签、黑名单与备注；
 - 临时/永久素材、草稿、发布文章与留言生命周期；
 - 普通/个性化菜单、二维码；
-- 模板消息、客服输入状态与群发；
-- API 配额查询/清理、RID 请求诊断、API 域名与回调 IP 查询。
+- 模板消息、订阅通知、客服输入状态与群发；
+- 网页授权、缓存 JS-SDK ticket 与签名配置生成；
+- API 配额查询/清理、RID 请求诊断、API 域名、回调 IP 与回调连通性检查。
 - 多客服账号、头像、在线状态、绑定邀请、客服会话和消息记录。
 
 登录信息与事件 `bot_id` 统一使用公众号实际 `app_id`，`account_id` 只作为 OneBots 内部配置键，不再暴露成平台身份。多客服接口依赖公众号已开通对应客服能力；不可用时微信的结构化错误会原样返回。
@@ -75,7 +76,11 @@ await adapter.callAction("my_mp", "wechat_call", {
 });
 ```
 
-所有命名动作只接受文档约定的顶层参数，拼错或过期字段会返回 `WECHAT_ACTION_PARAM_UNKNOWN`；复杂的菜单、草稿和群发 payload 仍在对应对象参数中无损传递。微信新增字段尚未进入命名动作时，应通过 `wechat_call` 显式调用，避免配置错误被静默吞掉。
+所有命名动作只接受文档约定的顶层参数并校验可选标量的类型，拼错、过期字段或错误类型不会静默降级为缺省值；复杂的菜单、草稿和群发 payload 仍在对应对象参数中无损传递。微信新增字段尚未进入命名动作时，应通过 `wechat_call` 显式调用，避免配置错误被静默吞掉。
+
+网页授权动作将公众号全局 access token 与 OAuth access token 明确分开：`build_oauth_url` 生成授权地址，`exchange_oauth_code`、`refresh_oauth_access_token`、`get_oauth_user_info` 和 `check_oauth_access_token` 负责授权生命周期。OAuth token 仅通过 `oauth_access_token` 参数传入，不会写入公众号全局 token 缓存。
+
+`get_jsapi_ticket` 复用 Client 内的并发安全缓存；`sign_jsapi_config` 会移除页面 URL 的 fragment，并返回可直接传给 JS-SDK 配置的 AppID、时间戳、随机串和 SHA-1 签名。调用方无需接触 ticket 的拼接规则。
 
 路径必须以 `/` 开头，查询参数必须通过 `query` 提供；适配器拒绝绝对 URL、路径穿越、内嵌 query/fragment。access token 使用微信稳定版 `/cgi-bin/stable_token`，普通刷新不会使其他进程正在使用的凭据失效；平台报告凭据失效时才执行一次强制刷新和重试，迟到的旧请求不会清空已经刷新的 token。
 

@@ -6,6 +6,7 @@ import { WECHAT_AUDIENCE_ACTIONS } from "./platform-actions-audience.js";
 import { WECHAT_CONTENT_ACTIONS } from "./platform-actions-content.js";
 import { WECHAT_CUSTOMER_SERVICE_ACTIONS } from "./platform-actions-customer-service.js";
 import { WECHAT_MESSAGING_ACTIONS } from "./platform-actions-messaging.js";
+import { WECHAT_WEB_ACTIONS } from "./platform-actions-web.js";
 
 const PLATFORM_ACTIONS = definePlatformActions(
     {
@@ -13,6 +14,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         ...WECHAT_AUDIENCE_ACTIONS,
         ...WECHAT_CONTENT_ACTIONS,
         ...WECHAT_CUSTOMER_SERVICE_ACTIONS,
+        ...WECHAT_WEB_ACTIONS,
     },
     action =>
         new WechatApiError(`未知微信公众号平台动作: ${action}`, {

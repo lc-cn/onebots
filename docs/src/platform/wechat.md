@@ -30,8 +30,9 @@ wechat.my_mp:
 - 接收文本、图片、语音、视频、短视频、位置、链接以及所有事件通知。
 - 发送文本、媒体、图文和原生 `wechat_message`；媒体须先取得 `media_id`。
 - `reply` 段可在 Webhook 窗口内提交被动回复，超时后发送客服消息。
-- 用户、标签、黑名单、素材、草稿、发布、菜单、二维码、模板和群发均有原生动作。
-- 稳定版 access token 避免普通刷新使其他进程的凭据失效；配额、RID、API 域名和回调 IP 均有诊断动作。
+- 用户、标签、黑名单、素材、草稿、发布、菜单、二维码、模板、订阅通知和群发均有原生动作。
+- 网页授权动作闭合授权地址、code 换取/刷新 OAuth token、用户资料与 token 校验，并与公众号全局 access token 隔离。
+- 稳定版 access token 避免普通刷新使其他进程的凭据失效；JS-SDK ticket 使用独立缓存，并可生成已移除 URL fragment 的签名配置；配额、RID、API 域名、回调 IP 与回调连通性均有诊断动作。
 - Webhook 与 manual 接入共享 Client 内的异步确认、并发合并与去重状态。
 - 未命名的新接口可通过 `wechat_call` 调用，且仍使用统一 token 缓存与结构化错误。
 - 标准 `get_user_info` 接收 canonical `user_id`；需指定微信原生语言时使用 `get_wechat_user_info(openid, lang?)`，不会与标准动作重名。

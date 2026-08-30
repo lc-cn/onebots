@@ -26,6 +26,10 @@ export const WECHAT_MESSAGING_ACTIONS = defineWechatActionContract(
             ),
         send_template_message: async (client: WechatClient, params: WechatActionParams) =>
             client.sendTemplate(requireTemplate(params, "message")),
+        send_subscription_notification: postRecordAction(
+            "/cgi-bin/message/subscribe/bizsend",
+            "message",
+        ),
         send_typing: async (client: WechatClient, params: WechatActionParams) =>
             client.sendTyping(
                 requireString(params, "openid"),
@@ -98,11 +102,26 @@ export const WECHAT_MESSAGING_ACTIONS = defineWechatActionContract(
             }),
         get_api_domain_ips: staticCall("/cgi-bin/get_api_domain_ip"),
         get_callback_ips: staticCall("/cgi-bin/getcallbackip"),
+        check_callback_connectivity: async (client: WechatClient, params: WechatActionParams) => {
+            const action = requireString(params, "action");
+            const operator = requireString(params, "operator");
+            if (!["dns", "ping", "all"].includes(action)) {
+                invalid("action 必须是 dns、ping 或 all");
+            }
+            if (!["CHINANET", "UNICOM", "CAP", "DEFAULT"].includes(operator)) {
+                invalid("operator 必须是 CHINANET、UNICOM、CAP 或 DEFAULT");
+            }
+            return post(client, "/cgi-bin/callback/check", {
+                action,
+                check_operator: operator,
+            });
+        },
     } satisfies Readonly<Record<string, WechatActionHandler>>,
     {
         wechat_call: ["method", "path", "query", "body", "token", "response_type"],
         send_custom_message: ["openid", "message"],
         send_template_message: ["message"],
+        send_subscription_notification: ["message"],
         send_typing: ["openid", "typing"],
         get_access_token: ["force"],
         create_menu: ["menu"],
@@ -131,5 +150,6 @@ export const WECHAT_MESSAGING_ACTIONS = defineWechatActionContract(
         clear_api_quota_by_app_secret: [],
         get_api_domain_ips: [],
         get_callback_ips: [],
+        check_callback_connectivity: ["action", "operator"],
     },
 );

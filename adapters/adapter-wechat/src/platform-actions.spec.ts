@@ -27,7 +27,7 @@ describe("微信公众号平台动作", () => {
             body: { value: 1 },
         });
         expect(call).toHaveBeenCalledWith(expect.objectContaining({ path: "/cgi-bin/new/action" }));
-        expect(WECHAT_PLATFORM_ACTIONS.size).toBe(88);
+        expect(WECHAT_PLATFORM_ACTIONS.size).toBe(97);
         expect(WECHAT_PLATFORM_ACTIONS.has("publish_draft")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("mass_send_by_tag")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("get_wechat_user_info")).toBe(true);
@@ -36,6 +36,31 @@ describe("微信公众号平台动作", () => {
         expect(WECHAT_PLATFORM_ACTIONS.has("get_api_quota")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("get_api_request_details")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("clear_api_quota_by_app_secret")).toBe(true);
+        expect(WECHAT_PLATFORM_ACTIONS.has("send_subscription_notification")).toBe(true);
+        expect(WECHAT_PLATFORM_ACTIONS.has("build_oauth_url")).toBe(true);
+    });
+
+    it("提供订阅通知与回调连通性诊断", async () => {
+        const call = vi.fn().mockResolvedValue({ errcode: 0 });
+        const client = { call } as unknown as WechatClient;
+        await executeWechatPlatformAction(client, "send_subscription_notification", {
+            message: { touser: "user", template_id: "template", data: {} },
+        });
+        expect(call).toHaveBeenLastCalledWith({
+            method: "POST",
+            path: "/cgi-bin/message/subscribe/bizsend",
+            body: { touser: "user", template_id: "template", data: {} },
+        });
+
+        await executeWechatPlatformAction(client, "check_callback_connectivity", {
+            action: "all",
+            operator: "DEFAULT",
+        });
+        expect(call).toHaveBeenLastCalledWith({
+            method: "POST",
+            path: "/cgi-bin/callback/check",
+            body: { action: "all", check_operator: "DEFAULT" },
+        });
     });
 
     it("命名动作拒绝静默忽略未知参数，低层调用仍可显式扩展", async () => {
@@ -52,6 +77,19 @@ describe("微信公众号平台动作", () => {
             body: { future_field: true },
         });
         expect(call).toHaveBeenCalledOnce();
+    });
+
+    it("命名动作不会把错误的可选参数类型降级为缺省值", async () => {
+        const client = { call: vi.fn() } as unknown as WechatClient;
+        await expect(
+            executeWechatPlatformAction(client, "get_access_token", { force: "true" }),
+        ).rejects.toMatchObject({ code: "WECHAT_INVALID_PARAMETER" });
+        await expect(
+            executeWechatPlatformAction(client, "get_wechat_user_info", {
+                openid: "user",
+                lang: false,
+            }),
+        ).rejects.toMatchObject({ code: "WECHAT_INVALID_PARAMETER" });
     });
 
     it("跨领域分派素材动作并保留未知动作错误", async () => {

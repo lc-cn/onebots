@@ -1,46 +1,30 @@
-# WeChat Adapter Configuration
-
-WeChat Official Account adapter configuration guide.
-
-## Configuration Format
+# WeChat Official Account Configuration
 
 ```yaml
-wechat.{account_id}:
-  # WeChat platform configuration
-  app_id: 'your_app_id'           # Required: Official Account AppID
-  app_secret: 'your_app_secret'   # Required: Official Account AppSecret
-  token: 'your_token'              # Required: Server configuration Token
-  encoding_aes_key: 'your_key'    # Optional: Message encryption/decryption key
-  
-  # Protocol configuration
-  onebot.v11:
-    access_token: 'your_v11_token'
-  onebot.v12:
-    access_token: 'your_v12_token'
+wechat.my_mp:
+  app_id: wx1234567890abcdef
+  app_secret: your_app_secret
+  receive_mode: webhook
+  token: your_webhook_token
+  encoding_aes_key: your_43_character_key
+  webhook_path: /wechat/my_mp/webhook
+  passive_reply_timeout_ms: 4500
+  deduplicate_webhooks: true
+  webhook_deduplication_limit: 10000
+  api_base_url: https://api.weixin.qq.com
 ```
 
-## Configuration Fields
+| Field | Required | Default | Description |
+| --- | --- | --- | --- |
+| `app_id` | Yes | - | Official Account AppID and encrypted-message recipient identity |
+| `app_secret` | Yes | - | Sensitive credential used to obtain the global access token |
+| `receive_mode` | No | `webhook` | `webhook` registers the shared Host route; `manual` only accepts `ingest()` |
+| `token` | Webhook mode | - | SHA-1 webhook signature token |
+| `encoding_aes_key` | Safe/compatible mode | - | 43-character message encryption key |
+| `webhook_path` | No | `/wechat/{account_id}/webhook` | Callback path on the shared HTTP Host |
+| `passive_reply_timeout_ms` | No | `4500` | Passive-reply wait, at most 4500 ms; `0` acknowledges immediately |
+| `deduplicate_webhooks` | No | `true` | Filters WeChat retry deliveries |
+| `webhook_deduplication_limit` | No | `10000` | In-process recent event-ID capacity |
+| `api_base_url` | No | `https://api.weixin.qq.com` | HTTPS-compatible official API proxy or test endpoint |
 
-| Field | Type | Required | Description | Default |
-|-------|------|----------|-------------|---------|
-| `app_id` | string | Yes | Official Account AppID | - |
-| `app_secret` | string | Yes | Official Account AppSecret | - |
-| `token` | string | Yes | Server configuration Token | - |
-| `encoding_aes_key` | string | No | Message encryption/decryption key (required for safe mode) | - |
-
-## Getting Configuration Information
-
-1. Log in to [WeChat Public Platform](https://mp.weixin.qq.com/)
-2. In "Development" - "Basic Configuration", get:
-   - **AppID**
-   - **AppSecret** (requires admin permission)
-3. In "Development" - "Basic Configuration" - "Server Configuration", set:
-   - **URL**: `http://your-domain:6727/wechat/{account_id}/webhook`
-   - **Token**: Custom token (must match configuration file)
-   - **EncodingAESKey**: Randomly generated or custom (required for safe mode)
-
-## Related Links
-
-- [WeChat Platform](/en/platform/wechat)
-- [Quick Start](/en/guide/start)
-
+All field names use snake_case. Historical camelCase aliases and account-type feature switches are intentionally unsupported; actual endpoint availability is determined by the Official Account's type, verification, and granted permissions.

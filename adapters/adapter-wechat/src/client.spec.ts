@@ -95,6 +95,19 @@ describe("WechatClient", () => {
         });
     });
 
+    it("缓存 JS-SDK ticket 并允许显式强制刷新", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(json({ access_token: "token", expires_in: 7200 }))
+            .mockResolvedValueOnce(json({ ticket: "ticket-1", expires_in: 7200 }))
+            .mockResolvedValueOnce(json({ ticket: "ticket-2", expires_in: 7200 }));
+        const client = new WechatClient(config, fetcher);
+        await expect(client.getJsApiTicket()).resolves.toBe("ticket-1");
+        await expect(client.getJsApiTicket()).resolves.toBe("ticket-1");
+        await expect(client.getJsApiTicket(true)).resolves.toBe("ticket-2");
+        expect(fetcher).toHaveBeenCalledTimes(3);
+    });
+
     it("标准发送始终以适配器解析出的 openid 为目标", async () => {
         const fetcher = vi
             .fn<typeof fetch>()

@@ -38,6 +38,7 @@ interface PendingReply {
 export class WechatClient extends EventEmitter<WechatClientEvents> {
     readonly apiBaseUrl: string;
     private readonly tokens = new RefreshableValue<string>(TOKEN_REFRESH_MARGIN);
+    private readonly jsApiTickets = new RefreshableValue<string>(TOKEN_REFRESH_MARGIN);
     private readonly pendingReplies = new Map<string, PendingReply>();
     private readonly processedEvents = new Set<string>();
     private readonly eventFlights = new KeyedSingleFlight<
@@ -80,6 +81,7 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         this.running = false;
         this.startPromise = undefined;
         this.tokens.clear();
+        this.jsApiTickets.clear();
         this.eventFlights.clear();
         for (const pending of this.pendingReplies.values()) {
             clearTimeout(pending.timer);
@@ -108,6 +110,23 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
     /** 获取并缓存 access_token；并发刷新只发起一个请求。 */
     async getAccessToken(force = false): Promise<string> {
         return this.tokens.get(() => this.fetchAccessToken(force), force);
+    }
+
+    /** 获取并缓存 JS-SDK ticket；与全局 access token 生命周期分离。 */
+    async getJsApiTicket(force = false): Promise<string> {
+        return this.jsApiTickets.get(async () => {
+            const data = await this.call<{ ticket?: string; expires_in?: number }>({
+                path: "/cgi-bin/ticket/getticket",
+                query: { type: "jsapi" },
+            });
+            if (!data.ticket || !data.expires_in) {
+                throw new WechatApiError("微信 JS-SDK ticket 响应缺少必要字段", {
+                    code: "WECHAT_INVALID_JSAPI_TICKET_RESPONSE",
+                    details: data,
+                });
+            }
+            return { value: data.ticket, ttlMs: data.expires_in * 1000 };
+        }, force);
     }
 
     /** 调用任意经过路径约束的公众号 API；token 失效时仅自动刷新并重试一次。 */
