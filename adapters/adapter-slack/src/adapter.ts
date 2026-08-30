@@ -14,6 +14,8 @@ import { executeSlackPlatformAction, SLACK_PLATFORM_ACTIONS } from "./platform-a
 import { compileSlackMessage } from "./messages.js";
 import { projectSlackMessageSegments } from "./events.js";
 import { SlackError } from "./errors.js";
+import { deleteSlackFile, getSlackFile } from "./files.js";
+import { slackUserDisplayName } from "./users.js";
 
 export class SlackAdapter extends Adapter<SlackBot, "slack"> {
     constructor(app: BaseApp) {
@@ -195,7 +197,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         return {
             user_id: this.createId(me?.id || ""),
             user_name: me?.name || "",
-            user_displayname: me?.display_name || me?.real_name || me?.name || "",
+            user_displayname: slackUserDisplayName(me),
             avatar: me?.profile?.image_512 || me?.profile?.image_192,
         };
     }
@@ -213,7 +215,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         return {
             user_id: this.createId(user.id),
             user_name: user.name || "",
-            user_displayname: user.display_name || user.real_name || user.name || "",
+            user_displayname: slackUserDisplayName(user),
             avatar: user.profile?.image_512 || user.profile?.image_192,
         };
     }
@@ -236,7 +238,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
             .map(user => ({
                 user_id: this.createId(user.id),
                 user_name: user.name || "",
-                remark: user.display_name || user.real_name || user.name || "",
+                remark: slackUserDisplayName(user),
             }));
     }
 
@@ -256,7 +258,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         return {
             user_id: this.createId(user.id),
             user_name: user.name || "",
-            remark: user.display_name || user.real_name || user.name || "",
+            remark: slackUserDisplayName(user),
         };
     }
 
@@ -373,7 +375,7 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
             return {
                 channel_id: params.channel_id,
                 user_id: this.createId(user.id),
-                user_name: user.display_name || user.real_name || user.name || "",
+                user_name: slackUserDisplayName(user),
                 role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
             } satisfies Adapter.ChannelMemberInfo;
         });
@@ -395,9 +397,19 @@ export class SlackAdapter extends Adapter<SlackBot, "slack"> {
         return {
             channel_id: params.channel_id,
             user_id: this.createId(user.id),
-            user_name: user.display_name || user.real_name || user.name || "",
+            user_name: slackUserDisplayName(user),
             role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
         };
+    }
+
+    async getFile(uin: string, params: Adapter.GetFileParams): Promise<Adapter.FileInfo> {
+        return getSlackFile(this.requireAccount(uin).client, params.file_id.string, value =>
+            this.createId(value),
+        );
+    }
+
+    async deleteFile(uin: string, params: Adapter.DeleteFileParams): Promise<void> {
+        await deleteSlackFile(this.requireAccount(uin).client, params.file_id.string);
     }
 
     // ============================================

@@ -17,12 +17,15 @@ export * from "./capabilities.js";
 export { SlackBot, type SlackBotEvents } from "./bot.js";
 export { SlackError, type SlackErrorOptions } from "./errors.js";
 export { projectSlackEvent, projectSlackMessageSegments } from "./events.js";
+export { slackUserDisplayName } from "./users.js";
 export { compileSlackMessage, type CompiledSlackMessage, type SlackFileInput } from "./messages.js";
+export { acceptSlackSocketEnvelope, type SlackSocketEnvelope } from "./socket-envelope.js";
 export {
     SLACK_PLATFORM_ACTIONS,
     executeSlackPlatformAction,
     type SlackPlatformAction,
 } from "./platform-actions.js";
+export { SLACK_COLLABORATION_ACTIONS } from "./platform-actions-collaboration.js";
 
 export const slackSchema: Schema = {
     account_id: {

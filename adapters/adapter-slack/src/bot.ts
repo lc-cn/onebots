@@ -9,6 +9,7 @@ import { RecentEventDeduplicator, type Next, type RouterContext } from "onebots"
 import { SlackError } from "./errors.js";
 import { parseSlackHttpBody, parseSlackInbound, verifySlackSignature } from "./inbound.js";
 import type { SlackFileInput } from "./messages.js";
+import { acceptSlackSocketEnvelope } from "./socket-envelope.js";
 import { SlackWebApi } from "./web-api.js";
 import type {
     SlackConfig,
@@ -21,22 +22,6 @@ import type {
     SlackChatResult,
     SlackHttpResult,
 } from "./types.js";
-
-interface SocketModeEnvelope {
-    ack(): Promise<void>;
-    body?: SlackWebhookBody;
-    envelope_id?: string;
-    type?: string;
-}
-
-function isSocketModeEnvelope(value: unknown): value is SocketModeEnvelope {
-    return (
-        typeof value === "object" &&
-        value !== null &&
-        "ack" in value &&
-        typeof value.ack === "function"
-    );
-}
 
 export interface SlackBotEvents {
     ready: [];
@@ -148,15 +133,9 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
         });
         this.socketClient = socket;
         socket.on("slack_event", async (payload: unknown) => {
-            if (!this.isCurrentSocket(socket, generation) || !isSocketModeEnvelope(payload)) return;
+            if (!this.isCurrentSocket(socket, generation)) return;
             try {
-                await payload.ack();
-                const body = payload.body ?? { type: payload.type };
-                this.ingest(
-                    payload.envelope_id && !body.envelope_id
-                        ? { ...body, envelope_id: payload.envelope_id }
-                        : body,
-                );
+                await acceptSlackSocketEnvelope(payload, body => this.ingest(body));
             } catch (error) {
                 this.emit(
                     "client_error",

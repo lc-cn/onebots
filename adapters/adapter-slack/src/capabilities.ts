@@ -1,8 +1,17 @@
 import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { SLACK_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+const platformActions = Object.fromEntries(
+    [...SLACK_PLATFORM_ACTIONS].map(action => [
+        action,
+        { support: "native" as const, availability: "context" as const },
+    ]),
+);
 
 /** Slack Web API/Events API 当前可用的能力。 */
 export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
+        ...platformActions,
         send_message: { support: "native", scenes: ["private", "channel"] },
         delete_message: {
             support: "native",
@@ -23,6 +32,8 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         get_channel_info: { support: "native" },
         get_channel_member_list: { support: "native" },
         get_channel_member_info: { support: "native" },
+        get_file: { support: "native", availability: "permission" },
+        delete_file: { support: "native", availability: "permission" },
         create_channel: { support: "native", availability: "permission" },
         update_channel: { support: "native", availability: "permission" },
         delete_channel: { support: "native", availability: "permission" },

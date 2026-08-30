@@ -34,11 +34,13 @@ onebots -r slack
 - HTTP Events API 与自动重连的 Socket Mode
 - Socket Mode 连接、重连与断开状态会同步到账号状态，普通 Web API 失败不会误判整号离线
 - 频道、私聊、线程消息以及文本、@、回复、附件收发
+- 用户目录按官方 `profile.display_name` / `profile.real_name` 投影真实显示名
 - 消息查询、编辑、删除、定时消息、回复列表
 - Reaction、Pin、频道生命周期、成员邀请与移除、Bookmark
 - 消息编辑/删除、Reaction、成员变化等 canonical 事件投影
 - Slash Command、交互载荷及其他未知事件的 `raw_event` 无损交付
 - Events API、交互组件、Slash Command 与 Socket Mode 共用公开的 `SlackBot.ingest(rawEvent)` 入站管线；`ingestHttp(rawBody, headers)` 与 `acceptHttp(Request)` 可复用完整验签和 JSON / 表单解析
+- Socket Mode 只在 canonical 投影与同步监听器成功后确认 envelope；失败事件不会进入去重窗口，可由 Slack 重投
 - Slack 重试事件保留每次 `raw_event`，仅在业务监听器成功后按 `event_id` / `envelope_id` 提交 canonical 去重状态
 - Web API 失败统一抛出带 `code`、`category`、`operation` 与平台错误码的 `SlackError`
 
@@ -46,7 +48,7 @@ onebots -r slack
 
 能力清单中的扩展动作可以从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
 
-`add_reaction`、`remove_reaction`、`add_pin`、`remove_pin`、`get_thread_replies`、`open_conversation`、`archive_channel`、`unarchive_channel`、`rename_channel`、`set_channel_topic`、`set_channel_purpose`、`join_channel`、`invite_channel_members`、`schedule_message`、`delete_scheduled_message`、`list_scheduled_messages` 以及 Bookmark 动作。
+`add_reaction`、`remove_reaction`、Pin、线程回复、频道生命周期与成员、定时消息及 Bookmark 动作；另提供临时消息、消息永久链接与 unfurl、频道历史与已读标记、Modal/App Home View、Reaction/Pin 查询、文件列表、用户组及成员管理动作。文件详情与删除直接实现 canonical `get_file` / `delete_file`，无需使用平台扩展名。能力发现直接由同一份动作注册表生成，不会与实际调用入口漂移。
 
 创建频道与移除频道成员使用 canonical `create_channel`、`kick_channel_member`，参数分别为 `channel_name`，以及 `channel_id` + `user_id`。Slack 工作区由当前 Bot Token 隐式确定，因此 `create_channel` 的 `guild_id` 不参与平台请求。
 

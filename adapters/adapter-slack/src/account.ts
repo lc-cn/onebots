@@ -55,6 +55,7 @@ export function createSlackAccount(
             if (projected) account.dispatch(projected);
         } catch (error) {
             adapter.logger.error("[Slack] 投影原始事件失败:", error);
+            throw error;
         }
     });
 

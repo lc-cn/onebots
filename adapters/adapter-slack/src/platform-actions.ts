@@ -1,6 +1,8 @@
-import { definePlatformActions, type PlatformActionHandler } from "onebots";
+import { definePlatformActions } from "onebots";
 import type { SlackBot } from "./bot.js";
 import { SlackError } from "./errors.js";
+import { createSlackMethodHandlers } from "./platform-action-methods.js";
+import { SLACK_COLLABORATION_ACTIONS } from "./platform-actions-collaboration.js";
 
 const METHOD_BY_ACTION = {
     add_reaction: "reactions.add",
@@ -26,19 +28,14 @@ const METHOD_BY_ACTION = {
     list_bookmarks: "bookmarks.list",
 } as const;
 
-const METHOD_HANDLERS = Object.fromEntries(
-    Object.entries(METHOD_BY_ACTION).map(([action, method]) => [
-        action,
-        (bot: SlackBot, params: Readonly<Record<string, unknown>>) =>
-            bot.call(method, { ...params }),
-    ]),
-) satisfies Readonly<Record<string, PlatformActionHandler<SlackBot>>>;
+const METHOD_HANDLERS = createSlackMethodHandlers(METHOD_BY_ACTION);
 
 const PLATFORM_ACTIONS = definePlatformActions(
     {
         call_slack_api: (bot: SlackBot, params: Readonly<Record<string, unknown>>) =>
             bot.call(requireMethod(params.method), requireObject(params.params, "params", {})),
         ...METHOD_HANDLERS,
+        ...SLACK_COLLABORATION_ACTIONS,
     },
     action => SlackError.invalid(`未实现 Slack 平台动作: ${action}`, "SLACK_ACTION_UNSUPPORTED"),
 );
