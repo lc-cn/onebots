@@ -24,14 +24,14 @@ export function registerAdapterRoutes(app: App, router: Router): void {
         ctx.body = app.accounts.map(bot => bot.info);
     });
 
-    router.post("/api/add", (ctx: RouterContext) => {
+    router.post("/api/add", async (ctx: RouterContext) => {
         const config = ctx.request.body;
         try {
-            app.addAccount(config);
-            ctx.body = { success: true, message: '添加成功' };
-        } catch (e) {
+            await app.addAccount(config);
+            ctx.body = { success: true, message: "添加成功" };
+        } catch (error) {
             ctx.status = 500;
-            ctx.body = { success: false, message: (e as Error).message };
+            ctx.body = { success: false, message: (error as Error).message };
         }
     });
 
@@ -39,7 +39,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
         const config = ctx.request.body;
         try {
             await app.updateAccount(config);
-            ctx.body = { success: true, message: '修改成功' };
+            ctx.body = { success: true, message: "修改成功" };
         } catch (e) {
             ctx.status = 500;
             ctx.body = { success: false, message: (e as Error).message };
@@ -50,7 +50,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
         const { uin, platform, force } = ctx.request.query;
         try {
             await app.removeAccount(String(platform), String(uin), Boolean(force));
-            ctx.body = { success: true, message: '移除成功' };
+            ctx.body = { success: true, message: "移除成功" };
         } catch (e) {
             ctx.status = 500;
             ctx.body = { success: false, message: (e as Error).message };
@@ -87,7 +87,10 @@ export function registerAdapterRoutes(app: App, router: Router): void {
             const body = (ctx.request.body as Record<string, unknown>) || {};
             const channel = String(body.channel ?? "");
             const target_id = String(body.target_id ?? "");
-            const target_type = String(body.target_type ?? "private") as "private" | "group" | "channel";
+            const target_type = String(body.target_type ?? "private") as
+                | "private"
+                | "group"
+                | "channel";
             const message = String(body.message ?? "");
 
             if (!channel || !target_id) {
