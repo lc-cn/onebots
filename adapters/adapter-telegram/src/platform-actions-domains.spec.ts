@@ -81,18 +81,104 @@ describe("Telegram 领域动作", () => {
         expect(TELEGRAM_PLATFORM_ACTIONS.has("answer_inline_query")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("set_chat_permissions")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("answer_guest_query")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("send_rich_message")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("delete_ephemeral_message")).toBe(true);
+        expect(TELEGRAM_PLATFORM_ACTIONS.has("answer_chat_join_request_query")).toBe(true);
+    });
+
+    it("闭合 Rich Message、Ephemeral Message 与入群查询动作", async () => {
+        const sendRichMessage = vi.fn().mockResolvedValue({ message_id: 10 });
+        const sendRichMessageDraft = vi.fn().mockResolvedValue(true);
+        const editEphemeralMessageText = vi.fn().mockResolvedValue(true);
+        const answerChatJoinRequestQuery = vi.fn().mockResolvedValue(true);
+        const sendChatJoinRequestWebApp = vi.fn().mockResolvedValue(true);
+        const bot = botWithApi({
+            sendRichMessage,
+            sendRichMessageDraft,
+            editEphemeralMessageText,
+            answerChatJoinRequestQuery,
+            sendChatJoinRequestWebApp,
+        } as unknown as Bot["api"]);
+
+        await executeTelegramPlatformAction(bot, "send_rich_message", {
+            chat_id: -100,
+            rich_message: { markdown: "# Hello" },
+        });
+        await executeTelegramPlatformAction(bot, "send_rich_message_draft", {
+            chat_id: 42,
+            draft_id: 3,
+            rich_message: { markdown: "Typing" },
+        });
+        await executeTelegramPlatformAction(bot, "edit_ephemeral_message_text", {
+            chat_id: -100,
+            receiver_user_id: 42,
+            ephemeral_message_id: 7,
+            rich_message: { markdown: "Updated" },
+        });
+        await executeTelegramPlatformAction(bot, "answer_chat_join_request_query", {
+            chat_join_request_query_id: "query-1",
+            result: "queue",
+        });
+        await executeTelegramPlatformAction(bot, "send_chat_join_request_web_app", {
+            chat_join_request_query_id: "query-2",
+            web_app_url: "https://bot.example/app",
+        });
+
+        expect(sendRichMessage).toHaveBeenCalledWith(-100, { markdown: "# Hello" }, undefined);
+        expect(sendRichMessageDraft).toHaveBeenCalledWith(42, 3, { markdown: "Typing" }, undefined);
+        expect(editEphemeralMessageText).toHaveBeenCalledWith(
+            -100,
+            42,
+            7,
+            {
+                markdown: "Updated",
+            },
+            undefined,
+        );
+        expect(answerChatJoinRequestQuery).toHaveBeenCalledWith("query-1", "queue");
+        expect(sendChatJoinRequestWebApp).toHaveBeenCalledWith(
+            "query-2",
+            "https://bot.example/app",
+        );
+
+        await expect(
+            executeTelegramPlatformAction(bot, "answer_chat_join_request_query", {
+                chat_join_request_query_id: "query-3",
+                result: "accept",
+            }),
+        ).rejects.toMatchObject({ code: "TELEGRAM_PARAM_INVALID" });
+        await expect(
+            executeTelegramPlatformAction(bot, "send_chat_join_request_web_app", {
+                chat_join_request_query_id: "query-4",
+                web_app_url: "http://bot.example/app",
+            }),
+        ).rejects.toMatchObject({ code: "TELEGRAM_PARAM_INVALID" });
+        expect(answerChatJoinRequestQuery).toHaveBeenCalledTimes(1);
+        expect(sendChatJoinRequestWebApp).toHaveBeenCalledTimes(1);
     });
 
     it("在 API 调用前执行 Telegram 官方集合上限", async () => {
-        const sendPoll = vi.fn();
+        const sendPoll = vi.fn().mockResolvedValue({ message_id: 11 });
+        const bot = botWithApi({ sendPoll } as unknown as Bot["api"]);
+        await executeTelegramPlatformAction(bot, "send_poll", {
+            chat_id: 1,
+            question: "Q",
+            options: [{ text: "only", media: { type: "link", url: "https://example.com" } }],
+        });
+        expect(sendPoll).toHaveBeenCalledWith(
+            1,
+            "Q",
+            [{ text: "only", media: { type: "link", url: "https://example.com" } }],
+            undefined,
+        );
         await expect(
-            executeTelegramPlatformAction(
-                botWithApi({ sendPoll } as unknown as Bot["api"]),
-                "send_poll",
-                { chat_id: 1, question: "Q", options: ["only"] },
-            ),
+            executeTelegramPlatformAction(bot, "send_poll", {
+                chat_id: 1,
+                question: "Q",
+                options: [],
+            }),
         ).rejects.toMatchObject({ code: "TELEGRAM_PARAM_INVALID" });
-        expect(sendPoll).not.toHaveBeenCalled();
+        expect(sendPoll).toHaveBeenCalledTimes(1);
     });
 });
 

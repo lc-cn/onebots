@@ -5,12 +5,13 @@ import { TelegramError } from "./errors.js";
 import { TELEGRAM_BOT_ACTIONS } from "./platform-actions-bot.js";
 import { TELEGRAM_CHAT_ACTIONS } from "./platform-actions-chat.js";
 import { TELEGRAM_INTERACTION_ACTIONS } from "./platform-actions-interaction.js";
+import { TELEGRAM_MODERN_ACTIONS } from "./platform-actions-modern.js";
 import {
     optionalObject,
     requireInteger,
+    requirePollOptions,
     requireReactions,
     requireString,
-    requireStringArray,
     requireStringOrNumber,
     telegramAction,
 } from "./platform-action-params.js";
@@ -24,7 +25,7 @@ const ACTION_HANDLERS = {
         api.sendPoll(
             requireStringOrNumber(params, "chat_id"),
             requireString(params, "question"),
-            requireStringArray(params, "options", 2, 12),
+            requirePollOptions(params),
             params.options_config as never,
         ),
     ),
@@ -67,6 +68,7 @@ const ACTION_HANDLERS = {
     ...TELEGRAM_CHAT_ACTIONS,
     ...TELEGRAM_BOT_ACTIONS,
     ...TELEGRAM_INTERACTION_ACTIONS,
+    ...TELEGRAM_MODERN_ACTIONS,
 } satisfies Readonly<Record<string, PlatformActionHandler<TelegramBot>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(ACTION_HANDLERS, action =>

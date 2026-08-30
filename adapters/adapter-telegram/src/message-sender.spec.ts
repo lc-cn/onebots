@@ -100,4 +100,53 @@ describe("sendTelegramMessage", () => {
             sendTelegramMessage(bot, "chat", [{ type: "text", data: { text: "hello" } }]),
         ).rejects.toMatchObject({ code: "TELEGRAM_MESSAGE_ID_MISSING" });
     });
+
+    it("以原生消息段发送 Bot API 10.3 Rich Message", async () => {
+        const sendRichMessage = vi.fn().mockResolvedValue({ message_id: 9 });
+        const bot = {
+            getBot: () => ({ api: { sendRichMessage } }),
+            callApi: async (_method: string, task: () => Promise<unknown>) => task(),
+        } as never;
+
+        await expect(
+            sendTelegramMessage(bot, "chat", [
+                { type: "reply", data: { message_id: 8 } },
+                {
+                    type: "telegram_rich_message",
+                    data: {
+                        rich_message: { markdown: "# Release" },
+                        options: { disable_notification: true },
+                    },
+                },
+            ]),
+        ).resolves.toBe(9);
+        expect(sendRichMessage).toHaveBeenCalledWith(
+            "chat",
+            { markdown: "# Release" },
+            {
+                disable_notification: true,
+                reply_parameters: { message_id: 8 },
+            },
+        );
+
+        await expect(
+            sendTelegramMessage(bot, "chat", [
+                { type: "text", data: { text: "mixed" } },
+                {
+                    type: "telegram_rich_message",
+                    data: { rich_message: { markdown: "# Release" } },
+                },
+            ]),
+        ).rejects.toMatchObject({ code: "TELEGRAM_RICH_MESSAGE_MIXED" });
+
+        sendRichMessage.mockResolvedValueOnce({});
+        await expect(
+            sendTelegramMessage(bot, "chat", [
+                {
+                    type: "telegram_rich_message",
+                    data: { rich_message: { markdown: "# Invalid response" } },
+                },
+            ]),
+        ).rejects.toMatchObject({ code: "TELEGRAM_MESSAGE_ID_MISSING" });
+    });
 });

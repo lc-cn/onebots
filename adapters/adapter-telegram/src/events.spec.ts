@@ -125,6 +125,7 @@ describe("projectTelegramEvents", () => {
                 user_chat_id: 40,
                 date: 100,
                 bio: "hello",
+                query_id: "join-query-1",
             },
         } as Update;
 
@@ -135,6 +136,43 @@ describe("projectTelegramEvents", () => {
             request_type: "group",
             flag: "-30:40",
             comment: "hello",
+            extensions: {
+                telegram: { kind: "chat_join_request", query_id: "join-query-1" },
+            },
+        });
+    });
+
+    it("投影 Rich Message 并保留 Ephemeral 回复地址", () => {
+        const update = {
+            update_id: 24,
+            message: {
+                message_id: 25,
+                date: 106,
+                chat: { id: -30, type: "supergroup", title: "group" },
+                from: { id: 40, is_bot: false, first_name: "Alice" },
+                receiver_user: { id: 41, is_bot: false, first_name: "Bob" },
+                ephemeral_message_id: 9,
+                rich_message: { blocks: [{ type: "paragraph" }] },
+            },
+        } as Update;
+
+        const [event] = projectTelegramEvents(update, context);
+
+        expect(event).toMatchObject({
+            type: "message",
+            message: [
+                {
+                    type: "telegram_rich_message",
+                    data: { rich_message: { blocks: [{ type: "paragraph" }] } },
+                },
+            ],
+            extensions: {
+                telegram: {
+                    kind: "ephemeral_message",
+                    ephemeral_message_id: 9,
+                    receiver_user_id: 41,
+                },
+            },
         });
     });
 

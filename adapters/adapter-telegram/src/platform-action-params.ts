@@ -113,6 +113,28 @@ export function requireStringArray(
     return value;
 }
 
+/** Bot API 10.1 Poll option，可为纯文本或携带媒体的 InputPollOption。 */
+export function requirePollOptions(params: Readonly<Record<string, unknown>>): never {
+    const value = params.options;
+    if (
+        !Array.isArray(value) ||
+        value.length < 1 ||
+        value.length > 12 ||
+        value.some(
+            item =>
+                (typeof item !== "string" || item.length === 0) &&
+                (!item || typeof item !== "object" || Array.isArray(item)),
+        )
+    ) {
+        throw TelegramError.invalid(
+            "Telegram 参数 options 必须为 1 到 12 项文本或 InputPollOption 数组",
+            "TELEGRAM_PARAM_INVALID",
+            { name: "options" },
+        );
+    }
+    return structuredClone(value) as never;
+}
+
 export function requireObjectArray(
     params: Readonly<Record<string, unknown>>,
     name: string,
@@ -145,6 +167,42 @@ export function requireBoolean(params: Readonly<Record<string, unknown>>, name: 
         );
     }
     return value;
+}
+
+export function requireStringEnum<const TValue extends string>(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+    values: readonly TValue[],
+): TValue {
+    const value = requireString(params, name);
+    if (!(values as readonly string[]).includes(value)) {
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为 ${values.join("/")}`,
+            "TELEGRAM_PARAM_INVALID",
+            { name },
+        );
+    }
+    return value as TValue;
+}
+
+export function requireHttpsUrl(params: Readonly<Record<string, unknown>>, name: string): string {
+    const value = requireString(params, name);
+    if (!URL.canParse(value)) {
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为 HTTPS URL`,
+            "TELEGRAM_PARAM_INVALID",
+            { name },
+        );
+    }
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) {
+        throw TelegramError.invalid(
+            `Telegram 参数 ${name} 必须为无凭据 HTTPS URL`,
+            "TELEGRAM_PARAM_INVALID",
+            { name },
+        );
+    }
+    return url.href;
 }
 
 export function requireReactions(params: Readonly<Record<string, unknown>>): never {

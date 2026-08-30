@@ -133,6 +133,11 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         location: { support: "native", direction: "both" },
         contact: { support: "native", direction: "both" },
         reply: { support: "native", direction: "both" },
+        telegram_rich_message: {
+            support: "native",
+            direction: "both",
+            note: "Bot API 10.3 InputRichMessage/RichMessage 原生结构，发送时不能与普通内容段混用",
+        },
     },
     transports: {
         webhook: { support: "native", mode: "webhook" },

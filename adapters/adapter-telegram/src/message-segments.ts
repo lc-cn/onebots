@@ -12,6 +12,12 @@ export function projectTelegramSegments(
     if (message.caption) {
         appendTextSegments(segments, message.caption, message.caption_entities ?? [], context);
     }
+    if (message.rich_message) {
+        segments.push({
+            type: "telegram_rich_message",
+            data: { rich_message: structuredClone(message.rich_message) },
+        });
+    }
     if (message.photo?.length) {
         segments.push({
             type: "image",

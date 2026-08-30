@@ -68,6 +68,12 @@ export function projectTelegramEvents(
                 },
                 comment: request.bio,
                 flag: `${request.chat.id}:${request.from.id}`,
+                extensions: {
+                    telegram: {
+                        kind: "chat_join_request",
+                        query_id: request.query_id,
+                    },
+                },
             },
         ];
     }
@@ -274,14 +280,29 @@ function projectMessage(
         message: projectTelegramSegments(message, context),
         raw_message: message.text ?? message.caption ?? "",
         message_id: context.createId(message.message_id),
-        extensions: update.guest_message
-            ? {
-                  telegram: {
-                      kind: "guest_message",
-                      guest_query_id: message.guest_query_id,
-                  },
-              }
-            : undefined,
+        extensions: telegramMessageExtensions(update, message),
+    };
+}
+
+function telegramMessageExtensions(
+    update: Update,
+    message: Message,
+): { telegram: Readonly<Record<string, unknown>> } | undefined {
+    const isGuest = Boolean(update.guest_message);
+    const isEphemeral = message.ephemeral_message_id !== undefined;
+    if (!isGuest && !isEphemeral && !message.business_connection_id) return undefined;
+    return {
+        telegram: {
+            kind: isGuest ? "guest_message" : isEphemeral ? "ephemeral_message" : "message",
+            ...(message.guest_query_id ? { guest_query_id: message.guest_query_id } : {}),
+            ...(message.ephemeral_message_id === undefined
+                ? {}
+                : { ephemeral_message_id: message.ephemeral_message_id }),
+            ...(message.receiver_user ? { receiver_user_id: message.receiver_user.id } : {}),
+            ...(message.business_connection_id
+                ? { business_connection_id: message.business_connection_id }
+                : {}),
+        },
     };
 }
 

@@ -1,6 +1,6 @@
 # @onebots/adapter-telegram
 
-OneBots 的 Telegram Bot API 适配器。基于 grammY 1.46 / Telegram Bot API 10.0，支持 polling、webhook、代理、完整原始 Update 透传，以及可由所有已启用协议调用的平台扩展动作。
+OneBots 的 Telegram Bot API 适配器。基于 grammY 1.46 / Telegram Bot API 10.3，支持 polling、webhook、代理、完整原始 Update 透传，以及可由所有已启用协议调用的平台扩展动作。
 
 ## 安装
 
@@ -80,7 +80,11 @@ onebots -r telegram
 - ✅ Bot 命令、名称、长短描述、菜单按钮与默认管理员权限
 - ✅ Callback、Inline、Shipping 与 Pre-checkout 查询应答
 - ✅ Guest Mode：`guest_message` 标准消息投影与 `answer_guest_query` 原生回复
-- ✅ 生成中止、托管 Bot、用户订阅状态等 Bot API 10.0 Update 投影
+- ✅ Rich Message：`telegram_rich_message` 原生消息段、持久发送与流式草稿
+- ✅ Ephemeral Message：接收地址保留，以及文本/Rich/媒体/Caption/键盘编辑和删除
+- ✅ Join Request Query：保留 `query_id`，支持直接决策或跳转 HTTPS Mini App
+- ✅ Poll Media：支持 Bot API 10.1 的单选项投票与结构化 `InputPollOption`
+- ✅ 生成中止、托管 Bot、用户订阅状态等 Bot API 10.x Update 投影
 - ✅ Callback/Inline/支付查询、消息编辑、机器人群生命周期、成员变化、入群申请的标准事件投影
 - ✅ 成员受限状态按 Bot API 的 `restricted.is_member` 判定真实加入/退出，不把全部 restricted 用户误算为在群
 - ✅ Reaction 增删与批量商业消息删除会拆成独立、唯一 ID 的标准事件
@@ -102,7 +106,21 @@ onebots -r telegram
 }
 ```
 
-扩展动作按消息、聊天/论坛、Bot 管理和交互应答四个领域组织，并全部进入同一不可变能力注册表。`set_message_reaction` 同时接受 emoji 字符串与官方 `ReactionType` 对象，因此 custom emoji 不会被压扁。Guest Mode 收到的 `extensions.telegram.guest_query_id` 可直接交给 `answer_guest_query`，其 `result` 使用官方 `InlineQueryResult` 结构。完整动作可通过 `get_supported_actions` 动态查询；未来 Bot API 仍可由 `call_telegram_api` 无损调用。
+扩展动作按消息、聊天/论坛、Bot 管理、交互应答和 Bot API 10.x 新能力组织，并全部进入同一不可变能力注册表。`set_message_reaction` 同时接受 emoji 字符串与官方 `ReactionType` 对象，因此 custom emoji 不会被压扁。Guest Mode 收到的 `extensions.telegram.guest_query_id` 可直接交给 `answer_guest_query`，其 `result` 使用官方 `InlineQueryResult` 结构。入群请求的 `extensions.telegram.query_id` 可交给 `answer_chat_join_request_query` 或 `send_chat_join_request_web_app`。完整动作可通过 `get_supported_actions` 动态查询；未来 Bot API 仍可由 `call_telegram_api` 无损调用。
+
+Rich Message 可直接作为统一消息中的单一原生段发送；`options` 继续接受 `disable_notification`、`ephemeral_message_parameters`、`reply_markup` 等官方字段：
+
+```json
+{
+  "type": "telegram_rich_message",
+  "data": {
+    "rich_message": { "markdown": "# 构建完成\n[下载](tg://document?id=artifact)" },
+    "options": { "disable_notification": true }
+  }
+}
+```
+
+流式输出使用 `send_rich_message_draft`，完成后再调用 `send_rich_message` 持久化；`edit_ephemeral_message_*` 和 `delete_ephemeral_message` 使用接收事件中保留的 `receiver_user_id` 与 `ephemeral_message_id`。
 
 高级集成可直接构造 `TelegramBot`，通过 `await ingest(rawUpdate)` 把现有 HTTP 服务、队列或测试夹具收到的 Update 交给同一 grammY 中间件和去重链；Fetch / WinterCG Host 可直接调用 `acceptHttp(request)`，复用 secret 校验和结构化响应。`raw_update` 保留每次投递；canonical 与细分事件、全部协议出口都成功后才提交 `update_id`。失败的 Webhook 返回 500，polling 会重新拉取；相同 Update 的并发投递只执行一次。所有原生调用可经 `callApi(method, task)` 获得统一的 `TelegramError`，其中包含 Telegram `error_code`、`retry_after` 和 `migrate_to_chat_id`。
 

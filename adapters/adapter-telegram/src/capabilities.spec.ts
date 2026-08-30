@@ -14,6 +14,8 @@ describe("Telegram 能力清单", () => {
         expect(TELEGRAM_PLATFORM_ACTIONS.has("get_chat_member_count")).toBe(true);
         expect(telegramCapabilities.actions.create_forum_topic?.support).toBe("native");
         expect(telegramCapabilities.actions.answer_callback_query?.support).toBe("native");
+        expect(telegramCapabilities.actions.send_rich_message?.support).toBe("native");
+        expect(telegramCapabilities.segments.telegram_rich_message?.direction).toBe("both");
     });
 
     it("所有声明动作均有真实入口", () => {

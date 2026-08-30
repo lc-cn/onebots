@@ -1,6 +1,6 @@
 import { materializeMediaSource, type Adapter } from "onebots";
 import { InputFile } from "grammy";
-import type { MessageEntity, Opts } from "grammy/types";
+import type { InputRichMessage, MessageEntity, Opts } from "grammy/types";
 import type { TelegramBot } from "./bot.js";
 import { TelegramError } from "./errors.js";
 
@@ -40,6 +40,9 @@ export async function sendTelegramMessage(
     const entities: MessageEntity[] = [];
     let replyTo: number | undefined;
     const media: Array<{ type: string; data: Record<string, unknown> }> = [];
+    let richMessage:
+        | { content: InputRichMessage; options?: Readonly<Record<string, unknown>> }
+        | undefined;
     let replyCount = 0;
 
     for (const segment of message) {
@@ -74,6 +77,20 @@ export async function sendTelegramMessage(
             )
         ) {
             media.push(segment);
+        } else if (segment.type === "telegram_rich_message") {
+            if (richMessage) {
+                throw TelegramError.invalid(
+                    "Telegram 消息只能包含一个 telegram_rich_message 段",
+                    "TELEGRAM_RICH_MESSAGE_DUPLICATED",
+                );
+            }
+            richMessage = {
+                content: requiredObject(
+                    segment.data.rich_message,
+                    "telegram_rich_message.rich_message",
+                ) as unknown as InputRichMessage,
+                options: optionalObject(segment.data.options, "telegram_rich_message.options"),
+            };
         } else {
             throw TelegramError.invalid(
                 `Telegram 不支持消息段 ${segment.type}`,
@@ -90,6 +107,21 @@ export async function sendTelegramMessage(
     }
 
     const options = replyTo ? { reply_parameters: { message_id: replyTo } } : {};
+    if (richMessage) {
+        if (text || media.length || entities.length) {
+            throw TelegramError.invalid(
+                "telegram_rich_message 不能与文本、@ 或其他媒体段混用",
+                "TELEGRAM_RICH_MESSAGE_MIXED",
+            );
+        }
+        const result = await bot.callApi("sendRichMessage", () =>
+            bot.getBot().api.sendRichMessage(chatId, richMessage.content, {
+                ...richMessage.options,
+                ...options,
+            } as never),
+        );
+        return requireMessageId(result);
+    }
     let lastMessageId: number | undefined;
     let caption = text || undefined;
     for (const segment of media) {
@@ -225,6 +257,39 @@ function requiredString(value: unknown, name: string): string {
 
 function optionalString(value: unknown): string | undefined {
     return typeof value === "string" && value ? value : undefined;
+}
+
+function requireMessageId(value: unknown): number {
+    const messageId =
+        value && typeof value === "object" && !Array.isArray(value)
+            ? (value as Readonly<Record<string, unknown>>).message_id
+            : undefined;
+    if (!Number.isSafeInteger(messageId) || Number(messageId) <= 0) {
+        throw TelegramError.invalid(
+            "Telegram 发送结果缺少 message_id",
+            "TELEGRAM_MESSAGE_ID_MISSING",
+        );
+    }
+    return Number(messageId);
+}
+
+function requiredObject(value: unknown, name: string): Readonly<Record<string, unknown>> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw TelegramError.invalid(
+            `Telegram ${name} 必须为对象`,
+            "TELEGRAM_MESSAGE_FIELD_REQUIRED",
+            { name },
+        );
+    }
+    return value as Readonly<Record<string, unknown>>;
+}
+
+function optionalObject(
+    value: unknown,
+    name: string,
+): Readonly<Record<string, unknown>> | undefined {
+    if (value == null) return undefined;
+    return requiredObject(value, name);
 }
 
 function boundedNumber(value: unknown, name: string, min: number, max: number): number {
