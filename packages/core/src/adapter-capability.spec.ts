@@ -8,6 +8,44 @@ import {
     listSupportedActions,
 } from "./adapter-capability.js";
 import { ValidationError } from "./errors.js";
+import { Adapter } from "./adapter.js";
+
+const executableManifest = defineAdapterCapabilities({
+    actions: { send_message: { support: "native" } },
+    events: {},
+    segments: {},
+    transports: {},
+});
+
+class ImplementedActionAdapter extends Adapter {
+    describeCapabilities() {
+        return executableManifest;
+    }
+
+    createAccount(): never {
+        throw new Error("测试不创建账号");
+    }
+
+    async sendMessage(): Promise<Adapter.SendMessageResult> {
+        return { message_id: { string: "sent", number: 1, source: "sent" } };
+    }
+}
+
+class MissingActionAdapter extends Adapter {
+    describeCapabilities() {
+        return executableManifest;
+    }
+
+    createAccount(): never {
+        throw new Error("测试不创建账号");
+    }
+}
+
+function withoutConstructor<T extends Adapter>(prototype: T): T {
+    const adapter = Object.create(prototype) as T;
+    adapter.platform = "mock";
+    return adapter;
+}
 
 describe("adapter capability manifest", () => {
     it("只将 native 与 emulated 动作暴露为支持", () => {
@@ -95,5 +133,20 @@ describe("adapter capability manifest", () => {
         expect(() => assertSupportedActionsImplemented(adapter)).toThrow(
             "适配器能力清单声明了未实现动作: send_message",
         );
+    });
+
+    it("动作接口抽离后仍能区分覆写实现与基类占位实现", async () => {
+        const implemented = withoutConstructor(ImplementedActionAdapter.prototype);
+        const missing = withoutConstructor(MissingActionAdapter.prototype);
+
+        expect(implemented.isActionImplemented("send_message")).toBe(true);
+        expect(missing.isActionImplemented("send_message")).toBe(false);
+        await expect(implemented.callAction("bot", "send_message", {})).resolves.toEqual({
+            message_id: { string: "sent", number: 1, source: "sent" },
+        });
+        await expect(missing.callAction("bot", "send_message", {})).rejects.toMatchObject({
+            code: "ADAPTER_CAPABILITY_UNAVAILABLE",
+            capability: "send_message",
+        });
     });
 });
