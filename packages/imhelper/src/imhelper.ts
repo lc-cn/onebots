@@ -9,6 +9,7 @@ import { ChannelMember } from "./instances/channelMember.js";
 import { Message } from "./message.js";
 import type { EventMap } from "./types.js";
 import { EventFactory } from "./events/factory.js";
+import type { AnyMessageEvent, AnyMessageEventData } from "./events/index.js";
 import {
     acceptHttpIngress,
     acceptWebSocketIngress,
@@ -19,6 +20,34 @@ import {
 } from "./ingress.js";
 type GroupMemberMap<Id extends string | number> = Map<Id, GroupMember.Data<Id>>;
 type ChannelMemberMap<Id extends string | number> = Map<Id, ChannelMember.Data<Id>>;
+
+function synchronizeMap<Key, Value extends object>(
+    target: Map<Key, Value>,
+    values: readonly Value[],
+    keyOf: (value: Value) => Key,
+): void {
+    const retained = new Set<Key>();
+    for (const value of values) {
+        const key = keyOf(value);
+        retained.add(key);
+        const current = target.get(key);
+        if (current) Object.assign(current, value);
+        else target.set(key, value);
+    }
+    for (const key of target.keys()) {
+        if (!retained.has(key)) target.delete(key);
+    }
+}
+
+function upsertMap<Key, Value extends object>(
+    target: Map<Key, Value>,
+    key: Key,
+    value: Value,
+): void {
+    const current = target.get(key);
+    if (current) Object.assign(current, value);
+    else target.set(key, value);
+}
 export type ImHelperEventMap<
     Id extends string | number,
     TRawEvent,
@@ -194,17 +223,114 @@ export class ImHelper<
 
     /** 批量获取用户信息 */
     async getUserList(options?: DirectoryQueryOptions): Promise<User<Id>[]> {
-        return this.#adapter.getUserList(options);
+        const users = await this.#adapter.getUserList(options);
+        synchronizeMap(this.$userMap, users, user => user.user_id);
+        return users.map(user => this.pickUser(user.user_id));
+    }
+
+    async getUserInfo(userId: Id, options?: DirectoryQueryOptions): Promise<User<Id>> {
+        const user = await this.#adapter.getUserInfo(userId, options);
+        upsertMap(this.$userMap, user.user_id, user);
+        return this.pickUser(user.user_id);
+    }
+
+    async getFriendInfo(userId: Id, options?: DirectoryQueryOptions): Promise<Friend<Id>> {
+        const friend = await this.#adapter.getFriendInfo(userId, options);
+        upsertMap(this.$userMap, friend.user_id, friend);
+        upsertMap(this.$friendMap, friend.user_id, friend);
+        return this.pickFriend(friend.user_id);
     }
 
     /** 批量获取群组列表 */
     async getGroupList(options?: DirectoryQueryOptions): Promise<Group<Id>[]> {
-        return this.#adapter.getGroupList(options);
+        const groups = await this.#adapter.getGroupList(options);
+        synchronizeMap(this.$groupMap, groups, group => group.group_id);
+        return groups.map(group => this.pickGroup(group.group_id));
+    }
+
+    async getGroupInfo(groupId: Id, options?: DirectoryQueryOptions): Promise<Group<Id>> {
+        const group = await this.#adapter.getGroupInfo(groupId, options);
+        upsertMap(this.$groupMap, group.group_id, group);
+        return this.pickGroup(group.group_id);
+    }
+
+    async getGroupMemberInfo(
+        groupId: Id,
+        userId: Id,
+        options?: DirectoryQueryOptions,
+    ): Promise<GroupMember<Id>> {
+        const member = await this.#adapter.getGroupMemberInfo(groupId, userId, options);
+        const members = this.$groupMemberMap.get(groupId) ?? new Map<Id, GroupMember.Data<Id>>();
+        this.$groupMemberMap.set(groupId, members);
+        upsertMap(members, member.user_id, member);
+        upsertMap(this.$userMap, member.user_id, member);
+        return this.pickGroupMember(groupId, member.user_id);
+    }
+
+    async getGroupMemberList(
+        groupId: Id,
+        options?: DirectoryQueryOptions,
+    ): Promise<GroupMember<Id>[]> {
+        const memberData = await this.#adapter.getGroupMemberList(groupId, options);
+        const members = this.$groupMemberMap.get(groupId) ?? new Map<Id, GroupMember.Data<Id>>();
+        synchronizeMap(members, memberData, member => member.user_id);
+        this.$groupMemberMap.set(groupId, members);
+        for (const member of memberData) {
+            upsertMap(this.$userMap, member.user_id, member);
+        }
+        return memberData.map(member => this.pickGroupMember(groupId, member.user_id));
     }
 
     /** 批量获取频道列表 */
     async getChannelList(): Promise<Channel<Id>[]> {
-        return this.#adapter.getChannelList();
+        const channels = await this.#adapter.getChannelList();
+        synchronizeMap(this.$channelMap, channels, channel => channel.channel_id);
+        return channels.map(channel => this.pickChannel(channel.channel_id));
+    }
+
+    async getChannelInfo(channelId: Id): Promise<Channel<Id>> {
+        const channel = await this.#adapter.getChannelInfo(channelId);
+        upsertMap(this.$channelMap, channel.channel_id, channel);
+        return this.pickChannel(channel.channel_id);
+    }
+
+    async getChannelMemberInfo(channelId: Id, userId: Id): Promise<ChannelMember<Id>> {
+        const member = await this.#adapter.getChannelMemberInfo(channelId, userId);
+        const members =
+            this.$channelMemberMap.get(channelId) ?? new Map<Id, ChannelMember.Data<Id>>();
+        this.$channelMemberMap.set(channelId, members);
+        upsertMap(members, member.user_id, member);
+        upsertMap(this.$userMap, member.user_id, member);
+        return this.pickChannelMember(channelId, member.user_id);
+    }
+
+    async getChannelMemberList(channelId: Id): Promise<ChannelMember<Id>[]> {
+        const memberData = await this.#adapter.getChannelMemberList(channelId);
+        const members =
+            this.$channelMemberMap.get(channelId) ?? new Map<Id, ChannelMember.Data<Id>>();
+        synchronizeMap(members, memberData, member => member.user_id);
+        this.$channelMemberMap.set(channelId, members);
+        for (const member of memberData) {
+            upsertMap(this.$userMap, member.user_id, member);
+        }
+        return memberData.map(member => this.pickChannelMember(channelId, member.user_id));
+    }
+
+    /** 获取消息并绑定到当前 helper，使 reply/recall 等行为始终可用。 */
+    async getMessage(messageId: Id): Promise<AnyMessageEvent<Id>> {
+        const data = await this.#adapter.getMessage(messageId);
+        return this.#createMessageEvent(data);
+    }
+
+    #createMessageEvent(data: AnyMessageEventData<Id>): AnyMessageEvent<Id> {
+        switch (data.message_type) {
+            case "private":
+                return EventFactory.create("message.private", data, this);
+            case "group":
+                return EventFactory.create("message.group", data, this);
+            case "channel":
+                return EventFactory.create("message.channel", data, this);
+        }
     }
 
     // ============================================

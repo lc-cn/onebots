@@ -24,6 +24,7 @@ export namespace PrivateMessageEvent {
     export interface Data<
         Id extends string | number = string | number,
     > extends MessageEvent.Data<Id> {
+        message_type: "private";
         sub_type?: "friend" | "group" | "other";
     }
 }

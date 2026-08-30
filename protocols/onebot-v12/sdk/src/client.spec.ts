@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { createOnebot12Client } from "./client.js";
 import { ProtocolError } from "./index.js";
 import type { OneBotV12Event } from "./types.js";
+import { User } from "imhelper";
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -163,5 +164,25 @@ describe("OneBot V12 client", () => {
 
         expect(createWebSocket).toHaveBeenCalledWith("wss://gateway.example/kook/bot/onebot/v12");
         await client.stop();
+    });
+
+    test("uses the standard friend list action for user directories", async () => {
+        const call = vi.fn(async () => ({
+            status: "ok" as const,
+            retcode: 0,
+            data: [{ user_id: "user-1", user_name: "Alice", user_remark: "备注" }],
+        }));
+        const client = createOnebot12Client({
+            baseUrl: "https://example.test",
+            selfId: "bot",
+            receiveMode: "manual",
+            call,
+        });
+
+        const [user] = await client.getUserList();
+
+        expect(user).toBeInstanceOf(User);
+        expect(user.user_name).toBe("Alice");
+        expect(call).toHaveBeenCalledWith("get_friend_list", {});
     });
 });

@@ -1,10 +1,11 @@
-import { EventEmitter } from "node:events";
 import {
     Adapter,
     ReceiveTransport,
     Message,
+    ProtocolError,
     type User,
     type Group,
+    type GroupMember,
     type Friend,
     type PrivateMessageEvent,
     type ChannelMessageEvent,
@@ -49,6 +50,48 @@ function isGatewayPayload(
     event: SatoriV1Event | SatoriGatewayPayload,
 ): event is SatoriGatewayPayload {
     return typeof (event as { op?: unknown }).op === "number" && "body" in event;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+}
+
+function malformed(operation: string, response: unknown): never {
+    throw new ProtocolError({
+        protocol: "satori-v1",
+        operation,
+        kind: "protocol",
+        message: `Satori ${operation} 返回了无效的数据结构`,
+        response,
+    });
+}
+
+async function collectList(
+    operation: string,
+    load: (next?: string) => Promise<unknown>,
+): Promise<Record<string, unknown>[]> {
+    const result: Record<string, unknown>[] = [];
+    const visited = new Set<string>();
+    let next: string | undefined;
+    do {
+        const response = await load(next);
+        if (!isRecord(response) || !Array.isArray(response.data)) {
+            return malformed(operation, response);
+        }
+        for (const item of response.data) {
+            if (!isRecord(item)) return malformed(operation, response);
+            result.push(item);
+        }
+        if (response.next !== undefined && typeof response.next !== "string") {
+            return malformed(operation, response);
+        }
+        next = response.next as string | undefined;
+        if (next && visited.has(next)) {
+            return malformed(operation, response);
+        }
+        if (next) visited.add(next);
+    } while (next);
+    return result;
 }
 
 export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter {
@@ -167,58 +210,48 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                         };
                         this.emit("message.private", messageData);
                     }
-                } else if (eventType === "message-deleted" && event.message) {
-                    // 消息删除通知
-                    const noticeType = event.channel
-                        ? "group_message_delete"
-                        : "private_message_delete";
-                    const noticeData: Record<string, unknown> = {
+                } else if (
+                    eventType === "message-deleted" &&
+                    event.message &&
+                    !event.guild &&
+                    event.user
+                ) {
+                    // 公会频道删除事件没有对应 canonical 类型，仅从 raw event 保真转发。
+                    this.emit("notice.private_message_delete", {
                         timestamp: Math.floor(event.timestamp / 1000),
                         bot_id: botId,
-                        notice_type: noticeType,
+                        notice_type: "private_message_delete",
+                        sub_type: "delete",
                         message_id: event.message.id,
-                    };
-
-                    if (event.channel) {
-                        noticeData.channel_id = event.channel.id;
-                    }
-                    if (event.user) {
-                        noticeData.user_id = event.user.id;
-                    }
-                    if (event.operator) {
-                        noticeData.operator_id = event.operator.id;
-                    }
-
-                    (this as EventEmitter).emit(`notice.${noticeType}`, noticeData);
+                        user_id: event.user.id,
+                    });
                 }
             }
             // 群组成员事件
-            else if (eventType.startsWith("guild-member-")) {
-                const noticeType =
-                    eventType === "guild-member-added"
-                        ? "group_member_increase"
-                        : "group_member_decrease";
-                const noticeData: Record<string, unknown> = {
+            else if (eventType === "guild-member-added" && event.guild && event.user) {
+                this.emit("notice.group_member_increase", {
                     timestamp: Math.floor(event.timestamp / 1000),
                     bot_id: botId,
-                    notice_type: noticeType,
-                };
-
-                if (event.guild) {
-                    noticeData.group_id = event.guild.id;
-                }
-                if (event.user) {
-                    noticeData.user_id = event.user.id;
-                }
-                if (event.operator) {
-                    noticeData.operator_id = event.operator.id;
-                }
-
-                (this as EventEmitter).emit(`notice.${noticeType}`, noticeData);
+                    notice_type: "group_member_increase",
+                    sub_type: "approve",
+                    group_id: event.guild.id,
+                    user_id: event.user.id,
+                    operator_id: event.operator?.id,
+                });
+            } else if (eventType === "guild-member-removed" && event.guild && event.user) {
+                this.emit("notice.group_member_decrease", {
+                    timestamp: Math.floor(event.timestamp / 1000),
+                    bot_id: botId,
+                    notice_type: "group_member_decrease",
+                    sub_type: event.operator ? "kick" : "leave",
+                    group_id: event.guild.id,
+                    user_id: event.user.id,
+                    operator_id: event.operator?.id,
+                });
             }
             // 好友请求事件
             else if (eventType === "friend-request") {
-                const requestData: Record<string, unknown> = {
+                const requestData = {
                     timestamp: Math.floor(event.timestamp / 1000),
                     bot_id: botId,
                     request_type: "friend",
@@ -228,11 +261,11 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                     flag: String(event.id || Date.now()),
                 };
 
-                (this as EventEmitter).emit("request.friend", requestData);
+                this.emit("request.friend", requestData);
             }
             // 群组请求事件
             else if (eventType === "guild-request") {
-                const requestData: Record<string, unknown> = {
+                const requestData = {
                     timestamp: Math.floor(event.timestamp / 1000),
                     bot_id: botId,
                     request_type: "group",
@@ -241,17 +274,18 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                     group_id: event.guild?.id || "",
                     comment: (event.message?.content as string) || "",
                     flag: String(event.id || Date.now()),
+                    sub_type: "add" as const,
                 };
 
-                (this as EventEmitter).emit("request.group", requestData);
+                this.emit("request.group", requestData);
             }
 
             // 转发原始事件
-            (this as EventEmitter).emit("event", event);
+            this.emit("event", event);
         }
 
         async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<unknown> {
-            const { scene_type, scene_id, message } = options;
+            const { scene_id, message } = options;
 
             // Satori 使用 message.create API
             return this.httpClient.post("/message.create", {
@@ -260,15 +294,7 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
             });
         }
 
-        async recallMessage(message_id: string): Promise<boolean> {
-            // Satori 使用 message.delete API，但需要 channel_id
-            // 由于我们没有 channel_id，这里暂时抛出错误
-            throw new Error(
-                "recallMessage requires channel_id in Satori, use deleteMessage instead",
-            );
-        }
-
-        async getUserInfo(user_id: string): Promise<User<string>> {
+        async getUserInfo(user_id: string): Promise<User.Data<string>> {
             const data = await this.httpClient.post<Record<string, unknown>>("/user.get", {
                 user_id,
             });
@@ -277,25 +303,40 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                 user_name: (data.name as string) || (data.username as string) || "",
                 avatar: (data.avatar as string) || "",
             };
-            return { info: userData } as unknown as User<string>;
+            return userData;
         }
 
-        async getFriendInfo(user_id: string): Promise<Friend<string>> {
-            // Satori 没有单独的 get_friend_info，使用 get_user_info
-            const user = await this.getUserInfo(user_id);
-            const friendData: Friend.Data<string> = {
-                ...user.info,
-                remark: "",
-            };
-            return { info: friendData } as unknown as Friend<string>;
+        async getFriendInfo(user_id: string): Promise<Friend.Data<string>> {
+            const friends = await this.getFriendList();
+            const friend = friends.find(item => item.user_id === user_id);
+            if (friend) return friend;
+            throw new ProtocolError({
+                protocol: "satori-v1",
+                operation: "friend.list",
+                kind: "validation",
+                message: `Satori 好友 ${user_id} 不存在`,
+            });
         }
 
-        async getUserList(): Promise<User<string>[]> {
-            // Satori 没有 getUserList，返回空数组
-            return [];
+        async getUserList(): Promise<User.Data<string>[]> {
+            return this.getFriendList();
         }
 
-        async getGroupInfo(group_id: string): Promise<Group<string>> {
+        private async getFriendList(): Promise<Friend.Data<string>[]> {
+            const friends = await collectList("friend.list", next =>
+                this.httpClient.post("/friend.list", next ? { next } : {}),
+            );
+            return friends.map(friend => {
+                if (typeof friend.id !== "string") return malformed("friend.list", friend);
+                return {
+                    user_id: friend.id,
+                    user_name: (friend.name as string) || (friend.username as string) || "",
+                    avatar: (friend.avatar as string) || "",
+                };
+            });
+        }
+
+        async getGroupInfo(group_id: string): Promise<Group.Data<string>> {
             // Satori 使用 guild.get API
             const data = await this.httpClient.post<Record<string, unknown>>("/guild.get", {
                 guild_id: group_id,
@@ -305,54 +346,65 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                 group_name: (data.name as string) || "",
                 avatar: (data.avatar as string) || "",
             };
-            return { info: groupData } as unknown as Group<string>;
+            return groupData;
         }
 
-        async getGroupList(): Promise<Group<string>[]> {
-            const response = await this.httpClient.post<unknown>("/guild.list", {});
-            if (Array.isArray(response)) {
-                return (response as Array<Record<string, unknown>>).map(item => {
-                    const groupData: Group.Data<string> = {
-                        group_id: item.id as string,
-                        group_name: (item.name as string) || "",
-                        avatar: (item.avatar as string) || "",
-                    };
-                    return { info: groupData } as unknown as Group<string>;
-                });
-            }
-            return [];
+        async getGroupList(): Promise<Group.Data<string>[]> {
+            const guilds = await collectList("guild.list", next =>
+                this.httpClient.post("/guild.list", next ? { next } : {}),
+            );
+            return guilds.map(guild => {
+                if (typeof guild.id !== "string") return malformed("guild.list", guild);
+                return {
+                    group_id: guild.id,
+                    group_name: (guild.name as string) || "",
+                    avatar: (guild.avatar as string) || "",
+                };
+            });
         }
 
-        async getGroupMemberInfo(group_id: string, user_id: string): Promise<User<string>> {
+        async getGroupMemberInfo(
+            group_id: string,
+            user_id: string,
+        ): Promise<GroupMember.Data<string>> {
             const data = await this.httpClient.post<Record<string, unknown>>("/guild.member.get", {
                 guild_id: group_id,
                 user_id,
             });
             const userObj = data.user as Record<string, unknown> | undefined;
-            const userData: User.Data<string> = {
+            const userData: GroupMember.Data<string> = {
                 user_id: (userObj?.id as string) || (data.user_id as string) || user_id,
                 user_name: (userObj?.name as string) || (data.nickname as string) || "",
                 avatar: (userObj?.avatar as string) || (data.avatar as string) || "",
+                group_id,
             };
-            return { info: userData } as unknown as User<string>;
+            return userData;
         }
 
-        async getGroupMemberList(group_id: string): Promise<User<string>[]> {
-            const response = await this.httpClient.post<unknown>("/guild.member.list", {
-                guild_id: group_id,
+        async getGroupMemberList(group_id: string): Promise<GroupMember.Data<string>[]> {
+            const members = await collectList("guild.member.list", next =>
+                this.httpClient.post("/guild.member.list", {
+                    guild_id: group_id,
+                    ...(next ? { next } : {}),
+                }),
+            );
+            return members.map(item => {
+                const user = isRecord(item.user) ? item.user : undefined;
+                const userId = user?.id ?? item.user_id;
+                if (typeof userId !== "string") {
+                    return malformed("guild.member.list", item);
+                }
+                return {
+                    user_id: userId,
+                    user_name:
+                        (user?.name as string) ||
+                        (item.nick as string) ||
+                        (item.nickname as string) ||
+                        "",
+                    avatar: (user?.avatar as string) || (item.avatar as string) || "",
+                    group_id,
+                };
             });
-            if (Array.isArray(response)) {
-                return (response as Array<Record<string, unknown>>).map(item => {
-                    const userObj = item.user as Record<string, unknown> | undefined;
-                    const userData: User.Data<string> = {
-                        user_id: (userObj?.id as string) || (item.user_id as string),
-                        user_name: (userObj?.name as string) || (item.nickname as string) || "",
-                        avatar: (userObj?.avatar as string) || (item.avatar as string) || "",
-                    };
-                    return { info: userData } as unknown as User<string>;
-                });
-            }
-            return [];
         }
 
         async kickGroupMember(group_id: string, user_id: string): Promise<void> {
@@ -372,11 +424,6 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                 user_id,
                 duration,
             });
-        }
-
-        async getMessage(message_id: string): Promise<import("imhelper").MessageEvent<string>> {
-            // Satori 的 message.get 需要 channel_id，这里暂时抛出错误
-            throw new Error("getMessage requires channel_id in Satori");
         }
 
         async start(port?: number): Promise<void> {

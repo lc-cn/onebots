@@ -46,6 +46,7 @@ export namespace GroupMessageEvent {
     export interface Data<
         Id extends string | number = string | number,
     > extends MessageEvent.Data<Id> {
+        message_type: "group";
         group_id: Id;
         sub_type?: "normal" | "anonymous" | "notice";
         anonymous?: {

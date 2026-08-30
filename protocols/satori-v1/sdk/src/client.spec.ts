@@ -157,4 +157,56 @@ describe("Satori V1 client", () => {
             kind: "protocol",
         } satisfies Partial<ProtocolError>);
     });
+
+    test("collects paginated Satori lists and projects bound entities", async () => {
+        const call = vi.fn(async (_resource: string, _method: string, params = {}) =>
+            "next" in params
+                ? { data: [{ id: "guild-2", name: "第二页" }] }
+                : { data: [{ id: "guild-1", name: "第一页" }], next: "page-2" },
+        );
+        const client = createSatoriClient({
+            baseUrl: "https://api.example/v1",
+            platform: "test",
+            selfId: "bot",
+            receiveMode: "manual",
+            call,
+        });
+
+        const groups = await client.getGroupList();
+
+        expect(groups.map(group => group.groupName)).toEqual(["第一页", "第二页"]);
+        expect(call).toHaveBeenNthCalledWith(1, "guild", "list", {});
+        expect(call).toHaveBeenNthCalledWith(2, "guild", "list", { next: "page-2" });
+    });
+
+    test("emits complete canonical guild member notices", () => {
+        const client = createSatoriClient({
+            baseUrl: "https://api.example/v1",
+            platform: "test",
+            selfId: "bot",
+            receiveMode: "manual",
+        });
+        const listener = vi.fn();
+        client.adapter.on("notice.group_member_increase", listener);
+
+        client.ingest({
+            id: "event-1",
+            type: "guild-member-added",
+            platform: "test",
+            timestamp: 1_700_000_000_000,
+            guild: { id: "guild-1" },
+            user: { id: "user-1" },
+            operator: { id: "admin-1" },
+        });
+
+        expect(listener).toHaveBeenCalledWith({
+            timestamp: 1_700_000_000,
+            bot_id: "bot",
+            notice_type: "group_member_increase",
+            sub_type: "approve",
+            group_id: "guild-1",
+            user_id: "user-1",
+            operator_id: "admin-1",
+        });
+    });
 });

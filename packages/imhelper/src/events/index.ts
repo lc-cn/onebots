@@ -23,30 +23,6 @@ export * from "./factory.js";
 // 事件工具函数
 export * from "./utils.js";
 
-// 类型联合
-export type {
-    PrivateMessageEvent,
-    GroupMessageEvent,
-    ChannelMessageEvent,
-} from "./message/index.js";
-
-export type {
-    GroupMemberIncreaseNoticeEvent,
-    GroupMemberDecreaseNoticeEvent,
-    GroupMessageDeleteNoticeEvent,
-    PrivateMessageDeleteNoticeEvent,
-    FriendIncreaseNoticeEvent,
-    FriendDecreaseNoticeEvent,
-} from "./notice/index.js";
-
-export type { FriendRequestEvent, GroupRequestEvent } from "./request/index.js";
-
-export type {
-    LifecycleMetaEvent,
-    HeartbeatMetaEvent,
-    StatusUpdateMetaEvent,
-} from "./meta/index.js";
-
 /**
  * 所有消息事件类型的联合
  */
@@ -54,6 +30,12 @@ export type AnyMessageEvent<Id extends string | number = string | number> =
     | import("./message/private.js").PrivateMessageEvent<Id>
     | import("./message/group.js").GroupMessageEvent<Id>
     | import("./message/channel.js").ChannelMessageEvent<Id>;
+
+/** Adapter 与 ImHelper 之间传递的纯消息数据联合。 */
+export type AnyMessageEventData<Id extends string | number = string | number> =
+    | import("./message/private.js").PrivateMessageEvent.Data<Id>
+    | import("./message/group.js").GroupMessageEvent.Data<Id>
+    | import("./message/channel.js").ChannelMessageEvent.Data<Id>;
 
 /**
  * 所有通知事件类型的联合

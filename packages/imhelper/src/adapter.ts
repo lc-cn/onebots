@@ -1,10 +1,12 @@
 import { EventEmitter } from "node:events";
 import type { Message } from "./message.js";
 import { UnsupportedAdapterOperationError } from "./adapter-error.js";
-import { Friend } from "./instances/friend.js";
-import { User } from "./instances/user.js";
-import { Group } from "./instances/group.js";
-import { Channel } from "./instances/channel.js";
+import type { Friend } from "./instances/friend.js";
+import type { User } from "./instances/user.js";
+import type { Group } from "./instances/group.js";
+import type { GroupMember } from "./instances/groupMember.js";
+import type { Channel } from "./instances/channel.js";
+import type { ChannelMember } from "./instances/channelMember.js";
 import type {
     GroupMemberIncreaseNoticeEvent,
     GroupMemberDecreaseNoticeEvent,
@@ -20,7 +22,7 @@ import type {
     PrivateMessageEvent,
     GroupMessageEvent,
     ChannelMessageEvent,
-    MessageEvent,
+    AnyMessageEventData,
 } from "./events/index.js";
 
 const adapterType: unique symbol = Symbol("imhelper.adapter.type");
@@ -49,41 +51,44 @@ export abstract class Adapter<
     async recallMessage(_message_id: Id): Promise<boolean> {
         return this.unsupported("recallMessage");
     }
-    async getUserList(_options?: DirectoryQueryOptions): Promise<User<Id>[]> {
+    async getUserList(_options?: DirectoryQueryOptions): Promise<User.Data<Id>[]> {
         return this.unsupported("getUserList");
     }
-    async getUserInfo(_user_id: Id, _options?: DirectoryQueryOptions): Promise<User<Id>> {
+    async getUserInfo(_user_id: Id, _options?: DirectoryQueryOptions): Promise<User.Data<Id>> {
         return this.unsupported("getUserInfo");
     }
-    async getFriendInfo(_user_id: Id, _options?: DirectoryQueryOptions): Promise<Friend<Id>> {
+    async getFriendInfo(_user_id: Id, _options?: DirectoryQueryOptions): Promise<Friend.Data<Id>> {
         return this.unsupported("getFriendInfo");
     }
-    async getGroupList(_options?: DirectoryQueryOptions): Promise<Group<Id>[]> {
+    async getGroupList(_options?: DirectoryQueryOptions): Promise<Group.Data<Id>[]> {
         return this.unsupported("getGroupList");
     }
-    async getGroupInfo(_group_id: Id, _options?: DirectoryQueryOptions): Promise<Group<Id>> {
+    async getGroupInfo(_group_id: Id, _options?: DirectoryQueryOptions): Promise<Group.Data<Id>> {
         return this.unsupported("getGroupInfo");
     }
-    async getGroupMemberList(_group_id: Id, _options?: DirectoryQueryOptions): Promise<User<Id>[]> {
+    async getGroupMemberList(
+        _group_id: Id,
+        _options?: DirectoryQueryOptions,
+    ): Promise<GroupMember.Data<Id>[]> {
         return this.unsupported("getGroupMemberList");
     }
     async getGroupMemberInfo(
         _group_id: Id,
         _user_id: Id,
         _options?: DirectoryQueryOptions,
-    ): Promise<User<Id>> {
+    ): Promise<GroupMember.Data<Id>> {
         return this.unsupported("getGroupMemberInfo");
     }
-    async getChannelList(): Promise<Channel<Id>[]> {
+    async getChannelList(): Promise<Channel.Data<Id>[]> {
         return this.unsupported("getChannelList");
     }
-    async getChannelInfo(_channel_id: Id): Promise<Channel<Id>> {
+    async getChannelInfo(_channel_id: Id): Promise<Channel.Data<Id>> {
         return this.unsupported("getChannelInfo");
     }
-    async getChannelMemberList(_channel_id: Id): Promise<User<Id>[]> {
+    async getChannelMemberList(_channel_id: Id): Promise<ChannelMember.Data<Id>[]> {
         return this.unsupported("getChannelMemberList");
     }
-    async getChannelMemberInfo(_channel_id: Id, _user_id: Id): Promise<User<Id>> {
+    async getChannelMemberInfo(_channel_id: Id, _user_id: Id): Promise<ChannelMember.Data<Id>> {
         return this.unsupported("getChannelMemberInfo");
     }
     async kickGroupMember(_group_id: Id, _user_id: Id): Promise<void> {
@@ -119,7 +124,7 @@ export abstract class Adapter<
         return this.unsupported("deleteMessageReaction");
     }
     /** 获取消息 */
-    async getMessage(_message_id: Id): Promise<MessageEvent<Id>> {
+    async getMessage(_message_id: Id): Promise<AnyMessageEventData<Id>> {
         return this.unsupported("getMessage");
     }
     /** 编辑消息 */

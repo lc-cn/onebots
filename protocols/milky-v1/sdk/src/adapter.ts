@@ -355,7 +355,7 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
         messageSeq: number,
     ): Promise<boolean> {
         if (scene === "temp") {
-            throw new Error("Milky 临时会话不支持通用撤回，请直接调用协议 action");
+            return this.unsupported("recallMessageIn:temp");
         }
         const response = await this.call(
             scene === "group" ? "recall_group_message" : "recall_private_message",

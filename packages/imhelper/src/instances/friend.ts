@@ -14,8 +14,7 @@ export class Friend<Id extends string | number = string | number> extends User<I
         return this.helper.adapter.deleteFriend(this.user_id);
     }
     async refresh() {
-        const updated = await this.helper.adapter.getFriendInfo(this.user_id, { fresh: true });
-        this.info = updated.info;
+        await this.helper.getFriendInfo(this.user_id, { fresh: true });
         return this;
     }
 }

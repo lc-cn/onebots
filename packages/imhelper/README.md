@@ -18,7 +18,7 @@ import { createOnebot11Client } from "@imhelper/onebot-v11";
 const client = createOnebot11Client({
   baseUrl: "http://localhost:6727/kook/zhin/onebot/v11",
   apiBaseUrl: "http://localhost:6727/kook/zhin/onebot/v11",
-  selfId: "zhin",
+  selfId: "10001",
   accessToken: "your_token",
   receiveMode: "ws",
 });
@@ -120,18 +120,20 @@ await client.sendChannelMessage(channelId, "频道消息");
 ### 实例选择器
 
 ```typescript
-const user = client.pickUser(userId);
-const friend = client.pickFriend(userId);
-const group = client.pickGroup(groupId);
-const channel = client.pickChannel(channelId);
-const member = client.pickGroupMember(groupId, userId);
+const user = await client.getUserInfo(userId);
+const friend = await client.getFriendInfo(userId);
+const group = await client.getGroupInfo(groupId);
+const member = await client.getGroupMemberInfo(groupId, userId);
 ```
 
-实例对象提供对应场景的便捷操作，例如 `user.send(message)`、`group.send(message)`、`channel.send(message)`。
+查询 API 会把协议 DTO 缓存并投影成绑定当前 Client 的实例。同一实体刷新后保持对象身份，已有引用会立即看到新数据；实例提供 `sendMessage()`、`refresh()`、`kick()`、`mute()` 等对应场景行为。`pick*()` 只选择已经由查询或事件写入缓存的实体，不发起网络请求。
 
 ### 查询、文件与请求
 
-- `getUserList()`、`getGroupList()`、`getChannelList()`
+- `getUserList()`、`getUserInfo()`、`getFriendInfo()`
+- `getGroupList()`、`getGroupInfo()`、`getGroupMemberList()`、`getGroupMemberInfo()`
+- `getChannelList()`、`getChannelInfo()`、`getChannelMemberList()`、`getChannelMemberInfo()`
+- `getMessage()`：返回绑定当前 Client 的消息事件，可直接 `reply()` / `recall()`
 - `uploadFile(file, filename?)`、`getFile(fileId)`
 - `approveFriendRequest(requestId, approve?, comment?)`
 - `approveGroupRequest(requestId, approve?, reason?)`
@@ -162,6 +164,11 @@ class CustomAdapter extends Adapter<string, CustomRawEvent> {
 
   transformEvent(rawEvent: CustomRawEvent): void {
     // 校验并转换 rawEvent，然后调用 this.emit('message.private', data) 等。
+  }
+
+  async getUserInfo(userId: string) {
+    // Adapter 边界只返回可序列化 DTO；ImHelper 负责构造带行为的 User 实例。
+    return { user_id: userId, user_name: "Alice", avatar: "" };
   }
 }
 

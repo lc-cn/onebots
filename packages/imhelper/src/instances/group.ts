@@ -1,5 +1,4 @@
 import { ImHelper } from "../imhelper.js";
-import { GroupMember } from "./groupMember.js";
 import type { Message } from "../message.js";
 export class Group<Id extends string | number = string | number> {
     constructor(
@@ -16,7 +15,12 @@ export class Group<Id extends string | number = string | number> {
         return this.info.avatar;
     }
     get members() {
-        return Array.from(this.helper.$groupMemberMap.get(this.group_id)?.values() || []);
+        const members = this.helper.$groupMemberMap.get(this.group_id);
+        return members
+            ? Array.from(members.keys(), userId =>
+                  this.helper.pickGroupMember(this.group_id, userId),
+              )
+            : [];
     }
     setAdmin(userId: Id) {
         return this.helper.adapter.setGroupMemberAdmin(this.group_id, userId, true);
@@ -44,25 +48,13 @@ export class Group<Id extends string | number = string | number> {
         return this.helper.adapter.leaveGroup(this.group_id);
     }
     async refresh() {
-        const updated = await this.helper.adapter.getGroupInfo(this.group_id, { fresh: true });
-        this.info = updated.info;
+        await this.helper.getGroupInfo(this.group_id, { fresh: true });
         return this;
     }
     async refreshMembers() {
-        const members = await this.helper.adapter.getGroupMemberList(this.group_id, {
+        return this.helper.getGroupMemberList(this.group_id, {
             fresh: true,
         });
-        const memberMap = new Map<Id, GroupMember.Data<Id>>();
-        for (const member of members) {
-            memberMap.set(member.user_id, {
-                user_id: member.user_id,
-                user_name: member.user_name,
-                avatar: member.avatar,
-                group_id: this.group_id,
-            });
-        }
-        this.helper.$groupMemberMap.set(this.group_id, memberMap);
-        return this.members;
     }
 }
 export namespace Group {

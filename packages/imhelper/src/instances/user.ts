@@ -34,8 +34,7 @@ export class User<Id extends string | number = string | number> {
         });
     }
     async refresh() {
-        const updated = await this.helper.adapter.getUserInfo(this.user_id, { fresh: true });
-        this.info = updated.info;
+        await this.helper.getUserInfo(this.user_id, { fresh: true });
         return this;
     }
 }

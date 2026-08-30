@@ -62,6 +62,10 @@ await client.sendPrivateMessage(123456789, "你好");
 await client.sendGroupMessage(987654321, "大家好");
 await client.inviteFriendToGroup(987654321, 123456789);
 await client.acceptFriendRequest("opaque-flag-from-request-event", "已验证");
+
+const friends = await client.getUserList(); // 调用标准 get_friend_list
+const group = await client.getGroupInfo(987654321);
+const message = await client.getMessage(10001); // 调用 get_msg，返回可 reply/recall 的事件实例
 ```
 
 `acceptFriendRequest()` 的 `flag` 必须原样取自 `request.friend` 事件，不能传好友 QQ 号。
@@ -81,7 +85,7 @@ const client = createOnebot11Client({
 });
 ```
 
-宿主已经管理 HTTP/WS 连接时可设置 `receiveMode: "manual"`，再调用 `ingest()`、`acceptHttp()` 或 `acceptWebSocket()`；此模式不会自行连接或监听端口。协议调用失败会抛出带 `protocol`、`operation`、`kind` 和 HTTP 状态等字段的 `ProtocolError`。
+宿主已经管理 HTTP/WS 连接时可设置 `receiveMode: "manual"`，再调用 `ingest()`、`acceptHttp()` 或 `acceptWebSocket()`；此模式不会自行连接或监听端口。协议调用失败或成功响应的数据结构不合法时都会抛出带 `protocol`、`operation`、`kind` 和 HTTP 状态等字段的 `ProtocolError`，不会用空目录掩盖错误。
 
 ## WebSocket 恢复策略
 

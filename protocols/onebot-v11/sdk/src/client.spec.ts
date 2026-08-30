@@ -2,6 +2,7 @@ import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { createOnebot11Client } from "./client.js";
 import { ProtocolError } from "./index.js";
+import { PrivateMessageEvent, User } from "imhelper";
 import type { OneBotV11Event, OneBotV11Response } from "./types.js";
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -43,7 +44,7 @@ describe("OneBot V11 client", () => {
         const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: "ok" })));
         const client = createOnebot11Client({
             baseUrl: "https://gateway.example/kook/bot/onebot/v11",
-            selfId: "bot",
+            selfId: "1",
             receiveMode: "ws",
             fetch: fetchMock,
         });
@@ -98,7 +99,7 @@ describe("OneBot V11 client", () => {
         const createWebSocket = vi.fn(() => socket as never);
         const client = createOnebot11Client({
             baseUrl: "https://gateway.example/kook/bot/onebot/v11",
-            selfId: "bot",
+            selfId: "1",
             receiveMode: "ws",
             webSocket: { createWebSocket },
         });
@@ -126,5 +127,80 @@ describe("OneBot V11 client", () => {
             operation: "get_msg",
             code: 1404,
         } satisfies Partial<ProtocolError>);
+    });
+
+    test("projects friend directory DTOs to bound user instances", async () => {
+        const call = vi.fn(async (action: string) => ({
+            status: "ok" as const,
+            retcode: 0,
+            data:
+                action === "get_friend_list"
+                    ? [{ user_id: 2, nickname: "好友", remark: "备注" }]
+                    : {},
+        }));
+        const client = createOnebot11Client({
+            baseUrl: "https://example.test",
+            selfId: "1",
+            receiveMode: "manual",
+            call,
+        });
+
+        const [user] = await client.getUserList();
+        await user.sendMessage("hello");
+
+        expect(user).toBeInstanceOf(User);
+        expect(user.user_name).toBe("好友");
+        expect(call).toHaveBeenNthCalledWith(1, "get_friend_list", {});
+        expect(call).toHaveBeenNthCalledWith(2, "send_private_msg", {
+            user_id: 2,
+            message: "hello",
+        });
+    });
+
+    test("returns a bound message event from get_msg", async () => {
+        const call = vi.fn(async (action: string) => ({
+            status: "ok" as const,
+            retcode: 0,
+            data:
+                action === "get_msg"
+                    ? {
+                          time: 10,
+                          message_type: "private",
+                          message_id: 7,
+                          sender: { user_id: 2 },
+                          message: "hello",
+                      }
+                    : {},
+        }));
+        const client = createOnebot11Client({
+            baseUrl: "https://example.test",
+            selfId: "1",
+            receiveMode: "manual",
+            call,
+        });
+
+        const message = await client.getMessage(7);
+        await message.reply("world");
+
+        expect(message).toBeInstanceOf(PrivateMessageEvent);
+        expect(call).toHaveBeenNthCalledWith(1, "get_msg", { message_id: 7 });
+        expect(call).toHaveBeenNthCalledWith(2, "send_private_msg", {
+            user_id: 2,
+            message: "world",
+        });
+    });
+
+    test("rejects malformed directory responses instead of hiding them as empty lists", async () => {
+        const client = createOnebot11Client({
+            baseUrl: "https://example.test",
+            selfId: "1",
+            receiveMode: "manual",
+            call: async () => ({ status: "ok", retcode: 0, data: {} }),
+        });
+
+        await expect(client.getUserList()).rejects.toMatchObject({
+            name: "ProtocolError",
+            operation: "get_friend_list",
+        });
     });
 });

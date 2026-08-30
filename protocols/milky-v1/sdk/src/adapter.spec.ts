@@ -209,10 +209,11 @@ describe("Milky V1 SDK", () => {
         });
 
         await expect(client.adapter.getGroupInfo("30003", { fresh: true })).resolves.toMatchObject({
-            info: { group_id: "30003", group_name: "OneBots" },
+            group_id: "30003",
+            group_name: "OneBots",
         });
         await expect(client.adapter.getGroupMemberList("30003", { fresh: true })).resolves.toEqual([
-            expect.objectContaining({ info: expect.objectContaining({ user_id: "20002" }) }),
+            expect.objectContaining({ user_id: "20002", group_id: "30003" }),
         ]);
         expect(call).toHaveBeenNthCalledWith(1, "get_group_info", {
             group_id: 30003,

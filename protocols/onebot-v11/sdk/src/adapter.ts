@@ -1,11 +1,7 @@
-import { EventEmitter } from "node:events";
 import {
     Adapter,
     ReceiveTransport,
     Message,
-    type User,
-    type Group,
-    type Friend,
     type PrivateMessageEvent,
     type GroupMessageEvent,
     type WebSocketReceiverOptions,
@@ -17,6 +13,7 @@ import {
     type OneBotV11Call,
 } from "./types.js";
 import { HttpClient } from "./http-client.js";
+import { OneBotV11ResourceApi } from "./resource-api.js";
 
 export interface OneBotV11AdapterConfig {
     baseUrl: string;
@@ -61,6 +58,7 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
     class OneBotV11AdapterImpl extends Adapter<number, OneBotV11Event> implements OneBotV11Adapter {
         public readonly selfId: string = selfId;
         private httpClient: HttpClient;
+        private readonly resourceApi: OneBotV11ResourceApi;
         private readonly receiveTransport: ReceiveTransport<number, OneBotV11Event>;
         private readonly requestFlags = new Map<number, string>();
         private readonly requestIds = new Map<string, number>();
@@ -77,6 +75,14 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
                 call: config.call,
                 fetch: config.fetch,
             });
+            const numericSelfId = Number(selfId);
+            if (!Number.isFinite(numericSelfId)) {
+                throw new TypeError("OneBot V11 selfId 必须是有效数字");
+            }
+            this.resourceApi = new OneBotV11ResourceApi(
+                (action, params) => this.httpClient.post(action, params),
+                numericSelfId,
+            );
 
             this.receiveTransport = new ReceiveTransport(this, {
                 mode: receiveMode,
@@ -257,7 +263,7 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
             }
 
             // 转发原始事件
-            (this as EventEmitter).emit("event", event);
+            this.emit("event", event);
         }
 
         private resolveRequestId(flag: string): number {
@@ -299,101 +305,32 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
             return response.status === "ok";
         }
 
-        async getUserInfo(user_id: number): Promise<User<number>> {
-            const response = await this.httpClient.post("/get_stranger_info", {
-                user_id,
-            });
-            if (response.status === "ok" && response.data) {
-                const data = response.data as Record<string, unknown>;
-                const userData: User.Data<number> = {
-                    user_id: data.user_id as number,
-                    user_name: (data.nickname as string) || "",
-                    avatar: (data.avatar as string) || "",
-                };
-                // 创建临时 User 实例，helper 会在使用时被替换
-                return { info: userData } as unknown as User<number>;
-            }
-            throw new Error("Failed to get user info");
+        getUserInfo(userId: number) {
+            return this.resourceApi.getUserInfo(userId);
         }
 
-        async getFriendInfo(user_id: number): Promise<Friend<number>> {
-            // OneBot V11 没有单独的 get_friend_info，使用 get_stranger_info
-            const user = await this.getUserInfo(user_id);
-            const friendData: Friend.Data<number> = {
-                ...user.info,
-                remark: "",
-            };
-            return { info: friendData } as unknown as Friend<number>;
+        getFriendInfo(userId: number) {
+            return this.resourceApi.getFriendInfo(userId);
         }
 
-        async getUserList(): Promise<User<number>[]> {
-            // OneBot V11 没有 getUserList，返回空数组
-            return [];
+        getUserList() {
+            return this.resourceApi.getUserList();
         }
 
-        async getGroupInfo(group_id: number): Promise<Group<number>> {
-            const response = await this.httpClient.post("/get_group_info", {
-                group_id,
-            });
-            if (response.status === "ok" && response.data) {
-                const data = response.data as Record<string, unknown>;
-                const groupData: Group.Data<number> = {
-                    group_id: data.group_id as number,
-                    group_name: (data.group_name as string) || "",
-                    avatar: "",
-                };
-                return { info: groupData } as unknown as Group<number>;
-            }
-            throw new Error("Failed to get group info");
+        getGroupInfo(groupId: number) {
+            return this.resourceApi.getGroupInfo(groupId);
         }
 
-        async getGroupList(): Promise<Group<number>[]> {
-            const response = await this.httpClient.post("/get_group_list", {});
-            if (response.status === "ok" && Array.isArray(response.data)) {
-                return (response.data as Array<Record<string, unknown>>).map(item => {
-                    const groupData: Group.Data<number> = {
-                        group_id: item.group_id as number,
-                        group_name: (item.group_name as string) || "",
-                        avatar: "",
-                    };
-                    return { info: groupData } as unknown as Group<number>;
-                });
-            }
-            return [];
+        getGroupList() {
+            return this.resourceApi.getGroupList();
         }
 
-        async getGroupMemberInfo(group_id: number, user_id: number): Promise<User<number>> {
-            const response = await this.httpClient.post("/get_group_member_info", {
-                group_id,
-                user_id,
-            });
-            if (response.status === "ok" && response.data) {
-                const data = response.data as Record<string, unknown>;
-                const userData: User.Data<number> = {
-                    user_id: data.user_id as number,
-                    user_name: (data.nickname as string) || (data.card as string) || "",
-                    avatar: (data.avatar as string) || "",
-                };
-                return { info: userData } as unknown as User<number>;
-            }
-            throw new Error("Failed to get group member info");
+        getGroupMemberInfo(groupId: number, userId: number) {
+            return this.resourceApi.getGroupMemberInfo(groupId, userId);
         }
 
-        async getGroupMemberList(group_id: number): Promise<User<number>[]> {
-            const response = await this.httpClient.post("/get_group_member_list", {
-                group_id,
-            });
-            if (response.status === "ok" && Array.isArray(response.data)) {
-                return (response.data as Array<Record<string, unknown>>).map(item => {
-                    const userData: User.Data<number> = {
-                        user_id: item.user_id as number,
-                        user_name: (item.nickname as string) || (item.card as string) || "",
-                        avatar: (item.avatar as string) || "",
-                    };
-                    return { info: userData } as unknown as User<number>;
-                });
-            }
-            return [];
+        getGroupMemberList(groupId: number) {
+            return this.resourceApi.getGroupMemberList(groupId);
         }
 
         async kickGroupMember(group_id: number, user_id: number): Promise<void> {
@@ -489,18 +426,8 @@ export function createOnebot11Adapter(config: OneBotV11AdapterConfig): OneBotV11
             this.requestSubTypes.delete(request_id);
         }
 
-        async getMessage(message_id: number): Promise<import("imhelper").MessageEvent<number>> {
-            const response = await this.httpClient.post("/get_msg", {
-                message_id,
-            });
-            if (response.status === "ok" && response.data) {
-                // 这里需要根据实际返回的数据构造 MessageEvent
-                // 由于需要 helper 实例，这里暂时抛出错误，由调用方处理
-                throw new Error(
-                    "getMessage requires helper instance, use helper.getMessage instead",
-                );
-            }
-            throw new Error("Failed to get message");
+        getMessage(messageId: number) {
+            return this.resourceApi.getMessage(messageId);
         }
 
         async start(port?: number): Promise<void> {

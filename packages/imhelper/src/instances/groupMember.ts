@@ -14,6 +14,21 @@ export class GroupMember<Id extends string | number = string | number> extends U
     get group(): import("./group.js").Group<Id> {
         return this.helper.pickGroup(this.group_id);
     }
+    get role() {
+        return this.info.role;
+    }
+    get joinTime() {
+        return this.info.join_time;
+    }
+    get lastSentTime() {
+        return this.info.last_sent_time;
+    }
+    get level() {
+        return this.info.level;
+    }
+    get title() {
+        return this.info.title;
+    }
     setAdmin() {
         return this.helper.adapter.setGroupMemberAdmin(this.group_id, this.user_id, true);
     }
@@ -36,13 +51,9 @@ export class GroupMember<Id extends string | number = string | number> extends U
         return this.helper.adapter.setGroupMemberCard(this.group_id, this.user_id, card);
     }
     async refresh() {
-        const updated = await this.helper.adapter.getGroupMemberInfo(this.group_id, this.user_id, {
+        await this.helper.getGroupMemberInfo(this.group_id, this.user_id, {
             fresh: true,
         });
-        this.info = {
-            ...updated.info,
-            group_id: this.group_id,
-        };
         return this;
     }
 }

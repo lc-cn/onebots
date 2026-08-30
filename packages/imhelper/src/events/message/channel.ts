@@ -53,6 +53,7 @@ export namespace ChannelMessageEvent {
     export interface Data<
         Id extends string | number = string | number,
     > extends MessageEvent.Data<Id> {
+        message_type: "channel";
         channel_id: Id;
         guild_id?: Id;
     }
