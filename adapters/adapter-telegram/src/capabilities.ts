@@ -1,8 +1,17 @@
 import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+const platformActions = Object.fromEntries(
+    [...TELEGRAM_PLATFORM_ACTIONS].map(action => [
+        action,
+        { support: "native" as const, availability: "context" as const },
+    ]),
+);
 
 /** Telegram Bot API 当前可用的能力。 */
 export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
+        ...platformActions,
         send_message: { support: "native", scenes: ["private", "group", "channel"] },
         delete_message: { support: "native", availability: "context" },
         update_message: {

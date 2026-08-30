@@ -75,7 +75,10 @@ onebots -r telegram
 - ✅ 图片、视频、音频、文件发送
 - ✅ 消息编辑和删除
 - ✅ 群组管理：踢出/禁言成员、设置管理员、群名、管理员头衔、处理入群申请
-- ✅ Bot API 扩展动作：投票、转发/复制、Reaction、置顶、邀请链接、群描述
+- ✅ Bot API 扩展动作：投票、转发/复制、完整 ReactionType、置顶、邀请链接与群权限
+- ✅ Forum Topic 完整生命周期：创建、编辑、关闭、重开、删除与清理置顶
+- ✅ Bot 命令、名称、长短描述、菜单按钮与默认管理员权限
+- ✅ Callback、Inline、Shipping 与 Pre-checkout 查询应答
 - ✅ Callback/Inline/支付查询、消息编辑、机器人群生命周期、成员变化、入群申请的标准事件投影
 - ✅ Reaction 增删与批量商业消息删除会拆成独立、唯一 ID 的标准事件
 - ✅ 其他 Telegram Update 以 `notice.custom` + `raw_event` 无损交付
@@ -96,7 +99,7 @@ onebots -r telegram
 }
 ```
 
-当前扩展动作包括：`send_poll`、`forward_message`、`copy_message`、 `set_message_reaction`、`pin_message`、`unpin_message`、 `create_chat_invite_link`、`set_chat_description`。
+扩展动作按消息、聊天/论坛、Bot 管理和交互应答四个领域组织，并全部进入同一不可变能力注册表。`set_message_reaction` 同时接受 emoji 字符串与官方 `ReactionType` 对象，因此 custom emoji 不会被压扁。完整动作可通过 `get_supported_actions` 动态查询；未来 Bot API 仍可由 `call_telegram_api` 无损调用。
 
 高级集成可直接构造 `TelegramBot`，通过 `ingest(rawUpdate)` 把现有 HTTP 服务、队列或测试夹具收到的 Update 交给同一 grammY 中间件和去重链；Fetch / WinterCG Host 可直接调用 `acceptHttp(request)`，复用 secret 校验和结构化响应。`raw_update` 保留每次投递，`update` 仅在业务监听器成功后提交去重状态。所有原生调用可经 `callApi(method, task)` 获得统一的 `TelegramError`，其中包含 Telegram `error_code`、`retry_after` 和 `migrate_to_chat_id`。
 

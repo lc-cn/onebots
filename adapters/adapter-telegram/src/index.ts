@@ -14,6 +14,9 @@ export { resolveTelegramReceiveConfig, type TelegramReceiveConfig } from "./rece
 export { TelegramBot, type TelegramBotEvents } from "./bot.js";
 export { TelegramError, type TelegramErrorOptions } from "./errors.js";
 export { projectTelegramEvents, type TelegramEventProjectorContext } from "./events.js";
+export { TELEGRAM_BOT_ACTIONS } from "./platform-actions-bot.js";
+export { TELEGRAM_CHAT_ACTIONS } from "./platform-actions-chat.js";
+export { TELEGRAM_INTERACTION_ACTIONS } from "./platform-actions-interaction.js";
 export {
     TELEGRAM_PLATFORM_ACTIONS,
     executeTelegramPlatformAction,

@@ -12,6 +12,8 @@ describe("Telegram 能力清单", () => {
         expect(TelegramAdapter.prototype.isActionImplemented("get_group_member_list")).toBe(false);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("get_chat_administrators")).toBe(true);
         expect(TELEGRAM_PLATFORM_ACTIONS.has("get_chat_member_count")).toBe(true);
+        expect(telegramCapabilities.actions.create_forum_topic?.support).toBe("native");
+        expect(telegramCapabilities.actions.answer_callback_query?.support).toBe("native");
     });
 
     it("所有声明动作均有真实入口", () => {
