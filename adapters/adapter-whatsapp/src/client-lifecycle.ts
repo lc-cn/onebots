@@ -7,7 +7,7 @@ export class WhatsAppClientLifecycle<T extends object> {
     private running = false;
     private value?: T;
 
-    start(load: () => Promise<T>, onReady: (value: T) => void): Promise<T> {
+    start(load: () => Promise<T>, onReady: (value: T) => void | PromiseLike<void>): Promise<T> {
         if (this.startPromise) return this.startPromise;
         if (this.running && this.value) return Promise.resolve({ ...this.value });
         const generation = ++this.generation;
@@ -33,7 +33,7 @@ export class WhatsAppClientLifecycle<T extends object> {
     private async load(
         generation: number,
         loader: () => Promise<T>,
-        onReady: (value: T) => void,
+        onReady: (value: T) => void | PromiseLike<void>,
     ): Promise<T> {
         try {
             const value = await loader();
@@ -42,8 +42,13 @@ export class WhatsAppClientLifecycle<T extends object> {
                     code: "WHATSAPP_START_CANCELLED",
                 });
             }
+            await onReady(value);
+            if (!this.running || generation !== this.generation) {
+                throw new WhatsAppApiError("WhatsApp 启动已取消", {
+                    code: "WHATSAPP_START_CANCELLED",
+                });
+            }
             this.value = { ...value };
-            onReady(value);
             return value;
         } catch (error) {
             if (generation === this.generation) this.running = false;

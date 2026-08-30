@@ -178,9 +178,12 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
                 throw error;
             }
         });
-        account.on("stop", () => {
-            client.stop();
-            account.status = AccountStatus.OffLine;
+        account.on("stop", async () => {
+            try {
+                await client.stop();
+            } finally {
+                account.status = AccountStatus.OffLine;
+            }
         });
         return account;
     }

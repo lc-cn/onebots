@@ -4,12 +4,16 @@ import { whatsappSchema } from "./index.js";
 
 describe("WhatsApp 配置 Schema", () => {
     test("按接收模式动态展示 Webhook 配置", () => {
-        for (const field of ["app_secret", "webhook_verify_token", "webhook_path"]) {
+        for (const field of ["app_secret", "webhook_verify_token"]) {
             expect(ruleAt(field).ui?.visibleWhen).toEqual({
                 path: "receive_mode",
-                oneOf: ["webhook"],
+                oneOf: ["webhook", "manual"],
             });
         }
+        expect(ruleAt("webhook_path").ui?.visibleWhen).toEqual({
+            path: "receive_mode",
+            oneOf: ["webhook"],
+        });
     });
 
     test("提供 manual 模式并限制 Graph API Origin", () => {

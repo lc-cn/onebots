@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
-import { emitAwaited, KeyedSingleFlight } from "onebots";
+import { emitAllAwaited, KeyedSingleFlight } from "onebots";
 import { WhatsAppApiError } from "./errors.js";
+import { deliverWhatsAppEvent } from "./event-delivery.js";
 import { WhatsAppGraphApi } from "./graph-api.js";
 import type {
     WhatsAppAPIResponse,
@@ -55,12 +56,12 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     async start(): Promise<WhatsAppPhoneNumberInfo> {
         return this.lifecycle.start(
             () => this.getPhoneNumberInfo(),
-            info => this.emit("ready", info),
+            info => emitAllAwaited(this, "ready", info),
         );
     }
 
-    stop(): void {
-        if (this.lifecycle.stop()) this.emit("stop");
+    async stop(): Promise<void> {
+        if (this.lifecycle.stop()) await emitAllAwaited(this, "stop");
     }
 
     get receiveMode(): "webhook" | "manual" {
@@ -79,25 +80,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
 
     private async deliver(event: WhatsAppWebhookEvent, key: string): Promise<WhatsAppIngestResult> {
         this.observeContacts(event);
-        await emitAwaited(this, "raw_event", event);
-        await emitAwaited(this, "webhook", event);
-        let changes = 0;
-        let messages = 0;
-        let statuses = 0;
-        for (const entry of event.entry) {
-            for (const change of entry.changes) {
-                await emitAwaited(this, "change", change, entry.id);
-                changes += 1;
-                for (const message of change.value.messages || []) {
-                    await emitAwaited(this, "message", message, change.value.metadata, change);
-                    messages += 1;
-                }
-                for (const status of change.value.statuses || []) {
-                    await emitAwaited(this, "status", status, change.value.metadata, change);
-                    statuses += 1;
-                }
-            }
-        }
+        const { changes, messages, statuses } = await deliverWhatsAppEvent(this, event);
         this.markProcessed(key);
         return {
             accepted: messages + statuses,

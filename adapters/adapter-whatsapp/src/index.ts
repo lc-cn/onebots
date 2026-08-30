@@ -78,10 +78,10 @@ export const whatsappSchema: Schema = {
         type: "string",
         label: "App Secret",
         sensitive: true,
-        description: "Meta 应用 Secret，仅用于校验 X-Hub-Signature-256",
+        description: "使用 ingestHttp()/acceptHttp() 时用于校验 X-Hub-Signature-256",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     receive_mode: {
@@ -92,17 +92,17 @@ export const whatsappSchema: Schema = {
             { value: "webhook", label: "Webhook" },
             { value: "manual", label: "手动接入既有 Host/队列" },
         ],
-        description: "manual 不注册路由，由现有连接调用 ingest()",
+        description: "manual 不注册路由，由现有 Host 调用 ingest()/ingestHttp()/acceptHttp()",
         ui: { section: "transport" },
     },
     webhook_verify_token: {
         type: "string",
         label: "Webhook Verify Token",
         sensitive: true,
-        description: "自定义随机令牌，须与 Meta Webhook 配置完全一致",
+        description: "acceptHttp() 处理 Meta GET 验证时使用，须与控制台配置一致",
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     webhook_path: {

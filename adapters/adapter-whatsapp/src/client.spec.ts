@@ -34,7 +34,7 @@ describe("WhatsAppClient", () => {
 
         const first = client.start();
         const concurrent = client.start();
-        client.stop();
+        await client.stop();
         const restarted = client.start();
         await expect(restarted).resolves.toMatchObject({ verified_name: "OneBots" });
         release?.(
@@ -227,6 +227,83 @@ describe("WhatsAppClient", () => {
         await expect(client.ingest(event)).rejects.toThrow("downstream failed");
         client.off("webhook", failure);
         await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: false });
+    });
+
+    it("一个事件视图失败后仍投递全部监听器与细粒度视图", async () => {
+        const client = new WhatsAppClient({ ...config, receive_mode: "manual" });
+        const secondWebhook = vi.fn();
+        const change = vi.fn();
+        const message = vi.fn();
+        const status = vi.fn();
+        client.on("webhook", () => {
+            throw new Error("first webhook failed");
+        });
+        client.on("webhook", secondWebhook);
+        client.on("change", change);
+        client.on("message", message);
+        client.on("status", status);
+        const event = {
+            object: "whatsapp_business_account" as const,
+            entry: [
+                {
+                    id: "waba",
+                    changes: [
+                        {
+                            field: "messages",
+                            value: {
+                                messages: [
+                                    { id: "m1", from: "1", timestamp: "1", type: "text" as const },
+                                ],
+                                statuses: [
+                                    {
+                                        id: "m2",
+                                        recipient_id: "1",
+                                        timestamp: "2",
+                                        status: "read" as const,
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                },
+            ],
+        };
+
+        await expect(client.ingest(event)).rejects.toThrow("first webhook failed");
+        expect(secondWebhook).toHaveBeenCalledOnce();
+        expect(change).toHaveBeenCalledOnce();
+        expect(message).toHaveBeenCalledOnce();
+        expect(status).toHaveBeenCalledOnce();
+    });
+
+    it("等待全部生命周期监听器并在失败后允许重新启动", async () => {
+        const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
+            new Response(JSON.stringify({ id: "phone" }), {
+                headers: { "content-type": "application/json" },
+            }),
+        );
+        const client = new WhatsAppClient(config, fetcher);
+        const laterReady = vi.fn();
+        const failedReady = async (): Promise<void> => {
+            await Promise.resolve();
+            throw new Error("ready failed");
+        };
+        client.on("ready", failedReady);
+        client.on("ready", laterReady);
+
+        await expect(client.start()).rejects.toThrow("ready failed");
+        expect(laterReady).toHaveBeenCalledOnce();
+        client.off("ready", failedReady);
+        await expect(client.start()).resolves.toMatchObject({ id: "phone" });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+
+        let stopped = false;
+        client.on("stop", async () => {
+            await Promise.resolve();
+            stopped = true;
+        });
+        await client.stop();
+        expect(stopped).toBe(true);
     });
 
     it("等待异步监听器并合并同一载荷的并发重投", async () => {

@@ -47,6 +47,9 @@ whatsapp.my_bot:
   phone_number_id: "your_phone_number_id"
   business_account_id: "your_business_account_id"
   access_token: "your_long_lived_access_token"
+  # 复用标准 HTTP 接入时填写；只调用 ingest(rawEvent) 时可省略
+  app_secret: "your_meta_app_secret"
+  webhook_verify_token: "your_random_verify_token"
   api_version: "v23.0"
   receive_mode: manual
 ```
@@ -63,7 +66,7 @@ client.on("message", async (message, metadata, change) => {
 });
 ```
 
-`ingest()` 与 `ingestHttp()` 会等待全部同步/异步监听器，成功后才提交去重并返回 `{ accepted, duplicate, changes, messages, statuses, event }`；并发的同一载荷只执行一次业务投递。`acceptHttp()` 返回可直接交给 Fetch/WinterCG Host 的结构化响应，业务失败返回 500 以触发 Meta 重投。
+`ingest()` 与 `ingestHttp()` 会按原始批次顺序尝试全部同步/异步监听器和事件视图，成功后才提交去重并返回 `{ accepted, duplicate, changes, messages, statuses, event }`；某个出口失败不会截断其他 typed handler，并发的同一载荷只执行一次业务投递。`acceptHttp()` 返回可直接交给 Fetch/WinterCG Host 的结构化响应，业务失败返回 500 以触发 Meta 重投。
 
 ## 原生消息
 
