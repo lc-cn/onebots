@@ -90,7 +90,7 @@ export interface KookEventExtra {
 
 /** Gateway 与 Webhook 共享的事件数据结构。 */
 export interface KookEvent {
-    channel_type: "GROUP" | "PERSON" | "BROADCAST" | "WEBHOOK_CHALLENGE";
+    channel_type: "GROUP" | "PERSON" | "BROADCAST";
     type: KookMessageType;
     target_id: string;
     author_id: string;
@@ -101,17 +101,32 @@ export interface KookEvent {
     verify_token?: string;
     challenge?: string;
     extra: KookEventExtra;
+    [key: string]: unknown;
 }
+
+/** Webhook 地址验证报文，不是可投递的机器人事件。 */
+export interface KookWebhookChallenge {
+    channel_type: "WEBHOOK_CHALLENGE";
+    type: 255;
+    verify_token?: string;
+    challenge: string;
+    [key: string]: unknown;
+}
+
+export type KookInboundEvent = KookEvent | KookWebhookChallenge;
 
 export interface KookSignal {
     s: 0 | 1 | 2 | 3 | 5 | 6;
-    d?: KookEvent | KookHello;
+    /** 信令数据由对应的事件或 HELLO 解析器继续校验。 */
+    d?: unknown;
     sn?: number;
+    [key: string]: unknown;
 }
 
 export interface KookHello {
     code: number;
     session_id?: string;
+    [key: string]: unknown;
 }
 
 export interface KookApiEnvelope<T> {

@@ -80,6 +80,8 @@ await bot.resetIngest();
 
 `ingest()` 返回 `{ status, body, event?, signal? }` 结构化结果，包含 challenge、重复事件和鉴权失败等响应；调用方可按自己的 Web 框架写回状态与响应体。Webhook 与 Gateway 都会等待 canonical 事件及全部协议出口，只在它们完整成功后确认 `sn`；并发的相同 Webhook 只投递一次。失败的 Webhook 返回 500，Gateway 则保留旧 `sn` 并重连 resume，确保平台能够重投。
 
+入站边界严格遵循 KOOK 官方 JSON 类型：`s`、`sn`、`type` 和 `msg_timestamp` 必须是数字，不会接受数字字符串或用本地时间补齐缺失字段；普通事件必须包含稳定的 `target_id`、`author_id`、`msg_id` 和对象形式的 `extra`。Webhook challenge 使用独立的 `KookWebhookChallenge` 类型，不会伪造成带空 ID 的机器人事件；Gateway HELLO 也经过独立结构校验。
+
 `start()` 会等待异步 `ready` 监听器，`stop()` 会立即使旧启动代次失效、清除旧启动单航班并等待 Gateway 投递队列与全部 `stopped` 监听器。socket 关闭失败不会跳过其余清理，最终通过 `KOOK_STOP_FAILED` 报告。
 
 ## 消息与事件

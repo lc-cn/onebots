@@ -1,6 +1,12 @@
 import { createDecipheriv } from "node:crypto";
 import { KookError } from "./errors.js";
-import type { KookEvent, KookSignal } from "./types.js";
+import type {
+    KookEvent,
+    KookHello,
+    KookInboundEvent,
+    KookMessageType,
+    KookSignal,
+} from "./types.js";
 
 /** 解密 KOOK Webhook 的 AES-256-CBC 载荷。 */
 export function decryptWebhookMessage(encryptedData: string, encryptKey: string): string {
@@ -23,51 +29,173 @@ export function decryptWebhookMessage(encryptedData: string, encryptKey: string)
 }
 
 export function parseSignal(value: unknown): KookSignal {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (!isRecord(value)) {
         throw new KookError("KOOK Gateway 信令必须为对象", {
             code: "KOOK_SIGNAL_INVALID",
             details: value,
         });
     }
-    const signal = value as Partial<KookSignal>;
-    if (![0, 1, 2, 3, 5, 6].includes(Number(signal.s))) {
+    const signal = value;
+    if (!isSignalType(signal.s)) {
         throw new KookError("KOOK Gateway 信令类型无效", {
             code: "KOOK_SIGNAL_INVALID",
             details: { signal: signal.s },
         });
     }
+    if (signal.sn !== undefined && !isSequence(signal.sn)) {
+        throw KookError.invalid("KOOK Gateway 序列号无效", "KOOK_SIGNAL_SEQUENCE_INVALID", {
+            sequence: signal.sn,
+        });
+    }
+    if ((signal.s === 0 || signal.s === 1) && !isRecord(signal.d)) {
+        throw KookError.invalid("KOOK Gateway 数据信令缺少对象 d", "KOOK_SIGNAL_DATA_INVALID", {
+            signal: signal.s,
+        });
+    }
     return {
         ...signal,
-        s: Number(signal.s) as KookSignal["s"],
-        sn: typeof signal.sn === "number" ? signal.sn : undefined,
-    } as KookSignal;
+        s: signal.s,
+        ...(signal.d === undefined ? {} : { d: signal.d }),
+        ...(signal.sn === undefined ? {} : { sn: signal.sn }),
+    };
 }
 
-export function parseEvent(value: unknown): KookEvent {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+export function parseHello(value: unknown): KookHello {
+    if (!isRecord(value)) {
+        throw KookError.invalid("KOOK Gateway HELLO 数据无效", "KOOK_HELLO_INVALID", value);
+    }
+    const hello = value;
+    const code = hello.code;
+    if (!isSafeInteger(code)) {
+        throw KookError.invalid("KOOK Gateway HELLO 数据无效", "KOOK_HELLO_INVALID", value);
+    }
+    if (hello.session_id !== undefined && typeof hello.session_id !== "string") {
+        throw KookError.invalid(
+            "KOOK Gateway HELLO session_id 无效",
+            "KOOK_HELLO_SESSION_INVALID",
+            { session_id: hello.session_id },
+        );
+    }
+    return {
+        ...hello,
+        code,
+        ...(typeof hello.session_id === "string" ? { session_id: hello.session_id } : {}),
+    };
+}
+
+export function parseEvent(value: unknown): KookInboundEvent {
+    if (!isRecord(value)) {
         throw new KookError("KOOK 事件数据必须为对象", {
             code: "KOOK_EVENT_INVALID",
             details: value,
         });
     }
-    const event = value as Partial<KookEvent>;
-    if (typeof event.channel_type !== "string" || typeof event.type !== "number") {
-        throw new KookError("KOOK 事件缺少 channel_type 或 type", {
-            code: "KOOK_EVENT_INVALID",
-            details: value,
+    const event = value;
+    if (event.channel_type === "WEBHOOK_CHALLENGE") {
+        if (event.type !== 255 || typeof event.challenge !== "string" || !event.challenge) {
+            throw KookError.invalid(
+                "KOOK Webhook challenge 数据无效",
+                "KOOK_WEBHOOK_CHALLENGE_INVALID",
+                value,
+            );
+        }
+        return {
+            ...event,
+            channel_type: "WEBHOOK_CHALLENGE",
+            type: 255,
+            challenge: event.challenge,
+            ...(typeof event.verify_token === "string"
+                ? { verify_token: event.verify_token }
+                : {}),
+        };
+    }
+    if (!isChannelType(event.channel_type) || !isEventType(event.type)) {
+        throw KookError.invalid(
+            "KOOK 事件 channel_type 或 type 无效",
+            "KOOK_EVENT_KIND_INVALID",
+            { channel_type: event.channel_type, type: event.type },
+        );
+    }
+    const targetId = requiredString(event.target_id, "target_id");
+    const authorId = requiredString(event.author_id, "author_id");
+    const messageId = requiredString(event.msg_id, "msg_id");
+    if (event.content === undefined) {
+        throw KookError.invalid("KOOK 事件 content 缺失", "KOOK_EVENT_FIELD_INVALID", {
+            field: "content",
+        });
+    }
+    if (!isTimestamp(event.msg_timestamp)) {
+        throw KookError.invalid(
+            "KOOK 事件 msg_timestamp 无效",
+            "KOOK_EVENT_TIMESTAMP_INVALID",
+            { msg_timestamp: event.msg_timestamp },
+        );
+    }
+    if (!isRecord(event.extra)) {
+        throw KookError.invalid("KOOK 事件 extra 必须为对象", "KOOK_EVENT_EXTRA_INVALID", {
+            extra: event.extra,
         });
     }
     return {
         ...event,
         channel_type: event.channel_type,
         type: event.type,
-        target_id: stringValue(event.target_id),
-        author_id: stringValue(event.author_id),
-        content: event.content ?? "",
-        msg_id: stringValue(event.msg_id),
-        msg_timestamp: typeof event.msg_timestamp === "number" ? event.msg_timestamp : Date.now(),
-        extra: objectValue(event.extra),
-    } as KookEvent;
+        target_id: targetId,
+        author_id: authorId,
+        content: event.content,
+        msg_id: messageId,
+        msg_timestamp: event.msg_timestamp,
+        ...(typeof event.nonce === "string" ? { nonce: event.nonce } : {}),
+        ...(typeof event.verify_token === "string" ? { verify_token: event.verify_token } : {}),
+        ...(typeof event.challenge === "string" ? { challenge: event.challenge } : {}),
+        extra: event.extra,
+    };
+}
+
+function requiredString(value: unknown, field: string): string {
+    if (typeof value === "string" && value) return value;
+    throw KookError.invalid(`KOOK 事件 ${field} 无效`, "KOOK_EVENT_FIELD_INVALID", {
+        field,
+        value,
+    });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSignalType(value: unknown): value is KookSignal["s"] {
+    return value === 0 || value === 1 || value === 2 || value === 3 || value === 5 || value === 6;
+}
+
+function isEventType(value: unknown): value is KookMessageType {
+    return (
+        value === 1 ||
+        value === 2 ||
+        value === 3 ||
+        value === 4 ||
+        value === 8 ||
+        value === 9 ||
+        value === 10 ||
+        value === 12 ||
+        value === 255
+    );
+}
+
+function isChannelType(value: unknown): value is KookEvent["channel_type"] {
+    return value === "GROUP" || value === "PERSON" || value === "BROADCAST";
+}
+
+function isSequence(value: unknown): value is number {
+    return isSafeInteger(value) && value >= 0;
+}
+
+function isTimestamp(value: unknown): value is number {
+    return isSafeInteger(value) && value > 0;
+}
+
+function isSafeInteger(value: unknown): value is number {
+    return typeof value === "number" && Number.isSafeInteger(value);
 }
 
 export function parseKMarkdown(content: string): string {

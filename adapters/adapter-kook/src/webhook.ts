@@ -40,7 +40,7 @@ export class KookWebhookReceiver {
             return { status: 401, body: { error: "Invalid verify_token" } };
         }
         if (event.channel_type === "WEBHOOK_CHALLENGE") {
-            return { status: 200, body: { challenge: event.challenge || "" } };
+            return { status: 200, body: { challenge: event.challenge } };
         }
         const sequence = signal.sn;
         try {

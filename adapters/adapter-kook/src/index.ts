@@ -6,7 +6,15 @@ export { KookWebhookReceiver, type KookEventDispatch, type KookIngestResult } fr
 export { KookRestClient, type KookBinaryResult, type KookHttpTransport } from "./rest-client.js";
 export { KookBot, type KookBotEvents } from "./bot.js";
 export { projectKookEvents, type KookRawEvent } from "./events.js";
-export type { KookConfig, KookEvent, KookApiRequestOptions } from "./types.js";
+export type {
+    KookApiRequestOptions,
+    KookConfig,
+    KookEvent,
+    KookHello,
+    KookInboundEvent,
+    KookSignal,
+    KookWebhookChallenge,
+} from "./types.js";
 export * from "./adapter.js";
 export * from "./capabilities.js";
 export {

@@ -10,13 +10,12 @@ import type {
     KookApiRequestOptions,
     KookConfig,
     KookEvent,
-    KookHello,
     KookMessageResult,
     KookSendMessage,
     KookSignal,
     KookUser,
 } from "./types.js";
-import { parseEvent, parseSignal } from "./utils.js";
+import { parseEvent, parseHello, parseSignal } from "./utils.js";
 import { KookWebhookReceiver, kookWebhookErrorStatus, type KookIngestResult } from "./webhook.js";
 
 export type { KookBotEvents } from "./bot-events.js";
@@ -188,7 +187,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
                 try {
                     const signal = parseSignal(JSON.parse(raw.toString()) as unknown);
                     if (signal.s === 1) {
-                        const hello = signal.d as KookHello;
+                        const hello = parseHello(signal.d);
                         if (hello.code !== 0) {
                             if ([40106, 40107, 40108].includes(hello.code)) {
                                 this.resetGatewaySession();
@@ -393,6 +392,12 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         let ready: KookSignal | undefined = sequenced.ready[0];
         while (ready) {
             const event = parseEvent(ready.d);
+            if (event.channel_type === "WEBHOOK_CHALLENGE") {
+                throw KookError.invalid(
+                    "KOOK Gateway 不接受 Webhook challenge",
+                    "KOOK_GATEWAY_CHALLENGE_INVALID",
+                );
+            }
             try {
                 await emitAllAwaited(this, "event", event, ready);
             } catch (error) {
