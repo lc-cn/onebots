@@ -3,7 +3,22 @@ import { LineBotClient, validateSignature, type messagingApi } from "@line/bot-s
 import { emitAllAwaited, ReliableEventIngress } from "onebots";
 import type { LineBotEvents } from "./bot-events.js";
 import { LineApiError } from "./errors.js";
-import type { LineConfig, LineIngestResult, WebhookEvent, WebhookRequest } from "./types.js";
+import {
+    applyLineHttpResponse,
+    isLineFetchRequest,
+    LINE_JSON_HEADERS,
+    lineMethodNotAllowed,
+    toLineFetchResponse,
+} from "./http-bridge.js";
+import type {
+    LineConfig,
+    LineHttpContext,
+    LineHttpRequest,
+    LineHttpResponse,
+    LineIngestResult,
+    WebhookEvent,
+    WebhookRequest,
+} from "./types.js";
 
 export type { LineBotEvents } from "./bot-events.js";
 
@@ -16,18 +31,25 @@ export interface LineEventRepository {
     save(eventId: string, limit: number): void;
 }
 
+export interface LineBotDependencies {
+    eventRepository?: LineEventRepository;
+    reportError?(error: LineApiError): void;
+}
+
 /** 基于 LINE 官方 Node SDK 的客户端，只负责鉴权、收发和原始事件分发。 */
 export class LineBot extends EventEmitter<LineBotEvents> {
     private readonly client: LineBotClient;
     private readonly processedEvents = new Set<string>();
     private readonly eventIngress: ReliableEventIngress<string>;
+    private readonly dependencies: LineBotDependencies;
     private botUserId?: string;
 
     constructor(
         private readonly config: LineConfig,
-        private readonly eventRepository?: LineEventRepository,
+        dependencies: LineBotDependencies = {},
     ) {
         super();
+        this.dependencies = dependencies;
         assertLineConfig(config);
         this.botUserId = config.destination;
         this.client = LineBotClient.fromChannelAccessToken({
@@ -95,43 +117,59 @@ export class LineBot extends EventEmitter<LineBotEvents> {
         return { accepted: events.length, duplicate, events };
     }
 
-    /** 验证未经修改的原始请求体，并交给与 manual 模式相同的 ingest 管线。 */
-    async ingestHttp(body: string | Buffer, signature: string): Promise<LineIngestResult> {
-        if (!signature || !this.validateSignature(body, signature)) {
-            throw new LineApiError("LINE Webhook 签名验证失败", {
-                code: "LINE_INVALID_SIGNATURE",
-                status: 401,
-            });
-        }
-        return this.ingest(parseWebhookRequest(body));
-    }
-
-    /** Fetch / WinterCG Host 可直接转交标准 Request，无需另开端口。 */
-    async acceptHttp(request: Request): Promise<Response> {
-        if (request.method !== "POST") {
-            return Response.json(
-                { error: { code: "LINE_METHOD_NOT_ALLOWED", message: "Method Not Allowed" } },
-                { status: 405, headers: { Allow: "POST" } },
-            );
-        }
+    /** 验签、解析和投递均在这里完成，所有 HTTP Host 共享同一响应策略。 */
+    async ingestHttp(request: LineHttpRequest): Promise<LineHttpResponse> {
+        if (request.method.toUpperCase() !== "POST") return lineMethodNotAllowed();
         try {
-            const body = Buffer.from(await request.arrayBuffer());
-            const result = await this.ingestHttp(
-                body,
-                request.headers.get("x-line-signature") || "",
-            );
-            return Response.json({
-                ok: true,
-                accepted: result.accepted,
-                duplicate: result.duplicate,
-            });
+            if (typeof request.body !== "string" && !Buffer.isBuffer(request.body)) {
+                throw new LineApiError("LINE Webhook 必须保留未经修改的 rawBody", {
+                    code: "LINE_RAW_BODY_REQUIRED",
+                    status: 400,
+                });
+            }
+            if (!request.signature || !this.validateSignature(request.body, request.signature)) {
+                throw new LineApiError("LINE Webhook 签名验证失败", {
+                    code: "LINE_INVALID_SIGNATURE",
+                    status: 401,
+                });
+            }
+            const ingest = await this.ingest(parseWebhookRequest(request.body));
+            return {
+                status: 200,
+                headers: LINE_JSON_HEADERS,
+                body: { ok: true, accepted: ingest.accepted, duplicate: ingest.duplicate },
+                ingest,
+            };
         } catch (error) {
             const wrapped = LineApiError.wrap(error, "LINE_WEBHOOK_ERROR");
-            return Response.json(
-                { error: { code: wrapped.code, message: wrapped.message } },
-                { status: wrapped.status || 500 },
-            );
+            this.dependencies.reportError?.(wrapped);
+            return {
+                status: wrapped.status || 500,
+                headers: LINE_JSON_HEADERS,
+                body: { error: { code: wrapped.code, message: wrapped.message } },
+            };
         }
+    }
+
+    /** Fetch / WinterCG 与 Koa 风格 Host 都可直接转交请求，无需另开端口。 */
+    async acceptHttp(request: Request): Promise<Response>;
+    async acceptHttp(context: LineHttpContext): Promise<void>;
+    async acceptHttp(input: Request | LineHttpContext): Promise<Response | void> {
+        if (isLineFetchRequest(input)) {
+            const response = await this.ingestHttp({
+                method: input.method,
+                body: input.method === "POST" ? Buffer.from(await input.arrayBuffer()) : undefined,
+                signature: input.headers.get("x-line-signature") || undefined,
+            });
+            return toLineFetchResponse(response);
+        }
+        const rawBody = input.request.rawBody;
+        const response = await this.ingestHttp({
+            method: input.method,
+            body: typeof rawBody === "string" || Buffer.isBuffer(rawBody) ? rawBody : undefined,
+            signature: input.get("x-line-signature") || undefined,
+        });
+        applyLineHttpResponse(input, response);
     }
 
     async pushMessage(
@@ -207,8 +245,8 @@ export class LineBot extends EventEmitter<LineBotEvents> {
     }
 
     private hasProcessed(eventId: string): boolean {
-        return this.eventRepository
-            ? this.eventRepository.has(eventId)
+        return this.dependencies.eventRepository
+            ? this.dependencies.eventRepository.has(eventId)
             : this.processedEvents.has(eventId);
     }
 
@@ -217,8 +255,8 @@ export class LineBot extends EventEmitter<LineBotEvents> {
             100,
             Math.floor(this.config.webhook_deduplication_limit || DEFAULT_DEDUPLICATION_LIMIT),
         );
-        if (this.eventRepository) {
-            this.eventRepository.save(eventId, limit);
+        if (this.dependencies.eventRepository) {
+            this.dependencies.eventRepository.save(eventId, limit);
             return;
         }
         this.processedEvents.add(eventId);

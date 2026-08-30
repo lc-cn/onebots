@@ -225,54 +225,21 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
                 webhook_deduplication_limit: config.webhook_deduplication_limit,
             },
             {
-                has: eventId => this.contexts.hasEvent(config.account_id, eventId),
-                save: (eventId, limit) =>
-                    this.contexts.saveEvent(config.account_id, eventId, limit),
+                eventRepository: {
+                    has: eventId => this.contexts.hasEvent(config.account_id, eventId),
+                    save: (eventId, limit) =>
+                        this.contexts.saveEvent(config.account_id, eventId, limit),
+                },
+                reportError: error => this.logger.error("LINE Webhook 处理失败", error),
             },
         );
         const account = new Account<"line", LineBot>(this, bot, config);
         if (bot.receiveMode === "webhook") {
-            this.app.router.post(`${account.path}/webhook`, async ctx => {
-                const rawBody = (ctx.request as { rawBody?: unknown }).rawBody;
-                const response = await this.handleWebhook(
-                    bot,
-                    rawBody,
-                    ctx.get("x-line-signature"),
-                );
-                ctx.status = response.status;
-                ctx.body = response.body;
-            });
+            this.app.router.post(`${account.path}/webhook`, ctx => bot.acceptHttp(ctx));
         }
         bot.on("event", async (event: webhook.Event) => this.dispatchEvent(account, event));
         this.bindLifecycle(account, bot);
         return account;
-    }
-
-    private async handleWebhook(
-        bot: LineBot,
-        rawBody: unknown,
-        signature: string,
-    ): Promise<{ status: number; body: unknown }> {
-        try {
-            if (typeof rawBody !== "string" && !Buffer.isBuffer(rawBody)) {
-                throw new LineApiError("LINE Webhook 必须保留未经修改的 rawBody", {
-                    code: "LINE_RAW_BODY_REQUIRED",
-                    status: 400,
-                });
-            }
-            const result = await bot.ingestHttp(rawBody, signature);
-            return {
-                status: 200,
-                body: { ok: true, accepted: result.accepted, duplicate: result.duplicate },
-            };
-        } catch (error) {
-            const wrapped = LineApiError.wrap(error, "LINE_WEBHOOK_ERROR");
-            this.logger.error("LINE Webhook 处理失败", wrapped);
-            return {
-                status: wrapped.status || 500,
-                body: { error: { code: wrapped.code, message: wrapped.message } },
-            };
-        }
     }
 
     private async dispatchEvent(

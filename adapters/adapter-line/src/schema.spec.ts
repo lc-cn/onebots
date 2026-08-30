@@ -6,11 +6,11 @@ describe("LINE 配置 Schema", () => {
     test("按接收模式动态显示 Webhook 凭据", () => {
         expect(ruleAt("channel_secret").ui?.visibleWhen).toEqual({
             path: "receive_mode",
-            oneOf: ["webhook"],
+            oneOf: ["webhook", "manual"],
         });
         expect(ruleAt("destination").ui?.visibleWhen).toEqual({
             path: "receive_mode",
-            oneOf: ["webhook"],
+            oneOf: ["webhook", "manual"],
         });
     });
 

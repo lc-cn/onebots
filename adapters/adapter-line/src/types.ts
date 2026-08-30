@@ -25,6 +25,31 @@ export interface LineIngestResult {
     events: WebhookEvent[];
 }
 
+/** 已有 HTTP Host 交给 LINE 客户端的最小请求结构。 */
+export interface LineHttpRequest {
+    method: string;
+    body?: string | Buffer;
+    signature?: string;
+}
+
+/** 与具体 Web 框架无关的 LINE Webhook 响应。 */
+export interface LineHttpResponse {
+    status: number;
+    headers: Readonly<Record<string, string>>;
+    body: Record<string, unknown>;
+    ingest?: LineIngestResult;
+}
+
+/** Koa 风格 Host 的最小桥接契约。 */
+export interface LineHttpContext {
+    method: string;
+    request: { rawBody?: unknown };
+    get(name: string): string;
+    set(name: string, value: string): void;
+    status: number;
+    body?: unknown;
+}
+
 export type WebhookRequest = webhook.CallbackRequest;
 export type WebhookEvent = webhook.Event;
 export type EventSource = webhook.Source;

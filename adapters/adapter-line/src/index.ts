@@ -1,7 +1,19 @@
 import { AdapterRegistry, type Schema } from "onebots";
 
 export { LineAdapter } from "./adapter.js";
-export { LineBot, type LineBotEvents, type LineEventRepository } from "./bot.js";
+export {
+    LineBot,
+    type LineBotDependencies,
+    type LineBotEvents,
+    type LineEventRepository,
+} from "./bot.js";
+export {
+    applyLineHttpResponse,
+    isLineFetchRequest,
+    LINE_JSON_HEADERS,
+    lineMethodNotAllowed,
+    toLineFetchResponse,
+} from "./http-bridge.js";
 export { lineCapabilities } from "./capabilities.js";
 export { LineApiError, type LineApiErrorOptions } from "./errors.js";
 export {
@@ -18,6 +30,9 @@ export {
 export type {
     LineConfig,
     LineIngestResult,
+    LineHttpRequest,
+    LineHttpResponse,
+    LineHttpContext,
     LineChatContext,
     WebhookRequest,
     WebhookEvent,
@@ -82,7 +97,7 @@ export const lineSchema: Schema = {
         description: "仅用于对原始 Webhook 请求体做 HMAC-SHA256 验签",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     destination: {
@@ -92,7 +107,7 @@ export const lineSchema: Schema = {
         description: "可选；校验 CallbackRequest.destination 确属当前机器人",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     deduplicate_webhooks: {

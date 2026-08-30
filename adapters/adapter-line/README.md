@@ -22,20 +22,20 @@ line.my-line-bot:
 https://your-domain.example/line/my-line-bot/webhook
 ```
 
-| 配置项                        | 说明                                                       |
-| ----------------------------- | ---------------------------------------------------------- |
-| `channel_access_token`        | Messaging API Channel Access Token                         |
-| `receive_mode`                | `webhook` 或 `manual`，默认 `webhook`                      |
-| `channel_secret`              | Webhook HMAC-SHA256 验签密钥；manual 模式无需配置          |
-| `destination`                 | 可选；校验 Webhook 确属当前机器人                          |
-| `deduplicate_webhooks`        | 按 `webhookEventId` 持久化忽略重复投递，默认 `true`        |
-| `webhook_deduplication_limit` | 每账号持久化去重窗口，默认 10000                           |
-| `api_base_url`                | Messaging API 地址，默认 `https://api.line.me`             |
-| `data_api_base_url`           | 媒体与 Rich Menu 图片地址，默认 `https://api-data.line.me` |
+| 配置项                        | 说明                                                        |
+| ----------------------------- | ----------------------------------------------------------- |
+| `channel_access_token`        | Messaging API Channel Access Token                          |
+| `receive_mode`                | `webhook` 或 `manual`，默认 `webhook`                       |
+| `channel_secret`              | Webhook HMAC-SHA256 验签密钥；manual 仅直接 ingest 时可省略 |
+| `destination`                 | 可选；校验 Webhook 确属当前机器人                           |
+| `deduplicate_webhooks`        | 按 `webhookEventId` 持久化忽略重复投递，默认 `true`         |
+| `webhook_deduplication_limit` | 每账号持久化去重窗口，默认 10000                            |
+| `api_base_url`                | Messaging API 地址，默认 `https://api.line.me`              |
+| `data_api_base_url`           | 媒体与 Rich Menu 图片地址，默认 `https://api-data.line.me`  |
 
 两个 Base URL 只用于官方兼容实现、可信代理或测试环境，必须使用 HTTPS。官方 SDK 11.x 需要 Node.js 22+，OneBots 当前要求 Node.js 24+。
 
-已有 HTTP Host、消息队列或其他连接管理器时可使用 `receive_mode: manual`。该模式不会向 OneBots Router 注册 Webhook 路由，应用通过最低层 `await ingest(rawEvent)` 投递单个官方事件或完整 CallbackRequest；发送 API 与账号身份仍由同一个 `LineBot` 提供。
+已有 HTTP Host、消息队列或其他连接管理器时可使用 `receive_mode: manual`。该模式不会向 OneBots Router 注册 Webhook 路由，应用通过最低层 `await ingest(rawEvent)` 投递单个已验签官方事件或完整 CallbackRequest；发送 API 与账号身份仍由同一个 `LineBot` 提供。若现有 Host 需要由客户端完成验签，则仍应配置 `channel_secret`。
 
 ## Webhook 安全与事件
 
@@ -129,16 +129,23 @@ const quota = await officialClient.getMessageQuota();
 复用已有 Host：
 
 ```ts
-const result = await bot.ingest(rawEvent);
+const ingestResult = await bot.ingest(rawEvent);
 
-// 已保留原始 body 与签名
-const verified = await bot.ingestHttp(rawBody, xLineSignature);
+// 已保留原始 body 与签名，获得与 Web 框架无关的结构化响应
+const httpResult = await bot.ingestHttp({
+  method: "POST",
+  body: rawBody,
+  signature: xLineSignature,
+});
 
 // Fetch / WinterCG 风格 Host
 const response = await bot.acceptHttp(request);
+
+// Koa 风格 Host
+await bot.acceptHttp(ctx);
 ```
 
-三种入口最终进入同一可等待的 typed `event` 管线并共享 `webhookEventId` 去重。`ingestHttp()` 返回 `{ accepted, duplicate, events }`，`acceptHttp()` 返回可直接写回的结构化 HTTP 响应。
+三种入口最终进入同一可等待的 typed `event` 管线并共享 `webhookEventId` 去重。`ingestHttp()` 返回 `{ status, headers, body, ingest? }`；其中 `ingest` 是成功投递后的 `{ accepted, duplicate, events }`。`acceptHttp()` 对 Fetch Host 返回标准 `Response`，对 Koa Host 直接写回同一响应，不维护第二套错误策略。
 
 按事件类型订阅时使用真实的判别式 API：
 

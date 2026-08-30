@@ -22,21 +22,26 @@ describe("LineBot Webhook 契约", () => {
         });
         const signature = createHmac("sha256", "secret").update(body).digest("base64");
 
-        await expect(bot.ingestHttp(body, signature)).resolves.toMatchObject({
-            accepted: 1,
-            duplicate: 0,
+        await expect(bot.ingestHttp({ method: "POST", body, signature })).resolves.toMatchObject({
+            status: 200,
+            ingest: { accepted: 1, duplicate: 0 },
         });
         expect(bot.getBotUserId()).toBe("U00000000000000000000000000000000");
-        await expect(bot.ingestHttp(body, signature)).resolves.toMatchObject({
-            accepted: 0,
-            duplicate: 1,
+        await expect(bot.ingestHttp({ method: "POST", body, signature })).resolves.toMatchObject({
+            status: 200,
+            ingest: { accepted: 0, duplicate: 1 },
         });
         expect(listener).toHaveBeenCalledTimes(1);
     });
 
     it("拒绝篡改请求与非 HTTPS API 地址", async () => {
         const bot = createBot();
-        await expect(bot.ingestHttp("{}", "invalid")).rejects.toThrow(/签名/u);
+        await expect(
+            bot.ingestHttp({ method: "POST", body: "{}", signature: "invalid" }),
+        ).resolves.toMatchObject({
+            status: 401,
+            body: { error: { code: "LINE_INVALID_SIGNATURE" } },
+        });
         expect(
             () =>
                 new LineBot({
@@ -75,9 +80,13 @@ describe("LineBot Webhook 契约", () => {
         const signature = createHmac("sha256", "secret").update(body).digest("base64");
         const failure = vi.fn().mockRejectedValue(new Error("downstream failed"));
         bot.on("event", failure);
-        await expect(bot.ingestHttp(body, signature)).rejects.toThrow("downstream failed");
+        await expect(bot.ingestHttp({ method: "POST", body, signature })).resolves.toMatchObject({
+            status: 500,
+        });
         bot.off("event", failure);
-        await expect(bot.ingestHttp(body, signature)).resolves.toMatchObject({ accepted: 1 });
+        await expect(bot.ingestHttp({ method: "POST", body, signature })).resolves.toMatchObject({
+            ingest: { accepted: 1 },
+        });
     });
 
     it("manual ingest 接收单个原始事件且无需 channel_secret", async () => {
@@ -137,8 +146,34 @@ describe("LineBot Webhook 契约", () => {
             }),
         );
         expect(response.status).toBe(200);
+        expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
         expect(await response.json()).toEqual({ ok: true, accepted: 1, duplicate: 0 });
-        expect((await bot.acceptHttp(new Request("https://example.test/line"))).status).toBe(405);
+        const methodNotAllowed = await bot.acceptHttp(new Request("https://example.test/line"));
+        expect(methodNotAllowed.status).toBe(405);
+        expect(methodNotAllowed.headers.get("allow")).toBe("POST");
+    });
+
+    it("Koa 风格 Host 与 Fetch Host 复用同一结构化 HTTP 边界", async () => {
+        const bot = createBot();
+        const body = JSON.stringify({
+            destination: "U00000000000000000000000000000000",
+            events: [webhookEvent("evt-koa")],
+        });
+        const signature = createHmac("sha256", "secret").update(body).digest("base64");
+        const context = {
+            method: "POST",
+            request: { rawBody: body },
+            get: (name: string) => (name === "x-line-signature" ? signature : ""),
+            set: vi.fn(),
+            status: 0,
+            body: undefined as unknown,
+        };
+
+        await bot.acceptHttp(context);
+
+        expect(context.status).toBe(200);
+        expect(context.set).toHaveBeenCalledWith("Content-Type", "application/json; charset=utf-8");
+        expect(context.body).toEqual({ ok: true, accepted: 1, duplicate: 0 });
     });
 
     it("可按 destination 拒绝发给其他机器人的 Webhook", async () => {
