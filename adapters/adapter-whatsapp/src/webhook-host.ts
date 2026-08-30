@@ -1,6 +1,11 @@
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
-import type { WhatsAppConfig, WhatsAppWebhookRequest, WhatsAppWebhookResponse } from "./types.js";
+import type {
+    WhatsAppConfig,
+    WhatsAppIngestResult,
+    WhatsAppWebhookRequest,
+    WhatsAppWebhookResponse,
+} from "./types.js";
 import { resolveWhatsAppVerification } from "./webhook.js";
 
 export interface WhatsAppHttpContext {
@@ -22,7 +27,7 @@ export class WhatsAppWebhookHost {
         private readonly errorListener: (error: WhatsAppApiError) => void = () => undefined,
         private readonly eventIngestor: (
             request: WhatsAppWebhookRequest,
-        ) => ReturnType<WhatsAppClient["ingestHttp"]> = request =>
+        ) => Promise<WhatsAppIngestResult> = request =>
             this.client.ingestHttp(request.body, request.signature),
     ) {
         this.path = config.webhook_path || `/whatsapp/${config.account_id}/webhook`;
@@ -38,7 +43,7 @@ export class WhatsAppWebhookHost {
     }
 
     async ingest(request: WhatsAppWebhookRequest): Promise<WhatsAppWebhookResponse> {
-        const result = this.eventIngestor(request);
+        const result = await this.eventIngestor(request);
         return {
             status: 200,
             body: {

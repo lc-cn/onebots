@@ -8,9 +8,9 @@ The adapter uses Meta's official WhatsApp Cloud API, receives signed webhooks th
 - Native Template, Interactive, Flow, and future Cloud API message payloads
 - Complete message-status projection with the original webhook change preserved
 - Media upload, metadata lookup, authenticated download, and deletion
-- Business profile, phone registration, two-step verification, blocked users, and templates
+- Business profile, commerce, Flow lifecycle, phone registration, two-step verification, blocked users, and templates
 - Generic `whatsapp_call` for newly introduced Graph API resources
-- `WhatsAppClient.ingest(rawEvent)` for feeding an existing trusted connection into the same client
+- `await WhatsAppClient.ingest(rawEvent)` for feeding an existing trusted connection into the same client, with deduplication committed only after all synchronous/asynchronous listeners succeed
 
 Cloud API does not expose ordinary WhatsApp groups, contact lists, or arbitrary message history, so the adapter does not emulate those capabilities.
 
@@ -30,7 +30,7 @@ See the [configuration reference](/en/config/adapter/whatsapp) for all fields.
 
 ## Native payloads and APIs
 
-Use a `whatsapp_message` segment for Template, Interactive, Flow, or any other native message payload. Platform actions expose common operations, while `whatsapp_call` accepts a safe relative Graph API resource:
+Use a `whatsapp_message` segment for Template, Interactive, Flow, or any other native message payload. Platform actions expose business profile, commerce, and Flow lifecycle operations, while `whatsapp_call` accepts a safe relative Graph API resource:
 
 ```ts
 await adapter.callAction("my_bot", "whatsapp_call", {

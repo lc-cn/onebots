@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { WhatsAppApiError } from "./errors.js";
+import { WhatsAppGraphApi } from "./graph-api.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -23,25 +24,31 @@ import {
 } from "./webhook.js";
 import { WhatsAppClientLifecycle } from "./client-lifecycle.js";
 
-const DEFAULT_API_BASE_URL = "https://graph.facebook.com";
 const DEFAULT_DEDUPLICATION_LIMIT = 10_000;
 
 /** WhatsApp Cloud API 客户端；保留通用 call 以覆盖 Graph API 新增能力。 */
 export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
-    readonly apiVersion: string;
-    readonly apiBaseUrl: string;
+    private readonly graph: WhatsAppGraphApi;
     private readonly contacts = new Map<string, WhatsAppObservedContact>();
     private readonly processedEvents = new Set<string>();
+    private readonly processingEvents = new Map<string, Promise<WhatsAppIngestResult>>();
     private readonly lifecycle = new WhatsAppClientLifecycle<WhatsAppPhoneNumberInfo>();
 
     constructor(
         readonly config: WhatsAppConfig,
-        private readonly fetcher: typeof fetch = fetch,
+        fetcher: typeof fetch = fetch,
     ) {
         super();
         assertWhatsAppConfig(config);
-        this.apiVersion = requireApiVersion(config.api_version);
-        this.apiBaseUrl = requireHttpsBase(config.api_base_url || DEFAULT_API_BASE_URL);
+        this.graph = new WhatsAppGraphApi(config, fetcher);
+    }
+
+    get apiVersion(): string {
+        return this.graph.apiVersion;
+    }
+
+    get apiBaseUrl(): string {
+        return this.graph.apiBaseUrl;
     }
 
     async start(): Promise<WhatsAppPhoneNumberInfo> {
@@ -60,36 +67,40 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     }
 
     /** 最底层事件入口，供共享 Webhook Host、队列或其他可信连接复用。 */
-    ingest(rawEvent: unknown, deduplicationKey?: string): WhatsAppIngestResult {
+    async ingest(rawEvent: unknown, deduplicationKey?: string): Promise<WhatsAppIngestResult> {
         const event = parseWhatsAppWebhook(rawEvent);
         const key = deduplicationKey || digestWhatsAppPayload(event);
         if (this.isDuplicate(key)) {
-            return {
-                accepted: 0,
-                duplicate: true,
-                changes: 0,
-                messages: 0,
-                statuses: 0,
-                ignoredChanges: 0,
-                event,
-            };
+            return duplicateResult(event);
         }
+        const processing = this.processingEvents.get(key);
+        if (processing) return processing;
+        const delivery = this.deliver(event, key);
+        this.processingEvents.set(key, delivery);
+        try {
+            return await delivery;
+        } finally {
+            if (this.processingEvents.get(key) === delivery) this.processingEvents.delete(key);
+        }
+    }
+
+    private async deliver(event: WhatsAppWebhookEvent, key: string): Promise<WhatsAppIngestResult> {
         this.observeContacts(event);
-        this.emit("raw_event", event);
-        this.emit("webhook", event);
+        await this.emitAwaited("raw_event", event);
+        await this.emitAwaited("webhook", event);
         let changes = 0;
         let messages = 0;
         let statuses = 0;
         for (const entry of event.entry) {
             for (const change of entry.changes) {
-                this.emit("change", change, entry.id);
+                await this.emitAwaited("change", change, entry.id);
                 changes += 1;
                 for (const message of change.value.messages || []) {
-                    this.emit("message", message, change.value.metadata, change);
+                    await this.emitAwaited("message", message, change.value.metadata, change);
                     messages += 1;
                 }
                 for (const status of change.value.statuses || []) {
-                    this.emit("status", status, change.value.metadata, change);
+                    await this.emitAwaited("status", status, change.value.metadata, change);
                     statuses += 1;
                 }
             }
@@ -106,8 +117,19 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         };
     }
 
+    private async emitAwaited<K extends keyof WhatsAppClientEvents>(
+        event: K,
+        ...args: WhatsAppClientEvents[K]
+    ): Promise<void> {
+        for (const listener of this.listeners(event)) {
+            await Promise.resolve(
+                (listener as (...values: WhatsAppClientEvents[K]) => unknown)(...args),
+            );
+        }
+    }
+
     /** 校验原始请求体签名，并交给与 manual 模式相同的 ingest 管线。 */
-    ingestHttp(body: string | Buffer, signature?: string): WhatsAppIngestResult {
+    async ingestHttp(body: string | Buffer, signature?: string): Promise<WhatsAppIngestResult> {
         const verified = this.verifyHttp(body, signature);
         return this.ingest(verified.event, verified.deduplicationKey);
     }
@@ -134,7 +156,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
             );
         }
         try {
-            const result = this.ingestHttp(
+            const result = await this.ingestHttp(
                 Buffer.from(await request.arrayBuffer()),
                 request.headers.get("x-hub-signature-256") || undefined,
             );
@@ -184,35 +206,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     }
 
     /** 调用任意经过路径约束的 Graph API 资源。 */
-    async call<T = unknown>(options: WhatsAppCallOptions): Promise<T> {
-        const url = this.resolveResource(options.resource, options.query);
-        const headers = new Headers(options.headers);
-        headers.set("Authorization", `Bearer ${this.config.access_token}`);
-        let body: BodyInit | undefined;
-        if (options.body instanceof FormData || typeof options.body === "string") {
-            body = options.body;
-        } else if (options.body !== undefined) {
-            headers.set("Content-Type", "application/json");
-            body = JSON.stringify(options.body);
-        }
-        let response: Response;
-        try {
-            response = await this.fetcher(url, {
-                method: options.method || "GET",
-                headers,
-                body,
-                signal: options.signal,
-            });
-        } catch (error) {
-            throw new WhatsAppApiError("WhatsApp Graph API 网络请求失败", {
-                code: "WHATSAPP_NETWORK_ERROR",
-                resource: options.resource,
-                cause: error,
-            });
-        }
-        const payload = await parseResponse(response);
-        if (!response.ok) throw graphError(response, payload, options.resource);
-        return payload as T;
+    call<T = unknown>(options: WhatsAppCallOptions): Promise<T> {
+        return this.graph.call<T>(options);
     }
 
     sendMessage(params: WhatsAppSendMessageParams): Promise<WhatsAppAPIResponse> {
@@ -288,113 +283,24 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
 
     /** 下载已经查询过临时 URL 的媒体，避免同一动作重复请求媒体元数据。 */
     async downloadMediaFrom(media: WhatsAppMediaInfo, signal?: AbortSignal): Promise<Buffer> {
-        let response: Response;
-        try {
-            response = await this.fetcher(media.url, {
-                headers: { Authorization: `Bearer ${this.config.access_token}` },
-                signal,
-            });
-        } catch (error) {
-            throw new WhatsAppApiError("WhatsApp 媒体下载请求失败", {
-                code: "WHATSAPP_MEDIA_NETWORK_ERROR",
-                resource: media.id,
-                cause: error,
-            });
-        }
-        if (!response.ok) {
-            throw graphError(response, await parseResponse(response), media.id);
-        }
-        return Buffer.from(await response.arrayBuffer());
+        return this.graph.download(media.url, media.id, signal);
     }
 
     async deleteMedia(mediaId: string): Promise<void> {
         await this.call({ method: "DELETE", resource: requireString(mediaId, "media_id") });
     }
-
-    private resolveResource(
-        resource: string,
-        query?: Readonly<Record<string, string | number | boolean | undefined>>,
-    ): URL {
-        const normalized = resource.replace(/\/+$/gu, "");
-        if (!isSafeGraphResource(resource, normalized)) {
-            throw new WhatsAppApiError("WhatsApp Graph API resource 必须是安全的相对路径", {
-                code: "WHATSAPP_INVALID_RESOURCE",
-                resource,
-            });
-        }
-        const url = new URL(`${this.apiVersion}/${normalized}`, `${this.apiBaseUrl}/`);
-        for (const [name, value] of Object.entries(query || {})) {
-            if (value !== undefined) url.searchParams.set(name, String(value));
-        }
-        return url;
-    }
 }
 
-function isSafeGraphResource(resource: string, normalized: string): boolean {
-    if (
-        !normalized ||
-        resource.startsWith("/") ||
-        resource.includes("?") ||
-        resource.includes("#") ||
-        resource.includes("\\") ||
-        /[\u0000-\u001f\u007f]/u.test(resource) ||
-        /^(?:https?|ftp):\/\//iu.test(resource)
-    ) {
-        return false;
-    }
-    try {
-        return normalized.split("/").every(segment => {
-            const decoded = decodeURIComponent(segment);
-            return (
-                decoded.length > 0 &&
-                decoded !== "." &&
-                decoded !== ".." &&
-                !decoded.includes("/") &&
-                !decoded.includes("\\") &&
-                !decoded.includes("?") &&
-                !decoded.includes("#") &&
-                !/[\u0000-\u001f\u007f]/u.test(decoded)
-            );
-        });
-    } catch {
-        return false;
-    }
-}
-
-async function parseResponse(response: Response): Promise<unknown> {
-    if (response.status === 204) return undefined;
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-        try {
-            return await response.json();
-        } catch (error) {
-            throw new WhatsAppApiError("WhatsApp Graph API 返回了无效 JSON", {
-                code: "WHATSAPP_INVALID_RESPONSE",
-                status: response.status,
-                cause: error,
-            });
-        }
-    }
-    return response.text();
-}
-
-function graphError(response: Response, payload: unknown, resource: string): WhatsAppApiError {
-    const record = asRecord(payload);
-    const error = asRecord(record?.error);
-    const message = typeof error?.message === "string" ? error.message : response.statusText;
-    const code = typeof error?.code === "number" ? `WHATSAPP_${error.code}` : "WHATSAPP_HTTP_ERROR";
-    return new WhatsAppApiError(message || `WhatsApp Graph API 返回 ${response.status}`, {
-        code,
-        status: response.status,
-        resource,
-        details: payload,
-    });
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-    return value && typeof value === "object" && !Array.isArray(value)
-        ? (value as Record<string, unknown>)
-        : undefined;
+function duplicateResult(event: WhatsAppWebhookEvent): WhatsAppIngestResult {
+    return {
+        accepted: 0,
+        duplicate: true,
+        changes: 0,
+        messages: 0,
+        statuses: 0,
+        ignoredChanges: 0,
+        event,
+    };
 }
 
 function requireString(value: string, name: string): string {
@@ -404,40 +310,6 @@ function requireString(value: string, name: string): string {
         });
     }
     return value;
-}
-
-function requireApiVersion(value: string): string {
-    if (!/^v\d+\.\d+$/u.test(value)) {
-        throw new WhatsAppApiError("WhatsApp api_version 必须使用 v数字.数字 格式", {
-            code: "WHATSAPP_INVALID_API_VERSION",
-            details: value,
-        });
-    }
-    return value;
-}
-
-function requireHttpsBase(value: string): string {
-    if (!URL.canParse(value)) {
-        throw new WhatsAppApiError("WhatsApp api_base_url 必须是有效 HTTPS URL", {
-            code: "WHATSAPP_INVALID_API_BASE_URL",
-            details: value,
-        });
-    }
-    const url = new URL(value);
-    if (
-        url.protocol !== "https:" ||
-        url.username ||
-        url.password ||
-        url.search ||
-        url.hash ||
-        (url.pathname !== "/" && url.pathname !== "")
-    ) {
-        throw new WhatsAppApiError("WhatsApp api_base_url 必须是无凭据和路径语义的 HTTPS Origin", {
-            code: "WHATSAPP_INVALID_API_BASE_URL",
-            details: value,
-        });
-    }
-    return url.origin;
 }
 
 function assertWhatsAppConfig(config: WhatsAppConfig): void {
@@ -450,6 +322,16 @@ function assertWhatsAppConfig(config: WhatsAppConfig): void {
         if (!value?.trim()) {
             throw new WhatsAppApiError(`WhatsApp ${name} 不能为空`, {
                 code: "WHATSAPP_CONFIG_REQUIRED",
+            });
+        }
+    }
+    for (const [name, value] of [
+        ["business_account_id", config.business_account_id],
+        ["phone_number_id", config.phone_number_id],
+    ] as const) {
+        if (!/^[A-Za-z\d._:-]+$/u.test(value)) {
+            throw new WhatsAppApiError(`WhatsApp ${name} 必须是单段 Graph 资源 ID`, {
+                code: "WHATSAPP_CONFIG_INVALID",
             });
         }
     }

@@ -16,6 +16,46 @@ const ACTION_HANDLERS = {
         client.getBusinessProfile(optionalString(params, "fields")),
     update_business_profile: (client, params) =>
         client.updateBusinessProfile(requireRecord(params, "profile")),
+    get_commerce_settings: client =>
+        client.call({ resource: `${client.config.phone_number_id}/whatsapp_commerce_settings` }),
+    update_commerce_settings: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: `${client.config.phone_number_id}/whatsapp_commerce_settings`,
+            query: commerceSettings(params),
+        }),
+    list_qr_codes: (client, params) =>
+        client.call({
+            method: "GET",
+            resource: `${client.config.phone_number_id}/message_qrdls`,
+            query: { fields: optionalString(params, "fields") },
+        }),
+    get_qr_code: (client, params) =>
+        client.call({
+            method: "GET",
+            resource: `${client.config.phone_number_id}/message_qrdls/${requireResourceId(params, "code")}`,
+            query: { fields: optionalString(params, "fields") },
+        }),
+    create_qr_code: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: `${client.config.phone_number_id}/message_qrdls`,
+            body: { prefilled_message: requireString(params, "prefilled_message") },
+        }),
+    update_qr_code: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: `${client.config.phone_number_id}/message_qrdls`,
+            body: {
+                code: requireResourceId(params, "code"),
+                prefilled_message: requireString(params, "prefilled_message"),
+            },
+        }),
+    delete_qr_code: (client, params) =>
+        client.call({
+            method: "DELETE",
+            resource: `${client.config.phone_number_id}/message_qrdls/${requireResourceId(params, "code")}`,
+        }),
     upload_media: (client, params) => uploadMedia(client, params),
     get_media: (client, params) => client.getMedia(requireString(params, "media_id")),
     download_media: async (client, params) => {
@@ -75,6 +115,46 @@ const ACTION_HANDLERS = {
                 name: requireString(params, "name"),
                 hsm_id: optionalString(params, "template_id"),
             },
+        }),
+    list_flows: (client, params) =>
+        client.call({
+            method: "GET",
+            resource: `${client.config.business_account_id}/flows`,
+            query: {
+                fields: optionalString(params, "fields"),
+                limit: optionalNumber(params, "limit"),
+                after: optionalString(params, "after"),
+            },
+        }),
+    create_flow: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: `${client.config.business_account_id}/flows`,
+            body: requireRecord(params, "flow"),
+        }),
+    get_flow: (client, params) =>
+        client.call({
+            method: "GET",
+            resource: requireResourceId(params, "flow_id"),
+            query: { fields: optionalString(params, "fields") },
+        }),
+    update_flow: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: requireResourceId(params, "flow_id"),
+            body: requireRecord(params, "flow"),
+        }),
+    delete_flow: (client, params) =>
+        client.call({ method: "DELETE", resource: requireResourceId(params, "flow_id") }),
+    publish_flow: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: `${requireResourceId(params, "flow_id")}/publish`,
+        }),
+    deprecate_flow: (client, params) =>
+        client.call({
+            method: "POST",
+            resource: `${requireResourceId(params, "flow_id")}/deprecate`,
         }),
 } satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
 
@@ -166,6 +246,14 @@ function requireString(params: Readonly<Record<string, unknown>>, name: string):
     return value;
 }
 
+function requireResourceId(params: Readonly<Record<string, unknown>>, name: string): string {
+    const value = requireString(params, name);
+    if (!/^[A-Za-z\d._:-]+$/u.test(value)) {
+        invalidParameter(`${name} 必须是单段 Graph 资源 ID`);
+    }
+    return value;
+}
+
 function optionalString(
     params: Readonly<Record<string, unknown>>,
     name: string,
@@ -180,6 +268,30 @@ function optionalBoolean(
 ): boolean | undefined {
     const value = params[name];
     return typeof value === "boolean" ? value : undefined;
+}
+
+function commerceSettings(
+    params: Readonly<Record<string, unknown>>,
+): Record<string, boolean | undefined> {
+    const isCartEnabled = booleanParam(params, "is_cart_enabled");
+    const isCatalogVisible = booleanParam(params, "is_catalog_visible");
+    if (isCartEnabled === undefined && isCatalogVisible === undefined) {
+        invalidParameter("Commerce 设置至少需要 is_cart_enabled 或 is_catalog_visible");
+    }
+    return {
+        is_cart_enabled: isCartEnabled,
+        is_catalog_visible: isCatalogVisible,
+    };
+}
+
+function booleanParam(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+): boolean | undefined {
+    const value = params[name];
+    if (value === undefined) return undefined;
+    if (typeof value !== "boolean") invalidParameter(`${name} 必须是布尔值`);
+    return value;
 }
 
 function optionalNumber(

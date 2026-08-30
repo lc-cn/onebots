@@ -59,6 +59,60 @@ describe("WhatsApp Webhook 投影", () => {
         expect(result[1]).toMatchObject({ notice_type: "message_status" });
         expect(result[2]).toMatchObject({ notice_type: "custom" });
         expect(result[2]?.timestamp).toBeLessThanOrEqual(Date.now());
+        expect(projectWhatsAppWebhook(webhook, context)[2]?.id).toEqual(result[2]?.id);
+    });
+
+    it("保留 Flow 回复并投影可读摘要", () => {
+        const [event] = projectWhatsAppWebhook(
+            {
+                object: "whatsapp_business_account",
+                entry: [
+                    {
+                        id: "waba",
+                        changes: [
+                            {
+                                field: "messages",
+                                value: {
+                                    messages: [
+                                        {
+                                            id: "flow-1",
+                                            from: "86123",
+                                            timestamp: "10",
+                                            type: "interactive",
+                                            interactive: {
+                                                type: "nfm_reply",
+                                                nfm_reply: {
+                                                    name: "flow",
+                                                    body: "Submitted",
+                                                    response_json: '{"choice":"A"}',
+                                                },
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                ],
+            },
+            context,
+        );
+
+        expect(event).toMatchObject({
+            type: "message",
+            raw_message: "Submitted",
+            message: [
+                {
+                    type: "interactive",
+                    data: {
+                        interactive: {
+                            type: "nfm_reply",
+                            nfm_reply: { response_json: '{"choice":"A"}' },
+                        },
+                    },
+                },
+            ],
+        });
     });
 
     it("将空 emoji 的 Reaction 投影为移除 notice", () => {

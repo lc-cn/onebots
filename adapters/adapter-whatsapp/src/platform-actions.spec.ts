@@ -56,4 +56,63 @@ describe("WhatsApp 平台动作", () => {
             template: { name: "hello" },
         });
     });
+
+    it.each([
+        ["list_flows", "waba/flows", "GET"],
+        ["get_flow", "flow-1", "GET"],
+        ["publish_flow", "flow-1/publish", "POST"],
+        ["deprecate_flow", "flow-1/deprecate", "POST"],
+    ])("将 %s 固定映射到受控 Flow 资源", async (action, resource, method) => {
+        const call = vi.fn().mockResolvedValue({ success: true });
+        await executeWhatsAppPlatformAction(
+            { call, config } as never,
+            action,
+            action === "list_flows" ? {} : { flow_id: "flow-1" },
+        );
+        expect(call).toHaveBeenCalledWith(expect.objectContaining({ resource, method }));
+    });
+
+    it("使用显式布尔值更新 Commerce 设置", async () => {
+        const call = vi.fn().mockResolvedValue({ success: true });
+        await executeWhatsAppPlatformAction({ call, config } as never, "update_commerce_settings", {
+            is_cart_enabled: false,
+            is_catalog_visible: true,
+        });
+        expect(call).toHaveBeenCalledWith({
+            method: "POST",
+            resource: "phone/whatsapp_commerce_settings",
+            query: { is_cart_enabled: false, is_catalog_visible: true },
+        });
+    });
+
+    it("用固定 Phone Number 资源管理消息二维码", async () => {
+        const call = vi.fn().mockResolvedValue({ code: "Q1" });
+        await executeWhatsAppPlatformAction({ call, config } as never, "update_qr_code", {
+            code: "Q1",
+            prefilled_message: "Hello",
+        });
+        expect(call).toHaveBeenCalledWith({
+            method: "POST",
+            resource: "phone/message_qrdls",
+            body: { code: "Q1", prefilled_message: "Hello" },
+        });
+    });
+
+    it("Commerce 设置不能为空操作", async () => {
+        await expect(
+            executeWhatsAppPlatformAction(
+                { call: vi.fn(), config } as never,
+                "update_commerce_settings",
+                {},
+            ),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
+    });
+
+    it("固定 Flow 动作拒绝路径注入", async () => {
+        await expect(
+            executeWhatsAppPlatformAction({ call: vi.fn(), config } as never, "publish_flow", {
+                flow_id: "flow/../other",
+            }),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
+    });
 });

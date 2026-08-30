@@ -79,6 +79,8 @@ export interface WhatsAppMessageEvent extends Record<string, unknown> {
         type: "button_reply" | "list_reply" | string;
         button_reply?: { id: string; title: string };
         list_reply?: { id: string; title: string; description?: string };
+        /** Flow 完成后返回的原生响应。 */
+        nfm_reply?: { name?: string; body?: string; response_json?: string };
     };
     button?: { payload?: string; text?: string };
     context?: {

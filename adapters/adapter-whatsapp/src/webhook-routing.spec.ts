@@ -62,7 +62,7 @@ describe("routeWhatsAppWebhook", () => {
         });
     });
 
-    it("一次验签后分别交付两个号码，并为各 Client 独立去重", () => {
+    it("一次验签后分别交付两个号码，并为各 Client 独立去重", async () => {
         const first = new WhatsAppClient(config);
         const second = new WhatsAppClient({
             ...config,
@@ -91,13 +91,15 @@ describe("routeWhatsAppWebhook", () => {
         });
         const signature = `sha256=${createHmac("sha256", "secret").update(body).digest("hex")}`;
 
-        expect(router.ingest(first, { body, signature })).toMatchObject({
+        await expect(router.ingest(first, { body, signature })).resolves.toMatchObject({
             accepted: 2,
             duplicate: false,
             changes: 2,
             ignoredChanges: 0,
         });
-        expect(router.ingest(first, { body, signature }).duplicate).toBe(true);
+        await expect(router.ingest(first, { body, signature })).resolves.toMatchObject({
+            duplicate: true,
+        });
         expect(firstMessage).toEqual(["message-1"]);
         expect(secondMessage).toEqual(["message-2"]);
     });

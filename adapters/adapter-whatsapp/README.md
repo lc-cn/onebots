@@ -12,7 +12,7 @@
 - 将 Reaction 增删投影为 canonical `reaction_added` / `reaction_removed` notice
 - 使用原始请求体校验 `X-Hub-Signature-256`，并过滤 Meta 重投递
 - 媒体上传、查询、下载、删除，消息已读与 typing indicator
-- Business Profile、号码注册、两步验证、用户屏蔽和消息模板管理
+- Business Profile、Commerce、Flow 生命周期、号码注册、两步验证、用户屏蔽和消息模板管理
 - 通用 `whatsapp_call`，无需等待适配器升级即可调用新的 Graph API 资源
 - `ingest()`、`ingestHttp()` 与标准 `acceptHttp(Request)` 共用同一 typed 事件和去重链路
 
@@ -54,16 +54,16 @@ whatsapp.my_bot:
 三层接入最终进入同一个 `WhatsAppClient`，共享联系人观察、typed events 与去重状态：
 
 ```ts
-const result = client.ingest(rawEvent);
-const verified = client.ingestHttp(rawBody, xHubSignature256);
+const result = await client.ingest(rawEvent);
+const verified = await client.ingestHttp(rawBody, xHubSignature256);
 const response = await client.acceptHttp(request);
 
-client.on("message", (message, metadata, change) => {
+client.on("message", async (message, metadata, change) => {
   // 参数均保留 Cloud API 原始类型
 });
 ```
 
-`ingest()` 与 `ingestHttp()` 返回 `{ accepted, duplicate, changes, messages, statuses, event }`；`acceptHttp()` 返回可直接交给 Fetch/WinterCG Host 的结构化响应。
+`ingest()` 与 `ingestHttp()` 会等待全部同步/异步监听器，成功后才提交去重并返回 `{ accepted, duplicate, changes, messages, statuses, event }`；并发的同一载荷只执行一次业务投递。`acceptHttp()` 返回可直接交给 Fetch/WinterCG Host 的结构化响应，业务失败返回 500 以触发 Meta 重投。
 
 ## 原生消息
 
@@ -91,6 +91,8 @@ await adapter.callAction("my_bot", "whatsapp_call", {
 ```
 
 `resource` 只能是相对 Graph API 路径，适配器拒绝绝对 URL，避免 Access Token 被发送到未配置域名。HTTP 和业务错误会抛出 `WhatsAppApiError`，其中保留 `code`、`status`、`resource` 与 Meta 错误详情。
+
+Flow 的 `list_flows`、`create_flow`、`get_flow`、`update_flow`、`delete_flow`、`publish_flow`、`deprecate_flow`，Commerce 设置，以及消息二维码的增查改删均提供固定资源动作；权限仍由 Meta 的 `whatsapp_business_management` scope 决定。
 
 ## 参考
 

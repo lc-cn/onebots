@@ -69,6 +69,26 @@ describe("WhatsAppClient", () => {
         } satisfies Partial<WhatsAppApiError>);
     });
 
+    it("媒体下载只向 Graph 主机或 Meta 官方媒体域发送凭据", async () => {
+        const fetcher = vi.fn<typeof fetch>();
+        const client = new WhatsAppClient(config, fetcher);
+        await expect(
+            client.downloadMediaFrom({ id: "media", url: "https://evil.example/file" }),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_MEDIA_URL" });
+        expect(fetcher).not.toHaveBeenCalled();
+
+        fetcher.mockResolvedValueOnce(new Response("media"));
+        await expect(
+            client.downloadMediaFrom({
+                id: "media",
+                url: "https://lookaside.fbsbx.com/whatsapp_business/attachments/file",
+            }),
+        ).resolves.toEqual(Buffer.from("media"));
+        expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("Authorization")).toBe(
+            "Bearer token",
+        );
+    });
+
     it.each(["/phone", "phone?fields=id", "phone#token", "phone/../me", "phone/%2e%2e/me"])(
         "拒绝夹带 URL 语义的 resource: %s",
         async resource => {
@@ -105,7 +125,7 @@ describe("WhatsAppClient", () => {
         });
     });
 
-    it("从统一 ingest 入口分发完整 Webhook 与细粒度事件", () => {
+    it("从统一 ingest 入口分发完整 Webhook 与细粒度事件", async () => {
         const client = new WhatsAppClient(config);
         const raw = vi.fn();
         const message = vi.fn();
@@ -139,7 +159,7 @@ describe("WhatsAppClient", () => {
                 },
             ],
         };
-        expect(client.ingest(event)).toMatchObject({
+        await expect(client.ingest(event)).resolves.toMatchObject({
             accepted: 2,
             duplicate: false,
             changes: 1,
@@ -152,13 +172,13 @@ describe("WhatsAppClient", () => {
         expect(client.getObservedContact("1")).toBeUndefined();
     });
 
-    it("只记录 Webhook 实际提供的联系人资料", () => {
+    it("只记录 Webhook 实际提供的联系人资料", async () => {
         const client = new WhatsAppClient(config);
         const observedDuringDispatch = vi.fn();
         client.on("webhook", () => {
             observedDuringDispatch(client.getObservedContact("86123"));
         });
-        client.ingest({
+        await client.ingest({
             object: "whatsapp_business_account",
             entry: [
                 {
@@ -179,7 +199,7 @@ describe("WhatsAppClient", () => {
         expect(observedDuringDispatch).toHaveBeenCalledWith({ id: "86123", name: "Alice" });
     });
 
-    it("manual 模式无需 Webhook 凭据并拒绝重复原始事件", () => {
+    it("manual 模式无需 Webhook 凭据并拒绝重复原始事件", async () => {
         const client = new WhatsAppClient({
             ...config,
             receive_mode: "manual",
@@ -190,11 +210,11 @@ describe("WhatsAppClient", () => {
             object: "whatsapp_business_account" as const,
             entry: [{ id: "waba", changes: [] }],
         };
-        expect(client.ingest(event).duplicate).toBe(false);
-        expect(client.ingest(event).duplicate).toBe(true);
+        await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: false });
+        await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: true });
     });
 
-    it("业务监听器失败时不提交去重状态，允许 Meta 重投递", () => {
+    it("业务监听器失败时不提交去重状态，允许 Meta 重投递", async () => {
         const client = new WhatsAppClient({ ...config, receive_mode: "manual" });
         const event = {
             object: "whatsapp_business_account" as const,
@@ -204,9 +224,31 @@ describe("WhatsAppClient", () => {
             throw new Error("downstream failed");
         };
         client.on("webhook", failure);
-        expect(() => client.ingest(event)).toThrow("downstream failed");
+        await expect(client.ingest(event)).rejects.toThrow("downstream failed");
         client.off("webhook", failure);
-        expect(client.ingest(event).duplicate).toBe(false);
+        await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: false });
+    });
+
+    it("等待异步监听器并合并同一载荷的并发重投", async () => {
+        const client = new WhatsAppClient({ ...config, receive_mode: "manual" });
+        const event = {
+            object: "whatsapp_business_account" as const,
+            entry: [{ id: "waba", changes: [] }],
+        };
+        let complete: (() => void) | undefined;
+        const listener = vi.fn(() => new Promise<void>(resolve => (complete = resolve)));
+        client.on("webhook", listener);
+
+        const first = client.ingest(event);
+        const retry = client.ingest(event);
+        await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce());
+        complete?.();
+
+        await expect(Promise.all([first, retry])).resolves.toEqual([
+            expect.objectContaining({ duplicate: false }),
+            expect.objectContaining({ duplicate: false }),
+        ]);
+        await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: true });
     });
 
     it("acceptHttp 接收标准 Request 并返回结构化响应", async () => {
@@ -268,5 +310,11 @@ describe("WhatsAppClient", () => {
                 /HTTPS Origin/u,
             );
         }
+    });
+
+    it("固定 Graph 资源 ID 不能夹带路径", () => {
+        expect(() => new WhatsAppClient({ ...config, phone_number_id: "phone/../other" })).toThrow(
+            /单段 Graph 资源 ID/u,
+        );
     });
 });

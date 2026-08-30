@@ -26,11 +26,11 @@ export class WhatsAppWebhookRouter {
         this.clients.set(phoneNumberId, client);
     }
 
-    ingest(
+    async ingest(
         source: WhatsAppClient,
         request: WhatsAppWebhookRequest,
         onIgnored: (phoneNumberId: string, changes: number) => void = () => undefined,
-    ): WhatsAppIngestResult {
+    ): Promise<WhatsAppIngestResult> {
         const verified = source.verifyHttp(request.body, request.signature);
         const aggregate: WhatsAppIngestResult = {
             accepted: 0,
@@ -58,7 +58,7 @@ export class WhatsAppWebhookRouter {
             }
             merge(
                 aggregate,
-                target.ingest(
+                await target.ingest(
                     delivery.event,
                     `${verified.deduplicationKey}:${delivery.phoneNumberId}`,
                 ),

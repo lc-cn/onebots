@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { CommonEvent, type CommonTypes } from "onebots";
 import type {
     WhatsAppMessageEvent,
@@ -163,8 +164,11 @@ function projectCustom(
     change: WhatsAppWebhookChange,
     context: WhatsAppProjectionContext,
 ): CommonEvent.Notice<WhatsAppWebhookChange> {
+    const identity = createHash("sha256")
+        .update(JSON.stringify({ entry_id: entryId, change }))
+        .digest("hex");
     return {
-        ...base(`${entryId}:${change.field}`, Date.now(), change, context),
+        ...base(`${entryId}:${change.field}:${identity}`, Date.now(), change, context),
         type: "notice",
         notice_type: "custom",
         extensions: { whatsapp: { field: change.field, value: change.value } },
@@ -210,6 +214,7 @@ function interactionText(message: WhatsAppMessageEvent): string {
     return (
         message.interactive?.button_reply?.title ||
         message.interactive?.list_reply?.title ||
+        message.interactive?.nfm_reply?.body ||
         message.button?.text ||
         ""
     );

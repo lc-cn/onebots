@@ -8,9 +8,9 @@ WhatsApp 适配器使用 Meta 官方 Cloud API。事件通过安全 Webhook 进�
 - 原生消息：Template、Interactive、Flow 以及 Cloud API 后续新增类型
 - 消息状态：`sent`、`delivered`、`read`、`failed`、`deleted`
 - 媒体：上传、查询临时 URL、鉴权下载和删除
-- 管理：Business Profile、号码注册/注销、两步验证、用户屏蔽、消息模板
+- 管理：Business Profile、Commerce、Flow 生命周期、号码注册/注销、两步验证、用户屏蔽、消息模板
 - 原始事件：所有 Webhook change 均保留在 `raw_event`
-- 嵌入式接入：`WhatsAppClient.ingest(rawEvent)` 可把已有可信连接交给同一 Client
+- 嵌入式接入：`await WhatsAppClient.ingest(rawEvent)` 可把已有可信连接交给同一 Client；同步/异步监听器全部成功后才确认去重
 
 Cloud API 不提供普通 WhatsApp 群组、好友列表或任意历史消息查询，因此适配器不会伪造这些能力。
 
@@ -53,7 +53,7 @@ const message = [{
 
 ## 平台动作
 
-常用动作包括 `send_native_message`、`mark_message_read`、`upload_media`、`download_media`、`get_business_profile`、`update_business_profile`、`block_user` 和消息模板管理。`get_supported_actions` 会返回当前完整清单。
+常用动作包括 `send_native_message`、`mark_message_read`、`upload_media`、`download_media`、Business Profile、Commerce、Flow 生命周期、`block_user` 和消息模板管理。`get_supported_actions` 会返回当前完整清单。
 
 新 Graph API 可通过 `whatsapp_call` 调用：
 
