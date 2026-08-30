@@ -41,4 +41,36 @@ describe("executeSlackPlatformAction", () => {
         expect(call).toHaveBeenCalledWith(method, { marker: "value" });
         expect(SLACK_PLATFORM_ACTIONS.has(action)).toBe(true);
     });
+
+    it("按 Agent Sessions 新标准校验状态和标题", async () => {
+        const call = vi.fn().mockResolvedValue({ ok: true });
+        await executeSlackPlatformAction({ call } as never, "set_agent_session_status", {
+            channel_id: "C1",
+            thread_ts: "1782234671.392669",
+            status: "processing",
+            title: "Research",
+        });
+        expect(call).toHaveBeenCalledWith("agents.sessions.setStatus", {
+            channel_id: "C1",
+            thread_ts: "1782234671.392669",
+            status: "processing",
+            title: "Research",
+        });
+        await executeSlackPlatformAction({ call } as never, "rename_agent_session", {
+            channel_id: "C1",
+            thread_ts: "1782234671.392669",
+            title: "Renamed",
+        });
+        expect(call).toHaveBeenLastCalledWith("agents.sessions.rename", {
+            channel_id: "C1",
+            thread_ts: "1782234671.392669",
+            title: "Renamed",
+        });
+        await expect(
+            executeSlackPlatformAction({ call } as never, "set_agent_session_status", {
+                channel_id: "C1",
+                status: "thinking",
+            }),
+        ).rejects.toMatchObject({ code: "SLACK_AGENT_STATUS_INVALID" });
+    });
 });

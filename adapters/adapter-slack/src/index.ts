@@ -4,6 +4,7 @@ import type { Schema } from "onebots";
 
 export type {
     SlackConfig,
+    SlackProxyConfig,
     SlackReceiveMode,
     SlackHttpResult,
     SlackWebhookBody,
@@ -26,6 +27,8 @@ export {
     type SlackPlatformAction,
 } from "./platform-actions.js";
 export { SLACK_COLLABORATION_ACTIONS } from "./platform-actions-collaboration.js";
+export { SLACK_AGENT_ACTIONS } from "./agent-actions.js";
+export { createSlackDispatcher, createSlackFetch } from "./transport.js";
 
 export const slackSchema: Schema = {
     account_id: {
@@ -50,7 +53,7 @@ export const slackSchema: Schema = {
         description: "HTTP Events API 请求签名密钥",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     receive_mode: {
@@ -74,6 +77,22 @@ export const slackSchema: Schema = {
         ui: {
             section: "credentials",
             visibleWhen: { path: "receive_mode", oneOf: ["socket"] },
+        },
+    },
+    proxy: {
+        url: {
+            type: "string",
+            label: "代理地址",
+            placeholder: "http://127.0.0.1:7890",
+            pattern: /^(?:https?|socks5):\/\/[^\s]+$/,
+            ui: { section: "advanced" },
+        },
+        username: { type: "string", label: "代理用户名", ui: { section: "advanced" } },
+        password: {
+            type: "string",
+            label: "代理密码",
+            sensitive: true,
+            ui: { section: "advanced" },
         },
     },
 };

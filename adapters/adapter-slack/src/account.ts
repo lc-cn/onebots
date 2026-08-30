@@ -15,6 +15,7 @@ export function createSlackAccount(
         signing_secret: config.signing_secret,
         app_token: config.app_token,
         receive_mode: config.receive_mode ?? "socket",
+        proxy: config.proxy,
     };
     const bot = new SlackBot(slackConfig);
     const account = new Account<"slack", SlackBot>(adapter, bot, config);

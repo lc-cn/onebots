@@ -6,6 +6,12 @@
 // 配置类型
 export type SlackReceiveMode = "socket" | "webhook" | "manual";
 
+export interface SlackProxyConfig {
+    url: string;
+    username?: string;
+    password?: string;
+}
+
 export interface SlackConfig {
     account_id: string;
     /** Bot Token（xoxb-…）。 */
@@ -16,6 +22,8 @@ export interface SlackConfig {
     app_token?: string;
     /** 事件接收方式；Socket Mode 无需公网回调地址。 */
     receive_mode?: SlackReceiveMode;
+    /** Web API 与 Socket Mode 共用的出站代理。 */
+    proxy?: SlackProxyConfig;
 }
 
 // Slack 用户类型
@@ -144,6 +152,7 @@ export interface SlackWebhookBody {
 /** 已验签 HTTP 入站的结构化响应，可由不同 Host 直接写回。 */
 export interface SlackHttpResult {
     status: number;
+    headers: Readonly<Record<string, string>>;
     body: Record<string, unknown>;
 }
 

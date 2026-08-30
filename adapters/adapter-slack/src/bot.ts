@@ -5,19 +5,15 @@
 import { EventEmitter } from "node:events";
 import { SocketModeClient } from "@slack/socket-mode";
 import type { WebClient } from "@slack/web-api";
-import {
-    emitAwaited,
-    KeyedSingleFlight,
-    RecentEventDeduplicator,
-    type Next,
-    type RouterContext,
-} from "onebots";
+import type { Dispatcher } from "undici";
+import { emitAllAwaited, ReliableEventIngress, type Next, type RouterContext } from "onebots";
 import { SlackError } from "./errors.js";
 import { slackEventIdentity } from "./event-identity.js";
 import { parseSlackHttpBody, parseSlackInbound, verifySlackSignature } from "./inbound.js";
 import type { SlackFileInput } from "./messages.js";
 import { acceptSlackSocketEnvelope } from "./socket-envelope.js";
 import { SlackWebApi } from "./web-api.js";
+import { createSlackDispatcher } from "./transport.js";
 import type {
     SlackConfig,
     SlackEvent,
@@ -41,18 +37,19 @@ export interface SlackBotEvents {
 
 export class SlackBot extends EventEmitter<SlackBotEvents> {
     private readonly api: SlackWebApi;
+    private readonly dispatcher?: Dispatcher;
     private socketClient?: SocketModeClient;
     private me: SlackUser | null = null;
     private startPromise?: Promise<void>;
     private running = false;
     private generation = 0;
     private readonly messageContexts = new Map<string, { channel: string; threadTs?: string }>();
-    private readonly receivedEvents = new RecentEventDeduplicator<string>();
-    private readonly processingEvents = new KeyedSingleFlight<string, void>();
+    private readonly eventIngress = new ReliableEventIngress<string>();
 
     constructor(readonly config: SlackConfig) {
         super();
-        this.api = new SlackWebApi(config.token);
+        this.dispatcher = createSlackDispatcher(config.proxy);
+        this.api = new SlackWebApi(config.token, this.dispatcher);
     }
 
     get receiveMode(): NonNullable<SlackConfig["receive_mode"]> {
@@ -95,7 +92,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                 );
             }
         }
-        if (wasActive) this.emit("stopped");
+        if (wasActive) await emitAllAwaited(this, "stopped");
     }
 
     private async startInternal(generation: number): Promise<void> {
@@ -107,7 +104,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
             if (this.receiveMode === "socket") await this.startSocket(generation);
             if (generation !== this.generation) return;
             this.running = true;
-            this.emit("ready");
+            await emitAllAwaited(this, "ready");
         } catch (error) {
             if (generation === this.generation) {
                 const socket = this.socketClient;
@@ -138,6 +135,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
         const socket = new SocketModeClient({
             appToken: this.config.app_token || "",
             autoReconnectEnabled: true,
+            dispatcher: this.dispatcher,
         });
         this.socketClient = socket;
         socket.on("slack_event", async (payload: unknown) => {
@@ -217,6 +215,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                 contentType: ctx.get("content-type"),
             });
             ctx.status = result.status;
+            for (const [name, value] of Object.entries(result.headers)) ctx.set(name, value);
             ctx.body = result.body;
         } catch (error) {
             const wrapped = SlackError.wrap(error, "webhook", "SLACK_WEBHOOK_INVALID");
@@ -270,10 +269,14 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                     status: 400,
                 });
             }
-            return { status: 200, body: { challenge: body.challenge } };
+            return {
+                status: 200,
+                headers: SLACK_JSON_HEADERS,
+                body: { challenge: body.challenge },
+            };
         }
         await this.ingest(body);
-        return { status: 200, body: { ok: true } };
+        return { status: 200, headers: SLACK_JSON_HEADERS, body: { ok: true } };
     }
 
     /** Fetch / WinterCG Host 可直接转交标准 Request，无需复刻验签与表单解析。 */
@@ -290,7 +293,10 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                 signature: request.headers.get("x-slack-signature") || "",
                 contentType: request.headers.get("content-type") || undefined,
             });
-            return Response.json(result.body, { status: result.status });
+            return new Response(JSON.stringify(result.body), {
+                status: result.status,
+                headers: result.headers,
+            });
         } catch (error) {
             const wrapped = SlackError.wrap(error, "webhook", "SLACK_WEBHOOK_INVALID");
             return Response.json(
@@ -303,17 +309,15 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     /** 将 HTTP Events 与 Socket Mode 归一到同一个原始事件入口。 */
     async ingest(rawEvent: unknown): Promise<SlackWebhookBody> {
         const body = parseSlackInbound(rawEvent);
-        await emitAwaited(this, "raw_event", body);
-        if (this.hasProcessedEvent(body)) return body;
+        await emitAllAwaited(this, "raw_event", body);
         const eventId = slackEventIdentity(body);
-        await this.processingEvents.run(eventId, () => this.deliver(body));
+        await this.eventIngress.deliver(eventId, () => this.deliver(body));
         return body;
     }
 
     private async deliver(body: SlackWebhookBody): Promise<void> {
         if (body.event) {
-            await emitAwaited(this, "event", body.event, body);
-            this.markEventProcessed(body);
+            await emitAllAwaited(this, "event", body.event, body);
             return;
         }
         const eventType =
@@ -323,7 +327,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                   ? body.type
                   : undefined;
         if (eventType) {
-            await emitAwaited(
+            await emitAllAwaited(
                 this,
                 "event",
                 {
@@ -334,16 +338,6 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                 body,
             );
         }
-        this.markEventProcessed(body);
-    }
-
-    /** Slack 超时重试仍交付 raw_event，但不会重复派发 canonical 事件。 */
-    private hasProcessedEvent(body: SlackWebhookBody): boolean {
-        return this.receivedEvents.has(slackEventIdentity(body));
-    }
-
-    private markEventProcessed(body: SlackWebhookBody): void {
-        this.receivedEvents.commit(slackEventIdentity(body));
     }
 
     /**
@@ -449,3 +443,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
         return this.api.call(method, params);
     }
 }
+
+const SLACK_JSON_HEADERS = {
+    "Content-Type": "application/json; charset=utf-8",
+} as const;

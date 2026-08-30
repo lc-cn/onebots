@@ -188,4 +188,49 @@ describe("projectSlackEvent", () => {
             extensions: { slack: { trigger_id: "trigger" } },
         });
     });
+
+    it("保留 Agent Session 停止与标题变更的可操作上下文", () => {
+        const stopped: SlackEvent = {
+            type: "agent_session_stopped",
+            event_ts: "1783536983.783769",
+            user: "U1",
+            channel: "C1",
+            thread_ts: "1782234671.392669",
+            streaming_message_ts: ["1782234987.693923"],
+        };
+        expect(
+            projectSlackEvent(stopped, { team_id: "T1", event: stopped }, context),
+        ).toMatchObject({
+            type: "notice",
+            notice_type: "custom",
+            user: { id: { string: "U1" } },
+            group: { channel_id: { string: "C1" }, guild_id: { string: "T1" } },
+            message_id: { string: "1782234671.392669" },
+            extensions: {
+                slack: {
+                    event_type: "agent_session_stopped",
+                    streaming_message_ts: ["1782234987.693923"],
+                },
+            },
+        });
+
+        const renamed: SlackEvent = {
+            type: "agent_session_title_changed",
+            event_ts: "1783536983.783770",
+            user: "U1",
+            channel: "C1",
+            thread_ts: "1782234671.392669",
+            previous_title: "Old",
+            title: "New",
+        };
+        expect(projectSlackEvent(renamed, { event: renamed }, context)).toMatchObject({
+            extensions: {
+                slack: {
+                    event_type: "agent_session_title_changed",
+                    previous_title: "Old",
+                    title: "New",
+                },
+            },
+        });
+    });
 });

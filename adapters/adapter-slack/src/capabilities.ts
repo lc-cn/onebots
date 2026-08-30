@@ -80,6 +80,15 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         set_canvas_access: { support: "native", availability: "permission" },
         delete_canvas_access: { support: "native", availability: "permission" },
         create_channel_canvas: { support: "native", availability: "permission" },
+        set_agent_session_status: {
+            support: "native",
+            permissions: ["chat:write"],
+            note: "管理 Slack Agent Session 生命周期并启用原生停止按钮",
+        },
+        rename_agent_session: {
+            support: "native",
+            permissions: ["chat:write"],
+        },
         get_version: { support: "native" },
         get_status: { support: "native" },
         get_supported_actions: { support: "native" },
@@ -95,6 +104,11 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         user_added: { support: "native" },
         user_updated: { support: "native" },
         interaction: { support: "native" },
+        agent_session_stopped: {
+            support: "native",
+            note: "用户点击 Slack 原生停止按钮",
+        },
+        agent_session_title_changed: { support: "native" },
         native_event: {
             support: "native",
             note: "所有未标准化 Events API 事件以 custom notice 和 raw_event 无损交付",

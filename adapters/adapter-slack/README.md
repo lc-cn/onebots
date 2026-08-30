@@ -17,6 +17,8 @@ slack.your_bot_id:
   token: "xoxb-YOUR-BOT-TOKEN"
   receive_mode: socket
   app_token: "xapp-YOUR-APP-TOKEN" # 需 connections:write
+  proxy:
+    url: "socks5://127.0.0.1:1080" # 可选；Web API 与 Socket Mode 共用
 ```
 
 使用 HTTP Events API 时改为 `receive_mode: webhook` 并配置必需的 `signing_secret`。请求地址为账号路径下的 `/webhook`；适配器会校验原始请求体签名和五分钟时间窗。Web 管理端会按接收模式只显示相关凭据。
@@ -31,7 +33,7 @@ onebots -r slack
 
 ## 功能
 
-- HTTP Events API 与自动重连的 Socket Mode
+- HTTP Events API 与默认无限恢复的 Socket Mode
 - Socket Mode 连接、重连与断开状态会同步到账号状态，普通 Web API 失败不会误判整号离线
 - 频道、单人私信、多人私信（MPIM）、线程消息以及文本、@、回复、附件收发
 - 用户目录按官方 `profile.display_name` / `profile.real_name` 投影真实显示名
@@ -39,6 +41,7 @@ onebots -r slack
 - Reaction、Pin、频道生命周期、成员邀请与移除、Bookmark
 - 消息编辑/删除、Reaction、成员变化等 canonical 事件投影
 - Slash Command、交互载荷及其他未知事件的 `raw_event` 无损交付
+- Slack Agent Sessions：生命周期状态、重命名、原生停止按钮与标题变更事件
 - Events API、交互组件、Slash Command 与 Socket Mode 共用公开的 `SlackBot.ingest(rawEvent)` 入站管线；`ingestHttp(rawBody, headers)` 与 `acceptHttp(Request)` 可复用完整验签和 JSON / 表单解析
 - Socket Mode 只在 canonical 投影与全部同步/异步监听器成功后确认 envelope；失败事件不会进入去重窗口，可由 Slack 重投
 - Slack 重试事件保留每次 `raw_event`，仅在业务监听器成功后按 `event_id` / `envelope_id` / `trigger_id` 提交 canonical 去重状态；缺少原生 ID 时使用稳定载荷摘要
@@ -48,7 +51,7 @@ onebots -r slack
 
 能力清单中的扩展动作可以从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
 
-`add_reaction`、`remove_reaction`、Pin、线程回复、频道生命周期与成员、定时消息及 Bookmark 动作；另提供临时消息、流式消息、消息永久链接与 unfurl、Block Kit 校验、Canvas 与访问控制、频道历史与已读标记、Modal/App Home View、Reaction/Pin 查询、文件列表、用户组及成员管理动作。文件详情与删除直接实现 canonical `get_file` / `delete_file`，无需使用平台扩展名。能力发现直接由同一份动作注册表生成，不会与实际调用入口漂移。
+`add_reaction`、`remove_reaction`、Pin、线程回复、频道生命周期与成员、定时消息及 Bookmark 动作；另提供临时消息、流式消息、消息永久链接与 unfurl、Block Kit 校验、Canvas 与访问控制、频道历史与已读标记、Modal/App Home View、Reaction/Pin 查询、文件列表、用户组及成员管理动作。Agent 应使用 `set_agent_session_status` 与 `rename_agent_session` 管理 Slack 当前的 Agent Sessions；适配器不会为已进入迁移期的 `assistant.threads.*` 另设兼容动作。文件详情与删除直接实现 canonical `get_file` / `delete_file`，无需使用平台扩展名。能力发现直接由同一份动作注册表生成，不会与实际调用入口漂移。
 
 创建频道与移除频道成员使用 canonical `create_channel`、`kick_channel_member`，参数分别为 `channel_name`，以及 `channel_id` + `user_id`。Slack 工作区由当前 Bot Token 隐式确定，因此 `create_channel` 的 `guild_id` 不参与平台请求。
 
@@ -63,7 +66,7 @@ onebots -r slack
 
 动作能否执行仍由当前 token scopes 和 Slack 会话上下文决定；`get_supported_actions` 只声明适配器已实现的调用路径。
 
-已有 HTTP Host 可直接把标准 `Request` 交给 `bot.acceptHttp(request)`；其他 Node Host 可调用 `bot.ingestHttp(rawBody, { timestamp, signature, contentType })` 并把结构化的 `{ status, body }` 写回。manual 模式只关闭 OneBots 自建路由或 Socket 连接，不会削弱这些公开入口。
+已有 HTTP Host 可直接把标准 `Request` 交给 `bot.acceptHttp(request)`；其他 Node Host 可调用 `bot.ingestHttp(rawBody, { timestamp, signature, contentType })` 并把结构化的 `{ status, headers, body }` 写回。manual 模式只关闭 OneBots 自建路由或 Socket 连接；直接调用 `ingest(rawEvent)` 不再次验签，若要在 manual 模式复用 `acceptHttp()` / `ingestHttp()`，仍需配置 `signing_secret`。
 
 ## 消息与文件
 

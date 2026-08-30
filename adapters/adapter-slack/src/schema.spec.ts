@@ -18,8 +18,12 @@ describe("Slack 配置 Schema", () => {
         });
         expect(slackSchema.signing_secret.ui?.visibleWhen).toEqual({
             path: "receive_mode",
-            oneOf: ["webhook"],
+            oneOf: ["webhook", "manual"],
         });
         expect(slackSchema.socket_mode).toBeUndefined();
+        expect(slackSchema.proxy.password).toMatchObject({
+            sensitive: true,
+            ui: { section: "advanced" },
+        });
     });
 });

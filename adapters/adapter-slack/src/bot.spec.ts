@@ -19,6 +19,7 @@ describe("SlackBot HTTP Events", () => {
         const ctx = {
             request: { rawBody, body: JSON.parse(rawBody) },
             get: (name: string) => (name === "x-slack-request-timestamp" ? timestamp : signature),
+            set: vi.fn(),
             status: 200,
             body: undefined,
         };
@@ -191,6 +192,7 @@ describe("SlackBot HTTP Events", () => {
         );
 
         expect(response.status).toBe(200);
+        expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
         expect(await response.json()).toEqual({ ok: true });
         expect(listener).toHaveBeenCalledWith(
             expect.objectContaining({ type: "slash_command", user_id: "U1" }),

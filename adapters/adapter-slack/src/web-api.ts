@@ -1,4 +1,5 @@
 import { WebClient } from "@slack/web-api";
+import type { Dispatcher } from "undici";
 import { materializeMediaSource } from "onebots";
 import { SlackError } from "./errors.js";
 import { slackUploadMessageTimestamp, type SlackFileInput } from "./messages.js";
@@ -9,6 +10,7 @@ import type {
     SlackMessageOptions,
     SlackUser,
 } from "./types.js";
+import { createSlackFetch } from "./transport.js";
 
 interface SlackResult {
     ok?: boolean;
@@ -19,8 +21,11 @@ interface SlackResult {
 export class SlackWebApi {
     private readonly client: WebClient;
 
-    constructor(token: string) {
-        this.client = new WebClient(token);
+    constructor(token: string, dispatcher?: Dispatcher) {
+        this.client = new WebClient(token, {
+            allowAbsoluteUrls: false,
+            fetch: createSlackFetch(dispatcher),
+        });
     }
 
     get rawClient(): WebClient {

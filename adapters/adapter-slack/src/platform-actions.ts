@@ -3,6 +3,7 @@ import type { SlackBot } from "./bot.js";
 import { SlackError } from "./errors.js";
 import { createSlackMethodHandlers } from "./platform-action-methods.js";
 import { SLACK_COLLABORATION_ACTIONS } from "./platform-actions-collaboration.js";
+import { SLACK_AGENT_ACTIONS } from "./agent-actions.js";
 
 const METHOD_BY_ACTION = {
     add_reaction: "reactions.add",
@@ -36,6 +37,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
             bot.call(requireMethod(params.method), requireObject(params.params, "params", {})),
         ...METHOD_HANDLERS,
         ...SLACK_COLLABORATION_ACTIONS,
+        ...SLACK_AGENT_ACTIONS,
     },
     action => SlackError.invalid(`未实现 Slack 平台动作: ${action}`, "SLACK_ACTION_UNSUPPORTED"),
 );

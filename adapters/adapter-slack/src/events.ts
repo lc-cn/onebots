@@ -123,6 +123,24 @@ export function projectSlackEvent(
         }
         case "app_rate_limited":
             return notice(envelope, event, context, "custom", extension(event));
+        case "agent_session_stopped":
+        case "agent_session_title_changed":
+            return notice(envelope, event, context, "custom", {
+                user: projectUser(event.user, context),
+                group: projectGroup(event.channel, context, envelope.team_id),
+                message_id:
+                    typeof event.thread_ts === "string"
+                        ? context.createId(event.thread_ts)
+                        : undefined,
+                extensions: {
+                    slack: {
+                        event_type: event.type,
+                        streaming_message_ts: event.streaming_message_ts,
+                        title: event.title,
+                        previous_title: event.previous_title,
+                    },
+                },
+            });
         default:
             return notice(envelope, event, context, "custom", extension(event));
     }
