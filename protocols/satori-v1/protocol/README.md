@@ -9,7 +9,7 @@ onebots Satori V1 协议实现 - 支持 Satori 协议的插件
 ## 特性
 
 - ✅ **Satori 协议** - 完整实现 Satori V1 规范
-- 🔌 **多通信方式** - HTTP、WebSocket
+- 🔌 **多通信方式** - HTTP、WebSocket、多个 Webhook
 - 🔐 **安全认证** - 支持 Token 认证
 - 📨 **消息元素** - 使用消息元素(Elements)表示消息
 - 🎯 **跨平台** - 统一的跨平台设计
@@ -57,7 +57,7 @@ accounts:
     protocol: satori.v1
 
     # Satori V1 配置
-    use_http: false             # 启用 HTTP API
+    use_http: true              # 启用 HTTP API
     use_ws: true                # 启用 WebSocket
     token: your_token           # 访问令牌
     platform: wechat            # 平台名称
@@ -86,11 +86,11 @@ await app.start();
 
 ### 通信方式
 
-| 参数       | 类型                  | 默认值 | 说明           |
-| ---------- | --------------------- | ------ | -------------- |
-| `use_http` | boolean \| HttpConfig | false  | HTTP 配置      |
-| `use_ws`   | boolean \| WsConfig   | true   | WebSocket 配置 |
-| `webhooks` | array                 | []     | Webhook 配置   |
+| 参数       | 类型    | 默认值 | 说明           |
+| ---------- | ------- | ------ | -------------- |
+| `use_http` | boolean | -      | 启用 HTTP API  |
+| `use_ws`   | boolean | -      | 启用 WebSocket |
+| `webhooks` | array   | []     | Webhook 配置   |
 
 ### 认证配置
 
@@ -98,30 +98,6 @@ await app.start();
 | ---------- | ------ | -------- | -------------- |
 | `token`    | string | -        | 访问令牌(全局) |
 | `platform` | string | "satori" | 平台名称       |
-
-### HTTP 配置
-
-```typescript
-{
-  enabled?: boolean;    // 是否启用
-  host?: string;        // 监听地址
-  port?: number;        // 监听端口
-  token?: string;       // 访问令牌(覆盖全局)
-  path?: string;        // 路径前缀
-}
-```
-
-### WebSocket 配置
-
-```typescript
-{
-  enabled?: boolean;    // 是否启用
-  host?: string;        // 监听地址
-  port?: number;        // 监听端口
-  token?: string;       // 访问令牌(覆盖全局)
-  path?: string;        // 路径
-}
-```
 
 ### Webhook 配置
 
@@ -159,7 +135,7 @@ curl -X POST http://localhost:6727/wechat/my_account/satori/v1/message.create \
 连接地址：
 
 ```
-ws://host:port/{platform}/{account_id}/satori/v1
+ws://host:port/{platform}/{account_id}/satori/v1/events
 ```
 
 认证：
@@ -174,6 +150,8 @@ ws://host:port/{platform}/{account_id}/satori/v1
 ```
 
 ## API 列表
+
+HTTP 动作名只接受 Satori 规范的 `resource.method` 形式，不提供 camelCase 别名。
 
 ### 消息 API
 
@@ -195,17 +173,13 @@ ws://host:port/{platform}/{account_id}/satori/v1
 
 - `guild.get` - 获取群组
 - `guild.list` - 获取群组列表
-- `guild.approve` - 处理群组邀请
-- `guild.remove` - 移除群组
 
 ### 群组成员 API
 
 - `guild.member.get` - 获取群组成员
 - `guild.member.list` - 获取群组成员列表
 - `guild.member.kick` - 移除群组成员
-- `guild.member.approve` - 处理加群请求
-- `guild.member.role.set` - 设置成员角色
-- `guild.member.role.unset` - 取消成员角色
+- `guild.member.mute` - 设置成员禁言状态
 
 ### 用户 API
 
@@ -215,8 +189,11 @@ ws://host:port/{platform}/{account_id}/satori/v1
 ### 好友 API
 
 - `friend.list` - 获取好友列表
-- `friend.approve` - 处理好友请求
-- `friend.remove` - 删除好友
+- `friend.delete` - 删除好友
+
+### 登录 API
+
+- `login.get` - 获取当前机器人真实登录身份
 
 ### 反应 API
 

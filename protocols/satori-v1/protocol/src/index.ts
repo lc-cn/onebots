@@ -4,6 +4,7 @@ import { Account } from "onebots";
 import { Adapter } from "onebots";
 import { CommonEvent, CommonTypes } from "onebots";
 import { WebSocket } from "ws";
+import { SatoriActionService } from "./actions.js";
 import { Satori } from "./types.js";
 import { SatoriConfig } from "./config.js";
 
@@ -52,6 +53,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     public readonly name = "satori";
     public readonly version = "v1" as const;
     private eventId = 0;
+    private readonly actions: SatoriActionService;
+    private readonly webhookCleanups = new Set<() => void>();
 
     constructor(
         public adapter: Adapter,
@@ -63,6 +66,9 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             protocol: "satori",
             version: "v1",
         });
+        this.actions = new SatoriActionService(adapter, account, segments =>
+            this.convertMessageContent(segments),
+        );
     }
 
     start(): void {
@@ -83,7 +89,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
     async stop(_force?: boolean): Promise<void> {
         this.logger.info(`Stopping Satori protocol v1`);
-        // Clean up Satori protocol resources
+        for (const cleanup of this.webhookCleanups) cleanup();
+        this.webhookCleanups.clear();
         this.removeAllListeners();
     }
 
@@ -91,15 +98,11 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
      * Account.dispatch 传入 CommonEvent；dispatchCommonEvent 等会传入已构造的 Satori.Event
      */
     async dispatch(event: unknown): Promise<void> {
-        if (!this.filterFn(event as Dict)) {
-            return;
+        if (!this.isCommonEventShape(event)) {
+            throw new TypeError("SatoriV1.dispatch 只接受 CommonEvent");
         }
-        let satoriEvent: Satori.Event | null = null;
-        if (this.isCommonEventShape(event)) {
-            satoriEvent = this.convertToSatoriFormat(event);
-        } else {
-            satoriEvent = event as Satori.Event;
-        }
+        if (!this.filterFn(event as Dict)) return;
+        const satoriEvent = this.convertToSatoriFormat(event);
         if (satoriEvent) {
             this.logger.debug(`Satori dispatch:`, satoriEvent);
             await emitAllAwaited(this, "dispatch", JSON.stringify(satoriEvent));
@@ -129,7 +132,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         this.logger.debug(`Satori action: ${action}`, params);
 
         try {
-            const result = await this.executeAction(action, params);
+            const result = await this.actions.execute(action, params);
             return {
                 data: result,
             };
@@ -138,100 +141,6 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             return {
                 message: error.message,
             };
-        }
-    }
-
-    /**
-     * Execute Satori protocol action
-     */
-    private async executeAction(action: string, params: Record<string, unknown>): Promise<unknown> {
-        // Map Satori method names to implementations
-        switch (action) {
-            // Message methods
-            case "message.create":
-            case "createMessage":
-                return this.createMessage(params);
-            case "message.get":
-            case "getMessage":
-                return this.getMessage(params);
-            case "message.delete":
-            case "deleteMessage":
-                return this.deleteMessage(params);
-            case "message.update":
-            case "editMessage":
-                return this.updateMessage(params);
-            case "message.list":
-            case "getMessageList":
-                return this.getMessageList(params);
-
-            // Channel methods
-            case "channel.get":
-            case "getChannel":
-                return this.getChannel(params);
-            case "channel.list":
-            case "getChannelList":
-                return this.getChannelList(params);
-            case "channel.create":
-            case "createChannel":
-                return this.createChannel(params);
-            case "channel.update":
-            case "updateChannel":
-                return this.updateChannel(params);
-            case "channel.delete":
-            case "deleteChannel":
-                return this.deleteChannel(params);
-
-            // Guild methods
-            case "guild.get":
-            case "getGuild":
-                return this.getGuild(params);
-            case "guild.list":
-            case "getGuildList":
-                return this.getGuildList(params);
-
-            // Guild member methods
-            case "guild.member.get":
-            case "getGuildMember":
-                return this.getGuildMember(params);
-            case "guild.member.list":
-            case "getGuildMemberList":
-                return this.getGuildMemberList(params);
-            case "guild.member.kick":
-            case "kickGuildMember":
-                return this.kickGuildMember(params);
-            case "guild.member.mute":
-            case "muteGuildMember":
-                return this.muteGuildMember(params);
-
-            // User methods
-            case "user.get":
-            case "getUser":
-                return this.getUser(params);
-            case "user.channel.create":
-            case "createDirectChannel":
-                return this.createDirectChannel(params);
-
-            // Friend methods
-            case "friend.list":
-            case "getFriendList":
-                return this.getFriendList(params);
-            case "friend.delete":
-            case "deleteFriend":
-                return this.deleteFriend(params);
-
-            // Login methods
-            case "login.get":
-            case "getLogin":
-                return this.getLogin();
-
-            default:
-                if (
-                    typeof this.adapter.describeCapabilities === "function" &&
-                    this.adapter.describeCapabilities(this.account.account_id).actions[action]
-                ) {
-                    return this.adapter.callAction(this.account.account_id, action, params);
-                }
-                throw new Error(`Unknown action: ${action}`);
         }
     }
 
@@ -355,404 +264,6 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             .join("");
     }
 
-    // Action implementations
-    /**
-     * message.create - Send a message to a channel
-     */
-    private async createMessage(params: Record<string, unknown>): Promise<Satori.Message[]> {
-        const { channel_id, content } = params as {
-            channel_id: string;
-            content: string | Satori.Element[];
-        };
-
-        // Determine scene type: check if channel_id looks like a DM channel (dm_xxx or just user_id)
-        const isDM = channel_id.startsWith("dm_") || !channel_id.includes("_");
-        const sceneType: CommonTypes.Scene = isDM ? "private" : "group";
-        const sceneId = isDM ? channel_id.replace("dm_", "") : channel_id;
-
-        const result = await this.adapter.sendMessage(this.account.account_id, {
-            scene_type: sceneType,
-            scene_id: this.adapter.resolveId(sceneId),
-            message: this.parseMessageContent(content),
-        });
-
-        return [
-            {
-                id: result.message_id.string,
-                content: typeof content === "string" ? content : JSON.stringify(content),
-            },
-        ];
-    }
-
-    /**
-     * message.get - Get a message by ID
-     */
-    private async getMessage(params: Record<string, unknown>): Promise<Satori.Message> {
-        const { message_id } = params as { message_id: string };
-
-        const msg = await this.adapter.getMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
-        });
-
-        return {
-            id: msg.message_id.string,
-            content: this.convertMessageContent(msg.message),
-            created_at: msg.time * 1000,
-        };
-    }
-
-    /**
-     * message.delete - Delete a message
-     */
-    private async deleteMessage(params: Record<string, unknown>): Promise<void> {
-        const { message_id } = params as { message_id: string };
-
-        await this.adapter.deleteMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
-        });
-    }
-
-    /**
-     * message.update - Update/edit a message
-     */
-    private async updateMessage(params: Record<string, unknown>): Promise<void> {
-        const { message_id, content } = params as {
-            message_id: string;
-            content: string | Satori.Element[];
-        };
-
-        await this.adapter.updateMessage(this.account.account_id, {
-            message_id: this.adapter.resolveId(message_id),
-            message: this.parseMessageContent(content),
-        });
-    }
-
-    /**
-     * message.list - Get message history
-     */
-    private async getMessageList(
-        params: Record<string, unknown>,
-    ): Promise<Satori.BidiList<Satori.Message>> {
-        const { channel_id, limit } = params as {
-            channel_id: string;
-            limit?: number;
-        };
-
-        // Determine scene type
-        const isDM = channel_id.startsWith("dm_") || !channel_id.includes("_");
-        const sceneType: CommonTypes.Scene = isDM ? "private" : "group";
-        const sceneId = isDM ? channel_id.replace("dm_", "") : channel_id;
-
-        const messages = await this.adapter.getMessageHistory(this.account.account_id, {
-            scene_type: sceneType,
-            scene_id: this.adapter.resolveId(sceneId),
-            limit: limit || 20,
-        });
-
-        return {
-            data: messages.map(msg => ({
-                id: msg.message_id.string,
-                content: this.convertMessageContent(msg.message),
-                created_at: msg.time * 1000,
-            })),
-        };
-    }
-
-    /**
-     * channel.get - Get channel information
-     * Maps to group/guild info in most platforms
-     */
-    private async getChannel(params: Record<string, unknown>): Promise<Satori.Channel> {
-        const { channel_id } = params as { channel_id: string };
-
-        const info = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(channel_id),
-        });
-
-        return {
-            id: info.group_id.string,
-            type: 0, // Text channel
-            name: info.group_name,
-        };
-    }
-
-    /**
-     * channel.list - Get channel list
-     * Returns group list as channels
-     */
-    private async getChannelList(
-        _params: Record<string, unknown>,
-    ): Promise<Satori.List<Satori.Channel>> {
-        const groups = await this.adapter.getGroupList(this.account.account_id);
-
-        return {
-            data: groups.map(g => ({
-                id: g.group_id.string,
-                type: 0, // Text channel
-                name: g.group_name,
-            })),
-        };
-    }
-
-    /**
-     * channel.create - Create a new channel
-     */
-    private async createChannel(params: Record<string, unknown>): Promise<Satori.Channel> {
-        const { guild_id, name, type, parent_id } = params as {
-            guild_id?: string;
-            name?: string;
-            type?: Satori.ChannelType;
-            parent_id?: string;
-        };
-
-        const channel = await this.adapter.createChannel(this.account.account_id, {
-            guild_id: guild_id ? this.adapter.resolveId(guild_id) : undefined,
-            channel_name: name,
-            channel_type: type,
-            parent_id: parent_id ? this.adapter.resolveId(parent_id) : undefined,
-        });
-
-        return {
-            id: channel.channel_id.string,
-            type: type || 0,
-            name: channel.channel_name,
-            parent_id: channel.parent_id?.string,
-        };
-    }
-
-    /**
-     * channel.update - Update channel information
-     */
-    private async updateChannel(params: Record<string, unknown>): Promise<void> {
-        const { channel_id, name, parent_id } = params as {
-            channel_id: string;
-            name?: string;
-            parent_id?: string;
-        };
-
-        await this.adapter.updateChannel(this.account.account_id, {
-            channel_id: this.adapter.resolveId(channel_id),
-            channel_name: name,
-            parent_id: parent_id ? this.adapter.resolveId(parent_id) : undefined,
-        });
-    }
-
-    /**
-     * channel.delete - Delete a channel
-     */
-    private async deleteChannel(params: Record<string, unknown>): Promise<void> {
-        const { channel_id } = params as { channel_id: string };
-
-        await this.adapter.deleteChannel(this.account.account_id, {
-            channel_id: this.adapter.resolveId(channel_id),
-        });
-    }
-
-    /**
-     * guild.get - Get guild information
-     * Maps to group info in most platforms
-     */
-    private async getGuild(params: Record<string, unknown>): Promise<Satori.Guild> {
-        const { guild_id } = params as { guild_id: string };
-
-        const info = await this.adapter.getGroupInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(guild_id),
-        });
-
-        return {
-            id: info.group_id.string,
-            name: info.group_name,
-        };
-    }
-
-    /**
-     * guild.list - Get guild list
-     * Returns group list as guilds
-     */
-    private async getGuildList(
-        _params: Record<string, unknown>,
-    ): Promise<Satori.List<Satori.Guild>> {
-        const groups = await this.adapter.getGroupList(this.account.account_id);
-
-        return {
-            data: groups.map(g => ({
-                id: g.group_id.string,
-                name: g.group_name,
-            })),
-        };
-    }
-
-    /**
-     * guild.member.get - Get guild member information
-     */
-    private async getGuildMember(params: Record<string, unknown>): Promise<Satori.GuildMember> {
-        const { guild_id, user_id } = params as { guild_id: string; user_id: string };
-
-        const info = await this.adapter.getGroupMemberInfo(this.account.account_id, {
-            group_id: this.adapter.resolveId(guild_id),
-            user_id: this.adapter.resolveId(user_id),
-        });
-
-        return {
-            user: {
-                id: info.user_id.string,
-                name: info.user_name,
-            },
-            nick: info.card,
-        };
-    }
-
-    /**
-     * guild.member.list - Get guild member list
-     */
-    private async getGuildMemberList(
-        params: Record<string, unknown>,
-    ): Promise<Satori.List<Satori.GuildMember>> {
-        const { guild_id } = params as { guild_id: string };
-
-        const members = await this.adapter.getGroupMemberList(this.account.account_id, {
-            group_id: this.adapter.resolveId(guild_id),
-        });
-
-        return {
-            data: members.map(m => ({
-                user: {
-                    id: m.user_id.string,
-                    name: m.user_name,
-                },
-                nick: m.card,
-            })),
-        };
-    }
-
-    /**
-     * guild.member.kick - Kick a member from guild
-     */
-    private async kickGuildMember(params: Record<string, unknown>): Promise<void> {
-        const { guild_id, user_id } = params as { guild_id: string; user_id: string };
-
-        await this.adapter.kickChannelMember(this.account.account_id, {
-            channel_id: this.adapter.resolveId(guild_id),
-            user_id: this.adapter.resolveId(user_id),
-        });
-    }
-
-    /**
-     * guild.member.mute - Mute a guild member
-     */
-    private async muteGuildMember(params: Record<string, unknown>): Promise<void> {
-        const { guild_id, user_id, duration } = params as {
-            guild_id: string;
-            user_id: string;
-            duration: number;
-        };
-
-        await this.adapter.setChannelMemberMute(this.account.account_id, {
-            channel_id: this.adapter.resolveId(guild_id),
-            user_id: this.adapter.resolveId(user_id),
-            mute: duration > 0,
-        });
-    }
-
-    /**
-     * user.get - Get user information
-     */
-    private async getUser(params: Record<string, unknown>): Promise<Satori.User> {
-        const { user_id } = params as { user_id: string };
-
-        const info = await this.adapter.getUserInfo(this.account.account_id, {
-            user_id: this.adapter.resolveId(user_id),
-        });
-
-        return {
-            id: info.user_id.string,
-            name: info.user_name,
-        };
-    }
-
-    /**
-     * user.channel.create - Create a direct message channel with a user
-     */
-    private async createDirectChannel(params: Record<string, unknown>): Promise<Satori.Channel> {
-        const { user_id, guild_id } = params as { user_id: string; guild_id?: string };
-
-        const channel = await this.adapter.createUserChannel(this.account.account_id, {
-            user_id: this.adapter.resolveId(user_id),
-            guild_id: guild_id ? this.adapter.resolveId(guild_id) : undefined,
-        });
-
-        return {
-            id: channel.channel_id.string,
-            type: 1, // Direct/private channel
-            name: channel.channel_name,
-        };
-    }
-
-    /**
-     * friend.list - Get friend list
-     */
-    private async getFriendList(
-        _params: Record<string, unknown>,
-    ): Promise<Satori.List<Satori.User>> {
-        const friends = await this.adapter.getFriendList(this.account.account_id);
-
-        return {
-            data: friends.map(f => ({
-                id: f.user_id.string,
-                name: f.user_name,
-            })),
-        };
-    }
-
-    /**
-     * friend.delete - Delete a friend
-     */
-    private async deleteFriend(params: Record<string, unknown>): Promise<void> {
-        const { user_id } = params as { user_id: string };
-
-        await this.adapter.deleteFriend(this.account.account_id, {
-            user_id: this.adapter.resolveId(user_id),
-        });
-    }
-
-    /**
-     * login.get - Get login (bot) information
-     */
-    private async getLogin(): Promise<Satori.Login> {
-        const info = await this.adapter.getLoginInfo(this.account.account_id);
-
-        return {
-            user: {
-                id: info.user_id.string,
-                name: info.user_name,
-            },
-            self_id: info.user_id.string,
-            platform: this.account.platform as string,
-            status: 1, // Online
-        };
-    }
-
-    /**
-     * Parse Satori message content (string or elements) to segments
-     */
-    private parseMessageContent(content: string | Satori.Element[]): CommonTypes.Segment[] {
-        if (typeof content === "string") {
-            // Simple text message
-            return [{ type: "text", data: { text: content } }];
-        }
-
-        // Parse element array
-        return content.map(el => {
-            if (typeof el === "string") {
-                return { type: "text", data: { text: el } };
-            }
-            return {
-                type: el.type,
-                data: el.attrs || {},
-            };
-        });
-    }
-
     /**
      * Verify access token
      */
@@ -771,10 +282,9 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             // Verify access token
             const authHeader = ctx.headers["authorization"];
             const token =
-                (typeof authHeader === "string" ? authHeader.replace("Bearer ", "") : undefined) ||
-                (typeof ctx.headers["x-platform"] === "string"
-                    ? ctx.headers["x-platform"].split("/")[1]
-                    : undefined);
+                typeof authHeader === "string"
+                    ? authHeader.replace(/^Bearer\s+/i, "").trim()
+                    : undefined;
 
             if (!this.verifyToken(token)) {
                 ctx.status = 401;
@@ -811,7 +321,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             }
 
             try {
-                const login = await this.getLogin();
+                const login = await this.actions.getLogin();
                 ctx.body = login;
             } catch (error) {
                 this.logger.error("Get login failed:", error);
@@ -858,21 +368,12 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
                             return;
                         }
                         identified = true;
+                        const login = await this.actions.getLogin();
                         ws.send(
                             JSON.stringify({
                                 op: 4, // READY
                                 body: {
-                                    logins: [
-                                        {
-                                            user: {
-                                                id: this.account.account_id,
-                                                name: this.account.account_id,
-                                            },
-                                            self_id: this.account.account_id,
-                                            platform: this.config.platform || this.account.platform,
-                                            status: 1, // ONLINE
-                                        },
-                                    ],
+                                    logins: [login],
                                     proxy_urls: [],
                                 },
                             }),
@@ -937,6 +438,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         };
 
         this.on("dispatch", onDispatch);
+        this.webhookCleanups.add(() => this.off("dispatch", onDispatch));
         this.logger.info(`Satori webhook configured to POST events to ${config.url}`);
     }
 }
