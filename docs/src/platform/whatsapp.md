@@ -77,6 +77,8 @@ Flow/data-channel Business Encryption 使用 `client.businessEncryption` 或 `ge
 
 Business Profile 通过 `client.businessProfile` 与同名固定平台动作管理。读取字段使用可增减数组，更新只发送官方字段并校验长度、邮箱、HTTP(S) 网站和 vertical 枚举；头像字段使用 Resumable Upload API 产生的 `profile_picture_handle`。未知字段不会透传到 Meta。
 
+Business Compliance 通过 `client.businessCompliance` 以及 `get_business_compliance_info` / `update_business_compliance_info` 管理。读取字段是可增减数组；写入严格验证实体类型、法定名称、联系人邮箱与 E.164 电话，并落实 `OTHER` 自定义类型和 `is_registered` 的官方跨字段规则。平台动作的更新对象使用 `info` 字段，额外字段不会透传。
+
 新 Graph API 可通过 `whatsapp_call` 调用：
 
 ```ts

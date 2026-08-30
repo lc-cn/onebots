@@ -122,6 +122,8 @@ Flow/data-channel 的 Business Encryption 与消息 payload encryption 是不同
 
 Business Profile 使用 `client.businessProfile` 或原有 `get_business_profile` / `update_business_profile` 动作。读取字段必须以数组显式增减，更新只接受 Meta 的 about、address、description、email、websites、vertical 和 `profile_picture_handle`，并校验长度、URL、邮箱与行业枚举；任意额外 JSON 字段会被拒绝。头像需先通过 Resumable Upload API 获得 handle，不能直接把图片 URL 当作 handle。
 
+Business Compliance 使用 `client.businessCompliance` 或 `get_business_compliance_info` / `update_business_compliance_info`。读取字段同样使用可增减数组；写入会校验官方实体类型、法定名称、联系人邮箱与 E.164 电话，并执行 `OTHER` / `entity_type_custom` 及 `is_registered` 的跨字段约束。平台动作把完整写入对象放在 `info` 字段中，未知字段会被拒绝。
+
 ## 参考
 
 - [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/)

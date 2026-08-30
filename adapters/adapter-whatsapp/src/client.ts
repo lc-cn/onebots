@@ -17,6 +17,13 @@ import {
     type WhatsAppBusinessProfileUpdate,
     type WhatsAppBusinessProfileUpdateResponse,
 } from "./business-profile.js";
+import {
+    WhatsAppBusinessCompliance,
+    type WhatsAppBusinessComplianceField,
+    type WhatsAppBusinessComplianceResponse,
+    type WhatsAppBusinessComplianceUpdate,
+    type WhatsAppBusinessComplianceUpdateResponse,
+} from "./business-compliance.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -65,6 +72,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly businessEncryption: WhatsAppBusinessEncryption;
     /** Business Profile 强类型读取与受控更新。 */
     readonly businessProfile: WhatsAppBusinessProfiles;
+    /** Business Compliance 强类型读写与跨字段校验。 */
+    readonly businessCompliance: WhatsAppBusinessCompliance;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -81,6 +90,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.phoneNumbers = new WhatsAppPhoneNumbers(this);
         this.businessEncryption = new WhatsAppBusinessEncryption(this);
         this.businessProfile = new WhatsAppBusinessProfiles(this);
+        this.businessCompliance = new WhatsAppBusinessCompliance(this);
     }
 
     get apiVersion(): string {
@@ -261,6 +271,18 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         profile: WhatsAppBusinessProfileUpdate,
     ): Promise<WhatsAppBusinessProfileUpdateResponse> {
         return this.businessProfile.update(profile);
+    }
+
+    getBusinessComplianceInfo(
+        fields?: readonly WhatsAppBusinessComplianceField[],
+    ): Promise<WhatsAppBusinessComplianceResponse> {
+        return this.businessCompliance.get(fields);
+    }
+
+    updateBusinessComplianceInfo(
+        info: WhatsAppBusinessComplianceUpdate,
+    ): Promise<WhatsAppBusinessComplianceUpdateResponse> {
+        return this.businessCompliance.update(info);
     }
 
     async uploadMedia(file: Blob, mimeType: string, filename = "upload"): Promise<{ id: string }> {

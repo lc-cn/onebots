@@ -2,6 +2,24 @@ import { AdapterRegistry, type Schema } from "onebots";
 
 export { WhatsAppAdapter } from "./adapter.js";
 export {
+    isWhatsAppBusinessComplianceAction,
+    WhatsAppBusinessCompliance,
+    WHATSAPP_BUSINESS_COMPLIANCE_ACTIONS,
+    WHATSAPP_BUSINESS_COMPLIANCE_FIELDS,
+    WHATSAPP_BUSINESS_ENTITY_TYPES,
+    type WhatsAppBusinessComplianceAction,
+    type WhatsAppBusinessComplianceField,
+    type WhatsAppBusinessComplianceInfo,
+    type WhatsAppBusinessComplianceResponse,
+    type WhatsAppBusinessComplianceUpdate,
+    type WhatsAppBusinessComplianceUpdateResponse,
+    type WhatsAppBusinessEntityType,
+    type WhatsAppComplianceContactDetails,
+    type WhatsAppComplianceContactInfo,
+    type WhatsAppGrievanceOfficerDetails,
+    type WhatsAppGrievanceOfficerInfo,
+} from "./business-compliance.js";
+export {
     isWhatsAppBusinessEncryptionAction,
     WhatsAppBusinessEncryption,
     WHATSAPP_BUSINESS_ENCRYPTION_ACTIONS,
