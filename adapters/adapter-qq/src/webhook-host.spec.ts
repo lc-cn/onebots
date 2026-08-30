@@ -95,4 +95,42 @@ describe("QQ 共享 Webhook Host", () => {
         expect(context.status).toBe(500);
         expect(context.body).toContain("QQ_WEBHOOK_ERROR");
     });
+
+    it("标准 Request 与 Koa 入口复用同一 SDK 验签和业务投递", async () => {
+        let release: (() => void) | undefined;
+        const delivered = new Promise<void>(resolve => (release = resolve));
+        const onDispatch = vi.fn(() => delivered);
+        const host = new QQWebhookHost("/qq/test/webhook", "test", onDispatch);
+        await host.listen(0, "/ignored", async () => ({
+            status: 200,
+            headers: { "x-qq-test": "ok" },
+            body: '{"op":12,"d":0}',
+        }));
+        const body = JSON.stringify({ op: 0, t: "FRIEND_ADD", d: { id: "e4" } });
+
+        const pending = host.acceptHttp(
+            new Request("https://example.test/qq/test/webhook", {
+                method: "POST",
+                body,
+            }),
+        );
+        await vi.waitFor(() => expect(onDispatch).toHaveBeenCalledOnce());
+        let settled = false;
+        void pending.then(() => (settled = true));
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        release?.();
+
+        const response = await pending;
+        expect(response.status).toBe(200);
+        expect(response.headers.get("x-qq-test")).toBe("ok");
+        expect(await response.json()).toEqual({ op: 12, d: 0 });
+    });
+
+    it("标准 Request 拒绝非 POST 方法", async () => {
+        const host = new QQWebhookHost("/qq/test/webhook", "test", vi.fn());
+        const response = await host.acceptHttp(new Request("https://example.test/qq"));
+        expect(response.status).toBe(405);
+        expect(response.headers.get("allow")).toBe("POST");
+    });
 });

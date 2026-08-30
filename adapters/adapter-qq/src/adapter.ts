@@ -288,9 +288,9 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
             qqConfig.receive_mode === "webhook" || qqConfig.receive_mode === "manual";
         let account: Account<"qq", QQClient>;
         let client: QQClient;
-        const host = new QQWebhookHost(webhookPath, config.account_id, result => {
-            this.dispatchWebhookResult(account, result);
-        });
+        const host = new QQWebhookHost(webhookPath, config.account_id, result =>
+            this.dispatchWebhookResult(account, result),
+        );
         client = new QQClient(
             {
                 appId: qqConfig.appid,
@@ -369,19 +369,23 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         }
     }
 
-    private dispatchWebhookResult(
+    private async dispatchWebhookResult(
         account: Account<"qq", QQClient>,
         result: QQWebhookDispatchResult,
-    ): void {
+    ): Promise<void> {
         switch (result.action) {
             case "message":
-                account.dispatch(projectQQMessage(result.msg, this.projectionContext(account)));
+                await account.dispatchAwaited(
+                    projectQQMessage(result.msg, this.projectionContext(account)),
+                );
                 break;
             case "interaction":
-                account.dispatch(this.projectRaw(account, "INTERACTION_CREATE", result.event));
+                await account.dispatchAwaited(
+                    this.projectRaw(account, "INTERACTION_CREATE", result.event),
+                );
                 break;
             case "raw":
-                account.dispatch(this.projectRaw(account, result.type, result.data));
+                await account.dispatchAwaited(this.projectRaw(account, result.type, result.data));
                 break;
         }
     }

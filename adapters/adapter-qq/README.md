@@ -64,7 +64,7 @@ qq.my_bot:
   receive_mode: manual
 ```
 
-宿主将原始请求组装为官方 SDK 的 `WebhookRequest` 后调用 `account.client.ingest(request)`，可获得结构化 `WebhookResponse`；Koa 风格宿主也可调用 `account.client.acceptHttp(ctx)`。两种入口都复用官方 SDK 的验签和事件解码，不另开端口。OneBots 的 canonical 分发会在 HTTP ACK 前完成：业务失败时 `ingest()` 拒绝、`acceptHttp()` 返回 500，QQ 可安全重投；成功事件进入有界内容哈希窗口，重复回调不会再次下发。
+宿主将原始请求组装为官方 SDK 的 `WebhookRequest` 后调用 `account.client.ingest(request)`，可获得结构化 `WebhookResponse`；Fetch/WinterCG 宿主可直接调用 `account.client.acceptHttp(request)` 并返回标准 `Response`，Koa 风格宿主也可传入上下文。所有入口都复用官方 SDK 的验签和事件解码，不另开端口。OneBots 的 canonical 分发会在 HTTP ACK 前完成：业务失败时 `ingest()` 拒绝、`acceptHttp()` 返回 500，QQ 可安全重投；成功事件进入有界内容哈希窗口，重复回调不会再次下发。
 
 旧字段 `mode`、`port`、`path`、`sandbox`、`apiBaseUrl` 和旧 intent 别名不再解释。配置 Schema 会直接生成接收方式、事件订阅和高级端点表单。
 

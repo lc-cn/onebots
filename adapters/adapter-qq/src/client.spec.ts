@@ -157,5 +157,11 @@ describe("QQClient", () => {
             status: 200,
             body: "{}",
         });
+
+        const response = await client.acceptHttp(
+            new Request("https://example.test/qq", { method: "POST", body: "{}" }),
+        );
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({});
     });
 });

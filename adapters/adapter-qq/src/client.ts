@@ -126,15 +126,19 @@ export class QQClient extends QQBot {
         return this.webhookHost.ingest(request);
     }
 
+    /** Fetch / WinterCG Host 适配入口；manual 与 webhook 模式行为一致。 */
+    async acceptHttp(request: Request): Promise<Response>;
     /** Koa/OneBots Host 适配入口；manual 与 webhook 模式行为一致。 */
-    async acceptHttp(ctx: QQHttpContext): Promise<void> {
+    async acceptHttp(ctx: QQHttpContext): Promise<void>;
+    async acceptHttp(request: Request | QQHttpContext): Promise<Response | void> {
         if (!this.webhookHost) {
             throw new QQApiError("QQ Client 未配置 Webhook 接收器", {
                 code: "QQ_WEBHOOK_UNAVAILABLE",
                 category: ErrorCategory.CONFIG,
             });
         }
-        await this.webhookHost.acceptHttp(ctx);
+        if (isStandardRequest(request)) return this.webhookHost.acceptHttp(request);
+        await this.webhookHost.acceptHttp(request);
     }
 
     /** 经 SDK 认证与结构化错误处理调用任意 QQ OpenAPI。 */
@@ -164,6 +168,13 @@ export class QQClient extends QQBot {
             throw QQApiError.wrap(error);
         }
     }
+}
+
+function isStandardRequest(value: Request | QQHttpContext): value is Request {
+    return (
+        typeof (value as Request).method === "string" &&
+        typeof (value as Request).arrayBuffer === "function"
+    );
 }
 
 /** 识别官方 SDK 当前唯一的重连耗尽信号，避免把普通平台错误误判成生命周期事件。 */

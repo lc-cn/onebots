@@ -59,29 +59,54 @@ export class QQWebhookHost implements WebhookServerAdapter {
         return response;
     }
 
-    /** Koa/OneBots 路由入口，返回 SDK 生成的结构化 HTTP 响应。 */
-    async acceptHttp(ctx: QQHttpContext): Promise<void> {
+    /** Fetch / WinterCG Host 入口，返回 SDK 生成的结构化响应。 */
+    async acceptHttp(request: Request): Promise<Response>;
+    /** Koa/OneBots 路由入口，写入 SDK 生成的结构化响应。 */
+    async acceptHttp(ctx: QQHttpContext): Promise<void>;
+    async acceptHttp(request: Request | QQHttpContext): Promise<Response | void> {
+        if (isStandardRequest(request)) return this.acceptFetchRequest(request);
+        await this.acceptKoaContext(request);
+    }
+
+    private async acceptFetchRequest(request: Request): Promise<Response> {
+        if (request.method !== "POST") {
+            return Response.json(
+                { error: { code: "QQ_METHOD_NOT_ALLOWED", message: "Method Not Allowed" } },
+                { status: 405, headers: { Allow: "POST" } },
+            );
+        }
         try {
-            const body = this.resolveRawBody(ctx.request.rawBody, ctx.request.body);
             const response = await this.ingest({
-                body,
+                body: Buffer.from(await request.arrayBuffer()),
+                headers: Object.fromEntries(request.headers),
+            });
+            return new Response(response.body, {
+                status: response.status,
+                headers: responseHeaders(response.headers),
+            });
+        } catch (error) {
+            const wrapped = QQApiError.wrap(error, "QQ_WEBHOOK_ERROR");
+            return Response.json(
+                { error: { code: wrapped.code, message: wrapped.message } },
+                { status: webhookErrorStatus(wrapped) },
+            );
+        }
+    }
+
+    private async acceptKoaContext(ctx: QQHttpContext): Promise<void> {
+        try {
+            const response = await this.ingest({
+                body: this.resolveRawBody(ctx.request.rawBody, ctx.request.body),
                 headers: normalizeHeaders(ctx.headers),
             });
             ctx.status = response.status;
-            for (const [name, value] of Object.entries(response.headers ?? {})) {
+            for (const [name, value] of Object.entries(response.headers ?? {}))
                 ctx.set(name, value);
-            }
             ctx.type = "application/json";
             ctx.body = response.body;
         } catch (error) {
             const wrapped = QQApiError.wrap(error, "QQ_WEBHOOK_ERROR");
-            ctx.status =
-                wrapped.code === "QQ_WEBHOOK_NOT_READY"
-                    ? 503
-                    : wrapped.category === ErrorCategory.VALIDATION ||
-                        wrapped.category === ErrorCategory.PROTOCOL
-                      ? 400
-                      : 500;
+            ctx.status = webhookErrorStatus(wrapped);
             ctx.type = "application/json";
             ctx.body = JSON.stringify({ error: { code: wrapped.code, message: wrapped.message } });
         }
@@ -119,6 +144,28 @@ export class QQWebhookHost implements WebhookServerAdapter {
         }
         this.receivedEvents.commit(eventKey);
     }
+}
+
+function isStandardRequest(value: Request | QQHttpContext): value is Request {
+    return (
+        typeof (value as Request).method === "string" &&
+        typeof (value as Request).arrayBuffer === "function" &&
+        typeof (value as Request).headers?.get === "function"
+    );
+}
+
+function responseHeaders(headers: Record<string, string> | undefined): Headers {
+    const result = new Headers(headers);
+    if (!result.has("content-type")) result.set("content-type", "application/json");
+    return result;
+}
+
+function webhookErrorStatus(error: QQApiError): number {
+    if (error.code === "QQ_WEBHOOK_NOT_READY") return 503;
+    if (error.category === ErrorCategory.VALIDATION || error.category === ErrorCategory.PROTOCOL) {
+        return 400;
+    }
+    return 500;
 }
 
 function normalizeHeaders(

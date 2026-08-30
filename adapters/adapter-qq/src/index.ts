@@ -62,7 +62,7 @@ export const qqSchema: Schema = {
         type: "string",
         default: "websocket",
         label: "事件接收方式",
-        description: "Webhook 直接复用 OneBots 主 HTTP 服务，不会另开端口",
+        description: "manual 可由已有 Host 调用 ingest() 或 acceptHttp(Request)",
         choices: [
             { value: "websocket", label: "WebSocket 正向连接" },
             { value: "webhook", label: "Webhook 回调" },
