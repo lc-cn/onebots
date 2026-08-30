@@ -1,6 +1,11 @@
-import { createHash } from "node:crypto";
 import type { QQBotInboundMessage } from "@tencent-connect/qqbot-nodejs";
-import { dateLikeToEventMs, type CommonEvent, type CommonTypes } from "onebots";
+import {
+    dateLikeToEventMs,
+    sha256Text,
+    stableJsonStringify,
+    type CommonEvent,
+    type CommonTypes,
+} from "onebots";
 
 export interface QQProjectionContext {
     botId: CommonTypes.Id;
@@ -318,12 +323,8 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function rawEventIdentity(eventType: string, raw: unknown): string {
     // Gateway 与 Webhook 载荷均来自 JSON；不可序列化的手动输入应直接暴露调用错误。
-    const serialised = JSON.stringify(raw) ?? String(raw);
-    const digest = createHash("sha256")
-        .update(eventType)
-        .update("\0")
-        .update(serialised)
-        .digest("hex");
+    const serialised = stableJsonStringify(raw);
+    const digest = sha256Text(`${eventType}\0${serialised}`);
     return `${eventType}:${digest}`;
 }
 

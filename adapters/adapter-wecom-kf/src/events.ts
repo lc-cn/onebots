@@ -1,5 +1,10 @@
-import { createHash } from "node:crypto";
-import { unixSecondsToEventMs, type CommonEvent, type CommonTypes } from "onebots";
+import {
+    sha256Json,
+    sha256Text,
+    unixSecondsToEventMs,
+    type CommonEvent,
+    type CommonTypes,
+} from "onebots";
 import { resolveKfOpenKfId } from "./identity.js";
 import type { KfCallbackEvent, KfMsgItem } from "./types.js";
 
@@ -78,9 +83,9 @@ export function projectKfCallback(
     context: Omit<KfProjectionContext, "openKfId">,
 ): CommonEvent.Event<KfCallbackEvent> {
     const rawEvent = publicCallback(event);
-    const identity = event.EncryptedXml || JSON.stringify(rawEvent);
+    const identity = event.EncryptedXml ? sha256Text(event.EncryptedXml) : sha256Json(rawEvent);
     return {
-        id: context.createId(createHash("sha256").update(identity).digest("hex")),
+        id: context.createId(identity),
         timestamp: unixSecondsToEventMs(event.CreateTime ?? 0),
         platform: "wecom-kf",
         bot_id: context.createId(event.OpenKfId || context.botId),
@@ -139,7 +144,7 @@ export function projectKfSegments(item: KfMsgItem): CommonTypes.Segment[] {
 }
 
 function stableId(item: KfMsgItem): string {
-    return createHash("sha256").update(JSON.stringify(item)).digest("hex");
+    return sha256Json(item);
 }
 
 function stringValue(value: unknown): string | undefined {

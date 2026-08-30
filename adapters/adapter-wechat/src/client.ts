@@ -1,6 +1,13 @@
 import { EventEmitter } from "node:events";
-import { createHash, randomUUID } from "node:crypto";
-import { emitAwaited, isSafeAbsoluteApiPath, KeyedSingleFlight, RefreshableValue } from "onebots";
+import { randomUUID } from "node:crypto";
+import {
+    emitAwaited,
+    isSafeAbsoluteApiPath,
+    KeyedSingleFlight,
+    RefreshableValue,
+    sha256Json,
+    sha256Text,
+} from "onebots";
 import { assertWechatConfig } from "./config.js";
 import { WechatApiError } from "./errors.js";
 import type {
@@ -394,9 +401,9 @@ export function wechatEventId(message: WechatIncomingMessage): string {
     ]
         .filter(value => value !== undefined && value !== "")
         .join(":");
-    const digest = createHash("sha256")
-        .update(message.RawXml || JSON.stringify(messageWithoutEncryptedXml(message)))
-        .digest("hex");
+    const digest = message.RawXml
+        ? sha256Text(message.RawXml)
+        : sha256Json(messageWithoutEncryptedXml(message));
     return identity ? `${identity}:${digest.slice(0, 16)}` : digest;
 }
 

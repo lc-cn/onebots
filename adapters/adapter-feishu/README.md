@@ -89,6 +89,8 @@ onebots -r feishu
 
 同一个成员变更或消息已读事件包含多个对象时，适配器会逐个分发 ID 稳定的 canonical notice，不再只投影数组第一项；完整原始载荷仍通过 `raw_event` 无损保留。机器人进群、被移出与群解散会投影为群生命周期事件，自定义菜单点击会投影为交互事件。
 
+平台事件缺少 `event_id` 时，适配器会根据 canonical JSON 载荷生成确定性 SHA-256 身份；同一事件重试不会因接收时间或对象键顺序不同而产生新 ID。
+
 旧的 `long_connection` 布尔字段已由明确的 `receive_mode: long_connection | webhook | manual` 取代，不再保留双配置语义。
 
 ## 消息与媒体

@@ -160,6 +160,29 @@ describe("projectFeishuEvent", () => {
             extensions: { feishu: { event_key: "open_settings" } },
         });
     });
+
+    it("缺少平台 event_id 时按载荷生成确定性身份", () => {
+        const first = makeEvent("drive.file.custom_v1", { token: "file", revision: 2 });
+        first.header.event_id = "";
+        const reordered: FeishuEvent = {
+            event: { revision: 2, token: "file" },
+            header: {
+                tenant_key: "tenant",
+                app_id: "cli_1",
+                create_time: "1710000000000",
+                event_type: "drive.file.custom_v1",
+                event_id: "",
+            },
+            schema: "2.0",
+        };
+
+        const firstId = projectFeishuEvents(first, first as FeishuWebhookBody, context)[0]?.id;
+        const secondId = projectFeishuEvents(reordered, reordered as FeishuWebhookBody, context)[0]
+            ?.id;
+
+        expect(firstId).toEqual(secondId);
+        expect(firstId?.string).toMatch(/^drive\.file\.custom_v1:sha256:/u);
+    });
 });
 
 function makeEvent(eventType: string, payload: Record<string, unknown>): FeishuEvent {

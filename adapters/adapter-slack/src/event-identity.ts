@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Json } from "onebots";
 import type { SlackWebhookBody } from "./types.js";
 
 /**
@@ -13,5 +13,5 @@ export function slackEventIdentity(body: SlackWebhookBody): string {
         value => typeof value === "string" && value,
     );
     if (nativeId) return nativeId;
-    return `sha256:${createHash("sha256").update(JSON.stringify(body)).digest("hex")}`;
+    return `sha256:${sha256Json(body)}`;
 }

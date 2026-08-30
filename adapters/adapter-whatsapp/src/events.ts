@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { CommonEvent, type CommonTypes } from "onebots";
+import { CommonEvent, sha256Json, type CommonTypes } from "onebots";
 import type {
     WhatsAppMessageEvent,
     WhatsAppMessageStatusEvent,
@@ -164,9 +163,7 @@ function projectCustom(
     change: WhatsAppWebhookChange,
     context: WhatsAppProjectionContext,
 ): CommonEvent.Notice<WhatsAppWebhookChange> {
-    const identity = createHash("sha256")
-        .update(JSON.stringify({ entry_id: entryId, change }))
-        .digest("hex");
+    const identity = sha256Json({ entry_id: entryId, change });
     return {
         ...base(`${entryId}:${change.field}:${identity}`, Date.now(), change, context),
         type: "notice",

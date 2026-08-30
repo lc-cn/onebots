@@ -14,6 +14,7 @@ onebots 核心库 - 提供多平台多协议机器人应用的基础架构。
 - **Types**: 通用类型定义
 - **Async utilities**: 代次安全的可刷新值缓存与有序受控并发
 - **API path**: 供适配器复用的结构化 API 路径安全校验
+- **JSON fingerprint**: 与对象键构造顺序无关的事件载荷序列化和 SHA-256 指纹
 
 ## 特性
 
@@ -139,6 +140,19 @@ abstract class Protocol {
 ```typescript
 import type { Dict, CommonEvent, CommonTypes } from "@onebots/core";
 ```
+
+## 确定性事件指纹
+
+平台没有提供原生事件 ID 时，可先选出真正构成事件身份的公开字段，再生成稳定指纹：
+
+```typescript
+import { sha256Json, stableJsonStringify } from "@onebots/core";
+
+const identity = `sha256:${sha256Json({ event: rawEvent.event, header: rawEvent.header })}`;
+const canonicalPayload = stableJsonStringify(rawEvent);
+```
+
+`stableJsonStringify()` 会递归排序对象键、保留数组顺序，并拒绝循环引用。不要把随机数或当前时间混入重试事件的身份。
 
 ## 开发
 

@@ -1,4 +1,4 @@
-import { CommonEvent, coerceUnixToEventMs, type CommonTypes } from "onebots";
+import { CommonEvent, coerceUnixToEventMs, sha256Json, type CommonTypes } from "onebots";
 import type { FeishuEvent, FeishuWebhookBody } from "./types.js";
 
 interface ProjectorContext {
@@ -298,7 +298,9 @@ function base(
     context: ProjectorContext,
 ): CommonEvent.Base<FeishuWebhookBody> {
     return {
-        id: context.createId(event.header.event_id || `${event.header.event_type}:${Date.now()}`),
+        id: context.createId(
+            event.header.event_id || `${event.header.event_type}:sha256:${sha256Json(rawEvent)}`,
+        ),
         timestamp: coerceUnixToEventMs(event.header.create_time),
         type: "custom",
         platform: "feishu",
