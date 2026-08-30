@@ -32,6 +32,7 @@ const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
     heartbeat: "心跳",
     invites_changed: "邀请变化",
     muted_users: "静音用户",
+    realm_linkifiers: "组织链接规则",
     restart: "服务器重启",
 };
 

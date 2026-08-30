@@ -312,8 +312,10 @@ describe("ZulipClient", () => {
         expect(registration?.params?.event_types).toContain("invites_changed");
         expect(registration?.params?.event_types).toContain("alert_words");
         expect(registration?.params?.event_types).toContain("muted_users");
+        expect(registration?.params?.event_types).toContain("realm_linkifiers");
         expect(registration?.params?.client_capabilities).toMatchObject({
             include_deactivated_groups: true,
+            linkifier_url_template: true,
         });
         await client.ingest({ id: 2, type: "subscription", op: "add" });
         expect(subscription).toHaveBeenCalledOnce();

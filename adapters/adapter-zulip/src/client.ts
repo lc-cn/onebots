@@ -43,6 +43,7 @@ const DEFAULT_EVENT_TYPES = [
     "invites_changed",
     "alert_words",
     "muted_users",
+    "realm_linkifiers",
     "presence",
     "user_status",
     "typing",
@@ -341,6 +342,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
                 client_capabilities: {
                     empty_topic_name: true,
                     include_deactivated_groups: true,
+                    linkifier_url_template: true,
                     user_avatar_url_field_optional: true,
                     user_list_incomplete: true,
                     simplified_presence_events: true,
