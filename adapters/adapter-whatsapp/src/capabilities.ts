@@ -6,6 +6,7 @@ import {
 import { WHATSAPP_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { isWhatsAppGroupAction } from "./groups.js";
 import { isWhatsAppCallingAction } from "./calling.js";
+import { isWhatsAppHistoryAction } from "./history.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -66,6 +67,7 @@ const businessMessagingActions = new Set([
 const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIONS, action => {
     if (isWhatsAppGroupAction(action)) return groupsAccess;
     if (isWhatsAppCallingAction(action)) return callingAccess;
+    if (isWhatsAppHistoryAction(action)) return businessMessaging;
     if (businessManagementActions.has(action)) return businessManagement;
     if (businessMessagingActions.has(action)) return businessMessaging;
     if (action === "send_native_message" || action === "mark_message_read") {

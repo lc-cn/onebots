@@ -11,6 +11,7 @@ WhatsApp 适配器使用 Meta 官方 Cloud API。事件通过安全 Webhook 进�
 - 管理：Business Profile、Commerce、Flow 生命周期、号码注册/注销、两步验证、用户屏蔽、消息模板
 - 群管理：群资料/成员、改名、参与者增删、邀请链接、入群申请审批，以及生命周期/设置/冻结 Webhook
 - 呼叫控制：用户权限查询/申请、建立、预接受、接受、拒绝与终止；SDP/WebRTC 媒体平面由调用方负责
+- 投递诊断：按 WAMID 查询消息状态、Webhook 更新结果与分页事件时间线
 - 原始事件：所有 Webhook change 均保留在 `raw_event`
 - 嵌入式接入：`await WhatsAppClient.ingest(rawEvent)` 可把已有可信连接交给同一 Client；同步/异步监听器全部成功后才确认去重
 
@@ -58,6 +59,8 @@ const message = [{
 常用动作包括 `send_native_message`、`mark_message_read`、`upload_media`、`download_media`、Business Profile、Commerce、Flow 生命周期、`block_user` 和消息模板管理。Groups API 另有 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message`。`get_supported_actions` 会返回当前完整清单及资格要求。
 
 Calling API 使用 `get_call_permissions` / `request_call_permission` 与 `connect_call`、`pre_accept_call`、`accept_call`、`reject_call`、`terminate_call`。适配器严格区分 offer、answer 和 `call_id`，但不负责 WebRTC/SIP 媒体传输。调用前需要 Meta 为当前 Phone Number 开通 Cloud API Calling，并具备 `whatsapp_business_messaging` 权限。
+
+消息历史使用 `list_message_history` 与 `list_message_history_events`，用于诊断投递状态、Webhook 更新状态和失败原因。`client.history` 还提供沿 cursor 完整遍历的强类型入口；该 API 不包含聊天正文，不能当作聊天记录归档。
 
 新 Graph API 可通过 `whatsapp_call` 调用：
 

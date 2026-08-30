@@ -10,6 +10,12 @@ export {
     type WhatsAppCallingAction,
 } from "./calling.js";
 export { WhatsAppApiError, type WhatsAppApiErrorOptions } from "./errors.js";
+export {
+    isWhatsAppHistoryAction,
+    WhatsAppHistory,
+    WHATSAPP_HISTORY_ACTIONS,
+    type WhatsAppHistoryAction,
+} from "./history.js";
 export { projectMessageContent, projectWhatsAppWebhook } from "./events.js";
 export { isWhatsAppGroupWebhookEntry } from "./group-webhook.js";
 export { compileWhatsAppMessages } from "./messages.js";
@@ -31,6 +37,19 @@ export {
     type WhatsAppWebhookDelivery,
 } from "./webhook-routing.js";
 export type { WhatsAppHttpContext } from "./webhook-host.js";
+export type {
+    WhatsAppHistoryDeliveryStatus,
+    WhatsAppHistoryEvent,
+    WhatsAppHistoryEventEdge,
+    WhatsAppHistoryEventOccurrence,
+    WhatsAppHistoryEventsQuery,
+    WhatsAppHistoryEventsResponse,
+    WhatsAppHistoryPaging,
+    WhatsAppMessageHistoryEntry,
+    WhatsAppMessageHistoryQuery,
+    WhatsAppMessageHistoryResponse,
+    WhatsAppWebhookUpdateState,
+} from "./history-types.js";
 export type {
     WhatsAppCallConnectParams,
     WhatsAppCallManageParams,

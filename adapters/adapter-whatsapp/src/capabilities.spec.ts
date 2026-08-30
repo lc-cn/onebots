@@ -35,5 +35,8 @@ describe("WhatsApp 能力清单", () => {
             scenes: ["private"],
         });
         expect(whatsAppCapabilities.actions.connect_call?.note).toContain("媒体平面");
+        expect(whatsAppCapabilities.actions.list_message_history?.permissions).toEqual([
+            "whatsapp_business_messaging",
+        ]);
     });
 });

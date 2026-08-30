@@ -5,6 +5,7 @@ import { deliverWhatsAppEvent } from "./event-delivery.js";
 import { WhatsAppGraphApi } from "./graph-api.js";
 import { WhatsAppGroups } from "./groups.js";
 import { WhatsAppCalling } from "./calling.js";
+import { WhatsAppHistory } from "./history.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -41,6 +42,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly groups: WhatsAppGroups;
     /** Calling API 控制平面；媒体协商与传输由调用方负责。 */
     readonly calling: WhatsAppCalling;
+    /** 消息投递历史与 Webhook 更新状态查询。 */
+    readonly history: WhatsAppHistory;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -51,6 +54,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.graph = new WhatsAppGraphApi(config, fetcher);
         this.groups = new WhatsAppGroups(this);
         this.calling = new WhatsAppCalling(this);
+        this.history = new WhatsAppHistory(this);
     }
 
     get apiVersion(): string {
