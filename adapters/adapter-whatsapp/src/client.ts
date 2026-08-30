@@ -53,6 +53,7 @@ import { WhatsAppFlows } from "./flows.js";
 import { WhatsAppBlockedUsers } from "./blocked-users.js";
 import { WhatsAppMedia } from "./media.js";
 import { WhatsAppConversationalAutomation } from "./conversational-automation.js";
+import { WhatsAppWebhookSubscriptions } from "./webhook-subscriptions.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -118,6 +119,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly media: WhatsAppMedia;
     /** Phone Number 欢迎消息、引导问题与 Bot 命令。 */
     readonly automation: WhatsAppConversationalAutomation;
+    /** WABA 对当前 Meta App 的 Webhook 订阅控制面。 */
+    readonly webhookSubscriptions: WhatsAppWebhookSubscriptions;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -143,6 +146,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.blockedUsers = new WhatsAppBlockedUsers(this);
         this.media = new WhatsAppMedia(this, this.graph);
         this.automation = new WhatsAppConversationalAutomation(this);
+        this.webhookSubscriptions = new WhatsAppWebhookSubscriptions(this);
     }
 
     get apiVersion(): string {

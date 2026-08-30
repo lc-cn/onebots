@@ -10,6 +10,7 @@ The adapter uses Meta's official WhatsApp Cloud API, receives signed webhooks th
 - Media upload, metadata lookup, authenticated download, and deletion
 - Business profile, commerce, Flow lifecycle, phone registration, two-step verification, blocked users, and templates
 - Conversational Automation welcome messages, prompts, and bot commands
+- WABA webhook App subscription inspection, subscription, and removal
 - Groups API metadata and participants, settings, invite links, join approvals, and lifecycle/status webhooks
 - Generic `whatsapp_call` for newly introduced Graph API resources
 - `await WhatsAppClient.ingest(rawEvent)` for feeding an existing trusted connection into the same client, with deduplication committed only after all synchronous/asynchronous listeners succeed
@@ -57,6 +58,8 @@ Blocked users are managed through `client.blockedUsers` and the bulk `block_user
 Media assets are managed through `client.media` and the four fixed media actions. Uploads enforce Meta's supported MIME types and size ceilings, while retrieval and deletion bind the media ID to the current `phone_number_id`. Temporary downloads only send the bearer token to trusted Meta hosts; metadata preserves the official string `file_size`, and deletion returns a validated structured result.
 
 Conversational Automation is managed through `client.automation`. The fixed configuration action controls the welcome message, up to three prompts, and up to thirty uniquely named bot commands; empty arrays explicitly clear prompts or commands. Bot details are retrieved with a separate WABA Bot ID and a controlled field array, never by pretending that the Phone Number ID is the Bot ID.
+
+WABA webhook App subscriptions are managed through `client.webhookSubscriptions`. Callers can inspect subscriptions, subscribe with the App default callback, provide a credential-free HTTPS override callback, or explicitly remove the current App subscription. Field projection always retains the App ID, while `verify_token` is write-only and never appears in structured responses.
 
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 

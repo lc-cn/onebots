@@ -194,6 +194,19 @@ export {
     type WhatsAppConversationalAutomationSettings,
 } from "./conversational-automation.js";
 export {
+    isWhatsAppWebhookSubscriptionAction,
+    WhatsAppWebhookSubscriptions,
+    WHATSAPP_SUBSCRIBED_APP_FIELDS,
+    WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTIONS,
+    type WhatsAppSubscribedAppData,
+    type WhatsAppSubscribedAppField,
+    type WhatsAppWebhookSubscription,
+    type WhatsAppWebhookSubscriptionAction,
+    type WhatsAppWebhookSubscriptionMutationResponse,
+    type WhatsAppWebhookSubscriptionRequest,
+    type WhatsAppWebhookSubscriptionsResponse,
+} from "./webhook-subscriptions.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,

@@ -16,6 +16,7 @@
 - 媒体上传、查询、下载、删除，消息已读与 typing indicator
 - Business Profile、Commerce、Flow 生命周期、号码注册、两步验证、用户屏蔽和消息模板管理
 - Conversational Automation：欢迎消息、引导问题和 Bot 命令配置
+- WABA Webhook App 订阅查看、订阅和取消订阅
 - Calling API 权限查询/申请，以及 `connect`、`pre_accept`、`accept`、`reject`、`terminate` 信令控制
 - 消息投递历史：按 WAMID 查询状态、Webhook 更新结果与可完整遍历的事件时间线
 - 号码级设置：Calling/SIP/视频、身份变更通知、payload encryption 公钥与数据驻留
@@ -116,6 +117,8 @@ Flow 通过强类型 `client.flows` 管理。固定动作覆盖列表、multipar
 用户封禁通过 `client.blockedUsers` 管理。`block_users` / `unblock_users` 接受去重后的 E.164 数组并保留 Meta 返回的输入号码到规范化 `wa_id` 映射；`list_blocked_users` 返回经过校验的用户与分页游标。单数动作不再存在，避免隐藏平台原生的批处理语义。
 
 对话自动化通过 `client.automation` 管理。`configure_conversational_automation` 可启停欢迎消息、配置最多 3 个 80 字符引导问题，以及最多 30 个唯一 Bot 命令；空数组会明确清空对应配置。`get_business_bot` 按独立 WABA Bot ID 和受控字段数组读取配置，不能用 Phone Number ID 冒充 Bot ID。命令名、描述、字段选择和响应均在边界校验。
+
+WABA Webhook 订阅通过 `client.webhookSubscriptions` 管理。`list_webhook_subscriptions` 使用可增减字段数组查看已订阅 App；`subscribe_waba_webhooks` 可沿用 App 默认回调，也可提交无凭据的 HTTPS `override_callback_uri` 和 `verify_token`；`unsubscribe_waba_webhooks` 会立即停止当前 App 的该 WABA 事件投递。读取结果保留 App ID、名称、链接与 override callback，但永远不会返回或记录 verify token。
 
 Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message` 等固定动作。标准 `send_message`、群资料、群成员、改名、邀请/移除成员和 `handle_group_request` 也复用同一实现。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
 
