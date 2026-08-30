@@ -1,13 +1,10 @@
 import { createSlackMethodHandlers } from "./platform-action-methods.js";
+import { SLACK_STREAM_ACTIONS } from "./stream-actions.js";
 
-/** 消息增强、流式消息、Canvas、Modal/App Home、文件与用户组协作能力。 */
-export const SLACK_COLLABORATION_ACTIONS = createSlackMethodHandlers({
+const SLACK_COLLABORATION_METHOD_ACTIONS = createSlackMethodHandlers({
     post_ephemeral: "chat.postEphemeral",
     get_message_permalink: "chat.getPermalink",
     unfurl_message: "chat.unfurl",
-    start_message_stream: "chat.startStream",
-    append_message_stream: "chat.appendStream",
-    stop_message_stream: "chat.stopStream",
     validate_blocks: "blocks.validate",
     create_canvas: "canvases.create",
     edit_canvas: "canvases.edit",
@@ -33,3 +30,9 @@ export const SLACK_COLLABORATION_ACTIONS = createSlackMethodHandlers({
     list_user_group_users: "usergroups.users.list",
     update_user_group_users: "usergroups.users.update",
 });
+
+/** 消息增强、流式消息、Canvas、Modal/App Home、文件与用户组协作能力。 */
+export const SLACK_COLLABORATION_ACTIONS = {
+    ...SLACK_COLLABORATION_METHOD_ACTIONS,
+    ...SLACK_STREAM_ACTIONS,
+};

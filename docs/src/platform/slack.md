@@ -12,6 +12,7 @@ Slack 适配器已完全实现，支持通过 Slack Bot API 接入 onebots 服�
   - 频道消息收发
   - 单人私信与多人私信（MPIM）收发
   - 文本、文件、线程、Block Kit 与流式消息
+  - 流式 `chunks`、任务 timeline/plan、Agent Session 状态与消息署名
 - ✅ **消息管理**
   - 消息编辑
   - 消息删除
@@ -27,6 +28,7 @@ Slack 适配器已完全实现，支持通过 Slack Bot API 接入 onebots 服�
 - ✅ **扩展功能**
   - 应用命令（Slash Commands，需要额外配置）
   - 交互式组件、Canvas、Modal 与 App Home
+  - Slack Lists、Calls 与远程文件索引/分享
 
 ## 安装
 

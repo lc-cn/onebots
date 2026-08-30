@@ -12,6 +12,7 @@ The Slack adapter is fully implemented and supports connecting to onebots servic
   - Channel message sending/receiving
   - One-to-one and multi-person direct messages (MPIM)
   - Text, files, threads, Block Kit, and streaming messages
+  - Streaming chunks, task timeline/plan views, Agent Session status, and authorship
 - ✅ **Message Management**
   - Message editing
   - Message deletion
@@ -27,6 +28,7 @@ The Slack adapter is fully implemented and supports connecting to onebots servic
 - ✅ **Extended Features**
   - App commands (Slash Commands, requires additional configuration)
   - Interactive components, Canvas, Modal, and App Home
+  - Slack Lists, Calls, and remote-file indexing/sharing
 
 ## Installation
 

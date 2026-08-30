@@ -1,10 +1,12 @@
 import { definePlatformActions } from "onebots";
+import { SLACK_AGENT_ACTIONS } from "./agent-actions.js";
 import type { SlackBot } from "./bot.js";
 import { SlackError } from "./errors.js";
-import { createSlackMethodHandlers } from "./platform-action-methods.js";
+import { createSlackMethodHandlers, withoutSlackToken } from "./platform-action-methods.js";
+import { SLACK_CALL_ACTIONS } from "./platform-actions-calls.js";
 import { SLACK_COLLABORATION_ACTIONS } from "./platform-actions-collaboration.js";
-import { SLACK_AGENT_ACTIONS } from "./agent-actions.js";
 import { SLACK_LIST_ACTIONS } from "./platform-actions-lists.js";
+import { SLACK_REMOTE_FILE_ACTIONS } from "./platform-actions-remote-files.js";
 
 const METHOD_BY_ACTION = {
     add_reaction: "reactions.add",
@@ -35,11 +37,16 @@ const METHOD_HANDLERS = createSlackMethodHandlers(METHOD_BY_ACTION);
 const PLATFORM_ACTIONS = definePlatformActions(
     {
         call_slack_api: (bot: SlackBot, params: Readonly<Record<string, unknown>>) =>
-            bot.call(requireMethod(params.method), requireObject(params.params, "params", {})),
+            bot.call(
+                requireMethod(params.method),
+                withoutSlackToken(requireObject(params.params, "params", {})),
+            ),
         ...METHOD_HANDLERS,
         ...SLACK_COLLABORATION_ACTIONS,
         ...SLACK_AGENT_ACTIONS,
         ...SLACK_LIST_ACTIONS,
+        ...SLACK_CALL_ACTIONS,
+        ...SLACK_REMOTE_FILE_ACTIONS,
     },
     action => SlackError.invalid(`未实现 Slack 平台动作: ${action}`, "SLACK_ACTION_UNSUPPORTED"),
 );

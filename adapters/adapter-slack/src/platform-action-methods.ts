@@ -9,7 +9,14 @@ export function createSlackMethodHandlers(
         Object.entries(methods).map(([action, method]) => [
             action,
             (bot: SlackBot, params: Readonly<Record<string, unknown>>) =>
-                bot.call(method, { ...params }),
+                bot.call(method, withoutSlackToken(params)),
         ]),
     );
+}
+
+/** 平台动作只能使用所属账号的凭据，避免通过参数越过账号安全边界。 */
+export function withoutSlackToken(
+    params: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(params).filter(([name]) => name !== "token"));
 }

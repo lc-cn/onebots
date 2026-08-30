@@ -4,20 +4,40 @@ import {
     type AdapterCapabilityManifest,
 } from "onebots";
 import { SLACK_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { SLACK_CALL_ACTION_NAMES, SLACK_CALL_READ_ACTION_NAMES } from "./platform-actions-calls.js";
 import { SLACK_LIST_ACTION_NAMES, SLACK_LIST_READ_ACTION_NAMES } from "./platform-actions-lists.js";
+import {
+    SLACK_REMOTE_FILE_ACTION_NAMES,
+    SLACK_REMOTE_FILE_READ_ACTION_NAMES,
+    SLACK_REMOTE_FILE_SHARE_ACTION_NAMES,
+} from "./platform-actions-remote-files.js";
 
-const platformActions = definePlatformActionCapabilities(SLACK_PLATFORM_ACTIONS, action => ({
-    support: "native",
-    availability: SLACK_LIST_ACTION_NAMES.has(action) ? "permission" : "context",
-    ...(SLACK_LIST_ACTION_NAMES.has(action)
-        ? {
-              permissions: [
-                  SLACK_LIST_READ_ACTION_NAMES.has(action) ? "lists:read" : "lists:write",
-              ],
-              note: "Slack Lists 仅适用于支持该功能的付费工作区",
-          }
-        : {}),
-}));
+const platformActions = definePlatformActionCapabilities(SLACK_PLATFORM_ACTIONS, action => {
+    if (SLACK_LIST_ACTION_NAMES.has(action)) {
+        return {
+            support: "native",
+            availability: "permission",
+            permissions: [SLACK_LIST_READ_ACTION_NAMES.has(action) ? "lists:read" : "lists:write"],
+            note: "Slack Lists 仅适用于支持该功能的付费工作区",
+        };
+    }
+    if (SLACK_CALL_ACTION_NAMES.has(action)) {
+        return {
+            support: "native",
+            availability: "permission",
+            permissions: [SLACK_CALL_READ_ACTION_NAMES.has(action) ? "calls:read" : "calls:write"],
+        };
+    }
+    if (SLACK_REMOTE_FILE_ACTION_NAMES.has(action)) {
+        const permission = SLACK_REMOTE_FILE_READ_ACTION_NAMES.has(action)
+            ? "remote_files:read"
+            : SLACK_REMOTE_FILE_SHARE_ACTION_NAMES.has(action)
+              ? "remote_files:share"
+              : "remote_files:write";
+        return { support: "native", availability: "permission", permissions: [permission] };
+    }
+    return { support: "native", availability: "context" };
+});
 
 /** Slack Web API/Events API 当前可用的能力。 */
 export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
@@ -80,9 +100,21 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         edit_bookmark: { support: "native", availability: "permission" },
         remove_bookmark: { support: "native", availability: "permission" },
         list_bookmarks: { support: "native", availability: "permission" },
-        start_message_stream: { support: "native", permissions: ["chat:write"] },
-        append_message_stream: { support: "native", permissions: ["chat:write"] },
-        stop_message_stream: { support: "native", permissions: ["chat:write"] },
+        start_message_stream: {
+            support: "native",
+            permissions: ["chat:write"],
+            note: "支持 markdown、结构化 chunks、timeline/plan 任务展示与消息署名",
+        },
+        append_message_stream: {
+            support: "native",
+            permissions: ["chat:write"],
+            note: "支持 markdown 或结构化 chunks，且保持起始流的内容模式",
+        },
+        stop_message_stream: {
+            support: "native",
+            permissions: ["chat:write"],
+            note: "支持结尾 chunks、Block Kit、metadata 与 Agent Session 状态",
+        },
         validate_blocks: { support: "native", availability: "permission" },
         create_canvas: { support: "native", availability: "permission" },
         edit_canvas: { support: "native", availability: "permission" },

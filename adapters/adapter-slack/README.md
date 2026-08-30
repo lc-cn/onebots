@@ -53,7 +53,11 @@ onebots -r slack
 
 `add_reaction`、`remove_reaction`、Pin、线程回复、频道生命周期与成员、定时消息及 Bookmark 动作；另提供临时消息、流式消息、消息永久链接与 unfurl、Block Kit 校验、Canvas 与访问控制、Slack Lists 的列表/记录/访问控制/异步下载、频道历史与已读标记、Modal/App Home View、Reaction/Pin 查询、文件列表、用户组及成员管理动作。Agent 应使用 `set_agent_session_status` 与 `rename_agent_session` 管理 Slack 当前的 Agent Sessions；适配器不会为已进入迁移期的 `assistant.threads.*` 另设兼容动作。文件详情与删除直接实现 canonical `get_file` / `delete_file`，无需使用平台扩展名。能力发现直接由同一份动作注册表生成，不会与实际调用入口漂移。
 
+流式消息使用 `start_message_stream`、`append_message_stream`、`stop_message_stream` 三个闭合动作。它们支持 Slack 当前的 `markdown_text` 或结构化 `chunks` 内容模式；`chunks` 可承载 Markdown、task update、plan update 与 Block Kit。起始动作还支持 `task_display_mode: "timeline" | "plan"`、接收方身份和 `icon_emoji` / `icon_url` / `username`，停止动作支持结尾 blocks、metadata 与 Agent Session 状态。具名动作只接受各阶段的官方字段，且不能覆盖当前 Bot token；需要访问其他 Slack Web API 时使用 `call_slack_api`。
+
 Slack Lists 动作使用 `create_list`、`update_list`、`*_list_access`、`*_list_download` 与 `*_list_item(s)` 命名，并一一固定映射到官方 `slackLists.*` 方法。读取动作声明 `lists:read`，写入动作声明 `lists:write`；Lists 仅在支持该功能的付费工作区可用。
+
+外部会议系统可通过 `create_call`、`get_call`、`update_call`、`end_call` 与参与者动作接入 Slack Calls 的原生加入按钮和通话界面。远程文档系统可通过 `add_remote_file`、`get_remote_file`、`list_remote_files`、`update_remote_file`、`remove_remote_file`、`share_remote_file` 管理 Slack 的远程文件索引、预览和频道分享；它与普通文件上传使用不同的 `remote_files:*` scopes。
 
 启用 Agent View 并订阅 `app_context_changed` 后，适配器会保留 Slack 按相关性排序的 active context：独立事件位于 `extensions.slack.context`，私信消息位于 `extensions.slack.app_context`，`app_home_opened` 同时保留 `tab`。频道、线程、Canvas 与 List 实体均保持官方结构，不会压成字符串。
 

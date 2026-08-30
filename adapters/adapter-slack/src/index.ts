@@ -27,7 +27,20 @@ export {
     type SlackPlatformAction,
 } from "./platform-actions.js";
 export { SLACK_COLLABORATION_ACTIONS } from "./platform-actions-collaboration.js";
-export { SLACK_AGENT_ACTIONS } from "./agent-actions.js";
+export { SLACK_CALL_ACTIONS } from "./platform-actions-calls.js";
+export { SLACK_REMOTE_FILE_ACTIONS } from "./platform-actions-remote-files.js";
+export {
+    SLACK_AGENT_ACTIONS,
+    requireSlackAgentSessionStatus,
+    type SlackAgentSessionStatus,
+} from "./agent-actions.js";
+export {
+    SLACK_STREAM_ACTIONS,
+    type SlackAppendMessageStreamParams,
+    type SlackStartMessageStreamParams,
+    type SlackStopMessageStreamParams,
+    type SlackTaskDisplayMode,
+} from "./stream-actions.js";
 export { createSlackDispatcher, createSlackFetch } from "./transport.js";
 
 export const slackSchema: Schema = {

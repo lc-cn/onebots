@@ -33,5 +33,13 @@ describe("Slack 能力清单", () => {
             support: "native",
             permissions: ["lists:write"],
         });
+        expect(slackCapabilities.actions.get_call?.permissions).toEqual(["calls:read"]);
+        expect(slackCapabilities.actions.create_call?.permissions).toEqual(["calls:write"]);
+        expect(slackCapabilities.actions.get_remote_file?.permissions).toEqual([
+            "remote_files:read",
+        ]);
+        expect(slackCapabilities.actions.share_remote_file?.permissions).toEqual([
+            "remote_files:share",
+        ]);
     });
 });
