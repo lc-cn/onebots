@@ -43,6 +43,21 @@ describe("LINE 消息编译", () => {
         ).toEqual([{ type: "sticker", packageId: "1", stickerId: "2", quoteToken: "quote" }]);
     });
 
+    it("用已接收消息 ID 解析 quote token", () => {
+        expect(
+            compileLineMessages(
+                [
+                    { type: "reply", data: { message_id: { string: "M1" } } },
+                    { type: "text", data: { text: "reply" } },
+                ],
+                { resolveQuoteToken: messageId => (messageId === "M1" ? "quote" : undefined) },
+            ),
+        ).toEqual([{ type: "text", text: "reply", quoteToken: "quote" }]);
+        expect(() =>
+            compileLineMessages([{ type: "reply", data: { message_id: "unknown" } }]),
+        ).toThrow("quote_token");
+    });
+
     it("未知消息段显式失败而不是静默丢失", () => {
         expect(() =>
             compileLineMessages([

@@ -107,6 +107,8 @@ function projectMessage(
             line: {
                 reply_token: event.replyToken,
                 quote_token: "quoteToken" in event.message ? event.message.quoteToken : undefined,
+                mark_as_read_token:
+                    "markAsReadToken" in event.message ? event.message.markAsReadToken : undefined,
                 is_redelivery: event.deliveryContext.isRedelivery,
             },
         },

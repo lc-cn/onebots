@@ -11,6 +11,7 @@ describe("LineContextStore", () => {
         withStore(store => {
             store.save("a", { id: "G1", type: "group", name: "旧名称" });
             store.save("a", { id: "G1", type: "group", name: "新名称" });
+            store.save("a", { id: "G1", type: "group" });
             store.save("b", { id: "G1", type: "room" });
 
             expect(store.list("a")).toHaveLength(1);
@@ -25,6 +26,18 @@ describe("LineContextStore", () => {
             store.saveEvent("a", "evt-1", 100);
             expect(store.hasEvent("a", "evt-1")).toBe(true);
             expect(store.hasEvent("b", "evt-1")).toBe(false);
+        });
+    });
+
+    it("持久化并合并消息 quote/read token", () => {
+        withStore(store => {
+            store.saveMessageTokens("a", "M1", { quoteToken: "quote" }, 100);
+            store.saveMessageTokens("a", "M1", { markAsReadToken: "read" }, 100);
+            expect(store.getMessageTokens("a", "M1")).toEqual({
+                quoteToken: "quote",
+                markAsReadToken: "read",
+            });
+            expect(store.getMessageTokens("b", "M1")).toBeUndefined();
         });
     });
 });

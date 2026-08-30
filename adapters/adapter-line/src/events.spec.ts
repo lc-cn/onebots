@@ -28,6 +28,7 @@ describe("LINE 事件投影", () => {
                 text: "更新后",
                 quotedMessageId: "M0",
                 quoteToken: "quote",
+                markAsReadToken: "read",
             },
         } as webhook.MessageEvent;
 
@@ -41,6 +42,7 @@ describe("LINE 事件投影", () => {
                 { type: "reply", data: { message_id: "M0" } },
                 { type: "text", data: { text: "更新后" } },
             ],
+            extensions: { line: { quote_token: "quote", mark_as_read_token: "read" } },
         });
     });
 

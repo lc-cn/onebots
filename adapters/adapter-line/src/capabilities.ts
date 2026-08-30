@@ -15,6 +15,12 @@ export const lineCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         send_message: { support: "native", scenes: ["private", "group"] },
         delete_message: { support: "unsupported" },
         get_message: { support: "unsupported", note: "仅支持按 ID 下载媒体内容" },
+        mark_message_as_read: {
+            support: "native",
+            scenes: ["private", "group"],
+            availability: "context",
+            note: "message_id 必须来自当前账号接收且包含 markAsReadToken 的事件",
+        },
         get_login_info: { support: "native" },
         get_user_info: { support: "native", availability: "context" },
         get_friend_list: {
@@ -86,7 +92,11 @@ export const lineCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
     segments: {
         text: { support: "native", direction: "both" },
         at: { support: "native", direction: "send" },
-        reply: { support: "native", direction: "both", note: "发送需 quote_token" },
+        reply: {
+            support: "native",
+            direction: "both",
+            note: "可使用已接收消息的 message_id 自动解析 quoteToken",
+        },
         image: { support: "native", direction: "both" },
         video: { support: "native", direction: "both" },
         audio: { support: "native", direction: "both" },

@@ -4,7 +4,11 @@ export { LineAdapter } from "./adapter.js";
 export { LineBot, type LineBotEvents, type LineEventRepository } from "./bot.js";
 export { lineCapabilities } from "./capabilities.js";
 export { LineApiError, type LineApiErrorOptions } from "./errors.js";
-export { chunkLineMessages, compileLineMessages } from "./messages.js";
+export {
+    chunkLineMessages,
+    compileLineMessages,
+    type LineMessageCompileOptions,
+} from "./messages.js";
 export { projectLineEvents, projectMessageContent } from "./events.js";
 export {
     LINE_PLATFORM_ACTIONS,

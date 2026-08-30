@@ -4,8 +4,15 @@ import { LineApiError } from "./errors.js";
 
 type MessageInput = Array<CommonTypes.Segment | string>;
 
+export interface LineMessageCompileOptions {
+    resolveQuoteToken?(messageId: string): string | undefined;
+}
+
 /** 将通用消息段编译为 LINE 原生 Message，原生 line_message 段可无损承载新消息类型。 */
-export function compileLineMessages(input: MessageInput): messagingApi.Message[] {
+export function compileLineMessages(
+    input: MessageInput,
+    options: LineMessageCompileOptions = {},
+): messagingApi.Message[] {
     const messages: messagingApi.Message[] = [];
     let text = "";
     let substitutions: NonNullable<messagingApi.TextMessageV2["substitution"]> = {};
@@ -51,7 +58,16 @@ export function compileLineMessages(input: MessageInput): messagingApi.Message[]
             continue;
         }
         if (segment.type === "reply") {
-            quoteToken = firstString(data, ["quote_token", "quoteToken"]);
+            const messageId = idValue(data.message_id ?? data.id);
+            quoteToken =
+                firstString(data, ["quote_token", "quoteToken"], false) ||
+                (messageId ? options.resolveQuoteToken?.(messageId) : undefined);
+            if (!quoteToken) {
+                throw new LineApiError(
+                    "LINE reply 段必须提供 quote_token，或引用当前账号已接收的 message_id",
+                    { code: "LINE_QUOTE_TOKEN_REQUIRED", details: { message_id: messageId } },
+                );
+            }
             continue;
         }
         flushText();
@@ -208,6 +224,14 @@ function stringValue(value: unknown): string {
 
 function optionalString(value: unknown): string | undefined {
     return typeof value === "string" && value ? value : undefined;
+}
+
+function idValue(value: unknown): string | undefined {
+    if (typeof value === "string" || typeof value === "number") return String(value);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+    const record = value as Record<string, unknown>;
+    const id = record.string ?? record.source;
+    return typeof id === "string" || typeof id === "number" ? String(id) : undefined;
 }
 
 function requiredNumber(value: unknown, name: string): number {

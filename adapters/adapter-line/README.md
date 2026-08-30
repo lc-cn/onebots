@@ -55,7 +55,7 @@ LINE 可能重复投递且顺序改变；业务需要以事件 `timestamp` 判�
 
 ## 消息能力
 
-通用段支持 `text`、`at`、`reply`、`image`、`video`、`audio` / `voice`、`location`、`sticker`。媒体 URL 必须是公开 HTTPS URL。`reply` 发送需要 LINE 原生 `quote_token`，不能用普通消息 ID 代替。
+通用段支持 `text`、`at`、`reply`、`image`、`video`、`audio` / `voice`、`location`、`sticker`。媒体 URL 必须是公开 HTTPS URL。适配器会持久化已接收消息的 `quoteToken` 与 `markAsReadToken`：`reply` 可直接引用该消息的 `message_id`，标准 `mark_message_as_read` 也会按消息 ID 调用当前 Messaging API 的 read-token 端点。显式原生调用仍可直接提供 token。
 
 任意官方 Message 可通过 `line_message` 段发送，因此 Flex、Template、Imagemap、Coupon、Quick Reply、发送者样式及后续 SDK 新消息类型不需要在 OneBots 重复建模：
 

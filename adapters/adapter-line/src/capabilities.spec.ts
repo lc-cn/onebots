@@ -11,6 +11,7 @@ describe("LINE 能力清单", () => {
             [...LINE_PLATFORM_ACTIONS].filter(action => !lineCapabilities.actions[action]),
         ).toEqual([]);
         expect(lineCapabilities.actions.delete_message?.support).toBe("unsupported");
+        expect(lineCapabilities.actions.mark_message_as_read?.support).toBe("native");
         expect(lineCapabilities.segments.line_message?.support).toBe("native");
         expect(lineCapabilities.events.group_increase?.support).toBe("native");
         expect(lineCapabilities.events.group_decrease?.support).toBe("native");

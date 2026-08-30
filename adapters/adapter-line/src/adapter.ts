@@ -36,7 +36,12 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     ): Promise<Adapter.SendMessageResult> {
         const bot = this.requireBot(uin);
         const target = this.coerceId(params.scene_id).string;
-        const chunks = chunkLineMessages(compileLineMessages(params.message));
+        const chunks = chunkLineMessages(
+            compileLineMessages(params.message, {
+                resolveQuoteToken: messageId =>
+                    this.contexts.getMessageTokens(uin, messageId)?.quoteToken,
+            }),
+        );
         let firstMessageId: string | undefined;
         for (const messages of chunks) {
             const response = await bot.pushMessage(target, messages, { retryKey: randomUUID() });
@@ -48,6 +53,25 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
             });
         }
         return { message_id: this.createId(firstMessageId) };
+    }
+
+    async markMessageAsRead(uin: string, params: Adapter.MarkMessageAsReadParams): Promise<void> {
+        const messageId = params.message_id?.string;
+        if (!messageId) {
+            throw new LineApiError("LINE mark_message_as_read 必须提供 message_id", {
+                code: "LINE_MESSAGE_ID_REQUIRED",
+            });
+        }
+        const token = this.contexts.getMessageTokens(uin, messageId)?.markAsReadToken;
+        if (!token) {
+            throw new LineApiError("LINE 消息缺少当前账号已接收的 markAsReadToken", {
+                code: "LINE_MARK_AS_READ_CONTEXT_MISSING",
+                details: { message_id: messageId },
+            });
+        }
+        await this.requireBot(uin).getClient().markMessagesAsReadByToken({
+            markAsReadToken: token,
+        });
     }
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
@@ -249,11 +273,29 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
 
     private dispatchEvent(account: Account<"line", LineBot>, event: webhook.Event): void {
         this.captureChat(account.config.account_id, event);
+        this.captureMessageTokens(account.config.account_id, account.config, event);
         const projected = projectLineEvents(event, {
             botId: this.createId(account.client.getBotUserId() || account.config.account_id),
             createId: value => this.createId(value),
         });
         for (const item of projected) account.dispatch(item);
+    }
+
+    private captureMessageTokens(
+        accountId: string,
+        config: Account.Config<"line">,
+        event: webhook.Event,
+    ): void {
+        if (event.type !== "message" && event.type !== "messageEdited") return;
+        const message = event.message;
+        const quoteToken = "quoteToken" in message ? message.quoteToken : undefined;
+        const markAsReadToken = "markAsReadToken" in message ? message.markAsReadToken : undefined;
+        this.contexts.saveMessageTokens(
+            accountId,
+            message.id,
+            { quoteToken, markAsReadToken },
+            config.webhook_deduplication_limit || 10_000,
+        );
     }
 
     private captureChat(accountId: string, event: webhook.Event): void {
