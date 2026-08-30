@@ -6,7 +6,7 @@ onebots Mock 适配器 - 用于测试和开发环境。
 
 - ✅ **无外部依赖**：不需要真实的机器人账号或服务
 - ✅ **精确能力**：只声明已真实模拟的 API，不伪造成功结果
-- ✅ **统一事件入口**：自动事件与手动事件都经过 typed `ingest()`
+- ✅ **可靠事件入口**：自动事件与手动事件都经过可等待的 typed `ingest()`
 - ✅ **可复现事件**：随机种子、时钟、随机源和等待器均可控制
 - ✅ **模拟数据**：预置好友、群组等模拟数据
 - ✅ **结构化错误**：可通过稳定的 `MockError.code` 精确断言失败原因
@@ -93,7 +93,7 @@ describe("Bot Tests", () => {
     bot.on("message", event => events.push(event));
 
     // 手动触发消息事件
-    bot.triggerEvent("message", {
+    await bot.triggerEvent("message", {
       type: "private",
       message_id: "test_msg_1",
       user_id: "10001",
@@ -129,16 +129,16 @@ describe("Bot Tests", () => {
 
 ### 测试辅助方法
 
-| 方法                        | 说明                                         |
-| --------------------------- | -------------------------------------------- |
-| `ingest(event)`             | 接收结构化入站事件，与自动事件共用校验和投影 |
-| `triggerEvent(event, data)` | 按事件名触发 typed 入站事件                  |
-| `addFriend(friend)`         | 添加模拟好友                                 |
-| `addGroup(group)`           | 添加模拟群组                                 |
-| `getSentMessages()`         | 仅获取出站消息快照                           |
-| `getReceivedMessages()`     | 仅获取入站消息快照                           |
-| `clearData()`               | 清除所有模拟数据，不会自动恢复默认数据       |
-| `isActive()`                | 检查是否正在运行                             |
+| 方法                        | 说明                                        |
+| --------------------------- | ------------------------------------------- |
+| `ingest(event)`             | 投递结构化入站事件，等待全部监听器完成      |
+| `triggerEvent(event, data)` | 按事件名投递 typed 事件，等待全部监听器完成 |
+| `addFriend(friend)`         | 添加模拟好友                                |
+| `addGroup(group)`           | 添加模拟群组                                |
+| `getSentMessages()`         | 仅获取出站消息快照                          |
+| `getReceivedMessages()`     | 仅获取入站消息快照                          |
+| `clearData()`               | 清除所有模拟数据，不会自动恢复默认数据      |
+| `isActive()`                | 检查是否正在运行                            |
 
 ## 事件
 
@@ -155,6 +155,8 @@ describe("Bot Tests", () => {
 Web 管理端会根据 Schema 把好友、群组和自动事件类型渲染为可动态增删的结构化列表，无需手写 JSON；群组中未展示的 `members` 等扩展字段在编辑后仍会保留。
 
 Mock 仅声明并接受文本消息段。传入图片、文件等未模拟消息段会明确报错，避免测试把占位字符串误判为平台支持。`latency: 0` 可用于完全关闭模拟延迟；停止正在启动的 Bot 会取消过期的 `ready` 和 `message_sent` 事件。构造器第二个参数可注入 `now`、`random`、`sleep`，用于完全确定性的测试。
+
+`ingest()` 与 `triggerEvent()` 返回的 Promise 会等待适配器投影和全部协议分发完成；任一监听器失败时，其他监听器仍会获得事件，最终向调用方传播单个错误或 `AggregateError`。自动事件按生成顺序串行投递，投递失败通过结构化 `client_error` 暴露，避免定时器产生未处理拒绝。
 
 ## 许可证
 

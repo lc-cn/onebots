@@ -22,6 +22,7 @@ export { mockCapabilities } from "./capabilities.js";
 export { MockBot } from "./bot.js";
 export type { MockBotEvents, MockBotOptions } from "./bot.js";
 export { MockError } from "./errors.js";
+export { createMockDataset, type MockDataset } from "./fixtures.js";
 export { projectMockHeartbeat, projectMockMessage, projectMockRequest } from "./events.js";
 export { compileMockMessage } from "./messages.js";
 export {

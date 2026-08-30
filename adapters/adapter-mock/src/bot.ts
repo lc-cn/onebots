@@ -4,7 +4,9 @@
  */
 
 import { EventEmitter } from "node:events";
+import { emitAllAwaited } from "onebots";
 import { MockError } from "./errors.js";
+import { createMockDataset } from "./fixtures.js";
 import {
     assertMockHeartbeat,
     assertMockMessage,
@@ -56,6 +58,7 @@ export class MockBot extends EventEmitter<MockBotEvents> {
     private readonly config: MockConfig;
     private messageIdCounter = 0;
     private eventTimer: NodeJS.Timeout | null = null;
+    private autoEventDelivery: Promise<void> = Promise.resolve();
     private isRunning = false;
     private generation = 0;
     private readonly now: () => number;
@@ -86,36 +89,9 @@ export class MockBot extends EventEmitter<MockBotEvents> {
     }
 
     private initMockData(): void {
-        // 初始化默认好友
-        const defaultFriends: MockUser[] = this.config.friends ?? [
-            { user_id: "10001", nickname: "测试好友1", avatar: "https://via.placeholder.com/100" },
-            { user_id: "10002", nickname: "测试好友2", avatar: "https://via.placeholder.com/100" },
-            { user_id: "10003", nickname: "测试好友3", avatar: "https://via.placeholder.com/100" },
-        ];
-        defaultFriends.forEach(friend => this.friends.set(friend.user_id, { ...friend }));
-
-        // 初始化默认群组
-        const defaultGroups: MockGroup[] = this.config.groups ?? [
-            {
-                group_id: "100001",
-                group_name: "测试群1",
-                member_count: 50,
-                max_member_count: 200,
-                members: [
-                    { user_id: "10001", nickname: "群主", role: "owner", card: "大佬" },
-                    { user_id: "10002", nickname: "管理员", role: "admin" },
-                    { user_id: "10003", nickname: "普通成员", role: "member" },
-                ],
-            },
-            {
-                group_id: "100002",
-                group_name: "测试群2",
-                member_count: 100,
-                max_member_count: 500,
-                members: [{ user_id: this.config.account_id, nickname: "机器人", role: "member" }],
-            },
-        ];
-        defaultGroups.forEach(group => this.groups.set(group.group_id, cloneMockGroup(group)));
+        const dataset = createMockDataset(this.config);
+        dataset.friends.forEach(friend => this.friends.set(friend.user_id, friend));
+        dataset.groups.forEach(group => this.groups.set(group.group_id, group));
     }
 
     async start(): Promise<void> {
@@ -127,38 +103,50 @@ export class MockBot extends EventEmitter<MockBotEvents> {
         await this.delay(this.config.latency ?? 100);
         if (!this.isRunning || generation !== this.generation) return;
 
-        // 触发就绪事件
-        this.emit("ready", {
-            user_id: this.config.account_id,
-            nickname: this.config.nickname ?? "MockBot",
-            avatar: this.config.avatar ?? "https://via.placeholder.com/100",
-        });
+        try {
+            await emitAllAwaited(this, "ready", {
+                user_id: this.config.account_id,
+                nickname: this.config.nickname ?? "MockBot",
+                avatar: this.config.avatar ?? "https://via.placeholder.com/100",
+            });
 
-        // 启动自动事件生成
-        if (this.config.auto_events) {
-            this.startEventGeneration();
+            if (this.config.auto_events) this.startEventGeneration();
+        } catch (error) {
+            if (generation === this.generation) {
+                this.isRunning = false;
+                this.generation += 1;
+            }
+            throw error;
         }
     }
 
     async stop(): Promise<void> {
+        const wasRunning = this.isRunning;
         this.isRunning = false;
         this.generation += 1;
         if (this.eventTimer) {
             clearInterval(this.eventTimer);
             this.eventTimer = null;
         }
-        this.emit("stopped");
+        await this.autoEventDelivery;
+        if (wasRunning) await emitAllAwaited(this, "stopped");
     }
 
     private startEventGeneration(): void {
         const interval = this.config.event_interval ?? 5000;
         this.eventTimer = setInterval(() => {
             if (!this.isRunning) return;
-            this.generateRandomEvent();
+            const generation = this.generation;
+            this.autoEventDelivery = this.autoEventDelivery
+                .then(async () => {
+                    if (this.isRunning && generation === this.generation)
+                        await this.generateRandomEvent();
+                })
+                .catch(error => this.reportAsyncError(error));
         }, interval);
     }
 
-    private generateRandomEvent(): void {
+    private async generateRandomEvent(): Promise<void> {
         const eventTypes = this.config.auto_event_types?.length
             ? this.config.auto_event_types
             : DEFAULT_AUTO_EVENT_TYPES;
@@ -166,21 +154,21 @@ export class MockBot extends EventEmitter<MockBotEvents> {
 
         switch (type) {
             case "private_message":
-                this.emitPrivateMessage();
+                await this.emitPrivateMessage();
                 break;
             case "group_message":
-                this.emitGroupMessage();
+                await this.emitGroupMessage();
                 break;
             case "friend_request":
-                this.emitFriendRequest();
+                await this.emitFriendRequest();
                 break;
             case "heartbeat":
-                this.ingest({ type: "heartbeat", data: { time: this.now() } });
+                await this.ingest({ type: "heartbeat", data: { time: this.now() } });
                 break;
         }
     }
 
-    private emitPrivateMessage(): void {
+    private async emitPrivateMessage(): Promise<void> {
         const friends = Array.from(this.friends.values());
         if (friends.length === 0) return;
         const friend = this.choose(friends);
@@ -193,7 +181,7 @@ export class MockBot extends EventEmitter<MockBotEvents> {
             time: Math.floor(now / 1000),
         };
 
-        this.ingest({
+        await this.ingest({
             type: "message",
             data: {
                 type: "private",
@@ -206,7 +194,7 @@ export class MockBot extends EventEmitter<MockBotEvents> {
         });
     }
 
-    private emitGroupMessage(): void {
+    private async emitGroupMessage(): Promise<void> {
         const groups = Array.from(this.groups.values());
         if (groups.length === 0) return;
         const group = this.choose(groups);
@@ -223,7 +211,7 @@ export class MockBot extends EventEmitter<MockBotEvents> {
             time: Math.floor(now / 1000),
         };
 
-        this.ingest({
+        await this.ingest({
             type: "message",
             data: {
                 type: "group",
@@ -238,9 +226,9 @@ export class MockBot extends EventEmitter<MockBotEvents> {
         });
     }
 
-    private emitFriendRequest(): void {
+    private async emitFriendRequest(): Promise<void> {
         const now = this.now();
-        this.ingest({
+        await this.ingest({
             type: "request",
             data: {
                 type: "friend",
@@ -341,15 +329,13 @@ export class MockBot extends EventEmitter<MockBotEvents> {
             void this.delay(100)
                 .then(() => {
                     if (!this.isRunning || generation !== this.generation) return;
-                    this.emit("message_sent", {
+                    return emitAllAwaited(this, "message_sent", {
                         message_id: msg.message_id,
                         target_id: targetId,
                         type,
                     });
                 })
-                .catch(error => {
-                    this.emit("client_error", MockError.wrap(error, "MOCK_ASYNC_EVENT_FAILED"));
-                });
+                .catch(error => this.reportAsyncError(error));
         }
 
         return { message_id: msg.message_id };
@@ -371,7 +357,7 @@ export class MockBot extends EventEmitter<MockBotEvents> {
     // ========== 测试辅助方法 ==========
 
     /** 将结构化模拟事件交给与自动事件相同的 typed 入口。 */
-    ingest(event: MockInboundEvent): void {
+    async ingest(event: MockInboundEvent): Promise<void> {
         switch (event.type) {
             case "message":
                 assertMockMessage(event.data);
@@ -383,35 +369,47 @@ export class MockBot extends EventEmitter<MockBotEvents> {
                     time: event.data.time,
                 });
                 this.receivedMessageIds.add(event.data.message_id);
-                this.emit("message", event.data);
+                await emitAllAwaited(this, "message", event.data);
                 return;
             case "request":
                 assertMockRequest(event.data);
-                this.emit("request", { ...event.data, time: event.data.time ?? this.now() });
+                await emitAllAwaited(this, "request", {
+                    ...event.data,
+                    time: event.data.time ?? this.now(),
+                });
                 return;
             case "heartbeat":
                 assertMockHeartbeat(event.data);
-                this.emit("heartbeat", event.data);
+                await emitAllAwaited(this, "heartbeat", event.data);
         }
     }
 
     /** 按事件名触发 typed 事件；适合 Vitest 等测试代码。 */
-    triggerEvent(event: "message", data: MockIncomingMessage): void;
-    triggerEvent(event: "request", data: MockFriendRequest): void;
-    triggerEvent(event: "heartbeat", data: MockHeartbeat): void;
-    triggerEvent(event: keyof MockInboundEventMap, data: unknown): void {
+    triggerEvent(event: "message", data: MockIncomingMessage): Promise<void>;
+    triggerEvent(event: "request", data: MockFriendRequest): Promise<void>;
+    triggerEvent(event: "heartbeat", data: MockHeartbeat): Promise<void>;
+    async triggerEvent(event: keyof MockInboundEventMap, data: unknown): Promise<void> {
         switch (event) {
             case "message":
                 assertMockMessage(data);
-                this.ingest({ type: "message", data });
+                await this.ingest({ type: "message", data });
                 return;
             case "request":
                 assertMockRequest(data);
-                this.ingest({ type: "request", data });
+                await this.ingest({ type: "request", data });
                 return;
             case "heartbeat":
                 assertMockHeartbeat(data);
-                this.ingest({ type: "heartbeat", data });
+                await this.ingest({ type: "heartbeat", data });
+        }
+    }
+
+    private async reportAsyncError(error: unknown): Promise<void> {
+        const wrapped = MockError.wrap(error, "MOCK_ASYNC_EVENT_FAILED");
+        try {
+            await emitAllAwaited(this, "client_error", wrapped);
+        } catch {
+            // client_error 是异步任务的最终错误出口，监听器失败时不能递归再次投递。
         }
     }
 

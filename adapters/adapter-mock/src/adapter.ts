@@ -236,9 +236,11 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
             botId: config.account_id,
             createId: (value: string | number) => this.createId(value),
         };
-        bot.on("message", event => account.dispatch(projectMockMessage(event, projection)));
-        bot.on("request", event => account.dispatch(projectMockRequest(event, projection)));
-        bot.on("heartbeat", event => account.dispatch(projectMockHeartbeat(event, projection)));
+        bot.on("message", event => account.dispatchAwaited(projectMockMessage(event, projection)));
+        bot.on("request", event => account.dispatchAwaited(projectMockRequest(event, projection)));
+        bot.on("heartbeat", event =>
+            account.dispatchAwaited(projectMockHeartbeat(event, projection)),
+        );
         bot.on("client_error", error => this.logger.error("Mock Bot 异步事件失败", error));
 
         account.on("start", async () => {
@@ -247,6 +249,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
             } catch (error) {
                 this.logger.error(`启动 Mock Bot 失败:`, error);
                 account.status = AccountStatus.OffLine;
+                throw error;
             }
         });
 

@@ -19,6 +19,17 @@ describe("MockBot 生命周期", () => {
         vi.useRealTimers();
     });
 
+    it("等待生命周期监听器，并在 ready 失败后恢复为未运行状态", async () => {
+        const bot = new MockBot({ account_id: "bot", latency: 0 });
+        bot.on("ready", async () => {
+            await Promise.resolve();
+            throw new Error("ready failed");
+        });
+
+        await expect(bot.start()).rejects.toThrow("ready failed");
+        expect(bot.isActive()).toBe(false);
+    });
+
     it("显式零延迟生效，clearData 真的清空而不是恢复默认数据", async () => {
         const bot = new MockBot({ account_id: "bot", latency: 0 });
         await bot.start();
@@ -41,7 +52,7 @@ describe("MockBot 生命周期", () => {
             time: 1_700_000_000,
         };
 
-        bot.ingest({ type: "message", data: incoming });
+        await bot.ingest({ type: "message", data: incoming });
         const sent = await bot.sendMessage("10001", "发出");
 
         expect(bot.getReceivedMessages()).toEqual([
@@ -53,10 +64,10 @@ describe("MockBot 生命周期", () => {
         expect(sent.message_id).toBe("mock_msg_1_1700000000000");
     });
 
-    it("拒绝结构无效的事件和未知自动事件类型", () => {
+    it("拒绝结构无效的事件和未知自动事件类型", async () => {
         const bot = new MockBot({ account_id: "bot", latency: 0 });
 
-        expect(() => bot.ingest({ type: "message", data: {} } as never)).toThrowError(
+        await expect(bot.ingest({ type: "message", data: {} } as never)).rejects.toThrowError(
             expect.objectContaining({ code: "MOCK_INVALID_EVENT" }),
         );
         expect(
@@ -73,6 +84,25 @@ describe("MockBot 生命周期", () => {
                     friends: [{ user_id: "", nickname: "无效" }],
                 }),
         ).toThrowError(expect.objectContaining({ code: "MOCK_INVALID_CONFIG" }));
+    });
+
+    it("等待全部异步监听器并在投递完成后传播失败", async () => {
+        const bot = new MockBot({ account_id: "bot", latency: 0 });
+        const completed: string[] = [];
+        bot.on("heartbeat", async () => {
+            await Promise.resolve();
+            completed.push("first");
+            throw new Error("protocol failed");
+        });
+        bot.on("heartbeat", async () => {
+            await Promise.resolve();
+            completed.push("second");
+        });
+
+        await expect(bot.ingest({ type: "heartbeat", data: { time: 1 } })).rejects.toThrow(
+            "protocol failed",
+        );
+        expect(completed).toEqual(["first", "second"]);
     });
 
     it("返回存储快照，外部修改不会污染内部状态", async () => {
