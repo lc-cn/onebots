@@ -10,7 +10,7 @@
 - Zulip-flavored Markdown、用户提及、Emoji、图片和文件上传
 - 真实频道订阅者查询、邀请、移除、退订与频道改名
 - 消息反应、成员变更、心跳及未知原始事件投影
-- 队列过期自动重建、无限指数退避、生命周期取消与调用方监听器隔离
+- 队列过期自动重建、无限指数退避、生命周期取消与成功后游标确认
 - 独立可嵌入的 `ZulipClient`、底层 `call()` 与 `ingest(rawEvent)`
 - HTTP/SOCKS 代理、结构化 `ZulipError` 和完整 TypeScript 类型
 
@@ -35,7 +35,7 @@ zulip.team-bot:
 
 `server_url` 是组织根地址，不应包含 `/api/v1`。生产地址必须使用 HTTPS，仅本机回环地址允许 HTTP。`api_key` 在 Web 表单中按敏感字段处理。旧的 `serverUrl`、`apiKey`、`websocket` 和 `event_queue.enabled` 已移除；是否建立 Event Queue 统一由顶层 `receive_mode` 决定。
 
-事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。
+事件类型可在 Web 表单中直接增减；省略 `event_queue.event_types` 时订阅消息、编辑、删除、反应、频道、订阅、成员、在线状态和输入状态。队列始终无限恢复，不提供“重试若干次后永久离线”的选项。事件只有在全部 canonical 监听器成功返回后才推进队列游标并写入本地去重窗口；监听器抛错会保留原游标，让 Event Queue 重投，不会静默丢失业务事件。
 
 已有 Event Queue、消息代理或测试连接可配置 `receive_mode: manual`。客户端仍会调用 `users/me` 验证 API 凭据并缓存 Bot 身份，但不会注册或轮询服务器队列；外部系统调用 `account.client.ingest(rawEvent)` 即可进入相同的类型化事件管线。
 

@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { randomBytes } from "node:crypto";
 import { assertZulipConfig, resolveZulipReceiveMode } from "./config.js";
+import { ZulipEventIngress } from "./event-ingress.js";
 import { isBadEventQueue, ZulipError } from "./errors.js";
 import { assertZulipApiPath, createZulipTransport, type ZulipTransport } from "./http.js";
 import {
@@ -74,6 +75,7 @@ export interface ZulipClientOptions {
 export class ZulipClient extends EventEmitter<ZulipClientEvents> {
     private readonly transportRequest: Promise<ZulipTransport>;
     private readonly sleep: (delayMs: number, signal: AbortSignal) => Promise<void>;
+    private readonly eventIngress = new ZulipEventIngress();
     private lifecycleAbort?: AbortController;
     private lifecycleGeneration = 0;
     private startRequest?: Promise<void>;
@@ -177,16 +179,12 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
     }
 
     /** 将已有 Event Queue、代理或测试连接取得的原始事件送入同一事件管线。 */
-    ingest(event: ZulipEvent): void {
-        if (!event || typeof event !== "object" || typeof event.type !== "string") {
-            throw new ZulipError("Zulip 原始事件必须包含 type", {
-                code: "ZULIP_INVALID_EVENT",
-                details: event,
-            });
-        }
-        this.safeEmit("raw_event", event);
-        if (EVENT_TYPE_SET.has(event.type)) this.safeEmitName(event.type, event);
-        this.safeEmit("event", event);
+    ingest(event: unknown): boolean {
+        return this.eventIngress.ingest(event, validEvent => {
+            this.emitName("raw_event", validEvent);
+            if (EVENT_TYPE_SET.has(validEvent.type)) this.emitName(validEvent.type, validEvent);
+            this.emitName("event", validEvent);
+        });
     }
 
     /** 返回启动认证阶段取得的 Bot 身份，不额外发起 HTTP 请求。 */
@@ -368,8 +366,8 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
                 failures = 0;
                 if (recovering) this.safeEmit("connected", registration);
                 for (const event of response.events) {
-                    if (typeof event.id === "number") registration.last_event_id = event.id;
                     this.ingest(event);
+                    registration.last_event_id = event.id;
                 }
             } catch (error) {
                 if (signal.aborted) return;
@@ -414,6 +412,11 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         ...args: ZulipClientEvents[K]
     ): void {
         this.safeEmitName(String(name), ...args);
+    }
+
+    /** canonical 事件监听器异常必须向队列轮询传播，以阻止游标确认。 */
+    private emitName(name: string, ...args: unknown[]): void {
+        for (const listener of this.rawListeners(name)) Reflect.apply(listener, this, args);
     }
 
     /** 逐个调用 raw listener，既保留 once 语义，也隔离同名监听器的异常。 */

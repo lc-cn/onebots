@@ -96,26 +96,91 @@ describe("ZulipClient", () => {
         await client.stop();
     });
 
-    it("隔离调用方监听器异常并继续投递原始事件", () => {
+    it("监听器异常时不提交事件，重投成功后才去重", () => {
         const client = new ZulipClient(
             { ...config, receive_mode: "manual" },
             { transport: async () => ({}) },
         );
-        const seen = vi.fn();
-        const sameEventSeen = vi.fn();
-        const errors: ZulipError[] = [];
-        client.on("message", () => {
-            throw new Error("listener failed");
+        let attempts = 0;
+        const messageSeen = vi.fn(() => {
+            attempts += 1;
+            if (attempts === 1) throw new Error("listener failed");
         });
-        client.on("message", sameEventSeen);
-        client.on("event", seen);
-        client.on("client_error", error => errors.push(error));
+        const eventSeen = vi.fn();
+        client.on("message", messageSeen);
+        client.on("event", eventSeen);
 
-        client.ingest({ id: 1, type: "message", message: message() });
+        const event = { id: 1, type: "message", message: message() } as const;
+        expect(() => client.ingest(event)).toThrow("listener failed");
+        expect(client.ingest(event)).toBe(true);
+        expect(client.ingest(event)).toBe(false);
 
-        expect(seen).toHaveBeenCalledOnce();
-        expect(sameEventSeen).toHaveBeenCalledOnce();
-        expect(errors[0]?.code).toBe("ZULIP_LISTENER_FAILED");
+        expect(messageSeen).toHaveBeenCalledTimes(2);
+        expect(eventSeen).toHaveBeenCalledOnce();
+    });
+
+    it("队列仅在事件投递成功后推进游标", async () => {
+        const eventRequests: ZulipHttpRequest[] = [];
+        let eventCalls = 0;
+        const transport: ZulipTransport = request => {
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: "queue-1",
+                    last_event_id: -1,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                eventRequests.push(request);
+                eventCalls += 1;
+                if (eventCalls === 1) {
+                    return Promise.resolve({
+                        result: "success",
+                        msg: "",
+                        events: [
+                            { id: 1, type: "heartbeat" },
+                            { id: 2, type: "message", message: message() },
+                        ],
+                    });
+                }
+                if (eventCalls === 2) {
+                    return Promise.resolve({
+                        result: "success",
+                        msg: "",
+                        events: [{ id: 2, type: "message", message: message() }],
+                    });
+                }
+                return new Promise((_, reject) =>
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        {
+                            once: true,
+                        },
+                    ),
+                );
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(config, {
+            transport,
+            sleep: () => Promise.resolve(),
+        });
+        let messageAttempts = 0;
+        client.on("message", () => {
+            messageAttempts += 1;
+            if (messageAttempts === 1) throw new Error("temporary failure");
+        });
+
+        await client.start();
+        await vi.waitFor(() => expect(eventRequests).toHaveLength(3));
+
+        expect(eventRequests[1]?.params?.last_event_id).toBe(1);
+        expect(eventRequests[2]?.params?.last_event_id).toBe(2);
+        expect(messageAttempts).toBe(2);
+        await client.stop();
     });
 
     it("manual 模式只认证身份，不注册队列并缓存认证结果", async () => {
