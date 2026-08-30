@@ -7,6 +7,7 @@ import {
     requireString,
     without,
 } from "./action-params.js";
+import { ZULIP_ATTACHMENT_ACTION_HANDLERS } from "./attachment-actions.js";
 import { ZULIP_BOT_ACTION_HANDLERS } from "./bot-actions.js";
 import { ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS } from "./channel-folder-actions.js";
 import type { ZulipClient } from "./client.js";
@@ -68,7 +69,6 @@ const ACTION_HANDLERS = {
         ),
     send_typing_notification: (client, params) =>
         client.call("typing", "POST", requireParams(params)),
-    get_attachments: client => client.call("attachments"),
     get_server_settings: client => client.call("server_settings"),
     get_scheduled_messages: client => client.call("scheduled_messages"),
     create_scheduled_message: (client, params) =>
@@ -94,6 +94,7 @@ const ACTION_HANDLERS = {
     delete_saved_snippet: (client, params) =>
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
     ...ZULIP_BOT_ACTION_HANDLERS,
+    ...ZULIP_ATTACHMENT_ACTION_HANDLERS,
     ...ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS,
     ...ZULIP_DATA_EXPORT_ACTION_HANDLERS,
     ...ZULIP_DOMAIN_ACTION_HANDLERS,

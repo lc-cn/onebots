@@ -2,6 +2,7 @@ import type { ZulipEventType } from "./types.js";
 
 /** 内置 Event Queue 默认订阅；配置显式选择时不参与合并。 */
 export const ZULIP_DEFAULT_EVENT_TYPES = [
+    "attachment",
     "heartbeat",
     "channel_folder",
     "message",
@@ -32,6 +33,7 @@ export const ZULIP_DEFAULT_EVENT_TYPES = [
 /** Web 配置界面与文档共用的事件名称。 */
 export const ZULIP_EVENT_TYPE_LABELS: Readonly<Partial<Record<ZulipEventType, string>>> = {
     alert_words: "提醒词",
+    attachment: "附件",
     channel_folder: "频道文件夹",
     message: "消息",
     navigation_view: "导航视图",

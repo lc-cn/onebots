@@ -9,6 +9,7 @@
 - 定时消息、草稿、提醒与保存片段管理
 - 用户组创建、权限更新、停用/恢复、成员与子组管理及成员关系查询
 - Zulip-flavored Markdown、用户提及、Emoji、图片和文件上传
+- 附件清单、删除、临时访问 URL、缩略图状态与实时生命周期事件
 - 真实频道订阅者查询、邀请、移除、退订与频道改名
 - 消息反应、成员变更、心跳及未知原始事件投影
 - 队列过期自动重建、无限指数退避、生命周期取消与成功后游标确认
@@ -85,6 +86,8 @@ Code Playground 领域提供 `add_code_playground` 与 `remove_code_playground`�
 Channel Folder 领域提供 `list_channel_folders`、`create_channel_folder`、`reorder_channel_folders` 与 `update_channel_folder`，完整覆盖创建、排序、资料更新、归档和恢复；写操作需要组织管理员权限。Client 默认订阅精确 `channel_folder` 事件，并投影为统一文件夹资源的创建、更新和排序通知。
 
 Navigation View 领域提供 `list_navigation_views`、`add_navigation_view`、`update_navigation_view` 与 `remove_navigation_view`，安全编码 URL fragment，并闭合当前用户侧栏视图的精确创建、更新、删除事件。组织资源投影与共享事件基元已从主消息投影模块拆分，避免资源域继续膨胀单文件。
+
+附件领域提供 `get_attachments`、`remove_attachment`、`get_attachment_temporary_url` 与 `check_attachment_thumbnail`；临时 URL 与缩略图动作按官方 `path_id` 拆分 `realm_id_str` 和 `filename`，每个路径段独立编码并拒绝路径穿越。Client 默认订阅 `attachment` 增改删事件，投影为统一附件资源通知，同时保留 `path_id`、空间使用量与原始事件。事件协议类型已独立到专用模块，REST 数据与队列报文不再共同推高单文件维护成本。
 
 当前账号资料领域提供 `get_own_user`、`update_own_profile_data`、`remove_own_profile_data`、`upload_own_avatar` 与 `delete_own_avatar`；资料值严格遵循 Zulip 自定义字段类型，头像上传复用统一媒体来源并使用官方 `file` multipart 字段。资料和头像变更可能受组织权限策略限制。
 

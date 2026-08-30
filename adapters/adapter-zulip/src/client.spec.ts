@@ -301,15 +301,18 @@ describe("ZulipClient", () => {
             { transport },
         );
         const subscription = vi.fn();
+        const attachment = vi.fn();
         const channelFolder = vi.fn();
         const navigationView = vi.fn();
         client.on("subscription", subscription);
+        client.on("attachment", attachment);
         client.on("channel_folder", channelFolder);
         client.on("navigation_view", navigationView);
 
         await client.start();
         const registration = requests.find(request => request.path === "register");
         expect(registration?.params?.event_types).toContain("message");
+        expect(registration?.params?.event_types).toContain("attachment");
         expect(registration?.params?.event_types).toContain("channel_folder");
         expect(registration?.params?.event_types).toContain("navigation_view");
         expect(registration?.params?.event_types).toContain("heartbeat");
@@ -332,6 +335,13 @@ describe("ZulipClient", () => {
         });
         await client.ingest({ id: 2, type: "subscription", op: "add" });
         await client.ingest({
+            id: 5,
+            type: "attachment",
+            op: "remove",
+            attachment: { id: 7 },
+            upload_space_used: 0,
+        });
+        await client.ingest({
             id: 3,
             type: "channel_folder",
             op: "update",
@@ -345,6 +355,9 @@ describe("ZulipClient", () => {
             fragment: "narrow/is/alerted",
         });
         expect(subscription).toHaveBeenCalledOnce();
+        expect(attachment).toHaveBeenCalledWith(
+            expect.objectContaining({ op: "remove", attachment: { id: 7 } }),
+        );
         expect(channelFolder).toHaveBeenCalledWith(
             expect.objectContaining({ op: "update", channel_folder_id: 2 }),
         );

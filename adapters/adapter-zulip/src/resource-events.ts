@@ -15,9 +15,51 @@ export function projectZulipResourceEvent(
     event: ZulipEvent,
     context: ZulipProjectionContext,
 ): CommonEvent.Notice<ZulipEvent> | undefined {
+    if (event.type === "attachment") return projectAttachment(event, context);
     if (event.type === "channel_folder") return projectChannelFolder(event, context);
     if (event.type === "navigation_view") return projectNavigationView(event, context);
     return undefined;
+}
+
+function projectAttachment(
+    event: ZulipBaseEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent> {
+    const op = stringValue(event.op);
+    const attachment = isRecord(event.attachment) ? event.attachment : undefined;
+    const attachmentId = numeric(attachment?.id);
+    if (
+        !attachment ||
+        (op !== "add" && op !== "update" && op !== "remove") ||
+        attachmentId === undefined
+    ) {
+        return customNotice(event, context);
+    }
+    const createdAt = numeric(attachment.create_time);
+    const pathId = stringValue(attachment.path_id);
+    const url =
+        pathId && context.serverUrl
+            ? new URL(`user_uploads/${pathId}`, `${context.serverUrl.replace(/\/+$/, "")}/`).href
+            : undefined;
+    return {
+        ...base(event, context, createdAt === undefined ? 0 : createdAt * 1000),
+        type: "notice",
+        notice_type:
+            op === "add"
+                ? "attachment_created"
+                : op === "remove"
+                  ? "attachment_removed"
+                  : "attachment_updated",
+        sub_type: op,
+        resource: {
+            ...attachment,
+            type: "attachment",
+            id: context.createId(attachmentId),
+            ...(url === undefined ? {} : { url }),
+            upload_space_used: numeric(event.upload_space_used),
+        },
+        extensions: { zulip: event },
+    };
 }
 
 function projectChannelFolder(

@@ -347,6 +347,65 @@ describe("Zulip 事件投影", () => {
         });
     });
 
+    it("投影附件增改删和官方上传路径", () => {
+        expect(
+            projectZulipEvents(
+                {
+                    id: 28,
+                    type: "attachment",
+                    op: "add",
+                    attachment: {
+                        id: 7,
+                        name: "release notes.txt",
+                        path_id: "2/ce/release notes.txt",
+                        size: 32,
+                        create_time: 100,
+                        message_ids: [42],
+                    },
+                    upload_space_used: 64,
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            timestamp: 100_000,
+            notice_type: "attachment_created",
+            resource: {
+                type: "attachment",
+                id: { string: "7" },
+                name: "release notes.txt",
+                url: "https://example.zulipchat.com/user_uploads/2/ce/release%20notes.txt",
+                upload_space_used: 64,
+            },
+        });
+        expect(
+            projectZulipEvents(
+                {
+                    id: 29,
+                    type: "attachment",
+                    op: "update",
+                    attachment: { id: 7, name: "a.txt", size: 1, path_id: "2/a.txt" },
+                    upload_space_used: 1,
+                },
+                context,
+            )[0],
+        ).toMatchObject({ notice_type: "attachment_updated" });
+        expect(
+            projectZulipEvents(
+                {
+                    id: 30,
+                    type: "attachment",
+                    op: "remove",
+                    attachment: { id: 7 },
+                    upload_space_used: 0,
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "attachment_removed",
+            resource: { id: { string: "7" }, upload_space_used: 0 },
+        });
+    });
+
     it("逐成员和子组拆分批量变化并生成稳定 ID", () => {
         const members = projectZulipEvents(
             {
