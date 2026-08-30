@@ -149,6 +149,23 @@ describe("Zulip 频道资源动作", () => {
         });
     });
 
+    it("按 Zulip 11+ 独立端点创建频道", async () => {
+        const client = new ZulipClient(config, { transport: async () => ({}) });
+        const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
+        const params = {
+            name: "platform",
+            description: "Platform engineering",
+            subscribers: [11, 12],
+            announce: true,
+            topics_policy: "disable_empty_topic",
+            can_send_message_group: { direct_members: [11], direct_subgroups: [4] },
+        };
+
+        await executeZulipPlatformAction(client, "create_zulip_channel", params);
+
+        expect(call).toHaveBeenCalledWith("channels/create", "POST", params);
+    });
+
     it("按现代契约更新频道及权限组", async () => {
         const client = new ZulipClient(config, { transport: async () => ({}) });
         const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
@@ -195,6 +212,14 @@ describe("Zulip 频道资源动作", () => {
         ["update_channel_subscriptions", {}],
         ["update_channel_subscriptions", { add: [{ name: "x", color: "red" }] }],
         ["unsubscribe_channels", { subscriptions: "engineering" }],
+        ["create_zulip_channel", { subscribers: [1] }],
+        ["create_zulip_channel", { name: "x" }],
+        ["create_zulip_channel", { name: "x", subscribers: [], stream_post_policy: 1 }],
+        [
+            "create_zulip_channel",
+            { name: "x", subscribers: [], can_send_message_group: { new: 2 } },
+        ],
+        ["create_zulip_channel", { name: "x", subscribers: [], folder_id: null }],
         ["update_zulip_channel", { stream_id: 7, is_announcement_only: true }],
         ["update_zulip_channel", { stream_id: 7, is_archived: true }],
         ["update_zulip_channel", { stream_id: 7, can_send_message_group: { direct_members: [1] } }],

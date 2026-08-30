@@ -106,7 +106,7 @@ Navigation View 领域提供 `list_navigation_views`、`add_navigation_view`、`
 
 频道个人设置提供 `update_channel_subscription_settings` 和 `update_channel_subscription_property`，支持批量或单频道更新颜色、静音、置顶和通知开关。颜色严格校验为 6 位十六进制值，其余属性必须为布尔值；不接受仅为旧客户端保留的 `in_home_view`。
 
-频道成员关系提供 `subscribe_channels`、`update_channel_subscriptions` 与 `unsubscribe_channels`，按官方结构校验频道描述、用户 principals、初始策略和权限组；频道资料更新支持 Zulip 10+ 的现代权限组变更对象。已移除的 `stream_post_policy`、`is_announcement_only` 不会继续透传。`stream` 创建、更新、删除以及 `subscription` 自身/其他成员变化均有精确 Client 类型，并投影为稳定的频道资源与订阅关系通知；批量事件会拆成逐频道、逐用户事件，原始报文仍完整保留。
+频道成员关系提供 `subscribe_channels`、`update_channel_subscriptions` 与 `unsubscribe_channels`，按官方结构校验频道描述、用户 principals、初始策略和权限组；`create_zulip_channel` 严格对应 Zulip 11+ 的独立创建端点，要求频道名与初始订阅者列表，并只接受创建态权限组值。频道资料更新支持 Zulip 10+ 的现代权限组变更对象。已移除的 `stream_post_policy`、`is_announcement_only` 不会继续透传。`stream` 创建、更新、删除以及 `subscription` 自身/其他成员变化均有精确 Client 类型，并投影为稳定的频道资源与订阅关系通知；批量事件会拆成逐频道、逐用户事件，原始报文仍完整保留。
 
 当前账号资料领域提供 `get_own_user`、`update_own_profile_data`、`remove_own_profile_data`、`upload_own_avatar` 与 `delete_own_avatar`；资料值严格遵循 Zulip 自定义字段类型，头像上传复用统一媒体来源并使用官方 `file` multipart 字段。资料和头像变更可能受组织权限策略限制。
 

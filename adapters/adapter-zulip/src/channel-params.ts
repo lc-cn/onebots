@@ -34,6 +34,14 @@ const SUBSCRIBE_BOOLEAN_FIELDS = [
     "default_push_notifications",
     "send_new_subscription_messages",
 ] as const;
+const CREATE_BOOLEAN_FIELDS = [
+    "announce",
+    "invite_only",
+    "is_web_public",
+    "is_default_stream",
+    "history_public_to_subscribers",
+    "default_push_notifications",
+] as const;
 const UPDATE_BOOLEAN_FIELDS = [
     "is_private",
     "is_web_public",
@@ -47,6 +55,27 @@ const TOPICS_POLICIES = new Set([
     "disable_empty_topic",
     "empty_topic_only",
 ]);
+
+/** 校验 Zulip 11+ 独立频道创建端点，不接受订阅端点或历史版本的扩展字段。 */
+export function channelCreateParams(params: Readonly<Record<string, unknown>>): ZulipParams {
+    const allowed = [
+        "name",
+        "description",
+        "subscribers",
+        ...CREATE_BOOLEAN_FIELDS,
+        "message_retention_days",
+        "topics_policy",
+        "folder_id",
+        ...PERMISSION_FIELDS,
+    ];
+    const input = exactParams(params, allowed, ["name", "subscribers"]);
+    requireString(input.name, "name");
+    if (input.description !== undefined) requireText(input.description, "description");
+    requireIntegerArray(input.subscribers, "subscribers");
+    validateBooleans(input, CREATE_BOOLEAN_FIELDS);
+    validateCommonChannelSettings(input, false);
+    return input;
+}
 
 /** 校验 Zulip 10+ 频道订阅请求；刻意不接受已移除的频道发布策略字段。 */
 export function channelSubscribeParams(params: Readonly<Record<string, unknown>>): ZulipParams {

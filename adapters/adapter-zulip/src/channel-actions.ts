@@ -3,12 +3,12 @@ import {
     exactParams,
     requireBoolean,
     requireInteger,
-    requireParams,
     requireString,
     requireText,
     without,
 } from "./action-params.js";
 import {
+    channelCreateParams,
     channelSubscribeParams,
     channelSubscriptionsUpdateParams,
     channelUnsubscribeParams,
@@ -128,7 +128,7 @@ export const ZULIP_CHANNEL_ACTION_HANDLERS = {
     get_channel_subscribers: (client, params) =>
         client.call(`streams/${onlyStreamId(params)}/members`),
     create_zulip_channel: (client, params) =>
-        client.call("channels/create", "POST", requireParams(params)),
+        client.call("channels/create", "POST", channelCreateParams(params)),
     update_zulip_channel: (client, params) => {
         const streamId = requireInteger(params.stream_id, "stream_id");
         return client.call(
