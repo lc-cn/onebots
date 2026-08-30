@@ -65,6 +65,7 @@ export {
     readPackageVersionFile,
     materializeMediaSource,
     definePlatformActions,
+    isCanonicalAdapterAction,
     isSafeAbsoluteApiPath,
     emitAllAwaited,
     emitAwaited,

@@ -1,3 +1,6 @@
+import { isCanonicalAdapterAction } from "./adapter-capability.js";
+import { ValidationError } from "./errors.js";
+
 export type PlatformActionParams = Readonly<Record<string, unknown>>;
 
 export type PlatformActionHandler<TContext> = (
@@ -40,7 +43,14 @@ export function definePlatformActions<
 ): PlatformActionRegistry<RegistryContext<THandlers>, Extract<keyof THandlers, string>> {
     type Action = Extract<keyof THandlers, string>;
     type Context = RegistryContext<THandlers>;
-    const names = new ImmutableSet(Object.keys(handlers) as Action[]);
+    const actionNames = Object.keys(handlers) as Action[];
+    const collisions = actionNames.filter(isCanonicalAdapterAction);
+    if (collisions.length > 0) {
+        throw new ValidationError(
+            `平台扩展动作不得与 canonical 动作重名: ${collisions.join(", ")}`,
+        );
+    }
+    const names = new ImmutableSet(actionNames);
     return Object.freeze({
         actions: names,
         has(action: string): action is Action {

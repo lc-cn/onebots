@@ -48,8 +48,6 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
         path: "/chatroom/v2/channel_user_perm/list_with_parent",
         method: "GET",
     },
-    create_channel: { path: "/chatroom/v3/channel/create", method: "POST" },
-    delete_channel: { path: "/chatroom/v2/channel/delete", method: "POST" },
     start_voice_stream: { path: "/chatroom/v3/channel/stream/push", method: "POST" },
     stop_voice_stream: { path: "/chatroom/v3/channel/stream/stop", method: "POST" },
 };

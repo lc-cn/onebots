@@ -29,8 +29,6 @@ export const LINE_CHANNEL_ACTIONS = {
             requireString(params, "group_id"),
             optionalString(params, "start"),
         ),
-    leave_group: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.leaveGroup(requireString(params, "group_id")),
     leave_room: async ({ client }: LineActionContext, params: LineActionParams) =>
         client.leaveRoom(requireString(params, "room_id")),
     create_liff_app: async ({ client }: LineActionContext, params: LineActionParams) =>

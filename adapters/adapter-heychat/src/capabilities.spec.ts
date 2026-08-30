@@ -9,6 +9,10 @@ describe("黑盒语音能力清单", () => {
         for (const action of HEYCHAT_PLATFORM_ACTIONS) {
             expect(heychatCapabilities.actions[action]?.support).toBe("native");
         }
+        expect(HEYCHAT_PLATFORM_ACTIONS.has("create_channel")).toBe(false);
+        expect(HEYCHAT_PLATFORM_ACTIONS.has("delete_channel")).toBe(false);
+        expect(heychatCapabilities.actions.create_channel?.support).toBe("native");
+        expect(heychatCapabilities.actions.delete_channel?.support).toBe("native");
     });
 
     it("能力清单中的动作都有真实适配器入口", () => {

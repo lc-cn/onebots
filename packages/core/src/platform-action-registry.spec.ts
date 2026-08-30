@@ -30,4 +30,19 @@ describe("definePlatformActions", () => {
         expect("add" in registry.actions).toBe(false);
         await expect(registry.execute(undefined, "missing", {})).rejects.toBeInstanceOf(RangeError);
     });
+
+    it("拒绝注册会被 canonical 路由遮蔽的平台动作", () => {
+        expect(() =>
+            definePlatformActions(
+                {
+                    send_message: async () => undefined,
+                    create_channel: async () => undefined,
+                    get_supported_actions: async () => undefined,
+                },
+                action => new Error(action),
+            ),
+        ).toThrowError(
+            "平台扩展动作不得与 canonical 动作重名: send_message, create_channel, get_supported_actions",
+        );
+    });
 });

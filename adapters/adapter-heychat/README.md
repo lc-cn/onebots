@@ -100,7 +100,7 @@ manual 模式仍保留 REST 出站能力，但不会建立 WebSocket、发送心
 - 消息：`send_channel_message`、`send_private_message`、`update_channel_message`、`delete_channel_message`、`set_message_reaction`
 - 角色：`list_room_roles`、`create_room_role`、`update_room_role`、`delete_room_role`、`grant_room_role`、`revoke_room_role`
 - 表情：`list_room_memes`、`delete_room_meme`、`update_room_meme`
-- 房间与频道：`list_joined_rooms`、`get_room`、`leave_room`、`kick_room_member`、`create_channel`、`delete_channel`、`rename_channel`、`update_channel_settings`、`set_channel_password`、`create_channel_invite`
+- 房间与频道：`list_joined_rooms`、`get_room`、`leave_room`、`kick_room_member`、`rename_channel`、`update_channel_settings`、`set_channel_password`、`create_channel_invite`；创建和删除频道使用 canonical `create_channel` / `delete_channel`
 - 权限与语音：`set_room_ban`、`set_channel_permission`、`get_channel_permissions`、`move_voice_member`、`kick_voice_member`、`toggle_channel_microphone`、`toggle_room_microphone`、`toggle_room_speaker`、`get_user_voice_channel`、`list_voice_channel_members`
 - 媒体流：`start_voice_stream`、`stop_voice_stream`
 - 底层：`upload_media`、`call_heychat_api`

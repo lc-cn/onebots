@@ -5,7 +5,7 @@ import { executeLinePlatformAction, LINE_PLATFORM_ACTIONS } from "./platform-act
 
 describe("LINE 平台动作注册表", () => {
     it("完整注册消息、Audience、LIFF、Module、Rich Menu 与统计动作", () => {
-        expect(LINE_PLATFORM_ACTIONS.size).toBe(101);
+        expect(LINE_PLATFORM_ACTIONS.size).toBe(100);
         expect(LINE_PLATFORM_ACTIONS).toEqual(
             expect.objectContaining({
                 has: expect.any(Function),
@@ -18,6 +18,7 @@ describe("LINE 平台动作注册表", () => {
         expect(LINE_PLATFORM_ACTIONS.has("create_liff_app")).toBe(true);
         expect(LINE_PLATFORM_ACTIONS.has("acquire_chat_control")).toBe(true);
         expect(LINE_PLATFORM_ACTIONS.has("get_group_summary")).toBe(true);
+        expect(LINE_PLATFORM_ACTIONS.has("leave_group")).toBe(false);
     });
 
     it("按领域分派到 Bot 语义入口与官方客户端", async () => {

@@ -1,4 +1,5 @@
 import { ValidationError } from "./errors.js";
+import { AdapterActionDefaults } from "./adapter-actions.js";
 import type { CommonTypes } from "./types.js";
 
 /**
@@ -177,6 +178,19 @@ export function assertSupportedActionsImplemented(
 /** 将协议层使用的 snake_case 动作名转换为 Adapter 的 camelCase 方法名。 */
 export function adapterActionMethodName(action: string): string {
     return action.replace(/_([a-z0-9])/g, (_, character: string) => character.toUpperCase());
+}
+
+/**
+ * 判断动作是否属于 Adapter 的正式 canonical 接口面。
+ *
+ * 只检查 AdapterActionDefaults，避免把 getAccount 等内部实例方法误当作远程动作。
+ */
+export function isCanonicalAdapterAction(action: string): boolean {
+    if (action === "get_supported_actions") return true;
+    const method = (AdapterActionDefaults.prototype as unknown as Record<string, unknown>)[
+        adapterActionMethodName(action)
+    ];
+    return typeof method === "function";
 }
 
 function freezeDescriptors<T extends CapabilityDescriptor>(

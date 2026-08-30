@@ -8,6 +8,7 @@ import {
     adapterActionMethodName,
     assertSupportedActionsImplemented,
     EMPTY_ADAPTER_CAPABILITIES,
+    isCanonicalAdapterAction,
     listSupportedActions,
     type AdapterCapabilityManifest,
 } from "./adapter-capability.js";
@@ -107,9 +108,13 @@ export abstract class Adapter<
             return this.unsupported(action, "platform_unsupported");
         }
 
+        if (action === "get_supported_actions") return this.getSupportedActions(uin);
+
         const methodName = adapterActionMethodName(action);
-        const baseMethod = (Adapter.prototype as unknown as Record<string, unknown>)[methodName];
-        if (typeof baseMethod === "function") {
+        if (isCanonicalAdapterAction(action)) {
+            const baseMethod = (
+                AdapterActionDefaults.prototype as unknown as Record<string, unknown>
+            )[methodName];
             const instanceMethod = (this as unknown as Record<string, unknown>)[methodName];
             if (typeof instanceMethod !== "function" || instanceMethod === baseMethod) {
                 return this.unsupported(action);
@@ -138,12 +143,16 @@ export abstract class Adapter<
     isActionImplemented(action: string): boolean {
         if (action === "get_supported_actions") return true;
 
+        if (!isCanonicalAdapterAction(action)) return this.isPlatformActionImplemented(action);
+
         const methodName = adapterActionMethodName(action);
         const instanceMethod = (this as unknown as Record<string, unknown>)[methodName];
-        if (typeof instanceMethod !== "function") return this.isPlatformActionImplemented(action);
+        if (typeof instanceMethod !== "function") return false;
 
-        const baseMethod = (Adapter.prototype as unknown as Record<string, unknown>)[methodName];
-        return typeof baseMethod !== "function" ? true : instanceMethod !== baseMethod;
+        const baseMethod = (AdapterActionDefaults.prototype as unknown as Record<string, unknown>)[
+            methodName
+        ];
+        return instanceMethod !== baseMethod;
     }
 
     getAccount(uin: string) {

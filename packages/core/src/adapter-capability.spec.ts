@@ -6,6 +6,7 @@ import {
     assertSupportedActionsImplemented,
     defineAdapterCapabilities,
     definePlatformActionCapabilities,
+    isCanonicalAdapterAction,
     listSupportedActions,
 } from "./adapter-capability.js";
 import { ValidationError } from "./errors.js";
@@ -35,6 +36,23 @@ class ImplementedActionAdapter extends Adapter {
 class MissingActionAdapter extends Adapter {
     describeCapabilities() {
         return executableManifest;
+    }
+
+    createAccount(): never {
+        throw new Error("测试不创建账号");
+    }
+}
+
+const introspectionManifest = defineAdapterCapabilities({
+    actions: { get_supported_actions: { support: "native" } },
+    events: {},
+    segments: {},
+    transports: {},
+});
+
+class IntrospectionAdapter extends Adapter {
+    describeCapabilities() {
+        return introspectionManifest;
     }
 
     createAccount(): never {
@@ -155,6 +173,16 @@ describe("adapter capability manifest", () => {
     it("将 canonical 动作名映射到适配器方法", () => {
         expect(adapterActionMethodName("get_group_member_list")).toBe("getGroupMemberList");
         expect(adapterActionMethodName("get_csrf_token")).toBe("getCsrfToken");
+        expect(isCanonicalAdapterAction("send_message")).toBe(true);
+        expect(isCanonicalAdapterAction("get_supported_actions")).toBe(true);
+        expect(isCanonicalAdapterAction("get_account")).toBe(false);
+    });
+
+    it("通过显式 canonical 分支执行能力查询", async () => {
+        const adapter = withoutConstructor(IntrospectionAdapter.prototype);
+        await expect(adapter.callAction("bot", "get_supported_actions")).resolves.toEqual([
+            "get_supported_actions",
+        ]);
     });
 
     it("拒绝声明支持但没有实际实现的动作", () => {
