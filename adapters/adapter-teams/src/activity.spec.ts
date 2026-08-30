@@ -114,10 +114,7 @@ describe("Teams Activity 消息转换", () => {
             { resolveUserId: String },
         );
 
-        expect(activity.entities).toEqual([
-            expect.objectContaining({ type: "mention" }),
-            aiEntity,
-        ]);
+        expect(activity.entities).toEqual([expect.objectContaining({ type: "mention" }), aiEntity]);
         expect(activity).toMatchObject({
             locale: "zh-CN",
             deliveryMode: "notification",
@@ -233,6 +230,85 @@ describe("Teams Activity 消息转换", () => {
             contentUrl: "https://example.com/report.pdf",
             content: { uniqueId: "drive-item", fileType: "pdf" },
             name: "report.pdf",
+        });
+    });
+
+    it("按消息顺序双向保留引用回复与 mention", () => {
+        const activity = compileTeamsActivity(
+            [
+                { type: "teams_quote", data: { message_id: "quoted-1" } },
+                { type: "text", data: { text: "看这里 " } },
+                { type: "at", data: { id: "u1", name: "Ada" } },
+            ],
+            { resolveUserId: String },
+        );
+
+        expect(activity).toMatchObject({
+            text: '<quoted messageId="quoted-1"/>看这里 <at>Ada</at>',
+            entities: [
+                { type: "quotedReply", quotedReply: { messageId: "quoted-1" } },
+                { type: "mention", mentioned: { id: "u1", name: "Ada" } },
+            ],
+        });
+        expect(
+            projectTeamsSegments(
+                baseActivity({
+                    text: activity.text,
+                    entities: [
+                        {
+                            type: "quotedReply",
+                            quotedReply: {
+                                messageId: "quoted-1",
+                                senderId: "u2",
+                                senderName: "Lin",
+                                preview: "原消息",
+                            },
+                        },
+                        { type: "mention", mentioned: { id: "u1", name: "Ada" } },
+                    ],
+                }),
+            ),
+        ).toEqual([
+            {
+                type: "teams_quote",
+                data: {
+                    message_id: "quoted-1",
+                    sender_id: "u2",
+                    sender_name: "Lin",
+                    preview: "原消息",
+                    time: undefined,
+                    is_reply_deleted: undefined,
+                    validated_message_reference: undefined,
+                },
+            },
+            { type: "text", data: { text: "看这里 " } },
+            { type: "at", data: { id: "u1", name: "Ada", aad_object_id: undefined } },
+        ]);
+    });
+
+    it("引用实体缺少官方占位符时仍从原生段无损交付", () => {
+        expect(
+            projectTeamsSegments(
+                baseActivity({
+                    text: "plain",
+                    entities: [
+                        {
+                            type: "quotedReply",
+                            quotedReply: { messageId: "quoted-1", preview: "原消息" },
+                        },
+                    ],
+                }),
+            ),
+        ).toContainEqual({
+            type: "teams_activity",
+            data: {
+                entities: [
+                    {
+                        type: "quotedReply",
+                        quotedReply: { messageId: "quoted-1", preview: "原消息" },
+                    },
+                ],
+            },
         });
     });
 

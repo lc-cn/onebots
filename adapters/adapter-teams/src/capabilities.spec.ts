@@ -30,5 +30,9 @@ describe("teamsCapabilities", () => {
             "group",
             "channel",
         ]);
+        expect(teamsCapabilities.events.message_status?.permissions).toEqual([
+            "ChatMessageReadReceipt.Read.Chat",
+        ]);
+        expect(teamsCapabilities.segments.teams_quote?.direction).toBe("both");
     });
 });

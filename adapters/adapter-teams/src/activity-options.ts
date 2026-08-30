@@ -54,7 +54,11 @@ export function applyTeamsActivityOptions(
 export function projectTeamsActivityOptions(
     activity: TeamsActivity,
 ): Record<string, unknown> | undefined {
-    const entities = activity.entities?.filter(entity => entity.type !== "mention");
+    const hasQuotePlaceholder = /<quoted messageId="[^"]+"\s*\/>/iu.test(activity.text || "");
+    const entities = activity.entities?.filter(
+        entity =>
+            entity.type !== "mention" && (entity.type !== "quotedReply" || !hasQuotePlaceholder),
+    );
     const data: Record<string, unknown> = {};
     if (activity.summary) data.summary = activity.summary;
     if (activity.importance) data.importance = activity.importance;
@@ -85,7 +89,9 @@ function validateMessageEntities(entities: TeamsEntity[]): void {
     if (roots.length > 1) {
         throw invalid("Teams AI 消息只能包含一个根 Message entity", "entities");
     }
-    const citations = roots.flatMap(entity => (Array.isArray(entity.citation) ? entity.citation : []));
+    const citations = roots.flatMap(entity =>
+        Array.isArray(entity.citation) ? entity.citation : [],
+    );
     if (citations.length > 20) {
         throw invalid("Teams 单条消息最多显示 20 条引用", "entities.citation");
     }

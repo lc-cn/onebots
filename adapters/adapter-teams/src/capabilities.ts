@@ -103,6 +103,13 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         message: { support: "native", scenes: ["private", "group", "channel"] },
         message_updated: { support: "native" },
         message_deleted: { support: "native" },
+        message_status: {
+            support: "native",
+            scenes: ["private"],
+            availability: "permission",
+            permissions: ["ChatMessageReadReceipt.Read.Chat"],
+            note: "Read Receipt 投影为 read 状态，并保留 lastReadMessageId",
+        },
         reaction_added: { support: "native" },
         reaction_removed: { support: "native" },
         member_joined: { support: "native" },
@@ -123,6 +130,11 @@ export const teamsCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
             note: "生成/解析用户 mention entity；Teams Bot 不支持通用 @all entity",
         },
         reply: { support: "native", direction: "both" },
+        teams_quote: {
+            support: "native",
+            direction: "both",
+            note: "Teams quotedReply entity，与线程 replyToId 保持独立并可多次引用",
+        },
         image: {
             support: "native",
             direction: "both",

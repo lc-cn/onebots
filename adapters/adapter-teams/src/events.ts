@@ -13,6 +13,7 @@ export type TeamsProjectionKind =
     | "group_decrease"
     | "reaction_added"
     | "reaction_removed"
+    | "message_status"
     | "interaction"
     | "custom";
 
@@ -24,6 +25,13 @@ export interface TeamsProjectionContext {
 /** 为非消息 Activity 选择稳定投影；不确定语义时保持 custom。 */
 export function resolveTeamsProjectionKind(event: TeamsEvent): TeamsProjectionKind {
     if (event.activity.type === "invoke") return "interaction";
+    if (
+        event.activity.type === "event" &&
+        event.activity.name === "application/vnd.microsoft.readReceipt" &&
+        lastReadMessageId(event.activity)
+    ) {
+        return "message_status";
+    }
     const conversationType = event.activity.conversation.conversationType;
     const isGroup =
         event.activity.conversation.isGroup === true ||
@@ -96,6 +104,9 @@ export function projectTeamsEvent(
                         : kind === "reaction_removed"
                           ? activity.reactionsRemoved
                           : undefined,
+                status: kind === "message_status" ? "read" : undefined,
+                last_read_message_id:
+                    kind === "message_status" ? lastReadMessageId(activity) : undefined,
             },
         },
     };
@@ -111,6 +122,7 @@ function noticeIdentity(
     }
     if (kind === "reaction_added") return activity.reactionsAdded?.[0]?.type || "unknown";
     if (kind === "reaction_removed") return activity.reactionsRemoved?.[0]?.type || "unknown";
+    if (kind === "message_status") return lastReadMessageId(activity) || "unknown";
     return activity.name || activity.replyToId || activity.id || "event";
 }
 
@@ -178,9 +190,13 @@ function isGroupActivity(activity: TeamsActivity): boolean {
 }
 
 function messageRelated(kind: TeamsProjectionKind): boolean {
-    return ["message_updated", "message_deleted", "reaction_added", "reaction_removed"].includes(
-        kind,
-    );
+    return [
+        "message_status",
+        "message_updated",
+        "message_deleted",
+        "reaction_added",
+        "reaction_removed",
+    ].includes(kind);
 }
 
 function messageIdForNotice(
@@ -189,7 +205,12 @@ function messageIdForNotice(
     context: TeamsProjectionContext,
 ): CommonTypes.Id | undefined {
     if (!messageRelated(kind)) return undefined;
-    const id = kind.startsWith("reaction_") ? activity.replyToId || activity.id : activity.id;
+    const id =
+        kind === "message_status"
+            ? lastReadMessageId(activity)
+            : kind.startsWith("reaction_")
+              ? activity.replyToId || activity.id
+              : activity.id;
     return id ? context.createId(id) : undefined;
 }
 
@@ -205,8 +226,17 @@ const NOTICE_TYPES: Record<
     group_decrease: "group_decrease",
     reaction_added: "reaction_added",
     reaction_removed: "reaction_removed",
+    message_status: "message_status",
     interaction: "interaction",
     custom: "custom",
 };
+
+function lastReadMessageId(activity: TeamsActivity): string | undefined {
+    if (!activity.value || typeof activity.value !== "object" || Array.isArray(activity.value)) {
+        return undefined;
+    }
+    const value = (activity.value as Record<string, unknown>).lastReadMessageId;
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
 
 export { projectTeamsSegments } from "./activity.js";

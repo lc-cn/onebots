@@ -117,6 +117,32 @@ describe("projectTeamsEvent", () => {
         });
     });
 
+    it("将个人聊天 Read Receipt 投影为消息已读状态", () => {
+        const raw = createEvent();
+        raw.type = "event";
+        raw.activity.type = "event";
+        raw.activity.name = "application/vnd.microsoft.readReceipt";
+        raw.activity.conversation.isGroup = false;
+        raw.activity.conversation.conversationType = "personal";
+        raw.activity.value = { lastReadMessageId: "1772050244572" };
+
+        const kind = resolveTeamsProjectionKind(raw);
+        const event = projectTeamsEvent(kind, raw, { botId: "bot", createId });
+
+        expect(kind).toBe("message_status");
+        expect(event).toMatchObject({
+            type: "notice",
+            notice_type: "message_status",
+            message_id: { string: "1772050244572" },
+            extensions: {
+                teams: {
+                    status: "read",
+                    last_read_message_id: "1772050244572",
+                },
+            },
+        });
+    });
+
     it("将群会话中的机器人安装投影为自身加入生命周期", () => {
         const raw = createEvent();
         raw.type = "installationUpdate";

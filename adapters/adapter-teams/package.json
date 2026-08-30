@@ -37,7 +37,7 @@
     "dependencies": {
         "@microsoft/agents-activity": "1.8.1",
         "@microsoft/agents-hosting": "1.8.1",
-        "@microsoft/teams.api": "2.0.14"
+        "@microsoft/teams.api": "2.0.15"
     },
     "repository": {
         "type": "git",

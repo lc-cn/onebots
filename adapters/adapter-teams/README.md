@@ -1,6 +1,6 @@
 # @onebots/adapter-teams
 
-Microsoft Teams 官方机器人适配器。基于 Microsoft 365 Agents SDK、Teams Connector API 和 Microsoft Graph，不再依赖已停止维护的 Bot Framework SDK。
+Microsoft Teams 官方机器人适配器。基于 Microsoft 365 Agents SDK 1.8.1、Teams API 2.0.15、Connector API 和 Microsoft Graph，不再依赖已停止维护的 Bot Framework SDK。
 
 ## 配置
 
@@ -51,7 +51,7 @@ Teams 主动消息不能只依赖 conversation ID；微软要求同时保留 `se
 
 ## 消息与事件
 
-发送链路原生支持文本、Teams mention entity、回复、图片/音频/视频附件、Adaptive Card、Hero/Thumbnail 等 Bot Card，以及双向 `teams_activity` 扩展。后者集中承载 `entities`、`channel_data`、`suggested_actions`、locale、通知投递、附件布局和自定义 value，可表达 AI 生成标签、引用、敏感度标签、反馈按钮与流信息；接收时非 mention entity 和这些顶层字段也会投影回同一个段，不必从原始 Activity 中重新拼装。媒体附件必须提供 Teams 服务端可访问的 HTTPS URL；未知段、无效卡片和本地/Base64 媒体会明确失败，不会静默丢失。
+发送链路原生支持文本、Teams mention entity、线程回复、引用回复、图片/音频/视频附件、Adaptive Card、Hero/Thumbnail 等 Bot Card，以及双向 `teams_activity` 扩展。`teams_quote` 单独表达官方 `quotedReply` entity，可在一条消息中按顺序引用多条历史消息，不会与 `replyToId` 混淆。`teams_activity` 集中承载 `entities`、`channel_data`、`suggested_actions`、locale、通知投递、附件布局和自定义 value，可表达 AI 生成标签、引用、敏感度标签、反馈按钮与流信息；接收时未标准化 entity 和这些顶层字段也会投影回同一个段，不必从原始 Activity 中重新拼装。媒体附件必须提供 Teams 服务端可访问的 HTTPS URL；未知段、无效卡片和本地/Base64 媒体会明确失败，不会静默丢失。
 
 下面的消息会显示 Teams AI 标签、引用、默认反馈按钮和一个建议操作：
 
@@ -93,7 +93,7 @@ Teams 主动消息不能只依赖 conversation ID；微软要求同时保留 `se
 
 Teams 的“附件链接”和“真实文件上传”不是同一能力。个人聊天上传必须完成 file consent → OneDrive upload → file-info 卡片流程；频道和群聊文件依赖 Graph 与 SharePoint/OneDrive 权限。适配器为此提供 `send_file_consent_card`、`send_file_info_card` 和 `call_graph_api`，`file` 段也可用 `unique_id`、`file_type`、`name`、`url` 生成标准 file-info 卡片。
 
-入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；群会话中明确的机器人安装/卸载投影为 `group_increase/group_decrease`，个人安装和其他 installation 动作仍保持 `custom`；invoke 投影为 `interaction`；typing、会议、read receipt 和其他 Activity 以 `custom` notice 无损交付。Agents SDK 原始 Activity 位于 `raw_event.raw_activity`，稳定投影位于 `raw_event.activity`，Teams 上下文位于 `extensions.teams`。
+入站会保留 `serviceUrl`、recipient、tenant、team/channel、locale、reply、entities、attachments、reactions、value 和 channelData。消息编辑/删除、成员进出、反应增删会投影为对应统一 notice；个人聊天 Read Receipt 投影为 `message_status`，`message_id` 与 `extensions.teams.last_read_message_id` 指向用户最后读到的消息，并要求 `ChatMessageReadReceipt.Read.Chat` RSC 权限。群会话中明确的机器人安装/卸载投影为 `group_increase/group_decrease`，个人安装和其他 installation 动作仍保持 `custom`；invoke 投影为 `interaction`；typing、会议和其他 Activity 以 `custom` notice 无损交付。Agents SDK 原始 Activity 位于 `raw_event.raw_activity`，稳定投影位于 `raw_event.activity`，Teams 上下文位于 `extensions.teams`。
 
 Webhook 与已有的、已认证 Agents SDK 连接可共用公开的 `await TeamsBot.ingest(activity)` 入站管线。`ingestHttp()` 负责 Microsoft JWT 认证；`ingest(activity)` 只接收已由上游认证的 Activity。入口会等待 canonical 事件抵达全部协议出口后才确认成功；失败不会提交去重状态，可由 Connector 安全重试。并发的相同 Activity 会合并为一次投递；缺少 ID 的 Activity 使用稳定载荷指纹生成身份。`raw_activity` 仍会记录每次接收，一个 Activity 携带多个成员或 Reaction 时会逐项派发并生成不同事件 ID。
 

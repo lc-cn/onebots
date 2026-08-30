@@ -1,93 +1,45 @@
-# Microsoft Teams
+# Microsoft Teams 适配器
 
-Microsoft Teams 是微软推出的团队协作平台，支持聊天、视频会议、文件共享等功能。
+`@onebots/adapter-teams` 基于 Microsoft 365 Agents SDK 1.8.1、Teams API 2.0.15、Connector API 与 Microsoft Graph。它不依赖旧 Bot Framework SDK，也不会自行启动第二个 HTTP 服务。
 
-## 状态
-
-✅ **已实现并可用**
-
-## 功能特性
-
-- ✅ **私聊消息** - 支持与用户的一对一聊天
-- ✅ **群聊消息** - 支持频道和群组消息
-- ✅ **消息编辑** - 支持编辑已发送的消息
-- ✅ **消息删除** - 支持删除消息
-- ✅ **自适应卡片** - 支持发送丰富的自适应卡片
-- ✅ **事件订阅** - 支持成员加入/离开等事件
-- ✅ **Webhook 模式** - 通过 Webhook 接收事件
-
-## 安装
-
-```bash
-npm install @onebots/adapter-teams
-# 或
-pnpm add @onebots/adapter-teams
-```
-
-## 配置示例
-
-### 基本配置
+## 配置
 
 ```yaml
-accounts:
-  - platform: teams
-    account_id: my_teams_bot
-    protocol: onebot.v11
-    
-    # Microsoft Teams 配置
-    app_id: your_app_id
-    app_password: your_app_password
-    webhook:
-      url: https://your-domain.com/teams/my_teams_bot/webhook
-      port: 8080
+teams.work-agent:
+  account_id: work-agent
+  app_id: "Microsoft Entra Client ID"
+  app_password: "Client Secret Value"
+  tenant_id: "Tenant ID"
+  receive_mode: webhook # webhook 或 manual
 ```
 
-### 高级配置
+Webhook 模式默认挂载 `/teams/{account_id}/webhook`。Azure Bot 的 Messaging endpoint 应直接指向公网 HTTPS 地址，例如 `https://bot.example/teams/work-agent/webhook`；反向代理必须保留 `Authorization` 和 JSON 请求体。
 
-```yaml
-accounts:
-  - platform: teams
-    account_id: my_teams_bot
-    protocol: onebot.v11
-    
-    app_id: your_app_id
-    app_password: your_app_password
-    webhook:
-      url: https://your-domain.com/teams/my_teams_bot/webhook
-      port: 8080
-    # 可选：用于政府云等特殊环境
-    channel_service: https://botframework.azure.us
-    open_id_metadata: https://login.microsoftonline.us/common/v2.0/.well-known/openid-configuration
-```
+`manual` 模式不注册路由。已有 Host 可调用 `account.client.ingestHttp({ method, headers, body })` 获取结构化响应，Fetch/WinterCG Host 可直接调用 `acceptHttp(request)`，Koa Host 可调用 `acceptHttp(ctx)`。这些入口复用同一 JWT 认证、ConversationReference 和可靠事件管线。
 
-## 使用客户端 SDK
+主权云可配置 `authority_endpoint`、`graph_base_url` 与 `bot_audience`。`allowed_service_urls` 只用于额外可信 Connector，生产环境应保持 `validate_service_url: true`。
 
-客户端应连接完整账号协议根，例如 `http://localhost:6727/teams/{account_id}/onebot/v12`。创建 Client、选择接收模式、接入已有 Host 与调用 API 的统一说明见[客户端 SDK 使用指南](/guide/client-sdk)。
+## 会话和原生能力
 
-## Microsoft Teams 配置步骤
+Teams 主动消息依赖完整 `ConversationReference`，而不只是 conversation ID。适配器持久化 `serviceUrl`、tenant、bot/user 和会话层级，因此重启后仍可主动发送；未见过的会话不会伪造上下文。
 
-1. **创建 Azure Bot 资源**
-   - 登录 [Azure Portal](https://portal.azure.com)
-   - 创建 "Azure Bot" 资源
-   - 获取 **App ID** 和 **App Password**
+- 私聊、groupChat 和 team channel 使用不同场景，不把频道压扁成 canonical Group。
+- 支持文本、mention、线程回复、引用回复、媒体链接、Adaptive Card、Bot Card、建议操作和完整原生 Activity。
+- `teams_quote` 双向保留官方 `quotedReply` entity，可按消息顺序引用一条或多条历史消息；它与 `replyToId` 的线程语义保持独立。
+- 支持消息更新/删除、Reaction、targeted message、会议上下文、成员目录、文件 consent 上传与 Azure Bot OAuth。
+- `call_graph_api` 提供受约束的相对路径 Graph 入口；app-only 权限不能冒充用户发送普通聊天消息。
 
-2. **配置 Messaging Endpoint**
-   - 在 Azure Bot 资源中，设置 **Messaging endpoint**
-   - URL 格式：`https://your-domain.com/teams/{account_id}/webhook`
+`teams_activity` 段保留 AI 生成标签、最多 20 条引用、敏感度、反馈回路、流信息、通知投递和建议操作。媒体附件必须是 Teams 可访问的 HTTPS URL；个人聊天的真实文件上传使用 file consent 流程，频道和群聊文件使用 Graph/SharePoint 权限。
 
-3. **在 Teams 中测试**
-   - 在 Microsoft Teams 中搜索你的 Bot
-   - 开始对话测试
+## 事件
 
-## 注意事项
+消息、编辑、删除、成员进出和 Reaction 均投影为对应标准事件。个人聊天的 `application/vnd.microsoft.readReceipt` 会投影为 `message_status`：`message_id` 与 `extensions.teams.last_read_message_id` 指向用户最后读到的消息。该事件需要在 Teams App Manifest 中授予 `ChatMessageReadReceipt.Read.Chat` RSC 权限，并受用户或管理员的 Read receipts 设置控制。
 
-1. **Webhook 模式**：Teams Bot 必须使用 Webhook 模式，不支持轮询
-2. **HTTPS 要求**：生产环境的 Webhook URL 必须是 HTTPS
-3. **消息限制**：Teams 对消息发送频率有限制
-4. **自适应卡片**：Teams 支持丰富的自适应卡片格式，可以创建更丰富的交互体验
+Invoke 投影为 `interaction`；安装生命周期在群会话中投影为 `group_increase/group_decrease`；typing、会议和未标准化 Activity 以 `custom` notice 无损交付。原始 Agents SDK Activity 始终保存在 `raw_event.raw_activity`。
 
 ## 相关链接
 
-- [适配器配置文档](/config/adapter/teams)
-- [Microsoft Bot Framework 文档](https://dev.botframework.com/)
-- [Teams Bot 开发文档](https://docs.microsoft.com/en-us/microsoftteams/platform/bots/what-are-bots)
+- [Microsoft 365 Agents SDK](https://learn.microsoft.com/microsoft-365/agents-sdk/)
+- [Teams 引用回复与 Read Receipt](https://learn.microsoft.com/microsoftteams/platform/bots/build-conversational-capability)
+- [Teams 文件](https://learn.microsoft.com/microsoftteams/platform/bots/how-to/bots-filesv4)
+- [客户端 SDK 使用指南](/guide/client-sdk)

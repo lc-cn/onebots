@@ -1,9 +1,6 @@
 import { Activity, ActivityTypes, type Attachment, type Entity } from "@microsoft/agents-activity";
 import type { CommonTypes } from "onebots";
-import {
-    applyTeamsActivityOptions,
-    projectTeamsActivityOptions,
-} from "./activity-options.js";
+import { applyTeamsActivityOptions, projectTeamsActivityOptions } from "./activity-options.js";
 import { TeamsApiError } from "./errors.js";
 import type {
     TeamsActivity,
@@ -62,6 +59,12 @@ export function compileTeamsActivity(
             );
             continue;
         }
+        if (segment.type === "teams_quote") {
+            const messageId = requiredString(segment.data.message_id, "teams_quote.message_id");
+            text += `<quoted messageId="${escapeXml(messageId)}"/>`;
+            entities.push({ type: "quotedReply", quotedReply: { messageId } });
+            continue;
+        }
         if (["adaptive_card", "card", "image", "video", "audio", "file"].includes(segment.type)) {
             attachments.push(compileAttachment(segment));
             continue;
@@ -114,7 +117,7 @@ export function projectTeamsSegments(activity: TeamsActivity): CommonTypes.Segme
     if (activity.replyToId) {
         segments.push({ type: "reply", data: { message_id: activity.replyToId } });
     }
-    segments.push(...tokenizeMentions(activity.text || "", activity.entities || []));
+    segments.push(...tokenizeInlineEntities(activity.text || "", activity.entities || []));
     for (const attachment of activity.attachments || []) {
         const contentType = attachment.contentType || "application/octet-stream";
         if (contentType === "application/vnd.microsoft.card.adaptive") {
@@ -203,30 +206,57 @@ function compileAttachment(segment: CommonTypes.Segment): TeamsAttachment {
     };
 }
 
-function tokenizeMentions(text: string, entities: TeamsEntity[]): CommonTypes.Segment[] {
+function tokenizeInlineEntities(text: string, entities: TeamsEntity[]): CommonTypes.Segment[] {
     const mentions = entities.filter(entity => entity.type === "mention" && entity.mentioned);
-    if (mentions.length === 0) return text ? [{ type: "text", data: { text } }] : [];
+    const quotes = entities.filter(entity => entity.type === "quotedReply");
+    if (mentions.length === 0 && quotes.length === 0) {
+        return text ? [{ type: "text", data: { text } }] : [];
+    }
     const segments: CommonTypes.Segment[] = [];
-    const matcher = /<at>(.*?)<\/at>/giu;
+    const matcher = /<at>(.*?)<\/at>|<quoted messageId="([^"]+)"\s*\/>/giu;
     let cursor = 0;
-    let index = 0;
+    let mentionIndex = 0;
+    let quoteIndex = 0;
     for (const match of text.matchAll(matcher)) {
         const position = match.index ?? cursor;
         if (position > cursor)
             segments.push({ type: "text", data: { text: text.slice(cursor, position) } });
-        const mention = mentions[index++];
-        segments.push({
-            type: "at",
-            data: {
-                id: mention?.mentioned?.id || match[1] || "",
-                name: mention?.mentioned?.name || match[1] || "",
-                aad_object_id: mention?.mentioned?.aadObjectId,
-            },
-        });
+        if (match[1] !== undefined) {
+            const mention = mentions[mentionIndex++];
+            segments.push({
+                type: "at",
+                data: {
+                    id: mention?.mentioned?.id || match[1],
+                    name: mention?.mentioned?.name || match[1],
+                    aad_object_id: mention?.mentioned?.aadObjectId,
+                },
+            });
+        } else {
+            const quote = quotes[quoteIndex++];
+            const data = objectValue(quote?.quotedReply);
+            segments.push({
+                type: "teams_quote",
+                data: {
+                    message_id: stringValue(data?.messageId ?? unescapeXml(match[2] || "")),
+                    sender_id: data?.senderId,
+                    sender_name: data?.senderName,
+                    preview: data?.preview,
+                    time: data?.time,
+                    is_reply_deleted: data?.isReplyDeleted,
+                    validated_message_reference: data?.validatedMessageReference,
+                },
+            });
+        }
         cursor = position + match[0].length;
     }
     if (cursor < text.length) segments.push({ type: "text", data: { text: text.slice(cursor) } });
     return segments;
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : undefined;
 }
 
 function mediaSegmentType(contentType: string): string {
@@ -292,10 +322,22 @@ function escapeXml(value: string): string {
     return value.replace(/[&<>"']/g, character => XML_ESCAPES[character] || character);
 }
 
+function unescapeXml(value: string): string {
+    return value.replace(/&(amp|lt|gt|quot|#39);/gu, entity => XML_UNESCAPES[entity] || entity);
+}
+
 const XML_ESCAPES: Record<string, string> = {
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#39;",
+};
+
+const XML_UNESCAPES: Record<string, string> = {
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
 };
