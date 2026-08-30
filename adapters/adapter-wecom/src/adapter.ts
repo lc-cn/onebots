@@ -178,8 +178,8 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
             this.logger.error("企业微信 Webhook 处理失败", error),
         );
 
-        client.on("raw_event", (event: WeComEvent) => {
-            account.dispatch(
+        client.on("raw_event", async (event: WeComEvent) => {
+            await account.dispatch(
                 projectWeComEvent(event, {
                     botId: config.agent_id,
                     createId: value => this.createId(value),
@@ -267,7 +267,7 @@ declare module "onebots" {
 AdapterRegistry.register("wecom", WeComAdapter, {
     name: "wecom",
     displayName: "企业微信自建应用",
-    description: "企业微信自建应用官方 API：加密回调、应用消息、应用群聊与通讯录管理",
+    description: "企业微信自建应用官方 API：可靠加密回调、消息、通讯录与协作办公",
     icon: "https://work.weixin.qq.com/favicon.ico",
     homepage: "https://developer.work.weixin.qq.com/document/path/90487",
     author: "凉菜",

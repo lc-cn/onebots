@@ -36,6 +36,7 @@ wecom.internal_app:
 
 平台动作覆盖应用详情、临时素材、模板卡片更新、应用群聊、部门、成员、标签、邀请、加入企业二维码与回调 IP。客户联系能力不再藏在通用调用中，还提供以下可发现动作：
 
+- 协作办公：日历的创建/更新/查询/删除，日程的创建/更新/参与者增删/查询/取消，以及审批模板、提交、批量查询和详情。
 - 客户：`list_follow_users`、`list_external_contacts`、`get_external_contact`、`batch_get_external_contacts`、`remark_external_contact`、`transfer_external_contacts`、`list_unassigned_external_contacts`。
 - 客户群：`list_external_contact_groups`、`get_external_contact_group`、`transfer_external_contact_groups`。
 - 联系我：`add_contact_way`、`get_contact_way`、`update_contact_way`、`delete_contact_way`、`list_contact_ways`、`close_temporary_contact`。
@@ -59,8 +60,8 @@ await adapter.callAction("internal_app", "wecom_call", {
 默认 Webhook、已有 Host 与消息队列最终进入同一个 `WeComClient`，共享事件校验、去重与 typed 分发：
 
 ```ts
-const result = client.ingest(decryptedEvent);
-const verified = client.ingestHttp({ method, query, body: rawXml });
+const result = await client.ingest(decryptedEvent);
+const verified = await client.ingestHttp({ method, query, body: rawXml });
 const response = await client.acceptHttp(request);
 
 const unsubscribe = client.onEvent("change_contact", event => {
@@ -69,6 +70,8 @@ const unsubscribe = client.onEvent("change_contact", event => {
 ```
 
 `WeComWebhookHost` 只负责 Koa 上下文桥接，不再持有第二套解密或去重状态。`ingestHttp()` 返回结构化 HTTP 响应，并在 POST 响应的 `ingest` 字段中附带 `{ accepted, duplicate, eventId, event }`。
+
+`ingest()` 会按注册顺序等待同步或异步监听器完成后才提交去重状态并确认 Webhook；同一事件的并发重投递会合并成一次执行。监听器失败时不会回复成功，也不会污染去重缓存，因此企业微信可以安全重试。
 
 已有 Host 已经完成验签解密，或事件来自可信队列时，可使用 manual 模式；此时无需回调 Token/AES Key，也不会在 OneBots Router 注册路由：
 

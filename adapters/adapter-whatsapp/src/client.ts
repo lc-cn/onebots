@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { emitAwaited, KeyedSingleFlight } from "onebots";
 import { WhatsAppApiError } from "./errors.js";
 import { WhatsAppGraphApi } from "./graph-api.js";
 import type {
@@ -31,7 +32,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     private readonly graph: WhatsAppGraphApi;
     private readonly contacts = new Map<string, WhatsAppObservedContact>();
     private readonly processedEvents = new Set<string>();
-    private readonly processingEvents = new Map<string, Promise<WhatsAppIngestResult>>();
+    private readonly processingEvents = new KeyedSingleFlight<string, WhatsAppIngestResult>();
     private readonly lifecycle = new WhatsAppClientLifecycle<WhatsAppPhoneNumberInfo>();
 
     constructor(
@@ -73,34 +74,26 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         if (this.isDuplicate(key)) {
             return duplicateResult(event);
         }
-        const processing = this.processingEvents.get(key);
-        if (processing) return processing;
-        const delivery = this.deliver(event, key);
-        this.processingEvents.set(key, delivery);
-        try {
-            return await delivery;
-        } finally {
-            if (this.processingEvents.get(key) === delivery) this.processingEvents.delete(key);
-        }
+        return this.processingEvents.run(key, () => this.deliver(event, key));
     }
 
     private async deliver(event: WhatsAppWebhookEvent, key: string): Promise<WhatsAppIngestResult> {
         this.observeContacts(event);
-        await this.emitAwaited("raw_event", event);
-        await this.emitAwaited("webhook", event);
+        await emitAwaited(this, "raw_event", event);
+        await emitAwaited(this, "webhook", event);
         let changes = 0;
         let messages = 0;
         let statuses = 0;
         for (const entry of event.entry) {
             for (const change of entry.changes) {
-                await this.emitAwaited("change", change, entry.id);
+                await emitAwaited(this, "change", change, entry.id);
                 changes += 1;
                 for (const message of change.value.messages || []) {
-                    await this.emitAwaited("message", message, change.value.metadata, change);
+                    await emitAwaited(this, "message", message, change.value.metadata, change);
                     messages += 1;
                 }
                 for (const status of change.value.statuses || []) {
-                    await this.emitAwaited("status", status, change.value.metadata, change);
+                    await emitAwaited(this, "status", status, change.value.metadata, change);
                     statuses += 1;
                 }
             }
@@ -115,17 +108,6 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
             ignoredChanges: 0,
             event,
         };
-    }
-
-    private async emitAwaited<K extends keyof WhatsAppClientEvents>(
-        event: K,
-        ...args: WhatsAppClientEvents[K]
-    ): Promise<void> {
-        for (const listener of this.listeners(event)) {
-            await Promise.resolve(
-                (listener as (...values: WhatsAppClientEvents[K]) => unknown)(...args),
-            );
-        }
     }
 
     /** 校验原始请求体签名，并交给与 manual 模式相同的 ingest 管线。 */

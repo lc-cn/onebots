@@ -63,6 +63,8 @@ export {
     materializeMediaSource,
     definePlatformActions,
     isSafeAbsoluteApiPath,
+    emitAwaited,
+    KeyedSingleFlight,
     mapConcurrent,
     RefreshableValue,
     RecentEventDeduplicator,

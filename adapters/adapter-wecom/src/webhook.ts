@@ -83,10 +83,14 @@ export function weComEventId(event: WeComEvent): string {
     ]
         .filter(Boolean)
         .join(":");
-    if (identity) return identity;
-    return createHash("sha256")
-        .update(event.RawXml || JSON.stringify(event))
+    const digest = createHash("sha256")
+        .update(event.RawXml || JSON.stringify(eventWithoutEncryptedXml(event)))
         .digest("hex");
+    return identity ? `${identity}:${digest.slice(0, 16)}` : digest;
+}
+
+function eventWithoutEncryptedXml(event: WeComEvent): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(event).filter(([key]) => key !== "EncryptedXml"));
 }
 
 function requireCallbackCredentials(config: WeComConfig): {

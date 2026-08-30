@@ -1,5 +1,6 @@
 import { definePlatformActions } from "onebots";
 import type { WeComClient } from "./client.js";
+import { WECOM_COLLABORATION_ACTIONS } from "./collaboration-actions.js";
 import { WECOM_CUSTOMER_ENGAGEMENT_ACTIONS } from "./customer-engagement-actions.js";
 import { WeComApiError } from "./errors.js";
 import { WECOM_EXTERNAL_CONTACT_ACTIONS } from "./external-contact-actions.js";
@@ -93,6 +94,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
             }),
         get_api_domain_ips: staticCall("/cgi-bin/get_api_domain_ip"),
         get_callback_ips: staticCall("/cgi-bin/getcallbackip"),
+        ...WECOM_COLLABORATION_ACTIONS,
         ...WECOM_EXTERNAL_CONTACT_ACTIONS,
         ...WECOM_CUSTOMER_ENGAGEMENT_ACTIONS,
     },

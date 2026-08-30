@@ -3,6 +3,7 @@ import { AdapterRegistry, type Schema } from "onebots";
 export { WeComAdapter } from "./adapter.js";
 export { weComCapabilities } from "./capabilities.js";
 export { WeComClient } from "./client.js";
+export { WECOM_COLLABORATION_ACTIONS } from "./collaboration-actions.js";
 export { WECOM_CUSTOMER_ENGAGEMENT_ACTIONS } from "./customer-engagement-actions.js";
 export { WeComApiError, type WeComApiErrorOptions } from "./errors.js";
 export { projectWeComEvent, projectWeComSegments } from "./events.js";

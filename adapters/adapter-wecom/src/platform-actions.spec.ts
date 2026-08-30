@@ -22,6 +22,9 @@ describe("企业微信平台动作", () => {
         expect(WECOM_PLATFORM_ACTIONS.has("batch_get_external_contacts")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("list_external_contact_groups")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("add_group_welcome_template")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("create_calendar")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("create_schedule")).toBe(true);
+        expect(WECOM_PLATFORM_ACTIONS.has("get_approval_detail")).toBe(true);
         expect(WECOM_PLATFORM_ACTIONS.has("wecom_call")).toBe(true);
     });
 });

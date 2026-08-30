@@ -1,3 +1,4 @@
+import type { EventEmitter } from "node:events";
 import { ValidationError } from "./errors.js";
 
 export interface RefreshableValueResult<T> {
@@ -59,6 +60,42 @@ export class RefreshableValue<T> {
         this.generation += 1;
         this.cached = undefined;
         this.pending = undefined;
+    }
+}
+
+/**
+ * 依照 Node EventEmitter 的注册顺序执行并等待所有监听器。
+ *
+ * 原生 `emit()` 不会等待异步监听器；Webhook 若直接使用它，可能在业务处理失败前
+ * 就确认成功。该函数保留 EventEmitter 的顺序和异常语义，同时闭合异步投递。
+ */
+export async function emitAwaited<TArgs extends readonly unknown[]>(
+    emitter: Pick<EventEmitter, "rawListeners">,
+    eventName: string | symbol,
+    ...args: TArgs
+): Promise<void> {
+    for (const listener of emitter.rawListeners(eventName)) {
+        await Promise.resolve((listener as (...values: TArgs) => unknown)(...args));
+    }
+}
+
+/** 按键合并同时进行的相同工作；任务结束后立即释放，不承担结果缓存。 */
+export class KeyedSingleFlight<TKey, TResult> {
+    private readonly pending = new Map<TKey, Promise<TResult>>();
+
+    run(key: TKey, task: () => TResult | PromiseLike<TResult>): Promise<TResult> {
+        const existing = this.pending.get(key);
+        if (existing) return existing;
+        const request = Promise.resolve().then(task);
+        const tracked = request.finally(() => {
+            if (this.pending.get(key) === tracked) this.pending.delete(key);
+        });
+        this.pending.set(key, tracked);
+        return tracked;
+    }
+
+    clear(): void {
+        this.pending.clear();
     }
 }
 

@@ -24,8 +24,10 @@ wecom.internal_app:
 - 部门和标签是组织管理对象，不映射为聊天群。
 - 原生发送文本、媒体、文件、Markdown、卡片和图文；媒体先上传取得 `media_id`。
 - 支持撤回具有服务端 `msgid` 的应用消息、获取应用群与成员、通讯录和标签管理；`appchat` 发送响应没有 `msgid`，不虚构可撤回能力。
+- 可发现平台动作覆盖日历、日程、审批、客户联系、客户群、群发、朋友圈和统计；复杂请求体保持企业微信官方结构。
 - 通用 `at` 段会文本化为 `@userid`，不声明为可靠提醒能力。
 - 所有事件保留解密 XML、密文 XML 和完整平台字段。
+- Webhook 会等待异步监听器成功后再确认；同一事件的并发重投递只执行一次，失败不会写入去重状态。
 - `wecom_call` 为新接口提供受限路径、统一 token 和结构化错误。
 
 完整动作与嵌入式 Webhook 契约见 [包 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wecom)。

@@ -16,6 +16,6 @@ Configure `https://bot.example.com/wecom/internal_app/webhook` as the receive-me
 
 Private/direct messages use the application-message API. Group scenes are real application-created `appchat` conversations; departments and tags are never projected as chats. Recall is available only when WeCom returned a server `msgid`; app-chat sends do not return one and are not falsely advertised as recallable. A common `at` segment becomes readable `@userid` text without claiming notification semantics.
 
-Native actions cover media, message recall, template-card updates, app chats, contacts, departments, tags, invitations, and network metadata. `wecom_call` provides a constrained path for new official endpoints.
+Native actions cover media, message recall, template-card updates, app chats, contacts, departments, tags, invitations, calendars, schedules, approvals, customer contacts, campaigns, moments, and statistics. Complex request bodies retain the official WeCom shape. `wecom_call` provides a constrained path for new official endpoints.
 
-Every event retains the complete decrypted and encrypted XML in `raw_event`. See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wecom) for embedding and action details.
+Every event retains the complete decrypted and encrypted XML in `raw_event`. Webhook acknowledgement waits for synchronous and asynchronous listeners; concurrent retries of the same event are coalesced, and failed delivery is not committed to deduplication state. See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wecom) for embedding and action details.

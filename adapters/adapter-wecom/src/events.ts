@@ -1,5 +1,6 @@
 import { coerceUnixToEventMs, type CommonEvent, type CommonTypes } from "onebots";
 import type { WeComEvent } from "./types.js";
+import { weComEventId } from "./webhook.js";
 
 export interface WeComProjectionContext {
     botId: string;
@@ -13,9 +14,7 @@ export function projectWeComEvent(
 ): CommonEvent.Event<WeComEvent> {
     const eventType = event.Event;
     const timestamp = coerceUnixToEventMs(event.CreateTime);
-    const eventId =
-        event.MsgId ??
-        `${event.FromUserName ?? "unknown"}:${eventType ?? event.MsgType ?? "event"}:${timestamp}`;
+    const eventId = weComEventId(event);
     const base = {
         id: context.createId(eventId),
         timestamp,

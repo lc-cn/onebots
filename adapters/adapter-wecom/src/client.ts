@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { isSafeAbsoluteApiPath, RefreshableValue } from "onebots";
+import { emitAwaited, isSafeAbsoluteApiPath, KeyedSingleFlight, RefreshableValue } from "onebots";
 import { WeComApiError } from "./errors.js";
 import type {
     WeComAgent,
@@ -31,6 +31,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     private readonly tokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
     private agent?: WeComAgent;
     private readonly processedEvents = new Set<string>();
+    private readonly eventFlights = new KeyedSingleFlight<string, WeComIngestResult>();
 
     constructor(
         readonly config: WeComConfig,
@@ -55,6 +56,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
 
     stop(): void {
         this.tokens.clear();
+        this.eventFlights.clear();
         this.emit("stop");
     }
 
@@ -159,25 +161,33 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     }
 
     /** 最底层明文事件入口，与加密 HTTP 回调共享校验、去重和 typed 分发。 */
-    ingest(rawEvent: unknown): WeComIngestResult {
+    async ingest(rawEvent: unknown): Promise<WeComIngestResult> {
         const event = parseWeComEvent(rawEvent);
         validateEvent(event);
         const eventId = weComEventId(event);
         if (this.isDuplicate(eventId)) {
             return { accepted: 0, duplicate: true, eventId, event };
         }
-        this.emit("raw_event", event);
-        const isEvent = event.MsgType === "event";
-        this.emit(isEvent ? "event" : "message", event);
-        this.markProcessed(eventId);
-        return { accepted: 1, duplicate: false, eventId, event };
+        return this.eventFlights.run(eventId, async () => {
+            if (this.isDuplicate(eventId)) {
+                return { accepted: 0, duplicate: true, eventId, event };
+            }
+            await emitAwaited(this, "raw_event", event);
+            const isEvent = event.MsgType === "event";
+            await emitAwaited(this, isEvent ? "event" : "message", event);
+            this.markProcessed(eventId);
+            return { accepted: 1, duplicate: false, eventId, event };
+        });
     }
 
     /** 按企业微信 Event 精确订阅，并返回取消订阅函数。 */
-    onEvent<K extends string>(name: K, listener: (event: WeComNamedEvent<K>) => void): () => void {
-        const wrapped = (event: WeComEvent) => {
+    onEvent<K extends string>(
+        name: K,
+        listener: (event: WeComNamedEvent<K>) => unknown,
+    ): () => void {
+        const wrapped = async (event: WeComEvent): Promise<void> => {
             if (event.Event?.toLowerCase() === name.toLowerCase()) {
-                listener(event as WeComNamedEvent<K>);
+                await listener(event as WeComNamedEvent<K>);
             }
         };
         this.on("event", wrapped);
@@ -185,7 +195,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     }
 
     /** 接收企业微信 GET 验证或 POST 加密回调。 */
-    ingestHttp(request: WeComWebhookRequest): WeComWebhookResponse {
+    async ingestHttp(request: WeComWebhookRequest): Promise<WeComWebhookResponse> {
         if (request.method === "GET") {
             const echo = verifyWeComEndpoint(this.config, request.query);
             return echo === undefined
@@ -193,7 +203,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
                 : { status: 200, body: echo, contentType: "text/plain" };
         }
         try {
-            const ingest = this.ingest(decodeWeComEvent(this.config, request));
+            const ingest = await this.ingest(decodeWeComEvent(this.config, request));
             return { status: 200, body: "success", contentType: "text/plain", ingest };
         } catch (error) {
             if (error instanceof WeComApiError && error.code === "WECOM_INVALID_SIGNATURE") {
@@ -213,7 +223,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
             );
         }
         try {
-            const response = this.ingestHttp({
+            const response = await this.ingestHttp({
                 method,
                 query: Object.fromEntries(new URL(request.url).searchParams),
                 body: method === "POST" ? Buffer.from(await request.arrayBuffer()) : undefined,

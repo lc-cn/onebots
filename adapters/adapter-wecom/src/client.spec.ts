@@ -105,7 +105,7 @@ describe("WeComClient", () => {
         });
     });
 
-    it("统一 ingest 同时分发 raw_event 与细粒度事件", () => {
+    it("统一 ingest 同时分发 raw_event 与细粒度事件", async () => {
         const client = new WeComClient(config);
         const raw = vi.fn();
         const message = vi.fn();
@@ -118,24 +118,24 @@ describe("WeComClient", () => {
             FromUserName: "u1",
             Content: "hi",
         };
-        expect(client.ingest(event)).toMatchObject({
+        await expect(client.ingest(event)).resolves.toMatchObject({
             accepted: 1,
             duplicate: false,
             eventId: "m1",
         });
         expect(raw).toHaveBeenCalledWith(event);
         expect(message).toHaveBeenCalledWith(event);
-        expect(client.ingest(event).duplicate).toBe(true);
+        await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: true });
     });
 
-    it("ingest 拒绝无法稳定投影的外部事件", () => {
+    it("ingest 拒绝无法稳定投影的外部事件", async () => {
         const client = new WeComClient(config);
-        expect(() => client.ingest({ MsgType: "text", Content: "hi" })).toThrowError(
+        await expect(client.ingest({ MsgType: "text", Content: "hi" })).rejects.toThrowError(
             expect.objectContaining({ code: "WECOM_INVALID_EVENT" }),
         );
     });
 
-    it("manual 模式无需回调凭据，并支持精确事件订阅", () => {
+    it("manual 模式无需回调凭据，并支持精确事件订阅", async () => {
         const client = new WeComClient({
             ...config,
             receive_mode: "manual",
@@ -150,14 +150,14 @@ describe("WeComClient", () => {
             CreateTime: 1_777_000_001,
             FromUserName: "u1",
         };
-        expect(client.ingest(event).accepted).toBe(1);
+        await expect(client.ingest(event)).resolves.toMatchObject({ accepted: 1 });
         expect(listener).toHaveBeenCalledWith(event);
         unsubscribe();
-        client.ingest({ ...event, CreateTime: 1_777_000_002 });
+        await client.ingest({ ...event, CreateTime: 1_777_000_002 });
         expect(listener).toHaveBeenCalledTimes(1);
     });
 
-    it("业务监听器失败时不提交去重状态，允许企业微信重投递", () => {
+    it("业务监听器失败时不提交去重状态，允许企业微信重投递", async () => {
         const client = new WeComClient({ ...config, receive_mode: "manual" });
         const event: WeComEvent = {
             MsgType: "event",
@@ -169,9 +169,52 @@ describe("WeComClient", () => {
             throw new Error("downstream failed");
         };
         client.on("raw_event", failure);
-        expect(() => client.ingest(event)).toThrow("downstream failed");
+        await expect(client.ingest(event)).rejects.toThrow("downstream failed");
         client.off("raw_event", failure);
-        expect(client.ingest(event).duplicate).toBe(false);
+        await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: false });
+    });
+
+    it("等待异步监听器并合并同一事件的并发重投递", async () => {
+        const client = new WeComClient({ ...config, receive_mode: "manual" });
+        let release!: () => void;
+        const listener = vi.fn(() => new Promise<void>(resolve => (release = resolve)));
+        client.on("raw_event", listener);
+        const event: WeComEvent = {
+            MsgType: "event",
+            Event: "enter_agent",
+            CreateTime: 1_777_000_004,
+            FromUserName: "u1",
+        };
+
+        const first = client.ingest(event);
+        const retry = client.ingest(structuredClone(event));
+        await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+        release();
+
+        await expect(Promise.all([first, retry])).resolves.toEqual([
+            expect.objectContaining({ accepted: 1, duplicate: false }),
+            expect.objectContaining({ accepted: 1, duplicate: false }),
+        ]);
+        expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it("不会把同秒发生的不同无 MsgId 事件误判为重复", async () => {
+        const client = new WeComClient({ ...config, receive_mode: "manual" });
+        const listener = vi.fn();
+        client.on("raw_event", listener);
+        const base: WeComEvent = {
+            MsgType: "event",
+            Event: "open_approval_change",
+            CreateTime: 1_777_000_005,
+            FromUserName: "sys",
+        };
+
+        const first = await client.ingest({ ...base, ApprovalInfo: { ThirdNo: "first" } });
+        const second = await client.ingest({ ...base, ApprovalInfo: { ThirdNo: "second" } });
+
+        expect(first.eventId).not.toBe(second.eventId);
+        expect(second.duplicate).toBe(false);
+        expect(listener).toHaveBeenCalledTimes(2);
     });
 
     it("标准 Request Host 拒绝不支持的方法", async () => {
