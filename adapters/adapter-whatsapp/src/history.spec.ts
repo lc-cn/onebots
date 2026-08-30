@@ -108,6 +108,18 @@ describe("WhatsApp 消息历史", () => {
         expect(new URL(requestUrl(fetcher)).pathname).toBe("/v23.0/phone/message_history");
     });
 
+    it("History 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "list_message_history", {
+                messageId: "typo",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "list_message_history", parameter: "messageId" },
+        });
+    });
+
     it("拒绝非法查询、路径和外部响应", async () => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(client.history.list({ limit: 101 })).rejects.toMatchObject({

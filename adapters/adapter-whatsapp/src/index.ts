@@ -263,12 +263,7 @@ export {
     type WhatsAppVerificationCodeRequest,
     type WhatsAppVerificationCodeResponse,
 } from "./phone-numbers.js";
-export {
-    isWhatsAppHistoryAction,
-    WhatsAppHistory,
-    WHATSAPP_HISTORY_ACTIONS,
-    type WhatsAppHistoryAction,
-} from "./history.js";
+export { isWhatsAppHistoryAction, WhatsAppHistory, type WhatsAppHistoryAction } from "./history.js";
 export { projectMessageContent, projectWhatsAppWebhook } from "./events.js";
 export {
     isWhatsAppSettingsAction,

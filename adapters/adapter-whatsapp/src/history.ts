@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import { WhatsAppApiError } from "./errors.js";
 import {
     isHistoryDeliveryStatus,
@@ -20,17 +21,6 @@ const HISTORY_FIELDS =
     "id,message_id,events{delivery_status,webhook_update_state,timestamp,application,webhook_uri,error_description}";
 const HISTORY_EVENT_FIELDS =
     "cursor,node{id,delivery_status,error_description,occurrence_timestamp,status_timestamp,application}";
-
-export const WHATSAPP_HISTORY_ACTIONS = Object.freeze([
-    "list_message_history",
-    "list_message_history_events",
-] as const);
-
-export type WhatsAppHistoryAction = (typeof WHATSAPP_HISTORY_ACTIONS)[number];
-
-export function isWhatsAppHistoryAction(action: string): action is WhatsAppHistoryAction {
-    return (WHATSAPP_HISTORY_ACTIONS as readonly string[]).includes(action);
-}
 
 /** WhatsApp 消息投递历史深模块；负责查询约束、分页完整性与响应校验。 */
 export class WhatsAppHistory {
@@ -71,27 +61,31 @@ export class WhatsAppHistory {
             this.listEvents(historyId, { ...params, ...(after ? { after } : {}) }),
         );
     }
-
-    execute(
-        action: WhatsAppHistoryAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "list_message_history":
-                return this.list(queryParams(params));
-            case "list_message_history_events":
-                return this.listEvents(resourceParam(params, "history_id"), eventParams(params));
-        }
-    }
 }
 
-export const WHATSAPP_HISTORY_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_HISTORY_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.history.execute(action, params),
-    ]),
-) as Record<WhatsAppHistoryAction, PlatformActionHandler<WhatsAppClient>>;
+type HistoryActionParams = Readonly<Record<string, unknown>>;
+
+const HISTORY_ACTION_HANDLERS = {
+    list_message_history: (client: WhatsAppClient, params: HistoryActionParams) =>
+        client.history.list(queryParams(params)),
+    list_message_history_events: (client: WhatsAppClient, params: HistoryActionParams) =>
+        client.history.listEvents(resourceParam(params, "history_id"), eventParams(params)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Message History 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_HISTORY_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    HISTORY_ACTION_HANDLERS,
+    {
+        list_message_history: ["message_id", "limit", "after", "before"],
+        list_message_history_events: ["history_id", "status_filter", "limit", "after", "before"],
+    },
+);
+
+export type WhatsAppHistoryAction = keyof typeof WHATSAPP_HISTORY_ACTION_HANDLERS;
+
+export function isWhatsAppHistoryAction(action: string): action is WhatsAppHistoryAction {
+    return Object.hasOwn(WHATSAPP_HISTORY_ACTION_HANDLERS, action);
+}
 
 async function collectPages<T>(
     fetchPage: (
