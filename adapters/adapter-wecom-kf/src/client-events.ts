@@ -1,23 +1,17 @@
 import type { EventEmitter } from "node:events";
 import type { WeComKfClientEvents } from "./client.js";
-import { WeComKfError } from "./errors.js";
+import type { WeComKfError } from "./errors.js";
 
 type KfClientEmitter = EventEmitter<WeComKfClientEvents>;
 type KfDataEventName = "raw_event" | "kf_item";
 
-/** 逐个调用数据监听器，避免单个业务异常阻断同批消息与游标提交。 */
+/** canonical 数据监听器异常必须向同步器传播，以阻止消息与游标确认。 */
 export function emitKfDataEvent<K extends KfDataEventName>(
     emitter: KfClientEmitter,
     eventName: K,
     ...args: WeComKfClientEvents[K]
 ): void {
-    for (const listener of emitter.rawListeners(eventName)) {
-        try {
-            Reflect.apply(listener, emitter, args);
-        } catch (error) {
-            reportKfClientError(emitter, WeComKfError.wrap(error, "WECOM_KF_EVENT_LISTENER_ERROR"));
-        }
-    }
+    for (const listener of emitter.rawListeners(eventName)) Reflect.apply(listener, emitter, args);
 }
 
 /** 错误观察器同样隔离，保证诊断回调不能破坏客户端状态机。 */

@@ -185,7 +185,7 @@ describe("WeComKfClient", () => {
         await expect(readFile(cursorPath, "utf8")).resolves.toContain('"wk-1": "c3"');
     });
 
-    it("隔离业务监听器异常并继续提交游标", async () => {
+    it("业务监听器异常时保留游标，重投成功后才提交", async () => {
         const cursorPath = `/tmp/onebots-wecom-kf-listener-${process.pid}-${Date.now()}.json`;
         temporaryFiles.push(cursorPath);
         const fetcher = vi
@@ -201,21 +201,33 @@ describe("WeComKfClient", () => {
                     has_more: 0,
                     msg_list: [{ msgid: "m1", msgtype: "text", text: { content: "one" } }],
                 }),
+            )
+            .mockResolvedValueOnce(
+                json({
+                    errcode: 0,
+                    errmsg: "ok",
+                    next_cursor: "committed",
+                    has_more: 0,
+                    msg_list: [{ msgid: "m1", msgtype: "text", text: { content: "one" } }],
+                }),
             );
         const client = new WeComKfClient({ ...config, cursor_store_path: cursorPath }, fetcher);
-        const errors = vi.fn();
         const delivered = vi.fn();
+        let attempts = 0;
         client.on("raw_event", () => {
-            throw new Error("observer failed");
+            attempts += 1;
+            if (attempts === 1) throw new Error("observer failed");
         });
         client.on("kf_item", delivered);
-        client.on("client_error", errors);
 
+        await expect(client.synchronize("wk-1")).rejects.toMatchObject({
+            code: "WECOM_KF_EVENT_DELIVERY_FAILED",
+        });
+        await expect(readFile(cursorPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
         await expect(client.synchronize("wk-1")).resolves.toHaveLength(1);
+
         expect(delivered).toHaveBeenCalledTimes(1);
-        expect(errors).toHaveBeenCalledWith(
-            expect.objectContaining({ code: "WECOM_KF_EVENT_LISTENER_ERROR" }),
-        );
+        expect(attempts).toBe(2);
         await expect(readFile(cursorPath, "utf8")).resolves.toContain('"wk-1": "committed"');
     });
 

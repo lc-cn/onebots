@@ -36,7 +36,7 @@ wecom-kf.customer_service:
 - 客户消息、接待人员消息、平台事件和未知消息类型都会保留完整 `raw_event`。
 - `sync_msg` 的事件身份从官方 `event.open_kfid/external_userid` 读取，不再误依赖消息顶层字段。
 - 回调 `Token`、解密明文和加密 XML 只留在接入层，不会随协议事件发送给下游。
-- 业务事件监听器相互隔离；单个监听器异常会进入 `client_error`，不会阻断同批消息与游标提交。
+- 业务事件只有在全部 canonical 监听器成功返回后才写入去重窗口并提交游标；监听器异常会保留旧游标，让后续 `sync_msg` 重投。
 - 接待人员消息的 `sender.id` 是真实 `servicer_userid`，客户身份保留在 `extensions.wecom_kf.external_userid`。
 - 可选 `enable_sync_poll` 仅作无回调 Token 时的补偿；默认关闭，开启时必须配置 `open_kfid`。
 

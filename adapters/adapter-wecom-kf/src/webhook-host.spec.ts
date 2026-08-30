@@ -97,13 +97,12 @@ describe("WeComKfWebhookHost", () => {
         expect(callback).not.toHaveBeenCalled();
     });
 
-    it("业务监听器异常不会破坏 Webhook 确认", async () => {
+    it("业务监听器异常时拒绝确认 Webhook 以允许平台重投", async () => {
         const client = new WeComKfClient(config);
-        const onError = vi.fn();
         client.on("callback", () => {
             throw new Error("listener failed");
         });
-        const host = new WeComKfWebhookHost(config, client, onError);
+        const host = new WeComKfWebhookHost(config, client);
         const xml = `<xml><MsgType><![CDATA[event]]></MsgType><Event><![CDATA[account_updated]]></Event></xml>`;
         const encrypted = encrypt(xml);
 
@@ -113,10 +112,7 @@ describe("WeComKfWebhookHost", () => {
                 query: { timestamp: "1", nonce: "2", msg_signature: sign(encrypted) },
                 body: `<xml><Encrypt><![CDATA[${encrypted}]]></Encrypt></xml>`,
             }),
-        ).resolves.toMatchObject({ status: 200, body: "success" });
-        expect(onError).toHaveBeenCalledWith(
-            expect.objectContaining({ code: "WECOM_KF_CALLBACK_DISPATCH_ERROR" }),
-        );
+        ).rejects.toMatchObject({ code: "WECOM_KF_CALLBACK_DISPATCH_ERROR" });
     });
 
     it("拒绝明文与错误签名", async () => {

@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { RefreshableValue } from "onebots";
 import { emitKfDataEvent, reportKfClientError } from "./client-events.js";
 import { assertWeComKfConfig } from "./config.js";
-import { loadKfCursors, persistKfCursors } from "./cursor-store.js";
+import { KfCursorState } from "./cursor-state.js";
 import {
     ensureKfNotAborted,
     invalidKfParameter,
@@ -21,6 +21,7 @@ import {
 } from "./http.js";
 import { resolveKfOpenKfId } from "./identity.js";
 import { assertKfUploadSize } from "./media.js";
+import { KfMessageDeduplicator } from "./message-deduplicator.js";
 import { resolveKfMessageId } from "./message-id.js";
 import {
     decodeKfAccounts,
@@ -73,9 +74,9 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     private lifecycleGeneration = 0;
     private startRequest?: Promise<void>;
     private started = false;
-    private readonly cursors = new Map<string, string>();
+    private readonly cursorState: KfCursorState;
     private readonly knownOpenKfIds = new Set<string>();
-    private readonly seenMessageIds = new Set<string>();
+    private readonly receivedMessages: KfMessageDeduplicator;
     private readonly syncQueues = new Map<string, Promise<KfMsgItem[]>>();
 
     constructor(
@@ -85,6 +86,11 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         super();
         assertWeComKfConfig(config);
         this.apiBaseUrl = requireKfHttpsBase(config.api_base_url || DEFAULT_API_BASE);
+        this.cursorState = new KfCursorState(config.cursor_store_path);
+        this.receivedMessages = new KfMessageDeduplicator(
+            config.deduplicate_messages !== false,
+            config.message_deduplication_limit,
+        );
         if (config.open_kfid) this.knownOpenKfIds.add(config.open_kfid);
     }
 
@@ -112,8 +118,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         this.lifecycleAbort = controller;
         const signal = controller.signal;
         try {
-            for (const [openKfid, cursor] of await loadKfCursors(this.config.cursor_store_path))
-                this.cursors.set(openKfid, cursor);
+            await this.cursorState.load();
             await this.getAccessToken();
             ensureKfNotAborted(signal);
             if (this.config.enable_sync_poll) this.startPolling();
@@ -199,11 +204,19 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     }
 
     /** 将已有连接取得的单个 `sync_msg` 条目送入统一事件管线。 */
-    ingest(item: KfMsgItem, fallbackOpenKfId = this.config.open_kfid || ""): void {
+    ingest(item: KfMsgItem, fallbackOpenKfId = this.config.open_kfid || ""): boolean {
+        const id = item.msgid;
+        if (id && this.receivedMessages.has(id)) return false;
         const openKfid = resolveKfOpenKfId(item, fallbackOpenKfId);
         if (openKfid) this.knownOpenKfIds.add(openKfid);
-        emitKfDataEvent(this, "raw_event", item);
-        emitKfDataEvent(this, "kf_item", { open_kfid: openKfid, item });
+        try {
+            emitKfDataEvent(this, "raw_event", item);
+            emitKfDataEvent(this, "kf_item", { open_kfid: openKfid, item });
+        } catch (error) {
+            throw WeComKfError.wrap(error, "WECOM_KF_EVENT_DELIVERY_FAILED");
+        }
+        if (id) this.receivedMessages.commit(id);
+        return true;
     }
 
     /** 将已验签、解密并校验的回调事件送入统一事件管线。 */
@@ -361,7 +374,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     ): Promise<KfMsgItem[]> {
         const collected: KfMsgItem[] = [];
         const batchIds = new Set<string>();
-        let cursor = this.cursors.get(openKfid) || "";
+        let cursor = this.cursorState.get(openKfid);
         for (let page = 0; page < MAX_SYNC_PAGES; page++) {
             ensureKfNotAborted(signal);
             const request: KfSyncMsgRequest = {
@@ -386,7 +399,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
                 if (
                     id &&
                     this.config.deduplicate_messages !== false &&
-                    (this.seenMessageIds.has(id) || batchIds.has(id))
+                    (this.receivedMessages.has(id) || batchIds.has(id))
                 )
                     continue;
                 if (id) batchIds.add(id);
@@ -412,21 +425,8 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         }
         ensureKfNotAborted(signal);
         for (const item of collected) this.ingest(item, openKfid);
-        for (const id of batchIds) this.rememberMessage(id);
-        this.cursors.set(openKfid, cursor);
-        await persistKfCursors(this.config.cursor_store_path, this.cursors);
+        await this.cursorState.commit(openKfid, cursor);
         return collected;
-    }
-
-    private rememberMessage(id: string): void {
-        if (this.config.deduplicate_messages === false) return;
-        this.seenMessageIds.add(id);
-        const limit = Math.max(100, this.config.message_deduplication_limit || 10_000);
-        while (this.seenMessageIds.size > limit) {
-            const oldest = this.seenMessageIds.values().next().value;
-            if (typeof oldest !== "string") break;
-            this.seenMessageIds.delete(oldest);
-        }
     }
 
     private async fetchToken(generation: number): Promise<{ value: string; ttlMs: number }> {

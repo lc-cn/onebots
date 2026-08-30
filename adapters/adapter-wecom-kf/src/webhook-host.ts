@@ -154,7 +154,7 @@ export class WeComKfWebhookHost {
         try {
             this.client.ingestCallback(event);
         } catch (error) {
-            this.reportError(WeComKfError.wrap(error, "WECOM_KF_CALLBACK_DISPATCH_ERROR"));
+            throw WeComKfError.wrap(error, "WECOM_KF_CALLBACK_DISPATCH_ERROR");
         }
     }
 
