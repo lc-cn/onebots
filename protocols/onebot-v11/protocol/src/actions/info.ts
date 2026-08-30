@@ -3,6 +3,14 @@ import type { OneBotV11ActionContext, OneBotV11ActionHandler } from "./types.js"
 export function createInfoActions(
     context: OneBotV11ActionContext,
 ): Record<string, OneBotV11ActionHandler> {
+    const platformAction =
+        (action: string): OneBotV11ActionHandler =>
+        async params => {
+            if (context.adapter.describeCapabilities(context.accountId).actions[action]) {
+                return context.adapter.callAction(context.accountId, action, params);
+            }
+            throw new Error(`${action} not implemented`);
+        };
     return {
         get_login_info: async () => ({
             user_id: context.adapter.resolveId(context.accountId).number,
@@ -94,9 +102,7 @@ export function createInfoActions(
                 card_changeable: false,
             }));
         },
-        get_group_honor_info: async () => {
-            throw new Error("get_group_honor_info not implemented");
-        },
+        get_group_honor_info: platformAction("get_group_honor_info"),
         get_cookies: async params => ({
             cookies: await context.adapter.getCookies(context.accountId, {
                 domain: typeof params.domain === "string" ? params.domain : undefined,
@@ -109,12 +115,8 @@ export function createInfoActions(
             context.adapter.getCredentials(context.accountId, {
                 domain: typeof params.domain === "string" ? params.domain : undefined,
             }),
-        get_record: async () => {
-            throw new Error("get_record not implemented");
-        },
-        get_image: async () => {
-            throw new Error("get_image not implemented");
-        },
+        get_record: platformAction("get_record"),
+        get_image: platformAction("get_image"),
         can_send_image: async () => ({
             yes: await context.adapter.canSendImage(context.accountId),
         }),
@@ -133,9 +135,7 @@ export function createInfoActions(
                 protocol_version: "v11",
             };
         },
-        set_restart: async () => {
-            throw new Error("set_restart not implemented");
-        },
+        set_restart: platformAction("set_restart"),
         clean_cache: async () => {
             await context.adapter.cleanCache(context.accountId);
             context.clearMessageIds();

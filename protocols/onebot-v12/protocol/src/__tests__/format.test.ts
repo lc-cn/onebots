@@ -91,6 +91,7 @@ function createProtocol() {
                 get_channel_member_info: { support: "native" },
                 get_channel_member_list: { support: "native" },
                 send_poll: { support: "native" },
+                upload_file: { support: "native" },
             },
         })),
         callAction: vi.fn().mockResolvedValue({ message_id: 42 }),
@@ -195,12 +196,14 @@ describe("OneBot V12 protocol", () => {
     test("sends a channel message with separate guild and channel addresses", async () => {
         const { adapter, protocol } = createProtocol();
 
-        await protocol["sendMessage"]({
-            detail_type: "channel",
-            guild_id: "g30000",
-            channel_id: "c30001",
-            message: [{ type: "text", data: { text: "hello" } }],
-        });
+        await expect(
+            protocol.apply("send_message", {
+                detail_type: "channel",
+                guild_id: "g30000",
+                channel_id: "c30001",
+                message: [{ type: "text", data: { text: "hello" } }],
+            }),
+        ).resolves.toMatchObject({ status: "ok", retcode: 0 });
 
         expect(adapter.sendMessage).toHaveBeenCalledWith("bot", {
             scene_type: "channel",
@@ -425,6 +428,18 @@ describe("OneBot V12 protocol", () => {
             data: { message_id: 42 },
         });
         expect(adapter.callAction).toHaveBeenCalledWith("bot", "send_poll", params);
+    });
+
+    test("标准文件动作在平台明确声明能力时走原生入口", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        await expect(
+            protocol.apply("upload_file", { type: "url", url: "https://example.com/a.txt" }),
+        ).resolves.toMatchObject({ status: "ok", retcode: 0 });
+        expect(adapter.callAction).toHaveBeenCalledWith("bot", "upload_file", {
+            type: "url",
+            url: "https://example.com/a.txt",
+        });
     });
 
     test("invite_friend_to_group is advertised and delegates to the adapter", async () => {

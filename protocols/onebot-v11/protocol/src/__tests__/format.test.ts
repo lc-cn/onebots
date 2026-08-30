@@ -78,7 +78,9 @@ function createProtocol() {
         handleGroupRequest: vi.fn(),
         muteGroupAnonymous: vi.fn(),
         setGroupAnonymous: vi.fn(),
-        describeCapabilities: vi.fn().mockReturnValue({ actions: { native_ping: true } }),
+        describeCapabilities: vi.fn().mockReturnValue({
+            actions: { native_ping: true, get_record: true },
+        }),
         callAction: vi.fn().mockResolvedValue({ pong: true }),
     };
 
@@ -540,5 +542,16 @@ describe("OneBot V11 message format conversion", () => {
 
         expect(result).toMatchObject({ status: "failed", retcode: -1 });
         expect(adapter.callAction).not.toHaveBeenCalled();
+    });
+
+    test("delegates optional standard actions when the adapter explicitly declares them", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        const result = await protocol.apply("get_record", { file: "voice.amr" });
+
+        expect(result).toMatchObject({ status: "ok", retcode: 0 });
+        expect(adapter.callAction).toHaveBeenCalledWith("bot", "get_record", {
+            file: "voice.amr",
+        });
     });
 });
