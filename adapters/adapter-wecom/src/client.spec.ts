@@ -221,6 +221,53 @@ describe("WeComClient", () => {
         expect(stopped).toHaveBeenCalledOnce();
     });
 
+    it("并发启动共享完整初始化且 stop 使迟到响应失效", async () => {
+        let releaseAgent!: (response: Response) => void;
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", access_token: "token", expires_in: 7200 }),
+            )
+            .mockImplementationOnce(
+                () => new Promise<Response>(resolve => (releaseAgent = resolve)),
+            );
+        const client = new WeComClient(config, fetcher);
+        const ready = vi.fn(async () => undefined);
+        const stopped = vi.fn(async () => undefined);
+        client.on("ready", ready);
+        client.on("stop", stopped);
+
+        const first = client.start();
+        const second = client.start();
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+        await client.stop();
+        releaseAgent(json({ errcode: 0, agentid: 1000001, name: "Bot" }));
+
+        await expect(first).rejects.toMatchObject({ code: "WECOM_START_CANCELLED" });
+        await expect(second).rejects.toMatchObject({ code: "WECOM_START_CANCELLED" });
+        expect(ready).not.toHaveBeenCalled();
+        expect(stopped).toHaveBeenCalledOnce();
+        expect(client.getCachedAgent()).toBeUndefined();
+    });
+
+    it("并发成功启动只请求一次身份并只发出一次 ready", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", access_token: "token", expires_in: 7200 }),
+            )
+            .mockResolvedValueOnce(json({ errcode: 0, agentid: 1000001, name: "Bot" }));
+        const client = new WeComClient(config, fetcher);
+        const ready = vi.fn(async () => undefined);
+        client.on("ready", ready);
+
+        await Promise.all([client.start(), client.start()]);
+
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect(ready).toHaveBeenCalledOnce();
+        await client.stop();
+    });
+
     it("等待异步监听器并合并同一事件的并发重投递", async () => {
         const client = new WeComClient({ ...config, receive_mode: "manual" });
         let release!: () => void;

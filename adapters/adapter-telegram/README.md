@@ -108,6 +108,8 @@ onebots -r telegram
 
 `stop()` 会先终止当前接收代次，再完整等待 polling、远端 Webhook 删除和全部停止监听器；单一步骤失败不会跳过其余清理，最终保留精确的结构化步骤错误，多个步骤失败时汇总为 `TELEGRAM_STOP_FAILED`。
 
+`start()` 只有在异步 `ready` 消费者全部成功后才确认完成；若投影失败，会终止本代 polling 或删除刚安装的远端 Webhook，再传播结构化启动错误，修复后可在同一实例上重新启动。
+
 ## 获取 Bot Token
 
 1. 在 Telegram 中搜索 [@BotFather](https://t.me/BotFather)

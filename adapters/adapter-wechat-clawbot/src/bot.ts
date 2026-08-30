@@ -1,4 +1,5 @@
 import path from "node:path";
+import { emitAllAwaited } from "onebots";
 import { IlinkBot } from "./sdk/ilink-bot.js";
 import type { WechatIlinkRuntimeConfig } from "./types.js";
 import type { StaleCredentialFault } from "./sdk/internal/errors.js";
@@ -163,7 +164,7 @@ export class WechatIlinkBot extends IlinkBot {
             if (!this.isCurrentLifecycle(generation)) return;
 
             await this.startReceiver(controller.signal);
-            if (this.isCurrentLifecycle(generation)) this.emit("ready");
+            if (this.isCurrentLifecycle(generation)) await emitAllAwaited(this, "ready");
         } catch (error: unknown) {
             if (this.isCurrentLifecycle(generation) && !controller.signal.aborted) {
                 this.emit("relogin_failed", error);
@@ -213,7 +214,7 @@ export class WechatIlinkBot extends IlinkBot {
 
             if (!this.isCurrentLifecycle(generation)) return;
             await this.startReceiver(controller.signal);
-            if (this.isCurrentLifecycle(generation)) this.emit("ready");
+            if (this.isCurrentLifecycle(generation)) await emitAllAwaited(this, "ready");
         } catch (error) {
             if (!this.isCurrentLifecycle(generation) || controller.signal.aborted) return;
             this.desiredRunning = false;

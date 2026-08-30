@@ -73,6 +73,8 @@ const unsubscribe = client.onEvent("change_contact", event => {
 
 `ingest()` 会按注册顺序等待同步或异步监听器完成后才提交去重状态并确认 Webhook；`raw_event` 与 typed 事件两个视图会全部尝试，单个监听器失败不会阻止其他出口看到事件。同一事件的并发重投递会合并成一次执行。任一监听器失败时不会回复成功，也不会污染去重缓存，因此企业微信可以安全重试。
 
+客户端启动使用单航班和生命周期代次：并发 `start()` 只加载一次令牌与应用身份，并等待全部异步 `ready` 监听器；启动期间调用 `stop()` 会清除身份缓存并使迟到响应以 `WECOM_START_CANCELLED` 结束，不能把已停止账号重新置为在线。
+
 已有 Host 已经完成验签解密，或事件来自可信队列时，可使用 manual 模式；此时不会在 OneBots Router 注册路由。若只调用 `ingest()`，无需回调 Token/AES Key；若现有 Host 希望复用 `ingestHttp()` / `acceptHttp()` 的验签解密，则仍需配置这两个字段，Web 表单会在 manual 模式中提供它们：
 
 ```yaml

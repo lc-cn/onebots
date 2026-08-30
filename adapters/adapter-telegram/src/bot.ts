@@ -141,6 +141,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
     }
 
     private async startInternal(generation: number): Promise<void> {
+        let webhookInstalled = false;
         try {
             await this.initBot();
             if (generation !== this.generation) return;
@@ -160,6 +161,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
                         allowed_updates: receive.allowedUpdates,
                     }),
                 );
+                webhookInstalled = true;
                 // stop() 可能在请求期间发生；过期启动不能遗留远端 Webhook。
                 if (generation !== this.generation) {
                     await this.callApi("deleteWebhook", () => this.bot.api.deleteWebhook());
@@ -174,9 +176,31 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
             }
             if (generation !== this.generation) return;
             this.running = true;
-            this.emit("ready");
+            await emitAllAwaited(this, "ready");
         } catch (error) {
-            const wrapped = TelegramError.wrap(error, "TELEGRAM_START_FAILED", "start");
+            const failures = new FailureCollector();
+            failures.add(error);
+            if (generation === this.generation) {
+                this.generation += 1;
+                this.running = false;
+                this.pollingAbort?.abort();
+                this.pollingAbort = undefined;
+                const pollingTask = this.pollingTask;
+                this.pollingTask = undefined;
+                await failures.capture(() => pollingTask);
+                if (webhookInstalled) {
+                    await failures.capture(async () => {
+                        await this.callApi("deleteWebhook", () => this.bot.api.deleteWebhook());
+                    });
+                }
+            }
+            let failure: unknown = error;
+            try {
+                failures.throwIfAny("Telegram 客户端启动回滚期间发生多个错误");
+            } catch (collected) {
+                failure = collected;
+            }
+            const wrapped = TelegramError.wrap(failure, "TELEGRAM_START_FAILED", "start");
             this.emit("client_error", wrapped);
             throw wrapped;
         }

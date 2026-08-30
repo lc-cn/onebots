@@ -7,6 +7,7 @@ import {
     RefreshableValue,
 } from "onebots";
 import { WeComApiError } from "./errors.js";
+import { assertWeComConfig, resolveWeComApiBaseUrl } from "./client-config.js";
 import { deliverWeComEvent } from "./event-delivery.js";
 import type {
     WeComAgent,
@@ -36,6 +37,10 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     readonly apiBaseUrl: string;
     private readonly tokens = new RefreshableValue<string>(TOKEN_MARGIN_MS);
     private agent?: WeComAgent;
+    private startPromise?: Promise<WeComAgent>;
+    private generation = 0;
+    private running = false;
+    private lifecycleActive = false;
     private readonly processedEvents = new Set<string>();
     private readonly eventFlights = new KeyedSingleFlight<string, WeComIngestResult>();
 
@@ -50,20 +55,57 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
                 code: "WECOM_INVALID_AGENT_ID",
             });
         }
-        this.apiBaseUrl = requireHttpsBase(config.api_base_url || DEFAULT_API_BASE);
+        this.apiBaseUrl = resolveWeComApiBaseUrl(config.api_base_url || DEFAULT_API_BASE);
     }
 
     async start(): Promise<WeComAgent> {
+        if (this.running && this.agent) return this.agent;
+        if (this.startPromise) return this.startPromise;
+        this.lifecycleActive = true;
+        const generation = this.generation;
+        const start = this.startInternal(generation);
+        this.startPromise = start;
+        try {
+            return await start;
+        } finally {
+            if (this.startPromise === start) this.startPromise = undefined;
+        }
+    }
+
+    private async startInternal(generation: number): Promise<WeComAgent> {
         await this.getAccessToken();
-        this.agent = await this.getAgent();
-        await emitAllAwaited(this, "ready", this.agent);
-        return this.agent;
+        const agent = await this.getAgent();
+        this.assertStartGeneration(generation);
+        this.agent = agent;
+        try {
+            await emitAllAwaited(this, "ready", agent);
+            this.assertStartGeneration(generation);
+            this.running = true;
+            return agent;
+        } catch (error) {
+            if (generation === this.generation) this.agent = undefined;
+            throw error;
+        }
     }
 
     async stop(): Promise<void> {
+        const wasActive = this.lifecycleActive;
+        this.lifecycleActive = false;
+        this.generation += 1;
+        this.running = false;
+        this.startPromise = undefined;
+        this.agent = undefined;
         this.tokens.clear();
         this.eventFlights.clear();
-        await emitAllAwaited(this, "stop");
+        if (wasActive) await emitAllAwaited(this, "stop");
+    }
+
+    private assertStartGeneration(generation: number): void {
+        if (generation !== this.generation) {
+            throw new WeComApiError("企业微信启动已被停止", {
+                code: "WECOM_START_CANCELLED",
+            });
+        }
     }
 
     getCachedAgent(): WeComAgent | undefined {
@@ -400,60 +442,6 @@ function apiError(response: Response, payload: unknown, path: string): WeComApiE
 
 function isJson(response: Response): boolean {
     return (response.headers.get("content-type") || "").includes("json");
-}
-
-function requireHttpsBase(value: string): string {
-    if (!URL.canParse(value))
-        throw new WeComApiError("api_base_url 必须是有效 HTTPS URL", {
-            code: "WECOM_INVALID_API_BASE_URL",
-        });
-    const url = new URL(value);
-    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
-        throw new WeComApiError("api_base_url 必须是无凭据、查询参数或片段的 HTTPS URL", {
-            code: "WECOM_INVALID_API_BASE_URL",
-        });
-    }
-    return `${url.origin}${url.pathname.replace(/\/+$/u, "")}`;
-}
-
-function assertWeComConfig(config: WeComConfig): void {
-    for (const [name, value] of [
-        ["account_id", config.account_id],
-        ["corp_id", config.corp_id],
-        ["corp_secret", config.corp_secret],
-        ["agent_id", config.agent_id],
-    ] as const) {
-        if (!value?.trim()) {
-            throw new WeComApiError(`企业微信 ${name} 不能为空`, {
-                code: "WECOM_CONFIG_REQUIRED",
-            });
-        }
-    }
-    const receiveMode = config.receive_mode || "webhook";
-    if (receiveMode !== "webhook" && receiveMode !== "manual") {
-        throw new WeComApiError("企业微信 receive_mode 仅支持 webhook 或 manual", {
-            code: "WECOM_INVALID_RECEIVE_MODE",
-        });
-    }
-    if (receiveMode === "webhook" && (!config.token?.trim() || !config.encoding_aes_key?.trim())) {
-        throw new WeComApiError("企业微信 Webhook 模式必须配置 token 和 encoding_aes_key", {
-            code: "WECOM_WEBHOOK_CONFIG_REQUIRED",
-        });
-    }
-    if (config.encoding_aes_key && config.encoding_aes_key.length !== 43) {
-        throw new WeComApiError("企业微信 encoding_aes_key 必须是 43 位", {
-            code: "WECOM_INVALID_ENCODING_AES_KEY",
-        });
-    }
-    if (
-        config.webhook_deduplication_limit !== undefined &&
-        (!Number.isInteger(config.webhook_deduplication_limit) ||
-            config.webhook_deduplication_limit < 100)
-    ) {
-        throw new WeComApiError("企业微信 webhook_deduplication_limit 必须是大于等于 100 的整数", {
-            code: "WECOM_INVALID_DEDUPLICATION_LIMIT",
-        });
-    }
 }
 
 function parseWeComEvent(value: unknown): WeComEvent {

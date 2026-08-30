@@ -133,6 +133,37 @@ describe("TelegramBot 边界", () => {
         expect(stopped).toHaveBeenCalledOnce();
     });
 
+    it("ready 投影失败时回滚已安装的 Webhook 并允许重启", async () => {
+        const setWebhook = vi.fn().mockResolvedValue(true);
+        const deleteWebhook = vi.fn().mockResolvedValue(true);
+        const nativeBot = {
+            api: { setWebhook, deleteWebhook },
+            botInfo: botInfo(),
+            isInited: () => true,
+        } as unknown as Bot;
+        const bot = new TelegramBot({
+            account_id: "bot",
+            token: "1:token",
+            receive_mode: "webhook",
+            webhook: { url: "https://bot.example/hook", secret_token: "secret_1" },
+        });
+        Object.assign(bot as unknown as { initialized: boolean; bot: Bot }, {
+            initialized: true,
+            bot: nativeBot,
+        });
+        const failure = vi.fn().mockRejectedValue(new Error("projection unavailable"));
+        bot.on("ready", failure);
+
+        await expect(bot.start()).rejects.toMatchObject({ code: "TELEGRAM_START_FAILED" });
+        expect(deleteWebhook).toHaveBeenCalledOnce();
+        bot.off("ready", failure);
+
+        await expect(bot.start()).resolves.toBeUndefined();
+        expect(setWebhook).toHaveBeenCalledTimes(2);
+        await bot.stop();
+        expect(deleteWebhook).toHaveBeenCalledTimes(2);
+    });
+
     it("polling 只在 Update 业务成功后推进 offset", async () => {
         vi.useFakeTimers();
         try {
