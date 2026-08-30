@@ -11,6 +11,49 @@ const config: ZulipConfig = {
 };
 
 describe("Zulip 消息扩展动作", () => {
+    it("按现代范围模式与消息 ID 模式查询消息", async () => {
+        const client = new ZulipClient(config, { transport: async () => ({}) });
+        const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
+
+        await executeZulipPlatformAction(client, "get_messages", {
+            anchor: "date",
+            anchor_date: "2026-08-31T12:30:00+08:00",
+            include_anchor: false,
+            num_before: 20,
+            num_after: 10,
+            narrow: [
+                ["channel", "engineering"],
+                { operator: "has", operand: "link", negated: true },
+            ],
+            apply_markdown: false,
+            allow_empty_topic_name: true,
+        });
+        await executeZulipPlatformAction(client, "get_messages", {
+            message_ids: [31, 32],
+            narrow: [{ operator: "sender", operand: 11 }],
+            client_gravatar: true,
+        });
+
+        expect(call).toHaveBeenNthCalledWith(1, "messages", "GET", {
+            anchor: "date",
+            anchor_date: "2026-08-31T12:30:00+08:00",
+            include_anchor: false,
+            num_before: 20,
+            num_after: 10,
+            narrow: [
+                ["channel", "engineering"],
+                { operator: "has", operand: "link", negated: true },
+            ],
+            apply_markdown: false,
+            allow_empty_topic_name: true,
+        });
+        expect(call).toHaveBeenNthCalledWith(2, "messages", "GET", {
+            message_ids: [31, 32],
+            narrow: [{ operator: "sender", operand: 11 }],
+            client_gravatar: true,
+        });
+    });
+
     it("覆盖指定消息和 narrow 标记", async () => {
         const client = new ZulipClient(config, { transport: async () => ({}) });
         const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
@@ -84,6 +127,17 @@ describe("Zulip 消息扩展动作", () => {
     });
 
     it.each([
+        ["get_messages", {}],
+        ["get_messages", { num_before: 10 }],
+        ["get_messages", { num_before: 10, num_after: 10, use_first_unread_anchor: true }],
+        ["get_messages", { anchor: "date", num_before: 10, num_after: 10 }],
+        [
+            "get_messages",
+            { anchor: "date", anchor_date: "2026-02-31", num_before: 10, num_after: 10 },
+        ],
+        ["get_messages", { anchor_date: "2026-08-31", num_before: 10, num_after: 10 }],
+        ["get_messages", { message_ids: [1], anchor: "newest" }],
+        ["get_messages", { message_ids: [1], narrow: [["channel"]] }],
         ["update_message_flags", { messages: [], op: "add", flag: "read" }],
         ["update_message_flags", { messages: [1], op: "add", flag: "mentioned" }],
         [
