@@ -1,4 +1,5 @@
 import {
+    emitAllAwaited,
     Protocol,
     ProtocolRegistry,
     Account,
@@ -165,7 +166,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
      * 上报事件到 Milky 客户端（HTTP 反连 / WebSocket 等）。
      * Account.dispatch 传入的是 CommonEvent；内部调用也可以传入已构造的 Milky event_type 事件。
      */
-    dispatch(event: unknown): void {
+    async dispatch(event: unknown): Promise<void> {
         if (!this.filterFn(event as Record<string, unknown>)) {
             return;
         }
@@ -177,7 +178,7 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         }
         if (milkyEvent) {
             this.logger.debug(`Milky dispatch:`, milkyEvent);
-            this.emit("dispatch", JSON.stringify(milkyEvent));
+            await emitAllAwaited(this, "dispatch", JSON.stringify(milkyEvent));
         }
     }
 
@@ -194,8 +195,8 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
     /**
      * 与 dispatch 相同，便于阅读；Account 只调用各协议的 dispatch(CommonEvent)
      */
-    dispatchCommonEvent(commonEvent: CommonEvent.Event): void {
-        this.dispatch(commonEvent);
+    async dispatchCommonEvent(commonEvent: CommonEvent.Event): Promise<void> {
+        await this.dispatch(commonEvent);
     }
 
     format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
@@ -430,11 +431,11 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
                     signal: AbortSignal.timeout((config.post_timeout || 5) * 1000),
                 });
 
-                if (!response.ok) {
-                    this.logger.warn(`HTTP POST failed: ${response.status} ${response.statusText}`);
-                }
+                if (!response.ok)
+                    throw new Error(`HTTP POST failed: ${response.status} ${response.statusText}`);
             } catch (error) {
                 this.logger.error(`HTTP POST error:`, error);
+                throw error;
             }
         };
 

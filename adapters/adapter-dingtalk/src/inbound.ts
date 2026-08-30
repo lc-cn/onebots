@@ -1,5 +1,5 @@
 import type { DWClientDownStream } from "dingtalk-stream";
-import { ErrorCategory } from "onebots";
+import { ErrorCategory, sha256Json } from "onebots";
 import { DingTalkError } from "./errors.js";
 import type { DingTalkEvent, DingTalkRobotMessage } from "./types.js";
 
@@ -16,9 +16,10 @@ export function streamEvent(message: DWClientDownStream): DingTalkEvent {
 }
 
 export function webhookEvent(body: Record<string, unknown>): DingTalkEvent {
+    const eventType = String(body.EventType || body.eventType || body.type || "unknown");
     return {
-        eventType: String(body.EventType || body.eventType || body.type || "unknown"),
-        eventId: String(body.eventId || body.id || `${Date.now()}`),
+        eventType,
+        eventId: String(body.eventId || body.id || `${eventType}:sha256:${sha256Json(body)}`),
         eventTime: Number(body.eventTime || body.timestamp) || Date.now(),
         eventCorpId: stringValue(body.CorpId || body.corpId || body.eventCorpId),
         eventData: objectOrSelf(body.data, body),

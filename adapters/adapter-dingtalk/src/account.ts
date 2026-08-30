@@ -27,15 +27,15 @@ export function createDingTalkAccount(
     bot.on("error", error => {
         adapter.logger.error(`钉钉 Bot ${config.account_id} 错误:`, error);
     });
-    bot.on("robot_message", (message: DingTalkRobotMessage, raw: unknown) => {
+    bot.on("robot_message", async (message: DingTalkRobotMessage, raw: unknown) => {
         const me = bot.getCachedMe();
         if (me && (message.senderId === me.userid || message.senderStaffId === me.userid)) return;
         const projected = projectDingTalkRobotMessage(message, rawRecord(raw), context());
-        if (projected) account.dispatch(projected);
+        if (projected) await account.dispatchAwaited(projected);
     });
-    const dispatchEvent = (event: DingTalkEvent) => {
+    const dispatchEvent = async (event: DingTalkEvent) => {
         for (const projected of projectDingTalkEvents(event, context()))
-            account.dispatch(projected);
+            await account.dispatchAwaited(projected);
     };
     bot.on("event", dispatchEvent);
     bot.on("native_event", dispatchEvent);

@@ -1,6 +1,12 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { emitAwaited, KeyedSingleFlight, mapConcurrent, RefreshableValue } from "./async-utils.js";
+import {
+    emitAllAwaited,
+    emitAwaited,
+    KeyedSingleFlight,
+    mapConcurrent,
+    RefreshableValue,
+} from "./async-utils.js";
 
 describe("RefreshableValue", () => {
     it("合并并发加载并只失效调用方实际使用的代次", async () => {
@@ -81,6 +87,21 @@ describe("emitAwaited", () => {
         await emitAwaited(emitter, "event");
         await emitAwaited(emitter, "event");
         expect(listener).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("emitAllAwaited", () => {
+    it("监听器失败后继续投递其余出口，并在最后传播错误", async () => {
+        const emitter = new EventEmitter();
+        const delivered = vi.fn();
+        emitter.on("event", async () => {
+            await Promise.resolve();
+            throw new Error("first failed");
+        });
+        emitter.on("event", delivered);
+
+        await expect(emitAllAwaited(emitter, "event", "payload")).rejects.toThrow("first failed");
+        expect(delivered).toHaveBeenCalledWith("payload");
     });
 });
 

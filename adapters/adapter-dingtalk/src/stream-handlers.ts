@@ -12,9 +12,9 @@ import type { DingTalkEvent, DingTalkRobotMessage } from "./types.js";
 
 interface DingTalkStreamHandlers {
     isCurrent(): boolean;
-    robot(message: DingTalkRobotMessage, raw: DWClientDownStream): void;
-    card(event: DingTalkEvent, raw: DWClientDownStream): void;
-    event(event: DingTalkEvent, raw: DWClientDownStream): void;
+    robot(message: DingTalkRobotMessage, raw: DWClientDownStream): void | Promise<void>;
+    card(event: DingTalkEvent, raw: DWClientDownStream): void | Promise<void>;
+    event(event: DingTalkEvent, raw: DWClientDownStream): void | Promise<void>;
     error(error: DingTalkError): void;
 }
 
@@ -23,7 +23,7 @@ export function registerDingTalkStreamHandlers(
     stream: DWClient,
     handlers: DingTalkStreamHandlers,
 ): void {
-    stream.registerCallbackListener(TOPIC_ROBOT, message => {
+    stream.registerCallbackListener(TOPIC_ROBOT, async message => {
         if (!handlers.isCurrent()) return;
         try {
             const data = parseObject(message.data, "钉钉 Stream 机器人消息");
@@ -33,7 +33,7 @@ export function registerDingTalkStreamHandlers(
                     "DINGTALK_ROBOT_MESSAGE_INVALID",
                 );
             }
-            handlers.robot(data, message);
+            await handlers.robot(data, message);
             stream.socketCallBackResponse(message.headers.messageId, { success: true });
         } catch (error) {
             handlers.error(
@@ -42,10 +42,10 @@ export function registerDingTalkStreamHandlers(
             stream.socketCallBackResponse(message.headers.messageId, { success: false });
         }
     });
-    stream.registerCallbackListener(TOPIC_CARD, message => {
+    stream.registerCallbackListener(TOPIC_CARD, async message => {
         if (!handlers.isCurrent()) return;
         try {
-            handlers.card(streamEvent(message), message);
+            await handlers.card(streamEvent(message), message);
             stream.socketCallBackResponse(message.headers.messageId, { success: true });
         } catch (error) {
             handlers.error(
@@ -54,10 +54,10 @@ export function registerDingTalkStreamHandlers(
             stream.socketCallBackResponse(message.headers.messageId, { success: false });
         }
     });
-    stream.registerAllEventListener(message => {
+    stream.registerAllEventListener(async message => {
         if (!handlers.isCurrent()) return { status: EventAck.SUCCESS };
         try {
-            handlers.event(streamEvent(message), message);
+            await handlers.event(streamEvent(message), message);
             return { status: EventAck.SUCCESS };
         } catch (error) {
             handlers.error(

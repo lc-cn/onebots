@@ -154,6 +154,16 @@ const canonicalPayload = stableJsonStringify(rawEvent);
 
 `stableJsonStringify()` 会递归排序对象键、保留数组顺序，并拒绝循环引用。不要把随机数或当前时间混入重试事件的身份。
 
+## 可靠事件派发
+
+`Account.dispatch(event)` 保留 fire-and-forget 语义，适用于不需要把投递结果反馈给上游的内部事件。Webhook、队列和 Stream 等需要“处理成功后再确认”的入口应使用：
+
+```typescript
+await account.dispatchAwaited(event);
+```
+
+`dispatchAwaited()` 会让全部已绑定协议都获得一次投递机会，等待异步 `Protocol.dispatch()` 完成，并在任一协议失败时向调用方传播错误。接入层可据此返回失败响应或请求平台重投。
+
 ## 开发
 
 ```bash

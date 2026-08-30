@@ -3,11 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { registerDingTalkStreamHandlers } from "./stream-handlers.js";
 
 describe("registerDingTalkStreamHandlers", () => {
-    it("CALLBACK 只在业务成功后确认", () => {
+    it("CALLBACK 只在异步业务成功后确认", async () => {
         const stream = fakeStream();
-        const robot = vi.fn().mockImplementationOnce(() => {
-            throw new Error("dispatch failed");
-        });
+        const robot = vi.fn().mockRejectedValueOnce(new Error("dispatch failed"));
         const error = vi.fn();
         registerDingTalkStreamHandlers(stream.api as never, {
             isCurrent: () => true,
@@ -18,8 +16,8 @@ describe("registerDingTalkStreamHandlers", () => {
         });
         const message = downstream(JSON.stringify(robotMessage()));
 
-        stream.callbacks.get("/v1.0/im/bot/messages/get")?.(message);
-        stream.callbacks.get("/v1.0/im/bot/messages/get")?.(message);
+        await stream.callbacks.get("/v1.0/im/bot/messages/get")?.(message);
+        await stream.callbacks.get("/v1.0/im/bot/messages/get")?.(message);
 
         expect(stream.respond).toHaveBeenNthCalledWith(1, "message-1", { success: false });
         expect(stream.respond).toHaveBeenNthCalledWith(2, "message-1", { success: true });
@@ -28,26 +26,26 @@ describe("registerDingTalkStreamHandlers", () => {
         );
     });
 
-    it("EVENT 处理失败返回 LATER", () => {
+    it("EVENT 异步处理失败返回 LATER", async () => {
         const stream = fakeStream();
         registerDingTalkStreamHandlers(stream.api as never, {
             isCurrent: () => true,
             robot: vi.fn(),
             card: vi.fn(),
-            event: () => {
-                throw new Error("dispatch failed");
-            },
+            event: () => Promise.reject(new Error("dispatch failed")),
             error: vi.fn(),
         });
 
-        expect(stream.event?.(downstream("{}"))).toMatchObject({ status: EventAck.LATER });
+        await expect(stream.event?.(downstream("{}"))).resolves.toMatchObject({
+            status: EventAck.LATER,
+        });
     });
 });
 
 function fakeStream() {
     type Downstream = ReturnType<typeof downstream>;
-    type CallbackHandler = (message: Downstream) => void;
-    type EventHandler = (message: Downstream) => { status: EventAck; message?: string };
+    type CallbackHandler = (message: Downstream) => void | Promise<void>;
+    type EventHandler = (message: Downstream) => Promise<{ status: EventAck; message?: string }>;
     const callbacks = new Map<string, CallbackHandler>();
     let event: EventHandler | undefined;
     const respond = vi.fn();

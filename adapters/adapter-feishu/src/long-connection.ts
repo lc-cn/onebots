@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
 import type { Logger } from "@larksuiteoapi/node-sdk";
-import { ErrorCategory } from "onebots";
+import { ErrorCategory, sha256Json } from "onebots";
 import { FeishuError } from "./errors.js";
 import type { FeishuEvent, FeishuWebhookBody } from "./types.js";
 import type { FeishuConfig } from "./types.js";
@@ -47,7 +46,7 @@ export function restoreLongConnectionEnvelope(
     const schema = take("schema") || "2.0";
     const token = take("token") || undefined;
     const headerEventType = take("event_type") || registeredEventType;
-    const eventId = take("event_id") || `${headerEventType}:${randomUUID()}`;
+    const eventId = take("event_id") || `${headerEventType}:sha256:${sha256Json(data)}`;
     const createTime = take("create_time") || String(Date.now());
     const appId = take("app_id") || configuredAppId;
     const tenantKey = take("tenant_key");

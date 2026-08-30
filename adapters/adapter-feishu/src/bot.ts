@@ -6,7 +6,7 @@ import {
     WSClient,
     type Logger,
 } from "@larksuiteoapi/node-sdk";
-import type { Next, RouterContext } from "onebots";
+import { emitAwaited, type Next, type RouterContext } from "onebots";
 import { FeishuApiTransport } from "./api-transport.js";
 import { FeishuError } from "./errors.js";
 import {
@@ -73,7 +73,7 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
             encryptKey: this.config.encrypt_key,
             logger,
         });
-        const handlers: Record<string, (data: Record<string, unknown>) => void> = {};
+        const handlers: Record<string, (data: Record<string, unknown>) => Promise<void>> = {};
         for (const eventType of FEISHU_LONG_CONNECTION_EVENT_TYPES) {
             handlers[eventType] = data => this.emitLongConnectionEvent(eventType, data);
         }
@@ -91,9 +91,12 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
         });
     }
 
-    private emitLongConnectionEvent(eventType: string, data: Record<string, unknown>): void {
+    private async emitLongConnectionEvent(
+        eventType: string,
+        data: Record<string, unknown>,
+    ): Promise<void> {
         const body = restoreLongConnectionEnvelope(eventType, data, this.config.app_id);
-        this.ingest(body, body);
+        await this.ingest(body, body);
     }
 
     /** 调用飞书开放平台 API，供能力清单声明的平台扩展动作使用。 */
@@ -243,7 +246,7 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
         }
 
         try {
-            this.ingest(resolved.body, resolved.body);
+            await this.ingest(resolved.body, resolved.body);
         } catch (error) {
             const wrapped = FeishuError.wrap(error, "FEISHU_WEBHOOK_FAILED", "webhook");
             this.safeEmit("client_error", wrapped);
@@ -273,9 +276,9 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     }
 
     /** 将 Webhook、官方长连接或外部连接的事件交给同一校验入口。 */
-    ingest(event: unknown, rawEvent?: FeishuWebhookBody): void {
-        this.eventIngress.ingest(event, parsed =>
-            this.emit("event", parsed, rawEvent ?? { ...parsed }),
+    async ingest(event: unknown, rawEvent?: FeishuWebhookBody): Promise<void> {
+        await this.eventIngress.ingest(event, parsed =>
+            emitAwaited(this, "event", parsed, rawEvent ?? { ...parsed }),
         );
     }
 

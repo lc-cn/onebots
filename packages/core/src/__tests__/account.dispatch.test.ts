@@ -4,10 +4,10 @@
  * 回归背景：dispatch() 在真正分发给各协议之前会 emit 一个仅供 Web 控制台调试
  * 使用的 "message:dispatch" 事件；这个 emit 曾经没有 try/catch 保护，一旦监听器
  * 抛出异常（例如 JSON.stringify 遇到 BigInt / 循环引用），会阻断下面 for 循环，
- * 导致该事件对所有协议都静默丢失。dispatch() 的文档注释明确写着
- * "协议内自行 catch，避免一次失败阻断其它协议"，调试旁路的异常同样不能例外。
+ * 导致该事件对所有协议都静默丢失。调试旁路异常不能影响协议投递；可靠入口还要
+ * 等待所有协议完成，并在全部协议均获得投递机会后向接入层传播失败。
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { EventEmitter } from "node:events";
 import { Account } from "../account.js";
 import { ProtocolRegistry } from "../registry.js";
@@ -22,7 +22,9 @@ function createAccount(adapterEmit: (event: string, payload: unknown) => void) {
         dispatch: protocolDispatch,
     }) as unknown as Protocol;
 
-    vi.spyOn(ProtocolRegistry, "has").mockReturnValue(true);
+    vi.spyOn(ProtocolRegistry, "has").mockImplementation(
+        (protocol, version) => protocol === "fake" && version === "v1",
+    );
     vi.spyOn(ProtocolRegistry, "create").mockReturnValue(fakeProtocol);
 
     const adapter = {
@@ -66,6 +68,44 @@ describe("Account.dispatch 调试旁路隔离", () => {
         expect(emitted).toHaveLength(1);
     });
 
+    it("dispatchAwaited 等待异步协议完成", async () => {
+        let release: (() => void) | undefined;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const { account, protocolDispatch } = createAccount(vi.fn());
+        protocolDispatch.mockReturnValue(pending);
+
+        let settled = false;
+        const delivery = account.dispatchAwaited({ type: "message" } as never).then(() => {
+            settled = true;
+        });
+        await Promise.resolve();
+        expect(settled).toBe(false);
+
+        release?.();
+        await delivery;
+        expect(settled).toBe(true);
+    });
+
+    it("一个协议失败时仍尝试其余协议并向接入层传播错误", async () => {
+        const { account, protocolDispatch } = createAccount(vi.fn());
+        const secondDispatch = vi.fn();
+        protocolDispatch.mockImplementation(() => {
+            throw new Error("first failed");
+        });
+        account.protocols.push({
+            name: "second",
+            version: "v1",
+            dispatch: secondDispatch,
+        } as never);
+
+        await expect(account.dispatchAwaited({ type: "message" } as never)).rejects.toThrow(
+            "first failed",
+        );
+        expect(secondDispatch).toHaveBeenCalledOnce();
+    });
+
     it("协议自身注册的 dispatch 监听器不受调试旁路监听器异常影响", () => {
         const { fakeProtocol } = createAccount(() => {
             throw new Error("调试旁路模拟异常");
@@ -75,7 +115,9 @@ describe("Account.dispatch 调试旁路隔离", () => {
         // 模拟协议自身在 start() 阶段注册的真正广播监听器（比调试旁路监听器晚注册）
         (fakeProtocol as unknown as EventEmitter).on("dispatch", realBroadcast);
 
-        expect(() => (fakeProtocol as unknown as EventEmitter).emit("dispatch", "payload")).not.toThrow();
+        expect(() =>
+            (fakeProtocol as unknown as EventEmitter).emit("dispatch", "payload"),
+        ).not.toThrow();
         expect(realBroadcast).toHaveBeenCalledWith("payload");
     });
 });

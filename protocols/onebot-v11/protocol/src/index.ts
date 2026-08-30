@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import {
+    emitAllAwaited,
     Protocol,
     ProtocolRegistry,
     requireBooleanParam,
@@ -173,7 +174,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     /**
      * Dispatch event to OneBot V11 format
      */
-    dispatch(event: CommonEvent.Event): void {
+    async dispatch(event: CommonEvent.Event): Promise<void> {
         this.logger.debug(
             `[OneBot V11] Received event:`,
             event.type,
@@ -187,7 +188,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
             this.logger.debug(`[OneBot V11] Filter result:`, filterResult);
         } catch (error) {
             this.logger.error(`[OneBot V11] Filter error:`, error);
-            return;
+            throw error;
         }
 
         if (!filterResult) {
@@ -211,7 +212,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                     `[OneBot V11] Emitting dispatch event, listener count:`,
                     this.listenerCount("dispatch"),
                 );
-                this.emit("dispatch", eventData);
+                await emitAllAwaited(this, "dispatch", eventData);
                 this.logger.debug(`[OneBot V11] Event dispatched to WebSocket clients`);
             } else {
                 this.logger.warn(
@@ -221,11 +222,8 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                 );
             }
         } catch (error) {
-            this.logger.error(
-                `[OneBot V11] Error converting event to V11 format:`,
-                error,
-                JSON.stringify(event).substring(0, 200),
-            );
+            this.logger.error(`[OneBot V11] Error dispatching event:`, error);
+            throw error;
         }
     }
     /**
@@ -1169,6 +1167,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                             `[OneBot V11] Error sending message to WebSocket:`,
                             error,
                         );
+                        throw error;
                     }
                 } else {
                     this.logger.warn(`[OneBot V11] WebSocket not open, readyState:`, ws.readyState);
@@ -1226,7 +1225,9 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                     },
                     interval: intervalMs,
                 });
-                this.emit("dispatch", JSON.stringify(heartbeatEvent));
+                void emitAllAwaited(this, "dispatch", JSON.stringify(heartbeatEvent)).catch(error =>
+                    this.logger.error("OneBot V11 heartbeat dispatch failed:", error),
+                );
             }, intervalMs);
         }
     }
@@ -1264,11 +1265,11 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                     signal: AbortSignal.timeout(this.config.post_timeout || 5000),
                 });
 
-                if (!response.ok) {
-                    this.logger.warn(`HTTP POST failed: ${response.status} ${response.statusText}`);
-                }
+                if (!response.ok)
+                    throw new Error(`HTTP POST failed: ${response.status} ${response.statusText}`);
             } catch (error) {
                 this.logger.error(`HTTP POST error:`, error);
+                throw error;
             }
         };
 

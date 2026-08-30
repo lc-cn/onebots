@@ -36,7 +36,7 @@ export function createSlackAccount(
         account.status = state === "connected" ? AccountStatus.Online : AccountStatus.OffLine;
         adapter.logger.info(`Slack Bot ${config.account_id} Socket Mode 状态: ${state}`);
     });
-    bot.on("event", (event: SlackEvent, envelope: SlackWebhookBody) => {
+    bot.on("event", async (event: SlackEvent, envelope: SlackWebhookBody) => {
         try {
             if (event.type === "message" && event.ts && typeof event.channel === "string") {
                 bot.rememberMessage(event.ts, event.channel, event.thread_ts);
@@ -52,7 +52,7 @@ export function createSlackAccount(
                 botId: adapter.createId(me?.id || config.account_id),
                 createId: value => adapter.createId(value),
             });
-            if (projected) account.dispatch(projected);
+            if (projected) await account.dispatchAwaited(projected);
         } catch (error) {
             adapter.logger.error("[Slack] 投影原始事件失败:", error);
             throw error;

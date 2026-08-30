@@ -79,6 +79,31 @@ export async function emitAwaited<TArgs extends readonly unknown[]>(
     }
 }
 
+/**
+ * 等待全部监听器，并保证单个失败不会阻止其他监听器获得本次事件。
+ *
+ * 适用于一个事件对应多个独立投递出口的场景；所有出口尝试完成后，单个错误原样
+ * 抛出，多个错误使用 AggregateError 汇总。
+ */
+export async function emitAllAwaited<TArgs extends readonly unknown[]>(
+    emitter: Pick<EventEmitter, "rawListeners">,
+    eventName: string | symbol,
+    ...args: TArgs
+): Promise<void> {
+    const failures: unknown[] = [];
+    for (const listener of emitter.rawListeners(eventName)) {
+        try {
+            await Promise.resolve((listener as (...values: TArgs) => unknown)(...args));
+        } catch (error) {
+            failures.push(error);
+        }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+        throw new AggregateError(failures, `${failures.length} 个事件监听器投递失败`);
+    }
+}
+
 /** 按键合并同时进行的相同工作；任务结束后立即释放，不承担结果缓存。 */
 export class KeyedSingleFlight<TKey, TResult> {
     private readonly pending = new Map<TKey, Promise<TResult>>();

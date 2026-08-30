@@ -24,7 +24,7 @@ dingtalk.my_bot:
 
 `DingTalkBot.start()` 是并发幂等的；启动期间调用 `stop()` 会使该代启动失效，延迟返回的令牌或连接不会再次触发 `ready`。Stream 首次连接失败会清理旧客户端，因此后续启动可以创建全新连接，而不会卡在未连接实例上。
 
-事件处理完成后才会向 Stream 确认：机器人/卡片 CALLBACK 失败返回 `success: false`，普通 EVENT 失败返回 `LATER`。成功事件按 `msgId` 或 `eventId` 有界去重；处理失败不会提交去重记录，因此钉钉重投仍可恢复。
+事件处理完成后才会向 Stream 确认：这里的“完成”包含异步监听器与全部协议投递。机器人/卡片 CALLBACK 失败返回 `success: false`，普通 EVENT 失败返回 `LATER`。成功事件按 `msgId` 或 `eventId` 有界去重；处理失败不会提交去重记录，因此钉钉重投仍可恢复。缺少原生 ID 的 Webhook 会按 canonical JSON 载荷生成确定性身份，不再使用接收时钟。
 
 高吞吐场景可配置 `max_pending_event_handlers` 与 `max_pending_callback_handlers`。Web 表单只在 Stream 模式显示这两个背压上限，只在 Webhook 模式显示回调验签字段，避免无关配置淹没必要信息。
 
@@ -49,7 +49,7 @@ POST /dingtalk/{account_id}/webhook
 
 适配器会验证 SHA-1 签名、解密 AES-256-CBC 载荷、校验 CorpId，并按钉钉要求返回加密响应。未配置 `encrypt_key` 时只接收带正确 `token` 的明文回调。
 
-已有 HTTP Host、消息队列或测试连接可以配置 `receive_mode: manual`，再调用 `DingTalkBot.ingest(rawEvent)` 进入同一校验、身份发现、去重与事件投影链路，无需另开端口。
+已有 HTTP Host、消息队列或测试连接可以配置 `receive_mode: manual`，再 `await DingTalkBot.ingest(rawEvent)` 进入同一校验、身份发现、并发合并、去重与事件投影链路，无需另开端口。Promise 成功表示本次 canonical 事件已经完成协议投递。
 
 ## 自定义群机器人
 

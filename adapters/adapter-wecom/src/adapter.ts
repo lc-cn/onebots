@@ -179,7 +179,7 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
         );
 
         client.on("raw_event", async (event: WeComEvent) => {
-            await account.dispatch(
+            await account.dispatchAwaited(
                 projectWeComEvent(event, {
                     botId: config.agent_id,
                     createId: value => this.createId(value),

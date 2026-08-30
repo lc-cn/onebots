@@ -144,12 +144,12 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
                 ),
         );
         this.webhookRouter.register(client);
-        client.on("webhook", (event: WhatsAppWebhookEvent) => {
+        client.on("webhook", async (event: WhatsAppWebhookEvent) => {
             for (const projected of projectWhatsAppWebhook(event, {
                 botId: this.createId(config.phone_number_id),
                 createId: value => this.createId(value),
             })) {
-                account.dispatch(projected);
+                await account.dispatchAwaited(projected);
             }
         });
 

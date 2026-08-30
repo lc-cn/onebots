@@ -7,7 +7,7 @@ import { DingTalkApiError, DingTalkError } from "./errors.js";
 describe("DingTalkBot", () => {
     afterEach(() => vi.unstubAllGlobals());
 
-    it("manual 模式通过 ingest 复用同一机器人消息管线", () => {
+    it("manual 模式通过 ingest 复用同一机器人消息管线", async () => {
         const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
         const listener = vi.fn();
         bot.on("robot_message", listener);
@@ -22,26 +22,56 @@ describe("DingTalkBot", () => {
             text: { content: "hello" },
         };
 
-        expect(bot.ingest(message)).toEqual(message);
-        expect(bot.ingest(message)).toEqual(message);
+        await expect(bot.ingest(message)).resolves.toEqual(message);
+        await expect(bot.ingest(message)).resolves.toEqual(message);
         expect(listener).toHaveBeenCalledWith(message, message);
         expect(listener).toHaveBeenCalledTimes(1);
         expect(bot.getCachedMe()?.userid).toBe("bot-id");
     });
 
-    it("业务处理失败不提交消息去重，重投成功后才抑制重复", () => {
+    it("异步业务处理失败不提交消息去重，重投成功后才抑制重复", async () => {
         const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
-        const listener = vi.fn().mockImplementationOnce(() => {
-            throw new Error("dispatch failed");
-        });
+        const listener = vi.fn().mockRejectedValueOnce(new Error("dispatch failed"));
         bot.on("robot_message", listener);
         const message = robotMessage("msg-retry");
 
-        expect(() => bot.ingest(message)).toThrow("dispatch failed");
-        expect(() => bot.ingest(message)).not.toThrow();
-        bot.ingest(message);
+        await expect(bot.ingest(message)).rejects.toThrow("dispatch failed");
+        await expect(bot.ingest(message)).resolves.toEqual(message);
+        await bot.ingest(message);
 
         expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it("合并同一消息的并发重投并等待异步监听器", async () => {
+        const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
+        let release: (() => void) | undefined;
+        const listener = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
+        bot.on("robot_message", listener);
+        const message = robotMessage("msg-concurrent");
+
+        const first = bot.ingest(message);
+        const second = bot.ingest(message);
+        expect(listener).toHaveBeenCalledOnce();
+        release?.();
+        await Promise.all([first, second]);
+        expect(listener).toHaveBeenCalledOnce();
+    });
+
+    it("缺少原生 ID 的 Webhook 重投使用确定性载荷身份", async () => {
+        const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
+        const listener = vi.fn();
+        bot.on("event", listener);
+
+        await bot.ingest({ EventType: "user_add_org", UserId: ["u1"], CorpId: "corp" });
+        await bot.ingest({ CorpId: "corp", UserId: ["u1"], EventType: "user_add_org" });
+
+        expect(listener).toHaveBeenCalledOnce();
+        expect(listener.mock.calls[0]?.[0].eventId).toMatch(/^user_add_org:sha256:/u);
     });
 
     it("Webhook 业务处理失败返回 500 并允许上游重投", async () => {

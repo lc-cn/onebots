@@ -47,7 +47,7 @@ describe("WechatAdapter 身份契约", () => {
             user_id: { string: "wx-platform-app" },
             user_name: "wx-platform-app",
         });
-        const dispatch = vi.spyOn(account, "dispatch");
+        const dispatch = vi.spyOn(account, "dispatchAwaited");
         account.client.emit("raw_event", {
             ToUserName: "gh_original",
             FromUserName: "user",

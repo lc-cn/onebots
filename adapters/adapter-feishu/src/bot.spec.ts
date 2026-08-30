@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ErrorCategory } from "onebots";
 import { FeishuBot } from "./bot.js";
 import { FeishuError } from "./errors.js";
-import { FEISHU_LONG_CONNECTION_EVENT_TYPES } from "./long-connection.js";
+import {
+    FEISHU_LONG_CONNECTION_EVENT_TYPES,
+    restoreLongConnectionEnvelope,
+} from "./long-connection.js";
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -45,7 +48,7 @@ describe("FeishuBot webhook", () => {
         expect(ctx.body).toEqual({ code: 0 });
     });
 
-    it("恢复长连接 EventDispatcher 展平的官方事件 envelope", () => {
+    it("恢复长连接 EventDispatcher 展平的官方事件 envelope", async () => {
         const bot = new FeishuBot({
             account_id: "A1",
             app_id: "cli_configured",
@@ -54,7 +57,7 @@ describe("FeishuBot webhook", () => {
         const listener = vi.fn();
         bot.on("event", listener);
 
-        bot["emitLongConnectionEvent"]("im.message.receive_v1", {
+        await bot["emitLongConnectionEvent"]("im.message.receive_v1", {
             schema: "2.0",
             event_id: "EV_LONG_1",
             event_type: "im.message.receive_v1",
@@ -82,6 +85,22 @@ describe("FeishuBot webhook", () => {
             },
         };
         expect(listener).toHaveBeenCalledWith(restored, restored);
+    });
+
+    it("缺少 event_id 时按规范化载荷生成稳定身份", () => {
+        const first = restoreLongConnectionEnvelope(
+            "im.message.receive_v1",
+            { message: { chat_id: "oc_1", message_id: "om_1" }, tenant_key: "tenant" },
+            "cli_1",
+        );
+        const reordered = restoreLongConnectionEnvelope(
+            "im.message.receive_v1",
+            { tenant_key: "tenant", message: { message_id: "om_1", chat_id: "oc_1" } },
+            "cli_1",
+        );
+
+        expect(first.header.event_id).toMatch(/^im\.message\.receive_v1:sha256:[a-f0-9]{64}$/);
+        expect(reordered.header.event_id).toBe(first.header.event_id);
     });
 });
 
@@ -188,7 +207,7 @@ describe("FeishuBot 请求与事件边界", () => {
         await expect(bot.callApi("/im/v1/test", { skipAuth: true })).rejects.toMatchObject({
             code: "FEISHU_INVALID_RESPONSE",
         });
-        expect(() => bot.ingest({ event: {} })).toThrowError(
+        await expect(bot.ingest({ event: {} })).rejects.toThrowError(
             expect.objectContaining({ code: "FEISHU_INVALID_EVENT" }),
         );
     });
@@ -204,11 +223,9 @@ describe("FeishuBot 请求与事件边界", () => {
         expect(invalidEvent).toMatchObject({ status: 400, body: { code: 1 } });
     });
 
-    it("监听器失败时允许同一事件重投，成功后才去重", () => {
+    it("异步监听器失败时允许同一事件重投，成功后才去重", async () => {
         const bot = createBot();
-        const listener = vi.fn().mockImplementationOnce(() => {
-            throw new Error("listener failed");
-        });
+        const listener = vi.fn().mockRejectedValueOnce(new Error("listener failed"));
         bot.on("event", listener);
         const event = {
             schema: "2.0",
@@ -222,10 +239,40 @@ describe("FeishuBot 请求与事件边界", () => {
             event: {},
         };
 
-        expect(() => bot.ingest(event)).toThrow("listener failed");
-        expect(() => bot.ingest(event)).not.toThrow();
-        bot.ingest(event);
+        await expect(bot.ingest(event)).rejects.toThrow("listener failed");
+        await expect(bot.ingest(event)).resolves.toBeUndefined();
+        await bot.ingest(event);
         expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it("合并同一事件的并发重投并等待业务监听器", async () => {
+        const bot = createBot();
+        let release: (() => void) | undefined;
+        const listener = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
+        bot.on("event", listener);
+        const event = {
+            schema: "2.0",
+            header: {
+                event_id: "EV_CONCURRENT",
+                event_type: "custom",
+                create_time: "1",
+                app_id: "a",
+                tenant_key: "t",
+            },
+            event: {},
+        };
+
+        const first = bot.ingest(event);
+        const second = bot.ingest(event);
+        expect(listener).toHaveBeenCalledOnce();
+        release?.();
+        await Promise.all([first, second]);
+        expect(listener).toHaveBeenCalledOnce();
     });
 
     it("Webhook 业务处理失败返回 500 并允许上游重投", async () => {

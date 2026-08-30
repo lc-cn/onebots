@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { DWClient } from "dingtalk-stream";
-import { ErrorCategory, type Next, type RouterContext } from "onebots";
-import { requireDingTalkApiPath } from "./api-path.js";
+import { emitAwaited, ErrorCategory, type Next, type RouterContext } from "onebots";
+import { DingTalkApiClient } from "./api-client.js";
 import { DingTalkCallbackCrypto } from "./crypto.js";
 import { assertDingTalkConfig } from "./config.js";
 import {
@@ -9,12 +9,10 @@ import {
     getDingTalkSceneGroupMembers,
     getDingTalkVisibleUsers,
 } from "./directory-api.js";
-import { DingTalkApiError, DingTalkError } from "./errors.js";
+import { DingTalkError } from "./errors.js";
 import {
-    extractApiError,
     isRobotMessage,
     objectValue,
-    parseResponse,
     queryString,
     stringValue,
     tryParseObject,
@@ -27,7 +25,6 @@ import type {
     DingTalkRobotMessage,
     DingTalkSceneGroupMember,
     DingTalkSendResult,
-    DingTalkTokenResponse,
     DingTalkUser,
     DingTalkUserGetResponse,
     DingTalkWebhookMessage,
@@ -36,9 +33,6 @@ import type {
 import { buildSignedWebhookUrl } from "./webhook-url.js";
 import { DingTalkEventIngress } from "./event-ingress.js";
 import { registerDingTalkStreamHandlers } from "./stream-handlers.js";
-
-const MODERN_API_BASE = "https://api.dingtalk.com";
-const LEGACY_API_BASE = "https://oapi.dingtalk.com";
 
 export interface DingTalkOutboundMessage {
     msgKey: string;
@@ -59,9 +53,7 @@ export interface DingTalkBotEvents {
 
 /** 钉钉 API、Stream 与 HTTP 回调的底层客户端。 */
 export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
-    private accessToken = "";
-    private tokenExpireTime = 0;
-    private accessTokenPromise?: Promise<string>;
+    private readonly api: DingTalkApiClient;
     private me: DingTalkUser | null = null;
     private streamClient?: DWClient;
     private startPromise?: Promise<void>;
@@ -74,6 +66,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     constructor(readonly config: DingTalkConfig) {
         super();
         assertDingTalkConfig(config);
+        this.api = new DingTalkApiClient(config);
         if (config.encrypt_key) {
             if (!config.corp_id) {
                 throw DingTalkError.config(
@@ -223,7 +216,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 const decoded = tryParseObject(plain);
                 if (decoded) {
                     dispatching = true;
-                    this.ingest(decoded, body);
+                    await this.ingest(decoded, body);
                 }
                 ctx.body = this.callbackCrypto.encryptResponse(decoded ? "success" : plain);
                 return;
@@ -234,7 +227,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 return;
             }
             dispatching = true;
-            this.ingest(body);
+            await this.ingest(body);
             ctx.body = { success: true };
             await next();
         } catch (error) {
@@ -250,14 +243,17 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     }
 
     /** 将已有 HTTP Host、消息队列或测试连接取得的解码载荷送入统一事件管线。 */
-    ingest(rawEvent: unknown, source: unknown = rawEvent): DingTalkRobotMessage | DingTalkEvent {
+    async ingest(
+        rawEvent: unknown,
+        source: unknown = rawEvent,
+    ): Promise<DingTalkRobotMessage | DingTalkEvent> {
         const body = objectValue(rawEvent, "钉钉事件");
         if (isRobotMessage(body)) {
-            this.deliverRobot(body, source);
+            await this.deliverRobot(body, source);
             return body;
         }
         const event = webhookEvent(body);
-        this.deliverEvent(event, source, "event");
+        await this.deliverEvent(event, source, "event");
         return event;
     }
 
@@ -276,108 +272,31 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         return this.me;
     }
 
-    private deliverRobot(message: DingTalkRobotMessage, raw: unknown): void {
+    private async deliverRobot(message: DingTalkRobotMessage, raw: unknown): Promise<void> {
         this.rememberRobot(message);
-        this.eventIngress.deliverRobot(message, () => this.emit("robot_message", message, raw));
+        await this.eventIngress.deliverRobot(message, () =>
+            emitAwaited(this, "robot_message", message, raw),
+        );
     }
 
-    private deliverEvent(
+    private async deliverEvent(
         event: DingTalkEvent,
         raw: unknown,
         channel: "event" | "native_event",
-    ): void {
-        this.eventIngress.deliverEvent(event, () => this.emit(channel, event, raw));
+    ): Promise<void> {
+        await this.eventIngress.deliverEvent(event, () => emitAwaited(this, channel, event, raw));
     }
 
     hasAppCredentials(): boolean {
-        return Boolean(this.config.app_key && this.config.app_secret);
+        return this.api.hasCredentials();
     }
 
     async getAccessToken(): Promise<string> {
-        if (!this.hasAppCredentials()) {
-            throw DingTalkError.config(
-                "钉钉开放平台 API 需要 app_key 和 app_secret",
-                "DINGTALK_API_CREDENTIALS_REQUIRED",
-            );
-        }
-        if (this.accessToken && Date.now() < this.tokenExpireTime) return this.accessToken;
-        const refresh = (this.accessTokenPromise ||= this.refreshAccessToken());
-        try {
-            return await refresh;
-        } finally {
-            if (this.accessTokenPromise === refresh) this.accessTokenPromise = undefined;
-        }
-    }
-
-    private async refreshAccessToken(): Promise<string> {
-        const data = await this.request<DingTalkTokenResponse>("/v1.0/oauth2/accessToken", {
-            method: "POST",
-            auth: "none",
-            body: { appKey: this.config.app_key, appSecret: this.config.app_secret },
-        });
-        const token = data.accessToken || data.access_token;
-        if (!token) {
-            throw new DingTalkApiError("获取钉钉访问令牌失败", {
-                status: 200,
-                platformCode: data.errcode,
-                path: "/v1.0/oauth2/accessToken",
-                details: data,
-            });
-        }
-        this.accessToken = token;
-        this.tokenExpireTime =
-            Date.now() + ((data.expireIn || data.expires_in || 7200) - 60) * 1000;
-        return token;
+        return this.api.getAccessToken();
     }
 
     async callApi<T = unknown>(path: string, options: DingTalkApiRequestOptions = {}): Promise<T> {
-        return this.request<T>(requireDingTalkApiPath(path), options);
-    }
-
-    private async request<T>(path: string, options: DingTalkApiRequestOptions): Promise<T> {
-        const auth = options.auth || (path.startsWith("/v1.0/") ? "modern" : "legacy");
-        const url = new URL(`${auth === "legacy" ? LEGACY_API_BASE : MODERN_API_BASE}${path}`);
-        for (const [key, value] of Object.entries(options.query || {})) {
-            url.searchParams.set(key, String(value));
-        }
-        const headers: Record<string, string> = {
-            "Content-Type": "application/json",
-            ...options.headers,
-        };
-        if (auth !== "none") {
-            const token = await this.getAccessToken();
-            if (auth === "modern") headers["x-acs-dingtalk-access-token"] = token;
-            else url.searchParams.set("access_token", token);
-        }
-        let response: Response;
-        let text: string;
-        try {
-            response = await fetch(url, {
-                method: options.method || "GET",
-                headers,
-                body: options.body ? JSON.stringify(options.body) : undefined,
-            });
-            text = await response.text();
-        } catch (error) {
-            throw DingTalkError.wrap(error, "DINGTALK_NETWORK_ERROR", ErrorCategory.NETWORK, {
-                path,
-            });
-        }
-        const data = parseResponse(text, path);
-        const apiError = extractApiError(data);
-        if (!response.ok || apiError) {
-            throw new DingTalkApiError(
-                apiError?.message || response.statusText || "钉钉 API 调用失败",
-                {
-                    status: response.status,
-                    platformCode: apiError?.code,
-                    requestId: apiError?.requestId,
-                    path,
-                    details: data,
-                },
-            );
-        }
-        return data as T;
+        return this.api.call<T>(path, options);
     }
 
     async sendMessage(
@@ -387,7 +306,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     ): Promise<DingTalkSendResult | DingTalkWebhookResponse> {
         const session = this.sessionWebhooks.get(receiveId);
         if (session && session.expiresAt > Date.now()) {
-            return this.postWebhook(session.url, message.webhook, true);
+            return this.api.postWebhook(session.url, message.webhook, true);
         }
         if (!this.hasAppCredentials()) {
             if (scene !== "group" || !this.config.webhook_url) {
@@ -397,7 +316,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                     { receiveId, scene },
                 );
             }
-            return this.postWebhook(buildSignedWebhookUrl(this.config), message.webhook, false);
+            return this.api.postWebhook(buildSignedWebhookUrl(this.config), message.webhook, false);
         }
         const robotCode = this.config.robot_code || this.config.app_key;
         if (!robotCode) {
@@ -426,44 +345,6 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 ...(message.isAtAll ? { isAtAll: true } : {}),
             },
         });
-    }
-
-    private async postWebhook(
-        url: string,
-        message: DingTalkWebhookMessage,
-        authenticated: boolean,
-    ): Promise<DingTalkWebhookResponse> {
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (authenticated) {
-            headers["x-acs-dingtalk-access-token"] = await this.getAccessToken();
-        }
-        let response: Response;
-        let text: string;
-        try {
-            response = await fetch(url, {
-                method: "POST",
-                headers,
-                body: JSON.stringify(message),
-            });
-            text = await response.text();
-        } catch (error) {
-            throw DingTalkError.wrap(
-                error,
-                "DINGTALK_WEBHOOK_NETWORK_ERROR",
-                ErrorCategory.NETWORK,
-                { url },
-            );
-        }
-        const data = parseResponse(text, "session webhook") as DingTalkWebhookResponse;
-        if (!response.ok || data.errcode) {
-            throw new DingTalkApiError(data.errmsg || response.statusText, {
-                status: response.status,
-                platformCode: data.errcode,
-                path: "session webhook",
-                details: data,
-            });
-        }
-        return data;
     }
 
     async getUserInfo(userId: string): Promise<DingTalkUser> {

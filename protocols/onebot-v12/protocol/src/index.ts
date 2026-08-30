@@ -1,4 +1,5 @@
 import {
+    emitAllAwaited,
     Protocol,
     ProtocolRegistry,
     requireNonEmptyStringParam,
@@ -140,7 +141,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
     /**
      * Dispatch event to OneBot V12 format
      */
-    dispatch(event: CommonEvent.Event): void {
+    async dispatch(event: CommonEvent.Event): Promise<void> {
         if (!this.filterFn(event)) {
             return;
         }
@@ -148,7 +149,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
         const v12Event = this.convertToV12Format(event);
         if (v12Event) {
             this.logger.debug(`OneBot V12 dispatch:`, v12Event);
-            this.emit("dispatch", JSON.stringify(v12Event));
+            await emitAllAwaited(this, "dispatch", JSON.stringify(v12Event));
         }
     }
 
@@ -833,7 +834,9 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             ...extra,
         };
 
-        this.emit("dispatch", JSON.stringify(event));
+        void emitAllAwaited(this, "dispatch", JSON.stringify(event)).catch(error =>
+            this.logger.error(`OneBot V12 ${detailType} dispatch failed:`, error),
+        );
     }
 
     /**
@@ -987,13 +990,13 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
                     signal: AbortSignal.timeout(this.config.request_timeout || 15000),
                 });
 
-                if (!response.ok) {
-                    this.logger.warn(
+                if (!response.ok)
+                    throw new Error(
                         `HTTP webhook POST failed: ${response.status} ${response.statusText}`,
                     );
-                }
             } catch (error) {
                 this.logger.error(`HTTP webhook POST error:`, error);
+                throw error;
             }
         };
 

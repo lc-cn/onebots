@@ -1,4 +1,4 @@
-import { Protocol, ProtocolRegistry } from "onebots";
+import { emitAllAwaited, Protocol, ProtocolRegistry } from "onebots";
 import type { Dict, Schema } from "onebots";
 import { Account } from "onebots";
 import { Adapter } from "onebots";
@@ -90,7 +90,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     /**
      * Account.dispatch 传入 CommonEvent；dispatchCommonEvent 等会传入已构造的 Satori.Event
      */
-    dispatch(event: unknown): void {
+    async dispatch(event: unknown): Promise<void> {
         if (!this.filterFn(event as Dict)) {
             return;
         }
@@ -102,7 +102,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         }
         if (satoriEvent) {
             this.logger.debug(`Satori dispatch:`, satoriEvent);
-            this.emit("dispatch", JSON.stringify(satoriEvent));
+            await emitAllAwaited(this, "dispatch", JSON.stringify(satoriEvent));
         }
     }
 
@@ -112,8 +112,8 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         return t === "message" || t === "notice" || t === "request" || t === "meta";
     }
 
-    dispatchCommonEvent(commonEvent: CommonEvent.Event): void {
-        this.dispatch(commonEvent);
+    async dispatchCommonEvent(commonEvent: CommonEvent.Event): Promise<void> {
+        await this.dispatch(commonEvent);
     }
 
     format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
@@ -926,13 +926,13 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
                     signal: AbortSignal.timeout(15000),
                 });
 
-                if (!response.ok) {
-                    this.logger.warn(
+                if (!response.ok)
+                    throw new Error(
                         `Webhook POST failed: ${response.status} ${response.statusText}`,
                     );
-                }
             } catch (error) {
                 this.logger.error(`Webhook POST error:`, error);
+                throw error;
             }
         };
 

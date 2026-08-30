@@ -41,14 +41,14 @@ export function createFeishuAccount(
     bot.on("client_error", error => {
         adapter.logger.error(`${platformName} Bot ${config.account_id} 错误:`, error);
     });
-    bot.on("event", (event: FeishuEvent, rawEvent: FeishuWebhookBody) => {
+    bot.on("event", async (event: FeishuEvent, rawEvent: FeishuWebhookBody) => {
         try {
             if (isOwnMessage(event, bot.getCachedMe()?.open_id)) return;
             const projected = projectFeishuEvents(event, rawEvent, {
                 botId: adapter.createId(resolveFeishuBotId(bot.getCachedMe(), config.app_id)),
                 createId: value => adapter.createId(value),
             });
-            for (const item of projected) account.dispatch(item);
+            for (const item of projected) await account.dispatchAwaited(item);
         } catch (error) {
             adapter.logger.error(`[${platformName}] 投影原始事件失败:`, error);
             throw error;
