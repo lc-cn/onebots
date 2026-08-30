@@ -6,6 +6,7 @@ import { WHATSAPP_HISTORY_ACTION_HANDLERS } from "./history.js";
 import { WHATSAPP_SETTINGS_ACTION_HANDLERS } from "./settings.js";
 import { WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS } from "./encrypted-messages.js";
 import { WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS } from "./phone-numbers.js";
+import { WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS } from "./business-encryption.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -24,6 +25,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_SETTINGS_ACTION_HANDLERS,
     ...WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS,
     ...WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS,
+    ...WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>

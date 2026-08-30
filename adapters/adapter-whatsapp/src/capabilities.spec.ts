@@ -50,5 +50,8 @@ describe("WhatsApp 能力清单", () => {
         expect(whatsAppCapabilities.actions.verify_phone_number_code?.permissions).toEqual([
             "whatsapp_business_messaging",
         ]);
+        expect(whatsAppCapabilities.actions.set_business_encryption_key?.permissions).toEqual([
+            "whatsapp_business_messaging",
+        ]);
     });
 });

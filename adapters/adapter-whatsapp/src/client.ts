@@ -9,6 +9,7 @@ import { WhatsAppHistory } from "./history.js";
 import { WhatsAppSettings } from "./settings.js";
 import { WhatsAppEncryptedMessages } from "./encrypted-messages.js";
 import { WhatsAppPhoneNumbers } from "./phone-numbers.js";
+import { WhatsAppBusinessEncryption } from "./business-encryption.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -53,6 +54,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly encryptedMessages: WhatsAppEncryptedMessages;
     /** 号码资料、注册、两步验证与所有权验证。 */
     readonly phoneNumbers: WhatsAppPhoneNumbers;
+    /** Flow/data-channel Business Encryption 公钥与签名状态。 */
+    readonly businessEncryption: WhatsAppBusinessEncryption;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -67,6 +70,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.settings = new WhatsAppSettings(this);
         this.encryptedMessages = new WhatsAppEncryptedMessages(this);
         this.phoneNumbers = new WhatsAppPhoneNumbers(this);
+        this.businessEncryption = new WhatsAppBusinessEncryption(this);
     }
 
     get apiVersion(): string {

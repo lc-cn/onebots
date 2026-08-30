@@ -1,6 +1,16 @@
 import { AdapterRegistry, type Schema } from "onebots";
 
 export { WhatsAppAdapter } from "./adapter.js";
+export {
+    isWhatsAppBusinessEncryptionAction,
+    WhatsAppBusinessEncryption,
+    WHATSAPP_BUSINESS_ENCRYPTION_ACTIONS,
+    type WhatsAppBusinessEncryptionAction,
+    type WhatsAppBusinessEncryptionInfo,
+    type WhatsAppBusinessEncryptionResponse,
+    type WhatsAppBusinessEncryptionUpdateResponse,
+    type WhatsAppBusinessPublicKeySignatureStatus,
+} from "./business-encryption.js";
 export { whatsAppCapabilities } from "./capabilities.js";
 export { WhatsAppClient } from "./client.js";
 export {
