@@ -1,3 +1,4 @@
+import { definePlatformActionHandlers } from "onebots";
 import { WechatApiError } from "./errors.js";
 import type { WechatActionHandler } from "./platform-action-context.js";
 
@@ -13,19 +14,13 @@ export function defineWechatActionContract<const THandlers extends WechatActionH
     handlers: THandlers,
     parameterKeys: { readonly [TAction in keyof THandlers]: readonly string[] },
 ): THandlers {
-    const contracted: Record<string, WechatActionHandler> = {};
-    for (const [action, handler] of Object.entries(handlers)) {
-        const accepted = new Set(parameterKeys[action] || []);
-        contracted[action] = (client, params) => {
-            const unknown = Object.keys(params).find(key => !accepted.has(key));
-            if (unknown) {
-                throw new WechatApiError(`微信公众号动作 ${action} 不接受参数 ${unknown}`, {
-                    code: "WECHAT_ACTION_PARAM_UNKNOWN",
-                    details: { action, parameter: unknown },
-                });
-            }
-            return handler(client, params);
-        };
-    }
-    return Object.freeze(contracted) as THandlers;
+    return definePlatformActionHandlers(
+        handlers,
+        parameterKeys,
+        (action, parameter) =>
+            new WechatApiError(`微信公众号动作 ${action} 不接受参数 ${parameter}`, {
+                code: "WECHAT_ACTION_PARAM_UNKNOWN",
+                details: { action, parameter },
+            }),
+    );
 }

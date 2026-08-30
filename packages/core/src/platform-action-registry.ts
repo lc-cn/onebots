@@ -31,6 +31,8 @@ export interface PlatformActionContractErrors {
     unexpectedParameter(action: string, parameter: string): Error;
 }
 
+export type UnexpectedPlatformActionParameter = (action: string, parameter: string) => Error;
+
 type AnyPlatformActionHandler = PlatformActionHandler<never>;
 type HandlerContext<T> = T extends PlatformActionHandler<infer TContext> ? TContext : never;
 type UnionToIntersection<T> = (T extends unknown ? (value: T) => void : never) extends (
@@ -88,43 +90,58 @@ export function definePlatformActionContract<
     parameters: PlatformActionParameterMap<THandlers>,
     errors: PlatformActionContractErrors,
 ): PlatformActionRegistry<RegistryContext<THandlers>, Extract<keyof THandlers, string>> {
+    return definePlatformActions(
+        definePlatformActionHandlers(handlers, parameters, errors.unexpectedParameter),
+        errors.unsupported,
+    );
+}
+
+/**
+ * 为可组合的 handler 子表编译顶层参数契约，并保留原始精确动作类型。
+ *
+ * 适配器可先分别声明消息、内容、管理等领域动作，再把多个闭合子表合并进同一注册表。
+ */
+export function definePlatformActionHandlers<
+    const THandlers extends Readonly<Record<string, AnyPlatformActionHandler>>,
+>(
+    handlers: THandlers,
+    parameters: PlatformActionParameterMap<THandlers>,
+    unexpectedParameter: UnexpectedPlatformActionParameter,
+): THandlers {
     type Action = Extract<keyof THandlers, string>;
-    const registry = definePlatformActions(handlers, errors.unsupported);
     const actionNames = Object.keys(handlers) as Action[];
-    const parameterActions = Object.keys(parameters);
-    const missing = actionNames.filter(action => !Object.hasOwn(parameters, action));
-    const extra = parameterActions.filter(action => !Object.hasOwn(handlers, action));
-    if (missing.length || extra.length) {
-        throw new ValidationError(
-            `平台动作参数契约与 handler 不一致: missing=[${missing.join(", ")}], extra=[${extra.join(", ")}]`,
-        );
-    }
-    const accepted = new Map<Action, ReadonlySet<string>>();
+    assertParameterMapMatchesHandlers(handlers, parameters, actionNames);
+    const contracted: Record<string, AnyPlatformActionHandler> = {};
     for (const action of actionNames) {
         const names = parameters[action];
         const unique = new Set(names);
         if (unique.size !== names.length) {
             throw new ValidationError(`平台动作 ${action} 的参数契约存在重复字段`);
         }
-        accepted.set(action, unique);
+        const handler = handlers[action];
+        contracted[action] = async (context, params) => {
+            const unexpected = Object.keys(params).find(name => !unique.has(name));
+            if (unexpected) throw unexpectedParameter(action, unexpected);
+            return Reflect.apply(handler, undefined, [context, params]) as unknown;
+        };
     }
+    return Object.freeze(contracted) as THandlers;
+}
 
-    return Object.freeze({
-        actions: registry.actions,
-        has: registry.has,
-        async execute(
-            context: RegistryContext<THandlers>,
-            action: string,
-            params: PlatformActionParams,
-        ) {
-            if (registry.has(action)) {
-                const names = accepted.get(action);
-                const unexpected = Object.keys(params).find(name => !names?.has(name));
-                if (unexpected) throw errors.unexpectedParameter(action, unexpected);
-            }
-            return registry.execute(context, action, params);
-        },
-    });
+function assertParameterMapMatchesHandlers<
+    THandlers extends Readonly<Record<string, AnyPlatformActionHandler>>,
+>(
+    handlers: THandlers,
+    parameters: PlatformActionParameterMap<THandlers>,
+    actionNames: readonly string[],
+): void {
+    const parameterActions = Object.keys(parameters);
+    const missing = actionNames.filter(action => !Object.hasOwn(parameters, action));
+    const extra = parameterActions.filter(action => !Object.hasOwn(handlers, action));
+    if (!missing.length && !extra.length) return;
+    throw new ValidationError(
+        `平台动作参数契约与 handler 不一致: missing=[${missing.join(", ")}], extra=[${extra.join(", ")}]`,
+    );
 }
 
 /** Set 的只读视图；不暴露 add/delete/clear。 */

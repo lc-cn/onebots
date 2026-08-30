@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { definePlatformActionContract, definePlatformActions } from "./platform-action-registry.js";
+import {
+    definePlatformActionContract,
+    definePlatformActionHandlers,
+    definePlatformActions,
+} from "./platform-action-registry.js";
 
 describe("definePlatformActions", () => {
     it("从同一 handler 表驱动发现、判断与执行", async () => {
@@ -67,6 +71,25 @@ describe("definePlatformActionContract", () => {
         ).rejects.toThrow("unexpected:send:typo");
         expect(handler).not.toHaveBeenCalled();
         await expect(registry.execute(undefined, "send", { message: {} })).resolves.toBe("ok");
+    });
+
+    it("允许多个已闭合 handler 子表组合进同一注册表", async () => {
+        const left = definePlatformActionHandlers(
+            { send: async (_context: string, params) => params.message },
+            { send: ["message"] },
+            errors.unexpectedParameter,
+        );
+        const right = definePlatformActionHandlers(
+            { inspect: async () => "ok" },
+            { inspect: [] },
+            errors.unexpectedParameter,
+        );
+        const registry = definePlatformActions({ ...left, ...right }, errors.unsupported);
+
+        await expect(registry.execute("bot", "send", { message: "hello" })).resolves.toBe("hello");
+        await expect(registry.execute("bot", "inspect", { typo: true })).rejects.toThrow(
+            "unexpected:inspect:typo",
+        );
     });
 
     it("保持未知动作错误优先于参数检查", async () => {

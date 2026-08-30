@@ -1,4 +1,4 @@
-import { definePlatformActions, type PlatformActionHandler } from "onebots";
+import { definePlatformActionContract, type PlatformActionHandler } from "onebots";
 import type { WechatIlinkBot } from "./bot.js";
 import { GatewayFault } from "./sdk/internal/errors.js";
 
@@ -31,10 +31,15 @@ const ACTION_PARAMETERS = {
     get_context_token: ["user_id"],
 } satisfies { readonly [TAction in keyof typeof ACTION_HANDLERS]: readonly string[] };
 
-const PLATFORM_ACTIONS = definePlatformActions(
-    ACTION_HANDLERS,
-    action => new GatewayFault("ACTION_NOT_IMPLEMENTED", `未实现微信 ClawBot 平台动作: ${action}`),
-);
+const PLATFORM_ACTIONS = definePlatformActionContract(ACTION_HANDLERS, ACTION_PARAMETERS, {
+    unsupported: action =>
+        new GatewayFault("ACTION_NOT_IMPLEMENTED", `未实现微信 ClawBot 平台动作: ${action}`),
+    unexpectedParameter: (action, parameter) =>
+        new GatewayFault(
+            "INVALID_ACTION_PARAMS",
+            `微信 ClawBot 动作 ${action} 不接受参数 ${parameter}`,
+        ),
+});
 
 export const WECHAT_CLAWBOT_PLATFORM_ACTIONS = PLATFORM_ACTIONS.actions;
 export type WechatClawBotPlatformAction =
@@ -45,17 +50,7 @@ export async function executeWechatClawbotPlatformAction(
     action: string,
     params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
-    if (PLATFORM_ACTIONS.has(action)) assertKnownParams(action, params);
     return PLATFORM_ACTIONS.execute(client, action, params);
-}
-
-function assertKnownParams(
-    action: keyof typeof ACTION_HANDLERS,
-    params: Readonly<Record<string, unknown>>,
-): void {
-    const accepted = new Set(ACTION_PARAMETERS[action]);
-    const unknown = Object.keys(params).find(key => !accepted.has(key));
-    if (unknown) invalid(`动作 ${action} 不接受参数 ${unknown}`);
 }
 
 function requireString(value: unknown, field: string): string {
