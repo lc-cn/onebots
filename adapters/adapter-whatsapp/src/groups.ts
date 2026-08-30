@@ -1,8 +1,5 @@
-import {
-    definePlatformActionHandlers,
-    materializeMediaSource,
-    type PlatformActionHandler,
-} from "onebots";
+import { materializeMediaSource, type PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import { WhatsAppApiError } from "./errors.js";
 import type { WhatsAppClient } from "./client.js";
 import { validateGroupProfilePicture } from "./group-profile-picture.js";
@@ -319,29 +316,21 @@ const GROUP_ACTION_HANDLERS = {
 } satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
 
 /** Groups 动作的执行与参数契约单一来源。 */
-export const WHATSAPP_GROUP_ACTION_HANDLERS = definePlatformActionHandlers(
-    GROUP_ACTION_HANDLERS,
-    {
-        create_group: ["subject", "description", "join_approval_mode"],
-        get_group: ["group_id"],
-        list_groups: ["limit", "after", "before"],
-        update_group: ["group_id", "subject", "description", "profile_picture"],
-        delete_group: ["group_id"],
-        get_group_invite_link: ["group_id"],
-        reset_group_invite_link: ["group_id"],
-        list_group_join_requests: ["group_id", "limit", "after", "before"],
-        approve_group_join_requests: ["group_id", "request_ids"],
-        reject_group_join_requests: ["group_id", "request_ids"],
-        remove_group_participants: ["group_id", "user_ids"],
-        pin_message: ["group_id", "message_id", "expiration_days"],
-        unpin_message: ["group_id", "message_id"],
-    },
-    (action, parameter) =>
-        new WhatsAppApiError(`WhatsApp 群动作 ${action} 不接受参数 ${parameter}`, {
-            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
-            details: { action, parameter },
-        }),
-);
+export const WHATSAPP_GROUP_ACTION_HANDLERS = defineWhatsAppActionHandlers(GROUP_ACTION_HANDLERS, {
+    create_group: ["subject", "description", "join_approval_mode"],
+    get_group: ["group_id"],
+    list_groups: ["limit", "after", "before"],
+    update_group: ["group_id", "subject", "description", "profile_picture"],
+    delete_group: ["group_id"],
+    get_group_invite_link: ["group_id"],
+    reset_group_invite_link: ["group_id"],
+    list_group_join_requests: ["group_id", "limit", "after", "before"],
+    approve_group_join_requests: ["group_id", "request_ids"],
+    reject_group_join_requests: ["group_id", "request_ids"],
+    remove_group_participants: ["group_id", "user_ids"],
+    pin_message: ["group_id", "message_id", "expiration_days"],
+    unpin_message: ["group_id", "message_id"],
+});
 
 export type WhatsAppGroupAction = keyof typeof WHATSAPP_GROUP_ACTION_HANDLERS;
 

@@ -1,4 +1,5 @@
-import { definePlatformActionHandlers, type PlatformActionHandler } from "onebots";
+import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import type { WhatsAppGraphApi } from "./graph-api.js";
@@ -134,20 +135,12 @@ const MEDIA_ACTION_HANDLERS = {
 } satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
 
 /** Media 动作的执行与参数契约单一来源。 */
-export const WHATSAPP_MEDIA_ACTION_HANDLERS = definePlatformActionHandlers(
-    MEDIA_ACTION_HANDLERS,
-    {
-        upload_media: ["data", "mime_type", "filename"],
-        get_media: ["media_id"],
-        download_media: ["media_id"],
-        delete_media: ["media_id"],
-    },
-    (action, parameter) =>
-        new WhatsAppApiError(`WhatsApp Media 动作 ${action} 不接受参数 ${parameter}`, {
-            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
-            details: { action, parameter },
-        }),
-);
+export const WHATSAPP_MEDIA_ACTION_HANDLERS = defineWhatsAppActionHandlers(MEDIA_ACTION_HANDLERS, {
+    upload_media: ["data", "mime_type", "filename"],
+    get_media: ["media_id"],
+    download_media: ["media_id"],
+    delete_media: ["media_id"],
+});
 
 export type WhatsAppMediaAction = keyof typeof WHATSAPP_MEDIA_ACTION_HANDLERS;
 
