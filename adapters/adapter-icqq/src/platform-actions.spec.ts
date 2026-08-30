@@ -224,4 +224,78 @@ describe("ICQQ 平台扩展动作", () => {
         expect(forwardFile).toHaveBeenCalledWith("file", 2, true);
         expect(forwardOfflineFile).toHaveBeenCalledWith("file", "copy.txt", false);
     });
+
+    it("公开原生系统申请、转发制作与匿名群消息", async () => {
+        const systemMessages = [{ request_type: "friend", request_id: "flag" }];
+        const makeForwardMsg = vi.fn().mockResolvedValue({ type: "json", data: "forward" });
+        const sendMsg = vi.fn().mockResolvedValue({ message_id: "anonymous-message" });
+        const client = {
+            getSystemMsg: vi.fn().mockResolvedValue(systemMessages),
+            makeForwardMsg,
+            pickGroup: vi.fn(() => ({ sendMsg })),
+        } as unknown as Client;
+
+        await expect(executeICQQPlatformAction(client, "get_system_messages", {})).resolves.toEqual(
+            systemMessages,
+        );
+        await executeICQQPlatformAction(client, "make_forward_message", {
+            dm: true,
+            nodes: [
+                {
+                    user_id: "10001",
+                    nickname: "Alice",
+                    message: [{ type: "text", data: { text: "hello" } }],
+                },
+            ],
+        });
+        await executeICQQPlatformAction(client, "send_group_anonymous_message", {
+            group_id: "20001",
+            anonymous: true,
+            message: [{ type: "text", data: { text: "anonymous" } }],
+        });
+
+        expect(makeForwardMsg).toHaveBeenCalledWith(
+            [{ user_id: 10001, nickname: "Alice", message: ["hello"] }],
+            true,
+        );
+        expect(sendMsg).toHaveBeenCalledWith(["anonymous"], undefined, true);
+    });
+
+    it("保留群文件分页条目与完整下载元数据", async () => {
+        const entries = [{ fid: "file", name: "demo.txt", is_dir: false }];
+        const download = vi.fn().mockResolvedValue({
+            fid: "file",
+            name: "demo.txt",
+            url: "https://example.com/demo.txt",
+            md5: "md5",
+        });
+        const dir = vi.fn().mockResolvedValue(entries);
+        const client = {
+            acquireGfs: vi.fn(() => ({ dir, download })),
+        } as unknown as Client;
+
+        await expect(
+            executeICQQPlatformAction(client, "get_group_file_entries", {
+                group_id: 20001,
+                folder_id: "/docs",
+                start: 20,
+                limit: 10,
+            }),
+        ).resolves.toEqual(entries);
+        await expect(
+            executeICQQPlatformAction(client, "download_group_file", {
+                group_id: 20001,
+                file_id: "file",
+            }),
+        ).resolves.toMatchObject({ url: "https://example.com/demo.txt", md5: "md5" });
+
+        expect(dir).toHaveBeenCalledWith("/docs", 20, 10);
+        expect(download).toHaveBeenCalledWith("file");
+        await expect(
+            executeICQQPlatformAction(client, "get_group_file_entries", {
+                group_id: 20001,
+                limit: 0,
+            }),
+        ).rejects.toThrow("limit 必须大于 0");
+    });
 });

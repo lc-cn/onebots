@@ -22,6 +22,11 @@ describe("ICQQ capability manifest", () => {
                 "set_group_join_type",
                 "get_group_mute_member_list",
                 "delete_group_message_reaction",
+                "get_system_messages",
+                "make_forward_message",
+                "send_group_anonymous_message",
+                "get_group_file_entries",
+                "download_group_file",
             ]),
         );
     });
@@ -69,11 +74,15 @@ describe("ICQQ capability manifest", () => {
             "markdown",
             "forward",
             "node",
+            "quote",
+            "button",
             "file",
+            "forum",
         ]) {
             expect(icqqCapabilities.segments[segment]?.support, segment).toBe("native");
         }
-        expect(icqqCapabilities.segments.node?.direction).toBe("send");
-        expect(icqqCapabilities.segments.file?.direction).toBe("receive");
+        expect(icqqCapabilities.segments.node?.direction).toBe("both");
+        expect(icqqCapabilities.segments.file?.direction).toBe("both");
+        expect(icqqCapabilities.segments.forum?.direction).toBe("receive");
     });
 });

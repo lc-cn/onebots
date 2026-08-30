@@ -3,8 +3,29 @@ import type { GfsDirStat, GfsFileStat } from "@icqqjs/icqq/lib/gfs";
 import { definePlatformActions, type CommonTypes, type PlatformActionHandler } from "onebots";
 import { compileICQQMessage } from "./messages.js";
 import { ICQQError, icqqResourceNotFound, invalidICQQParam } from "./errors.js";
+import {
+    optionalBoolean,
+    optionalInteger,
+    optionalQQNumber,
+    optionalString,
+    qqNumberArray,
+    record,
+    requiredInteger,
+    requiredQQNumber,
+    requiredString,
+    stringArray,
+    stringOrInteger,
+    stringOrStrings,
+    type ICQQPlatformActionParams,
+} from "./platform-action-input.js";
+import {
+    downloadGroupFile,
+    getGroupFileEntries,
+    makeForwardMessage,
+    sendGroupAnonymousMessage,
+} from "./platform-native-actions.js";
 
-type Params = Readonly<Record<string, unknown>>;
+type Params = ICQQPlatformActionParams;
 type Handler = PlatformActionHandler<Client>;
 
 const PLATFORM_ACTIONS = definePlatformActions(
@@ -72,6 +93,8 @@ const PLATFORM_ACTIONS = definePlatformActions(
         reload_group_list: reloadAction(client => client.reloadGroupList()),
         reload_blacklist: reloadAction(client => client.reloadBlackList()),
         get_stranger_list: async (client: Client) => [...client.getStrangerList().values()],
+        get_system_messages: async (client: Client) => client.getSystemMsg(),
+        make_forward_message: makeForwardMessage,
         image_ocr: async (client: Client, params: Params) =>
             client.imageOcr(requiredString(params.file, "file")),
         get_video_url: async (client: Client, params: Params) =>
@@ -87,6 +110,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
                 .getAvatarUrl(avatarSize(params.size), optionalInteger(params.history)),
         send_group_sign: async (client: Client, params: Params) =>
             client.sendGroupSign(requiredQQNumber(params.group_id, "group_id")),
+        send_group_anonymous_message: sendGroupAnonymousMessage,
         get_group_at_all_remainder: groupAction(group => group.getAtAllRemainder()),
         get_group_mute_member_list: groupAction(group => group.getMuteMemberList()),
         get_group_anonymous_info: groupAction(group => group.getAnonyInfo()),
@@ -130,6 +154,8 @@ const PLATFORM_ACTIONS = definePlatformActions(
             client
                 .acquireGfs(requiredQQNumber(params.group_id, "group_id"))
                 .stat(requiredString(params.file_id, "file_id")),
+        get_group_file_entries: getGroupFileEntries,
+        download_group_file: downloadGroupFile,
         forward_group_file: forwardGroupFile,
         get_offline_file_info: async (client: Client, params: Params) =>
             client
@@ -198,65 +224,6 @@ function groupAction(
 function platformMessage(value: unknown) {
     if (!Array.isArray(value)) throw invalidICQQParam("message 必须是消息段数组", value);
     return compileICQQMessage(value as CommonTypes.Segment[]);
-}
-
-function requiredString(value: unknown, field: string): string {
-    if (typeof value !== "string" || !value)
-        throw invalidICQQParam(`${field} 必须是非空字符串`, value);
-    return value;
-}
-
-function optionalString(value: unknown): string | undefined {
-    if (value === undefined) return undefined;
-    if (typeof value !== "string") throw invalidICQQParam("参数必须是字符串", value);
-    return value;
-}
-
-function requiredInteger(value: unknown, field: string): number {
-    if (typeof value !== "number" || !Number.isSafeInteger(value)) {
-        throw invalidICQQParam(`${field} 必须是安全整数`, value);
-    }
-    return value;
-}
-
-function requiredQQNumber(value: unknown, field: string): number {
-    if (typeof value === "string" && /^\d+$/u.test(value)) {
-        const parsed = Number(value);
-        if (Number.isSafeInteger(parsed)) return parsed;
-    }
-    return requiredInteger(value, field);
-}
-
-function optionalInteger(value: unknown): number | undefined {
-    return value === undefined ? undefined : requiredInteger(value, "参数");
-}
-
-function optionalQQNumber(value: unknown): number | undefined {
-    return value === undefined ? undefined : requiredQQNumber(value, "group_id");
-}
-
-function optionalBoolean(value: unknown): boolean | undefined {
-    if (value === undefined) return undefined;
-    if (typeof value !== "boolean") throw invalidICQQParam("参数必须是布尔值", value);
-    return value;
-}
-
-function stringArray(value: unknown, field: string): string[] {
-    if (!Array.isArray(value)) throw invalidICQQParam(`${field} 必须是字符串数组`, value);
-    return value.map(item => requiredString(item, field));
-}
-
-function qqNumberArray(value: unknown, field: string): number[] {
-    if (!Array.isArray(value)) throw invalidICQQParam(`${field} 必须是整数数组`, value);
-    return value.map(item => requiredQQNumber(item, field));
-}
-
-function stringOrStrings(value: unknown, field: string): string | string[] {
-    return Array.isArray(value) ? stringArray(value, field) : requiredString(value, field);
-}
-
-function stringOrInteger(value: unknown, field: string): string | number {
-    return typeof value === "string" ? requiredString(value, field) : requiredInteger(value, field);
 }
 
 function gender(value: unknown): 0 | 1 | 2 {
@@ -404,17 +371,6 @@ function channelShareConfig(value: unknown) {
         appname: optionalString(config.appname),
         appsign: optionalString(config.appsign),
     };
-}
-
-function record(value: unknown, field: string): Readonly<Record<string, unknown>> {
-    if (!isRecord(value)) {
-        throw invalidICQQParam(`${field} 必须是对象`, value);
-    }
-    return value;
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isGfsFile(value: GfsFileStat | GfsDirStat): value is GfsFileStat {
