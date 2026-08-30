@@ -23,15 +23,16 @@ export function createDiscordAccount(
     const bot = new DiscordBot(discordConfig);
     const account = new Account<"discord", DiscordBot>(adapter, bot, config);
 
-    if (bot.getReceiveMode() === "interactions") {
-        const path = `${account.path}/interactions`;
+    if (["interactions", "webhook_events"].includes(bot.getReceiveMode())) {
+        const isWebhookEvents = bot.getReceiveMode() === "webhook_events";
+        const path = `${account.path}/${isWebhookEvents ? "events" : "interactions"}`;
         adapter.app.router.post(path, async (ctx: RouterContext) => {
             const rawBody: unknown = ctx.request.rawBody;
             if (typeof rawBody !== "string" && !Buffer.isBuffer(rawBody)) {
                 ctx.status = 400;
                 ctx.body = {
-                    error: "DISCORD_INTERACTION_RAW_BODY_REQUIRED",
-                    message: "Discord Interaction 验签必须保留未经修改的 rawBody",
+                    error: "DISCORD_SIGNED_BODY_REQUIRED",
+                    message: "Discord HTTP 验签必须保留未经修改的 rawBody",
                 };
                 return;
             }
@@ -46,11 +47,13 @@ export function createDiscordAccount(
             ctx.body = response.body;
             if (response.status >= 500) {
                 adapter.logger.error(
-                    `Discord Interaction ${config.account_id} 处理失败（HTTP ${response.status}）`,
+                    `Discord ${isWebhookEvents ? "Webhook Event" : "Interaction"} ${config.account_id} 处理失败（HTTP ${response.status}）`,
                 );
             }
         });
-        adapter.logger.info(`Discord Bot ${config.account_id} Interactions 路径: ${path}`);
+        adapter.logger.info(
+            `Discord Bot ${config.account_id} ${isWebhookEvents ? "Webhook Events" : "Interactions"} 路径: ${path}`,
+        );
     }
 
     bot.on("ready", user => {
@@ -71,18 +74,16 @@ export function createDiscordAccount(
     bot.on("close", () => {
         account.status = AccountStatus.OffLine;
     });
-    bot.on("dispatch", (eventName, data, sequence, sessionId) => {
-        try {
-            const events = projectDiscordEvents(
-                { name: eventName, data, sequence, session_id: sessionId },
-                {
-                    botId: adapter.createId(bot.getBotUser()?.id || config.account_id),
-                    createId: value => adapter.createId(value),
-                },
-            );
-            for (const event of events) account.dispatch(event);
-        } catch (error) {
-            adapter.logger.error(`[Discord] 投影 Gateway Dispatch 失败:`, error);
+    bot.on("dispatch", async (eventName, data, sequence, sessionId) => {
+        const events = projectDiscordEvents(
+            { name: eventName, data, sequence, session_id: sessionId },
+            {
+                botId: adapter.createId(bot.getBotUser()?.id || config.account_id),
+                createId: value => adapter.createId(value),
+            },
+        );
+        for (const event of events) {
+            await account.dispatchAwaited(event);
         }
     });
 

@@ -225,6 +225,34 @@ describe("Discord Interactions ingestion", () => {
         expect(command).toHaveBeenCalledTimes(2);
     });
 
+    it("等待异步事件出口且失败后允许 Interaction 重投", async () => {
+        const onInteraction = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("protocol unavailable"))
+            .mockResolvedValue(undefined);
+        const handler = new InteractionsHandler({
+            token: "token",
+            trustedIngress: true,
+            onInteraction,
+        });
+        const interaction = {
+            id: "event-retry",
+            application_id: "1",
+            type: InteractionType.ApplicationCommand,
+            token: "interaction-token",
+            version: 1,
+            data: { name: "unhandled" },
+        };
+
+        await expect(handler.ingest(interaction)).rejects.toMatchObject({
+            code: "DISCORD_INTERACTION_HANDLER_FAILED",
+        });
+        await expect(handler.ingest(interaction)).resolves.toMatchObject({
+            type: InteractionCallbackType.ChannelMessageWithSource,
+        });
+        expect(onInteraction).toHaveBeenCalledTimes(2);
+    });
+
     it("公开 Activities 的 LAUNCH_ACTIVITY callback", () => {
         expect(InteractionsHandler.launchActivityResponse()).toEqual({
             type: InteractionCallbackType.LaunchActivity,

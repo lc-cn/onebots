@@ -1,6 +1,12 @@
 import { EventEmitter } from "node:events";
 import { DiscordREST } from "./rest.js";
-import { buildProxyUrl, createProxyAgent, ConnectionManager, RetryPresets } from "onebots";
+import {
+    buildProxyUrl,
+    createProxyAgent,
+    ConnectionManager,
+    emitAllAwaited,
+    RetryPresets,
+} from "onebots";
 import type { Agent } from "http";
 import type { GatewayHelloData, GatewayReadyData } from "../types.js";
 import { DiscordError } from "../errors.js";
@@ -15,6 +21,7 @@ import {
 } from "./gateway-types.js";
 import { compileDiscordGatewayCommand, type DiscordGatewayCommand } from "./gateway-commands.js";
 import { emitDiscordGatewayEvent } from "./gateway-dispatch.js";
+import { DiscordGatewayDeliveryQueue } from "./gateway-delivery-queue.js";
 export { GatewayIntents, GatewayOpcodes } from "./gateway-types.js";
 export type { DiscordGatewayEvents, GatewayOptions } from "./gateway-types.js";
 export type { DiscordGatewayCommand } from "./gateway-commands.js";
@@ -42,6 +49,7 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
     private readonly presence?: GatewayOptions["presence"];
     private readonly shard?: GatewayOptions["shard"];
     private connectionManager: ConnectionManager;
+    private readonly deliveryQueue = new DiscordGatewayDeliveryQueue();
 
     constructor(options: GatewayOptions) {
         super();
@@ -62,6 +70,8 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         // 使用 ConnectionManager 管理重连，支持指数退避
         this.connectionManager = new ConnectionManager(
             async () => {
+                // 旧 socket 已收到的 Dispatch 必须先完成，Resume 才能携带最后成功序号。
+                await this.deliveryQueue.drain();
                 if (this.resumeGatewayUrl && this.sessionId) {
                     try {
                         await this.connectToGateway(
@@ -116,7 +126,9 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         this.abortSignal = undefined;
     }
 
-    private readonly handleAbort = () => this.disconnect();
+    private readonly handleAbort = () => {
+        void this.disconnect();
+    };
 
     private async connectToGateway(url: string, resume: boolean): Promise<void> {
         // 动态导入 ws
@@ -164,7 +176,12 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
                 if (this.ws !== socket) return;
                 try {
                     const buffer = data as Buffer;
-                    this.handleMessage(JSON.parse(buffer.toString()));
+                    void this.handleMessage(JSON.parse(buffer.toString())).catch(error => {
+                        const wrapped = DiscordError.wrap(error, "DISCORD_GATEWAY_DISPATCH_FAILED");
+                        if (wrapped.code !== "DISCORD_GATEWAY_DISPATCH_STALE") {
+                            this.scheduleReconnect(wrapped);
+                        }
+                    });
                 } catch (error) {
                     this.emit(
                         "client_error",
@@ -220,14 +237,9 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         else this.scheduleReconnect(error);
     }
 
-    private handleMessage(rawPayload: unknown) {
+    private async handleMessage(rawPayload: unknown): Promise<void> {
         const payload = rawPayload as GatewayPayload;
         const { op, d, s, t } = payload;
-
-        // 更新序列号
-        if (s !== null) {
-            this.sequence = s;
-        }
 
         switch (op) {
             case GatewayOpcodes.Hello: {
@@ -248,7 +260,7 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
                 break;
 
             case GatewayOpcodes.Dispatch:
-                if (typeof t === "string") this.handleDispatch(t, d);
+                if (typeof t === "string") await this.enqueueDispatch(t, d, s);
                 break;
 
             case GatewayOpcodes.Reconnect:
@@ -283,7 +295,22 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         }
     }
 
-    private handleDispatch(eventName: string, data: unknown) {
+    private enqueueDispatch(
+        eventName: string,
+        data: unknown,
+        sequence: number | null,
+    ): Promise<void> {
+        return this.deliveryQueue.enqueue(async () => {
+            await this.handleDispatch(eventName, data, sequence);
+            if (sequence !== null) this.sequence = sequence;
+        });
+    }
+
+    private async handleDispatch(
+        eventName: string,
+        data: unknown,
+        sequence: number | null,
+    ): Promise<void> {
         if (eventName === "READY") {
             const ready = data as GatewayReadyData;
             this.sessionId = ready.session_id;
@@ -291,24 +318,24 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         }
         // 所有 Gateway Dispatch 都先走统一原始事件通道；具名事件只是便捷别名。
         // Adapter 以此保证 Discord 新增事件不会在 SDK 更新前被静默丢弃。
-        this.emit("dispatch", eventName, data, this.sequence, this.sessionId);
+        await emitAllAwaited(this, "dispatch", eventName, data, sequence, this.sessionId);
         switch (eventName) {
             case "READY": {
                 const readyData = data as GatewayReadyData;
                 this.isReady = true;
                 this.emit("connected");
-                this.emit("ready", readyData.user);
+                await emitAllAwaited(this, "ready", readyData.user);
                 break;
             }
 
             case "RESUMED":
                 this.isReady = true;
                 this.emit("connected");
-                this.emit("resumed");
+                await emitAllAwaited(this, "resumed");
                 break;
 
             default:
-                emitDiscordGatewayEvent(this, eventName, data);
+                await emitDiscordGatewayEvent(this, eventName, data);
                 break;
         }
     }
@@ -340,9 +367,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         });
     }
 
-    /**
-     * 发送 Resume
-     */
     private resume() {
         if (!this.sessionId || this.sequence === null) {
             this.identify();
@@ -359,9 +383,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         });
     }
 
-    /**
-     * 开始心跳
-     */
     private startHeartbeat(interval: number) {
         this.stopHeartbeat();
 
@@ -374,9 +395,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         }, jitter);
     }
 
-    /**
-     * 停止心跳
-     */
     private stopHeartbeat() {
         if (this.heartbeatStartTimer) {
             clearTimeout(this.heartbeatStartTimer);
@@ -388,9 +406,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         }
     }
 
-    /**
-     * 发送心跳
-     */
     private sendHeartbeat() {
         if (!this.heartbeatAcknowledged) {
             this.scheduleReconnect(
@@ -407,9 +422,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         this.heartbeatAcknowledged = false;
     }
 
-    /**
-     * 发送数据
-     */
     private send(data: Record<string, unknown>) {
         if (this.ws && this.ws.readyState === 1) {
             this.ws.send(JSON.stringify(data));
@@ -433,9 +445,6 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         this.connectionManager.scheduleReconnect(error);
     }
 
-    /**
-     * 清理资源
-     */
     private cleanup(connectionError?: Error) {
         const reject = this.pendingConnectionReject;
         this.pendingConnectionReject = undefined;
@@ -463,24 +472,20 @@ export class DiscordGateway extends EventEmitter<DiscordGatewayEvents> {
         }
     }
 
-    /**
-     * 断开连接
-     */
-    disconnect() {
+    async disconnect(): Promise<void> {
         this.started = false;
         this.connectPromise = undefined;
         this.unbindAbortSignal();
         this.connectionManager.stop();
-        this.sessionId = null;
-        this.resumeGatewayUrl = null;
         this.cleanup(
             new DiscordError("Discord Gateway 已停止", { code: "DISCORD_GATEWAY_STOPPED" }),
         );
+        await this.deliveryQueue.drain();
+        this.deliveryQueue.invalidate();
+        this.sessionId = null;
+        this.resumeGatewayUrl = null;
     }
 
-    /**
-     * 获取 REST 客户端
-     */
     getREST(): DiscordREST {
         return this.rest;
     }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDiscordLite } from "./bot-client.js";
 
 describe("createDiscordLite", () => {
@@ -19,6 +19,18 @@ describe("createDiscordLite", () => {
                 version: 1,
             }),
         ).resolves.toEqual({ type: 1 });
+
+        const onWebhookEvent = vi.fn();
+        client.on("webhookEvent", onWebhookEvent);
+        await expect(
+            client.ingest({
+                version: 1,
+                application_id: "1",
+                type: 1,
+                event: { type: "ENTITLEMENT_CREATE", timestamp: "2026-08-30T00:00:00Z" },
+            }),
+        ).resolves.toMatchObject({ type: 1 });
+        expect(onWebhookEvent).toHaveBeenCalledOnce();
     });
 
     it("将 Interactions 接收模式闭合到统一客户端", async () => {

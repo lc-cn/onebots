@@ -26,7 +26,7 @@ interface GatewayHarness {
         code: number,
         reason: string,
     ): void;
-    handleMessage(payload: unknown): void;
+    handleMessage(payload: unknown): Promise<void>;
     sendHeartbeat(): void;
 }
 
@@ -86,7 +86,7 @@ describe("DiscordGateway lifecycle", () => {
 
         release();
         await Promise.all([first, second]);
-        gateway.disconnect();
+        await gateway.disconnect();
 
         expect(removeEventListener).toHaveBeenCalledWith("abort", expect.any(Function));
     });
@@ -138,7 +138,7 @@ describe("DiscordGateway lifecycle", () => {
         gateway.on("resumed", resumed);
         gateway.on("dispatch", dispatch);
 
-        harness.handleMessage({
+        await harness.handleMessage({
             op: GatewayOpcodes.Hello,
             d: { heartbeat_interval: 30_000 },
             s: null,
@@ -149,19 +149,19 @@ describe("DiscordGateway lifecycle", () => {
             d: { token: "token", session_id: "session", seq: 0 },
         });
 
-        harness.handleMessage({
+        await harness.handleMessage({
             op: GatewayOpcodes.Dispatch,
             d: {},
             s: 1,
             t: "RESUMED",
         });
-        harness.handleMessage({
+        await harness.handleMessage({
             op: GatewayOpcodes.InvalidSession,
             d: true,
             s: null,
             t: null,
         });
-        gateway.disconnect();
+        await gateway.disconnect();
         await vi.runAllTimersAsync();
 
         expect(resumed).toHaveBeenCalledOnce();
@@ -169,6 +169,61 @@ describe("DiscordGateway lifecycle", () => {
         expect(send).toHaveBeenCalledOnce();
         expect(removeAllListeners).toHaveBeenCalledOnce();
         expect(close).toHaveBeenCalledOnce();
+    });
+
+    it("只在异步 Dispatch 完整成功后推进 Resume sequence", async () => {
+        const gateway = new DiscordGateway({ token: "token", intents: 1 });
+        const harness = gateway as unknown as GatewayHarness;
+        harness.sequence = 9;
+        let fail = true;
+        const dispatch = vi.fn(async () => {
+            if (fail) {
+                fail = false;
+                throw new Error("protocol unavailable");
+            }
+        });
+        gateway.on("dispatch", dispatch);
+        const payload = {
+            op: GatewayOpcodes.Dispatch,
+            d: { id: "message" },
+            s: 10,
+            t: "MESSAGE_CREATE",
+        };
+
+        await expect(harness.handleMessage(payload)).rejects.toThrow("protocol unavailable");
+        expect(harness.sequence).toBe(9);
+        await expect(harness.handleMessage(payload)).resolves.toBeUndefined();
+        expect(harness.sequence).toBe(10);
+        expect(dispatch).toHaveBeenCalledTimes(2);
+    });
+
+    it("等待具名事件监听器后再提交 Dispatch sequence", async () => {
+        const gateway = new DiscordGateway({ token: "token", intents: 1 });
+        const harness = gateway as unknown as GatewayHarness;
+        harness.sequence = 10;
+        let release: (() => void) | undefined;
+        let markEntered: (() => void) | undefined;
+        const entered = new Promise<void>(resolve => {
+            markEntered = resolve;
+        });
+        gateway.on("messageCreate", () => {
+            markEntered?.();
+            return new Promise<void>(resolve => {
+                release = resolve;
+            });
+        });
+
+        const delivery = harness.handleMessage({
+            op: GatewayOpcodes.Dispatch,
+            d: { id: "message" },
+            s: 11,
+            t: "MESSAGE_CREATE",
+        });
+        await entered;
+        expect(harness.sequence).toBe(10);
+        release?.();
+        await delivery;
+        expect(harness.sequence).toBe(11);
     });
 
     it("未收到上一次心跳 ACK 时立即结束旧连接并安排重连", () => {

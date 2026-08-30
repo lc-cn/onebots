@@ -81,10 +81,11 @@ export const discordSchema: Schema = {
         choices: [
             { value: "gateway", label: "Gateway WebSocket" },
             { value: "interactions", label: "Interactions Webhook" },
+            { value: "webhook_events", label: "Webhook Events" },
             { value: "manual", label: "手动接入已验签事件" },
         ],
         description:
-            "Gateway 接收完整事件；Interactions 复用 OneBots HTTP Host；manual 由现有 Host 调用 ingestInteraction()",
+            "Gateway 接收实时事件；Interactions 接收交互；Webhook Events 接收应用事件；HTTP 模式均复用 OneBots Host",
         ui: { section: "transport" },
     },
     application_id: {
@@ -93,7 +94,10 @@ export const discordSchema: Schema = {
         placeholder: "Discord Developer Portal 中的 Application ID",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["interactions"] },
+            visibleWhen: {
+                path: "receive_mode",
+                oneOf: ["interactions", "webhook_events"],
+            },
         },
     },
     public_key: {
@@ -103,7 +107,10 @@ export const discordSchema: Schema = {
         placeholder: "64 位十六进制公钥",
         ui: {
             section: "credentials",
-            visibleWhen: { path: "receive_mode", oneOf: ["interactions"] },
+            visibleWhen: {
+                path: "receive_mode",
+                oneOf: ["interactions", "webhook_events"],
+            },
         },
     },
     proxy: {

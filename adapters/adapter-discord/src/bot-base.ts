@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { emitAllAwaited } from "onebots";
 import type { DiscordBotEvents } from "./bot-events.js";
 import { createDiscordLite } from "./bot-client.js";
 import { wrapDiscordUser, type DiscordGuild, type DiscordUser } from "./bot-model.js";
@@ -31,34 +32,39 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
     }
 
     private setupEventListeners(): void {
-        this.client.on("ready", user => {
+        this.client.on("ready", async user => {
             this.ready = true;
             this.user = wrapDiscordUser(user);
-            this.emit("ready", this.user);
+            await emitAllAwaited(this, "ready", this.user);
         });
-        this.client.on("messageCreate", message => {
-            this.emit("messageCreate", wrapDiscordMessage(message));
-        });
-        this.client.on("messageUpdate", message => this.emit("messageUpdate", null, message));
-        this.client.on("messageDelete", data => this.emit("messageDelete", data));
-        this.client.on("guildCreate", guild => {
+        this.client.on("messageCreate", message =>
+            emitAllAwaited(this, "messageCreate", wrapDiscordMessage(message)),
+        );
+        this.client.on("messageUpdate", message =>
+            emitAllAwaited(this, "messageUpdate", null, message),
+        );
+        this.client.on("messageDelete", data => emitAllAwaited(this, "messageDelete", data));
+        this.client.on("guildCreate", async guild => {
             this.guilds.set(guild.id, guild);
-            this.emit("guildCreate", guild);
+            await emitAllAwaited(this, "guildCreate", guild);
         });
-        this.client.on("guildDelete", guild => {
+        this.client.on("guildDelete", async guild => {
             this.guilds.delete(guild.id);
-            this.emit("guildDelete", guild);
+            await emitAllAwaited(this, "guildDelete", guild);
         });
-        this.client.on("guildMemberAdd", member => {
-            this.emit("guildMemberAdd", wrapDiscordMember(member));
-        });
-        this.client.on("guildMemberRemove", member => this.emit("guildMemberRemove", member));
-        this.client.on("interactionCreate", interaction => {
-            this.emit("interactionCreate", interaction);
-        });
-        this.client.on("dispatch", (eventName, data, sequence, sessionId) => {
-            this.emit("dispatch", eventName, data, sequence, sessionId);
-        });
+        this.client.on("guildMemberAdd", member =>
+            emitAllAwaited(this, "guildMemberAdd", wrapDiscordMember(member)),
+        );
+        this.client.on("guildMemberRemove", member =>
+            emitAllAwaited(this, "guildMemberRemove", member),
+        );
+        this.client.on("interactionCreate", interaction =>
+            emitAllAwaited(this, "interactionCreate", interaction),
+        );
+        this.client.on("webhookEvent", payload => emitAllAwaited(this, "webhookEvent", payload));
+        this.client.on("dispatch", (eventName, data, sequence, sessionId) =>
+            emitAllAwaited(this, "dispatch", eventName, data, sequence, sessionId),
+        );
         this.client.on("client_error", error => this.emit("client_error", error));
         this.client.on("reconnecting", error => {
             this.ready = false;
@@ -81,13 +87,18 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
         try {
             if (
                 this.config.receive_mode === "interactions" ||
+                this.config.receive_mode === "webhook_events" ||
                 this.config.receive_mode === "manual"
             ) {
-                this.client.initInteractions();
+                if (this.config.receive_mode === "webhook_events") {
+                    this.client.initWebhookEvents();
+                } else {
+                    this.client.initInteractions();
+                }
                 const user = wrapDiscordUser(await this.getREST().getCurrentUser());
                 this.ready = true;
                 this.user = user;
-                this.emit("ready", user);
+                await emitAllAwaited(this, "ready", user);
                 return;
             }
             await this.client.start();
@@ -103,8 +114,8 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
         if (!this.running) return;
         this.running = false;
         this.ready = false;
-        this.client.stop();
-        this.emit("stopped");
+        await this.client.stop();
+        await emitAllAwaited(this, "stopped");
     }
 
     isReady(): boolean {
@@ -112,15 +123,21 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
     }
 
     ingest(rawEvent: unknown) {
-        return this.client.ingestInteraction(rawEvent);
+        return this.client.ingest(rawEvent);
     }
 
     ingestHttp(request: DiscordInteractionHttpRequest): Promise<DiscordInteractionHttpResponse> {
-        return this.client.ingestInteractionHttp(request);
+        return this.config.receive_mode === "webhook_events"
+            ? this.client.ingestWebhookEventHttp(request)
+            : this.client.ingestInteractionHttp(request);
     }
 
     acceptHttp(request: Request): Promise<Response> {
         return this.client.acceptHttp(request);
+    }
+
+    ingestWebhookEvent(rawEvent: unknown) {
+        return this.client.ingestWebhookEvent(rawEvent);
     }
 
     sendGatewayCommand(command: DiscordGatewayCommand): void {
@@ -139,7 +156,7 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
         return this.client;
     }
 
-    getReceiveMode(): "gateway" | "interactions" | "manual" {
+    getReceiveMode(): "gateway" | "interactions" | "webhook_events" | "manual" {
         return this.config.receive_mode ?? "gateway";
     }
 }

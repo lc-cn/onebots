@@ -6,6 +6,7 @@ OneBots 的 Discord 官方 Bot 适配器。实现直接面向 Discord API v10，
 
 - Gateway WebSocket：无限重连、Resume、心跳 ACK 检测、Identify 限速、分片、Presence、AbortSignal，并支持全部 Gateway 主动事件。
 - Interactions Webhook：Ed25519 验签、重放时间窗、应用命令、组件、Modal、自动补全。
+- Webhook Events：接收应用授权、Entitlement、Lobby 与 Social SDK 事件，成功投递后才确认重投。
 - REST：Discord route/global rate limit、429 自动重试、AbortSignal、审计日志原因、附件上传和结构化错误。
 - 事件：消息编辑/删除与批量删除、Reaction、Guild 成员、Interaction；未知 Dispatch 仍通过 `raw_event` 无损交付。
 - 消息：文本、用户/角色/频道提及、回复、Embed、Sticker 与多媒体附件。
@@ -65,7 +66,19 @@ discord.my_bot:
 https://你的网关/discord/my_bot/interactions
 ```
 
-该模式复用 OneBots 已有 HTTP Host，不创建独立端口。请求必须保留未经修改的 `rawBody`，否则适配器会拒绝无法验签的载荷。适配器会在 Discord 的 3 秒窗口内返回 deferred 确认，再把 Interaction 分发给已配置协议；下游可从 `raw_event` 取得 Interaction token 并通过 Discord Webhook API 编辑原始回复。Gateway 适合完整消息和 Guild 事件；Interactions 模式只接收 Discord 的应用交互。
+该模式复用 OneBots 已有 HTTP Host，不创建独立端口。请求必须保留未经修改的 `rawBody`，否则适配器会拒绝无法验签的载荷。适配器等待统一事件链成功后返回 callback，因此协议消费者必须在 Discord 的 3 秒窗口内完成；投影失败不会缓存响应，Discord 重投时可恢复。下游可从 `raw_event` 取得 Interaction token 并通过 Discord Webhook API 编辑原始回复。Gateway 适合完整消息和 Guild 事件；Interactions 模式只接收 Discord 的应用交互。
+
+### Webhook Events 模式
+
+```yaml
+discord.my_bot:
+  token: "your_discord_bot_token"
+  receive_mode: webhook_events
+  application_id: "123456789012345678"
+  public_key: "64位十六进制Application Public Key"
+```
+
+将 Developer Portal 的 Webhook Events URL 指向 `https://你的网关/discord/my_bot/events`。该入口和 Interactions 使用相同的 Ed25519 验签边界，但遵循 Webhook Events 的 `204 No Content` 应答语义。事件以 `webhookEvent` 和 `WEBHOOK_EVENT:<event.type>` dispatch 双通道发出；并发重投被合并，只有全部异步消费者成功后才提交去重身份。
 
 ### 手动接入模式
 
@@ -75,7 +88,7 @@ discord.my_bot:
   receive_mode: manual
 ```
 
-`manual` 不注册 Gateway 或 HTTP 路由。已有 Host 完成 Discord 验签后，将原始 Interaction 交给 `account.client.ingest(rawInteraction)`；此入口不会再次验签。`interactions` 模式还可直接调用 `account.client.acceptHttp(request)` 获取标准 `Response`，或调用 `account.client.ingestHttp({ method, body, signature, timestamp })` 获取结构化响应，均复用同一验签、去重和事件投影链。
+`manual` 不注册 Gateway 或 HTTP 路由。已有 Host 完成 Discord 验签后，将原始 Interaction 或 Webhook Event 交给 `account.client.ingest(rawEvent)`；客户端按官方 envelope 自动分流，此入口不会再次验签。`interactions` 与 `webhook_events` 模式都可调用 `account.client.acceptHttp(request)` 获取标准 `Response`，或调用 `account.client.ingestHttp({ method, body, signature, timestamp })` 获取结构化响应，均复用对应模式的验签、去重和事件投影链。
 
 ## 独立使用 Lite SDK
 
@@ -130,6 +143,8 @@ export default {
 
 使用统一 `DiscordLite` 时，对应方法为 `handleRequest()`、`ingestInteractionHttp()` 和 `ingestInteraction()`；同一个客户端会继续发出 `interactionCreate` 与统一 `dispatch` 事件。
 
+Webhook Events 可独立使用 `DiscordWebhookEventsReceiver`，或在 `DiscordLite` 上调用 `ingestWebhookEventHttp()` / `ingestWebhookEvent()`；已验签的嵌入式 Host 无需让 SDK 另开端口。
+
 ### REST 与自定义传输
 
 ```typescript
@@ -147,7 +162,7 @@ await rest.createMessage("123456789012345678", "Hello!");
 
 `transport` 可注入已有 HTTP 栈；默认实现不会在代理初始化失败时静默直连。`DiscordLite` 的 Gateway discovery 与业务 API 会复用同一个 REST 实例，因此自定义 `apiBaseUrl`、传输实现和已学习的限流 bucket 不会在建立 Gateway 时失效。直接构造 `DiscordGateway` 时也可通过 `rest` 注入同一实例。所有非成功响应均抛出 `DiscordError`，其中保留 HTTP 状态、Discord code、retry_after、global 标记和请求 ID。
 
-Gateway 默认无限重连；并发 `connect()` 会等待同一次启动，`disconnect()` 会解除传入的 `AbortSignal` 监听。鉴权、分片或 intents 等 fatal close 会结束当前生命周期，修正配置后可在同一实例上重新 `connect()`。
+Gateway 默认无限重连；并发 `connect()` 会等待同一次启动，`disconnect()` 会解除传入的 `AbortSignal` 监听。每个 Dispatch 会串行等待 raw、具名事件和 OneBots 协议投影全部成功后才提交 Resume sequence；投递失败会断开并从最后成功序号恢复，避免确认后丢事件。鉴权、分片或 intents 等 fatal close 会结束当前生命周期，修正配置后可在同一实例上重新 `connect()`。
 
 ## 通用消息段
 

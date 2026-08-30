@@ -28,11 +28,12 @@ describe("Discord 配置 Schema", () => {
         expect(receiveMode.choices?.map(choice => choice.value)).toEqual([
             "gateway",
             "interactions",
+            "webhook_events",
             "manual",
         ]);
         expect(applicationId.ui?.visibleWhen).toEqual({
             path: "receive_mode",
-            oneOf: ["interactions"],
+            oneOf: ["interactions", "webhook_events"],
         });
         expect(intents.ui?.visibleWhen).toEqual({ path: "receive_mode", oneOf: ["gateway"] });
         expect(presence.activities.ui).toMatchObject({

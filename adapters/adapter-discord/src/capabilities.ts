@@ -188,6 +188,11 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
             mode: "webhook",
             note: "复用 OneBots HTTP Host，不创建独立监听端口",
         },
+        webhook_events: {
+            support: "native",
+            mode: "webhook",
+            note: "接收 Discord 应用授权、Entitlement、Lobby 与 Social SDK 原生事件",
+        },
         manual: {
             support: "native",
             mode: "native",

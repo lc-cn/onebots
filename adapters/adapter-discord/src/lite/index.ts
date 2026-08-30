@@ -1,50 +1,5 @@
-/**
- * Discord Lite - 轻量版 Discord 客户端
- *
- * 特性：
- * - 使用原生 fetch，无外部依赖
- * - 自动检测运行时环境
- * - Node.js: 支持 Gateway WebSocket
- * - Cloudflare Workers / Vercel: 支持 Interactions Webhook
- *
- * @example Node.js Gateway 模式
- * ```ts
- * import { DiscordLite, GatewayIntents } from './lite';
- *
- * const client = new DiscordLite({
- *   token: 'your-bot-token',
- *   intents: GatewayIntents.Guilds | GatewayIntents.GuildMessages | GatewayIntents.MessageContent,
- *   mode: 'gateway',
- * });
- *
- * client.on('messageCreate', (message) => {
- *   console.log(message.content);
- * });
- *
- * await client.start();
- * ```
- *
- * @example Cloudflare Workers Webhook 模式
- * ```ts
- * import { DiscordLite, InteractionsHandler } from './lite';
- *
- * const handler = new InteractionsHandler({
- *   publicKey: 'your-public-key',
- *   token: 'your-bot-token',
- *   applicationId: 'your-app-id',
- * });
- *
- * handler.onCommand('hello', async (interaction) => {
- *   return InteractionsHandler.messageResponse('Hello, World!');
- * });
- *
- * export default {
- *   fetch: (request) => handler.handleRequest(request),
- * };
- * ```
- */
-
 import { EventEmitter } from "node:events";
+import { emitAllAwaited } from "onebots";
 import { DiscordREST } from "./rest.js";
 import type { DiscordHttpTransport } from "./rest-transport.js";
 import {
@@ -59,6 +14,12 @@ import {
     type DiscordInteractionHttpResponse,
     type InteractionWebhookOptions,
 } from "./interactions.js";
+import {
+    DiscordWebhookEventsReceiver,
+    isDiscordWebhookPayload,
+    type DiscordWebhookEventPayload,
+    type DiscordWebhookPayload,
+} from "./webhook-events.js";
 import type {
     CreateMessageBody,
     DiscordApiGuild,
@@ -74,6 +35,7 @@ import type {
 } from "../types.js";
 import { DiscordError } from "../errors.js";
 import { isFatalGatewayCloseCode } from "./gateway-types.js";
+import { detectDiscordRuntime, supportsDiscordGateway, type DiscordRuntime } from "./runtime.js";
 
 // 重新导出
 export { DiscordREST, type RESTOptions } from "./rest.js";
@@ -108,58 +70,23 @@ export {
     type DiscordInteractionHttpRequest,
     type DiscordInteractionHttpResponse,
 } from "./interactions.js";
+export {
+    DiscordWebhookEventsReceiver,
+    isDiscordWebhookPayload,
+    type DiscordWebhookEvent,
+    type DiscordWebhookEventPayload,
+    type DiscordWebhookEventsOptions,
+    type DiscordWebhookEventType,
+    type DiscordWebhookPayload,
+    type DiscordWebhookPingPayload,
+} from "./webhook-events.js";
 /**
  * 运行时类型
  */
-export type RuntimeType = "node" | "cloudflare" | "vercel" | "deno" | "bun" | "browser" | "unknown";
-
-/**
- * 检测当前运行时环境
- */
-export function detectRuntime(): RuntimeType {
-    // Cloudflare Workers
-    if (
-        typeof globalThis.caches !== "undefined" &&
-        typeof (globalThis as Record<string, unknown>).WebSocketPair !== "undefined"
-    ) {
-        return "cloudflare";
-    }
-
-    // Vercel Edge Runtime
-    if (typeof (globalThis as Record<string, unknown>).EdgeRuntime !== "undefined") {
-        return "vercel";
-    }
-
-    // Deno
-    if (typeof (globalThis as Record<string, unknown>).Deno !== "undefined") {
-        return "deno";
-    }
-
-    // Bun
-    if (typeof (globalThis as Record<string, unknown>).Bun !== "undefined") {
-        return "bun";
-    }
-
-    // Node.js
-    if (typeof process !== "undefined" && process.versions?.node) {
-        return "node";
-    }
-
-    // Browser
-    if (typeof window !== "undefined" && typeof document !== "undefined") {
-        return "browser";
-    }
-
-    return "unknown";
-}
-
-/**
- * 检测是否支持 WebSocket Gateway
- */
-export function supportsGateway(): boolean {
-    const runtime = detectRuntime();
-    return ["node", "bun", "deno"].includes(runtime);
-}
+export type RuntimeType = DiscordRuntime;
+export const detectRuntime = detectDiscordRuntime;
+export const supportsGateway = supportsDiscordGateway;
+export { detectDiscordRuntime, supportsDiscordGateway, type DiscordRuntime } from "./runtime.js";
 
 /**
  * Discord Lite 配置
@@ -172,8 +99,8 @@ export interface DiscordLiteOptions {
         username?: string;
         password?: string;
     };
-    mode?: "gateway" | "interactions" | "manual" | "auto";
-    // Interactions 模式需要
+    mode?: "gateway" | "interactions" | "webhook_events" | "manual" | "auto";
+    // HTTP 接收模式需要
     publicKey?: string;
     applicationId?: string;
     presence?: GatewayOptions["presence"];
@@ -200,6 +127,7 @@ export interface DiscordLiteEvents {
     guildMemberAdd: [member: DiscordApiGuildMember];
     guildMemberRemove: [member: DiscordGuildMemberRemoveData];
     interactionCreate: [interaction: DiscordInteraction];
+    webhookEvent: [payload: DiscordWebhookEventPayload];
 }
 
 /**
@@ -209,9 +137,10 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
     private options: DiscordLiteOptions;
     private gateway: DiscordGateway | null = null;
     private interactions: InteractionsHandler | null = null;
+    private webhookEvents: DiscordWebhookEventsReceiver | null = null;
     private rest: DiscordREST;
     private runtime: RuntimeType;
-    private mode: "gateway" | "interactions" | "manual";
+    private mode: "gateway" | "interactions" | "webhook_events" | "manual";
     private user: DiscordApiUser | null = null;
     private startPromise?: Promise<void>;
 
@@ -286,21 +215,25 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
         this.gateway = gateway;
 
         // 转发事件
-        gateway.on("ready", user => {
+        gateway.on("ready", async user => {
             this.user = user;
-            this.emit("ready", user);
+            await emitAllAwaited(this, "ready", user);
         });
-        gateway.on("resumed", () => this.emit("resumed"));
-        gateway.on("messageCreate", message => this.emit("messageCreate", message));
-        gateway.on("messageUpdate", message => this.emit("messageUpdate", message));
-        gateway.on("messageDelete", data => this.emit("messageDelete", data));
-        gateway.on("guildCreate", guild => this.emit("guildCreate", guild));
-        gateway.on("guildDelete", guild => this.emit("guildDelete", guild));
-        gateway.on("guildMemberAdd", member => this.emit("guildMemberAdd", member));
-        gateway.on("guildMemberRemove", member => this.emit("guildMemberRemove", member));
-        gateway.on("interactionCreate", interaction => this.emit("interactionCreate", interaction));
+        gateway.on("resumed", () => emitAllAwaited(this, "resumed"));
+        gateway.on("messageCreate", message => emitAllAwaited(this, "messageCreate", message));
+        gateway.on("messageUpdate", message => emitAllAwaited(this, "messageUpdate", message));
+        gateway.on("messageDelete", data => emitAllAwaited(this, "messageDelete", data));
+        gateway.on("guildCreate", guild => emitAllAwaited(this, "guildCreate", guild));
+        gateway.on("guildDelete", guild => emitAllAwaited(this, "guildDelete", guild));
+        gateway.on("guildMemberAdd", member => emitAllAwaited(this, "guildMemberAdd", member));
+        gateway.on("guildMemberRemove", member =>
+            emitAllAwaited(this, "guildMemberRemove", member),
+        );
+        gateway.on("interactionCreate", interaction =>
+            emitAllAwaited(this, "interactionCreate", interaction),
+        );
         gateway.on("dispatch", (event, data, sequence, sessionId) =>
-            this.emit("dispatch", event, data, sequence, sessionId),
+            emitAllAwaited(this, "dispatch", event, data, sequence, sessionId),
         );
         gateway.on("client_error", error => this.emit("client_error", error));
         gateway.on("reconnecting", error => this.emit("reconnecting", error));
@@ -315,7 +248,7 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
         try {
             await gateway.connect(signal);
         } catch (error) {
-            gateway.disconnect();
+            await gateway.disconnect();
             if (this.gateway === gateway) this.gateway = null;
             throw error;
         }
@@ -324,12 +257,12 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
     /**
      * 停止客户端
      */
-    stop(): void {
+    async stop(): Promise<void> {
         if (this.gateway) {
-            this.gateway.disconnect();
+            await this.gateway.disconnect();
             this.gateway = null;
             this.user = null;
-            this.emit("stopped");
+            await emitAllAwaited(this, "stopped");
         }
     }
 
@@ -353,14 +286,52 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
             token: this.options.token,
             applicationId: this.options.applicationId ?? "",
             trustedIngress: this.mode === "manual",
-            onInteraction: interaction => {
-                this.emit("interactionCreate", interaction);
-                this.emit("dispatch", "INTERACTION_CREATE", interaction, null, null);
+            onInteraction: async interaction => {
+                await emitAllAwaited(this, "interactionCreate", interaction);
+                await emitAllAwaited(
+                    this,
+                    "dispatch",
+                    "INTERACTION_CREATE",
+                    interaction,
+                    null,
+                    null,
+                );
             },
             onUnhandled: this.options.unhandledInteractionHandler,
         });
 
         return this.interactions;
+    }
+
+    /** 初始化 Discord 原生 Webhook Events 接收器。 */
+    initWebhookEvents(): DiscordWebhookEventsReceiver {
+        if (this.webhookEvents) return this.webhookEvents;
+        if (
+            this.mode === "webhook_events" &&
+            (!this.options.publicKey || !this.options.applicationId)
+        ) {
+            throw DiscordError.configuration(
+                "Webhook Events 模式需要 publicKey 和 applicationId",
+                "DISCORD_WEBHOOK_CONFIG_REQUIRED",
+            );
+        }
+        this.webhookEvents = new DiscordWebhookEventsReceiver({
+            publicKey: this.options.publicKey,
+            applicationId: this.options.applicationId,
+            trustedIngress: this.mode === "manual",
+            onEvent: async payload => {
+                await emitAllAwaited(this, "webhookEvent", payload);
+                await emitAllAwaited(
+                    this,
+                    "dispatch",
+                    `WEBHOOK_EVENT:${payload.event.type}`,
+                    payload,
+                    null,
+                    null,
+                );
+            },
+        });
+        return this.webhookEvents;
     }
 
     /**
@@ -372,6 +343,9 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
 
     /** 标准 Fetch/WinterCG HTTP seam。 */
     async acceptHttp(request: Request): Promise<Response> {
+        if (this.mode === "webhook_events") {
+            return this.initWebhookEvents().acceptHttp(request);
+        }
         if (!this.interactions) {
             this.initInteractions();
         }
@@ -388,6 +362,26 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
         request: DiscordInteractionHttpRequest,
     ): Promise<DiscordInteractionHttpResponse> {
         return this.initInteractions().ingestHttp(request);
+    }
+
+    /** 将 Discord Webhook Events 请求交给已有 HTTP Host。 */
+    async ingestWebhookEventHttp(
+        request: DiscordInteractionHttpRequest,
+    ): Promise<DiscordInteractionHttpResponse> {
+        return this.initWebhookEvents().ingestHttp(request);
+    }
+
+    /** 将已验证或结构化的 Discord Webhook Event 交给同一个客户端。 */
+    async ingestWebhookEvent(rawEvent: unknown): Promise<DiscordWebhookPayload> {
+        return this.initWebhookEvents().ingest(rawEvent);
+    }
+
+    /** 按配置的 HTTP 接收模式分派原始事件。 */
+    async ingest(rawEvent: unknown) {
+        return this.mode === "webhook_events" ||
+            (this.mode === "manual" && isDiscordWebhookPayload(rawEvent))
+            ? this.ingestWebhookEvent(rawEvent)
+            : this.ingestInteraction(rawEvent);
     }
 
     /**
@@ -414,7 +408,7 @@ export class DiscordLite extends EventEmitter<DiscordLiteEvents> {
     /**
      * 获取当前模式
      */
-    getMode(): "gateway" | "interactions" | "manual" {
+    getMode(): "gateway" | "interactions" | "webhook_events" | "manual" {
         return this.mode;
     }
 

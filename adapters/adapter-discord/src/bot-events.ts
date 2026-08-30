@@ -8,6 +8,7 @@ import type {
     DiscordGuildMemberRemoveData,
 } from "./types.js";
 import type { DiscordMember, DiscordMessage, DiscordUser } from "./bot-model.js";
+import type { DiscordWebhookEventPayload } from "./lite/webhook-events.js";
 
 /** DiscordBot 对外公开的强类型事件契约。 */
 export interface DiscordBotEvents {
@@ -26,4 +27,5 @@ export interface DiscordBotEvents {
     guildMemberAdd: [member: DiscordMember];
     guildMemberRemove: [member: DiscordGuildMemberRemoveData];
     interactionCreate: [interaction: DiscordInteraction];
+    webhookEvent: [payload: DiscordWebhookEventPayload];
 }

@@ -232,4 +232,27 @@ describe("projectDiscordEvents", () => {
             extensions: { discord: { poll_answer_id: 2 } },
         });
     });
+
+    it("以 Webhook Event 自带时间生成稳定事件身份", () => {
+        const rawEvent = {
+            name: "WEBHOOK_EVENT:ENTITLEMENT_CREATE",
+            data: {
+                version: 1,
+                application_id: "app",
+                type: 1,
+                event: {
+                    type: "ENTITLEMENT_CREATE",
+                    timestamp: "2026-08-30T00:00:00.000Z",
+                    data: { id: "entitlement" },
+                },
+            },
+        };
+
+        const [first] = projectDiscordEvents(rawEvent, context);
+        const [replayed] = projectDiscordEvents(rawEvent, context);
+
+        expect(first?.timestamp).toBe(Date.parse("2026-08-30T00:00:00.000Z"));
+        expect(first?.id).toEqual(replayed?.id);
+        expect(first?.raw_event).toEqual(rawEvent);
+    });
 });

@@ -360,7 +360,7 @@ function notice(
     suffix?: string,
 ): CommonEvent.Notice<DiscordDispatchEvent> {
     return {
-        ...base(rawEvent, context, Date.now(), suffix),
+        ...base(rawEvent, context, eventTimestamp(rawEvent.data), suffix),
         type: "notice",
         notice_type: noticeType,
         ...fields,
@@ -394,7 +394,30 @@ function eventIdentity(data: unknown): string | undefined {
         const value = record[key];
         if (typeof value === "string" && value) return value;
     }
+    const webhookEvent = objectField(record, "event");
+    if (webhookEvent) {
+        const timestamp = webhookEvent.timestamp;
+        if (typeof timestamp === "string" && timestamp) return timestamp;
+    }
     return undefined;
+}
+
+function eventTimestamp(data: unknown): number {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return Date.now();
+    const event = objectField(data as Record<string, unknown>, "event");
+    if (!event || typeof event.timestamp !== "string") return Date.now();
+    const timestamp = Date.parse(event.timestamp);
+    return Number.isFinite(timestamp) ? timestamp : Date.now();
+}
+
+function objectField(
+    record: Record<string, unknown>,
+    key: string,
+): Record<string, unknown> | undefined {
+    const value = record[key];
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : undefined;
 }
 
 function hasMessageProjectionFields(message: DiscordMessageUpdateData): boolean {

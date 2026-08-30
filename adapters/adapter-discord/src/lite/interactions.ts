@@ -33,7 +33,7 @@ export interface InteractionWebhookOptions {
     /** 防止已签名请求被长期重放；设为 0 可关闭时间窗校验。 */
     maxTimestampAgeMs?: number;
     /** 在路由处理前观察已验证的 Interaction。 */
-    onInteraction?: (interaction: DiscordInteraction) => void;
+    onInteraction?: (interaction: DiscordInteraction) => void | PromiseLike<void>;
     /** 未注册本地处理器时的响应策略。 */
     onUnhandled?: (
         interaction: DiscordInteraction,
@@ -208,7 +208,7 @@ export class InteractionsHandler {
         }
         try {
             return await this.responses.run(rawEvent.id, async () => {
-                this.onInteraction?.(rawEvent);
+                await this.onInteraction?.(rawEvent);
                 return this.handleInteraction(rawEvent);
             });
         } catch (error) {
