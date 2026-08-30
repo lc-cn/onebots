@@ -7,6 +7,7 @@ import { WhatsAppGroups } from "./groups.js";
 import { WhatsAppCalling } from "./calling.js";
 import { WhatsAppHistory } from "./history.js";
 import { WhatsAppSettings } from "./settings.js";
+import { WhatsAppEncryptedMessages } from "./encrypted-messages.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -47,6 +48,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly history: WhatsAppHistory;
     /** 号码级 Calling、加密、身份变更与存储设置。 */
     readonly settings: WhatsAppSettings;
+    /** 只承载 compact JWE 的 Payload Encryption 消息入口。 */
+    readonly encryptedMessages: WhatsAppEncryptedMessages;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -59,6 +62,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.calling = new WhatsAppCalling(this);
         this.history = new WhatsAppHistory(this);
         this.settings = new WhatsAppSettings(this);
+        this.encryptedMessages = new WhatsAppEncryptedMessages(this);
     }
 
     get apiVersion(): string {

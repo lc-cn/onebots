@@ -41,5 +41,8 @@ describe("WhatsApp 能力清单", () => {
         expect(
             whatsAppCapabilities.actions.update_payload_encryption_settings?.permissions,
         ).toEqual(["whatsapp_business_messaging"]);
+        expect(whatsAppCapabilities.actions.send_encrypted_message?.permissions).toEqual([
+            "whatsapp_business_messaging",
+        ]);
     });
 });

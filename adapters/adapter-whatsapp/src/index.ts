@@ -11,6 +11,13 @@ export {
 } from "./calling.js";
 export { WhatsAppApiError, type WhatsAppApiErrorOptions } from "./errors.js";
 export {
+    isWhatsAppEncryptedMessageAction,
+    WhatsAppEncryptedMessages,
+    WHATSAPP_ENCRYPTED_MESSAGE_ACTIONS,
+    type WhatsAppEncryptedMessageAction,
+    type WhatsAppEncryptedMessageResponse,
+} from "./encrypted-messages.js";
+export {
     isWhatsAppHistoryAction,
     WhatsAppHistory,
     WHATSAPP_HISTORY_ACTIONS,

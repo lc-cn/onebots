@@ -18,6 +18,7 @@
 - Calling API 权限查询/申请，以及 `connect`、`pre_accept`、`accept`、`reject`、`terminate` 信令控制
 - 消息投递历史：按 WAMID 查询状态、Webhook 更新结果与可完整遍历的事件时间线
 - 号码级设置：Calling/SIP/视频、身份变更通知、payload encryption 公钥与数据驻留
+- Payload Encryption 加密消息：固定端点、compact JWE 结构校验与加密响应校验
 - 通用 `whatsapp_call`，无需等待适配器升级即可调用新的 Graph API 资源
 - `ingest()`、`ingestHttp()` 与标准 `acceptHttp(Request)` 共用同一 typed 事件和去重链路
 
@@ -109,6 +110,8 @@ Calling API 提供 `get_call_permissions`、`request_call_permission`、`connect
 消息历史通过 `list_message_history` 与 `list_message_history_events` 固定动作提供，也可使用 `client.history.list/listAll/listEvents/listAllEvents`。它保留投递状态、Webhook 更新状态、时间戳、应用与错误说明，并校验每一页的官方响应结构；完整遍历检测到重复 cursor 时会失败，不会返回看似成功的不完整列表。此能力是投递状态诊断接口，不是聊天内容归档或任意历史消息读取。
 
 号码设置使用 `get_phone_number_settings`、`update_calling_settings`、`update_user_identity_change_settings`、`update_payload_encryption_settings` 与 `update_storage_configuration_settings`，或直接使用强类型 `client.settings`。Meta 要求一次请求只能更新一个 feature，适配器为此提供独立方法并只发送对应字段；启用 payload encryption 时必须提供客户端公钥，关闭时不会携带密钥。读取 SIP 密码必须显式设置 `include_sip_credentials` 且由 Meta 权限控制，请避免记录该响应。
+
+加密消息使用 `send_encrypted_message` 或 `client.encryptedMessages.send(compactJwe)`。适配器只向 `messages_encrypted` 发送官方允许的两个字段，并校验请求和成功响应均为五段 compact JWE；明文加密、响应解密、私钥保护和轮换由业务负责。Meta 的失败响应仍是未加密的结构化 Graph API 错误。
 
 ## 参考
 
