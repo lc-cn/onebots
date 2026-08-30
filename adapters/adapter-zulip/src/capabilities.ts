@@ -6,6 +6,7 @@ import {
 import { ZULIP_BOT_CREDENTIAL_ACTIONS } from "./bot-actions.js";
 import { ZULIP_INVITATION_ACTIONS } from "./invitation-actions.js";
 import { ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { ZULIP_PREFERENCE_PERMISSION_ACTIONS } from "./preference-actions.js";
 import { ZULIP_USER_MUTATION_ACTIONS } from "./user-actions.js";
 import { ZULIP_USER_GROUP_MUTATION_ACTIONS } from "./user-group-actions.js";
 
@@ -19,6 +20,7 @@ const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS,
     ZULIP_USER_MUTATION_ACTIONS.has(action) ||
     ZULIP_INVITATION_ACTIONS.has(action) ||
     ZULIP_BOT_CREDENTIAL_ACTIONS.has(action) ||
+    ZULIP_PREFERENCE_PERMISSION_ACTIONS.has(action) ||
     [
         "subscribe_channels",
         "unsubscribe_channels",

@@ -17,6 +17,7 @@ export type { ZulipTransport, ZulipHttpRequest } from "./http.js";
 export type * from "./types.js";
 
 const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
+    alert_words: "提醒词",
     message: "消息",
     update_message: "消息更新",
     delete_message: "消息删除",
@@ -30,6 +31,7 @@ const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
     typing: "输入状态",
     heartbeat: "心跳",
     invites_changed: "邀请变化",
+    muted_users: "静音用户",
     restart: "服务器重启",
 };
 

@@ -41,6 +41,8 @@ const DEFAULT_EVENT_TYPES = [
     "realm_user",
     "user_group",
     "invites_changed",
+    "alert_words",
+    "muted_users",
     "presence",
     "user_status",
     "typing",

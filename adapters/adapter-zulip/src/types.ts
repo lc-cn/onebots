@@ -233,6 +233,16 @@ export interface ZulipInvitesChangedEvent extends ZulipBaseEvent {
     type: "invites_changed";
 }
 
+export interface ZulipAlertWordsEvent extends ZulipBaseEvent {
+    type: "alert_words";
+    alert_words: string[];
+}
+
+export interface ZulipMutedUsersEvent extends ZulipBaseEvent {
+    type: "muted_users";
+    muted_users: Array<{ id: number; timestamp: number }>;
+}
+
 export interface ZulipUserGroupEvent extends ZulipBaseEvent {
     type: "user_group";
     op:
@@ -258,6 +268,8 @@ export type ZulipEvent =
     | ZulipHeartbeatEvent
     | ZulipRealmUserEvent
     | ZulipInvitesChangedEvent
+    | ZulipAlertWordsEvent
+    | ZulipMutedUsersEvent
     | ZulipUserGroupEvent
     | ZulipBaseEvent;
 

@@ -11,6 +11,7 @@ import { ZULIP_BOT_ACTION_HANDLERS } from "./bot-actions.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 import { ZULIP_INVITATION_ACTION_HANDLERS } from "./invitation-actions.js";
+import { ZULIP_PREFERENCE_ACTION_HANDLERS } from "./preference-actions.js";
 import { ZULIP_USER_ACTION_HANDLERS } from "./user-actions.js";
 import { ZULIP_USER_GROUP_ACTION_HANDLERS } from "./user-group-actions.js";
 
@@ -56,8 +57,6 @@ const ACTION_HANDLERS = {
         client.call(
             `users/${encodeURIComponent(requireString(params.user_id_or_email, "user_id_or_email"))}/presence`,
         ),
-    update_user_status: (client, params) =>
-        client.call("users/me/status", "POST", requireParams(params)),
     send_typing_notification: (client, params) =>
         client.call("typing", "POST", requireParams(params)),
     get_custom_emoji: client => client.call("realm/emoji"),
@@ -88,6 +87,7 @@ const ACTION_HANDLERS = {
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
     ...ZULIP_BOT_ACTION_HANDLERS,
     ...ZULIP_INVITATION_ACTION_HANDLERS,
+    ...ZULIP_PREFERENCE_ACTION_HANDLERS,
     ...ZULIP_USER_ACTION_HANDLERS,
     ...ZULIP_USER_GROUP_ACTION_HANDLERS,
 } satisfies Readonly<Record<string, PlatformActionHandler<ZulipClient>>>;
