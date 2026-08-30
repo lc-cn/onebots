@@ -10,7 +10,7 @@ import type {
     ChatMemberOwner,
     ChatMemberAdministrator,
 } from "grammy/types";
-import { createProxyAgent, RecentEventDeduplicator } from "onebots";
+import { createProxyAgent, emitAllAwaited, ReliableEventIngress } from "onebots";
 import { TelegramError } from "./errors.js";
 import type { TelegramCallbackQuery, TelegramConfig, TelegramMessage } from "./types.js";
 import { resolveTelegramReceiveConfig, type TelegramReceiveConfig } from "./receive-config.js";
@@ -52,7 +52,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
     private generation = 0;
     private pollingAbort?: AbortController;
     private pollingTask?: Promise<void>;
-    private readonly receivedUpdates = new RecentEventDeduplicator<number>();
+    private readonly updateIngress = new ReliableEventIngress<number>();
 
     constructor(config: TelegramConfig) {
         super();
@@ -114,21 +114,16 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
     private setupEventHandlers(): void {
         // 完整 Update 先进入统一投影，避免 Bot 与 Adapter 维护两套事件分支。
         this.bot.use(async (ctx, next) => {
-            this.dispatchUpdate(ctx.update);
-            await next();
+            await this.dispatchUpdate(ctx.update, next);
         });
         installTelegramLegacyEventHandlers(this.bot, {
             getSelfId: () => this.me?.id,
-            privateMessage: message => this.emit("private_message", message),
-            groupMessage: message => this.emit("group_message", message),
-            channelMessage: message => this.emit("channel_message", message),
-            guestMessage: message => this.emit("guest_message", message),
-            editedMessage: message => this.emit("message_edited", message),
-            callbackQuery: query => this.emit("callback_query", query),
-        });
-
-        this.bot.catch(error => {
-            this.emit("client_error", TelegramError.wrap(error, "TELEGRAM_UPDATE_HANDLER_ERROR"));
+            privateMessage: message => emitAllAwaited(this, "private_message", message),
+            groupMessage: message => emitAllAwaited(this, "group_message", message),
+            channelMessage: message => emitAllAwaited(this, "channel_message", message),
+            guestMessage: message => emitAllAwaited(this, "guest_message", message),
+            editedMessage: message => emitAllAwaited(this, "message_edited", message),
+            callbackQuery: query => emitAllAwaited(this, "callback_query", query),
         });
     }
 
@@ -171,6 +166,8 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
                     return;
                 }
             } else {
+                await this.ensureBotInited();
+                this.me = this.bot.botInfo;
                 const abort = new AbortController();
                 this.pollingAbort = abort;
                 this.pollingTask = this.runPolling(generation, abort.signal);
@@ -196,8 +193,6 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
             if (this.initialized && wasActive) {
                 if (this.receiveConfig.mode === "webhook") {
                     await this.callApi("deleteWebhook", () => this.bot.api.deleteWebhook());
-                } else if (this.receiveConfig.mode === "polling" && this.bot.isRunning()) {
-                    await this.bot.stop();
                 }
             }
             await this.pollingTask;
@@ -224,7 +219,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
         }
         await this.ensureBotInited();
         const update = rawEvent;
-        await this.bot.handleUpdate(update);
+        await this.handleUpdate(update);
         return update;
     }
 
@@ -249,11 +244,25 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
         }
     }
 
-    private dispatchUpdate(update: Update): void {
-        this.emit("raw_update", update);
-        if (this.receivedUpdates.has(update.update_id)) return;
-        this.emit("update", update);
-        this.receivedUpdates.commit(update.update_id);
+    private async dispatchUpdate(
+        update: Update,
+        next: () => Promise<void> = async () => undefined,
+    ): Promise<boolean> {
+        await emitAllAwaited(this, "raw_update", update);
+        return this.updateIngress.deliver(update.update_id, async () => {
+            await emitAllAwaited(this, "update", update);
+            await next();
+        });
+    }
+
+    private async handleUpdate(update: Update): Promise<void> {
+        try {
+            await this.bot.handleUpdate(update);
+        } catch (error) {
+            const wrapped = TelegramError.wrap(error, "TELEGRAM_UPDATE_HANDLER_ERROR");
+            this.emit("client_error", wrapped);
+            throw wrapped;
+        }
     }
 
     private async runPolling(generation: number, signal: AbortSignal): Promise<void> {
@@ -261,7 +270,9 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
         if (receiveConfig.mode !== "polling") return;
         const pollingOptions = receiveConfig.options;
         let clearWebhook = true;
+        let offset: number | undefined;
         let attempt = 0;
+        let connected = false;
         while (generation === this.generation && !signal.aborted) {
             try {
                 if (clearWebhook) {
@@ -274,27 +285,43 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
                     );
                     clearWebhook = false;
                 }
-                await this.bot.start({
-                    ...pollingOptions,
-                    onStart: botInfo => {
-                        this.me = botInfo;
-                        attempt = 0;
-                        if (generation === this.generation) {
-                            this.emit("transport_state", "connected");
-                        }
-                    },
-                });
+                if (!connected) {
+                    this.emit("transport_state", "connected");
+                    connected = true;
+                }
+                const updates = await this.callApi("getUpdates", () =>
+                    this.bot.api.getUpdates(
+                        {
+                            ...pollingOptions,
+                            timeout: pollingOptions.timeout ?? 30,
+                            limit: pollingOptions.limit ?? 100,
+                            offset,
+                        },
+                        signal as Parameters<typeof this.bot.api.getUpdates>[1],
+                    ),
+                );
+                attempt = 0;
+                for (const update of updates) {
+                    if (generation !== this.generation || signal.aborted) return;
+                    await this.handleUpdate(update);
+                    offset = update.update_id + 1;
+                }
             } catch (error) {
                 if (generation !== this.generation || signal.aborted) return;
-                this.emit(
-                    "client_error",
-                    TelegramError.wrap(error, "TELEGRAM_POLLING_FAILED", "getUpdates"),
-                );
+                if (
+                    !(error instanceof TelegramError) ||
+                    error.code !== "TELEGRAM_UPDATE_HANDLER_ERROR"
+                ) {
+                    this.emit(
+                        "client_error",
+                        TelegramError.wrap(error, "TELEGRAM_POLLING_FAILED", "getUpdates"),
+                    );
+                }
+                connected = false;
                 this.emit("transport_state", "reconnecting");
+                attempt += 1;
+                await abortableDelay(pollingRetryDelay(attempt), signal);
             }
-            if (generation !== this.generation || signal.aborted) return;
-            attempt += 1;
-            await abortableDelay(pollingRetryDelay(attempt), signal);
         }
     }
 

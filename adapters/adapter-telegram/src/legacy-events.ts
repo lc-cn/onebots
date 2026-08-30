@@ -4,12 +4,12 @@ import type { TelegramCallbackQuery, TelegramMessage } from "./types.js";
 
 interface TelegramLegacyEventCallbacks {
     getSelfId(): number | undefined;
-    privateMessage(message: TelegramMessage): void;
-    groupMessage(message: TelegramMessage): void;
-    channelMessage(message: TelegramMessage): void;
-    guestMessage(message: TelegramMessage): void;
-    editedMessage(message: TelegramMessage): void;
-    callbackQuery(query: TelegramCallbackQuery): void;
+    privateMessage(message: TelegramMessage): void | PromiseLike<void>;
+    groupMessage(message: TelegramMessage): void | PromiseLike<void>;
+    channelMessage(message: TelegramMessage): void | PromiseLike<void>;
+    guestMessage(message: TelegramMessage): void | PromiseLike<void>;
+    editedMessage(message: TelegramMessage): void | PromiseLike<void>;
+    callbackQuery(query: TelegramCallbackQuery): void | PromiseLike<void>;
 }
 
 /**
@@ -20,29 +20,24 @@ export function installTelegramLegacyEventHandlers(
     bot: Bot,
     callbacks: TelegramLegacyEventCallbacks,
 ): void {
-    bot.on("message", ctx => {
-        const message = ctx.message;
-        if (!message || (message.from?.is_bot && message.from.id === callbacks.getSelfId())) return;
-        const event = transformMessage(message, ctx);
-        if (message.chat.type === "private") callbacks.privateMessage(event);
-        else callbacks.groupMessage(event);
-    });
-
-    bot.on("edited_message", ctx => {
-        if (ctx.editedMessage) callbacks.editedMessage(transformMessage(ctx.editedMessage, ctx));
-    });
-
-    bot.on("channel_post", ctx => {
-        if (ctx.channelPost) callbacks.channelMessage(transformMessage(ctx.channelPost, ctx));
-    });
-
-    bot.on("guest_message", ctx => {
-        if (ctx.guestMessage) callbacks.guestMessage(transformMessage(ctx.guestMessage, ctx));
-    });
-
-    bot.on("callback_query", ctx => {
-        if (ctx.callbackQuery) {
-            callbacks.callbackQuery(ctx.callbackQuery as unknown as TelegramCallbackQuery);
+    bot.use(async context => {
+        const update = context.update;
+        if (update.message) {
+            const message = update.message;
+            if (message.from?.is_bot && message.from.id === callbacks.getSelfId()) return;
+            const event = transformMessage(message, context);
+            if (message.chat.type === "private") await callbacks.privateMessage(event);
+            else await callbacks.groupMessage(event);
+        } else if (update.edited_message) {
+            await callbacks.editedMessage(transformMessage(update.edited_message, context));
+        } else if (update.channel_post) {
+            await callbacks.channelMessage(transformMessage(update.channel_post, context));
+        } else if (update.guest_message) {
+            await callbacks.guestMessage(transformMessage(update.guest_message, context));
+        } else if (update.callback_query) {
+            await callbacks.callbackQuery(
+                update.callback_query as unknown as TelegramCallbackQuery,
+            );
         }
     });
 }

@@ -63,16 +63,12 @@ export function createTelegramAccount(
         if (state === "connected") syncIdentity();
         adapter.logger.info(`Telegram Bot ${config.account_id} polling 状态: ${state}`);
     });
-    bot.on("update", (update: Update) => {
-        try {
-            const events = projectTelegramEvents(update, {
-                botId: adapter.createId(bot.getCachedMe()?.id || config.account_id),
-                createId: value => adapter.createId(value),
-            });
-            for (const event of events) account.dispatch(event);
-        } catch (error) {
-            adapter.logger.error(`[Telegram] 投影 Update 失败:`, error);
-        }
+    bot.on("update", async (update: Update) => {
+        const events = projectTelegramEvents(update, {
+            botId: adapter.createId(bot.getCachedMe()?.id || config.account_id),
+            createId: value => adapter.createId(value),
+        });
+        for (const event of events) await account.dispatchAwaited(event);
     });
 
     const manager = new ConnectionManager(() => bot.start(), RetryPresets.websocket, {

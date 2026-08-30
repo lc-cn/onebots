@@ -1,8 +1,8 @@
 import { ErrorCategory } from "onebots";
 import { describe, expect, it, vi } from "vitest";
+import { Bot } from "grammy";
 import { TelegramBot } from "./bot.js";
 import { TelegramError } from "./errors.js";
-import type { Bot } from "grammy";
 import type { Update } from "grammy/types";
 
 describe("TelegramBot 边界", () => {
@@ -60,32 +60,21 @@ describe("TelegramBot 边界", () => {
     it("polling 初次网络失败后仍会重试并恢复在线", async () => {
         vi.useFakeTimers();
         try {
-            let stopPolling!: () => void;
             const deleteWebhook = vi
                 .fn()
                 .mockRejectedValueOnce(new Error("offline"))
                 .mockResolvedValue(true);
-            const start = vi.fn(async (options: Parameters<Bot["start"]>[0]) => {
-                await options?.onStart?.({
-                    id: 1,
-                    is_bot: true,
-                    first_name: "Bot",
-                    username: "bot",
-                    can_join_groups: true,
-                    can_read_all_group_messages: false,
-                    supports_inline_queries: false,
-                    can_connect_to_business: false,
-                    has_main_web_app: false,
-                });
-                await new Promise<void>(resolve => {
-                    stopPolling = resolve;
-                });
-            });
+            const getUpdates = vi.fn(
+                (_options: unknown, signal?: AbortSignal) =>
+                    new Promise<Update[]>(resolve => {
+                        signal?.addEventListener("abort", () => resolve([]), { once: true });
+                    }),
+            );
             const nativeBot = {
-                api: { deleteWebhook },
-                start,
-                stop: async () => stopPolling(),
-                isRunning: () => start.mock.calls.length > 0,
+                api: { deleteWebhook, getUpdates },
+                botInfo: botInfo(),
+                isInited: () => true,
+                handleUpdate: vi.fn(),
             } as unknown as Bot;
             const bot = new TelegramBot({ account_id: "bot", token: "1:token" });
             Object.assign(bot as unknown as { initialized: boolean; bot: Bot }, {
@@ -99,8 +88,56 @@ describe("TelegramBot 边界", () => {
             await vi.advanceTimersByTimeAsync(2_000);
 
             expect(deleteWebhook).toHaveBeenCalledTimes(2);
-            expect(start).toHaveBeenCalledOnce();
+            expect(getUpdates).toHaveBeenCalledOnce();
+            expect(getUpdates).toHaveBeenCalledWith(
+                expect.objectContaining({ timeout: 30, limit: 100 }),
+                expect.any(AbortSignal),
+            );
             expect(states).toEqual(["reconnecting", "connected"]);
+            await bot.stop();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("polling 只在 Update 业务成功后推进 offset", async () => {
+        vi.useFakeTimers();
+        try {
+            const updates = [{ update_id: 10 }, { update_id: 11 }] as Update[];
+            const requestedOffsets: Array<number | undefined> = [];
+            let request = 0;
+            const getUpdates = vi.fn(
+                (options: { offset?: number }, signal?: AbortSignal): Promise<Update[]> => {
+                    requestedOffsets.push(options.offset);
+                    request += 1;
+                    if (request === 1) return Promise.resolve(updates);
+                    if (request === 2) return Promise.resolve([updates[1]!]);
+                    return new Promise(resolve => {
+                        signal?.addEventListener("abort", () => resolve([]), { once: true });
+                    });
+                },
+            );
+            const nativeBot = {
+                api: { deleteWebhook: vi.fn().mockResolvedValue(true), getUpdates },
+                botInfo: botInfo(),
+                isInited: () => true,
+                handleUpdate: vi
+                    .fn()
+                    .mockResolvedValueOnce(undefined)
+                    .mockRejectedValueOnce(new Error("consumer failed"))
+                    .mockResolvedValue(undefined),
+            } as unknown as Bot;
+            const bot = new TelegramBot({ account_id: "bot", token: "1:token" });
+            Object.assign(bot as unknown as { initialized: boolean; bot: Bot }, {
+                initialized: true,
+                bot: nativeBot,
+            });
+            await bot.start();
+            await vi.advanceTimersByTimeAsync(2_000);
+            await vi.runAllTicks();
+
+            expect(requestedOffsets.slice(0, 3)).toEqual([undefined, 11, 12]);
+            expect(nativeBot.handleUpdate).toHaveBeenCalledTimes(3);
             await bot.stop();
         } finally {
             vi.useRealTimers();
@@ -136,26 +173,98 @@ describe("TelegramBot 边界", () => {
         expect((await bot.acceptHttp(new Request("https://bot.example/hook"))).status).toBe(405);
     });
 
-    it("业务更新监听器失败时不提交去重状态", () => {
+    it("异步业务更新监听器失败时不提交去重状态", async () => {
         const bot = new TelegramBot({ account_id: "bot", token: "1:token" });
         const update = { update_id: 2 } as Update;
-        const dispatch = (value: Update): void =>
+        const dispatch = (value: Update): Promise<boolean> =>
             (
                 bot as unknown as {
-                    dispatchUpdate(update: Update): void;
+                    dispatchUpdate(update: Update): Promise<boolean>;
                 }
             ).dispatchUpdate(value);
-        const failure = (): void => {
-            throw new Error("downstream failed");
-        };
+        const failure = vi.fn().mockRejectedValue(new Error("downstream failed"));
         bot.on("update", failure);
-        expect(() => dispatch(update)).toThrow("downstream failed");
+        await expect(dispatch(update)).rejects.toThrow("downstream failed");
         bot.off("update", failure);
         const listener = vi.fn();
         bot.on("update", listener);
 
-        dispatch(update);
+        await expect(dispatch(update)).resolves.toBe(true);
+        await expect(dispatch(update)).resolves.toBe(false);
 
         expect(listener).toHaveBeenCalledOnce();
     });
+
+    it("合并同一 update_id 的并发投递并等待完整中间件链", async () => {
+        const bot = new TelegramBot({ account_id: "bot", token: "1:token" });
+        const update = { update_id: 3 } as Update;
+        let release: (() => void) | undefined;
+        const listener = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
+        const next = vi.fn(async () => undefined);
+        bot.on("update", listener);
+        const dispatch = (value: Update): Promise<boolean> =>
+            (
+                bot as unknown as {
+                    dispatchUpdate(update: Update, next: () => Promise<void>): Promise<boolean>;
+                }
+            ).dispatchUpdate(value, next);
+
+        const first = dispatch(update);
+        const follower = dispatch(update);
+        await Promise.resolve();
+        expect(listener).toHaveBeenCalledOnce();
+        release?.();
+
+        await expect(Promise.all([first, follower])).resolves.toEqual([true, false]);
+        expect(next).toHaveBeenCalledOnce();
+    });
+
+    it("grammY 错误边界记录后继续向 Webhook 传播投递失败", async () => {
+        const bot = new TelegramBot({
+            account_id: "bot",
+            token: "1:token",
+            receive_mode: "manual",
+        });
+        const nativeBot = new Bot("1:token", { botInfo: botInfo() });
+        Object.assign(bot as unknown as { initialized: boolean; bot: Bot }, {
+            initialized: true,
+            bot: nativeBot,
+        });
+        (
+            bot as unknown as {
+                setupEventHandlers(): void;
+            }
+        ).setupEventHandlers();
+        const failure = vi.fn().mockRejectedValue(new Error("protocol offline"));
+        const clientError = vi.fn();
+        bot.on("update", failure);
+        bot.on("client_error", clientError);
+
+        await expect(bot.ingest({ update_id: 4 })).rejects.toMatchObject({
+            code: "TELEGRAM_UPDATE_HANDLER_ERROR",
+        });
+        expect(clientError).toHaveBeenCalledOnce();
+
+        bot.off("update", failure);
+        await expect(bot.ingest({ update_id: 4 })).resolves.toMatchObject({ update_id: 4 });
+    });
 });
+
+function botInfo() {
+    return {
+        id: 1,
+        is_bot: true as const,
+        first_name: "Bot",
+        username: "bot",
+        can_join_groups: true,
+        can_read_all_group_messages: false,
+        supports_inline_queries: false,
+        can_connect_to_business: false,
+        has_main_web_app: false,
+    };
+}
