@@ -32,6 +32,20 @@ export const kookCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },
+        get_friend_list: { support: "native" },
+        get_friend_info: { support: "native" },
+        delete_friend: {
+            support: "native",
+            note: "支持删除后同时加入 KOOK 屏蔽列表",
+        },
+        get_friend_requests: {
+            support: "native",
+            note: "KOOK 不提供申请时间，统一 time 为 0；只返回当前账号收到的申请",
+        },
+        handle_friend_request: {
+            support: "native",
+            note: "拒绝时可通过 initiator_uid 同时屏蔽申请人",
+        },
         get_guild_list: { support: "native" },
         get_guild_info: { support: "native" },
         get_guild_member_list: { support: "native" },
@@ -62,6 +76,7 @@ export const kookCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         reaction_removed: { support: "native", scenes: ["private", "channel"] },
         message_updated: { support: "native", scenes: ["private", "channel"] },
         message_deleted: { support: "native", scenes: ["private", "channel"] },
+        message_status: { support: "native", scenes: ["channel"] },
         interaction: { support: "native" },
         custom: { support: "native", note: "未标准化系统事件保留完整 raw_event" },
     },

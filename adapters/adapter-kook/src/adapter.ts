@@ -10,6 +10,7 @@ import { createKookAccount } from "./account.js";
 import { KookBot } from "./bot.js";
 import { kookCapabilities } from "./capabilities.js";
 import { KookError } from "./errors.js";
+import { KookFriendActions } from "./friend-actions.js";
 import {
     assertKookEditableMessage,
     prepareKookOutboundMessage,
@@ -25,8 +26,11 @@ import type {
 } from "./types.js";
 
 export class KookAdapter extends Adapter<KookBot, "kook"> {
+    private readonly friendActions: KookFriendActions;
+
     constructor(app: BaseApp) {
         super(app, "kook", kookCapabilities);
+        this.friendActions = new KookFriendActions(value => this.createId(value));
         this.icon = "https://www.kookapp.cn/favicon.ico";
     }
 
@@ -123,6 +127,33 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
             query: { user_id: params.user_id.string },
         });
         return this.toUserInfo(user);
+    }
+
+    getFriendList(uin: string): Promise<Adapter.FriendInfo[]> {
+        return this.friendActions.getFriendList(this.requireBot(uin));
+    }
+
+    getFriendInfo(uin: string, params: Adapter.GetFriendInfoParams): Promise<Adapter.FriendInfo> {
+        return this.friendActions.getFriendInfo(this.requireBot(uin), params.user_id.string);
+    }
+
+    deleteFriend(uin: string, params: Adapter.DeleteFriendParams): Promise<void> {
+        return this.friendActions.deleteFriend(
+            this.requireBot(uin),
+            params.user_id.string,
+            params.block === true,
+        );
+    }
+
+    getFriendRequests(
+        uin: string,
+        params?: Adapter.GetFriendRequestsParams,
+    ): Promise<Adapter.FriendRequest[]> {
+        return this.friendActions.getFriendRequests(this.requireBot(uin), params);
+    }
+
+    handleFriendRequest(uin: string, params: Adapter.HandleFriendRequestParams): Promise<void> {
+        return this.friendActions.handleFriendRequest(this.requireBot(uin), params);
     }
 
     async getGuildList(uin: string): Promise<Adapter.GuildInfo[]> {

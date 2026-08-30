@@ -3,6 +3,7 @@ import {
     assertKookEditableMessage,
     buildKookOutboundMessage,
     prepareKookOutboundMessage,
+    projectKookEditableContent,
     projectKookMessageSegments,
 } from "./messages.js";
 
@@ -42,6 +43,15 @@ describe("KOOK 消息编译", () => {
             data: { content, cards: [{ type: "card", modules: [] }] },
         });
         expect(projectKookMessageSegments(8, "https://example.com/a.mp3")[0]?.type).toBe("audio");
+    });
+
+    test("编辑事件仅对官方 Card 数组结构推断 Card", () => {
+        const card = JSON.stringify([{ type: "card", modules: [] }]);
+        expect(projectKookEditableContent(card)[0]?.type).toBe("card");
+        expect(projectKookEditableContent('{"type":"card"}')).toEqual([
+            { type: "text", data: { text: '{"type":"card"}' } },
+        ]);
+        expect(projectKookEditableContent("[]")).toEqual([{ type: "text", data: { text: "[]" } }]);
     });
 
     test("发送前把 Base64 媒体上传为当前机器人的 KOOK 素材", async () => {

@@ -104,6 +104,31 @@ describe("KOOK 事件投影", () => {
         });
     });
 
+    test("更新事件保留 Card，并把置顶事件投影为消息状态", () => {
+        const card = JSON.stringify([{ type: "card", modules: [] }]);
+        const updated = systemEvent("updated_message", {
+            msg_id: "message-2",
+            channel_id: "channel-1",
+            content: card,
+        });
+        expect(projectKookEvents(updated, { s: 0, d: updated }, context)[0]).toMatchObject({
+            notice_type: "message_updated",
+            message: [{ type: "card", data: { content: card } }],
+        });
+
+        const pinned = systemEvent("pinned_message", {
+            msg_id: "message-2",
+            channel_id: "channel-1",
+            operator_id: "admin-1",
+        });
+        expect(projectKookEvents(pinned, { s: 0, d: pinned }, context)[0]).toMatchObject({
+            notice_type: "message_status",
+            sub_type: "pinned_message",
+            message_id: { string: "message-2" },
+            operator: { id: { string: "admin-1" } },
+        });
+    });
+
     test("投影机器人服务器生命周期和语音频道成员", () => {
         const joined = systemEvent("self_joined_guild", { guild_id: "guild-2" }, "PERSON");
         expect(projectKookEvents(joined, { s: 0, d: joined }, context)[0]).toMatchObject({

@@ -56,4 +56,24 @@ describe("KOOK 平台扩展动作", () => {
             style: 2,
         });
     });
+
+    test("主动好友申请保持 KOOK 来源语义", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        await executeKookPlatformAction({ callApi } as never, "send_friend_request", {
+            user_code: "Alice#0001",
+            from: 2,
+            guild_id: "guild-1",
+        });
+        expect(callApi).toHaveBeenCalledWith("/v3/friend/request", {
+            method: "POST",
+            body: { user_code: "Alice#0001", from: 2, guild_id: "guild-1" },
+        });
+
+        await expect(
+            executeKookPlatformAction({ callApi } as never, "send_friend_request", {
+                user_code: "Alice#0001",
+                from: 2,
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_FRIEND_REQUEST_GUILD_REQUIRED" });
+    });
 });

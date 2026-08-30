@@ -102,6 +102,27 @@ export function projectKookMessageSegments(
     return segments;
 }
 
+/** KOOK 更新事件不携带消息类型，仅在内容满足官方 Card 数组结构时按 Card 投影。 */
+export function projectKookEditableContent(content: unknown): CommonTypes.Segment[] {
+    const text = stringValue(content);
+    return projectKookMessageSegments(isKookCardContent(text) ? 10 : 9, text);
+}
+
+function isKookCardContent(content: string): boolean {
+    const value = parseJson(content);
+    return (
+        Array.isArray(value) &&
+        value.length > 0 &&
+        value.every(
+            card =>
+                card !== null &&
+                typeof card === "object" &&
+                !Array.isArray(card) &&
+                (card as Record<string, unknown>).type === "card",
+        )
+    );
+}
+
 function buildKMarkdown(segments: CommonTypes.Segment[]): string {
     let result = "";
     for (const segment of segments) {

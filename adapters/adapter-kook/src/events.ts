@@ -1,5 +1,5 @@
 import { coerceUnixToEventMs, type CommonEvent, type CommonTypes } from "onebots";
-import { projectKookMessageSegments } from "./messages.js";
+import { projectKookEditableContent, projectKookMessageSegments } from "./messages.js";
 import type { KookEvent, KookSignal } from "./types.js";
 import { stringValue } from "./utils.js";
 
@@ -67,7 +67,7 @@ function projectSystemNotice(
         operator: userValue(body.operator_id, context),
         group: projectGroup(guildId, channelId, event.extra.channel_name, context),
         message_id: messageId ? context.createId(messageId) : undefined,
-        message: body.content ? projectKookMessageSegments(9, String(body.content)) : undefined,
+        message: body.content ? projectKookEditableContent(body.content) : undefined,
         sub_type: eventType,
         extensions: {
             kook: {
@@ -231,6 +231,8 @@ const NOTICE_TYPES: Record<string, CommonEvent.NoticeType> = {
     updated_guild_member: "user_updated",
     user_updated: "user_updated",
     message_btn_click: "interaction",
+    pinned_message: "message_status",
+    unpinned_message: "message_status",
     self_joined_guild: "group_increase",
     self_exited_guild: "group_decrease",
     joined_channel: "member_joined",

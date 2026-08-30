@@ -159,6 +159,40 @@ describe("KOOK Bot", () => {
         await bot.stop();
     });
 
+    test("并发 start 共享同一次初始化并等待相同结果", async () => {
+        let release: ((response: Response) => void) | undefined;
+        const response = new Promise<Response>(resolve => {
+            release = resolve;
+        });
+        const fetchMock = vi.fn().mockReturnValue(response);
+        vi.stubGlobal("fetch", fetchMock);
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        const first = bot.start();
+        const second = bot.start();
+        const firstSettled = vi.fn();
+        const secondSettled = vi.fn();
+        void first.then(firstSettled);
+        void second.then(secondSettled);
+
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+        expect(firstSettled).not.toHaveBeenCalled();
+        expect(secondSettled).not.toHaveBeenCalled();
+
+        release?.(
+            new Response(JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } }), {
+                status: 200,
+            }),
+        );
+        await Promise.all([first, second]);
+        expect(firstSettled).toHaveBeenCalledOnce();
+        expect(secondSettled).toHaveBeenCalledOnce();
+        await bot.stop();
+    });
+
     test("manual ingest 复用 Gateway sn 保序器", () => {
         const bot = new KookBot({
             account_id: "bot",

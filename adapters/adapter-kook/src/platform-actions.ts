@@ -7,6 +7,7 @@ import {
 import type { KookBot } from "./bot.js";
 import { KookError } from "./errors.js";
 import type { KookApiRequestOptions } from "./types.js";
+import { KOOK_FRIEND_PLATFORM_ACTIONS } from "./platform-actions-friend.js";
 
 interface ActionRoute {
     path: string;
@@ -108,6 +109,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         },
         create_guild_emoji: createGuildEmoji,
         get_guild_badge: getGuildBadge,
+        ...KOOK_FRIEND_PLATFORM_ACTIONS,
         ...ROUTE_HANDLERS,
     },
     action =>

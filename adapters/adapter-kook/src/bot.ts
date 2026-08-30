@@ -34,6 +34,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     private generation = 0;
     private reconnectAttempt = 0;
     private stopped = true;
+    private startPromise?: Promise<void>;
     private readonly gatewaySequence = new KookGatewaySequence();
     private sessionId = "";
     private me: KookUser | null = null;
@@ -56,14 +57,19 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     }
 
     async start(): Promise<void> {
+        if (this.startPromise) return this.startPromise;
         if (!this.stopped) return;
         this.stopped = false;
-        this.generation++;
-        try {
-            await this.establish(this.generation);
-        } catch (error) {
-            this.scheduleReconnect(this.generation);
+        const generation = ++this.generation;
+        const startPromise = this.establish(generation).catch(error => {
+            this.scheduleReconnect(generation);
             throw error;
+        });
+        this.startPromise = startPromise;
+        try {
+            await startPromise;
+        } finally {
+            if (this.startPromise === startPromise) this.startPromise = undefined;
         }
     }
 
