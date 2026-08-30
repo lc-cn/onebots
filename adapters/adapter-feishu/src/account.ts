@@ -3,6 +3,7 @@ import type { Logger } from "@larksuiteoapi/node-sdk";
 import type { FeishuAdapter } from "./adapter.js";
 import { FeishuBot } from "./bot.js";
 import { projectFeishuEvents } from "./events.js";
+import { resolveFeishuBotId } from "./identity.js";
 import type { FeishuConfig, FeishuEvent, FeishuWebhookBody } from "./types.js";
 
 /** 组装飞书账号生命周期；Webhook 与官方长连接共用同一事件投影。 */
@@ -44,12 +45,13 @@ export function createFeishuAccount(
         try {
             if (isOwnMessage(event, bot.getCachedMe()?.open_id)) return;
             const projected = projectFeishuEvents(event, rawEvent, {
-                botId: adapter.createId(config.account_id),
+                botId: adapter.createId(resolveFeishuBotId(bot.getCachedMe(), config.app_id)),
                 createId: value => adapter.createId(value),
             });
             for (const item of projected) account.dispatch(item);
         } catch (error) {
             adapter.logger.error(`[${platformName}] 投影原始事件失败:`, error);
+            throw error;
         }
     });
 

@@ -204,15 +204,13 @@ describe("FeishuBot 请求与事件边界", () => {
         expect(invalidEvent).toMatchObject({ status: 400, body: { code: 1 } });
     });
 
-    it("隔离业务监听器异常并报告结构化错误", () => {
+    it("监听器失败时允许同一事件重投，成功后才去重", () => {
         const bot = createBot();
-        const errorListener = vi.fn();
-        bot.on("client_error", errorListener);
-        bot.on("event", () => {
+        const listener = vi.fn().mockImplementationOnce(() => {
             throw new Error("listener failed");
         });
-
-        bot.ingest({
+        bot.on("event", listener);
+        const event = {
             schema: "2.0",
             header: {
                 event_id: "EV1",
@@ -222,10 +220,40 @@ describe("FeishuBot 请求与事件边界", () => {
                 tenant_key: "t",
             },
             event: {},
+        };
+
+        expect(() => bot.ingest(event)).toThrow("listener failed");
+        expect(() => bot.ingest(event)).not.toThrow();
+        bot.ingest(event);
+        expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it("Webhook 业务处理失败返回 500 并允许上游重投", async () => {
+        const bot = createBot();
+        const listener = vi.fn().mockImplementationOnce(() => {
+            throw new Error("dispatch failed");
         });
-        expect(errorListener).toHaveBeenCalledWith(
-            expect.objectContaining({ code: "FEISHU_LISTENER_FAILED" }),
-        );
+        bot.on("event", listener);
+        const event = {
+            schema: "2.0",
+            header: {
+                event_id: "EV_RETRY",
+                event_type: "custom",
+                create_time: "1",
+                app_id: "a",
+                tenant_key: "t",
+            },
+            event: {},
+        };
+        const first = { request: { body: event }, body: undefined, status: 0 };
+        const second = { request: { body: event }, body: undefined, status: 0 };
+
+        await bot.handleWebhook(first as never, vi.fn());
+        await bot.handleWebhook(second as never, vi.fn());
+
+        expect(first).toMatchObject({ status: 500, body: { code: 1 } });
+        expect(second.body).toEqual({ code: 0 });
+        expect(listener).toHaveBeenCalledTimes(2);
     });
 
     it("并发启动共享完整初始化且只触发一次 ready", async () => {

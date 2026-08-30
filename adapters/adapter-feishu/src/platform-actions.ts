@@ -26,7 +26,7 @@ const ACTION_HANDLERS = {
             method: "POST",
             params: {
                 receive_id_type: stringValue(params.receive_id_type, "open_id"),
-                ...(typeof params.uuid === "string" && params.uuid ? { uuid: params.uuid } : {}),
+                ...optionalStringParam(params.uuid, "uuid"),
             },
             body: {
                 receive_id: requiredString(params.receive_id, "receive_id"),
@@ -137,7 +137,11 @@ function requiredString(value: unknown, name: string): string {
 }
 
 function requireMethod(value: unknown): Method {
-    const method = typeof value === "string" ? value.toUpperCase() : "GET";
+    if (value === undefined) return "GET";
+    if (typeof value !== "string" || !value) {
+        throw invalidFeishuParam("飞书参数 method 必须为非空字符串", value);
+    }
+    const method = value.toUpperCase();
     if (!["GET", "POST", "PUT", "DELETE", "PATCH"].includes(method)) {
         throw invalidFeishuParam("飞书参数 method 不是受支持的 HTTP 方法", value);
     }
@@ -153,8 +157,8 @@ function segment(params: Readonly<Record<string, unknown>>, name: string): strin
 }
 
 function bodyValue(value: unknown): Record<string, unknown> | undefined {
-    if (value == null) return undefined;
-    if (typeof value !== "object" || Array.isArray(value))
+    if (value === undefined) return undefined;
+    if (value === null || typeof value !== "object" || Array.isArray(value))
         throw invalidFeishuParam("飞书参数 body 必须为对象", value);
     return value as Record<string, unknown>;
 }
@@ -162,8 +166,8 @@ function bodyValue(value: unknown): Record<string, unknown> | undefined {
 function queryValue(
     value: Readonly<Record<string, unknown>> | unknown,
 ): Record<string, string | number | boolean> | undefined {
-    if (value == null) return undefined;
-    if (typeof value !== "object" || Array.isArray(value))
+    if (value === undefined) return undefined;
+    if (value === null || typeof value !== "object" || Array.isArray(value))
         throw invalidFeishuParam("飞书参数 query 必须为对象", value);
     const query: Record<string, string | number | boolean> = {};
     for (const [key, item] of Object.entries(value)) {
@@ -183,7 +187,13 @@ function without(
 }
 
 function stringValue(value: unknown, fallback: string): string {
-    return typeof value === "string" && value ? value : fallback;
+    if (value === undefined) return fallback;
+    return requiredString(value, "可选字符串");
+}
+
+function optionalStringParam(value: unknown, name: string): Record<string, string> {
+    if (value === undefined) return {};
+    return { [name]: requiredString(value, name) };
 }
 
 function stringArray(value: unknown, name: string): string[] {

@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeFeishuPlatformAction } from "./platform-actions.js";
+import { feishuCapabilities } from "./capabilities.js";
+import { executeFeishuPlatformAction, FEISHU_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 describe("executeFeishuPlatformAction", () => {
+    it("所有已注册平台动作都公开能力声明", () => {
+        for (const action of FEISHU_PLATFORM_ACTIONS) {
+            expect(feishuCapabilities.actions[action]?.support).toBe("native");
+        }
+    });
+
     it("按开放平台 endpoint 回复消息", async () => {
         const callApi = vi.fn().mockResolvedValue({ code: 0 });
         await executeFeishuPlatformAction({ callApi } as never, "reply_message", {
@@ -27,6 +34,29 @@ describe("executeFeishuPlatformAction", () => {
         await expect(
             executeFeishuPlatformAction({ callApi: vi.fn() } as never, "call_feishu_api", {
                 path: "/im/v1/%2e%2e/auth",
+            }),
+        ).rejects.toMatchObject({ code: "FEISHU_INVALID_PARAM" });
+    });
+
+    it("拒绝显式传入的无效可选参数", async () => {
+        const bot = { callApi: vi.fn() } as never;
+        await expect(
+            executeFeishuPlatformAction(bot, "call_feishu_api", {
+                path: "/im/v1/messages",
+                method: null,
+            }),
+        ).rejects.toMatchObject({ code: "FEISHU_INVALID_PARAM" });
+        await expect(
+            executeFeishuPlatformAction(bot, "call_feishu_api", {
+                path: "/im/v1/messages",
+                body: null,
+            }),
+        ).rejects.toMatchObject({ code: "FEISHU_INVALID_PARAM" });
+        await expect(
+            executeFeishuPlatformAction(bot, "merge_forward_messages", {
+                receive_id: "oc_1",
+                receive_id_type: null,
+                message_id_list: ["om_1"],
             }),
         ).rejects.toMatchObject({ code: "FEISHU_INVALID_PARAM" });
     });

@@ -1,8 +1,17 @@
 import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { FEISHU_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+const platformActions = Object.fromEntries(
+    [...FEISHU_PLATFORM_ACTIONS].map(action => [
+        action,
+        { support: "native" as const, availability: "context" as const },
+    ]),
+);
 
 /** 飞书开放平台实现当前可用的能力。 */
 export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
+        ...platformActions,
         send_message: { support: "native", scenes: ["private", "group"] },
         delete_message: { support: "native" },
         get_message: { support: "native" },

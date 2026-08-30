@@ -17,6 +17,7 @@ import { type FeishuConfig, type FeishuAPIResponse, type FeishuMessage } from ".
 import { feishuCapabilities } from "./capabilities.js";
 import { createFeishuAccount } from "./account.js";
 import { executeFeishuPlatformAction, FEISHU_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { resolveFeishuBotId } from "./identity.js";
 import { projectFeishuMessageSegments } from "./events.js";
 import { compileFeishuMessage } from "./messages.js";
 import { FeishuError, invalidFeishuParam } from "./errors.js";
@@ -203,7 +204,7 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
         const me = bot.getCachedMe();
 
         return {
-            user_id: this.createId(me?.user_id || me?.open_id || ""),
+            user_id: this.createId(resolveFeishuBotId(me, bot.getAppId())),
             user_name: me?.name || "",
             user_displayname: me?.nickname || me?.name || "",
             avatar: me?.avatar_url || me?.avatar_big,
@@ -405,9 +406,23 @@ export class FeishuAdapter extends Adapter<FeishuBot, "feishu"> {
      */
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
         return {
-            online: account?.status === AccountStatus.Online,
-            good: account?.status === AccountStatus.Online,
+            online,
+            good: online,
+            bots: account
+                ? [
+                      {
+                          self: this.createId(
+                              resolveFeishuBotId(
+                                  account.client.getCachedMe(),
+                                  account.config.app_id,
+                              ),
+                          ),
+                          online,
+                      },
+                  ]
+                : [],
         };
     }
 

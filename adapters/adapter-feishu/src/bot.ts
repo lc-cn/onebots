@@ -1,7 +1,3 @@
-/**
- * 飞书 Bot 客户端
- * 基于飞书开放平台 API，使用 fetch 实现
- */
 import { EventEmitter } from "node:events";
 import {
     Domain,
@@ -29,7 +25,8 @@ import {
     FEISHU_LONG_CONNECTION_EVENT_TYPES,
     restoreLongConnectionEnvelope,
 } from "./long-connection.js";
-import { isFeishuApiEnvelope, isFeishuEvent } from "./guards.js";
+import { isFeishuApiEnvelope } from "./guards.js";
+import { FeishuEventIngress } from "./event-ingress.js";
 import {
     buildFeishuApiUrl,
     normalizeFeishuEndpoint,
@@ -66,7 +63,7 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     private startPromise?: Promise<void>;
     private running = false;
     private generation = 0;
-    /** 当前使用的 API 端点 */
+    private readonly eventIngress = new FeishuEventIngress();
     readonly endpoint: string;
 
     constructor(config: FeishuConfig) {
@@ -395,12 +392,14 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
         try {
             this.ingest(resolved.body, resolved.body);
         } catch (error) {
-            this.safeEmit(
-                "client_error",
-                FeishuError.wrap(error, "FEISHU_WEBHOOK_INVALID", "webhook"),
-            );
-            ctx.status = 400;
-            ctx.body = { code: 1, msg: "飞书事件结构无效" };
+            const wrapped = FeishuError.wrap(error, "FEISHU_WEBHOOK_FAILED", "webhook");
+            this.safeEmit("client_error", wrapped);
+            const invalidEvent = wrapped.code === "FEISHU_INVALID_EVENT";
+            ctx.status = invalidEvent ? 400 : 500;
+            ctx.body = {
+                code: 1,
+                msg: invalidEvent ? "飞书事件结构无效" : "飞书事件处理失败",
+            };
             return;
         }
 
@@ -415,15 +414,16 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
         return this.me;
     }
 
+    /** 返回应用身份回退值；仅在尚未获取机器人 open_id 时使用。 */
+    getAppId(): string {
+        return this.config.app_id;
+    }
+
     /** 将 Webhook、官方长连接或外部连接的事件交给同一校验入口。 */
     ingest(event: unknown, rawEvent?: FeishuWebhookBody): void {
-        if (!isFeishuEvent(event)) {
-            throw new FeishuError("飞书事件缺少有效的 2.0 header", {
-                code: "FEISHU_INVALID_EVENT",
-                details: event,
-            });
-        }
-        this.safeEmit("event", event, rawEvent ?? event);
+        this.eventIngress.ingest(event, parsed =>
+            this.emit("event", parsed, rawEvent ?? { ...parsed }),
+        );
     }
 
     /**

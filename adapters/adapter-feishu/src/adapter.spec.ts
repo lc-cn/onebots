@@ -41,3 +41,29 @@ describe("FeishuAdapter.getMessage", () => {
         });
     });
 });
+
+describe("FeishuAdapter 机器人身份", () => {
+    it("登录信息与状态使用平台 open_id，而不是本地账号别名", async () => {
+        const me = {
+            open_id: "ou_bot",
+            user_id: "user_bot",
+            name: "Bot",
+        };
+        const client = { getCachedMe: () => me, getAppId: () => "cli_app" };
+        const createId = (value: string) => ({ string: value });
+        const login = await FeishuAdapter.prototype.getLoginInfo.call(
+            { requireBot: () => client, createId } as never,
+            "local-alias",
+        );
+        const status = await FeishuAdapter.prototype.getStatus.call(
+            {
+                getAccount: () => ({ status: "online", client, config: { app_id: "cli_app" } }),
+                createId,
+            } as never,
+            "local-alias",
+        );
+
+        expect(login.user_id).toEqual({ string: "ou_bot" });
+        expect(status.bots).toEqual([{ self: { string: "ou_bot" }, online: true }]);
+    });
+});
