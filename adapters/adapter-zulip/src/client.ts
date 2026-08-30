@@ -47,6 +47,7 @@ const DEFAULT_EVENT_TYPES = [
     "realm_domains",
     "realm_emoji",
     "realm_linkifiers",
+    "realm_playgrounds",
     "presence",
     "user_status",
     "typing",

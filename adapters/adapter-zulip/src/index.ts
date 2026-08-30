@@ -36,6 +36,7 @@ const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
     realm_domains: "允许注册的邮箱域名",
     realm_emoji: "组织自定义表情",
     realm_linkifiers: "组织链接规则",
+    realm_playgrounds: "代码运行环境",
     restart: "服务器重启",
 };
 

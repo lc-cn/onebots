@@ -10,6 +10,7 @@ import { ZULIP_INVITATION_ACTIONS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_MUTATION_ACTIONS } from "./linkifier-actions.js";
 import { ZULIP_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { ZULIP_PREFERENCE_PERMISSION_ACTIONS } from "./preference-actions.js";
+import { ZULIP_PLAYGROUND_MUTATION_ACTIONS } from "./playground-actions.js";
 import { ZULIP_PROFILE_FIELD_MUTATION_ACTIONS } from "./profile-field-actions.js";
 import { ZULIP_USER_MUTATION_ACTIONS } from "./user-actions.js";
 import { ZULIP_USER_GROUP_MUTATION_ACTIONS } from "./user-group-actions.js";
@@ -27,6 +28,7 @@ const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS,
     ZULIP_DOMAIN_MUTATION_ACTIONS.has(action) ||
     ZULIP_EMOJI_MUTATION_ACTIONS.has(action) ||
     ZULIP_PREFERENCE_PERMISSION_ACTIONS.has(action) ||
+    ZULIP_PLAYGROUND_MUTATION_ACTIONS.has(action) ||
     ZULIP_PROFILE_FIELD_MUTATION_ACTIONS.has(action) ||
     ZULIP_LINKIFIER_MUTATION_ACTIONS.has(action) ||
     [

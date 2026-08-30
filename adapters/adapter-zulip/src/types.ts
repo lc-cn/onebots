@@ -312,6 +312,18 @@ export interface ZulipRealmDomainsEvent extends ZulipBaseEvent {
     domain?: string;
 }
 
+export interface ZulipCodePlayground {
+    id: number;
+    name: string;
+    pygments_language: string;
+    url_template: string;
+}
+
+export interface ZulipRealmPlaygroundsEvent extends ZulipBaseEvent {
+    type: "realm_playgrounds";
+    realm_playgrounds: ZulipCodePlayground[];
+}
+
 export type ZulipEvent =
     | ZulipMessageEvent
     | ZulipUpdateMessageEvent
@@ -327,6 +339,7 @@ export type ZulipEvent =
     | ZulipRealmEmojiUpdateEvent
     | ZulipCustomProfileFieldsEvent
     | ZulipRealmDomainsEvent
+    | ZulipRealmPlaygroundsEvent
     | ZulipBaseEvent;
 
 export interface ZulipQueueRegistration extends ZulipApiEnvelope {
