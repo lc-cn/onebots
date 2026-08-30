@@ -19,6 +19,7 @@
 - 消息投递历史：按 WAMID 查询状态、Webhook 更新结果与可完整遍历的事件时间线
 - 号码级设置：Calling/SIP/视频、身份变更通知、payload encryption 公钥与数据驻留
 - Payload Encryption 加密消息：固定端点、compact JWE 结构校验与加密响应校验
+- 号码生命周期：状态资料、注册/注销、两步验证、短信或语音验证码申请与校验
 - 通用 `whatsapp_call`，无需等待适配器升级即可调用新的 Graph API 资源
 - `ingest()`、`ingestHttp()` 与标准 `acceptHttp(Request)` 共用同一 typed 事件和去重链路
 
@@ -112,6 +113,8 @@ Calling API 提供 `get_call_permissions`、`request_call_permission`、`connect
 号码设置使用 `get_phone_number_settings`、`update_calling_settings`、`update_user_identity_change_settings`、`update_payload_encryption_settings` 与 `update_storage_configuration_settings`，或直接使用强类型 `client.settings`。Meta 要求一次请求只能更新一个 feature，适配器为此提供独立方法并只发送对应字段；启用 payload encryption 时必须提供客户端公钥，关闭时不会携带密钥。读取 SIP 密码必须显式设置 `include_sip_credentials` 且由 Meta 权限控制，请避免记录该响应。
 
 加密消息使用 `send_encrypted_message` 或 `client.encryptedMessages.send(compactJwe)`。适配器只向 `messages_encrypted` 发送官方允许的两个字段，并校验请求和成功响应均为五段 compact JWE；明文加密、响应解密、私钥保护和轮换由业务负责。Meta 的失败响应仍是未加密的结构化 Graph API 错误。
+
+号码生命周期由 `client.phoneNumbers` 管理，并提供 `get_phone_number_info`、`register_phone_number`、`deregister_phone_number`、`set_two_step_verification`、`request_phone_number_verification_code` 与 `verify_phone_number_code` 固定动作。注册支持官方迁移 `backup`；验证码方式仅接受 `SMS` / `VOICE` 和 `en_US` 形式的 locale。适配器不发送 v21 起弃用的数据驻留注册字段，注销也不会夹带规范外请求体。PIN、验证码与迁移 backup 都是敏感信息，请勿记录。
 
 ## 参考
 

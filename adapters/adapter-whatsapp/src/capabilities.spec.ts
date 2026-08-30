@@ -44,5 +44,11 @@ describe("WhatsApp 能力清单", () => {
         expect(whatsAppCapabilities.actions.send_encrypted_message?.permissions).toEqual([
             "whatsapp_business_messaging",
         ]);
+        expect(
+            whatsAppCapabilities.actions.request_phone_number_verification_code?.permissions,
+        ).toEqual(["whatsapp_business_messaging"]);
+        expect(whatsAppCapabilities.actions.verify_phone_number_code?.permissions).toEqual([
+            "whatsapp_business_messaging",
+        ]);
     });
 });

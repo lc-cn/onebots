@@ -9,6 +9,7 @@ import { isWhatsAppCallingAction } from "./calling.js";
 import { isWhatsAppHistoryAction } from "./history.js";
 import { isWhatsAppSettingsAction } from "./settings.js";
 import { isWhatsAppEncryptedMessageAction } from "./encrypted-messages.js";
+import { isWhatsAppPhoneNumberAction } from "./phone-numbers.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -58,20 +59,14 @@ const businessManagementActions = new Set([
     "publish_flow",
     "deprecate_flow",
 ]);
-const businessMessagingActions = new Set([
-    "register_phone_number",
-    "deregister_phone_number",
-    "set_two_step_verification",
-    "block_user",
-    "unblock_user",
-    "list_blocked_users",
-]);
+const businessMessagingActions = new Set(["block_user", "unblock_user", "list_blocked_users"]);
 const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIONS, action => {
     if (isWhatsAppGroupAction(action)) return groupsAccess;
     if (isWhatsAppCallingAction(action)) return callingAccess;
     if (isWhatsAppHistoryAction(action)) return businessMessaging;
     if (isWhatsAppSettingsAction(action)) return businessMessaging;
     if (isWhatsAppEncryptedMessageAction(action)) return businessMessaging;
+    if (isWhatsAppPhoneNumberAction(action)) return businessMessaging;
     if (businessManagementActions.has(action)) return businessManagement;
     if (businessMessagingActions.has(action)) return businessMessaging;
     if (action === "send_native_message" || action === "mark_message_read") {

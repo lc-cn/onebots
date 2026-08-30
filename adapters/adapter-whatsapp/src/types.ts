@@ -392,8 +392,15 @@ export interface WhatsAppPhoneNumberInfo {
     id: string;
     display_phone_number?: string;
     verified_name?: string;
-    quality_rating?: string;
-    code_verification_status?: string;
+    quality_rating?: "GREEN" | "YELLOW" | "RED" | "NA";
+    code_verification_status?: "VERIFIED" | "UNVERIFIED";
+    name_status?:
+        | "APPROVED"
+        | "AVAILABLE_WITHOUT_REVIEW"
+        | "DECLINED"
+        | "EXPIRED"
+        | "PENDING_REVIEW"
+        | "NONE";
 }
 
 export interface WhatsAppMediaInfo {

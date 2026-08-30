@@ -14,6 +14,7 @@ WhatsApp 适配器使用 Meta 官方 Cloud API。事件通过安全 Webhook 进�
 - 投递诊断：按 WAMID 查询消息状态、Webhook 更新结果与分页事件时间线
 - 号码设置：Calling/SIP/视频、身份变化通知、payload encryption 公钥和数据驻留
 - 加密消息：Payload Encryption 固定端点、compact JWE 请求与加密响应校验
+- 号码生命周期：资料状态、注册/注销、两步验证、短信或语音验证码申请与校验
 - 原始事件：所有 Webhook change 均保留在 `raw_event`
 - 嵌入式接入：`await WhatsAppClient.ingest(rawEvent)` 可把已有可信连接交给同一 Client；同步/异步监听器全部成功后才确认去重
 
@@ -67,6 +68,8 @@ Calling API 使用 `get_call_permissions` / `request_call_permission` 与 `conne
 号码级设置通过 `client.settings` 及对应固定平台动作管理。Calling、身份变化、payload encryption 和数据驻留每次只更新一个 feature，避免违反 Meta 请求约束；读取 SIP 凭据必须显式启用并谨慎处理返回的密码。
 
 启用 payload encryption 后，可通过 `send_encrypted_message` 或 `client.encryptedMessages.send(compactJwe)` 使用专用加密消息端点。适配器不会接触明文和私钥，只负责 compact JWE 结构、固定请求字段与加密成功响应；密钥保护、轮换和解密由业务实现，失败响应仍按结构化 Graph API 错误处理。
+
+号码注册、注销、两步验证和所有权验证码统一由 `client.phoneNumbers` 与对应固定平台动作提供。迁移注册可携带完整 `backup`，短信/语音验证码会校验方式、locale 和六位数字；已弃用的数据驻留注册字段不会继续暴露。PIN、验证码和迁移备份均应按敏感信息处理。
 
 新 Graph API 可通过 `whatsapp_call` 调用：
 

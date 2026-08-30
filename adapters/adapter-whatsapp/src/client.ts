@@ -8,6 +8,7 @@ import { WhatsAppCalling } from "./calling.js";
 import { WhatsAppHistory } from "./history.js";
 import { WhatsAppSettings } from "./settings.js";
 import { WhatsAppEncryptedMessages } from "./encrypted-messages.js";
+import { WhatsAppPhoneNumbers } from "./phone-numbers.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -50,6 +51,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly settings: WhatsAppSettings;
     /** 只承载 compact JWE 的 Payload Encryption 消息入口。 */
     readonly encryptedMessages: WhatsAppEncryptedMessages;
+    /** 号码资料、注册、两步验证与所有权验证。 */
+    readonly phoneNumbers: WhatsAppPhoneNumbers;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -63,6 +66,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.history = new WhatsAppHistory(this);
         this.settings = new WhatsAppSettings(this);
         this.encryptedMessages = new WhatsAppEncryptedMessages(this);
+        this.phoneNumbers = new WhatsAppPhoneNumbers(this);
     }
 
     get apiVersion(): string {
@@ -230,12 +234,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     }
 
     getPhoneNumberInfo(): Promise<WhatsAppPhoneNumberInfo> {
-        return this.call({
-            resource: this.config.phone_number_id,
-            query: {
-                fields: "id,display_phone_number,verified_name,quality_rating,code_verification_status",
-            },
-        });
+        return this.phoneNumbers.getInfo();
     }
 
     getBusinessProfile(

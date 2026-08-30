@@ -18,6 +18,17 @@ export {
     type WhatsAppEncryptedMessageResponse,
 } from "./encrypted-messages.js";
 export {
+    isWhatsAppPhoneNumberAction,
+    WhatsAppPhoneNumbers,
+    WHATSAPP_PHONE_NUMBER_ACTIONS,
+    type WhatsAppPhoneNumberAction,
+    type WhatsAppPhoneNumberRegistration,
+    type WhatsAppSuccessResponse,
+    type WhatsAppVerificationCodeMethod,
+    type WhatsAppVerificationCodeRequest,
+    type WhatsAppVerificationCodeResponse,
+} from "./phone-numbers.js";
+export {
     isWhatsAppHistoryAction,
     WhatsAppHistory,
     WHATSAPP_HISTORY_ACTIONS,

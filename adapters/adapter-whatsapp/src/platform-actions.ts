@@ -5,6 +5,7 @@ import { WHATSAPP_CALLING_ACTION_HANDLERS } from "./calling.js";
 import { WHATSAPP_HISTORY_ACTION_HANDLERS } from "./history.js";
 import { WHATSAPP_SETTINGS_ACTION_HANDLERS } from "./settings.js";
 import { WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS } from "./encrypted-messages.js";
+import { WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS } from "./phone-numbers.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -22,6 +23,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_HISTORY_ACTION_HANDLERS,
     ...WHATSAPP_SETTINGS_ACTION_HANDLERS,
     ...WHATSAPP_ENCRYPTED_MESSAGE_ACTION_HANDLERS,
+    ...WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>
@@ -29,7 +31,6 @@ const ACTION_HANDLERS = {
             requireString(params, "message_id"),
             optionalBoolean(params, "typing_indicator") || false,
         ),
-    get_phone_number_info: client => client.getPhoneNumberInfo(),
     get_business_profile: (client, params) =>
         client.getBusinessProfile(optionalString(params, "fields")),
     update_business_profile: (client, params) =>
@@ -82,24 +83,6 @@ const ACTION_HANDLERS = {
         return { ...info, data: data.toString("base64") };
     },
     delete_media: (client, params) => client.deleteMedia(requireString(params, "media_id")),
-    register_phone_number: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: `${client.config.phone_number_id}/register`,
-            body: { messaging_product: "whatsapp", pin: requirePin(params) },
-        }),
-    deregister_phone_number: client =>
-        client.call({
-            method: "POST",
-            resource: `${client.config.phone_number_id}/deregister`,
-            body: { messaging_product: "whatsapp" },
-        }),
-    set_two_step_verification: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: client.config.phone_number_id,
-            body: { pin: requirePin(params) },
-        }),
     block_user: (client, params) => blockedUser(client, "POST", params),
     unblock_user: (client, params) => blockedUser(client, "DELETE", params),
     list_blocked_users: (client, params) =>
@@ -372,12 +355,6 @@ function stringRecord(
         result[key] = item;
     }
     return result;
-}
-
-function requirePin(params: Readonly<Record<string, unknown>>): string {
-    const pin = requireString(params, "pin");
-    if (!/^\d{6}$/u.test(pin)) invalidParameter("pin 必须是 6 位数字");
-    return pin;
 }
 
 function invalidParameter(message: string): never {
