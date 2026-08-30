@@ -55,8 +55,12 @@ export class WeComKfWebhookHost {
             : this.receiveCallback(request);
     }
 
-    /** 将结构化处理结果写回已有 Koa 风格 HTTP Host 的上下文。 */
-    async acceptHttp(ctx: WeComKfHttpContext): Promise<void> {
+    async acceptHttp(request: Request): Promise<Response>;
+    async acceptHttp(context: WeComKfHttpContext): Promise<void>;
+    /** 将同一结构化结果写回 Fetch/WinterCG 或 Koa 风格 HTTP Host。 */
+    async acceptHttp(input: Request | WeComKfHttpContext): Promise<Response | void> {
+        if (isFetchRequest(input)) return this.acceptFetchRequest(input);
+        const ctx = input;
         try {
             const method = ctx.method.toUpperCase();
             if (method !== "GET" && method !== "POST") {
@@ -139,22 +143,55 @@ export class WeComKfWebhookHost {
                     code: "WECOM_KF_INVALID_CALLBACK",
                     status: 400,
                 });
-            this.dispatchCallback(event);
+            await this.dispatchCallback(event);
             // 企业微信要求快速确认回调；耗时分页进入 Client 的串行同步队列。
             void this.client
                 .synchronize(event.OpenKfId, event.Token)
                 .catch(error => this.reportError(WeComKfError.wrap(error, "WECOM_KF_SYNC_ERROR")));
         } else {
-            this.dispatchCallback(event);
+            await this.dispatchCallback(event);
         }
         return { status: 200, body: "success", contentType: "text/plain" };
     }
 
-    private dispatchCallback(event: KfCallbackEvent): void {
+    private async dispatchCallback(event: KfCallbackEvent): Promise<void> {
         try {
-            this.client.ingestCallback(event);
+            await this.client.ingestCallback(event);
         } catch (error) {
             throw WeComKfError.wrap(error, "WECOM_KF_CALLBACK_DISPATCH_ERROR");
+        }
+    }
+
+    private async acceptFetchRequest(request: Request): Promise<Response> {
+        const method = request.method.toUpperCase();
+        if (method !== "GET" && method !== "POST") {
+            return Response.json(
+                {
+                    error: {
+                        code: "WECOM_KF_METHOD_NOT_ALLOWED",
+                        message: "微信客服 Webhook 仅接受 GET 或 POST",
+                    },
+                },
+                { status: 405, headers: { Allow: "GET, POST" } },
+            );
+        }
+        try {
+            const response = await this.ingest({
+                method,
+                query: Object.fromEntries(new URL(request.url).searchParams),
+                body: method === "POST" ? Buffer.from(await request.arrayBuffer()) : undefined,
+            });
+            return new Response(String(response.body), {
+                status: response.status,
+                headers: { "Content-Type": response.contentType || "text/plain" },
+            });
+        } catch (error) {
+            const wrapped = WeComKfError.wrap(error, "WECOM_KF_WEBHOOK_ERROR");
+            this.reportError(wrapped);
+            return Response.json(
+                { error: { code: wrapped.code, message: wrapped.message } },
+                { status: wrapped.status || 500 },
+            );
         }
     }
 
@@ -165,6 +202,18 @@ export class WeComKfWebhookHost {
             // 错误观察器不得破坏 Webhook ACK 或制造未处理的后台 Promise。
         }
     }
+}
+
+/** 跨 realm 识别 Fetch/WinterCG Request，不依赖 instanceof。 */
+function isFetchRequest(value: unknown): value is Request {
+    if (!value || typeof value !== "object") return false;
+    const candidate = value as { method?: unknown; headers?: unknown; arrayBuffer?: unknown };
+    return (
+        typeof candidate.method === "string" &&
+        typeof candidate.arrayBuffer === "function" &&
+        Boolean(candidate.headers) &&
+        typeof (candidate.headers as { get?: unknown }).get === "function"
+    );
 }
 
 function decryptPayload(encrypted: string, encodingAesKey: string, corpId: string): string {

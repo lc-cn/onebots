@@ -4,12 +4,16 @@ import { wecomKfSchema } from "./index.js";
 
 describe("微信客服配置 Schema", () => {
     test("按接收模式动态展示回调配置", () => {
-        for (const field of ["token", "encoding_aes_key", "webhook_path"]) {
+        for (const field of ["token", "encoding_aes_key"]) {
             expect(ruleAt(field).ui?.visibleWhen).toEqual({
                 path: "receive_mode",
-                oneOf: ["webhook"],
+                oneOf: ["webhook", "manual"],
             });
         }
+        expect(ruleAt("webhook_path").ui?.visibleWhen).toEqual({
+            path: "receive_mode",
+            oneOf: ["webhook"],
+        });
     });
 
     test("补偿轮询间隔只在启用时显示", () => {

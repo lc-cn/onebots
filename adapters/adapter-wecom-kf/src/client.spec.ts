@@ -46,7 +46,7 @@ describe("WeComKfClient", () => {
 
         const synchronization = client.synchronize("wk-1");
         await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
-        client.stop();
+        await client.stop();
         await expect(synchronization).rejects.toMatchObject({ code: "WECOM_KF_ABORTED" });
     });
 
@@ -67,7 +67,7 @@ describe("WeComKfClient", () => {
 
         const oldStart = client.start();
         await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
-        client.stop();
+        await client.stop();
         await client.start();
 
         const oldResult = expect(oldStart).rejects.toMatchObject({ code: "WECOM_KF_ABORTED" });
@@ -75,7 +75,7 @@ describe("WeComKfClient", () => {
         await oldResult;
         await expect(client.getAccessToken()).resolves.toBe("new");
         expect(fetcher).toHaveBeenCalledTimes(2);
-        client.stop();
+        await client.stop();
     });
 
     it("并发请求只获取一次 access_token", async () => {
@@ -214,7 +214,8 @@ describe("WeComKfClient", () => {
         const client = new WeComKfClient({ ...config, cursor_store_path: cursorPath }, fetcher);
         const delivered = vi.fn();
         let attempts = 0;
-        client.on("raw_event", () => {
+        client.on("raw_event", async () => {
+            await Promise.resolve();
             attempts += 1;
             if (attempts === 1) throw new Error("observer failed");
         });
@@ -226,19 +227,45 @@ describe("WeComKfClient", () => {
         await expect(readFile(cursorPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
         await expect(client.synchronize("wk-1")).resolves.toHaveLength(1);
 
-        expect(delivered).toHaveBeenCalledTimes(1);
+        expect(delivered).toHaveBeenCalledTimes(2);
         expect(attempts).toBe(2);
         await expect(readFile(cursorPath, "utf8")).resolves.toContain('"wk-1": "committed"');
     });
 
-    it("从系统事件内层发现真实客服账号身份", () => {
+    it("并发交付同一消息只执行一次并等待全部异步出口", async () => {
+        const client = new WeComKfClient({ ...config, receive_mode: "manual" });
+        let release!: () => void;
+        const first = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
+        const second = vi.fn();
+        client.on("raw_event", first);
+        client.on("kf_item", second);
+        const item = { msgid: "m-concurrent", msgtype: "text", text: { content: "one" } };
+
+        const delivery = client.ingest(item, "wk-1");
+        const retry = client.ingest(structuredClone(item), "wk-1");
+        await vi.waitFor(() => expect(first).toHaveBeenCalledOnce());
+        expect(second).not.toHaveBeenCalled();
+        release();
+
+        await expect(Promise.all([delivery, retry])).resolves.toEqual([true, true]);
+        expect(first).toHaveBeenCalledOnce();
+        expect(second).toHaveBeenCalledOnce();
+        await expect(client.ingest(item, "wk-1")).resolves.toBe(false);
+    });
+
+    it("从系统事件内层发现真实客服账号身份", async () => {
         const client = new WeComKfClient(config);
 
-        client.ingest({
+        await client.ingest({
             msgtype: "event",
             event: { event_type: "enter_session", open_kfid: "wk-event" },
         });
-        client.ingestCallback({
+        await client.ingestCallback({
             MsgType: "event",
             Event: "kf_msg_or_event",
             OpenKfId: "wk-callback",

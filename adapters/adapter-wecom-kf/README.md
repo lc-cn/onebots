@@ -94,7 +94,7 @@ await adapter.callAction("customer_service", "wecom_kf_call", {
 ## 底层接入
 
 - `WeComKfWebhookHost.ingest()` 接收框架无关请求并返回结构化 HTTP 响应；
-- `WeComKfWebhookHost.acceptHttp()` 可挂到已有 Koa 风格 Host；
+- `WeComKfWebhookHost.acceptHttp()` 可直接接收标准 `Request`，也可挂到已有 Koa 风格 Host；
 - `WeComKfClient.ingest()` 可接收已有连接或其他同步器取得的原始 `sync_msg` 条目；
 - `WeComKfClient.call()` 对 JSON 与二进制响应提供闭合重载；JSON 返回 `KfJsonResponse`，素材下载返回 `Buffer`。
 
@@ -109,7 +109,7 @@ wecom-kf.customer_service:
   enable_sync_poll: true
 ```
 
-manual 模式仍可按需构造 `WeComKfWebhookHost` 处理原始加密回调，或直接使用 `client.ingest(item)` 接入已有 `sync_msg` 同步器；所有条目继续进入同一个 typed Client 事件管线。
+manual 模式仍可按需构造 `WeComKfWebhookHost` 处理原始加密回调，或直接使用 `await client.ingest(item)` 接入已有 `sync_msg` 同步器；所有条目继续进入同一个 typed Client 事件管线。前者仍需配置 Token/AES Key，Web 表单会在 manual 模式中提供；后者接收已验证条目，可省略回调凭据。
 
 适配器不会自行监听端口。发送窗口、5 条限制与“接口成功不等于最终送达”均由微信客服规则决定，最终失败通过 `sync_msg` 事件交付。
 

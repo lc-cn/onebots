@@ -46,6 +46,10 @@ export const weComKfCapabilities: AdapterCapabilityManifest = defineAdapterCapab
     transports: {
         webhook: { support: "native", mode: "webhook" },
         sync: { support: "native", mode: "polling" },
-        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有同步器" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 ingest() 或 WebhookHost.acceptHttp() 接入既有 Host/同步器",
+        },
     },
 });

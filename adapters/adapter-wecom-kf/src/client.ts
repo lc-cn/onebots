@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
+import { emitAllAwaited, KeyedSingleFlight } from "onebots";
 import { KfApiTransport } from "./api-transport.js";
-import { emitKfDataEvent, reportKfClientError } from "./client-events.js";
+import { deliverKfCallback, deliverKfItem, reportKfClientError } from "./client-events.js";
 import { assertWeComKfConfig } from "./config.js";
 import { KfCursorState } from "./cursor-state.js";
 import { ensureKfNotAborted, invalidKfParameter, isKfAborted, WeComKfError } from "./errors.js";
@@ -56,6 +57,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     private readonly cursorState: KfCursorState;
     private readonly knownOpenKfIds = new Set<string>();
     private readonly receivedMessages: KfMessageDeduplicator;
+    private readonly messageFlights = new KeyedSingleFlight<string, boolean>();
     private readonly syncQueues = new Map<string, Promise<KfMsgItem[]>>();
 
     constructor(
@@ -102,7 +104,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
             await this.getAccessToken();
             ensureKfNotAborted(signal);
             if (this.config.enable_sync_poll) this.startPolling();
-            this.emit("ready");
+            await emitAllAwaited(this, "ready");
         } catch (error) {
             controller.abort();
             if (this.lifecycleGeneration === generation) {
@@ -114,7 +116,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     }
 
     /** 停止轮询并取消当前生命周期内尚未完成的 API 同步。 */
-    stop(): void {
+    async stop(): Promise<void> {
         if (!this.started) return;
         this.started = false;
         this.lifecycleGeneration += 1;
@@ -124,7 +126,8 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         this.lifecycleAbort?.abort();
         this.lifecycleAbort = undefined;
         this.transport.stop();
-        this.emit("stop");
+        this.messageFlights.clear();
+        await emitAllAwaited(this, "stop");
     }
 
     private startPolling(): void {
@@ -182,14 +185,25 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     }
 
     /** 将已有连接取得的单个 `sync_msg` 条目送入统一事件管线。 */
-    ingest(item: KfMsgItem, fallbackOpenKfId = this.config.open_kfid || ""): boolean {
+    async ingest(
+        item: KfMsgItem,
+        fallbackOpenKfId = this.config.open_kfid || "",
+    ): Promise<boolean> {
+        const id = item.msgid;
+        if (id && this.receivedMessages.has(id)) return false;
+        if (id) {
+            return this.messageFlights.run(id, () => this.ingestUnlocked(item, fallbackOpenKfId));
+        }
+        return this.ingestUnlocked(item, fallbackOpenKfId);
+    }
+
+    private async ingestUnlocked(item: KfMsgItem, fallbackOpenKfId: string): Promise<boolean> {
         const id = item.msgid;
         if (id && this.receivedMessages.has(id)) return false;
         const openKfid = resolveKfOpenKfId(item, fallbackOpenKfId);
         if (openKfid) this.knownOpenKfIds.add(openKfid);
         try {
-            emitKfDataEvent(this, "raw_event", item);
-            emitKfDataEvent(this, "kf_item", { open_kfid: openKfid, item });
+            await deliverKfItem(this, openKfid, item);
         } catch (error) {
             throw WeComKfError.wrap(error, "WECOM_KF_EVENT_DELIVERY_FAILED");
         }
@@ -198,9 +212,9 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     }
 
     /** 将已验签、解密并校验的回调事件送入统一事件管线。 */
-    ingestCallback(event: KfCallbackEvent): void {
+    async ingestCallback(event: KfCallbackEvent): Promise<void> {
         if (event.OpenKfId) this.knownOpenKfIds.add(event.OpenKfId);
-        this.emit("callback", event);
+        await deliverKfCallback(this, event);
     }
 
     /** 返回配置、回调、同步或账号目录中已经确认的真实客服账号 ID。 */
@@ -402,7 +416,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
             }
         }
         ensureKfNotAborted(signal);
-        for (const item of collected) this.ingest(item, openKfid);
+        for (const item of collected) await this.ingest(item, openKfid);
         await this.cursorState.commit(openKfid, cursor);
         return collected;
     }

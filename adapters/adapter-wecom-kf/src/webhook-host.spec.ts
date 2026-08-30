@@ -99,9 +99,11 @@ describe("WeComKfWebhookHost", () => {
 
     it("业务监听器异常时拒绝确认 Webhook 以允许平台重投", async () => {
         const client = new WeComKfClient(config);
+        const delivered = vi.fn();
         client.on("callback", () => {
             throw new Error("listener failed");
         });
+        client.on("callback", delivered);
         const host = new WeComKfWebhookHost(config, client);
         const xml = `<xml><MsgType><![CDATA[event]]></MsgType><Event><![CDATA[account_updated]]></Event></xml>`;
         const encrypted = encrypt(xml);
@@ -113,6 +115,37 @@ describe("WeComKfWebhookHost", () => {
                 body: `<xml><Encrypt><![CDATA[${encrypted}]]></Encrypt></xml>`,
             }),
         ).rejects.toMatchObject({ code: "WECOM_KF_CALLBACK_DISPATCH_ERROR" });
+        expect(delivered).toHaveBeenCalledOnce();
+    });
+
+    it("acceptHttp 接收标准 Request 并返回同一结构化结果", async () => {
+        const client = new WeComKfClient(config);
+        const callback = vi.fn();
+        client.on("callback", callback);
+        const host = new WeComKfWebhookHost(config, client);
+        const xml = `<xml><MsgType><![CDATA[event]]></MsgType><Event><![CDATA[account_updated]]></Event></xml>`;
+        const encrypted = encrypt(xml);
+        const query = new URLSearchParams({
+            timestamp: "1",
+            nonce: "2",
+            msg_signature: sign(encrypted),
+        });
+
+        const response = await host.acceptHttp(
+            new Request(`https://example.test/wecom-kf?${query}`, {
+                method: "POST",
+                body: `<xml><Encrypt><![CDATA[${encrypted}]]></Encrypt></xml>`,
+            }),
+        );
+
+        expect(response.status).toBe(200);
+        await expect(response.text()).resolves.toBe("success");
+        expect(callback).toHaveBeenCalledOnce();
+        const rejected = await host.acceptHttp(
+            new Request("https://example.test/wecom-kf", { method: "PUT" }),
+        );
+        expect(rejected.status).toBe(405);
+        expect(rejected.headers.get("allow")).toBe("GET, POST");
     });
 
     it("拒绝明文与错误签名", async () => {

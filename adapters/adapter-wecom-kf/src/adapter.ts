@@ -147,26 +147,29 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
     createAccount(config: Account.Config<"wecom-kf">): Account<"wecom-kf", WeComKfClient> {
         const client = new WeComKfClient(normalizeConfig(config));
         const account = new Account<"wecom-kf", WeComKfClient>(this, client, config);
-        client.on("kf_item", ({ open_kfid, item }: { open_kfid: string; item: KfMsgItem }) => {
-            const externalUserId =
-                item.external_userid || stringField(item.event, "external_userid");
-            const eventOpenKfId = stringField(item.event, "open_kfid");
-            if (externalUserId) {
-                this.userLastOpenKf.set(
-                    this.contextKey(account.account_id, externalUserId),
-                    item.open_kfid || eventOpenKfId || open_kfid,
+        client.on(
+            "kf_item",
+            async ({ open_kfid, item }: { open_kfid: string; item: KfMsgItem }) => {
+                const externalUserId =
+                    item.external_userid || stringField(item.event, "external_userid");
+                const eventOpenKfId = stringField(item.event, "open_kfid");
+                if (externalUserId) {
+                    this.userLastOpenKf.set(
+                        this.contextKey(account.account_id, externalUserId),
+                        item.open_kfid || eventOpenKfId || open_kfid,
+                    );
+                }
+                await account.dispatchAwaited(
+                    projectKfItem(item, {
+                        botId: account.account_id,
+                        openKfId: open_kfid,
+                        createId: value => this.createId(value),
+                    }),
                 );
-            }
-            account.dispatch(
-                projectKfItem(item, {
-                    botId: account.account_id,
-                    openKfId: open_kfid,
-                    createId: value => this.createId(value),
-                }),
-            );
-        });
-        client.on("callback", event => {
-            account.dispatch(
+            },
+        );
+        client.on("callback", async event => {
+            await account.dispatchAwaited(
                 projectKfCallback(event, {
                     botId: account.account_id,
                     createId: value => this.createId(value),
@@ -192,10 +195,11 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
             } catch (error) {
                 account.status = AccountStatus.OffLine;
                 this.logger.error("启动微信客服失败", error);
+                throw error;
             }
         });
-        account.on("stop", () => {
-            client.stop();
+        account.on("stop", async () => {
+            await client.stop();
             account.status = AccountStatus.OffLine;
         });
         return account;

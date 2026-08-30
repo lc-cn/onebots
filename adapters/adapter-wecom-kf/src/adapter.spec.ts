@@ -89,7 +89,7 @@ describe("WeComKfAdapter 基础契约", () => {
         const account = adapter.createAccount({ ...config, open_kfid: undefined });
         adapter.accounts.set(config.account_id, account);
         const send = vi.spyOn(account.client, "sendMessage").mockResolvedValue("message-1");
-        account.client.ingest(
+        await account.client.ingest(
             {
                 msgid: "event-1",
                 msgtype: "event",

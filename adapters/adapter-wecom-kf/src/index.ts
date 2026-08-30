@@ -77,7 +77,7 @@ export const wecomKfSchema: Schema = {
         sensitive: true,
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     receive_mode: {
@@ -99,7 +99,7 @@ export const wecomKfSchema: Schema = {
         sensitive: true,
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     webhook_path: {
