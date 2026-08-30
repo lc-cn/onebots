@@ -51,7 +51,11 @@ onebots -r slack
 
 能力清单中的扩展动作可以从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
 
-`add_reaction`、`remove_reaction`、Pin、线程回复、频道生命周期与成员、定时消息及 Bookmark 动作；另提供临时消息、流式消息、消息永久链接与 unfurl、Block Kit 校验、Canvas 与访问控制、频道历史与已读标记、Modal/App Home View、Reaction/Pin 查询、文件列表、用户组及成员管理动作。Agent 应使用 `set_agent_session_status` 与 `rename_agent_session` 管理 Slack 当前的 Agent Sessions；适配器不会为已进入迁移期的 `assistant.threads.*` 另设兼容动作。文件详情与删除直接实现 canonical `get_file` / `delete_file`，无需使用平台扩展名。能力发现直接由同一份动作注册表生成，不会与实际调用入口漂移。
+`add_reaction`、`remove_reaction`、Pin、线程回复、频道生命周期与成员、定时消息及 Bookmark 动作；另提供临时消息、流式消息、消息永久链接与 unfurl、Block Kit 校验、Canvas 与访问控制、Slack Lists 的列表/记录/访问控制/异步下载、频道历史与已读标记、Modal/App Home View、Reaction/Pin 查询、文件列表、用户组及成员管理动作。Agent 应使用 `set_agent_session_status` 与 `rename_agent_session` 管理 Slack 当前的 Agent Sessions；适配器不会为已进入迁移期的 `assistant.threads.*` 另设兼容动作。文件详情与删除直接实现 canonical `get_file` / `delete_file`，无需使用平台扩展名。能力发现直接由同一份动作注册表生成，不会与实际调用入口漂移。
+
+Slack Lists 动作使用 `create_list`、`update_list`、`*_list_access`、`*_list_download` 与 `*_list_item(s)` 命名，并一一固定映射到官方 `slackLists.*` 方法。读取动作声明 `lists:read`，写入动作声明 `lists:write`；Lists 仅在支持该功能的付费工作区可用。
+
+启用 Agent View 并订阅 `app_context_changed` 后，适配器会保留 Slack 按相关性排序的 active context：独立事件位于 `extensions.slack.context`，私信消息位于 `extensions.slack.app_context`，`app_home_opened` 同时保留 `tab`。频道、线程、Canvas 与 List 实体均保持官方结构，不会压成字符串。
 
 创建频道与移除频道成员使用 canonical `create_channel`、`kick_channel_member`，参数分别为 `channel_name`，以及 `channel_id` + `user_id`。Slack 工作区由当前 Bot Token 隐式确定，因此 `create_channel` 的 `guild_id` 不参与平台请求。
 

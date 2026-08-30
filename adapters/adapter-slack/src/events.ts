@@ -123,6 +123,19 @@ export function projectSlackEvent(
         }
         case "app_rate_limited":
             return notice(envelope, event, context, "custom", extension(event));
+        case "app_context_changed":
+        case "app_home_opened":
+            return notice(envelope, event, context, "custom", {
+                user: projectUser(event.user, context),
+                group: projectGroup(event.channel, context, envelope.team_id),
+                extensions: {
+                    slack: {
+                        event_type: event.type,
+                        context: contextObject(event.context),
+                        tab: event.tab,
+                    },
+                },
+            });
         case "agent_session_stopped":
         case "agent_session_title_changed":
             return notice(envelope, event, context, "custom", {
@@ -166,6 +179,9 @@ function projectMessage(
         message_id: context.createId(event.ts ?? event.event_ts),
         raw_message: event.text ?? "",
         message: projectSlackMessageSegments(event),
+        extensions: event.app_context
+            ? { slack: { app_context: contextObject(event.app_context) } }
+            : undefined,
     };
 }
 
@@ -259,6 +275,10 @@ function extension(event: SlackEventShape): { extensions: { slack: { event_type:
 
 function objectValue(value: unknown): Record<string, unknown> {
     return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function contextObject(value: unknown): Record<string, unknown> {
+    return objectValue(value);
 }
 
 function stringValue(value: unknown, fallback = ""): string {

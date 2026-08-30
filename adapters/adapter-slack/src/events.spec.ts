@@ -73,6 +73,93 @@ describe("projectSlackEvent", () => {
         });
     });
 
+    it("在消息上保留 Slack Agent 当前活跃上下文", () => {
+        const event: SlackEvent = {
+            type: "message",
+            event_ts: "1782920000.000001",
+            ts: "1782920000.000001",
+            channel: "D1",
+            channel_type: "im",
+            user: "U1",
+            text: "总结当前内容",
+            app_context: {
+                entities: [
+                    {
+                        type: "slack#/types/list_id",
+                        value: "F123",
+                        team_id: "T1",
+                    },
+                ],
+            },
+        };
+
+        expect(projectSlackEvent(event, { team_id: "T1", event }, context)).toMatchObject({
+            type: "message",
+            extensions: {
+                slack: {
+                    app_context: {
+                        entities: [{ type: "slack#/types/list_id", value: "F123" }],
+                    },
+                },
+            },
+        });
+    });
+
+    it("结构化投影 active context 与 App Home 入口", () => {
+        const changed: SlackEvent = {
+            type: "app_context_changed",
+            event_ts: "1782920001.000001",
+            user: "U1",
+            channel: "D1",
+            context: {
+                entities: [
+                    {
+                        type: "slack#/types/message_context",
+                        value: { channel_id: "C1", message_ts: "1782919931.619439" },
+                    },
+                ],
+            },
+        };
+        expect(
+            projectSlackEvent(changed, { team_id: "T1", event: changed }, context),
+        ).toMatchObject({
+            notice_type: "custom",
+            user: { id: { string: "U1" } },
+            group: { channel_id: { string: "D1" } },
+            extensions: {
+                slack: {
+                    event_type: "app_context_changed",
+                    context: {
+                        entities: [
+                            {
+                                type: "slack#/types/message_context",
+                                value: { channel_id: "C1" },
+                            },
+                        ],
+                    },
+                },
+            },
+        });
+
+        const opened: SlackEvent = {
+            type: "app_home_opened",
+            event_ts: "1782920002.000001",
+            user: "U1",
+            channel: "D1",
+            tab: "messages",
+            context: { entities: [{ type: "slack#/types/canvas_id", value: "F456" }] },
+        };
+        expect(projectSlackEvent(opened, { event: opened }, context)).toMatchObject({
+            extensions: {
+                slack: {
+                    event_type: "app_home_opened",
+                    tab: "messages",
+                    context: { entities: [{ type: "slack#/types/canvas_id", value: "F456" }] },
+                },
+            },
+        });
+    });
+
     it("没有原生 ID 时仍生成稳定摘要身份", () => {
         const event: SlackEvent = {
             type: "app_rate_limited",

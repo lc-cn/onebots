@@ -35,6 +35,12 @@ describe("executeSlackPlatformAction", () => {
         ["create_canvas", "canvases.create"],
         ["set_canvas_access", "canvases.access.set"],
         ["create_channel_canvas", "conversations.canvases.create"],
+        ["create_list", "slackLists.create"],
+        ["set_list_access", "slackLists.access.set"],
+        ["start_list_download", "slackLists.download.start"],
+        ["create_list_item", "slackLists.items.create"],
+        ["delete_list_items", "slackLists.items.deleteMultiple"],
+        ["get_list_items", "slackLists.items.list"],
     ])("将 %s 固定映射到 %s", async (action, method) => {
         const call = vi.fn().mockResolvedValue({ ok: true });
         await executeSlackPlatformAction({ call } as never, action, { marker: "value" });

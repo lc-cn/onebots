@@ -4,11 +4,20 @@ import {
     type AdapterCapabilityManifest,
 } from "onebots";
 import { SLACK_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { SLACK_LIST_ACTION_NAMES, SLACK_LIST_READ_ACTION_NAMES } from "./platform-actions-lists.js";
 
-const platformActions = definePlatformActionCapabilities(SLACK_PLATFORM_ACTIONS, {
+const platformActions = definePlatformActionCapabilities(SLACK_PLATFORM_ACTIONS, action => ({
     support: "native",
-    availability: "context",
-});
+    availability: SLACK_LIST_ACTION_NAMES.has(action) ? "permission" : "context",
+    ...(SLACK_LIST_ACTION_NAMES.has(action)
+        ? {
+              permissions: [
+                  SLACK_LIST_READ_ACTION_NAMES.has(action) ? "lists:read" : "lists:write",
+              ],
+              note: "Slack Lists 仅适用于支持该功能的付费工作区",
+          }
+        : {}),
+}));
 
 /** Slack Web API/Events API 当前可用的能力。 */
 export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
@@ -106,6 +115,14 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         user_added: { support: "native" },
         user_updated: { support: "native" },
         interaction: { support: "native" },
+        app_context_changed: {
+            support: "native",
+            note: "保留按相关性排序的频道、线程、Canvas 与 List 活跃上下文",
+        },
+        app_home_opened: {
+            support: "native",
+            note: "保留 Agent View 的当前 App Home 上下文",
+        },
         agent_session_stopped: {
             support: "native",
             note: "用户点击 Slack 原生停止按钮",

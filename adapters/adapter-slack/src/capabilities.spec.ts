@@ -25,5 +25,13 @@ describe("Slack 能力清单", () => {
         }
         expect(slackCapabilities.actions.open_view?.availability).toBe("context");
         expect(slackCapabilities.actions.update_user_group_users?.support).toBe("native");
+        expect(slackCapabilities.actions.get_list_items).toMatchObject({
+            support: "native",
+            permissions: ["lists:read"],
+        });
+        expect(slackCapabilities.actions.create_list_item).toMatchObject({
+            support: "native",
+            permissions: ["lists:write"],
+        });
     });
 });
