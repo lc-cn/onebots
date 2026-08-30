@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { DWClient, EventAck, TOPIC_CARD, TOPIC_ROBOT } from "dingtalk-stream";
+import { DWClient } from "dingtalk-stream";
 import { ErrorCategory, type Next, type RouterContext } from "onebots";
 import { requireDingTalkApiPath } from "./api-path.js";
 import { DingTalkCallbackCrypto } from "./crypto.js";
@@ -14,10 +14,8 @@ import {
     extractApiError,
     isRobotMessage,
     objectValue,
-    parseObject,
     parseResponse,
     queryString,
-    streamEvent,
     stringValue,
     tryParseObject,
     webhookEvent,
@@ -36,6 +34,8 @@ import type {
     DingTalkWebhookResponse,
 } from "./types.js";
 import { buildSignedWebhookUrl } from "./webhook-url.js";
+import { DingTalkEventIngress } from "./event-ingress.js";
+import { registerDingTalkStreamHandlers } from "./stream-handlers.js";
 
 const MODERN_API_BASE = "https://api.dingtalk.com";
 const LEGACY_API_BASE = "https://oapi.dingtalk.com";
@@ -68,6 +68,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     private running = false;
     private generation = 0;
     private callbackCrypto?: DingTalkCallbackCrypto;
+    private readonly eventIngress = new DingTalkEventIngress();
     private readonly sessionWebhooks = new Map<string, { url: string; expiresAt: number }>();
 
     constructor(readonly config: DingTalkConfig) {
@@ -157,33 +158,12 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
             maxPendingEventHandlers: this.config.max_pending_event_handlers,
             maxPendingCallbackHandlers: this.config.max_pending_callback_handlers,
         });
-        stream.registerCallbackListener(TOPIC_ROBOT, message => {
-            if (!this.isCurrentStream(stream, generation)) return;
-            const data = parseObject(message.data, "钉钉 Stream 机器人消息");
-            if (!isRobotMessage(data)) {
-                this.emit(
-                    "error",
-                    DingTalkError.protocol(
-                        "钉钉 Stream 机器人消息缺少必要字段",
-                        "DINGTALK_ROBOT_MESSAGE_INVALID",
-                    ),
-                );
-                stream.socketCallBackResponse(message.headers.messageId, { success: false });
-                return;
-            }
-            this.rememberRobot(data);
-            this.emit("robot_message", data, message);
-            stream.socketCallBackResponse(message.headers.messageId, { success: true });
-        });
-        stream.registerCallbackListener(TOPIC_CARD, message => {
-            if (!this.isCurrentStream(stream, generation)) return;
-            this.emit("native_event", streamEvent(message), message);
-            stream.socketCallBackResponse(message.headers.messageId, { success: true });
-        });
-        stream.registerAllEventListener(message => {
-            if (!this.isCurrentStream(stream, generation)) return { status: EventAck.SUCCESS };
-            this.emit("event", streamEvent(message), message);
-            return { status: EventAck.SUCCESS };
+        registerDingTalkStreamHandlers(stream, {
+            isCurrent: () => this.isCurrentStream(stream, generation),
+            robot: (message, raw) => this.deliverRobot(message, raw),
+            card: (event, raw) => this.deliverEvent(event, raw, "native_event"),
+            event: (event, raw) => this.deliverEvent(event, raw, "event"),
+            error: error => this.emit("error", error),
         });
         stream.on("error", error => {
             if (this.isCurrentStream(stream, generation)) {
@@ -225,6 +205,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     }
 
     async handleWebhook(ctx: RouterContext, next: Next): Promise<void> {
+        let dispatching = false;
         try {
             const body = objectValue(ctx.request.body, "钉钉回调 body");
             const encrypted = stringValue(body.encrypt);
@@ -240,7 +221,10 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 const signature = queryString(ctx.query.signature || ctx.query.msg_signature);
                 const plain = this.callbackCrypto.decrypt(encrypted, signature, timestamp, nonce);
                 const decoded = tryParseObject(plain);
-                if (decoded) this.ingest(decoded, body);
+                if (decoded) {
+                    dispatching = true;
+                    this.ingest(decoded, body);
+                }
                 ctx.body = this.callbackCrypto.encryptResponse(decoded ? "success" : plain);
                 return;
             }
@@ -249,6 +233,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 ctx.body = { error: "Invalid token" };
                 return;
             }
+            dispatching = true;
             this.ingest(body);
             ctx.body = { success: true };
             await next();
@@ -259,7 +244,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 ErrorCategory.PROTOCOL,
             );
             this.emit("error", callbackError);
-            ctx.status = 400;
+            ctx.status = dispatching ? 500 : 400;
             ctx.body = { error: callbackError.message, code: callbackError.code };
         }
     }
@@ -268,17 +253,40 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     ingest(rawEvent: unknown, source: unknown = rawEvent): DingTalkRobotMessage | DingTalkEvent {
         const body = objectValue(rawEvent, "钉钉事件");
         if (isRobotMessage(body)) {
-            this.rememberRobot(body);
-            this.emit("robot_message", body, source);
+            this.deliverRobot(body, source);
             return body;
         }
         const event = webhookEvent(body);
-        this.emit("event", event, source);
+        this.deliverEvent(event, source, "event");
         return event;
+    }
+
+    /** 返回已发现的机器人 userid；初始化阶段回退到企业机器人或应用标识。 */
+    getPlatformBotId(): string {
+        return (
+            this.me?.userid ||
+            this.config.robot_code ||
+            this.config.app_key ||
+            this.config.agent_id ||
+            this.config.account_id
+        );
     }
 
     getCachedMe(): DingTalkUser | null {
         return this.me;
+    }
+
+    private deliverRobot(message: DingTalkRobotMessage, raw: unknown): void {
+        this.rememberRobot(message);
+        this.eventIngress.deliverRobot(message, () => this.emit("robot_message", message, raw));
+    }
+
+    private deliverEvent(
+        event: DingTalkEvent,
+        raw: unknown,
+        channel: "event" | "native_event",
+    ): void {
+        this.eventIngress.deliverEvent(event, () => this.emit(channel, event, raw));
     }
 
     hasAppCredentials(): boolean {

@@ -48,8 +48,13 @@ const ACTION_HANDLERS = {
         legacy(bot, "/topapi/message/corpconversation/getsendresult", params),
     recall_work_notification: (bot, params) =>
         legacy(bot, "/topapi/message/corpconversation/recall", params),
+    get_user: (bot, params) => legacy(bot, "/topapi/v2/user/get", params),
+    create_user: (bot, params) => legacy(bot, "/topapi/v2/user/create", params),
+    update_user: (bot, params) => legacy(bot, "/topapi/v2/user/update", params),
+    delete_user: (bot, params) => legacy(bot, "/topapi/v2/user/delete", params),
     get_department_users: (bot, params) => legacy(bot, "/topapi/v2/user/list", params),
     get_sub_departments: (bot, params) => legacy(bot, "/topapi/v2/department/listsub", params),
+    get_department: (bot, params) => legacy(bot, "/topapi/v2/department/get", params),
     create_department: (bot, params) => legacy(bot, "/topapi/v2/department/create", params),
     update_department: (bot, params) => legacy(bot, "/topapi/v2/department/update", params),
     delete_department: (bot, params) => legacy(bot, "/topapi/v2/department/delete", params),
@@ -57,6 +62,13 @@ const ACTION_HANDLERS = {
     get_role_users: (bot, params) => legacy(bot, "/topapi/role/simplelist", params),
     add_user_roles: (bot, params) => legacy(bot, "/topapi/role/addrolesforemps", params),
     remove_user_roles: (bot, params) => legacy(bot, "/topapi/role/removerolesforemps", params),
+    get_scene_group: (bot, params) => legacy(bot, "/topapi/im/chat/scenegroup/get", params),
+    create_scene_group: (bot, params) => legacy(bot, "/topapi/im/chat/scenegroup/create", params),
+    update_scene_group: (bot, params) => legacy(bot, "/topapi/im/chat/scenegroup/update", params),
+    add_scene_group_members: (bot, params) =>
+        legacy(bot, "/topapi/im/chat/scenegroup/member/add", params),
+    remove_scene_group_members: (bot, params) =>
+        legacy(bot, "/topapi/im/chat/scenegroup/member/delete", params),
 } satisfies Readonly<Record<string, PlatformActionHandler<DingTalkBot>>>;
 
 const PLATFORM_ACTIONS = definePlatformActions(ACTION_HANDLERS, action =>
@@ -87,7 +99,15 @@ function legacy(
 }
 
 function methodValue(value: unknown): DingTalkApiRequestOptions["method"] {
-    const method = typeof value === "string" ? value.toUpperCase() : "GET";
+    if (value === undefined) return "GET";
+    if (typeof value !== "string" || !value) {
+        throw DingTalkError.invalid(
+            "钉钉参数 method 必须为非空字符串",
+            "DINGTALK_ACTION_METHOD_INVALID",
+            { method: value },
+        );
+    }
+    const method = value.toUpperCase();
     if (!["GET", "POST", "PUT", "DELETE"].includes(method)) {
         throw DingTalkError.invalid(
             "钉钉参数 method 不是受支持的 HTTP 方法",
@@ -99,7 +119,7 @@ function methodValue(value: unknown): DingTalkApiRequestOptions["method"] {
 }
 
 function authValue(value: unknown): DingTalkApiRequestOptions["auth"] {
-    if (value == null) return undefined;
+    if (value === undefined) return undefined;
     if (value === "modern" || value === "legacy" || value === "none") return value;
     throw DingTalkError.invalid(
         "钉钉参数 auth 必须为 modern、legacy 或 none",
@@ -109,7 +129,7 @@ function authValue(value: unknown): DingTalkApiRequestOptions["auth"] {
 }
 
 function bodyValue(value: unknown): Record<string, unknown> | undefined {
-    if (value == null) return undefined;
+    if (value === undefined) return undefined;
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         throw DingTalkError.invalid("钉钉参数 body 必须为对象", "DINGTALK_ACTION_BODY_INVALID");
     }
@@ -117,7 +137,7 @@ function bodyValue(value: unknown): Record<string, unknown> | undefined {
 }
 
 function queryValue(value: unknown): Record<string, string | number | boolean> | undefined {
-    if (value == null) return undefined;
+    if (value === undefined) return undefined;
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         throw DingTalkError.invalid("钉钉参数 query 必须为对象", "DINGTALK_ACTION_QUERY_INVALID");
     }

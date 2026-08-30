@@ -88,9 +88,10 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
     }
 
     async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
-        const me = this.requireBot(uin).getCachedMe();
+        const bot = this.requireBot(uin);
+        const me = bot.getCachedMe();
         return {
-            user_id: this.createId(me?.userid || this.getAccount(uin)?.config.account_id || uin),
+            user_id: this.createId(me?.userid || bot.getPlatformBotId()),
             user_name: me?.name || "钉钉机器人",
             user_displayname: me?.name || "钉钉机器人",
             avatar: me?.avatar,
@@ -241,9 +242,13 @@ export class DingTalkAdapter extends Adapter<DingTalkBot, "dingtalk"> {
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
         const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
         return {
-            online: account?.status === AccountStatus.Online,
-            good: account?.status === AccountStatus.Online,
+            online,
+            good: online,
+            bots: account
+                ? [{ self: this.createId(account.client.getPlatformBotId()), online }]
+                : [],
         };
     }
 

@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import { ErrorCategory } from "onebots";
+import { dingTalkCapabilities } from "./capabilities.js";
 import { DingTalkError } from "./errors.js";
-import { executeDingTalkPlatformAction } from "./platform-actions.js";
+import { DINGTALK_PLATFORM_ACTIONS, executeDingTalkPlatformAction } from "./platform-actions.js";
 
 describe("executeDingTalkPlatformAction", () => {
+    it("所有已注册平台动作都公开能力声明", () => {
+        for (const action of DINGTALK_PLATFORM_ACTIONS) {
+            expect(dingTalkCapabilities.actions[action]?.support).toBe("native");
+        }
+    });
+
     it("工作通知映射到旧版开放平台 endpoint", async () => {
         const callApi = vi.fn().mockResolvedValue({ task_id: 1 });
         await executeDingTalkPlatformAction({ callApi } as never, "send_work_notification", {
@@ -20,6 +27,26 @@ describe("executeDingTalkPlatformAction", () => {
                 msg: { msgtype: "text", text: { content: "ok" } },
             },
         });
+    });
+
+    it("通讯录与场景群动作映射到稳定的旧版 endpoint", async () => {
+        const callApi = vi.fn().mockResolvedValue({ errcode: 0 });
+        const bot = { callApi } as never;
+        await executeDingTalkPlatformAction(bot, "create_user", { name: "用户" });
+        await executeDingTalkPlatformAction(bot, "get_department", { dept_id: 1 });
+        await executeDingTalkPlatformAction(bot, "add_scene_group_members", {
+            open_conversation_id: "cid",
+            user_ids: ["user_1"],
+        });
+
+        expect(callApi.mock.calls.map(call => call[0])).toEqual([
+            "/topapi/v2/user/create",
+            "/topapi/v2/department/get",
+            "/topapi/im/chat/scenegroup/member/add",
+        ]);
+        for (const [, options] of callApi.mock.calls) {
+            expect(options).toMatchObject({ method: "POST", auth: "legacy" });
+        }
     });
 
     it("底层入口拒绝目录穿越 path", async () => {
@@ -48,6 +75,20 @@ describe("executeDingTalkPlatformAction", () => {
             ).rejects.toMatchObject({ code: "DINGTALK_API_PATH_INVALID" });
         },
     );
+
+    it("拒绝显式传入的无效可选参数", async () => {
+        const bot = { callApi: vi.fn() } as never;
+        for (const params of [
+            { path: "/v1.0/test", method: null },
+            { path: "/v1.0/test", auth: null },
+            { path: "/v1.0/test", body: null },
+            { path: "/v1.0/test", query: null },
+        ]) {
+            await expect(
+                executeDingTalkPlatformAction(bot, "call_dingtalk_api", params),
+            ).rejects.toMatchObject({ category: ErrorCategory.VALIDATION });
+        }
+    });
 
     it("机器人撤回与已读查询使用官方端点", async () => {
         const callApi = vi.fn().mockResolvedValue({ successResult: ["key_1"] });

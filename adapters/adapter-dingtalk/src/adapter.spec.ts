@@ -41,3 +41,24 @@ describe("DingTalkAdapter", () => {
         ).rejects.toMatchObject({ code: "DINGTALK_WEBHOOK_MESSAGE_NOT_RECALLABLE" });
     });
 });
+
+describe("DingTalkAdapter 机器人身份", () => {
+    it("登录信息与状态使用平台机器人 ID，而不是本地账号别名", async () => {
+        const client = {
+            getCachedMe: () => ({ userid: "ding-bot", name: "Bot" }),
+            getPlatformBotId: () => "ding-bot",
+        };
+        const createId = (value: string) => ({ string: value });
+        const login = await DingTalkAdapter.prototype.getLoginInfo.call(
+            { requireBot: () => client, createId } as never,
+            "local-alias",
+        );
+        const status = await DingTalkAdapter.prototype.getStatus.call(
+            { getAccount: () => ({ status: "online", client }), createId } as never,
+            "local-alias",
+        );
+
+        expect(login.user_id).toEqual({ string: "ding-bot" });
+        expect(status.bots).toEqual([{ self: { string: "ding-bot" }, online: true }]);
+    });
+});

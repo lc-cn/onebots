@@ -23,8 +23,44 @@ describe("DingTalkBot", () => {
         };
 
         expect(bot.ingest(message)).toEqual(message);
+        expect(bot.ingest(message)).toEqual(message);
         expect(listener).toHaveBeenCalledWith(message, message);
+        expect(listener).toHaveBeenCalledTimes(1);
         expect(bot.getCachedMe()?.userid).toBe("bot-id");
+    });
+
+    it("业务处理失败不提交消息去重，重投成功后才抑制重复", () => {
+        const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
+        const listener = vi.fn().mockImplementationOnce(() => {
+            throw new Error("dispatch failed");
+        });
+        bot.on("robot_message", listener);
+        const message = robotMessage("msg-retry");
+
+        expect(() => bot.ingest(message)).toThrow("dispatch failed");
+        expect(() => bot.ingest(message)).not.toThrow();
+        bot.ingest(message);
+
+        expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it("Webhook 业务处理失败返回 500 并允许上游重投", async () => {
+        const bot = new DingTalkBot({ account_id: "bot", receive_mode: "webhook" });
+        const listener = vi.fn().mockImplementationOnce(() => {
+            throw new Error("dispatch failed");
+        });
+        bot.on("robot_message", listener);
+        bot.on("error", vi.fn());
+        const message = robotMessage("msg-webhook-retry");
+        const first = { request: { body: message }, query: {}, body: undefined, status: 0 };
+        const second = { request: { body: message }, query: {}, body: undefined, status: 0 };
+
+        await bot.handleWebhook(first as never, vi.fn());
+        await bot.handleWebhook(second as never, vi.fn());
+
+        expect(first.status).toBe(500);
+        expect(second.body).toEqual({ success: true });
+        expect(listener).toHaveBeenCalledTimes(2);
     });
 
     it("在创建传输前拒绝非法接收模式与 Stream 并发上限", () => {
@@ -314,4 +350,17 @@ function jsonResponse(value: unknown): Response {
         status: 200,
         headers: { "Content-Type": "application/json" },
     });
+}
+
+function robotMessage(msgId: string) {
+    return {
+        conversationId: "cid",
+        conversationType: "2",
+        chatbotUserId: "bot-id",
+        msgId,
+        msgtype: "text",
+        createAt: 1,
+        senderId: "user-1",
+        text: { content: "hello" },
+    };
 }

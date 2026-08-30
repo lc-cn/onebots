@@ -12,10 +12,10 @@ export function createDingTalkAccount(
     const dingtalkConfig: DingTalkConfig = { ...config };
     const bot = new DingTalkBot(dingtalkConfig);
     const account = new Account<"dingtalk", DingTalkBot>(adapter, bot, config);
-    const context = {
-        botId: adapter.createId(config.account_id),
+    const context = () => ({
+        botId: adapter.createId(bot.getPlatformBotId()),
         createId: (value: string | number) => adapter.createId(value),
-    };
+    });
 
     if (bot.receiveMode === "webhook") {
         adapter.app.router.post(`${account.path}/webhook`, bot.handleWebhook.bind(bot));
@@ -30,11 +30,12 @@ export function createDingTalkAccount(
     bot.on("robot_message", (message: DingTalkRobotMessage, raw: unknown) => {
         const me = bot.getCachedMe();
         if (me && (message.senderId === me.userid || message.senderStaffId === me.userid)) return;
-        const projected = projectDingTalkRobotMessage(message, rawRecord(raw), context);
+        const projected = projectDingTalkRobotMessage(message, rawRecord(raw), context());
         if (projected) account.dispatch(projected);
     });
     const dispatchEvent = (event: DingTalkEvent) => {
-        for (const projected of projectDingTalkEvents(event, context)) account.dispatch(projected);
+        for (const projected of projectDingTalkEvents(event, context()))
+            account.dispatch(projected);
     };
     bot.on("event", dispatchEvent);
     bot.on("native_event", dispatchEvent);
