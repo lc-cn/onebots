@@ -1,4 +1,4 @@
-import { RouterContext } from "@onebots/core";
+import { RouterContext, createManagedTokenValidator } from "@onebots/core";
 import type { Router, Adapter } from "@onebots/core";
 import type { App } from "../app.js";
 
@@ -16,11 +16,28 @@ import type { App } from "../app.js";
  *  POST /api/send           — send a message through a running gateway
  */
 export function registerAdapterRoutes(app: App, router: Router): void {
-    router.get("/api/adapters", (ctx: RouterContext) => {
+    // 显式鉴权，避免依赖其他文件中路由注册顺序来保护敏感信息接口
+    const validateApiAuth = createManagedTokenValidator(app.tokenManager, {
+        tokenName: "access_token",
+        errorMessage: "Unauthorized",
+    });
+    const expectedAccessToken = (app.config as { access_token?: string }).access_token?.trim()
+        || process.env.ONEBOTS_ACCESS_TOKEN?.trim()
+        || undefined;
+    const requireAuth = async (ctx: RouterContext, next: () => Promise<void>) => {
+        const authHeader = ctx.request.headers.authorization;
+        const token = (authHeader && authHeader.match(/^Bearer\s+(.+)$/i)?.[1])
+            || authHeader
+            || (ctx.request.query?.access_token as string | undefined);
+        if (expectedAccessToken && token === expectedAccessToken) return next();
+        return validateApiAuth(ctx as any, next as any);
+    };
+
+    router.get("/api/adapters", requireAuth, (ctx: RouterContext) => {
         ctx.body = [...app.adapters.values()].map(adapter => adapter.info);
     });
 
-    router.get("/api/list", (ctx: RouterContext) => {
+    router.get("/api/list", requireAuth, (ctx: RouterContext) => {
         ctx.body = app.accounts.map(bot => bot.info);
     });
 
