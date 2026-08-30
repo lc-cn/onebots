@@ -78,6 +78,8 @@ function createProtocol() {
         handleGroupRequest: vi.fn(),
         muteGroupAnonymous: vi.fn(),
         setGroupAnonymous: vi.fn(),
+        describeCapabilities: vi.fn().mockReturnValue({ actions: { native_ping: true } }),
+        callAction: vi.fn().mockResolvedValue({ pong: true }),
     };
 
     const protocol = new OneBotV11Protocol(
@@ -520,5 +522,23 @@ describe("OneBot V11 message format conversion", () => {
             "bot",
             expect.objectContaining({ enable: false }),
         );
+    });
+
+    test("delegates declared platform-native actions through the common capability boundary", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        const result = await protocol.apply("native_ping", { value: 1 });
+
+        expect(result).toEqual({ status: "ok", retcode: 0, data: { pong: true } });
+        expect(adapter.callAction).toHaveBeenCalledWith("bot", "native_ping", { value: 1 });
+    });
+
+    test("rejects actions absent from both the protocol catalog and adapter capabilities", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        const result = await protocol.apply("missing_action");
+
+        expect(result).toMatchObject({ status: "failed", retcode: -1 });
+        expect(adapter.callAction).not.toHaveBeenCalled();
     });
 });

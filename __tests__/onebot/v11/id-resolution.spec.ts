@@ -2,6 +2,11 @@ import { describe, expect, test, vi } from "vitest";
 
 vi.mock("onebots", () => {
     class Protocol {
+        public logger = {
+            debug: vi.fn(),
+            error: vi.fn(),
+        };
+
         constructor(
             public adapter: any,
             public account: any,
@@ -80,7 +85,7 @@ describe("OneBot V11 ID resolution", () => {
     test("send_private_msg resolves numeric-string user_id through adapter.resolveId()", async () => {
         const { adapter, protocol, resolvedId } = createProtocol();
 
-        await protocol["sendPrivateMsg"]({
+        await protocol.apply("send_private_msg", {
             user_id: "123456789",
             message: "hello",
         });
@@ -98,12 +103,12 @@ describe("OneBot V11 ID resolution", () => {
     test("message and info APIs resolve numeric-string IDs through adapter.resolveId()", async () => {
         const { adapter, protocol } = createProtocol();
 
-        await protocol["deleteMsg"]({ message_id: "10001" });
-        await protocol["getMsg"]({ message_id: "10002" });
-        await protocol["getStrangerInfo"]({ user_id: "10003" });
-        await protocol["getGroupInfo"]({ group_id: "10004" });
-        await protocol["getGroupMemberInfo"]({ group_id: "10005", user_id: "10006" });
-        await protocol["getGroupMemberList"]({ group_id: "10007" });
+        await protocol.apply("delete_msg", { message_id: "10001" });
+        await protocol.apply("get_msg", { message_id: "10002" });
+        await protocol.apply("get_stranger_info", { user_id: "10003" });
+        await protocol.apply("get_group_info", { group_id: "10004" });
+        await protocol.apply("get_group_member_info", { group_id: "10005", user_id: "10006" });
+        await protocol.apply("get_group_member_list", { group_id: "10007" });
 
         expect(adapter.resolveId).toHaveBeenNthCalledWith(1, 10001);
         expect(adapter.resolveId).toHaveBeenNthCalledWith(2, 10002);
