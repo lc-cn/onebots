@@ -1,76 +1,95 @@
-import type { liff, moduleOperation, shop } from "@line/bot-sdk";
 import {
-    optionalNumber,
-    optionalString,
-    requireRecord,
-    requireString,
-} from "./platform-action-params.js";
-import type {
-    LineActionContext,
-    LineActionHandler,
-    LineActionParams,
-} from "./platform-action-context.js";
+    acquireChatControlRequest,
+    createLiffRequest,
+    detachModuleRequest,
+    missionStickerRequest,
+    moduleLimit,
+    requireAuthorizationCodeGrant,
+    requireRedirectUri,
+    updateLiffRequest,
+} from "./channel-action-params.js";
+import { optionalString, requireString } from "./platform-action-params.js";
+import { lineAction, type LineActionHandler } from "./platform-action-context.js";
 
 /** Profile、群聊、LIFF、Module 与 Shop 的官方动作。 */
 export const LINE_CHANNEL_ACTIONS = {
-    get_profile: async ({ client }: LineActionContext, params: LineActionParams) =>
+    get_profile: lineAction(["user_id"], async ({ client }, params) =>
         client.getProfile(requireString(params, "user_id")),
-    get_group_summary: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    get_group_summary: lineAction(["group_id"], async ({ client }, params) =>
         client.getGroupSummary(requireString(params, "group_id")),
-    get_group_member_count: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    get_group_member_count: lineAction(["group_id"], async ({ client }, params) =>
         client.getGroupMemberCount(requireString(params, "group_id")),
-    get_group_member_profile: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    get_group_member_profile: lineAction(["group_id", "user_id"], async ({ client }, params) =>
         client.getGroupMemberProfile(
             requireString(params, "group_id"),
             requireString(params, "user_id"),
         ),
-    get_group_member_ids: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    get_group_member_ids: lineAction(["group_id", "start"], async ({ client }, params) =>
         client.getGroupMembersIds(
             requireString(params, "group_id"),
             optionalString(params, "start"),
         ),
-    leave_room: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    leave_room: lineAction(["room_id"], async ({ client }, params) =>
         client.leaveRoom(requireString(params, "room_id")),
-    create_liff_app: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.addLIFFApp(requireRecord(params, "request") as liff.AddLiffAppRequest),
-    list_liff_apps: async ({ client }: LineActionContext) => client.getAllLIFFApps(),
-    update_liff_app: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.updateLIFFApp(
-            requireString(params, "liff_id"),
-            requireRecord(params, "request") as liff.UpdateLiffAppRequest,
-        ),
-    delete_liff_app: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    create_liff_app: lineAction(["request"], async ({ client }, params) =>
+        client.addLIFFApp(createLiffRequest(params)),
+    ),
+    list_liff_apps: lineAction([], async ({ client }) => client.getAllLIFFApps()),
+    update_liff_app: lineAction(["liff_id", "request"], async ({ client }, params) =>
+        client.updateLIFFApp(requireString(params, "liff_id"), updateLiffRequest(params)),
+    ),
+    delete_liff_app: lineAction(["liff_id"], async ({ client }, params) =>
         client.deleteLIFFApp(requireString(params, "liff_id")),
-    acquire_chat_control: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    acquire_chat_control: lineAction(["chat_id", "request"], async ({ client }, params) =>
         client.acquireChatControl(
             requireString(params, "chat_id"),
-            params.request
-                ? (requireRecord(params, "request") as moduleOperation.AcquireChatControlRequest)
-                : undefined,
+            acquireChatControlRequest(params),
         ),
-    release_chat_control: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    release_chat_control: lineAction(["chat_id"], async ({ client }, params) =>
         client.releaseChatControl(requireString(params, "chat_id")),
-    list_modules: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.getModules(optionalString(params, "start"), optionalNumber(params, "limit")),
-    attach_module: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.attachModule(
-            requireString(params, "grant_type"),
-            requireString(params, "code"),
-            requireString(params, "redirect_uri"),
-            optionalString(params, "code_verifier"),
-            optionalString(params, "client_id"),
-            optionalString(params, "client_secret"),
-            optionalString(params, "region"),
-            optionalString(params, "basic_search_id"),
-            optionalString(params, "scope"),
-            optionalString(params, "brand_type"),
-        ),
-    detach_module: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.detachModule(
-            params.request
-                ? (requireRecord(params, "request") as moduleOperation.DetachModuleRequest)
-                : undefined,
-        ),
-    mission_sticker: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.missionStickerV3(requireRecord(params, "request") as shop.MissionStickerRequest),
+    ),
+    list_modules: lineAction(["start", "limit"], async ({ client }, params) =>
+        client.getModules(optionalString(params, "start"), moduleLimit(params)),
+    ),
+    attach_module: lineAction(
+        [
+            "grant_type",
+            "code",
+            "redirect_uri",
+            "code_verifier",
+            "client_id",
+            "client_secret",
+            "region",
+            "basic_search_id",
+            "scope",
+            "brand_type",
+        ],
+        async ({ client }, params) =>
+            client.attachModule(
+                requireAuthorizationCodeGrant(params),
+                requireString(params, "code"),
+                requireRedirectUri(params),
+                optionalString(params, "code_verifier"),
+                optionalString(params, "client_id"),
+                optionalString(params, "client_secret"),
+                optionalString(params, "region"),
+                optionalString(params, "basic_search_id"),
+                optionalString(params, "scope"),
+                optionalString(params, "brand_type"),
+            ),
+    ),
+    detach_module: lineAction(["request"], async ({ client }, params) =>
+        client.detachModule(detachModuleRequest(params)),
+    ),
+    mission_sticker: lineAction(["request"], async ({ client }, params) =>
+        client.missionStickerV3(missionStickerRequest(params)),
+    ),
 } satisfies Readonly<Record<string, LineActionHandler>>;

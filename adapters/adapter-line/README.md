@@ -108,6 +108,8 @@ Rich Menu 与 Coupon 动作使用共用的精确参数入口。图片只接受�
 
 消息动作同样采用精确参数契约：重试键使用 UUID，`multicast` 最多接收 500 个不重复用户，聚合单位只能有 1 个且不超过 30 字符，loading 时长为 5 到 60 秒并以 5 秒递增，投递统计日期使用有效的 `yyyyMMdd`。分页 `limit` 对调用者统一使用整数；`get_room_member_list` 会拉取全部页面并拒绝重复游标。
 
+LIFF、Module、Mission Sticker 与洞察动作会校验官方枚举、HTTPS LIFF URL、Chat Control TTL、分页上限及请求体字段。洞察日期统一使用有效的 `yyyyMMdd`，聚合统计最多跨 30 天，Rich Menu daily/summary 分别最多跨 99/396 天；空 LIFF 更新和未知嵌套字段会在本地返回结构化参数错误。
+
 ## 官方限制
 
 - LINE 不提供机器人撤回已发送消息的 API；`deleteMessage` 会返回结构化“不支持”错误。

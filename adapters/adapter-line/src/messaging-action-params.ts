@@ -88,6 +88,13 @@ export function requireLineDate(
     return value;
 }
 
+export function optionalLineDate(
+    params: Readonly<Record<string, unknown>>,
+    name = "date",
+): string | undefined {
+    return params[name] === undefined ? undefined : requireLineDate(params, name);
+}
+
 export function narrowcastRequest(
     params: Readonly<Record<string, unknown>>,
 ): messagingApi.NarrowcastRequest {
