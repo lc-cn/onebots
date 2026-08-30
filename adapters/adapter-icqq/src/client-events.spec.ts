@@ -4,6 +4,69 @@ import { describe, expect, it, vi } from "vitest";
 import { wireICQQClientEvents } from "./client-events.js";
 
 describe("ICQQ 客户端事件桥接", () => {
+    it("保留完整原生消息元素与群发送者语义", () => {
+        const emitter = new EventEmitter();
+        const client = Object.assign(emitter, { uin: 10000, nickname: "Bot" }) as unknown as Client;
+        const sink = { emit: vi.fn(), online: vi.fn(), offline: vi.fn() };
+        const image = {
+            type: "image",
+            file: "image-file",
+            url: "https://example.com/image.jpg",
+            md5: "0123456789abcdef",
+            width: 640,
+            height: 480,
+            size: 1024,
+            summary: "[图片]",
+            nt: true,
+        };
+        const button = {
+            type: "button",
+            content: { appid: 1, rows: [] },
+        };
+        wireICQQClientEvents(client, sink);
+
+        emitter.emit("message.group", {
+            message_id: "message-1",
+            group_id: 20000,
+            group_name: "OneBots",
+            user_id: 10001,
+            message: [image, button],
+            raw_message: "[图片]",
+            time: 100,
+            sub_type: "anonymous",
+            anonymous: { id: 1, name: "匿名" },
+            block: true,
+            atme: true,
+            atall: false,
+            sender: {
+                user_id: 10001,
+                user_uid: "u_alice",
+                nickname: "Alice",
+                sub_id: "sub",
+                card: "管理员",
+                sex: "female",
+                age: 20,
+                area: "广东",
+                level: 12,
+                role: "admin",
+                title: "活跃成员",
+            },
+            reply: vi.fn(),
+        });
+
+        const event = sink.emit.mock.calls.find(([name]) => name === "group_message")?.[1];
+        expect(event).toMatchObject({
+            sub_type: "anonymous",
+            anonymous: { name: "匿名" },
+            block: true,
+            atme: true,
+            atall: false,
+            sender: { user_uid: "u_alice", area: "广东", level: 12 },
+        });
+        expect((event as { message: unknown[] }).message[0]).toBe(image);
+        expect((event as { message: unknown[] }).message[1]).toBe(button);
+    });
+
     it("桥接群消息回应并归一化回应类型", () => {
         const emitter = new EventEmitter();
         const client = Object.assign(emitter, { uin: 10000, nickname: "Bot" }) as unknown as Client;
@@ -66,7 +129,41 @@ describe("ICQQ 客户端事件桥接", () => {
             message: [],
             raw_message: "",
             time: 100,
-            sender: { user_id: 10000, nickname: "Bot" },
+            sub_type: "self",
+            from_uid: "u_bot",
+            to_id: 10000,
+            to_uid: "u_bot",
+            auto_reply: false,
+            sender: {
+                user_id: 10000,
+                user_uid: "u_bot",
+                nickname: "Bot",
+                group_id: undefined,
+                discuss_id: undefined,
+            },
+        });
+        emitter.emit("request.friend", {
+            flag: "friend-flag",
+            user_id: 10001,
+            nickname: "Alice",
+            comment: "申请好友",
+            source: "search",
+            sub_type: "single",
+            age: 20,
+            sex: "female",
+            time: 100,
+        });
+        emitter.emit("request.group", {
+            flag: "group-flag",
+            group_id: 20000,
+            group_name: "OneBots",
+            user_id: 10001,
+            nickname: "Alice",
+            sub_type: "add",
+            comment: "申请入群",
+            inviter_id: 10002,
+            tips: "来自群邀请",
+            time: 100,
         });
         emitter.emit("notice.friend.increase", { user_id: 10001, nickname: "Alice" });
         emitter.emit("notice.friend.decrease", { user_id: 10002, nickname: "Bob" });
@@ -89,6 +186,8 @@ describe("ICQQ 客户端事件桥接", () => {
             "discuss_message",
             "guild_message",
             "synced_private_message",
+            "friend_request",
+            "group_request",
             "friend_change",
             "group_sign",
             "group_transfer",
@@ -99,5 +198,17 @@ describe("ICQQ 客户端事件桥接", () => {
         }
         expect(sink.emit.mock.calls.filter(([name]) => name === "friend_change")).toHaveLength(2);
         expect(sink.emit.mock.calls.filter(([name]) => name === "read_sync")).toHaveLength(2);
+        expect(sink.emit).toHaveBeenCalledWith(
+            "friend_request",
+            expect.objectContaining({ sub_type: "single", age: 20, sex: "female" }),
+        );
+        expect(sink.emit).toHaveBeenCalledWith(
+            "group_request",
+            expect.objectContaining({
+                group_name: "OneBots",
+                inviter_id: 10002,
+                tips: "来自群邀请",
+            }),
+        );
     });
 });

@@ -158,4 +158,72 @@ describe("ICQQ 消息编译", () => {
             },
         ]);
     });
+
+    it("保留 QQNT 媒体元数据、按钮、论坛和引用节点", () => {
+        expect(
+            projectICQQMessageSegments([
+                {
+                    type: "image",
+                    file: "image-file",
+                    url: "https://example.com/image.jpg",
+                    md5: "image-md5",
+                    sha1: "image-sha1",
+                    width: 640,
+                    height: 480,
+                    size: 1024,
+                    summary: "[图片]",
+                    nt: true,
+                },
+                { type: "button", content: { appid: 1, rows: [] } },
+                { type: "forum", id: "post-1", create_time: 100 },
+                {
+                    type: "quote",
+                    user_id: 10001,
+                    time: 100,
+                    seq: 2,
+                    rand: 3,
+                    message: ["quoted", { type: "face", id: 66, big: true }],
+                },
+                {
+                    type: "node",
+                    user_id: 10002,
+                    nickname: "Bob",
+                    message: "forwarded",
+                },
+            ]),
+        ).toMatchObject([
+            {
+                type: "image",
+                data: {
+                    md5: "image-md5",
+                    sha1: "image-sha1",
+                    width: 640,
+                    height: 480,
+                    size: 1024,
+                    summary: "[图片]",
+                    nt: true,
+                },
+            },
+            { type: "button", data: { content: { appid: 1, rows: [] } } },
+            { type: "forum", data: { id: "post-1", create_time: 100 } },
+            {
+                type: "quote",
+                data: {
+                    user_id: 10001,
+                    message: [
+                        { type: "text", data: { text: "quoted" } },
+                        { type: "face", data: { id: "66", is_large: true } },
+                    ],
+                },
+            },
+            {
+                type: "node",
+                data: {
+                    user_id: 10002,
+                    nickname: "Bob",
+                    message: [{ type: "text", data: { text: "forwarded" } }],
+                },
+            },
+        ]);
+    });
 });

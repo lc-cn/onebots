@@ -4,6 +4,12 @@
  */
 
 import type { LogLevel } from "@icqqjs/icqq";
+export type {
+    ICQQGroupMessageEvent,
+    ICQQMessageElement,
+    ICQQMessageRet,
+    ICQQPrivateMessageEvent,
+} from "./message-event-types.js";
 
 // log4js Configuration type -- not importable directly, use unknown as passthrough
 type Log4jsConfiguration = unknown;
@@ -182,103 +188,6 @@ export interface ICQQGroupMember {
 // 消息相关类型
 // ============================================
 
-/**
- * 消息发送返回值
- */
-export interface ICQQMessageRet {
-    /** 消息 ID */
-    message_id: string;
-    /** 消息序号 */
-    seq: number;
-    /** 随机数 */
-    rand: number;
-    /** 发送时间 */
-    time: number;
-}
-
-/**
- * 消息段类型
- */
-export type ICQQMessageElement =
-    | { type: "text"; text: string }
-    | { type: "face" | "sface"; id: number }
-    | { type: "image"; file: string; url?: string }
-    | { type: "record"; file: string; url?: string }
-    | { type: "video"; file: string; url?: string }
-    | { type: "at"; qq: number | "all" }
-    | { type: "share"; url: string; title: string; content?: string; image?: string }
-    | { type: "json"; data: string }
-    | { type: "xml"; data: string }
-    | { type: "poke"; id: number }
-    | { type: "reply"; id: string }
-    | { type: "icqq_raw"; data: unknown };
-
-/**
- * 私聊消息事件
- */
-export interface ICQQPrivateMessageEvent {
-    /** ICQQ 原始事件 */
-    raw_event: unknown;
-    /** 消息 ID */
-    message_id: string;
-    /** 发送者 QQ */
-    user_id: number;
-    /** 消息内容 */
-    message: ICQQMessageElement[];
-    /** 原始消息 */
-    raw_message: string;
-    /** 发送时间戳 */
-    time: number;
-    /** 发送者信息 */
-    sender: {
-        user_id: number;
-        nickname: string;
-        sex?: "male" | "female" | "unknown";
-        age?: number;
-    };
-    /** 自动回复函数 */
-    reply?: (message: string | ICQQMessageElement[], quote?: boolean) => Promise<ICQQMessageRet>;
-}
-
-/**
- * 群消息事件
- */
-export interface ICQQGroupMessageEvent {
-    /** ICQQ 原始事件 */
-    raw_event: unknown;
-    /** 消息 ID */
-    message_id: string;
-    /** 群号 */
-    group_id: number;
-    /** 发送者 QQ */
-    user_id: number;
-    /** 消息内容 */
-    message: ICQQMessageElement[];
-    /** 原始消息 */
-    raw_message: string;
-    /** 发送时间戳 */
-    time: number;
-    /** 发送者信息 */
-    sender: {
-        user_id: number;
-        nickname: string;
-        card?: string;
-        sex?: "male" | "female" | "unknown";
-        age?: number;
-        role?: "owner" | "admin" | "member";
-        title?: string;
-    };
-    /** 群信息 */
-    group: {
-        group_id: number;
-        group_name: string;
-    };
-    /** @提及的 QQ 列表 */
-    atme?: boolean;
-    /** 自动回复函数 */
-    reply?: (message: string | ICQQMessageElement[], quote?: boolean) => Promise<ICQQMessageRet>;
-}
-
 // ============================================
 // 通知事件类型
 // ============================================
@@ -298,6 +207,10 @@ export interface ICQQFriendRequestEvent {
     comment: string;
     /** 来源 */
     source: string;
+    /** 添加好友或单向好友请求。 */
+    sub_type: "add" | "single";
+    age: number;
+    sex: "male" | "female" | "unknown";
     /** 时间戳 */
     time: number;
 }
@@ -319,6 +232,10 @@ export interface ICQQGroupRequestEvent {
     sub_type: "add" | "invite";
     /** 验证信息 */
     comment: string;
+    group_name: string;
+    inviter_id?: number;
+    tips?: string;
+    role?: "owner" | "admin" | "member";
     /** 时间戳 */
     time: number;
 }
@@ -332,6 +249,7 @@ export interface ICQQGroupIncreaseEvent {
     group_id: number;
     /** 新成员 QQ */
     user_id: number;
+    nickname: string;
     /** 操作者 QQ (邀请人) */
     operator_id?: number;
     /** 时间戳 */
@@ -353,6 +271,8 @@ export interface ICQQGroupDecreaseEvent {
     sub_type: "leave" | "kick" | "kick_me";
     /** 群主退群导致群解散 */
     is_dismiss: boolean;
+    /** SDK 返回的退群成员快照。 */
+    member?: unknown;
     /** 时间戳 */
     time: number;
 }
@@ -370,6 +290,8 @@ export interface ICQQGroupMuteEvent {
     operator_id: number;
     /** 禁言时长 (秒，0 表示解除禁言) */
     duration: number;
+    /** 匿名成员禁言时的昵称。 */
+    nickname?: string;
     /** 时间戳 */
     time: number;
 }
@@ -410,6 +332,8 @@ export interface ICQQFriendRecallEvent {
     message_id: string;
     /** 好友 QQ */
     user_id: number;
+    seq: number;
+    rand: number;
     /** 时间戳 */
     time: number;
 }
@@ -427,6 +351,8 @@ export interface ICQQGroupRecallEvent {
     user_id: number;
     /** 操作者 QQ */
     operator_id: number;
+    seq: number;
+    rand: number;
     /** 时间戳 */
     time: number;
 }

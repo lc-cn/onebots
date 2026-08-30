@@ -53,7 +53,25 @@ export function projectICQQMessage(
         raw_message: event.raw_message,
         message: projectICQQMessageSegments(event.message),
         raw_event: event.raw_event,
-        extensions: isGroup ? { icqq: { at_me: event.atme, sender: event.sender } } : undefined,
+        extensions: {
+            icqq: isGroup
+                ? {
+                      sub_type: event.sub_type,
+                      at_me: event.atme,
+                      at_all: event.atall,
+                      anonymous: event.anonymous,
+                      block: event.block,
+                      sender: event.sender,
+                  }
+                : {
+                      sub_type: event.sub_type,
+                      from_uid: event.from_uid,
+                      to_id: event.to_id,
+                      to_uid: event.to_uid,
+                      auto_reply: event.auto_reply,
+                      sender: event.sender,
+                  },
+        },
     };
 }
 
@@ -195,6 +213,21 @@ export function projectICQQRequest(
         comment: event.comment,
         flag: event.request_id,
         raw_event: event.raw_event,
+        extensions: {
+            icqq: isGroup
+                ? {
+                      group_name: event.group_name,
+                      inviter_id: event.inviter_id,
+                      tips: event.tips,
+                      role: event.role,
+                  }
+                : {
+                      sub_type: event.sub_type,
+                      source: event.source,
+                      age: event.age,
+                      sex: event.sex,
+                  },
+        },
     };
 }
 
@@ -209,10 +242,15 @@ export function projectICQQMembership(
         increase ? "group_increase" : "group_decrease",
         increase ? (event.operator_id === event.user_id ? "approve" : "invite") : event.sub_type,
         {
-            user: { id: context.createId(event.user_id) },
+            user: {
+                id: context.createId(event.user_id),
+                ...("nickname" in event ? { name: event.nickname } : {}),
+            },
             operator: event.operator_id ? { id: context.createId(event.operator_id) } : undefined,
             extensions:
-                "is_dismiss" in event ? { icqq: { is_dismiss: event.is_dismiss } } : undefined,
+                "is_dismiss" in event
+                    ? { icqq: { is_dismiss: event.is_dismiss, member: event.member } }
+                    : undefined,
         },
     );
 }
@@ -231,6 +269,8 @@ export function projectICQQMute(
             user: all ? undefined : { id: context.createId(event.user_id) },
             operator: { id: context.createId(event.operator_id) },
             duration: event.duration,
+            extensions:
+                event.nickname === undefined ? undefined : { icqq: { nickname: event.nickname } },
         },
     );
 }
@@ -254,6 +294,7 @@ export function projectICQQRecall(
         user: { id: context.createId(event.user_id) },
         operator: group ? { id: context.createId(event.operator_id) } : undefined,
         group: group ? { id: context.createId(event.group_id) } : undefined,
+        extensions: { icqq: { seq: event.seq, rand: event.rand } },
     });
 }
 

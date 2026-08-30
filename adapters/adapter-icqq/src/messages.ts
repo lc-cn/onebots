@@ -116,7 +116,7 @@ export function compileICQQMessage(
 
 /** 将 ICQQ 消息元素保真投影；未知元素使用 icqq_raw 而非占位文本。 */
 export function projectICQQMessageSegments(
-    message: ReadonlyArray<ICQQMessageElement | MessageElem>,
+    message: ReadonlyArray<ICQQMessageElement>,
 ): CommonTypes.Segment[] {
     return message.map(element => {
         switch (element.type) {
@@ -124,17 +124,49 @@ export function projectICQQMessageSegments(
                 return { type: "text", data: { text: element.text } };
             case "face":
             case "sface":
-                return { type: "face", data: { id: String(element.id) } };
+                return {
+                    type: "face",
+                    data: {
+                        id: String(element.id),
+                        ...(element.text === undefined ? {} : { text: element.text }),
+                        ...(element.big === undefined ? {} : { is_large: element.big }),
+                        ...(element.stickerId === undefined
+                            ? {}
+                            : { sticker_id: element.stickerId }),
+                        ...(element.stickerType === undefined
+                            ? {}
+                            : { sticker_type: element.stickerType }),
+                    },
+                };
             case "image":
-                return { type: "image", data: { url: element.url, file: element.file } };
+                return {
+                    type: "image",
+                    data: {
+                        url: element.url,
+                        file: element.file,
+                        ...imageMetadata(element),
+                    },
+                };
             case "flash":
                 return { type: "flash", data: mediaData(element) };
             case "record":
-                return { type: "record", data: { url: element.url, file: element.file } };
+                return {
+                    type: "record",
+                    data: {
+                        url: element.url,
+                        file: element.file,
+                        ...mediaMetadata(element),
+                        ...(element.brief === undefined ? {} : { brief: element.brief }),
+                    },
+                };
             case "video":
                 return {
                     type: "video",
-                    data: { url: "url" in element ? element.url : undefined, file: element.file },
+                    data: {
+                        url: "url" in element ? element.url : undefined,
+                        file: element.file,
+                        ...mediaMetadata(element),
+                    },
                 };
             case "bubble":
                 return { type: "bubble", data: mediaData(element) };
@@ -142,7 +174,11 @@ export function projectICQQMessageSegments(
                 const tinyId = "id" in element ? element.id : undefined;
                 return {
                     type: "at",
-                    data: tinyId ? { id: tinyId } : { qq: String(element.qq) },
+                    data: {
+                        ...(tinyId ? { id: tinyId } : { qq: String(element.qq) }),
+                        ...(element.text === undefined ? {} : { text: element.text }),
+                        ...(element.dummy === undefined ? {} : { dummy: element.dummy }),
+                    },
                 };
             }
             case "rps":
@@ -169,6 +205,7 @@ export function projectICQQMessageSegments(
                         lng: element.lng,
                         address: element.address,
                         id: element.id,
+                        ...(element.name === undefined ? {} : { name: element.name }),
                     },
                 };
             case "poke":
@@ -177,10 +214,30 @@ export function projectICQQMessageSegments(
                     data: { id: element.id, text: "text" in element ? element.text : undefined },
                 };
             case "json":
+                return { type: "json", data: { data: element.data } };
             case "xml":
-                return { type: element.type, data: { data: element.data } };
+                return {
+                    type: "xml",
+                    data: {
+                        data: element.data,
+                        ...(element.id === undefined ? {} : { id: element.id }),
+                    },
+                };
             case "markdown":
-                return { type: "markdown", data: { content: element.content } };
+                return {
+                    type: "markdown",
+                    data: {
+                        content: element.content,
+                        ...(element.config === undefined ? {} : { config: element.config }),
+                    },
+                };
+            case "button":
+                return { type: "button", data: { content: element.content } };
+            case "forum":
+                return {
+                    type: "forum",
+                    data: { id: element.id, create_time: element.create_time },
+                };
             case "mirai":
                 return { type: "mirai", data: { data: element.data } };
             case "long_msg":
@@ -207,10 +264,41 @@ export function projectICQQMessageSegments(
                         file_size: element.size,
                         md5: element.md5,
                         sha1: element.sha1,
+                        ...(element.duration === undefined ? {} : { duration: element.duration }),
                     },
                 };
             case "reply":
-                return { type: "reply", data: { id: element.id } };
+                return {
+                    type: "reply",
+                    data: {
+                        id: element.id,
+                        ...(element.text === undefined ? {} : { text: element.text }),
+                    },
+                };
+            case "quote":
+                return {
+                    type: "quote",
+                    data: {
+                        user_id: element.user_id,
+                        time: element.time,
+                        seq: element.seq,
+                        rand: element.rand,
+                        message: projectSendable(element.message),
+                    },
+                };
+            case "node":
+                return {
+                    type: "node",
+                    data: {
+                        user_id: element.user_id,
+                        nickname: element.nickname,
+                        time: element.time,
+                        seq: element.seq,
+                        rand: element.rand,
+                        preview: element.preview,
+                        message: projectSendable(element.message),
+                    },
+                };
             case "icqq_raw":
                 return { type: "icqq_raw", data: { element: element.data } };
             default:
@@ -307,4 +395,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function mediaData(element: { file: unknown; url?: string; name?: string }) {
     return { file: element.file, url: element.url, name: element.name };
+}
+
+function imageMetadata(element: Extract<MessageElem, { type: "image" }>) {
+    return {
+        ...(element.summary === undefined ? {} : { summary: element.summary }),
+        ...(element.asface === undefined ? {} : { asface: element.asface }),
+        ...(element.origin === undefined ? {} : { origin: element.origin }),
+        ...mediaMetadata(element),
+    };
+}
+
+function mediaMetadata(element: {
+    name?: string;
+    fid?: string | number;
+    md5?: string;
+    sha1?: string;
+    height?: number;
+    width?: number;
+    size?: number;
+    seconds?: number;
+    nt?: boolean;
+}) {
+    return {
+        ...(element.name === undefined ? {} : { name: element.name }),
+        ...(element.fid === undefined ? {} : { file_id: element.fid }),
+        ...(element.md5 === undefined ? {} : { md5: element.md5 }),
+        ...(element.sha1 === undefined ? {} : { sha1: element.sha1 }),
+        ...(element.height === undefined ? {} : { height: element.height }),
+        ...(element.width === undefined ? {} : { width: element.width }),
+        ...(element.size === undefined ? {} : { size: element.size }),
+        ...(element.seconds === undefined ? {} : { duration: element.seconds }),
+        ...(element.nt === undefined ? {} : { nt: element.nt }),
+    };
+}
+
+function projectSendable(message: Sendable): CommonTypes.Segment[] {
+    const elements = Array.isArray(message) ? message : [message];
+    return elements.flatMap(element =>
+        typeof element === "string"
+            ? [{ type: "text", data: { text: element } }]
+            : projectICQQMessageSegments([element]),
+    );
 }

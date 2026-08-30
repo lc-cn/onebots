@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { icqqSchema } from "./index.js";
+import { icqqSchema, Platform } from "./index.js";
 
 describe("ICQQ 配置 Schema", () => {
+    it("从包入口提供可用于配置的运行时平台枚举", () => {
+        expect(Platform.AndroidPad).toBe(2);
+    });
+
     it("为 Web 表单提供凭据、传输、过滤和高级分区", () => {
         expect(icqqSchema.password).toMatchObject({
             sensitive: true,

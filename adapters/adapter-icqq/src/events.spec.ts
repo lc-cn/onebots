@@ -10,6 +10,7 @@ import {
     projectICQQRecall,
     projectICQQReaction,
     projectICQQReadSync,
+    projectICQQRequest,
 } from "./events.js";
 
 function id(value: string | number) {
@@ -33,7 +34,23 @@ describe("ICQQ 事件投影", () => {
                 ],
                 raw_message: "hello",
                 time: 1_700_000_000,
-                sender: { user_id: 30000, nickname: "Alice", role: "admin" },
+                sub_type: "normal",
+                anonymous: null,
+                block: false,
+                atall: false,
+                sender: {
+                    user_id: 30000,
+                    user_uid: "u_alice",
+                    nickname: "Alice",
+                    sub_id: "sub",
+                    card: "管理员",
+                    sex: "female",
+                    age: 20,
+                    area: "广东",
+                    level: 12,
+                    role: "admin",
+                    title: "活跃成员",
+                },
                 group: { group_id: 20000, group_name: "Group" },
                 atme: true,
             },
@@ -57,7 +74,7 @@ describe("ICQQ 事件投影", () => {
             context,
         );
         const recall = projectICQQRecall(
-            { raw_event: {}, message_id: "m", user_id: 2, time: 101 },
+            { raw_event: {}, message_id: "m", user_id: 2, seq: 10, rand: 11, time: 101 },
             context,
         );
         const poke = projectICQQPoke(
@@ -75,6 +92,52 @@ describe("ICQQ 事件投影", () => {
         expect(mute).toMatchObject({ notice_type: "group_ban", sub_type: "ban", duration: 60 });
         expect(recall).toMatchObject({ notice_type: "message_deleted", sub_type: "private" });
         expect(poke).toMatchObject({ notice_type: "interaction", sub_type: "poke" });
+    });
+
+    it("申请事件保留 ICQQ 身份、来源和群邀请上下文", () => {
+        const friend = projectICQQRequest(
+            {
+                raw_event: {},
+                request_id: "friend-flag",
+                user_id: 2,
+                nickname: "Alice",
+                comment: "申请好友",
+                source: "search",
+                sub_type: "single",
+                age: 20,
+                sex: "female",
+                time: 100,
+            },
+            context,
+        );
+        const group = projectICQQRequest(
+            {
+                raw_event: {},
+                request_id: "group-flag",
+                group_id: 1,
+                group_name: "OneBots",
+                user_id: 2,
+                nickname: "Alice",
+                sub_type: "add",
+                comment: "申请入群",
+                inviter_id: 3,
+                tips: "来自群邀请",
+                time: 100,
+            },
+            context,
+        );
+
+        expect(friend.extensions).toEqual({
+            icqq: { sub_type: "single", source: "search", age: 20, sex: "female" },
+        });
+        expect(group.extensions).toEqual({
+            icqq: {
+                group_name: "OneBots",
+                inviter_id: 3,
+                tips: "来自群邀请",
+                role: undefined,
+            },
+        });
     });
 
     it("群成员减少保留踢出语义、解散标记并生成互不冲突的事件 ID", () => {

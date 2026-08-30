@@ -6,7 +6,6 @@ import type {
     PrivateMessageEvent,
 } from "@icqqjs/icqq";
 import type { GuildMessageEvent } from "@icqqjs/icqq/lib/internal";
-import type { MessageElem } from "@icqqjs/icqq/lib/message";
 import { compileICQQReply } from "./messages.js";
 import type { ICQQBotEvents } from "./bot-events.js";
 import type {
@@ -105,6 +104,9 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             nickname: event.nickname,
             comment: event.comment,
             source: event.source,
+            sub_type: event.sub_type,
+            age: event.age,
+            sex: event.sex,
             time: event.time,
         });
     });
@@ -117,6 +119,10 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             nickname: event.nickname,
             sub_type: event.sub_type,
             comment: "comment" in event ? event.comment : "",
+            group_name: event.group_name,
+            inviter_id: "inviter_id" in event ? event.inviter_id : undefined,
+            tips: "tips" in event ? event.tips : undefined,
+            role: "role" in event ? event.role : undefined,
             time: event.time,
         });
     });
@@ -126,6 +132,7 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             raw_event: event,
             group_id: event.group_id,
             user_id: event.user_id,
+            nickname: event.nickname,
             operator_id: undefined,
             time: Date.now() / 1000,
         });
@@ -144,6 +151,7 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             operator_id: event.operator_id,
             sub_type: subType,
             is_dismiss: event.dismiss,
+            member: event.member,
             time: Date.now() / 1000,
         });
     });
@@ -154,6 +162,7 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             user_id: event.user_id,
             operator_id: event.operator_id,
             duration: event.duration,
+            nickname: event.nickname,
             time: Date.now() / 1000,
         });
     });
@@ -220,6 +229,8 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             raw_event: event,
             message_id: event.message_id,
             user_id: event.user_id,
+            seq: event.seq,
+            rand: event.rand,
             time: event.time,
         });
     });
@@ -230,6 +241,8 @@ export function wireICQQClientEvents(client: Client, sink: ICQQClientEventSink):
             group_id: event.group_id,
             user_id: event.user_id,
             operator_id: event.operator_id,
+            seq: event.seq,
+            rand: event.rand,
             time: event.time,
         });
     });
@@ -293,13 +306,21 @@ function projectPrivateMessage(
         raw_event: event,
         message_id: event.message_id,
         user_id: event.user_id,
-        message: projectMessage(event.message),
+        message: [...event.message],
         raw_message: event.raw_message,
         time: event.time,
         sender: {
             user_id: event.sender.user_id,
+            user_uid: event.sender.user_uid,
             nickname: event.sender.nickname,
+            group_id: event.sender.group_id,
+            discuss_id: event.sender.discuss_id,
         },
+        sub_type: event.sub_type,
+        from_uid: event.from_uid,
+        to_id: event.to_id,
+        to_uid: event.to_uid,
+        auto_reply: event.auto_reply,
         ...(typeof (event as Partial<PrivateMessageEvent>).reply === "function"
             ? {
                   reply: (message: string | ICQQMessageElement[], quote?: boolean) =>
@@ -323,7 +344,7 @@ function projectDiscussMessage(event: DiscussMessageEvent): ICQQDiscussMessageEv
         discuss_id: event.discuss_id,
         discuss_name: event.discuss_name,
         user_id: event.user_id,
-        message: projectMessage(event.message),
+        message: [...event.message],
         raw_message: event.raw_message,
         time: event.time,
         sender: {
@@ -351,7 +372,7 @@ function projectGuildMessage(event: GuildMessageEvent): ICQQGuildMessageEvent {
         channel_name: event.channel_name,
         message_id: messageId,
         user_id: event.sender.tiny_id,
-        message: projectMessage(event.message),
+        message: [...event.message],
         raw_message: event.raw_message,
         time: event.time,
         is_delete: event.is_delete === true,
@@ -365,18 +386,26 @@ function projectGroupMessage(event: GroupMessageEvent): ICQQGroupMessageEvent {
         message_id: event.message_id,
         group_id: event.group_id,
         user_id: event.user_id,
-        message: projectMessage(event.message),
+        message: [...event.message],
         raw_message: event.raw_message,
         time: event.time,
         sender: {
             user_id: event.sender.user_id,
+            user_uid: event.sender.user_uid,
             nickname: event.sender.nickname,
+            sub_id: event.sender.sub_id,
             card: event.sender.card,
             sex: event.sender.sex,
             age: event.sender.age,
+            area: event.sender.area,
+            level: event.sender.level,
             role: event.sender.role,
             title: event.sender.title,
         },
+        sub_type: event.sub_type,
+        anonymous: event.anonymous,
+        block: event.block,
+        atall: event.atall,
         group: { group_id: event.group_id, group_name: event.group_name },
         atme: event.atme,
         reply: (message, quote) =>
@@ -387,43 +416,6 @@ function projectGroupMessage(event: GroupMessageEvent): ICQQGroupMessageEvent {
                 time: result.time,
             })),
     };
-}
-
-function projectMessage(message: MessageElem[]): ICQQMessageElement[] {
-    return message.map(element => {
-        switch (element.type) {
-            case "text":
-                return { type: "text", text: element.text };
-            case "face":
-                return { type: "face", id: element.id };
-            case "image":
-                return { type: "image", file: String(element.file), url: element.url };
-            case "record":
-                return { type: "record", file: String(element.file), url: element.url };
-            case "video":
-                return { type: "video", file: String(element.file), url: undefined };
-            case "at":
-                return { type: "at", qq: element.qq };
-            case "share":
-                return {
-                    type: "share",
-                    url: element.url,
-                    title: element.title,
-                    content: element.content,
-                    image: element.image,
-                };
-            case "json":
-                return { type: "json", data: element.data };
-            case "xml":
-                return { type: "xml", data: element.data };
-            case "poke":
-                return { type: "poke", id: element.id };
-            case "reply":
-                return { type: "reply", id: element.id };
-            default:
-                return { type: "icqq_raw", data: element };
-        }
-    });
 }
 
 function nowSeconds(): number {
