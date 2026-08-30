@@ -11,60 +11,90 @@ import {
     createImpressionAudienceRequest,
     updateAudienceDescriptionRequest,
 } from "./audience-params.js";
-import { exactParams, optionalBoolean, requirePositiveInteger } from "./platform-action-params.js";
-import type {
-    LineActionContext,
-    LineActionHandler,
-    LineActionParams,
+import { optionalBoolean } from "./platform-action-params.js";
+import {
+    lineAction,
+    type LineActionContext,
+    type LineActionHandler,
 } from "./platform-action-context.js";
 
 /** Audience 创建、扩充、共享查询与生命周期动作。 */
 export const LINE_AUDIENCE_ACTIONS = {
-    add_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
+    add_audience: lineAction(["request"], async ({ client }, params) =>
         client.addAudienceToAudienceGroup(addAudienceRequest(params)),
-    create_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    create_audience: lineAction(["request"], async ({ client }, params) =>
         client.createAudienceGroup(createAudienceRequest(params)),
-    create_click_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    create_click_audience: lineAction(["request"], async ({ client }, params) =>
         client.createClickBasedAudienceGroup(createClickAudienceRequest(params)),
-    create_impression_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    create_impression_audience: lineAction(["request"], async ({ client }, params) =>
         client.createImpBasedAudienceGroup(createImpressionAudienceRequest(params)),
-    create_upload_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.createAudienceForUploadingUserIds(
-            audienceFile(params, "create"),
-            audienceFileDescription(params),
-            optionalBoolean(params, "is_ifa_audience"),
-            audienceUploadDescription(params),
-        ),
-    add_user_ids_to_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.addUserIdsToAudience(
-            audienceFile(params, "append"),
-            audienceId(params),
-            audienceUploadDescription(params),
-        ),
-    get_audience: async ({ client }: LineActionContext, params: LineActionParams) => {
-        exactParams(params, ["audience_group_id"]);
-        return client.getAudienceData(audienceId(params));
-    },
-    list_audiences: listAudiences,
-    get_shared_audience: async ({ client }: LineActionContext, params: LineActionParams) => {
-        exactParams(params, ["audience_group_id"]);
-        return client.getSharedAudienceData(audienceId(params));
-    },
-    list_shared_audiences: listSharedAudiences,
-    update_audience_description: async ({ client }: LineActionContext, params: LineActionParams) =>
+    ),
+    create_upload_audience: lineAction(
+        ["data_base64", "description", "is_ifa_audience", "upload_description"],
+        async ({ client }, params) =>
+            client.createAudienceForUploadingUserIds(
+                audienceFile(params, "create"),
+                audienceFileDescription(params),
+                optionalBoolean(params, "is_ifa_audience"),
+                audienceUploadDescription(params),
+            ),
+    ),
+    add_user_ids_to_audience: lineAction(
+        ["data_base64", "audience_group_id", "upload_description"],
+        async ({ client }, params) =>
+            client.addUserIdsToAudience(
+                audienceFile(params, "append"),
+                audienceId(params),
+                audienceUploadDescription(params),
+            ),
+    ),
+    get_audience: lineAction(["audience_group_id"], async ({ client }, params) =>
+        client.getAudienceData(audienceId(params)),
+    ),
+    list_audiences: lineAction(
+        [
+            "page",
+            "description",
+            "status",
+            "size",
+            "create_route",
+            "includes_external_public_groups",
+        ],
+        listAudiences,
+    ),
+    get_shared_audience: lineAction(["audience_group_id"], async ({ client }, params) =>
+        client.getSharedAudienceData(audienceId(params)),
+    ),
+    list_shared_audiences: lineAction(
+        [
+            "page",
+            "description",
+            "status",
+            "size",
+            "create_route",
+            "includes_owned_audience_groups",
+        ],
+        listSharedAudiences,
+    ),
+    update_audience_description: lineAction(
+        ["audience_group_id", "request"],
+        async ({ client }, params) =>
         client.updateAudienceGroupDescription(
             audienceId(params),
             updateAudienceDescriptionRequest(params),
         ),
-    delete_audience: async ({ client }: LineActionContext, params: LineActionParams) => {
-        exactParams(params, ["audience_group_id"]);
-        return client.deleteAudienceGroup(requirePositiveInteger(params, "audience_group_id"));
-    },
+    ),
+    delete_audience: lineAction(["audience_group_id"], async ({ client }, params) =>
+        client.deleteAudienceGroup(audienceId(params)),
+    ),
 } satisfies Readonly<Record<string, LineActionHandler>>;
 
 async function listAudiences(
     { client }: LineActionContext,
-    params: LineActionParams,
+    params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
     const query = audienceListQuery(params, false);
     return client.getAudienceGroups(
@@ -79,7 +109,7 @@ async function listAudiences(
 
 async function listSharedAudiences(
     { client }: LineActionContext,
-    params: LineActionParams,
+    params: Readonly<Record<string, unknown>>,
 ): Promise<unknown> {
     const query = audienceListQuery(params, true);
     return client.getSharedAudienceGroups(

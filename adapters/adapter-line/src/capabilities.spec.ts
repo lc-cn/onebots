@@ -20,4 +20,13 @@ describe("LINE 能力清单", () => {
         expect(lineCapabilities.events.user_updated?.support).toBe("native");
         expect(lineCapabilities.events.message_status?.support).toBe("native");
     });
+
+    it("区分始终可用、会话上下文与专项权限动作", () => {
+        expect(lineCapabilities.actions.get_message_quota?.availability).toBe("always");
+        expect(lineCapabilities.actions.get_webhook_endpoint?.availability).toBe("always");
+        expect(lineCapabilities.actions.get_group_member_profile?.availability).toBe("context");
+        expect(lineCapabilities.actions.create_audience?.availability).toBe("permission");
+        expect(lineCapabilities.actions.create_liff_app?.availability).toBe("permission");
+        expect(lineCapabilities.actions.get_membership_list?.availability).toBe("permission");
+    });
 });

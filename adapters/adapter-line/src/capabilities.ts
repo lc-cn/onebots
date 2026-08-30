@@ -5,9 +5,73 @@ import {
 } from "onebots";
 import { LINE_PLATFORM_ACTIONS } from "./platform-actions.js";
 
-const platformActions = definePlatformActionCapabilities(LINE_PLATFORM_ACTIONS, {
-    support: "native",
-    availability: "context",
+const permissionActionPrefixes = [
+    "add_audience",
+    "create_audience",
+    "create_click_audience",
+    "create_impression_audience",
+    "create_upload_audience",
+    "add_user_ids_to_audience",
+    "get_audience",
+    "list_audience",
+    "get_shared_audience",
+    "list_shared_audience",
+    "update_audience",
+    "delete_audience",
+    "create_liff",
+    "list_liff",
+    "update_liff",
+    "delete_liff",
+    "acquire_chat_control",
+    "release_chat_control",
+    "list_modules",
+    "attach_module",
+    "detach_module",
+    "mission_sticker",
+    "create_coupon",
+    "get_coupon",
+    "list_coupons",
+    "close_coupon",
+    "get_membership",
+    "get_joined_membership",
+    "push_messages_by_phone",
+    "get_phone_message_statistics",
+    "get_group_member_ids",
+    "get_room_member_list",
+] as const;
+
+const contextActions = new Set([
+    "push_message",
+    "reply_message",
+    "mark_messages_as_read",
+    "issue_link_token",
+    "get_profile",
+    "get_group_summary",
+    "get_group_member_count",
+    "get_group_member_profile",
+    "get_group_member_ids",
+    "get_room_member_count",
+    "get_room_member_profile",
+    "get_room_member_list",
+    "leave_room",
+    "link_rich_menu_to_user",
+    "unlink_rich_menu_from_user",
+    "get_user_rich_menu",
+]);
+
+const platformActions = definePlatformActionCapabilities(LINE_PLATFORM_ACTIONS, action => {
+    if (action === "show_loading_animation") {
+        return { support: "native", availability: "always", scenes: ["private"] };
+    }
+    if (permissionActionPrefixes.some(prefix => action.startsWith(prefix))) {
+        return {
+            support: "native",
+            availability: "permission",
+            permissions: ["LINE Official Account 产品资格或专项权限"],
+        };
+    }
+    if (contextActions.has(action)) return { support: "native", availability: "context" };
+    return { support: "native", availability: "always" };
 });
 
 /** LINE Messaging API 与官方 SDK 11.x 的真实能力边界。 */
@@ -35,40 +99,6 @@ export const lineCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         leave_group: { support: "native" },
         get_group_member_list: { support: "native", availability: "permission" },
         get_group_member_info: { support: "native", availability: "context" },
-        show_loading_animation: { support: "native", scenes: ["private"] },
-        get_group_member_ids: { support: "native", availability: "permission" },
-        add_audience: { support: "native", availability: "permission" },
-        create_audience: { support: "native", availability: "permission" },
-        create_click_audience: { support: "native", availability: "permission" },
-        create_impression_audience: { support: "native", availability: "permission" },
-        create_upload_audience: { support: "native", availability: "permission" },
-        add_user_ids_to_audience: { support: "native", availability: "permission" },
-        get_audience: { support: "native", availability: "permission" },
-        list_audiences: { support: "native", availability: "permission" },
-        get_shared_audience: { support: "native", availability: "permission" },
-        list_shared_audiences: { support: "native", availability: "permission" },
-        update_audience_description: { support: "native", availability: "permission" },
-        delete_audience: { support: "native", availability: "permission" },
-        create_liff_app: { support: "native", availability: "permission" },
-        list_liff_apps: { support: "native", availability: "permission" },
-        update_liff_app: { support: "native", availability: "permission" },
-        delete_liff_app: { support: "native", availability: "permission" },
-        acquire_chat_control: { support: "native", availability: "permission" },
-        release_chat_control: { support: "native", availability: "permission" },
-        list_modules: { support: "native", availability: "permission" },
-        attach_module: { support: "native", availability: "permission" },
-        detach_module: { support: "native", availability: "permission" },
-        mission_sticker: { support: "native", availability: "permission" },
-        get_membership_list: { support: "native" },
-        get_membership_subscription: { support: "native" },
-        get_joined_membership_users: { support: "native" },
-        get_number_of_followers: { support: "native" },
-        get_friends_demographics: { support: "native" },
-        get_number_of_message_deliveries: { support: "native" },
-        get_message_event: { support: "native" },
-        get_statistics_per_unit: { support: "native" },
-        get_rich_menu_insight_summary: { support: "native" },
-        get_rich_menu_insight_daily: { support: "native" },
         can_send_image: { support: "native" },
         can_send_record: { support: "native" },
         get_version: { support: "native" },
