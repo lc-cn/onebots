@@ -37,8 +37,60 @@ export function projectZulipEvents(
     }
     if (event.type === "realm_user") return [projectRealmUser(event, context)];
     if (event.type === "user_group") return projectUserGroup(event, context);
+    if (event.type === "channel_folder") return [projectChannelFolder(event, context)];
     if (event.type === "realm_emoji") return [projectRealmEmoji(event, context)];
     return [customNotice(event, context)];
+}
+
+function projectChannelFolder(
+    event: ZulipBaseEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent> {
+    const op = stringValue(event.op);
+    const folder = isRecord(event.channel_folder) ? event.channel_folder : undefined;
+    const data = isRecord(event.data) ? event.data : undefined;
+    const folderId = numeric(folder?.id) ?? numeric(event.channel_folder_id);
+    if (op === "reorder") {
+        const order = numericArray(event.order);
+        if (!Array.isArray(event.order) || order.length !== event.order.length) {
+            return customNotice(event, context);
+        }
+        return {
+            ...base(event, context),
+            type: "notice",
+            notice_type: "channel_folders_reordered",
+            sub_type: op,
+            resource: {
+                type: "channel_folder",
+                id: context.createId("channel_folders"),
+                order,
+            },
+            extensions: { zulip: event },
+        };
+    }
+    if ((op !== "add" && op !== "update") || folderId === undefined) {
+        return customNotice(event, context);
+    }
+    const createdAt = numeric(folder?.date_created);
+    return {
+        ...base(event, context, createdAt === undefined ? 0 : createdAt * 1000),
+        type: "notice",
+        notice_type: op === "add" ? "channel_folder_created" : "channel_folder_updated",
+        sub_type:
+            op === "update" && typeof data?.is_archived === "boolean"
+                ? data.is_archived
+                    ? "archived"
+                    : "unarchived"
+                : op,
+        resource: {
+            ...(folder || {}),
+            ...(data || {}),
+            type: "channel_folder",
+            id: context.createId(folderId),
+            name: stringValue(folder?.name) || stringValue(data?.name),
+        },
+        extensions: { zulip: event },
+    };
 }
 
 function projectRealmEmoji(

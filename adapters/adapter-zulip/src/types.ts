@@ -243,6 +243,44 @@ export interface ZulipMutedUsersEvent extends ZulipBaseEvent {
     muted_users: Array<{ id: number; timestamp: number }>;
 }
 
+export interface ZulipChannelFolder {
+    id: number;
+    name: string;
+    order: number;
+    date_created: number | null;
+    creator_id: number | null;
+    description: string;
+    rendered_description: string;
+    is_archived: boolean;
+}
+
+export interface ZulipChannelFolderAddEvent extends ZulipBaseEvent {
+    type: "channel_folder";
+    op: "add";
+    channel_folder: ZulipChannelFolder;
+}
+
+export interface ZulipChannelFolderUpdateEvent extends ZulipBaseEvent {
+    type: "channel_folder";
+    op: "update";
+    channel_folder_id: number;
+    data: Partial<
+        Pick<ZulipChannelFolder, "name" | "description" | "rendered_description" | "is_archived">
+    > &
+        Record<string, unknown>;
+}
+
+export interface ZulipChannelFoldersReorderEvent extends ZulipBaseEvent {
+    type: "channel_folder";
+    op: "reorder";
+    order: number[];
+}
+
+export type ZulipChannelFolderEvent =
+    | ZulipChannelFolderAddEvent
+    | ZulipChannelFolderUpdateEvent
+    | ZulipChannelFoldersReorderEvent;
+
 export interface ZulipUserGroupEvent extends ZulipBaseEvent {
     type: "user_group";
     op:
@@ -359,6 +397,7 @@ export type ZulipEvent =
     | ZulipInvitesChangedEvent
     | ZulipAlertWordsEvent
     | ZulipMutedUsersEvent
+    | ZulipChannelFolderEvent
     | ZulipUserGroupEvent
     | ZulipRealmEmojiAddEvent
     | ZulipRealmEmojiUpdateEvent

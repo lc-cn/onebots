@@ -234,6 +234,64 @@ describe("Zulip 事件投影", () => {
         });
     });
 
+    it("投影 Channel Folder 创建、归档与排序事件", () => {
+        expect(
+            projectZulipEvents(
+                {
+                    id: 21,
+                    type: "channel_folder",
+                    op: "add",
+                    channel_folder: {
+                        id: 2,
+                        name: "Backend",
+                        order: 1,
+                        date_created: 1_717_484_476,
+                        creator_id: 9,
+                        description: "Backend channels",
+                        rendered_description: "<p>Backend channels</p>",
+                        is_archived: false,
+                    },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            timestamp: 1_717_484_476_000,
+            notice_type: "channel_folder_created",
+            resource: { type: "channel_folder", id: { string: "2" }, name: "Backend" },
+        });
+        expect(
+            projectZulipEvents(
+                {
+                    id: 22,
+                    type: "channel_folder",
+                    op: "update",
+                    channel_folder_id: 2,
+                    data: { is_archived: true },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "channel_folder_updated",
+            sub_type: "archived",
+            resource: { type: "channel_folder", id: { string: "2" }, is_archived: true },
+        });
+        expect(
+            projectZulipEvents(
+                { id: 23, type: "channel_folder", op: "reorder", order: [3, 1, 2] },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "channel_folders_reordered",
+            resource: { type: "channel_folder", order: [3, 1, 2] },
+        });
+        expect(
+            projectZulipEvents(
+                { id: 24, type: "channel_folder", op: "reorder", order: [] },
+                context,
+            )[0],
+        ).toMatchObject({ notice_type: "channel_folders_reordered" });
+    });
+
     it("逐成员和子组拆分批量变化并生成稳定 ID", () => {
         const members = projectZulipEvents(
             {

@@ -8,6 +8,7 @@ import {
     without,
 } from "./action-params.js";
 import { ZULIP_BOT_ACTION_HANDLERS } from "./bot-actions.js";
+import { ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS } from "./channel-folder-actions.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 import { ZULIP_EMOJI_ACTION_HANDLERS } from "./emoji-actions.js";
@@ -92,6 +93,7 @@ const ACTION_HANDLERS = {
     delete_saved_snippet: (client, params) =>
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
     ...ZULIP_BOT_ACTION_HANDLERS,
+    ...ZULIP_CHANNEL_FOLDER_ACTION_HANDLERS,
     ...ZULIP_DATA_EXPORT_ACTION_HANDLERS,
     ...ZULIP_DOMAIN_ACTION_HANDLERS,
     ...ZULIP_EMOJI_ACTION_HANDLERS,

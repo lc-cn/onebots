@@ -4,6 +4,7 @@ import {
     type AdapterCapabilityManifest,
 } from "onebots";
 import { ZULIP_BOT_CREDENTIAL_ACTIONS } from "./bot-actions.js";
+import { ZULIP_CHANNEL_FOLDER_MUTATION_ACTIONS } from "./channel-folder-actions.js";
 import { ZULIP_DOMAIN_MUTATION_ACTIONS } from "./domain-actions.js";
 import { ZULIP_DATA_EXPORT_MUTATION_ACTIONS } from "./data-export-actions.js";
 import { ZULIP_EMOJI_MUTATION_ACTIONS } from "./emoji-actions.js";
@@ -27,6 +28,11 @@ const ownProfilePermission = {
     availability: "permission" as const,
     permissions: ["Zulip 组织资料与头像修改策略"],
 };
+const administratorPermission = {
+    support: "native" as const,
+    availability: "permission" as const,
+    permissions: ["Zulip 组织管理员"],
+};
 const permissionActions: ReadonlySet<string> = new Set([
     ...ZULIP_USER_GROUP_MUTATION_ACTIONS,
     ...ZULIP_USER_MUTATION_ACTIONS,
@@ -48,6 +54,7 @@ const permissionActions: ReadonlySet<string> = new Set([
 ]);
 const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS, action => {
     if (ZULIP_OWN_PROFILE_PERMISSION_ACTIONS.has(action)) return { ...ownProfilePermission };
+    if (ZULIP_CHANNEL_FOLDER_MUTATION_ACTIONS.has(action)) return { ...administratorPermission };
     return permissionActions.has(action) ? { ...permission } : { support: "native" };
 });
 
@@ -95,6 +102,9 @@ export const zulipCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         user_group_member_removed: { support: "native" },
         user_group_subgroup_added: { support: "native" },
         user_group_subgroup_removed: { support: "native" },
+        channel_folder_created: { support: "native" },
+        channel_folder_updated: { support: "native" },
+        channel_folders_reordered: { support: "native" },
         emoji_created: { support: "native" },
         emoji_updated: { support: "native" },
         heartbeat: { support: "native" },

@@ -301,11 +301,14 @@ describe("ZulipClient", () => {
             { transport },
         );
         const subscription = vi.fn();
+        const channelFolder = vi.fn();
         client.on("subscription", subscription);
+        client.on("channel_folder", channelFolder);
 
         await client.start();
         const registration = requests.find(request => request.path === "register");
         expect(registration?.params?.event_types).toContain("message");
+        expect(registration?.params?.event_types).toContain("channel_folder");
         expect(registration?.params?.event_types).toContain("heartbeat");
         expect(registration?.params?.event_types).toContain("restart");
         expect(registration?.params?.event_types).toContain("user_group");
@@ -325,7 +328,17 @@ describe("ZulipClient", () => {
             linkifier_url_template: true,
         });
         await client.ingest({ id: 2, type: "subscription", op: "add" });
+        await client.ingest({
+            id: 3,
+            type: "channel_folder",
+            op: "update",
+            channel_folder_id: 2,
+            data: { name: "Platform" },
+        });
         expect(subscription).toHaveBeenCalledOnce();
+        expect(channelFolder).toHaveBeenCalledWith(
+            expect.objectContaining({ op: "update", channel_folder_id: 2 }),
+        );
         await client.stop();
     });
 
