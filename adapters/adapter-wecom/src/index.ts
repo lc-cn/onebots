@@ -6,6 +6,7 @@ export { WeComClient } from "./client.js";
 export { WECOM_COLLABORATION_ACTIONS } from "./collaboration-actions.js";
 export { WECOM_CUSTOMER_ENGAGEMENT_ACTIONS } from "./customer-engagement-actions.js";
 export { WeComApiError, type WeComApiErrorOptions } from "./errors.js";
+export { deliverWeComEvent } from "./event-delivery.js";
 export { projectWeComEvent, projectWeComSegments } from "./events.js";
 export { WECOM_EXTERNAL_CONTACT_ACTIONS } from "./external-contact-actions.js";
 export { prepareWeComMediaSegments, uploadWeComMedia, weComMediaType } from "./media.js";
@@ -80,7 +81,7 @@ export const wecomSchema: Schema = {
         sensitive: true,
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     receive_mode: {
@@ -103,7 +104,7 @@ export const wecomSchema: Schema = {
         sensitive: true,
         ui: {
             section: "transport",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
+            visibleWhen: { path: "receive_mode", oneOf: ["webhook", "manual"] },
         },
     },
     webhook_path: {

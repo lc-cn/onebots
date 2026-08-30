@@ -71,9 +71,9 @@ const unsubscribe = client.onEvent("change_contact", event => {
 
 `WeComWebhookHost` 只负责 Koa 上下文桥接，不再持有第二套解密或去重状态。`ingestHttp()` 返回结构化 HTTP 响应，并在 POST 响应的 `ingest` 字段中附带 `{ accepted, duplicate, eventId, event }`。
 
-`ingest()` 会按注册顺序等待同步或异步监听器完成后才提交去重状态并确认 Webhook；同一事件的并发重投递会合并成一次执行。监听器失败时不会回复成功，也不会污染去重缓存，因此企业微信可以安全重试。
+`ingest()` 会按注册顺序等待同步或异步监听器完成后才提交去重状态并确认 Webhook；`raw_event` 与 typed 事件两个视图会全部尝试，单个监听器失败不会阻止其他出口看到事件。同一事件的并发重投递会合并成一次执行。任一监听器失败时不会回复成功，也不会污染去重缓存，因此企业微信可以安全重试。
 
-已有 Host 已经完成验签解密，或事件来自可信队列时，可使用 manual 模式；此时无需回调 Token/AES Key，也不会在 OneBots Router 注册路由：
+已有 Host 已经完成验签解密，或事件来自可信队列时，可使用 manual 模式；此时不会在 OneBots Router 注册路由。若只调用 `ingest()`，无需回调 Token/AES Key；若现有 Host 希望复用 `ingestHttp()` / `acceptHttp()` 的验签解密，则仍需配置这两个字段，Web 表单会在 manual 模式中提供它们：
 
 ```yaml
 wecom.internal_app:

@@ -174,6 +174,53 @@ describe("WeComClient", () => {
         await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: false });
     });
 
+    it("单个出口失败时仍投递其他 raw 与 typed 监听器", async () => {
+        const client = new WeComClient({ ...config, receive_mode: "manual" });
+        const failed = vi.fn().mockRejectedValueOnce(new Error("raw failed"));
+        const secondRaw = vi.fn();
+        const typed = vi.fn();
+        client.on("raw_event", failed);
+        client.on("raw_event", secondRaw);
+        client.on("message", typed);
+        const event: WeComEvent = {
+            MsgType: "text",
+            MsgId: "m-all-views",
+            CreateTime: 1_777_000_003,
+            FromUserName: "u1",
+            Content: "hi",
+        };
+
+        await expect(client.ingest(event)).rejects.toThrow("raw failed");
+        expect(secondRaw).toHaveBeenCalledOnce();
+        expect(typed).toHaveBeenCalledOnce();
+
+        await expect(client.ingest(event)).resolves.toMatchObject({ duplicate: false });
+        expect(failed).toHaveBeenCalledTimes(2);
+        expect(secondRaw).toHaveBeenCalledTimes(2);
+        expect(typed).toHaveBeenCalledTimes(2);
+    });
+
+    it("生命周期等待异步监听器并向调用方传播失败", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", access_token: "token", expires_in: 7200 }),
+            )
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", agentid: 1000001, name: "Bot" }),
+            );
+        const client = new WeComClient(config, fetcher);
+        const ready = vi.fn().mockRejectedValue(new Error("ready failed"));
+        const stopped = vi.fn().mockRejectedValue(new Error("stop failed"));
+        client.on("ready", ready);
+        client.on("stop", stopped);
+
+        await expect(client.start()).rejects.toThrow("ready failed");
+        await expect(client.stop()).rejects.toThrow("stop failed");
+        expect(ready).toHaveBeenCalledWith(expect.objectContaining({ agentid: 1000001 }));
+        expect(stopped).toHaveBeenCalledOnce();
+    });
+
     it("等待异步监听器并合并同一事件的并发重投递", async () => {
         const client = new WeComClient({ ...config, receive_mode: "manual" });
         let release!: () => void;

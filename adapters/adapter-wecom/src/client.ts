@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { emitAwaited, isSafeAbsoluteApiPath, KeyedSingleFlight, RefreshableValue } from "onebots";
+import {
+    emitAllAwaited,
+    isSafeAbsoluteApiPath,
+    KeyedSingleFlight,
+    RefreshableValue,
+} from "onebots";
 import { WeComApiError } from "./errors.js";
+import { deliverWeComEvent } from "./event-delivery.js";
 import type {
     WeComAgent,
     WeComAppChat,
@@ -50,14 +56,14 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     async start(): Promise<WeComAgent> {
         await this.getAccessToken();
         this.agent = await this.getAgent();
-        this.emit("ready", this.agent);
+        await emitAllAwaited(this, "ready", this.agent);
         return this.agent;
     }
 
-    stop(): void {
+    async stop(): Promise<void> {
         this.tokens.clear();
         this.eventFlights.clear();
-        this.emit("stop");
+        await emitAllAwaited(this, "stop");
     }
 
     getCachedAgent(): WeComAgent | undefined {
@@ -172,9 +178,7 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
             if (this.isDuplicate(eventId)) {
                 return { accepted: 0, duplicate: true, eventId, event };
             }
-            await emitAwaited(this, "raw_event", event);
-            const isEvent = event.MsgType === "event";
-            await emitAwaited(this, isEvent ? "event" : "message", event);
+            await deliverWeComEvent(this, event);
             this.markProcessed(eventId);
             return { accepted: 1, duplicate: false, eventId, event };
         });

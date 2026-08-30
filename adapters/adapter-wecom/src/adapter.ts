@@ -202,10 +202,11 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
             } catch (error) {
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动企业微信应用 ${config.account_id} 失败`, error);
+                throw error;
             }
         });
-        account.on("stop", () => {
-            client.stop();
+        account.on("stop", async () => {
+            await client.stop();
             account.status = AccountStatus.OffLine;
         });
         return account;

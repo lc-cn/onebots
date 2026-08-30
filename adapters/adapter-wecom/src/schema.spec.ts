@@ -4,12 +4,16 @@ import { wecomSchema } from "./index.js";
 
 describe("企业微信配置 Schema", () => {
     test("按接收模式动态展示回调配置", () => {
-        for (const field of ["token", "encoding_aes_key", "webhook_path"]) {
+        for (const field of ["token", "encoding_aes_key"]) {
             expect(ruleAt(field).ui?.visibleWhen).toEqual({
                 path: "receive_mode",
-                oneOf: ["webhook"],
+                oneOf: ["webhook", "manual"],
             });
         }
+        expect(ruleAt("webhook_path").ui?.visibleWhen).toEqual({
+            path: "receive_mode",
+            oneOf: ["webhook"],
+        });
     });
 
     test("提供 manual 模式并限制 API Base URL", () => {
