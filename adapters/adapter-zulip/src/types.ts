@@ -38,7 +38,7 @@ export interface ZulipConfig {
 export type ZulipMessageType = "channel" | "direct";
 /** Event Queue 仍使用的消息场景字段。 */
 export type ZulipEventMessageType = "stream" | "private" | "channel" | "direct";
-export type ZulipHttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+export type ZulipHttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export type ZulipParam = string | number | boolean | null | readonly unknown[] | object;
 export type ZulipParams = Readonly<Record<string, ZulipParam | undefined>>;
 

@@ -7,6 +7,7 @@ import {
     requireString,
     without,
 } from "./action-params.js";
+import { ZULIP_BOT_ACTION_HANDLERS } from "./bot-actions.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 import { ZULIP_INVITATION_ACTION_HANDLERS } from "./invitation-actions.js";
@@ -85,6 +86,7 @@ const ACTION_HANDLERS = {
         resourceAction(client, "saved_snippets", "saved_snippet_id", "PATCH", params),
     delete_saved_snippet: (client, params) =>
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
+    ...ZULIP_BOT_ACTION_HANDLERS,
     ...ZULIP_INVITATION_ACTION_HANDLERS,
     ...ZULIP_USER_ACTION_HANDLERS,
     ...ZULIP_USER_GROUP_ACTION_HANDLERS,

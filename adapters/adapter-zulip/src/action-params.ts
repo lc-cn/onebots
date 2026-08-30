@@ -5,10 +5,16 @@ const ZULIP_USER_ROLES = new Set([100, 200, 300, 400, 600]);
 
 export function requireMethod(value: unknown): ZulipHttpMethod {
     if (value === undefined) return "GET";
-    if (value === "GET" || value === "POST" || value === "PATCH" || value === "DELETE") {
+    if (
+        value === "GET" ||
+        value === "POST" ||
+        value === "PUT" ||
+        value === "PATCH" ||
+        value === "DELETE"
+    ) {
         return value;
     }
-    invalid("Zulip method 必须是 GET、POST、PATCH 或 DELETE");
+    invalid("Zulip method 必须是 GET、POST、PUT、PATCH 或 DELETE");
 }
 
 export function requireParams(value: unknown): ZulipParams {
@@ -73,6 +79,13 @@ export function requireInteger(value: unknown, name: string): number {
 export function requireIntegerArray(value: unknown, name: string): readonly number[] {
     if (!Array.isArray(value) || !value.every(item => Number.isSafeInteger(item) && item >= 0)) {
         invalid(`Zulip 参数 ${name} 必须是非负整数数组`);
+    }
+    return value;
+}
+
+export function requireStringArray(value: unknown, name: string): readonly string[] {
+    if (!Array.isArray(value) || !value.every(item => typeof item === "string" && item.length)) {
+        invalid(`Zulip 参数 ${name} 必须是非空字符串数组`);
     }
     return value;
 }

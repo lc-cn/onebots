@@ -41,10 +41,25 @@ describe("Zulip 平台动作", () => {
         await expect(
             executeZulipPlatformAction(client, "call_zulip_api", {
                 path: "messages",
-                method: "PUT",
+                method: "OPTIONS",
                 params: {},
             }),
         ).rejects.toMatchObject({ code: "ZULIP_INVALID_ACTION_PARAM" });
+    });
+
+    it("底层调用支持官方 PUT 端点", async () => {
+        const client = new ZulipClient(config, { transport: async () => ({}) });
+        const call = vi.spyOn(client, "call").mockResolvedValue({ result: "success", msg: "" });
+
+        await executeZulipPlatformAction(client, "call_zulip_api", {
+            path: "bot_storage",
+            method: "PUT",
+            params: { storage: { cursor: "42" } },
+        });
+
+        expect(call).toHaveBeenCalledWith("bot_storage", "PUT", {
+            storage: { cursor: "42" },
+        });
     });
 
     it.each([
