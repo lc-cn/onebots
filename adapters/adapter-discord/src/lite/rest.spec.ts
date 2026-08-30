@@ -75,6 +75,25 @@ describe("DiscordREST endpoint boundary", () => {
         );
     });
 
+    it("以重复 query key 编码 Discord 数组筛选器", async () => {
+        const transport = sequenceTransport([{ status: 200, headers: {}, body: "{}" }]);
+        const rest = new DiscordREST({ token: "secret", transport });
+
+        await rest.request("/guilds/1/messages/search", {
+            query: {
+                channel_id: ["10", "20"],
+                author_type: ["user", "-bot"],
+                include_nsfw: false,
+                omitted: undefined,
+            },
+        });
+
+        expect(transport.request).toHaveBeenCalledWith(
+            "https://discord.com/api/v10/guilds/1/messages/search?channel_id=10&channel_id=20&author_type=user&author_type=-bot&include_nsfw=false",
+            expect.any(Object),
+        );
+    });
+
     it("在传输前拒绝过长审计日志原因", async () => {
         const transport = sequenceTransport([{ status: 200, headers: {}, body: "{}" }]);
         const rest = new DiscordREST({ token: "secret", transport });

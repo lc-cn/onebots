@@ -40,6 +40,36 @@ describe("executeDiscordPlatformAction", () => {
                 query: { nested: {} },
             }),
         ).rejects.toThrow("必须为标量");
+        await expect(
+            executeDiscordPlatformAction(bot, "call_discord_api", {
+                path: "/users/@me",
+                query: { users: ["1", {}] },
+            }),
+        ).rejects.toThrow("数组必须只包含标量");
+    });
+
+    it("使用重复查询参数搜索 Guild 消息", async () => {
+        const request = vi.fn().mockResolvedValue({ total_results: 1, messages: [[]] });
+        const bot = { getREST: () => ({ request }) } as never;
+
+        await executeDiscordPlatformAction(bot, "search_guild_messages", {
+            guild_id: "100",
+            query: {
+                content: "release",
+                channel_id: ["10", "20"],
+                author_type: ["user", "-bot"],
+            },
+        });
+
+        expect(request).toHaveBeenCalledWith("/guilds/100/messages/search", {
+            method: undefined,
+            body: undefined,
+            query: {
+                content: "release",
+                channel_id: ["10", "20"],
+                author_type: ["user", "-bot"],
+            },
+        });
     });
 
     it("以受约束命令发送 Discord Gateway 主动事件", async () => {
@@ -186,6 +216,98 @@ describe("executeDiscordPlatformAction", () => {
             query: undefined,
             reason: "disable noisy rule",
         });
+    });
+
+    it("管理语音频道状态与完整 Soundboard 生命周期", async () => {
+        const request = vi.fn().mockResolvedValue({ sound_id: "8" });
+        const bot = { getREST: () => ({ request }) } as never;
+
+        await executeDiscordPlatformAction(bot, "set_voice_channel_status", {
+            channel_id: "10",
+            status: "发布会直播中",
+            reason: "event started",
+        });
+        await executeDiscordPlatformAction(bot, "send_soundboard_sound", {
+            channel_id: "10",
+            sound: { sound_id: "8", source_guild_id: "100" },
+        });
+        await executeDiscordPlatformAction(bot, "list_default_soundboard_sounds", {});
+        await executeDiscordPlatformAction(bot, "list_guild_soundboard_sounds", {
+            guild_id: "100",
+        });
+        await executeDiscordPlatformAction(bot, "get_guild_soundboard_sound", {
+            guild_id: "100",
+            sound_id: "8",
+        });
+        await executeDiscordPlatformAction(bot, "create_guild_soundboard_sound", {
+            guild_id: "100",
+            sound: { name: "Build", sound: "data:audio/ogg;base64,T2dnUw==" },
+            reason: "new sound",
+        });
+        await executeDiscordPlatformAction(bot, "update_guild_soundboard_sound", {
+            guild_id: "100",
+            sound_id: "8",
+            sound: { volume: 0.5 },
+        });
+        await executeDiscordPlatformAction(bot, "delete_guild_soundboard_sound", {
+            guild_id: "100",
+            sound_id: "8",
+        });
+
+        expect(request.mock.calls).toEqual([
+            [
+                "/channels/10/voice-status",
+                { method: "PUT", body: { status: "发布会直播中" }, reason: "event started" },
+            ],
+            [
+                "/channels/10/send-soundboard-sound",
+                {
+                    method: "POST",
+                    body: { sound_id: "8", source_guild_id: "100" },
+                    reason: undefined,
+                },
+            ],
+            [
+                "/soundboard-default-sounds",
+                { method: undefined, body: undefined, reason: undefined },
+            ],
+            [
+                "/guilds/100/soundboard-sounds",
+                { method: undefined, body: undefined, reason: undefined },
+            ],
+            [
+                "/guilds/100/soundboard-sounds/8",
+                { method: undefined, body: undefined, reason: undefined },
+            ],
+            [
+                "/guilds/100/soundboard-sounds",
+                {
+                    method: "POST",
+                    body: { name: "Build", sound: "data:audio/ogg;base64,T2dnUw==" },
+                    reason: "new sound",
+                },
+            ],
+            [
+                "/guilds/100/soundboard-sounds/8",
+                { method: "PATCH", body: { volume: 0.5 }, reason: undefined },
+            ],
+            [
+                "/guilds/100/soundboard-sounds/8",
+                { method: "DELETE", body: undefined, reason: undefined },
+            ],
+        ]);
+    });
+
+    it("在请求前校验语音频道状态长度", async () => {
+        const request = vi.fn();
+        await expect(
+            executeDiscordPlatformAction(
+                { getREST: () => ({ request }) } as never,
+                "set_voice_channel_status",
+                { channel_id: "10", status: "x".repeat(501) },
+            ),
+        ).rejects.toMatchObject({ code: "DISCORD_ACTION_PARAMS_INVALID" });
+        expect(request).not.toHaveBeenCalled();
     });
 
     it("完整传递 Scheduled Event 查询字段", async () => {

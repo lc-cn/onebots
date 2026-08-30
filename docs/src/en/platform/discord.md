@@ -1,83 +1,75 @@
 # Discord Adapter
 
-The Discord adapter is fully implemented and supports connecting to onebots service through Discord Bot API.
-
-## Status
-
-✅ **Implemented and Available**
-
-## Features
-
-- ✅ **Message Sending/Receiving**
-  - Channel message sending/receiving
-  - Private chat message sending/receiving
-  - Supports text, images, audio, video, files, and other message formats
-- ✅ **Server (Guild) Management**
-  - Get server list and information
-  - Leave server
-- ✅ **Channel Management**
-  - Get channel list and information
-  - Create, update, delete channels
-- ✅ **Member Management**
-  - Get member information
-  - Kick members
-  - Mute members
-  - Set member nickname
-- ✅ **Message Reactions**
-  - Add/remove message reactions
-- ✅ **Embed Messages**
-  - Supports rich text Embed messages
+`@onebots/adapter-discord` implements Discord API v10 directly and does not depend on `discord.js`. It supports Gateway, Interactions Webhooks, Webhook Events, and manual ingress, and includes a standalone strongly typed Lite client.
 
 ## Installation
 
 ```bash
-npm install @onebots/adapter-discord discord.js
-# or
-pnpm add @onebots/adapter-discord discord.js
+pnpm add @onebots/adapter-discord
 ```
 
-## Configuration
-
-Configure Discord account in `config.yaml`:
+## Gateway mode
 
 ```yaml
-# Discord bot account configuration
-discord.your_bot_id:
-  # Discord platform configuration
-  token: 'your_discord_bot_token'  # Discord Bot Token, required
-  intents:  # Optional, Gateway Intents
+discord.my_bot:
+  account_id: my_bot
+  token: "your_discord_bot_token"
+  receive_mode: gateway
+  intents:
     - Guilds
-    - GuildMessages
     - GuildMembers
+    - GuildMessages
     - GuildMessageReactions
     - DirectMessages
     - DirectMessageReactions
     - MessageContent
-  partials:  # Optional, Partials
-    - Message
-    - Channel
-    - Reaction
-  presence:  # Optional, bot status
-    status: online  # online, idle, dnd, invisible
+  presence:
+    status: online
     activities:
-      - name: 'Running onebots'
-        type: 0  # 0: Playing, 1: Streaming, 2: Listening, 3: Watching, 5: Competing
-  
-  # OneBot V11 protocol configuration
-  onebot.v11:
-    access_token: 'your_v11_token'
-  
-  # OneBot V12 protocol configuration
-  onebot.v12:
-    access_token: 'your_v12_token'
+      - name: "Running OneBots"
+        type: 0
 ```
 
-## Client SDK Usage
+The Web form renders Intents as constrained choices and Presence activities as a dynamic structured list. Privileged intents such as `GuildMembers` and `MessageContent` must also be enabled in the Discord Developer Portal.
 
-Connect the client to the complete account protocol root, for example `http://localhost:6727/discord/{account_id}/onebot/v12`. See the [Client SDK Guide](/en/guide/client-sdk) for Client creation, receive modes, existing-Host integration, and API calls.
+Gateway reconnects indefinitely by default and supports Resume, heartbeat ACK checks, Identify rate limits, sharding, Presence, and `AbortSignal`. A dispatch sequence is committed only after all event destinations succeed; failures resume from the last committed position.
 
-## Related Links
+## Interactions and Webhook Events
 
-- [Discord Adapter Configuration](/en/config/adapter/discord)
-- [Quick Start](/en/guide/start)
+```yaml
+discord.my_bot:
+  account_id: my_bot
+  token: "your_discord_bot_token"
+  receive_mode: interactions # or webhook_events
+  application_id: "123456789012345678"
+  public_key: "64-character hexadecimal Application Public Key"
+```
+
+- Interactions endpoint: `POST /discord/{account_id}/interactions`
+- Webhook Events endpoint: `POST /discord/{account_id}/events`
+
+Both modes reuse the OneBots HTTP host for Ed25519 verification, replay-window validation, concurrent redelivery coalescing, and commit-after-success deduplication. They do not open another port.
+
+With `receive_mode: manual`, an existing host can pass verified events to `account.client.ingest(rawEvent)`. Standard Requests can use `acceptHttp(request)`, while non-Fetch hosts can call `ingestHttp(...)` for a structured response.
+
+## Native resource model
+
+Discord Guild and Channel resources map to canonical `get_guild_*` and `get_channel_*` actions; Guilds are not presented as Groups. Messages support text, mentions, replies, embeds, stickers, media attachments, and the native `discord_message` segment.
+
+Named platform actions cover:
+
+- Guild members, roles, threads, invites, reactions, and message pins;
+- Auto Moderation, Scheduled Events, and Guild Emoji;
+- `search_guild_messages`, including repeated array query parameters, with `READ_MESSAGE_HISTORY` and the `MESSAGE_CONTENT` intent;
+- `set_voice_channel_status` for setting or clearing ephemeral voice-channel status;
+- default and Guild Soundboard sounds, complete Guild sound lifecycle, and playback in a voice channel;
+- original Interaction responses and Followup lifecycle;
+- `send_gateway_command` and the fixed-origin `call_discord_api` escape hatch.
+
+See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-discord) for the complete action list and Lite SDK examples.
+
+## Related links
+
 - [Client SDK Guide](/en/guide/client-sdk)
+- [Discord Developer Portal](https://discord.com/developers/applications)
+- [Discord Developer Documentation](https://docs.discord.com/developers/intro)

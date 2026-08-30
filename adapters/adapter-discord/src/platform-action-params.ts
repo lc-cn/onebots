@@ -1,6 +1,8 @@
 import { DiscordError } from "./errors.js";
 
 export type DiscordActionParams = Readonly<Record<string, unknown>>;
+type DiscordQueryScalar = string | number | boolean;
+export type DiscordActionQuery = Record<string, string | string[]>;
 
 export function requireString(params: DiscordActionParams, name: string): string {
     const value = params[name];
@@ -66,22 +68,33 @@ export function optionalString(params: DiscordActionParams, name: string): strin
     return value;
 }
 
-export function query(params: DiscordActionParams): Record<string, string> {
+export function query(params: DiscordActionParams): DiscordActionQuery {
     const source = params.query;
     if (typeof source !== "object" || source === null || Array.isArray(source)) return {};
-    const result: Record<string, string> = {};
+    const result: DiscordActionQuery = {};
     for (const [key, value] of Object.entries(source)) {
         if (value == null) continue;
+        if (Array.isArray(value)) {
+            if (!value.every(isScalar)) {
+                throw invalidParameter(`Discord query 参数 ${key} 数组必须只包含标量`);
+            }
+            result[key] = value.map(String);
+            continue;
+        }
         if (!isScalar(value)) {
-            throw invalidParameter(`Discord query 参数 ${key} 必须为标量`);
+            throw invalidParameter(`Discord query 参数 ${key} 必须为标量或标量数组`);
         }
         result[key] = String(value);
     }
     return result;
 }
 
-function isScalar(value: unknown): value is string | number | boolean {
-    return typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+function isScalar(value: unknown): value is DiscordQueryScalar {
+    return (
+        typeof value === "string" ||
+        typeof value === "boolean" ||
+        (typeof value === "number" && Number.isFinite(value))
+    );
 }
 
 function invalidParameter(message: string): DiscordError {

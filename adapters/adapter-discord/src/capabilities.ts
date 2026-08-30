@@ -54,6 +54,11 @@ const emojiWriteActions = new Set([
     "update_guild_emoji",
     "delete_guild_emoji",
 ]);
+const soundboardWriteActions = new Set([
+    "create_guild_soundboard_sound",
+    "update_guild_soundboard_sound",
+    "delete_guild_soundboard_sound",
+]);
 
 const native: CapabilityDescriptor = { support: "native" };
 const platformActionDescriptors: Readonly<Record<string, CapabilityDescriptor>> = {
@@ -135,11 +140,27 @@ const platformActionDescriptors: Readonly<Record<string, CapabilityDescriptor>> 
         availability: "permission",
         permissions: ["MANAGE_NICKNAMES"],
     },
+    search_guild_messages: {
+        support: "native",
+        availability: "permission",
+        permissions: ["READ_MESSAGE_HISTORY", "MESSAGE_CONTENT intent"],
+    },
+    set_voice_channel_status: {
+        support: "native",
+        availability: "permission",
+        permissions: ["SET_VOICE_CHANNEL_STATUS", "MANAGE_CHANNELS（未连接频道时）"],
+    },
+    send_soundboard_sound: {
+        support: "native",
+        availability: "permission",
+        permissions: ["SPEAK", "USE_SOUNDBOARD", "USE_EXTERNAL_SOUNDS（跨服务器时）"],
+    },
 };
 const platformActions = definePlatformActionCapabilities(DISCORD_PLATFORM_ACTIONS, action => {
     if (autoModerationActions.has(action)) return manageGuild;
     if (scheduledEventWriteActions.has(action)) return manageEvents;
     if (emojiWriteActions.has(action)) return manageExpressions;
+    if (soundboardWriteActions.has(action)) return manageExpressions;
     return platformActionDescriptors[action] ?? native;
 });
 

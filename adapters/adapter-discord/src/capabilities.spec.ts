@@ -31,5 +31,15 @@ describe("Discord 能力清单", () => {
         expect(discordCapabilities.actions.create_scheduled_event?.availability).toBe("permission");
         expect(discordCapabilities.actions.create_guild_emoji?.availability).toBe("permission");
         expect(discordCapabilities.actions.list_scheduled_events?.availability).toBeUndefined();
+        expect(discordCapabilities.actions.search_guild_messages?.permissions).toEqual([
+            "READ_MESSAGE_HISTORY",
+            "MESSAGE_CONTENT intent",
+        ]);
+        expect(discordCapabilities.actions.set_voice_channel_status?.permissions).toContain(
+            "SET_VOICE_CHANNEL_STATUS",
+        );
+        expect(discordCapabilities.actions.create_guild_soundboard_sound?.permissions).toEqual([
+            "CREATE_GUILD_EXPRESSIONS / MANAGE_GUILD_EXPRESSIONS",
+        ]);
     });
 });

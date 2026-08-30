@@ -1,173 +1,75 @@
 # Discord 适配器
 
-Discord 适配器已完全实现，支持通过 Discord Bot API 接入 onebots 服务。
-
-## 状态
-
-✅ **已实现并可用**
-
-## 功能特性
-
-- ✅ **消息收发**
-  - 频道消息收发
-  - 私聊消息收发
-  - 支持文本、图片、音频、视频、文件等多种消息格式
-- ✅ **服务器（Guild）管理**
-  - 获取服务器列表和信息
-  - 退出服务器
-- ✅ **频道管理**
-  - 获取频道列表和信息
-  - 创建、更新、删除频道
-- ✅ **成员管理**
-  - 获取成员信息
-  - 踢出成员
-  - 禁言成员
-  - 设置成员昵称
-- ✅ **消息反应**
-  - 添加/移除消息反应
-- ✅ **Embed 消息**
-  - 支持富文本 Embed 消息
+`@onebots/adapter-discord` 直接实现 Discord API v10，不依赖 `discord.js`。适配器支持 Gateway、Interactions Webhook、Webhook Events 与手动接入，并提供可独立使用的强类型 Lite 客户端。
 
 ## 安装
 
 ```bash
-npm install @onebots/adapter-discord discord.js
-# 或
-pnpm add @onebots/adapter-discord discord.js
+pnpm add @onebots/adapter-discord
 ```
 
-## 配置
-
-在 `config.yaml` 中配置 Discord 账号：
+## Gateway 配置
 
 ```yaml
-# Discord 机器人账号配置
-discord.your_bot_id:
-  # Discord 平台配置
-  token: 'your_discord_bot_token'  # Discord Bot Token，必填
-  intents:  # 可选，Gateway Intents
+discord.my_bot:
+  account_id: my_bot
+  token: "your_discord_bot_token"
+  receive_mode: gateway
+  intents:
     - Guilds
-    - GuildMessages
     - GuildMembers
+    - GuildMessages
     - GuildMessageReactions
     - DirectMessages
     - DirectMessageReactions
     - MessageContent
-  partials:  # 可选，Partials
-    - Message
-    - Channel
-    - Reaction
-  presence:  # 可选，机器人状态
-    status: online  # online, idle, dnd, invisible
+  presence:
+    status: online
     activities:
-      - name: '正在运行 onebots'
-        type: 0  # 0: Playing, 1: Streaming, 2: Listening, 3: Watching, 5: Competing
-  
-  # OneBot V11 协议配置
-  onebot.v11:
-    access_token: 'your_v11_token'
-  
-  # OneBot V12 协议配置
-  onebot.v12:
-    access_token: 'your_v12_token'
+      - name: "正在运行 OneBots"
+        type: 0
 ```
 
-### 配置项说明
+Web 表单会把 Intents 渲染为选择列表，把 Presence activities 渲染为可动态增减的结构化表单。`GuildMembers` 与 `MessageContent` 等特权 Intent 还需在 Discord Developer Portal 开启。
 
-| 配置项 | 类型 | 必填 | 说明 |
-|--------|------|------|------|
-| `token` | string | 是 | Discord Bot Token |
-| `intents` | string[] | 否 | Gateway Intents，需要接收的事件类型 |
-| `partials` | string[] | 否 | Partials，部分数据支持 |
-| `presence` | object | 否 | 机器人状态和活动 |
+Gateway 默认无限重连，支持 Resume、心跳 ACK、Identify 限速、分片、Presence 与 `AbortSignal`。每个 Dispatch 在所有事件出口处理成功后才提交 sequence，失败时从最后成功位置恢复。
 
-### 必需的 Intents
+## Interactions 与 Webhook Events
 
-根据你的机器人功能，可能需要启用以下 Privileged Intents：
-
-- **PRESENCE INTENT** - 如果需要在状态中显示成员信息
-- **SERVER MEMBERS INTENT** - 如果需要获取服务器成员列表
-- **MESSAGE CONTENT INTENT** - 如果需要读取消息内容（必需）
-
-## 获取 Token
-
-1. 前往 [Discord Developer Portal](https://discord.com/developers/applications)
-2. 点击 "New Application" 创建新应用
-3. 进入应用后，点击左侧 "Bot" 菜单
-4. 点击 "Reset Token" 获取 Bot Token
-5. 在 "Privileged Gateway Intents" 中启用需要的 Intents
-
-## 邀请机器人到服务器
-
-1. 在 Discord Developer Portal 中，进入你的应用
-2. 点击左侧 "OAuth2" -> "URL Generator"
-3. 在 "SCOPES" 中选择 `bot`
-4. 在 "BOT PERMISSIONS" 中选择需要的权限
-5. 复制生成的 URL 并在浏览器中打开
-6. 选择要添加机器人的服务器
-
-## 启动服务
-
-```bash
-# 启动 onebots 服务，加载 Discord 适配器
-onebots -r discord -p onebot-v11 -p onebot-v12 -c config.yaml
+```yaml
+discord.my_bot:
+  account_id: my_bot
+  token: "your_discord_bot_token"
+  receive_mode: interactions # 或 webhook_events
+  application_id: "123456789012345678"
+  public_key: "64位十六进制Application Public Key"
 ```
 
-## 使用客户端SDK连接
+- Interactions Endpoint：`POST /discord/{account_id}/interactions`
+- Webhook Events Endpoint：`POST /discord/{account_id}/events`
 
-客户端应连接完整账号协议根，例如 `http://localhost:6727/discord/{account_id}/onebot/v12`。创建 Client、选择接收模式、接入已有 Host 与调用 API 的统一说明见[客户端 SDK 使用指南](/guide/client-sdk)。
+两种模式复用 OneBots HTTP Host，完成 Ed25519 验签、重放时间窗校验、并发合并与成功后去重，不会新开端口。
 
-## 支持的 API
+已有 Host 可配置 `receive_mode: manual`，把已验签事件交给 `account.client.ingest(rawEvent)`；标准 Request 可交给 `acceptHttp(request)`，非 Fetch Host 可调用 `ingestHttp(...)` 获取结构化响应。
 
-### 消息相关
-- `sendMessage` - 发送消息（支持私信、频道消息）
-- `deleteMessage` - 删除/撤回消息
-- `getMessage` - 获取消息
-- `getMessageHistory` - 获取历史消息
+## 原生资源模型
 
-### 用户相关
-- `getLoginInfo` - 获取机器人信息
-- `getUserInfo` - 获取用户信息
+Discord Guild 与 Channel 分别映射统一 `get_guild_*` 和 `get_channel_*`，不会伪装成 Group。消息支持文本、提及、回复、Embed、Sticker、多媒体附件和原生 `discord_message` 段。
 
-### 服务器相关
-- `getGroupList` - 获取服务器列表
-- `getGroupInfo` - 获取服务器信息
-- `leaveGroup` - 退出服务器
-- `getGroupMemberList` - 获取服务器成员列表
-- `getGroupMemberInfo` - 获取成员信息
-- `kickGroupMember` - 踢出成员
-- `muteGroupMember` - 禁言成员
-- `setGroupCard` - 设置成员昵称
+常用扩展动作覆盖：
 
-### 频道相关
-- `getChannelList` - 获取频道列表
-- `getChannelInfo` - 获取频道信息
-- `createChannel` - 创建频道
-- `updateChannel` - 更新频道
-- `deleteChannel` - 删除频道
+- Guild 成员、角色、线程、邀请、Reaction 与消息置顶；
+- Auto Moderation、Scheduled Event 与 Guild Emoji；
+- `search_guild_messages`：支持 Discord 的重复数组 query，需要 `READ_MESSAGE_HISTORY` 与 `MESSAGE_CONTENT` Intent；
+- `set_voice_channel_status`：设置或清除语音频道状态；
+- Soundboard 默认音效、Guild 音效增删改查与频道播放；
+- Interaction 原始回复与 Followup 生命周期；
+- `send_gateway_command` 与受固定 API 根约束的 `call_discord_api`。
 
-## 事件类型
-
-### 消息事件
-- `message.guild` - 频道消息
-- `message.private` - 私聊消息
-
-### 通知事件
-- `guild_create` / `guild_delete` - 服务器加入/离开
-- `guild_member_add` / `guild_member_remove` - 成员加入/离开
-- `channel_create` / `channel_delete` - 频道创建/删除
-- `message_reaction_add` / `message_reaction_remove` - 消息反应
-
-## 注意事项
-
-1. **权限配置**：确保机器人拥有足够的权限执行相应操作
-2. **Intents 配置**：需要在 Discord Developer Portal 中启用对应的 Privileged Intents
-3. **消息内容**：要接收消息内容，需要启用 MESSAGE CONTENT INTENT
-4. **速率限制**：Discord API 有速率限制，请勿频繁调用
+完整动作和 Lite SDK 示例见[包 README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-discord)。
 
 ## 相关链接
 
+- [客户端 SDK 使用指南](/guide/client-sdk)
 - [Discord Developer Portal](https://discord.com/developers/applications)
-- [Discord.js 文档](https://discord.js.org/)
-- [@onebots/adapter-discord README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-discord)
-- [客户端SDK使用指南](/guide/client-sdk)
+- [Discord Developer Documentation](https://docs.discord.com/developers/intro)

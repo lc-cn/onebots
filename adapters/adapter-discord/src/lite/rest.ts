@@ -34,7 +34,10 @@ export interface RequestOptions {
     method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: unknown;
     headers?: Record<string, string>;
-    query?: Record<string, string | number | boolean | undefined>;
+    query?: Record<
+        string,
+        string | number | boolean | undefined | readonly (string | number | boolean | undefined)[]
+    >;
     reason?: string;
     signal?: AbortSignal;
 }
@@ -72,18 +75,16 @@ export class DiscordREST {
         const { method = "GET", body, headers = {}, query } = options;
         let url = `${this.apiBaseUrl}${endpoint}`;
         if (query) {
-            const filteredQuery = Object.fromEntries(
-                Object.entries(query)
-                    .filter(
-                        (entry): entry is [string, string | number | boolean] =>
-                            entry[1] !== undefined,
-                    )
-                    .map(([key, value]) => [key, String(value)]),
-            );
-            if (Object.keys(filteredQuery).length > 0) {
-                const params = new URLSearchParams(filteredQuery);
-                url += `?${params.toString()}`;
+            const params = new URLSearchParams();
+            for (const [key, value] of Object.entries(query)) {
+                if (Array.isArray(value)) {
+                    for (const item of value)
+                        if (item !== undefined) params.append(key, String(item));
+                } else if (value !== undefined) {
+                    params.append(key, String(value));
+                }
             }
+            if (params.size) url += `?${params.toString()}`;
         }
 
         const requestHeaders: Record<string, string> = {

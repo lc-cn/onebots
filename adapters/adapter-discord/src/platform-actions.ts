@@ -4,6 +4,7 @@ import { assertDiscordEndpoint } from "./lite/rest.js";
 import { DiscordError } from "./errors.js";
 import { parseDiscordGatewayCommand } from "./lite/gateway-commands.js";
 import { DISCORD_COMMUNITY_ACTIONS } from "./platform-actions-community.js";
+import { DISCORD_VOICE_ACTIONS } from "./platform-actions-voice.js";
 import {
     optionalInteger,
     optionalSnowflake,
@@ -23,6 +24,7 @@ type Handler = PlatformActionHandler<DiscordBot>;
 const PLATFORM_ACTIONS = definePlatformActions(
     {
         ...DISCORD_COMMUNITY_ACTIONS,
+        ...DISCORD_VOICE_ACTIONS,
         call_discord_api: async (bot: DiscordBot, params: Params) =>
             bot.getREST().request(requirePath(params.path), {
                 method: methodValue(params.method),
@@ -40,6 +42,9 @@ const PLATFORM_ACTIONS = definePlatformActions(
         unban_member: async (bot: DiscordBot, params: Params) =>
             bot.unbanMember(guildId(params), userId(params), optionalString(params, "reason")),
         get_guild_bans: restAction(params => `/guilds/${guildId(params)}/bans`, {
+            query: true,
+        }),
+        search_guild_messages: restAction(params => `/guilds/${guildId(params)}/messages/search`, {
             query: true,
         }),
         get_guild_roles: restAction(params => `/guilds/${guildId(params)}/roles`),
