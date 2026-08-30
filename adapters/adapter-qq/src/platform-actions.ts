@@ -6,12 +6,14 @@ import { QQ_BOT_ACTIONS } from "./platform-actions-bot.js";
 import { QQ_CHANNEL_ACTIONS } from "./platform-actions-channel.js";
 import { QQ_GROUP_ACTIONS } from "./platform-actions-group.js";
 import { QQ_GUILD_ACTIONS } from "./platform-actions-guild.js";
+import { QQ_STREAM_ACTIONS } from "./platform-actions-stream.js";
 
 const ACTION_HANDLERS = {
     ...QQ_GROUP_ACTIONS,
     ...QQ_GUILD_ACTIONS,
     ...QQ_CHANNEL_ACTIONS,
     ...QQ_BOT_ACTIONS,
+    ...QQ_STREAM_ACTIONS,
 };
 
 export type QQPlatformAction = Extract<keyof typeof ACTION_HANDLERS, string>;

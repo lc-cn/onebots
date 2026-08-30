@@ -85,7 +85,7 @@ describe("QQ 平台动作", () => {
     it("完整注册并跨群、频道服务器和面板领域分派", async () => {
         const call = vi.fn().mockResolvedValue({ ok: true });
         const client = { call } as unknown as QQClient;
-        expect(QQ_PLATFORM_ACTIONS.size).toBe(58);
+        expect(QQ_PLATFORM_ACTIONS.size).toBe(62);
 
         await executeQQPlatformAction(client, "create_group_join_approval_strategy", {
             strategy: { name: "审核" },
@@ -122,6 +122,70 @@ describe("QQ 平台动作", () => {
                 },
             ],
         ]);
+    });
+
+    it("闭合 QQ C2C 流式消息生命周期", async () => {
+        const startC2CStream = vi.fn().mockReturnValue("stream-1");
+        const updateC2CStream = vi.fn().mockResolvedValue(undefined);
+        const completeC2CStream = vi.fn().mockResolvedValue({ id: "message-1" });
+        const cancelC2CStream = vi.fn();
+        const client = {
+            startC2CStream,
+            updateC2CStream,
+            completeC2CStream,
+            cancelC2CStream,
+        } as unknown as QQClient;
+
+        await expect(
+            executeQQPlatformAction(client, "start_c2c_stream", {
+                target_id: "user-1",
+                msg_id: "source-1",
+                event_id: "event-1",
+                throttle_ms: 500,
+                content: "生成中",
+            }),
+        ).resolves.toEqual({ stream_id: "stream-1" });
+        await executeQQPlatformAction(client, "complete_c2c_stream", {
+            stream_id: "stream-1",
+            content: "生成完成",
+        });
+
+        expect(startC2CStream).toHaveBeenCalledWith({
+            targetId: "user-1",
+            msgId: "source-1",
+            eventId: "event-1",
+            throttleMs: 500,
+        });
+        expect(updateC2CStream.mock.calls).toEqual([
+            ["stream-1", "生成中"],
+            ["stream-1", "生成完成"],
+        ]);
+        expect(completeC2CStream).toHaveBeenCalledWith("stream-1");
+        expect(cancelC2CStream).not.toHaveBeenCalled();
+    });
+
+    it("流式动作拒绝平台不支持的刷新频率", async () => {
+        const client = { startC2CStream: vi.fn() } as unknown as QQClient;
+        await expect(
+            executeQQPlatformAction(client, "start_c2c_stream", {
+                target_id: "user-1",
+                msg_id: "source-1",
+                throttle_ms: 299,
+            }),
+        ).rejects.toMatchObject({ code: "QQ_INVALID_ACTION_PARAMS" });
+        expect(client.startC2CStream).not.toHaveBeenCalled();
+    });
+
+    it("流式动作拒绝未知字段而不静默忽略拼写错误", async () => {
+        const client = { updateC2CStream: vi.fn() } as unknown as QQClient;
+        await expect(
+            executeQQPlatformAction(client, "update_c2c_stream", {
+                stream_id: "stream-1",
+                content: "完整文本",
+                delta: true,
+            }),
+        ).rejects.toMatchObject({ code: "QQ_INVALID_ACTION_PARAMS" });
+        expect(client.updateC2CStream).not.toHaveBeenCalled();
     });
 
     it("未知动作保留稳定错误码", async () => {

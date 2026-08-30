@@ -64,6 +64,14 @@ const platformActions = definePlatformActionCapabilities(QQ_PLATFORM_ACTIONS, ac
     if (action === "send_wakeup" || action === "send_typing") {
         return { support: "native", scenes: ["private"] };
     }
+    if (action.endsWith("_c2c_stream")) {
+        return {
+            support: "native",
+            scenes: ["private"],
+            availability: "permission",
+            permissions: ["c2c.stream_messages"],
+        };
+    }
     return { support: "native" };
 });
 

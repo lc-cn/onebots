@@ -1,4 +1,4 @@
-import { QQBot } from "@tencent-connect/qqbot-nodejs";
+import { QQBot, type StreamSession } from "@tencent-connect/qqbot-nodejs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isQQSdkReconnectExhaustedLog, QQClient } from "./client.js";
 import { QQApiError } from "./errors.js";
@@ -101,6 +101,26 @@ describe("QQClient", () => {
         expect(stop).toHaveBeenCalledTimes(1);
         client.close();
         await run;
+    });
+
+    it("关闭账号时取消全部活跃 C2C 流式会话", () => {
+        const cancel = vi.fn();
+        const session = {
+            cancel,
+            update: vi.fn(),
+            complete: vi.fn(),
+        } as unknown as StreamSession;
+        vi.spyOn(QQBot.prototype, "openStream").mockReturnValue(session);
+        vi.spyOn(QQBot.prototype, "stop").mockImplementation(() => undefined);
+        const client = new QQClient(
+            { appId: "app", appSecret: "secret" },
+            { warn: vi.fn(), error: vi.fn() },
+        );
+
+        client.startC2CStream({ targetId: "user-1", msgId: "message-1" });
+        client.close();
+
+        expect(cancel).toHaveBeenCalledOnce();
     });
 
     it("拒绝缺少真实 ID 的机器人身份响应", async () => {

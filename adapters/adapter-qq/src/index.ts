@@ -3,7 +3,7 @@ import { QQ_INTENTS } from "./types.js";
 
 export { QQAdapter } from "./adapter.js";
 export { qqCapabilities } from "./capabilities.js";
-export { QQClient } from "./client.js";
+export { QQClient, type QQC2CStreamOptions } from "./client.js";
 export { QQApiError, type QQApiErrorOptions } from "./errors.js";
 export { projectQQMessage, projectQQRawEvent } from "./events.js";
 export { compileMessage, sendQQMessage } from "./messages.js";

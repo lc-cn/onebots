@@ -7,7 +7,7 @@ QQ 官方机器人适配器，基于腾讯官方 [`@tencent-connect/qqbot-nodejs
 - C2C、群聊、频道和频道私信消息
 - 图片、语音、视频、文件、Markdown、Ark、Embed 与 Inline Keyboard
 - 频道、成员、角色、权限、公告、表态、日程、帖子、音频控制与机器人分享链接
-- C2C 主动唤醒、输入状态和流式消息（可直接使用 `account.client`）
+- C2C 主动唤醒、输入状态和完整流式消息生命周期
 - 好友增删、机器人进退群、群与 Guild 成员、消息接收/审核/删除状态、表态与交互事件的标准投影
 - 群申请完整投影验证信息与邀请来源；审批可拒绝并加入成员黑名单
 - 所有未知 QQ Gateway 事件均通过 `raw_event` 无损下发
@@ -99,6 +99,36 @@ const guilds = await account?.client.call({
 绝对 URL 会被拒绝，避免令牌被发送到非 QQ OpenAPI 主机。
 
 参数、账号、生命周期和 OpenAPI 故障均使用 `QQApiError`，并接入 OneBots 核心错误分类。协议层可据此稳定区分客户端参数、资源缺失、平台拒绝和网络故障；`code`、HTTP `status` 与 API `path` 不会在包装时丢失。
+
+### C2C 流式消息
+
+QQ 的 `stream_messages` 仅支持 C2C，并采用 replace 模式：每次更新必须传当前完整文本，而不是增量片段。OneBots 提供 `start_c2c_stream`、`update_c2c_stream`、`complete_c2c_stream` 和 `cancel_c2c_stream` 四个闭合平台动作；开始动作返回进程内 opaque `stream_id`，调用方不需要管理 SDK 对象、`index` 或 `msg_seq`。
+
+```json
+{
+  "action": "start_c2c_stream",
+  "params": {
+    "target_id": "USER_OPENID",
+    "msg_id": "INBOUND_MESSAGE_ID",
+    "content": "正在生成…",
+    "throttle_ms": 500
+  }
+}
+```
+
+后续使用返回的 `stream_id` 更新完整内容，并以最终文本结束：
+
+```json
+{
+  "action": "complete_c2c_stream",
+  "params": {
+    "stream_id": "RETURNED_STREAM_ID",
+    "content": "完整的最终回答"
+  }
+}
+```
+
+刷新间隔限制为 300–60000 毫秒；空闲 15 分钟的句柄会被回收，账号停止时所有活跃会话都会本地取消。流式发送需要 QQ 开放平台为机器人开通 C2C `stream_messages` 能力。
 
 ## 相关链接
 

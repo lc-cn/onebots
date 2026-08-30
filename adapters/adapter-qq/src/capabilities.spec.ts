@@ -12,6 +12,11 @@ describe("QQ 能力清单", () => {
         expect(qqCapabilities.actions.send_typing?.scenes).toEqual(["private"]);
         expect(qqCapabilities.actions.mute_guild?.permissions).toEqual(["guild.manage"]);
         expect(qqCapabilities.actions.publish_bot_panel?.permissions).toEqual(["bot.ui.manage"]);
+        expect(qqCapabilities.actions.start_c2c_stream).toMatchObject({
+            scenes: ["private"],
+            availability: "permission",
+            permissions: ["c2c.stream_messages"],
+        });
     });
 
     it("能力清单中的动作都有真实入口", () => {

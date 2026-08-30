@@ -3,6 +3,7 @@ import type { WebhookRequest, WebhookResponse } from "@tencent-connect/qqbot-nod
 import { ErrorCategory } from "onebots";
 import { QQApiError } from "./errors.js";
 import type { QQPlatformCall, QQUser } from "./types.js";
+import { QQStreamSessions } from "./stream-sessions.js";
 import { QQWebhookHost, type QQHttpContext } from "./webhook-host.js";
 
 const RETRY_DELAYS = [1_000, 2_000, 5_000, 10_000, 30_000, 60_000] as const;
@@ -17,6 +18,7 @@ export class QQClient extends QQBot {
     private runController?: AbortController;
     private runPromise?: Promise<void>;
     private self?: QQUser;
+    private readonly streamSessions = new QQStreamSessions();
 
     constructor(
         options: QQBotOptions,
@@ -75,7 +77,38 @@ export class QQClient extends QQBot {
         const controller = this.runController;
         this.runController = undefined;
         controller?.abort();
+        this.streamSessions.cancelAll();
         super.stop();
+    }
+
+    /** 创建仅限 C2C 的 QQ 流式消息会话，并返回供协议动作使用的进程内句柄。 */
+    startC2CStream(options: QQC2CStreamOptions): string {
+        const session = this.openStream({
+            target: { scope: "c2c", targetId: options.targetId, msgId: options.msgId },
+            eventId: options.eventId,
+            throttleMs: options.throttleMs,
+        });
+        return this.streamSessions.create(session);
+    }
+
+    async updateC2CStream(streamId: string, content: string): Promise<void> {
+        try {
+            await this.streamSessions.update(streamId, content);
+        } catch (error) {
+            throw QQApiError.wrap(error, "QQ_STREAM_UPDATE_FAILED");
+        }
+    }
+
+    async completeC2CStream(streamId: string): Promise<unknown> {
+        try {
+            return await this.streamSessions.complete(streamId);
+        } catch (error) {
+            throw QQApiError.wrap(error, "QQ_STREAM_COMPLETE_FAILED");
+        }
+    }
+
+    cancelC2CStream(streamId: string): void {
+        this.streamSessions.cancel(streamId);
     }
 
     /**
@@ -168,6 +201,13 @@ export class QQClient extends QQBot {
             throw QQApiError.wrap(error);
         }
     }
+}
+
+export interface QQC2CStreamOptions {
+    targetId: string;
+    msgId: string;
+    eventId?: string;
+    throttleMs?: number;
 }
 
 function isStandardRequest(value: Request | QQHttpContext): value is Request {
