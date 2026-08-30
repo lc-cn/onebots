@@ -17,6 +17,7 @@ import {
     projectKookMessageSegments,
 } from "./messages.js";
 import { executeKookPlatformAction, KOOK_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { collectKookPages } from "./pagination.js";
 import type {
     KookChannel,
     KookGuild,
@@ -384,17 +385,11 @@ export class KookAdapter extends Adapter<KookBot, "kook"> {
         path: string,
         query: Record<string, string | number | boolean | undefined> = {},
     ): Promise<T[]> {
-        const items: T[] = [];
-        let page = 1;
-        do {
-            const response = await bot.callApi<KookListResponse<T>>(path, {
-                query: { ...query, page, page_size: 100 },
-            });
-            items.push(...response.items);
-            if (!response.meta?.page_total || page >= response.meta.page_total) break;
-            page++;
-        } while (true);
-        return items;
+        return collectKookPages((page, pageSize) =>
+            bot.callApi<KookListResponse<T>>(path, {
+                query: { ...query, page, page_size: pageSize },
+            }),
+        );
     }
 
     private toUserInfo(user: KookUser): Adapter.UserInfo {

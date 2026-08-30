@@ -8,6 +8,7 @@ import type { KookBot } from "./bot.js";
 import { KookError } from "./errors.js";
 import type { KookApiRequestOptions } from "./types.js";
 import { KOOK_FRIEND_PLATFORM_ACTIONS } from "./platform-actions-friend.js";
+import { KOOK_GUILD_PLATFORM_ACTIONS } from "./platform-actions-guild.js";
 import { KOOK_PERMISSION_PLATFORM_ACTIONS } from "./platform-actions-permission.js";
 
 interface ActionRoute {
@@ -24,13 +25,6 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     remove_direct_message_reaction: { path: "/v3/direct-message/delete-reaction", method: "POST" },
     pin_message: { path: "/v3/message/pin", method: "POST" },
     unpin_message: { path: "/v3/message/unpin", method: "POST" },
-    list_blacklist: { path: "/v3/blacklist/list", method: "GET" },
-    add_blacklist: { path: "/v3/blacklist/create", method: "POST" },
-    remove_blacklist: { path: "/v3/blacklist/delete", method: "POST" },
-    list_guild_mutes: { path: "/v3/guild-mute/list", method: "GET" },
-    add_guild_mute: { path: "/v3/guild-mute/create", method: "POST" },
-    remove_guild_mute: { path: "/v3/guild-mute/delete", method: "POST" },
-    get_guild_boost_history: { path: "/v3/guild-boost/history", method: "GET" },
     list_invites: { path: "/v3/invite/list", method: "GET" },
     create_invite: { path: "/v3/invite/create", method: "POST" },
     delete_invite: { path: "/v3/invite/delete", method: "POST" },
@@ -74,9 +68,6 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     set_bot_online: { path: "/v3/user/online", method: "POST" },
     set_bot_offline: { path: "/v3/user/offline", method: "POST" },
     get_bot_online_status: { path: "/v3/user/get-online-status", method: "GET" },
-    leave_guild: { path: "/v3/guild/leave", method: "POST" },
-    kick_guild_member: { path: "/v3/guild/kickout", method: "POST" },
-    set_guild_member_nickname: { path: "/v3/guild/nickname", method: "POST" },
 };
 
 const ROUTE_HANDLERS = Object.fromEntries(
@@ -107,6 +98,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         create_guild_emoji: createGuildEmoji,
         get_guild_badge: getGuildBadge,
         ...KOOK_FRIEND_PLATFORM_ACTIONS,
+        ...KOOK_GUILD_PLATFORM_ACTIONS,
         ...KOOK_PERMISSION_PLATFORM_ACTIONS,
         ...ROUTE_HANDLERS,
     },

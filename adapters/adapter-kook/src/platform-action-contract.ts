@@ -6,6 +6,9 @@ export interface KookStringParamRule {
     type: "string";
     required?: boolean;
     values?: readonly string[];
+    default?: string;
+    minLength?: number;
+    maxLength?: number;
 }
 
 export interface KookIntegerParamRule {
@@ -14,6 +17,7 @@ export interface KookIntegerParamRule {
     min?: number;
     max?: number;
     values?: readonly number[];
+    default?: number;
 }
 
 export type KookActionParamRule = KookStringParamRule | KookIntegerParamRule;
@@ -67,6 +71,10 @@ function validateParams(
     for (const [key, rule] of Object.entries(rules)) {
         const value = params[key];
         if (value === undefined) {
+            if (rule.default !== undefined) {
+                result[key] = validateValue(action, key, rule.default, rule);
+                continue;
+            }
             if (rule.required) {
                 throw KookError.invalid(
                     `KOOK 动作 ${action} 缺少参数 ${key}`,
@@ -88,7 +96,13 @@ function validateValue(
     rule: KookActionParamRule,
 ): KookActionValue {
     if (rule.type === "string") {
-        if (typeof value !== "string" || value.length === 0 || !isAllowed(value, rule.values)) {
+        if (
+            typeof value !== "string" ||
+            value.length === 0 ||
+            (rule.minLength !== undefined && value.length < rule.minLength) ||
+            (rule.maxLength !== undefined && value.length > rule.maxLength) ||
+            !isAllowed(value, rule.values)
+        ) {
             throw invalidValue(action, key, value, rule);
         }
         return value;

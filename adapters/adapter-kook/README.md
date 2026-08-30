@@ -118,7 +118,7 @@ KOOK 的频道消息与私聊消息使用两套 API。`delete_message`、`get_me
 - 机器人在线状态：上线、下线和查询状态
 - 好友：目录、申请列表、同意/拒绝、删除，以及 `send_friend_request`、`block_user`、`unblock_user`、`list_blocked_users`
 
-命名动作的参数字段与 KOOK 官方 API 保持一致。服务器角色和频道权限动作会在请求前校验官方字段、必填项、枚举与无符号整数范围，未知字段不会被静默转发；尚未收录的新字段应显式使用 `call_kook_api`。统一好友接口会剔除当前账号主动发出的申请；KOOK 不返回申请时间，因此 `get_friend_requests` 的 `time` 明确为 `0`，不会伪造本地时间。权限不足、参数错误和限流会抛出结构化 `KookError` / `KookApiError`，其中包含错误分类、HTTP 状态、KOOK 错误码、请求路径和重试等待时间。REST 客户端按官方 route bucket / global 限流头串行调度，并支持 `AbortSignal`。
+命名动作的参数字段与 KOOK 官方 API 保持一致。服务器管理、服务器角色和频道权限动作会在请求前校验官方字段、必填项、枚举、长度与整数范围，未知字段不会被静默转发；尚未收录的新字段应显式使用 `call_kook_api`。`list_guild_mutes` 固定请求官方 `detail` 结构，不保留旧返回格式。所有标准列表按 KOOK 官方单页上限 50 自动遍历，不依赖平台静默截断。统一好友接口会剔除当前账号主动发出的申请；KOOK 不返回申请时间，因此 `get_friend_requests` 的 `time` 明确为 `0`，不会伪造本地时间。权限不足、参数错误和限流会抛出结构化 `KookError` / `KookApiError`，其中包含错误分类、HTTP 状态、KOOK 错误码、请求路径和重试等待时间。REST 客户端按官方 route bucket / global 限流头串行调度，并支持 `AbortSignal`。
 
 ## 参考
 

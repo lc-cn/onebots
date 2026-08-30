@@ -85,6 +85,54 @@ describe("KOOK 平台扩展动作", () => {
         ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_REQUIRED" });
     });
 
+    test("服务器管理动作使用稳定详情格式并拒绝兼容字段", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await executeKookPlatformAction(bot, "list_guild_mutes", { guild_id: "guild" });
+        expect(callApi).toHaveBeenCalledWith("/v3/guild-mute/list", {
+            query: { guild_id: "guild", return_type: "detail" },
+        });
+        await expect(
+            executeKookPlatformAction(bot, "list_guild_mutes", {
+                guild_id: "guild",
+                return_type: "legacy",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+    });
+
+    test("服务器管理动作校验平台约束", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await expect(
+            executeKookPlatformAction(bot, "add_blacklist", {
+                guild_id: "guild",
+                target_id: "user",
+                del_msg_days: 8,
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "add_guild_mute", {
+                guild_id: "guild",
+                user_id: "user",
+                type: 3,
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "set_guild_member_nickname", {
+                guild_id: "guild",
+                nickname: "x",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "list_blacklist", {
+                guild_id: "guild",
+                page_size: 51,
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+    });
+
     test("补齐消息模板与机器人语音生命周期", async () => {
         const callApi = vi.fn().mockResolvedValue({});
         const bot = { callApi } as never;

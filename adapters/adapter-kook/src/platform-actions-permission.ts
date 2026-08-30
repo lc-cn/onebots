@@ -3,6 +3,7 @@ import {
     type KookActionParamRule,
     type KookActionRouteContract,
 } from "./platform-action-contract.js";
+import { KOOK_MAX_PAGE_SIZE } from "./pagination.js";
 
 const REQUIRED_STRING = { type: "string", required: true } satisfies KookActionParamRule;
 const OPTIONAL_STRING = { type: "string" } satisfies KookActionParamRule;
@@ -18,6 +19,11 @@ const OPTIONAL_UINT = {
     max: 0xffff_ffff,
 } satisfies KookActionParamRule;
 const OPTIONAL_PAGE = { type: "integer", min: 1 } satisfies KookActionParamRule;
+const OPTIONAL_PAGE_SIZE = {
+    type: "integer",
+    min: 1,
+    max: KOOK_MAX_PAGE_SIZE,
+} satisfies KookActionParamRule;
 const OPTIONAL_FLAG = { type: "integer", values: [0, 1] } satisfies KookActionParamRule;
 const OPTIONAL_PERMISSION_TARGET = {
     type: "string",
@@ -31,7 +37,7 @@ const PERMISSION_ROUTES = {
         params: {
             guild_id: REQUIRED_STRING,
             page: OPTIONAL_PAGE,
-            page_size: OPTIONAL_PAGE,
+            page_size: OPTIONAL_PAGE_SIZE,
         },
     },
     create_guild_role: {
