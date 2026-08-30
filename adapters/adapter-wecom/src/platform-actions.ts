@@ -2,6 +2,7 @@ import { definePlatformActions } from "onebots";
 import type { WeComClient } from "./client.js";
 import { WECOM_COLLABORATION_ACTIONS } from "./collaboration-actions.js";
 import { WECOM_CUSTOMER_ENGAGEMENT_ACTIONS } from "./customer-engagement-actions.js";
+import { WECOM_DIRECTORY_READ_ACTIONS } from "./directory-read-actions.js";
 import { WeComApiError } from "./errors.js";
 import { WECOM_EXTERNAL_CONTACT_ACTIONS } from "./external-contact-actions.js";
 import type { WeComActionHandler, WeComActionParams } from "./platform-action-context.js";
@@ -62,11 +63,6 @@ const PLATFORM_ACTIONS = definePlatformActions(
             "department_id",
             "id",
         ),
-        list_departments: async (client: WeComClient, params: WeComActionParams) =>
-            client.call({
-                path: "/cgi-bin/department/list",
-                query: { id: optionalNumber(params, "department_id") },
-            }),
         create_user: directoryPostAction("/cgi-bin/user/create", "user"),
         update_user: directoryPostAction("/cgi-bin/user/update", "user"),
         delete_user: directoryStringQueryAction("/cgi-bin/user/delete", "user_id", "userid"),
@@ -76,19 +72,6 @@ const PLATFORM_ACTIONS = definePlatformActions(
                 path: "/cgi-bin/user/batchdelete",
                 body: {
                     useridlist: requireStringArray(params, "user_ids"),
-                },
-            }),
-        list_department_users: async (client: WeComClient, params: WeComActionParams) =>
-            client.listDepartmentUsers(
-                requireNumber(params, "department_id"),
-                optionalBoolean(params, "fetch_child") || false,
-            ),
-        list_department_user_ids: async (client: WeComClient, params: WeComActionParams) =>
-            client.call({
-                path: "/cgi-bin/user/simplelist",
-                query: {
-                    department_id: requireNumber(params, "department_id"),
-                    fetch_child: optionalBoolean(params, "fetch_child") ? 1 : 0,
                 },
             }),
         create_tag: postAction("/cgi-bin/tag/create", "tag"),
@@ -120,6 +103,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
             }),
         get_api_domain_ips: staticCall("/cgi-bin/get_api_domain_ip"),
         get_callback_ips: staticCall("/cgi-bin/getcallbackip"),
+        ...WECOM_DIRECTORY_READ_ACTIONS,
         ...WECOM_COLLABORATION_ACTIONS,
         ...WECOM_EXTERNAL_CONTACT_ACTIONS,
         ...WECOM_CUSTOMER_ENGAGEMENT_ACTIONS,
