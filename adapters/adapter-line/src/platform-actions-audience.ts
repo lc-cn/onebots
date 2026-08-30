@@ -1,12 +1,17 @@
 import type { manageAudience } from "@line/bot-sdk";
 import {
-    base64Blob,
-    optionalBoolean,
-    optionalNumber,
-    optionalString,
-    requireInteger,
-    requireRecord,
-} from "./platform-action-params.js";
+    addAudienceRequest,
+    audienceFile,
+    audienceFileDescription,
+    audienceId,
+    audienceListQuery,
+    audienceUploadDescription,
+    createAudienceRequest,
+    createClickAudienceRequest,
+    createImpressionAudienceRequest,
+    updateAudienceDescriptionRequest,
+} from "./audience-params.js";
+import { exactParams, optionalBoolean, requirePositiveInteger } from "./platform-action-params.js";
 import type {
     LineActionContext,
     LineActionHandler,
@@ -16,72 +21,80 @@ import type {
 /** Audience 创建、扩充、共享查询与生命周期动作。 */
 export const LINE_AUDIENCE_ACTIONS = {
     add_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.addAudienceToAudienceGroup(
-            requireRecord(params, "request") as manageAudience.AddAudienceToAudienceGroupRequest,
-        ),
+        client.addAudienceToAudienceGroup(addAudienceRequest(params)),
     create_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.createAudienceGroup(
-            requireRecord(params, "request") as manageAudience.CreateAudienceGroupRequest,
-        ),
+        client.createAudienceGroup(createAudienceRequest(params)),
     create_click_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.createClickBasedAudienceGroup(
-            requireRecord(params, "request") as manageAudience.CreateClickBasedAudienceGroupRequest,
-        ),
+        client.createClickBasedAudienceGroup(createClickAudienceRequest(params)),
     create_impression_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.createImpBasedAudienceGroup(
-            requireRecord(params, "request") as manageAudience.CreateImpBasedAudienceGroupRequest,
-        ),
+        client.createImpBasedAudienceGroup(createImpressionAudienceRequest(params)),
     create_upload_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
         client.createAudienceForUploadingUserIds(
-            base64Blob(params, "text/plain"),
-            optionalString(params, "description"),
+            audienceFile(params, "create"),
+            audienceFileDescription(params),
             optionalBoolean(params, "is_ifa_audience"),
-            optionalString(params, "upload_description"),
+            audienceUploadDescription(params),
         ),
     add_user_ids_to_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
         client.addUserIdsToAudience(
-            base64Blob(params, "text/plain"),
-            optionalInteger(params, "audience_group_id"),
-            optionalString(params, "upload_description"),
+            audienceFile(params, "append"),
+            audienceId(params),
+            audienceUploadDescription(params),
         ),
-    get_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.getAudienceData(requireInteger(params, "audience_group_id")),
-    list_audiences: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.getAudienceGroups(
-            requireInteger(params, "page"),
-            optionalString(params, "description"),
-            optionalString(params, "status") as manageAudience.AudienceGroupStatus | undefined,
-            optionalNumber(params, "size"),
-            optionalBoolean(params, "includes_external_public_groups"),
-            optionalString(params, "create_route") as
-                | manageAudience.AudienceGroupCreateRoute
-                | undefined,
-        ),
-    get_shared_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.getSharedAudienceData(requireInteger(params, "audience_group_id")),
-    list_shared_audiences: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.getSharedAudienceGroups(
-            requireInteger(params, "page"),
-            optionalString(params, "description"),
-            optionalString(params, "status") as manageAudience.AudienceGroupStatus | undefined,
-            optionalNumber(params, "size"),
-            optionalString(params, "create_route") as
-                | manageAudience.AudienceGroupCreateRoute
-                | undefined,
-            optionalBoolean(params, "includes_owned_audience_groups"),
-        ),
+    get_audience: async ({ client }: LineActionContext, params: LineActionParams) => {
+        exactParams(params, ["audience_group_id"]);
+        return client.getAudienceData(audienceId(params));
+    },
+    list_audiences: listAudiences,
+    get_shared_audience: async ({ client }: LineActionContext, params: LineActionParams) => {
+        exactParams(params, ["audience_group_id"]);
+        return client.getSharedAudienceData(audienceId(params));
+    },
+    list_shared_audiences: listSharedAudiences,
     update_audience_description: async ({ client }: LineActionContext, params: LineActionParams) =>
         client.updateAudienceGroupDescription(
-            requireInteger(params, "audience_group_id"),
-            requireRecord(
-                params,
-                "request",
-            ) as manageAudience.UpdateAudienceGroupDescriptionRequest,
+            audienceId(params),
+            updateAudienceDescriptionRequest(params),
         ),
-    delete_audience: async ({ client }: LineActionContext, params: LineActionParams) =>
-        client.deleteAudienceGroup(requireInteger(params, "audience_group_id")),
+    delete_audience: async ({ client }: LineActionContext, params: LineActionParams) => {
+        exactParams(params, ["audience_group_id"]);
+        return client.deleteAudienceGroup(requirePositiveInteger(params, "audience_group_id"));
+    },
 } satisfies Readonly<Record<string, LineActionHandler>>;
 
-function optionalInteger(params: LineActionParams, name: string): number | undefined {
-    return params[name] === undefined ? undefined : requireInteger(params, name);
+async function listAudiences(
+    { client }: LineActionContext,
+    params: LineActionParams,
+): Promise<unknown> {
+    const query = audienceListQuery(params, false);
+    return client.getAudienceGroups(
+        query.page,
+        query.description,
+        query.status,
+        query.size,
+        query.includeExternal,
+        sdkCreateRoute(query.createRoute),
+    );
+}
+
+async function listSharedAudiences(
+    { client }: LineActionContext,
+    params: LineActionParams,
+): Promise<unknown> {
+    const query = audienceListQuery(params, true);
+    return client.getSharedAudienceGroups(
+        query.page,
+        query.description,
+        query.status,
+        query.size,
+        sdkCreateRoute(query.createRoute),
+        query.includeOwned,
+    );
+}
+
+/** 官方 API 已新增来源枚举，但 SDK 11.2.0 的生成联合类型尚未同步。 */
+function sdkCreateRoute(
+    value: string | undefined,
+): manageAudience.AudienceGroupCreateRoute | undefined {
+    return value as manageAudience.AudienceGroupCreateRoute | undefined;
 }

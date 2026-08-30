@@ -16,8 +16,17 @@ export function base64Blob(
     params: Readonly<Record<string, unknown>>,
     defaultContentType = "image/png",
 ): Blob {
-    const data = Buffer.from(requireString(params, "data_base64"), "base64");
+    const data = decodeBase64(requireString(params, "data_base64"));
     return new Blob([data], { type: optionalString(params, "content_type") || defaultContentType });
+}
+
+export function exactParams(
+    params: Readonly<Record<string, unknown>>,
+    allowed: readonly string[],
+): void {
+    const fields = new Set(allowed);
+    const unknown = Object.keys(params).find(name => !fields.has(name));
+    if (unknown) throw invalidParams(`LINE 动作不接受参数 ${unknown}`);
 }
 
 export function couponStatuses(
@@ -134,6 +143,67 @@ export function requireInteger(params: Readonly<Record<string, unknown>>, name: 
     return value;
 }
 
-function invalidParams(message: string): LineApiError {
+export function requirePositiveInteger(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+): number {
+    const value = requireInteger(params, name);
+    if (value < 1) throw invalidParams(`LINE 参数 ${name} 必须是正整数`);
+    return value;
+}
+
+export function optionalIntegerInRange(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+    minimum: number,
+    maximum: number,
+): number | undefined {
+    if (params[name] === undefined) return undefined;
+    const value = requireInteger(params, name);
+    if (value < minimum || value > maximum) {
+        throw invalidParams(`LINE 参数 ${name} 必须在 ${minimum} 到 ${maximum} 之间`);
+    }
+    return value;
+}
+
+export function requireBoundedString(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+    maximumLength: number,
+): string {
+    const value = requireString(params, name);
+    if (value.length > maximumLength) {
+        throw invalidParams(`LINE 参数 ${name} 最多 ${maximumLength} 个字符`);
+    }
+    return value;
+}
+
+export function optionalBoundedString(
+    params: Readonly<Record<string, unknown>>,
+    name: string,
+    maximumLength: number,
+): string | undefined {
+    const value = optionalString(params, name);
+    if (value && value.length > maximumLength) {
+        throw invalidParams(`LINE 参数 ${name} 最多 ${maximumLength} 个字符`);
+    }
+    return value;
+}
+
+function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
+    if (
+        value.length % 4 !== 0 ||
+        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)
+    ) {
+        throw invalidParams("LINE 参数 data_base64 必须是规范 Base64");
+    }
+    const decoded = Buffer.from(value, "base64");
+    if (decoded.length === 0) throw invalidParams("LINE 参数 data_base64 不能为空");
+    const data = new Uint8Array(decoded.length);
+    data.set(decoded);
+    return data;
+}
+
+export function invalidParams(message: string): LineApiError {
     return new LineApiError(message, { code: "LINE_INVALID_ACTION_PARAMS" });
 }

@@ -102,6 +102,8 @@ LINE 每次最多发送 5 条 Message。通用 `sendMessage` 会按 5 条自动�
 
 各动作的参数名与完整清单可通过 `get_supported_actions` 和适配器能力清单获取。部分接口受 LINE Official Account 所在地区、认证状态、套餐或专项权限限制；适配器会保留官方 HTTP 状态和错误体并抛出 `LineApiError`。
 
+Audience 动作会在请求发出前闭合官方参数：JSON 上传要求 1 到 10000 个仅含 `id` 的对象，文件上传固定为 `text/plain` 并验证规范 Base64，受众 ID 必须为正整数，列表分页限制为每页 1 到 40 条。外层及受众请求中的未知字段不会再被静默忽略；来源筛选同时支持当前官方的 `BUSINESS_MANAGER` 与 `YAHOO_DISPLAY_ADS`。
+
 ## 官方限制
 
 - LINE 不提供机器人撤回已发送消息的 API；`deleteMessage` 会返回结构化“不支持”错误。
