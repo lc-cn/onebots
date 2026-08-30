@@ -114,7 +114,7 @@ webSocketServer.on("connection", socket => {
 ```typescript
 await client.sendPrivateMessage(userId, "你好");
 await client.sendGroupMessage(groupId, "大家好");
-await client.sendChannelMessage(channelId, "频道消息");
+await client.sendChannelMessage(channelId, "频道消息", guildId);
 ```
 
 ### 实例选择器
@@ -132,9 +132,11 @@ const member = await client.getGroupMemberInfo(groupId, userId);
 
 ```typescript
 const channels = await client.getChannelList({
-  scope: { type: "group", id: guildId },
+  scope: { type: "guild", id: guildId },
 });
 ```
+
+`guild` 与 `group` 是不同作用域：Guild/Channel 平台必须使用 `guild`，传统群目录使用 `group`。事件与频道实体会保存已观察到的 Guild，因此从事件回复或调用 `channel.sendMessage()` 时无需重复传入。
 
 消息事件会保留协议动作需要的会话上下文。`reply()`、`recall()`、`edit()` 与频道 reaction 会走 Adapter 的上下文动作入口；只需要全局消息 ID 的协议自动退化到原有 API，需要 `channel_id` 的协议则不会再丢失地址。
 

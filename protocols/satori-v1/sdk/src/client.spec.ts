@@ -368,7 +368,7 @@ describe("Satori V1 client", () => {
             kind: "validation",
         });
         const [channel] = await client.getChannelList({
-            scope: { type: "group", id: "guild-1" },
+            scope: { type: "guild", id: "guild-1" },
         });
         await channel.setName("renamed");
 

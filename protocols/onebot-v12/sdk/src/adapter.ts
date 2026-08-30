@@ -3,10 +3,7 @@ import {
     ReceiveTransport,
     Message,
     ProtocolError,
-    type User,
-    type Group,
-    type GroupMember,
-    type Friend,
+    type DirectoryQueryOptions,
     type PrivateMessageEvent,
     type GroupMessageEvent,
     type ChannelMessageEvent,
@@ -19,27 +16,7 @@ import {
     type OneBotV12Call,
 } from "./types.js";
 import { HttpClient } from "./http-client.js";
-
-function malformed(action: string, response: OneBotV12Response<unknown>): never {
-    throw new ProtocolError({
-        protocol: "onebot-v12",
-        operation: action,
-        kind: "protocol",
-        message: `OneBot V12 ${action} 返回了无效的数据结构`,
-        response,
-    });
-}
-
-function responseRecord(
-    action: string,
-    response: OneBotV12Response<unknown>,
-): Record<string, unknown> {
-    return typeof response.data === "object" &&
-        response.data !== null &&
-        !Array.isArray(response.data)
-        ? (response.data as Record<string, unknown>)
-        : malformed(action, response);
-}
+import { OneBotV12DirectoryApi } from "./directory-api.js";
 
 export interface OneBotV12AdapterConfig {
     baseUrl: string;
@@ -77,6 +54,8 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
         public readonly selfId: string = selfId;
         private httpClient: HttpClient;
         private readonly receiveTransport: ReceiveTransport<string, OneBotV12Event>;
+        private readonly channelGuilds = new Map<string, string>();
+        private readonly directoryApi: OneBotV12DirectoryApi;
         private readonly friendRequestFlags = new Map<string, string>();
         private readonly groupRequestContexts = new Map<
             string,
@@ -93,6 +72,10 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                 call: config.call,
                 fetch: config.fetch,
             });
+            this.directoryApi = new OneBotV12DirectoryApi(
+                (action, params) => this.httpClient.post(action, params),
+                this.channelGuilds,
+            );
             this.receiveTransport = new ReceiveTransport(this, {
                 mode: receiveMode,
                 endpoints: {
@@ -147,12 +130,14 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                     };
                     this.emit("message.group", messageData);
                 } else if (detailType === "channel") {
+                    if (event.guild_id) this.channelGuilds.set(event.channel_id!, event.guild_id);
                     const messageData: ChannelMessageEvent.Data<string> = {
                         timestamp,
                         bot_id: eventBotId,
                         message_id: messageId,
                         user_id: userId,
                         channel_id: event.channel_id!,
+                        guild_id: event.guild_id,
                         content: (event.message || []) as Message.Content,
                         message_type: "channel",
                     };
@@ -303,13 +288,28 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
         async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<OneBotV12Response> {
             const { scene_type, scene_id, message } = options;
             const segments = Message.toSegments(message);
+            const guildId =
+                scene_type === "channel"
+                    ? (options.guild_id ?? this.directoryApi.resolveGuild("send_message", scene_id))
+                    : undefined;
 
             return this.httpClient.post("/send_message", {
                 detail_type: scene_type,
                 ...(scene_type === "private" ? { user_id: scene_id } : {}),
                 ...(scene_type === "group" ? { group_id: scene_id } : {}),
-                ...(scene_type === "channel" ? { channel_id: scene_id } : {}),
+                ...(scene_type === "channel" ? { guild_id: guildId, channel_id: scene_id } : {}),
                 message: segments,
+            });
+        }
+
+        async replyMessage(
+            options: Adapter.ReplyMessageOptions<string>,
+        ): Promise<OneBotV12Response> {
+            return this.sendMessage({
+                scene_type: options.scene_type,
+                scene_id: options.scene_id,
+                guild_id: options.guild_id,
+                message: options.message,
             });
         }
 
@@ -320,139 +320,48 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
             return response.status === "ok";
         }
 
-        async getUserInfo(user_id: string): Promise<User.Data<string>> {
-            const response = await this.httpClient.post<unknown>("/get_user_info", {
-                user_id,
-            });
-            const data = responseRecord("get_user_info", response);
-            return {
-                user_id: typeof data.user_id === "string" ? data.user_id : user_id,
-                user_name:
-                    (typeof data.user_name === "string" && data.user_name) ||
-                    (typeof data.nickname === "string" ? data.nickname : ""),
-                avatar: typeof data.avatar === "string" ? data.avatar : "",
-            };
+        getUserInfo(userId: string) {
+            return this.directoryApi.getUserInfo(userId);
         }
 
-        async getFriendInfo(user_id: string): Promise<Friend.Data<string>> {
-            const friends = await this.getFriendList();
-            const friend = friends.find(item => item.user_id === user_id);
-            if (friend) return friend;
-            throw new ProtocolError({
-                protocol: "onebot-v12",
-                operation: "get_friend_list",
-                kind: "validation",
-                message: `OneBot V12 好友 ${user_id} 不存在`,
-            });
+        getFriendInfo(userId: string) {
+            return this.directoryApi.getFriendInfo(userId);
         }
 
-        async getUserList(): Promise<User.Data<string>[]> {
-            return this.getFriendList();
+        getUserList() {
+            return this.directoryApi.getUserList();
         }
 
-        private async getFriendList(): Promise<Friend.Data<string>[]> {
-            const response = await this.httpClient.post<unknown>("/get_friend_list", {});
-            if (!Array.isArray(response.data)) return malformed("get_friend_list", response);
-            return response.data.map(item => {
-                if (typeof item !== "object" || item === null) {
-                    return malformed("get_friend_list", response);
-                }
-                const data = item as Record<string, unknown>;
-                if (typeof data.user_id !== "string") {
-                    return malformed("get_friend_list", response);
-                }
-                return {
-                    user_id: data.user_id,
-                    user_name: (data.user_name as string) || (data.nickname as string) || "",
-                    avatar: (data.avatar as string) || "",
-                    remark: (data.user_remark as string) || (data.remark as string) || undefined,
-                };
-            });
+        getGroupInfo(groupId: string) {
+            return this.directoryApi.getGroupInfo(groupId);
         }
 
-        async getGroupInfo(group_id: string): Promise<Group.Data<string>> {
-            const response = await this.httpClient.post<unknown>("/get_group_info", {
-                group_id,
-            });
-            const data = responseRecord("get_group_info", response);
-            return {
-                group_id: typeof data.group_id === "string" ? data.group_id : group_id,
-                group_name: typeof data.group_name === "string" ? data.group_name : "",
-                avatar: typeof data.avatar === "string" ? data.avatar : "",
-            };
+        getGroupList() {
+            return this.directoryApi.getGroupList();
         }
 
-        async getGroupList(): Promise<Group.Data<string>[]> {
-            const response = await this.httpClient.post<unknown>("/get_group_list", {});
-            if (response.status === "ok" && Array.isArray(response.data)) {
-                return response.data.map(item => {
-                    if (typeof item !== "object" || item === null) {
-                        return malformed("get_group_list", response);
-                    }
-                    const data = item as Record<string, unknown>;
-                    if (typeof data.group_id !== "string") {
-                        return malformed("get_group_list", response);
-                    }
-                    return {
-                        group_id: data.group_id,
-                        group_name: typeof data.group_name === "string" ? data.group_name : "",
-                        avatar: typeof data.avatar === "string" ? data.avatar : "",
-                    };
-                });
-            }
-            return malformed("get_group_list", response);
+        getGroupMemberInfo(groupId: string, userId: string) {
+            return this.directoryApi.getGroupMemberInfo(groupId, userId);
         }
 
-        async getGroupMemberInfo(
-            group_id: string,
-            user_id: string,
-        ): Promise<GroupMember.Data<string>> {
-            const response = await this.httpClient.post<unknown>("/get_group_member_info", {
-                group_id,
-                user_id,
-            });
-            const data = responseRecord("get_group_member_info", response);
-            const role = data.role;
-            return {
-                user_id: typeof data.user_id === "string" ? data.user_id : user_id,
-                user_name:
-                    (typeof data.user_name === "string" && data.user_name) ||
-                    (typeof data.nickname === "string" ? data.nickname : ""),
-                avatar: typeof data.avatar === "string" ? data.avatar : "",
-                group_id,
-                role: role === "owner" || role === "admin" || role === "member" ? role : undefined,
-            };
+        getGroupMemberList(groupId: string) {
+            return this.directoryApi.getGroupMemberList(groupId);
         }
 
-        async getGroupMemberList(group_id: string): Promise<GroupMember.Data<string>[]> {
-            const response = await this.httpClient.post<unknown>("/get_group_member_list", {
-                group_id,
-            });
-            if (response.status === "ok" && Array.isArray(response.data)) {
-                return response.data.map(item => {
-                    if (typeof item !== "object" || item === null) {
-                        return malformed("get_group_member_list", response);
-                    }
-                    const data = item as Record<string, unknown>;
-                    if (typeof data.user_id !== "string") {
-                        return malformed("get_group_member_list", response);
-                    }
-                    const role = data.role;
-                    return {
-                        user_id: data.user_id,
-                        user_name:
-                            (typeof data.user_name === "string" && data.user_name) ||
-                            (typeof data.nickname === "string" ? data.nickname : ""),
-                        avatar: typeof data.avatar === "string" ? data.avatar : "",
-                        group_id,
-                        role:
-                            role === "owner" || role === "admin" || role === "member"
-                                ? role
-                                : undefined,
-                    };
-                });
-            }
-            return malformed("get_group_member_list", response);
+        getChannelList(options?: DirectoryQueryOptions<string>) {
+            return this.directoryApi.getChannelList(options);
+        }
+
+        getChannelInfo(channelId: string, options?: DirectoryQueryOptions<string>) {
+            return this.directoryApi.getChannelInfo(channelId, options);
+        }
+
+        getChannelMemberInfo(channelId: string, userId: string) {
+            return this.directoryApi.getChannelMemberInfo(channelId, userId);
+        }
+
+        getChannelMemberList(channelId: string) {
+            return this.directoryApi.getChannelMemberList(channelId);
         }
 
         /** OneBots 扩展：邀请机器人好友加入指定群。 */
@@ -514,6 +423,14 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
         async leaveGroup(group_id: string): Promise<void> {
             await this.httpClient.post("/leave_group", {
                 group_id,
+            });
+        }
+
+        async setChannelName(channelId: string, name: string): Promise<void> {
+            await this.httpClient.post("/set_channel_name", {
+                guild_id: this.directoryApi.resolveGuild("set_channel_name", channelId),
+                channel_id: channelId,
+                channel_name: name,
             });
         }
 

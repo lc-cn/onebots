@@ -35,7 +35,11 @@ export class ChannelMessageEvent<
         return this.channel_id;
     }
     protected override getMessageContext() {
-        return { ...super.getMessageContext(), channel_id: this.channel_id };
+        return {
+            ...super.getMessageContext(),
+            channel_id: this.channel_id,
+            guild_id: this.guild_id,
+        };
     }
     /**
      * 添加反应

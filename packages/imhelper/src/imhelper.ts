@@ -184,10 +184,15 @@ export class ImHelper<
             message: message,
         }) as AdapterSendResult<TAdapter, Id>;
     }
-    sendChannelMessage(channelId: Id, message: Message.Content): AdapterSendResult<TAdapter, Id> {
+    sendChannelMessage(
+        channelId: Id,
+        message: Message.Content,
+        guildId?: Id,
+    ): AdapterSendResult<TAdapter, Id> {
         return this.#adapter.sendMessage({
             scene_type: "channel",
             scene_id: channelId,
+            guild_id: guildId,
             message: message,
         }) as AdapterSendResult<TAdapter, Id>;
     }

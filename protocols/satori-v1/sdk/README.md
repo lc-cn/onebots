@@ -37,11 +37,11 @@ Satori 不允许向 guild ID 直接发送消息，因此 `sendGroupMessage()` �
 
 ```typescript
 const channels = await client.getChannelList({
-  scope: { type: "group", id: guildId },
+  scope: { type: "guild", id: guildId },
 });
 
 const channel = await client.getChannelInfo(channelId, {
-  scope: { type: "group", id: guildId },
+  scope: { type: "guild", id: guildId },
 });
 
 await channel.setName("general");

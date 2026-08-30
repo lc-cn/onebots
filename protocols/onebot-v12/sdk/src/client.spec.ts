@@ -185,4 +185,69 @@ describe("OneBot V12 client", () => {
         expect(user.user_name).toBe("Alice");
         expect(call).toHaveBeenCalledWith("get_friend_list", {});
     });
+
+    test("keeps guild and channel addresses closed across events and directories", async () => {
+        const call = vi.fn(async (action: string) => {
+            if (action === "get_channel_list") {
+                return {
+                    status: "ok" as const,
+                    retcode: 0,
+                    data: [{ channel_id: "channel-1", channel_name: "General" }],
+                };
+            }
+            if (action === "get_channel_member_list") {
+                return {
+                    status: "ok" as const,
+                    retcode: 0,
+                    data: [{ user_id: "user-1", user_name: "Alice" }],
+                };
+            }
+            return { status: "ok" as const, retcode: 0, data: {} };
+        });
+        const client = createOnebot12Client({
+            baseUrl: "https://example.test",
+            selfId: "bot",
+            receiveMode: "manual",
+            call,
+        });
+        let reply: Promise<unknown> | undefined;
+        client.on("message.channel", event => {
+            expect(event.guild_id).toBe("guild-1");
+            expect(event.channel.guild_id).toBe("guild-1");
+            reply = event.reply("pong");
+        });
+
+        client.ingest({
+            id: "event-1",
+            time: 1,
+            type: "message",
+            detail_type: "channel",
+            sub_type: "",
+            self: { platform: "test", user_id: "bot" },
+            guild_id: "guild-1",
+            channel_id: "channel-1",
+            user_id: "user-1",
+            message_id: "message-1",
+            message: [{ type: "text", data: { text: "ping" } }],
+        });
+        await reply;
+
+        const [channel] = await client.getChannelList({
+            scope: { type: "guild", id: "guild-1" },
+        });
+        const [member] = await client.getChannelMemberList(channel.channel_id);
+
+        expect(member.user_id).toBe("user-1");
+        expect(call).toHaveBeenCalledWith("send_message", {
+            detail_type: "channel",
+            guild_id: "guild-1",
+            channel_id: "channel-1",
+            message: [{ type: "text", data: { text: "pong" } }],
+        });
+        expect(call).toHaveBeenCalledWith("get_channel_list", { guild_id: "guild-1" });
+        expect(call).toHaveBeenCalledWith("get_channel_member_list", {
+            guild_id: "guild-1",
+            channel_id: "channel-1",
+        });
+    });
 });

@@ -24,8 +24,15 @@ function observeGroup<Id extends EntityId>(helper: ImHelper<Id>, groupId: Id): v
     upsert(helper.$groupMap, groupId, { group_id: groupId });
 }
 
-function observeChannel<Id extends EntityId>(helper: ImHelper<Id>, channelId: Id): void {
-    upsert(helper.$channelMap, channelId, { channel_id: channelId });
+function observeChannel<Id extends EntityId>(
+    helper: ImHelper<Id>,
+    channelId: Id,
+    guildId?: Id,
+): void {
+    upsert(helper.$channelMap, channelId, {
+        channel_id: channelId,
+        ...(guildId === undefined ? {} : { guild_id: guildId }),
+    });
 }
 
 function observeGroupMember<Id extends EntityId>(
@@ -64,11 +71,12 @@ export function observeEventEntities<Id extends EntityId>(
     const operatorId = isEntityId(data.operator_id) ? (data.operator_id as Id) : undefined;
     const groupId = isEntityId(data.group_id) ? (data.group_id as Id) : undefined;
     const channelId = isEntityId(data.channel_id) ? (data.channel_id as Id) : undefined;
+    const guildId = isEntityId(data.guild_id) ? (data.guild_id as Id) : undefined;
 
     if (userId !== undefined) observeUser(helper, userId);
     if (operatorId !== undefined) observeUser(helper, operatorId);
     if (groupId !== undefined) observeGroup(helper, groupId);
-    if (channelId !== undefined) observeChannel(helper, channelId);
+    if (channelId !== undefined) observeChannel(helper, channelId, guildId);
 
     if (
         groupId !== undefined &&

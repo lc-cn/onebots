@@ -33,7 +33,7 @@ export interface DirectoryQueryOptions<Id extends string | number = string | num
     fresh?: boolean;
     /** 目录必须依附其他实体时显式携带作用域，禁止从 ID 形状猜测父级。 */
     scope?: {
-        type: "group" | "channel";
+        type: "group" | "guild" | "channel";
         id: Id;
     };
 }
@@ -58,6 +58,7 @@ export abstract class Adapter<
         return this.sendMessage({
             scene_type: options.scene_type,
             scene_id: options.scene_id,
+            guild_id: options.guild_id,
             message: options.message,
         });
     }
@@ -272,6 +273,8 @@ export namespace Adapter {
     export interface SendMessageOptions<Id extends string | number = string | number> {
         scene_type: Message.SceneType;
         scene_id: Id;
+        /** channel 场景所属的 Guild/服务器；协议要求双重寻址时必须保留。 */
+        guild_id?: Id;
         message: Message.Content;
     }
     export interface MessageContextOptions<Id extends string | number = string | number> {
@@ -280,6 +283,8 @@ export namespace Adapter {
         scene_id: Id;
         /** 协议需要独立会话地址时保留真实频道 ID。 */
         channel_id?: Id;
+        /** 频道所属 Guild/服务器，禁止从 channel_id 形状反推。 */
+        guild_id?: Id;
     }
     export interface ReplyMessageOptions<
         Id extends string | number = string | number,

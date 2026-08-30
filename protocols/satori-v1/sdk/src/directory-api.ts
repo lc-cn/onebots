@@ -116,12 +116,12 @@ export class SatoriDirectoryApi {
     }
 
     async getChannelList(options?: DirectoryQueryOptions<string>): Promise<Channel.Data<string>[]> {
-        if (options?.scope?.type !== "group") {
+        if (options?.scope?.type !== "guild") {
             throw new ProtocolError({
                 protocol: "satori-v1",
                 operation: "channel.list",
                 kind: "validation",
-                message: "Satori channel.list 需要 group scope",
+                message: "Satori channel.list 需要 guild scope",
             });
         }
         const guildId = options.scope.id;
@@ -131,7 +131,7 @@ export class SatoriDirectoryApi {
                 ...(next ? { next } : {}),
             }),
         );
-        return channels.map(channel => this.toChannel(channel, "channel.list"));
+        return channels.map(channel => this.toChannel(channel, "channel.list", guildId));
     }
 
     async getChannelInfo(
@@ -140,9 +140,13 @@ export class SatoriDirectoryApi {
     ): Promise<Channel.Data<string>> {
         const channel = await this.call<unknown>("channel.get", {
             channel_id: channelId,
-            ...(options?.scope?.type === "group" ? { guild_id: options.scope.id } : {}),
+            ...(options?.scope?.type === "guild" ? { guild_id: options.scope.id } : {}),
         });
-        return this.toChannel(channel, "channel.get");
+        return this.toChannel(
+            channel,
+            "channel.get",
+            options?.scope?.type === "guild" ? options.scope.id : undefined,
+        );
     }
 
     private async getFriendList(): Promise<Friend.Data<string>[]> {
@@ -161,12 +165,13 @@ export class SatoriDirectoryApi {
         });
     }
 
-    private toChannel(value: unknown, operation: string): Channel.Data<string> {
+    private toChannel(value: unknown, operation: string, guildId?: string): Channel.Data<string> {
         if (!isRecord(value) || typeof value.id !== "string") {
             return malformed(operation, value);
         }
         return {
             channel_id: value.id,
+            guild_id: guildId,
             channel_name: typeof value.name === "string" ? value.name : "",
             avatar: typeof value.avatar === "string" ? value.avatar : "",
         };

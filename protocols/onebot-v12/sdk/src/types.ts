@@ -18,6 +18,7 @@ export interface OneBotV12Event {
     /** 消息段，或请求事件的附言。 */
     message?: unknown[] | string;
     group_id?: string;
+    guild_id?: string;
     channel_id?: string;
     operator_id?: string;
     request_id?: string;

@@ -40,12 +40,22 @@ await client.start();
 ```typescript
 const status = await client.call("get_status");
 await client.sendPrivateMessage("user-id", "你好");
+await client.sendChannelMessage("channel-id", "频道消息", "guild-id");
 await client.inviteFriendToGroup("group-id", "user-id");
 await client.acceptFriendRequest("opaque-flag", "已验证");
 
 // 好友与群请求事件也可通过统一 ImHelper 方法处理；支持同意和拒绝。
 await client.approveFriendRequest("request-id", false, "拒绝理由");
 await client.approveGroupRequest("request-id", true);
+```
+
+频道目录必须显式指定 Guild；查询结果与频道事件会记住这条父子关系，供后续发送、回复、成员查询和重命名复用：
+
+```typescript
+const channels = await client.getChannelList({
+  scope: { type: "guild", id: "guild-id" },
+});
+await channels[0].sendMessage("hello");
 ```
 
 宿主自行管理 HTTP 或 WebSocket 时使用 `receiveMode: "manual"`，再调用 `ingest()`、`acceptHttp()` 或 `acceptWebSocket()`；SDK 不会另开端口。`baseUrl`、`apiBaseUrl`、`wsUrl`、`resolveActionUrl` 和可注入的 `call` 允许事件与 API 独立部署。

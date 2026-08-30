@@ -15,6 +15,10 @@ export class Channel<Id extends string | number = string | number> {
         return this.info.channel_name;
     }
 
+    get guild_id() {
+        return this.info.guild_id;
+    }
+
     get avatar() {
         return this.info.avatar;
     }
@@ -40,6 +44,7 @@ export class Channel<Id extends string | number = string | number> {
         return this.helper.adapter.sendMessage({
             scene_type: "channel",
             scene_id: this.channel_id,
+            guild_id: this.guild_id,
             message,
         });
     }
@@ -65,6 +70,7 @@ export class Channel<Id extends string | number = string | number> {
 export namespace Channel {
     export interface Data<Id extends string | number = string | number> {
         channel_id: Id;
+        guild_id?: Id;
         channel_name?: string;
         avatar?: string;
     }
