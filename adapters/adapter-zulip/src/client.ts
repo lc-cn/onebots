@@ -3,6 +3,7 @@ import { FailureCollector } from "onebots";
 import { assertZulipConfig, resolveZulipReceiveMode } from "./config.js";
 import { deliverZulipEvent, ZulipEventIngress } from "./event-ingress.js";
 import { isBadEventQueue, ZulipError } from "./errors.js";
+import { ZULIP_DEFAULT_EVENT_TYPES } from "./event-metadata.js";
 import { assertZulipApiPath, createZulipTransport, type ZulipTransport } from "./http.js";
 import { buildZulipMultipart } from "./multipart.js";
 import {
@@ -29,30 +30,6 @@ import type {
     ZulipUploadResponse,
     ZulipUser,
 } from "./types.js";
-
-const DEFAULT_EVENT_TYPES = [
-    "heartbeat",
-    "message",
-    "update_message",
-    "delete_message",
-    "reaction",
-    "subscription",
-    "stream",
-    "realm_user",
-    "user_group",
-    "invites_changed",
-    "alert_words",
-    "muted_users",
-    "custom_profile_fields",
-    "realm_domains",
-    "realm_emoji",
-    "realm_linkifiers",
-    "realm_playgrounds",
-    "presence",
-    "user_status",
-    "typing",
-    "restart",
-] as const;
 
 interface ZulipLifecycleEvents {
     ready: [registration?: ZulipQueueRegistration];
@@ -367,7 +344,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
             {
                 event_types: configuredEventTypes?.length
                     ? configuredEventTypes
-                    : DEFAULT_EVENT_TYPES,
+                    : ZULIP_DEFAULT_EVENT_TYPES,
                 all_public_streams: this.config.event_queue?.all_public_streams || false,
                 apply_markdown: false,
                 client_capabilities: {

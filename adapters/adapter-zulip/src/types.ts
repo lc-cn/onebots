@@ -324,6 +324,31 @@ export interface ZulipRealmPlaygroundsEvent extends ZulipBaseEvent {
     realm_playgrounds: ZulipCodePlayground[];
 }
 
+export type ZulipDataExportType = "public" | "full_with_consent" | "full_without_consent";
+
+export interface ZulipDataExport {
+    id: number;
+    acting_user_id: number;
+    export_time: number;
+    deleted_timestamp: number | null;
+    failed_timestamp: number | null;
+    export_url: string | null;
+    pending: boolean;
+    export_from_prior_server: boolean;
+    export_type: ZulipDataExportType;
+}
+
+export interface ZulipRealmExportEvent extends ZulipBaseEvent {
+    type: "realm_export";
+    exports: ZulipDataExport[];
+}
+
+export interface ZulipRealmExportConsentEvent extends ZulipBaseEvent {
+    type: "realm_export_consent";
+    user_id: number;
+    consented: boolean;
+}
+
 export type ZulipEvent =
     | ZulipMessageEvent
     | ZulipUpdateMessageEvent
@@ -340,6 +365,8 @@ export type ZulipEvent =
     | ZulipCustomProfileFieldsEvent
     | ZulipRealmDomainsEvent
     | ZulipRealmPlaygroundsEvent
+    | ZulipRealmExportEvent
+    | ZulipRealmExportConsentEvent
     | ZulipBaseEvent;
 
 export interface ZulipQueueRegistration extends ZulipApiEnvelope {

@@ -76,6 +76,8 @@ await client.start();
 
 ## 平台扩展动作
 
+数据导出领域提供 `list_data_exports`、`create_data_export`、`delete_data_export` 与 `get_data_export_consents`，使用 Zulip 12 的字符串导出类型并保留跨服务器导出状态；默认订阅导出进度和成员授权变化，相关动作需要组织管理员权限。
+
 Code Playground 领域提供 `add_code_playground` 与 `remove_code_playground`，只接受现代 RFC 6570 `url_template`，并默认订阅 `realm_playgrounds` 完整快照；Zulip 没有提供单独的列表或更新 REST API，因此不会暴露伪造动作。
 
 允许域名领域提供 `list_allowed_domains`、`add_allowed_domain`、`update_allowed_domain` 与 `remove_allowed_domain`，并默认订阅增改删事件；写操作仅组织 Owner 可用。

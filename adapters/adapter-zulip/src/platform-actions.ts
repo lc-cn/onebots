@@ -12,6 +12,7 @@ import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
 import { ZULIP_EMOJI_ACTION_HANDLERS } from "./emoji-actions.js";
 import { ZULIP_DOMAIN_ACTION_HANDLERS } from "./domain-actions.js";
+import { ZULIP_DATA_EXPORT_ACTION_HANDLERS } from "./data-export-actions.js";
 import { ZULIP_INVITATION_ACTION_HANDLERS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_ACTION_HANDLERS } from "./linkifier-actions.js";
 import { ZULIP_PREFERENCE_ACTION_HANDLERS } from "./preference-actions.js";
@@ -90,6 +91,7 @@ const ACTION_HANDLERS = {
     delete_saved_snippet: (client, params) =>
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
     ...ZULIP_BOT_ACTION_HANDLERS,
+    ...ZULIP_DATA_EXPORT_ACTION_HANDLERS,
     ...ZULIP_DOMAIN_ACTION_HANDLERS,
     ...ZULIP_EMOJI_ACTION_HANDLERS,
     ...ZULIP_INVITATION_ACTION_HANDLERS,

@@ -317,6 +317,8 @@ describe("ZulipClient", () => {
         expect(registration?.params?.event_types).toContain("realm_emoji");
         expect(registration?.params?.event_types).toContain("realm_linkifiers");
         expect(registration?.params?.event_types).toContain("realm_playgrounds");
+        expect(registration?.params?.event_types).toContain("realm_export");
+        expect(registration?.params?.event_types).toContain("realm_export_consent");
         expect(registration?.params?.client_capabilities).toMatchObject({
             include_deactivated_groups: true,
             individual_emoji_changes: true,

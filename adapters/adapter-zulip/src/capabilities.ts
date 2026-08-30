@@ -5,6 +5,7 @@ import {
 } from "onebots";
 import { ZULIP_BOT_CREDENTIAL_ACTIONS } from "./bot-actions.js";
 import { ZULIP_DOMAIN_MUTATION_ACTIONS } from "./domain-actions.js";
+import { ZULIP_DATA_EXPORT_MUTATION_ACTIONS } from "./data-export-actions.js";
 import { ZULIP_EMOJI_MUTATION_ACTIONS } from "./emoji-actions.js";
 import { ZULIP_INVITATION_ACTIONS } from "./invitation-actions.js";
 import { ZULIP_LINKIFIER_MUTATION_ACTIONS } from "./linkifier-actions.js";
@@ -26,6 +27,7 @@ const platformActions = definePlatformActionCapabilities(ZULIP_PLATFORM_ACTIONS,
     ZULIP_INVITATION_ACTIONS.has(action) ||
     ZULIP_BOT_CREDENTIAL_ACTIONS.has(action) ||
     ZULIP_DOMAIN_MUTATION_ACTIONS.has(action) ||
+    ZULIP_DATA_EXPORT_MUTATION_ACTIONS.has(action) ||
     ZULIP_EMOJI_MUTATION_ACTIONS.has(action) ||
     ZULIP_PREFERENCE_PERMISSION_ACTIONS.has(action) ||
     ZULIP_PLAYGROUND_MUTATION_ACTIONS.has(action) ||

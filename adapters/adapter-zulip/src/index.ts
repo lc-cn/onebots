@@ -1,4 +1,5 @@
 import { AdapterRegistry, type Schema } from "onebots";
+import { ZULIP_EVENT_TYPE_LABELS } from "./event-metadata.js";
 import { ZULIP_EVENT_TYPES } from "./types.js";
 
 export { ZulipAdapter } from "./adapter.js";
@@ -15,30 +16,6 @@ export {
 } from "./platform-actions.js";
 export type { ZulipTransport, ZulipHttpRequest } from "./http.js";
 export type * from "./types.js";
-
-const EVENT_TYPE_LABELS: Readonly<Record<string, string>> = {
-    alert_words: "提醒词",
-    message: "消息",
-    update_message: "消息更新",
-    delete_message: "消息删除",
-    reaction: "表情回应",
-    subscription: "频道订阅",
-    stream: "频道",
-    realm_user: "组织成员",
-    user_group: "用户组",
-    presence: "在线状态",
-    user_status: "用户状态",
-    typing: "输入状态",
-    heartbeat: "心跳",
-    invites_changed: "邀请变化",
-    muted_users: "静音用户",
-    custom_profile_fields: "自定义资料字段",
-    realm_domains: "允许注册的邮箱域名",
-    realm_emoji: "组织自定义表情",
-    realm_linkifiers: "组织链接规则",
-    realm_playgrounds: "代码运行环境",
-    restart: "服务器重启",
-};
 
 export const zulipSchema: Schema = {
     account_id: {
@@ -95,7 +72,7 @@ export const zulipSchema: Schema = {
             label: "事件类型",
             description: "留空使用适配器的消息、反应、成员、频道和状态事件集合",
             choices: ZULIP_EVENT_TYPES.map(value => ({
-                label: EVENT_TYPE_LABELS[value] || value,
+                label: ZULIP_EVENT_TYPE_LABELS[value] || value,
                 value,
             })),
             ui: {
