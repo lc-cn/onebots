@@ -1,15 +1,7 @@
-import type { PlatformActionHandler } from "onebots";
+import { definePlatformActionHandlers, type PlatformActionHandler } from "onebots";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import type { WhatsAppGraphApi } from "./graph-api.js";
-
-export const WHATSAPP_MEDIA_ACTIONS = Object.freeze([
-    "upload_media",
-    "get_media",
-    "download_media",
-    "delete_media",
-] as const);
-export type WhatsAppMediaAction = (typeof WHATSAPP_MEDIA_ACTIONS)[number];
 
 export interface WhatsAppMediaUploadResponse {
     id: string;
@@ -61,10 +53,6 @@ export type WhatsAppMediaMimeType = keyof typeof WHATSAPP_MEDIA_LIMITS;
 
 export function isWhatsAppMediaMimeType(value: string): value is WhatsAppMediaMimeType {
     return Object.hasOwn(WHATSAPP_MEDIA_LIMITS, value);
-}
-
-export function isWhatsAppMediaAction(action: string): action is WhatsAppMediaAction {
-    return (WHATSAPP_MEDIA_ACTIONS as readonly string[]).includes(action);
 }
 
 /** Phone Number 级媒体资产入口；统一上传约束、所有权校验和临时 URL 下载。 */
@@ -122,45 +110,50 @@ export class WhatsAppMedia {
             }),
         );
     }
-
-    async execute(
-        action: WhatsAppMediaAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "upload_media": {
-                rejectUnknown(params, ["data", "mime_type", "filename"]);
-                const mimeType = mediaType(params.mime_type);
-                return this.upload(
-                    new Blob([decodeBase64(params.data)], { type: mimeType }),
-                    mimeType,
-                    params.filename === undefined
-                        ? "upload"
-                        : inputString(params.filename, "filename"),
-                );
-            }
-            case "get_media":
-                rejectUnknown(params, ["media_id"]);
-                return this.get(inputString(params.media_id, "media_id"));
-            case "download_media": {
-                rejectUnknown(params, ["media_id"]);
-                const result = await this.download(inputString(params.media_id, "media_id"));
-                return { ...result.info, data: result.data.toString("base64") };
-            }
-            case "delete_media":
-                rejectUnknown(params, ["media_id"]);
-                return this.delete(inputString(params.media_id, "media_id"));
-        }
-    }
 }
 
-export const WHATSAPP_MEDIA_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_MEDIA_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.media.execute(action, params),
-    ]),
-) as Record<WhatsAppMediaAction, PlatformActionHandler<WhatsAppClient>>;
+type MediaActionParams = Readonly<Record<string, unknown>>;
+
+const MEDIA_ACTION_HANDLERS = {
+    upload_media: (client: WhatsAppClient, params: MediaActionParams) => {
+        const mimeType = mediaType(params.mime_type);
+        return client.media.upload(
+            new Blob([decodeBase64(params.data)], { type: mimeType }),
+            mimeType,
+            params.filename === undefined ? "upload" : inputString(params.filename, "filename"),
+        );
+    },
+    get_media: (client: WhatsAppClient, params: MediaActionParams) =>
+        client.media.get(inputString(params.media_id, "media_id")),
+    download_media: async (client: WhatsAppClient, params: MediaActionParams) => {
+        const result = await client.media.download(inputString(params.media_id, "media_id"));
+        return { ...result.info, data: result.data.toString("base64") };
+    },
+    delete_media: (client: WhatsAppClient, params: MediaActionParams) =>
+        client.media.delete(inputString(params.media_id, "media_id")),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Media 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_MEDIA_ACTION_HANDLERS = definePlatformActionHandlers(
+    MEDIA_ACTION_HANDLERS,
+    {
+        upload_media: ["data", "mime_type", "filename"],
+        get_media: ["media_id"],
+        download_media: ["media_id"],
+        delete_media: ["media_id"],
+    },
+    (action, parameter) =>
+        new WhatsAppApiError(`WhatsApp Media 动作 ${action} 不接受参数 ${parameter}`, {
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action, parameter },
+        }),
+);
+
+export type WhatsAppMediaAction = keyof typeof WHATSAPP_MEDIA_ACTION_HANDLERS;
+
+export function isWhatsAppMediaAction(action: string): action is WhatsAppMediaAction {
+    return Object.hasOwn(WHATSAPP_MEDIA_ACTION_HANDLERS, action);
+}
 
 function validateFile(file: Blob, mimeType: WhatsAppMediaMimeType): void {
     if (!(file instanceof Blob) || file.size === 0) invalidParameter("file 不能为空");
@@ -250,14 +243,6 @@ function responseString(value: unknown, root: unknown): string {
 function responseRecord(value: unknown, root: unknown): Record<string, unknown> {
     if (!value || typeof value !== "object" || Array.isArray(value)) invalidResponse(root);
     return value as Record<string, unknown>;
-}
-
-function rejectUnknown(
-    source: Readonly<Record<string, unknown>>,
-    allowed: readonly string[],
-): void {
-    const unknown = Object.keys(source).find(key => !allowed.includes(key));
-    if (unknown) invalidParameter(`Media 参数包含未知字段: ${unknown}`);
 }
 
 function invalidResponse(details: unknown): never {

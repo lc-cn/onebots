@@ -90,6 +90,19 @@ describe("WhatsAppMedia", () => {
         expect(fetcher).toHaveBeenCalledTimes(2);
     });
 
+    it("媒体动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "get_media", {
+                media_id: "media",
+                mediaId: "typo",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "get_media", parameter: "mediaId" },
+        });
+    });
+
     it("删除媒体时绑定当前 Phone Number 并校验 success", async () => {
         const fetcher = jsonFetcher({ success: true });
         const client = new WhatsAppClient(config, fetcher);
@@ -104,7 +117,6 @@ describe("WhatsAppMedia", () => {
         ["未知 MIME", "upload_media", { data: "YQ==", mime_type: "image/gif" }],
         ["路径文件名", "upload_media", { data: "YQ==", mime_type: "image/jpeg", filename: "a/b" }],
         ["非法 ID", "get_media", { media_id: "../media" }],
-        ["额外字段", "delete_media", { media_id: "media", force: true }],
     ])("拒绝%s", async (_label, action, params) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(executeWhatsAppPlatformAction(client, action, params)).rejects.toMatchObject({

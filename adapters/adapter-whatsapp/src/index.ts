@@ -171,7 +171,6 @@ export {
     isWhatsAppMediaAction,
     isWhatsAppMediaMimeType,
     WhatsAppMedia,
-    WHATSAPP_MEDIA_ACTIONS,
     WHATSAPP_MEDIA_LIMITS,
     type WhatsAppMediaAction,
     type WhatsAppMediaDeleteResponse,
