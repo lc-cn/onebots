@@ -6,6 +6,7 @@ import { CommonEvent, CommonTypes } from "onebots";
 import { WebSocket } from "ws";
 import { SatoriActionService } from "./actions.js";
 import { SatoriChannelRouteRegistry } from "./channel-routes.js";
+import { projectSatoriNotice } from "./notice-projector.js";
 import { Satori } from "./types.js";
 import { SatoriConfig } from "./config.js";
 
@@ -203,31 +204,11 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
     }
 
     private formatSatoriNotice(event: CommonEvent.Notice): Satori.Event {
-        const eventTypeMap: Record<string, Satori.EventType> = {
-            "group_increase": "guild-member-added",
-            "group_decrease": "guild-member-removed",
-            "friend_add": "friend-request",
-        };
-
-        return {
+        return projectSatoriNotice(event, {
             id: this.eventId++,
-            type: eventTypeMap[event.notice_type] || "internal",
             platform: this.config.platform || event.platform,
-            self_id: this.adapter.resolveId(this.account.account_id).string,
-            timestamp: event.timestamp,
-            user: event.user
-                ? {
-                      id: event.user.id.string,
-                      name: event.user.name,
-                  }
-                : undefined,
-            guild: event.group
-                ? {
-                      id: event.group.id.string,
-                      name: event.group.name,
-                  }
-                : undefined,
-        };
+            selfId: this.adapter.resolveId(this.account.account_id).string,
+        });
     }
 
     private formatSatoriRequest(event: CommonEvent.Request): Satori.Event {
@@ -450,6 +431,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         this.logger.info(`Satori webhook configured to POST events to ${config.url}`);
     }
 }
+
 ProtocolRegistry.register("satori", "v1", SatoriV1);
 export * from "./types.js";
 export * from "./config.js";

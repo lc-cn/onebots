@@ -30,6 +30,9 @@ export function projectKookEvents(
     if (eventType === "added_block_list" || eventType === "deleted_block_list") {
         return projectGuildBans(event, raw, body, context, eventType === "added_block_list");
     }
+    if (eventType === "guild_member_online" || eventType === "guild_member_offline") {
+        return projectPresenceEvents(event, raw, body, context, eventType);
+    }
     return [projectSystemNotice(event, raw, body, context, eventType)];
 }
 
@@ -39,16 +42,23 @@ function projectSystemNotice(
     body: Record<string, unknown>,
     context: ProjectionContext,
     eventType: string,
+    guildOverride?: string,
 ): CommonEvent.Notice<KookRawEvent> {
-    const noticeType = NOTICE_TYPES[eventType] || "custom";
+    const resourceDefinition = RESOURCE_EVENTS[eventType];
+    const noticeType = resourceDefinition?.noticeType || NOTICE_TYPES[eventType] || "custom";
     const bodyUser = objectValue(body.user_info);
-    const userId = stringValue(body.user_id || bodyUser.id || body.author_id || body.target_id);
-    const guildId = stringValue(
-        body.guild_id ||
-            event.extra.guild_id ||
-            (event.channel_type === "GROUP" ? event.target_id : ""),
-    );
-    const channelId = stringValue(body.channel_id);
+    const userId = systemUserId(eventType, body, bodyUser);
+    const resource = projectResource(resourceDefinition, body, context);
+    const guildId =
+        guildOverride ||
+        (resource?.type === "guild" ? resource.id.string : "") ||
+        stringValue(
+            body.guild_id ||
+                event.extra.guild_id ||
+                (event.channel_type === "GROUP" ? event.target_id : ""),
+        );
+    const channelId =
+        (resource?.type === "channel" ? resource.id.string : "") || stringValue(body.channel_id);
     const messageId = stringValue(body.msg_id);
     return {
         ...base(event, raw, context),
@@ -60,14 +70,21 @@ function projectSystemNotice(
                 : userId
                   ? {
                         id: context.createId(userId),
-                        name: stringValue(bodyUser.nickname || bodyUser.username || userId),
-                        avatar: stringValue(bodyUser.avatar) || undefined,
+                        name: stringValue(
+                            body.nickname ||
+                                body.username ||
+                                bodyUser.nickname ||
+                                bodyUser.username ||
+                                userId,
+                        ),
+                        avatar: stringValue(body.avatar || bodyUser.avatar) || undefined,
                     }
                   : undefined,
         operator: userValue(body.operator_id, context),
         group: projectGroup(guildId, channelId, event.extra.channel_name, context),
         message_id: messageId ? context.createId(messageId) : undefined,
         message: body.content ? projectKookEditableContent(body.content) : undefined,
+        resource,
         sub_type: eventType,
         extensions: {
             kook: {
@@ -78,9 +95,63 @@ function projectSystemNotice(
                 chat_code: body.chat_code,
                 updated_at: body.updated_at,
                 deleted_at: body.deleted_at,
+                ...(eventType === "guild_member_online" || eventType === "guild_member_offline"
+                    ? {
+                          online: eventType === "guild_member_online",
+                          guilds: stringArray(body.guilds),
+                      }
+                    : {}),
                 body,
             },
         },
+    };
+}
+
+function projectPresenceEvents(
+    event: KookEvent,
+    raw: KookRawEvent,
+    body: Record<string, unknown>,
+    context: ProjectionContext,
+    eventType: "guild_member_online" | "guild_member_offline",
+): CommonEvent.Notice<KookRawEvent>[] {
+    const guilds = stringArray(body.guilds);
+    if (!guilds.length) return [projectSystemNotice(event, raw, body, context, eventType)];
+    return guilds.map(guildId => ({
+        ...projectSystemNotice(event, raw, body, context, eventType, guildId),
+        id: context.createId(`${event.msg_id}:${guildId}`),
+    }));
+}
+
+function systemUserId(
+    eventType: string,
+    body: Record<string, unknown>,
+    bodyUser: Record<string, unknown>,
+): string {
+    if (RESOURCE_EVENTS[eventType]) return "";
+    if (eventType === "updated_guild_member") {
+        return stringValue(body.id || body.user_id);
+    }
+    return stringValue(body.user_id || bodyUser.id || body.author_id || body.target_id);
+}
+
+function projectResource(
+    definition: ResourceEventDefinition | undefined,
+    body: Record<string, unknown>,
+    context: ProjectionContext,
+): CommonTypes.Resource | undefined {
+    if (!definition) return undefined;
+    const id = identifier(definition.type === "role" ? body.role_id : body.id);
+    if (!id) return undefined;
+    return {
+        type: definition.type,
+        id: context.createId(id),
+        name: stringValue(body.name) || undefined,
+        ...(definition.type === "channel"
+            ? {
+                  channel_type: numericValue(body.type),
+                  parent_id: stringValue(body.parent_id) || undefined,
+              }
+            : {}),
     };
 }
 
@@ -158,6 +229,21 @@ function objectValue(value: unknown): Record<string, unknown> {
         : {};
 }
 
+function stringArray(value: unknown): string[] {
+    return Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+        : [];
+}
+
+function identifier(value: unknown): string {
+    if (typeof value === "string") return value;
+    return typeof value === "number" && Number.isSafeInteger(value) ? String(value) : "";
+}
+
+function numericValue(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function projectMessage(
     event: KookEvent,
     raw: KookRawEvent,
@@ -229,6 +315,8 @@ const NOTICE_TYPES: Record<string, CommonEvent.NoticeType> = {
     joined_guild: "member_joined",
     exited_guild: "member_left",
     updated_guild_member: "user_updated",
+    guild_member_online: "user_updated",
+    guild_member_offline: "user_updated",
     user_updated: "user_updated",
     message_btn_click: "interaction",
     pinned_message: "message_status",
@@ -237,4 +325,23 @@ const NOTICE_TYPES: Record<string, CommonEvent.NoticeType> = {
     self_exited_guild: "group_decrease",
     joined_channel: "member_joined",
     exited_channel: "member_left",
+};
+
+interface ResourceEventDefinition {
+    type: CommonTypes.ResourceType;
+    noticeType: CommonEvent.NoticeType;
+}
+
+const RESOURCE_EVENTS: Readonly<Record<string, ResourceEventDefinition>> = {
+    updated_guild: { type: "guild", noticeType: "guild_updated" },
+    deleted_guild: { type: "guild", noticeType: "guild_deleted" },
+    added_channel: { type: "channel", noticeType: "channel_created" },
+    updated_channel: { type: "channel", noticeType: "channel_updated" },
+    deleted_channel: { type: "channel", noticeType: "channel_deleted" },
+    added_role: { type: "role", noticeType: "guild_role_created" },
+    updated_role: { type: "role", noticeType: "guild_role_updated" },
+    deleted_role: { type: "role", noticeType: "guild_role_deleted" },
+    added_emoji: { type: "emoji", noticeType: "emoji_created" },
+    updated_emoji: { type: "emoji", noticeType: "emoji_updated" },
+    removed_emoji: { type: "emoji", noticeType: "emoji_deleted" },
 };

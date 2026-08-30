@@ -153,6 +153,78 @@ describe("KOOK 事件投影", () => {
         });
     });
 
+    test("投影服务器、频道、角色与表情资源生命周期", () => {
+        const channel = systemEvent("added_channel", {
+            id: "channel-2",
+            guild_id: "guild-1",
+            name: "news",
+            type: 1,
+            parent_id: "category-1",
+        });
+        expect(projectKookEvents(channel, { s: 0, d: channel }, context)[0]).toMatchObject({
+            notice_type: "channel_created",
+            group: {
+                id: { string: "channel-2" },
+                guild_id: { string: "guild-1" },
+                channel_id: { string: "channel-2" },
+            },
+            resource: {
+                type: "channel",
+                id: { string: "channel-2" },
+                name: "news",
+                channel_type: 1,
+                parent_id: "category-1",
+            },
+            user: undefined,
+        });
+
+        const role = systemEvent("updated_role", { role_id: 702, name: "管理员" });
+        expect(projectKookEvents(role, { s: 0, d: role }, context)[0]).toMatchObject({
+            notice_type: "guild_role_updated",
+            group: { guild_id: { string: "guild-1" } },
+            resource: { type: "role", id: { string: "702" }, name: "管理员" },
+        });
+
+        const emoji = systemEvent("removed_emoji", { id: "emoji-1", name: "wave" });
+        expect(projectKookEvents(emoji, { s: 0, d: emoji }, context)[0]).toMatchObject({
+            notice_type: "emoji_deleted",
+            resource: { type: "emoji", id: { string: "emoji-1" }, name: "wave" },
+        });
+    });
+
+    test("按共同服务器拆分成员在线状态，并使用官方首选成员 ID", () => {
+        const online = systemEvent(
+            "guild_member_online",
+            { user_id: "user-2", event_time: 1_700_000_000_000, guilds: ["g1", "g2"] },
+            "PERSON",
+        );
+        const projected = projectKookEvents(online, { s: 0, d: online }, context);
+        expect(projected).toHaveLength(2);
+        expect(projected[0]).toMatchObject({
+            id: { string: "system-message:g1" },
+            notice_type: "user_updated",
+            sub_type: "guild_member_online",
+            user: { id: { string: "user-2" } },
+            group: { id: { string: "g1" }, guild_id: { string: "g1" } },
+            extensions: { kook: { online: true, guilds: ["g1", "g2"] } },
+        });
+        expect(projected[1]).toMatchObject({ group: { id: { string: "g2" } } });
+
+        const updated = systemEvent("updated_guild_member", {
+            id: "user-3",
+            username: "Alice",
+            avatar: "https://example.test/avatar.png",
+        });
+        expect(projectKookEvents(updated, { s: 0, d: updated }, context)[0]).toMatchObject({
+            notice_type: "user_updated",
+            user: {
+                id: { string: "user-3" },
+                name: "Alice",
+                avatar: "https://example.test/avatar.png",
+            },
+        });
+    });
+
     test("将批量服务器封禁逐用户投影并保留操作人", () => {
         const event = systemEvent("added_block_list", {
             operator_id: "admin-1",

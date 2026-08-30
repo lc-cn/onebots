@@ -42,6 +42,16 @@ export namespace CommonTypes {
         [key: string]: unknown;
     }
 
+    export type ResourceType = "guild" | "channel" | "role" | "emoji";
+
+    /** 通知所描述的平台资源；生命周期动作由 notice_type 表达。 */
+    export interface Resource {
+        type: ResourceType;
+        id: Id;
+        name?: string;
+        [key: string]: unknown;
+    }
+
     /**
      * Message segment
      */
@@ -115,6 +125,18 @@ export namespace CommonEvent {
         | "user_added"
         | "user_updated"
         | "user_removed"
+        | "guild_created"
+        | "guild_updated"
+        | "guild_deleted"
+        | "channel_created"
+        | "channel_updated"
+        | "channel_deleted"
+        | "guild_role_created"
+        | "guild_role_updated"
+        | "guild_role_deleted"
+        | "emoji_created"
+        | "emoji_updated"
+        | "emoji_deleted"
         | "interaction"
         | "custom";
 
@@ -135,6 +157,8 @@ export namespace CommonEvent {
         message_id?: CommonTypes.Id;
         /** Updated message content when supplied by the platform. */
         message?: CommonTypes.Segment[];
+        /** Guild、Channel、Role、Emoji 等生命周期通知关联的资源。 */
+        resource?: CommonTypes.Resource;
         /** Additional notice data */
         [key: string]: unknown;
     }

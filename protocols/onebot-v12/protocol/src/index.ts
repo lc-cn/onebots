@@ -259,6 +259,13 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             if (event.group) {
                 noticeEvent.group_id = event.group.id.string;
             }
+            if (event.sub_type) noticeEvent.sub_type = event.sub_type;
+            if (event.resource) {
+                noticeEvent.resource_type = event.resource.type;
+                noticeEvent.resource_id = event.resource.id.string;
+                noticeEvent.resource_name = event.resource.name;
+            }
+            if (event.extensions) noticeEvent.extensions = event.extensions;
 
             return noticeEvent as unknown as OneBotV12.NoticeEvent;
         } else if (event.type === "request") {

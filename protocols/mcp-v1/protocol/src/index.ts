@@ -1,5 +1,5 @@
-import { Protocol, ProtocolRegistry, Account, Adapter, CommonEvent } from 'onebots';
-import type { Schema } from 'onebots';
+import { Protocol, ProtocolRegistry, Account, Adapter, CommonEvent } from "onebots";
+import type { Schema } from "onebots";
 
 /** verifyToken 所需的 Koa context 最小子集 */
 interface TokenContext {
@@ -14,9 +14,9 @@ interface McpHttpContext extends TokenContext {
 }
 
 function isJsonRpcRequest(value: unknown): value is JsonRpcRequest {
-    if (!value || typeof value !== 'object') return false;
+    if (!value || typeof value !== "object") return false;
     const request = value as Record<string, unknown>;
-    return request.jsonrpc === '2.0' && typeof request.method === 'string';
+    return request.jsonrpc === "2.0" && typeof request.method === "string";
 }
 import type {
     McpV1Config,
@@ -26,39 +26,39 @@ import type {
     McpInitializeResult,
     McpToolCallParams,
     SseClient,
-} from './types.js';
-import { MCP_TOOLS, executeTool, filterTools } from './tools.js';
-import './config.js';
+} from "./types.js";
+import { MCP_TOOLS, executeTool, filterTools } from "./tools.js";
+import "./config.js";
 
-const PROTOCOL_VERSION = '2025-03-26';
-const SERVER_NAME = 'onebots-mcp';
-const SERVER_VERSION = '0.1.0';
+const PROTOCOL_VERSION = "2025-03-26";
+const SERVER_NAME = "onebots-mcp";
+const SERVER_VERSION = "0.1.0";
 
 const mcpV1Schema: Schema = {
     access_token: {
-        type: 'string',
-        label: 'Access Token（鉴权）',
+        type: "string",
+        label: "Access Token（鉴权）",
         sensitive: true,
-        ui: { section: 'credentials' },
+        ui: { section: "credentials" },
     },
     tools_whitelist: {
-        type: 'array',
-        label: '工具白名单（留空则全部启用）',
-        ui: { section: 'filter' },
+        type: "array",
+        label: "工具白名单（留空则全部启用）",
+        ui: { section: "filter" },
     },
     tools_blacklist: {
-        type: 'array',
-        label: '工具黑名单',
-        ui: { section: 'filter' },
+        type: "array",
+        label: "工具黑名单",
+        ui: { section: "filter" },
     },
     filters: Protocol.FilterSchema,
 };
 
-ProtocolRegistry.registerSchema('mcp.v1', mcpV1Schema);
+ProtocolRegistry.registerSchema("mcp.v1", mcpV1Schema);
 
-export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
-    public readonly name = 'mcp';
-    public readonly version = 'v1' as const;
+export class McpV1Protocol extends Protocol<"v1", McpV1Config> {
+    public readonly name = "mcp";
+    public readonly version = "v1" as const;
 
     private sseClients: Map<string, SseClient> = new Map();
     private clientIdCounter = 0;
@@ -66,8 +66,8 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
     constructor(adapter: Adapter, account: Account, config: McpV1Config) {
         super(adapter, account, {
             ...config,
-            protocol: 'mcp',
-            version: 'v1',
+            protocol: "mcp",
+            version: "v1",
         });
     }
 
@@ -84,7 +84,7 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
         }
         this.sseClients.clear();
         this.removeAllListeners();
-        this.logger.info('MCP v1 协议已停止');
+        this.logger.info("MCP v1 协议已停止");
     }
 
     // ============ 事件分发 ============
@@ -98,7 +98,7 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
         const data = JSON.stringify(notification);
         for (const client of this.sseClients.values()) {
             if (client.initialized) {
-                client.write('message', data);
+                client.write("message", data);
             }
         }
     }
@@ -109,7 +109,7 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
 
     async apply(action: string, params?: Record<string, unknown>): Promise<JsonRpcResponse> {
         return this.handleJsonRpc({
-            jsonrpc: '2.0',
+            jsonrpc: "2.0",
             id: Date.now(),
             method: action,
             params,
@@ -125,47 +125,47 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
             let result: unknown;
 
             switch (method) {
-                case 'initialize':
+                case "initialize":
                     result = this.handleInitialize(params as unknown as McpInitializeParams);
                     break;
 
-                case 'initialized':
+                case "initialized":
                     result = {};
                     break;
 
-                case 'ping':
+                case "ping":
                     result = {};
                     break;
 
-                case 'tools/list':
+                case "tools/list":
                     result = this.handleToolsList();
                     break;
 
-                case 'tools/call':
+                case "tools/call":
                     result = await this.handleToolCall(params as unknown as McpToolCallParams);
                     break;
 
-                case 'resources/list':
+                case "resources/list":
                     result = { resources: [] };
                     break;
 
-                case 'prompts/list':
+                case "prompts/list":
                     result = { prompts: [] };
                     break;
 
                 default:
                     return {
-                        jsonrpc: '2.0',
+                        jsonrpc: "2.0",
                         id,
                         error: { code: -32601, message: `未知方法: ${method}` },
                     };
             }
 
-            return { jsonrpc: '2.0', id, result };
+            return { jsonrpc: "2.0", id, result };
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             return {
-                jsonrpc: '2.0',
+                jsonrpc: "2.0",
                 id,
                 error: { code: -32603, message },
             };
@@ -210,7 +210,7 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
         );
         if (!availableTools.find(t => t.name === name)) {
             return {
-                content: [{ type: 'text' as const, text: `Tool "${name}" 不可用或已被禁用` }],
+                content: [{ type: "text" as const, text: `Tool "${name}" 不可用或已被禁用` }],
                 isError: true,
             };
         }
@@ -222,28 +222,28 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
 
     private startSseTransport(): void {
         // GET /{platform}/{account_id}/mcp/v1/sse — SSE 连接
-        this.router.get(`${this.path}/sse`, (ctx) => {
+        this.router.get(`${this.path}/sse`, ctx => {
             if (!this.verifyToken(ctx)) {
                 ctx.status = 401;
-                ctx.body = { error: 'Unauthorized' };
+                ctx.body = { error: "Unauthorized" };
                 return;
             }
 
             const clientId = `sse_${++this.clientIdCounter}`;
-            ctx.set('Content-Type', 'text/event-stream');
-            ctx.set('Cache-Control', 'no-cache');
-            ctx.set('Connection', 'keep-alive');
-            ctx.set('X-Accel-Buffering', 'no');
+            ctx.set("Content-Type", "text/event-stream");
+            ctx.set("Cache-Control", "no-cache");
+            ctx.set("Connection", "keep-alive");
+            ctx.set("X-Accel-Buffering", "no");
 
             ctx.status = 200;
             ctx.respond = false;
 
             const res = ctx.res;
             res.writeHead(200, {
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-                'X-Accel-Buffering': 'no',
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
             });
 
             const client: SseClient = {
@@ -254,7 +254,9 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
                     res.write(`event: ${event}\ndata: ${data}\n\n`);
                 },
                 close() {
-                    try { res.end(); } catch {}
+                    try {
+                        res.end();
+                    } catch {}
                 },
             };
 
@@ -263,19 +265,19 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
 
             // 发送 endpoint 事件，告知客户端消息端点
             const messageUrl = `${this.path}/message?session_id=${clientId}`;
-            client.write('endpoint', messageUrl);
+            client.write("endpoint", messageUrl);
 
-            res.on('close', () => {
+            res.on("close", () => {
                 this.sseClients.delete(clientId);
                 this.logger.info(`SSE 客户端已断开: ${clientId}`);
             });
         });
 
         // POST /{platform}/{account_id}/mcp/v1/message — JSON-RPC 消息
-        this.router.post(`${this.path}/message`, async (ctx) => {
+        this.router.post(`${this.path}/message`, async ctx => {
             if (!this.verifyToken(ctx)) {
                 ctx.status = 401;
-                ctx.body = { error: 'Unauthorized' };
+                ctx.body = { error: "Unauthorized" };
                 return;
             }
 
@@ -285,19 +287,19 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
             const body = (ctx as McpHttpContext).request.body;
             if (!isJsonRpcRequest(body)) {
                 ctx.status = 400;
-                ctx.body = { error: '请求必须是 JSON-RPC 2.0 格式' };
+                ctx.body = { error: "请求必须是 JSON-RPC 2.0 格式" };
                 return;
             }
 
             const request = body;
 
             // 标记客户端已初始化（收到 initialized 通知后开始推送事件）
-            if (request.method === 'initialized' && client) {
+            if (request.method === "initialized" && client) {
                 client.initialized = true;
             }
 
             // 处理 initialize 时也标记
-            if (request.method === 'initialize' && client) {
+            if (request.method === "initialize" && client) {
                 client.initialized = true;
             }
 
@@ -321,24 +323,24 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
             request = JSON.parse(line);
         } catch {
             const err: JsonRpcResponse = {
-                jsonrpc: '2.0',
+                jsonrpc: "2.0",
                 id: 0,
-                error: { code: -32700, message: 'JSON 解析错误' },
+                error: { code: -32700, message: "JSON 解析错误" },
             };
             return JSON.stringify(err);
         }
 
-        if (request.jsonrpc !== '2.0') {
+        if (request.jsonrpc !== "2.0") {
             const err: JsonRpcResponse = {
-                jsonrpc: '2.0',
+                jsonrpc: "2.0",
                 id: request.id ?? 0,
-                error: { code: -32600, message: '必须使用 JSON-RPC 2.0' },
+                error: { code: -32600, message: "必须使用 JSON-RPC 2.0" },
             };
             return JSON.stringify(err);
         }
 
         // 标记初始化
-        if (request.method === 'initialized') {
+        if (request.method === "initialized") {
             return null;
         }
 
@@ -354,7 +356,7 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
 
     sendStdioNotification(notification: Record<string, unknown>): string {
         return JSON.stringify({
-            jsonrpc: '2.0',
+            jsonrpc: "2.0",
             ...notification,
         });
     }
@@ -362,10 +364,10 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
     // ============ 事件转 MCP 通知 ============
 
     private convertToMcpNotification(event: CommonEvent.Event): Record<string, unknown> | null {
-        if (event.type === 'message') {
+        if (event.type === "message") {
             const msg = event as CommonEvent.Message;
             return {
-                method: 'notifications/message',
+                method: "notifications/message",
                 params: {
                     platform: this.account.platform,
                     account_id: this.account.account_id,
@@ -375,28 +377,44 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
                         id: msg.sender?.id?.string,
                         name: msg.sender?.name,
                     },
-                    group: msg.group ? {
-                        id: msg.group.id?.string,
-                        name: msg.group.name,
-                    } : undefined,
+                    group: msg.group
+                        ? {
+                              id: msg.group.id?.string,
+                              name: msg.group.name,
+                          }
+                        : undefined,
                     raw_message: msg.raw_message,
                     timestamp: msg.timestamp,
                 },
             };
         }
 
-        if (event.type === 'notice') {
+        if (event.type === "notice") {
             const notice = event as CommonEvent.Notice;
             return {
-                method: 'notifications/notice',
+                method: "notifications/notice",
                 params: {
                     platform: this.account.platform,
                     account_id: this.account.account_id,
                     notice_type: notice.notice_type,
                     sub_type: notice.sub_type,
-                    user: notice.user ? { id: notice.user.id?.string, name: notice.user.name } : undefined,
-                    group: notice.group ? { id: notice.group.id?.string, name: notice.group.name } : undefined,
-                    operator: notice.operator ? { id: notice.operator.id?.string, name: notice.operator.name } : undefined,
+                    user: notice.user
+                        ? { id: notice.user.id?.string, name: notice.user.name }
+                        : undefined,
+                    group: notice.group
+                        ? { id: notice.group.id?.string, name: notice.group.name }
+                        : undefined,
+                    operator: notice.operator
+                        ? { id: notice.operator.id?.string, name: notice.operator.name }
+                        : undefined,
+                    resource: notice.resource
+                        ? {
+                              type: notice.resource.type,
+                              id: notice.resource.id.string,
+                              name: notice.resource.name,
+                          }
+                        : undefined,
+                    extensions: notice.extensions,
                     timestamp: notice.timestamp,
                 },
             };
@@ -410,19 +428,20 @@ export class McpV1Protocol extends Protocol<'v1', McpV1Config> {
     private verifyToken(ctx: TokenContext): boolean {
         if (!this.config.access_token) return true;
         const authHeader = ctx.headers?.authorization;
-        const token = (typeof authHeader === 'string'
-            ? authHeader.replace(/^Bearer\s+/i, '').trim()
-            : undefined) || ctx.query?.access_token;
+        const token =
+            (typeof authHeader === "string"
+                ? authHeader.replace(/^Bearer\s+/i, "").trim()
+                : undefined) || ctx.query?.access_token;
         return token === this.config.access_token;
     }
 }
 
-ProtocolRegistry.register('mcp', 'v1', McpV1Protocol, {
-    displayName: 'MCP (Model Context Protocol)',
-    description: 'MCP v1 协议 — 让 AI Agent 通过标准化接口调用 IM 能力',
+ProtocolRegistry.register("mcp", "v1", McpV1Protocol, {
+    displayName: "MCP (Model Context Protocol)",
+    description: "MCP v1 协议 — 让 AI Agent 通过标准化接口调用 IM 能力",
 });
 
-export * from './types.js';
-export * from './tools.js';
-export * from './config.js';
-export * from './stdio.js';
+export * from "./types.js";
+export * from "./tools.js";
+export * from "./config.js";
+export * from "./stdio.js";

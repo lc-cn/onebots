@@ -340,6 +340,15 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
                     ...(event.group
                         ? { group_id: (event.group.id as CommonTypes.Id)?.number }
                         : {}),
+                    ...(event.sub_type ? { sub_type: event.sub_type } : {}),
+                    ...(event.resource
+                        ? {
+                              resource_type: event.resource.type,
+                              resource_id: event.resource.id.string,
+                              resource_name: event.resource.name,
+                          }
+                        : {}),
+                    ...(event.extensions ? { extensions: event.extensions } : {}),
                 };
             } else if (event.type === "request") {
                 return {

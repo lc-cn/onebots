@@ -376,6 +376,36 @@ describe("OneBot V11 message format conversion", () => {
         });
     });
 
+    test("resource notices preserve subtype and platform extensions", () => {
+        const { protocol } = createProtocol();
+        const event = {
+            id: { number: 4, string: "e4", source: "e4" },
+            timestamp: 1700000000000,
+            type: "notice",
+            platform: "kook",
+            bot_id: { number: 12345678, string: "bot", source: "bot" },
+            notice_type: "guild_role_updated",
+            sub_type: "updated_role",
+            group: { id: { number: 20001, string: "guild-1", source: "guild-1" } },
+            resource: {
+                type: "role",
+                id: { number: 702, string: "702", source: 702 },
+                name: "管理员",
+            },
+            extensions: { kook: { body: { permissions: 2_048 } } },
+        };
+        const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
+
+        expect(result).toMatchObject({
+            notice_type: "guild_role_updated",
+            sub_type: "updated_role",
+            resource_type: "role",
+            resource_id: "702",
+            resource_name: "管理员",
+            extensions: { kook: { body: { permissions: 2_048 } } },
+        });
+    });
+
     test("request events are converted with user_id / comment / flag / group_id", () => {
         const { protocol } = createProtocol();
         const event = {

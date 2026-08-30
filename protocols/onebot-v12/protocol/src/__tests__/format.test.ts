@@ -297,6 +297,36 @@ describe("OneBot V12 protocol", () => {
         });
     });
 
+    test("resource notices preserve subtype and platform extensions", () => {
+        const { protocol } = createProtocol();
+        const event = {
+            id: { number: 4, string: "e4", source: "e4" },
+            timestamp: 1700000000000,
+            type: "notice",
+            platform: "kook",
+            bot_id: { number: 12345678, string: "bot", source: "bot" },
+            notice_type: "channel_updated",
+            sub_type: "updated_channel",
+            group: { id: { number: 20001, string: "channel-1", source: "channel-1" } },
+            resource: {
+                type: "channel",
+                id: { number: 20001, string: "channel-1", source: "channel-1" },
+                name: "News",
+            },
+            extensions: { kook: { body: { topic: "updates" } } },
+        };
+        const result = protocol["convertToV12Format"](event as unknown as CommonEvent.Event)!;
+
+        expect(result).toMatchObject({
+            detail_type: "channel_updated",
+            sub_type: "updated_channel",
+            resource_type: "channel",
+            resource_id: "channel-1",
+            resource_name: "News",
+            extensions: { kook: { body: { topic: "updates" } } },
+        });
+    });
+
     test("request event uses string user_id and includes comment and flag", () => {
         const { protocol } = createProtocol();
         const event = {
