@@ -86,10 +86,10 @@ importers:
         version: 5.9.3
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3)
+        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.13)(typescript@5.9.3)
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
+        version: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))
       ws:
         specifier: ^8.21.3
         version: 8.21.3
@@ -307,14 +307,17 @@ importers:
   adapters/adapter-slack:
     dependencies:
       '@slack/socket-mode':
-        specifier: ^2.0.5
-        version: 2.0.7
+        specifier: ^3.0.1
+        version: 3.0.1(undici@7.29.0)
       '@slack/web-api':
-        specifier: ^7.0.0
-        version: 7.15.0
+        specifier: ^8.1.1
+        version: 8.1.1
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
+      undici:
+        specifier: ^7.0.0
+        version: 7.29.0
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -435,7 +438,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
+        version: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))
 
   adapters/adapter-whatsapp:
     dependencies:
@@ -578,16 +581,16 @@ importers:
         version: 3.6.2
       vite:
         specifier: ^7.3.6
-        version: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+        version: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
       vite-plugin-style-import:
         specifier: ^2.0.0
-        version: 2.0.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
+        version: 2.0.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3)
+        version: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.13)(typescript@5.9.3)
       vitepress-plugin-mermaid:
         specifier: ^2.0.17
-        version: 2.0.17(mermaid@11.17.1)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3))
+        version: 2.0.17(mermaid@11.17.1)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.13)(typescript@5.9.3))
       vue:
         specifier: ^3.5.26
         version: 3.5.30(typescript@5.9.3)
@@ -658,7 +661,7 @@ importers:
         version: 4.2.0
       tsx:
         specifier: latest
-        version: 4.23.12
+        version: 4.23.13
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -736,7 +739,7 @@ importers:
         version: 4.2.0
       tsx:
         specifier: latest
-        version: 4.23.12
+        version: 4.23.13
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -782,13 +785,13 @@ importers:
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.3
-        version: 4.3.3(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
+        version: 4.3.3(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))
       '@types/qrcode':
         specifier: ^1.5.5
         version: 1.5.6
       '@vitejs/plugin-vue':
         specifier: ^6.0.8
-        version: 6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))
+        version: 6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))(vue@3.5.30(typescript@5.9.3))
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -797,7 +800,7 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^7.3.6
-        version: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+        version: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
 
   protocols/mcp-v1/protocol:
     devDependencies:
@@ -1835,21 +1838,23 @@ packages:
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
 
-  '@slack/logger@4.0.1':
-    resolution: {integrity: sha512-6cmdPrV/RYfd2U0mDGiMK8S7OJqpCTm7enMLRR3edccsPX8j7zXTLnaEF4fhxxJJTAIOil6+qZrnUPTuaLvwrQ==}
-    engines: {node: '>= 18', npm: '>= 8.6.0'}
+  '@slack/logger@5.0.0':
+    resolution: {integrity: sha512-VGXhmmgsAo9shdQYh4tFDndd+7nsgp0Y5h0UPDaUp8K359pBasI6YdkMqFW3mCOxLQkq09qj7o7cq6f3DuXcJQ==}
+    engines: {node: '>= 20', npm: '>=9.6.4'}
 
-  '@slack/socket-mode@2.0.7':
-    resolution: {integrity: sha512-qYy07je71WnEHgRwmw12DlAnZLi5HXmdlI2WUzUK2LH/rYXQpP6uEg462S5CwfE8FoCKUdIigHtYnOOfzZH1lQ==}
-    engines: {node: '>= 18', npm: '>= 8.6.0'}
+  '@slack/socket-mode@3.0.1':
+    resolution: {integrity: sha512-7L4adgnJtQvQgo5cfIwqHG1QuR8mdZQ/WdMScNDp6uK644ZqnHDAa4rR+vZYfZFdJ5+obCqZQ66Dad8kcwJ4Jg==}
+    engines: {node: '>=20', npm: '>=9.6.4'}
+    peerDependencies:
+      undici: ^7.0.0
 
-  '@slack/types@2.20.1':
-    resolution: {integrity: sha512-eWX2mdt1ktpn8+40iiMc404uGrih+2fxiky3zBcPjtXKj6HLRdYlmhrPkJi7JTJm8dpXR6BWVWEDBXtaWMKD6A==}
-    engines: {node: '>= 12.13.0', npm: '>= 6.12.0'}
+  '@slack/types@3.1.0':
+    resolution: {integrity: sha512-bTzqrO3lxJ5iWedo1eJKNAs1koyEhaTwKLJUkD3KETnPeQvD978AAE4jvWstUws8Gbbc4JR6iYE6F7XjE8UGmw==}
+    engines: {node: '>= 20', npm: '>=9.6.4'}
 
-  '@slack/web-api@7.15.0':
-    resolution: {integrity: sha512-va7zYIt3QHG1x9M/jqXXRPFMoOVlVSSRHC5YH+DzKYsrz5xUKOA3lR4THsu/Zxha9N1jOndbKFKLtr0WOPW1Vw==}
-    engines: {node: '>= 18', npm: '>= 8.6.0'}
+  '@slack/web-api@8.1.1':
+    resolution: {integrity: sha512-am/z/LLbEC7gNQp6FpaGT0l4XnWqcXetpwdgZHzS7Nbb96q9R9QwWA3lo0ZXGuAHDkct0MvFnouzuc2Y4XNmow==}
+    engines: {node: '>= 20', npm: '>=9.6.4'}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -2194,6 +2199,9 @@ packages:
 
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
+
+  '@types/retry@0.12.5':
+    resolution: {integrity: sha512-3xSjTp3v03X/lSQLkczaN9UIEwJMoMCA1+Nb5HfbJEQWogdeQIyVtTvxPXDQjZ5zws8rFQfVfRdz03ARihPJgw==}
 
   '@types/send@1.2.1':
     resolution: {integrity: sha512-arsCikDvlU99zl1g69TcAB3mzZPpxgw0UQnaHeC1Nwb015xp8bknZv5rIfri9xTOcMuaVgvabfIRA7PSZVuZIQ==}
@@ -3511,9 +3519,6 @@ packages:
     resolution: {integrity: sha512-ZMERYes6pDydyuGidse7OsHxtbI7WVeUEozgR/g7rd0xUimYNlvZRE/K2MgZTjWy725IfelLeVcEM97mmtRGXw==}
     engines: {node: '>=8'}
 
-  is-electron@2.2.2:
-    resolution: {integrity: sha512-FO/Rhvz5tuw4MCWkpMzHFKWD2LsfHzIb7i6MdPYZ/KW7AlxawyLkqdy+jPZP1WubqEADE3O4FUENlJHDfQASRg==}
-
   is-extglob@2.1.1:
     resolution: {integrity: sha512-SbKbANkN603Vi4jEZv49LeVJMn4yGwsbzZworEoyEiutsN3nJYdbO36zfhGJ6QEDpOZIFkDtnq5JRxmvl3jsoQ==}
     engines: {node: '>=0.10.0'}
@@ -3538,10 +3543,6 @@ packages:
   is-number@7.0.0:
     resolution: {integrity: sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==}
     engines: {node: '>=0.12.0'}
-
-  is-stream@2.0.1:
-    resolution: {integrity: sha512-hFoiJiTl63nn+kstHGBtewWSKnQLpyb155KHheA1l39uvtO9nWIop1p3udqPcUd/xbF1VLMO4n7OI6p7RbngDg==}
-    engines: {node: '>=8'}
 
   is-subdir@1.2.0:
     resolution: {integrity: sha512-2AT6j+gXe/1ueqbW6fLZJiIw3F8iXGJtt0yDrZaBhAZEG1raiTxKWU+IPqMCzQAXOUCKdA4UDMgacKH25XG2Cw==}
@@ -4705,8 +4706,8 @@ packages:
     resolution: {integrity: sha512-LxhtAkPDTkVCMQjt2h6eBVY28KCjikZqZfMcC15YBeNjkgUpdCfBu5HoiOTDu86v6smE8yOjyEktJ8hlbANHQA==}
     engines: {node: '>=0.6.x'}
 
-  tsx@4.23.12:
-    resolution: {integrity: sha512-FDf4L4sYzKtzWYhU/Xm0AQFdTjdIxNo9ElTf2mxXM6k8YMHXzYUe4yODVaXP4V9uMFbVg8c0qyBccK2OOxb45Q==}
+  tsx@4.23.13:
+    resolution: {integrity: sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -4746,6 +4747,10 @@ packages:
 
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
+
+  undici@7.29.0:
+    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+    engines: {node: '>=20.18.1'}
 
   unicorn-magic@0.1.0:
     resolution: {integrity: sha512-lRfVq8fE8gz6QMBuDM6a+LO3IAzTi05H6gCVaUpir2E1Rwpo4ZUog45KpNXKC/Mn3Yb9UDuHumeFTo9iV/D9FQ==}
@@ -5936,43 +5941,30 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
-  '@slack/logger@4.0.1':
+  '@slack/logger@5.0.0':
     dependencies:
       '@types/node': 24.12.0
 
-  '@slack/socket-mode@2.0.7':
+  '@slack/socket-mode@3.0.1(undici@7.29.0)':
     dependencies:
-      '@slack/logger': 4.0.1
-      '@slack/web-api': 7.15.0
+      '@slack/logger': 5.0.0
+      '@slack/web-api': 8.1.1
       '@types/node': 24.12.0
-      '@types/ws': 8.18.1
       eventemitter3: 5.0.4
-      ws: 8.21.3
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - supports-color
-      - utf-8-validate
+      undici: 7.29.0
 
-  '@slack/types@2.20.1': {}
+  '@slack/types@3.1.0': {}
 
-  '@slack/web-api@7.15.0':
+  '@slack/web-api@8.1.1':
     dependencies:
-      '@slack/logger': 4.0.1
-      '@slack/types': 2.20.1
+      '@slack/logger': 5.0.0
+      '@slack/types': 3.1.0
       '@types/node': 24.12.0
-      '@types/retry': 0.12.0
-      axios: 1.19.0(debug@4.4.3)
+      '@types/retry': 0.12.5
       eventemitter3: 5.0.4
-      form-data: 4.0.6
-      is-electron: 2.2.2
-      is-stream: 2.0.1
       p-queue: 6.6.2
       p-retry: 4.6.2
       retry: 0.13.1
-    transitivePeerDependencies:
-      - debug
-      - supports-color
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -6046,12 +6038,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/vite@4.3.3(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))':
+  '@tailwindcss/vite@4.3.3(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
 
   '@tencent-connect/qqbot-nodejs@1.0.4(silk-wasm@3.7.1)':
     dependencies:
@@ -6352,6 +6344,8 @@ snapshots:
 
   '@types/retry@0.12.0': {}
 
+  '@types/retry@0.12.5': {}
+
   '@types/send@1.2.1':
     dependencies:
       '@types/node': 24.12.0
@@ -6480,16 +6474,16 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-vue@6.0.8(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))':
+  '@vitejs/plugin-vue@6.0.8(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))(vue@3.5.30(typescript@5.9.3))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
       vue: 3.5.30(typescript@5.9.3)
 
-  '@vitejs/plugin-vue@6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))':
+  '@vitejs/plugin-vue@6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))(vue@3.5.30(typescript@5.9.3))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
       vue: 3.5.30(typescript@5.9.3)
 
   '@vitest/coverage-v8@4.1.11(vitest@4.1.11)':
@@ -6504,7 +6498,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
+      vitest: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))
 
   '@vitest/expect@4.1.11':
     dependencies:
@@ -6515,13 +6509,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  '@vitest/mocker@4.1.11(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))':
+  '@vitest/mocker@4.1.11(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))':
     dependencies:
       '@vitest/spy': 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
 
   '@vitest/pretty-format@4.1.11':
     dependencies:
@@ -6550,7 +6544,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
+      vitest: 4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))
 
   '@vitest/utils@4.1.11':
     dependencies:
@@ -7873,8 +7867,6 @@ snapshots:
     dependencies:
       binary-extensions: 2.3.0
 
-  is-electron@2.2.2: {}
-
   is-extglob@2.1.1: {}
 
   is-fullwidth-code-point@3.0.0: {}
@@ -7890,8 +7882,6 @@ snapshots:
   is-in-ci@2.0.0: {}
 
   is-number@7.0.0: {}
-
-  is-stream@2.0.1: {}
 
   is-subdir@1.2.0:
     dependencies:
@@ -9089,7 +9079,7 @@ snapshots:
 
   tsscmp@1.0.6: {}
 
-  tsx@4.23.12:
+  tsx@4.23.13:
     dependencies:
       esbuild: 0.25.12
     optionalDependencies:
@@ -9126,6 +9116,8 @@ snapshots:
 
   undici-types@7.18.2:
     optional: true
+
+  undici@7.29.0: {}
 
   unicorn-magic@0.1.0: {}
 
@@ -9189,7 +9181,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-plugin-style-import@2.0.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)):
+  vite-plugin-style-import@2.0.0(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)):
     dependencies:
       '@rollup/pluginutils': 4.2.1
       change-case: 4.1.2
@@ -9198,9 +9190,9 @@ snapshots:
       fs-extra: 10.1.0
       magic-string: 0.25.9
       pathe: 0.2.0
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
 
-  vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12):
+  vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
@@ -9214,9 +9206,9 @@ snapshots:
       jiti: 2.7.0
       lightningcss: 1.32.0
       sass: 1.98.0
-      tsx: 4.23.12
+      tsx: 4.23.13
 
-  vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12):
+  vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
@@ -9230,16 +9222,16 @@ snapshots:
       jiti: 2.7.0
       lightningcss: 1.32.0
       sass: 1.98.0
-      tsx: 4.23.12
+      tsx: 4.23.13
 
-  vitepress-plugin-mermaid@2.0.17(mermaid@11.17.1)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3)):
+  vitepress-plugin-mermaid@2.0.17(mermaid@11.17.1)(vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.13)(typescript@5.9.3)):
     dependencies:
       mermaid: 11.17.1
-      vitepress: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3)
+      vitepress: 1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.13)(typescript@5.9.3)
     optionalDependencies:
       '@mermaid-js/mermaid-mindmap': 9.3.0
 
-  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3):
+  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@24.12.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.13)(typescript@5.9.3):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.49.2)(search-insights@2.17.3)
@@ -9248,7 +9240,7 @@ snapshots:
       '@shikijs/transformers': 2.5.0
       '@shikijs/types': 2.5.0
       '@types/markdown-it': 14.1.2
-      '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))
+      '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))(vue@3.5.30(typescript@5.9.3))
       '@vue/devtools-api': 7.7.9
       '@vue/shared': 3.5.30
       '@vueuse/core': 12.8.2(typescript@5.9.3)
@@ -9257,7 +9249,7 @@ snapshots:
       mark.js: 8.11.1
       minisearch: 7.2.0
       shiki: 2.5.0
-      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
       vue: 3.5.30(typescript@5.9.3)
     optionalDependencies:
       postcss: 8.5.26
@@ -9291,7 +9283,7 @@ snapshots:
       - universal-cookie
       - yaml
 
-  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.12)(typescript@5.9.3):
+  vitepress@1.6.4(@algolia/client-search@5.49.2)(@types/node@25.5.0)(async-validator@4.2.5)(axios@1.19.0)(jiti@2.7.0)(jwt-decode@4.0.0)(lightningcss@1.32.0)(postcss@8.5.26)(qrcode@1.5.4)(sass@1.98.0)(search-insights@2.17.3)(tsx@4.23.13)(typescript@5.9.3):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.49.2)(search-insights@2.17.3)
@@ -9300,7 +9292,7 @@ snapshots:
       '@shikijs/transformers': 2.5.0
       '@shikijs/types': 2.5.0
       '@types/markdown-it': 14.1.2
-      '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))(vue@3.5.30(typescript@5.9.3))
+      '@vitejs/plugin-vue': 6.0.8(vite@7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))(vue@3.5.30(typescript@5.9.3))
       '@vue/devtools-api': 7.7.9
       '@vue/shared': 3.5.30
       '@vueuse/core': 12.8.2(typescript@5.9.3)
@@ -9309,7 +9301,7 @@ snapshots:
       mark.js: 8.11.1
       minisearch: 7.2.0
       shiki: 2.5.0
-      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+      vite: 7.3.6(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
       vue: 3.5.30(typescript@5.9.3)
     optionalDependencies:
       postcss: 8.5.26
@@ -9343,10 +9335,10 @@ snapshots:
       - universal-cookie
       - yaml
 
-  vitest@4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)):
+  vitest@4.1.11(@types/node@24.12.0)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)):
     dependencies:
       '@vitest/expect': 4.1.11
-      '@vitest/mocker': 4.1.11(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12))
+      '@vitest/mocker': 4.1.11(vite@7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13))
       '@vitest/pretty-format': 4.1.11
       '@vitest/runner': 4.1.11
       '@vitest/snapshot': 4.1.11
@@ -9363,7 +9355,7 @@ snapshots:
       tinyexec: 1.0.4
       tinyglobby: 0.2.15
       tinyrainbow: 3.1.1
-      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.12)
+      vite: 7.3.6(@types/node@24.12.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.98.0)(tsx@4.23.13)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.12.0

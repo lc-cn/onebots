@@ -29,7 +29,14 @@ export class SlackWebApi {
 
     async getBotInfo(): Promise<SlackUser> {
         const result = await this.execute("auth.test", () => this.client.auth.test());
-        return { id: result.user_id || "", name: result.user || "" };
+        if (!result.user_id) {
+            throw SlackError.protocol(
+                "Slack auth.test 响应缺少 Bot 用户 ID",
+                "SLACK_BOT_ID_MISSING",
+                result,
+            );
+        }
+        return { id: result.user_id, name: result.user || result.user_id };
     }
 
     async sendMessage(

@@ -29,6 +29,12 @@ describe("executeSlackPlatformAction", () => {
         ["publish_app_home", "views.publish"],
         ["list_files", "files.list"],
         ["update_user_group_users", "usergroups.users.update"],
+        ["start_message_stream", "chat.startStream"],
+        ["stop_message_stream", "chat.stopStream"],
+        ["validate_blocks", "blocks.validate"],
+        ["create_canvas", "canvases.create"],
+        ["set_canvas_access", "canvases.access.set"],
+        ["create_channel_canvas", "conversations.canvases.create"],
     ])("将 %s 固定映射到 %s", async (action, method) => {
         const call = vi.fn().mockResolvedValue({ ok: true });
         await executeSlackPlatformAction({ call } as never, action, { marker: "value" });

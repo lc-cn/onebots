@@ -1,10 +1,21 @@
 import { createSlackMethodHandlers } from "./platform-action-methods.js";
 
-/** 消息增强、内容读取、Modal/App Home、文件与用户组协作能力。 */
+/** 消息增强、流式消息、Canvas、Modal/App Home、文件与用户组协作能力。 */
 export const SLACK_COLLABORATION_ACTIONS = createSlackMethodHandlers({
     post_ephemeral: "chat.postEphemeral",
     get_message_permalink: "chat.getPermalink",
     unfurl_message: "chat.unfurl",
+    start_message_stream: "chat.startStream",
+    append_message_stream: "chat.appendStream",
+    stop_message_stream: "chat.stopStream",
+    validate_blocks: "blocks.validate",
+    create_canvas: "canvases.create",
+    edit_canvas: "canvases.edit",
+    delete_canvas: "canvases.delete",
+    lookup_canvas_sections: "canvases.sections.lookup",
+    set_canvas_access: "canvases.access.set",
+    delete_canvas_access: "canvases.access.delete",
+    create_channel_canvas: "conversations.canvases.create",
     get_conversation_history: "conversations.history",
     mark_conversation: "conversations.mark",
     open_view: "views.open",

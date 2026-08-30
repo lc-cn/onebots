@@ -79,7 +79,7 @@ describe("SlackBot HTTP Events", () => {
         bot.on("event", event);
         bot.on("raw_event", rawEvent);
 
-        const body = bot.ingest({
+        const body = await bot.ingest({
             payload: JSON.stringify({ type: "block_actions", user: { id: "U1" } }),
         });
 
@@ -91,14 +91,14 @@ describe("SlackBot HTTP Events", () => {
         );
     });
 
-    it("拒绝无法投影的非对象载荷", () => {
+    it("拒绝无法投影的非对象载荷", async () => {
         const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
-        expect(() => bot.ingest([])).toThrowError(
+        await expect(bot.ingest([])).rejects.toEqual(
             expect.objectContaining({ code: "SLACK_EVENT_INVALID" }),
         );
     });
 
-    it("保留 Slack 重试的原始事件但只投影一次", () => {
+    it("保留 Slack 重试的原始事件但只投影一次", async () => {
         const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
         const event = vi.fn();
         const rawEvent = vi.fn();
@@ -110,14 +110,14 @@ describe("SlackBot HTTP Events", () => {
             event: { type: "reaction_added", event_ts: "1" },
         };
 
-        bot.ingest(body);
-        bot.ingest(body);
+        await bot.ingest(body);
+        await bot.ingest(body);
 
         expect(rawEvent).toHaveBeenCalledTimes(2);
         expect(event).toHaveBeenCalledOnce();
     });
 
-    it("业务监听器失败时不提交去重状态，允许 Slack 重投递", () => {
+    it("业务监听器失败时不提交去重状态，允许 Slack 重投递", async () => {
         const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
         const body = {
             type: "event_callback",
@@ -128,13 +128,38 @@ describe("SlackBot HTTP Events", () => {
             throw new Error("downstream failed");
         };
         bot.on("event", failure);
-        expect(() => bot.ingest(body)).toThrow("downstream failed");
+        await expect(bot.ingest(body)).rejects.toThrow("downstream failed");
         bot.off("event", failure);
         const listener = vi.fn();
         bot.on("event", listener);
 
-        bot.ingest(body);
+        await bot.ingest(body);
 
+        expect(listener).toHaveBeenCalledOnce();
+    });
+
+    it("等待异步业务监听器成功后才提交事件", async () => {
+        const bot = new SlackBot({ account_id: "A1", token: "xoxb-test" });
+        const body = {
+            type: "event_callback",
+            event_id: "Ev-async",
+            event: { type: "reaction_added", event_ts: "1" },
+        };
+        let complete: (() => void) | undefined;
+        const listener = vi.fn(() => new Promise<void>(resolve => (complete = resolve)));
+        bot.on("event", listener);
+
+        const first = bot.ingest(body);
+        const concurrentRetry = bot.ingest(body);
+        await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce());
+        let settled = false;
+        void first.then(() => (settled = true));
+        await Promise.resolve();
+        expect(settled).toBe(false);
+
+        complete?.();
+        await Promise.all([first, concurrentRetry]);
+        await bot.ingest(body);
         expect(listener).toHaveBeenCalledOnce();
     });
 
@@ -247,6 +272,22 @@ describe("SlackBot lifecycle", () => {
             operation: "auth.test",
         });
         expect(clientError).toHaveBeenCalledOnce();
+    });
+
+    it("拒绝把缺少真实 Bot ID 的鉴权响应带入事件模型", async () => {
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            receive_mode: "webhook",
+            signing_secret: "secret",
+        });
+        bot.getWebClient().auth.test = vi.fn().mockResolvedValue({ ok: true, user: "bot" });
+
+        await expect(bot.start()).rejects.toMatchObject({
+            code: "SLACK_BOT_ID_MISSING",
+            category: ErrorCategory.PROTOCOL,
+        });
+        expect(bot.getCachedMe()).toBeNull();
     });
 });
 

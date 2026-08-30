@@ -10,8 +10,8 @@ The Slack adapter is fully implemented and supports connecting to onebots servic
 
 - ✅ **Message Sending/Receiving**
   - Channel message sending/receiving
-  - Private chat message sending/receiving
-  - Supports text, rich text (Blocks), and other message formats
+  - One-to-one and multi-person direct messages (MPIM)
+  - Text, files, threads, Block Kit, and streaming messages
 - ✅ **Message Management**
   - Message editing
   - Message deletion
@@ -22,18 +22,18 @@ The Slack adapter is fully implemented and supports connecting to onebots servic
 - ✅ **User Management**
   - Get user information
 - ✅ **Event Subscription**
-  - Events API support
-  - Webhook event subscription
+  - Socket Mode, HTTP Events, and manual ingestion
+  - Acknowledgement only after synchronous and asynchronous listeners succeed
 - ✅ **Extended Features**
   - App commands (Slash Commands, requires additional configuration)
-  - Interactive components (requires additional configuration)
+  - Interactive components, Canvas, Modal, and App Home
 
 ## Installation
 
 ```bash
-npm install @onebots/adapter-slack @slack/web-api
+npm install @onebots/adapter-slack
 # or
-pnpm add @onebots/adapter-slack @slack/web-api
+pnpm add @onebots/adapter-slack
 ```
 
 ## Configuration
@@ -45,7 +45,7 @@ Configure Slack account in `config.yaml`:
 slack.your_bot_id:
   # Slack platform configuration
   token: 'xoxb-your-bot-token'  # Slack Bot Token, required
-  receive_mode: socket  # socket (default) or webhook
+  receive_mode: socket  # socket (default), webhook, or manual
   app_token: 'xapp-your-app-token'  # Required in Socket Mode
   
   # OneBot V11 protocol configuration
@@ -60,22 +60,20 @@ slack.your_bot_id:
 ## Client SDK Usage
 
 ```typescript
-import { ImHelper } from 'imhelper';
-import { OneBotV11Adapter } from '@imhelper/onebot-v11';
+import { createOnebot12Client } from '@imhelper/onebot-v12';
 
-const client = new ImHelper();
-
-// Register OneBot V11 protocol adapter
-client.registerAdapter('onebot.v11', OneBotV11Adapter);
-
-// Connect to onebots server
-await client.connect({
-  platform: 'slack',
-  account_id: 'your_bot_id',
-  protocol: 'onebot.v11',
-  endpoint: 'ws://localhost:6727/slack/your_bot_id/onebot/v11/ws',
-  access_token: 'your_access_token',
+const client = createOnebot12Client({
+  baseUrl: 'http://localhost:6727/slack/your_bot_id/onebot/v12',
+  selfId: 'your_bot_id',
+  accessToken: 'your_access_token',
+  receiveMode: 'ws',
 });
+
+client.on('message.channel', async message => {
+  await message.reply('Received!');
+});
+
+await client.start();
 ```
 
 ## Related Links

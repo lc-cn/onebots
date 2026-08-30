@@ -12,7 +12,7 @@ const platformActions = Object.fromEntries(
 export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
         ...platformActions,
-        send_message: { support: "native", scenes: ["private", "channel"] },
+        send_message: { support: "native", scenes: ["private", "direct", "channel"] },
         delete_message: {
             support: "native",
             availability: "context",
@@ -69,12 +69,23 @@ export const slackCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         edit_bookmark: { support: "native", availability: "permission" },
         remove_bookmark: { support: "native", availability: "permission" },
         list_bookmarks: { support: "native", availability: "permission" },
+        start_message_stream: { support: "native", permissions: ["chat:write"] },
+        append_message_stream: { support: "native", permissions: ["chat:write"] },
+        stop_message_stream: { support: "native", permissions: ["chat:write"] },
+        validate_blocks: { support: "native", availability: "permission" },
+        create_canvas: { support: "native", availability: "permission" },
+        edit_canvas: { support: "native", availability: "permission" },
+        delete_canvas: { support: "native", availability: "permission" },
+        lookup_canvas_sections: { support: "native", availability: "permission" },
+        set_canvas_access: { support: "native", availability: "permission" },
+        delete_canvas_access: { support: "native", availability: "permission" },
+        create_channel_canvas: { support: "native", availability: "permission" },
         get_version: { support: "native" },
         get_status: { support: "native" },
         get_supported_actions: { support: "native" },
     },
     events: {
-        message: { support: "native", scenes: ["private", "channel"] },
+        message: { support: "native", scenes: ["private", "direct", "channel"] },
         message_updated: { support: "native" },
         message_deleted: { support: "native" },
         reaction_added: { support: "native" },

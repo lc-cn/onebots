@@ -73,6 +73,8 @@ export interface SlackMessage {
     user?: string;
     text?: string;
     channel: string;
+    /** Slack Events API 明确的会话类型；mpim 对应多人私信。 */
+    channel_type?: "im" | "mpim" | "channel" | "group";
     files?: Array<{
         id: string;
         name: string;
@@ -131,6 +133,9 @@ export interface SlackWebhookBody {
     team_id?: string;
     api_app_id?: string;
     event_id?: string;
+    envelope_id?: string;
+    trigger_id?: string;
+    command?: string;
     event_time?: number;
     event?: SlackEvent;
     [key: string]: unknown;

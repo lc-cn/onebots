@@ -51,6 +51,40 @@ describe("projectSlackEvent", () => {
         });
     });
 
+    it("按 channel_type 区分单人私信与多人私信", () => {
+        const mpim: SlackEvent = {
+            type: "message",
+            event_ts: "1710000000.000002",
+            ts: "1710000000.000002",
+            channel: "G1",
+            channel_type: "mpim",
+            user: "U1",
+            text: "hello team",
+        };
+        expect(projectSlackEvent(mpim, { event: mpim }, context)).toMatchObject({
+            message_type: "direct",
+            group: { channel_id: { string: "G1" } },
+        });
+
+        const im = { ...mpim, channel: "D1", channel_type: "im" } satisfies SlackEvent;
+        expect(projectSlackEvent(im, { event: im }, context)).toMatchObject({
+            message_type: "private",
+            group: undefined,
+        });
+    });
+
+    it("没有原生 ID 时仍生成稳定摘要身份", () => {
+        const event: SlackEvent = {
+            type: "app_rate_limited",
+            event_ts: "1710000000",
+        };
+        const first = projectSlackEvent(event, { event }, context);
+        const second = projectSlackEvent(event, { event }, context);
+
+        expect(first?.id).toEqual(second?.id);
+        expect(first?.id.string).toMatch(/^sha256:/u);
+    });
+
     it("投影消息删除与未知原生事件", () => {
         const deleted: SlackEvent = {
             type: "message",

@@ -10,8 +10,8 @@ Slack 适配器已完全实现，支持通过 Slack Bot API 接入 onebots 服�
 
 - ✅ **消息收发**
   - 频道消息收发
-  - 私聊消息收发
-  - 支持文本、富文本（Blocks）等多种消息格式
+  - 单人私信与多人私信（MPIM）收发
+  - 文本、文件、线程、Block Kit 与流式消息
 - ✅ **消息管理**
   - 消息编辑
   - 消息删除
@@ -22,18 +22,18 @@ Slack 适配器已完全实现，支持通过 Slack Bot API 接入 onebots 服�
 - ✅ **用户管理**
   - 获取用户信息
 - ✅ **事件订阅**
-  - Events API 支持
-  - Webhook 事件订阅
+  - Socket Mode、HTTP Events 与 manual 接入
+  - 事件只在同步/异步监听器成功后确认，失败可由 Slack 重投
 - ✅ **扩展功能**
   - 应用命令（Slash Commands，需要额外配置）
-  - 交互式组件（需要额外配置）
+  - 交互式组件、Canvas、Modal 与 App Home
 
 ## 安装
 
 ```bash
-npm install @onebots/adapter-slack @slack/web-api
+npm install @onebots/adapter-slack
 # 或
-pnpm add @onebots/adapter-slack @slack/web-api
+pnpm add @onebots/adapter-slack
 ```
 
 ## 配置
@@ -45,7 +45,7 @@ pnpm add @onebots/adapter-slack @slack/web-api
 slack.your_bot_id:
   # Slack 平台配置
   token: 'xoxb-your-bot-token'  # Slack Bot Token，必填
-  receive_mode: socket  # socket（默认）或 webhook
+  receive_mode: socket  # socket（默认）、webhook 或 manual
   app_token: 'xapp-your-app-token'  # Socket Mode 必填
   
   # OneBot V11 协议配置
@@ -62,7 +62,7 @@ slack.your_bot_id:
 | 配置项 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | `token` | string | 是 | Slack Bot Token（xoxb-...） |
-| `receive_mode` | socket / webhook | 否 | 唯一事件接收方式，默认 socket |
+| `receive_mode` | socket / webhook / manual | 否 | 唯一事件接收方式，默认 socket |
 | `signing_secret` | string | Webhook 模式 | Signing Secret（用于验证请求） |
 | `app_token` | string | Socket 模式 | App-Level Token（用于 Socket Mode） |
 
@@ -96,36 +96,27 @@ onebots -r slack -p onebot.v11
 onebots 提供了 imhelper 客户端SDK，可以方便地连接 Slack 适配器：
 
 ```typescript
-import { createImHelper } from 'imhelper';
-import { createOnebot12Adapter } from '@imhelper/onebot-v12';
+import { createOnebot12Client } from '@imhelper/onebot-v12';
 
-// 创建适配器
-const adapter = createOnebot12Adapter({
-  baseUrl: 'http://localhost:6727',
+const client = createOnebot12Client({
+  baseUrl: 'http://localhost:6727/slack/your_bot_id/onebot/v12',
   selfId: 'your_bot_id',
   accessToken: 'your_token',
   receiveMode: 'ws',
-  path: '/slack/your_bot_id/onebot/v12',
-  wsUrl: 'ws://localhost:6727/slack/your_bot_id/onebot/v12',
-  platform: 'slack',
 });
-
-// 创建 ImHelper 实例
-const helper = createImHelper(adapter);
 
 // 监听消息事件
-helper.on('message.private', (message) => {
+client.on('message.private', async message => {
   console.log('收到私聊消息:', message.content);
-  message.reply([{ type: 'text', data: { text: '收到！' } }]);
+  await message.reply('收到！');
 });
 
-helper.on('message.group', (message) => {
+client.on('message.channel', async message => {
   console.log('收到频道消息:', message.content);
-  message.reply([{ type: 'text', data: { text: '收到！' } }]);
+  await message.reply('收到！');
 });
 
-// 连接
-await adapter.connect();
+await client.start();
 ```
 
 详细说明请查看：[客户端SDK使用指南](/guide/client-sdk)

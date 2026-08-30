@@ -1,4 +1,5 @@
 import { CommonEvent, unixSecondsToEventMs, type CommonTypes } from "onebots";
+import { slackEventIdentity } from "./event-identity.js";
 import type { SlackEvent, SlackMessage, SlackWebhookBody } from "./types.js";
 
 interface ProjectorContext {
@@ -133,7 +134,7 @@ function projectMessage(
     context: ProjectorContext,
 ): CommonEvent.Event<SlackWebhookBody> {
     const channel = event.channel ?? "";
-    const isPrivate = channel.startsWith("D");
+    const scene = slackMessageScene(event);
     const sender = projectUser(event.user ?? event.bot_id, context);
     if (!sender) {
         return notice(envelope, event, context, "custom", extension(event));
@@ -141,13 +142,19 @@ function projectMessage(
     return {
         ...base(envelope, event, context),
         type: "message",
-        message_type: isPrivate ? "private" : "channel",
+        message_type: scene,
         sender,
-        group: isPrivate ? undefined : projectGroup(channel, context, envelope.team_id),
+        group: scene === "private" ? undefined : projectGroup(channel, context, envelope.team_id),
         message_id: context.createId(event.ts ?? event.event_ts),
         raw_message: event.text ?? "",
         message: projectSlackMessageSegments(event),
     };
+}
+
+function slackMessageScene(event: SlackMessage): "private" | "direct" | "channel" {
+    if (event.channel_type === "im" || event.channel.startsWith("D")) return "private";
+    if (event.channel_type === "mpim") return "direct";
+    return "channel";
 }
 
 export function projectSlackMessageSegments(event: SlackMessage): CommonTypes.Segment[] {
@@ -194,7 +201,7 @@ function base(
 ): CommonEvent.Base<SlackWebhookBody> {
     const timestamp = unixSecondsToEventMs(event.ts ?? event.event_ts);
     return {
-        id: context.createId(stringValue(envelope.event_id, `${event.type}:${timestamp}`)),
+        id: context.createId(slackEventIdentity(envelope)),
         timestamp,
         type: "custom",
         platform: "slack",

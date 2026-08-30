@@ -7,6 +7,7 @@ import { SocketModeClient } from "@slack/socket-mode";
 import type { WebClient } from "@slack/web-api";
 import { RecentEventDeduplicator, type Next, type RouterContext } from "onebots";
 import { SlackError } from "./errors.js";
+import { slackEventIdentity } from "./event-identity.js";
 import { parseSlackHttpBody, parseSlackInbound, verifySlackSignature } from "./inbound.js";
 import type { SlackFileInput } from "./messages.js";
 import { acceptSlackSocketEnvelope } from "./socket-envelope.js";
@@ -41,6 +42,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     private generation = 0;
     private readonly messageContexts = new Map<string, { channel: string; threadTs?: string }>();
     private readonly receivedEvents = new RecentEventDeduplicator<string>();
+    private readonly processingEvents = new Map<string, Promise<void>>();
 
     constructor(readonly config: SlackConfig) {
         super();
@@ -135,7 +137,9 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
         socket.on("slack_event", async (payload: unknown) => {
             if (!this.isCurrentSocket(socket, generation)) return;
             try {
-                await acceptSlackSocketEnvelope(payload, body => this.ingest(body));
+                await acceptSlackSocketEnvelope(payload, async body => {
+                    await this.ingest(body);
+                });
             } catch (error) {
                 this.emit(
                     "client_error",
@@ -201,7 +205,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                     status: 400,
                 });
             }
-            const result = this.ingestHttp(rawBody, {
+            const result = await this.ingestHttp(rawBody, {
                 timestamp: ctx.get("x-slack-request-timestamp"),
                 signature: ctx.get("x-slack-signature"),
                 contentType: ctx.get("content-type"),
@@ -219,10 +223,10 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     }
 
     /** 验证原始 HTTP 请求并汇入与 Socket Mode / manual 相同的 ingest 管线。 */
-    ingestHttp(
+    async ingestHttp(
         rawBody: string | Buffer,
         headers: { timestamp: string; signature: string; contentType?: string },
-    ): SlackHttpResult {
+    ): Promise<SlackHttpResult> {
         if (!this.config.signing_secret) {
             throw new SlackError("Slack Webhook 模式必须配置 signing_secret", {
                 code: "SLACK_SIGNING_SECRET_REQUIRED",
@@ -262,7 +266,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
             }
             return { status: 200, body: { challenge: body.challenge } };
         }
-        this.ingest(body);
+        await this.ingest(body);
         return { status: 200, body: { ok: true } };
     }
 
@@ -275,7 +279,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
             );
         }
         try {
-            const result = this.ingestHttp(Buffer.from(await request.arrayBuffer()), {
+            const result = await this.ingestHttp(Buffer.from(await request.arrayBuffer()), {
                 timestamp: request.headers.get("x-slack-request-timestamp") || "",
                 signature: request.headers.get("x-slack-signature") || "",
                 contentType: request.headers.get("content-type") || undefined,
@@ -291,14 +295,33 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     }
 
     /** 将 HTTP Events 与 Socket Mode 归一到同一个原始事件入口。 */
-    ingest(rawEvent: unknown): SlackWebhookBody {
+    async ingest(rawEvent: unknown): Promise<SlackWebhookBody> {
         const body = parseSlackInbound(rawEvent);
-        this.emit("raw_event", body);
+        await this.emitRawEvent(body);
         if (this.hasProcessedEvent(body)) return body;
-        if (body.event) {
-            this.emit("event", body.event, body);
-            this.markEventProcessed(body);
+        const eventId = slackEventIdentity(body);
+        const processing = this.processingEvents.get(eventId);
+        if (processing) {
+            await processing;
             return body;
+        }
+        const delivery = this.deliver(body);
+        this.processingEvents.set(eventId, delivery);
+        try {
+            await delivery;
+        } finally {
+            if (this.processingEvents.get(eventId) === delivery) {
+                this.processingEvents.delete(eventId);
+            }
+        }
+        return body;
+    }
+
+    private async deliver(body: SlackWebhookBody): Promise<void> {
+        if (body.event) {
+            await this.emitEvent(body.event, body);
+            this.markEventProcessed(body);
+            return;
         }
         const eventType =
             typeof body.command === "string"
@@ -307,8 +330,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
                   ? body.type
                   : undefined;
         if (eventType) {
-            this.emit(
-                "event",
+            await this.emitEvent(
                 {
                     ...body,
                     type: eventType,
@@ -318,18 +340,32 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
             );
         }
         this.markEventProcessed(body);
-        return body;
+    }
+
+    private async emitRawEvent(body: SlackWebhookBody): Promise<void> {
+        for (const listener of this.listeners("raw_event")) {
+            await Promise.resolve((listener as (value: SlackWebhookBody) => unknown)(body));
+        }
+    }
+
+    private async emitEvent(event: SlackEvent, body: SlackWebhookBody): Promise<void> {
+        for (const listener of this.listeners("event")) {
+            await Promise.resolve(
+                (listener as (value: SlackEvent, envelope: SlackWebhookBody) => unknown)(
+                    event,
+                    body,
+                ),
+            );
+        }
     }
 
     /** Slack 超时重试仍交付 raw_event，但不会重复派发 canonical 事件。 */
     private hasProcessedEvent(body: SlackWebhookBody): boolean {
-        const eventId = eventIdentity(body);
-        return eventId ? this.receivedEvents.has(eventId) : false;
+        return this.receivedEvents.has(slackEventIdentity(body));
     }
 
     private markEventProcessed(body: SlackWebhookBody): void {
-        const eventId = eventIdentity(body);
-        if (eventId) this.receivedEvents.commit(eventId);
+        this.receivedEvents.commit(slackEventIdentity(body));
     }
 
     /**
@@ -434,12 +470,4 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     async call(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
         return this.api.call(method, params);
     }
-}
-
-function eventIdentity(body: SlackWebhookBody): string | undefined {
-    return typeof body.event_id === "string"
-        ? body.event_id
-        : typeof body.envelope_id === "string"
-          ? body.envelope_id
-          : undefined;
 }

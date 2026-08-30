@@ -33,8 +33,9 @@
     "onebots": "workspace:*"
   },
   "dependencies": {
-    "@slack/socket-mode": "^2.0.5",
-    "@slack/web-api": "^7.0.0"
+    "@slack/socket-mode": "^3.0.1",
+    "@slack/web-api": "^8.1.1",
+    "undici": "^7.0.0"
   },
   "repository": {
     "type": "git",

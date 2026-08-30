@@ -1,3 +1,12 @@
+import {
+    WebAPIFileUploadInvalidArgumentsError,
+    WebAPIFileUploadReadFileDataError,
+    WebAPIHTTPError,
+    WebAPIPlatformError,
+    WebAPIRateLimitedError,
+    WebAPIRequestError,
+} from "@slack/web-api";
+import { SMPlatformError, SlackSocketModeError } from "@slack/socket-mode";
 import { ErrorCategory, ErrorSeverity, OneBotsError } from "onebots";
 
 export interface SlackErrorOptions {
@@ -40,9 +49,17 @@ export class SlackError extends OneBotsError {
 
     static wrap(error: unknown, operation?: string, code = "SLACK_API_ERROR"): SlackError {
         if (error instanceof SlackError) return error;
+        const official = officialErrorOptions(error, code);
+        if (official) {
+            return new SlackError(error instanceof Error ? error.message : String(error), {
+                ...official,
+                operation,
+                cause: error,
+            });
+        }
         const record = objectValue(error);
         const data = objectValue(record.data);
-        const platformCode = stringValue(data.error) || stringValue(record.code);
+        const platformCode = stringValue(data.error);
         const status = numberValue(data.statusCode) ?? numberValue(record.statusCode);
         return new SlackError(error instanceof Error ? error.message : String(error), {
             code: platformCode ? undefined : code,
@@ -69,6 +86,43 @@ export class SlackError extends OneBotsError {
     static resource(message: string, code: string, details?: unknown): SlackError {
         return new SlackError(message, { code, category: ErrorCategory.RESOURCE, details });
     }
+}
+
+function officialErrorOptions(error: unknown, fallbackCode: string): SlackErrorOptions | undefined {
+    if (error instanceof WebAPIPlatformError) {
+        return { platformCode: error.data.error, details: error.data };
+    }
+    if (error instanceof WebAPIHTTPError) {
+        return { code: fallbackCode, status: error.statusCode, details: error.body };
+    }
+    if (error instanceof WebAPIRateLimitedError) {
+        return {
+            code: "SLACK_RATE_LIMITED",
+            category: ErrorCategory.NETWORK,
+            status: 429,
+            details: { retry_after: error.retryAfter },
+        };
+    }
+    if (error instanceof WebAPIRequestError) {
+        return { code: fallbackCode, category: ErrorCategory.NETWORK };
+    }
+    if (error instanceof WebAPIFileUploadInvalidArgumentsError) {
+        return { code: "SLACK_UPLOAD_ARGUMENTS_INVALID", category: ErrorCategory.VALIDATION };
+    }
+    if (error instanceof WebAPIFileUploadReadFileDataError) {
+        return { code: "SLACK_UPLOAD_FILE_UNREADABLE", category: ErrorCategory.RESOURCE };
+    }
+    if (error instanceof SlackSocketModeError) {
+        return {
+            code: fallbackCode,
+            category: ErrorCategory.NETWORK,
+            details: {
+                sdk_code: error.code,
+                ...(error instanceof SMPlatformError ? { event: error.data } : {}),
+            },
+        };
+    }
+    return undefined;
 }
 
 function categoryFor(options: SlackErrorOptions): ErrorCategory {
