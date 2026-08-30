@@ -167,6 +167,50 @@ export class SatoriDirectoryActions {
         });
     }
 
+    /** friend.approve - Handle a friend request. */
+    async approveFriend(params: Record<string, unknown>): Promise<void> {
+        const { message_id, approve, comment } = params as {
+            message_id: string;
+            approve: boolean;
+            comment?: string;
+        };
+
+        await this.adapter.handleFriendRequest(this.account.account_id, {
+            request_id: this.adapter.resolveId(message_id),
+            approve,
+            remark: comment,
+            reason: comment,
+        });
+    }
+
+    /** guild.approve - Handle an invitation for the bot to join a guild. */
+    async approveGuild(params: Record<string, unknown>): Promise<void> {
+        return this.handleGuildRequest(params, "invitation");
+    }
+
+    /** guild.member.approve - Handle a user's request to join a guild. */
+    async approveGuildMember(params: Record<string, unknown>): Promise<void> {
+        return this.handleGuildRequest(params, "request");
+    }
+
+    private async handleGuildRequest(
+        params: Record<string, unknown>,
+        type: "request" | "invitation",
+    ): Promise<void> {
+        const { message_id, approve, comment } = params as {
+            message_id: string;
+            approve: boolean;
+            comment?: string;
+        };
+
+        await this.adapter.handleGroupRequest(this.account.account_id, {
+            request_id: this.adapter.resolveId(message_id),
+            type,
+            approve,
+            reason: comment,
+        });
+    }
+
     /**
      * login.get - Get login (bot) information
      */

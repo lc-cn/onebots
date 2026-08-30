@@ -222,19 +222,19 @@ export class ImHelper<
     // ============================================
 
     /** 批量获取用户信息 */
-    async getUserList(options?: DirectoryQueryOptions): Promise<User<Id>[]> {
+    async getUserList(options?: DirectoryQueryOptions<Id>): Promise<User<Id>[]> {
         const users = await this.#adapter.getUserList(options);
         synchronizeMap(this.$userMap, users, user => user.user_id);
         return users.map(user => this.pickUser(user.user_id));
     }
 
-    async getUserInfo(userId: Id, options?: DirectoryQueryOptions): Promise<User<Id>> {
+    async getUserInfo(userId: Id, options?: DirectoryQueryOptions<Id>): Promise<User<Id>> {
         const user = await this.#adapter.getUserInfo(userId, options);
         upsertMap(this.$userMap, user.user_id, user);
         return this.pickUser(user.user_id);
     }
 
-    async getFriendInfo(userId: Id, options?: DirectoryQueryOptions): Promise<Friend<Id>> {
+    async getFriendInfo(userId: Id, options?: DirectoryQueryOptions<Id>): Promise<Friend<Id>> {
         const friend = await this.#adapter.getFriendInfo(userId, options);
         upsertMap(this.$userMap, friend.user_id, friend);
         upsertMap(this.$friendMap, friend.user_id, friend);
@@ -242,13 +242,13 @@ export class ImHelper<
     }
 
     /** 批量获取群组列表 */
-    async getGroupList(options?: DirectoryQueryOptions): Promise<Group<Id>[]> {
+    async getGroupList(options?: DirectoryQueryOptions<Id>): Promise<Group<Id>[]> {
         const groups = await this.#adapter.getGroupList(options);
         synchronizeMap(this.$groupMap, groups, group => group.group_id);
         return groups.map(group => this.pickGroup(group.group_id));
     }
 
-    async getGroupInfo(groupId: Id, options?: DirectoryQueryOptions): Promise<Group<Id>> {
+    async getGroupInfo(groupId: Id, options?: DirectoryQueryOptions<Id>): Promise<Group<Id>> {
         const group = await this.#adapter.getGroupInfo(groupId, options);
         upsertMap(this.$groupMap, group.group_id, group);
         return this.pickGroup(group.group_id);
@@ -257,7 +257,7 @@ export class ImHelper<
     async getGroupMemberInfo(
         groupId: Id,
         userId: Id,
-        options?: DirectoryQueryOptions,
+        options?: DirectoryQueryOptions<Id>,
     ): Promise<GroupMember<Id>> {
         const member = await this.#adapter.getGroupMemberInfo(groupId, userId, options);
         const members = this.$groupMemberMap.get(groupId) ?? new Map<Id, GroupMember.Data<Id>>();
@@ -269,7 +269,7 @@ export class ImHelper<
 
     async getGroupMemberList(
         groupId: Id,
-        options?: DirectoryQueryOptions,
+        options?: DirectoryQueryOptions<Id>,
     ): Promise<GroupMember<Id>[]> {
         const memberData = await this.#adapter.getGroupMemberList(groupId, options);
         const members = this.$groupMemberMap.get(groupId) ?? new Map<Id, GroupMember.Data<Id>>();
@@ -282,14 +282,14 @@ export class ImHelper<
     }
 
     /** 批量获取频道列表 */
-    async getChannelList(): Promise<Channel<Id>[]> {
-        const channels = await this.#adapter.getChannelList();
+    async getChannelList(options?: DirectoryQueryOptions<Id>): Promise<Channel<Id>[]> {
+        const channels = await this.#adapter.getChannelList(options);
         synchronizeMap(this.$channelMap, channels, channel => channel.channel_id);
         return channels.map(channel => this.pickChannel(channel.channel_id));
     }
 
-    async getChannelInfo(channelId: Id): Promise<Channel<Id>> {
-        const channel = await this.#adapter.getChannelInfo(channelId);
+    async getChannelInfo(channelId: Id, options?: DirectoryQueryOptions<Id>): Promise<Channel<Id>> {
+        const channel = await this.#adapter.getChannelInfo(channelId, options);
         upsertMap(this.$channelMap, channel.channel_id, channel);
         return this.pickChannel(channel.channel_id);
     }

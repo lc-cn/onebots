@@ -100,6 +100,15 @@ function createProtocol() {
             channel_type: 0,
         }),
         getChannelList: vi.fn().mockResolvedValue([]),
+        createChannel: vi.fn().mockResolvedValue({
+            channel_id: { string: "created-channel" },
+            channel_name: "Created",
+        }),
+        updateChannel: vi.fn().mockResolvedValue(undefined),
+        handleFriendRequest: vi.fn().mockResolvedValue(undefined),
+        handleGroupRequest: vi.fn().mockResolvedValue(undefined),
+        sendGroupMessageReaction: vi.fn().mockResolvedValue(undefined),
+        callAction: vi.fn().mockResolvedValue(undefined),
         getGuildInfo: vi.fn().mockResolvedValue({
             guild_id: { string: "guild-1" },
             guild_name: "Guild",
@@ -260,6 +269,95 @@ describe("Satori V1 protocol", () => {
                 scene_id: expect.objectContaining({ string: "direct-1" }),
             }),
         );
+    });
+
+    test("频道创建与更新使用标准 data 对象", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        await protocol.apply("channel.create", {
+            guild_id: "guild-1",
+            data: { name: "Created", type: 1, parent_id: "parent-1" },
+        });
+        await protocol.apply("channel.update", {
+            channel_id: "channel-1",
+            data: { name: "Renamed", parent_id: "parent-2" },
+        });
+
+        expect(adapter.createChannel).toHaveBeenCalledWith("bot", {
+            guild_id: expect.objectContaining({ string: "guild-1" }),
+            channel_name: "Created",
+            channel_type: 1,
+            parent_id: expect.objectContaining({ string: "parent-1" }),
+        });
+        expect(adapter.updateChannel).toHaveBeenCalledWith("bot", {
+            channel_id: expect.objectContaining({ string: "channel-1" }),
+            channel_name: "Renamed",
+            parent_id: expect.objectContaining({ string: "parent-2" }),
+        });
+    });
+
+    test("申请处理映射到统一适配器动作", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        await protocol.apply("friend.approve", {
+            message_id: "friend-request-1",
+            approve: false,
+            comment: "declined",
+        });
+        await protocol.apply("guild.approve", {
+            message_id: "invite-1",
+            approve: true,
+        });
+        await protocol.apply("guild.member.approve", {
+            message_id: "join-1",
+            approve: false,
+            comment: "declined",
+        });
+
+        expect(adapter.handleFriendRequest).toHaveBeenCalledWith("bot", {
+            request_id: expect.objectContaining({ string: "friend-request-1" }),
+            approve: false,
+            remark: "declined",
+            reason: "declined",
+        });
+        expect(adapter.handleGroupRequest).toHaveBeenNthCalledWith(1, "bot", {
+            request_id: expect.objectContaining({ string: "invite-1" }),
+            type: "invitation",
+            approve: true,
+            reason: undefined,
+        });
+        expect(adapter.handleGroupRequest).toHaveBeenNthCalledWith(2, "bot", {
+            request_id: expect.objectContaining({ string: "join-1" }),
+            type: "request",
+            approve: false,
+            reason: "declined",
+        });
+    });
+
+    test("群消息 reaction 使用已登记的频道场景", async () => {
+        const { adapter, protocol } = createProtocol();
+        protocol["convertToSatoriFormat"](
+            textMsgEvent({
+                message_type: "group",
+                group: {
+                    id: { number: 20001, string: "guild-channel", source: "guild-channel" },
+                },
+            }) as unknown as CommonEvent.Event,
+        );
+
+        await protocol.apply("reaction.create", {
+            channel_id: "guild-channel",
+            message_id: "message-1",
+            emoji: "👍",
+        });
+
+        expect(adapter.sendGroupMessageReaction).toHaveBeenCalledWith("bot", {
+            group_id: expect.objectContaining({ string: "guild-channel" }),
+            message_id: expect.objectContaining({ string: "message-1" }),
+            reaction: "👍",
+            reaction_type: "emoji",
+            is_add: true,
+        });
     });
 
     test("converts a group message with channel type 0", () => {

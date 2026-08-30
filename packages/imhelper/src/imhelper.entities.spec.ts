@@ -7,10 +7,12 @@ import { ImHelper } from "./imhelper.js";
 class EntityAdapter extends Adapter<string> {
     readonly selfId = "bot";
     userName = "初始名称";
-    readonly sendMessageMock = vi.fn(
-        async (_options: Adapter.SendMessageOptions<string>) => ({ message_id: "sent" }),
-    );
+    readonly sendMessageMock = vi.fn(async (_options: Adapter.SendMessageOptions<string>) => ({
+        message_id: "sent",
+    }));
     readonly kickMock = vi.fn(async (_groupId: string, _userId: string) => undefined);
+    readonly recallMock = vi.fn(async (_messageId: string) => true);
+    readonly updateMock = vi.fn(async (_messageId: string, _content: string) => undefined);
 
     async getUserList(): Promise<User.Data<string>[]> {
         return [{ user_id: "user-1", user_name: this.userName, avatar: "avatar" }];
@@ -49,6 +51,14 @@ class EntityAdapter extends Adapter<string> {
 
     async kickGroupMember(groupId: string, userId: string) {
         return this.kickMock(groupId, userId);
+    }
+
+    async recallMessage(messageId: string) {
+        return this.recallMock(messageId);
+    }
+
+    async updateMessage(messageId: string, content: import("./message.js").Message.Content) {
+        return this.updateMock(messageId, String(content));
     }
 }
 
@@ -91,6 +101,8 @@ describe("ImHelper entity projection", () => {
 
         const message = await helper.getMessage("message-1");
         await message.reply("world");
+        await message.edit("updated");
+        await message.recall();
 
         expect(message.message_id).toBe("message-1");
         expect(adapter.sendMessageMock).toHaveBeenCalledWith({
@@ -98,5 +110,7 @@ describe("ImHelper entity projection", () => {
             scene_id: "user-1",
             message: "world",
         });
+        expect(adapter.updateMock).toHaveBeenCalledWith("message-1", "updated");
+        expect(adapter.recallMock).toHaveBeenCalledWith("message-1");
     });
 });

@@ -6,6 +6,23 @@ function toSatoriChannelType(value?: number): Satori.ChannelType {
     return value === 1 || value === 2 || value === 3 ? value : 0;
 }
 
+const SATORI_CHILDREN_KEY = "$children";
+
+/** 保留 Satori 的嵌套格式树；通用消息段没有独立 children 字段，因此收进保留键。 */
+function parseSatoriElement(element: Satori.Element | string): CommonTypes.Segment {
+    if (typeof element === "string") return { type: "text", data: { text: element } };
+
+    return {
+        type: element.type,
+        data: {
+            ...(element.attrs ?? {}),
+            ...(element.children
+                ? { [SATORI_CHILDREN_KEY]: element.children.map(parseSatoriElement) }
+                : {}),
+        },
+    };
+}
+
 /** 消息与频道资源动作；负责 Satori Element 与通用消息段的边界转换。 */
 export class SatoriMessageActions {
     constructor(
@@ -86,6 +103,35 @@ export class SatoriMessageActions {
         await this.adapter.updateMessage(this.account.account_id, {
             message_id: this.adapter.resolveId(message_id),
             message: this.parseMessageContent(content),
+        });
+    }
+
+    /** reaction.create / reaction.delete - Update a reaction through the resolved channel route. */
+    async updateReaction(params: Record<string, unknown>, isAdd: boolean): Promise<void> {
+        const { channel_id, message_id, emoji } = params as {
+            channel_id: string;
+            message_id: string;
+            emoji: string;
+        };
+        const route = this.channelRoutes.resolve(channel_id);
+        if (route.scene_type !== "group") {
+            const action = isAdd ? "reaction.create" : "reaction.delete";
+            const capability = this.adapter.describeCapabilities(this.account.account_id).actions[
+                action
+            ];
+            if (!capability || capability.support === "unsupported") {
+                throw new Error(`${action} not implemented for ${route.scene_type} channels`);
+            }
+            await this.adapter.callAction(this.account.account_id, action, params);
+            return;
+        }
+
+        await this.adapter.sendGroupMessageReaction(this.account.account_id, {
+            group_id: this.adapter.resolveId(route.scene_id),
+            message_id: this.adapter.resolveId(message_id),
+            reaction: emoji,
+            reaction_type: "emoji",
+            is_add: isAdd,
         });
     }
 
@@ -170,24 +216,24 @@ export class SatoriMessageActions {
      * channel.create - Create a new channel
      */
     async createChannel(params: Record<string, unknown>): Promise<Satori.Channel> {
-        const { guild_id, name, type, parent_id } = params as {
-            guild_id?: string;
-            name?: string;
-            type?: Satori.ChannelType;
-            parent_id?: string;
+        const { guild_id, data } = params as {
+            guild_id: string;
+            data: Partial<Satori.Channel>;
         };
+        if (!guild_id) throw new TypeError("guild_id 必须是非空字符串");
+        if (!data || typeof data !== "object") throw new TypeError("data 必须是频道对象");
 
         const channel = await this.adapter.createChannel(this.account.account_id, {
-            guild_id: guild_id ? this.adapter.resolveId(guild_id) : undefined,
-            channel_name: name,
-            channel_type: type,
-            parent_id: parent_id ? this.adapter.resolveId(parent_id) : undefined,
+            guild_id: this.adapter.resolveId(guild_id),
+            channel_name: data.name,
+            channel_type: data.type,
+            parent_id: data.parent_id ? this.adapter.resolveId(data.parent_id) : undefined,
         });
         this.channelRoutes.rememberDirectoryChannel(channel.channel_id.string, "channel", guild_id);
 
         return {
             id: channel.channel_id.string,
-            type: type || 0,
+            type: data.type ?? 0,
             name: channel.channel_name,
             parent_id: channel.parent_id?.string,
         };
@@ -197,16 +243,17 @@ export class SatoriMessageActions {
      * channel.update - Update channel information
      */
     async updateChannel(params: Record<string, unknown>): Promise<void> {
-        const { channel_id, name, parent_id } = params as {
+        const { channel_id, data } = params as {
             channel_id: string;
-            name?: string;
-            parent_id?: string;
+            data: Partial<Satori.Channel>;
         };
+        if (!channel_id) throw new TypeError("channel_id 必须是非空字符串");
+        if (!data || typeof data !== "object") throw new TypeError("data 必须是频道对象");
 
         await this.adapter.updateChannel(this.account.account_id, {
             channel_id: this.adapter.resolveId(channel_id),
-            channel_name: name,
-            parent_id: parent_id ? this.adapter.resolveId(parent_id) : undefined,
+            channel_name: data.name,
+            parent_id: data.parent_id ? this.adapter.resolveId(data.parent_id) : undefined,
         });
     }
 
@@ -231,14 +278,6 @@ export class SatoriMessageActions {
         }
 
         // Parse element array
-        return content.map(el => {
-            if (typeof el === "string") {
-                return { type: "text", data: { text: el } };
-            }
-            return {
-                type: el.type,
-                data: el.attrs || {},
-            };
-        });
+        return content.map(parseSatoriElement);
     }
 }

@@ -30,6 +30,10 @@ export class SatoriActionService {
                 return this.messages.updateMessage(params);
             case "message.list":
                 return this.messages.getMessageList(params);
+            case "reaction.create":
+                return this.messages.updateReaction(params, true);
+            case "reaction.delete":
+                return this.messages.updateReaction(params, false);
             case "channel.get":
                 return this.messages.getChannel(params);
             case "channel.list":
@@ -60,6 +64,12 @@ export class SatoriActionService {
                 return this.directory.getFriendList(params);
             case "friend.delete":
                 return this.directory.deleteFriend(params);
+            case "friend.approve":
+                return this.directory.approveFriend(params);
+            case "guild.approve":
+                return this.directory.approveGuild(params);
+            case "guild.member.approve":
+                return this.directory.approveGuildMember(params);
             case "login.get":
                 return this.directory.getLogin();
             default:

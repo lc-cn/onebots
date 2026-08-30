@@ -128,6 +128,16 @@ const member = await client.getGroupMemberInfo(groupId, userId);
 
 查询 API 会把协议 DTO 缓存并投影成绑定当前 Client 的实例。同一实体刷新后保持对象身份，已有引用会立即看到新数据；实例提供 `sendMessage()`、`refresh()`、`kick()`、`mute()` 等对应场景行为。`pick*()` 只选择已经由查询或事件写入缓存的实体，不发起网络请求。
 
+依附父实体的目录必须显式传入 scope。例如 Satori 的频道目录要求公会上下文：
+
+```typescript
+const channels = await client.getChannelList({
+  scope: { type: "group", id: guildId },
+});
+```
+
+消息事件会保留协议动作需要的会话上下文。`reply()`、`recall()`、`edit()` 与频道 reaction 会走 Adapter 的上下文动作入口；只需要全局消息 ID 的协议自动退化到原有 API，需要 `channel_id` 的协议则不会再丢失地址。
+
 ### 查询、文件与请求
 
 - `getUserList()`、`getUserInfo()`、`getFriendInfo()`

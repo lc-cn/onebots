@@ -44,6 +44,7 @@ export type AnyNoticeEvent<Id extends string | number = string | number> =
     | import("./notice/group-member-increase.js").GroupMemberIncreaseNoticeEvent<Id>
     | import("./notice/group-member-decrease.js").GroupMemberDecreaseNoticeEvent<Id>
     | import("./notice/group-message-delete.js").GroupMessageDeleteNoticeEvent<Id>
+    | import("./notice/channel-message-delete.js").ChannelMessageDeleteNoticeEvent<Id>
     | import("./notice/private-message-delete.js").PrivateMessageDeleteNoticeEvent<Id>
     | import("./notice/friend-increase.js").FriendIncreaseNoticeEvent<Id>
     | import("./notice/friend-decrease.js").FriendDecreaseNoticeEvent<Id>;

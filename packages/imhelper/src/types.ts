@@ -4,6 +4,7 @@ import { ChannelMessageEvent } from "./events/message/channel.js";
 import { GroupMemberIncreaseNoticeEvent } from "./events/notice/group-member-increase.js";
 import { GroupMemberDecreaseNoticeEvent } from "./events/notice/group-member-decrease.js";
 import { GroupMessageDeleteNoticeEvent } from "./events/notice/group-message-delete.js";
+import { ChannelMessageDeleteNoticeEvent } from "./events/notice/channel-message-delete.js";
 import { PrivateMessageDeleteNoticeEvent } from "./events/notice/private-message-delete.js";
 import { FriendIncreaseNoticeEvent } from "./events/notice/friend-increase.js";
 import { FriendDecreaseNoticeEvent } from "./events/notice/friend-decrease.js";
@@ -20,6 +21,7 @@ export interface EventMap<Id extends string | number> {
     "notice.group_member_increase": [GroupMemberIncreaseNoticeEvent<Id>];
     "notice.group_member_decrease": [GroupMemberDecreaseNoticeEvent<Id>];
     "notice.group_message_delete": [GroupMessageDeleteNoticeEvent<Id>];
+    "notice.channel_message_delete": [ChannelMessageDeleteNoticeEvent<Id>];
     "notice.private_message_delete": [PrivateMessageDeleteNoticeEvent<Id>];
     "notice.friend_increase": [FriendIncreaseNoticeEvent<Id>];
     "notice.friend_decrease": [FriendDecreaseNoticeEvent<Id>];

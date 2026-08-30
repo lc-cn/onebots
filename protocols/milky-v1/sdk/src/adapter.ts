@@ -346,16 +346,16 @@ export class MilkyV1Adapter extends Adapter<string, MilkyV1Event> {
 
     async recallMessage(messageId: string): Promise<boolean> {
         const { scene, peerId, messageSeq } = parseMessageId(messageId);
-        return this.recallMessageIn(scene, peerId, messageSeq);
+        return this.recallMilkyMessage(scene, peerId, messageSeq);
     }
 
-    async recallMessageIn(
+    private async recallMilkyMessage(
         scene: MilkyMessageScene,
         peerId: number,
         messageSeq: number,
     ): Promise<boolean> {
         if (scene === "temp") {
-            return this.unsupported("recallMessageIn:temp");
+            return this.unsupported("recallMessage:temp");
         }
         const response = await this.call(
             scene === "group" ? "recall_group_message" : "recall_private_message",

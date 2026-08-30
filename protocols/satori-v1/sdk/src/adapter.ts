@@ -3,10 +3,7 @@ import {
     ReceiveTransport,
     Message,
     ProtocolError,
-    type User,
-    type Group,
-    type GroupMember,
-    type Friend,
+    type DirectoryQueryOptions,
     type PrivateMessageEvent,
     type ChannelMessageEvent,
     type WebSocketReceiverOptions,
@@ -18,6 +15,9 @@ import {
     type SatoriGatewayPayload,
 } from "./types.js";
 import { HttpClient } from "./http-client.js";
+import { SatoriDirectoryApi } from "./directory-api.js";
+import { isRecord, malformed } from "./protocol-data.js";
+import { decodeSatoriContent, encodeSatoriContent } from "./message-codec.js";
 
 export interface SatoriAdapterConfig {
     baseUrl: string;
@@ -52,48 +52,6 @@ function isGatewayPayload(
     return typeof (event as { op?: unknown }).op === "number" && "body" in event;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function malformed(operation: string, response: unknown): never {
-    throw new ProtocolError({
-        protocol: "satori-v1",
-        operation,
-        kind: "protocol",
-        message: `Satori ${operation} 返回了无效的数据结构`,
-        response,
-    });
-}
-
-async function collectList(
-    operation: string,
-    load: (next?: string) => Promise<unknown>,
-): Promise<Record<string, unknown>[]> {
-    const result: Record<string, unknown>[] = [];
-    const visited = new Set<string>();
-    let next: string | undefined;
-    do {
-        const response = await load(next);
-        if (!isRecord(response) || !Array.isArray(response.data)) {
-            return malformed(operation, response);
-        }
-        for (const item of response.data) {
-            if (!isRecord(item)) return malformed(operation, response);
-            result.push(item);
-        }
-        if (response.next !== undefined && typeof response.next !== "string") {
-            return malformed(operation, response);
-        }
-        next = response.next as string | undefined;
-        if (next && visited.has(next)) {
-            return malformed(operation, response);
-        }
-        if (next) visited.add(next);
-    } while (next);
-    return result;
-}
-
 export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter {
     const { baseUrl, selfId, accessToken, receiveMode, path = "/satori/v1", wsUrl } = config;
 
@@ -111,6 +69,7 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
     class SatoriV1AdapterImpl extends Adapter<string, SatoriV1Event> implements SatoriAdapter {
         public readonly selfId: string = selfId;
         private httpClient: HttpClient;
+        private readonly directoryApi: SatoriDirectoryApi;
         private readonly receiveTransport: ReceiveTransport<string, SatoriV1Event>;
 
         constructor() {
@@ -125,6 +84,9 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                 call: config.call,
                 fetch: config.fetch,
             });
+            this.directoryApi = new SatoriDirectoryApi((action, params) =>
+                this.httpClient.post(action, params),
+            );
 
             this.receiveTransport = new ReceiveTransport(this, {
                 mode: receiveMode,
@@ -190,9 +152,7 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                             message_id: messageId,
                             user_id: userId,
                             channel_id: channel.id,
-                            content: (typeof event.message.content === "string"
-                                ? event.message.content
-                                : event.message.content || []) as Message.Content,
+                            content: decodeSatoriContent(event.message.content ?? ""),
                             message_type: "channel",
                         };
                         this.emit("message.channel", messageData);
@@ -203,28 +163,35 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                             bot_id: botId,
                             message_id: messageId,
                             user_id: userId,
-                            content: (typeof event.message.content === "string"
-                                ? event.message.content
-                                : event.message.content || []) as Message.Content,
+                            content: decodeSatoriContent(event.message.content ?? ""),
                             message_type: "private",
+                            channel_id: channel?.id,
                         };
                         this.emit("message.private", messageData);
                     }
-                } else if (
-                    eventType === "message-deleted" &&
-                    event.message &&
-                    !event.guild &&
-                    event.user
-                ) {
-                    // 公会频道删除事件没有对应 canonical 类型，仅从 raw event 保真转发。
-                    this.emit("notice.private_message_delete", {
-                        timestamp: Math.floor(event.timestamp / 1000),
-                        bot_id: botId,
-                        notice_type: "private_message_delete",
-                        sub_type: "delete",
-                        message_id: event.message.id,
-                        user_id: event.user.id,
-                    });
+                } else if (eventType === "message-deleted" && event.message) {
+                    if (event.guild && event.channel) {
+                        this.emit("notice.channel_message_delete", {
+                            timestamp: Math.floor(event.timestamp / 1000),
+                            bot_id: botId,
+                            notice_type: "channel_message_delete",
+                            sub_type: "delete",
+                            channel_id: event.channel.id,
+                            guild_id: event.guild.id,
+                            message_id: event.message.id,
+                            user_id: event.user?.id,
+                            operator_id: event.operator?.id,
+                        });
+                    } else if (event.user) {
+                        this.emit("notice.private_message_delete", {
+                            timestamp: Math.floor(event.timestamp / 1000),
+                            bot_id: botId,
+                            notice_type: "private_message_delete",
+                            sub_type: "delete",
+                            message_id: event.message.id,
+                            user_id: event.user.id,
+                        });
+                    }
                 }
             }
             // 群组成员事件
@@ -257,7 +224,8 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                     request_type: "friend",
                     request_id: String(event.id || Date.now()),
                     user_id: event.user?.id || "",
-                    comment: (event.message?.content as string) || "",
+                    comment:
+                        typeof event.message?.content === "string" ? event.message.content : "",
                     flag: String(event.id || Date.now()),
                 };
 
@@ -272,7 +240,8 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                     request_id: String(event.id || Date.now()),
                     user_id: event.user?.id || "",
                     group_id: event.guild?.id || "",
-                    comment: (event.message?.content as string) || "",
+                    comment:
+                        typeof event.message?.content === "string" ? event.message.content : "",
                     flag: String(event.id || Date.now()),
                     sub_type: "add" as const,
                 };
@@ -285,125 +254,134 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
         }
 
         async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<unknown> {
-            const { scene_id, message } = options;
-
-            // Satori 使用 message.create API
-            return this.httpClient.post("/message.create", {
-                channel_id: scene_id,
-                content: message,
-            });
-        }
-
-        async getUserInfo(user_id: string): Promise<User.Data<string>> {
-            const data = await this.httpClient.post<Record<string, unknown>>("/user.get", {
-                user_id,
-            });
-            const userData: User.Data<string> = {
-                user_id: (data.id as string) || user_id,
-                user_name: (data.name as string) || (data.username as string) || "",
-                avatar: (data.avatar as string) || "",
-            };
-            return userData;
-        }
-
-        async getFriendInfo(user_id: string): Promise<Friend.Data<string>> {
-            const friends = await this.getFriendList();
-            const friend = friends.find(item => item.user_id === user_id);
-            if (friend) return friend;
-            throw new ProtocolError({
-                protocol: "satori-v1",
-                operation: "friend.list",
-                kind: "validation",
-                message: `Satori 好友 ${user_id} 不存在`,
-            });
-        }
-
-        async getUserList(): Promise<User.Data<string>[]> {
-            return this.getFriendList();
-        }
-
-        private async getFriendList(): Promise<Friend.Data<string>[]> {
-            const friends = await collectList("friend.list", next =>
-                this.httpClient.post("/friend.list", next ? { next } : {}),
-            );
-            return friends.map(friend => {
-                if (typeof friend.id !== "string") return malformed("friend.list", friend);
-                return {
-                    user_id: friend.id,
-                    user_name: (friend.name as string) || (friend.username as string) || "",
-                    avatar: (friend.avatar as string) || "",
-                };
-            });
-        }
-
-        async getGroupInfo(group_id: string): Promise<Group.Data<string>> {
-            // Satori 使用 guild.get API
-            const data = await this.httpClient.post<Record<string, unknown>>("/guild.get", {
-                guild_id: group_id,
-            });
-            const groupData: Group.Data<string> = {
-                group_id: (data.id as string) || group_id,
-                group_name: (data.name as string) || "",
-                avatar: (data.avatar as string) || "",
-            };
-            return groupData;
-        }
-
-        async getGroupList(): Promise<Group.Data<string>[]> {
-            const guilds = await collectList("guild.list", next =>
-                this.httpClient.post("/guild.list", next ? { next } : {}),
-            );
-            return guilds.map(guild => {
-                if (typeof guild.id !== "string") return malformed("guild.list", guild);
-                return {
-                    group_id: guild.id,
-                    group_name: (guild.name as string) || "",
-                    avatar: (guild.avatar as string) || "",
-                };
-            });
-        }
-
-        async getGroupMemberInfo(
-            group_id: string,
-            user_id: string,
-        ): Promise<GroupMember.Data<string>> {
-            const data = await this.httpClient.post<Record<string, unknown>>("/guild.member.get", {
-                guild_id: group_id,
-                user_id,
-            });
-            const userObj = data.user as Record<string, unknown> | undefined;
-            const userData: GroupMember.Data<string> = {
-                user_id: (userObj?.id as string) || (data.user_id as string) || user_id,
-                user_name: (userObj?.name as string) || (data.nickname as string) || "",
-                avatar: (userObj?.avatar as string) || (data.avatar as string) || "",
-                group_id,
-            };
-            return userData;
-        }
-
-        async getGroupMemberList(group_id: string): Promise<GroupMember.Data<string>[]> {
-            const members = await collectList("guild.member.list", next =>
-                this.httpClient.post("/guild.member.list", {
-                    guild_id: group_id,
-                    ...(next ? { next } : {}),
-                }),
-            );
-            return members.map(item => {
-                const user = isRecord(item.user) ? item.user : undefined;
-                const userId = user?.id ?? item.user_id;
-                if (typeof userId !== "string") {
-                    return malformed("guild.member.list", item);
+            if (options.scene_type === "channel") {
+                return this.createMessage(options.scene_id, options.message);
+            }
+            if (options.scene_type === "private") {
+                const directChannel = await this.httpClient.post<unknown>("/user.channel.create", {
+                    user_id: options.scene_id,
+                });
+                if (!isRecord(directChannel) || typeof directChannel.id !== "string") {
+                    return malformed("user.channel.create", directChannel);
                 }
-                return {
-                    user_id: userId,
-                    user_name:
-                        (user?.name as string) ||
-                        (item.nick as string) ||
-                        (item.nickname as string) ||
-                        "",
-                    avatar: (user?.avatar as string) || (item.avatar as string) || "",
-                    group_id,
-                };
+                return this.createMessage(directChannel.id, options.message);
+            }
+            return this.unsupported("sendMessage:group");
+        }
+
+        async replyMessage(options: Adapter.ReplyMessageOptions<string>): Promise<unknown> {
+            const channelId = this.resolveChannelId(options);
+            return channelId
+                ? this.createMessage(channelId, options.message)
+                : this.sendMessage(options);
+        }
+
+        async recallMessageIn(options: Adapter.MessageContextOptions<string>): Promise<boolean> {
+            const channelId = this.requireChannelId(options, "message.delete");
+            await this.httpClient.post("/message.delete", {
+                channel_id: channelId,
+                message_id: options.message_id,
+            });
+            return true;
+        }
+
+        async updateMessageIn(options: Adapter.UpdateMessageOptions<string>): Promise<void> {
+            const channelId = this.requireChannelId(options, "message.update");
+            await this.httpClient.post("/message.update", {
+                channel_id: channelId,
+                message_id: options.message_id,
+                content: encodeSatoriContent(options.content),
+            });
+        }
+
+        async addMessageReactionIn(options: Adapter.MessageReactionOptions<string>): Promise<void> {
+            const channelId = this.requireChannelId(options, "reaction.create");
+            await this.httpClient.post("/reaction.create", {
+                channel_id: channelId,
+                message_id: options.message_id,
+                emoji: options.reaction,
+            });
+        }
+
+        async deleteMessageReactionIn(
+            options: Adapter.MessageReactionOptions<string>,
+        ): Promise<void> {
+            const channelId = this.requireChannelId(options, "reaction.delete");
+            await this.httpClient.post("/reaction.delete", {
+                channel_id: channelId,
+                message_id: options.message_id,
+                emoji: options.reaction,
+            });
+        }
+
+        getUserInfo(userId: string) {
+            return this.directoryApi.getUserInfo(userId);
+        }
+
+        getFriendInfo(userId: string) {
+            return this.directoryApi.getFriendInfo(userId);
+        }
+
+        getUserList() {
+            return this.directoryApi.getUserList();
+        }
+
+        getGroupInfo(groupId: string) {
+            return this.directoryApi.getGroupInfo(groupId);
+        }
+
+        getGroupList() {
+            return this.directoryApi.getGroupList();
+        }
+
+        getGroupMemberInfo(groupId: string, userId: string) {
+            return this.directoryApi.getGroupMemberInfo(groupId, userId);
+        }
+
+        getGroupMemberList(groupId: string) {
+            return this.directoryApi.getGroupMemberList(groupId);
+        }
+
+        getChannelList(options?: DirectoryQueryOptions<string>) {
+            return this.directoryApi.getChannelList(options);
+        }
+
+        getChannelInfo(channelId: string, options?: DirectoryQueryOptions<string>) {
+            return this.directoryApi.getChannelInfo(channelId, options);
+        }
+
+        async setChannelName(channelId: string, name: string): Promise<void> {
+            await this.httpClient.post("/channel.update", {
+                channel_id: channelId,
+                data: { name },
+            });
+        }
+
+        async deleteFriend(userId: string): Promise<void> {
+            await this.httpClient.post("/friend.delete", { user_id: userId });
+        }
+
+        async approveFriendRequest(
+            requestId: string,
+            approve: boolean,
+            comment?: string,
+        ): Promise<void> {
+            await this.httpClient.post("/friend.approve", {
+                message_id: requestId,
+                approve,
+                comment,
+            });
+        }
+
+        async approveGroupRequest(
+            requestId: string,
+            approve: boolean,
+            reason?: string,
+        ): Promise<void> {
+            await this.httpClient.post("/guild.approve", {
+                message_id: requestId,
+                approve,
+                comment: reason,
             });
         }
 
@@ -423,6 +401,34 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                 guild_id: group_id,
                 user_id,
                 duration,
+            });
+        }
+
+        private createMessage(channelId: string, content: Message.Content): Promise<unknown> {
+            return this.httpClient.post("/message.create", {
+                channel_id: channelId,
+                content: encodeSatoriContent(content),
+            });
+        }
+
+        private resolveChannelId(options: Adapter.MessageContextOptions<string>) {
+            return (
+                options.channel_id ??
+                (options.scene_type === "channel" ? options.scene_id : undefined)
+            );
+        }
+
+        private requireChannelId(
+            options: Adapter.MessageContextOptions<string>,
+            operation: string,
+        ): string {
+            const channelId = this.resolveChannelId(options);
+            if (channelId) return channelId;
+            throw new ProtocolError({
+                protocol: "satori-v1",
+                operation,
+                kind: "validation",
+                message: `Satori ${operation} 需要 channel_id 上下文`,
             });
         }
 

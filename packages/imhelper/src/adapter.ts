@@ -11,6 +11,7 @@ import type {
     GroupMemberIncreaseNoticeEvent,
     GroupMemberDecreaseNoticeEvent,
     GroupMessageDeleteNoticeEvent,
+    ChannelMessageDeleteNoticeEvent,
     PrivateMessageDeleteNoticeEvent,
     FriendIncreaseNoticeEvent,
     FriendDecreaseNoticeEvent,
@@ -28,8 +29,13 @@ import type {
 const adapterType: unique symbol = Symbol("imhelper.adapter.type");
 
 /** 协议无关的目录读取策略，由具体适配器映射到平台刷新参数。 */
-export interface DirectoryQueryOptions {
+export interface DirectoryQueryOptions<Id extends string | number = string | number> {
     fresh?: boolean;
+    /** 目录必须依附其他实体时显式携带作用域，禁止从 ID 形状猜测父级。 */
+    scope?: {
+        type: "group" | "channel";
+        id: Id;
+    };
 }
 
 export abstract class Adapter<
@@ -47,42 +53,63 @@ export abstract class Adapter<
     async sendMessage(_options: Adapter.SendMessageOptions<Id>): Promise<Message.Ret> {
         return this.unsupported("sendMessage");
     }
+    /** 带来源消息与协议上下文的回复入口；默认退化为普通发送。 */
+    async replyMessage(options: Adapter.ReplyMessageOptions<Id>): Promise<Message.Ret> {
+        return this.sendMessage({
+            scene_type: options.scene_type,
+            scene_id: options.scene_id,
+            message: options.message,
+        });
+    }
     /** 撤回消息 */
     async recallMessage(_message_id: Id): Promise<boolean> {
         return this.unsupported("recallMessage");
     }
-    async getUserList(_options?: DirectoryQueryOptions): Promise<User.Data<Id>[]> {
+    /** 带场景上下文的撤回入口，供要求 channel_id 的协议覆盖。 */
+    async recallMessageIn(options: Adapter.MessageContextOptions<Id>): Promise<boolean> {
+        return this.recallMessage(options.message_id);
+    }
+    async getUserList(_options?: DirectoryQueryOptions<Id>): Promise<User.Data<Id>[]> {
         return this.unsupported("getUserList");
     }
-    async getUserInfo(_user_id: Id, _options?: DirectoryQueryOptions): Promise<User.Data<Id>> {
+    async getUserInfo(_user_id: Id, _options?: DirectoryQueryOptions<Id>): Promise<User.Data<Id>> {
         return this.unsupported("getUserInfo");
     }
-    async getFriendInfo(_user_id: Id, _options?: DirectoryQueryOptions): Promise<Friend.Data<Id>> {
+    async getFriendInfo(
+        _user_id: Id,
+        _options?: DirectoryQueryOptions<Id>,
+    ): Promise<Friend.Data<Id>> {
         return this.unsupported("getFriendInfo");
     }
-    async getGroupList(_options?: DirectoryQueryOptions): Promise<Group.Data<Id>[]> {
+    async getGroupList(_options?: DirectoryQueryOptions<Id>): Promise<Group.Data<Id>[]> {
         return this.unsupported("getGroupList");
     }
-    async getGroupInfo(_group_id: Id, _options?: DirectoryQueryOptions): Promise<Group.Data<Id>> {
+    async getGroupInfo(
+        _group_id: Id,
+        _options?: DirectoryQueryOptions<Id>,
+    ): Promise<Group.Data<Id>> {
         return this.unsupported("getGroupInfo");
     }
     async getGroupMemberList(
         _group_id: Id,
-        _options?: DirectoryQueryOptions,
+        _options?: DirectoryQueryOptions<Id>,
     ): Promise<GroupMember.Data<Id>[]> {
         return this.unsupported("getGroupMemberList");
     }
     async getGroupMemberInfo(
         _group_id: Id,
         _user_id: Id,
-        _options?: DirectoryQueryOptions,
+        _options?: DirectoryQueryOptions<Id>,
     ): Promise<GroupMember.Data<Id>> {
         return this.unsupported("getGroupMemberInfo");
     }
-    async getChannelList(): Promise<Channel.Data<Id>[]> {
+    async getChannelList(_options?: DirectoryQueryOptions<Id>): Promise<Channel.Data<Id>[]> {
         return this.unsupported("getChannelList");
     }
-    async getChannelInfo(_channel_id: Id): Promise<Channel.Data<Id>> {
+    async getChannelInfo(
+        _channel_id: Id,
+        _options?: DirectoryQueryOptions<Id>,
+    ): Promise<Channel.Data<Id>> {
         return this.unsupported("getChannelInfo");
     }
     async getChannelMemberList(_channel_id: Id): Promise<ChannelMember.Data<Id>[]> {
@@ -120,8 +147,14 @@ export abstract class Adapter<
     async addMessageReaction(_message_id: Id, _reaction: string): Promise<void> {
         return this.unsupported("addMessageReaction");
     }
+    async addMessageReactionIn(options: Adapter.MessageReactionOptions<Id>): Promise<void> {
+        return this.addMessageReaction(options.message_id, options.reaction);
+    }
     async deleteMessageReaction(_message_id: Id, _reaction: string): Promise<void> {
         return this.unsupported("deleteMessageReaction");
+    }
+    async deleteMessageReactionIn(options: Adapter.MessageReactionOptions<Id>): Promise<void> {
+        return this.deleteMessageReaction(options.message_id, options.reaction);
     }
     /** 获取消息 */
     async getMessage(_message_id: Id): Promise<AnyMessageEventData<Id>> {
@@ -130,6 +163,9 @@ export abstract class Adapter<
     /** 编辑消息 */
     async updateMessage(_message_id: Id, _content: Message.Content): Promise<void> {
         return this.unsupported("updateMessage");
+    }
+    async updateMessageIn(options: Adapter.UpdateMessageOptions<Id>): Promise<void> {
+        return this.updateMessage(options.message_id, options.content);
     }
     /** 设置群组名称 */
     async setGroupName(_group_id: Id, _name: string): Promise<void> {
@@ -219,6 +255,7 @@ export namespace Adapter {
         "notice.group_member_increase": [GroupMemberIncreaseNoticeEvent.Data<Id>];
         "notice.group_member_decrease": [GroupMemberDecreaseNoticeEvent.Data<Id>];
         "notice.group_message_delete": [GroupMessageDeleteNoticeEvent.Data<Id>];
+        "notice.channel_message_delete": [ChannelMessageDeleteNoticeEvent.Data<Id>];
         "notice.private_message_delete": [PrivateMessageDeleteNoticeEvent.Data<Id>];
         "notice.friend_increase": [FriendIncreaseNoticeEvent.Data<Id>];
         "notice.friend_decrease": [FriendDecreaseNoticeEvent.Data<Id>];
@@ -236,5 +273,27 @@ export namespace Adapter {
         scene_type: Message.SceneType;
         scene_id: Id;
         message: Message.Content;
+    }
+    export interface MessageContextOptions<Id extends string | number = string | number> {
+        message_id: Id;
+        scene_type: Message.SceneType;
+        scene_id: Id;
+        /** 协议需要独立会话地址时保留真实频道 ID。 */
+        channel_id?: Id;
+    }
+    export interface ReplyMessageOptions<
+        Id extends string | number = string | number,
+    > extends MessageContextOptions<Id> {
+        message: Message.Content;
+    }
+    export interface UpdateMessageOptions<
+        Id extends string | number = string | number,
+    > extends MessageContextOptions<Id> {
+        content: Message.Content;
+    }
+    export interface MessageReactionOptions<
+        Id extends string | number = string | number,
+    > extends MessageContextOptions<Id> {
+        reaction: string;
     }
 }

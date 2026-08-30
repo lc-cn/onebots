@@ -34,18 +34,27 @@ export class ChannelMessageEvent<
     protected getSceneId(): Id {
         return this.channel_id;
     }
+    protected override getMessageContext() {
+        return { ...super.getMessageContext(), channel_id: this.channel_id };
+    }
     /**
      * 添加反应
      */
     addReaction(reaction: string): Promise<void> {
-        return this.helper.adapter.addMessageReaction(this.message_id, reaction);
+        return this.helper.adapter.addMessageReactionIn({
+            ...this.getMessageContext(),
+            reaction,
+        });
     }
 
     /**
      * 移除反应
      */
     removeReaction(reaction: string): Promise<void> {
-        return this.helper.adapter.deleteMessageReaction(this.message_id, reaction);
+        return this.helper.adapter.deleteMessageReactionIn({
+            ...this.getMessageContext(),
+            reaction,
+        });
     }
 }
 

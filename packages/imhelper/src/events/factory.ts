@@ -12,6 +12,7 @@ import { FriendIncreaseNoticeEvent } from "./notice/friend-increase.js";
 import { GroupMemberDecreaseNoticeEvent } from "./notice/group-member-decrease.js";
 import { GroupMemberIncreaseNoticeEvent } from "./notice/group-member-increase.js";
 import { GroupMessageDeleteNoticeEvent } from "./notice/group-message-delete.js";
+import { ChannelMessageDeleteNoticeEvent } from "./notice/channel-message-delete.js";
 import { PrivateMessageDeleteNoticeEvent } from "./notice/private-message-delete.js";
 import { FriendRequestEvent } from "./request/friend.js";
 import { GroupRequestEvent } from "./request/group.js";
@@ -23,6 +24,7 @@ type EventTypeMap<Id extends string | number> = {
     "notice.group_member_increase": GroupMemberIncreaseNoticeEvent<Id>;
     "notice.group_member_decrease": GroupMemberDecreaseNoticeEvent<Id>;
     "notice.group_message_delete": GroupMessageDeleteNoticeEvent<Id>;
+    "notice.channel_message_delete": ChannelMessageDeleteNoticeEvent<Id>;
     "notice.private_message_delete": PrivateMessageDeleteNoticeEvent<Id>;
     "notice.friend_increase": FriendIncreaseNoticeEvent<Id>;
     "notice.friend_decrease": FriendDecreaseNoticeEvent<Id>;
@@ -40,6 +42,7 @@ type EventDataMap<Id extends string | number> = {
     "notice.group_member_increase": GroupMemberIncreaseNoticeEvent.Data<Id>;
     "notice.group_member_decrease": GroupMemberDecreaseNoticeEvent.Data<Id>;
     "notice.group_message_delete": GroupMessageDeleteNoticeEvent.Data<Id>;
+    "notice.channel_message_delete": ChannelMessageDeleteNoticeEvent.Data<Id>;
     "notice.private_message_delete": PrivateMessageDeleteNoticeEvent.Data<Id>;
     "notice.friend_increase": FriendIncreaseNoticeEvent.Data<Id>;
     "notice.friend_decrease": FriendDecreaseNoticeEvent.Data<Id>;
@@ -62,6 +65,7 @@ const supportedEventTypes = [
     "notice.group_member_increase",
     "notice.group_member_decrease",
     "notice.group_message_delete",
+    "notice.channel_message_delete",
     "notice.private_message_delete",
     "notice.friend_increase",
     "notice.friend_decrease",
@@ -110,6 +114,11 @@ function createKnownEvent<Id extends string | number>(
             return new GroupMessageDeleteNoticeEvent(
                 helper,
                 data as GroupMessageDeleteNoticeEvent.Data<Id>,
+            );
+        case "notice.channel_message_delete":
+            return new ChannelMessageDeleteNoticeEvent(
+                helper,
+                data as ChannelMessageDeleteNoticeEvent.Data<Id>,
             );
         case "notice.private_message_delete":
             return new PrivateMessageDeleteNoticeEvent(

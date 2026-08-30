@@ -24,11 +24,17 @@ export interface SatoriV1Event {
     };
     message?: {
         id: string;
-        content?: string | unknown[];
+        content?: string | SatoriElement[];
         created_at?: number;
         [key: string]: unknown;
     };
     [key: string]: unknown;
+}
+
+export interface SatoriElement {
+    type: string;
+    attrs?: Record<string, unknown>;
+    children?: Array<SatoriElement | string>;
 }
 
 export type SatoriGatewayPayload =

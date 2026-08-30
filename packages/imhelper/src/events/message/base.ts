@@ -37,29 +37,33 @@ export abstract class MessageEvent<
      */
     protected abstract getSceneId(): Id;
 
+    protected getMessageContext(): import("../../adapter.js").Adapter.MessageContextOptions<Id> {
+        return {
+            message_id: this.message_id,
+            scene_type: this.message_type,
+            scene_id: this.getSceneId(),
+        };
+    }
+
     /**
      * 回复消息
      */
     reply(message: Message.Content): Promise<Message.Ret> {
-        return this.helper.adapter.sendMessage({
-            scene_type: this.message_type,
-            scene_id: this.getSceneId(),
-            message: message,
-        });
+        return this.helper.adapter.replyMessage({ ...this.getMessageContext(), message });
     }
 
     /**
      * 撤回消息
      */
     recall(): Promise<boolean> {
-        return this.helper.adapter.recallMessage(this.message_id);
+        return this.helper.adapter.recallMessageIn(this.getMessageContext());
     }
 
     /**
      * 编辑消息
      */
     edit(content: Message.Content): Promise<void> {
-        return this.helper.adapter.updateMessage(this.message_id, content);
+        return this.helper.adapter.updateMessageIn({ ...this.getMessageContext(), content });
     }
 }
 
