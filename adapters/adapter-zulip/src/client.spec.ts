@@ -312,6 +312,7 @@ describe("ZulipClient", () => {
         expect(registration?.params?.event_types).toContain("invites_changed");
         expect(registration?.params?.event_types).toContain("alert_words");
         expect(registration?.params?.event_types).toContain("muted_users");
+        expect(registration?.params?.event_types).toContain("custom_profile_fields");
         expect(registration?.params?.event_types).toContain("realm_emoji");
         expect(registration?.params?.event_types).toContain("realm_linkifiers");
         expect(registration?.params?.client_capabilities).toMatchObject({

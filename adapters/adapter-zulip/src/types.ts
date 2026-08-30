@@ -282,6 +282,24 @@ export interface ZulipRealmEmojiUpdateEvent extends ZulipBaseEvent {
     data: Partial<Pick<ZulipRealmEmoji, "deactivated">> & Record<string, unknown>;
 }
 
+export interface ZulipCustomProfileField {
+    id: number;
+    type: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+    order: number;
+    name: string;
+    hint: string;
+    field_data?: string;
+    display_in_profile_summary?: boolean;
+    required: boolean;
+    editable_by_user: boolean;
+    use_for_user_matching?: boolean;
+}
+
+export interface ZulipCustomProfileFieldsEvent extends ZulipBaseEvent {
+    type: "custom_profile_fields";
+    fields: ZulipCustomProfileField[];
+}
+
 export type ZulipEvent =
     | ZulipMessageEvent
     | ZulipUpdateMessageEvent
@@ -295,6 +313,7 @@ export type ZulipEvent =
     | ZulipUserGroupEvent
     | ZulipRealmEmojiAddEvent
     | ZulipRealmEmojiUpdateEvent
+    | ZulipCustomProfileFieldsEvent
     | ZulipBaseEvent;
 
 export interface ZulipQueueRegistration extends ZulipApiEnvelope {
