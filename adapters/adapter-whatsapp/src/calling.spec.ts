@@ -130,6 +130,20 @@ describe("WhatsApp Calling API", () => {
         expect(requestJson(fetcher)).toMatchObject({ action: "reject", to: "8613800138000" });
     });
 
+    it("Calling 动作拒绝契约外字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "connect_call", {
+                user_id: "8613800138000",
+                sdp: "v=0\r\n",
+                sdp_type: "offer",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "connect_call", parameter: "sdp_type" },
+        });
+    });
+
     it("拒绝错误状态、错误响应和超长回调标识", async () => {
         const invalidPermission = new WhatsAppClient(
             config,

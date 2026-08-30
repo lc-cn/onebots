@@ -238,12 +238,7 @@ export {
     type WhatsAppSolutionMigrationRequestStatus,
     type WhatsAppSolutionMigrationResponse,
 } from "./solution-migration.js";
-export {
-    isWhatsAppCallingAction,
-    WhatsAppCalling,
-    WHATSAPP_CALLING_ACTIONS,
-    type WhatsAppCallingAction,
-} from "./calling.js";
+export { isWhatsAppCallingAction, WhatsAppCalling, type WhatsAppCallingAction } from "./calling.js";
 export { WhatsAppApiError, type WhatsAppApiErrorOptions } from "./errors.js";
 export {
     isWhatsAppEncryptedMessageAction,

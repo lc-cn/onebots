@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import {
     parseCallPermissionResponse,
     parseCallResponse,
@@ -15,22 +16,6 @@ import type {
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import type { WhatsAppAPIResponse } from "./types.js";
-
-export const WHATSAPP_CALLING_ACTIONS = Object.freeze([
-    "get_call_permissions",
-    "request_call_permission",
-    "connect_call",
-    "pre_accept_call",
-    "accept_call",
-    "reject_call",
-    "terminate_call",
-] as const);
-
-export type WhatsAppCallingAction = (typeof WHATSAPP_CALLING_ACTIONS)[number];
-
-export function isWhatsAppCallingAction(action: string): action is WhatsAppCallingAction {
-    return (WHATSAPP_CALLING_ACTIONS as readonly string[]).includes(action);
-}
 
 /**
  * WhatsApp Calling API 控制平面。
@@ -105,40 +90,6 @@ export class WhatsAppCalling {
         );
     }
 
-    execute(
-        action: WhatsAppCallingAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_call_permissions":
-                return this.getPermission(stringParam(params, "user_id"));
-            case "request_call_permission":
-                return this.requestPermission(stringParam(params, "user_id"));
-            case "connect_call":
-                return this.connect({
-                    to: stringParam(params, "user_id"),
-                    session: { sdp_type: "offer", sdp: stringParam(params, "sdp") },
-                    biz_opaque_callback_data: optionalString(params, "biz_opaque_callback_data"),
-                });
-            case "pre_accept_call": {
-                const sdp = optionalString(params, "sdp");
-                return this.preAccept({
-                    to: stringParam(params, "user_id"),
-                    ...(sdp ? { session: { sdp_type: "answer", sdp } } : {}),
-                });
-            }
-            case "accept_call":
-                return this.accept(stringParam(params, "user_id"), {
-                    sdp_type: "answer",
-                    sdp: stringParam(params, "sdp"),
-                });
-            case "reject_call":
-                return this.reject(stringParam(params, "user_id"));
-            case "terminate_call":
-                return this.terminate(stringParam(params, "call_id"));
-        }
-    }
-
     private async manage(
         action: "connect" | "pre_accept" | "accept" | "reject",
         params: Readonly<Record<string, unknown>>,
@@ -153,13 +104,56 @@ export class WhatsAppCalling {
     }
 }
 
-export const WHATSAPP_CALLING_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_CALLING_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.calling.execute(action, params),
-    ]),
-) as Record<WhatsAppCallingAction, PlatformActionHandler<WhatsAppClient>>;
+type CallingActionParams = Readonly<Record<string, unknown>>;
+
+const CALLING_ACTION_HANDLERS = {
+    get_call_permissions: (client: WhatsAppClient, params: CallingActionParams) =>
+        client.calling.getPermission(stringParam(params, "user_id")),
+    request_call_permission: (client: WhatsAppClient, params: CallingActionParams) =>
+        client.calling.requestPermission(stringParam(params, "user_id")),
+    connect_call: (client: WhatsAppClient, params: CallingActionParams) =>
+        client.calling.connect({
+            to: stringParam(params, "user_id"),
+            session: { sdp_type: "offer", sdp: stringParam(params, "sdp") },
+            biz_opaque_callback_data: optionalString(params, "biz_opaque_callback_data"),
+        }),
+    pre_accept_call: (client: WhatsAppClient, params: CallingActionParams) => {
+        const sdp = optionalString(params, "sdp");
+        return client.calling.preAccept({
+            to: stringParam(params, "user_id"),
+            ...(sdp ? { session: { sdp_type: "answer", sdp } } : {}),
+        });
+    },
+    accept_call: (client: WhatsAppClient, params: CallingActionParams) =>
+        client.calling.accept(stringParam(params, "user_id"), {
+            sdp_type: "answer",
+            sdp: stringParam(params, "sdp"),
+        }),
+    reject_call: (client: WhatsAppClient, params: CallingActionParams) =>
+        client.calling.reject(stringParam(params, "user_id")),
+    terminate_call: (client: WhatsAppClient, params: CallingActionParams) =>
+        client.calling.terminate(stringParam(params, "call_id")),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Calling 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_CALLING_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    CALLING_ACTION_HANDLERS,
+    {
+        get_call_permissions: ["user_id"],
+        request_call_permission: ["user_id"],
+        connect_call: ["user_id", "sdp", "biz_opaque_callback_data"],
+        pre_accept_call: ["user_id", "sdp"],
+        accept_call: ["user_id", "sdp"],
+        reject_call: ["user_id"],
+        terminate_call: ["call_id"],
+    },
+);
+
+export type WhatsAppCallingAction = keyof typeof WHATSAPP_CALLING_ACTION_HANDLERS;
+
+export function isWhatsAppCallingAction(action: string): action is WhatsAppCallingAction {
+    return Object.hasOwn(WHATSAPP_CALLING_ACTION_HANDLERS, action);
+}
 
 function session<TType extends "offer" | "answer">(
     value: WhatsAppCallSession<TType>,
