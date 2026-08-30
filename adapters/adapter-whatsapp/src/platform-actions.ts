@@ -11,6 +11,7 @@ import { WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS } from "./business-profile.js
 import { WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS } from "./business-compliance.js";
 import { WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS } from "./solution-migration.js";
 import { WHATSAPP_COMMERCE_ACTION_HANDLERS } from "./commerce.js";
+import { WHATSAPP_QR_CODE_ACTION_HANDLERS } from "./qr-codes.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -34,6 +35,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS,
     ...WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS,
     ...WHATSAPP_COMMERCE_ACTION_HANDLERS,
+    ...WHATSAPP_QR_CODE_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>
@@ -41,38 +43,6 @@ const ACTION_HANDLERS = {
             requireString(params, "message_id"),
             optionalBoolean(params, "typing_indicator") || false,
         ),
-    list_qr_codes: (client, params) =>
-        client.call({
-            method: "GET",
-            resource: `${client.config.phone_number_id}/message_qrdls`,
-            query: { fields: optionalString(params, "fields") },
-        }),
-    get_qr_code: (client, params) =>
-        client.call({
-            method: "GET",
-            resource: `${client.config.phone_number_id}/message_qrdls/${requireResourceId(params, "code")}`,
-            query: { fields: optionalString(params, "fields") },
-        }),
-    create_qr_code: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: `${client.config.phone_number_id}/message_qrdls`,
-            body: { prefilled_message: requireString(params, "prefilled_message") },
-        }),
-    update_qr_code: (client, params) =>
-        client.call({
-            method: "POST",
-            resource: `${client.config.phone_number_id}/message_qrdls`,
-            body: {
-                code: requireResourceId(params, "code"),
-                prefilled_message: requireString(params, "prefilled_message"),
-            },
-        }),
-    delete_qr_code: (client, params) =>
-        client.call({
-            method: "DELETE",
-            resource: `${client.config.phone_number_id}/message_qrdls/${requireResourceId(params, "code")}`,
-        }),
     upload_media: (client, params) => uploadMedia(client, params),
     get_media: (client, params) => client.getMedia(requireString(params, "media_id")),
     download_media: async (client, params) => {

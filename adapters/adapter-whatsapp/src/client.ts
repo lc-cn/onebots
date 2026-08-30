@@ -37,6 +37,17 @@ import {
     type WhatsAppCommerceSettingsUpdate,
     type WhatsAppCommerceSettingsUpdateResponse,
 } from "./commerce.js";
+import {
+    WhatsAppQrCodes,
+    type WhatsAppQrCodeCreate,
+    type WhatsAppQrCodeDeleteResponse,
+    type WhatsAppQrCodeFieldSelection,
+    type WhatsAppQrCodeGetResponse,
+    type WhatsAppQrCodeListQuery,
+    type WhatsAppQrCodeListResponse,
+    type WhatsAppQrCodeMutationResponse,
+    type WhatsAppQrCodeUpdate,
+} from "./qr-codes.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -91,6 +102,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly solutionMigration: WhatsAppSolutionMigration;
     /** Phone Number 级 Commerce 显示与购物车设置。 */
     readonly commerce: WhatsAppCommerce;
+    /** Phone Number 级消息二维码增查改删与图片生成。 */
+    readonly qrCodes: WhatsAppQrCodes;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -110,6 +123,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.businessCompliance = new WhatsAppBusinessCompliance(this);
         this.solutionMigration = new WhatsAppSolutionMigration(this);
         this.commerce = new WhatsAppCommerce(this);
+        this.qrCodes = new WhatsAppQrCodes(this);
     }
 
     get apiVersion(): string {
@@ -325,6 +339,29 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         settings: WhatsAppCommerceSettingsUpdate,
     ): Promise<WhatsAppCommerceSettingsUpdateResponse> {
         return this.commerce.update(settings);
+    }
+
+    listQrCodes(query?: WhatsAppQrCodeListQuery): Promise<WhatsAppQrCodeListResponse> {
+        return this.qrCodes.list(query);
+    }
+
+    getQrCode(
+        code: string,
+        selection?: WhatsAppQrCodeFieldSelection,
+    ): Promise<WhatsAppQrCodeGetResponse> {
+        return this.qrCodes.get(code, selection);
+    }
+
+    createQrCode(request: WhatsAppQrCodeCreate): Promise<WhatsAppQrCodeMutationResponse> {
+        return this.qrCodes.create(request);
+    }
+
+    updateQrCode(request: WhatsAppQrCodeUpdate): Promise<WhatsAppQrCodeMutationResponse> {
+        return this.qrCodes.update(request);
+    }
+
+    deleteQrCode(code: string): Promise<WhatsAppQrCodeDeleteResponse> {
+        return this.qrCodes.delete(code);
     }
 
     async uploadMedia(file: Blob, mimeType: string, filename = "upload"): Promise<{ id: string }> {

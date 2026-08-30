@@ -56,6 +56,27 @@ export {
     type WhatsAppCommerceSettingsUpdateResponse,
 } from "./commerce.js";
 export {
+    isWhatsAppQrCodeAction,
+    WhatsAppQrCodes,
+    WHATSAPP_QR_CODE_ACTIONS,
+    WHATSAPP_QR_CODE_FIELDS,
+    WHATSAPP_QR_IMAGE_FORMATS,
+    type WhatsAppQrCode,
+    type WhatsAppQrCodeAction,
+    type WhatsAppQrCodeCreate,
+    type WhatsAppQrCodeDeleteResponse,
+    type WhatsAppQrCodeDetails,
+    type WhatsAppQrCodeField,
+    type WhatsAppQrCodeFieldSelection,
+    type WhatsAppQrCodeGetResponse,
+    type WhatsAppQrCodeListQuery,
+    type WhatsAppQrCodeListResponse,
+    type WhatsAppQrCodeMutationResponse,
+    type WhatsAppQrCodePaging,
+    type WhatsAppQrCodeUpdate,
+    type WhatsAppQrImageFormat,
+} from "./qr-codes.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,

@@ -15,6 +15,7 @@ import { isWhatsAppBusinessProfileAction } from "./business-profile.js";
 import { isWhatsAppBusinessComplianceAction } from "./business-compliance.js";
 import { isWhatsAppSolutionMigrationAction } from "./solution-migration.js";
 import { isWhatsAppCommerceAction } from "./commerce.js";
+import { isWhatsAppQrCodeAction } from "./qr-codes.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -45,11 +46,6 @@ const callingAccess = {
 };
 
 const businessManagementActions = new Set([
-    "list_qr_codes",
-    "get_qr_code",
-    "create_qr_code",
-    "update_qr_code",
-    "delete_qr_code",
     "list_message_templates",
     "create_message_template",
     "delete_message_template",
@@ -74,6 +70,7 @@ const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIO
     if (isWhatsAppBusinessComplianceAction(action)) return businessManagement;
     if (isWhatsAppSolutionMigrationAction(action)) return businessManagement;
     if (isWhatsAppCommerceAction(action)) return businessManagement;
+    if (isWhatsAppQrCodeAction(action)) return businessManagement;
     if (businessManagementActions.has(action)) return businessManagement;
     if (businessMessagingActions.has(action)) return businessMessaging;
     if (action === "send_native_message" || action === "mark_message_read") {

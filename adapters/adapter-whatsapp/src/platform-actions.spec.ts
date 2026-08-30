@@ -84,19 +84,6 @@ describe("WhatsApp 平台动作", () => {
         );
     });
 
-    it("用固定 Phone Number 资源管理消息二维码", async () => {
-        const call = vi.fn().mockResolvedValue({ code: "Q1" });
-        await executeWhatsAppPlatformAction({ call, config } as never, "update_qr_code", {
-            code: "Q1",
-            prefilled_message: "Hello",
-        });
-        expect(call).toHaveBeenCalledWith({
-            method: "POST",
-            resource: "phone/message_qrdls",
-            body: { code: "Q1", prefilled_message: "Hello" },
-        });
-    });
-
     it("Commerce 设置不能为空操作", async () => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(

@@ -106,6 +106,8 @@ await adapter.callAction("my_bot", "whatsapp_call", {
 
 Flow 的 `list_flows`、`create_flow`、`get_flow`、`update_flow`、`delete_flow`、`publish_flow`、`deprecate_flow`，Commerce 设置，以及消息二维码的增查改删均提供固定资源动作；权限仍由 Meta 的 `whatsapp_business_management` scope 决定。Commerce 也可通过强类型 `client.commerce` 使用，读取响应会校验官方 `data` 数组，更新仅接受购物车与目录可见性布尔字段，并拒绝空操作或任意附加参数。
 
+消息二维码通过 `client.qrCodes` 或 `list_qr_codes` / `get_qr_code` / `create_qr_code` / `update_qr_code` / `delete_qr_code` 管理。查询 `fields` 是可增减数组，图片用独立的 `qr_image_format: "PNG" | "SVG"` 生成 Graph formatted field；列表还支持 `code`、1–25 的 `limit` 与 `after` cursor。创建图片使用 `generate_qr_image`，适配器会校验 14 位大写字母数字 code、140 字符预填消息、分页结构以及单项响应的单元素 `data` 数组。
+
 Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message` 等固定动作。标准 `send_message`、群资料、群成员、改名、邀请/移除成员和 `handle_group_request` 也复用同一实现。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
 
 Calling API 提供 `get_call_permissions`、`request_call_permission`、`connect_call`、`pre_accept_call`、`accept_call`、`reject_call` 与 `terminate_call` 固定动作，也可直接使用 `client.calling` 获得完整类型。呼叫权限申请通过原生 `interactive.call_permission_request` 消息发送；`connect` 使用 offer SDP，`accept` 使用 answer SDP，`terminate` 使用 Meta 返回的 `call_id`。此模块只负责权限和呼叫信令，不会伪装成 WebRTC/SIP 媒体实现；媒体会话、ICE 与音频传输由调用方负责。当前 Phone Number 必须先获准启用 Cloud API Calling。

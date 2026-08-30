@@ -45,6 +45,8 @@ Absolute resource URLs are rejected so the access token cannot be sent to an unc
 
 Fixed Groups actions cover create/get/list/update/delete, invite links, join-request approval, participant add/remove, and message pin/unpin. Subscribe the v23 fields `group_lifecycle_update`, `group_participant_update`, and `group_settings_update` in addition to `messages` when Groups API is enabled.
 
+Message QR codes are available through `client.qrCodes` and the five fixed QR-code actions. Field selection uses an array, PNG/SVG image projection is explicit, and list queries support code filtering, a 1–25 limit, and cursor pagination. Requests and responses are validated against the Meta v23 shapes, including the single-item `data` array.
+
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 
 References: [WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/), [Meta official Postman workspace](https://www.postman.com/meta/whatsapp-business-platform/overview/).
