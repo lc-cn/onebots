@@ -91,4 +91,29 @@ describe("WechatWebhookHost", () => {
             body: { error: { code: "WECHAT_METHOD_NOT_ALLOWED" } },
         });
     });
+
+    it("业务监听失败时不确认且允许同一 Webhook 重投", async () => {
+        const client = new WechatClient(config);
+        const failure = vi.fn(async () => {
+            await Promise.resolve();
+            throw new Error("downstream failed");
+        });
+        client.on("raw_event", failure);
+        const host = new WechatWebhookHost(config, client);
+        const query = {
+            timestamp: "1",
+            nonce: "2",
+            signature: signWechatMessage("token", "1", "2"),
+        };
+
+        await expect(host.ingest({ method: "POST", query, body: xml })).rejects.toThrow(
+            "downstream failed",
+        );
+        client.off("raw_event", failure);
+        await expect(host.ingest({ method: "POST", query, body: xml })).resolves.toMatchObject({
+            status: 200,
+            body: "success",
+        });
+        expect(failure).toHaveBeenCalledTimes(1);
+    });
 });

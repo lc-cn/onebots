@@ -18,6 +18,8 @@ describe("微信公众号配置 Schema", () => {
             path: "receive_mode",
             oneOf: ["webhook"],
         });
+        expect(wechatSchema.deduplicate_webhooks?.ui?.visibleWhen).toBeUndefined();
+        expect(wechatSchema.webhook_deduplication_limit?.ui?.visibleWhen).toBeUndefined();
     });
 
     it("约束 Webhook 路径和 API HTTPS 入口", () => {

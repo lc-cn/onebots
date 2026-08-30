@@ -134,8 +134,8 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
         const client = new WechatClient(wechatConfig);
         const account = new Account<"wechat", WechatClient>(this, client, config);
 
-        client.on("raw_event", (message: WechatIncomingMessage) => {
-            account.dispatch(
+        client.on("raw_event", async (message: WechatIncomingMessage) => {
+            await account.dispatch(
                 projectWechatEvent(message, {
                     botId: this.createId(config.app_id),
                     createId: value => this.createId(value),

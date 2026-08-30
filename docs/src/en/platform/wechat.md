@@ -20,6 +20,6 @@ Configure `https://bot.example.com/wechat/my_mp/webhook` in the WeChat console. 
 
 The adapter receives every official-account message and event, preserves `raw_event` plus the complete `RawXml`, and supports active customer-service messages and correlated passive replies. Media must use an uploaded `media_id`; URLs are never silently converted into placeholder text.
 
-WeChat user tags are audience-management objects, not chat groups. Native actions cover users, tags, blocklists, media, drafts, publishing, menus, QR codes, templates, and mass messaging. Use `wechat_call` for newly introduced or uncommon official endpoints.
+WeChat user tags are audience-management objects, not chat groups. Native actions cover users, tags, blocklists, media, drafts, publishing, menus, QR codes, templates, mass messaging, API quota, RID diagnostics, API domains, and callback IPs. Access tokens use the stable-token endpoint. Webhook and manual ingress share awaited delivery, in-flight coalescing, and deduplication inside the client. Use `wechat_call` for newly introduced or uncommon official endpoints.
 
 See the [package README](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wechat) for the complete API and embedding contract.

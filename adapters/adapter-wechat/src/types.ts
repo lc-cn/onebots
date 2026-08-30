@@ -11,7 +11,7 @@ export interface WechatConfig {
     webhook_path?: string;
     /** 等待下游通过 reply 段提交被动回复的时间，默认 4500ms，0 表示立即确认。 */
     passive_reply_timeout_ms?: number;
-    /** 是否按 MsgId/事件复合键过滤微信重试，默认开启。 */
+    /** 是否在统一 Client 入口按稳定事件身份过滤重试，默认开启。 */
     deduplicate_webhooks?: boolean;
     webhook_deduplication_limit?: number;
     api_base_url?: string;

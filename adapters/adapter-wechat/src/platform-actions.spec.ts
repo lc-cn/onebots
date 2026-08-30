@@ -27,10 +27,13 @@ describe("微信公众号平台动作", () => {
             body: { value: 1 },
         });
         expect(call).toHaveBeenCalledWith(expect.objectContaining({ path: "/cgi-bin/new/action" }));
-        expect(WECHAT_PLATFORM_ACTIONS.size).toBe(74);
+        expect(WECHAT_PLATFORM_ACTIONS.size).toBe(79);
         expect(WECHAT_PLATFORM_ACTIONS.has("publish_draft")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("mass_send_by_tag")).toBe(true);
         expect(WECHAT_PLATFORM_ACTIONS.has("list_customer_service_accounts")).toBe(true);
+        expect(WECHAT_PLATFORM_ACTIONS.has("get_api_quota")).toBe(true);
+        expect(WECHAT_PLATFORM_ACTIONS.has("get_api_request_details")).toBe(true);
+        expect(WECHAT_PLATFORM_ACTIONS.has("clear_api_quota_by_app_secret")).toBe(true);
     });
 
     it("跨领域分派素材动作并保留未知动作错误", async () => {
@@ -46,5 +49,36 @@ describe("微信公众号平台动作", () => {
         const promise = executeWechatPlatformAction(client, "missing_action", {});
         await expect(promise).rejects.toBeInstanceOf(WechatApiError);
         await expect(promise).rejects.toMatchObject({ code: "WECHAT_UNKNOWN_ACTION" });
+    });
+
+    it("提供受控的 API 配额与 RID 诊断动作", async () => {
+        const call = vi.fn().mockResolvedValue({ errcode: 0 });
+        const client = {
+            call,
+            config: { app_id: "wx-app", app_secret: "secret" },
+        } as unknown as WechatClient;
+
+        await executeWechatPlatformAction(client, "get_api_quota", {
+            path: "/cgi-bin/message/custom/send",
+        });
+        expect(call).toHaveBeenLastCalledWith({
+            method: "POST",
+            path: "/cgi-bin/openapi/quota/get",
+            body: { cgi_path: "/cgi-bin/message/custom/send" },
+        });
+
+        await executeWechatPlatformAction(client, "clear_api_quota_by_app_secret", {});
+        expect(call).toHaveBeenLastCalledWith({
+            method: "POST",
+            path: "/cgi-bin/clear_quota/v2",
+            query: { appid: "wx-app", appsecret: "secret" },
+            token: false,
+        });
+
+        await expect(
+            executeWechatPlatformAction(client, "get_api_quota", {
+                path: "https://evil.example/api",
+            }),
+        ).rejects.toMatchObject({ code: "WECHAT_INVALID_PARAMETER" });
     });
 });

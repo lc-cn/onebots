@@ -27,6 +27,9 @@ describe("WechatClient", () => {
         await expect(client.getUserInfo("user")).resolves.toMatchObject({ openid: "user" });
         expect(fetcher).toHaveBeenCalledTimes(4);
         expect(String(fetcher.mock.calls[3]?.[0])).toContain("access_token=new");
+        expect(JSON.parse(String(fetcher.mock.calls[2]?.[1]?.body))).toMatchObject({
+            force_refresh: true,
+        });
     });
 
     it.each([
@@ -48,7 +51,7 @@ describe("WechatClient", () => {
         let tokenRequests = 0;
         const fetcher = vi.fn<typeof fetch>(async input => {
             const url = String(input);
-            if (url.includes("/cgi-bin/token")) {
+            if (url.includes("/cgi-bin/stable_token")) {
                 tokenRequests += 1;
                 return json({
                     access_token: tokenRequests === 1 ? "old" : "new",
@@ -82,8 +85,14 @@ describe("WechatClient", () => {
         );
         await client.getAccessToken();
         expect(String(fetcher.mock.calls[0]?.[0])).toContain(
-            "https://proxy.example/wechat/cgi-bin/token",
+            "https://proxy.example/wechat/cgi-bin/stable_token",
         );
+        expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
+            grant_type: "client_credential",
+            appid: "wx-app",
+            secret: "secret",
+            force_refresh: false,
+        });
     });
 
     it("标准发送始终以适配器解析出的 openid 为目标", async () => {
@@ -157,5 +166,54 @@ describe("WechatClient", () => {
                 MsgType: "text",
             }),
         ).rejects.toMatchObject({ code: "WECHAT_INVALID_EVENT" });
+    });
+
+    it("等待异步监听器、合并并发重投并在失败后允许重试", async () => {
+        const client = new WechatClient(config);
+        let release!: () => void;
+        const listener = vi.fn(() => new Promise<void>(resolve => (release = resolve)));
+        client.on("raw_event", listener);
+        const message: WechatIncomingMessage = {
+            ToUserName: "bot",
+            FromUserName: "user",
+            CreateTime: 3,
+            MsgType: "text",
+            MsgId: "m3",
+        };
+
+        const first = client.ingest(message);
+        const retry = client.ingest(structuredClone(message));
+        await vi.waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+        release();
+        await Promise.all([first, retry]);
+        await client.ingest(message);
+        expect(listener).toHaveBeenCalledTimes(1);
+
+        client.off("raw_event", listener);
+        const failure = vi.fn(() => {
+            throw new Error("downstream failed");
+        });
+        client.on("raw_event", failure);
+        const failed = { ...message, MsgId: "m4" };
+        await expect(client.ingest(failed)).rejects.toThrow("downstream failed");
+        client.off("raw_event", failure);
+        await client.ingest(failed);
+        expect(failure).toHaveBeenCalledTimes(1);
+    });
+
+    it("同秒发生的不同无 MsgId 事件具有不同身份", async () => {
+        const client = new WechatClient(config);
+        const listener = vi.fn();
+        client.on("raw_event", listener);
+        const event: WechatIncomingMessage = {
+            ToUserName: "bot",
+            FromUserName: "user",
+            CreateTime: 4,
+            MsgType: "event",
+            Event: "TEMPLATESENDJOBFINISH",
+        };
+        await client.ingest({ ...event, Status: "success", MsgID: undefined, Extra: "first" });
+        await client.ingest({ ...event, Status: "success", MsgID: undefined, Extra: "second" });
+        expect(listener).toHaveBeenCalledTimes(2);
     });
 });

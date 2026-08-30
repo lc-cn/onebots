@@ -134,23 +134,17 @@ export const wechatSchema: Schema = {
     deduplicate_webhooks: {
         type: "boolean",
         default: true,
-        label: "过滤重复 Webhook",
-        description: "按 MsgId 或事件复合键过滤微信重试投递",
-        ui: {
-            section: "delivery",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
-        },
+        label: "过滤重复事件",
+        description: "Webhook 与 manual 接入统一按稳定事件身份过滤重投递",
+        ui: { section: "delivery" },
     },
     webhook_deduplication_limit: {
         type: "number",
         default: 10000,
         min: 100,
         label: "去重缓存上限",
-        description: "进程内保留的最近事件 ID 数量，最低 100",
-        ui: {
-            section: "advanced",
-            visibleWhen: { path: "receive_mode", oneOf: ["webhook"] },
-        },
+        description: "Client 进程内保留的最近事件 ID 数量，最低 100",
+        ui: { section: "advanced" },
     },
     api_base_url: {
         type: "string",

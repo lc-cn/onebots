@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import type { WechatClient } from "./client.js";
-import { wechatEventId } from "./client.js";
 import { requireWechatWebhookConfig } from "./config.js";
 import {
     decryptWechatPayload,
@@ -31,12 +30,10 @@ export interface WechatHttpContext {
     type: string;
 }
 
-/** 微信回调接入层：签名、解密、去重和被动回复都在框架无关的 ingest 中完成。 */
+/** 微信回调接入层：仅负责签名、解密和回复编码；投递状态由 Client 统一持有。 */
 export class WechatWebhookHost {
     readonly path: string;
     private readonly config: WechatWebhookConfig;
-    private readonly processed = new Set<string>();
-    private readonly inFlight = new Map<string, Promise<WechatWebhookResponse>>();
 
     constructor(
         config: WechatConfig,
@@ -164,36 +161,21 @@ export class WechatWebhookHost {
         const message = parseIncomingMessage(xml);
         message.RawXml = xml;
         if (encrypted) message.EncryptedXml = body;
-        const eventId = wechatEventId(message);
-        if (this.isDuplicate(eventId)) {
-            return { status: 200, body: "success", contentType: "text/plain" };
-        }
-        const active = this.inFlight.get(eventId);
-        if (active) return active;
-        const delivery = this.deliverMessage(message, eventId, encrypted);
-        this.inFlight.set(eventId, delivery);
-        try {
-            return await delivery;
-        } finally {
-            this.inFlight.delete(eventId);
-        }
+        return this.deliverMessage(message, encrypted);
     }
 
     private async deliverMessage(
         message: ReturnType<typeof parseIncomingMessage>,
-        eventId: string,
         encrypted: boolean,
     ): Promise<WechatWebhookResponse> {
         const reply = await this.client.ingest(message, {
             passiveReplyTimeoutMs: this.config.passive_reply_timeout_ms ?? 4_500,
         });
         if (!reply) {
-            this.markProcessed(eventId);
             return { status: 200, body: "success", contentType: "text/plain" };
         }
         const replyXml = buildPassiveReply(message, reply);
         if (!encrypted) {
-            this.markProcessed(eventId);
             return { status: 200, body: replyXml, contentType: "application/xml" };
         }
         const responseTimestamp = String(Math.floor(Date.now() / 1000));
@@ -218,7 +200,6 @@ export class WechatWebhookHost {
             ),
             contentType: "application/xml",
         } satisfies WechatWebhookResponse;
-        this.markProcessed(eventId);
         return response;
     }
 
@@ -230,21 +211,6 @@ export class WechatWebhookHost {
             });
         }
         return this.config.encoding_aes_key;
-    }
-
-    private isDuplicate(eventId: string): boolean {
-        return this.config.deduplicate_webhooks !== false && this.processed.has(eventId);
-    }
-
-    private markProcessed(eventId: string): void {
-        if (this.config.deduplicate_webhooks === false) return;
-        this.processed.add(eventId);
-        const limit = Math.max(100, this.config.webhook_deduplication_limit || 10_000);
-        while (this.processed.size > limit) {
-            const oldest = this.processed.values().next().value;
-            if (typeof oldest !== "string") break;
-            this.processed.delete(oldest);
-        }
     }
 }
 

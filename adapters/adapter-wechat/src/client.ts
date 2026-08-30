@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
-import { randomUUID } from "node:crypto";
-import { isSafeAbsoluteApiPath, RefreshableValue } from "onebots";
+import { createHash, randomUUID } from "node:crypto";
+import { emitAwaited, isSafeAbsoluteApiPath, KeyedSingleFlight, RefreshableValue } from "onebots";
 import { assertWechatConfig } from "./config.js";
 import { WechatApiError } from "./errors.js";
 import type {
@@ -19,7 +19,8 @@ import type {
 
 const DEFAULT_API_BASE = "https://api.weixin.qq.com";
 const TOKEN_REFRESH_MARGIN = 300_000;
-const INVALID_TOKEN_CODES = new Set([40014, 42001]);
+const INVALID_TOKEN_CODES = new Set([40001, 40014, 42001]);
+const DEFAULT_DEDUPLICATION_LIMIT = 10_000;
 
 interface PendingReply {
     resolve(message: WechatOutboundMessage | undefined): void;
@@ -31,6 +32,11 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
     readonly apiBaseUrl: string;
     private readonly tokens = new RefreshableValue<string>(TOKEN_REFRESH_MARGIN);
     private readonly pendingReplies = new Map<string, PendingReply>();
+    private readonly processedEvents = new Set<string>();
+    private readonly eventFlights = new KeyedSingleFlight<
+        string,
+        WechatOutboundMessage | undefined
+    >();
 
     constructor(
         readonly config: WechatConfig,
@@ -52,6 +58,7 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
 
     stop(): void {
         this.tokens.clear();
+        this.eventFlights.clear();
         for (const pending of this.pendingReplies.values()) {
             clearTimeout(pending.timer);
             pending.resolve(undefined);
@@ -62,7 +69,7 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
 
     /** 获取并缓存 access_token；并发刷新只发起一个请求。 */
     async getAccessToken(force = false): Promise<string> {
-        return this.tokens.get(() => this.fetchAccessToken(), force);
+        return this.tokens.get(() => this.fetchAccessToken(force), force);
     }
 
     /** 调用任意经过路径约束的公众号 API；token 失效时仅自动刷新并重试一次。 */
@@ -144,6 +151,18 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
     ): Promise<WechatOutboundMessage | undefined> {
         validateIncomingMessage(message);
         const eventId = wechatEventId(message);
+        if (this.isDuplicate(eventId)) return undefined;
+        return this.eventFlights.run(eventId, () =>
+            this.deliverIncoming(message, eventId, options),
+        );
+    }
+
+    private async deliverIncoming(
+        message: WechatIncomingMessage,
+        eventId: string,
+        options: WechatIngressOptions,
+    ): Promise<WechatOutboundMessage | undefined> {
+        if (this.isDuplicate(eventId)) return undefined;
         const timeout = Math.max(0, Math.min(4_500, options.passiveReplyTimeoutMs || 0));
         let waiter: Promise<WechatOutboundMessage | undefined> | undefined;
         if (timeout > 0) {
@@ -155,18 +174,30 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
                 this.pendingReplies.set(eventId, { resolve, timer });
             });
         }
-        this.emit("raw_event", message);
-        this.emit(message.MsgType === "event" ? "event" : "message", message);
-        if (message.MsgType === "event" && message.Event) {
-            this.emit(`event.${message.Event.toLowerCase()}`, message);
+        try {
+            await emitAwaited(this, "raw_event", message);
+            await emitAwaited(this, message.MsgType === "event" ? "event" : "message", message);
+            if (message.MsgType === "event" && message.Event) {
+                await emitAwaited(this, `event.${message.Event.toLowerCase()}`, message);
+            }
+            const reply = await waiter;
+            this.markProcessed(eventId);
+            return reply;
+        } catch (error) {
+            this.cancelPendingReply(eventId);
+            throw error;
         }
-        return waiter;
     }
 
     /** 按微信 Event 精确订阅，并返回取消订阅函数。 */
-    onEvent<K extends string>(name: K, listener: (event: WechatNamedEvent<K>) => void): () => void {
+    onEvent<K extends string>(
+        name: K,
+        listener: (event: WechatNamedEvent<K>) => unknown,
+    ): () => void {
         const eventName = `event.${name.toLowerCase()}` as const;
-        const wrapped = (event: WechatIncomingMessage) => listener(event as WechatNamedEvent<K>);
+        const wrapped = async (event: WechatIncomingMessage): Promise<void> => {
+            await listener(event as WechatNamedEvent<K>);
+        };
         this.on(eventName, wrapped);
         return () => this.off(eventName, wrapped);
     }
@@ -182,6 +213,29 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
 
     hasPendingPassiveReply(eventId: string): boolean {
         return this.pendingReplies.has(eventId);
+    }
+
+    private cancelPendingReply(eventId: string): void {
+        const pending = this.pendingReplies.get(eventId);
+        if (!pending) return;
+        this.pendingReplies.delete(eventId);
+        clearTimeout(pending.timer);
+        pending.resolve(undefined);
+    }
+
+    private isDuplicate(eventId: string): boolean {
+        return this.config.deduplicate_webhooks !== false && this.processedEvents.has(eventId);
+    }
+
+    private markProcessed(eventId: string): void {
+        if (this.config.deduplicate_webhooks === false) return;
+        this.processedEvents.add(eventId);
+        const limit = this.config.webhook_deduplication_limit || DEFAULT_DEDUPLICATION_LIMIT;
+        while (this.processedEvents.size > limit) {
+            const oldest = this.processedEvents.values().next().value;
+            if (typeof oldest !== "string") break;
+            this.processedEvents.delete(oldest);
+        }
     }
 
     async uploadTemporaryMedia(
@@ -214,15 +268,17 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         };
     }
 
-    private async fetchAccessToken(): Promise<{ value: string; ttlMs: number }> {
+    private async fetchAccessToken(force: boolean): Promise<{ value: string; ttlMs: number }> {
         const data = await this.performCall<{ access_token?: string; expires_in?: number }>(
             {
-                path: "/cgi-bin/token",
+                method: "POST",
+                path: "/cgi-bin/stable_token",
                 token: false,
-                query: {
+                body: {
                     grant_type: "client_credential",
                     appid: this.config.app_id,
                     secret: this.config.app_secret,
+                    force_refresh: force,
                 },
             },
             false,
@@ -329,18 +385,23 @@ function validateIncomingMessage(message: WechatIncomingMessage): void {
 }
 
 export function wechatEventId(message: WechatIncomingMessage): string {
-    return (
-        message.MsgId ||
-        message.MsgID ||
-        [
-            message.FromUserName,
-            message.CreateTime,
-            message.Event || message.MsgType,
-            message.EventKey,
-        ]
-            .filter(value => value !== undefined && value !== "")
-            .join(":")
-    );
+    if (message.MsgId || message.MsgID) return message.MsgId || message.MsgID!;
+    const identity = [
+        message.FromUserName,
+        message.CreateTime,
+        message.Event || message.MsgType,
+        message.EventKey,
+    ]
+        .filter(value => value !== undefined && value !== "")
+        .join(":");
+    const digest = createHash("sha256")
+        .update(message.RawXml || JSON.stringify(messageWithoutEncryptedXml(message)))
+        .digest("hex");
+    return identity ? `${identity}:${digest.slice(0, 16)}` : digest;
+}
+
+function messageWithoutEncryptedXml(message: WechatIncomingMessage): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(message).filter(([key]) => key !== "EncryptedXml"));
 }
 
 async function parseJson(response: Response, path: string): Promise<unknown> {

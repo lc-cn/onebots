@@ -27,7 +27,7 @@ https://bot.example.com/wechat/my_mp/webhook
 
 默认路径为 `/wechat/{account_id}/webhook`，可用 `webhook_path` 覆盖。`token` 与 `encoding_aes_key` 必须和公众平台配置一致。
 
-如事件已由既有 HTTP Host、消息队列或测试夹具接收，可改用 `receive_mode: manual`。此时适配器不注册 Webhook 路由，也不要求 `token`；将解析后的 `WechatIncomingMessage` 交给同一个 `WechatClient.ingest()` 即可。`onEvent(name, listener)` 可按微信原生 `Event` 精确订阅，并返回取消订阅函数。
+如事件已由既有 HTTP Host、消息队列或测试夹具接收，可改用 `receive_mode: manual`。此时适配器不注册 Webhook 路由，也不要求 `token`；将解析后的 `WechatIncomingMessage` 交给同一个 `WechatClient.ingest()` 即可。Webhook 与 manual 共用 Client 内的稳定身份、进行中合并、去重和 typed 分发；同步或异步监听器全部成功后才确认事件，失败不会污染去重状态。`onEvent(name, listener)` 可按微信原生 `Event` 精确订阅，并返回取消订阅函数。
 
 ## 消息
 
@@ -56,7 +56,7 @@ await adapter.sendMessage("my_mp", {
 - 临时/永久素材、草稿与发布；
 - 普通/个性化菜单、二维码；
 - 模板消息、客服输入状态与群发；
-- API 配额清理。
+- API 配额查询/清理、RID 请求诊断、API 域名与回调 IP 查询。
 - 多客服账号、头像、在线状态、绑定邀请、客服会话和消息记录。
 
 登录信息与事件 `bot_id` 统一使用公众号实际 `app_id`，`account_id` 只作为 OneBots 内部配置键，不再暴露成平台身份。多客服接口依赖公众号已开通对应客服能力；不可用时微信的结构化错误会原样返回。
@@ -73,11 +73,11 @@ await adapter.callAction("my_mp", "wechat_call", {
 });
 ```
 
-路径必须以 `/` 开头，查询参数必须通过 `query` 提供；适配器拒绝绝对 URL、路径穿越、内嵌 query/fragment。access token 自动缓存，失效后只刷新并重试一次，迟到的旧请求不会清空已经刷新的 token。
+路径必须以 `/` 开头，查询参数必须通过 `query` 提供；适配器拒绝绝对 URL、路径穿越、内嵌 query/fragment。access token 使用微信稳定版 `/cgi-bin/stable_token`，普通刷新不会使其他进程正在使用的凭据失效；平台报告凭据失效时才执行一次强制刷新和重试，迟到的旧请求不会清空已经刷新的 token。
 
 ## 底层接入
 
-`WechatWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂到已有 Koa 风格 Host；`WechatClient.ingest()` 则允许现有连接把含稳定收发方、时间与消息 ID 的解析事件交给同一个客户端。适配器本身不会另开端口。
+`WechatWebhookHost.ingest()` 返回结构化 HTTP 响应，`acceptHttp()` 可挂到已有 Koa 风格 Host；`WechatClient.ingest()` 则允许现有连接把含稳定收发方、时间与消息 ID 的解析事件交给同一个客户端。Webhook Host 只负责验签、解密和被动回复编码，不再持有第二套投递状态。适配器本身不会另开端口。
 
 ## 权限
 

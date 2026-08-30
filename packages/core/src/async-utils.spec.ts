@@ -97,4 +97,15 @@ describe("KeyedSingleFlight", () => {
         await expect(second).rejects.toThrow("retry me");
         await expect(flights.run("same", async () => "ok")).resolves.toBe("ok");
     });
+
+    it("先登记航班再同步启动任务，允许调用方立即观察初始化状态", async () => {
+        const flights = new KeyedSingleFlight<string, string>();
+        const states: string[] = [];
+        const result = flights.run("key", () => {
+            states.push("started");
+            return "done";
+        });
+        expect(states).toEqual(["started"]);
+        await expect(result).resolves.toBe("done");
+    });
 });

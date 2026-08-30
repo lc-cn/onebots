@@ -2,6 +2,7 @@ import type { WechatClient } from "./client.js";
 import type { WechatActionHandler, WechatActionParams } from "./platform-action-context.js";
 import {
     callOptions,
+    invalid,
     optionalBoolean,
     post,
     postRecordAction,
@@ -75,4 +76,24 @@ export const WECHAT_MESSAGING_ACTIONS = {
     get_mass_speed: staticCall("/cgi-bin/message/mass/speed/get"),
     clear_api_quota: async (client: WechatClient) =>
         post(client, "/cgi-bin/clear_quota", { appid: client.config.app_id }),
+    get_api_quota: async (client: WechatClient, params: WechatActionParams) => {
+        const path = requireString(params, "path");
+        if (!/^\/(?!\/)[^?#\u0000-\u001f\u007f]+$/u.test(path)) {
+            invalid("path 必须是无 query/fragment 的绝对 API 路径");
+        }
+        return post(client, "/cgi-bin/openapi/quota/get", { cgi_path: path });
+    },
+    get_api_request_details: async (client: WechatClient, params: WechatActionParams) =>
+        post(client, "/cgi-bin/openapi/rid/get", {
+            rid: requireString(params, "rid"),
+        }),
+    clear_api_quota_by_app_secret: async (client: WechatClient) =>
+        client.call({
+            method: "POST",
+            path: "/cgi-bin/clear_quota/v2",
+            query: { appid: client.config.app_id, appsecret: client.config.app_secret },
+            token: false,
+        }),
+    get_api_domain_ips: staticCall("/cgi-bin/get_api_domain_ip"),
+    get_callback_ips: staticCall("/cgi-bin/getcallbackip"),
 } satisfies Readonly<Record<string, WechatActionHandler>>;

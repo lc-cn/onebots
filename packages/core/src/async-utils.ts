@@ -86,11 +86,21 @@ export class KeyedSingleFlight<TKey, TResult> {
     run(key: TKey, task: () => TResult | PromiseLike<TResult>): Promise<TResult> {
         const existing = this.pending.get(key);
         if (existing) return existing;
-        const request = Promise.resolve().then(task);
+        let resolve!: (value: TResult | PromiseLike<TResult>) => void;
+        let reject!: (reason?: unknown) => void;
+        const request = new Promise<TResult>((done, fail) => {
+            resolve = done;
+            reject = fail;
+        });
         const tracked = request.finally(() => {
             if (this.pending.get(key) === tracked) this.pending.delete(key);
         });
         this.pending.set(key, tracked);
+        try {
+            resolve(task());
+        } catch (error) {
+            reject(error);
+        }
         return tracked;
     }
 

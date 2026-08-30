@@ -31,6 +31,8 @@ wechat.my_mp:
 - 发送文本、媒体、图文和原生 `wechat_message`；媒体须先取得 `media_id`。
 - `reply` 段可在 Webhook 窗口内提交被动回复，超时后发送客服消息。
 - 用户、标签、黑名单、素材、草稿、发布、菜单、二维码、模板和群发均有原生动作。
+- 稳定版 access token 避免普通刷新使其他进程的凭据失效；配额、RID、API 域名和回调 IP 均有诊断动作。
+- Webhook 与 manual 接入共享 Client 内的异步确认、并发合并与去重状态。
 - 未命名的新接口可通过 `wechat_call` 调用，且仍使用统一 token 缓存与结构化错误。
 
 所有事件均保留 `raw_event`；嵌套 XML 的完整原文位于 `raw_event.RawXml`。
