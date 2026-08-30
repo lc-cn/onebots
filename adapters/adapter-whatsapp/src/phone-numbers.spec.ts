@@ -79,17 +79,33 @@ describe("WhatsAppPhoneNumbers", () => {
         expect(bodyAt(fetcher, 1)).toEqual({ code: "654321" });
     });
 
-    it("固定动作复用强类型模块且不会转发额外字段", async () => {
-        const fetcher = jsonFetcher({ success: true });
+    it("固定动作拒绝契约外字段并保留动作上下文", async () => {
+        const fetcher = vi.fn<typeof fetch>();
         const client = new WhatsAppClient(config, fetcher);
 
-        await executeWhatsAppPlatformAction(client, "register_phone_number", {
-            pin: "123456",
-            data_localization_region: "DE",
-            meta_store_retention_minutes: 60,
+        await expect(
+            executeWhatsAppPlatformAction(client, "register_phone_number", {
+                pin: "123456",
+                data_localization_region: "DE",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: {
+                action: "register_phone_number",
+                parameter: "data_localization_region",
+            },
         });
+        expect(fetcher).not.toHaveBeenCalled();
+    });
 
-        expect(bodyAt(fetcher)).toEqual({ messaging_product: "whatsapp", pin: "123456" });
+    it("注册动作拒绝 backup 内的未知字段", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "register_phone_number", {
+                pin: "123456",
+                backup: { password: "secret", data: "cipher", plaintext: true },
+            }),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
     });
 
     it.each([

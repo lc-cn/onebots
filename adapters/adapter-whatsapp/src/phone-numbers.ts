@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import type { WhatsAppPhoneNumberInfo } from "./types.js";
@@ -24,21 +25,6 @@ export interface WhatsAppSuccessResponse {
 
 export interface WhatsAppVerificationCodeResponse extends WhatsAppSuccessResponse {
     id: string;
-}
-
-export const WHATSAPP_PHONE_NUMBER_ACTIONS = Object.freeze([
-    "get_phone_number_info",
-    "register_phone_number",
-    "deregister_phone_number",
-    "set_two_step_verification",
-    "request_phone_number_verification_code",
-    "verify_phone_number_code",
-] as const);
-
-export type WhatsAppPhoneNumberAction = (typeof WHATSAPP_PHONE_NUMBER_ACTIONS)[number];
-
-export function isWhatsAppPhoneNumberAction(action: string): action is WhatsAppPhoneNumberAction {
-    return (WHATSAPP_PHONE_NUMBER_ACTIONS as readonly string[]).includes(action);
 }
 
 /** 号码资料、注册、两步验证与所有权验证的强类型控制平面。 */
@@ -119,38 +105,47 @@ export class WhatsAppPhoneNumbers {
         }
         return { success: true, id: value.id };
     }
-
-    execute(
-        action: WhatsAppPhoneNumberAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_phone_number_info":
-                return this.getInfo();
-            case "register_phone_number":
-                return this.register(registrationParams(params));
-            case "deregister_phone_number":
-                return this.deregister();
-            case "set_two_step_verification":
-                return this.setTwoStepVerification(requiredText(params, "pin"));
-            case "request_phone_number_verification_code":
-                return this.requestVerificationCode({
-                    code_method: actionCodeMethod(params),
-                    language: requiredText(params, "language"),
-                });
-            case "verify_phone_number_code":
-                return this.verifyCode(requiredText(params, "code"));
-        }
-    }
 }
 
-export const WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_PHONE_NUMBER_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.phoneNumbers.execute(action, params),
-    ]),
-) as Record<WhatsAppPhoneNumberAction, PlatformActionHandler<WhatsAppClient>>;
+type PhoneNumberActionParams = Readonly<Record<string, unknown>>;
+
+const PHONE_NUMBER_ACTION_HANDLERS = {
+    get_phone_number_info: (client: WhatsAppClient) => client.phoneNumbers.getInfo(),
+    register_phone_number: (client: WhatsAppClient, params: PhoneNumberActionParams) =>
+        client.phoneNumbers.register(registrationParams(params)),
+    deregister_phone_number: (client: WhatsAppClient) => client.phoneNumbers.deregister(),
+    set_two_step_verification: (client: WhatsAppClient, params: PhoneNumberActionParams) =>
+        client.phoneNumbers.setTwoStepVerification(requiredText(params, "pin")),
+    request_phone_number_verification_code: (
+        client: WhatsAppClient,
+        params: PhoneNumberActionParams,
+    ) =>
+        client.phoneNumbers.requestVerificationCode({
+            code_method: actionCodeMethod(params),
+            language: requiredText(params, "language"),
+        }),
+    verify_phone_number_code: (client: WhatsAppClient, params: PhoneNumberActionParams) =>
+        client.phoneNumbers.verifyCode(requiredText(params, "code")),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Phone Number 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    PHONE_NUMBER_ACTION_HANDLERS,
+    {
+        get_phone_number_info: [],
+        register_phone_number: ["pin", "backup"],
+        deregister_phone_number: [],
+        set_two_step_verification: ["pin"],
+        request_phone_number_verification_code: ["code_method", "language"],
+        verify_phone_number_code: ["code"],
+    },
+);
+
+export type WhatsAppPhoneNumberAction = keyof typeof WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS;
+
+export function isWhatsAppPhoneNumberAction(action: string): action is WhatsAppPhoneNumberAction {
+    return Object.hasOwn(WHATSAPP_PHONE_NUMBER_ACTION_HANDLERS, action);
+}
 
 function phoneNumberInfo(value: unknown): WhatsAppPhoneNumberInfo {
     if (!isRecord(value) || !nonEmptyText(value.id)) invalidResponse("号码资料", value);
@@ -215,6 +210,7 @@ function registrationParams(
     params: Readonly<Record<string, unknown>>,
 ): WhatsAppPhoneNumberRegistration {
     const backup = optionalRecord(params, "backup");
+    if (backup) rejectUnknown(backup, ["password", "data"], "backup");
     return {
         pin: requiredText(params, "pin"),
         ...(backup
@@ -286,6 +282,15 @@ function optionalRecord(
     if (value === undefined) return undefined;
     if (!isRecord(value)) invalidParameter(`${name} 必须是对象`);
     return value;
+}
+
+function rejectUnknown(
+    value: Readonly<Record<string, unknown>>,
+    allowed: readonly string[],
+    name: string,
+): void {
+    const unknown = Object.keys(value).find(key => !allowed.includes(key));
+    if (unknown) invalidParameter(`${name} 包含未知字段: ${unknown}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
