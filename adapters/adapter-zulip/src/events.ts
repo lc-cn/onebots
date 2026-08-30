@@ -201,17 +201,25 @@ function projectRealmUser(
     const op = typeof event.op === "string" ? event.op : "update";
     const person = isRecord(event.person) ? event.person : undefined;
     const userId = numeric(person?.user_id) ?? numeric(event.person_id) ?? 0;
+    const isActive = typeof person?.is_active === "boolean" ? person.is_active : undefined;
     const noticeType =
         op === "add" ? "user_added" : op === "remove" ? "user_removed" : "user_updated";
     return {
         ...base(event, context),
         type: "notice",
         notice_type: noticeType,
+        sub_type:
+            op === "update" && isActive !== undefined
+                ? isActive
+                    ? "reactivated"
+                    : "deactivated"
+                : op,
         user: userId
             ? {
                   id: context.createId(userId),
                   name: stringValue(person?.full_name),
                   avatar: stringValue(person?.avatar_url),
+                  ...(isActive === undefined ? {} : { is_active: isActive }),
               }
             : undefined,
         extensions: { zulip: event },

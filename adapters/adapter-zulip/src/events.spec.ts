@@ -112,6 +112,39 @@ describe("Zulip 事件投影", () => {
         });
     });
 
+    it("区分组织成员停用与恢复，同时保持统一 user_updated 事件", () => {
+        expect(
+            projectZulipEvents(
+                {
+                    id: 17,
+                    type: "realm_user",
+                    op: "update",
+                    person: { user_id: 12, is_active: false },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "user_updated",
+            sub_type: "deactivated",
+            user: { id: { string: "12" }, is_active: false },
+        });
+        expect(
+            projectZulipEvents(
+                {
+                    id: 18,
+                    type: "realm_user",
+                    op: "update",
+                    person: { user_id: 12, is_active: true },
+                },
+                context,
+            )[0],
+        ).toMatchObject({
+            notice_type: "user_updated",
+            sub_type: "reactivated",
+            user: { is_active: true },
+        });
+    });
+
     it("投影用户组资源生命周期并使用平台创建时间", () => {
         expect(
             projectZulipEvents(

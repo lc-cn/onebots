@@ -9,6 +9,7 @@ import {
 } from "./action-params.js";
 import type { ZulipClient } from "./client.js";
 import { ZulipError } from "./errors.js";
+import { ZULIP_USER_ACTION_HANDLERS } from "./user-actions.js";
 import { ZULIP_USER_GROUP_ACTION_HANDLERS } from "./user-group-actions.js";
 
 const ACTION_HANDLERS = {
@@ -83,6 +84,7 @@ const ACTION_HANDLERS = {
         resourceAction(client, "saved_snippets", "saved_snippet_id", "PATCH", params),
     delete_saved_snippet: (client, params) =>
         resourceAction(client, "saved_snippets", "saved_snippet_id", "DELETE", params),
+    ...ZULIP_USER_ACTION_HANDLERS,
     ...ZULIP_USER_GROUP_ACTION_HANDLERS,
 } satisfies Readonly<Record<string, PlatformActionHandler<ZulipClient>>>;
 
