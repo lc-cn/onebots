@@ -354,7 +354,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             const preview = rawText.length > 80 ? `${rawText.slice(0, 80)}...` : rawText;
             this.logger.info(`[${this.platform}] 收到私聊 | from=${m.from.id} | ${preview}`);
 
-            account.dispatch(
+            return account.dispatchAwaited(
                 projectWechatClawbotEvent(m, {
                     accountId: this.createId(config.account_id),
                     createId: value => this.createId(value),
@@ -368,6 +368,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             } catch (error) {
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`[${this.platform}] ${config.account_id} 启动失败:`, error);
+                throw error;
             }
         });
         account.on("stop", async () => {

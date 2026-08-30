@@ -164,6 +164,8 @@ await account.dispatchAwaited(event);
 
 `dispatchAwaited()` 会让全部已绑定协议都获得一次投递机会，等待异步 `Protocol.dispatch()` 完成，并在任一协议失败时向调用方传播错误。接入层可据此返回失败响应或请求平台重投。
 
+`Account.start()` 会等待账号的异步启动监听器完成后再启动协议，启动错误直接向调用方传播。`Account.stop()` 即使遇到单个协议停止失败，也会继续停止其余协议和账号客户端，清理监听器后再汇总错误。
+
 ## 开发
 
 ```bash

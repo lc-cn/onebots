@@ -32,7 +32,7 @@ export function createHeychatAccount(
         account.status = AccountStatus.OffLine;
     });
     bot.on("event", (envelope: HeychatWsEnvelope) => {
-        account.dispatch(
+        return account.dispatchAwaited(
             projectHeychatEvent(envelope, {
                 accountId: config.account_id,
                 botId: bot.getBotId(),

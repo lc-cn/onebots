@@ -12,7 +12,7 @@ OneBots 的黑盒语音官方机器人适配器。它使用官方 REST API 发�
 - 投影斜杠命令、消息回应、成员加入/退出和卡片按钮事件；未知事件通过 `raw_event` 无损交付
 - WebSocket 默认无限重连，支持可配置心跳、指数退避、代理与握手超时
 - `receive_mode: manual` 不创建正向连接；`await HeychatBot.ingest(rawEvent)` 与 `acceptWebSocket(socket)` 可让现有 Host、反向代理或已升级 socket 复用同一校验、去重和事件管线
-- 事件按连接代次串行投递，仅在业务监听器成功后确认精确 `sequence`；显式 `ingest()` 失败会拒绝 Promise 并允许宿主重投，socket 来源则在本地按配置退避重试，不会把业务错误伪装成无效协议帧
+- 事件按连接代次串行投递，仅在业务监听器与全部协议投影成功后确认精确 `sequence`；显式 `ingest()` 失败会拒绝 Promise 并允许宿主重投，socket 来源则在本地按配置退避重试，不会把业务错误伪装成无效协议帧
 - `call_heychat_api` 与 `upload_media` 为尚未封装或新增的官方接口保留受限底层入口
 
 黑盒语音官方当前公布的机器人推送事件不包含普通频道消息。适配器不会把未经官方定义的 `type=5` 当作消息事件；`message` 事件对应 `type=50` 斜杠命令。
@@ -56,7 +56,7 @@ heychat.my_bot:
 
 `api_base_url`、`upload_base_url` 和 `ws_url` 仅用于官方兼容代理、私有网关或测试环境，日常配置不应修改。
 
-manual 模式仍保留 REST 出站能力，但不会建立 WebSocket、发送心跳或负责重连。宿主可逐条 `await bot.ingest(rawEvent)`，也可将 `ws` 已升级实例交给 `bot.acceptWebSocket(socket)`；后者返回解除监听函数，socket 的心跳、关闭与重连所有权仍属于宿主。显式接入方应在 Promise 拒绝时保留原事件并重投；只有完整业务管线成功后，同一连接代次内的精确 `sequence` 才会被确认为重复事件。
+manual 模式仍保留 REST 出站能力，但不会建立 WebSocket、发送心跳或负责重连。宿主可逐条 `await bot.ingest(rawEvent)`，也可将 `ws` 已升级实例交给 `bot.acceptWebSocket(socket)`；后者返回解除监听函数，socket 的心跳、关闭与重连所有权仍属于宿主。显式接入方应在 Promise 拒绝时保留原事件并重投；只有监听器与协议分发全部成功后，同一连接代次内的精确 `sequence` 才会被确认为重复事件。
 
 ## 场景 ID
 

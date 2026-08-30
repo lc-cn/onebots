@@ -10,7 +10,7 @@
 - 投影官方斜杠命令（`type=50`）、回应（`5003`）、成员变更（`3001`）与卡片交互
 - 未知官方事件以 `custom` + `raw_event` 无损交付，不把未公开的 `type=5` 伪造成普通消息
 - 正向 WebSocket 无限重连、可取消心跳、代次隔离与指数退避
-- manual 模式通过 `HeychatBot.ingest()` 或 `acceptWebSocket()` 复用已有 Host
+- manual 模式通过 `await HeychatBot.ingest()` 或 `acceptWebSocket()` 复用已有 Host，协议投影成功后才确认事件
 
 ## 安装与配置
 
