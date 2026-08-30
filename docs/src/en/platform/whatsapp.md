@@ -13,6 +13,7 @@ The adapter uses Meta's official WhatsApp Cloud API, receives signed webhooks th
 - WABA webhook App subscription inspection, subscription, and removal
 - WABA account details, controlled updates, and activity audit trails
 - WABA phone-number inventory, filtering, sorting, pagination, and onboarding
+- WABA schedules for business hours, automated responses, campaigns, and maintenance windows
 - Groups API metadata and participants, settings, invite links, join approvals, and lifecycle/status webhooks
 - Generic `whatsapp_call` for newly introduced Graph API resources
 - `await WhatsAppClient.ingest(rawEvent)` for feeding an existing trusted connection into the same client, with deduplication committed only after all synchronous/asynchronous listeners succeed
@@ -66,6 +67,8 @@ WABA webhook App subscriptions are managed through `client.webhookSubscriptions`
 WABA operations are managed through `client.businessAccount` and the `get_business_account`, `update_business_account`, and `list_business_account_activities` actions. Reads retain the account ID and name, writes are limited to the official name/timezone fields, and audit queries use controlled fields and enums with one-directional cursors, 1–100 item pages, and a maximum 90-day window. Audit results can contain actor IDs, IP addresses, and user agents and should be protected as security-audit data. Domain modules are the single typed client surface, avoiding duplicate forwarding APIs.
 
 WABA phone-number assets are managed through `client.businessPhoneNumbers` and the `list_business_phone_numbers` / `create_business_phone_number` actions. Lists support controlled fields, equality filters for account mode, messaging tier and OBA status, official sort expressions, and cursor pagination. Creation validates the E.164 number without `+`, verified name, country calling code, migration flag, and BSP preverification ID. It starts Meta onboarding and returns the new number ID; it never switches the current client's `phone_number_id`.
+
+WABA schedules are managed through `client.schedules` and the `list_business_schedules` / `create_business_schedule` actions. Fields, statuses, types, filters, sorts, HH:MM clocks, IANA time zones, unique weekdays, and recurrence values are validated at the seam, while shared Graph paging rejects non-HTTPS or credential-bearing links. Omitted timezone and activation values are sent explicitly as UTC / true, and official overnight ranges such as `18:00 → 08:00` remain valid. The WABA must have Schedule Management enabled.
 
 Meta manages the Graph API lifecycle, so `api_version` must explicitly match a version enabled for the app.
 

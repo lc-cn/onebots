@@ -1,3 +1,5 @@
+import type { WhatsAppPaging } from "./types.js";
+
 export const WHATSAPP_BUSINESS_ACCOUNT_ACTIONS = Object.freeze([
     "get_business_account",
     "update_business_account",
@@ -147,9 +149,5 @@ export interface WhatsAppBusinessAccountActivitiesQuery {
 
 export interface WhatsAppBusinessAccountActivitiesResponse {
     data: WhatsAppBusinessAccountActivity[];
-    paging?: {
-        cursors?: { before?: string; after?: string };
-        previous?: string;
-        next?: string;
-    };
+    paging?: WhatsAppPaging;
 }

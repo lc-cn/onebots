@@ -1,6 +1,7 @@
 import type { PlatformActionHandler } from "onebots";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
+import { parseWhatsAppPaging } from "./graph-paging.js";
 import {
     WHATSAPP_BUSINESS_ACCOUNT_ACTIONS,
     WHATSAPP_BUSINESS_ACCOUNT_ACTIVITY_FIELDS,
@@ -311,7 +312,9 @@ function activitiesResponse(
     if (!Array.isArray(source.data)) invalidResponse(value);
     return {
         data: source.data.map(item => activityResponse(item, fields, value)),
-        ...(source.paging === undefined ? {} : { paging: pagingResponse(source.paging, value) }),
+        ...(source.paging === undefined
+            ? {}
+            : { paging: parseWhatsAppPaging(source.paging, value, invalidResponse) }),
     };
 }
 
@@ -348,32 +351,6 @@ function activityResponse(
     return result;
 }
 
-function pagingResponse(
-    value: unknown,
-    root: unknown,
-): WhatsAppBusinessAccountActivitiesResponse["paging"] {
-    const source = responseRecord(value, root);
-    const cursors = source.cursors === undefined ? undefined : responseRecord(source.cursors, root);
-    return {
-        ...(cursors
-            ? {
-                  cursors: {
-                      ...(cursors.before === undefined
-                          ? {}
-                          : { before: responseText(cursors.before, root) }),
-                      ...(cursors.after === undefined
-                          ? {}
-                          : { after: responseText(cursors.after, root) }),
-                  },
-              }
-            : {}),
-        ...(source.previous === undefined
-            ? {}
-            : { previous: responseHttpsUrl(source.previous, root) }),
-        ...(source.next === undefined ? {} : { next: responseHttpsUrl(source.next, root) }),
-    };
-}
-
 function successResponse(value: unknown): WhatsAppBusinessAccountUpdateResponse {
     const source = responseRecord(value, value);
     if (source.success !== true) invalidResponse(value);
@@ -401,14 +378,6 @@ function responseTimestamp(value: unknown, root: unknown): string {
 function responseEnum<T extends string>(value: unknown, allowed: readonly T[], root: unknown): T {
     if (typeof value !== "string" || !allowed.includes(value as T)) invalidResponse(root);
     return value as T;
-}
-
-function responseHttpsUrl(value: unknown, root: unknown): string {
-    const text = responseText(value, root);
-    if (!URL.canParse(text)) invalidResponse(root);
-    const url = new URL(text);
-    if (url.protocol !== "https:" || url.username || url.password) invalidResponse(root);
-    return text;
 }
 
 function optionalInputText(value: unknown, name: string): string | undefined {

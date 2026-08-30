@@ -1,6 +1,7 @@
 import type { PlatformActionHandler } from "onebots";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
+import { parseWhatsAppPaging } from "./graph-paging.js";
 import {
     WHATSAPP_BUSINESS_PHONE_NUMBER_ACCOUNT_MODES,
     WHATSAPP_BUSINESS_PHONE_NUMBER_ACTIONS,
@@ -236,7 +237,9 @@ function listResponse(
     if (!Array.isArray(source.data)) invalidResponse(value);
     return {
         data: source.data.map(item => phoneNumberResponse(item, fields, value)),
-        ...(source.paging === undefined ? {} : { paging: pagingResponse(source.paging, value) }),
+        ...(source.paging === undefined
+            ? {}
+            : { paging: parseWhatsAppPaging(source.paging, value, invalidResponse) }),
     };
 }
 
@@ -352,31 +355,6 @@ function assignEnum<
     }
 }
 
-function pagingResponse(
-    value: unknown,
-    root: unknown,
-): WhatsAppBusinessPhoneNumbersResponse["paging"] {
-    const source = responseRecord(value, root);
-    const cursors = source.cursors === undefined ? undefined : responseRecord(source.cursors, root);
-    return {
-        ...(cursors ? { cursors: optionalCursorPair(cursors, root) } : {}),
-        ...(source.previous === undefined
-            ? {}
-            : { previous: responseHttpsUrl(source.previous, root) }),
-        ...(source.next === undefined ? {} : { next: responseHttpsUrl(source.next, root) }),
-    };
-}
-
-function optionalCursorPair(
-    source: Readonly<Record<string, unknown>>,
-    root: unknown,
-): { before?: string; after?: string } {
-    return {
-        ...(source.before === undefined ? {} : { before: responseText(source.before, root) }),
-        ...(source.after === undefined ? {} : { after: responseText(source.after, root) }),
-    };
-}
-
 function createResponse(value: unknown): WhatsAppBusinessPhoneNumberCreateResponse {
     const source = responseRecord(value, value);
     return { id: responseNumericId(source.id, value) };
@@ -392,14 +370,6 @@ function inputEnum<T extends string>(value: unknown, allowed: readonly T[], name
 function responseEnum<T extends string>(value: unknown, allowed: readonly T[], root: unknown): T {
     if (typeof value !== "string" || !allowed.includes(value as T)) invalidResponse(root);
     return value as T;
-}
-
-function responseHttpsUrl(value: unknown, root: unknown): string {
-    const text = responseText(value, root);
-    if (!URL.canParse(text)) invalidResponse(root);
-    const url = new URL(text);
-    if (url.protocol !== "https:" || url.username || url.password) invalidResponse(root);
-    return text;
 }
 
 function optionalText(value: unknown, name: string): string | undefined {

@@ -44,6 +44,13 @@ describe("WhatsApp 能力清单", () => {
         expect(whatsAppCapabilities.actions.create_business_phone_number?.permissions).toEqual([
             "whatsapp_business_management",
         ]);
+        expect(whatsAppCapabilities.actions.create_business_schedule).toMatchObject({
+            permissions: ["whatsapp_business_management"],
+            availability: "permission",
+        });
+        expect(whatsAppCapabilities.actions.create_business_schedule?.note).toContain(
+            "Schedule Management",
+        );
         expect(whatsAppCapabilities.actions.connect_call).toMatchObject({
             availability: "permission",
             permissions: ["whatsapp_business_messaging"],

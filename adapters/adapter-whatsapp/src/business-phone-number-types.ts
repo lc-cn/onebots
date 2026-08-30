@@ -1,3 +1,5 @@
+import type { WhatsAppPaging } from "./types.js";
+
 export const WHATSAPP_BUSINESS_PHONE_NUMBER_ACTIONS = Object.freeze([
     "list_business_phone_numbers",
     "create_business_phone_number",
@@ -134,11 +136,7 @@ export interface WhatsAppBusinessPhoneNumbersQuery {
 
 export interface WhatsAppBusinessPhoneNumbersResponse {
     data: WhatsAppBusinessPhoneNumber[];
-    paging?: {
-        cursors?: { before?: string; after?: string };
-        previous?: string;
-        next?: string;
-    };
+    paging?: WhatsAppPaging;
 }
 
 export interface WhatsAppBusinessPhoneNumberCreateRequest {
