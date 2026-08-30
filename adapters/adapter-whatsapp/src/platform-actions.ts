@@ -19,6 +19,7 @@ import { WHATSAPP_MEDIA_ACTION_HANDLERS } from "./media.js";
 import { WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTION_HANDLERS } from "./conversational-automation.js";
 import { WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTION_HANDLERS } from "./webhook-subscriptions.js";
 import { WHATSAPP_BUSINESS_ACCOUNT_ACTION_HANDLERS } from "./business-account.js";
+import { WHATSAPP_BUSINESS_PHONE_NUMBER_ACTION_HANDLERS } from "./business-phone-numbers.js";
 import type { WhatsAppClient } from "./client.js";
 import type { WhatsAppCallOptions, WhatsAppSendMessageParams } from "./types.js";
 
@@ -50,6 +51,7 @@ const ACTION_HANDLERS = {
     ...WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTION_HANDLERS,
     ...WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTION_HANDLERS,
     ...WHATSAPP_BUSINESS_ACCOUNT_ACTION_HANDLERS,
+    ...WHATSAPP_BUSINESS_PHONE_NUMBER_ACTION_HANDLERS,
     whatsapp_call: (client, params) => client.call(callOptions(params)),
     send_native_message: (client, params) => client.sendMessage(nativeMessage(params)),
     mark_message_read: (client, params) =>

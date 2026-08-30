@@ -18,6 +18,7 @@
 - Conversational Automation：欢迎消息、引导问题和 Bot 命令配置
 - WABA Webhook App 订阅查看、订阅和取消订阅
 - WABA 账户资料、受控配置更新与活动审计
+- WABA 号码资产查询、过滤、排序与入驻创建
 - Calling API 权限查询/申请，以及 `connect`、`pre_accept`、`accept`、`reject`、`terminate` 信令控制
 - 消息投递历史：按 WAMID 查询状态、Webhook 更新结果与可完整遍历的事件时间线
 - 号码级设置：Calling/SIP/视频、身份变更通知、payload encryption 公钥与数据驻留
@@ -122,6 +123,8 @@ Flow 通过强类型 `client.flows` 管理。固定动作覆盖列表、multipar
 WABA Webhook 订阅通过 `client.webhookSubscriptions` 管理。`list_webhook_subscriptions` 使用可增减字段数组查看已订阅 App；`subscribe_waba_webhooks` 可沿用 App 默认回调，也可提交无凭据的 HTTPS `override_callback_uri` 和 `verify_token`；`unsubscribe_waba_webhooks` 会立即停止当前 App 的该 WABA 事件投递。读取结果保留 App ID、名称、链接与 override callback，但永远不会返回或记录 verify token。
 
 WABA 控制面通过 `client.businessAccount` 管理。`get_business_account` 始终保留账户 ID 与名称，并按受控字段读取审核、认证、归属和时区状态；`update_business_account` 只允许官方 name / timezone_id 字段。`list_business_account_activities` 支持受控字段、活动类型、1–100 条分页、单向 cursor 与最长 90 天时间窗，严格校验 actor、活动枚举、JSON details 和 HTTPS 分页链接。审计结果可能包含 actor ID、IP 和 User-Agent，应按安全审计数据保护。领域能力只挂在对应深模块上，不再为 Business Profile、Compliance、迁移、Commerce 和二维码重复维护 Client 转发方法。
+
+WABA 下的号码资产由 `client.businessPhoneNumbers` 管理，与当前运行号码的 `client.phoneNumbers` 生命周期明确分离。`list_business_phone_numbers` 支持受控字段、账户模式/消息额度/OBA 等值过滤、官方排序、1–100 条分页和单向 cursor；`create_business_phone_number` 校验不带 `+` 的 E.164、显示名称、国家拨号代码，以及迁移或 BSP 预验证字段。创建只启动 Meta 入驻流程，不会修改当前 Client 的 `phone_number_id`，后续验证码、注册和状态跟踪应针对新号码建立明确配置。
 
 Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message` 等固定动作。标准 `send_message`、群资料、群成员、改名、邀请/移除成员和 `handle_group_request` 也复用同一实现。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
 

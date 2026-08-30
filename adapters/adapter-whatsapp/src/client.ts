@@ -22,6 +22,7 @@ import { WhatsAppMedia } from "./media.js";
 import { WhatsAppConversationalAutomation } from "./conversational-automation.js";
 import { WhatsAppWebhookSubscriptions } from "./webhook-subscriptions.js";
 import { WhatsAppBusinessAccounts } from "./business-account.js";
+import { WhatsAppBusinessPhoneNumbers } from "./business-phone-numbers.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -91,6 +92,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly webhookSubscriptions: WhatsAppWebhookSubscriptions;
     /** WABA 身份、受控配置与活动审计控制面。 */
     readonly businessAccount: WhatsAppBusinessAccounts;
+    /** WABA 号码资产清单与入驻创建控制面。 */
+    readonly businessPhoneNumbers: WhatsAppBusinessPhoneNumbers;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -118,6 +121,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.automation = new WhatsAppConversationalAutomation(this);
         this.webhookSubscriptions = new WhatsAppWebhookSubscriptions(this);
         this.businessAccount = new WhatsAppBusinessAccounts(this);
+        this.businessPhoneNumbers = new WhatsAppBusinessPhoneNumbers(this);
     }
 
     get apiVersion(): string {

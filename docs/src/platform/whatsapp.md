@@ -12,6 +12,7 @@ WhatsApp 适配器使用 Meta 官方 Cloud API。事件通过安全 Webhook 进�
 - 对话自动化：欢迎消息、引导问题和 Bot 命令
 - Webhook 管理：查看、订阅和取消 WABA 的当前 App 订阅
 - WABA 运维：账户资料、名称/时区更新和活动审计
+- WABA 号码资产：字段投影、过滤、排序、分页和号码入驻创建
 - 群管理：群资料/成员、改名、参与者增删、邀请链接、入群申请审批，以及生命周期/设置/冻结 Webhook
 - 呼叫控制：用户权限查询/申请、建立、预接受、接受、拒绝与终止；SDP/WebRTC 媒体平面由调用方负责
 - 投递诊断：按 WAMID 查询消息状态、Webhook 更新结果与分页事件时间线
@@ -75,6 +76,8 @@ Conversational Automation 由 `client.automation` 管理。固定动作可配置
 WABA Webhook App 订阅由 `client.webhookSubscriptions` 管理。可以查看订阅、使用 App 默认回调订阅、配置独立 HTTPS callback，或立即取消当前 App 的订阅。字段选择始终保留 App ID；`verify_token` 只进入写请求，不会出现在结构化返回中。取消订阅会停止事件投递，应由调用方显式执行。
 
 WABA 账户运维由 `client.businessAccount` 管理，并提供 `get_business_account`、`update_business_account` 和 `list_business_account_activities` 固定动作。账户读取始终保留 ID/名称，更新只接受 name 与 timezone_id；活动审计使用闭合字段和枚举，支持单向 cursor、1–100 条分页及最长 90 天时间窗。审计结果可能包含 actor ID、IP 和 User-Agent，应作为安全审计数据保护。各业务领域以 Client 深模块作为唯一强类型入口，避免重复转发 API 漂移。
+
+WABA 号码资产由 `client.businessPhoneNumbers` 管理，并提供 `list_business_phone_numbers` / `create_business_phone_number`。列表支持受控字段、账户模式/消息额度/OBA 等值过滤、官方排序和 cursor 分页；创建支持普通入驻、迁移标志和 BSP 预验证 ID。它与 `client.phoneNumbers` 的当前号码注册/验证码生命周期是两个领域；创建成功只返回新号码 ID，不会隐式切换当前 Client。
 
 Calling API 使用 `get_call_permissions` / `request_call_permission` 与 `connect_call`、`pre_accept_call`、`accept_call`、`reject_call`、`terminate_call`。适配器严格区分 offer、answer 和 `call_id`，但不负责 WebRTC/SIP 媒体传输。调用前需要 Meta 为当前 Phone Number 开通 Cloud API Calling，并具备 `whatsapp_business_messaging` 权限。
 

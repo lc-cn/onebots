@@ -209,6 +209,11 @@ export {
 export { isWhatsAppBusinessAccountAction, WhatsAppBusinessAccounts } from "./business-account.js";
 export * from "./business-account-types.js";
 export {
+    isWhatsAppBusinessPhoneNumberAction,
+    WhatsAppBusinessPhoneNumbers,
+} from "./business-phone-numbers.js";
+export * from "./business-phone-number-types.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,
