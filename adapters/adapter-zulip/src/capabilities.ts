@@ -114,6 +114,7 @@ export const zulipCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         channel_subscriber_added: { support: "native" },
         channel_subscriber_removed: { support: "native" },
         default_channels_updated: { support: "native" },
+        default_user_settings_updated: { support: "native" },
         channel_folder_created: { support: "native" },
         channel_folder_updated: { support: "native" },
         channel_folders_reordered: { support: "native" },

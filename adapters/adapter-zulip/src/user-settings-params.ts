@@ -99,17 +99,36 @@ const SETTING_FIELDS = [
     ...Object.keys(STRING_ENUMS),
     ...STRING_FIELDS,
 ] as const;
+const REALM_DEFAULT_EXCLUDED_FIELDS = new Set([
+    "full_name",
+    "email",
+    "old_password",
+    "new_password",
+    "default_language",
+    "timezone",
+    "enable_marketing_emails",
+    "enable_login_emails",
+    "allow_private_data_export",
+]);
+const REALM_DEFAULT_FIELDS = SETTING_FIELDS.filter(
+    field => !REALM_DEFAULT_EXCLUDED_FIELDS.has(field),
+);
+
+export type UserSettingsMode = "self" | "bulk" | "realm_default";
 
 /** 校验 Zulip 12+ 统一个人设置端点。 */
 export function userSettingsParams(
     params: Readonly<Record<string, unknown>>,
-    allowTargetUsers = false,
+    mode: UserSettingsMode = "self",
 ): ZulipParams {
-    const input = exactParams(
-        params,
-        allowTargetUsers ? ["target_users", ...SETTING_FIELDS] : SETTING_FIELDS,
-    );
-    assertHasAny(input, SETTING_FIELDS);
+    const allowed =
+        mode === "bulk"
+            ? ["target_users", ...SETTING_FIELDS]
+            : mode === "realm_default"
+              ? REALM_DEFAULT_FIELDS
+              : SETTING_FIELDS;
+    const input = exactParams(params, allowed);
+    assertHasAny(input, mode === "realm_default" ? REALM_DEFAULT_FIELDS : SETTING_FIELDS);
     for (const field of BOOLEAN_FIELDS) {
         if (input[field] !== undefined) requireBoolean(input[field], field);
     }
@@ -117,7 +136,15 @@ export function userSettingsParams(
         if (input[field] !== undefined) requireInteger(input[field], field);
     }
     for (const [field, values] of Object.entries(INTEGER_ENUMS)) {
-        if (input[field] !== undefined && !values.has(requireInteger(input[field], field))) {
+        if (
+            input[field] !== undefined &&
+            !values.has(requireInteger(input[field], field)) &&
+            !(
+                mode === "realm_default" &&
+                field === "web_channel_default_view" &&
+                input[field] === 3
+            )
+        ) {
             invalid(`Zulip 参数 ${field} 不是有效选项`);
         }
     }
@@ -130,7 +157,7 @@ export function userSettingsParams(
         if (input[field] !== undefined) requireString(input[field], field);
     }
     validatePasswordChange(input);
-    if (input.target_users !== undefined) {
+    if (mode === "bulk" && input.target_users !== undefined) {
         validateTargetUsers(input.target_users);
         for (const field of ["full_name", "email", "old_password", "new_password"]) {
             if (input[field] !== undefined) {

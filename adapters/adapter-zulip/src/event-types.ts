@@ -148,6 +148,13 @@ export interface ZulipUserSettingsEvent extends ZulipBaseEvent {
     language_name?: string;
 }
 
+export interface ZulipRealmUserSettingsDefaultsEvent extends ZulipBaseEvent {
+    type: "realm_user_settings_defaults";
+    op: "update";
+    property: string;
+    value: boolean | number | string;
+}
+
 export interface ZulipAttachmentChangedEvent extends ZulipBaseEvent {
     type: "attachment";
     op: "add" | "update";
@@ -428,6 +435,7 @@ export type ZulipEvent =
     | ZulipAlertWordsEvent
     | ZulipMutedUsersEvent
     | ZulipUserSettingsEvent
+    | ZulipRealmUserSettingsDefaultsEvent
     | ZulipAttachmentEvent
     | ZulipStreamEvent
     | ZulipSubscriptionEvent

@@ -19,6 +19,7 @@ const REACTION_TYPES = new Set(["unicode_emoji", "realm_emoji", "zulip_extra_emo
 export const ZULIP_PREFERENCE_PERMISSION_ACTIONS: ReadonlySet<string> = new Set([
     "update_status_for_user",
     "update_user_settings_for_users",
+    "update_default_user_settings",
 ]);
 
 export const ZULIP_PREFERENCE_ACTION_HANDLERS = {
@@ -33,10 +34,16 @@ export const ZULIP_PREFERENCE_ACTION_HANDLERS = {
     update_user_settings: (client, params) =>
         client.call("settings", "PATCH", userSettingsParams(params)),
     update_user_settings_for_users: (client, params) => {
-        const input = userSettingsParams(params, true);
+        const input = userSettingsParams(params, "bulk");
         if (input.target_users === undefined) invalid("Zulip 批量设置动作必须提供 target_users");
         return client.call("settings", "PATCH", input);
     },
+    update_default_user_settings: (client, params) =>
+        client.call(
+            "realm/user_settings_defaults",
+            "PATCH",
+            userSettingsParams(params, "realm_default"),
+        ),
     get_user_status: (client, params) => {
         const userId = requirePathId(params, "user_id");
         return client.call(`users/${userId}/status`);

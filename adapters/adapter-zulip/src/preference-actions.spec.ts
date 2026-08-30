@@ -62,6 +62,10 @@ describe("Zulip 个人偏好动作", () => {
             target_users: { group_ids: [4], skip_if_already_edited: true },
             enable_drafts_synchronization: true,
         });
+        await executeZulipPlatformAction(client, "update_default_user_settings", {
+            web_channel_default_view: 3,
+            send_read_receipts: true,
+        });
 
         expect(call).toHaveBeenNthCalledWith(1, "settings", "PATCH", {
             color_scheme: 2,
@@ -71,6 +75,10 @@ describe("Zulip 个人偏好动作", () => {
         expect(call).toHaveBeenNthCalledWith(2, "settings", "PATCH", {
             target_users: { group_ids: [4], skip_if_already_edited: true },
             enable_drafts_synchronization: true,
+        });
+        expect(call).toHaveBeenNthCalledWith(3, "realm/user_settings_defaults", "PATCH", {
+            web_channel_default_view: 3,
+            send_read_receipts: true,
         });
     });
 
@@ -95,6 +103,9 @@ describe("Zulip 个人偏好动作", () => {
             "update_user_settings_for_users",
             { target_users: { user_ids: [1] }, full_name: "Other user" },
         ],
+        ["update_default_user_settings", {}],
+        ["update_default_user_settings", { default_language: "zh_CN" }],
+        ["update_default_user_settings", { web_channel_default_view: 5 }],
     ])("%s 在请求前拒绝非官方参数", async (action, params) => {
         const { client, call } = mockClient();
 

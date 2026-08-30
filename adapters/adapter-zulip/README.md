@@ -104,6 +104,8 @@ Navigation View 领域提供 `list_navigation_views`、`add_navigation_view`、`
 
 个人设置领域提供 `update_user_settings` 与管理员专用的 `update_user_settings_for_users`，覆盖 Zulip 12 统一 `/settings` 端点的显示、通知、隐私、输入和话题策略。字段由共享元数据表严格校验，已移除的 `dense_mode` 不再透传；批量动作要求明确用户或用户组，且不能借此修改姓名、邮箱或密码。Client 精确声明 `user_settings` 增量事件，并投影为机器人本人的 `user_updated/settings` 通知。
 
+组织新用户默认设置复用同一字段模型，通过管理员动作 `update_default_user_settings` 仅开放官方支持的设置子集；不会把姓名、凭据、语言、时区或仅属个人的邮件选项误发给组织端点。`realm_user_settings_defaults` 增量事件投影为独立 `default_user_settings_updated` 策略通知。
+
 频道发现领域提供 `get_channel_id`、`get_channel_topics`、`get_channel_subscriptions`、`get_channel_subscription_status`、`get_user_channels`、`list_zulip_channels`、`get_zulip_channel`、`get_channel_email_address` 与 `delete_channel_topic`，并将原有订阅、订阅者、创建、更新和归档动作收敛到独立频道模块。频道列表仅暴露现代 `include_all` 等参数，不接受已弃用的 `include_all_active`；归档使用官方 `DELETE /streams/{stream_id}`，不再伪装成 PATCH 属性更新。话题删除保留 Zulip 10+ 的空话题名语义。
 
 频道个人设置提供 `update_channel_subscription_settings` 和 `update_channel_subscription_property`，支持批量或单频道更新颜色、静音、置顶和通知开关。颜色严格校验为 6 位十六进制值，其余属性必须为布尔值；不接受仅为旧客户端保留的 `in_home_view`。

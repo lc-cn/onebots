@@ -19,6 +19,7 @@ import type {
     ZulipMessage,
     ZulipMessageEvent,
     ZulipReactionEvent,
+    ZulipRealmUserSettingsDefaultsEvent,
     ZulipUpdateMessageEvent,
     ZulipUpdateMessageFlagsEvent,
     ZulipUserSettingsEvent,
@@ -35,6 +36,9 @@ export function projectZulipEvents(
     if (isReactionEvent(event)) return [projectReaction(event, context)];
     if (isMessageFlagsEvent(event)) return [projectMessageFlags(event, context)];
     if (isUserSettingsEvent(event)) return [projectUserSettings(event, context)];
+    if (isRealmUserSettingsDefaultsEvent(event)) {
+        return [projectRealmUserSettingsDefaults(event, context)];
+    }
     if (event.type === "heartbeat") {
         return [
             {
@@ -74,6 +78,21 @@ function projectUserSettings(
             [event.property]: event.value,
             ...(event.language_name === undefined ? {} : { language_name: event.language_name }),
         },
+        extensions: { zulip: event },
+    };
+}
+
+function projectRealmUserSettingsDefaults(
+    event: ZulipRealmUserSettingsDefaultsEvent,
+    context: ZulipProjectionContext,
+): CommonEvent.Notice<ZulipEvent> {
+    return {
+        ...base(event, context),
+        type: "notice",
+        notice_type: "default_user_settings_updated",
+        sub_type: "settings",
+        changed_property: event.property,
+        value: event.value,
         extensions: { zulip: event },
     };
 }
@@ -422,6 +441,19 @@ function isMessageFlagsEvent(event: ZulipEvent): event is ZulipUpdateMessageFlag
 function isUserSettingsEvent(event: ZulipEvent): event is ZulipUserSettingsEvent {
     return (
         event.type === "user_settings" &&
+        event.op === "update" &&
+        typeof event.property === "string" &&
+        (typeof event.value === "boolean" ||
+            typeof event.value === "number" ||
+            typeof event.value === "string")
+    );
+}
+
+function isRealmUserSettingsDefaultsEvent(
+    event: ZulipEvent,
+): event is ZulipRealmUserSettingsDefaultsEvent {
+    return (
+        event.type === "realm_user_settings_defaults" &&
         event.op === "update" &&
         typeof event.property === "string" &&
         (typeof event.value === "boolean" ||

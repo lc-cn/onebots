@@ -54,8 +54,28 @@ describe("Zulip 个人设置事件", () => {
         });
     });
 
+    it("投影组织新用户默认设置策略变化", () => {
+        const event = projectZulipEvents(
+            {
+                id: 3,
+                type: "realm_user_settings_defaults",
+                op: "update",
+                property: "send_read_receipts",
+                value: false,
+            },
+            context,
+        )[0];
+
+        expect(event).toMatchObject({
+            notice_type: "default_user_settings_updated",
+            sub_type: "settings",
+            changed_property: "send_read_receipts",
+            value: false,
+        });
+    });
+
     it("异常设置事件退回 custom 并保留原始报文", () => {
-        const raw = { id: 3, type: "user_settings", op: "update", value: true };
+        const raw = { id: 4, type: "user_settings", op: "update", value: true };
         expect(projectZulipEvents(raw, context)[0]).toMatchObject({
             notice_type: "custom",
             raw_event: raw,
