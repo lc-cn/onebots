@@ -215,6 +215,11 @@ export * from "./business-phone-number-types.js";
 export { isWhatsAppScheduleAction, WhatsAppSchedules } from "./schedules.js";
 export * from "./schedule-types.js";
 export {
+    isWhatsAppOfficialBusinessAccountAction,
+    WhatsAppOfficialBusinessAccount,
+} from "./official-business-account.js";
+export * from "./official-business-account-types.js";
+export {
     isWhatsAppSolutionMigrationAction,
     WhatsAppSolutionMigration,
     WHATSAPP_MIGRATION_INTENT_FIELDS,

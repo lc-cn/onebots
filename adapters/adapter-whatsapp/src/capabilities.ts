@@ -25,6 +25,7 @@ import { isWhatsAppWebhookSubscriptionAction } from "./webhook-subscriptions.js"
 import { isWhatsAppBusinessAccountAction } from "./business-account.js";
 import { isWhatsAppBusinessPhoneNumberAction } from "./business-phone-numbers.js";
 import { isWhatsAppScheduleAction } from "./schedules.js";
+import { isWhatsAppOfficialBusinessAccountAction } from "./official-business-account.js";
 
 const businessManagement = {
     support: "native" as const,
@@ -41,6 +42,11 @@ const businessMessaging = {
 const scheduleAccess = {
     ...businessManagement,
     note: "要求 WABA 已开通 Meta Schedule Management 功能；创建时默认使用 UTC 且立即启用",
+};
+
+const officialBusinessAccountAccess = {
+    ...businessManagement,
+    note: "面向当前 Phone Number 的 OBA 状态与申请；审核由 Meta 完成，批准不等于自动开通 Groups API",
 };
 
 const groupsAccess = {
@@ -81,6 +87,7 @@ const platformActions = definePlatformActionCapabilities(WHATSAPP_PLATFORM_ACTIO
     if (isWhatsAppBusinessAccountAction(action)) return businessManagement;
     if (isWhatsAppBusinessPhoneNumberAction(action)) return businessManagement;
     if (isWhatsAppScheduleAction(action)) return scheduleAccess;
+    if (isWhatsAppOfficialBusinessAccountAction(action)) return officialBusinessAccountAccess;
     if (action === "send_native_message" || action === "mark_message_read") {
         return { support: "native", scenes: ["private", "group"] };
     }

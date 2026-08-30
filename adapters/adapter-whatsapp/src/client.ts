@@ -24,6 +24,7 @@ import { WhatsAppWebhookSubscriptions } from "./webhook-subscriptions.js";
 import { WhatsAppBusinessAccounts } from "./business-account.js";
 import { WhatsAppBusinessPhoneNumbers } from "./business-phone-numbers.js";
 import { WhatsAppSchedules } from "./schedules.js";
+import { WhatsAppOfficialBusinessAccount } from "./official-business-account.js";
 import type {
     WhatsAppAPIResponse,
     WhatsAppCallOptions,
@@ -97,6 +98,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     readonly businessPhoneNumbers: WhatsAppBusinessPhoneNumbers;
     /** WABA 业务时段、自动响应、Campaign 与维护窗口。 */
     readonly schedules: WhatsAppSchedules;
+    /** 当前 Phone Number 的 Official Business Account 审核与申请。 */
+    readonly officialBusinessAccount: WhatsAppOfficialBusinessAccount;
 
     constructor(
         readonly config: WhatsAppConfig,
@@ -126,6 +129,7 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         this.businessAccount = new WhatsAppBusinessAccounts(this);
         this.businessPhoneNumbers = new WhatsAppBusinessPhoneNumbers(this);
         this.schedules = new WhatsAppSchedules(this);
+        this.officialBusinessAccount = new WhatsAppOfficialBusinessAccount(this);
     }
 
     get apiVersion(): string {

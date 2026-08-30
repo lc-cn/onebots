@@ -129,6 +129,8 @@ WABA 下的号码资产由 `client.businessPhoneNumbers` 管理，与当前运�
 
 WABA Schedule 通过 `client.schedules` 管理，并提供 `list_business_schedules` / `create_business_schedule`。列表支持受控字段、状态/类型/启用状态等值过滤、官方排序和统一 HTTPS cursor 分页；创建严格校验 Schedule 类型、HH:MM、IANA 时区、唯一星期、recurrence 频率/间隔/有效日期。未填写 timezone / is_active 时会显式发送 `UTC` / `true`；起止时间可以按官方夜间自动回复示例跨午夜，但不能完全相同。此能力要求 WABA 已开通 Meta Schedule Management。
 
+当前号码的 Official Business Account 审核由 `client.officialBusinessAccount` 管理，并提供 `get_official_business_account_status` / `submit_official_business_account_application`。申请严格使用 Meta v23 Schema 的官网、主要运营国家、语言、母品牌、5–10 条媒体佐证链接和补充说明；官网及佐证链接必须是无凭据 HTTPS URL。官方描述中的 `action/application_data` 示例与正式 Schema 冲突，因此适配器不虚构撤回或重提动作。OBA 获批也不代表 Groups API 已自动开通，仍须以能力资格为准。
+
 Groups API 提供 `create_group`、`get_group`、`list_groups`、`update_group`、`delete_group`、`create_group_invite_link`、`delete_group_invite_link`、入群申请审批、参与者增删以及 `pin_message` / `unpin_message` 等固定动作。标准 `send_message`、群资料、群成员、改名、邀请/移除成员和 `handle_group_request` 也复用同一实现。该能力仅适用于当前 Phone Number 通过 Groups API 创建和管理的群，并要求 Meta 为 Official Business Account 开通资格；它不表示适配器能访问普通消费者群组。
 
 Calling API 提供 `get_call_permissions`、`request_call_permission`、`connect_call`、`pre_accept_call`、`accept_call`、`reject_call` 与 `terminate_call` 固定动作，也可直接使用 `client.calling` 获得完整类型。呼叫权限申请通过原生 `interactive.call_permission_request` 消息发送；`connect` 使用 offer SDP，`accept` 使用 answer SDP，`terminate` 使用 Meta 返回的 `call_id`。此模块只负责权限和呼叫信令，不会伪装成 WebRTC/SIP 媒体实现；媒体会话、ICE 与音频传输由调用方负责。当前 Phone Number 必须先获准启用 Cloud API Calling。
