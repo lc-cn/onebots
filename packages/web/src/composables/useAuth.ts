@@ -1,10 +1,20 @@
 import { buildApiUrl } from '../config'
 import { managementRequestInit } from '../management-request.js'
+import {
+  authenticationRequestErrorMessage,
+  authenticationRequestInit
+} from '../authentication-request.js'
 
 const TOKEN_KEY = 'onebots:authToken'
 const REFRESH_KEY = 'onebots:authRefreshToken'
 const EXPIRES_KEY = 'onebots:authExpiresAt'
 const EXPIRED_FLAG = 'onebots:authExpired'
+
+export type LoginResult =
+  | { ok: true; isDefaultCredentials: boolean }
+  | { ok: false; message: string; unavailable?: boolean }
+
+export type RefreshResult = { ok: true } | { ok: false; unavailable?: boolean }
 
 const getStoredExpiresAt = () => {
   const value = localStorage.getItem(EXPIRES_KEY)
@@ -83,6 +93,7 @@ export const authFetch = async (
     if (refreshed.ok) {
       return authFetch(input, init, false)
     }
+    if (refreshed.unavailable) return response
   }
 
   clearAuth()
@@ -92,46 +103,60 @@ export const authFetch = async (
 }
 
 /** 使用鉴权码登录（Bearer Token，与 config 中 access_token 一致） */
-export const loginWithToken = async (accessToken: string) => {
-  const response = await fetch(buildApiUrl('/api/auth/login'), managementRequestInit({
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ access_token: accessToken.trim() })
-  }))
-
-  if (!response.ok) {
-    const message = await response.json().catch(() => ({ message: '鉴权码错误' }))
-    return { ok: false, message: message.message || '鉴权码错误' }
+export const loginWithToken = async (accessToken: string): Promise<LoginResult> => {
+  let response: Response
+  try {
+    response = await fetch(buildApiUrl('/api/auth/login'), authenticationRequestInit({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: accessToken.trim() })
+    }))
+  } catch (error) {
+    return { ok: false, unavailable: true, message: authenticationRequestErrorMessage(error) }
   }
 
-  const result = await response.json()
+  if (!response.ok) {
+    const fallback = response.status === 401 ? '鉴权码错误' : `登录请求失败（HTTP ${response.status}）`
+    const result = await response.json().catch(() => ({ message: fallback }))
+    const failure = { ok: false as const, message: result.message || fallback }
+    return response.status === 401 ? failure : { ...failure, unavailable: true }
+  }
+
+  const result = await response.json().catch(() => null)
   if (result?.token) {
     setToken(result.token, result.expiresAt, result.refreshToken)
     return { ok: true, isDefaultCredentials: !!result.isDefaultCredentials }
   }
 
-  return { ok: false, message: result?.message || '登录失败' }
+  return { ok: false, unavailable: true, message: result?.message || '登录响应格式无效' }
 }
 
-export const login = async (username: string, password: string) => {
-  const response = await fetch(buildApiUrl('/api/auth/login'), managementRequestInit({
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  }))
-
-  if (!response.ok) {
-    const message = await response.json().catch(() => ({ message: '登录失败' }))
-    return { ok: false, message: message.message || '登录失败' }
+export const login = async (username: string, password: string): Promise<LoginResult> => {
+  let response: Response
+  try {
+    response = await fetch(buildApiUrl('/api/auth/login'), authenticationRequestInit({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    }))
+  } catch (error) {
+    return { ok: false, unavailable: true, message: authenticationRequestErrorMessage(error) }
   }
 
-  const result = await response.json()
+  if (!response.ok) {
+    const fallback = response.status === 401 ? '用户名或密码错误' : `登录请求失败（HTTP ${response.status}）`
+    const result = await response.json().catch(() => ({ message: fallback }))
+    const failure = { ok: false as const, message: result.message || fallback }
+    return response.status === 401 ? failure : { ...failure, unavailable: true }
+  }
+
+  const result = await response.json().catch(() => null)
   if (result?.token) {
     setToken(result.token, result.expiresAt, result.refreshToken)
     return { ok: true, isDefaultCredentials: !!result.isDefaultCredentials }
   }
 
-  return { ok: false, message: result?.message || '登录失败' }
+  return { ok: false, unavailable: true, message: result?.message || '登录响应格式无效' }
 }
 
 export const logout = async () => {
@@ -144,18 +169,27 @@ export const logout = async () => {
   clearAuth()
 }
 
-export const refresh = async (signal?: AbortSignal | null) => {
+export const refresh = async (signal?: AbortSignal | null): Promise<RefreshResult> => {
   const refreshToken = getRefreshToken()
   if (!refreshToken) return { ok: false }
 
-  const response = await fetch(buildApiUrl('/api/auth/refresh'), managementRequestInit({
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
-    signal
-  }))
+  let response: Response
+  try {
+    response = await fetch(buildApiUrl('/api/auth/refresh'), authenticationRequestInit({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+      signal
+    }))
+  } catch {
+    return { ok: false, unavailable: true }
+  }
 
-  if (!response.ok) return { ok: false }
+  if (!response.ok) {
+    return response.status === 400 || response.status === 401
+      ? { ok: false }
+      : { ok: false, unavailable: true }
+  }
 
   const result = await response.json().catch(() => null)
   if (result?.token) {
@@ -163,5 +197,5 @@ export const refresh = async (signal?: AbortSignal | null) => {
     return { ok: true }
   }
 
-  return { ok: false }
+  return { ok: false, unavailable: true }
 }

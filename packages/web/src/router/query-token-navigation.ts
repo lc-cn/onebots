@@ -7,7 +7,7 @@ interface QueryTokenTarget {
 }
 
 interface QueryTokenDependencies {
-    authenticate(token: string): Promise<{ ok: boolean }>;
+    authenticate(token: string): Promise<{ ok: boolean; unavailable?: boolean }>;
     hasExistingSession(): boolean;
 }
 
@@ -32,7 +32,9 @@ export async function resolveQueryTokenNavigation(
 
     if (token) {
         try {
-            if ((await dependencies.authenticate(token)).ok) return cleanTarget;
+            const result = await dependencies.authenticate(token);
+            if (result.ok) return cleanTarget;
+            if (result.unavailable) reason = "token_unavailable";
         } catch {
             reason = "token_unavailable";
         }

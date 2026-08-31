@@ -70,6 +70,16 @@ describe("URL 鉴权码导航", () => {
             query: { reason: "token_unavailable" },
         });
 
+        await expect(
+            resolveQueryTokenNavigation(target, {
+                authenticate: async () => ({ ok: false, unavailable: true }),
+                hasExistingSession: () => false,
+            }),
+        ).resolves.toMatchObject({
+            path: "/login",
+            query: { reason: "token_unavailable" },
+        });
+
         const authenticate = vi.fn(async () => ({ ok: true }));
         await resolveQueryTokenNavigation(
             { ...target, query: { access_token: ["first", "second"] } },
