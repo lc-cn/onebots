@@ -95,6 +95,32 @@ describe("executeHeychatPlatformAction", () => {
                 access_token: "access",
                 client_secret: "不应由动作传入",
             }),
-        ).rejects.toMatchObject({ code: "HEYCHAT_INVALID_ACTION_PARAMS" });
+        ).rejects.toMatchObject({
+            code: "HEYCHAT_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "get_oauth_user_info", parameter: "client_secret" },
+        });
+    });
+
+    it("底层调用与媒体上传同样拒绝契约外顶层字段", async () => {
+        const bot = {} as HeychatBot;
+        await expect(
+            executeHeychatPlatformAction(bot, "call_heychat_api", {
+                path: "/chatroom/v2/room/view",
+                token: "不应透传",
+            }),
+        ).rejects.toMatchObject({
+            code: "HEYCHAT_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "call_heychat_api", parameter: "token" },
+        });
+        await expect(
+            executeHeychatPlatformAction(bot, "upload_media", {
+                data: "aW1hZ2U=",
+                filename: "a.png",
+                path: "/tmp/a.png",
+            }),
+        ).rejects.toMatchObject({
+            code: "HEYCHAT_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "upload_media", parameter: "path" },
+        });
     });
 });

@@ -1,4 +1,8 @@
-import { definePlatformActions, type PlatformActionHandler } from "onebots";
+import {
+    definePlatformActionHandlers,
+    definePlatformActions,
+    type PlatformActionHandler,
+} from "onebots";
 import type { HeychatBot } from "./bot.js";
 import { isSafeHeychatApiPath } from "./api-path.js";
 import { HeychatApiError } from "./errors.js";
@@ -9,6 +13,8 @@ interface ActionRoute {
     path: string;
     method: "GET" | "POST";
 }
+
+const DURATION_PARAMS = ["room_id", "begin_time", "end_time", "appid"] as const;
 
 const ROUTES: Readonly<Record<string, ActionRoute>> = {
     send_channel_message: { path: "/chatroom/v2/channel_msg/send", method: "POST" },
@@ -65,63 +71,69 @@ const ROUTE_HANDLERS = Object.fromEntries(
     ]),
 ) satisfies Readonly<Record<string, PlatformActionHandler<HeychatBot>>>;
 
+const SPECIAL_ACTION_HANDLERS = {
+    call_heychat_api: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+        bot.callApi(requireApiPath(params.path), {
+            method: methodValue(params.method),
+            query: queryValue(params.query),
+            body: objectValue(params.body, "body"),
+        }),
+    upload_media: async (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => ({
+        url: await uploadHeychatMedia(bot, {
+            source: normalizeBase64Source(requiredString(params.data, "data")),
+            filename: requiredString(params.filename, "filename"),
+            contentType: optionalString(params.content_type, "content_type"),
+        }),
+    }),
+    create_oauth_authorization_url: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+        Promise.resolve({ url: bot.buildOAuthAuthorizationUrl(scopeValue(params.scope)) }),
+    exchange_oauth_code: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+        bot.exchangeOAuthCode(requiredString(params.code, "code")),
+    refresh_oauth_token: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+        bot.refreshOAuthToken(requiredString(params.refresh_token, "refresh_token")),
+    get_oauth_user_info: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+        bot.getOAuthUserInfo(requiredString(params.access_token, "access_token")),
+    request_oauth_user_info: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+        bot.requestOAuthUserInfo(
+            requiredString(params.user_id, "user_id"),
+            scopeValue(params.scope),
+        ),
+    get_oauth_voice_duration: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+        bot.getOAuthVoiceDuration(
+            requiredString(params.access_token, "access_token"),
+            durationQuery(params),
+        ),
+    get_oauth_game_duration: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
+        bot.getOAuthVoiceDuration(requiredString(params.access_token, "access_token"), {
+            ...durationQuery(params),
+            appid: requiredString(params.appid, "appid"),
+        }),
+} satisfies Readonly<Record<string, PlatformActionHandler<HeychatBot>>>;
+
+const SPECIAL_ACTIONS = definePlatformActionHandlers(
+    SPECIAL_ACTION_HANDLERS,
+    {
+        call_heychat_api: ["path", "method", "query", "body"],
+        upload_media: ["data", "filename", "content_type"],
+        create_oauth_authorization_url: ["scope"],
+        exchange_oauth_code: ["code"],
+        refresh_oauth_token: ["refresh_token"],
+        get_oauth_user_info: ["access_token"],
+        request_oauth_user_info: ["user_id", "scope"],
+        get_oauth_voice_duration: ["access_token", ...DURATION_PARAMS],
+        get_oauth_game_duration: ["access_token", ...DURATION_PARAMS],
+    },
+    (action, parameter) =>
+        HeychatApiError.invalid(
+            `黑盒语音平台动作 ${action} 不接受参数 ${parameter}`,
+            "HEYCHAT_UNEXPECTED_ACTION_PARAMETER",
+            { action, parameter },
+        ),
+);
+
 const PLATFORM_ACTIONS = definePlatformActions(
     {
-        call_heychat_api: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) =>
-            bot.callApi(requireApiPath(params.path), {
-                method: methodValue(params.method),
-                query: queryValue(params.query),
-                body: objectValue(params.body, "body"),
-            }),
-        upload_media: async (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => ({
-            url: await uploadHeychatMedia(bot, {
-                source: normalizeBase64Source(requiredString(params.data, "data")),
-                filename: requiredString(params.filename, "filename"),
-                contentType: optionalString(params.content_type, "content_type"),
-            }),
-        }),
-        create_oauth_authorization_url: (
-            bot: HeychatBot,
-            params: Readonly<Record<string, unknown>>,
-        ) => {
-            assertAllowedParams(params, ["scope"]);
-            return Promise.resolve({
-                url: bot.buildOAuthAuthorizationUrl(scopeValue(params.scope)),
-            });
-        },
-        exchange_oauth_code: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["code"]);
-            return bot.exchangeOAuthCode(requiredString(params.code, "code"));
-        },
-        refresh_oauth_token: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["refresh_token"]);
-            return bot.refreshOAuthToken(requiredString(params.refresh_token, "refresh_token"));
-        },
-        get_oauth_user_info: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["access_token"]);
-            return bot.getOAuthUserInfo(requiredString(params.access_token, "access_token"));
-        },
-        request_oauth_user_info: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["user_id", "scope"]);
-            return bot.requestOAuthUserInfo(
-                requiredString(params.user_id, "user_id"),
-                scopeValue(params.scope),
-            );
-        },
-        get_oauth_voice_duration: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["access_token", ...DURATION_PARAMS]);
-            return bot.getOAuthVoiceDuration(
-                requiredString(params.access_token, "access_token"),
-                durationQuery(params),
-            );
-        },
-        get_oauth_game_duration: (bot: HeychatBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["access_token", ...DURATION_PARAMS]);
-            return bot.getOAuthVoiceDuration(requiredString(params.access_token, "access_token"), {
-                ...durationQuery(params),
-                appid: requiredString(params.appid, "appid"),
-            });
-        },
+        ...SPECIAL_ACTIONS,
         ...ROUTE_HANDLERS,
     },
     action =>
@@ -203,8 +215,6 @@ function optionalString(value: unknown, name: string): string | undefined {
     return requiredString(value, name);
 }
 
-const DURATION_PARAMS = ["room_id", "begin_time", "end_time", "appid"] as const;
-
 function scopeValue(value: unknown): string[] {
     const scopes = typeof value === "string" ? value.split(/\s+/u) : value;
     if (
@@ -232,14 +242,6 @@ function optionalTimestamp(value: unknown, name: string): number | undefined {
         throw invalid(`${name} 必须是非负秒级时间戳`);
     }
     return value;
-}
-
-function assertAllowedParams(
-    params: Readonly<Record<string, unknown>>,
-    allowed: readonly string[],
-): void {
-    const unknown = Object.keys(params).filter(key => !allowed.includes(key));
-    if (unknown.length) throw invalid(`不支持参数: ${unknown.join(", ")}`);
 }
 
 function invalid(message: string): HeychatApiError {
