@@ -80,6 +80,9 @@ export interface AdapterInfo {
     capabilities: AdapterCapabilityManifest;
     /** 仅包含与适配器默认清单不同的账号级能力覆写。 */
     accountCapabilities?: Record<string, AdapterCapabilityManifest>;
+    /** 能力证据来自当前进程，或尚未加载插件的版本化目录快照。 */
+    capabilitySource?: "runtime" | "catalog";
+    capabilityPackageVersion?: string | null;
     accounts: AccountInfo[];
 }
 
@@ -130,7 +133,7 @@ export interface ExtensionInfo {
     enabled: boolean;
     loaded: boolean;
     installing: boolean;
-    /** 仅在适配器已加载后提供，内容来自插件注册的默认能力契约。 */
+    /** 适配器能力来自已加载插件的运行时契约，或安装前可见的版本化目录快照。 */
     capability: ExtensionCapabilityInfo | null;
 }
 

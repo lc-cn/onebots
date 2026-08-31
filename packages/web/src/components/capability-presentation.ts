@@ -4,7 +4,7 @@ import type {
     SegmentCapabilityDescriptor,
     TransportCapabilityDescriptor,
 } from "@onebots/core";
-import type { AdapterInfo } from "../types";
+import type { AdapterInfo, ExtensionInfo } from "../types";
 
 export const CAPABILITY_CATEGORIES = [
     { key: "actions", label: "动作" },
@@ -22,6 +22,49 @@ export type CapabilityEntryDescriptor =
 export interface CapabilityEntry {
     name: string;
     descriptor: CapabilityEntryDescriptor;
+}
+
+export function mergeCapabilityAdapters(
+    runtimeAdapters: readonly AdapterInfo[],
+    extensions: readonly ExtensionInfo[],
+): AdapterInfo[] {
+    const runtimePlatforms = new Set(runtimeAdapters.map(adapter => adapter.platform));
+    const catalogAdapters = extensions.flatMap(extension => {
+        if (
+            extension.type !== "adapter" ||
+            runtimePlatforms.has(extension.name) ||
+            !extension.capability?.declared ||
+            !extension.capability.manifest
+        ) {
+            return [];
+        }
+        return [
+            {
+                platform: extension.name,
+                displayName: extension.displayName,
+                description: extension.description,
+                icon: "",
+                capabilities: extension.capability.manifest,
+                capabilitySource: extension.capability.source,
+                capabilityPackageVersion: extension.capability.packageVersion,
+                accounts: [],
+            } satisfies AdapterInfo,
+        ];
+    });
+    return [
+        ...runtimeAdapters.map(adapter => {
+            const runtimeCapability = extensions.find(
+                extension => extension.type === "adapter" && extension.name === adapter.platform,
+            )?.capability;
+            return {
+                ...adapter,
+                capabilitySource: "runtime" as const,
+                capabilityPackageVersion:
+                    adapter.capabilityPackageVersion ?? runtimeCapability?.packageVersion,
+            };
+        }),
+        ...catalogAdapters,
+    ];
 }
 
 export function getCapabilityEntries(

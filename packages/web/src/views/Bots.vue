@@ -8,10 +8,7 @@
                 </h2>
                 <div class="flex items-center gap-2">
                     <UiBadge variant="neutral">共 {{ totalBotCount }} 个机器人</UiBadge>
-                    <UiButton
-                        size="sm"
-                        :disabled="adapters.length === 0"
-                        @click="capabilitiesOpen = true">
+                    <UiButton size="sm" @click="capabilitiesOpen = true">
                         <IconListCheck :size="14" />
                         <span class="hidden sm:inline">能力概览</span>
                     </UiButton>
@@ -24,7 +21,7 @@
                 :description="
                     adapters.length > 0
                         ? '适配器已经加载，请在配置管理中添加账号。'
-                        : '请在启动时加载适配器，并在配置管理中添加账号。'
+                        : '可先打开能力概览比较平台，再到功能扩展安装并配置账号。'
                 " />
             <div
                 v-else
@@ -41,27 +38,45 @@
                 </template>
             </div>
         </div>
-        <AdapterCapabilitiesDrawer v-model="capabilitiesOpen" :adapters="adapters" />
+        <AdapterCapabilitiesDrawer v-model="capabilitiesOpen" :adapters="capabilityAdapters" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { IconListCheck, IconRobot } from "@tabler/icons-vue";
 import UiBadge from "../ui/UiBadge.vue";
 import UiButton from "../ui/UiButton.vue";
 import UiEmpty from "../ui/UiEmpty.vue";
 import { useToast } from "../ui/toast";
 import { useApi } from "../composables/useApi";
+import { authFetch } from "../composables/useAuth";
+import { buildApiUrl } from "../config";
+import { reportClientError } from "../client-diagnostics";
 import BotCard from "../components/BotCard.vue";
 import AdapterCapabilitiesDrawer from "../components/AdapterCapabilitiesDrawer.vue";
-import type { AccountInfo } from "../types";
+import type { AccountInfo, ExtensionInfo } from "../types";
+import { mergeCapabilityAdapters } from "../components/capability-presentation.js";
 
 const { adapters, totalBotCount, startBot, stopBot } = useApi();
 const toast = useToast();
 
 const loadingBots = ref<Set<string>>(new Set());
 const capabilitiesOpen = ref(false);
+const extensions = ref<ExtensionInfo[]>([]);
+const capabilityAdapters = computed(() =>
+    mergeCapabilityAdapters(adapters.value, extensions.value),
+);
+
+onMounted(async () => {
+    try {
+        const response = await authFetch(buildApiUrl("/api/extensions"));
+        if (!response.ok) throw new Error("无法读取适配器能力目录");
+        extensions.value = await response.json();
+    } catch (error) {
+        reportClientError("获取适配器能力目录失败", error);
+    }
+});
 
 const botKey = (bot: AccountInfo) => `${bot.platform}:${bot.uin}`;
 

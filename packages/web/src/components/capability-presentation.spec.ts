@@ -4,8 +4,10 @@ import {
     countSupportedCapabilities,
     getCapabilityEntries,
     hasAccountCapabilityOverride,
+    mergeCapabilityAdapters,
     resolveAccountCapabilities,
 } from "./capability-presentation.js";
+import type { AdapterInfo, ExtensionInfo } from "../types";
 
 const manifest: AdapterCapabilityManifest = {
     version: 1,
@@ -44,4 +46,74 @@ describe("capability presentation", () => {
         expect(hasAccountCapabilityOverride(adapter, "limited")).toBe(true);
         expect(hasAccountCapabilityOverride(adapter, "default")).toBe(false);
     });
+
+    it("adds catalog manifests without an account and keeps runtime evidence authoritative", () => {
+        const runtimeAdapter = {
+            platform: "telegram",
+            displayName: "Telegram runtime",
+            description: "runtime",
+            icon: "telegram.svg",
+            capabilities: manifest,
+            accounts: [],
+        } satisfies AdapterInfo;
+        const extensions = [
+            extension("telegram", manifest),
+            extension("discord", manifest),
+            extension("undeclared", null),
+            { ...extension("protocol", manifest), type: "protocol" as const },
+        ];
+
+        const result = mergeCapabilityAdapters([runtimeAdapter], extensions);
+
+        expect(result.map(adapter => adapter.platform)).toEqual(["telegram", "discord"]);
+        expect(result[0]).toMatchObject({
+            displayName: "Telegram runtime",
+            capabilitySource: "runtime",
+            capabilityPackageVersion: "1.2.3",
+        });
+        expect(result[1]).toMatchObject({
+            displayName: "discord catalog",
+            capabilitySource: "catalog",
+            capabilityPackageVersion: "1.2.3",
+            accounts: [],
+            capabilities: manifest,
+        });
+    });
 });
+
+function extension(
+    name: string,
+    capabilityManifest: AdapterCapabilityManifest | null,
+): ExtensionInfo {
+    return {
+        id: `adapter:${name}`,
+        type: "adapter",
+        name,
+        displayName: `${name} catalog`,
+        description: "catalog",
+        packageName: `@onebots/adapter-${name}`,
+        targetVersion: "1.2.3",
+        installedVersion: null,
+        versionAligned: false,
+        setup: [],
+        installed: false,
+        enabled: false,
+        loaded: false,
+        installing: false,
+        capability: capabilityManifest
+            ? {
+                  source: "catalog",
+                  packageVersion: "1.2.3",
+                  declared: true,
+                  summary: null,
+                  manifest: capabilityManifest,
+              }
+            : {
+                  source: "catalog",
+                  packageVersion: null,
+                  declared: false,
+                  summary: null,
+                  manifest: null,
+              },
+    };
+}

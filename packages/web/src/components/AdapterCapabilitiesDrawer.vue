@@ -2,8 +2,8 @@
     <UiDrawer v-model="visible" title="适配器能力" size="520px">
         <div v-if="adapters.length === 0" class="py-8">
             <UiEmpty
-                title="暂无已加载的适配器"
-                description="启动时通过 -r 参数加载适配器后可查看能力。" />
+                title="暂无可用能力清单"
+                description="能力目录暂不可用，请稍后重试或检查功能扩展页面。" />
         </div>
 
         <div v-else class="flex flex-col gap-5">
@@ -26,10 +26,21 @@
                     <div class="min-w-0 flex-1">
                         <div class="font-medium text-fg">{{ selectedAdapter.displayName }}</div>
                         <div class="text-xs text-fg-tertiary">
-                            {{ selectedAdapter.platform }} · 能力清单 v{{
-                                selectedCapabilities.version
+                            {{ selectedAdapter.platform }} ·
+                            {{
+                                selectedAdapter.capabilitySource === "catalog"
+                                    ? "目录快照"
+                                    : "运行时清单"
                             }}
-                            · {{ selectedAdapter.accounts.length }} 个账号
+                            <template v-if="selectedAdapter.capabilityPackageVersion">
+                                · 插件 v{{ selectedAdapter.capabilityPackageVersion }}
+                            </template>
+                            · 能力清单 v{{ selectedCapabilities.version }} ·
+                            {{
+                                selectedAdapter.accounts.length > 0
+                                    ? `${selectedAdapter.accounts.length} 个账号`
+                                    : "未配置账号"
+                            }}
                         </div>
                     </div>
                 </div>
