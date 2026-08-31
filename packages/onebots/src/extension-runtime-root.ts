@@ -8,6 +8,10 @@ export interface ExtensionRuntimeRootInspection {
     error: string | null;
 }
 
+export interface ExtensionRuntimeRootInspectionOptions {
+    access?: (target: string, mode: number) => void;
+}
+
 interface RuntimeManifest {
     name?: unknown;
     version?: unknown;
@@ -17,7 +21,10 @@ interface RuntimeManifest {
 }
 
 /** 验证扩展安装目录确实由当前 OneBots 进程管理。 */
-export function inspectExtensionRuntimeRoot(runtimeRoot: string): ExtensionRuntimeRootInspection {
+export function inspectExtensionRuntimeRoot(
+    runtimeRoot: string,
+    options: ExtensionRuntimeRootInspectionOptions = {},
+): ExtensionRuntimeRootInspection {
     const root = path.resolve(runtimeRoot);
     const manifestPath = path.join(root, "package.json");
     if (!fs.existsSync(manifestPath)) {
@@ -41,7 +48,7 @@ export function inspectExtensionRuntimeRoot(runtimeRoot: string): ExtensionRunti
                 `扩展运行目录声明 ${packageMetadata.name}@${String(manifest.version ?? "未声明")}，与当前进程 ${packageMetadata.name}@${packageMetadata.version} 不一致`,
             );
         }
-        return { root, version: packageMetadata.version, error: null };
+        return inspectWritableDirectories(root, packageMetadata.version, options.access);
     }
     if (!declaresOnebotsDependency(manifest)) {
         return invalid(
@@ -63,7 +70,33 @@ export function inspectExtensionRuntimeRoot(runtimeRoot: string): ExtensionRunti
             `扩展运行目录中的 onebots@${installed.version} 与当前进程 onebots@${packageMetadata.version} 不一致。请从该目录启动 OneBots 后重试。`,
         );
     }
-    return { root, version: installed.version, error: null };
+    return inspectWritableDirectories(root, installed.version, options.access);
+}
+
+function inspectWritableDirectories(
+    root: string,
+    version: string,
+    access: (target: string, mode: number) => void = fs.accessSync,
+): ExtensionRuntimeRootInspection {
+    try {
+        access(root, fs.constants.W_OK);
+    } catch {
+        return invalid(root, `扩展运行目录不可写：${root}。请调整目录属主或权限后重试。`);
+    }
+
+    const dependenciesRoot = path.join(root, "node_modules");
+    if (fs.existsSync(dependenciesRoot)) {
+        try {
+            access(dependenciesRoot, fs.constants.W_OK);
+        } catch {
+            return invalid(
+                root,
+                `扩展依赖目录不可写：${dependenciesRoot}。请调整目录属主或权限后重试。`,
+            );
+        }
+    }
+
+    return { root, version, error: null };
 }
 
 function inspectInstalledOnebots(root: string): { version: string | null; error: string | null } {
