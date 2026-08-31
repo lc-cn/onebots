@@ -178,6 +178,8 @@ Doctor verifies that every extension catalog **Configure** target matches its pl
 
 Before selecting an adapter, installing a plugin, or creating an account, `onebots capabilities --json` exports the complete platform capability catalog shipped with the current OneBots version. Catalog entries use `source: "catalog"` and `entryPath: null`. The command first runs the same closed-set validation as doctor, so a snapshot with missing entries cannot report `complete: true`. Once configuration or `-r` selects adapters, the command loads their plugins without connecting accounts and gives the registered `source: "runtime"` manifests precedence. A load failure still returns an error exit code while retaining any available catalog snapshot for troubleshooting and platform selection.
 
+The Web extension center enforces the same gate. When the catalog is not closed, the page shows the complete reason, suppresses unverified static capability evidence, and disables every install or version-switch action. The server rejects the request again before reading configuration or invoking a package manager. Already loaded plugins keep their runtime manifests, so existing account configuration and operation do not depend on a broken static catalog.
+
 ## Next Steps
 
 - 📖 Read the [Architecture Guide](/en/guide/architecture) to understand the system structure

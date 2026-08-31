@@ -12,6 +12,9 @@
                 服务正在重启，页面会在恢复后自动刷新，请勿关闭。
             </UiAlert>
             <UiAlert v-if="errorMessage" variant="danger">{{ errorMessage }}</UiAlert>
+            <UiAlert v-if="catalogErrorMessage" variant="danger">
+                {{ catalogErrorMessage }}。扩展安装已禁用；现有运行时插件仍可继续配置和使用。
+            </UiAlert>
 
             <div class="flex flex-wrap gap-2">
                 <UiButton
@@ -49,7 +52,10 @@
                             </p>
                             <div
                                 class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-tertiary">
-                                <span>验证版本 v{{ extension.targetVersion }}</span>
+                                <span v-if="extension.targetVersion">
+                                    验证版本 v{{ extension.targetVersion }}
+                                </span>
+                                <span v-else>验证版本不可用</span>
                                 <span v-if="extension.installedVersion">
                                     已安装 v{{ extension.installedVersion }}
                                 </span>
@@ -57,7 +63,11 @@
                         </div>
 
                         <UiAlert
-                            v-if="extension.installedVersion && !extension.versionAligned"
+                            v-if="
+                                extension.targetVersion &&
+                                extension.installedVersion &&
+                                !extension.versionAligned
+                            "
                             variant="warning">
                             已安装版本与当前 OneBots 验证版本不一致。能力目录和兼容性预检对应 v{{
                                 extension.targetVersion
@@ -122,9 +132,13 @@
                                 v-if="!extension.loaded || !extension.versionAligned"
                                 variant="primary"
                                 :loading="installingId === extension.id || extension.installing"
-                                :disabled="restarting || Boolean(installingId)"
+                                :disabled="
+                                    restarting ||
+                                    Boolean(installingId) ||
+                                    !installationAction(extension).available
+                                "
                                 @click="install(extension)">
-                                {{ installActionLabel(extension) }}
+                                {{ installationAction(extension).label }}
                             </UiButton>
                         </div>
                     </div>
@@ -145,6 +159,7 @@ import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
+import { getExtensionInstallationAction } from "./extension-installation.js";
 
 const route = useRoute();
 const extensions = ref<ExtensionInfo[]>([]);
@@ -167,14 +182,13 @@ watch(
     { immediate: true },
 );
 
-function installActionLabel(extension: ExtensionInfo): string {
-    if (!extension.installed) return `安装 v${extension.targetVersion} 并重启`;
-    if (!extension.versionAligned) return `切换至 v${extension.targetVersion} 并重启`;
-    return "启用并重启";
-}
-
 const configurationAction = (extension: ExtensionInfo) =>
     getExtensionConfigurationAction(extension);
+const installationAction = (extension: ExtensionInfo) => getExtensionInstallationAction(extension);
+
+const catalogErrorMessage = computed(
+    () => extensions.value.find(extension => extension.catalogError)?.catalogError ?? "",
+);
 
 const visibleExtensions = computed(() =>
     filter.value === "all"

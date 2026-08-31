@@ -20,6 +20,7 @@ import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 import { buildExtensionInstallInvocation } from "./package-manager.js";
 import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
+import { validateExtensionCatalogIntegrity } from "./extension-catalog-integrity.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -47,6 +48,7 @@ export interface ExtensionManagerOptions {
     configPath?: string;
     installer?: ExtensionInstaller;
     preflight?: ExtensionConfigPreflight;
+    catalogIssues?: () => string[];
 }
 
 export interface ExtensionConfigPreflightRequest {
@@ -60,6 +62,7 @@ export type ExtensionConfigPreflight = (request: ExtensionConfigPreflightRequest
 
 export class ExtensionNotFoundError extends Error {}
 export class ExtensionInstallConflictError extends Error {}
+export class ExtensionCatalogIntegrityError extends Error {}
 
 /** 白名单扩展的安装、启用和运行态查询。 */
 export class ExtensionManager {
@@ -67,6 +70,7 @@ export class ExtensionManager {
     private readonly configPath: string;
     private readonly installer: ExtensionInstaller;
     private readonly preflight: ExtensionConfigPreflight;
+    private readonly catalogIssues: () => string[];
     private installing: string | null = null;
 
     constructor(options: ExtensionManagerOptions = {}) {
@@ -76,10 +80,15 @@ export class ExtensionManager {
         this.configPath = options.configPath ?? BaseApp.configPath;
         this.installer = options.installer ?? new RuntimeExtensionInstaller();
         this.preflight = options.preflight ?? preflightExtensionConfig;
+        this.catalogIssues = options.catalogIssues ?? validateExtensionCatalogIntegrity;
     }
 
     list(loadedPlugins: readonly LoadedPluginInfo[]) {
         const selection = this.readSelection();
+        const catalogIssues = this.catalogIssues();
+        const catalogError = catalogIssues.length
+            ? `扩展目录完整性校验失败：${catalogIssues.join("；")}`
+            : null;
         const adapterCapabilities = new Map(
             buildAdapterCapabilityReport(loadedPlugins).adapters.map(adapter => [
                 adapter.name,
@@ -93,7 +102,7 @@ export class ExtensionManager {
             ]),
         );
         return EXTENSION_CATALOG.map(entry => {
-            const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
+            const packageCatalog = getExtensionPackageCatalogEntry(entry.packageName);
             const installedVersion = this.installedVersion(entry.packageName);
             const loaded = loadedPlugins.some(
                 plugin => plugin.type === entry.type && plugin.name === entry.name,
@@ -104,10 +113,13 @@ export class ExtensionManager {
                     : undefined;
             return {
                 ...entry,
+                catalogError,
                 configurationError: validateExtensionConfigurationTarget(entry),
-                targetVersion: packageCatalog.packageVersion,
+                targetVersion: packageCatalog?.packageVersion ?? null,
                 installedVersion,
-                versionAligned: installedVersion === packageCatalog.packageVersion,
+                versionAligned:
+                    packageCatalog !== undefined &&
+                    installedVersion === packageCatalog.packageVersion,
                 installed: installedVersion !== null,
                 enabled: (entry.type === "adapter"
                     ? selection.adapters
@@ -126,7 +138,7 @@ export class ExtensionManager {
                                 summary: null,
                                 manifest: null,
                             })
-                          : catalogCapability
+                          : !catalogError && catalogCapability
                             ? {
                                   source: "catalog" as const,
                                   packageVersion: catalogCapability.packageVersion,
@@ -151,6 +163,7 @@ export class ExtensionManager {
         if (this.installing) {
             throw new ExtensionInstallConflictError(`扩展 ${this.installing} 正在安装，请稍后再试`);
         }
+        this.assertCatalogIntegrity();
         this.assertRuntimeRoot();
         const preparedConfig = this.prepareConfig(entry.type, entry.name);
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
@@ -242,6 +255,15 @@ export class ExtensionManager {
         const entry = getExtensionPackageCatalogEntry(packageName);
         if (!entry) throw new Error(`扩展版本目录缺少 ${packageName}`);
         return entry;
+    }
+
+    private assertCatalogIntegrity(): void {
+        const issues = this.catalogIssues();
+        if (issues.length > 0) {
+            throw new ExtensionCatalogIntegrityError(
+                `扩展目录完整性校验失败，已阻止安装：${issues.join("；")}`,
+            );
+        }
     }
 
     private assertRuntimeRoot(): void {

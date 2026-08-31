@@ -109,6 +109,7 @@ function extension(
         packageName: `@onebots/adapter-${name}`,
         configurationTarget: { kind: "account", platform: name },
         configurationError: null,
+        catalogError: null,
         targetVersion: "1.2.3",
         installedVersion: null,
         versionAligned: false,

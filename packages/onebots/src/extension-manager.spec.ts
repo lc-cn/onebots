@@ -154,6 +154,7 @@ describe("ExtensionManager", () => {
 
         expect(slack?.loaded).toBe(false);
         expect(slack).toMatchObject({
+            catalogError: null,
             configurationError: null,
             targetVersion: catalogVersion("@onebots/adapter-slack"),
             installedVersion: null,
@@ -167,6 +168,56 @@ describe("ExtensionManager", () => {
                 actions: { total: expect.any(Number), supported: expect.any(Number) },
             },
             manifest: { version: 1 },
+        });
+    });
+
+    it("目录闭合失败时隔离静态能力证据并保留运行时信息", () => {
+        const { root, configPath } = fixture();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            preflight: successfulPreflight,
+            catalogIssues: () => ["适配器能力快照版本错配: slack"],
+        });
+
+        const slack = manager.list([]).find(item => item.id === "adapter:slack");
+
+        expect(slack).toMatchObject({
+            catalogError: "扩展目录完整性校验失败：适配器能力快照版本错配: slack",
+            targetVersion: catalogVersion("@onebots/adapter-slack"),
+            capability: {
+                source: "catalog",
+                packageVersion: null,
+                declared: false,
+                summary: null,
+                manifest: null,
+            },
+        });
+
+        const runtimeCapabilities = defineAdapterCapabilities({
+            actions: { send_message: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        AdapterRegistry.register("slack", (() => undefined) as unknown as Adapter.Factory, {
+            capabilities: runtimeCapabilities,
+        });
+        const runtimeSlack = manager
+            .list([
+                {
+                    type: "adapter",
+                    name: "slack",
+                    packageName: "@onebots/adapter-slack",
+                    version: "1.2.3",
+                    entryPath: "/runtime/slack.js",
+                },
+            ])
+            .find(item => item.id === "adapter:slack");
+        expect(runtimeSlack?.capability).toMatchObject({
+            source: "runtime",
+            declared: true,
+            manifest: runtimeCapabilities,
         });
     });
 
@@ -247,6 +298,24 @@ describe("ExtensionManager", () => {
             "不允许从管理端安装",
         );
         expect(install).not.toHaveBeenCalled();
+    });
+
+    it("目录闭合失败时在读取配置或下载依赖前阻止安装", async () => {
+        const { root, configPath } = fixture();
+        const install = vi.fn();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+            catalogIssues: () => ["适配器能力快照缺失: slack"],
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            "扩展目录完整性校验失败，已阻止安装：适配器能力快照缺失: slack",
+        );
+        expect(install).not.toHaveBeenCalled();
+        expect(fs.readFileSync(configPath, "utf8")).not.toContain("- slack");
     });
 
     it("已安装依赖只启用配置，不重复调用包管理器", async () => {

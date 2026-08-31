@@ -131,7 +131,8 @@ export interface ExtensionInfo {
         | { kind: "account"; platform: string }
         | { kind: "protocol"; protocolKey: string };
     configurationError: string | null;
-    targetVersion: string;
+    catalogError: string | null;
+    targetVersion: string | null;
     installedVersion: string | null;
     versionAligned: boolean;
     setup: ExtensionSetupStep[];

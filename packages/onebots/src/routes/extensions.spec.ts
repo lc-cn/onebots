@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { RouterContext } from "@onebots/core";
 import type { App } from "../app.js";
-import { ExtensionInstallConflictError } from "../extension-manager.js";
+import {
+    ExtensionCatalogIntegrityError,
+    ExtensionInstallConflictError,
+} from "../extension-manager.js";
 import { registerExtensionRoutes } from "./extensions.js";
 
 type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
@@ -52,5 +55,18 @@ describe("extension routes", () => {
 
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({ success: false, message: "正在安装" });
+    });
+
+    it("目录完整性失败返回可重试的服务不可用状态", async () => {
+        const install = vi.fn(async () => {
+            throw new ExtensionCatalogIntegrityError("扩展目录完整性校验失败");
+        });
+        const { posts } = setup(install);
+        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+
+        await posts.get("/api/extensions/:id/install")!(ctx);
+
+        expect(ctx.status).toBe(503);
+        expect(ctx.body).toEqual({ success: false, message: "扩展目录完整性校验失败" });
     });
 });
