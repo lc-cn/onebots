@@ -2,8 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { inspectSensitiveFilePermissions, probeDoctorEndpoint, runDoctor } from "./doctor.js";
-import { ServiceController } from "./service-manager.js";
+import {
+    inspectSensitiveFilePermissions,
+    probeDoctorEndpoint,
+    resolveDoctorPluginSelection,
+    runDoctor,
+} from "./doctor.js";
+import { ServiceController, type ServiceSpec } from "./service-manager.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -248,6 +253,45 @@ describe("doctor health probes", () => {
 });
 
 describe("doctor persisted plugin selection", () => {
+    it("exposes category-level precedence and ignores service defaults in standalone mode", () => {
+        const service: ServiceSpec = {
+            scope: "user",
+            configPath: "/service/config.yaml",
+            adapters: ["service-adapter"],
+            protocols: ["service-v1"],
+            nodePath: process.execPath,
+            binPath: process.argv[1],
+            workingDirectory: "/service",
+        };
+
+        expect(
+            resolveDoctorPluginSelection(
+                { adapters: ["cli-adapter"], protocols: [], useInstalledService: true },
+                { adapters: ["config-adapter"], protocols: ["config-v1"] },
+                service,
+            ),
+        ).toMatchObject({
+            adapters: ["cli-adapter"],
+            protocols: ["service-v1"],
+            adapterSource: "cli",
+            protocolSource: "service",
+            workingDirectory: "/service",
+        });
+        expect(
+            resolveDoctorPluginSelection(
+                { adapters: [], protocols: [], useInstalledService: false },
+                { adapters: ["config-adapter"], protocols: ["config-v1"] },
+                service,
+            ),
+        ).toMatchObject({
+            adapters: ["config-adapter"],
+            protocols: ["config-v1"],
+            adapterSource: "config",
+            protocolSource: "config",
+            workingDirectory: process.cwd(),
+        });
+    });
+
     it("uses config defaults when no service or explicit plugin flags exist", async () => {
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
         vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
@@ -276,6 +320,10 @@ describe("doctor persisted plugin selection", () => {
         expect(
             report.checks.find(check => check.name === "adapter:missing-first-run"),
         ).toMatchObject({ level: "error" });
+        expect(report.checks.find(check => check.name === "plugin-selection")).toMatchObject({
+            level: "ok",
+            message: expect.stringContaining("适配器 配置文件 [missing-first-run]"),
+        });
     });
 });
 

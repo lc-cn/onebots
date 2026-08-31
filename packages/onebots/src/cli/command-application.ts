@@ -206,17 +206,23 @@ export async function diagnose(
     options: RuntimeOptions & ScopeOptions & { fix: boolean; json: boolean },
 ): Promise<CommandResult> {
     const scope = scopeFrom(options);
-    const explicit = normalizeRuntimeOptions(options);
-    const runtime = new ServiceController(scope).readSpec()
-        ? explicit
-        : resolveConfiguredRuntimeOptions(options);
+    const serviceSpec = new ServiceController(scope).readSpec();
+    const configPath = options.config
+        ? path.resolve(options.config)
+        : (serviceSpec?.configPath ?? path.resolve("config.yaml"));
+    const useInstalledService =
+        options.config === undefined ||
+        (serviceSpec !== null && path.resolve(serviceSpec.configPath) === configPath);
+    // 保留显式参数与配置默认值的来源边界，由 doctor 在读取配置和服务定义后统一解析。
+    const runtime = normalizeRuntimeOptions(options);
     const { runDoctor, formatDoctorReport } = await import("../doctor.js");
     const report = await runDoctor({
-        configPath: serviceConfigPath(options),
+        configPath,
         adapters: runtime.adapters,
         protocols: runtime.protocols,
         scope,
         fix: options.fix,
+        useInstalledService,
     });
     return {
         output: formatDoctorReport(report, options.json),

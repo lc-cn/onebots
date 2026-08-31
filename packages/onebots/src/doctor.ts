@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as net from "node:net";
 import { createRequire } from "node:module";
-import { ServiceController, type ServiceScope } from "./service-manager.js";
+import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
 import { pluginCandidates, tryLoadRegisteredPlugin } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { writeCliOutput } from "./cli-output.js";
@@ -32,6 +32,18 @@ export interface DoctorOptions {
     protocols: string[];
     scope: ServiceScope;
     fix?: boolean;
+    /** false 表示独立诊断显式配置，不读取或修复已安装服务定义。 */
+    useInstalledService?: boolean;
+}
+
+export type DoctorPluginSource = "cli" | "config" | "service" | "none";
+
+export interface DoctorPluginSelection {
+    adapters: string[];
+    protocols: string[];
+    adapterSource: DoctorPluginSource;
+    protocolSource: DoctorPluginSource;
+    workingDirectory: string;
 }
 
 /** 诊断配置、插件、权限、端口、系统服务与健康端点。 */
@@ -132,19 +144,20 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         });
     }
 
-    const spec = new ServiceController(options.scope).readSpec();
-    const adapters = options.adapters.length
-        ? options.adapters
-        : (spec?.adapters ?? configuredPlugins?.adapters ?? []);
-    const protocols = options.protocols.length
-        ? options.protocols
-        : (spec?.protocols ?? configuredPlugins?.protocols ?? []);
-    const pluginWorkingDirectory = spec?.workingDirectory ?? process.cwd();
-    const runtimeRequire = createRequire(path.join(pluginWorkingDirectory, "package.json"));
+    const useInstalledService = options.useInstalledService !== false;
+    const controller = new ServiceController(options.scope);
+    const spec = useInstalledService ? controller.readSpec() : null;
+    const selection = resolveDoctorPluginSelection(options, configuredPlugins, spec);
+    checks.push({
+        name: "plugin-selection",
+        level: selection.adapters.length || selection.protocols.length ? "ok" : "warning",
+        message: formatDoctorPluginSelection(selection),
+    });
+    const runtimeRequire = createRequire(path.join(selection.workingDirectory, "package.json"));
     let pluginsReady = true;
     for (const [kind, names] of [
-        ["adapter", adapters],
-        ["protocol", protocols],
+        ["adapter", selection.adapters],
+        ["protocol", selection.protocols],
     ] as const) {
         for (const name of names) {
             const result = await tryLoadRegisteredPlugin(
@@ -178,15 +191,22 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         }
     }
 
-    const controller = new ServiceController(options.scope);
-    const status = controller.status();
-    checks.push({
-        name: "service",
-        level: status.installed ? "ok" : "warning",
-        message: status.installed
-            ? `服务${status.running ? "正在运行" : "已安装但未运行"}`
-            : "服务未安装",
-    });
+    const status = useInstalledService ? controller.status() : null;
+    checks.push(
+        useInstalledService
+            ? {
+                  name: "service",
+                  level: status?.installed ? "ok" : "warning",
+                  message: status?.installed
+                      ? `服务${status.running ? "正在运行" : "已安装但未运行"}`
+                      : "服务未安装",
+              }
+            : {
+                  name: "service",
+                  level: "ok",
+                  message: "按显式配置独立诊断，未读取或修改已安装服务定义",
+              },
+    );
     if (spec) {
         const stateDirectory = controller.paths().stateDir;
         try {
@@ -244,7 +264,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     if (config) {
         const port = Number(config.port ?? 6727);
         const base = resolveGatewayBaseUrl(config);
-        const portOpen = status.running || (await isPortOpen(port));
+        const portOpen = status?.running || (await isPortOpen(port));
         if (portOpen) {
             for (const endpoint of ["health", "ready"] as const) {
                 checks.push(await probeDoctorEndpoint(base, endpoint));
@@ -255,6 +275,54 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         }
     }
     return { ok: !checks.some(check => check.level === "error"), checks };
+}
+
+/** 逐类别公开 doctor 最终采用的插件来源，避免服务定义与候选配置互相污染。 */
+export function resolveDoctorPluginSelection(
+    options: Pick<DoctorOptions, "adapters" | "protocols" | "useInstalledService">,
+    configured: RuntimePluginSelection | undefined,
+    service: ServiceSpec | null,
+): DoctorPluginSelection {
+    const useService = options.useInstalledService !== false;
+    const adapters = resolvePluginCategory(
+        options.adapters,
+        configured?.adapters,
+        useService ? service?.adapters : undefined,
+    );
+    const protocols = resolvePluginCategory(
+        options.protocols,
+        configured?.protocols,
+        useService ? service?.protocols : undefined,
+    );
+    return {
+        adapters: adapters.names,
+        protocols: protocols.names,
+        adapterSource: adapters.source,
+        protocolSource: protocols.source,
+        workingDirectory: useService && service ? service.workingDirectory : process.cwd(),
+    };
+}
+
+function resolvePluginCategory(
+    explicit: string[],
+    configured: string[] | undefined,
+    service: string[] | undefined,
+): { names: string[]; source: DoctorPluginSource } {
+    if (explicit.length) return { names: explicit, source: "cli" };
+    if (service !== undefined) return { names: service, source: "service" };
+    if (configured !== undefined) return { names: configured, source: "config" };
+    return { names: [], source: "none" };
+}
+
+function formatDoctorPluginSelection(selection: DoctorPluginSelection): string {
+    const sourceNames: Record<DoctorPluginSource, string> = {
+        cli: "CLI",
+        config: "配置文件",
+        service: "服务定义",
+        none: "未指定",
+    };
+    const list = (values: string[]) => (values.length ? values.join(", ") : "无");
+    return `适配器 ${sourceNames[selection.adapterSource]} [${list(selection.adapters)}]；协议 ${sourceNames[selection.protocolSource]} [${list(selection.protocols)}]；解析目录 ${selection.workingDirectory}`;
 }
 
 /** 检查包含凭据的 POSIX 文件权限；组只读可见但不自动破坏部署授权。 */

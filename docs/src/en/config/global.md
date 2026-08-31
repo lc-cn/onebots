@@ -82,4 +82,4 @@ Run the same check before deployment with the service's plugin selection:
 onebots doctor -c config.yaml --json
 ```
 
-For a legacy configuration without `plugins`, pass `-r` and `-p` as before. When the service was installed with `onebots install`, doctor prefers the saved plugin list from the service definition.
+For a legacy configuration without `plugins`, pass `-r` and `-p` as before. Doctor prefers the saved service definition when `-c` is omitted or resolves to that service's configuration. Passing a different `-c` creates a standalone diagnostic scope: doctor uses that file's `plugins` and does not read, mark stale, or repair the unrelated service definition with `--fix`. The `plugin-selection` check reports the final plugins, source, and resolution directory for each category, with the same evidence preserved in JSON output.
