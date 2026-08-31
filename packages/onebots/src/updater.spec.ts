@@ -5,10 +5,12 @@ import * as path from "node:path";
 import type { ServiceSpec } from "./service-manager.js";
 import {
     assertUpdatedPackageVersions,
+    loadTargetExtensionVersionCatalog,
     packageNamesFor,
     refreshServiceAfterUpdate,
     resolveInstalledPackageVersion,
     resolveUpdatePluginSelection,
+    resolveVerifiedUpdateTargets,
     runUpdatedServicePreflight,
 } from "./updater.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
@@ -17,6 +19,7 @@ const temporaryDirectories: string[] = [];
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -73,6 +76,95 @@ function refreshDependencies(
 }
 
 describe("post-update service safety", () => {
+    it("使用目标 OneBots 目录固定所有插件版本而不是各自追随 latest", () => {
+        expect(
+            resolveVerifiedUpdateTargets(
+                ["onebots", "@onebots/adapter-mock", "@onebots/protocol-onebot-v11"],
+                "1.3.0",
+                {
+                    schemaVersion: 2,
+                    packages: {
+                        "@onebots/adapter-mock": { version: "2.4.0" },
+                        "@onebots/protocol-onebot-v11": { version: "3.0.8" },
+                    },
+                },
+            ),
+        ).toEqual([
+            { name: "onebots", target: "1.3.0" },
+            { name: "@onebots/adapter-mock", target: "2.4.0" },
+            { name: "@onebots/protocol-onebot-v11", target: "3.0.8" },
+        ]);
+    });
+
+    it("目标目录缺项或损坏时在生成安装命令前失败", () => {
+        expect(() =>
+            resolveVerifiedUpdateTargets(["onebots", "@onebots/adapter-mock"], "1.3.0", {
+                schemaVersion: 2,
+                packages: {},
+            }),
+        ).toThrow("目标 OneBots 的扩展版本目录缺少 @onebots/adapter-mock");
+        expect(() =>
+            resolveVerifiedUpdateTargets(["onebots"], "1.3.0", {
+                schemaVersion: 1,
+                packages: {},
+            }),
+        ).toThrow("目标 OneBots 的扩展版本目录格式无效");
+    });
+
+    it("目标主程序版本未变化时直接读取当前安装目录，不运行暂存安装", () => {
+        const spec = temporaryServiceSpec();
+        writePackageManifest(spec.workingDirectory, "onebots", "1.3.0");
+        const catalog = path.join(
+            spec.workingDirectory,
+            "node_modules",
+            "onebots",
+            "lib",
+            "extension-capability-catalog.json",
+        );
+        fs.mkdirSync(path.dirname(catalog), { recursive: true });
+        fs.writeFileSync(
+            catalog,
+            JSON.stringify({
+                schemaVersion: 2,
+                packages: { "@onebots/adapter-mock": { version: "2.4.0" } },
+            }),
+        );
+
+        expect(loadTargetExtensionVersionCatalog("npm", spec.workingDirectory, "1.3.0")).toEqual({
+            schemaVersion: 2,
+            packages: { "@onebots/adapter-mock": { version: "2.4.0" } },
+        });
+    });
+
+    it("目标主程序变化时以禁用脚本的隔离安装读取新目录", () => {
+        const spec = temporaryServiceSpec();
+        const bin = path.join(spec.workingDirectory, "bin");
+        const marker = path.join(spec.workingDirectory, "staging-command.txt");
+        fs.mkdirSync(bin);
+        const npm = path.join(bin, "npm");
+        fs.writeFileSync(
+            npm,
+            `#!/bin/sh
+printf '%s\n' "$*" > "$UPDATE_MARKER"
+mkdir -p node_modules/onebots/lib
+cat > node_modules/onebots/lib/extension-capability-catalog.json <<'EOF'
+{"schemaVersion":2,"packages":{"@onebots/adapter-mock":{"version":"2.5.0"}}}
+EOF
+`,
+            { mode: 0o755 },
+        );
+        vi.stubEnv("PATH", `${bin}:${process.env.PATH ?? ""}`);
+        vi.stubEnv("UPDATE_MARKER", marker);
+
+        expect(loadTargetExtensionVersionCatalog("npm", spec.workingDirectory, "1.3.0")).toEqual({
+            schemaVersion: 2,
+            packages: { "@onebots/adapter-mock": { version: "2.5.0" } },
+        });
+        expect(fs.readFileSync(marker, "utf8").trim()).toBe(
+            "install --ignore-scripts --no-save --omit=dev onebots@1.3.0",
+        );
+    });
+
     it("bypasses caches when recording the pre-update service instance", async () => {
         const spec = temporaryServiceSpec();
         const fetcher = vi.fn<typeof fetch>(
@@ -146,8 +238,8 @@ describe("post-update service safety", () => {
         expect(() =>
             assertUpdatedPackageVersions(
                 [
-                    { name: "onebots", latest: "1.3.0" },
-                    { name: "@onebots/adapter-mock", latest: "2.4.0" },
+                    { name: "onebots", target: "1.3.0" },
+                    { name: "@onebots/adapter-mock", target: "2.4.0" },
                 ],
                 spec.workingDirectory,
             ),
@@ -180,8 +272,8 @@ describe("post-update service safety", () => {
         expect(() =>
             assertUpdatedPackageVersions(
                 [
-                    { name: "onebots", latest: "1.3.0" },
-                    { name: "@onebots/adapter-mock", latest: "2.4.0" },
+                    { name: "onebots", target: "1.3.0" },
+                    { name: "@onebots/adapter-mock", target: "2.4.0" },
                 ],
                 "/runtime",
                 name => versions.get(name) ?? null,
