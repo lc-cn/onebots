@@ -183,11 +183,13 @@ scrape_configs:
 - `/health`: 基础健康检查
 - `/ready`: 检查服务、账号和每个协议出口是否就绪
 
+`/health` 的 `application` 与 `version` 表示实际运行的 `onebots` 主程序包，`core_version` 单独表示 `@onebots/core`。Prometheus 的 `onebots_info` 使用主程序版本，`onebots_core_info` 使用 Core 版本；Web「系统信息」也会分别展示两者，避免升级后把依赖版本误认作在线应用版本。
+
 `/ready` 的 `summary` 同时给出账号与协议实例总数、在线/就绪数量以及 `accounts_without_protocols`；每个平台也会列出缺少协议出口的账号数，以及协议的 `ready`、`unavailable` 与 `total`。即使平台账号已经 online，只要任一协议 `start()` 失败或任一账号没有协议出口，端点仍会返回 HTTP 503。响应中的 `config.status` 与 `config.in_sync` 还会证明磁盘配置是否就是当前运行版本；外部修改、不可读文件或等待重启的宿主配置会撤销 readiness。首次启动尚未配置账号时，管理面保持 HTTP 200 以便继续配置，但响应包含 `configured: false`，doctor 会把它明确标为警告。
 
 热重载配置期间 HTTP 存活探针继续返回成功，但 `/ready` 会立即返回 HTTP 503 并声明 `reloading: true`，直到新账号与协议出口完成启动或旧配置完成回滚。并发热重载会被拒绝，防止两次配置切换交错覆盖。Prometheus 的 `onebots_reloading` 可用于记录和告警持续时间异常的重载。
 
-部署或更新后可运行 `onebots doctor -c config.yaml --json --strict` 作为自动化门禁。显式配置路径使前台或 Docker 部署执行独立配置诊断；若该路径就是托管服务保存的配置，doctor 仍会核验服务是否运行。默认模式仍允许首次配置流程继续，将未配置账号、服务未安装或已停止、无法完成合法管理凭据探测等状态保留为警告；`--strict` 会让任一警告同时令 JSON `ok` 为 `false` 并返回退出码 `1`。配置端口可连接时，doctor 会同时探测这两个端点；非 2xx、非 JSON、`status` 不是 `ok` 或 `ready` 不是 `true` 都会让检查失败。`/ready` 失败时，报告会列出在线账号、就绪协议数量、对应的未就绪平台以及缺少协议出口的账号，避免只看到一个没有上下文的 HTTP 503。Prometheus 可通过 `onebots_accounts_without_protocols` 为这类配置缺口设置告警。
+部署或更新后可运行 `onebots doctor -c config.yaml --json --strict` 作为自动化门禁。显式配置路径使前台或 Docker 部署执行独立配置诊断；若该路径就是托管服务保存的配置，doctor 仍会核验服务是否运行。doctor 会把 `/health` 的在线主程序版本与当前 CLI 版本对比；不一致或旧端点无法证明版本时产生警告，严格模式会因此失败，能发现依赖已更新但旧进程尚未重启或命令入口指向另一套安装。默认模式仍允许首次配置流程继续，将未配置账号、服务未安装或已停止、无法完成合法管理凭据探测等状态保留为警告；`--strict` 会让任一警告同时令 JSON `ok` 为 `false` 并返回退出码 `1`。配置端口可连接时，doctor 会同时探测这两个端点；非 2xx、非 JSON、`status` 不是 `ok` 或 `ready` 不是 `true` 都会让检查失败。`/ready` 失败时，报告会列出在线账号、就绪协议数量、对应的未就绪平台以及缺少协议出口的账号，避免只看到一个没有上下文的 HTTP 503。Prometheus 可通过 `onebots_accounts_without_protocols` 为这类配置缺口设置告警。
 
 账号管理摘要还会为每个协议出口返回 `name`、`version`、`path` 和 `lifecycleStatus`。机器人管理页会分别显示等待启动、启动中、就绪、停止中、已停止或失败，不再用账号 online 状态掩盖某个协议出口的启动失败。doctor 在验证合法管理凭据后会读取同一份受保护的运行态，直接报告 `平台.账号/协议.版本`；公开的 `/ready` 仍只返回平台级聚合，不暴露账号标识。
 

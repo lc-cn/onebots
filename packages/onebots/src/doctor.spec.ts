@@ -155,6 +155,61 @@ describe("doctor health probes", () => {
         });
     });
 
+    it("reports the running OneBots and Core versions when they match the CLI", async () => {
+        const fetcher = vi.fn(
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        status: "ok",
+                        application: "onebots",
+                        version: "1.2.8",
+                        core_version: "1.2.5",
+                    }),
+                    { status: 200 },
+                ),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "health", fetcher, "1.2.8"),
+        ).resolves.toEqual({
+            name: "health",
+            level: "ok",
+            message: "health: HTTP 200；状态 ok；onebots@1.2.8；@onebots/core@1.2.5",
+        });
+    });
+
+    it("warns when the online process version differs from the current CLI", async () => {
+        const fetcher = vi.fn(
+            async () =>
+                new Response(JSON.stringify({ status: "ok", version: "1.2.7" }), {
+                    status: 200,
+                }),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "health", fetcher, "1.2.8"),
+        ).resolves.toEqual({
+            name: "health",
+            level: "warning",
+            message:
+                "health: HTTP 200；状态 ok；onebots@1.2.7；在线 OneBots 1.2.7 与当前 CLI 1.2.8 不一致；请重启或核对运行入口",
+        });
+    });
+
+    it("warns when a legacy health response cannot prove its running version", async () => {
+        const fetcher = vi.fn(
+            async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "health", fetcher, "1.2.8"),
+        ).resolves.toEqual({
+            name: "health",
+            level: "warning",
+            message: "health: HTTP 200；状态 ok；响应未声明运行版本（当前 CLI 1.2.8）",
+        });
+    });
+
     it("reports protocol startup failures even when the platform account is online", async () => {
         const fetcher = vi.fn(
             async () =>

@@ -49,6 +49,7 @@ import {
 } from "./runtime-plugin-selection.js";
 import { ExtensionManager } from "./extension-manager.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
+import packageMetadata from "../package.json" with { type: "json" };
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -104,7 +105,7 @@ export class App extends BaseApp {
     }
 
     constructor(config: App.Config) {
-        super(config);
+        super(config, { name: packageMetadata.name, version: packageMetadata.version });
         this.runtimeConfigStateTracker = new RuntimeConfigStateTracker(BaseApp.configPath);
         this.extensionManager = new ExtensionManager({ configPath: BaseApp.configPath });
 

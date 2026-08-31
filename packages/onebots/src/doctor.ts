@@ -14,6 +14,7 @@ import {
 } from "./runtime-version.js";
 import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
+import packageMetadata from "../package.json" with { type: "json" };
 
 export type CheckLevel = "ok" | "warning" | "error";
 export interface DoctorCheck {
@@ -270,7 +271,14 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         const portOpen = status?.running || (await isPortOpen(port));
         if (portOpen) {
             for (const endpoint of ["health", "ready"] as const) {
-                checks.push(await probeDoctorEndpoint(base, endpoint));
+                checks.push(
+                    await probeDoctorEndpoint(
+                        base,
+                        endpoint,
+                        fetch,
+                        endpoint === "health" ? packageMetadata.version : undefined,
+                    ),
+                );
             }
             checks.push(...(await probeDoctorManagement(base, config)));
         } else {
@@ -394,6 +402,7 @@ export async function probeDoctorEndpoint(
     base: string,
     endpoint: DoctorEndpoint,
     fetcher: DoctorFetch = fetch,
+    expectedVersion?: string,
 ): Promise<DoctorCheck> {
     try {
         const response = await fetcher(`${base}/${endpoint}`, {
@@ -402,13 +411,21 @@ export async function probeDoctorEndpoint(
         const body = await response.text();
         const detail = summarizeEndpointBody(endpoint, body);
         const semanticError = response.ok ? validateEndpointBody(endpoint, body) : undefined;
+        const versionWarning =
+            endpoint === "health" && response.ok && !semanticError && expectedVersion
+                ? validateHealthVersion(body, expectedVersion)
+                : undefined;
         const configurationPending =
             endpoint === "ready" && response.ok && !semanticError && isConfigurationPending(body);
         return {
             name: endpoint,
             level:
-                response.ok && !semanticError ? (configurationPending ? "warning" : "ok") : "error",
-            message: `${endpoint}: HTTP ${response.status}${detail}${semanticError ? `；${semanticError}` : ""}`,
+                response.ok && !semanticError
+                    ? configurationPending || versionWarning
+                        ? "warning"
+                        : "ok"
+                    : "error",
+            message: `${endpoint}: HTTP ${response.status}${detail}${semanticError ? `；${semanticError}` : ""}${versionWarning ? `；${versionWarning}` : ""}`,
         };
     } catch (error) {
         return {
@@ -424,7 +441,17 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
     try {
         const payload = JSON.parse(body) as Record<string, unknown>;
         if (endpoint !== "ready") {
-            return typeof payload.status === "string" ? `；状态 ${payload.status}` : "";
+            const details: string[] = [];
+            if (typeof payload.status === "string") details.push(`状态 ${payload.status}`);
+            if (typeof payload.version === "string") {
+                const application =
+                    typeof payload.application === "string" ? payload.application : "onebots";
+                details.push(`${application}@${payload.version}`);
+            }
+            if (typeof payload.core_version === "string") {
+                details.push(`@onebots/core@${payload.core_version}`);
+            }
+            return details.length > 0 ? `；${details.join("；")}` : "";
         }
         const summary = payload.summary as Record<string, unknown> | undefined;
         const adapters = payload.adapters as
@@ -516,6 +543,16 @@ function validateEndpointBody(endpoint: DoctorEndpoint, body: string): string | 
     } catch {
         return "响应不是有效 JSON";
     }
+}
+
+function validateHealthVersion(body: string, expectedVersion: string): string | undefined {
+    const payload = JSON.parse(body) as Record<string, unknown>;
+    const runningVersion = typeof payload.version === "string" ? payload.version.trim() : "";
+    if (!runningVersion) return `响应未声明运行版本（当前 CLI ${expectedVersion}）`;
+    if (runningVersion !== expectedVersion) {
+        return `在线 OneBots ${runningVersion} 与当前 CLI ${expectedVersion} 不一致；请重启或核对运行入口`;
+    }
+    return undefined;
 }
 
 /** 以人类可读或 JSON 格式输出诊断结果。 */

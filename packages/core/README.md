@@ -93,10 +93,12 @@ class MyProtocol extends Protocol {
 // 使用基类
 class MyApp extends BaseApp {
   constructor(config) {
-    super(config);
+    super(config, { name: "my-gateway", version: "1.0.0" });
   }
 }
 ```
+
+第二个参数是嵌入式应用的生产身份。`/health`、`onebots_info` 与 `app.info` 会使用该应用名称和版本，同时通过 `core_version` / `onebots_core_info` 单独公开 `@onebots/core` 版本。省略时应用身份默认为当前 Core 包；自定义网关应传入自身包身份，便于部署系统证明实际运行版本。
 
 ## API 文档
 
@@ -104,7 +106,7 @@ class MyApp extends BaseApp {
 
 ```typescript
 class BaseApp {
-  constructor(config: BaseApp.Config);
+  constructor(config: BaseApp.Config, identity?: { name: string; version: string });
   start(): Promise<void>;
   stop(force?: boolean): Promise<void>;
   // ... 更多方法

@@ -70,13 +70,28 @@ describe("BaseApp reload boundary", () => {
         expect(() => resolveListenPort(6727, "socket-name")).toThrow("PORT 必须是");
     });
 
+    it("拒绝无法用于生产身份证明的空应用名称或版本", () => {
+        expect(() => new BaseApp({}, { name: "", version: "1.0.0" })).toThrow(
+            "应用身份必须包含非空的 name 与 version",
+        );
+        expect(() => new BaseApp({}, { name: "embedded", version: " " })).toThrow(
+            "应用身份必须包含非空的 name 与 version",
+        );
+        expect(() => new BaseApp({}, { name: 42, version: "1.0.0" } as never)).toThrow(
+            "应用身份必须包含非空的 name 与 version",
+        );
+    });
+
     it("运行态热重载保留 HTTP、Router 与生命周期资源", async () => {
         const originalConfigDir = BaseApp.configDir;
         const originalPort = process.env.PORT;
         const directory = mkdtempSync(join(tmpdir(), "onebots-reload-"));
         BaseApp.configDir = directory;
         process.env.PORT = "0";
-        const app = new BaseApp({ database: "reload.db" });
+        const app = new BaseApp(
+            { database: "reload.db" },
+            { name: "embedded-gateway", version: "9.8.7" },
+        );
 
         try {
             await app.start();
@@ -94,6 +109,16 @@ describe("BaseApp reload boundary", () => {
                 fetch(`http://127.0.0.1:${port}/metrics`),
             ]);
             expect(health.status).toBe(200);
+            await expect(health.json()).resolves.toMatchObject({
+                application: "embedded-gateway",
+                version: "9.8.7",
+                core_version: expect.any(String),
+            });
+            expect(app.info).toMatchObject({
+                application_name: "embedded-gateway",
+                application_version: "9.8.7",
+                core_version: expect.any(String),
+            });
             expect(readiness.status).toBe(503);
             await expect(readiness.json()).resolves.toMatchObject({
                 ready: false,
@@ -101,6 +126,8 @@ describe("BaseApp reload boundary", () => {
                 reloading: true,
             });
             const metricsBody = await metrics.text();
+            expect(metricsBody).toContain('onebots_info{version="9.8.7"} 1');
+            expect(metricsBody).toContain("onebots_core_info");
             expect(metricsBody).toContain("onebots_reloading 1");
             expect(metricsBody).toContain("onebots_config_in_sync 1");
             app.isReloading = false;

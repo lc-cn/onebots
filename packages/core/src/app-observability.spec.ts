@@ -165,7 +165,11 @@ describe("application readiness", () => {
                     handlers.set(route, handler),
             },
         };
-        registerObservabilityEndpoints(app as never, "1.2.3");
+        registerObservabilityEndpoints(app as never, {
+            name: "onebots",
+            version: "1.2.3",
+            coreVersion: "1.1.0",
+        });
 
         const readyContext: Record<string, unknown> = {};
         handlers.get("/ready")?.(readyContext);
@@ -180,6 +184,16 @@ describe("application readiness", () => {
         const metricsContext: Record<string, unknown> = {};
         handlers.get("/metrics")?.(metricsContext);
         expect(metricsContext.body).toContain("onebots_config_in_sync 0");
+        expect(metricsContext.body).toContain('onebots_info{version="1.2.3"} 1');
+        expect(metricsContext.body).toContain('onebots_core_info{version="1.1.0"} 1');
+
+        const healthContext: Record<string, unknown> = {};
+        handlers.get("/health")?.(healthContext);
+        expect(healthContext.body).toMatchObject({
+            application: "onebots",
+            version: "1.2.3",
+            core_version: "1.1.0",
+        });
     });
 
     it("exports protocol readiness with safe Prometheus labels", () => {

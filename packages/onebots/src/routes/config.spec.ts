@@ -29,7 +29,12 @@ function setup(reload: App["reload"], isReloading = false) {
         backupDataToHf: vi.fn(async () => ({ success: true })),
         preflightRestart: vi.fn(async () => undefined),
         logger: { warn: vi.fn(), error: vi.fn() },
-        info: {},
+        info: {
+            application_name: "onebots",
+            application_version: "1.2.8",
+            core_version: "1.2.5",
+            sdk_version: "1.2.5",
+        },
         pluginInfos: [
             {
                 type: "adapter",
@@ -107,6 +112,9 @@ describe("configuration route", () => {
         systemHandler(ctx);
 
         expect(ctx.body).toMatchObject({
+            application_name: "onebots",
+            application_version: "1.2.8",
+            core_version: "1.2.5",
             configState: {
                 status: "in_sync",
                 appliedAt: "2026-08-31T09:00:00.000Z",

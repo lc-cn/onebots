@@ -11,6 +11,15 @@ interface ObservableApp {
     readonly runtimeConfigState?: { status: string };
 }
 
+export interface ApplicationIdentity {
+    name: string;
+    version: string;
+}
+
+export interface RuntimeIdentity extends ApplicationIdentity {
+    coreVersion: string;
+}
+
 interface ProtocolReadinessCounts {
     ready: number;
     unavailable: number;
@@ -161,13 +170,18 @@ function escapePrometheusLabel(value: string): string {
 }
 
 /** 注册不依赖管理端鉴权的存活、就绪与 Prometheus 端点。 */
-export function registerObservabilityEndpoints(app: ObservableApp, version: string): void {
+export function registerObservabilityEndpoints(
+    app: ObservableApp,
+    identity: RuntimeIdentity,
+): void {
     app.router.get("/health", ctx => {
         ctx.body = {
             status: "ok",
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
-            version,
+            application: identity.name,
+            version: identity.version,
+            core_version: identity.coreVersion,
         };
     });
 
@@ -183,7 +197,10 @@ export function registerObservabilityEndpoints(app: ObservableApp, version: stri
         const lines = [
             "# HELP onebots_info OneBots application info",
             "# TYPE onebots_info gauge",
-            `onebots_info{version="${version}"} 1`,
+            `onebots_info{version="${escapePrometheusLabel(identity.version)}"} 1`,
+            "# HELP onebots_core_info OneBots core runtime info",
+            "# TYPE onebots_core_info gauge",
+            `onebots_core_info{version="${escapePrometheusLabel(identity.coreVersion)}"} 1`,
             "# HELP onebots_uptime_seconds Application uptime in seconds",
             "# TYPE onebots_uptime_seconds gauge",
             `onebots_uptime_seconds ${process.uptime()}`,

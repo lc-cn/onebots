@@ -21,7 +21,7 @@ import pkg from "../package.json" with { type: "json" };
 import { AdapterRegistry } from "./registry.js";
 import { ConfigValidator, BaseAppConfigSchema } from "./config-validator.js";
 import { LifecycleManager } from "./lifecycle.js";
-import { ErrorHandler, ConfigError, ResourceError } from "./errors.js";
+import { ErrorHandler, ConfigError, ResourceError, ValidationError } from "./errors.js";
 import { Logger as EnhancedLogger, createLogger } from "./logger.js";
 import {
     initSecurityAudit,
@@ -30,7 +30,8 @@ import {
 } from "./middleware/security-audit.js";
 import { defaultRateLimit } from "./middleware/rate-limit.js";
 import { metricsCollector } from "./middleware/metrics-collector.js";
-import { registerObservabilityEndpoints } from "./app-observability.js";
+import { registerObservabilityEndpoints, type ApplicationIdentity } from "./app-observability.js";
+export type { ApplicationIdentity } from "./app-observability.js";
 import { resolvePublicStaticRoot } from "./public-static-root.js";
 import { assertHostConfigReloadable, resolveListenPort } from "./app-reload.js";
 import { writeConfigFileAtomic } from "./config-file.js";
@@ -42,6 +43,17 @@ export interface KoaOptions {
     subdomainOffset?: number;
     proxyIpHeader?: string;
     maxIpsCount?: number;
+}
+
+function normalizeApplicationIdentity(
+    identity: ApplicationIdentity,
+): Readonly<ApplicationIdentity> {
+    const name = typeof identity?.name === "string" ? identity.name.trim() : "";
+    const version = typeof identity?.version === "string" ? identity.version.trim() : "";
+    if (!name || !version) {
+        throw new ValidationError("应用身份必须包含非空的 name 与 version");
+    }
+    return Object.freeze({ name, version });
 }
 
 export class BaseApp extends Koa {
@@ -66,6 +78,7 @@ export class BaseApp extends Koa {
     db: SqliteDB;
     adapters: Map<keyof Adapter.Configs, Adapter> = new Map<keyof Adapter.Configs, Adapter>();
     public router: Router;
+    public readonly applicationIdentity: Readonly<ApplicationIdentity>;
     get info() {
         const free_memory = os.freemem();
         const total_memory = os.totalmem();
@@ -83,12 +96,20 @@ export class BaseApp extends Koa {
             process_cwd: process.cwd(),
             process_use_memory: process.memoryUsage.rss(),
             node_version: process.version,
+            application_name: this.applicationIdentity.name,
+            application_version: this.applicationIdentity.version,
+            core_version: pkg.version,
+            /** @deprecated 使用 core_version。 */
             sdk_version: pkg.version,
             uptime: process.uptime() * 1000,
         };
     }
-    constructor(config: BaseApp.Config = {}) {
+    constructor(
+        config: BaseApp.Config = {},
+        applicationIdentity: ApplicationIdentity = { name: pkg.name, version: pkg.version },
+    ) {
         super(config);
+        this.applicationIdentity = normalizeApplicationIdentity(applicationIdentity);
 
         // 初始化生命周期管理器
         this.lifecycle = new LifecycleManager();
@@ -143,7 +164,10 @@ export class BaseApp extends Koa {
         initSecurityAudit(path.join(BaseApp.dataDir, "audit"));
 
         // 注册健康检查端点（无需认证）
-        registerObservabilityEndpoints(this, pkg.version);
+        registerObservabilityEndpoints(this, {
+            ...this.applicationIdentity,
+            coreVersion: pkg.version,
+        });
 
         // 用户配置的站点根静态目录（需在 Router 等功能路由之前，便于 GET /xxx.txt 等直出）
         const publicStaticDir = this.getPublicStaticRoot();

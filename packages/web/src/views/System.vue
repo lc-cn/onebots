@@ -111,8 +111,18 @@
                         <dd class="min-w-0 text-fg">{{ systemInfo.node_version }}</dd>
                     </div>
                     <div class="flex items-baseline gap-3 md:col-span-2">
-                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">SDK 版本</dt>
-                        <dd class="min-w-0 text-fg">onebots v{{ systemInfo.sdk_version }}</dd>
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">OneBots 版本</dt>
+                        <dd class="min-w-0 text-fg">
+                            {{ systemInfo.application_name || "onebots" }} v{{
+                                systemInfo.application_version || systemInfo.sdk_version
+                            }}
+                        </dd>
+                    </div>
+                    <div class="flex items-baseline gap-3 md:col-span-2">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">Core 版本</dt>
+                        <dd class="min-w-0 text-fg">
+                            @onebots/core v{{ systemInfo.core_version || systemInfo.sdk_version }}
+                        </dd>
                     </div>
                     <div class="flex items-baseline gap-3 md:col-span-2">
                         <dt class="w-24 shrink-0 text-sm text-fg-secondary">运行目录</dt>
