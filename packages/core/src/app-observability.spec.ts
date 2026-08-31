@@ -193,6 +193,14 @@ describe("application readiness", () => {
             application: "onebots",
             version: "1.2.3",
             core_version: "1.1.0",
+            instance_id: expect.any(String),
+            started_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        });
+        const secondHealthContext: Record<string, unknown> = {};
+        handlers.get("/health")?.(secondHealthContext);
+        expect(secondHealthContext.body).toMatchObject({
+            instance_id: (healthContext.body as Record<string, unknown>).instance_id,
+            started_at: (healthContext.body as Record<string, unknown>).started_at,
         });
     });
 

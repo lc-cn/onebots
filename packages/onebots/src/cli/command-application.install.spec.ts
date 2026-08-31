@@ -124,4 +124,72 @@ describe("service install preflight", () => {
         });
         expect(restart).not.toHaveBeenCalled();
     });
+
+    it("reports start success only after the new instance is online", async () => {
+        const config = createConfig("general: {}\n");
+        const spec = serviceSpec(config);
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "inactive",
+        });
+        const start = vi.spyOn(ServiceController.prototype, "start").mockResolvedValue();
+        const readInstanceId = vi.fn(async () => "occupied-instance");
+        const verifyOnline = vi.fn(async () => undefined);
+
+        await expect(
+            startService({ system: false }, { readInstanceId, verifyOnline }),
+        ).resolves.toEqual({ output: "OneBots 服务已启动并通过在线验证" });
+        expect(start).toHaveBeenCalledOnce();
+        expect(verifyOnline).toHaveBeenCalledWith(spec, expect.any(String), "occupied-instance");
+    });
+
+    it("keeps start idempotent when the installed service is already online", async () => {
+        const config = createConfig("general: {}\n");
+        const spec = serviceSpec(config);
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: true,
+            scope: "user",
+            detail: "active",
+        });
+        const start = vi.spyOn(ServiceController.prototype, "start").mockResolvedValue();
+        const readInstanceId = vi.fn(async () => "current-instance");
+        const verifyOnline = vi.fn(async () => undefined);
+
+        await expect(
+            startService({ system: false }, { readInstanceId, verifyOnline }),
+        ).resolves.toEqual({ output: "OneBots 服务已在运行并通过在线验证" });
+        expect(start).not.toHaveBeenCalled();
+        expect(readInstanceId).not.toHaveBeenCalled();
+        expect(verifyOnline).toHaveBeenCalledWith(spec, expect.any(String), null);
+    });
+
+    it("reports restart failure after the control command when the instance does not switch", async () => {
+        const config = createConfig("general: {}\n");
+        const spec = serviceSpec(config);
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        const restart = vi.spyOn(ServiceController.prototype, "restart").mockResolvedValue();
+
+        await expect(
+            restartService(
+                { system: false },
+                {
+                    readInstanceId: async () => "old-instance",
+                    verifyOnline: async () => {
+                        throw new Error("实例仍为 old-instance");
+                    },
+                },
+            ),
+        ).rejects.toMatchObject({
+            message: expect.stringMatching(
+                /服务重启命令已执行，但在线验证失败.*实例仍为 old-instance.*onebots status/,
+            ),
+            exitCode: 1,
+        });
+        expect(restart).toHaveBeenCalledOnce();
+    });
 });

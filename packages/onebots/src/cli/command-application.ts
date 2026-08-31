@@ -14,6 +14,7 @@ import {
     formatAdapterCapabilityReport,
 } from "../capability-report.js";
 import packageMetadata from "../../package.json" with { type: "json" };
+import { readServiceInstanceId, verifyServiceOnline } from "../service-online-verification.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -135,12 +136,37 @@ export async function installService(
     };
 }
 
-/** 启动当前 scope 中已安装的服务。 */
-export async function startService(options: ScopeOptions): Promise<CommandResult> {
+export interface ServiceActivationDependencies {
+    readInstanceId(spec: ServiceSpec): Promise<string | null>;
+    verifyOnline(
+        spec: ServiceSpec,
+        expectedVersion: string,
+        previousInstanceId: string | null,
+    ): Promise<void>;
+}
+
+const serviceActivationDependencies: ServiceActivationDependencies = {
+    readInstanceId: readServiceInstanceId,
+    verifyOnline: (spec, expectedVersion, previousInstanceId) =>
+        verifyServiceOnline(spec, expectedVersion, { previousInstanceId }),
+};
+
+/** 启动当前 scope 中已安装的服务，并确认新进程实际接管端口。 */
+export async function startService(
+    options: ScopeOptions,
+    dependencies: ServiceActivationDependencies = serviceActivationDependencies,
+): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
-    await preflightInstalledService(controller, "启动");
+    const spec = await preflightInstalledService(controller, "启动");
+    const alreadyRunning = controller.status().running;
+    if (alreadyRunning) {
+        await verifyActivatedService(spec, "启动", null, dependencies, false);
+        return { output: "OneBots 服务已在运行并通过在线验证" };
+    }
+    const previousInstanceId = await dependencies.readInstanceId(spec);
     await controller.start();
-    return { output: "OneBots 服务已启动" };
+    await verifyActivatedService(spec, "启动", previousInstanceId, dependencies);
+    return { output: "OneBots 服务已启动并通过在线验证" };
 }
 
 /** 停止当前 scope 中已安装的服务。 */
@@ -149,12 +175,35 @@ export async function stopService(options: ScopeOptions): Promise<CommandResult>
     return { output: "OneBots 服务已停止" };
 }
 
-/** 重启当前 scope 中已安装的服务。 */
-export async function restartService(options: ScopeOptions): Promise<CommandResult> {
+/** 重启当前 scope 中已安装的服务，并确认实例身份已经切换。 */
+export async function restartService(
+    options: ScopeOptions,
+    dependencies: ServiceActivationDependencies = serviceActivationDependencies,
+): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
-    await preflightInstalledService(controller, "重启");
+    const spec = await preflightInstalledService(controller, "重启");
+    const previousInstanceId = await dependencies.readInstanceId(spec);
     await controller.restart();
-    return { output: "OneBots 服务已重启" };
+    await verifyActivatedService(spec, "重启", previousInstanceId, dependencies);
+    return { output: "OneBots 服务已重启并通过在线验证" };
+}
+
+async function verifyActivatedService(
+    spec: ServiceSpec,
+    action: "启动" | "重启",
+    previousInstanceId: string | null,
+    dependencies: ServiceActivationDependencies,
+    commandExecuted = true,
+): Promise<void> {
+    try {
+        await dependencies.verifyOnline(spec, packageMetadata.version, previousInstanceId);
+    } catch (error) {
+        const prefix = commandExecuted ? `服务${action}命令已执行` : "服务已在运行";
+        throw new CliError(
+            `${prefix}，但在线验证失败：${error instanceof Error ? error.message : String(error)}；请运行 onebots status 并检查服务日志`,
+            1,
+        );
+    }
 }
 
 /** 同时检查进程管理器与网关健康语义，并返回适合自动化使用的退出码。 */
@@ -465,10 +514,11 @@ function isMcpStdioModule(value: unknown): value is {
 async function preflightInstalledService(
     controller: ServiceController,
     action: "启动" | "重启",
-): Promise<void> {
+): Promise<ServiceSpec> {
     const spec = controller.readSpec();
     if (!spec) throw new CliError("OneBots 服务尚未安装", 2);
     await preflightService(spec, action);
+    return spec;
 }
 
 async function preflightService(spec: ServicePreflightSpec, action: string): Promise<void> {

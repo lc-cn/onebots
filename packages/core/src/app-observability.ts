@@ -1,6 +1,10 @@
+import { randomUUID } from "node:crypto";
 import type { Adapter } from "./adapter.js";
 import { metrics } from "./metrics.js";
 import type { Router } from "./router.js";
+
+const runtimeInstanceId = randomUUID();
+const runtimeStartedAt = new Date(Date.now() - process.uptime() * 1_000).toISOString();
 
 interface ObservableApp {
     readonly router: Router;
@@ -179,6 +183,8 @@ export function registerObservabilityEndpoints(
             status: "ok",
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
+            instance_id: runtimeInstanceId,
+            started_at: runtimeStartedAt,
             application: identity.name,
             version: identity.version,
             core_version: identity.coreVersion,

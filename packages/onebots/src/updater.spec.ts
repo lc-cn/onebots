@@ -10,8 +10,8 @@ import {
     resolveInstalledPackageVersion,
     resolveUpdatePluginSelection,
     runUpdatedServicePreflight,
-    verifyUpdatedServiceOnline,
 } from "./updater.js";
+import { verifyServiceOnline } from "./service-online-verification.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -56,12 +56,18 @@ function refreshDependencies(
     overrides: {
         preflight?: () => void | Promise<void>;
         confirmRestart?: () => Promise<boolean>;
-        verifyOnline?: (spec: ServiceSpec, expectedVersion: string) => Promise<void>;
+        readInstanceId?: (spec: ServiceSpec) => Promise<string | null>;
+        verifyOnline?: (
+            spec: ServiceSpec,
+            expectedVersion: string,
+            previousInstanceId: string | null,
+        ) => Promise<void>;
     } = {},
 ) {
     return {
         preflight: overrides.preflight ?? vi.fn(async () => undefined),
         confirmRestart: overrides.confirmRestart ?? vi.fn(async () => true),
+        readInstanceId: overrides.readInstanceId ?? vi.fn(async () => "previous-instance"),
         verifyOnline: overrides.verifyOnline ?? vi.fn(async () => undefined),
     };
 }
@@ -212,13 +218,23 @@ describe("post-update service safety", () => {
                     order.push("preflight");
                 },
                 confirmRestart: vi.fn(async () => false),
-                verifyOnline: async (_spec, version) => {
-                    order.push(`verify:${version}`);
+                readInstanceId: async () => {
+                    order.push("read-instance");
+                    return "previous-instance";
+                },
+                verifyOnline: async (_spec, version, previousInstanceId) => {
+                    order.push(`verify:${version}:${previousInstanceId}`);
                 },
             }),
         });
 
-        expect(order).toEqual(["preflight", "install", "restart", "verify:1.3.0"]);
+        expect(order).toEqual([
+            "preflight",
+            "install",
+            "read-instance",
+            "restart",
+            "verify:1.3.0:previous-instance",
+        ]);
         expect(result).toEqual({ wasRunning: true, restarted: true, onlineVerified: true });
     });
 
@@ -271,6 +287,7 @@ describe("post-update service safety", () => {
                     status: "ok",
                     application: "onebots",
                     version: healthAttempts === 1 ? "1.2.9" : "1.3.0",
+                    instance_id: "updated-instance",
                 }),
                 { status: 200 },
             );
@@ -278,7 +295,7 @@ describe("post-update service safety", () => {
         const sleep = vi.fn(async () => undefined);
 
         await expect(
-            verifyUpdatedServiceOnline(spec, "1.3.0", {
+            verifyServiceOnline(spec, "1.3.0", {
                 fetcher,
                 attempts: 2,
                 intervalMs: 1,
@@ -304,11 +321,81 @@ describe("post-update service safety", () => {
         );
 
         await expect(
-            verifyUpdatedServiceOnline(spec, "1.3.0", {
+            verifyServiceOnline(spec, "1.3.0", {
                 fetcher,
                 attempts: 1,
             }),
         ).rejects.toThrow(/目标版本 1\.3\.0.*在线 OneBots 1\.2\.9.*ready: HTTP 503/);
+    });
+
+    it("rejects a healthy endpoint when restart did not replace the previous instance", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(async input =>
+            String(input).endsWith("/ready")
+                ? new Response(JSON.stringify({ ready: true }), { status: 200 })
+                : new Response(
+                      JSON.stringify({
+                          status: "ok",
+                          application: "onebots",
+                          version: "1.3.0",
+                          instance_id: "old-instance",
+                      }),
+                      { status: 200 },
+                  ),
+        );
+
+        await expect(
+            verifyServiceOnline(spec, "1.3.0", {
+                fetcher,
+                attempts: 1,
+                previousInstanceId: "old-instance",
+            }),
+        ).rejects.toThrow(/实例仍为 old-instance.*未证明新进程已接管端口/);
+    });
+
+    it("rejects a target-version endpoint without process identity evidence", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(async input =>
+            String(input).endsWith("/ready")
+                ? new Response(JSON.stringify({ ready: true }), { status: 200 })
+                : new Response(
+                      JSON.stringify({
+                          status: "ok",
+                          application: "onebots",
+                          version: "1.3.0",
+                      }),
+                      { status: 200 },
+                  ),
+        );
+
+        await expect(verifyServiceOnline(spec, "1.3.0", { fetcher, attempts: 1 })).rejects.toThrow(
+            /未声明 instance_id.*无法证明目标进程已接管端口/,
+        );
+    });
+
+    it("accepts the target version only after a different instance owns the endpoint", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(async input =>
+            String(input).endsWith("/ready")
+                ? new Response(JSON.stringify({ ready: true }), { status: 200 })
+                : new Response(
+                      JSON.stringify({
+                          status: "ok",
+                          application: "onebots",
+                          version: "1.3.0",
+                          instance_id: "new-instance",
+                      }),
+                      { status: 200 },
+                  ),
+        );
+
+        await expect(
+            verifyServiceOnline(spec, "1.3.0", {
+                fetcher,
+                attempts: 1,
+                previousInstanceId: "old-instance",
+            }),
+        ).resolves.toBeUndefined();
     });
 
     it("launches the saved updated CLI in the service working directory", () => {

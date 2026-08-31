@@ -12,7 +12,7 @@ import { writeCliOutput } from "./cli-output.js";
 import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import { detectRuntimePackageManager } from "./package-manager.js";
-import { probeDoctorEndpoint, resolveGatewayBaseUrl } from "./doctor.js";
+import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
 
 export interface UpdateOptions {
     adapters: string[];
@@ -172,7 +172,12 @@ interface UpdateServiceController {
 interface RefreshServiceDependencies {
     preflight(spec: ServiceSpec): void | Promise<void>;
     confirmRestart(): Promise<boolean>;
-    verifyOnline(spec: ServiceSpec, expectedVersion: string): Promise<void>;
+    readInstanceId(spec: ServiceSpec): Promise<string | null>;
+    verifyOnline(
+        spec: ServiceSpec,
+        expectedVersion: string,
+        previousInstanceId: string | null,
+    ): Promise<void>;
 }
 
 interface RefreshServiceOptions {
@@ -187,13 +192,6 @@ export interface RefreshServiceResult {
     onlineVerified: boolean;
 }
 
-interface OnlineVerificationDependencies {
-    fetcher?: typeof fetch;
-    attempts?: number;
-    intervalMs?: number;
-    sleep?: (milliseconds: number) => Promise<void>;
-}
-
 /** 软件包更新后先用新 CLI 子进程预检，再改写服务定义和选择性重启。 */
 export async function refreshServiceAfterUpdate(
     controller: UpdateServiceController,
@@ -203,7 +201,9 @@ export async function refreshServiceAfterUpdate(
     const dependencies = options.dependencies ?? {
         preflight: runUpdatedServicePreflight,
         confirmRestart,
-        verifyOnline: verifyUpdatedServiceOnline,
+        readInstanceId: readServiceInstanceId,
+        verifyOnline: (targetSpec, expectedVersion, previousInstanceId) =>
+            verifyServiceOnline(targetSpec, expectedVersion, { previousInstanceId }),
     };
     const wasRunning = controller.status().running;
     try {
@@ -219,9 +219,10 @@ export async function refreshServiceAfterUpdate(
     if (!options.yes && !(await dependencies.confirmRestart())) {
         return { wasRunning, restarted: false, onlineVerified: false };
     }
+    const previousInstanceId = await dependencies.readInstanceId(spec);
     await controller.restart();
     try {
-        await dependencies.verifyOnline(spec, options.expectedVersion);
+        await dependencies.verifyOnline(spec, options.expectedVersion, previousInstanceId);
     } catch (error) {
         throw new Error(
             `软件包与服务定义已更新，服务也已重启，但在线验证失败：${error instanceof Error ? error.message : String(error)}；请运行 onebots status 并检查服务日志`,
@@ -229,36 +230,6 @@ export async function refreshServiceAfterUpdate(
         );
     }
     return { wasRunning, restarted: true, onlineVerified: true };
-}
-
-/** 等待服务切换到目标 OneBots 版本，并确认其运行状态至少可继续首次配置。 */
-export async function verifyUpdatedServiceOnline(
-    spec: ServiceSpec,
-    expectedVersion: string,
-    dependencies: OnlineVerificationDependencies = {},
-): Promise<void> {
-    const fetcher = dependencies.fetcher ?? fetch;
-    const attempts = dependencies.attempts ?? 10;
-    const intervalMs = dependencies.intervalMs ?? 500;
-    const sleep =
-        dependencies.sleep ??
-        ((milliseconds: number) =>
-            new Promise(resolve => {
-                setTimeout(resolve, milliseconds);
-            }));
-    const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
-    const base = resolveGatewayBaseUrl(config);
-    let lastEvidence = "服务尚未响应";
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-        const checks = await Promise.all([
-            probeDoctorEndpoint(base, "health", fetcher, expectedVersion),
-            probeDoctorEndpoint(base, "ready", fetcher),
-        ]);
-        if (checks[0].level === "ok" && checks[1].level !== "error") return;
-        lastEvidence = checks.map(check => check.message).join("；");
-        if (attempt < attempts - 1) await sleep(intervalMs);
-    }
-    throw new Error(`目标版本 ${expectedVersion} 未在重试窗口内就绪（${lastEvidence}）`);
 }
 
 /** 使用更新后的 Node/CLI 路径，在服务实际工作目录中运行隔离预检。 */
