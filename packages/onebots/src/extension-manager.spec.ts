@@ -3,9 +3,16 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import yaml from "js-yaml";
-import { ExtensionManager, type ExtensionInstaller } from "./extension-manager.js";
+import {
+    ExtensionManager,
+    preflightExtensionConfig,
+    type ExtensionConfigPreflight,
+    type ExtensionInstaller,
+} from "./extension-manager.js";
+import type { ServicePreflightSpec } from "./service-preflight.js";
 
 const directories: string[] = [];
+const successfulPreflight: ExtensionConfigPreflight = async () => undefined;
 
 afterEach(() => {
     for (const directory of directories.splice(0)) {
@@ -26,6 +33,33 @@ function fixture() {
 }
 
 describe("ExtensionManager", () => {
+    it("候选配置临时文件使用私有权限并在预检失败后清理", async () => {
+        const { root, configPath } = fixture();
+        let temporaryPath = "";
+        const runPreflight = vi.fn(async (spec: ServicePreflightSpec) => {
+            temporaryPath = spec.configPath;
+            expect(fs.statSync(temporaryPath).mode & 0o777).toBe(0o600);
+            expect(fs.readFileSync(temporaryPath, "utf8")).toContain("access_token: secret");
+            throw new Error("候选插件损坏");
+        });
+
+        await expect(
+            preflightExtensionConfig(
+                {
+                    content: "access_token: secret\n",
+                    selection: { adapters: ["slack"], protocols: [] },
+                    runtimeRoot: root,
+                    configPath,
+                },
+                runPreflight,
+            ),
+        ).rejects.toThrow("候选插件损坏");
+
+        expect(runPreflight).toHaveBeenCalledOnce();
+        expect(temporaryPath).not.toBe("");
+        expect(fs.existsSync(temporaryPath)).toBe(false);
+    });
+
     it("只安装目录中的固定包名并持久化插件选择", async () => {
         const { root, configPath } = fixture();
         const install = vi.fn(async (packageName: string, runtimeRoot: string) => {
@@ -41,6 +75,7 @@ describe("ExtensionManager", () => {
             runtimeRoot: root,
             configPath,
             installer: { install } satisfies ExtensionInstaller,
+            preflight: successfulPreflight,
         });
 
         await expect(manager.install("adapter:slack")).resolves.toEqual({
@@ -66,6 +101,7 @@ describe("ExtensionManager", () => {
             runtimeRoot: root,
             configPath,
             installer: { install },
+            preflight: successfulPreflight,
         });
 
         await expect(manager.install("adapter:slack@latest;rm -rf /")).rejects.toThrow(
@@ -84,6 +120,7 @@ describe("ExtensionManager", () => {
             runtimeRoot: root,
             configPath,
             installer: { install },
+            preflight: successfulPreflight,
         });
 
         await manager.install("adapter:slack");
@@ -98,6 +135,7 @@ describe("ExtensionManager", () => {
             runtimeRoot: root,
             configPath,
             installer: { install },
+            preflight: successfulPreflight,
         });
 
         await expect(manager.install("adapter:slack")).rejects.toThrow("plugins 必须是对象");
@@ -116,6 +154,7 @@ describe("ExtensionManager", () => {
             runtimeRoot: root,
             configPath,
             installer: { install },
+            preflight: successfulPreflight,
         });
 
         await manager.install("adapter:slack");
@@ -127,6 +166,66 @@ describe("ExtensionManager", () => {
                 protocols: ["onebot-v11"],
             },
             general: { host: "127.0.0.1" },
+        });
+    });
+
+    it("候选插件预检失败时不启用配置", async () => {
+        const { root, configPath } = fixture();
+        const original = fs.readFileSync(configPath, "utf8");
+        const install = vi.fn(async () => undefined);
+        const preflight = vi.fn(async () => {
+            throw new Error("插件没有注册配置 Schema");
+        });
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow("插件没有注册配置 Schema");
+
+        expect(install).toHaveBeenCalledOnce();
+        expect(preflight).toHaveBeenCalledWith(
+            expect.objectContaining({
+                selection: { adapters: ["slack"], protocols: ["onebot-v11"] },
+                runtimeRoot: root,
+                configPath,
+            }),
+        );
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+    });
+
+    it("候选预检期间配置变化时重新合并并验证", async () => {
+        const { root, configPath } = fixture();
+        const preflight = vi.fn(async () => {
+            if (preflight.mock.calls.length === 1) {
+                fs.writeFileSync(
+                    configPath,
+                    "plugins:\n  adapters: [telegram]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+                );
+            }
+        });
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn(async () => undefined) },
+            preflight,
+        });
+
+        await manager.install("adapter:slack");
+
+        expect(preflight).toHaveBeenCalledTimes(2);
+        expect(preflight).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                selection: expect.objectContaining({ adapters: ["telegram", "slack"] }),
+            }),
+        );
+        const config = yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+        expect(config.plugins).toEqual({
+            adapters: ["telegram", "slack"],
+            protocols: ["onebot-v11"],
         });
     });
 });

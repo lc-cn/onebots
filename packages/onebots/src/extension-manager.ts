@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { BaseApp, writeConfigFileAtomic, yaml } from "@onebots/core";
@@ -10,6 +11,8 @@ import {
 } from "./runtime-plugin-selection.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
+import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
+import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -31,7 +34,17 @@ export interface ExtensionManagerOptions {
     runtimeRoot?: string;
     configPath?: string;
     installer?: ExtensionInstaller;
+    preflight?: ExtensionConfigPreflight;
 }
+
+export interface ExtensionConfigPreflightRequest {
+    content: string;
+    selection: RuntimePluginSelection;
+    runtimeRoot: string;
+    configPath: string;
+}
+
+export type ExtensionConfigPreflight = (request: ExtensionConfigPreflightRequest) => Promise<void>;
 
 export class ExtensionNotFoundError extends Error {}
 export class ExtensionInstallConflictError extends Error {}
@@ -41,6 +54,7 @@ export class ExtensionManager {
     private readonly runtimeRoot: string;
     private readonly configPath: string;
     private readonly installer: ExtensionInstaller;
+    private readonly preflight: ExtensionConfigPreflight;
     private installing: string | null = null;
 
     constructor(options: ExtensionManagerOptions = {}) {
@@ -49,6 +63,7 @@ export class ExtensionManager {
         );
         this.configPath = options.configPath ?? BaseApp.configPath;
         this.installer = options.installer ?? new NpmExtensionInstaller();
+        this.preflight = options.preflight ?? preflightExtensionConfig;
     }
 
     list(loadedPlugins: readonly LoadedPluginInfo[]) {
@@ -79,15 +94,25 @@ export class ExtensionManager {
             if (!this.isInstalled(entry.packageName)) {
                 await this.installer.install(entry.packageName, this.runtimeRoot);
             }
-            const latestSource = fs.readFileSync(this.configPath, "utf8");
-            const content =
-                latestSource === preparedConfig.source
-                    ? preparedConfig.content
-                    : this.prepareConfig(entry.type, entry.name, latestSource).content;
-            writeConfigFileAtomic(this.configPath, content, {
-                backup: true,
-            });
-            return { restartRequired: true };
+            let candidate = preparedConfig;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const latestSource = fs.readFileSync(this.configPath, "utf8");
+                if (latestSource !== candidate.source) {
+                    candidate = this.prepareConfig(entry.type, entry.name, latestSource);
+                }
+                await this.preflight({
+                    content: candidate.content,
+                    selection: candidate.selection,
+                    runtimeRoot: this.runtimeRoot,
+                    configPath: this.configPath,
+                });
+                if (fs.readFileSync(this.configPath, "utf8") !== candidate.source) continue;
+                writeConfigFileAtomic(this.configPath, candidate.content, { backup: true });
+                return { restartRequired: true };
+            }
+            throw new ExtensionInstallConflictError(
+                "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
+            );
         } finally {
             this.installing = null;
         }
@@ -111,6 +136,7 @@ export class ExtensionManager {
         return {
             source: currentSource,
             content: yaml.dump(config, { noRefs: true }),
+            selection,
         };
     }
 
@@ -132,5 +158,34 @@ export class ExtensionManager {
                 `扩展运行目录缺少 package.json：${this.runtimeRoot}。请使用官方安装脚本部署，或设置 ONEBOTS_EXTENSION_ROOT。`,
             );
         }
+    }
+}
+
+/** @internal 使用正式重启的隔离预检，并确保含凭据的临时文件被清理。 */
+export async function preflightExtensionConfig(
+    request: ExtensionConfigPreflightRequest,
+    runPreflight: typeof preflightServiceRuntimeIsolated = preflightServiceRuntimeIsolated,
+): Promise<void> {
+    const targetPath = fs.existsSync(request.configPath)
+        ? fs.realpathSync(request.configPath)
+        : path.resolve(request.configPath);
+    const temporaryPath = path.join(
+        path.dirname(targetPath),
+        `.${path.basename(targetPath)}.${process.pid}.${randomUUID()}.preflight`,
+    );
+    try {
+        fs.writeFileSync(temporaryPath, request.content, {
+            encoding: "utf8",
+            mode: 0o600,
+            flag: "wx",
+        });
+        await runPreflight({
+            configPath: temporaryPath,
+            adapters: request.selection.adapters,
+            protocols: request.selection.protocols,
+            workingDirectory: request.runtimeRoot,
+        });
+    } finally {
+        if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
     }
 }
