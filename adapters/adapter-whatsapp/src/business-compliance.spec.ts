@@ -79,18 +79,29 @@ describe("WhatsAppBusinessCompliance", () => {
         expect(fetcher).toHaveBeenCalledTimes(2);
     });
 
-    it("平台动作要求字段数组与 info 对象", async () => {
+    it("平台动作要求字段数组", async () => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(
             executeWhatsAppPlatformAction(client, "get_business_compliance_info", {
                 fields: "entity_name,is_registered",
             }),
         ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
+    });
+
+    it("平台动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(
-            executeWhatsAppPlatformAction(client, "update_business_compliance_info", {
-                profile: validInfo,
+            executeWhatsAppPlatformAction(client, "get_business_compliance_info", {
+                fields: ["entity_name"],
+                include_contacts: true,
             }),
-        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: {
+                action: "get_business_compliance_info",
+                parameter: "include_contacts",
+            },
+        });
     });
 
     it.each([

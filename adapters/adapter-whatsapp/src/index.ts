@@ -3,7 +3,6 @@ export { whatsappSchema } from "./schema.js";
 export {
     isWhatsAppBusinessComplianceAction,
     WhatsAppBusinessCompliance,
-    WHATSAPP_BUSINESS_COMPLIANCE_ACTIONS,
     WHATSAPP_BUSINESS_COMPLIANCE_FIELDS,
     WHATSAPP_BUSINESS_ENTITY_TYPES,
     type WhatsAppBusinessComplianceAction,

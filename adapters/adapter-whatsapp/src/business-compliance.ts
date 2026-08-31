@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 
@@ -73,20 +74,6 @@ export interface WhatsAppBusinessComplianceUpdateResponse {
     success: true;
 }
 
-export const WHATSAPP_BUSINESS_COMPLIANCE_ACTIONS = Object.freeze([
-    "get_business_compliance_info",
-    "update_business_compliance_info",
-] as const);
-
-export type WhatsAppBusinessComplianceAction =
-    (typeof WHATSAPP_BUSINESS_COMPLIANCE_ACTIONS)[number];
-
-export function isWhatsAppBusinessComplianceAction(
-    action: string,
-): action is WhatsAppBusinessComplianceAction {
-    return (WHATSAPP_BUSINESS_COMPLIANCE_ACTIONS as readonly string[]).includes(action);
-}
-
 /** Business Compliance 强类型读写边界，并执行 Meta 的跨字段校验。 */
 export class WhatsAppBusinessCompliance {
     constructor(private readonly client: WhatsAppClient) {}
@@ -114,27 +101,38 @@ export class WhatsAppBusinessCompliance {
         if (!isRecord(response) || response.success !== true) invalidResponse(response);
         return { success: true };
     }
-
-    execute(
-        action: WhatsAppBusinessComplianceAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_business_compliance_info":
-                return this.get(actionFields(params));
-            case "update_business_compliance_info":
-                return this.update(actionUpdate(params));
-        }
-    }
 }
 
-export const WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_BUSINESS_COMPLIANCE_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.businessCompliance.execute(action, params),
-    ]),
-) as Record<WhatsAppBusinessComplianceAction, PlatformActionHandler<WhatsAppClient>>;
+type BusinessComplianceActionParams = Readonly<Record<string, unknown>>;
+
+const BUSINESS_COMPLIANCE_ACTION_HANDLERS = {
+    get_business_compliance_info: (
+        client: WhatsAppClient,
+        params: BusinessComplianceActionParams,
+    ) => client.businessCompliance.get(actionFields(params)),
+    update_business_compliance_info: (
+        client: WhatsAppClient,
+        params: BusinessComplianceActionParams,
+    ) => client.businessCompliance.update(actionUpdate(params)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Business Compliance 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    BUSINESS_COMPLIANCE_ACTION_HANDLERS,
+    {
+        get_business_compliance_info: ["fields"],
+        update_business_compliance_info: ["info"],
+    },
+);
+
+export type WhatsAppBusinessComplianceAction =
+    keyof typeof WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS;
+
+export function isWhatsAppBusinessComplianceAction(
+    action: string,
+): action is WhatsAppBusinessComplianceAction {
+    return Object.hasOwn(WHATSAPP_BUSINESS_COMPLIANCE_ACTION_HANDLERS, action);
+}
 
 function complianceResponse(value: unknown): WhatsAppBusinessComplianceResponse {
     if (!isRecord(value) || !Array.isArray(value.data)) invalidResponse(value);
