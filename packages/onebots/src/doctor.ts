@@ -6,6 +6,7 @@ import { ServiceController, type ServiceScope } from "./service-manager.js";
 import { pluginCandidates, tryLoadRegisteredPlugin } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { writeCliOutput } from "./cli-output.js";
+import { probeDoctorManagement } from "./doctor-management.js";
 
 export type CheckLevel = "ok" | "warning" | "error";
 export interface DoctorCheck {
@@ -228,6 +229,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             for (const endpoint of ["health", "ready"] as const) {
                 checks.push(await probeDoctorEndpoint(base, endpoint));
             }
+            checks.push(...(await probeDoctorManagement(base, config)));
         } else {
             checks.push({ name: "port", level: "ok", message: `端口 ${port} 可用` });
         }
