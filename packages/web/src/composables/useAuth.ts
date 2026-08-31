@@ -1,4 +1,5 @@
 import { buildApiUrl } from '../config'
+import { managementRequestInit } from '../management-request.js'
 
 const TOKEN_KEY = 'onebots:authToken'
 const REFRESH_KEY = 'onebots:authRefreshToken'
@@ -83,7 +84,7 @@ export const authFetch = async (
   const headers = new Headers(init.headers)
   const authHeaders = buildAuthHeaders()
   Object.entries(authHeaders).forEach(([key, value]) => headers.set(key, value))
-  const response = await fetch(input, { ...init, headers })
+  const response = await fetch(input, managementRequestInit({ ...init, headers }))
 
   if (response.status !== 401) return response
 
@@ -102,11 +103,11 @@ export const authFetch = async (
 
 /** 使用鉴权码登录（Bearer Token，与 config 中 access_token 一致） */
 export const loginWithToken = async (accessToken: string) => {
-  const response = await fetch(buildApiUrl('/api/auth/login'), {
+  const response = await fetch(buildApiUrl('/api/auth/login'), managementRequestInit({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ access_token: accessToken.trim() })
-  })
+  }))
 
   if (!response.ok) {
     const message = await response.json().catch(() => ({ message: '鉴权码错误' }))
@@ -123,11 +124,11 @@ export const loginWithToken = async (accessToken: string) => {
 }
 
 export const login = async (username: string, password: string) => {
-  const response = await fetch(buildApiUrl('/api/auth/login'), {
+  const response = await fetch(buildApiUrl('/api/auth/login'), managementRequestInit({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
-  })
+  }))
 
   if (!response.ok) {
     const message = await response.json().catch(() => ({ message: '登录失败' }))
@@ -157,12 +158,12 @@ export const refresh = async (signal?: AbortSignal | null) => {
   const refreshToken = getRefreshToken()
   if (!refreshToken) return { ok: false }
 
-  const response = await fetch(buildApiUrl('/api/auth/refresh'), {
+  const response = await fetch(buildApiUrl('/api/auth/refresh'), managementRequestInit({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
     signal
-  })
+  }))
 
   if (!response.ok) return { ok: false }
 

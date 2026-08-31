@@ -23,6 +23,7 @@ export function registerAuthRoutes(app: App, router: Router): void {
     /* ── routes ────────────────────────────────────────────────── */
 
     router.post("/api/auth/login", (ctx: RouterContext) => {
+        disableManagementCaching(ctx);
         const body = ctx.request.body as {
             username?: string;
             password?: string;
@@ -63,6 +64,7 @@ export function registerAuthRoutes(app: App, router: Router): void {
     });
 
     router.post("/api/auth/refresh", (ctx: RouterContext) => {
+        disableManagementCaching(ctx);
         const { refreshToken } = ctx.request.body as { refreshToken?: string };
         if (!refreshToken) {
             ctx.status = 400;
@@ -90,6 +92,7 @@ export function registerAuthRoutes(app: App, router: Router): void {
      * which validates the Bearer token issued by the login endpoint.
      */
     router.use("/api", async (ctx: RouterContext, next) => {
+        disableManagementCaching(ctx);
         if (ctx.path === "/api/auth/login" || ctx.path === "/api/auth/refresh") return next();
 
         const token = extractManagementToken(ctx.req);
@@ -130,4 +133,8 @@ export function registerAuthRoutes(app: App, router: Router): void {
             },
         };
     });
+}
+
+function disableManagementCaching(ctx: RouterContext): void {
+    ctx.set("Cache-Control", "no-store");
 }
