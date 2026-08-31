@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from "vue";
+import { useRouter } from "vue-router";
 import SchemaField from "../SchemaField.vue";
+import UiAlert from "../../ui/UiAlert.vue";
 import UiButton from "../../ui/UiButton.vue";
 import UiField from "../../ui/UiField.vue";
 import UiInput from "../../ui/UiInput.vue";
@@ -26,6 +28,7 @@ import {
     protocolTitle,
 } from "./utils";
 import { buildProtocolFieldLayout } from "./protocol-layout";
+import { getAccountProtocolSelectionState } from "./account-protocol-selection.js";
 
 const props = defineProps<{
     schema: SchemaBundle | null;
@@ -36,6 +39,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const router = useRouter();
 
 const dialogVisible = ref(false);
 const dialogTitle = ref("新增账号");
@@ -60,6 +64,13 @@ const activeProtocolTab = ref("");
 
 const protocolTabs = computed(() =>
     protocolGroups.value.map(group => ({ key: group.key, label: group.title })),
+);
+
+const protocolSelection = computed(() =>
+    getAccountProtocolSelectionState(
+        protocolGroups.value.map(group => group.key),
+        protocolEnabled,
+    ),
 );
 
 const protocolLayouts = computed(() =>
@@ -157,6 +168,11 @@ const handleSubmit = async () => {
         toast.warning("请填写平台与账号ID");
         return;
     }
+    if (!protocolSelection.value.valid) {
+        currentStep.value = steps.length - 1;
+        toast.warning(protocolSelection.value.description);
+        return;
+    }
 
     const configObject = JSON.parse(JSON.stringify(accountOriginalConfig.value || {})) as Record<
         string,
@@ -224,6 +240,11 @@ const handleSubmit = async () => {
         const result = await response.json().catch(() => ({}));
         toast.error(result.message || "保存失败");
     }
+};
+
+const goToProtocolExtensions = () => {
+    dialogVisible.value = false;
+    void router.push("/extensions?type=protocol");
 };
 
 const openAdd = (platform = "") => {
@@ -316,6 +337,21 @@ defineExpose({ openAdd, openEdit });
 
             <!-- 第三步：协议配置（页签） -->
             <div v-show="currentStep === 2" class="flex flex-col gap-3">
+                <UiAlert
+                    v-if="!protocolSelection.valid"
+                    variant="warning"
+                    :title="protocolSelection.title">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span>{{ protocolSelection.description }}</span>
+                        <UiButton
+                            v-if="protocolSelection.actionLabel"
+                            size="sm"
+                            variant="secondary"
+                            @click="goToProtocolExtensions">
+                            {{ protocolSelection.actionLabel }}
+                        </UiButton>
+                    </div>
+                </UiAlert>
                 <template v-if="protocolGroups.length">
                     <UiTabs v-model="activeProtocolTab" :tabs="protocolTabs" />
                     <div
@@ -382,7 +418,10 @@ defineExpose({ openAdd, openEdit });
                         </details>
                     </div>
                 </template>
-                <UiEmpty v-else title="暂无协议 Schema" />
+                <UiEmpty
+                    v-else
+                    title="暂无可用协议"
+                    description="安装至少一个开放协议并重启后，再为账号配置消息出口" />
             </div>
         </div>
 
