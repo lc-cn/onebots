@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { formatProtocolReadinessMetrics, getReadinessSnapshot } from "./app-observability.js";
+import {
+    formatProtocolReadinessMetrics,
+    getReadinessSnapshot,
+    registerObservabilityEndpoints,
+} from "./app-observability.js";
 
 function observableApp(
     accounts: Array<{ status: string; protocols: Array<{ lifecycleStatus: string }> }>,
     isStarted = true,
     isReloading = false,
+    configStatus?: string,
 ) {
     return {
         isStarted,
         isReloading,
+        runtimeConfigState: configStatus ? { status: configStatus } : undefined,
         adapters: new Map([
             [
                 "mock",
@@ -97,6 +103,83 @@ describe("application readiness", () => {
         );
 
         expect(snapshot).toMatchObject({ ready: false, server: true, reloading: true });
+    });
+
+    it.each(["drifted", "unavailable"])(
+        "rejects readiness when runtime configuration is %s",
+        configStatus => {
+            const snapshot = getReadinessSnapshot(
+                observableApp(
+                    [{ status: "online", protocols: [{ lifecycleStatus: "ready" }] }],
+                    true,
+                    false,
+                    configStatus,
+                ),
+            );
+
+            expect(snapshot).toMatchObject({
+                ready: false,
+                config: { status: configStatus, in_sync: false },
+            });
+        },
+    );
+
+    it("keeps embedded applications ready when configuration tracking is unavailable", () => {
+        const snapshot = getReadinessSnapshot(
+            observableApp([{ status: "online", protocols: [{ lifecycleStatus: "ready" }] }]),
+        );
+
+        expect(snapshot).toMatchObject({
+            ready: true,
+            config: { status: "untracked", in_sync: true },
+        });
+    });
+
+    it("fails closed for an invalid tracked configuration status", () => {
+        const snapshot = getReadinessSnapshot(
+            observableApp(
+                [{ status: "online", protocols: [{ lifecycleStatus: "ready" }] }],
+                true,
+                false,
+                "corrupt",
+            ),
+        );
+
+        expect(snapshot).toMatchObject({
+            ready: false,
+            config: { status: "unavailable", in_sync: false },
+        });
+    });
+
+    it("publishes configuration drift through readiness and Prometheus routes", () => {
+        const handlers = new Map<string, (ctx: Record<string, unknown>) => void>();
+        const app = {
+            ...observableApp(
+                [{ status: "online", protocols: [{ lifecycleStatus: "ready" }] }],
+                true,
+                false,
+                "drifted",
+            ),
+            router: {
+                get: (route: string, handler: (ctx: Record<string, unknown>) => void) =>
+                    handlers.set(route, handler),
+            },
+        };
+        registerObservabilityEndpoints(app as never, "1.2.3");
+
+        const readyContext: Record<string, unknown> = {};
+        handlers.get("/ready")?.(readyContext);
+        expect(readyContext).toMatchObject({
+            status: 503,
+            body: {
+                ready: false,
+                config: { status: "drifted", in_sync: false },
+            },
+        });
+
+        const metricsContext: Record<string, unknown> = {};
+        handlers.get("/metrics")?.(metricsContext);
+        expect(metricsContext.body).toContain("onebots_config_in_sync 0");
     });
 
     it("exports protocol readiness with safe Prometheus labels", () => {

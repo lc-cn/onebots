@@ -65,7 +65,7 @@ docker compose ps
 docker inspect --format '{{json .State.Health}}' onebots
 ```
 
-The container becomes `unhealthy` whenever a configured account is offline, allowing load balancers and orchestrators to stop routing traffic to it. Docker and Compose restart policies do not restart a container solely because it is unhealthy; use external monitoring or an orchestration policy for persistent failures.
+The container becomes `unhealthy` whenever a configured account is offline, a protocol outlet is unavailable, or the disk configuration differs from the active runtime. Restart the container when this follows an intentional host-setting change; investigate the mounted file when the drift is unexpected. Docker and Compose restart policies do not restart a container solely because it is unhealthy; use external monitoring or an orchestration policy for persistent failures.
 
 For configurations outside the default path, set `ONEBOTS_CONFIG_PATH`. `PORT` and `ONEBOTS_PATH` override the configured port and path, while `ONEBOTS_HEALTHCHECK_URL` supplies a complete readiness URL. The Hugging Face image inherits this probe and automatically uses its `PORT=7860` setting.
 

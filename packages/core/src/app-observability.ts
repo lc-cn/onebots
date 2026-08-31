@@ -7,6 +7,8 @@ interface ObservableApp {
     readonly adapters: ReadonlyMap<keyof Adapter.Configs, Adapter>;
     readonly isStarted: boolean;
     readonly isReloading: boolean;
+    /** OneBots 主应用提供磁盘配置状态；嵌入式 BaseApp 可不跟踪。 */
+    readonly runtimeConfigState?: { status: string };
 }
 
 interface ProtocolReadinessCounts {
@@ -29,6 +31,10 @@ export interface ReadinessSnapshot {
     server: boolean;
     reloading: boolean;
     configured: boolean;
+    config: {
+        status: "in_sync" | "drifted" | "unavailable" | "untracked";
+        in_sync: boolean;
+    };
     adapters: Record<string, AdapterReadinessCounts>;
     summary: {
         total_adapters: number;
@@ -49,6 +55,8 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
     let totalProtocols = 0;
     let readyProtocols = 0;
     let accountsWithoutProtocols = 0;
+    const configStatus = normalizeConfigStatus(app.runtimeConfigState?.status);
+    const configInSync = configStatus === "in_sync" || configStatus === "untracked";
 
     for (const [platform, adapter] of app.adapters) {
         let online = 0;
@@ -95,11 +103,15 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
     }
 
     return {
-        ready: allReady && app.isStarted && !app.isReloading,
+        ready: allReady && app.isStarted && !app.isReloading && configInSync,
         timestamp: new Date().toISOString(),
         server: app.isStarted,
         reloading: app.isReloading,
         configured: totalAccounts > 0,
+        config: {
+            status: configStatus,
+            in_sync: configInSync,
+        },
         adapters,
         summary: {
             total_adapters: app.adapters.size,
@@ -110,6 +122,13 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
             accounts_without_protocols: accountsWithoutProtocols,
         },
     };
+}
+
+function normalizeConfigStatus(status: string | undefined): ReadinessSnapshot["config"]["status"] {
+    if (status === undefined) return "untracked";
+    return status === "in_sync" || status === "drifted" || status === "unavailable"
+        ? status
+        : "unavailable";
 }
 
 export function formatProtocolReadinessMetrics(snapshot: ReadinessSnapshot): string[] {
@@ -174,6 +193,9 @@ export function registerObservabilityEndpoints(app: ObservableApp, version: stri
             "# HELP onebots_reloading Whether the application is reloading configuration",
             "# TYPE onebots_reloading gauge",
             `onebots_reloading ${app.isReloading ? 1 : 0}`,
+            "# HELP onebots_config_in_sync Whether disk configuration matches the active runtime",
+            "# TYPE onebots_config_in_sync gauge",
+            `onebots_config_in_sync ${readiness.config.in_sync ? 1 : 0}`,
             "# HELP onebots_memory_bytes Memory usage in bytes",
             "# TYPE onebots_memory_bytes gauge",
             `onebots_memory_bytes{type="rss"} ${memory.rss}`,

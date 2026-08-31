@@ -71,6 +71,32 @@ describe.runIf(process.platform !== "win32")("doctor config permissions", () => 
 });
 
 describe("doctor health probes", () => {
+    it.each([
+        ["drifted", "磁盘配置未应用"],
+        ["unavailable", "配置文件不可读"],
+    ])("明确报告运行时配置状态 %s", async (status, message) => {
+        const fetcher = vi.fn(
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        ready: false,
+                        configured: true,
+                        config: { status, in_sync: false },
+                        adapters: {},
+                        summary: { total_accounts: 0, online_accounts: 0 },
+                    }),
+                    { status: 503 },
+                ),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "ready", fetcher),
+        ).resolves.toMatchObject({
+            level: "error",
+            message: `ready: HTTP 503；${message}；账号 0/0 在线`,
+        });
+    });
+
     it("明确报告配置重载中的暂时不可用", async () => {
         const fetcher = vi.fn(
             async () =>

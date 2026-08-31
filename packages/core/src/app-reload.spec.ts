@@ -100,7 +100,9 @@ describe("BaseApp reload boundary", () => {
                 server: true,
                 reloading: true,
             });
-            await expect(metrics.text()).resolves.toContain("onebots_reloading 1");
+            const metricsBody = await metrics.text();
+            expect(metricsBody).toContain("onebots_reloading 1");
+            expect(metricsBody).toContain("onebots_config_in_sync 1");
             app.isReloading = false;
 
             await app.reload({ ...app.config, access_token: "next-token", log_level: "debug" });

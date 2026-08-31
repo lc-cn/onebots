@@ -183,7 +183,7 @@ scrape_configs:
 - `/health`: 基础健康检查
 - `/ready`: 检查服务、账号和每个协议出口是否就绪
 
-`/ready` 的 `summary` 同时给出账号与协议实例总数、在线/就绪数量以及 `accounts_without_protocols`；每个平台也会列出缺少协议出口的账号数，以及协议的 `ready`、`unavailable` 与 `total`。即使平台账号已经 online，只要任一协议 `start()` 失败或任一账号没有协议出口，端点仍会返回 HTTP 503。首次启动尚未配置账号时，管理面保持 HTTP 200 以便继续配置，但响应包含 `configured: false`，doctor 会把它明确标为警告。
+`/ready` 的 `summary` 同时给出账号与协议实例总数、在线/就绪数量以及 `accounts_without_protocols`；每个平台也会列出缺少协议出口的账号数，以及协议的 `ready`、`unavailable` 与 `total`。即使平台账号已经 online，只要任一协议 `start()` 失败或任一账号没有协议出口，端点仍会返回 HTTP 503。响应中的 `config.status` 与 `config.in_sync` 还会证明磁盘配置是否就是当前运行版本；外部修改、不可读文件或等待重启的宿主配置会撤销 readiness。首次启动尚未配置账号时，管理面保持 HTTP 200 以便继续配置，但响应包含 `configured: false`，doctor 会把它明确标为警告。
 
 热重载配置期间 HTTP 存活探针继续返回成功，但 `/ready` 会立即返回 HTTP 503 并声明 `reloading: true`，直到新账号与协议出口完成启动或旧配置完成回滚。并发热重载会被拒绝，防止两次配置切换交错覆盖。Prometheus 的 `onebots_reloading` 可用于记录和告警持续时间异常的重载。
 
@@ -201,7 +201,7 @@ doctor 还会实际加载服务选用的插件，并使用它们注册的 Schema
 
 setup、Web 管理端与运行时账号操作通过同一原子写入边界保存配置：新内容先在配置目录完成写入与同步，再替换正式文件，避免进程退出留下半截 YAML。Web 保存随后立即热重载账号与协议；应用失败会恢复磁盘和运行态的上一版本，宿主参数变更则返回需要重启的字段。更新已有配置时会把紧邻的上一版本保存在 `<config>.bak`；新配置默认权限为 `0600`，已有配置继续沿用原权限。恢复前仍应先用 `onebots doctor` 校验备份内容。
 
-进程会在启动、每次成功热重载及账号配置落盘后保留配置文件的不可逆摘要。受保护的 `GET /api/system` 通过 `configState` 字段与 Web「系统信息 → 配置状态」只公开 `in_sync`、`drifted` 或 `unavailable` 及最近应用时间，不公开摘要或配置内容。若配置被外部编辑、挂载替换，或者 Web 保存的宿主字段仍等待重启，状态会保持 `drifted`；成功重新加载或重启后才恢复 `in_sync`。带合法管理凭据的 `onebots doctor` 会把漂移或无法读取配置视为错误，避免磁盘配置校验和在线健康检查各自成功却实际针对不同版本。管理 WebSocket 的初始 `system.sync` 也携带同一状态。
+进程会在启动、每次成功热重载及账号配置落盘后保留配置文件的不可逆摘要。受保护的 `GET /api/system` 通过 `configState` 字段与 Web「系统信息 → 配置状态」只公开 `in_sync`、`drifted` 或 `unavailable` 及最近应用时间，不公开摘要或配置内容。若配置被外部编辑、挂载替换，或者 Web 保存的宿主字段仍等待重启，状态会保持 `drifted`；成功重新加载或重启后才恢复 `in_sync`。同一状态会投影到公开 `/ready`，不同步时返回 HTTP 503，并通过 `onebots_config_in_sync` 指标暴露为 `0`；doctor 会把漂移和文件不可读分别报告为可操作原因。管理 WebSocket 的初始 `system.sync` 也携带同一状态。
 
 在 POSIX 系统上，doctor 会分别检查正式配置与 `.bak` 的权限。`0600` 视为私有；`0640` 等仅允许同组读取的模式会给出警告但不自动修改，以兼容服务账号共享；其他用户可访问或同组用户可修改会使检查失败。显式使用 `--fix` 时，这类高风险权限会收紧为 `0600`，JSON 报告中的 `fixed` 字段可供部署脚本留痕。
 

@@ -65,7 +65,7 @@ docker compose ps
 docker inspect --format '{{json .State.Health}}' onebots
 ```
 
-只要任一已配置账号离线，容器就会显示 `unhealthy`，便于负载均衡器和编排系统停止转发流量。Docker/Compose 的 `restart` 策略不会仅因 `unhealthy` 自动重启容器，仍应结合外部监控或编排策略处理持续故障。
+只要任一已配置账号离线、协议出口未就绪，或磁盘配置与当前运行版本不同步，容器就会显示 `unhealthy`，便于负载均衡器和编排系统停止转发流量。宿主字段保存后出现该状态时，应完成页面要求的容器重启；意外漂移则应先核对挂载文件。Docker/Compose 的 `restart` 策略不会仅因 `unhealthy` 自动重启容器，仍应结合外部监控或编排策略处理持续故障。
 
 默认配置路径以外的部署可设置 `ONEBOTS_CONFIG_PATH`；`PORT` 和 `ONEBOTS_PATH` 会覆盖配置中的端口与路径。也可用 `ONEBOTS_HEALTHCHECK_URL` 直接指定完整就绪地址。Hugging Face 镜像继承此探针，并自动使用其 `PORT=7860`。
 

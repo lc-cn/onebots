@@ -434,6 +434,16 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
         const details: string[] = [];
         if (payload.reloading === true) details.push("配置重载中");
         else if (payload.configured === false) details.push("未配置账号");
+        const config = payload.config as { status?: unknown; in_sync?: unknown } | undefined;
+        if (config?.in_sync === false) {
+            const label =
+                config.status === "drifted"
+                    ? "磁盘配置未应用"
+                    : config.status === "unavailable"
+                      ? "配置文件不可读"
+                      : `配置不同步（${String(config.status ?? "unknown")}）`;
+            details.push(label);
+        }
         if (summary) {
             details.push(
                 `账号 ${Number(summary.online_accounts ?? 0)}/${Number(summary.total_accounts ?? 0)} 在线`,
