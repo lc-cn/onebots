@@ -71,7 +71,10 @@ export class ExtensionManager {
     private readonly installer: ExtensionInstaller;
     private readonly preflight: ExtensionConfigPreflight;
     private readonly catalogIssues: () => string[];
-    private installing: string | null = null;
+    private installation: {
+        id: string;
+        promise: Promise<{ restartRequired: true }>;
+    } | null = null;
 
     constructor(options: ExtensionManagerOptions = {}) {
         this.runtimeRoot = path.resolve(
@@ -126,7 +129,7 @@ export class ExtensionManager {
                     : selection.protocols
                 ).includes(entry.name),
                 loaded,
-                installing: this.installing === entry.id,
+                installing: this.installation?.id === entry.id,
                 capability:
                     entry.type !== "adapter"
                         ? null
@@ -160,15 +163,17 @@ export class ExtensionManager {
     async install(id: string): Promise<{ restartRequired: true }> {
         const entry = getExtensionCatalogEntry(id);
         if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端安装");
-        if (this.installing) {
-            throw new ExtensionInstallConflictError(`扩展 ${this.installing} 正在安装，请稍后再试`);
+        if (this.installation) {
+            if (this.installation.id === id) return this.installation.promise;
+            throw new ExtensionInstallConflictError(
+                `扩展 ${this.installation.id} 正在安装，请稍后再试`,
+            );
         }
         this.assertCatalogIntegrity();
         this.assertRuntimeRoot();
         const preparedConfig = this.prepareConfig(entry.type, entry.name);
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
-        this.installing = id;
-        try {
+        const promise = (async (): Promise<{ restartRequired: true }> => {
             if (this.installedVersion(entry.packageName) !== packageCatalog.packageVersion) {
                 await this.installer.install(
                     entry.packageName,
@@ -201,8 +206,12 @@ export class ExtensionManager {
             throw new ExtensionInstallConflictError(
                 "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
             );
+        })();
+        this.installation = { id, promise };
+        try {
+            return await promise;
         } finally {
-            this.installing = null;
+            if (this.installation?.promise === promise) this.installation = null;
         }
     }
 

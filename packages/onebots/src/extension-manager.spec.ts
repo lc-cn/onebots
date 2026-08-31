@@ -337,6 +337,75 @@ describe("ExtensionManager", () => {
         expect(install).not.toHaveBeenCalled();
     });
 
+    it("同一扩展的并发请求复用安装、预检与配置写入结果", async () => {
+        const { root, configPath } = fixture();
+        let releaseInstall: (() => void) | undefined;
+        const installGate = new Promise<void>(resolve => {
+            releaseInstall = resolve;
+        });
+        const install = vi.fn(
+            async (packageName: string, packageVersion: string, runtimeRoot: string) => {
+                await installGate;
+                installFixturePackage(packageName, packageVersion, runtimeRoot);
+            },
+        );
+        const preflight = vi.fn(successfulPreflight);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight,
+        });
+
+        const first = manager.install("adapter:slack");
+        const retry = manager.install("adapter:slack");
+        expect(manager.list([]).find(item => item.id === "adapter:slack")?.installing).toBe(true);
+        releaseInstall?.();
+
+        await expect(Promise.all([first, retry])).resolves.toEqual([
+            { restartRequired: true },
+            { restartRequired: true },
+        ]);
+        expect(install).toHaveBeenCalledOnce();
+        expect(preflight).toHaveBeenCalledOnce();
+        expect(manager.list([]).find(item => item.id === "adapter:slack")?.installing).toBe(false);
+    });
+
+    it("不同扩展继续互斥，失败后同一扩展可以重新安装", async () => {
+        const { root, configPath } = fixture();
+        let attempt = 0;
+        const install = vi.fn(
+            async (packageName: string, packageVersion: string, runtimeRoot: string) => {
+                attempt += 1;
+                if (attempt === 1) throw new Error("registry timeout");
+                installFixturePackage(packageName, packageVersion, runtimeRoot);
+            },
+        );
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+        });
+
+        const first = manager.install("adapter:slack");
+        const joined = manager.install("adapter:slack");
+        await expect(manager.install("adapter:telegram")).rejects.toThrow(
+            /扩展 adapter:slack 正在安装/,
+        );
+        const failures = await Promise.allSettled([first, joined]);
+        expect(failures).toEqual([
+            expect.objectContaining({ status: "rejected", reason: expect.any(Error) }),
+            expect.objectContaining({ status: "rejected", reason: expect.any(Error) }),
+        ]);
+        expect(install).toHaveBeenCalledOnce();
+
+        await expect(manager.install("adapter:slack")).resolves.toEqual({
+            restartRequired: true,
+        });
+        expect(install).toHaveBeenCalledTimes(2);
+    });
+
     it("已安装版本偏离目录时切换到当前 OneBots 验证版本", async () => {
         const { root, configPath } = fixture();
         installFixturePackage("@onebots/adapter-slack", "99.0.0", root);

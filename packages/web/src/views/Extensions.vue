@@ -151,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import type { ExtensionInfo } from "../types";
 import { buildApiUrl } from "../config";
@@ -177,6 +177,11 @@ const filter = ref<ExtensionFilter>("all");
 const installingId = ref("");
 const restarting = ref(false);
 const errorMessage = ref("");
+let installationRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let installationRefreshAttempts = 0;
+let isMounted = false;
+const INSTALLATION_REFRESH_INTERVAL_MS = 1_500;
+const MAX_INSTALLATION_REFRESH_ATTEMPTS = 410;
 const filters: Array<{ value: ExtensionFilter; label: string }> = [
     { value: "all", label: "全部" },
     { value: "adapter", label: "平台适配器" },
@@ -206,8 +211,34 @@ const visibleExtensions = computed(() =>
         : extensions.value.filter(item => item.type === filter.value),
 );
 
-async function loadExtensions(): Promise<void> {
-    loading.value = true;
+function clearInstallationRefresh(): void {
+    if (installationRefreshTimer !== null) clearTimeout(installationRefreshTimer);
+    installationRefreshTimer = null;
+}
+
+function scheduleInstallationRefresh(): void {
+    clearInstallationRefresh();
+    if (!isMounted) return;
+    if (!extensions.value.some(extension => extension.installing)) {
+        installationRefreshAttempts = 0;
+        return;
+    }
+    if (installationRefreshAttempts >= MAX_INSTALLATION_REFRESH_ATTEMPTS) {
+        errorMessage.value = "扩展安装状态确认超时，请刷新页面检查最终结果";
+        return;
+    }
+    installationRefreshAttempts += 1;
+    installationRefreshTimer = setTimeout(() => {
+        installationRefreshTimer = null;
+        void loadExtensions(true);
+    }, INSTALLATION_REFRESH_INTERVAL_MS);
+}
+
+async function loadExtensions(background = false): Promise<void> {
+    if (!background) {
+        loading.value = true;
+        installationRefreshAttempts = 0;
+    }
     errorMessage.value = "";
     try {
         const response = await authFetch(buildApiUrl("/api/extensions"));
@@ -216,7 +247,8 @@ async function loadExtensions(): Promise<void> {
     } catch (error) {
         errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {
-        loading.value = false;
+        if (!background) loading.value = false;
+        scheduleInstallationRefresh();
     }
 }
 
@@ -246,5 +278,12 @@ async function install(extension: ExtensionInfo): Promise<void> {
     }
 }
 
-onMounted(loadExtensions);
+onMounted(() => {
+    isMounted = true;
+    void loadExtensions();
+});
+onUnmounted(() => {
+    isMounted = false;
+    clearInstallationRefresh();
+});
 </script>
