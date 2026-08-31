@@ -1,5 +1,6 @@
 import { createPublicKey } from "node:crypto";
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 
@@ -16,20 +17,6 @@ export interface WhatsAppBusinessEncryptionResponse {
 
 export interface WhatsAppBusinessEncryptionUpdateResponse {
     success: true;
-}
-
-export const WHATSAPP_BUSINESS_ENCRYPTION_ACTIONS = Object.freeze([
-    "get_business_encryption_key",
-    "set_business_encryption_key",
-] as const);
-
-export type WhatsAppBusinessEncryptionAction =
-    (typeof WHATSAPP_BUSINESS_ENCRYPTION_ACTIONS)[number];
-
-export function isWhatsAppBusinessEncryptionAction(
-    action: string,
-): action is WhatsAppBusinessEncryptionAction {
-    return (WHATSAPP_BUSINESS_ENCRYPTION_ACTIONS as readonly string[]).includes(action);
 }
 
 /** Flow/data-channel Business Encryption 公钥控制平面，不持有业务私钥。 */
@@ -58,27 +45,33 @@ export class WhatsAppBusinessEncryption {
         if (!isRecord(response) || response.success !== true) invalidResponse(response);
         return { success: true };
     }
-
-    execute(
-        action: WhatsAppBusinessEncryptionAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_business_encryption_key":
-                return this.get();
-            case "set_business_encryption_key":
-                return this.set(requiredText(params, "business_public_key"));
-        }
-    }
 }
 
-export const WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_BUSINESS_ENCRYPTION_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.businessEncryption.execute(action, params),
-    ]),
-) as Record<WhatsAppBusinessEncryptionAction, PlatformActionHandler<WhatsAppClient>>;
+type BusinessEncryptionActionParams = Readonly<Record<string, unknown>>;
+
+const BUSINESS_ENCRYPTION_ACTION_HANDLERS = {
+    get_business_encryption_key: (client: WhatsAppClient) => client.businessEncryption.get(),
+    set_business_encryption_key: (client: WhatsAppClient, params: BusinessEncryptionActionParams) =>
+        client.businessEncryption.set(requiredText(params, "business_public_key")),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Business Encryption 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    BUSINESS_ENCRYPTION_ACTION_HANDLERS,
+    {
+        get_business_encryption_key: [],
+        set_business_encryption_key: ["business_public_key"],
+    },
+);
+
+export type WhatsAppBusinessEncryptionAction =
+    keyof typeof WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS;
+
+export function isWhatsAppBusinessEncryptionAction(
+    action: string,
+): action is WhatsAppBusinessEncryptionAction {
+    return Object.hasOwn(WHATSAPP_BUSINESS_ENCRYPTION_ACTION_HANDLERS, action);
+}
 
 function encryptionResponse(value: unknown): WhatsAppBusinessEncryptionResponse {
     if (!isRecord(value) || !Array.isArray(value.data)) invalidResponse(value);

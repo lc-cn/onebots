@@ -21,7 +21,6 @@ export {
 export {
     isWhatsAppBusinessEncryptionAction,
     WhatsAppBusinessEncryption,
-    WHATSAPP_BUSINESS_ENCRYPTION_ACTIONS,
     type WhatsAppBusinessEncryptionAction,
     type WhatsAppBusinessEncryptionInfo,
     type WhatsAppBusinessEncryptionResponse,

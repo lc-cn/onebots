@@ -73,14 +73,19 @@ describe("WhatsAppBusinessEncryption", () => {
         expect(new Headers(fetcher.mock.calls[0]?.[1]?.headers).has("Content-Type")).toBe(false);
     });
 
-    it("固定平台动作不会转发额外字段", async () => {
-        const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ success: true }));
+    it("固定平台动作拒绝额外密钥字段并保留动作上下文", async () => {
+        const fetcher = vi.fn<typeof fetch>();
         const client = new WhatsAppClient(config, fetcher);
-        await executeWhatsAppPlatformAction(client, "set_business_encryption_key", {
-            business_public_key: publicKey,
-            private_key: "不得转发",
+        await expect(
+            executeWhatsAppPlatformAction(client, "set_business_encryption_key", {
+                business_public_key: publicKey,
+                private_key: "不得接受",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "set_business_encryption_key", parameter: "private_key" },
         });
-        expect([...formDataBody(fetcher).keys()]).toEqual(["business_public_key"]);
+        expect(fetcher).not.toHaveBeenCalled();
     });
 
     it("拒绝非 RSA、低强度 RSA 和畸形 PEM", async () => {
