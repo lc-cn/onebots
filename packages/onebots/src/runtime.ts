@@ -2,6 +2,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { App, createOnebots } from "./app.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
+import { createRuntimeShutdownCoordinator } from "./runtime-shutdown.js";
 
 export interface RuntimeOptions {
     configPath: string;
@@ -54,36 +55,21 @@ export async function runBridge(options: RuntimeOptions): Promise<void> {
     }
 
     const app = createOnebots(configPath);
-    let shuttingDown = false;
+    let coordinator: ReturnType<typeof createRuntimeShutdownCoordinator>;
 
     // 第三方 SDK（如 icqq SSO 心跳）可能抛出未处理的 Promise rejection；注册监听后 Node 不会再默认退出
     const onUnhandledRejection = (reason: unknown) => {
-        if (shuttingDown) return;
+        if (coordinator.isShuttingDown()) return;
         app.enhancedLogger.error("未处理的 Promise rejection（已拦截，进程继续运行）", {
             error: formatProcessError(reason),
         });
     };
     process.on("unhandledRejection", onUnhandledRejection);
 
-    const shutdown = async (signal: NodeJS.Signals) => {
-        if (shuttingDown) return;
-        shuttingDown = true;
-        process.off("unhandledRejection", onUnhandledRejection);
-        const forceTimer = setTimeout(() => {
-            app.enhancedLogger.fatal("优雅关闭超过 30 秒，强制退出");
-            process.exit(1);
-        }, 30_000);
-        forceTimer.unref();
-        try {
-            await app.stop();
-            clearTimeout(forceTimer);
-            process.exitCode = 0;
-        } catch (error) {
-            clearTimeout(forceTimer);
-            app.enhancedLogger.error(`${signal} 关闭失败`, { error });
-            process.exitCode = 1;
-        }
-    };
+    coordinator = createRuntimeShutdownCoordinator(app, {
+        onBegin: () => process.off("unhandledRejection", onUnhandledRejection),
+    });
+    const shutdown = (signal: NodeJS.Signals) => void coordinator.shutdown(signal);
 
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
