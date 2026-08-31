@@ -181,6 +181,65 @@ describe("OneBot V12 protocol", () => {
         });
     });
 
+    test.each([
+        ["member_joined", "group_member_increase", "join"],
+        ["member_left", "group_member_decrease", "leave"],
+        ["friend_add", "friend_increase", ""],
+        ["friend_remove", "friend_decrease", ""],
+    ])("canonicalizes common notice %s", (noticeType, detailType, subType) => {
+        const { protocol } = createProtocol();
+        const event = {
+            id: { number: 5, string: "e5", source: "e5" },
+            timestamp: 1700000000000,
+            type: "notice",
+            platform: "telegram",
+            bot_id: { number: 12345678, string: "bot", source: "bot" },
+            notice_type: noticeType,
+            user: { id: { number: 10005, string: "u10005", source: "u10005" } },
+            operator: { id: { number: 10005, string: "u10005", source: "u10005" } },
+            group: { id: { number: 20001, string: "g20001", source: "g20001" } },
+        };
+
+        expect(protocol["convertToV12Format"](event as unknown as CommonEvent.Event)).toMatchObject(
+            {
+                type: "notice",
+                detail_type: detailType,
+                sub_type: subType,
+                user_id: "u10005",
+            },
+        );
+    });
+
+    test.each([
+        [true, "group_message_delete"],
+        [false, "private_message_delete"],
+    ])("canonicalizes message deletion (group=%s)", (group, detailType) => {
+        const { protocol } = createProtocol();
+        const event = {
+            id: { number: 6, string: "e6", source: "e6" },
+            timestamp: 1700000000000,
+            type: "notice",
+            platform: "telegram",
+            bot_id: { number: 12345678, string: "bot", source: "bot" },
+            notice_type: "message_deleted",
+            message_id: { number: 42, string: "m42", source: 42 },
+            user: { id: { number: 10005, string: "u10005", source: "u10005" } },
+            operator: { id: { number: 10001, string: "u10001", source: "u10001" } },
+            ...(group
+                ? { group: { id: { number: 20001, string: "g20001", source: "g20001" } } }
+                : {}),
+        };
+
+        expect(protocol["convertToV12Format"](event as unknown as CommonEvent.Event)).toMatchObject(
+            {
+                detail_type: detailType,
+                message_id: "m42",
+                user_id: "u10005",
+                sub_type: group ? "delete" : "",
+            },
+        );
+    });
+
     test("converts a channel message with detail_type channel", () => {
         const { protocol } = createProtocol();
         const event = textMsgEvent({
@@ -290,7 +349,7 @@ describe("OneBot V12 protocol", () => {
             time: 1700000000,
             type: "notice",
             detail_type: "group_member_increase",
-            sub_type: "",
+            sub_type: "invite",
             user_id: "u10005",
             operator_id: "op10001",
             group_id: "g20001",
@@ -318,13 +377,48 @@ describe("OneBot V12 protocol", () => {
         const result = protocol["convertToV12Format"](event as unknown as CommonEvent.Event)!;
 
         expect(result).toMatchObject({
-            detail_type: "channel_updated",
+            detail_type: "kook.channel_updated",
             sub_type: "updated_channel",
             resource_type: "channel",
             resource_id: "channel-1",
             resource_name: "News",
             extensions: { kook: { body: { topic: "updates" } } },
         });
+    });
+
+    test.each([
+        ["channel_created", "channel_create"],
+        ["channel_deleted", "channel_delete"],
+    ])("canonicalizes channel lifecycle %s", (noticeType, detailType) => {
+        const { protocol } = createProtocol();
+        const event = {
+            id: { number: 7, string: "e7", source: "e7" },
+            timestamp: 1700000000000,
+            type: "notice",
+            platform: "kook",
+            bot_id: { number: 12345678, string: "bot", source: "bot" },
+            notice_type: noticeType,
+            operator: { id: { number: 10001, string: "u10001", source: "u10001" } },
+            group: {
+                id: { number: 30001, string: "c30001", source: "c30001" },
+                guild_id: { number: 30000, string: "g30000", source: "g30000" },
+                channel_id: { number: 30001, string: "c30001", source: "c30001" },
+            },
+            resource: {
+                type: "channel",
+                id: { number: 30001, string: "c30001", source: "c30001" },
+                name: "News",
+            },
+        };
+
+        expect(protocol["convertToV12Format"](event as unknown as CommonEvent.Event)).toMatchObject(
+            {
+                detail_type: detailType,
+                guild_id: "g30000",
+                channel_id: "c30001",
+                operator_id: "u10001",
+            },
+        );
     });
 
     test("request event uses string user_id and includes comment and flag", () => {

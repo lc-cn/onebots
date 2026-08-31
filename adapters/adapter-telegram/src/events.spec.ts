@@ -348,6 +348,27 @@ describe("projectTelegramEvents", () => {
         expect(new Set(events.map(event => event.id.string)).size).toBe(2);
     });
 
+    it("将成员主动退群的服务消息投影为通知事件", () => {
+        const update = {
+            update_id: 26,
+            message: {
+                message_id: 27,
+                date: 108,
+                chat: { id: -30, type: "supergroup", title: "group" },
+                from: { id: 41, is_bot: false, first_name: "冰冰" },
+                left_chat_member: { id: 41, is_bot: false, first_name: "冰冰" },
+            },
+        } as Update;
+
+        expect(projectTelegramEvents(update, context)[0]).toMatchObject({
+            type: "notice",
+            notice_type: "member_left",
+            user: { id: { string: "41" }, name: "冰冰" },
+            operator: { id: { string: "41" } },
+            group: { id: { string: "-30" } },
+        });
+    });
+
     it("不把无法标准化的服务消息伪装为空消息", () => {
         const update = {
             update_id: 18,

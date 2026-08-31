@@ -34,6 +34,7 @@ describe("OneBot V12 canonical event projection", () => {
                 group_id: "1",
                 message_id: "4",
                 operator_id: "3",
+                sub_type: "recall",
             },
         ],
         [
@@ -43,6 +44,19 @@ describe("OneBot V12 canonical event projection", () => {
                 detail_type: "private_message_delete",
                 user_id: "2",
                 message_id: "4",
+            },
+        ],
+        [
+            "notice.channel_message_delete",
+            {
+                type: "notice",
+                detail_type: "channel_message_delete",
+                guild_id: "1",
+                channel_id: "2",
+                user_id: "3",
+                operator_id: "4",
+                message_id: "5",
+                sub_type: "recall",
             },
         ],
         [
@@ -110,6 +124,13 @@ describe("OneBot V12 canonical event projection", () => {
         expect(handler).toHaveBeenCalledWith(
             expect.objectContaining({ timestamp: 1, bot_id: "bot" }),
         );
+        if (raw.detail_type.endsWith("message_delete")) {
+            expect(handler).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sub_type: raw.detail_type === "private_message_delete" ? "delete" : "recall",
+                }),
+            );
+        }
     });
 
     test("uses protocol request_id, preserves its opaque flag, and projects bot status", async () => {

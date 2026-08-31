@@ -6,6 +6,7 @@ import { CommonEvent, CommonTypes } from "onebots";
 import { OneBotV11ActionService } from "./actions/index.js";
 import { CQCode } from "./cqcode.js";
 import { OneBotV11Config } from "./config.js";
+import { projectOneBotV11Notice } from "./notice-projector.js";
 import { OneBotV11Transport } from "./transport.js";
 
 const onebotV11Schema: Schema = {
@@ -331,24 +332,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
             } else if (event.type === "notice") {
                 return {
                     ...base,
-                    post_type: "notice",
-                    notice_type: event.notice_type,
-                    ...(event.user ? { user_id: (event.user.id as CommonTypes.Id)?.number } : {}),
-                    ...(event.operator
-                        ? { operator_id: (event.operator.id as CommonTypes.Id)?.number }
-                        : {}),
-                    ...(event.group
-                        ? { group_id: (event.group.id as CommonTypes.Id)?.number }
-                        : {}),
-                    ...(event.sub_type ? { sub_type: event.sub_type } : {}),
-                    ...(event.resource
-                        ? {
-                              resource_type: event.resource.type,
-                              resource_id: event.resource.id.string,
-                              resource_name: event.resource.name,
-                          }
-                        : {}),
-                    ...(event.extensions ? { extensions: event.extensions } : {}),
+                    ...projectOneBotV11Notice(event),
                 };
             } else if (event.type === "request") {
                 return {

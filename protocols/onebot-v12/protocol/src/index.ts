@@ -6,6 +6,7 @@ import { CommonEvent, CommonTypes } from "onebots";
 import { OneBotV12 } from "./types.js";
 import { OneBotV12Config } from "./config.js";
 import { OneBotV12ActionService } from "./actions.js";
+import { projectOneBotV12Notice } from "./notice-projector.js";
 import { OneBotV12Transport } from "./transport.js";
 
 const onebotV12Schema: Schema = {
@@ -242,32 +243,10 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
 
             return messageEvent;
         } else if (event.type === "notice") {
-            const noticeEvent: Record<string, unknown> = {
+            return {
                 ...base,
-                type: "notice",
-                detail_type: event.notice_type as string,
-                sub_type: "",
-            };
-
-            // 添加 notice 事件的必要字段
-            if (event.user) {
-                noticeEvent.user_id = event.user.id.string;
-            }
-            if (event.operator) {
-                noticeEvent.operator_id = event.operator.id.string;
-            }
-            if (event.group) {
-                noticeEvent.group_id = event.group.id.string;
-            }
-            if (event.sub_type) noticeEvent.sub_type = event.sub_type;
-            if (event.resource) {
-                noticeEvent.resource_type = event.resource.type;
-                noticeEvent.resource_id = event.resource.id.string;
-                noticeEvent.resource_name = event.resource.name;
-            }
-            if (event.extensions) noticeEvent.extensions = event.extensions;
-
-            return noticeEvent as unknown as OneBotV12.NoticeEvent;
+                ...projectOneBotV12Notice(event),
+            } as unknown as OneBotV12.NoticeEvent;
         } else if (event.type === "request") {
             const requestEvent: Record<string, unknown> = {
                 ...base,

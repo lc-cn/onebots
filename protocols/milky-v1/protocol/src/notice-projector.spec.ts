@@ -58,6 +58,22 @@ describe("Milky notice projector", () => {
         ).toMatchObject({ event_type: "group_whole_mute", data: { is_mute: false } });
     });
 
+    it.each([
+        ["member_joined", "group_member_increase"],
+        ["member_left", "group_member_decrease"],
+    ] as const)("将通用成员事件 %s 投影为 %s", (noticeType, eventType) => {
+        expect(
+            projectMilkyNotice(
+                notice({
+                    notice_type: noticeType,
+                    group: { id: id(20000) },
+                    user: { id: id(10001) },
+                    operator: { id: id(10002) },
+                }),
+            ),
+        ).toMatchObject({ event_type: eventType, data: { group_id: 20000, user_id: 10001 } });
+    });
+
     it("投影撤回、回应和群戳一戳的完整字段", () => {
         expect(
             projectMilkyNotice(

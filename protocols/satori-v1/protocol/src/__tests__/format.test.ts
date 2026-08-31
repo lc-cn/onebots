@@ -480,7 +480,7 @@ describe("Satori V1 protocol", () => {
         });
     });
 
-    test("notice friend_add maps to friend-request", () => {
+    test("notice friend_add does not masquerade as a request", () => {
         const { protocol } = createProtocol();
         const event = {
             id: { number: 4, string: "e4", source: "e4" },
@@ -494,8 +494,10 @@ describe("Satori V1 protocol", () => {
         const result = protocol["convertToSatoriFormat"](event as unknown as CommonEvent.Event);
 
         expect(result).toMatchObject({
-            type: "friend-request",
+            type: "internal",
             user: { id: "u10007", name: "NewFriend" },
+            _type: "qq.friend_add",
+            _data: { notice_type: "friend_add" },
         });
     });
 
@@ -515,6 +517,8 @@ describe("Satori V1 protocol", () => {
         expect(result).toMatchObject({
             type: "internal",
             user: { id: "u10008", name: "Poker" },
+            _type: "qq.poke",
+            _data: { notice_type: "poke" },
         });
     });
 

@@ -173,9 +173,23 @@ export function createOnebot12Adapter(config: OneBotV12AdapterConfig): OneBotV12
                         this.emit("notice.group_message_delete", {
                             ...base,
                             notice_type: "group_message_delete",
-                            sub_type: "delete",
+                            sub_type: event.sub_type === "recall" ? "recall" : "delete",
                             group_id: event.group_id!,
                             message_id: event.message_id!,
+                            operator_id: event.operator_id,
+                        });
+                        break;
+                    case "channel_message_delete":
+                        if (event.guild_id)
+                            this.channelGuilds.set(event.channel_id!, event.guild_id);
+                        this.emit("notice.channel_message_delete", {
+                            ...base,
+                            notice_type: "channel_message_delete",
+                            sub_type: event.sub_type === "recall" ? "recall" : "delete",
+                            channel_id: event.channel_id!,
+                            guild_id: event.guild_id,
+                            message_id: event.message_id!,
+                            user_id: event.user_id,
                             operator_id: event.operator_id,
                         });
                         break;

@@ -27,7 +27,8 @@ export namespace ChannelMessageDeleteNoticeEvent {
         Id extends string | number = string | number,
     > extends NoticeEvent.Data<Id> {
         notice_type: "channel_message_delete";
-        sub_type: "delete";
+        /** 主动撤回为 recall，管理员删除为 delete。 */
+        sub_type: "recall" | "delete";
         channel_id: Id;
         guild_id?: Id;
         message_id: Id;

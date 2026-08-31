@@ -223,7 +223,7 @@ export namespace OneBotV12 {
      */
     export interface GroupMessageDeleteNotice extends NoticeEvent {
         detail_type: "group_message_delete";
-        sub_type: "";
+        sub_type: "recall" | "delete" | "";
         group_id: string;
         message_id: string;
         user_id: string;
@@ -238,6 +238,19 @@ export namespace OneBotV12 {
         sub_type: "";
         message_id: string;
         user_id: string;
+    }
+
+    /**
+     * Channel message delete notice
+     */
+    export interface ChannelMessageDeleteNotice extends NoticeEvent {
+        detail_type: "channel_message_delete";
+        sub_type: "recall" | "delete" | "";
+        guild_id: string;
+        channel_id: string;
+        message_id: string;
+        user_id: string;
+        operator_id: string;
     }
 
     /**

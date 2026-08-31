@@ -376,6 +376,97 @@ describe("OneBot V11 message format conversion", () => {
         });
     });
 
+    test.each([
+        ["主动退群", "member_left", 10005, 10005, "group_decrease", "leave"],
+        ["被管理员移出群", "member_left", 10005, 10001, "group_decrease", "kick"],
+        ["机器人被移出群", "member_left", 12345678, 10001, "group_decrease", "kick_me"],
+        ["机器人主动退群", "member_left", 12345678, 12345678, "group_decrease", "leave"],
+        ["受邀入群", "member_joined", 10005, 10001, "group_increase", "invite"],
+    ])(
+        "common member notice: %s",
+        (_name, noticeType, userId, operatorId, expectedType, subType) => {
+            const { protocol } = createProtocol();
+            const event = {
+                id: { number: 5, string: "e5", source: "e5" },
+                timestamp: 1700000000000,
+                type: "notice",
+                platform: "telegram",
+                bot_id: { number: 12345678, string: "bot", source: "bot" },
+                notice_type: noticeType,
+                user: { id: { number: userId, string: String(userId), source: userId } },
+                operator: {
+                    id: { number: operatorId, string: String(operatorId), source: operatorId },
+                },
+                group: { id: { number: 20001, string: "-30", source: -30 } },
+            };
+
+            expect(
+                protocol["convertToV11Format"](event as unknown as CommonEvent.Event),
+            ).toMatchObject({
+                post_type: "notice",
+                notice_type: expectedType,
+                sub_type: subType,
+                group_id: 20001,
+                user_id: userId,
+                operator_id: operatorId,
+            });
+        },
+    );
+
+    test.each([
+        ["群消息撤回", true, "group_recall"],
+        ["私聊消息撤回", false, "friend_recall"],
+    ])("common message_deleted notice: %s", (_name, group, expectedType) => {
+        const { protocol } = createProtocol();
+        const event = {
+            id: { number: 6, string: "e6", source: "e6" },
+            timestamp: 1700000000000,
+            type: "notice",
+            platform: "telegram",
+            bot_id: { number: 12345678, string: "bot", source: "bot" },
+            notice_type: "message_deleted",
+            message_id: { number: 42, string: "42", source: 42 },
+            user: { id: { number: 10005, string: "10005", source: 10005 } },
+            operator: { id: { number: 10001, string: "10001", source: 10001 } },
+            ...(group ? { group: { id: { number: 20001, string: "20001", source: 20001 } } } : {}),
+        };
+
+        expect(protocol["convertToV11Format"](event as unknown as CommonEvent.Event)).toMatchObject(
+            {
+                post_type: "notice",
+                notice_type: expectedType,
+                message_id: 42,
+                user_id: 10005,
+            },
+        );
+    });
+
+    test("preserves notice-specific scalar fields and canonical friend deletion", () => {
+        const { protocol } = createProtocol();
+        const common = {
+            id: { number: 7, string: "e7", source: "e7" },
+            timestamp: 1700000000000,
+            type: "notice",
+            platform: "qq",
+            bot_id: { number: 12345678, string: "bot", source: "bot" },
+            user: { id: { number: 10005, string: "10005", source: 10005 } },
+        };
+
+        expect(
+            protocol["convertToV11Format"]({
+                ...common,
+                notice_type: "friend_remove",
+            } as unknown as CommonEvent.Event),
+        ).toMatchObject({ notice_type: "friend_delete", user_id: 10005 });
+        expect(
+            protocol["convertToV11Format"]({
+                ...common,
+                notice_type: "group_ban",
+                duration: 60,
+            } as unknown as CommonEvent.Event),
+        ).toMatchObject({ notice_type: "group_ban", duration: 60 });
+    });
+
     test("resource notices preserve subtype and platform extensions", () => {
         const { protocol } = createProtocol();
         const event = {

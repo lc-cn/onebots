@@ -208,6 +208,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             id: this.eventId++,
             platform: this.config.platform || event.platform,
             selfId: this.adapter.resolveId(this.account.account_id).string,
+            convertMessageContent: segments => this.convertMessageContent(segments ?? []),
         });
     }
 

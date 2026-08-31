@@ -36,10 +36,32 @@ describe("Satori notice 资源投影", () => {
                 context,
             ),
         ).toMatchObject({
-            type: "channel-created",
+            type: "channel-added",
             guild: { id: "guild-1" },
             channel: { id: "channel-1", type: 2, name: "News", parent_id: "category-1" },
         });
+    });
+
+    test.each([
+        ["member_joined", "guild-member-added"],
+        ["member_left", "guild-member-removed"],
+        ["message_updated", "message-updated"],
+        ["message_deleted", "message-deleted"],
+        ["reaction_added", "reaction-added"],
+        ["reaction_removed", "reaction-removed"],
+    ] as const)("将 %s 映射为 %s", (noticeType, eventType) => {
+        expect(
+            projectSatoriNotice(
+                {
+                    ...base,
+                    notice_type: noticeType,
+                    user: { id: id("user-1"), name: "Alice" },
+                    message_id: id("message-1"),
+                    face_id: "wave",
+                },
+                context,
+            ),
+        ).toMatchObject({ type: eventType });
     });
 
     test("角色与服务器资源使用原生实体", () => {
@@ -71,5 +93,20 @@ describe("Satori notice 资源投影", () => {
             type: "guild-updated",
             guild: { id: "guild-1", name: "OneBots" },
         });
+    });
+
+    test("标准事件缺少必需资源时回退 internal 而不伪造空实体", () => {
+        expect(
+            projectSatoriNotice(
+                {
+                    ...base,
+                    group: undefined,
+                    notice_type: "message_deleted",
+                    user: { id: id("user-1") },
+                    message_id: id("message-1"),
+                },
+                context,
+            ),
+        ).toMatchObject({ type: "internal", _type: "kook.message_deleted" });
     });
 });

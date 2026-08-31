@@ -48,6 +48,7 @@ export namespace GroupMessageDeleteNoticeEvent {
         message_id: Id;
         operator_id?: Id;
         notice_type: "group_message_delete";
-        sub_type: "delete";
+        /** 主动撤回为 recall，管理员删除为 delete。 */
+        sub_type: "recall" | "delete";
     }
 }

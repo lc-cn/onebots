@@ -179,6 +179,17 @@ export class MilkyV1 extends Protocol<"v1", MilkyConfig.Config> {
         if (milkyEvent) {
             this.logger.debug(`Milky dispatch:`, milkyEvent);
             await emitAllAwaited(this, "dispatch", JSON.stringify(milkyEvent));
+        } else {
+            const commonEvent = event as Partial<CommonEvent.Event>;
+            const description = `Milky 无法表示事件，已跳过: type=${commonEvent.type || "unknown"}`;
+            if (commonEvent.type === "notice") {
+                this.logger.warn(
+                    description,
+                    `notice_type=${(commonEvent as Partial<CommonEvent.Notice>).notice_type || "unknown"}`,
+                );
+            } else {
+                this.logger.debug(description);
+            }
         }
     }
 

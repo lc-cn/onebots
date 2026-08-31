@@ -21,6 +21,7 @@ export function projectMilkyNotice(event: CommonEvent.Notice): Milky.NoticeEvent
 
     switch (event.notice_type) {
         case "group_increase":
+        case "member_joined":
             if (!groupId || !userId) return null;
             return {
                 ...base,
@@ -38,6 +39,7 @@ export function projectMilkyNotice(event: CommonEvent.Notice): Milky.NoticeEvent
                 },
             };
         case "group_decrease":
+        case "member_left":
             if (!groupId || !userId) return null;
             return {
                 ...base,
@@ -101,7 +103,15 @@ export function projectMilkyNotice(event: CommonEvent.Notice): Milky.NoticeEvent
         }
         case "reaction_added":
         case "reaction_removed":
-            if (!groupId || !userId || !event.message_id) return null;
+            if (
+                !groupId ||
+                !userId ||
+                !event.message_id ||
+                typeof event.face_id !== "string" ||
+                !event.face_id
+            ) {
+                return null;
+            }
             return {
                 ...base,
                 event_type: "group_message_reaction",
@@ -109,7 +119,7 @@ export function projectMilkyNotice(event: CommonEvent.Notice): Milky.NoticeEvent
                     group_id: groupId,
                     user_id: userId,
                     message_seq: event.message_id.number,
-                    face_id: typeof event.face_id === "string" ? event.face_id : "",
+                    face_id: event.face_id,
                     reaction_type: event.reaction_type === "emoji" ? "emoji" : "face",
                     is_add: event.notice_type === "reaction_added",
                 },
