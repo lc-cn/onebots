@@ -177,6 +177,19 @@ describe("WhatsAppFlows", () => {
         expect(requestUrl(fetcher).pathname).toBe(path);
     });
 
+    it("Flow 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "publish_flow", {
+                flow_id: "flow-1",
+                force: true,
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "publish_flow", parameter: "force" },
+        });
+    });
+
     it.each([
         ["非法分类", "create_flow", { flow: { name: "x", categories: ["UNKNOWN"] } }],
         ["字符串 fields", "get_flow", { flow_id: "flow-1", fields: "id" }],

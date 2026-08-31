@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import {
@@ -37,26 +38,6 @@ import {
     parseFlowSuccess,
     serializeFlowJson,
 } from "./flow-validation.js";
-
-export const WHATSAPP_FLOW_ACTIONS = Object.freeze([
-    "list_flows",
-    "create_flow",
-    "migrate_flows",
-    "get_flow",
-    "get_flow_preview",
-    "get_flow_metric",
-    "update_flow",
-    "update_flow_json",
-    "list_flow_assets",
-    "delete_flow",
-    "publish_flow",
-    "deprecate_flow",
-] as const);
-export type WhatsAppFlowAction = (typeof WHATSAPP_FLOW_ACTIONS)[number];
-
-export function isWhatsAppFlowAction(action: string): action is WhatsAppFlowAction {
-    return (WHATSAPP_FLOW_ACTIONS as readonly string[]).includes(action);
-}
 
 /** WhatsApp Flows 的元数据、JSON 资产、生命周期、迁移、预览与 endpoint metrics。 */
 export class WhatsAppFlows {
@@ -182,61 +163,6 @@ export class WhatsAppFlows {
         return this.transition(flowId, "deprecate");
     }
 
-    execute(
-        action: WhatsAppFlowAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "list_flows":
-                rejectUnknown(params, []);
-                return this.list();
-            case "create_flow":
-                rejectUnknown(params, ["flow"]);
-                return this.create(createInput(params.flow));
-            case "migrate_flows":
-                rejectUnknown(params, ["source_waba_id", "source_flow_names"]);
-                return this.migrate(migrationInput(params));
-            case "get_flow":
-                rejectUnknown(params, ["flow_id", "fields"]);
-                return this.get(graphId(params.flow_id, "flow_id"), actionFields(params.fields));
-            case "get_flow_preview":
-                rejectUnknown(params, ["flow_id", "invalidate"]);
-                return this.getPreview(
-                    graphId(params.flow_id, "flow_id"),
-                    params.invalidate === undefined
-                        ? false
-                        : booleanValue(params.invalidate, "invalidate"),
-                );
-            case "get_flow_metric":
-                rejectUnknown(params, ["flow_id", "metric"]);
-                return this.getMetric(
-                    graphId(params.flow_id, "flow_id"),
-                    metricInput(params.metric),
-                );
-            case "update_flow":
-                rejectUnknown(params, ["flow_id", "flow"]);
-                return this.update(graphId(params.flow_id, "flow_id"), updateInput(params.flow));
-            case "update_flow_json":
-                rejectUnknown(params, ["flow_id", "flow_json"]);
-                return this.updateJson(
-                    graphId(params.flow_id, "flow_id"),
-                    flowJsonInput(params.flow_json),
-                );
-            case "list_flow_assets":
-                rejectUnknown(params, ["flow_id"]);
-                return this.listAssets(graphId(params.flow_id, "flow_id"));
-            case "delete_flow":
-                rejectUnknown(params, ["flow_id"]);
-                return this.delete(graphId(params.flow_id, "flow_id"));
-            case "publish_flow":
-                rejectUnknown(params, ["flow_id"]);
-                return this.publish(graphId(params.flow_id, "flow_id"));
-            case "deprecate_flow":
-                rejectUnknown(params, ["flow_id"]);
-                return this.deprecate(graphId(params.flow_id, "flow_id"));
-        }
-    }
-
     private async transition(
         flowId: string,
         action: "delete" | "publish" | "deprecate",
@@ -251,13 +177,61 @@ export class WhatsAppFlows {
     }
 }
 
-export const WHATSAPP_FLOW_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_FLOW_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.flows.execute(action, params),
-    ]),
-) as Record<WhatsAppFlowAction, PlatformActionHandler<WhatsAppClient>>;
+type FlowActionParams = Readonly<Record<string, unknown>>;
+
+const FLOW_ACTION_HANDLERS = {
+    list_flows: (client: WhatsAppClient) => client.flows.list(),
+    create_flow: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.create(createInput(params.flow)),
+    migrate_flows: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.migrate(migrationInput(params)),
+    get_flow: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.get(graphId(params.flow_id, "flow_id"), actionFields(params.fields)),
+    get_flow_preview: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.getPreview(
+            graphId(params.flow_id, "flow_id"),
+            params.invalidate === undefined ? false : booleanValue(params.invalidate, "invalidate"),
+        ),
+    get_flow_metric: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.getMetric(graphId(params.flow_id, "flow_id"), metricInput(params.metric)),
+    update_flow: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.update(graphId(params.flow_id, "flow_id"), updateInput(params.flow)),
+    update_flow_json: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.updateJson(
+            graphId(params.flow_id, "flow_id"),
+            flowJsonInput(params.flow_json),
+        ),
+    list_flow_assets: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.listAssets(graphId(params.flow_id, "flow_id")),
+    delete_flow: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.delete(graphId(params.flow_id, "flow_id")),
+    publish_flow: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.publish(graphId(params.flow_id, "flow_id")),
+    deprecate_flow: (client: WhatsAppClient, params: FlowActionParams) =>
+        client.flows.deprecate(graphId(params.flow_id, "flow_id")),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Flow 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_FLOW_ACTION_HANDLERS = defineWhatsAppActionHandlers(FLOW_ACTION_HANDLERS, {
+    list_flows: [],
+    create_flow: ["flow"],
+    migrate_flows: ["source_waba_id", "source_flow_names"],
+    get_flow: ["flow_id", "fields"],
+    get_flow_preview: ["flow_id", "invalidate"],
+    get_flow_metric: ["flow_id", "metric"],
+    update_flow: ["flow_id", "flow"],
+    update_flow_json: ["flow_id", "flow_json"],
+    list_flow_assets: ["flow_id"],
+    delete_flow: ["flow_id"],
+    publish_flow: ["flow_id"],
+    deprecate_flow: ["flow_id"],
+});
+
+export type WhatsAppFlowAction = keyof typeof WHATSAPP_FLOW_ACTION_HANDLERS;
+
+export function isWhatsAppFlowAction(action: string): action is WhatsAppFlowAction {
+    return Object.hasOwn(WHATSAPP_FLOW_ACTION_HANDLERS, action);
+}
 
 function flowMetadataForm(
     value: WhatsAppFlowCreate | WhatsAppFlowUpdate,

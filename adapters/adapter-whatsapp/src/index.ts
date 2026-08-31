@@ -103,12 +103,7 @@ export {
     type WhatsAppMessageTemplateUpdate,
     type WhatsAppTemplateJson,
 } from "./message-template-types.js";
-export {
-    isWhatsAppFlowAction,
-    WhatsAppFlows,
-    WHATSAPP_FLOW_ACTIONS,
-    type WhatsAppFlowAction,
-} from "./flows.js";
+export { isWhatsAppFlowAction, WhatsAppFlows, type WhatsAppFlowAction } from "./flows.js";
 export {
     isWhatsAppFlowCategory,
     isWhatsAppFlowField,
