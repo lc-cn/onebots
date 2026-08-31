@@ -198,6 +198,45 @@ describe("KOOK 平台扩展动作", () => {
         });
     });
 
+    test("消息模板动作严格校验官方必填字段与枚举", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await executeKookPlatformAction(bot, "create_message_template", {
+            title: "通知模板",
+            content: "{{ message }}",
+            msgtype: 1,
+            type: 0,
+        });
+        expect(callApi).toHaveBeenCalledWith("/v3/template/create", {
+            method: "POST",
+            body: {
+                title: "通知模板",
+                content: "{{ message }}",
+                msgtype: 1,
+                type: 0,
+            },
+        });
+
+        await expect(
+            executeKookPlatformAction(bot, "create_message_template", {
+                title: "缺少内容",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_REQUIRED" });
+        await expect(
+            executeKookPlatformAction(bot, "update_message_template", {
+                id: "template",
+                msgtype: 4,
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "delete_message_template", {
+                id: "template",
+                title: "shadow",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_UNKNOWN" });
+    });
+
     test("通用动作拒绝跳出 /v3 API", async () => {
         await expect(
             executeKookPlatformAction({ callApi: vi.fn() } as never, "call_kook_api", {

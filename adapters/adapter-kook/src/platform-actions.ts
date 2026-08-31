@@ -12,6 +12,7 @@ import { KOOK_FRIEND_PLATFORM_ACTIONS } from "./platform-actions-friend.js";
 import { KOOK_GUILD_PLATFORM_ACTIONS } from "./platform-actions-guild.js";
 import { KOOK_MESSAGE_PLATFORM_ACTIONS } from "./platform-actions-message.js";
 import { KOOK_PERMISSION_PLATFORM_ACTIONS } from "./platform-actions-permission.js";
+import { KOOK_TEMPLATE_PLATFORM_ACTIONS } from "./platform-actions-template.js";
 
 interface ActionRoute {
     path: string;
@@ -41,10 +42,6 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     delete_game: { path: "/v3/game/delete", method: "POST" },
     set_game_activity: { path: "/v3/game/activity", method: "POST" },
     delete_game_activity: { path: "/v3/game/delete-activity", method: "POST" },
-    list_message_templates: { path: "/v3/template/list", method: "GET" },
-    create_message_template: { path: "/v3/template/create", method: "POST" },
-    update_message_template: { path: "/v3/template/update", method: "POST" },
-    delete_message_template: { path: "/v3/template/delete", method: "POST" },
     list_thread_categories: { path: "/v3/category/list", method: "GET" },
     create_thread: { path: "/v3/thread/create", method: "POST" },
     reply_thread: { path: "/v3/thread/reply", method: "POST" },
@@ -152,6 +149,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         ...KOOK_GUILD_PLATFORM_ACTIONS,
         ...KOOK_MESSAGE_PLATFORM_ACTIONS,
         ...KOOK_PERMISSION_PLATFORM_ACTIONS,
+        ...KOOK_TEMPLATE_PLATFORM_ACTIONS,
         ...ROUTE_HANDLERS,
     },
     action =>
