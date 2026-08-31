@@ -13,6 +13,35 @@ describe("KOOK 平台扩展动作", () => {
         });
     });
 
+    test("消息回应与置顶动作按官方字段闭合", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await executeKookPlatformAction(bot, "get_message_reactions", {
+            msg_id: "message",
+            emoji: "smile",
+        });
+        expect(callApi).toHaveBeenCalledWith("/v3/message/reaction-list", {
+            query: { msg_id: "message", emoji: "smile" },
+        });
+
+        await expect(
+            executeKookPlatformAction(bot, "pin_message", {
+                msg_id: "message",
+                target_id: "channel",
+                guild_id: "shadow",
+            }),
+        ).rejects.toMatchObject({
+            code: "KOOK_ACTION_PARAM_UNKNOWN",
+            details: { action: "pin_message", key: "guild_id" },
+        });
+        await expect(
+            executeKookPlatformAction(bot, "add_direct_message_reaction", {
+                msg_id: "message",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_REQUIRED" });
+    });
+
     test("服务器角色动作只接受官方字段并校验范围", async () => {
         const callApi = vi.fn().mockResolvedValue({});
         const bot = { callApi } as never;

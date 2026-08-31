@@ -10,6 +10,7 @@ import { KookError } from "./errors.js";
 import type { KookApiRequestOptions, KookOAuthScope } from "./types.js";
 import { KOOK_FRIEND_PLATFORM_ACTIONS } from "./platform-actions-friend.js";
 import { KOOK_GUILD_PLATFORM_ACTIONS } from "./platform-actions-guild.js";
+import { KOOK_MESSAGE_PLATFORM_ACTIONS } from "./platform-actions-message.js";
 import { KOOK_PERMISSION_PLATFORM_ACTIONS } from "./platform-actions-permission.js";
 
 interface ActionRoute {
@@ -18,14 +19,6 @@ interface ActionRoute {
 }
 
 const ROUTES: Readonly<Record<string, ActionRoute>> = {
-    get_message_reactions: { path: "/v3/message/reaction-list", method: "GET" },
-    add_message_reaction: { path: "/v3/message/add-reaction", method: "POST" },
-    remove_message_reaction: { path: "/v3/message/delete-reaction", method: "POST" },
-    get_direct_message_reactions: { path: "/v3/direct-message/reaction-list", method: "GET" },
-    add_direct_message_reaction: { path: "/v3/direct-message/add-reaction", method: "POST" },
-    remove_direct_message_reaction: { path: "/v3/direct-message/delete-reaction", method: "POST" },
-    pin_message: { path: "/v3/message/pin", method: "POST" },
-    unpin_message: { path: "/v3/message/unpin", method: "POST" },
     list_invites: { path: "/v3/invite/list", method: "GET" },
     create_invite: { path: "/v3/invite/create", method: "POST" },
     delete_invite: { path: "/v3/invite/delete", method: "POST" },
@@ -157,6 +150,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         ...SPECIAL_ACTIONS,
         ...KOOK_FRIEND_PLATFORM_ACTIONS,
         ...KOOK_GUILD_PLATFORM_ACTIONS,
+        ...KOOK_MESSAGE_PLATFORM_ACTIONS,
         ...KOOK_PERMISSION_PLATFORM_ACTIONS,
         ...ROUTE_HANDLERS,
     },
