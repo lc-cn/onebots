@@ -177,6 +177,7 @@ import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
+    getExtensionInstallRequestRecovery,
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
@@ -192,8 +193,18 @@ const errorMessage = ref("");
 let installationRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let installationRefreshAttempts = 0;
 let isMounted = false;
+let disconnectedInstallation: {
+    id: string;
+    previousOperationId: string | null;
+    requestMessage: string;
+} | null = null;
+let recoveringDisconnectedInstallation = false;
 const INSTALLATION_REFRESH_INTERVAL_MS = 1_500;
-const MAX_INSTALLATION_REFRESH_ATTEMPTS = 410;
+// 覆盖服务端 10 分钟包安装与最多 3 次、每次 60 秒的隔离预检，并留出观察余量。
+const INSTALLATION_STATUS_TIMEOUT_MS = 14 * 60 * 1_000;
+const MAX_INSTALLATION_REFRESH_ATTEMPTS = Math.ceil(
+    INSTALLATION_STATUS_TIMEOUT_MS / INSTALLATION_REFRESH_INTERVAL_MS,
+);
 const filters: Array<{ value: ExtensionFilter; label: string }> = [
     { value: "all", label: "全部" },
     { value: "adapter", label: "平台适配器" },
@@ -263,30 +274,90 @@ async function loadExtensions(background = false): Promise<void> {
     } finally {
         if (!background) loading.value = false;
         scheduleInstallationRefresh();
+        void resumeDisconnectedInstallation();
+    }
+}
+
+async function restartAfterInstallation(): Promise<void> {
+    restarting.value = true;
+    const previousInstanceId = await readCurrentServiceInstanceId();
+    await requestServiceRestart(previousInstanceId, authFetch);
+    await waitForServiceRestart(previousInstanceId);
+    window.location.reload();
+}
+
+async function resumeDisconnectedInstallation(): Promise<void> {
+    if (!disconnectedInstallation || recoveringDisconnectedInstallation || !isMounted) return;
+    const pending = disconnectedInstallation;
+    const refreshed = extensions.value.find(item => item.id === pending.id);
+    const recovery = getExtensionInstallRequestRecovery(pending.previousOperationId, refreshed);
+    if (recovery.status === "running") return;
+
+    disconnectedInstallation = null;
+    if (recovery.status === "failed") {
+        errorMessage.value = recovery.message;
+        return;
+    }
+    if (recovery.status === "unknown") {
+        errorMessage.value = pending.requestMessage;
+        return;
+    }
+
+    recoveringDisconnectedInstallation = true;
+    try {
+        await restartAfterInstallation();
+    } catch (error) {
+        restarting.value = false;
+        await loadExtensions();
+        errorMessage.value = error instanceof Error ? error.message : String(error);
+    } finally {
+        recoveringDisconnectedInstallation = false;
     }
 }
 
 async function install(extension: ExtensionInfo): Promise<void> {
+    const previousOperationId = extension.lastInstallation?.operationId ?? null;
     installingId.value = extension.id;
     errorMessage.value = "";
     try {
-        const response = await authFetch(
-            buildApiUrl(`/api/extensions/${encodeURIComponent(extension.id)}/install`),
-            { method: "POST" },
-        );
-        const result = (await response.json()) as { success: boolean; message?: string };
-        if (!response.ok || !result.success) throw new Error(result.message || "扩展安装失败");
+        let shouldRestart = false;
+        try {
+            const response = await authFetch(
+                buildApiUrl(`/api/extensions/${encodeURIComponent(extension.id)}/install`),
+                { method: "POST" },
+            );
+            const result = (await response.json()) as { success: boolean; message?: string };
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || "扩展安装失败");
+            }
+            shouldRestart = true;
+        } catch (error) {
+            const requestMessage = error instanceof Error ? error.message : String(error);
+            await loadExtensions();
+            const refreshed = extensions.value.find(item => item.id === extension.id);
+            const recovery = getExtensionInstallRequestRecovery(previousOperationId, refreshed);
+            if (recovery.status === "running") {
+                disconnectedInstallation = {
+                    id: extension.id,
+                    previousOperationId,
+                    requestMessage,
+                };
+                return;
+            }
+            if (recovery.status === "succeeded") {
+                shouldRestart = true;
+            } else {
+                errorMessage.value =
+                    recovery.status === "failed" ? recovery.message : requestMessage;
+                return;
+            }
+        }
 
-        restarting.value = true;
-        const previousInstanceId = await readCurrentServiceInstanceId();
-        await requestServiceRestart(previousInstanceId, authFetch);
-        await waitForServiceRestart(previousInstanceId);
-        window.location.reload();
+        if (shouldRestart) await restartAfterInstallation();
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
         restarting.value = false;
         await loadExtensions();
-        errorMessage.value = message;
+        errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {
         installingId.value = "";
     }

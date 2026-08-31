@@ -17,6 +17,24 @@ export interface ExtensionInstallationProgress {
     detail: string | null;
 }
 
+export type ExtensionInstallRequestRecovery =
+    | { status: "running" }
+    | { status: "succeeded" }
+    | { status: "failed"; message: string }
+    | { status: "unknown" };
+
+/** 长安装请求断线后，只接受当前活动操作或本次请求产生的新终态作为恢复证据。 */
+export function getExtensionInstallRequestRecovery(
+    previousOperationId: string | null,
+    extension: Pick<ExtensionInfo, "installation" | "lastInstallation"> | null | undefined,
+): ExtensionInstallRequestRecovery {
+    if (extension?.installation) return { status: "running" };
+    const result = extension?.lastInstallation;
+    if (!result || result.operationId === previousOperationId) return { status: "unknown" };
+    if (result.status === "succeeded") return { status: "succeeded" };
+    return { status: "failed", message: result.message ?? "扩展安装失败" };
+}
+
 export function getExtensionInstallationProgress(
     extension: Pick<ExtensionInfo, "installing" | "installation" | "lastInstallation">,
 ): ExtensionInstallationProgress | null {

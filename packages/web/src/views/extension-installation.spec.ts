@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    getExtensionInstallRequestRecovery,
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
@@ -150,6 +151,61 @@ describe("extension installation progress", () => {
         ],
     ])("maps %j to an observable label", (extension, expected) => {
         expect(getExtensionInstallationProgress(extension)).toEqual(expected);
+    });
+});
+
+describe("extension install request recovery", () => {
+    const previous = {
+        operationId: "previous-operation",
+        status: "succeeded" as const,
+        startedAt: "2026-08-31T00:00:00.000Z",
+        completedAt: "2026-08-31T00:01:00.000Z",
+        message: null,
+    };
+
+    it("keeps polling when the server still owns an active operation", () => {
+        expect(
+            getExtensionInstallRequestRecovery(previous.operationId, {
+                installation: {
+                    operationId: "active-operation",
+                    phase: "preflighting",
+                    startedAt: "2026-08-31T00:02:00.000Z",
+                },
+                lastInstallation: null,
+            }),
+        ).toEqual({ status: "running" });
+    });
+
+    it("recovers only a terminal result created after the request started", () => {
+        expect(
+            getExtensionInstallRequestRecovery(previous.operationId, {
+                installation: null,
+                lastInstallation: { ...previous, operationId: "successful-operation" },
+            }),
+        ).toEqual({ status: "succeeded" });
+        expect(
+            getExtensionInstallRequestRecovery(previous.operationId, {
+                installation: null,
+                lastInstallation: {
+                    ...previous,
+                    operationId: "failed-operation",
+                    status: "failed",
+                    message: "registry timeout",
+                },
+            }),
+        ).toEqual({ status: "failed", message: "registry timeout" });
+    });
+
+    it("does not mistake stale or missing evidence for this request", () => {
+        expect(
+            getExtensionInstallRequestRecovery(previous.operationId, {
+                installation: null,
+                lastInstallation: previous,
+            }),
+        ).toEqual({ status: "unknown" });
+        expect(getExtensionInstallRequestRecovery(previous.operationId, null)).toEqual({
+            status: "unknown",
+        });
     });
 });
 
