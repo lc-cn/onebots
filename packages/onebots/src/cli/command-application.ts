@@ -243,7 +243,7 @@ export function serviceConfigPath(options: RuntimeOptions & ScopeOptions): strin
 
 /** 执行 doctor 检查并格式化为人类或 JSON 输出。 */
 export async function diagnose(
-    options: RuntimeOptions & ScopeOptions & { fix: boolean; json: boolean },
+    options: RuntimeOptions & ScopeOptions & { fix: boolean; json: boolean; strict?: boolean },
 ): Promise<CommandResult> {
     const scope = scopeFrom(options);
     const serviceSpec = new ServiceController(scope).readSpec();
@@ -262,6 +262,7 @@ export async function diagnose(
         protocols: runtime.protocols,
         scope,
         fix: options.fix,
+        strict: options.strict,
         useInstalledService,
     });
     return {

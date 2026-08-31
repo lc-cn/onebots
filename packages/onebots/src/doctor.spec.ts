@@ -279,6 +279,36 @@ describe("doctor health probes", () => {
 });
 
 describe("doctor persisted plugin selection", () => {
+    it("only fails a first-run warning when strict mode is enabled", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-strict-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+
+        const normal = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            useInstalledService: false,
+        });
+        const strict = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            strict: true,
+            useInstalledService: false,
+        });
+
+        expect(normal).toMatchObject({ ok: true, strict: false });
+        expect(strict).toMatchObject({ ok: false, strict: true });
+        expect(strict.checks.find(check => check.name === "plugin-selection")).toMatchObject({
+            level: "warning",
+        });
+    });
+
     it("exposes category-level precedence and ignores service defaults in standalone mode", () => {
         const service: ServiceSpec = {
             scope: "user",
@@ -315,6 +345,36 @@ describe("doctor persisted plugin selection", () => {
             adapterSource: "config",
             protocolSource: "config",
             workingDirectory: process.cwd(),
+        });
+    });
+
+    it("reports an installed but stopped managed service as a warning", async () => {
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "服务已安装但未运行",
+        });
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-stopped-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            strict: true,
+        });
+
+        expect(report.ok).toBe(false);
+        expect(report.checks.find(check => check.name === "service")).toEqual({
+            name: "service",
+            level: "warning",
+            message: "服务已安装但未运行",
         });
     });
 

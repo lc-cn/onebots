@@ -15,6 +15,36 @@ afterEach(() => {
 });
 
 describe("doctor configuration scope", () => {
+    it("returns a failure exit code for warnings in strict mode", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-strict-cli-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
+
+        const result = await diagnose({
+            config: configPath,
+            register: [],
+            protocol: [],
+            system: false,
+            fix: false,
+            json: true,
+            strict: true,
+        });
+        const report = JSON.parse(result.output || "{}") as {
+            ok: boolean;
+            strict: boolean;
+            checks: Array<{ name: string; level: string }>;
+        };
+
+        expect(result.exitCode).toBe(1);
+        expect(report).toMatchObject({ ok: false, strict: true });
+        expect(report.checks.find(check => check.name === "plugin-selection")).toMatchObject({
+            level: "warning",
+        });
+    });
+
     it("diagnoses an explicit candidate config independently from another installed service", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-candidate-"));
         temporaryDirectories.push(directory);

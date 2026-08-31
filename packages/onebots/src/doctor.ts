@@ -24,6 +24,7 @@ export interface DoctorCheck {
 }
 export interface DoctorReport {
     ok: boolean;
+    strict: boolean;
     checks: DoctorCheck[];
 }
 export interface DoctorOptions {
@@ -32,6 +33,8 @@ export interface DoctorOptions {
     protocols: string[];
     scope: ServiceScope;
     fix?: boolean;
+    /** 严格模式下，任何 warning 都会使诊断失败。 */
+    strict?: boolean;
     /** false 表示独立诊断显式配置，不读取或修复已安装服务定义。 */
     useInstalledService?: boolean;
 }
@@ -196,7 +199,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         useInstalledService
             ? {
                   name: "service",
-                  level: status?.installed ? "ok" : "warning",
+                  level: status?.installed && status.running ? "ok" : "warning",
                   message: status?.installed
                       ? `服务${status.running ? "正在运行" : "已安装但未运行"}`
                       : "服务未安装",
@@ -274,7 +277,12 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             checks.push({ name: "port", level: "ok", message: `端口 ${port} 可用` });
         }
     }
-    return { ok: !checks.some(check => check.level === "error"), checks };
+    const strict = options.strict === true;
+    return {
+        ok: !checks.some(check => check.level === "error" || (strict && check.level === "warning")),
+        strict,
+        checks,
+    };
 }
 
 /** 逐类别公开 doctor 最终采用的插件来源，避免服务定义与候选配置互相污染。 */
@@ -522,7 +530,15 @@ export function formatDoctorReport(report: DoctorReport, json = false): string {
         const mark = check.level === "ok" ? "✓" : check.level === "warning" ? "!" : "✗";
         return `${mark} ${check.name}: ${check.message}${check.fixed ? " [fixed]" : ""}`;
     });
-    lines.push(report.ok ? "OneBots 诊断通过" : "OneBots 存在需要处理的问题");
+    lines.push(
+        report.strict
+            ? report.ok
+                ? "OneBots 严格诊断通过"
+                : "OneBots 严格诊断存在需要处理的问题"
+            : report.ok
+              ? "OneBots 诊断通过"
+              : "OneBots 存在需要处理的问题",
+    );
     return lines.join("\n");
 }
 

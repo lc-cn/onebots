@@ -81,7 +81,7 @@ Integrations that still use the root management WebSocket must authenticate the 
 Run the same check before deployment with the service's plugin selection:
 
 ```bash
-onebots doctor -c config.yaml --json
+onebots doctor -c config.yaml --json --strict
 ```
 
-For a legacy configuration without `plugins`, pass `-r` and `-p` as before. Doctor prefers the saved service definition when `-c` is omitted or resolves to that service's configuration. Passing a different `-c` creates a standalone diagnostic scope: doctor uses that file's `plugins` and does not read, mark stale, or repair the unrelated service definition with `--fix`. The `plugin-selection` check reports the final plugins, source, and resolution directory for each category, with the same evidence preserved in JSON output.
+Default mode keeps recoverable first-run states, such as no configured account, no installed or running service, or an unavailable authenticated management probe, as warnings. With `--strict`, any warning sets JSON `ok` to `false` and returns exit code `1`, which is suitable for a production deployment gate. For a legacy configuration without `plugins`, pass `-r` and `-p` as before. Doctor prefers the saved service definition when `-c` is omitted or resolves to that service's configuration. Passing a different `-c` creates a standalone diagnostic scope: doctor uses that file's `plugins` and does not read, mark stale, or repair the unrelated service definition with `--fix`. The `plugin-selection` check reports the final plugins, source, and resolution directory for each category, with the same evidence preserved in JSON output.

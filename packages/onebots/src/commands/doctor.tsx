@@ -8,6 +8,7 @@ export const description = "诊断 OneBots 配置与服务";
 export const options = scopedRuntimeOptions.extend({
     fix: z.boolean().describe(option({ description: "修复安全且无破坏性的问题" })),
     json: z.boolean().describe(option({ description: "输出 JSON" })),
+    strict: z.boolean().describe(option({ description: "将警告视为诊断失败" })),
 });
 
 export default function DoctorCommand({ options: input }: { options: z.infer<typeof options> }) {
