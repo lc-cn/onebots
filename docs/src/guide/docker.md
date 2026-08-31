@@ -44,7 +44,7 @@ docker compose logs -f onebots
 docker compose down
 ```
 
-首次运行会在当前目录下创建 `./data`，并在其中生成默认 `config.yaml`。修改 `./data/config.yaml` 后执行 `docker compose restart` 使配置生效。
+首次运行会在当前目录下创建 `./data`，并在其中生成默认 `config.yaml`。默认文件不包含平台账号，因此不会用空凭据连接外部平台；启动日志会显示自动生成的管理端初始凭据。登录 Web 管理端添加账号、设置协议访问令牌后，执行 `docker compose restart` 使配置生效。
 
 ### 方式二：使用 docker run
 

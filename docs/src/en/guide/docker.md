@@ -44,7 +44,7 @@ docker compose logs -f onebots
 docker compose down
 ```
 
-On first run, a `./data` directory is created and a default `config.yaml` is generated. Edit `./data/config.yaml` as needed, then run `docker compose restart` to apply changes.
+On first run, a `./data` directory and a default `config.yaml` are created. The default contains no platform accounts, so it cannot attempt external connections with empty credentials. Initial Web console credentials are printed to the startup log. Add accounts and protocol access tokens in the Web console, then run `docker compose restart` to apply changes.
 
 ### Option 2: docker run
 

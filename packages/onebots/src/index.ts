@@ -1,6 +1,11 @@
 // App exports
 export { App, createOnebots, defineConfig } from "./app.js";
 export { getAppConfigSchema } from "./config-schema.js";
+export {
+    parseRuntimeConfig,
+    validateRuntimeConfig,
+    type RuntimeConfigIssue,
+} from "./runtime-config-validator.js";
 
 // Re-export core symbols that adapters and protocols depend on
 // (avoids requiring consumers to add @onebots/core as a direct dependency)

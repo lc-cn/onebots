@@ -146,7 +146,7 @@ npx onebots status
 npx onebots logs --follow
 ```
 
-Add `--system` to the same lifecycle commands for the system-level service. `setup`, `ui`, `doctor`, and `update` provide configuration, terminal/Web management, diagnostics, and coordinated package updates.
+Add `--system` to the same lifecycle commands for the system-level service. `setup`, `ui`, `doctor`, and `update` provide configuration, terminal/Web management, diagnostics, and coordinated package updates. A generated first-run configuration contains no placeholder platform accounts, so the gateway does not attempt external connections with empty credentials.
 
 **CLI flags** (see `App.loadAdapterFactory` / `App.loadProtocolFactory` in source):
 

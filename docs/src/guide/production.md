@@ -177,6 +177,10 @@ scrape_configs:
 - `/health`: 基础健康检查
 - `/ready`: 检查所有适配器和账号是否就绪
 
+部署或更新后可运行 `onebots doctor --json` 作为自动化门禁。配置端口可连接时，无论网关以前台、Docker 还是托管服务方式运行，doctor 都会同时探测这两个端点；任一端点返回非 2xx 都会让命令以非零状态退出。`/ready` 失败时，报告会列出在线账号数量和未就绪的平台，避免只看到一个没有上下文的 HTTP 503。
+
+doctor 还会实际加载服务选用的插件，并使用它们注册的 Schema 校验完整账号和协议配置。直接诊断未安装为服务的配置时，应传入与启动命令相同的 `-r` / `-p` 参数。
+
 **Kubernetes 配置示例**:
 
 ```yaml
@@ -245,4 +249,3 @@ await app.start();
 - [快速开始](/guide/start)
 - [配置指南](/config/global)
 - [架构说明](/guide/architecture)
-

@@ -1,5 +1,7 @@
 import * as path from "node:path";
+import * as fs from "node:fs";
 import { App, createOnebots } from "./app.js";
+import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 
 export interface RuntimeOptions {
     configPath: string;
@@ -30,10 +32,10 @@ function formatProcessError(reason: unknown): string {
 export async function loadPlugins(adapters: string[], protocols: string[]): Promise<string[]> {
     const failures: string[] = [];
     for (const adapter of adapters) {
-        if (!await App.loadAdapterFactory(adapter)) failures.push(`adapter:${adapter}`);
+        if (!(await App.loadAdapterFactory(adapter))) failures.push(`adapter:${adapter}`);
     }
     for (const protocol of protocols) {
-        if (!await App.loadProtocolFactory(protocol)) failures.push(`protocol:${protocol}`);
+        if (!(await App.loadProtocolFactory(protocol))) failures.push(`protocol:${protocol}`);
     }
     return failures;
 }
@@ -44,6 +46,11 @@ export async function runBridge(options: RuntimeOptions): Promise<void> {
     const failures = await loadPlugins(options.adapters, options.protocols);
     if (failures.length) {
         throw new Error(`无法加载插件: ${failures.join(", ")}`);
+    }
+
+    if (fs.existsSync(configPath)) {
+        const config = parseRuntimeConfig(fs.readFileSync(configPath, "utf8"));
+        validateRuntimeConfig(config);
     }
 
     const app = createOnebots(configPath);
