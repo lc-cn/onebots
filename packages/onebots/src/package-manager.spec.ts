@@ -4,6 +4,8 @@ import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
     buildExtensionInstallInvocation,
+    buildPackageManagerInvocation,
+    buildPackageUpdateInvocation,
     detectRuntimePackageManager,
     sanitizeNpmEnvironment,
 } from "./package-manager.js";
@@ -75,5 +77,69 @@ describe("runtime package manager", () => {
             npm_config_registry: "https://registry.npmjs.org",
         });
         expect(source.npm_config_recursive).toBe("true");
+    });
+
+    it("npm 项目更新省略开发依赖并清理继承的 pnpm 配置", () => {
+        const root = fixture({ packageManager: "npm@11.17.0" });
+        const environment = {
+            npm_config_recursive: "true",
+            npm_config_registry: "https://registry.npmjs.org",
+        };
+
+        expect(
+            buildPackageUpdateInvocation(
+                root,
+                ["onebots@latest", "@onebots/adapter-slack@latest"],
+                root,
+                "darwin",
+                environment,
+            ),
+        ).toEqual({
+            executable: "npm",
+            args: [
+                "install",
+                "--save",
+                "--omit=dev",
+                "onebots@latest",
+                "@onebots/adapter-slack@latest",
+            ],
+            cwd: root,
+            environment: { npm_config_registry: "https://registry.npmjs.org" },
+        });
+    });
+
+    it("Windows 更新和版本查询使用 cmd 入口", () => {
+        const root = fixture({ packageManager: "npm@11.17.0" });
+
+        expect(buildPackageUpdateInvocation(root, ["onebots@latest"], null, "win32", {})).toEqual({
+            executable: "npm.cmd",
+            args: ["install", "--global", "onebots@latest"],
+            cwd: root,
+            environment: {},
+        });
+        expect(
+            buildPackageManagerInvocation("pnpm", ["view", "onebots", "version"], "win32", {}),
+        ).toEqual({
+            executable: "pnpm.cmd",
+            args: ["view", "onebots", "version"],
+            environment: {},
+        });
+    });
+
+    it("pnpm 项目与全局更新保持原有命令语义", () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+
+        expect(buildPackageUpdateInvocation(root, ["onebots@latest"], root, "linux", {})).toEqual({
+            executable: "pnpm",
+            args: ["up", "onebots@latest"],
+            cwd: root,
+            environment: {},
+        });
+        expect(buildPackageUpdateInvocation(root, ["onebots@latest"], null, "linux", {})).toEqual({
+            executable: "pnpm",
+            args: ["add", "--global", "onebots@latest"],
+            cwd: root,
+            environment: {},
+        });
     });
 });

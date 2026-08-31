@@ -9,6 +9,10 @@ export interface PackageInstallInvocation {
     environment: NodeJS.ProcessEnv;
 }
 
+export interface PackageUpdateInvocation extends PackageInstallInvocation {
+    cwd: string;
+}
+
 /** 根据运行目录自己的清单和锁文件选择包管理器，避免被启动 OneBots 的外层命令误导。 */
 export function detectRuntimePackageManager(runtimeRoot: string): SupportedPackageManager {
     if (
@@ -56,6 +60,20 @@ export function sanitizeNpmEnvironment(source: NodeJS.ProcessEnv): NodeJS.Proces
     return environment;
 }
 
+/** 统一生成跨平台包管理器进程调用，并隔离 npm 不认识的 pnpm 环境配置。 */
+export function buildPackageManagerInvocation(
+    manager: SupportedPackageManager,
+    args: string[],
+    platform: NodeJS.Platform = process.platform,
+    environment: NodeJS.ProcessEnv = process.env,
+): PackageInstallInvocation {
+    return {
+        executable: platform === "win32" ? `${manager}.cmd` : manager,
+        args,
+        environment: manager === "npm" ? sanitizeNpmEnvironment(environment) : environment,
+    };
+}
+
 /** 生成可直接执行的扩展安装命令；pnpm workspace 根目录必须显式使用 workspace-root。 */
 export function buildExtensionInstallInvocation(
     runtimeRoot: string,
@@ -64,19 +82,45 @@ export function buildExtensionInstallInvocation(
     environment: NodeJS.ProcessEnv = process.env,
 ): PackageInstallInvocation {
     const manager = detectRuntimePackageManager(runtimeRoot);
-    return {
-        executable: platform === "win32" ? `${manager}.cmd` : manager,
-        args:
-            manager === "pnpm"
-                ? [
-                      "add",
-                      "--save-prod",
-                      ...(fs.existsSync(path.join(runtimeRoot, "pnpm-workspace.yaml"))
-                          ? ["--workspace-root"]
-                          : []),
-                      packageSpec,
-                  ]
-                : ["install", "--save", "--omit=dev", packageSpec],
-        environment: manager === "npm" ? sanitizeNpmEnvironment(environment) : environment,
-    };
+    return buildPackageManagerInvocation(
+        manager,
+        manager === "pnpm"
+            ? [
+                  "add",
+                  "--save-prod",
+                  ...(fs.existsSync(path.join(runtimeRoot, "pnpm-workspace.yaml"))
+                      ? ["--workspace-root"]
+                      : []),
+                  packageSpec,
+              ]
+            : ["install", "--save", "--omit=dev", packageSpec],
+        platform,
+        environment,
+    );
+}
+
+/** 生成项目或全局运行时的批量更新调用；项目更新不恢复开发依赖。 */
+export function buildPackageUpdateInvocation(
+    runtimeRoot: string,
+    packageSpecs: string[],
+    projectRoot: string | null,
+    platform: NodeJS.Platform = process.platform,
+    environment: NodeJS.ProcessEnv = process.env,
+): PackageUpdateInvocation {
+    const manager = detectRuntimePackageManager(runtimeRoot);
+    const invocation = buildPackageManagerInvocation(
+        manager,
+        manager === "pnpm"
+            ? projectRoot
+                ? ["up", ...packageSpecs]
+                : ["add", "--global", ...packageSpecs]
+            : [
+                  "install",
+                  ...(projectRoot ? ["--save", "--omit=dev"] : ["--global"]),
+                  ...packageSpecs,
+              ],
+        platform,
+        environment,
+    );
+    return { ...invocation, cwd: projectRoot ?? runtimeRoot };
 }

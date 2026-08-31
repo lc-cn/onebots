@@ -11,7 +11,11 @@ import {
 import { writeCliOutput } from "./cli-output.js";
 import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
-import { detectRuntimePackageManager } from "./package-manager.js";
+import {
+    buildPackageManagerInvocation,
+    buildPackageUpdateInvocation,
+    detectRuntimePackageManager,
+} from "./package-manager.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
 
 export interface UpdateOptions {
@@ -112,17 +116,12 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
     }
     const names = changed.map(item => `${item.name}@latest`);
     const projectRoot = findProjectRoot(runtimeRoot);
-    if (manager === "pnpm") {
-        execFileSync("pnpm", projectRoot ? ["up", ...names] : ["add", "--global", ...names], {
-            cwd: projectRoot ?? runtimeRoot,
-            stdio: "inherit",
-        });
-    } else {
-        execFileSync("npm", ["install", ...(projectRoot ? [] : ["--global"]), ...names], {
-            cwd: projectRoot ?? runtimeRoot,
-            stdio: "inherit",
-        });
-    }
+    const invocation = buildPackageUpdateInvocation(runtimeRoot, names, projectRoot);
+    execFileSync(invocation.executable, invocation.args, {
+        cwd: invocation.cwd,
+        env: invocation.environment,
+        stdio: "inherit",
+    });
     assertUpdatedPackageVersions(updates, runtimeRoot);
     if (spec) {
         const result = await refreshServiceAfterUpdate(
@@ -307,9 +306,11 @@ function readPackageVersion(manifest: string, expectedName: string): string | nu
 }
 
 function latestVersion(manager: "npm" | "pnpm", name: string): string | null {
+    const invocation = buildPackageManagerInvocation(manager, ["view", name, "version"]);
     try {
-        return execFileSync(manager, ["view", name, "version"], {
+        return execFileSync(invocation.executable, invocation.args, {
             encoding: "utf8",
+            env: invocation.environment,
             stdio: ["ignore", "pipe", "pipe"],
         }).trim();
     } catch {
