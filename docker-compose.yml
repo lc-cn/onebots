@@ -15,3 +15,9 @@ services:
       - ./data:/data
     environment:
       - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "node", "/app/scripts/docker-healthcheck.mjs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3

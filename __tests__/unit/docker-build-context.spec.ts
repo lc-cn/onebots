@@ -16,4 +16,15 @@ describe("Docker 构建上下文", () => {
         expect(rootConfigCopy).toBeGreaterThanOrEqual(0);
         expect(workspaceBuild).toBeGreaterThan(rootConfigCopy);
     });
+
+    test("运行镜像包含基于 readiness 的健康检查", async () => {
+        const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
+
+        expect(dockerfile).toContain(
+            "COPY scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs",
+        );
+        expect(dockerfile).toContain(
+            'HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]',
+        );
+    });
 });

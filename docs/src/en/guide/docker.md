@@ -29,6 +29,12 @@ services:
       - ./data:/data
     environment:
       - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "node", "/app/scripts/docker-healthcheck.mjs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 ```
 
 Then run:
@@ -45,6 +51,19 @@ docker compose down
 ```
 
 On first run, a `./data` directory and a default `config.yaml` are created. The default contains no platform accounts, so it cannot attempt external connections with empty credentials. Initial Web console credentials are printed to the startup log. Add accounts and protocol access tokens in the Web console, then run `docker compose restart` to apply changes.
+
+### Container health status
+
+The official image includes a health check, and the Compose example enables the same probe explicitly. It reads `port` and `path` from `/data/config.yaml`, requests the matching `/ready` endpoint, and requires both a successful HTTP status and an explicit `ready: true` response. Inspect the status and recent failures with:
+
+```bash
+docker compose ps
+docker inspect --format '{{json .State.Health}}' onebots
+```
+
+The container becomes `unhealthy` whenever a configured account is offline, allowing load balancers and orchestrators to stop routing traffic to it. Docker and Compose restart policies do not restart a container solely because it is unhealthy; use external monitoring or an orchestration policy for persistent failures.
+
+For configurations outside the default path, set `ONEBOTS_CONFIG_PATH`. `PORT` and `ONEBOTS_PATH` override the configured port and path, while `ONEBOTS_HEALTHCHECK_URL` supplies a complete readiness URL. The Hugging Face image inherits this probe and automatically uses its `PORT=7860` setting.
 
 ### Option 2: docker run
 

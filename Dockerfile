@@ -43,9 +43,12 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/adapters ./adapters
 COPY --from=builder /app/protocols ./protocols
 COPY --from=builder /app/development ./development
+COPY scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs
 
 # 数据目录：挂载卷到 /data，配置文件为 /data/config.yaml
 EXPOSE 6727
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]
 
 # 若 /data/config.yaml 不存在则从示例复制，再启动网关
 COPY docker-entrypoint.sh /docker-entrypoint.sh

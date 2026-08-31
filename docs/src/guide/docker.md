@@ -29,6 +29,12 @@ services:
       - ./data:/data
     environment:
       - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "node", "/app/scripts/docker-healthcheck.mjs"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 ```
 
 然后执行：
@@ -45,6 +51,19 @@ docker compose down
 ```
 
 首次运行会在当前目录下创建 `./data`，并在其中生成默认 `config.yaml`。默认文件不包含平台账号，因此不会用空凭据连接外部平台；启动日志会显示自动生成的管理端初始凭据。登录 Web 管理端添加账号、设置协议访问令牌后，执行 `docker compose restart` 使配置生效。
+
+### 容器健康状态
+
+官方镜像内置健康检查，Compose 示例也显式启用同一探针。探针读取 `/data/config.yaml` 的 `port` 与 `path`，请求对应的 `/ready`，并要求 HTTP 成功且响应明确包含 `ready: true`。可用以下命令查看状态与最近失败原因：
+
+```bash
+docker compose ps
+docker inspect --format '{{json .State.Health}}' onebots
+```
+
+只要任一已配置账号离线，容器就会显示 `unhealthy`，便于负载均衡器和编排系统停止转发流量。Docker/Compose 的 `restart` 策略不会仅因 `unhealthy` 自动重启容器，仍应结合外部监控或编排策略处理持续故障。
+
+默认配置路径以外的部署可设置 `ONEBOTS_CONFIG_PATH`；`PORT` 和 `ONEBOTS_PATH` 会覆盖配置中的端口与路径。也可用 `ONEBOTS_HEALTHCHECK_URL` 直接指定完整就绪地址。Hugging Face 镜像继承此探针，并自动使用其 `PORT=7860`。
 
 ### 方式二：使用 docker run
 
