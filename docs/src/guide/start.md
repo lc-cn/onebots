@@ -2,7 +2,7 @@
 
 ## 一键安装（推荐）
 
-Linux 和 macOS 可以运行官方安装脚本。脚本会检查 Node.js 版本，在独立目录安装 Node.js 24、OneBots、Web 管理端和默认 OneBot v11 协议，创建安全配置，并注册为用户级常驻服务：
+Linux 和 macOS 可以运行官方安装脚本。脚本会检查 Node.js 版本，在独立目录安装 Node.js 24、OneBots、Web 管理端和默认 OneBot v11 协议，创建安全配置，并注册为用户级常驻服务。它会先安装 OneBots 及其匹配的 Web 依赖，再从主包发布的扩展版本目录读取默认协议版本；Web 入口缺失或协议落盘版本不一致时，会在创建配置和服务前停止：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lc-cn/onebots/master/install.sh | sh

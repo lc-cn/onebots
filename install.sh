@@ -102,14 +102,43 @@ if [ ! -f "$RUNTIME_DIR/package.json" ]; then
 EOF
 fi
 
-say "正在安装 OneBots、Web 管理端和默认 OneBot v11 协议…"
+say "正在安装 OneBots 与匹配的 Web 管理端…"
 (
     cd "$RUNTIME_DIR"
-    "$NPM_BIN" install --omit=dev onebots@latest @onebots/web@latest @onebots/protocol-onebot-v11@latest
+    "$NPM_BIN" install --omit=dev onebots@latest
 )
 
 ONEBOTS_BIN="$RUNTIME_DIR/node_modules/.bin/onebots"
 [ -x "$ONEBOTS_BIN" ] || fail "OneBots 命令安装不完整"
+CATALOG_FILE="$RUNTIME_DIR/node_modules/onebots/lib/extension-capability-catalog.json"
+WEB_ENTRY="$RUNTIME_DIR/node_modules/@onebots/web/dist/index.html"
+NESTED_WEB_ENTRY="$RUNTIME_DIR/node_modules/onebots/node_modules/@onebots/web/dist/index.html"
+[ -f "$CATALOG_FILE" ] || fail "OneBots 扩展版本目录缺失，无法选择匹配的默认协议"
+if [ ! -f "$WEB_ENTRY" ] && [ ! -f "$NESTED_WEB_ENTRY" ]; then
+    fail "与 OneBots 匹配的 Web 管理端产物缺失"
+fi
+
+protocol_version=$(
+    ONEBOTS_CATALOG_FILE="$CATALOG_FILE" "$NODE_BIN" -p \
+        'require(process.env.ONEBOTS_CATALOG_FILE).packages["@onebots/protocol-onebot-v11"]?.version ?? ""'
+)
+case "$protocol_version" in
+    ""|*[!0-9A-Za-z.+_-]*) fail "OneBots 扩展目录中的 OneBot v11 版本无效" ;;
+esac
+say "正在安装 OneBots 验证的 OneBot v11 协议版本 ${protocol_version}…"
+(
+    cd "$RUNTIME_DIR"
+    "$NPM_BIN" install --omit=dev "@onebots/protocol-onebot-v11@$protocol_version"
+)
+
+PROTOCOL_MANIFEST="$RUNTIME_DIR/node_modules/@onebots/protocol-onebot-v11/package.json"
+[ -f "$PROTOCOL_MANIFEST" ] || fail "默认 OneBot v11 协议安装不完整"
+installed_protocol_version=$(
+    ONEBOTS_PROTOCOL_MANIFEST="$PROTOCOL_MANIFEST" "$NODE_BIN" -p \
+        'require(process.env.ONEBOTS_PROTOCOL_MANIFEST).version ?? ""'
+)
+[ "$installed_protocol_version" = "$protocol_version" ] ||
+    fail "默认 OneBot v11 协议版本校验失败：期望 ${protocol_version}，实际 ${installed_protocol_version:-未安装}"
 
 say "正在创建安全配置并安装用户级常驻服务…"
 (

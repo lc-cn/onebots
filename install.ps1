@@ -77,11 +77,35 @@ if (-not (Test-Path $Manifest)) {
     '{"name":"onebots-managed-runtime","private":true,"version":"1.0.0"}' | Set-Content $Manifest -Encoding utf8
 }
 
-Write-Step "正在安装 OneBots、Web 管理端和默认 OneBot v11 协议…"
+Write-Step "正在安装 OneBots 与匹配的 Web 管理端…"
 Push-Location $RuntimeDir
 try {
-    Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "onebots@latest", "@onebots/web@latest", "@onebots/protocol-onebot-v11@latest")
+    Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "onebots@latest")
     $OneBots = Join-Path $RuntimeDir "node_modules/.bin/onebots.cmd"
+    if (-not (Test-Path $OneBots)) { throw "OneBots 命令安装不完整" }
+
+    $CatalogFile = Join-Path $RuntimeDir "node_modules/onebots/lib/extension-capability-catalog.json"
+    $WebEntry = Join-Path $RuntimeDir "node_modules/@onebots/web/dist/index.html"
+    $NestedWebEntry = Join-Path $RuntimeDir "node_modules/onebots/node_modules/@onebots/web/dist/index.html"
+    if (-not (Test-Path $CatalogFile)) { throw "OneBots 扩展版本目录缺失，无法选择匹配的默认协议" }
+    if (-not (Test-Path $WebEntry) -and -not (Test-Path $NestedWebEntry)) {
+        throw "与 OneBots 匹配的 Web 管理端产物缺失"
+    }
+    $Catalog = Get-Content $CatalogFile -Raw | ConvertFrom-Json
+    $ProtocolVersion = $Catalog.packages.'@onebots/protocol-onebot-v11'.version
+    if (-not $ProtocolVersion -or $ProtocolVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]*$') {
+        throw "OneBots 扩展目录中的 OneBot v11 版本无效"
+    }
+    Write-Step "正在安装 OneBots 验证的 OneBot v11 协议版本 $($ProtocolVersion)…"
+    Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "@onebots/protocol-onebot-v11@$ProtocolVersion")
+
+    $ProtocolManifest = Join-Path $RuntimeDir "node_modules/@onebots/protocol-onebot-v11/package.json"
+    if (-not (Test-Path $ProtocolManifest)) { throw "默认 OneBot v11 协议安装不完整" }
+    $InstalledProtocolVersion = (Get-Content $ProtocolManifest -Raw | ConvertFrom-Json).version
+    if ($InstalledProtocolVersion -ne $ProtocolVersion) {
+        throw "默认 OneBot v11 协议版本校验失败：期望 $($ProtocolVersion)，实际 $InstalledProtocolVersion"
+    }
+
     $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
     if (-not $ConfigExists) {
         Invoke-Checked -FilePath $OneBots -Arguments @("setup", "-c", $ConfigFile, "-p", "onebot-v11")

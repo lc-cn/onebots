@@ -29,7 +29,16 @@ function createFakeRuntime() {
     writeExecutable(
         path.join(bin, "node"),
         `#!/bin/sh
-if [ "$1" = "-p" ]; then printf '24\\n'; exit 0; fi
+if [ "$1" = "-p" ]; then
+    if [ -n "\${ONEBOTS_CATALOG_FILE:-}" ]; then
+        printf '3.0.8\\n'
+    elif [ -n "\${ONEBOTS_PROTOCOL_MANIFEST:-}" ]; then
+        awk -F'"' '{ print $4; exit }' "$ONEBOTS_PROTOCOL_MANIFEST"
+    else
+        printf '24\\n'
+    fi
+    exit 0
+fi
 exit 2
 `,
     );
@@ -77,9 +86,28 @@ esac
         `#!/bin/sh
 printf 'npm %s\\n' "$*" >> "$FAKE_COMMAND_LOG"
 [ "\${FAKE_NPM_FAIL:-0}" = "1" ] && exit 42
-mkdir -p node_modules/.bin
-cp "$FAKE_ONEBOTS_SOURCE" node_modules/.bin/onebots
-chmod 755 node_modules/.bin/onebots
+case "$*" in
+    *"onebots@latest"*)
+        mkdir -p node_modules/.bin node_modules/onebots/lib node_modules/@onebots/web/dist
+        cp "$FAKE_ONEBOTS_SOURCE" node_modules/.bin/onebots
+        chmod 755 node_modules/.bin/onebots
+        cat > node_modules/onebots/lib/extension-capability-catalog.json <<'EOF'
+{"schemaVersion":2,"packages":{"@onebots/protocol-onebot-v11":{"version":"3.0.8"}}}
+EOF
+        if [ "\${FAKE_WEB_MISSING:-0}" != "1" ]; then
+            : > node_modules/@onebots/web/dist/index.html
+        fi
+        ;;
+    *"@onebots/protocol-onebot-v11@"*)
+        package_spec=""
+        for argument in "$@"; do package_spec=$argument; done
+        requested_version=\${package_spec##*@}
+        installed_version=\${FAKE_PROTOCOL_VERSION_OVERRIDE:-$requested_version}
+        mkdir -p node_modules/@onebots/protocol-onebot-v11
+        printf '{"version":"%s"}\\n' "$installed_version" > \
+            node_modules/@onebots/protocol-onebot-v11/package.json
+        ;;
+esac
 `,
     );
     return { home, bin, log, serviceMarker, onebotsSource };
@@ -113,6 +141,12 @@ describe("one-command installer", () => {
 
         const firstCommands = fs.readFileSync(runtime.log, "utf8");
         expect(firstOutput).toContain("首次登录鉴权码：first-token");
+        expect(firstCommands).toContain("npm install --omit=dev onebots@latest");
+        expect(firstCommands).toContain(
+            "npm install --omit=dev @onebots/protocol-onebot-v11@3.0.8",
+        );
+        expect(firstCommands).not.toContain("@onebots/web@latest");
+        expect(firstCommands).not.toContain("@onebots/protocol-onebot-v11@latest");
         expect(firstCommands).toContain("onebots setup -c");
         expect(firstCommands).not.toContain("setup --force");
         expect(firstCommands).toContain("onebots install -c");
@@ -162,6 +196,34 @@ slack.production:
         );
         expect(source).toContain("if (-not $ConfigExists -and $Token)");
         expect(source).toContain("已保留现有管理凭据且未显示");
+        expect(source).toContain('Arguments @("install", "--omit=dev", "onebots@latest")');
+        expect(source).toContain("$Catalog.packages.'@onebots/protocol-onebot-v11'.version");
+        expect(source).toContain('"@onebots/protocol-onebot-v11@$ProtocolVersion"');
+        expect(source).not.toContain('"@onebots/web@latest"');
+        expect(source).not.toContain('"@onebots/protocol-onebot-v11@latest"');
+    });
+
+    it("Web 管理端产物缺失时不创建配置或安装服务", () => {
+        const runtime = createFakeRuntime();
+
+        expect(() => runInstaller(runtime, { FAKE_WEB_MISSING: "1" })).toThrow();
+
+        const commands = fs.readFileSync(runtime.log, "utf8");
+        expect(commands).toContain("npm install --omit=dev onebots@latest");
+        expect(commands).not.toContain("@onebots/protocol-onebot-v11@3.0.8");
+        expect(commands).not.toContain("onebots setup");
+        expect(commands).not.toContain("onebots install");
+    });
+
+    it("默认协议落盘版本与主包目录不一致时不创建配置或安装服务", () => {
+        const runtime = createFakeRuntime();
+
+        expect(() => runInstaller(runtime, { FAKE_PROTOCOL_VERSION_OVERRIDE: "9.9.9" })).toThrow();
+
+        const commands = fs.readFileSync(runtime.log, "utf8");
+        expect(commands).toContain("npm install --omit=dev @onebots/protocol-onebot-v11@3.0.8");
+        expect(commands).not.toContain("onebots setup");
+        expect(commands).not.toContain("onebots install");
     });
 
     it("在线状态始终失败时不会宣告安装完成", () => {
