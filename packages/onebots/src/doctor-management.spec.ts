@@ -14,6 +14,7 @@ describe("doctor management probes", () => {
                     JSON.stringify([
                         {
                             platform: "mock",
+                            accountCapabilityErrors: {},
                             accounts: [
                                 {
                                     uin: "bot",
@@ -53,11 +54,15 @@ describe("doctor management probes", () => {
             ["management-http-authenticated", "ok"],
             ["management-config", "ok"],
             ["management-runtime", "ok"],
+            ["management-capabilities", "ok"],
             ["management-ws-anonymous", "ok"],
             ["management-ws-authenticated", "ok"],
         ]);
         expect(checks.find(check => check.name === "management-runtime")?.message).toBe(
             "运行态已验证: 1 个账号，1 个协议出口均就绪",
+        );
+        expect(checks.find(check => check.name === "management-capabilities")?.message).toBe(
+            "账号能力证据已验证: 1 个账号均可读取可信能力清单",
         );
         expect(upgrade).toHaveBeenNthCalledWith(1, "http://127.0.0.1:6727/");
         expect(upgrade).toHaveBeenNthCalledWith(2, "http://127.0.0.1:6727/", "secret");
@@ -145,6 +150,7 @@ describe("doctor management probes", () => {
             ["management-http-authenticated", "warning"],
             ["management-config", "warning"],
             ["management-runtime", "warning"],
+            ["management-capabilities", "warning"],
             ["management-ws-anonymous", "ok"],
             ["management-ws-authenticated", "warning"],
         ]);
@@ -158,6 +164,7 @@ describe("doctor management probes", () => {
                     JSON.stringify([
                         {
                             platform: "kook",
+                            accountCapabilityErrors: {},
                             accounts: [
                                 {
                                     uin: "primary",
@@ -200,6 +207,106 @@ describe("doctor management probes", () => {
             level: "error",
             message:
                 "运行态未就绪: kook.primary 账号状态 offline；kook.primary/onebot.v11 协议状态 failed；kook.orphan 无协议出口",
+        });
+    });
+
+    it("fails the production capability check without hiding healthy lifecycle evidence", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/adapters")) {
+                return new Response(
+                    JSON.stringify([
+                        {
+                            platform: "custom",
+                            accountCapabilityErrors: {
+                                bot: {
+                                    code: "capability_unavailable",
+                                    message: "传输模式无效",
+                                },
+                            },
+                            accounts: [
+                                {
+                                    uin: "bot",
+                                    status: "online",
+                                    protocols: [
+                                        {
+                                            name: "onebot",
+                                            version: "v11",
+                                            lifecycleStatus: "ready",
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ]),
+                    { status: 200 },
+                );
+            }
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            return new Headers(init?.headers).has("authorization")
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: Boolean(token),
+                    status: token ? 101 : 401,
+                }),
+            },
+        );
+
+        expect(checks.find(check => check.name === "management-runtime")).toMatchObject({
+            level: "ok",
+        });
+        expect(checks.find(check => check.name === "management-capabilities")).toEqual({
+            name: "management-capabilities",
+            level: "error",
+            message: "账号能力证据不可用: custom.bot: 传输模式无效",
+        });
+    });
+
+    it("rejects malformed capability diagnostics as an invalid management contract", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/adapters")) {
+                return new Response(
+                    JSON.stringify([
+                        {
+                            platform: "custom",
+                            accountCapabilityErrors: {
+                                ghost: { code: "unknown", message: "ignored" },
+                            },
+                            accounts: [],
+                        },
+                    ]),
+                    { status: 200 },
+                );
+            }
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            return new Headers(init?.headers).has("authorization")
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: Boolean(token),
+                    status: token ? 101 : 401,
+                }),
+            },
+        );
+
+        expect(checks.find(check => check.name === "management-capabilities")).toEqual({
+            name: "management-capabilities",
+            level: "error",
+            message: "账号能力诊断契约无效: custom.ghost 不对应已配置账号",
         });
     });
 

@@ -36,7 +36,7 @@ export async function probeDoctorManagement(
     if (credential.token) {
         checks.push(await probeAuthenticatedManagementHttp(base, credential.token, fetcher));
         checks.push(await probeAuthenticatedConfigState(base, credential.token, fetcher));
-        checks.push(await probeAuthenticatedRuntime(base, credential.token, fetcher));
+        checks.push(...(await probeAuthenticatedRuntime(base, credential.token, fetcher)));
     } else {
         checks.push({
             name: "management-http-authenticated",
@@ -53,6 +53,11 @@ export async function probeDoctorManagement(
             name: "management-runtime",
             level: "warning",
             message: "未获得管理令牌，无法定位账号与协议出口运行态",
+        });
+        checks.push({
+            name: "management-capabilities",
+            level: "warning",
+            message: "未获得管理令牌，无法验证账号能力证据",
         });
     }
 
@@ -90,6 +95,7 @@ interface RuntimeAccountSummary {
 interface RuntimeAdapterSummary {
     platform?: unknown;
     accounts?: unknown;
+    accountCapabilityErrors?: unknown;
 }
 
 /** 对比在线进程保留的应用快照与它当前看到的磁盘配置。 */
@@ -149,7 +155,7 @@ async function probeAuthenticatedRuntime(
     base: string,
     token: string,
     fetcher: DoctorFetch,
-): Promise<DoctorCheck> {
+): Promise<DoctorCheck[]> {
     try {
         const response = await fetcher(`${base}/api/adapters`, {
             headers: { authorization: `Bearer ${token}` },
@@ -157,21 +163,31 @@ async function probeAuthenticatedRuntime(
         });
         const payload: unknown = await response.json();
         if (!response.ok || !Array.isArray(payload)) {
-            return {
-                name: "management-runtime",
-                level: "error",
-                message: `管理运行态响应无效: HTTP ${response.status}`,
-            };
+            return unavailableRuntimeChecks(`管理运行态响应无效: HTTP ${response.status}`);
         }
 
         const issues: string[] = [];
+        const capabilityIssues: string[] = [];
+        const capabilityContractIssues: string[] = [];
         let accountCount = 0;
         let protocolCount = 0;
         for (const adapter of payload as RuntimeAdapterSummary[]) {
             if (!Array.isArray(adapter.accounts)) {
-                return invalidRuntimeContract("适配器缺少 accounts 数组");
+                return unavailableRuntimeChecks("管理运行态契约无效: 适配器缺少 accounts 数组");
             }
             const platform = runtimeLabel(adapter.platform, "unknown");
+            const accountIds = new Set(
+                (adapter.accounts as RuntimeAccountSummary[]).map(account =>
+                    runtimeLabel(account.uin, "unknown"),
+                ),
+            );
+            inspectCapabilityDiagnostics(
+                platform,
+                accountIds,
+                adapter.accountCapabilityErrors,
+                capabilityIssues,
+                capabilityContractIssues,
+            );
             for (const account of adapter.accounts as RuntimeAccountSummary[]) {
                 accountCount++;
                 const accountId = runtimeLabel(account.uin, "unknown");
@@ -181,7 +197,9 @@ async function probeAuthenticatedRuntime(
                     issues.push(`${accountTarget} 账号状态 ${accountStatus}`);
                 }
                 if (!Array.isArray(account.protocols)) {
-                    return invalidRuntimeContract(`${accountTarget} 缺少 protocols 生命周期数组`);
+                    return unavailableRuntimeChecks(
+                        `管理运行态契约无效: ${accountTarget} 缺少 protocols 生命周期数组`,
+                    );
                 }
                 if (account.protocols.length === 0) {
                     issues.push(`${accountTarget} 无协议出口`);
@@ -198,25 +216,85 @@ async function probeAuthenticatedRuntime(
             }
         }
 
-        return {
-            name: "management-runtime",
-            level: issues.length === 0 ? "ok" : "error",
-            message:
-                issues.length === 0
-                    ? `运行态已验证: ${accountCount} 个账号，${protocolCount} 个协议出口均就绪`
-                    : `运行态未就绪: ${issues.join("；")}`,
-        };
+        return [
+            {
+                name: "management-runtime",
+                level: issues.length === 0 ? "ok" : "error",
+                message:
+                    issues.length === 0
+                        ? `运行态已验证: ${accountCount} 个账号，${protocolCount} 个协议出口均就绪`
+                        : `运行态未就绪: ${issues.join("；")}`,
+            },
+            capabilityDoctorCheck(accountCount, capabilityIssues, capabilityContractIssues),
+        ];
     } catch (error) {
-        return failedManagementCheck("management-runtime", "管理运行态", error);
+        return [
+            failedManagementCheck("management-runtime", "管理运行态", error),
+            failedManagementCheck("management-capabilities", "账号能力证据", error),
+        ];
     }
 }
 
-function invalidRuntimeContract(detail: string): DoctorCheck {
+function inspectCapabilityDiagnostics(
+    platform: string,
+    accountIds: ReadonlySet<string>,
+    value: unknown,
+    issues: string[],
+    contractIssues: string[],
+): void {
+    if (!isRecord(value)) {
+        contractIssues.push(`${platform} 缺少 accountCapabilityErrors 对象`);
+        return;
+    }
+    for (const [accountId, diagnostic] of Object.entries(value)) {
+        if (!accountIds.has(accountId)) {
+            contractIssues.push(`${platform}.${accountId} 不对应已配置账号`);
+            continue;
+        }
+        if (
+            !isRecord(diagnostic) ||
+            diagnostic.code !== "capability_unavailable" ||
+            typeof diagnostic.message !== "string" ||
+            !diagnostic.message.trim()
+        ) {
+            contractIssues.push(`${platform}.${accountId} 诊断结构无效`);
+            continue;
+        }
+        issues.push(`${platform}.${accountId}: ${diagnostic.message.trim().slice(0, 500)}`);
+    }
+}
+
+function capabilityDoctorCheck(
+    accountCount: number,
+    issues: string[],
+    contractIssues: string[],
+): DoctorCheck {
+    if (contractIssues.length > 0) {
+        return {
+            name: "management-capabilities",
+            level: "error",
+            message: `账号能力诊断契约无效: ${contractIssues.join("；")}`,
+        };
+    }
     return {
-        name: "management-runtime",
-        level: "error",
-        message: `管理运行态契约无效: ${detail}`,
+        name: "management-capabilities",
+        level: issues.length === 0 ? "ok" : "error",
+        message:
+            issues.length === 0
+                ? `账号能力证据已验证: ${accountCount} 个账号均可读取可信能力清单`
+                : `账号能力证据不可用: ${issues.join("；")}`,
     };
+}
+
+function unavailableRuntimeChecks(message: string): DoctorCheck[] {
+    return [
+        { name: "management-runtime", level: "error", message },
+        {
+            name: "management-capabilities",
+            level: "error",
+            message: "账号能力证据无法验证: 管理运行态响应不可用",
+        },
+    ];
 }
 
 function runtimeLabel(value: unknown, fallback: string): string {
