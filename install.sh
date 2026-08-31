@@ -15,6 +15,23 @@ fail() {
     exit 1
 }
 
+wait_for_service() {
+    attempt=1
+    last_status=""
+    while [ "$attempt" -le 15 ]; do
+        if last_status=$(ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" status 2>&1); then
+            printf '%s\n' "$last_status"
+            return 0
+        fi
+        if [ "$attempt" -lt 15 ]; then
+            sleep 1
+        fi
+        attempt=$((attempt + 1))
+    done
+    [ -z "$last_status" ] || printf '%s\n' "$last_status" >&2
+    return 1
+}
+
 command -v curl >/dev/null 2>&1 || fail "需要 curl 下载运行环境"
 command -v tar >/dev/null 2>&1 || fail "需要 tar 解压运行环境"
 
@@ -106,6 +123,7 @@ say "正在创建安全配置并安装用户级常驻服务…"
     if ! ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" restart; then
         ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" start
     fi
+    wait_for_service || fail "服务启动后未通过在线验证；请运行 onebots status 并检查服务日志"
 )
 
 token=$(awk '$1 == "access_token:" { print $2; exit }' "$CONFIG_FILE" | tr -d "'\"")

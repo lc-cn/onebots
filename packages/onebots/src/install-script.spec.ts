@@ -33,6 +33,7 @@ if [ "$1" = "-p" ]; then printf '24\\n'; exit 0; fi
 exit 2
 `,
     );
+    writeExecutable(path.join(bin, "sleep"), "#!/bin/sh\nexit 0\n");
     writeExecutable(
         onebotsSource,
         `#!/bin/sh
@@ -61,6 +62,11 @@ EOF
         ;;
     start)
         : > "$FAKE_SERVICE_MARKER"
+        ;;
+    status)
+        [ -f "$FAKE_SERVICE_MARKER" ] || exit 1
+        [ "\${FAKE_STATUS_FAIL:-0}" = "1" ] && exit 3
+        printf '运行中，已就绪\\n'
         ;;
     *) exit 2 ;;
 esac
@@ -111,6 +117,7 @@ describe("one-command installer", () => {
         expect(firstCommands).toContain("onebots install -c");
         expect(firstCommands).toContain("onebots restart");
         expect(firstCommands).toContain("onebots start");
+        expect(firstCommands).toContain("onebots status");
 
         const customized = `access_token: preserved-token
 port: 7788
@@ -132,6 +139,7 @@ slack.production:
         expect(secondCommands).toContain("onebots install -c");
         expect(secondCommands).toContain("onebots restart");
         expect(secondCommands).not.toContain("onebots start");
+        expect(secondCommands).toContain("onebots status");
     });
 
     it("PowerShell 安装脚本显式闭合原生命令失败并保留已有配置", () => {
@@ -143,6 +151,23 @@ slack.production:
         expect(source).not.toContain("setup --force");
         expect(source).toContain("& $OneBots restart");
         expect(source).toContain('Invoke-Checked -FilePath $OneBots -Arguments @("start")');
+        expect(source).toContain("function Wait-OneBotsReady");
+        expect(source).toContain("Wait-OneBotsReady -OneBotsCommand $OneBots");
+    });
+
+    it("在线状态始终失败时不会宣告安装完成", () => {
+        const runtime = createFakeRuntime();
+        let output = "";
+
+        try {
+            runInstaller(runtime, { FAKE_STATUS_FAIL: "1" });
+        } catch (error) {
+            output = String((error as { stdout?: string }).stdout ?? "");
+        }
+
+        expect(output).not.toContain("安装完成");
+        const commands = fs.readFileSync(runtime.log, "utf8");
+        expect(commands.match(/onebots status/g)).toHaveLength(15);
     });
 
     it("npm 失败时立即停止且不创建配置或安装服务", () => {

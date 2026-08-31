@@ -16,6 +16,20 @@ function Invoke-Checked([string]$FilePath, [string[]]$Arguments) {
     }
 }
 
+function Wait-OneBotsReady([string]$OneBotsCommand) {
+    $LastStatus = @()
+    for ($Attempt = 1; $Attempt -le 15; $Attempt++) {
+        $LastStatus = @(& $OneBotsCommand status 2>&1)
+        if ($LASTEXITCODE -eq 0) {
+            if ($LastStatus.Count -gt 0) { Write-Host ($LastStatus -join [Environment]::NewLine) }
+            return
+        }
+        if ($Attempt -lt 15) { Start-Sleep -Seconds 1 }
+    }
+    $Evidence = if ($LastStatus.Count -gt 0) { $LastStatus -join [Environment]::NewLine } else { "服务尚未响应" }
+    throw "服务启动后未通过在线验证；请运行 onebots status 并检查服务日志。最后状态：$Evidence"
+}
+
 $NodeCommand = Get-Command node -ErrorAction SilentlyContinue
 $NodeUsable = $false
 if ($NodeCommand) {
@@ -79,6 +93,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         Invoke-Checked -FilePath $OneBots -Arguments @("start")
     }
+    Wait-OneBotsReady -OneBotsCommand $OneBots
 } finally {
     Pop-Location
 }
