@@ -33,6 +33,8 @@ Use `adapter.describeCapabilities(accountId)` for the complete manifest and `ada
 
 The management API and Web capability panel now call `describeCapabilities(accountId)` for each configured account. To avoid repeating large manifests, `/api/adapters` keeps the adapter default in `capabilities` and places only object-distinct account overrides in `accountCapabilities`. Selecting an account in the Web panel explicitly shows either **account-specific manifest** or **uses adapter default**. An adapter may vary its manifest using stable token, plan, or permission information, but should not present transient network failures as capability changes.
 
+Explicit event subscriptions are also account capability boundaries. QQ/Discord intents, Telegram `allowed_updates`, and Zulip `event_types` are projected into the canonical events that the selected account can actually receive. A webhook, reverse WebSocket, or manual mode that only changes ingress transport does not invent an upstream event filter when OneBots cannot observe one.
+
 In the Web console, open **Capability overview** from **Bots** to inspect all four categories for each loaded adapter. The selector shows both the display name and internal platform identifier, while the details retain the registered description. Summary counts include native and emulated capabilities, while explicitly unsupported entries remain visible. Permission, scene, and context restrictions appear on each item. Because this view consumes the runtime manifest, it describes the adapters loaded in the current deployment rather than a static platform catalog.
 
 ### Native platform actions

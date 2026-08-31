@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listSupportedActions } from "onebots";
 import { TelegramAdapter } from "./adapter.js";
-import { telegramCapabilities } from "./capabilities.js";
+import { describeTelegramCapabilities, telegramCapabilities } from "./capabilities.js";
 import { TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 describe("Telegram 能力清单", () => {
@@ -27,5 +27,64 @@ describe("Telegram 能力清单", () => {
         for (const action of listSupportedActions(telegramCapabilities)) {
             expect(TelegramAdapter.prototype.isActionImplemented(action), action).toBe(true);
         }
+    });
+
+    it("按 polling allowed_updates 展示真实可达事件", () => {
+        const capabilities = describeTelegramCapabilities({
+            receive_mode: "polling",
+            polling: { allowed_updates: ["message", "chat_join_request"] },
+        });
+
+        expect(capabilities.events.message?.support).toBe("native");
+        expect(capabilities.events.member_joined?.support).toBe("native");
+        expect(capabilities.events.group_request?.support).toBe("native");
+        expect(capabilities.events.interaction).toMatchObject({
+            support: "unsupported",
+            availability: "context",
+        });
+        expect(capabilities.events.interaction?.note).toContain("polling.allowed_updates");
+        expect(capabilities.events.reaction_added?.support).toBe("unsupported");
+    });
+
+    it("空白名单使用完整集合，manual 不推断外部订阅", () => {
+        expect(
+            describeTelegramCapabilities({
+                receive_mode: "webhook",
+                webhook: { allowed_updates: [] },
+            }),
+        ).toBe(telegramCapabilities);
+        expect(
+            describeTelegramCapabilities({
+                receive_mode: "manual",
+                polling: { allowed_updates: ["message"] },
+            }),
+        ).toBe(telegramCapabilities);
+    });
+
+    it("适配器按账号配置返回动态清单", () => {
+        const adapter = {
+            getAccount: (accountId: string) =>
+                accountId === "messages"
+                    ? {
+                          config: {
+                              account_id: accountId,
+                              receive_mode: "polling",
+                              polling: { allowed_updates: ["message"] },
+                          },
+                      }
+                    : undefined,
+        } as unknown as TelegramAdapter;
+
+        expect(
+            TelegramAdapter.prototype.describeCapabilities.call(adapter, "messages").events.message
+                ?.support,
+        ).toBe("native");
+        expect(
+            TelegramAdapter.prototype.describeCapabilities.call(adapter, "messages").events
+                .interaction?.support,
+        ).toBe("unsupported");
+        expect(TelegramAdapter.prototype.describeCapabilities.call(adapter, "missing")).toBe(
+            telegramCapabilities,
+        );
     });
 });

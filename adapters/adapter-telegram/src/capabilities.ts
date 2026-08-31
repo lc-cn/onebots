@@ -1,9 +1,12 @@
 import {
     defineAdapterCapabilities,
     definePlatformActionCapabilities,
+    restrictAdapterEventCapabilities,
     type AdapterCapabilityManifest,
 } from "onebots";
 import { TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { resolveTelegramAllowedUpdates } from "./receive-config.js";
+import type { TelegramConfig, TelegramUpdateType } from "./types.js";
 
 const reactionManagementActions = new Set([
     "delete_message_reaction",
@@ -123,7 +126,8 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         group_increase: { support: "native" },
         group_decrease: { support: "native" },
         group_request: { support: "native" },
-        message_reaction: { support: "native" },
+        reaction_added: { support: "native" },
+        reaction_removed: { support: "native" },
         message_deleted: { support: "native", note: "商业消息批量删除会拆分为独立事件" },
         native_update: {
             support: "native",
@@ -166,3 +170,49 @@ export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapa
         },
     },
 });
+
+const telegramEventUpdates = {
+    message: ["message", "channel_post", "business_message", "guest_message"],
+    message_updated: ["edited_message", "edited_channel_post", "edited_business_message"],
+    interaction: [
+        "callback_query",
+        "inline_query",
+        "chosen_inline_result",
+        "shipping_query",
+        "pre_checkout_query",
+        "stopped_message_generation",
+    ],
+    user_updated: ["managed_bot"],
+    member_joined: ["message", "channel_post", "business_message", "chat_member"],
+    member_left: ["message", "channel_post", "business_message", "chat_member"],
+    group_increase: ["my_chat_member"],
+    group_decrease: ["my_chat_member"],
+    group_request: ["chat_join_request"],
+    reaction_added: ["message_reaction"],
+    reaction_removed: ["message_reaction"],
+    message_deleted: ["deleted_business_messages"],
+} as const satisfies Partial<Record<string, readonly TelegramUpdateType[]>>;
+
+/** 根据账号真正提交给 Telegram 的 allowed_updates 收窄事件能力。 */
+export function describeTelegramCapabilities(
+    config: Pick<TelegramConfig, "polling" | "receive_mode" | "webhook">,
+): AdapterCapabilityManifest {
+    const mode = config.receive_mode ?? "polling";
+    // manual 的上游订阅不归 OneBots 管理，不能依据本地空配置推断事件范围。
+    if (mode === "manual") return telegramCapabilities;
+    const allowed = new Set(
+        resolveTelegramAllowedUpdates(
+            mode === "webhook" ? config.webhook?.allowed_updates : config.polling?.allowed_updates,
+        ),
+    );
+    const available = new Set<string>(["native_update"]);
+    for (const [event, updates] of Object.entries(telegramEventUpdates)) {
+        if (updates.some(update => allowed.has(update))) available.add(event);
+    }
+    return restrictAdapterEventCapabilities(telegramCapabilities, available, event => {
+        const updates = telegramEventUpdates[event as keyof typeof telegramEventUpdates];
+        return updates
+            ? `${mode}.allowed_updates 未订阅可生成此事件的 Update：${updates.join(", ")}`
+            : `${mode}.allowed_updates 不会生成此 canonical 事件`;
+    });
+}

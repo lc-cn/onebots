@@ -5,9 +5,10 @@ import {
     AdapterRegistry,
     BaseApp,
     readPackageVersion,
+    type AdapterCapabilityManifest,
     type CommonTypes,
 } from "onebots";
-import { zulipCapabilities } from "./capabilities.js";
+import { describeZulipCapabilities, zulipCapabilities } from "./capabilities.js";
 import { ZulipClient } from "./client.js";
 import { toGroupInfo, toGroupMember, toMessageInfo, toUserInfo } from "./entities.js";
 import { ZulipError } from "./errors.js";
@@ -24,6 +25,13 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
     constructor(app: BaseApp) {
         super(app, "zulip", zulipCapabilities);
         this.icon = "https://zulip.com/static/images/logo/zulip-icon-circle.png";
+    }
+
+    describeCapabilities(accountId?: string): AdapterCapabilityManifest {
+        if (!accountId) return zulipCapabilities;
+        const account = this.getAccount(accountId);
+        if (!account) return zulipCapabilities;
+        return describeZulipCapabilities(account.config as Account.Config<"zulip"> & ZulipConfig);
     }
 
     /** 发送频道、单人私聊或多人私聊消息。 */

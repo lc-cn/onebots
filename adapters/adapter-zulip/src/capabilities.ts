@@ -1,6 +1,7 @@
 import {
     defineAdapterCapabilities,
     definePlatformActionCapabilities,
+    restrictAdapterEventCapabilities,
     type AdapterCapabilityManifest,
 } from "onebots";
 import { ZULIP_BOT_CREDENTIAL_ACTIONS } from "./bot-actions.js";
@@ -26,6 +27,8 @@ import { ZULIP_PLAYGROUND_MUTATION_ACTIONS } from "./playground-actions.js";
 import { ZULIP_PROFILE_FIELD_MUTATION_ACTIONS } from "./profile-field-actions.js";
 import { ZULIP_USER_MUTATION_ACTIONS } from "./user-actions.js";
 import { ZULIP_USER_GROUP_MUTATION_ACTIONS } from "./user-group-actions.js";
+import { ZULIP_DEFAULT_EVENT_TYPES } from "./event-metadata.js";
+import type { ZulipConfig, ZulipEventType } from "./types.js";
 
 const permission = {
     support: "native" as const,
@@ -167,3 +170,67 @@ export const zulipCapabilities: AdapterCapabilityManifest = defineAdapterCapabil
         },
     },
 });
+
+const zulipEventTypes = {
+    message: ["message"],
+    message_updated: ["update_message"],
+    message_deleted: ["delete_message"],
+    message_flags_updated: ["update_message_flags"],
+    reaction_added: ["reaction"],
+    reaction_removed: ["reaction"],
+    user_added: ["realm_user"],
+    user_updated: ["realm_user", "user_settings", "presence", "user_status"],
+    user_removed: ["realm_user"],
+    user_group_created: ["user_group"],
+    user_group_updated: ["user_group"],
+    user_group_deactivated: ["user_group"],
+    user_group_reactivated: ["user_group"],
+    user_group_member_added: ["user_group"],
+    user_group_member_removed: ["user_group"],
+    user_group_subgroup_added: ["user_group"],
+    user_group_subgroup_removed: ["user_group"],
+    channel_created: ["stream"],
+    channel_updated: ["stream"],
+    channel_deleted: ["stream"],
+    channel_subscription_added: ["subscription"],
+    channel_subscription_removed: ["subscription"],
+    channel_subscription_updated: ["subscription"],
+    channel_subscriber_added: ["subscription"],
+    channel_subscriber_removed: ["subscription"],
+    default_channels_updated: ["default_streams", "default_stream_groups"],
+    default_user_settings_updated: ["realm_user_settings_defaults"],
+    channel_folder_created: ["channel_folder"],
+    channel_folder_updated: ["channel_folder"],
+    channel_folders_reordered: ["channel_folder"],
+    navigation_view_created: ["navigation_view"],
+    navigation_view_updated: ["navigation_view"],
+    navigation_view_removed: ["navigation_view"],
+    attachment_created: ["attachment"],
+    attachment_updated: ["attachment"],
+    attachment_removed: ["attachment"],
+    emoji_created: ["realm_emoji"],
+    emoji_updated: ["realm_emoji"],
+    heartbeat: ["heartbeat"],
+} as const satisfies Partial<Record<string, readonly ZulipEventType[]>>;
+
+/** 根据当前账号注册 Event Queue 时提交的 event_types 收窄事件能力。 */
+export function describeZulipCapabilities(
+    config: Pick<ZulipConfig, "event_queue" | "receive_mode">,
+): AdapterCapabilityManifest {
+    // manual 模式的订阅由外部 Event Queue 管理，本地配置无法可靠推断。
+    if (config.receive_mode === "manual") return zulipCapabilities;
+    const configured = config.event_queue?.event_types;
+    const enabled = new Set<ZulipEventType>(
+        configured?.length ? configured : ZULIP_DEFAULT_EVENT_TYPES,
+    );
+    const available = new Set<string>(["raw_event", "custom"]);
+    for (const [event, eventTypes] of Object.entries(zulipEventTypes)) {
+        if (eventTypes.some(eventType => enabled.has(eventType))) available.add(event);
+    }
+    return restrictAdapterEventCapabilities(zulipCapabilities, available, event => {
+        const eventTypes = zulipEventTypes[event as keyof typeof zulipEventTypes];
+        return eventTypes
+            ? `event_queue.event_types 未订阅可生成此事件的类型：${eventTypes.join(", ")}`
+            : "当前 Event Queue 订阅不会生成此 canonical 事件";
+    });
+}

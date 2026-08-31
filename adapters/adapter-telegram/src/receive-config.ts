@@ -22,7 +22,7 @@ export type TelegramReceiveConfig =
 export function resolveTelegramReceiveConfig(config: TelegramConfig): TelegramReceiveConfig {
     if (config.receive_mode === "manual") return { mode: "manual" };
 
-    const allowedUpdates = resolveAllowedUpdates(
+    const allowedUpdates = resolveTelegramAllowedUpdates(
         config.receive_mode === "webhook"
             ? config.webhook?.allowed_updates
             : config.polling?.allowed_updates,
@@ -92,7 +92,8 @@ function isIpAddress(value: string): boolean {
     );
 }
 
-function resolveAllowedUpdates(
+/** 解析 Telegram 实际提交给 getUpdates/setWebhook 的 Update 白名单。 */
+export function resolveTelegramAllowedUpdates(
     values: ReadonlyArray<TelegramUpdateType> | undefined,
 ): ReadonlyArray<TelegramUpdateType> {
     if (!values?.length) return TELEGRAM_UPDATE_TYPES;

@@ -5,7 +5,7 @@ import { ZULIP_EVENT_TYPES } from "./types.js";
 export { ZulipAdapter } from "./adapter.js";
 export { ZulipClient, type ZulipClientEvents, type ZulipClientOptions } from "./client.js";
 export { assertZulipConfig, resolveZulipReceiveMode } from "./config.js";
-export { zulipCapabilities } from "./capabilities.js";
+export { describeZulipCapabilities, zulipCapabilities } from "./capabilities.js";
 export { ZulipError } from "./errors.js";
 export { projectZulipEvents, projectZulipMessage } from "./events.js";
 export { compileZulipMessage, type ZulipMessageCompiler } from "./messages.js";

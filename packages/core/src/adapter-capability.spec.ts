@@ -6,6 +6,7 @@ import {
     assertSupportedActionsImplemented,
     defineAdapterCapabilities,
     definePlatformActionCapabilities,
+    restrictAdapterEventCapabilities,
     isCanonicalAdapterAction,
     listSupportedActions,
 } from "./adapter-capability.js";
@@ -67,6 +68,30 @@ function withoutConstructor<T extends Adapter>(prototype: T): T {
 }
 
 describe("adapter capability manifest", () => {
+    it("按账号可达事件生成受限清单并复用完整清单", () => {
+        const manifest = defineAdapterCapabilities({
+            actions: executableManifest.actions,
+            events: { message: { support: "native" }, notice: { support: "native" } },
+            segments: {},
+            transports: {},
+        });
+        const all = new Set(Object.keys(manifest.events));
+        expect(restrictAdapterEventCapabilities(manifest, all, "未订阅")).toBe(manifest);
+
+        const restricted = restrictAdapterEventCapabilities(
+            manifest,
+            new Set(["message"]),
+            event => `当前账号未订阅 ${event}`,
+        );
+        expect(restricted.events.message).toStrictEqual(manifest.events.message);
+        expect(restricted.events.notice).toEqual({
+            support: "unsupported",
+            availability: "context",
+            note: "当前账号未订阅 notice",
+        });
+        expect(restricted.actions).toEqual(manifest.actions);
+    });
+
     it("从平台动作集合派生不可变能力描述", () => {
         const actions = definePlatformActionCapabilities(new Set(["send_card", "list_roles"]), {
             support: "native",

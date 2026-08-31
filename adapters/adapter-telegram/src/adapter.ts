@@ -2,13 +2,19 @@
  * Telegram 适配器
  * 继承 Adapter 基类，实现 Telegram 平台功能
  */
-import { Account, AdapterRegistry, AccountStatus, readPackageVersion } from "onebots";
+import {
+    Account,
+    AdapterRegistry,
+    AccountStatus,
+    readPackageVersion,
+    type AdapterCapabilityManifest,
+} from "onebots";
 import { Adapter } from "onebots";
 import { BaseApp } from "onebots";
 import { TelegramBot } from "./bot.js";
 import type { CommonTypes } from "onebots";
 import type { TelegramConfig } from "./types.js";
-import { telegramCapabilities } from "./capabilities.js";
+import { describeTelegramCapabilities, telegramCapabilities } from "./capabilities.js";
 import { createTelegramAccount } from "./account.js";
 import { executeTelegramPlatformAction, TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
 import { compileTelegramEditableText, sendTelegramMessage } from "./message-sender.js";
@@ -18,6 +24,15 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
     constructor(app: BaseApp) {
         super(app, "telegram", telegramCapabilities);
         this.icon = "https://telegram.org/favicon.ico";
+    }
+
+    describeCapabilities(accountId?: string): AdapterCapabilityManifest {
+        if (!accountId) return telegramCapabilities;
+        const account = this.getAccount(accountId);
+        if (!account) return telegramCapabilities;
+        return describeTelegramCapabilities(
+            account.config as Account.Config<"telegram"> & TelegramConfig,
+        );
     }
 
     /**

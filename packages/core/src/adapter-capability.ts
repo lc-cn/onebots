@@ -76,6 +76,50 @@ export function defineAdapterCapabilities(
     return Object.freeze(manifest);
 }
 
+export type UnavailableEventNote =
+    | string
+    | ((event: string, descriptor: CapabilityDescriptor) => string);
+
+/**
+ * 按账号实际可达的 canonical 事件收窄能力清单。
+ *
+ * 平台适配器应先把 intents、allowed_updates 等原生订阅配置投影为 canonical
+ * 事件名，再交给此函数。这样协议/UI 不需要理解各平台订阅术语，也不会把
+ * “适配器支持”与“当前账号已订阅”混为一谈。
+ *
+ * 当全部事件均可达时返回原始对象，便于管理 API 省略没有差异的账号清单。
+ */
+export function restrictAdapterEventCapabilities(
+    manifest: AdapterCapabilityManifest,
+    availableEvents: ReadonlySet<string>,
+    unavailableNote: UnavailableEventNote,
+): AdapterCapabilityManifest {
+    const events: Record<string, CapabilityDescriptor> = {};
+    let restricted = false;
+    for (const [event, descriptor] of Object.entries(manifest.events)) {
+        if (availableEvents.has(event)) {
+            events[event] = descriptor;
+            continue;
+        }
+        restricted = true;
+        events[event] = {
+            support: "unsupported",
+            availability: "context",
+            note:
+                typeof unavailableNote === "function"
+                    ? unavailableNote(event, descriptor)
+                    : unavailableNote,
+        };
+    }
+    if (!restricted) return manifest;
+    return defineAdapterCapabilities({
+        actions: manifest.actions,
+        events,
+        segments: manifest.segments,
+        transports: manifest.transports,
+    });
+}
+
 export type PlatformActionCapabilityResolver<TAction extends string> =
     | CapabilityDescriptor
     | ((action: TAction) => CapabilityDescriptor);

@@ -10,7 +10,11 @@ export type {
     ProxyConfig,
 } from "./types.js";
 export { TELEGRAM_UPDATE_TYPES } from "./types.js";
-export { resolveTelegramReceiveConfig, type TelegramReceiveConfig } from "./receive-config.js";
+export {
+    resolveTelegramAllowedUpdates,
+    resolveTelegramReceiveConfig,
+    type TelegramReceiveConfig,
+} from "./receive-config.js";
 export { TelegramBot, type TelegramBotEvents } from "./bot.js";
 export { TelegramError, type TelegramErrorOptions } from "./errors.js";
 export { projectTelegramEvents, type TelegramEventProjectorContext } from "./events.js";

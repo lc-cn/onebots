@@ -103,6 +103,7 @@ export {
     sha256Text,
     stableJsonStringify,
     defineAdapterCapabilities,
+    restrictAdapterEventCapabilities,
     definePlatformActionCapabilities,
     assertAdapterCapabilities,
     assertAdapterCapabilityContract,
