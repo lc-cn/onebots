@@ -23,6 +23,8 @@ discord.my_bot:
     - DirectMessages
     - DirectMessageReactions
     - MessageContent
+    - GuildMessagePolls
+    - DirectMessagePolls
   presence:
     status: online
     activities:
@@ -31,6 +33,8 @@ discord.my_bot:
 ```
 
 Web 表单会把 Intents 渲染为选择列表，把 Presence activities 渲染为可动态增减的结构化表单。`GuildMembers` 与 `MessageContent` 等特权 Intent 还需在 Discord Developer Portal 开启。
+
+管理端会按账号实际 Gateway intents 展示消息、成员、Reaction 与 Poll Vote 的可达场景。缺少 `MessageContent` 不会被误报为收不到消息；管理端会单独提示 Guild 消息的正文、附件与 Embed 可能为空。Interactions、Webhook Events 与手动接入模式则按各自真实事件入口展示，不套用 Gateway intents。
 
 Gateway 默认无限重连，支持 Resume、心跳 ACK、Identify 限速、分片、Presence 与 `AbortSignal`。每个 Dispatch 在所有事件出口处理成功后才提交 sequence，失败时从最后成功位置恢复。
 

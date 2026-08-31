@@ -2,7 +2,7 @@ import { GatewayIntents } from "./lite/gateway.js";
 import { DISCORD_GATEWAY_INTENTS, type GatewayIntentName } from "./types.js";
 import { DiscordError } from "./errors.js";
 
-/** 同时满足消息、成员和 Reaction 投影的默认 Gateway 订阅。 */
+/** 同时满足消息、成员、Reaction 与 Poll Vote 投影的默认 Gateway 订阅。 */
 export const DEFAULT_DISCORD_INTENTS: ReadonlyArray<GatewayIntentName> = [
     "Guilds",
     "GuildMembers",
@@ -11,6 +11,8 @@ export const DEFAULT_DISCORD_INTENTS: ReadonlyArray<GatewayIntentName> = [
     "DirectMessages",
     "DirectMessageReactions",
     "MessageContent",
+    "GuildMessagePolls",
+    "DirectMessagePolls",
 ];
 
 const intentNames = new Set<string>(DISCORD_GATEWAY_INTENTS);

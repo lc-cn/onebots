@@ -17,6 +17,8 @@ describe("resolveDiscordIntents", () => {
             expect(resolveDiscordIntents([name])).toBe(GatewayIntents[name]);
         }
         expect(resolveDiscordIntents(["AutoModerationExecution"])).toBe(1 << 21);
+        expect(resolveDiscordIntents(["GuildMessagePolls"])).toBe(1 << 24);
+        expect(resolveDiscordIntents(["DirectMessagePolls"])).toBe(1 << 25);
     });
 
     it("拒绝静默忽略未知名称和非法原始位图", () => {

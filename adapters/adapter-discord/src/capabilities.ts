@@ -4,7 +4,9 @@ import {
     type AdapterCapabilityManifest,
     type CapabilityDescriptor,
 } from "onebots";
+import { DEFAULT_DISCORD_INTENTS } from "./intents.js";
 import { DISCORD_PLATFORM_ACTIONS } from "./platform-actions.js";
+import type { DiscordConfig, GatewayIntentName } from "./types.js";
 
 const manageMessages = {
     support: "native" as const,
@@ -205,6 +207,7 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         message: { support: "native", scenes: ["private", "channel"] },
         member_joined: { support: "native" },
         member_left: { support: "native" },
+        user_updated: { support: "native" },
         message_updated: { support: "native" },
         message_deleted: { support: "native" },
         reaction_added: { support: "native", note: "包括 emoji reaction 与 poll vote" },
@@ -251,3 +254,159 @@ export const discordCapabilities: AdapterCapabilityManifest = defineAdapterCapab
         },
     },
 });
+
+type CapabilityScene = NonNullable<CapabilityDescriptor["scenes"]>[number];
+
+/** 根据账号接收模式与 Identify intents 描述当前真正可达的 Discord 事件。 */
+export function describeDiscordCapabilities(
+    config: Pick<DiscordConfig, "intents" | "receive_mode">,
+): AdapterCapabilityManifest {
+    const mode = config.receive_mode ?? "gateway";
+    if (mode !== "gateway") return describeDiscordHttpCapabilities(mode);
+
+    const enabled = new Set<GatewayIntentName>(
+        config.intents?.length ? config.intents : DEFAULT_DISCORD_INTENTS,
+    );
+    const events: Record<string, CapabilityDescriptor> = { ...discordCapabilities.events };
+    const messageScenes: CapabilityScene[] = [];
+    const missingMessageIntents: GatewayIntentName[] = [];
+    if (enabled.has("DirectMessages")) messageScenes.push("private");
+    else missingMessageIntents.push("DirectMessages");
+    if (enabled.has("GuildMessages")) messageScenes.push("channel");
+    else missingMessageIntents.push("GuildMessages");
+    for (const event of ["message", "message_updated", "message_deleted"] as const) {
+        events[event] = sceneLimitedDescriptor(
+            messageScenes,
+            missingMessageIntents,
+            "消息事件",
+            discordCapabilities.events[event],
+        );
+    }
+
+    const memberDescriptor = enabled.has("GuildMembers")
+        ? discordCapabilities.events.member_joined
+        : missingIntentDescriptor(["GuildMembers"], "Guild 成员事件");
+    events.member_joined = memberDescriptor;
+    events.member_left = memberDescriptor;
+    events.user_updated = memberDescriptor;
+
+    const reactionScenes: CapabilityScene[] = [];
+    const missingReactionIntents: GatewayIntentName[] = [];
+    collectReactionScene(
+        enabled,
+        reactionScenes,
+        missingReactionIntents,
+        "private",
+        "DirectMessageReactions",
+        "DirectMessagePolls",
+    );
+    collectReactionScene(
+        enabled,
+        reactionScenes,
+        missingReactionIntents,
+        "channel",
+        "GuildMessageReactions",
+        "GuildMessagePolls",
+    );
+    for (const event of ["reaction_added", "reaction_removed"] as const) {
+        events[event] = sceneLimitedDescriptor(
+            reactionScenes,
+            missingReactionIntents,
+            "Reaction 与 Poll Vote 事件",
+            discordCapabilities.events[event],
+        );
+    }
+
+    const segments = { ...discordCapabilities.segments };
+    if (enabled.has("GuildMessages") && !enabled.has("MessageContent")) {
+        for (const segment of ["text", "image", "file", "audio", "video", "embed"] as const) {
+            const descriptor = discordCapabilities.segments[segment];
+            if (!descriptor) continue;
+            segments[segment] = {
+                ...descriptor,
+                availability: "permission",
+                permissions: ["MessageContent"],
+                note: "发送与私信接收不受影响；Guild 消息中的用户正文、附件与 Embed 可能为空",
+            };
+        }
+    }
+
+    return defineAdapterCapabilities({
+        actions: discordCapabilities.actions,
+        events,
+        segments,
+        transports: discordCapabilities.transports,
+    });
+}
+
+function describeDiscordHttpCapabilities(
+    mode: Exclude<NonNullable<DiscordConfig["receive_mode"]>, "gateway">,
+): AdapterCapabilityManifest {
+    const events: Record<string, CapabilityDescriptor> = {};
+    for (const event of Object.keys(discordCapabilities.events)) {
+        const supported =
+            (mode === "interactions" || mode === "manual") && event === "interaction"
+                ? discordCapabilities.events.interaction
+                : mode === "webhook_events" && event === "native_dispatch"
+                  ? {
+                        support: "native" as const,
+                        note: "Discord Webhook Events 以结构化 custom notice 和 raw_event 无损交付",
+                    }
+                  : {
+                        support: "unsupported" as const,
+                        availability: "context" as const,
+                        note: `${mode} 接收模式不会投递此类 Gateway 事件`,
+                    };
+        events[event] = supported;
+    }
+    return defineAdapterCapabilities({
+        actions: discordCapabilities.actions,
+        events,
+        segments: discordCapabilities.segments,
+        transports: discordCapabilities.transports,
+    });
+}
+
+function collectReactionScene(
+    enabled: ReadonlySet<GatewayIntentName>,
+    scenes: CapabilityScene[],
+    missing: GatewayIntentName[],
+    scene: CapabilityScene,
+    reactionIntent: GatewayIntentName,
+    pollIntent: GatewayIntentName,
+): void {
+    const hasReaction = enabled.has(reactionIntent);
+    const hasPoll = enabled.has(pollIntent);
+    if (hasReaction || hasPoll) scenes.push(scene);
+    if (!hasReaction) missing.push(reactionIntent);
+    if (!hasPoll) missing.push(pollIntent);
+}
+
+function sceneLimitedDescriptor(
+    scenes: readonly CapabilityScene[],
+    missing: readonly GatewayIntentName[],
+    label: string,
+    complete: CapabilityDescriptor,
+): CapabilityDescriptor {
+    if (scenes.length === 0) return missingIntentDescriptor(missing, label);
+    if (missing.length === 0) return { ...complete, scenes };
+    return {
+        ...complete,
+        availability: "permission",
+        scenes,
+        permissions: missing,
+        note: `${label}仅在当前账号已订阅的场景和类型中可接收；权限列表为缺少的 intent`,
+    };
+}
+
+function missingIntentDescriptor(
+    required: readonly GatewayIntentName[],
+    label: string,
+): CapabilityDescriptor {
+    return {
+        support: "unsupported",
+        availability: "permission",
+        permissions: required,
+        note: `当前账号未订阅 ${label} 所需的 Discord Gateway intent`,
+    };
+}

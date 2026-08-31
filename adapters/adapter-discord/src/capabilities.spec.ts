@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listSupportedActions } from "onebots";
 import { DiscordAdapter } from "./adapter.js";
-import { discordCapabilities } from "./capabilities.js";
+import { describeDiscordCapabilities, discordCapabilities } from "./capabilities.js";
 import { DISCORD_PLATFORM_ACTIONS } from "./platform-actions.js";
 
 describe("Discord 能力清单", () => {
@@ -41,5 +41,71 @@ describe("Discord 能力清单", () => {
         expect(discordCapabilities.actions.create_guild_soundboard_sound?.permissions).toEqual([
             "CREATE_GUILD_EXPRESSIONS / MANAGE_GUILD_EXPRESSIONS",
         ]);
+    });
+
+    it("按 Gateway intents 收窄消息、成员与 Reaction 场景", () => {
+        const capabilities = describeDiscordCapabilities({
+            intents: ["GuildMessages", "GuildMessagePolls"],
+        });
+
+        expect(capabilities.events.message).toMatchObject({
+            support: "native",
+            scenes: ["channel"],
+            permissions: ["DirectMessages"],
+        });
+        expect(capabilities.events.member_joined).toMatchObject({
+            support: "unsupported",
+            permissions: ["GuildMembers"],
+        });
+        expect(capabilities.events.reaction_added).toMatchObject({
+            support: "native",
+            scenes: ["channel"],
+        });
+        expect(capabilities.events.reaction_added?.permissions).toEqual([
+            "DirectMessageReactions",
+            "DirectMessagePolls",
+            "GuildMessageReactions",
+        ]);
+    });
+
+    it("缺少 MessageContent 时展示 Guild 消息内容限制", () => {
+        const capabilities = describeDiscordCapabilities({ intents: ["GuildMessages"] });
+
+        expect(capabilities.events.message?.support).toBe("native");
+        expect(capabilities.segments.text).toMatchObject({
+            support: "native",
+            direction: "both",
+            availability: "permission",
+            permissions: ["MessageContent"],
+        });
+        expect(capabilities.segments.embed?.note).toContain("Guild 消息");
+    });
+
+    it("区分 Gateway、Interactions 与 Webhook Events 的事件入口", () => {
+        const interactions = describeDiscordCapabilities({ receive_mode: "interactions" });
+        const webhookEvents = describeDiscordCapabilities({ receive_mode: "webhook_events" });
+
+        expect(interactions.events.interaction?.support).toBe("native");
+        expect(interactions.events.message?.support).toBe("unsupported");
+        expect(interactions.events.native_dispatch?.support).toBe("unsupported");
+        expect(webhookEvents.events.interaction?.support).toBe("unsupported");
+        expect(webhookEvents.events.native_dispatch?.support).toBe("native");
+    });
+
+    it("适配器按目标账号配置返回动态清单", () => {
+        const adapter = {
+            getAccount: (accountId: string) =>
+                accountId === "interactions"
+                    ? { config: { account_id: accountId, receive_mode: "interactions" } }
+                    : undefined,
+        } as unknown as DiscordAdapter;
+
+        expect(
+            DiscordAdapter.prototype.describeCapabilities.call(adapter, "interactions").events
+                .message?.support,
+        ).toBe("unsupported");
+        expect(DiscordAdapter.prototype.describeCapabilities.call(adapter, "missing")).toBe(
+            discordCapabilities,
+        );
     });
 });

@@ -55,6 +55,8 @@ export const DISCORD_GATEWAY_INTENTS = [
     "GuildScheduledEvents",
     "AutoModerationConfiguration",
     "AutoModerationExecution",
+    "GuildMessagePolls",
+    "DirectMessagePolls",
 ] as const;
 
 export type GatewayIntentName = (typeof DISCORD_GATEWAY_INTENTS)[number];

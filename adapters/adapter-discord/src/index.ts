@@ -133,7 +133,8 @@ export const discordSchema: Schema = {
         type: "array",
         default: [...DEFAULT_DISCORD_INTENTS],
         label: "Gateway Intents",
-        description: "仅选择机器人已在 Developer Portal 开通的特权 Intent",
+        description:
+            "按需订阅 Gateway 事件；GuildMembers、GuildPresences、MessageContent 需先在 Developer Portal 开启",
         choices: DISCORD_GATEWAY_INTENTS.map(value => ({ value, label: value })),
         ui: {
             widget: "choice-list",
