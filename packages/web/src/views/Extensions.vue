@@ -1,97 +1,106 @@
 <template>
-    <div class="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
-        <div>
-            <h1 class="text-2xl font-semibold text-fg">功能扩展</h1>
-            <p class="mt-1 text-sm text-fg-secondary">
-                安装平台适配器和开放协议。依赖、启动配置和服务重启都由 OneBots 完成。
-            </p>
-        </div>
+    <div class="h-full overflow-y-auto">
+        <div class="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
+            <div>
+                <h1 class="text-2xl font-semibold text-fg">功能扩展</h1>
+                <p class="mt-1 text-sm text-fg-secondary">
+                    安装平台适配器和开放协议。依赖、启动配置和服务重启都由 OneBots 完成。
+                </p>
+            </div>
 
-        <UiAlert v-if="restarting" variant="warning">
-            服务正在重启，页面会在恢复后自动刷新，请勿关闭。
-        </UiAlert>
-        <UiAlert v-if="errorMessage" variant="danger">{{ errorMessage }}</UiAlert>
+            <UiAlert v-if="restarting" variant="warning">
+                服务正在重启，页面会在恢复后自动刷新，请勿关闭。
+            </UiAlert>
+            <UiAlert v-if="errorMessage" variant="danger">{{ errorMessage }}</UiAlert>
 
-        <div class="flex flex-wrap gap-2">
-            <UiButton
-                v-for="option in filters"
-                :key="option.value"
-                size="sm"
-                :variant="filter === option.value ? 'primary' : 'ghost'"
-                @click="filter = option.value">
-                {{ option.label }}
-            </UiButton>
-        </div>
+            <div class="flex flex-wrap gap-2">
+                <UiButton
+                    v-for="option in filters"
+                    :key="option.value"
+                    size="sm"
+                    :variant="filter === option.value ? 'primary' : 'ghost'"
+                    @click="filter = option.value">
+                    {{ option.label }}
+                </UiButton>
+            </div>
 
-        <div v-if="loading" class="flex justify-center py-20"><UiSpinner /></div>
-        <div v-else class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <UiCard v-for="extension in visibleExtensions" :key="extension.id">
-                <template #header>
-                    <div class="flex min-w-0 flex-1 items-center gap-2">
-                        <span class="font-semibold text-fg">{{ extension.displayName }}</span>
-                        <UiBadge :variant="extension.type === 'adapter' ? 'success' : 'neutral'">
-                            {{ extension.type === "adapter" ? "平台" : "协议" }}
-                        </UiBadge>
-                        <UiBadge v-if="extension.loaded" variant="success" dot>已启用</UiBadge>
-                        <UiBadge v-else-if="extension.installed" variant="warning" dot>
-                            等待重启
-                        </UiBadge>
+            <div v-if="loading" class="flex justify-center py-20"><UiSpinner /></div>
+            <div v-else class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <UiCard v-for="extension in visibleExtensions" :key="extension.id">
+                    <template #header>
+                        <div class="flex min-w-0 flex-1 items-center gap-2">
+                            <span class="font-semibold text-fg">{{ extension.displayName }}</span>
+                            <UiBadge
+                                :variant="extension.type === 'adapter' ? 'success' : 'neutral'">
+                                {{ extension.type === "adapter" ? "平台" : "协议" }}
+                            </UiBadge>
+                            <UiBadge v-if="extension.loaded" variant="success" dot>已启用</UiBadge>
+                            <UiBadge v-else-if="extension.installed" variant="warning" dot>
+                                等待重启
+                            </UiBadge>
+                        </div>
+                    </template>
+
+                    <div class="space-y-4">
+                        <div>
+                            <p class="text-sm text-fg-secondary">{{ extension.description }}</p>
+                            <p class="mt-1 font-mono text-xs text-fg-tertiary">
+                                {{ extension.packageName }}
+                            </p>
+                        </div>
+
+                        <details v-if="extension.loaded" class="group">
+                            <summary
+                                class="cursor-pointer text-sm font-medium text-accent select-none hover:underline">
+                                配置引导（{{ extension.setup.length }} 步）
+                            </summary>
+                            <ol class="mt-3 space-y-3">
+                                <li
+                                    v-for="(step, index) in extension.setup"
+                                    :key="step.title"
+                                    class="flex gap-3 rounded-lg border border-border-subtle p-3">
+                                    <span
+                                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
+                                        {{ index + 1 }}
+                                    </span>
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-medium text-fg">{{ step.title }}</p>
+                                        <p class="mt-0.5 text-xs leading-5 text-fg-secondary">
+                                            {{ step.description }}
+                                        </p>
+                                        <a
+                                            v-if="step.url"
+                                            :href="step.url"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="mt-1 inline-flex text-xs font-medium text-accent hover:underline">
+                                            打开官方页面
+                                        </a>
+                                    </div>
+                                </li>
+                            </ol>
+                        </details>
+
+                        <div class="flex justify-end">
+                            <RouterLink
+                                v-if="extension.loaded"
+                                v-slot="{ navigate }"
+                                custom
+                                :to="{ path: '/config', query: { add: extension.name } }">
+                                <UiButton variant="primary" @click="navigate">去配置</UiButton>
+                            </RouterLink>
+                            <UiButton
+                                v-else
+                                variant="primary"
+                                :loading="installingId === extension.id || extension.installing"
+                                :disabled="restarting || Boolean(installingId)"
+                                @click="install(extension)">
+                                {{ extension.installed ? "启用并重启" : "安装并重启" }}
+                            </UiButton>
+                        </div>
                     </div>
-                </template>
-
-                <div class="space-y-4">
-                    <div>
-                        <p class="text-sm text-fg-secondary">{{ extension.description }}</p>
-                        <p class="mt-1 font-mono text-xs text-fg-tertiary">
-                            {{ extension.packageName }}
-                        </p>
-                    </div>
-
-                    <ol v-if="extension.loaded" class="space-y-3">
-                        <li
-                            v-for="(step, index) in extension.setup"
-                            :key="step.title"
-                            class="flex gap-3 rounded-lg border border-border-subtle p-3">
-                            <span
-                                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
-                                {{ index + 1 }}
-                            </span>
-                            <div class="min-w-0">
-                                <p class="text-sm font-medium text-fg">{{ step.title }}</p>
-                                <p class="mt-0.5 text-xs leading-5 text-fg-secondary">
-                                    {{ step.description }}
-                                </p>
-                                <a
-                                    v-if="step.url"
-                                    :href="step.url"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="mt-1 inline-flex text-xs font-medium text-accent hover:underline">
-                                    打开官方页面
-                                </a>
-                            </div>
-                        </li>
-                    </ol>
-
-                    <div class="flex justify-end">
-                        <RouterLink
-                            v-if="extension.loaded"
-                            v-slot="{ navigate }"
-                            custom
-                            :to="{ path: '/config', query: { add: extension.name } }">
-                            <UiButton variant="primary" @click="navigate">去配置</UiButton>
-                        </RouterLink>
-                        <UiButton
-                            v-else
-                            variant="primary"
-                            :loading="installingId === extension.id || extension.installing"
-                            :disabled="restarting || Boolean(installingId)"
-                            @click="install(extension)">
-                            {{ extension.installed ? "启用并重启" : "安装并重启" }}
-                        </UiButton>
-                    </div>
-                </div>
-            </UiCard>
+                </UiCard>
+            </div>
         </div>
     </div>
 </template>
