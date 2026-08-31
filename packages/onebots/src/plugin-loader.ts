@@ -6,8 +6,15 @@ export type PluginInspection =
     | { status: "broken"; candidate: string; reason: string; buildCommand?: string }
     | { status: "missing"; candidates: string[] };
 
+export type PluginLoadResult =
+    | { loaded: true; inspection: Extract<PluginInspection, { status: "ready" }> }
+    | { loaded: false; inspection: PluginInspection; message: string };
+
 /** 区分插件未安装与 workspace 包存在但构建入口缺失。 */
-export function inspectPlugin(candidates: string[], runtimeRequire: NodeJS.Require): PluginInspection {
+export function inspectPlugin(
+    candidates: string[],
+    runtimeRequire: NodeJS.Require,
+): PluginInspection {
     for (const candidate of candidates) {
         try {
             return { status: "ready", candidate, entryPath: runtimeRequire.resolve(candidate) };
@@ -24,7 +31,9 @@ export function inspectPlugin(candidates: string[], runtimeRequire: NodeJS.Requi
                 status: "broken",
                 candidate,
                 reason,
-                buildCommand: candidate.startsWith("@onebots/") ? `pnpm --filter ${candidate} build` : undefined,
+                buildCommand: candidate.startsWith("@onebots/")
+                    ? `pnpm --filter ${candidate} build`
+                    : undefined,
             };
         }
     }
@@ -32,6 +41,41 @@ export function inspectPlugin(candidates: string[], runtimeRequire: NodeJS.Requi
 }
 
 /** 加载第一个可用插件，并且每个逻辑插件最多输出一条诊断。 */
+export function tryLoadPlugin(
+    kind: "适配器" | "协议",
+    name: string,
+    candidates: string[],
+    runtimeRequire: NodeJS.Require,
+): PluginLoadResult {
+    const inspection = inspectPlugin(candidates, runtimeRequire);
+    if (inspection.status === "missing") {
+        return {
+            loaded: false,
+            inspection,
+            message: `未找到${kind} ${name}（已尝试: ${inspection.candidates.join(", ")}）`,
+        };
+    }
+    if (inspection.status === "broken") {
+        const suggestion = inspection.buildCommand ? `；请先运行 ${inspection.buildCommand}` : "";
+        return {
+            loaded: false,
+            inspection,
+            message: `加载${kind} ${name} 失败：已找到 ${inspection.candidate}，但入口无法加载（${inspection.reason}）${suggestion}`,
+        };
+    }
+    try {
+        runtimeRequire(inspection.candidate);
+        return { loaded: true, inspection };
+    } catch (error) {
+        return {
+            loaded: false,
+            inspection,
+            message: `加载${kind} ${name} 失败：${inspection.candidate} 运行时初始化失败（${firstLine(error)}）`,
+        };
+    }
+}
+
+/** 兼容布尔返回值的加载入口；失败时输出结构化结果中的唯一诊断。 */
 export function loadPlugin(
     kind: "适配器" | "协议",
     name: string,
@@ -39,23 +83,11 @@ export function loadPlugin(
     runtimeRequire: NodeJS.Require,
     warn: (message: string) => void = console.warn,
 ): boolean {
-    const inspection = inspectPlugin(candidates, runtimeRequire);
-    if (inspection.status === "missing") {
-        warn(`[onebots] 未找到${kind} ${name}（已尝试: ${inspection.candidates.join(", ")}）`);
-        return false;
+    const result = tryLoadPlugin(kind, name, candidates, runtimeRequire);
+    if (result.loaded === false) {
+        warn(`[onebots] ${result.message}`);
     }
-    if (inspection.status === "broken") {
-        const suggestion = inspection.buildCommand ? `；请先运行 ${inspection.buildCommand}` : "";
-        warn(`[onebots] 加载${kind} ${name} 失败：已找到 ${inspection.candidate}，但入口无法加载（${inspection.reason}）${suggestion}`);
-        return false;
-    }
-    try {
-        runtimeRequire(inspection.candidate);
-        return true;
-    } catch (error) {
-        warn(`[onebots] 加载${kind} ${name} 失败：${inspection.candidate} 运行时初始化失败（${firstLine(error)}）`);
-        return false;
-    }
+    return result.loaded;
 }
 
 function resolvePackageJson(candidate: string, runtimeRequire: NodeJS.Require): string | undefined {

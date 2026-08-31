@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as net from "node:net";
 import { createRequire } from "node:module";
 import { ServiceController, type ServiceScope } from "./service-manager.js";
-import { inspectPlugin, loadPlugin } from "./plugin-loader.js";
+import { tryLoadPlugin } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 
 export type CheckLevel = "ok" | "warning" | "error";
@@ -111,27 +111,17 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 kind === "adapter"
                     ? [`@onebots/adapter-${name}`, `onebots-adapter-${name}`, name]
                     : [`@onebots/protocol-${name}`, `onebots-protocol-${name}`, name];
-            const inspection = inspectPlugin(candidates, runtimeRequire);
-            const loaded =
-                inspection.status === "ready" &&
-                loadPlugin(
-                    kind === "adapter" ? "适配器" : "协议",
-                    name,
-                    candidates,
-                    runtimeRequire,
-                    () => {},
-                );
-            pluginsReady &&= loaded;
+            const result = tryLoadPlugin(
+                kind === "adapter" ? "适配器" : "协议",
+                name,
+                candidates,
+                runtimeRequire,
+            );
+            pluginsReady &&= result.loaded;
             checks.push({
                 name: `${kind}:${name}`,
-                level: loaded ? "ok" : "error",
-                message: loaded
-                    ? `已加载 ${name}`
-                    : inspection.status === "broken"
-                      ? `${name} 无法加载: ${inspection.reason}`
-                      : inspection.status === "missing"
-                        ? `未找到 ${candidates[0]}`
-                        : `${name} 运行时初始化失败`,
+                level: result.loaded ? "ok" : "error",
+                message: result.loaded === true ? `已加载 ${name}` : result.message,
             });
         }
     }

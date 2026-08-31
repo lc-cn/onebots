@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { loadPlugin } from "./plugin-loader.js";
+import { loadPlugin, tryLoadPlugin } from "./plugin-loader.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -21,10 +21,13 @@ describe("plugin loader", () => {
         fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({ type: "module" }));
         const packageDirectory = path.join(directory, "node_modules", "@onebots", "adapter-kook");
         fs.mkdirSync(packageDirectory, { recursive: true });
-        fs.writeFileSync(path.join(packageDirectory, "package.json"), JSON.stringify({
-            name: "@onebots/adapter-kook",
-            main: "lib/index.js",
-        }));
+        fs.writeFileSync(
+            path.join(packageDirectory, "package.json"),
+            JSON.stringify({
+                name: "@onebots/adapter-kook",
+                main: "lib/index.js",
+            }),
+        );
         const warnings: string[] = [];
 
         const loaded = loadPlugin(
@@ -40,5 +43,33 @@ describe("plugin loader", () => {
         expect(warnings[0]).toContain("已找到 @onebots/adapter-kook，但入口无法加载");
         expect(warnings[0]).toContain("pnpm --filter @onebots/adapter-kook build");
         expect(warnings[0]).not.toContain("onebots-adapter-kook 失败");
+    });
+
+    it("preserves the plugin initialization error for doctor diagnostics", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
+        temporaryDirectories.push(directory);
+        fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({ type: "module" }));
+        const packageDirectory = path.join(directory, "node_modules", "conflicting-adapter");
+        fs.mkdirSync(packageDirectory, { recursive: true });
+        fs.writeFileSync(
+            path.join(packageDirectory, "package.json"),
+            JSON.stringify({ name: "conflicting-adapter", main: "index.cjs" }),
+        );
+        fs.writeFileSync(
+            path.join(packageDirectory, "index.cjs"),
+            'throw new Error("适配器 mock 已由其他实现注册");',
+        );
+
+        const result = tryLoadPlugin(
+            "适配器",
+            "mock",
+            ["conflicting-adapter"],
+            createRequire(path.join(directory, "package.json")),
+        );
+
+        expect(result).toMatchObject({
+            loaded: false,
+            message: expect.stringContaining("适配器 mock 已由其他实现注册"),
+        });
     });
 });

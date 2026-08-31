@@ -179,7 +179,7 @@ Supports Kubernetes deployment probes.
 
 Run `onebots doctor --json` as an automated gate after deployment or upgrades. When the configured port is reachable, doctor probes both endpoints whether the gateway runs in the foreground, in Docker, or as a managed service. It exits non-zero if either returns a non-2xx response. A failed `/ready` check includes the online account count and the platforms that are not ready, instead of reporting an unexplained HTTP 503.
 
-Doctor also loads the selected plugins and validates the complete account and protocol configuration against their registered schemas. When checking a configuration that was not installed as a service, pass the same `-r` and `-p` options used to start the gateway.
+Doctor also loads the selected plugins and validates the complete account and protocol configuration against their registered schemas. When checking a configuration that is not installed as a service, pass the same `-r` / `-p` arguments used by the run command. If a plugin entry exists but initialization fails, doctor preserves the first underlying error line, including duplicate registration conflicts and missing runtime dependencies, instead of reducing it to a generic initialization failure.
 
 **Kubernetes Configuration Example**:
 
