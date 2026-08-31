@@ -1,14 +1,7 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
-
-export const WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTIONS = Object.freeze([
-    "list_webhook_subscriptions",
-    "subscribe_waba_webhooks",
-    "unsubscribe_waba_webhooks",
-] as const);
-export type WhatsAppWebhookSubscriptionAction =
-    (typeof WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTIONS)[number];
 
 export const WHATSAPP_SUBSCRIBED_APP_FIELDS = Object.freeze(["id", "name", "link"] as const);
 export type WhatsAppSubscribedAppField = (typeof WHATSAPP_SUBSCRIBED_APP_FIELDS)[number];
@@ -36,12 +29,6 @@ export interface WhatsAppWebhookSubscriptionRequest {
 export interface WhatsAppWebhookSubscriptionMutationResponse {
     success: true;
     data?: WhatsAppWebhookSubscription[];
-}
-
-export function isWhatsAppWebhookSubscriptionAction(
-    action: string,
-): action is WhatsAppWebhookSubscriptionAction {
-    return (WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTIONS as readonly string[]).includes(action);
 }
 
 /** WABA Webhook App 订阅控制面；verify token 只存在于写请求。 */
@@ -83,40 +70,43 @@ export class WhatsAppWebhookSubscriptions {
             WHATSAPP_SUBSCRIBED_APP_FIELDS,
         );
     }
-
-    execute(
-        action: WhatsAppWebhookSubscriptionAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "list_webhook_subscriptions":
-                rejectUnknown(params, ["fields"]);
-                return this.list(
-                    params.fields === undefined
-                        ? WHATSAPP_SUBSCRIBED_APP_FIELDS
-                        : fieldSelection(params.fields),
-                );
-            case "subscribe_waba_webhooks":
-                rejectUnknown(params, ["subscription"]);
-                return this.subscribe(
-                    params.subscription === undefined
-                        ? {}
-                        : subscriptionRequest(params.subscription),
-                );
-            case "unsubscribe_waba_webhooks":
-                rejectUnknown(params, []);
-                return this.unsubscribe();
-        }
-    }
 }
 
-export const WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.webhookSubscriptions.execute(action, params),
-    ]),
-) as Record<WhatsAppWebhookSubscriptionAction, PlatformActionHandler<WhatsAppClient>>;
+type WebhookSubscriptionActionParams = Readonly<Record<string, unknown>>;
+
+const WEBHOOK_SUBSCRIPTION_ACTION_HANDLERS = {
+    list_webhook_subscriptions: (client: WhatsAppClient, params: WebhookSubscriptionActionParams) =>
+        client.webhookSubscriptions.list(
+            params.fields === undefined
+                ? WHATSAPP_SUBSCRIBED_APP_FIELDS
+                : fieldSelection(params.fields),
+        ),
+    subscribe_waba_webhooks: (client: WhatsAppClient, params: WebhookSubscriptionActionParams) =>
+        client.webhookSubscriptions.subscribe(
+            params.subscription === undefined ? {} : subscriptionRequest(params.subscription),
+        ),
+    unsubscribe_waba_webhooks: (client: WhatsAppClient) =>
+        client.webhookSubscriptions.unsubscribe(),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Webhook Subscription 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    WEBHOOK_SUBSCRIPTION_ACTION_HANDLERS,
+    {
+        list_webhook_subscriptions: ["fields"],
+        subscribe_waba_webhooks: ["subscription"],
+        unsubscribe_waba_webhooks: [],
+    },
+);
+
+export type WhatsAppWebhookSubscriptionAction =
+    keyof typeof WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTION_HANDLERS;
+
+export function isWhatsAppWebhookSubscriptionAction(
+    action: string,
+): action is WhatsAppWebhookSubscriptionAction {
+    return Object.hasOwn(WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTION_HANDLERS, action);
+}
 
 function subscriptionRequest(value: unknown): WhatsAppWebhookSubscriptionRequest {
     const source = inputRecord(value, "subscription");

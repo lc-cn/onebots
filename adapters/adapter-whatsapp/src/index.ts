@@ -190,7 +190,6 @@ export {
     isWhatsAppWebhookSubscriptionAction,
     WhatsAppWebhookSubscriptions,
     WHATSAPP_SUBSCRIBED_APP_FIELDS,
-    WHATSAPP_WEBHOOK_SUBSCRIPTION_ACTIONS,
     type WhatsAppSubscribedAppData,
     type WhatsAppSubscribedAppField,
     type WhatsAppWebhookSubscription,

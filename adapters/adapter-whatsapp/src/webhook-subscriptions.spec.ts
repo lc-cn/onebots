@@ -68,6 +68,16 @@ describe("WhatsAppWebhookSubscriptions", () => {
         expect(fetcher.mock.calls[0]?.[1]?.body).toBeUndefined();
     });
 
+    it("取消订阅拒绝契约外参数并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "unsubscribe_waba_webhooks", { force: true }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "unsubscribe_waba_webhooks", parameter: "force" },
+        });
+    });
+
     it.each([
         ["空字段", "list_webhook_subscriptions", { fields: [] }],
         ["未知字段", "list_webhook_subscriptions", { fields: ["token"] }],
@@ -82,7 +92,6 @@ describe("WhatsAppWebhookSubscriptions", () => {
             { subscription: { override_callback_uri: "https://user:pass@bots.example/webhook" } },
         ],
         ["未知订阅字段", "subscribe_waba_webhooks", { subscription: { fields: [] } }],
-        ["取消参数", "unsubscribe_waba_webhooks", { force: true }],
     ])("拒绝%s", async (_label, action, params) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(executeWhatsAppPlatformAction(client, action, params)).rejects.toMatchObject({
