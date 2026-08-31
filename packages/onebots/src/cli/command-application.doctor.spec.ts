@@ -46,6 +46,7 @@ describe("doctor configuration scope", () => {
             target: {
                 configPath: string;
                 dataDirectory: string;
+                databasePath: string | null;
                 extensionRoot: string;
                 workingDirectory: string;
                 service: { scope: string; mode: string };
@@ -66,6 +67,7 @@ describe("doctor configuration scope", () => {
             target: {
                 configPath,
                 dataDirectory: path.join(directory, "data"),
+                databasePath: path.join(directory, "data", "onebots.db"),
                 extensionRoot: directory,
                 workingDirectory: process.cwd(),
                 service: { scope: "user", mode: "standalone" },

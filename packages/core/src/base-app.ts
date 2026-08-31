@@ -16,7 +16,7 @@ import { Adapter } from "./adapter.js";
 import { Protocol } from "./protocol.js";
 import process from "process";
 import { Account } from "./account.js";
-import { SqliteDB } from "./db.js";
+import { resolveDatabaseFilePath, SqliteDB } from "./db.js";
 import pkg from "../package.json" with { type: "json" };
 import { AdapterRegistry } from "./registry.js";
 import { ConfigValidator, BaseAppConfigSchema } from "./config-validator.js";
@@ -150,7 +150,7 @@ export class BaseApp extends Koa {
         this.enhancedLogger = createLogger("[onebots]", this.config.log_level);
 
         // 注册数据库资源到生命周期管理器
-        this.db = new SqliteDB(path.resolve(BaseApp.dataDir, this.config.database));
+        this.db = new SqliteDB(resolveDatabaseFilePath(BaseApp.dataDir, this.config.database));
         this.lifecycle.register("database", () => this.db.close());
 
         // 创建 HTTP 服务器

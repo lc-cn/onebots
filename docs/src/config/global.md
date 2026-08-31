@@ -61,6 +61,12 @@ general:
 - **单位**: 秒
 - **说明**: 账号登录超时时间
 
+### database
+
+- **类型**: 非空 `string`
+- **默认值**: `onebots.db`
+- **说明**: SQLite 数据库文件。相对路径以配置文件同级的 `data` 目录为根，绝对路径保持不变；未以 `.db` 结尾时会自动补充扩展名，修改后需要重启。`onebots doctor` 会验证解析后的实际文件及其父目录是否可读写，而不只检查默认数据目录。
+
 ### access_token / username / password
 
 - **类型**: `string`

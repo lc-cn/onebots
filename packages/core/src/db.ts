@@ -2,6 +2,12 @@ import { DatabaseSync } from "node:sqlite";
 import * as fs from "fs";
 import * as path from "path";
 
+/** 按运行时约定解析数据库文件：相对路径以 data 目录为根，绝对路径保持不变。 */
+export function resolveDatabaseFilePath(dataDirectory: string, database: string): string {
+    const resolved = path.resolve(dataDirectory, database);
+    return resolved.endsWith(".db") ? resolved : `${resolved}.db`;
+}
+
 /**
  * SQLite-based database implementation to replace JsonDB
  * Uses Node.js built-in SQLite support (node:sqlite)

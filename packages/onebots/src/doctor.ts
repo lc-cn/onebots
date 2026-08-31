@@ -25,6 +25,7 @@ import {
     ensureRuntimeDataDirectory,
     inspectRuntimeDataDirectory,
 } from "./runtime-data-directory.js";
+import { inspectConfiguredDatabase } from "./doctor-database.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
     compareDoctorEndpointIdentities,
@@ -43,6 +44,7 @@ export interface DoctorPluginTarget {
 export interface DoctorTarget {
     configPath: string;
     dataDirectory: string;
+    databasePath: string | null;
     extensionRoot: string;
     workingDirectory: string;
     service: {
@@ -174,6 +176,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
 
     const dataDir = path.resolve(path.dirname(options.configPath), "data");
     checks.push(inspectDataDirectory(dataDir, options.fix));
+    const database = inspectConfiguredDatabase(dataDir, config);
+    if (database.check) checks.push(database.check);
 
     const useInstalledService = options.useInstalledService !== false;
     const controller = new ServiceController(options.scope);
@@ -355,6 +359,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         target: {
             configPath: path.resolve(options.configPath),
             dataDirectory: dataDir,
+            databasePath: database.path,
             extensionRoot: extensionRuntime.root,
             workingDirectory: path.resolve(selection.workingDirectory),
             service: {

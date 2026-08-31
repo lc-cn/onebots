@@ -861,6 +861,7 @@ describe("doctor persisted plugin selection", () => {
         expect(report.target).toMatchObject({
             configPath,
             dataDirectory: path.join(directory, "data"),
+            databasePath: path.join(directory, "data", "onebots.db"),
             service: { scope: "user", mode: "uninstalled" },
             plugins: {
                 adapters: { source: "config", names: ["missing-first-run"] },

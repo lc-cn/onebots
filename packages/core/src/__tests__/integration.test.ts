@@ -4,11 +4,13 @@
  */
 
 import { describe, it, expect } from "vitest";
+import * as path from "node:path";
 import { ConfigValidator, BaseAppConfigSchema } from "../config-validator.js";
 import { LifecycleManager } from "../lifecycle.js";
 import { Container } from "../di-container.js";
 import { ErrorHandler } from "../errors.js";
 import { createLogger } from "../logger.js";
+import { resolveDatabaseFilePath } from "../db.js";
 
 describe("Integration Tests", () => {
     describe("Config Validation Integration", () => {
@@ -31,6 +33,28 @@ describe("Integration Tests", () => {
             expect(() => {
                 ConfigValidator.validate(invalidConfig, BaseAppConfigSchema);
             }).toThrow();
+        });
+
+        it("rejects an empty database target and resolves supported path forms", () => {
+            const dataDirectory = path.resolve("runtime-data");
+            const absoluteDatabase = path.resolve("external-state", "runtime.db");
+            let validationError: unknown;
+            try {
+                ConfigValidator.validate({ database: "" }, BaseAppConfigSchema);
+            } catch (error) {
+                validationError = error;
+            }
+            expect(validationError).toMatchObject({
+                message: "Configuration validation failed",
+                context: { errors: ["database length must be >= 1"] },
+            });
+            expect(resolveDatabaseFilePath(dataDirectory, "nested/runtime.db")).toBe(
+                path.join(dataDirectory, "nested", "runtime.db"),
+            );
+            expect(resolveDatabaseFilePath(dataDirectory, absoluteDatabase)).toBe(absoluteDatabase);
+            expect(resolveDatabaseFilePath(dataDirectory, "runtime")).toBe(
+                path.join(dataDirectory, "runtime.db"),
+            );
         });
     });
 

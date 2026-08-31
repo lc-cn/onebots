@@ -394,6 +394,7 @@ export const BaseAppConfigSchema: Schema = {
     },
     database: {
         type: "string",
+        min: 1,
         default: "onebots.db",
     },
     timeout: {
