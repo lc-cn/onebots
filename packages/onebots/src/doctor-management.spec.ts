@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { probeDoctorManagement } from "./doctor-management.js";
 
+const capabilityEvidence = () => ({
+    capabilityDeclared: true,
+    capabilities: { version: 1, actions: {}, events: {}, segments: {}, transports: {} },
+    accountCapabilities: {},
+    accountCapabilityErrors: {},
+});
+
 describe("doctor management probes", () => {
     beforeEach(() => vi.stubEnv("ONEBOTS_ACCESS_TOKEN", ""));
     afterEach(() => vi.unstubAllEnvs());
@@ -14,7 +21,7 @@ describe("doctor management probes", () => {
                     JSON.stringify([
                         {
                             platform: "mock",
-                            accountCapabilityErrors: {},
+                            ...capabilityEvidence(),
                             accounts: [
                                 {
                                     uin: "bot",
@@ -62,7 +69,7 @@ describe("doctor management probes", () => {
             "运行态已验证: 1 个账号，1 个协议出口均就绪",
         );
         expect(checks.find(check => check.name === "management-capabilities")?.message).toBe(
-            "账号能力证据已验证: 1 个账号均可读取可信能力清单",
+            "能力证据已验证: 1 个适配器默认清单与 1 个账号能力均可信",
         );
         expect(upgrade).toHaveBeenNthCalledWith(1, "http://127.0.0.1:6727/");
         expect(upgrade).toHaveBeenNthCalledWith(2, "http://127.0.0.1:6727/", "secret");
@@ -222,7 +229,7 @@ describe("doctor management probes", () => {
                     JSON.stringify([
                         {
                             platform: "kook",
-                            accountCapabilityErrors: {},
+                            ...capabilityEvidence(),
                             accounts: [
                                 {
                                     uin: "primary",
@@ -275,6 +282,7 @@ describe("doctor management probes", () => {
                     JSON.stringify([
                         {
                             platform: "custom",
+                            ...capabilityEvidence(),
                             accountCapabilityErrors: {
                                 bot: {
                                     code: "capability_unavailable",
@@ -334,8 +342,8 @@ describe("doctor management probes", () => {
                     JSON.stringify([
                         {
                             platform: "third-party",
+                            ...capabilityEvidence(),
                             capabilityDeclared: false,
-                            accountCapabilityErrors: {},
                             accounts: [],
                         },
                     ]),
@@ -378,6 +386,7 @@ describe("doctor management probes", () => {
                     JSON.stringify([
                         {
                             platform: "custom",
+                            ...capabilityEvidence(),
                             accountCapabilityErrors: {
                                 ghost: { code: "unknown", message: "ignored" },
                             },
@@ -408,7 +417,100 @@ describe("doctor management probes", () => {
         expect(checks.find(check => check.name === "management-capabilities")).toEqual({
             name: "management-capabilities",
             level: "error",
-            message: "账号能力诊断契约无效: custom.ghost 不对应已配置账号",
+            message: "适配器能力契约无效: custom.ghost 不对应已配置账号",
+        });
+    });
+
+    it("proves a loaded adapter default manifest without pretending an account exists", async () => {
+        const checks = await probeWithAdapters([
+            { platform: "mock", ...capabilityEvidence(), accounts: [] },
+        ]);
+
+        expect(checks.find(check => check.name === "management-capabilities")).toEqual({
+            name: "management-capabilities",
+            level: "ok",
+            message: "能力证据已验证: 1 个适配器默认清单有效，尚未配置账号",
+        });
+    });
+
+    it("rejects a claimed capability declaration without a concrete manifest", async () => {
+        const checks = await probeWithAdapters([
+            {
+                platform: "custom",
+                capabilityDeclared: true,
+                accountCapabilities: {},
+                accountCapabilityErrors: {},
+                accounts: [],
+            },
+        ]);
+
+        expect(checks.find(check => check.name === "management-capabilities")).toEqual({
+            name: "management-capabilities",
+            level: "error",
+            message: "适配器能力契约无效: custom 默认能力清单无效: 适配器能力清单必须是对象",
+        });
+    });
+
+    it("rejects account capability overrides that cannot be tied to configured accounts", async () => {
+        const evidence = capabilityEvidence();
+        const checks = await probeWithAdapters([
+            {
+                platform: "custom",
+                ...evidence,
+                accountCapabilities: { ghost: evidence.capabilities },
+                accounts: [],
+            },
+        ]);
+
+        expect(checks.find(check => check.name === "management-capabilities")).toEqual({
+            name: "management-capabilities",
+            level: "error",
+            message: "适配器能力契约无效: custom.ghost 的能力覆写不对应已配置账号",
+        });
+    });
+
+    it("rejects malformed account capability manifests", async () => {
+        const evidence = capabilityEvidence();
+        const checks = await probeWithAdapters([
+            {
+                platform: "custom",
+                ...evidence,
+                accountCapabilities: {
+                    bot: {
+                        ...evidence.capabilities,
+                        actions: { send_message: { support: "unknown" } },
+                    },
+                },
+                accounts: [{ uin: "bot", status: "online", protocols: [] }],
+            },
+        ]);
+
+        expect(checks.find(check => check.name === "management-capabilities")).toEqual({
+            name: "management-capabilities",
+            level: "error",
+            message:
+                "适配器能力契约无效: custom.bot 账号能力清单无效: 适配器能力 actions.send_message 的 support 无效",
+        });
+    });
+
+    it("rejects contradictory account capability evidence", async () => {
+        const evidence = capabilityEvidence();
+        const checks = await probeWithAdapters([
+            {
+                platform: "custom",
+                ...evidence,
+                accountCapabilities: { bot: evidence.capabilities },
+                accountCapabilityErrors: {
+                    bot: { code: "capability_unavailable", message: "读取失败" },
+                },
+                accounts: [{ uin: "bot", status: "online", protocols: [] }],
+            },
+        ]);
+
+        expect(checks.find(check => check.name === "management-capabilities")).toEqual({
+            name: "management-capabilities",
+            level: "error",
+            message: "适配器能力契约无效: custom.bot 同时声明能力覆写和不可用诊断",
         });
     });
 
@@ -480,6 +582,29 @@ describe("doctor management probes", () => {
         });
     });
 });
+
+async function probeWithAdapters(adapters: unknown[]) {
+    const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+        if (input.endsWith("/api/adapters")) {
+            return new Response(JSON.stringify(adapters), { status: 200 });
+        }
+        if (input.endsWith("/api/system")) return inSyncSystemResponse();
+        return new Headers(init?.headers).has("authorization")
+            ? new Response(JSON.stringify({ success: true }), { status: 200 })
+            : new Response(null, { status: 401 });
+    });
+    return probeDoctorManagement(
+        "http://127.0.0.1:6727",
+        { access_token: "secret" },
+        {
+            fetcher,
+            upgrade: async (_url, token) => ({
+                upgraded: Boolean(token),
+                status: token ? 101 : 401,
+            }),
+        },
+    );
+}
 
 function inSyncSystemResponse(): Response {
     return new Response(

@@ -1,5 +1,6 @@
 import * as http from "node:http";
 import { randomBytes } from "node:crypto";
+import { assertAdapterCapabilities } from "@onebots/core";
 import type { DoctorCheck } from "./doctor.js";
 import {
     acquireManagementCredential,
@@ -104,6 +105,8 @@ interface RuntimeAdapterSummary {
     platform?: unknown;
     accounts?: unknown;
     capabilityDeclared?: unknown;
+    capabilities?: unknown;
+    accountCapabilities?: unknown;
     accountCapabilityErrors?: unknown;
 }
 
@@ -185,13 +188,27 @@ async function probeAuthenticatedRuntime(
                 return unavailableRuntimeChecks("管理运行态契约无效: 适配器缺少 accounts 数组");
             }
             const platform = runtimeLabel(adapter.platform, "unknown");
+            if (typeof adapter.capabilityDeclared !== "boolean") {
+                capabilityContractIssues.push(`${platform} 的 capabilityDeclared 必须是布尔值`);
+            }
             if (adapter.capabilityDeclared === false) {
                 capabilityIssues.push(`${platform}: 适配器默认能力清单未声明`);
             }
+            inspectCapabilityManifest(
+                `${platform} 默认能力清单`,
+                adapter.capabilities,
+                capabilityContractIssues,
+            );
             const accountIds = new Set(
                 (adapter.accounts as RuntimeAccountSummary[]).map(account =>
                     runtimeLabel(account.uin, "unknown"),
                 ),
+            );
+            const overrideIds = inspectAccountCapabilityOverrides(
+                platform,
+                accountIds,
+                adapter.accountCapabilities,
+                capabilityContractIssues,
             );
             inspectCapabilityDiagnostics(
                 platform,
@@ -199,6 +216,7 @@ async function probeAuthenticatedRuntime(
                 adapter.accountCapabilityErrors,
                 capabilityIssues,
                 capabilityContractIssues,
+                overrideIds,
             );
             for (const account of adapter.accounts as RuntimeAccountSummary[]) {
                 accountCount++;
@@ -237,7 +255,12 @@ async function probeAuthenticatedRuntime(
                         ? `运行态已验证: ${accountCount} 个账号，${protocolCount} 个协议出口均就绪`
                         : `运行态未就绪: ${issues.join("；")}`,
             },
-            capabilityDoctorCheck(accountCount, capabilityIssues, capabilityContractIssues),
+            capabilityDoctorCheck(
+                payload.length,
+                accountCount,
+                capabilityIssues,
+                capabilityContractIssues,
+            ),
         ];
     } catch (error) {
         return [
@@ -247,12 +270,48 @@ async function probeAuthenticatedRuntime(
     }
 }
 
+function inspectAccountCapabilityOverrides(
+    platform: string,
+    accountIds: ReadonlySet<string>,
+    value: unknown,
+    contractIssues: string[],
+): ReadonlySet<string> {
+    const overrideIds = new Set<string>();
+    if (!isRecord(value)) {
+        contractIssues.push(`${platform} 缺少 accountCapabilities 对象`);
+        return overrideIds;
+    }
+    for (const [accountId, manifest] of Object.entries(value)) {
+        overrideIds.add(accountId);
+        if (!accountIds.has(accountId)) {
+            contractIssues.push(`${platform}.${accountId} 的能力覆写不对应已配置账号`);
+            continue;
+        }
+        inspectCapabilityManifest(
+            `${platform}.${accountId} 账号能力清单`,
+            manifest,
+            contractIssues,
+        );
+    }
+    return overrideIds;
+}
+
+function inspectCapabilityManifest(label: string, value: unknown, contractIssues: string[]): void {
+    try {
+        assertAdapterCapabilities(value);
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : "未知结构错误";
+        contractIssues.push(`${label}无效: ${detail.slice(0, 500)}`);
+    }
+}
+
 function inspectCapabilityDiagnostics(
     platform: string,
     accountIds: ReadonlySet<string>,
     value: unknown,
     issues: string[],
     contractIssues: string[],
+    overrideIds: ReadonlySet<string>,
 ): void {
     if (!isRecord(value)) {
         contractIssues.push(`${platform} 缺少 accountCapabilityErrors 对象`);
@@ -272,11 +331,16 @@ function inspectCapabilityDiagnostics(
             contractIssues.push(`${platform}.${accountId} 诊断结构无效`);
             continue;
         }
+        if (overrideIds.has(accountId)) {
+            contractIssues.push(`${platform}.${accountId} 同时声明能力覆写和不可用诊断`);
+            continue;
+        }
         issues.push(`${platform}.${accountId}: ${diagnostic.message.trim().slice(0, 500)}`);
     }
 }
 
 function capabilityDoctorCheck(
+    adapterCount: number,
     accountCount: number,
     issues: string[],
     contractIssues: string[],
@@ -285,7 +349,7 @@ function capabilityDoctorCheck(
         return {
             name: "management-capabilities",
             level: "error",
-            message: `账号能力诊断契约无效: ${contractIssues.join("；")}`,
+            message: `适配器能力契约无效: ${contractIssues.join("；")}`,
         };
     }
     return {
@@ -293,7 +357,11 @@ function capabilityDoctorCheck(
         level: issues.length === 0 ? "ok" : "error",
         message:
             issues.length === 0
-                ? `账号能力证据已验证: ${accountCount} 个账号均可读取可信能力清单`
+                ? accountCount === 0
+                    ? adapterCount === 0
+                        ? "能力证据已验证: 当前未加载适配器，尚无账号能力可核对"
+                        : `能力证据已验证: ${adapterCount} 个适配器默认清单有效，尚未配置账号`
+                    : `能力证据已验证: ${adapterCount} 个适配器默认清单与 ${accountCount} 个账号能力均可信`
                 : `账号能力证据不可用: ${issues.join("；")}`,
     };
 }
