@@ -148,7 +148,7 @@ curl --fail http://localhost:6727/health
 curl --fail http://localhost:6727/ready
 ```
 
-Before an account is configured, `/ready` keeps the management surface reachable and reports `configured: false`; doctor presents this as a warning. An unavailable account or protocol outlet makes `/ready` return HTTP 503.
+Before an account is configured, `/ready` keeps the management surface reachable and reports `configured: false`; doctor presents this as a warning. `/ready` returns HTTP 503 when an account is offline, a protocol outlet fails to start, or any account has no protocol outlet configured.
 
 ## Next Steps
 
@@ -156,4 +156,3 @@ Before an account is configured, `/ready` keeps the management surface reachable
 - 🔧 Check the [Configuration Guide](/en/config/global) for detailed configuration options
 - 💻 Learn about the [Client SDK](/en/guide/client-sdk) for developing cross-protocol applications
 - 🔌 Explore [Platform Documentation](/en/platform/wechat) for platform-specific features
-

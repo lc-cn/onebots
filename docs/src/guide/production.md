@@ -177,9 +177,9 @@ scrape_configs:
 - `/health`: 基础健康检查
 - `/ready`: 检查服务、账号和每个协议出口是否就绪
 
-`/ready` 的 `summary` 同时给出账号与协议实例总数、在线/就绪数量；每个平台还会列出协议的 `ready`、`unavailable` 与 `total`。即使平台账号已经 online，只要任一协议 `start()` 失败，端点仍会返回 HTTP 503。首次启动尚未配置账号时，管理面保持 HTTP 200 以便继续配置，但响应包含 `configured: false`，doctor 会把它明确标为警告。
+`/ready` 的 `summary` 同时给出账号与协议实例总数、在线/就绪数量以及 `accounts_without_protocols`；每个平台也会列出缺少协议出口的账号数，以及协议的 `ready`、`unavailable` 与 `total`。即使平台账号已经 online，只要任一协议 `start()` 失败或任一账号没有协议出口，端点仍会返回 HTTP 503。首次启动尚未配置账号时，管理面保持 HTTP 200 以便继续配置，但响应包含 `configured: false`，doctor 会把它明确标为警告。
 
-部署或更新后可运行 `onebots doctor --json` 作为自动化门禁。配置端口可连接时，无论网关以前台、Docker 还是托管服务方式运行，doctor 都会同时探测这两个端点；非 2xx、非 JSON、`status` 不是 `ok` 或 `ready` 不是 `true` 都会让检查失败。`/ready` 失败时，报告会列出在线账号、就绪协议数量以及对应的未就绪平台，避免只看到一个没有上下文的 HTTP 503。
+部署或更新后可运行 `onebots doctor --json` 作为自动化门禁。配置端口可连接时，无论网关以前台、Docker 还是托管服务方式运行，doctor 都会同时探测这两个端点；非 2xx、非 JSON、`status` 不是 `ok` 或 `ready` 不是 `true` 都会让检查失败。`/ready` 失败时，报告会列出在线账号、就绪协议数量、对应的未就绪平台以及缺少协议出口的账号，避免只看到一个没有上下文的 HTTP 503。Prometheus 可通过 `onebots_accounts_without_protocols` 为这类配置缺口设置告警。
 
 doctor 还会实际加载服务选用的插件，并使用它们注册的 Schema 校验完整账号和协议配置。直接诊断未安装为服务的配置时，应传入与启动命令相同的 `-r` / `-p` 参数。
 

@@ -196,7 +196,7 @@ curl --fail http://localhost:6727/health
 curl --fail http://localhost:6727/ready
 ```
 
-首次尚未添加账号时 `/ready` 会保持管理面可访问，并返回 `configured: false`；doctor 会明确标为警告。账号或协议出口未就绪时 `/ready` 返回 HTTP 503。
+首次尚未添加账号时 `/ready` 会保持管理面可访问，并返回 `configured: false`；doctor 会明确标为警告。账号离线、协议出口启动失败，或任一账号尚未配置协议出口时，`/ready` 返回 HTTP 503。
 
 ## 接入机器人框架
 

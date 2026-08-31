@@ -268,6 +268,7 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
                       online?: unknown;
                       total?: unknown;
                       offline?: unknown;
+                      accounts_without_protocols?: unknown;
                       protocols?: { ready?: unknown; total?: unknown; unavailable?: unknown };
                   }
               >
@@ -299,6 +300,15 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
             );
         if (unavailableProtocols.length > 0) {
             details.push(`协议未就绪: ${unavailableProtocols.join(", ")}`);
+        }
+        const accountsWithoutProtocols = Object.entries(adapters ?? {})
+            .filter(([, state]) => Number(state.accounts_without_protocols ?? 0) > 0)
+            .map(
+                ([platform, state]) =>
+                    `${platform}(${Number(state.accounts_without_protocols ?? 0)})`,
+            );
+        if (accountsWithoutProtocols.length > 0) {
+            details.push(`无协议出口: ${accountsWithoutProtocols.join(", ")}`);
         }
         return details.length > 0 ? `；${details.join("；")}` : "";
     } catch {

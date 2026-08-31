@@ -57,6 +57,28 @@ describe("application readiness", () => {
         expect(snapshot.summary.ready_protocols).toBe(2);
     });
 
+    it("rejects an online account without any protocol outlet", () => {
+        const snapshot = getReadinessSnapshot(observableApp([{ status: "online", protocols: [] }]));
+
+        expect(snapshot).toMatchObject({
+            ready: false,
+            configured: true,
+            adapters: {
+                mock: {
+                    online: 1,
+                    accounts_without_protocols: 1,
+                    protocols: { ready: 0, unavailable: 0, total: 0 },
+                },
+            },
+            summary: {
+                total_accounts: 1,
+                online_accounts: 1,
+                total_protocols: 0,
+                accounts_without_protocols: 1,
+            },
+        });
+    });
+
     it("keeps an empty first-run gateway reachable while exposing pending configuration", () => {
         const snapshot = getReadinessSnapshot(observableApp([]));
 
@@ -72,6 +94,9 @@ describe("application readiness", () => {
 
         expect(formatProtocolReadinessMetrics(snapshot)).toContain(
             'onebots_protocols_total{platform="mock\\"adapter",status="ready"} 1',
+        );
+        expect(formatProtocolReadinessMetrics(snapshot)).toContain(
+            'onebots_accounts_without_protocols{platform="mock\\"adapter"} 0',
         );
     });
 });

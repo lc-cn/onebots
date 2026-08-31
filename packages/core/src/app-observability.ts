@@ -18,6 +18,7 @@ interface AdapterReadinessCounts {
     online: number;
     offline: number;
     total: number;
+    accounts_without_protocols: number;
     protocols: ProtocolReadinessCounts;
 }
 
@@ -33,6 +34,7 @@ export interface ReadinessSnapshot {
         online_accounts: number;
         total_protocols: number;
         ready_protocols: number;
+        accounts_without_protocols: number;
     };
 }
 
@@ -44,12 +46,14 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
     let totalAccounts = 0;
     let totalProtocols = 0;
     let readyProtocols = 0;
+    let accountsWithoutProtocols = 0;
 
     for (const [platform, adapter] of app.adapters) {
         let online = 0;
         let offline = 0;
         let adapterProtocols = 0;
         let adapterReadyProtocols = 0;
+        let adapterAccountsWithoutProtocols = 0;
         for (const account of adapter.accounts.values()) {
             totalAccounts++;
             if (account.status === "online") {
@@ -57,6 +61,10 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
                 totalOnline++;
             } else {
                 offline++;
+            }
+            if (account.protocols.length === 0) {
+                adapterAccountsWithoutProtocols++;
+                accountsWithoutProtocols++;
             }
             for (const protocol of account.protocols) {
                 adapterProtocols++;
@@ -72,13 +80,16 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
             online,
             offline,
             total: online + offline,
+            accounts_without_protocols: adapterAccountsWithoutProtocols,
             protocols: {
                 ready: adapterReadyProtocols,
                 unavailable: unavailableProtocols,
                 total: adapterProtocols,
             },
         };
-        if (offline > 0 || unavailableProtocols > 0) allReady = false;
+        if (offline > 0 || unavailableProtocols > 0 || adapterAccountsWithoutProtocols > 0) {
+            allReady = false;
+        }
     }
 
     return {
@@ -93,6 +104,7 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
             online_accounts: totalOnline,
             total_protocols: totalProtocols,
             ready_protocols: readyProtocols,
+            accounts_without_protocols: accountsWithoutProtocols,
         },
     };
 }
@@ -107,6 +119,16 @@ export function formatProtocolReadinessMetrics(snapshot: ReadinessSnapshot): str
         lines.push(
             `onebots_protocols_total{platform="${label}",status="ready"} ${state.protocols.ready}`,
             `onebots_protocols_total{platform="${label}",status="unavailable"} ${state.protocols.unavailable}`,
+        );
+    }
+    lines.push(
+        "# HELP onebots_accounts_without_protocols Number of accounts without a protocol outlet by platform",
+        "# TYPE onebots_accounts_without_protocols gauge",
+    );
+    for (const [platform, state] of Object.entries(snapshot.adapters)) {
+        const label = escapePrometheusLabel(platform);
+        lines.push(
+            `onebots_accounts_without_protocols{platform="${label}"} ${state.accounts_without_protocols}`,
         );
     }
     return lines;

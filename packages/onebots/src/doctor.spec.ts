@@ -73,6 +73,43 @@ describe("doctor health probes", () => {
         });
     });
 
+    it("reports online accounts that have no protocol outlet", async () => {
+        const fetcher = vi.fn(
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        ready: false,
+                        configured: true,
+                        adapters: {
+                            mock: {
+                                online: 1,
+                                offline: 0,
+                                total: 1,
+                                accounts_without_protocols: 1,
+                                protocols: { ready: 0, unavailable: 0, total: 0 },
+                            },
+                        },
+                        summary: {
+                            total_accounts: 1,
+                            online_accounts: 1,
+                            total_protocols: 0,
+                            ready_protocols: 0,
+                            accounts_without_protocols: 1,
+                        },
+                    }),
+                    { status: 503 },
+                ),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "ready", fetcher),
+        ).resolves.toEqual({
+            name: "ready",
+            level: "error",
+            message: "ready: HTTP 503；账号 1/1 在线；无协议出口: mock(1)",
+        });
+    });
+
     it("marks a reachable but unconfigured first-run gateway as a warning", async () => {
         const fetcher = vi.fn(
             async () =>
