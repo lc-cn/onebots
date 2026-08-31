@@ -201,9 +201,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
 
     if (config) {
         const port = Number(config.port ?? 6727);
-        const configuredPath = String(config.path ?? "").trim();
-        const suffix = configuredPath ? `/${configuredPath.replace(/^\/+/, "")}` : "";
-        const base = `http://127.0.0.1:${port}${suffix}`.replace(/\/$/, "");
+        const base = resolveGatewayBaseUrl(config);
         const portOpen = status.running || (await isPortOpen(port));
         if (portOpen) {
             for (const endpoint of ["health", "ready"] as const) {
@@ -214,6 +212,14 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         }
     }
     return { ok: !checks.some(check => check.level === "error"), checks };
+}
+
+/** 根据运行时配置生成本机管理与可观测端点的根 URL。 */
+export function resolveGatewayBaseUrl(config: Record<string, unknown>): string {
+    const port = Number(config.port ?? 6727);
+    const configuredPath = String(config.path ?? "").trim();
+    const suffix = configuredPath ? `/${configuredPath.replace(/^\/+/, "")}` : "";
+    return `http://127.0.0.1:${port}${suffix}`.replace(/\/$/, "");
 }
 
 type DoctorEndpoint = "health" | "ready";

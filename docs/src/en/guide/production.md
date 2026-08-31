@@ -187,6 +187,8 @@ Doctor also loads the selected plugins and validates the complete account and pr
 
 `onebots start` and `onebots restart` also read the saved service definition, resolve plugins from its installation `workingDirectory`, and validate the current configuration again. This catches plugins or configuration that were removed or damaged after installation. A failed start preflight never asks the operating system to launch the service, and a failed restart preflight leaves the existing instance running.
 
+After startup, `onebots status` reports both the process-manager state and the semantic results of `/health` and `/ready`. It distinguishes **running and ready**, **running but awaiting configuration**, and **running but unavailable**. An installed but stopped service or any failed probe returns exit code `1`; a missing installation returns `2`. CI/CD can therefore use `onebots status` as a lightweight deployment gate and reserve `onebots doctor --json` for full configuration and plugin diagnostics.
+
 **Kubernetes Configuration Example**:
 
 ```yaml

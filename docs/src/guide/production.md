@@ -189,6 +189,8 @@ doctor 还会实际加载服务选用的插件，并使用它们注册的 Schema
 
 `onebots start` 与 `onebots restart` 还会读取已保存的服务定义，以安装时的 `workingDirectory` 解析插件，并重新校验当前配置。这能捕获安装后被删除或损坏的插件与配置；启动预检失败时不会请求操作系统启动服务，重启预检失败时也不会先停止现有实例。
 
+服务启动后，`onebots status` 会同时显示进程管理器状态以及 `/health`、`/ready` 的语义结果。输出会区分“运行中，已就绪”“运行中，待配置”和“运行中，不可用”；已安装但未运行或任一探针失败时退出码为 `1`，服务未安装时为 `2`。因此 CI/CD 可以直接以 `onebots status` 作为轻量部署门禁，需要完整配置和插件诊断时再使用 `onebots doctor --json`。
+
 **Kubernetes 配置示例**:
 
 ```yaml
