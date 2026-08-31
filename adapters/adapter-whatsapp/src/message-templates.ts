@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import { normalizeTemplateComponents, parseTemplateComponents } from "./message-template-json.js";
@@ -26,23 +27,6 @@ import {
     type WhatsAppMessageTemplateSuccessResponse,
     type WhatsAppMessageTemplateUpdate,
 } from "./message-template-types.js";
-
-export const WHATSAPP_MESSAGE_TEMPLATE_ACTIONS = Object.freeze([
-    "list_message_templates",
-    "get_message_template",
-    "get_message_template_namespace",
-    "create_message_template",
-    "update_message_template",
-    "delete_message_template",
-    "delete_message_template_by_id",
-] as const);
-export type WhatsAppMessageTemplateAction = (typeof WHATSAPP_MESSAGE_TEMPLATE_ACTIONS)[number];
-
-export function isWhatsAppMessageTemplateAction(
-    action: string,
-): action is WhatsAppMessageTemplateAction {
-    return (WHATSAPP_MESSAGE_TEMPLATE_ACTIONS as readonly string[]).includes(action);
-}
 
 /** WABA 级消息模板读写，组件保留 Meta 可扩展的安全 JSON 结构。 */
 export class WhatsAppMessageTemplates {
@@ -125,57 +109,61 @@ export class WhatsAppMessageTemplates {
         });
         return successResponse(response);
     }
-
-    execute(
-        action: WhatsAppMessageTemplateAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "list_message_templates":
-                return this.list(actionListQuery(params));
-            case "get_message_template":
-                rejectUnknown(params, ["template_id", "fields"]);
-                return this.get(
-                    graphId(params.template_id, "template_id"),
-                    actionSelection(params),
-                );
-            case "get_message_template_namespace":
-                rejectUnknown(params, []);
-                return this.getNamespace();
-            case "create_message_template":
-                rejectUnknown(params, ["template"]);
-                return this.create(createRequest(params.template));
-            case "update_message_template":
-                rejectUnknown(params, ["template_id", "template"]);
-                return this.update(
-                    graphId(params.template_id, "template_id"),
-                    updateRequest(params.template),
-                );
-            case "delete_message_template":
-                rejectUnknown(params, ["name"]);
-                return this.deleteByName(templateName(params.name));
-            case "delete_message_template_by_id":
-                rejectUnknown(params, ["name", "template_id"]);
-                return this.deleteByName(
-                    templateName(params.name),
-                    graphId(params.template_id, "template_id"),
-                );
-        }
-    }
 }
 
-export const WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_MESSAGE_TEMPLATE_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.messageTemplates.execute(action, params),
-    ]),
-) as Record<WhatsAppMessageTemplateAction, PlatformActionHandler<WhatsAppClient>>;
+type MessageTemplateActionParams = Readonly<Record<string, unknown>>;
+
+const MESSAGE_TEMPLATE_ACTION_HANDLERS = {
+    list_message_templates: (client: WhatsAppClient, params: MessageTemplateActionParams) =>
+        client.messageTemplates.list(actionListQuery(params)),
+    get_message_template: (client: WhatsAppClient, params: MessageTemplateActionParams) =>
+        client.messageTemplates.get(
+            graphId(params.template_id, "template_id"),
+            actionSelection(params),
+        ),
+    get_message_template_namespace: (client: WhatsAppClient) =>
+        client.messageTemplates.getNamespace(),
+    create_message_template: (client: WhatsAppClient, params: MessageTemplateActionParams) =>
+        client.messageTemplates.create(createRequest(params.template)),
+    update_message_template: (client: WhatsAppClient, params: MessageTemplateActionParams) =>
+        client.messageTemplates.update(
+            graphId(params.template_id, "template_id"),
+            updateRequest(params.template),
+        ),
+    delete_message_template: (client: WhatsAppClient, params: MessageTemplateActionParams) =>
+        client.messageTemplates.deleteByName(templateName(params.name)),
+    delete_message_template_by_id: (client: WhatsAppClient, params: MessageTemplateActionParams) =>
+        client.messageTemplates.deleteByName(
+            templateName(params.name),
+            graphId(params.template_id, "template_id"),
+        ),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Message Template 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    MESSAGE_TEMPLATE_ACTION_HANDLERS,
+    {
+        list_message_templates: ["name", "fields", "limit", "after"],
+        get_message_template: ["template_id", "fields"],
+        get_message_template_namespace: [],
+        create_message_template: ["template"],
+        update_message_template: ["template_id", "template"],
+        delete_message_template: ["name"],
+        delete_message_template_by_id: ["name", "template_id"],
+    },
+);
+
+export type WhatsAppMessageTemplateAction = keyof typeof WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS;
+
+export function isWhatsAppMessageTemplateAction(
+    action: string,
+): action is WhatsAppMessageTemplateAction {
+    return Object.hasOwn(WHATSAPP_MESSAGE_TEMPLATE_ACTION_HANDLERS, action);
+}
 
 function actionListQuery(
     params: Readonly<Record<string, unknown>>,
 ): WhatsAppMessageTemplateListQuery {
-    rejectUnknown(params, ["name", "fields", "limit", "after"]);
     return {
         ...actionSelection(params),
         ...(params.name === undefined ? {} : { name: templateName(params.name) }),

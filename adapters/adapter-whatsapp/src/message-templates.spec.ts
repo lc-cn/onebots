@@ -158,6 +158,19 @@ describe("WhatsAppMessageTemplates", () => {
         expect(byId.searchParams.get("hsm_id")).toBe(template.id);
     });
 
+    it("Message Template 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "delete_message_template", {
+                name: template.name,
+                template_id: template.id,
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "delete_message_template", parameter: "template_id" },
+        });
+    });
+
     it.each([
         { label: "字符串 fields", action: "list_message_templates", params: { fields: "id" } },
         { label: "未知 fields", action: "list_message_templates", params: { fields: ["quality"] } },
@@ -197,11 +210,6 @@ describe("WhatsAppMessageTemplates", () => {
             label: "空更新",
             action: "update_message_template",
             params: { template_id: template.id, template: {} },
-        },
-        {
-            label: "附加顶层字段",
-            action: "delete_message_template",
-            params: { name: template.name, template_id: template.id },
         },
     ])("拒绝非法模板动作：$label", async ({ action, params }) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());

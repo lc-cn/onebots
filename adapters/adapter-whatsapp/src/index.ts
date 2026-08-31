@@ -73,7 +73,6 @@ export {
 export {
     isWhatsAppMessageTemplateAction,
     WhatsAppMessageTemplates,
-    WHATSAPP_MESSAGE_TEMPLATE_ACTIONS,
     type WhatsAppMessageTemplateAction,
 } from "./message-templates.js";
 export {
