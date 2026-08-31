@@ -68,6 +68,64 @@ describe("doctor management probes", () => {
         expect(upgrade).toHaveBeenNthCalledWith(2, "http://127.0.0.1:6727/", "secret");
     });
 
+    it("starts every independent configured-token probe before a slow peer completes", async () => {
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const started = new Set<string>();
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            const authorization = new Headers(init?.headers).has("authorization");
+            const name = input.endsWith("/api/adapters")
+                ? "runtime"
+                : input.endsWith("/api/system")
+                  ? "config"
+                  : authorization
+                    ? "http-authenticated"
+                    : "http-anonymous";
+            started.add(name);
+            await gate;
+            if (name === "runtime") return new Response("[]", { status: 200 });
+            if (name === "config") return inSyncSystemResponse();
+            return authorization
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+        const upgrade = vi.fn(async (_url: string, token?: string) => {
+            started.add(token ? "ws-authenticated" : "ws-anonymous");
+            await gate;
+            return token ? { upgraded: true, status: 101 } : { upgraded: false, status: 401 };
+        });
+
+        const probing = probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            { fetcher, upgrade },
+        );
+        await vi.waitFor(() => {
+            expect([...started].sort()).toEqual([
+                "config",
+                "http-anonymous",
+                "http-authenticated",
+                "runtime",
+                "ws-anonymous",
+                "ws-authenticated",
+            ]);
+        });
+        release();
+
+        const checks = await probing;
+        expect(checks.map(check => check.name)).toEqual([
+            "management-http-anonymous",
+            "management-http-authenticated",
+            "management-config",
+            "management-runtime",
+            "management-capabilities",
+            "management-ws-anonymous",
+            "management-ws-authenticated",
+        ]);
+    });
+
     it("logs in with configured credentials and revokes the temporary session", async () => {
         const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
             if (input.endsWith("/api/auth/login")) {

@@ -31,12 +31,28 @@ export async function probeDoctorManagement(
     const websocketUrl = managementWebSocketUrl(base);
     const checks: DoctorCheck[] = [];
 
-    checks.push(await probeAnonymousManagementHttp(base, fetcher));
+    const anonymousHttpPromise = probeAnonymousManagementHttp(base, fetcher);
+    const anonymousWebSocketPromise = probeAnonymousManagementWebSocket(websocketUrl, upgrade);
     const credential = await acquireDoctorManagementCredential(base, config, fetcher);
+    const authenticatedPromise = credential.token
+        ? Promise.all([
+              probeAuthenticatedManagementHttp(base, credential.token, fetcher),
+              probeAuthenticatedConfigState(base, credential.token, fetcher),
+              probeAuthenticatedRuntime(base, credential.token, fetcher),
+              probeAuthenticatedManagementWebSocket(websocketUrl, credential.token, upgrade),
+          ])
+        : null;
+    const [anonymousHttp, anonymousWebSocket, authenticated] = await Promise.all([
+        anonymousHttpPromise,
+        anonymousWebSocketPromise,
+        authenticatedPromise,
+    ]);
+
+    checks.push(anonymousHttp);
     if (credential.token) {
-        checks.push(await probeAuthenticatedManagementHttp(base, credential.token, fetcher));
-        checks.push(await probeAuthenticatedConfigState(base, credential.token, fetcher));
-        checks.push(...(await probeAuthenticatedRuntime(base, credential.token, fetcher)));
+        const [authenticatedHttp, configState, runtime, authenticatedWebSocket] = authenticated!;
+        checks.push(authenticatedHttp, configState, ...runtime);
+        checks.push(anonymousWebSocket, authenticatedWebSocket);
     } else {
         checks.push({
             name: "management-http-authenticated",
@@ -59,14 +75,7 @@ export async function probeDoctorManagement(
             level: "warning",
             message: "未获得管理令牌，无法验证账号能力证据",
         });
-    }
-
-    checks.push(await probeAnonymousManagementWebSocket(websocketUrl, upgrade));
-    if (credential.token) {
-        checks.push(
-            await probeAuthenticatedManagementWebSocket(websocketUrl, credential.token, upgrade),
-        );
-    } else {
+        checks.push(anonymousWebSocket);
         checks.push({
             name: "management-ws-authenticated",
             level: "warning",
