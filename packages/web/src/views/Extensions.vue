@@ -159,7 +159,12 @@ async function install(extension: ExtensionInfo): Promise<void> {
 
         restarting.value = true;
         const restart = await authFetch(buildApiUrl("/api/system/restart"), { method: "POST" });
-        if (!restart.ok) throw new Error("扩展已安装，但服务重启失败，请在系统信息页手动重启");
+        const restartResult = (await restart.json()) as { success: boolean; message?: string };
+        if (!restart.ok || !restartResult.success) {
+            throw new Error(
+                restartResult.message || "扩展已安装，但服务重启失败，请在系统信息页手动重启",
+            );
+        }
         await waitForRestart();
     } catch (error) {
         errorMessage.value = error instanceof Error ? error.message : String(error);

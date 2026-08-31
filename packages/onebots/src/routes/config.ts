@@ -68,13 +68,21 @@ export function registerConfigRoutes(app: App, router: Router): void {
         }
     });
 
-    /** 以临时失败码退出，让 systemd、launchd、Windows 服务或容器策略重新拉起。 */
-    router.post("/api/system/restart", (ctx: RouterContext) => {
-        ctx.body = { success: true, message: "服务即将重启" };
-        setImmediate(() => {
-            setTimeout(() => {
-                process.exit(75);
-            }, 1500);
-        });
+    /** 预检通过后以临时失败码退出，让服务管理器或容器策略重新拉起。 */
+    router.post("/api/system/restart", async (ctx: RouterContext) => {
+        try {
+            await app.preflightRestart();
+            ctx.body = { success: true, message: "重启预检通过，服务即将重启" };
+            setImmediate(() => {
+                setTimeout(() => {
+                    process.exit(75);
+                }, 1500);
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            ctx.status = 422;
+            ctx.body = { success: false, message: `重启预检失败：${message}` };
+            app.logger.error("管理端重启预检失败，当前服务继续运行", { error });
+        }
     });
 }

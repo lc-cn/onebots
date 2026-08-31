@@ -31,7 +31,7 @@ import { existsSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import type { WsServer, Dict } from "@onebots/core";
 import { getLoadedPlugins, loadPlugin, pluginCandidates } from "./plugin-loader.js";
 import { writeCliError, writeCliOutput } from "./cli-output.js";
-import { validateRuntimeConfig } from "./runtime-config-validator.js";
+import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { getAdapterInfo } from "./adapter-info.js";
 import { handleManagementConfigSocketAction } from "./management-config-socket.js";
 import {
@@ -48,6 +48,7 @@ import {
     type RuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
 import { ExtensionManager } from "./extension-manager.js";
+import { preflightServiceRuntime } from "./service-preflight.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -189,6 +190,27 @@ export class App extends BaseApp {
 
     markRuntimeConfigApplied(configPath: string, source: string): void {
         if (configPath === BaseApp.configPath) this.runtimeConfigStateTracker.markApplied(source);
+    }
+
+    /** 使用守护服务的真实解析目录验证磁盘配置和全部待启动插件。 */
+    async preflightRestart(): Promise<void> {
+        const config = parseRuntimeConfig(fs.readFileSync(BaseApp.configPath, "utf8"));
+        const selection = getRuntimePluginSelection(config);
+        const loadedPlugins = this.pluginInfos;
+        await preflightServiceRuntime({
+            configPath: BaseApp.configPath,
+            adapters:
+                selection?.adapters ??
+                loadedPlugins
+                    .filter(plugin => plugin.type === "adapter")
+                    .map(plugin => plugin.name),
+            protocols:
+                selection?.protocols ??
+                loadedPlugins
+                    .filter(plugin => plugin.type === "protocol")
+                    .map(plugin => plugin.name),
+            workingDirectory: process.cwd(),
+        });
     }
 
     protected override onConfigPersisted(configPath: string, content: string): void {
