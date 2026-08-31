@@ -238,6 +238,8 @@ describe("BaseApp reload boundary", () => {
         const app = {
             config: { ...config },
             isStarted: false,
+            isReloading: false,
+            adapters: new Map(),
             findOrCreateAdapter: vi.fn(() => adapter),
             onConfigPersisted,
         } as unknown as BaseApp;

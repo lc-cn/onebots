@@ -1,4 +1,4 @@
-import { RouterContext } from "@onebots/core";
+import { AccountMutationConflictError, RouterContext } from "@onebots/core";
 import type { Router, Adapter } from "@onebots/core";
 import type { App } from "../app.js";
 
@@ -30,7 +30,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
             await app.addAccount(config);
             ctx.body = { success: true, message: "添加成功" };
         } catch (error) {
-            ctx.status = 500;
+            ctx.status = error instanceof AccountMutationConflictError ? 409 : 500;
             ctx.body = { success: false, message: (error as Error).message };
         }
     });
@@ -40,20 +40,20 @@ export function registerAdapterRoutes(app: App, router: Router): void {
         try {
             await app.updateAccount(config);
             ctx.body = { success: true, message: "修改成功" };
-        } catch (e) {
-            ctx.status = 500;
-            ctx.body = { success: false, message: (e as Error).message };
+        } catch (error) {
+            ctx.status = error instanceof AccountMutationConflictError ? 409 : 500;
+            ctx.body = { success: false, message: (error as Error).message };
         }
     });
 
     router.get("/api/remove", async (ctx: RouterContext) => {
         const { uin, platform, force } = ctx.request.query;
         try {
-            await app.removeAccount(String(platform), String(uin), Boolean(force));
+            await app.removeAccount(String(platform), String(uin), parseBooleanQuery(force));
             ctx.body = { success: true, message: "移除成功" };
-        } catch (e) {
-            ctx.status = 500;
-            ctx.body = { success: false, message: (e as Error).message };
+        } catch (error) {
+            ctx.status = error instanceof AccountMutationConflictError ? 409 : 500;
+            ctx.body = { success: false, message: (error as Error).message };
         }
     });
 
@@ -63,9 +63,9 @@ export function registerAdapterRoutes(app: App, router: Router): void {
             const adapter = app.adapters.get(platform as keyof Adapter.Configs);
             await adapter?.setOnline(uin);
             ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
-        } catch (e) {
+        } catch (error) {
             ctx.status = 500;
-            ctx.body = { success: false, message: (e as Error).message };
+            ctx.body = { success: false, message: (error as Error).message };
         }
     });
 
@@ -75,9 +75,9 @@ export function registerAdapterRoutes(app: App, router: Router): void {
             const adapter = app.adapters.get(platform as keyof Adapter.Configs);
             await adapter?.setOffline(uin);
             ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
-        } catch (e) {
+        } catch (error) {
             ctx.status = 500;
-            ctx.body = { success: false, message: (e as Error).message };
+            ctx.body = { success: false, message: (error as Error).message };
         }
     });
 
@@ -131,10 +131,16 @@ export function registerAdapterRoutes(app: App, router: Router): void {
                 message: segments,
             });
             ctx.body = { success: true, message_id: result?.message_id ?? null };
-        } catch (e: unknown) {
-            const err = e as Error;
+        } catch (error: unknown) {
+            const err = error as Error;
             ctx.status = 500;
             ctx.body = { success: false, message: err?.message ?? "发送失败" };
         }
     });
+}
+
+function parseBooleanQuery(value: unknown): boolean {
+    if (Array.isArray(value)) return value.some(item => parseBooleanQuery(item));
+    if (typeof value !== "string") return value === true;
+    return value === "1" || value.toLowerCase() === "true";
 }

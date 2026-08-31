@@ -38,10 +38,10 @@ import {
 export type { ApplicationIdentity } from "./app-observability.js";
 import { resolvePublicStaticRoot } from "./public-static-root.js";
 import { assertHostConfigReloadable, resolveListenPort } from "./app-reload.js";
-import { writeConfigFileAtomic } from "./config-file.js";
 import { emitAllAwaited, FailureCollector } from "./async-utils.js";
 import { rollbackFailedStart as rollbackStartup } from "./startup-rollback.js";
 import { normalizeGatewayPathPrefix } from "./gateway-path.js";
+import { AccountMutationConflictError, mutateAccountAtomically } from "./account-transaction.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -274,40 +274,70 @@ export class BaseApp extends Koa {
     }
 
     public async addAccount<P extends keyof Adapter.Configs>(config: Account.Config<P>) {
-        this.config[`${config.platform}.${config.account_id}`] = config;
+        if (this.isReloading) throw new AccountMutationConflictError();
+        const adapterExisted = this.adapters.has(config.platform);
         const adapter = this.findOrCreateAdapter<P>(config.platform);
         if (!adapter) return;
-        const account = adapter.createAccount(config);
-        adapter.accounts.set(config.account_id, account);
-        if (this.isStarted) await account.start();
-        const content = yaml.dump(deepClone(this.config));
-        writeConfigFileAtomic(BaseApp.configPath, content, {
-            backup: true,
-        });
-        this.onConfigPersisted(BaseApp.configPath, content);
+        if (adapter.accounts.has(config.account_id)) {
+            throw new ValidationError(
+                `账号 ${config.platform}.${config.account_id} 已存在，请使用编辑操作`,
+            );
+        }
+        try {
+            await mutateAccountAtomically({
+                host: this,
+                adapter,
+                accountId: config.account_id,
+                nextConfig: deepClone(config),
+                configKey: `${config.platform}.${config.account_id}`,
+                configPath: BaseApp.configPath,
+                runtimeStarted: this.isStarted,
+                onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
+            });
+        } catch (error) {
+            if (!adapterExisted && adapter.accounts.size === 0) {
+                this.adapters.delete(config.platform);
+            }
+            throw error;
+        }
     }
 
     public async updateAccount<P extends keyof Adapter.Configs>(config: Adapter.Configs[P]) {
-        const adapter = this.findOrCreateAdapter(config.platform);
-        if (!adapter) return;
+        if (this.isReloading) throw new AccountMutationConflictError();
+        const adapter = this.adapters.get(config.platform);
+        if (!adapter) return this.addAccount(config);
         const account = adapter.accounts.get(config.account_id);
         if (!account) return this.addAccount(config);
-        const newConfig = deepMerge(this.config[`${config.platform}.${config.account_id}`], config);
-        await this.removeAccount(config.platform, config.account_id);
-        await this.addAccount(newConfig);
+        const key = `${config.platform}.${config.account_id}`;
+        const newConfig = deepMerge(this.config[key], config) as Account.Config<P>;
+        await mutateAccountAtomically({
+            host: this,
+            adapter,
+            accountId: config.account_id,
+            nextConfig: newConfig,
+            configKey: key,
+            configPath: BaseApp.configPath,
+            runtimeStarted: this.isStarted,
+            onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
+        });
     }
 
     public async removeAccount(p: string, uin: string, force?: boolean) {
-        const adapter = this.findOrCreateAdapter(p);
-        if (!adapter) return;
+        if (this.isReloading) throw new AccountMutationConflictError();
+        const adapter = this.adapters.get(p);
+        if (!adapter) return this.logger.warn(`未找到适配器${p}`);
         const account = adapter.accounts.get(uin);
         if (!account) return this.logger.warn(`未找到账号${uin}`);
-        await account.stop(force);
-        delete this.config[`${p}.${uin}`];
-        adapter.accounts.delete(uin);
-        const content = yaml.dump(this.config);
-        writeConfigFileAtomic(BaseApp.configPath, content, { backup: true });
-        this.onConfigPersisted(BaseApp.configPath, content);
+        await mutateAccountAtomically({
+            host: this,
+            adapter,
+            accountId: uin,
+            configKey: `${p}.${uin}`,
+            configPath: BaseApp.configPath,
+            runtimeStarted: this.isStarted,
+            forceStop: force,
+            onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
+        });
     }
 
     /** 配置由核心账号操作成功落盘后的扩展钩子。 */

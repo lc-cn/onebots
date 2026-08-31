@@ -44,6 +44,7 @@ export * from "./proxy.js";
 export * from "./rate-limiter.js";
 export * from "./circuit-breaker.js";
 export * from "./metrics.js";
+export { AccountMutationConflictError } from "./account-transaction.js";
 export * from "./connection-pool.js";
 
 // Middleware
