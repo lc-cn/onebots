@@ -194,12 +194,18 @@ function escapePrometheusLabel(value: string): string {
     return value.replace(/\\/gu, "\\\\").replace(/\n/gu, "\\n").replace(/"/gu, '\\"');
 }
 
+/** 观测结果描述当前进程瞬时状态，禁止浏览器或中间代理复用旧证据。 */
+function preventObservabilityCaching(ctx: { set(field: string, value: string): unknown }): void {
+    ctx.set("Cache-Control", "no-store");
+}
+
 /** 注册不依赖管理端鉴权的存活、就绪与 Prometheus 端点。 */
 export function registerObservabilityEndpoints(
     app: ObservableApp,
     identity: RuntimeIdentity,
 ): void {
     app.router.get("/health", ctx => {
+        preventObservabilityCaching(ctx);
         const processIdentity = getRuntimeProcessIdentity();
         ctx.body = {
             status: "ok",
@@ -214,6 +220,7 @@ export function registerObservabilityEndpoints(
     });
 
     app.router.get("/ready", ctx => {
+        preventObservabilityCaching(ctx);
         const snapshot = getReadinessSnapshot(app);
         const processIdentity = getRuntimeProcessIdentity();
         ctx.status = snapshot.ready ? 200 : 503;
@@ -228,6 +235,7 @@ export function registerObservabilityEndpoints(
     });
 
     app.router.get("/metrics", ctx => {
+        preventObservabilityCaching(ctx);
         const memory = process.memoryUsage();
         const readiness = getReadinessSnapshot(app);
         const lines = [

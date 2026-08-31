@@ -23,6 +23,7 @@ export async function readServiceInstanceId(
     try {
         const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
         const response = await fetcher(`${resolveGatewayBaseUrl(config)}/health`, {
+            cache: "no-store",
             signal: AbortSignal.timeout(2_000),
         });
         if (!response.ok) return null;

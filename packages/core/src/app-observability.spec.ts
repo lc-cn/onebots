@@ -27,6 +27,12 @@ function observableApp(
     } as never;
 }
 
+function observabilityContext(): Record<string, unknown> {
+    return {
+        set: () => undefined,
+    };
+}
+
 describe("application readiness", () => {
     it("rejects an online account whose protocol failed to start", () => {
         const snapshot = getReadinessSnapshot(
@@ -172,7 +178,7 @@ describe("application readiness", () => {
             coreVersion: "1.1.0",
         });
 
-        const readyContext: Record<string, unknown> = {};
+        const readyContext = observabilityContext();
         handlers.get("/ready")?.(readyContext);
         expect(readyContext).toMatchObject({
             status: 503,
@@ -187,13 +193,13 @@ describe("application readiness", () => {
             },
         });
 
-        const metricsContext: Record<string, unknown> = {};
+        const metricsContext = observabilityContext();
         handlers.get("/metrics")?.(metricsContext);
         expect(metricsContext.body).toContain("onebots_config_in_sync 0");
         expect(metricsContext.body).toContain('onebots_info{version="1.2.3"} 1');
         expect(metricsContext.body).toContain('onebots_core_info{version="1.1.0"} 1');
 
-        const healthContext: Record<string, unknown> = {};
+        const healthContext = observabilityContext();
         handlers.get("/health")?.(healthContext);
         expect(healthContext.body).toMatchObject({
             application: "onebots",
@@ -210,7 +216,7 @@ describe("application readiness", () => {
             instance_id: (healthContext.body as Record<string, unknown>).instance_id,
             started_at: (healthContext.body as Record<string, unknown>).started_at,
         });
-        const secondHealthContext: Record<string, unknown> = {};
+        const secondHealthContext = observabilityContext();
         handlers.get("/health")?.(secondHealthContext);
         expect(secondHealthContext.body).toMatchObject({
             instance_id: (healthContext.body as Record<string, unknown>).instance_id,

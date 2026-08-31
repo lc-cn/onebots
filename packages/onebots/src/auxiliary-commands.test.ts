@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { packageNamesFor } from "./updater.js";
-import { getWebUrl } from "./ui.js";
+import { getGatewayUrl, getWebUrl } from "./ui.js";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -20,6 +20,7 @@ describe("auxiliary commands", () => {
         const config = path.join(directory, "config.yaml");
         fs.writeFileSync(config, "port: 7788\npath: admin\n");
         expect(getWebUrl(config)).toBe("http://127.0.0.1:7788");
+        expect(getGatewayUrl(config)).toBe("http://127.0.0.1:7788/admin");
         fs.rmSync(directory, { recursive: true, force: true });
     });
 });

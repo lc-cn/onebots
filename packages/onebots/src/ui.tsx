@@ -42,11 +42,16 @@ export function executeDashboardServiceAction(
 }
 
 /** 根据桥接配置计算 Web 管理端地址。 */
-export function getWebUrl(configPath: string): string {
+export function getGatewayUrl(configPath: string): string {
     const config = fs.existsSync(configPath)
         ? (yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {}
         : {};
-    return new URL(resolveGatewayBaseUrl(config)).origin;
+    return resolveGatewayBaseUrl(config);
+}
+
+/** Web 页面固定由本机 origin 提供，HTTP API 前缀由运行时元数据注入。 */
+export function getWebUrl(configPath: string): string {
+    return new URL(getGatewayUrl(configPath)).origin;
 }
 
 /** 使用当前操作系统的默认浏览器打开地址。 */
@@ -89,6 +94,7 @@ export async function runUi(options: UiOptions): Promise<void> {
 /** Pastel `ui` 路由直接复用的仪表盘，避免嵌套 Ink renderer。 */
 export function OneBotsDashboard({ configPath, scope, url }: UiOptions & { url: string }) {
     const controller = useMemo(() => new ServiceController(scope), [scope]);
+    const gatewayUrl = useMemo(() => getGatewayUrl(configPath), [configPath]);
     const { exit } = useApp();
     const [status, setStatus] = useState<ServiceStatus>(() => controller.status());
     const [logs, setLogs] = useState("正在读取日志…");
@@ -104,12 +110,15 @@ export function OneBotsDashboard({ configPath, scope, url }: UiOptions & { url: 
             setLogs((error as Error).message);
         }
         try {
-            const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(1500) });
+            const response = await fetch(`${gatewayUrl}/health`, {
+                cache: "no-store",
+                signal: AbortSignal.timeout(1500),
+            });
             setHealth(response.ok ? "健康" : `HTTP ${response.status}`);
         } catch {
             setHealth("不可达");
         }
-    }, [controller, url]);
+    }, [controller, gatewayUrl]);
 
     useEffect(() => {
         void refresh();

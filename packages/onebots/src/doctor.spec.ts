@@ -207,6 +207,10 @@ describe("doctor health probes", () => {
             level: "ok",
             message: "health: HTTP 200；状态 ok",
         });
+        expect(fetcher).toHaveBeenCalledWith(
+            "http://127.0.0.1:6727/health",
+            expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
+        );
     });
 
     it("reports the running OneBots and Core versions when they match the CLI", async () => {

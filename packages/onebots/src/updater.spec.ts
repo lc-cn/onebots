@@ -11,7 +11,7 @@ import {
     resolveUpdatePluginSelection,
     runUpdatedServicePreflight,
 } from "./updater.js";
-import { verifyServiceOnline } from "./service-online-verification.js";
+import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -73,6 +73,20 @@ function refreshDependencies(
 }
 
 describe("post-update service safety", () => {
+    it("bypasses caches when recording the pre-update service instance", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(
+            async () =>
+                new Response(JSON.stringify({ instance_id: "current-instance" }), { status: 200 }),
+        );
+
+        await expect(readServiceInstanceId(spec, fetcher)).resolves.toBe("current-instance");
+        expect(fetcher).toHaveBeenCalledWith(
+            "http://127.0.0.1:6727/health",
+            expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
+        );
+    });
+
     it("使用当前配置中的 Web 后装插件覆盖过期服务快照", () => {
         const spec = temporaryServiceSpec();
         fs.writeFileSync(

@@ -39,6 +39,7 @@ export async function probeDoctorEndpoint(
 ): Promise<DoctorCheck> {
     try {
         const response = await fetcher(`${base}/${endpoint}`, {
+            cache: "no-store",
             signal: AbortSignal.timeout(2_000),
         });
         const body = await response.text();

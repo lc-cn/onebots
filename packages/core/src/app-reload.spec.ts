@@ -146,6 +146,9 @@ describe("BaseApp reload boundary", () => {
                 fetch(`http://127.0.0.1:${port}/ready`),
                 fetch(`http://127.0.0.1:${port}/metrics`),
             ]);
+            expect(health.headers.get("cache-control")).toBe("no-store");
+            expect(readiness.headers.get("cache-control")).toBe("no-store");
+            expect(metrics.headers.get("cache-control")).toBe("no-store");
             expect(health.status).toBe(200);
             const healthPayload = (await health.json()) as Record<string, unknown>;
             expect(healthPayload).toMatchObject({
