@@ -51,6 +51,7 @@ import {
 import { ExtensionManager } from "./extension-manager.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 import packageMetadata from "../package.json" with { type: "json" };
+import { isManagementSpaPath, renderManagementIndexHtml } from "./management-index.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -365,15 +366,18 @@ export class App extends BaseApp {
         }
 
         if (fs.existsSync(client)) {
-            this.use(koaStatic(client));
-            const spaPathRegex = /^\/(login|bots|extensions|config|system|terminal|logs)(\/.*)?$/;
+            const managementIndex = renderManagementIndexHtml(
+                fs.readFileSync(path.join(client, "index.html"), "utf8"),
+                this.config.path,
+            );
             this.use(async (ctx, next) => {
                 if (ctx.method !== "HEAD" && ctx.method !== "GET") return next();
-                const p = ctx.path;
-                if (p !== "/" && !spaPathRegex.test(p)) return next();
+                if (!isManagementSpaPath(ctx.path)) return next();
                 ctx.type = "html";
-                ctx.body = fs.readFileSync(path.join(client, "index.html"));
+                ctx.set("Cache-Control", "no-store");
+                ctx.body = managementIndex;
             });
+            this.use(koaStatic(client, { index: false }));
         }
 
         await super.start();

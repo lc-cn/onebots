@@ -128,6 +128,7 @@ import UiBadge from "../ui/UiBadge.vue";
 import UiButton from "../ui/UiButton.vue";
 import UiCard from "../ui/UiCard.vue";
 import type { AccountInfo } from "../types";
+import { buildApiUrl } from "../config";
 
 interface Props {
     bot: AccountInfo;
@@ -169,10 +170,9 @@ const protocolStatusMeta = (status: AccountInfo["protocols"][number]["lifecycleS
     }
 };
 
-// 使用当前页同源，协议地址可直接复制使用（HF/Docker/反向代理下端口正确）
+// 复用管理 HTTP 地址，确保协议链接包含运行时前缀或显式 API base。
 const getFullUrl = (url: string) => {
-    const base = import.meta.env.VITE_API_BASE || window.location.origin;
     const path = url.startsWith("/") ? url : `/${url}`;
-    return `${base.replace(/\/$/, "")}${path}`;
+    return new URL(buildApiUrl(path), window.location.origin).toString();
 };
 </script>
