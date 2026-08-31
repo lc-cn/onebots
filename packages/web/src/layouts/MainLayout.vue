@@ -245,7 +245,7 @@ const route = useRoute();
 const router = useRouter();
 
 const { isDark, toggleTheme } = useTheme();
-const { readinessProbe, systemInfo } = useApi();
+const { readinessProbe, systemInfo } = useApi({ adapters: false });
 const verification = useVerification();
 const verificationPending = computed(() => verification.pending.value);
 const verificationShouldOpen = computed(() => verification.shouldOpenDrawer.value);

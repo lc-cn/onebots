@@ -69,7 +69,10 @@ import { mergeCapabilityAdapters } from "../components/capability-presentation.j
 import { getBotOnboardingState } from "./bot-onboarding.js";
 import type { ProtocolInventoryState } from "./bot-onboarding.js";
 
-const { adapters, totalBotCount, startBot, stopBot } = useApi();
+const { adapters, totalBotCount, startBot, stopBot } = useApi({
+    systemInfo: false,
+    readiness: false,
+});
 const toast = useToast();
 
 const loadingBots = ref<Set<string>>(new Set());

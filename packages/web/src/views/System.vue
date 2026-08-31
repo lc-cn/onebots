@@ -11,7 +11,7 @@
                 <div class="flex items-center gap-2">
                     <label
                         class="flex cursor-pointer items-center gap-1.5 text-sm text-fg-secondary"
-                        title="每 10 秒自动刷新系统信息">
+                        title="每 10 秒自动刷新系统信息与服务状态">
                         <UiSwitch v-model="autoRefresh" />
                         <span class="hidden sm:inline">自动刷新</span>
                     </label>
@@ -230,7 +230,7 @@
                         variant="ghost"
                         size="sm"
                         :loading="healthLoading"
-                        @click="checkHealth">
+                        @click="refreshServiceStatus">
                         <IconRefresh v-if="!healthLoading" :size="14" />
                         刷新
                     </UiButton>
@@ -306,8 +306,9 @@ import {
     reconcileServiceProbeInstances,
     type ServiceProbeResult,
 } from "../utils/service-probes.js";
+import { createSystemDashboardRefreshCoordinator } from "./system-dashboard-refresh.js";
 
-const { systemInfo, fetchSystemInfo } = useApi();
+const { systemInfo, fetchSystemInfo } = useApi({ adapters: false, readiness: false });
 const toast = useToast();
 const { confirm } = useConfirm();
 
@@ -346,7 +347,7 @@ const formatAppliedAt = (value: string) => {
 const startAutoRefresh = () => {
     stopAutoRefresh();
     refreshTimer = setInterval(() => {
-        fetchSystemInfo();
+        void refreshDashboard();
     }, AUTO_REFRESH_INTERVAL);
 };
 
@@ -379,13 +380,23 @@ async function handleBackup() {
     }
 }
 
-async function checkHealth() {
+async function loadServiceStatus() {
     healthLoading.value = true;
-    const [health, readiness] = await Promise.all([probeHealth(), probeReadiness()]);
-    healthStatus.value = health;
-    readyStatus.value = reconcileServiceProbeInstances(health, readiness);
-    healthLoading.value = false;
+    try {
+        const [health, readiness] = await Promise.all([probeHealth(), probeReadiness()]);
+        healthStatus.value = health;
+        readyStatus.value = reconcileServiceProbeInstances(health, readiness);
+    } finally {
+        healthLoading.value = false;
+    }
 }
+
+const dashboardRefresh = createSystemDashboardRefreshCoordinator({
+    refreshSystemInfo: fetchSystemInfo,
+    refreshServiceStatus: loadServiceStatus,
+});
+const refreshDashboard = dashboardRefresh.refreshAll;
+const refreshServiceStatus = dashboardRefresh.refreshServiceStatus;
 
 async function handleRestart() {
     const confirmed = await confirm({
@@ -413,7 +424,7 @@ async function handleRestart() {
 }
 
 onMounted(() => {
-    checkHealth();
+    void refreshServiceStatus();
     if (autoRefresh.value) startAutoRefresh();
 });
 

@@ -9,7 +9,18 @@ import {
     type ServiceProbeResult,
 } from "../utils/service-probes.js";
 
-export function useApi() {
+export interface UseApiResources {
+    adapters?: boolean;
+    systemInfo?: boolean;
+    readiness?: boolean;
+}
+
+export function useApi(resources: UseApiResources = {}) {
+    const enabled = {
+        adapters: resources.adapters !== false,
+        systemInfo: resources.systemInfo !== false,
+        readiness: resources.readiness !== false,
+    };
     const adapters = ref<AdapterInfo[]>([]);
     const systemInfo = ref<SystemInfo | null>(null);
     const logs = ref<string[]>([]);
@@ -34,7 +45,9 @@ export function useApi() {
 
     const fetchSystemInfo = async () => {
         try {
-            const response = await authFetch(buildApiUrl("/api/system"));
+            const response = await authFetch(buildApiUrl("/api/system"), {
+                signal: AbortSignal.timeout(5_000),
+            });
             if (response.ok) {
                 systemInfo.value = await response.json();
             }
@@ -101,34 +114,34 @@ export function useApi() {
         }
     };
 
-    const ADAPTER_POLL_INTERVAL = 5_000;
-    let adapterPollTimer: ReturnType<typeof setInterval> | null = null;
+    const RESOURCE_POLL_INTERVAL = 5_000;
+    let resourcePollTimer: ReturnType<typeof setInterval> | null = null;
 
-    const startAdapterPolling = () => {
-        stopAdapterPolling();
-        adapterPollTimer = setInterval(() => {
-            void fetchAdapters();
-            void fetchReadiness();
-        }, ADAPTER_POLL_INTERVAL);
+    const startResourcePolling = () => {
+        stopResourcePolling();
+        resourcePollTimer = setInterval(() => {
+            if (enabled.adapters) void fetchAdapters();
+            if (enabled.readiness) void fetchReadiness();
+        }, RESOURCE_POLL_INTERVAL);
     };
 
-    const stopAdapterPolling = () => {
-        if (adapterPollTimer) {
-            clearInterval(adapterPollTimer);
-            adapterPollTimer = null;
+    const stopResourcePolling = () => {
+        if (resourcePollTimer) {
+            clearInterval(resourcePollTimer);
+            resourcePollTimer = null;
         }
     };
 
     const cleanup = () => {
         logsEventSource?.close();
-        stopAdapterPolling();
+        stopResourcePolling();
     };
 
     onMounted(() => {
-        void fetchAdapters();
-        void fetchSystemInfo();
-        void fetchReadiness();
-        startAdapterPolling();
+        if (enabled.adapters) void fetchAdapters();
+        if (enabled.systemInfo) void fetchSystemInfo();
+        if (enabled.readiness) void fetchReadiness();
+        if (enabled.adapters || enabled.readiness) startResourcePolling();
     });
 
     onUnmounted(() => {

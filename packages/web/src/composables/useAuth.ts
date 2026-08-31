@@ -88,7 +88,7 @@ export const authFetch = async (
   if (response.status !== 401) return response
 
   if (retry) {
-    const refreshed = await refresh()
+    const refreshed = await refresh(init.signal)
     if (refreshed.ok) {
       return authFetch(input, init, false)
     }
@@ -153,14 +153,15 @@ export const logout = async () => {
   clearAuth()
 }
 
-export const refresh = async () => {
+export const refresh = async (signal?: AbortSignal | null) => {
   const refreshToken = getRefreshToken()
   if (!refreshToken) return { ok: false }
 
   const response = await fetch(buildApiUrl('/api/auth/refresh'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken })
+    body: JSON.stringify({ refreshToken }),
+    signal
   })
 
   if (!response.ok) return { ok: false }
