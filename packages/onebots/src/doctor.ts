@@ -76,6 +76,27 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 message: `配置或目录权限不足: ${(error as Error).message}`,
             });
         }
+        if (process.platform !== "win32") {
+            checks.push(
+                inspectSensitiveFilePermissions(
+                    options.configPath,
+                    "config-mode",
+                    "配置文件",
+                    options.fix,
+                ),
+            );
+            const backupPath = `${fs.realpathSync(options.configPath)}.bak`;
+            if (fs.existsSync(backupPath)) {
+                checks.push(
+                    inspectSensitiveFilePermissions(
+                        backupPath,
+                        "config-backup-mode",
+                        "配置备份",
+                        options.fix,
+                    ),
+                );
+            }
+        }
     }
 
     const dataDir = path.join(path.dirname(options.configPath), "data");
@@ -212,6 +233,51 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         }
     }
     return { ok: !checks.some(check => check.level === "error"), checks };
+}
+
+/** 检查包含凭据的 POSIX 文件权限；组只读可见但不自动破坏部署授权。 */
+export function inspectSensitiveFilePermissions(
+    filePath: string,
+    name: string,
+    label: string,
+    fix = false,
+): DoctorCheck {
+    const mode = fs.statSync(filePath).mode & 0o777;
+    const formattedMode = formatMode(mode);
+    const hasPublicAccess = (mode & 0o007) !== 0;
+    const hasGroupMutation = (mode & 0o030) !== 0;
+    if (hasPublicAccess || hasGroupMutation) {
+        if (fix) {
+            fs.chmodSync(filePath, 0o600);
+            return {
+                name,
+                level: "ok",
+                message: `已将${label}权限从 ${formattedMode} 收紧为 0600`,
+                fixed: true,
+            };
+        }
+        return {
+            name,
+            level: "error",
+            message: `${label}权限 ${formattedMode} 允许其他用户访问或同组用户修改（--fix 可收紧为 0600）`,
+        };
+    }
+    if ((mode & 0o040) !== 0) {
+        return {
+            name,
+            level: "warning",
+            message: `${label}权限 ${formattedMode} 允许同组用户读取；请确认这是服务部署所需`,
+        };
+    }
+    return {
+        name,
+        level: "ok",
+        message: `${label}权限 ${formattedMode} 未向组或其他用户开放`,
+    };
+}
+
+function formatMode(mode: number): string {
+    return mode.toString(8).padStart(3, "0");
 }
 
 /** 根据运行时配置生成本机管理与可观测端点的根 URL。 */
