@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { IconCheck } from '@tabler/icons-vue';
+import { IconCheck } from "@tabler/icons-vue";
 
 interface StepItem {
     key: string;
@@ -14,7 +14,7 @@ const props = withDefaults(
         /** 是否允许点击步骤跳转（编辑模式用） */
         clickable?: boolean;
     }>(),
-    { clickable: false }
+    { clickable: false },
 );
 
 const emit = defineEmits<{
@@ -23,7 +23,7 @@ const emit = defineEmits<{
 
 function onSelect(index: number) {
     if (!props.clickable) return;
-    emit('select', index);
+    emit("select", index);
 }
 </script>
 
@@ -56,7 +56,11 @@ function onSelect(index: number) {
                                   ? 'border-2 border-accent text-accent'
                                   : 'border border-border-strong text-fg-tertiary'
                         ">
-                        <IconCheck v-if="index < current" :size="13" :stroke="2.5" aria-hidden="true" />
+                        <IconCheck
+                            v-if="index < current"
+                            :size="13"
+                            stroke="2.5"
+                            aria-hidden="true" />
                         <template v-else>{{ index + 1 }}</template>
                     </span>
                     <span

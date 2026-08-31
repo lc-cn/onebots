@@ -96,8 +96,13 @@ const updateField = (index: number, value: string | number | boolean | undefined
 const knownField = (path: string) =>
     fieldDefinitions.value.some(field => field.path === path) ? path : "__custom__";
 
+const isChoiceValue = (value: unknown): value is string | number | boolean =>
+    typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+
 const fieldChoices = (path: string) =>
-    fieldDefinitions.value.find(field => field.path === path)?.choices ?? [];
+    (fieldDefinitions.value.find(field => field.path === path)?.choices ?? []).flatMap(choice =>
+        isChoiceValue(choice.value) ? [{ label: choice.label, value: choice.value }] : [],
+    );
 
 const displayValue = (rule: EventFilterRow): string =>
     Array.isArray(rule.value) ? rule.value.join(", ") : String(rule.value ?? "");

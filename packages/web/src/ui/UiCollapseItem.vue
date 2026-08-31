@@ -1,7 +1,7 @@
-<script setup lang='ts'>
-import { computed, inject, useId } from 'vue';
-import { IconChevronDown } from '@tabler/icons-vue';
-import { collapseContextKey } from './collapseContext.js';
+<script setup lang="ts">
+import { computed, inject, useId } from "vue";
+import { IconChevronDown } from "@tabler/icons-vue";
+import { collapseContextKey } from "./collapseContext.js";
 
 interface Props {
     /** 唯一标识 */
@@ -11,12 +11,12 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-    title: '',
+    title: "",
 });
 
 const collapse = inject(collapseContextKey);
 if (!collapse) {
-    throw new Error('UiCollapseItem 必须放在 UiCollapse 内使用');
+    throw new Error("UiCollapseItem 必须放在 UiCollapse 内使用");
 }
 const context = collapse;
 
@@ -40,7 +40,7 @@ const panelId = `collapse-panel-${baseId}`;
                 <slot name="title">{{ title }}</slot>
                 <IconChevronDown
                     :size="16"
-                    :stroke="1.75"
+                    stroke="1.75"
                     class="shrink-0 text-fg-tertiary transition-transform duration-200"
                     :class="{ 'rotate-180': expanded }"
                     aria-hidden="true" />

@@ -3,7 +3,7 @@
         <div class="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
             <div class="mb-6 flex items-center justify-between gap-3 border-b border-border pb-4">
                 <h2 class="flex items-center gap-2 text-xl font-semibold text-fg">
-                    <IconRobot :size="22" :stroke="1.5" class="text-fg-secondary" />
+                    <IconRobot :size="22" stroke="1.5" class="text-fg-secondary" />
                     机器人管理
                 </h2>
                 <div class="flex items-center gap-2">

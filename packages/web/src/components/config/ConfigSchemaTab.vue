@@ -6,7 +6,7 @@ import UiCollapseItem from "../../ui/UiCollapseItem.vue";
 import UiEmpty from "../../ui/UiEmpty.vue";
 import { isSchemaFieldVisible } from "./utils.js";
 
-defineProps<{
+const props = defineProps<{
     schemaGroups: SchemaGroup[];
     formModel: Record<string, unknown>;
 }>();
@@ -20,7 +20,7 @@ const isWideField = (field: SchemaGroup["fields"][number]) =>
     field.rule.ui?.widget === "record-list";
 
 const visibleFields = (fields: SchemaGroup["fields"]) =>
-    fields.filter(field => isSchemaFieldVisible(field, formModel));
+    fields.filter(field => isSchemaFieldVisible(field, props.formModel));
 </script>
 
 <template>

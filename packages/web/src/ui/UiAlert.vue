@@ -1,16 +1,16 @@
-<script setup lang='ts'>
-import { computed } from 'vue';
+<script setup lang="ts">
+import { computed } from "vue";
 import {
     IconInfoCircle,
     IconAlertTriangle,
     IconCircleX,
     IconCircleCheck,
     IconX,
-} from '@tabler/icons-vue';
+} from "@tabler/icons-vue";
 
 interface Props {
     /** 语义变体 */
-    variant?: 'info' | 'warning' | 'danger' | 'success';
+    variant?: "info" | "warning" | "danger" | "success";
     /** 标题 */
     title?: string;
     /** 可关闭 */
@@ -18,7 +18,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-    variant: 'info',
+    variant: "info",
     title: undefined,
     closable: false,
 });
@@ -29,15 +29,15 @@ const emit = defineEmits<{
 
 const config = computed(() => {
     switch (props.variant) {
-        case 'warning':
-            return { icon: IconAlertTriangle, cls: 'bg-warning-soft border-warning text-warning' };
-        case 'danger':
-            return { icon: IconCircleX, cls: 'bg-danger-soft border-danger text-danger' };
-        case 'success':
-            return { icon: IconCircleCheck, cls: 'bg-success-soft border-success text-success' };
-        case 'info':
+        case "warning":
+            return { icon: IconAlertTriangle, cls: "bg-warning-soft border-warning text-warning" };
+        case "danger":
+            return { icon: IconCircleX, cls: "bg-danger-soft border-danger text-danger" };
+        case "success":
+            return { icon: IconCircleCheck, cls: "bg-success-soft border-success text-success" };
+        case "info":
         default:
-            return { icon: IconInfoCircle, cls: 'bg-info-soft border-info text-info' };
+            return { icon: IconInfoCircle, cls: "bg-info-soft border-info text-info" };
     }
 });
 </script>
@@ -50,7 +50,7 @@ const config = computed(() => {
         <component
             :is="config.icon"
             :size="18"
-            :stroke="1.75"
+            stroke="1.75"
             class="mt-0.5 shrink-0"
             aria-hidden="true" />
         <div class="min-w-0 flex-1">
@@ -65,7 +65,7 @@ const config = computed(() => {
             aria-label="关闭提示"
             class="shrink-0 rounded-control p-0.5 opacity-70 transition-opacity duration-150 hover:opacity-100"
             @click="emit('close')">
-            <IconX :size="14" :stroke="2" aria-hidden="true" />
+            <IconX :size="14" stroke="2" aria-hidden="true" />
         </button>
     </div>
 </template>

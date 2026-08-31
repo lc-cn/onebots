@@ -43,7 +43,9 @@ const updateUrl = (index: number, url: string) => {
 const updateOption = (index: number, key: string, value: unknown) => {
     const next = [...entries.value];
     const current = next[index];
-    const objectValue = isRecord(current) ? { ...current } : { url: entryUrl(current) };
+    const objectValue: Record<string, unknown> = isRecord(current)
+        ? { ...current }
+        : { url: entryUrl(current) };
     if (value === "" || value === undefined) delete objectValue[key];
     else objectValue[key] = value;
     next[index] = objectValue;

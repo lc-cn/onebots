@@ -25,6 +25,9 @@ const props = withDefaults(defineProps<Props>(), {
 
 const model = defineModel<unknown>();
 
+const isChoiceValue = (value: unknown): value is string | number | boolean =>
+    typeof value === "string" || typeof value === "number" || typeof value === "boolean";
+
 type WidgetKind =
     | "input"
     | "number"
@@ -51,10 +54,9 @@ const widget = computed<WidgetKind>(() => {
 });
 
 const choiceOptions = computed(() =>
-    (props.field.rule.choices || []).map(c => ({
-        label: c.label,
-        value: c.value,
-    })),
+    (props.field.rule.choices || []).flatMap(choice =>
+        isChoiceValue(choice.value) ? [{ label: choice.label, value: choice.value }] : [],
+    ),
 );
 
 const stringModel = computed<string>({

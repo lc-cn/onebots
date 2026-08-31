@@ -1,38 +1,41 @@
 {
-  "name": "@onebots/web",
-  "version": "1.0.13",
-  "description": "IMHelper Web 管理界面",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "clean": "rm -rf dist"
-  },
-  "dependencies": {
-    "@fontsource-variable/geist": "^5.3.0",
-    "@fontsource-variable/geist-mono": "^5.3.0",
-    "@onebots/core": "workspace:*",
-    "@tabler/icons-vue": "^3.45.0",
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/addon-web-links": "^0.11.0",
-    "@xterm/xterm": "^5.5.0",
-    "dayjs": "^1.11.10",
-    "js-yaml": "^4.3.1",
-    "qrcode": "^1.5.4",
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.5"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "@types/qrcode": "^1.5.5",
-    "@vitejs/plugin-vue": "^6.0.8",
-    "tailwindcss": "^4.3.3",
-    "typescript": "catalog:",
-    "vite": "^7.3.6"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/lc-cn/onebots.git"
-  }
+    "name": "@onebots/web",
+    "version": "1.0.13",
+    "description": "IMHelper Web 管理界面",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "pnpm typecheck && vite build",
+        "typecheck": "vue-tsc --noEmit",
+        "preview": "vite preview",
+        "clean": "rm -rf dist"
+    },
+    "dependencies": {
+        "@fontsource-variable/geist": "^5.3.0",
+        "@fontsource-variable/geist-mono": "^5.3.0",
+        "@onebots/core": "workspace:*",
+        "@tabler/icons-vue": "^3.45.0",
+        "@xterm/addon-fit": "^0.10.0",
+        "@xterm/addon-web-links": "^0.11.0",
+        "@xterm/xterm": "^5.5.0",
+        "dayjs": "^1.11.10",
+        "js-yaml": "^4.3.1",
+        "qrcode": "^1.5.4",
+        "vue": "^3.4.0",
+        "vue-router": "^4.2.5"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.3.3",
+        "@types/js-yaml": "^4.0.9",
+        "@types/qrcode": "^1.5.5",
+        "@vitejs/plugin-vue": "^6.0.8",
+        "tailwindcss": "^4.3.3",
+        "typescript": "catalog:",
+        "vite": "^7.3.6",
+        "vue-tsc": "^3.3.11"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/lc-cn/onebots.git"
+    }
 }
