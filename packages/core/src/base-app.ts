@@ -36,6 +36,7 @@ import { resolvePublicStaticRoot } from "./public-static-root.js";
 import { assertHostConfigReloadable, resolveListenPort } from "./app-reload.js";
 import { writeConfigFileAtomic } from "./config-file.js";
 import { emitAllAwaited, FailureCollector } from "./async-utils.js";
+import { rollbackFailedStart as rollbackStartup } from "./startup-rollback.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -112,10 +113,8 @@ export class BaseApp extends Koa {
         super(config);
         this.applicationIdentity = normalizeApplicationIdentity(applicationIdentity);
 
-        // 初始化生命周期管理器
         this.lifecycle = new LifecycleManager();
 
-        // 合并配置并验证
         const mergedConfig = deepMerge(deepClone(BaseApp.defaultConfig), config);
         try {
             this.config = ConfigValidator.validateWithDefaults(
@@ -355,6 +354,14 @@ export class BaseApp extends Koa {
         if (throwOnFailure) failures.throwIfAny(`${failures.size} 个适配器停止失败`);
     }
 
+    protected async rollbackFailedStart(error: unknown): Promise<never> {
+        return rollbackStartup(
+            error,
+            () => this.stop(),
+            wrappedError => this.enhancedLogger.fatal(wrappedError),
+        );
+    }
+
     async start() {
         this.assertCanStart();
         if (this.isStarted) return;
@@ -391,9 +398,8 @@ export class BaseApp extends Koa {
             this.isStarted = true;
             stopTimer();
         } catch (error) {
-            const wrappedError = ErrorHandler.wrap(error);
-            this.enhancedLogger.fatal(wrappedError);
-            throw wrappedError;
+            stopTimer();
+            await this.rollbackFailedStart(error);
         }
     }
     async reload(config: BaseApp.Config) {

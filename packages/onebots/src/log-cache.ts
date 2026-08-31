@@ -7,6 +7,7 @@ export class LogCacheManager {
     public readonly cacheFile: string;
     public readonly clients: Set<ServerResponse> = new Set();
     private writeStream!: fs.WriteStream;
+    private restoreStdio?: () => void;
 
     constructor(cacheFile: string) {
         this.cacheFile = cacheFile;
@@ -42,6 +43,8 @@ export class LogCacheManager {
     }
 
     cleanup() {
+        this.restoreStdio?.();
+        this.restoreStdio = undefined;
         if (this.writeStream) {
             this.writeStream.end();
         }
@@ -55,10 +58,11 @@ export class LogCacheManager {
     }
 
     interceptStdio() {
-        const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-        const originalStderrWrite = process.stderr.write.bind(process.stderr);
+        if (this.restoreStdio) return;
+        const originalStdoutWrite = process.stdout.write;
+        const originalStderrWrite = process.stderr.write;
 
-        const intercept = (original: typeof originalStdoutWrite) => {
+        const intercept = (original: typeof originalStdoutWrite, stream: NodeJS.WriteStream) => {
             return ((
                 chunk: Buffer | string,
                 encoding?: BufferEncoding,
@@ -69,13 +73,26 @@ export class LogCacheManager {
                     this.cache(message);
                     this.broadcast(message);
                 } catch (error) {
-                    originalStderrWrite(`[onebots] Log interceptor error: ${String(error)}\n`);
+                    originalStderrWrite.call(
+                        process.stderr,
+                        `[onebots] Log interceptor error: ${String(error)}\n`,
+                    );
                 }
-                return original(chunk, encoding as BufferEncoding, callback);
+                return original.call(stream, chunk, encoding as BufferEncoding, callback);
             }) as typeof process.stdout.write;
         };
 
-        process.stdout.write = intercept(originalStdoutWrite);
-        process.stderr.write = intercept(originalStderrWrite);
+        const interceptedStdoutWrite = intercept(originalStdoutWrite, process.stdout);
+        const interceptedStderrWrite = intercept(originalStderrWrite, process.stderr);
+        process.stdout.write = interceptedStdoutWrite;
+        process.stderr.write = interceptedStderrWrite;
+        this.restoreStdio = () => {
+            if (process.stdout.write === interceptedStdoutWrite) {
+                process.stdout.write = originalStdoutWrite;
+            }
+            if (process.stderr.write === interceptedStderrWrite) {
+                process.stderr.write = originalStderrWrite;
+            }
+        };
     }
 }

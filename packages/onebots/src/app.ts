@@ -121,8 +121,12 @@ export class App extends BaseApp {
             authorize: request => authorizeManagementUpgrade(this, request),
         });
 
-        process.on("exit", () => this._logCache.cleanup());
-        this.once("close", () => this._logCache.cleanup());
+        const cleanupLogCache = () => this._logCache.cleanup();
+        process.once("exit", cleanupLogCache);
+        this.once("close", () => {
+            process.off("exit", cleanupLogCache);
+            cleanupLogCache();
+        });
     }
 
     getPendingVerificationList(): Record<string, unknown>[] {
@@ -221,6 +225,17 @@ export class App extends BaseApp {
     async start() {
         this.assertCanStart();
         if (this.isStarted) return;
+
+        try {
+            await this.startRuntime();
+        } catch (error) {
+            // BaseApp.start 已完成回滚时，直接保留其聚合错误。
+            if (this.isDisposed) throw error;
+            await this.rollbackFailedStart(error);
+        }
+    }
+
+    private async startRuntime() {
         validateRuntimeConfig(this.config as Record<string, unknown>);
         registerAuthRoutes(this, this.router);
         registerConfigRoutes(this, this.router);
@@ -248,8 +263,15 @@ export class App extends BaseApp {
                 });
         };
         const logWatcher = fs.watch(BaseApp.logFile, fileListener);
-        this.once("close", () => logWatcher.close());
-        process.once("disconnect", () => logWatcher.close());
+        let logWatcherClosed = false;
+        const closeLogWatcher = () => {
+            if (logWatcherClosed) return;
+            logWatcherClosed = true;
+            process.off("disconnect", closeLogWatcher);
+            logWatcher.close();
+        };
+        this.once("close", closeLogWatcher);
+        process.once("disconnect", closeLogWatcher);
 
         this.ws.on("connection", async (client, request) => {
             const managementToken = extractManagementToken(request);
