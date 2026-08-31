@@ -40,6 +40,9 @@ describe("doctor configuration scope", () => {
 
         expect(result.exitCode).toBe(1);
         expect(report).toMatchObject({ ok: false, strict: true });
+        expect(report.checks.find(check => check.name === "extension-catalog")).toMatchObject({
+            level: "ok",
+        });
         expect(report.checks.find(check => check.name === "plugin-selection")).toMatchObject({
             level: "warning",
         });

@@ -174,7 +174,7 @@ curl --fail http://localhost:6727/health
 curl --fail http://localhost:6727/ready
 ```
 
-Before an account is configured, `/ready` keeps the management surface reachable and reports `configured: false`; doctor presents this as a warning. `/ready` returns HTTP 503 when an account is offline, a protocol outlet fails to start, or any account has no protocol outlet configured.
+Doctor first verifies that every extension catalog **Configure** target matches its adapter or protocol identity. Deployment scripts and CI can inspect the `extension-catalog` check in `--json` output; any drift lists every affected catalog entry and its reason. Before an account is configured, `/ready` keeps the management surface reachable and reports `configured: false`; doctor presents this as a warning. `/ready` returns HTTP 503 when an account is offline, a protocol outlet fails to start, or any account has no protocol outlet configured.
 
 ## Next Steps
 

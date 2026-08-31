@@ -224,7 +224,7 @@ curl --fail http://localhost:6727/health
 curl --fail http://localhost:6727/ready
 ```
 
-首次尚未添加账号时 `/ready` 会保持管理面可访问，并返回 `configured: false`；doctor 会明确标为警告。账号离线、协议出口启动失败，或任一账号尚未配置协议出口时，`/ready` 返回 HTTP 503。
+`doctor` 会先验证扩展目录中每个“去配置”入口与适配器或协议身份一致；`--json` 输出中的 `extension-catalog` 检查可供部署脚本和 CI 判定，漂移时会列出全部目录项及原因。首次尚未添加账号时 `/ready` 会保持管理面可访问，并返回 `configured: false`；doctor 会明确标为警告。账号离线、协议出口启动失败，或任一账号尚未配置协议出口时，`/ready` 返回 HTTP 503。
 
 ## 接入机器人框架
 

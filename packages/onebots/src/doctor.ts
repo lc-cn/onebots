@@ -7,6 +7,7 @@ import { pluginCandidates, tryLoadRegisteredPlugin } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { writeCliOutput } from "./cli-output.js";
 import { probeDoctorManagement } from "./doctor-management.js";
+import { inspectExtensionCatalog } from "./doctor-extension-catalog.js";
 import {
     inspectNodeRuntime,
     MINIMUM_NODE_MAJOR,
@@ -61,6 +62,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             ? `Node.js ${process.version}（要求 >=${MINIMUM_NODE_MAJOR}）`
             : unsupportedNodeRuntimeMessage(runtime),
     });
+    checks.push(inspectExtensionCatalog());
 
     let config: Record<string, unknown> | null = null;
     let configuredPlugins: RuntimePluginSelection | undefined;
