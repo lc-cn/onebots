@@ -22,9 +22,6 @@ interface ActionRoute {
 }
 
 const ROUTES: Readonly<Record<string, ActionRoute>> = {
-    list_channel_messages: { path: "/v3/message/list", method: "GET" },
-    send_pipe_message: { path: "/v3/message/send-pipemsg", method: "POST" },
-    list_direct_messages: { path: "/v3/direct-message/list", method: "GET" },
     list_user_chats: { path: "/v3/user-chat/list", method: "GET" },
     get_user_chat: { path: "/v3/user-chat/view", method: "GET" },
     create_user_chat: { path: "/v3/user-chat/create", method: "POST" },

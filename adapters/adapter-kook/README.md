@@ -115,7 +115,8 @@ KOOK 的频道消息与私聊消息使用两套 API。`delete_message`、`get_me
 - 服务器语音静音/闭麦与助力历史：`list/add/remove_guild_mute`、`get_guild_boost_history`
 - 邀请：`list_invites`、`create_invite`、`delete_invite`
 - 邀请用户：`list_invitees`
-- 频道/私聊历史与管道消息：`list_channel_messages`、`list_direct_messages`、`send_pipe_message`
+- 频道/私聊历史：`list_channel_messages`、`list_direct_messages`，按官方参考消息与分页字段查询
+- 管道消息：`send_pipe_message`，使用 `access_token` / `type` / `target_id` 查询参数与独立 `body` 模板输入
 - 私聊会话：`list_user_chats`、`get_user_chat`、`create_user_chat`、`delete_user_chat`
 - 服务器表情：`list_guild_emojis`、`create_guild_emoji`、`update_guild_emoji`、`delete_guild_emoji`
 - 用户亲密度：`get_intimacy`、`update_intimacy`
@@ -128,7 +129,7 @@ KOOK 的频道消息与私聊消息使用两套 API。`delete_message`、`get_me
 - 好友：目录、申请列表、同意/拒绝、删除，以及 `send_friend_request`、`block_user`、`unblock_user`、`list_blocked_users`
 - 用户 OAuth2：`create_oauth_authorization_url`、`exchange_oauth_code`、`get_oauth_user_info`、`list_oauth_user_guilds`，以及受限 GET 底层动作 `call_kook_oauth_api`
 
-命名动作的参数字段与 KOOK 官方 API 保持一致。服务器管理、服务器角色和频道权限动作会在请求前校验官方字段、必填项、枚举、长度与整数范围，未知字段不会被静默转发；尚未收录的新字段应显式使用 `call_kook_api`。`list_guild_mutes` 固定请求官方 `detail` 结构，不保留旧返回格式。所有标准列表按 KOOK 官方单页上限 50 自动遍历，不依赖平台静默截断。统一好友接口会剔除当前账号主动发出的申请；KOOK 不返回申请时间，因此 `get_friend_requests` 的 `time` 明确为 `0`，不会伪造本地时间。权限不足、参数错误和限流会抛出结构化 `KookError` / `KookApiError`，其中包含错误分类、HTTP 状态、KOOK 错误码、请求路径和重试等待时间。REST 客户端按官方 route bucket / global 限流头串行调度，并支持 `AbortSignal`。
+命名动作的参数字段与 KOOK 官方 API 保持一致。服务器管理、服务器角色、频道权限、消息历史与管道消息动作会在请求前校验官方字段、必填项、枚举、长度与整数范围，未知字段不会被静默转发；尚未收录的新字段应显式使用 `call_kook_api`。管道消息的 `access_token` 不会混入模板输入，请求体必须放在独立 `body` 对象中。`list_guild_mutes` 固定请求官方 `detail` 结构，不保留旧返回格式。所有标准列表按 KOOK 官方单页上限 50 自动遍历，不依赖平台静默截断。统一好友接口会剔除当前账号主动发出的申请；KOOK 不返回申请时间，因此 `get_friend_requests` 的 `time` 明确为 `0`，不会伪造本地时间。权限不足、参数错误和限流会抛出结构化 `KookError` / `KookApiError`，其中包含错误分类、HTTP 状态、KOOK 错误码、请求路径和重试等待时间。REST 客户端按官方 route bucket / global 限流头串行调度，并支持 `AbortSignal`。
 
 OAuth2 使用与 Bot Token 完全隔离的客户端。授权地址动作要求调用方提供不可预测的 `state` 并在回调时自行核验；换码时应用密钥只进入官方 `application/x-www-form-urlencoded` 请求，用户资料与服务器列表只发送 `Authorization: Bearer`。KOOK 当前只支持授权码模式，访问令牌过期后需重新授权，不会伪造平台未提供的刷新流程。`scope` 仅接受官方 `get_user_info` 和 `get_user_guilds`。
 
