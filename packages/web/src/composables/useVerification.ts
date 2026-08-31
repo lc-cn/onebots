@@ -1,7 +1,11 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import type { VerificationRequest, VerificationClearEvent } from "../types";
 import { buildApiUrl } from "../config";
-import { authFetch, appendAuthQuery } from "./useAuth";
+import { authFetch } from "./useAuth";
+import {
+    openAuthenticatedEventStream,
+    type AuthenticatedEventStream,
+} from "../authenticated-event-stream.js";
 import { reportClientError } from "../client-diagnostics";
 
 /** 合并单条验证到列表（同 platform+account_id+type 只保留最新） */
@@ -36,7 +40,7 @@ export function useVerification() {
     const pending = ref<VerificationRequest[]>([]);
     /** 仅在有新验证通过 SSE 到达时置为 true，用于自动打开抽屉；首屏拉取的待处理列表不自动弹窗 */
     const shouldOpenDrawer = ref(false);
-    let verificationEventSource: EventSource | null = null;
+    let verificationEventSource: AuthenticatedEventStream | null = null;
 
     /** 从服务端拉取待处理验证（Web 未在线时产生的验证，打开页面后可补拉） */
     const fetchPending = async () => {
@@ -67,31 +71,32 @@ export function useVerification() {
     };
 
     const connect = () => {
-        const url = appendAuthQuery(buildApiUrl("/api/verification/stream"));
-        verificationEventSource = new EventSource(url);
-
-        verificationEventSource.onmessage = e => {
-            try {
-                const payload = JSON.parse(e.data) as VerificationRequest | VerificationClearEvent;
-                if (isClearEvent(payload)) {
-                    applyClear(payload);
-                    return;
-                }
-                if (payload.platform && payload.account_id && payload.type) {
-                    // 新请求与同 key 刷新（如二维码过期换码）都打开抽屉并更新 UI
-                    pending.value = mergePending(pending.value, payload);
-                    shouldOpenDrawer.value = true;
-                }
-            } catch (error) {
-                reportClientError("解析验证事件失败", error);
-            }
-        };
-
-        verificationEventSource.onerror = () => {
-            verificationEventSource?.close();
-            verificationEventSource = null;
-            setTimeout(connect, 5000);
-        };
+        verificationEventSource?.close();
+        verificationEventSource = openAuthenticatedEventStream(
+            buildApiUrl("/api/verification/stream"),
+            {
+                onMessage(data) {
+                    try {
+                        const payload = JSON.parse(data) as
+                            | VerificationRequest
+                            | VerificationClearEvent;
+                        if (isClearEvent(payload)) {
+                            applyClear(payload);
+                            return;
+                        }
+                        if (payload.platform && payload.account_id && payload.type) {
+                            // 新请求与同 key 刷新（如二维码过期换码）都打开抽屉并更新 UI
+                            pending.value = mergePending(pending.value, payload);
+                            shouldOpenDrawer.value = true;
+                        }
+                    } catch (error) {
+                        reportClientError("解析验证事件失败", error);
+                    }
+                },
+                onError: error => reportClientError("验证事件流连接失败", error),
+                retryMs: 5_000,
+            },
+        );
     };
 
     const dismiss = (req: VerificationRequest) => {

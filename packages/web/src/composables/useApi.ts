@@ -1,7 +1,11 @@
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import type { AdapterInfo, SystemInfo } from "../types";
 import { buildApiUrl } from "../config";
-import { authFetch, appendAuthQuery } from "./useAuth";
+import { authFetch } from "./useAuth";
+import {
+    openAuthenticatedEventStream,
+    type AuthenticatedEventStream,
+} from "../authenticated-event-stream.js";
 import { reportClientError } from "../client-diagnostics";
 import {
     pendingReadinessProbe,
@@ -26,7 +30,7 @@ export function useApi(resources: UseApiResources = {}) {
     const logs = ref<string[]>([]);
     const readinessProbe = ref<ServiceProbeResult>(pendingReadinessProbe());
 
-    let logsEventSource: EventSource | null = null;
+    let logsEventSource: AuthenticatedEventStream | null = null;
 
     const totalBotCount = computed(() => {
         return adapters.value.reduce((acc, adapter) => acc + adapter.accounts.length, 0);
@@ -61,21 +65,15 @@ export function useApi(resources: UseApiResources = {}) {
     };
 
     const startLogsSSE = () => {
-        logsEventSource = new EventSource(appendAuthQuery(buildApiUrl("/api/logs")));
-
-        logsEventSource.onmessage = e => {
-            const logData = JSON.parse(e.data);
-            logs.value.push(logData.message);
-            if (logs.value.length > 1000) {
-                logs.value = logs.value.slice(-1000);
-            }
-        };
-
-        logsEventSource.onerror = () => {
-            reportClientError("Logs SSE 连接错误");
-            logsEventSource?.close();
-            setTimeout(startLogsSSE, 5000);
-        };
+        logsEventSource?.close();
+        logsEventSource = openAuthenticatedEventStream(buildApiUrl("/api/logs"), {
+            onMessage(data) {
+                const logData = JSON.parse(data);
+                logs.value.push(logData.message);
+                if (logs.value.length > 1000) logs.value = logs.value.slice(-1000);
+            },
+            onError: error => reportClientError("Logs SSE 连接错误", error),
+        });
     };
 
     const startBot = async (platform: string, uin: string): Promise<boolean> => {

@@ -42,7 +42,7 @@ import { IconTerminal2, IconTrash, IconRefresh, IconPower } from '@tabler/icons-
 import '@xterm/xterm/css/xterm.css';
 import { UiButton, UiBadge } from '../ui/index';
 import { buildWsUrl } from '../config';
-import { appendAuthQuery } from '../composables/useAuth';
+import { appendWebSocketAuthQuery } from '../composables/useAuth';
 
 const terminalContainer = ref<HTMLElement>();
 let terminal: Terminal | null = null;
@@ -63,7 +63,7 @@ const connectWebSocket = () => {
         ws.close();
     }
 
-    ws = new WebSocket(appendAuthQuery(buildWsUrl('/api/terminal')));
+    ws = new WebSocket(appendWebSocketAuthQuery(buildWsUrl('/api/terminal')));
 
     ws.onopen = () => {
         isConnected.value = true;

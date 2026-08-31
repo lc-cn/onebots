@@ -39,7 +39,7 @@ OneBots 提供了完整的生产级功能，包括安全性、稳定性和可观
 
 ### 管理面鉴权边界
 
-`/api/*`、根管理 WebSocket `/` 与终端 WebSocket `/api/terminal` 使用同一组动态认证规则。请求可以携带顶层 `access_token`，也可以使用用户名密码登录后签发的会话 token；WebSocket 可通过 `Authorization: Bearer <token>` 或 `?access_token=<token>` 传递。未授权 WebSocket 会在协议升级前返回 HTTP 401，不会先建立连接再关闭，因此无法收到包含完整配置的 `system.sync`。
+`/api/*`、根管理 WebSocket `/` 与终端 WebSocket `/api/terminal` 使用同一组动态认证材料。普通管理 HTTP 只从 `Authorization: Bearer <token>` 读取凭据；`/api/auth/login` 可以在 JSON body 中提交顶层 `access_token`，也可以用用户名密码换取会话 token。日志、账号验证和消息调试 SSE 使用带 Authorization header 的 Fetch 流，不会把长期 token 写进 URL，并由同一客户端统一处理分帧、取消与有界重连。只有浏览器 WebSocket 握手可通过 `Authorization` 或 `?access_token=<token>` 传递，因为原生 WebSocket API 无法设置请求头。未授权 WebSocket 会在协议升级前返回 HTTP 401，不会先建立连接再关闭，因此无法收到包含完整配置的 `system.sync`。
 
 Web 首屏仍兼容用 `?access_token=` 引导登录，但会先调用登录端点验证候选值，只有服务端确认后才写入本地会话。无效链接不会覆盖已有 token；已有会话会继续使用，尚未登录时则回到登录页说明凭据无效。登录、链接验证和令牌刷新各自拥有 5 秒请求边界，超时、网络不可达、主动取消与凭据拒绝使用不同语义；慢代理不能让路由守卫或登录按钮永久挂起。无论验证结果如何，下一次导航都会先从地址栏移除鉴权码。管理 HTML 还会同时通过 `Referrer-Policy: no-referrer` 响应头和前置的 referrer meta 禁止发送来源地址，因此脚本与样式在前端执行之前加载时，也不会把含 token 的入口 URL 复制到 `Referer` 请求头。建议人工集成优先在登录页输入鉴权码；根管理 WebSocket 的查询参数只用于无法设置 `Authorization` 请求头的客户端。
 

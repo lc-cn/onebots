@@ -36,9 +36,9 @@ function loginContext(body: Record<string, unknown>): RouterContext {
     return { request: { body }, set: vi.fn() } as unknown as RouterContext;
 }
 
-function apiContext(token?: string): RouterContext {
+function apiContext(token?: string, url = "/api/config"): RouterContext {
     const req = {
-        url: "/api/config",
+        url,
         headers: token ? { authorization: `Bearer ${token}` } : {},
     } as IncomingMessage;
     return {
@@ -97,6 +97,17 @@ describe("management HTTP authentication", () => {
         expect(rejected.status).toBe(401);
         expect(rejected.body).toEqual({ error: "Unauthorized", message: "Unauthorized" });
         expect(next).toHaveBeenCalledTimes(2);
+    });
+
+    it("普通管理 HTTP 拒绝查询参数令牌", async () => {
+        const { middleware } = setup();
+        const next = vi.fn(async () => undefined);
+        const queryToken = apiContext(undefined, "/api/config?access_token=old-token");
+
+        await middleware(queryToken, next);
+
+        expect(queryToken.status).toBe(401);
+        expect(next).not.toHaveBeenCalled();
     });
 
     it("为凭据签发、鉴权失败和受保护 API 统一禁止缓存", async () => {

@@ -2,7 +2,7 @@ import { RouterContext, logInvalidToken } from "@onebots/core";
 import type { App } from "../app.js";
 import type { Router } from "@onebots/core";
 import {
-    extractManagementToken,
+    extractManagementHeaderToken,
     managementAccessTokenMatches,
     managementCredentialsMatch,
     validateManagementToken,
@@ -95,7 +95,7 @@ export function registerAuthRoutes(app: App, router: Router): void {
         disableManagementCaching(ctx);
         if (ctx.path === "/api/auth/login" || ctx.path === "/api/auth/refresh") return next();
 
-        const token = extractManagementToken(ctx.req);
+        const token = extractManagementHeaderToken(ctx.req);
         const validation = validateManagementToken(app, token);
         if (!validation.valid) {
             logInvalidToken(ctx, token);

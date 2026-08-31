@@ -12,13 +12,20 @@ export type ManagementTokenValidation =
     | { valid: true; source: "configured"; info?: undefined }
     | { valid: true; source: "session"; info: TokenInfo };
 
-/** 从 Authorization 或 query 中读取管理令牌，供 HTTP upgrade 与连接复检共用。 */
-export function extractManagementToken(request: IncomingMessage): string | undefined {
+/** 从 Authorization 读取管理令牌；普通 HTTP 管理 API 不接受 URL 中的长期秘密。 */
+export function extractManagementHeaderToken(request: IncomingMessage): string | undefined {
     const authHeader = request.headers.authorization;
     if (authHeader) {
         const match = authHeader.match(/^Bearer\s+(.+)$/i);
         return (match ? match[1] : authHeader).trim() || undefined;
     }
+    return undefined;
+}
+
+/** WebSocket 握手优先使用 header，并兼容浏览器客户端只能设置的 query token。 */
+export function extractManagementToken(request: IncomingMessage): string | undefined {
+    const headerToken = extractManagementHeaderToken(request);
+    if (headerToken) return headerToken;
     try {
         const url = new URL(request.url || "/", "http://localhost");
         return url.searchParams.get("access_token")?.trim() || undefined;

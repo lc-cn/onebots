@@ -94,7 +94,11 @@ import { IconBug, IconTrash, IconSearch, IconChevronRight, IconCopy } from '@tab
 import { UiButton, UiBadge, UiInput, UiSelect, UiEmpty } from '../ui/index';
 import { useToast } from '../ui/toast';
 import { buildApiUrl } from '../config';
-import { appendAuthQuery, authFetch } from '../composables/useAuth';
+import { authFetch } from '../composables/useAuth';
+import {
+    openAuthenticatedEventStream,
+    type AuthenticatedEventStream,
+} from '../authenticated-event-stream.js';
 
 interface DebugEntry {
     seq: number;
@@ -122,7 +126,7 @@ const platformFilter = ref<string | undefined>(undefined);
 const directionFilter = ref<string | undefined>(undefined);
 const searchKeyword = ref('');
 
-let eventSource: EventSource | null = null;
+let eventSource: AuthenticatedEventStream | null = null;
 
 const platformOptions = computed(() => {
     const platforms = [...new Set(entries.value.map(e => e.platform))].sort();
@@ -211,27 +215,23 @@ async function loadHistory() {
 }
 
 function connectSSE() {
-    if (eventSource) eventSource.close();
-
-    eventSource = new EventSource(appendAuthQuery(buildApiUrl('/api/message-debug/stream')));
-
-    eventSource.onopen = () => {
-        isConnected.value = true;
-    };
-
-    eventSource.onmessage = event => {
-        try {
-            pushEntry(JSON.parse(event.data));
-        } catch (error) {
-            console.error('解析消息调试数据失败:', error);
-        }
-    };
-
-    eventSource.onerror = () => {
-        isConnected.value = false;
-        eventSource?.close();
-        setTimeout(connectSSE, 3000);
-    };
+    eventSource?.close();
+    eventSource = openAuthenticatedEventStream(buildApiUrl('/api/message-debug/stream'), {
+        onOpen: () => {
+            isConnected.value = true;
+        },
+        onMessage(data) {
+            try {
+                pushEntry(JSON.parse(data));
+            } catch (error) {
+                console.error('解析消息调试数据失败:', error);
+            }
+        },
+        onError: () => {
+            isConnected.value = false;
+        },
+        retryMs: 3_000,
+    });
 }
 
 onMounted(async () => {

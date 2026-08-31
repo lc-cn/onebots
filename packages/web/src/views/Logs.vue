@@ -86,7 +86,10 @@ import '@xterm/xterm/css/xterm.css';
 import { UiButton, UiBadge, UiInput } from '../ui/index';
 import { useConfirm } from '../ui/confirm';
 import { buildApiUrl } from '../config';
-import { appendAuthQuery } from '../composables/useAuth';
+import {
+    openAuthenticatedEventStream,
+    type AuthenticatedEventStream,
+} from '../authenticated-event-stream.js';
 
 const { confirm } = useConfirm();
 
@@ -135,7 +138,7 @@ interface LogLine {
 const logsContainer = ref<HTMLElement>();
 let terminal: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
-let eventSource: EventSource | null = null;
+let eventSource: AuthenticatedEventStream | null = null;
 const isConnected = ref(false);
 
 /** 存储所有原始日志行 */
@@ -314,30 +317,25 @@ const connectSSE = () => {
     displayedCount.value = 0;
     terminal?.reset();
 
-    eventSource = new EventSource(appendAuthQuery(buildApiUrl('/api/logs')));
-
-    eventSource.onopen = () => {
-        isConnected.value = true;
-        console.log('日志流已连接');
-    };
-
-    eventSource.onmessage = event => {
-        try {
-            const data = JSON.parse(event.data);
-            if (data.message) {
-                processMessage(data.message);
+    eventSource = openAuthenticatedEventStream(buildApiUrl('/api/logs'), {
+        onOpen: () => {
+            isConnected.value = true;
+            console.log('日志流已连接');
+        },
+        onMessage(eventData) {
+            try {
+                const data = JSON.parse(eventData);
+                if (data.message) processMessage(data.message);
+            } catch (error) {
+                console.error('解析日志数据失败:', error);
             }
-        } catch (error) {
-            console.error('解析日志数据失败:', error);
-        }
-    };
-
-    eventSource.onerror = () => {
-        isConnected.value = false;
-        console.error('SSE 连接错误');
-        eventSource?.close();
-        setTimeout(reconnect, 3000);
-    };
+        },
+        onError: () => {
+            isConnected.value = false;
+            console.error('SSE 连接错误');
+        },
+        retryMs: 3_000,
+    });
 };
 
 /* ── 监听过滤器变化 ────────────────────────────────────── */

@@ -69,7 +69,8 @@ export const hasExpiredFlag = () => localStorage.getItem(EXPIRED_FLAG) === '1'
 
 export const clearExpiredFlag = () => localStorage.removeItem(EXPIRED_FLAG)
 
-export const appendAuthQuery = (url: string) => {
+/** 仅供浏览器 WebSocket 握手使用；普通 HTTP 与 SSE 必须使用 Authorization header。 */
+export const appendWebSocketAuthQuery = (url: string) => {
   const token = getToken()
   if (!token) return url
   const separator = url.includes('?') ? '&' : '?'

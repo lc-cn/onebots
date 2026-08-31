@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TokenManager } from "@onebots/core";
 import {
     authorizeManagementUpgrade,
+    extractManagementHeaderToken,
     extractManagementToken,
     managementAccessTokenMatches,
     managementCredentialsChanged,
@@ -21,6 +22,7 @@ describe("management authentication", () => {
     it("从 Bearer header 与 query 提取令牌", () => {
         expect(extractManagementToken(request("/", "Bearer header-token"))).toBe("header-token");
         expect(extractManagementToken(request("/?access_token=query-token"))).toBe("query-token");
+        expect(extractManagementHeaderToken(request("/?access_token=query-token"))).toBeUndefined();
     });
 
     it("配置 token 与会话 token 可同时授权 WebSocket upgrade", () => {
