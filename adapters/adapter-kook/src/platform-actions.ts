@@ -1,4 +1,5 @@
 import {
+    definePlatformActionHandlers,
     definePlatformActions,
     isSafeAbsoluteApiPath,
     materializeMediaSource,
@@ -83,55 +84,77 @@ const ROUTE_HANDLERS = Object.fromEntries(
     ]),
 ) satisfies Readonly<Record<string, PlatformActionHandler<KookBot>>>;
 
+const SPECIAL_ACTION_HANDLERS = {
+    call_kook_api: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
+        bot.callApi(requirePath(params.path), {
+            method: methodValue(params.method),
+            query: queryValue(params.query),
+            body: bodyValue(params.body),
+        }),
+    upload_asset: async (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
+        const media = await mediaFromParams(params);
+        return { url: await bot.uploadAsset(media.data, media.filename, media.contentType) };
+    },
+    create_oauth_authorization_url: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
+        Promise.resolve({
+            url: bot.buildOAuthAuthorizationUrl(
+                oauthScopes(params.scope),
+                requiredString(params.state, "state"),
+            ),
+        }),
+    exchange_oauth_code: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
+        bot.exchangeOAuthCode(requiredString(params.code, "code")),
+    get_oauth_user_info: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
+        bot.getOAuthUserInfo(requiredString(params.access_token, "access_token")),
+    list_oauth_user_guilds: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
+        bot.listOAuthUserGuilds(
+            requiredString(params.access_token, "access_token"),
+            oauthGuildListQuery(params),
+        ),
+    call_kook_oauth_api: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
+        bot.callOAuthApi(
+            requiredString(params.access_token, "access_token"),
+            requirePath(params.path),
+            queryValue(params.query),
+        ),
+    create_guild_emoji: createGuildEmoji,
+    get_guild_badge: getGuildBadge,
+} satisfies Readonly<Record<string, PlatformActionHandler<KookBot>>>;
+
+const SPECIAL_ACTIONS = definePlatformActionHandlers(
+    SPECIAL_ACTION_HANDLERS,
+    {
+        call_kook_api: ["path", "method", "query", "body"],
+        upload_asset: ["file", "url", "src", "filename", "name", "content_type", "mime"],
+        create_oauth_authorization_url: ["scope", "state"],
+        exchange_oauth_code: ["code"],
+        get_oauth_user_info: ["access_token"],
+        list_oauth_user_guilds: ["access_token", "page", "page_size", "sort"],
+        call_kook_oauth_api: ["access_token", "path", "query"],
+        create_guild_emoji: [
+            "guild_id",
+            "emoji",
+            "file",
+            "url",
+            "src",
+            "filename",
+            "name",
+            "content_type",
+            "mime",
+        ],
+        get_guild_badge: ["guild_id", "style"],
+    },
+    (action, parameter) =>
+        KookError.invalid(
+            `KOOK 动作 ${action} 不接受参数 ${parameter}`,
+            "KOOK_ACTION_PARAM_UNKNOWN",
+            { action, key: parameter },
+        ),
+);
+
 const PLATFORM_ACTIONS = definePlatformActions(
     {
-        call_kook_api: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
-            bot.callApi(requirePath(params.path), {
-                method: methodValue(params.method),
-                query: queryValue(params.query),
-                body: bodyValue(params.body),
-            }),
-        upload_asset: async (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
-            const media = await mediaFromParams(params);
-            return { url: await bot.uploadAsset(media.data, media.filename, media.contentType) };
-        },
-        create_oauth_authorization_url: (
-            bot: KookBot,
-            params: Readonly<Record<string, unknown>>,
-        ) => {
-            assertAllowedParams(params, ["scope", "state"]);
-            return Promise.resolve({
-                url: bot.buildOAuthAuthorizationUrl(
-                    oauthScopes(params.scope),
-                    requiredString(params.state, "state"),
-                ),
-            });
-        },
-        exchange_oauth_code: (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["code"]);
-            return bot.exchangeOAuthCode(requiredString(params.code, "code"));
-        },
-        get_oauth_user_info: (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["access_token"]);
-            return bot.getOAuthUserInfo(requiredString(params.access_token, "access_token"));
-        },
-        list_oauth_user_guilds: (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["access_token", "page", "page_size", "sort"]);
-            return bot.listOAuthUserGuilds(
-                requiredString(params.access_token, "access_token"),
-                oauthGuildListQuery(params),
-            );
-        },
-        call_kook_oauth_api: (bot: KookBot, params: Readonly<Record<string, unknown>>) => {
-            assertAllowedParams(params, ["access_token", "path", "query"]);
-            return bot.callOAuthApi(
-                requiredString(params.access_token, "access_token"),
-                requirePath(params.path),
-                queryValue(params.query),
-            );
-        },
-        create_guild_emoji: createGuildEmoji,
-        get_guild_badge: getGuildBadge,
+        ...SPECIAL_ACTIONS,
         ...KOOK_FRIEND_PLATFORM_ACTIONS,
         ...KOOK_GUILD_PLATFORM_ACTIONS,
         ...KOOK_PERMISSION_PLATFORM_ACTIONS,
@@ -270,20 +293,6 @@ function optionalPositiveInteger(value: unknown, key: string, max?: number): num
         );
     }
     return value;
-}
-
-function assertAllowedParams(
-    params: Readonly<Record<string, unknown>>,
-    allowed: readonly string[],
-): void {
-    const unknown = Object.keys(params).filter(key => !allowed.includes(key));
-    if (unknown.length) {
-        throw KookError.invalid(
-            `KOOK OAuth 动作不接受参数 ${unknown.join(", ")}`,
-            "KOOK_ACTION_PARAM_UNKNOWN",
-            { params: unknown },
-        );
-    }
 }
 
 function scalarValue(value: unknown, key: string): string | number | boolean | undefined {

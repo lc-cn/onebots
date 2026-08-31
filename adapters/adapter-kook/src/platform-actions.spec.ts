@@ -275,6 +275,31 @@ describe("KOOK 平台扩展动作", () => {
                 code: "code",
                 client_secret: "shadow",
             }),
-        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_UNKNOWN" });
+        ).rejects.toMatchObject({
+            code: "KOOK_ACTION_PARAM_UNKNOWN",
+            details: { action: "exchange_oauth_code", key: "client_secret" },
+        });
+    });
+
+    test("底层调用与资源动作拒绝契约外顶层字段", async () => {
+        const bot = {} as never;
+        await expect(
+            executeKookPlatformAction(bot, "call_kook_api", {
+                path: "/v3/user/me",
+                token: "不应透传",
+            }),
+        ).rejects.toMatchObject({
+            code: "KOOK_ACTION_PARAM_UNKNOWN",
+            details: { action: "call_kook_api", key: "token" },
+        });
+        await expect(
+            executeKookPlatformAction(bot, "get_guild_badge", {
+                guild_id: "guild",
+                format: "svg",
+            }),
+        ).rejects.toMatchObject({
+            code: "KOOK_ACTION_PARAM_UNKNOWN",
+            details: { action: "get_guild_badge", key: "format" },
+        });
     });
 });
