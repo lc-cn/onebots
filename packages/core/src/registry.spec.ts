@@ -5,6 +5,13 @@ import { AdapterRegistry, ProtocolRegistry } from "./registry.js";
 import type { Schema } from "./config-validator.js";
 
 const schema: Schema = {};
+const anotherSchema: Schema = {
+    enabled: {
+        type: "boolean",
+        label: "启用",
+        ui: { section: "advanced" },
+    },
+};
 
 const adapterFactory = (() => undefined) as unknown as Adapter.Factory;
 const anotherAdapterFactory = (() => undefined) as unknown as Adapter.Factory;
@@ -51,6 +58,28 @@ describe("extension registries", () => {
             ValidationError,
         );
         expect(ProtocolRegistry.get("test", "v1")).toBe(protocolFactory);
+    });
+
+    it("keeps repeated schema registration with the same object idempotent", () => {
+        AdapterRegistry.registerSchema("mock", schema);
+        ProtocolRegistry.registerSchema("test.v1", schema);
+
+        expect(() => AdapterRegistry.registerSchema("mock", schema)).not.toThrow();
+        expect(() => ProtocolRegistry.registerSchema("test.v1", schema)).not.toThrow();
+    });
+
+    it("rejects schema replacement and preserves the original contract", () => {
+        AdapterRegistry.registerSchema("mock", schema);
+        ProtocolRegistry.registerSchema("test.v1", schema);
+
+        expect(() => AdapterRegistry.registerSchema("mock", anotherSchema)).toThrowError(
+            ValidationError,
+        );
+        expect(() => ProtocolRegistry.registerSchema("test.v1", anotherSchema)).toThrowError(
+            ValidationError,
+        );
+        expect(AdapterRegistry.getSchema("mock")).toBe(schema);
+        expect(ProtocolRegistry.getSchema("test.v1")).toBe(schema);
     });
 
     it("removes related schemas when an extension is unregistered", () => {

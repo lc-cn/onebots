@@ -63,6 +63,15 @@ export class ProtocolRegistry {
      */
     static registerSchema(key: string, schema: Schema): void {
         assertSchemaFormContract(schema);
+        const registeredSchema = this.schemas.get(key);
+        if (registeredSchema) {
+            if (registeredSchema === schema) {
+                return;
+            }
+            throw new ValidationError(`协议配置 Schema ${key} 已由其他实现注册`, {
+                context: { key },
+            });
+        }
         this.schemas.set(key, schema);
     }
 
@@ -241,6 +250,15 @@ export class AdapterRegistry {
      */
     static registerSchema(name: string, schema: Schema): void {
         assertSchemaFormContract(schema);
+        const registeredSchema = this.schemas.get(name);
+        if (registeredSchema) {
+            if (registeredSchema === schema) {
+                return;
+            }
+            throw new ValidationError(`适配器配置 Schema ${name} 已由其他实现注册`, {
+                context: { name },
+            });
+        }
         this.schemas.set(name, schema);
     }
 

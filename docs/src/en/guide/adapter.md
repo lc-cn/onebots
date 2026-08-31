@@ -54,7 +54,9 @@ async function callQQ(client: QQClient, action: string, params: Record<string, u
 
 The Web console only lists adapters and protocols actually loaded with `-r` / `-p`. A plugin's registered schema is the single source for runtime validation, form sections, sensitive fields, and dynamic lists; the application does not maintain a second field catalog.
 
-Adapter names and protocol name-version pairs are unique within a process. The same implementation may register repeatedly so plugin loading remains idempotent. A different implementation cannot claim an occupied identifier: the registry throws a `ValidationError` instead of silently replacing the implementation while retaining stale metadata. Unregistering an implementation also removes its schema.
+Adapter names, protocol name-version pairs, and their configuration schema keys are unique within a process. The same factory or schema object may register repeatedly so plugin loading remains idempotent. A different implementation or schema cannot claim an occupied identifier: the registry throws a `ValidationError` instead of silently changing the implementation, metadata, or validation contract. Unregistering an implementation also removes its schema.
+
+Plugin entries are loaded through native ESM dynamic imports and module initialization is awaited, so plugins may use top-level `await`. An initialization rejection is preserved in startup and doctor diagnostics instead of being misreported as a missing module.
 
 ### Quick Links
 
