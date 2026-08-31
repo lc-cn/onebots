@@ -5,6 +5,7 @@ import type { App } from "../app.js";
 import { getAppConfigSchema } from "../config-schema.js";
 import { saveManagedRuntimeConfig } from "../managed-runtime-config.js";
 import { RuntimeConfigApplicationConflictError } from "../runtime-config-application.js";
+import { scheduleProcessRestart } from "../process-restart.js";
 
 /**
  * Register configuration and system management routes.
@@ -72,12 +73,11 @@ export function registerConfigRoutes(app: App, router: Router): void {
     router.post("/api/system/restart", async (ctx: RouterContext) => {
         try {
             await app.preflightRestart();
-            ctx.body = { success: true, message: "重启预检通过，服务即将重启" };
-            setImmediate(() => {
-                setTimeout(() => {
-                    process.exit(75);
-                }, 1500);
-            });
+            const scheduled = scheduleProcessRestart(app, { exitCode: 75 });
+            ctx.body = {
+                success: true,
+                message: scheduled ? "重启预检通过，服务即将重启" : "服务重启已在进行中",
+            };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             ctx.status = 422;

@@ -8,6 +8,7 @@ import {
     extractManagementToken,
     validateManagementToken,
 } from "../management-auth.js";
+import { scheduleProcessRestart } from "../process-restart.js";
 
 /** SSE 心跳间隔（毫秒） */
 const SSE_HEARTBEAT_INTERVAL_MS = 30000;
@@ -82,20 +83,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
                 } else if (payload.type === "resize" && app.ptyTerminal) {
                     app.ptyTerminal.resize(payload.cols, payload.rows);
                 } else if (payload.type === "restart") {
-                    // 通知所有客户端
-                    app.terminalClients.forEach(c => {
-                        try {
-                            c.send(
-                                JSON.stringify({
-                                    type: "output",
-                                    data: "\r\n\x1b[33m[服务即将重启]\x1b[0m",
-                                }),
-                            );
-                        } catch {
-                            // 客户端可能已断开，忽略
-                        }
-                    });
-                    setTimeout(() => process.exit(100), TERMINAL_RESTART_DELAY_MS);
+                    void requestTerminalRestart(app);
                 }
             } catch (e) {
                 app.logger.error("终端消息处理失败:", e);
@@ -160,5 +148,37 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             clearInterval(heartbeat);
             app.logClients.delete(ctx.res);
         });
+    });
+}
+
+async function requestTerminalRestart(app: App): Promise<void> {
+    try {
+        await app.preflightRestart();
+        const scheduled = scheduleProcessRestart(app, {
+            exitCode: 100,
+            delayMs: TERMINAL_RESTART_DELAY_MS,
+        });
+        broadcastTerminalOutput(
+            app,
+            scheduled
+                ? "\r\n\x1b[33m[重启预检通过，服务正在优雅停止]\x1b[0m"
+                : "\r\n\x1b[33m[服务重启已在进行中]\x1b[0m",
+        );
+    } catch (error) {
+        app.logger.error("终端重启预检失败，当前服务继续运行", { error });
+        broadcastTerminalOutput(
+            app,
+            `\r\n\x1b[31m[重启预检失败：${error instanceof Error ? error.message : String(error)}]\x1b[0m`,
+        );
+    }
+}
+
+function broadcastTerminalOutput(app: App, data: string): void {
+    app.terminalClients.forEach(client => {
+        try {
+            client.send(JSON.stringify({ type: "output", data }));
+        } catch {
+            // 客户端可能已断开，后续 close 事件会完成清理。
+        }
     });
 }

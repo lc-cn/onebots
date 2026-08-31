@@ -286,6 +286,7 @@ import { useApi } from "../composables/useApi";
 import { authFetch } from "../composables/useAuth";
 import { formatSize, formatTime } from "../utils";
 import { buildApiUrl } from "../config";
+import { readCurrentServiceInstanceId, waitForServiceRestart } from "../utils/service-restart";
 
 const { systemInfo, fetchSystemInfo } = useApi();
 const toast = useToast();
@@ -388,9 +389,13 @@ async function handleRestart() {
     if (!confirmed) return;
     restartLoading.value = true;
     try {
+        const previousInstanceId = await readCurrentServiceInstanceId();
         const res = await authFetch(buildApiUrl("/api/system/restart"), { method: "POST" });
         if (res.ok) {
-            toast.success("服务即将重启，请稍后刷新页面（Docker 下约 10 秒内可恢复）");
+            toast.info("服务正在优雅停止并切换实例，请勿关闭页面");
+            await waitForServiceRestart(previousInstanceId);
+            toast.success("新服务实例已上线，正在刷新页面");
+            window.location.reload();
         } else {
             const data = await res.json().catch(() => ({}));
             toast.error(data?.message || "重启请求失败");

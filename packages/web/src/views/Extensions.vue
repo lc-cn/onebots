@@ -133,6 +133,7 @@ import { computed, onMounted, ref } from "vue";
 import type { ExtensionInfo } from "../types";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
+import { readCurrentServiceInstanceId, waitForServiceRestart } from "../utils/service-restart";
 import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
 
@@ -188,6 +189,7 @@ async function install(extension: ExtensionInfo): Promise<void> {
         if (!response.ok || !result.success) throw new Error(result.message || "扩展安装失败");
 
         restarting.value = true;
+        const previousInstanceId = await readCurrentServiceInstanceId();
         const restart = await authFetch(buildApiUrl("/api/system/restart"), { method: "POST" });
         const restartResult = (await restart.json()) as { success: boolean; message?: string };
         if (!restart.ok || !restartResult.success) {
@@ -195,31 +197,16 @@ async function install(extension: ExtensionInfo): Promise<void> {
                 restartResult.message || "扩展已安装，但服务重启失败，请在系统信息页手动重启",
             );
         }
-        await waitForRestart();
+        await waitForServiceRestart(previousInstanceId);
+        window.location.reload();
     } catch (error) {
-        errorMessage.value = error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         restarting.value = false;
         await loadExtensions();
+        errorMessage.value = message;
     } finally {
         installingId.value = "";
     }
-}
-
-async function waitForRestart(): Promise<void> {
-    await new Promise(resolve => setTimeout(resolve, 2_500));
-    for (let attempt = 0; attempt < 40; attempt++) {
-        try {
-            const response = await fetch(buildApiUrl("/health"), { cache: "no-store" });
-            if (response.ok) {
-                window.location.reload();
-                return;
-            }
-        } catch {
-            // 服务重启期间连接失败属于预期状态。
-        }
-        await new Promise(resolve => setTimeout(resolve, 1_500));
-    }
-    throw new Error("服务重启超时，请稍后刷新页面或检查服务状态");
 }
 
 onMounted(loadExtensions);
