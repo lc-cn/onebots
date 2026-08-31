@@ -1,3 +1,4 @@
+import { FULL_INTENTS } from "@tencent-connect/qqbot-nodejs/protocol";
 import {
     defineAdapterCapabilities,
     definePlatformActionCapabilities,
@@ -5,6 +6,7 @@ import {
     type CapabilityDescriptor,
 } from "onebots";
 import { QQ_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { QQ_INTENTS, type QQConfig, type QQIntent } from "./types.js";
 
 const manageGuild: CapabilityDescriptor = {
     support: "native",
@@ -149,3 +151,113 @@ export const qqCapabilities: AdapterCapabilityManifest = defineAdapterCapabiliti
         },
     },
 });
+
+type CapabilityScene = NonNullable<CapabilityDescriptor["scenes"]>[number];
+
+const intentEventRequirements = {
+    friend_add: ["GROUP_AND_C2C_EVENT"],
+    friend_remove: ["GROUP_AND_C2C_EVENT"],
+    group_increase: ["GROUP_AND_C2C_EVENT"],
+    group_decrease: ["GROUP_AND_C2C_EVENT"],
+    reaction_added: ["GUILD_MESSAGE_REACTIONS"],
+    reaction_removed: ["GUILD_MESSAGE_REACTIONS"],
+    interaction: ["INTERACTION"],
+} as const satisfies Partial<Record<string, readonly QQIntent[]>>;
+
+/** 根据账号实际提交给 QQ Gateway 的 intents 收窄事件能力。 */
+export function describeQQCapabilities(
+    config: Pick<QQConfig, "intents" | "receive_mode">,
+): AdapterCapabilityManifest {
+    // Webhook/manual 的事件订阅由开放平台回调配置决定，本地 intents 不参与接收。
+    // 留空时 SDK 使用 FULL_INTENTS；从同一位图推导，避免 SDK 升级后复制值漂移。
+    if (config.receive_mode === "webhook" || config.receive_mode === "manual") {
+        return qqCapabilities;
+    }
+
+    const enabled = new Set<QQIntent>(
+        config.intents?.length ? config.intents : intentsFromMask(FULL_INTENTS),
+    );
+    const events: Record<string, CapabilityDescriptor> = { ...qqCapabilities.events };
+    const messageScenes: CapabilityScene[] = [];
+    const missingMessageIntents: QQIntent[] = [];
+    if (enabled.has("GROUP_AND_C2C_EVENT")) messageScenes.push("private", "group");
+    else missingMessageIntents.push("GROUP_AND_C2C_EVENT");
+    if (enabled.has("DIRECT_MESSAGE")) messageScenes.push("direct");
+    else missingMessageIntents.push("DIRECT_MESSAGE");
+    if (enabled.has("GUILD_MESSAGES") || enabled.has("PUBLIC_GUILD_MESSAGES")) {
+        messageScenes.push("channel");
+    } else {
+        missingMessageIntents.push("GUILD_MESSAGES", "PUBLIC_GUILD_MESSAGES");
+    }
+    events.message = intentLimitedDescriptor(
+        messageScenes,
+        missingMessageIntents,
+        "消息事件",
+        qqCapabilities.events.message,
+    );
+
+    const memberScenes: CapabilityScene[] = [];
+    const missingMemberIntents: QQIntent[] = [];
+    if (enabled.has("GROUP_MEMBER")) memberScenes.push("group");
+    else missingMemberIntents.push("GROUP_MEMBER");
+    if (enabled.has("GUILD_MEMBERS")) memberScenes.push("channel");
+    else missingMemberIntents.push("GUILD_MEMBERS");
+    for (const event of ["member_joined", "user_updated", "member_left"] as const) {
+        events[event] = intentLimitedDescriptor(
+            memberScenes,
+            missingMemberIntents,
+            "成员事件",
+            qqCapabilities.events[event],
+        );
+    }
+
+    for (const [event, required] of Object.entries(intentEventRequirements)) {
+        const descriptor = qqCapabilities.events[event];
+        if (!descriptor) continue;
+        events[event] = required.some(intent => enabled.has(intent))
+            ? descriptor
+            : missingIntentDescriptor(required, `${event} 事件`);
+    }
+
+    return defineAdapterCapabilities({
+        actions: qqCapabilities.actions,
+        events,
+        segments: qqCapabilities.segments,
+        transports: qqCapabilities.transports,
+    });
+}
+
+function intentsFromMask(mask: number): QQIntent[] {
+    return (Object.entries(QQ_INTENTS) as [QQIntent, number][])
+        .filter(([, value]) => (mask & value) === value)
+        .map(([intent]) => intent);
+}
+
+function intentLimitedDescriptor(
+    scenes: readonly CapabilityScene[],
+    missing: readonly QQIntent[],
+    label: string,
+    complete: CapabilityDescriptor,
+): CapabilityDescriptor {
+    if (scenes.length === 0) return missingIntentDescriptor(missing, label);
+    if (missing.length === 0) return complete;
+    return {
+        support: "native",
+        availability: "permission",
+        scenes,
+        permissions: missing,
+        note: `${label}仅在当前账号已订阅的场景中可接收；权限列表为其他场景缺少的 intent`,
+    };
+}
+
+function missingIntentDescriptor(
+    required: readonly QQIntent[],
+    label: string,
+): CapabilityDescriptor {
+    return {
+        support: "unsupported",
+        availability: "permission",
+        permissions: required,
+        note: `当前账号未订阅 ${label} 所需的 QQ Gateway intent`,
+    };
+}

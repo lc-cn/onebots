@@ -39,6 +39,8 @@ qq.my_bot:
 
 旧接收字段和 intent 别名不会自动转换，配置错误会在启动时直接暴露。
 
+WebSocket 模式下，管理端会按该账号实际提交给 Gateway 的 intents 收窄消息场景、成员、表态和互动事件能力，并标出缺少的 intent。留空时按官方 SDK 的 `FULL_INTENTS` 默认位图计算，其中不含频道表态、群成员等额外订阅。Webhook 与手动接入的事件范围由 QQ 开放平台回调配置决定，本地 `intents` 不参与判断。
+
 已有 HTTP Host 可将 `receive_mode` 设为 `manual`，再把原始请求交给 `account.client.ingest(request)` 或 `acceptHttp(ctx)`。启动时会先解析真实机器人身份，canonical `bot_id` 不使用内部账号别名。
 
 Gateway 事件保持平台到达顺序并等待所有协议出口完成。投递失败时按封顶退避持续重试，后续事件不会越过；停止账号会取消旧代次的等待。由于腾讯 Gateway 在业务处理前已经推进会话序列，积压不会通过丢弃或伪造断线重放来掩盖。

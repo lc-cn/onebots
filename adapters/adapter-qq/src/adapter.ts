@@ -9,8 +9,9 @@ import {
     OrderedEventDeliveryQueue,
     readPackageVersion,
     type CommonEvent,
+    type AdapterCapabilityManifest,
 } from "onebots";
-import { qqCapabilities } from "./capabilities.js";
+import { describeQQCapabilities, qqCapabilities } from "./capabilities.js";
 import { isQQSdkReconnectExhaustedLog, QQClient } from "./client.js";
 import { QQApiError } from "./errors.js";
 import { projectQQMessage, projectQQRawEvent } from "./events.js";
@@ -32,6 +33,13 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
     constructor(app: BaseApp) {
         super(app, "qq", qqCapabilities);
         this.icon = "https://q.qq.com/favicon.ico";
+    }
+
+    describeCapabilities(uin?: string): AdapterCapabilityManifest {
+        if (!uin) return qqCapabilities;
+        const account = this.getAccount(uin);
+        if (!account) return qqCapabilities;
+        return describeQQCapabilities(account.config as Account.Config<"qq"> & QQConfig);
     }
 
     async sendMessage(
