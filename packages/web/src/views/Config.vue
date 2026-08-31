@@ -313,7 +313,7 @@ watch(activeTab, name => {
                         :title="`配置 ${protocolTitle(protocolConfigurationHint)} 账号出口`"
                         @close="protocolConfigurationHint = ''">
                         <div class="flex flex-wrap items-center justify-between gap-2">
-                            <span>新增或编辑账号，并在协议配置步骤启用这个协议。</span>
+                            <span>新增账号会预选该协议；编辑已有账号会直接定位并启用。</span>
                             <UiButton
                                 size="sm"
                                 variant="secondary"
@@ -325,7 +325,7 @@ watch(activeTab, name => {
                     <ConfigAccountsTab
                         :accounts="accounts"
                         :account-empty-text="accountEmptyText"
-                        @edit="row => accountWizardRef?.openEdit(row)"
+                        @edit="row => accountWizardRef?.openEdit(row, protocolConfigurationHint)"
                         @remove="handleRemoveAccount" />
                 </template>
             </UiCard>

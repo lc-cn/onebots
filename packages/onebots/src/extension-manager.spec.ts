@@ -154,6 +154,7 @@ describe("ExtensionManager", () => {
 
         expect(slack?.loaded).toBe(false);
         expect(slack).toMatchObject({
+            configurationError: null,
             targetVersion: catalogVersion("@onebots/adapter-slack"),
             installedVersion: null,
             versionAligned: false,

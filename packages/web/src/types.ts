@@ -130,6 +130,7 @@ export interface ExtensionInfo {
     configurationTarget:
         | { kind: "account"; platform: string }
         | { kind: "protocol"; protocolKey: string };
+    configurationError: string | null;
     targetVersion: string;
     installedVersion: string | null;
     versionAligned: boolean;

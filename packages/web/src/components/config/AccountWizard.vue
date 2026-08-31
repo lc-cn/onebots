@@ -307,10 +307,10 @@ const openAdd = (platform = "", protocol = "") => {
     dialogVisible.value = true;
 };
 
-const openEdit = (row: AccountRow) => {
+const openEdit = (row: AccountRow, protocol = "") => {
     dialogTitle.value = "编辑账号";
     isEdit.value = true;
-    preferredProtocol.value = "";
+    preferredProtocol.value = protocol;
     accountOriginalConfig.value = JSON.parse(JSON.stringify(row.config || {})) as Record<
         string,
         unknown
@@ -318,8 +318,9 @@ const openEdit = (row: AccountRow) => {
     accountForm.value = { platform: row.platform, account_id: row.account_id };
     buildAdapterFields(row.platform);
     syncFormModel(row.config || {});
-    currentStep.value = 0;
-    activeProtocolTab.value = protocolGroups.value[0]?.key ?? "";
+    const requestedProtocol = applyPreferredProtocol();
+    currentStep.value = requestedProtocol ? steps.length - 1 : 0;
+    activeProtocolTab.value = requestedProtocol ?? protocolGroups.value[0]?.key ?? "";
     dialogVisible.value = true;
 };
 

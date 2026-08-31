@@ -19,6 +19,7 @@ import type { LoadedPluginInfo } from "./plugin-loader.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 import { buildExtensionInstallInvocation } from "./package-manager.js";
+import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -103,6 +104,7 @@ export class ExtensionManager {
                     : undefined;
             return {
                 ...entry,
+                configurationError: validateExtensionConfigurationTarget(entry),
                 targetVersion: packageCatalog.packageVersion,
                 installedVersion,
                 versionAligned: installedVersion === packageCatalog.packageVersion,

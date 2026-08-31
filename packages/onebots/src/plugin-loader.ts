@@ -10,6 +10,7 @@ import {
     type ExtensionRegistryState,
 } from "@onebots/core";
 import { writeCliError } from "./cli-output.js";
+import { parseProtocolPluginIdentity } from "./protocol-plugin-identity.js";
 
 export type PluginInspection =
     | {
@@ -257,13 +258,12 @@ function getRegistrationContractError(
         if (!AdapterRegistry.has(name)) return `没有注册适配器 ${name}`;
         if (!AdapterRegistry.getSchema(name)) return `没有注册适配器配置 Schema ${name}`;
     } else {
-        const identity = parseProtocolIdentity(name);
+        const identity = parseProtocolPluginIdentity(name);
         if (!identity) return `协议插件名必须使用 <name>-<version> 格式（例如 onebot-v11）`;
-        const { protocol, version } = identity;
+        const { protocol, version, schemaKey } = identity;
         if (!ProtocolRegistry.has(protocol, version)) {
             return `没有注册协议 ${protocol}/${version}`;
         }
-        const schemaKey = `${protocol}.${version}`;
         if (!ProtocolRegistry.getSchema(schemaKey)) {
             return `没有注册协议配置 Schema ${schemaKey}`;
         }
@@ -289,10 +289,9 @@ function hasPromisedRegistration(
             state.adapters.schemas.has(name)
         );
     }
-    const identity = parseProtocolIdentity(name);
+    const identity = parseProtocolPluginIdentity(name);
     if (!identity) return false;
-    const { protocol, version } = identity;
-    const schemaKey = `${protocol}.${version}`;
+    const { protocol, version, schemaKey } = identity;
     return (
         state.protocols.factories.get(protocol)?.has(version) === true ||
         state.protocols.schemas.has(schemaKey)
@@ -312,12 +311,12 @@ function promisedRegistryChangeKeys(type: PluginType, name: string): Set<string>
             `adapter.schema:${name}`,
         ]);
     }
-    const identity = parseProtocolIdentity(name);
+    const identity = parseProtocolPluginIdentity(name);
     if (!identity) return new Set();
     return new Set([
         `protocol.factory:${identity.protocol}/${identity.version}`,
         `protocol.metadata:${identity.protocol}`,
-        `protocol.schema:${identity.protocol}.${identity.version}`,
+        `protocol.schema:${identity.schemaKey}`,
     ]);
 }
 
@@ -400,12 +399,6 @@ function flattenProtocolFactories(
 
 function jsonEqual(left: unknown, right: unknown): boolean {
     return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function parseProtocolIdentity(name: string): { protocol: string; version: string } | undefined {
-    const match = /^(.+)-(v\d+)$/.exec(name);
-    if (!match) return undefined;
-    return { protocol: match[1], version: match[2] };
 }
 
 interface PackageManifest {

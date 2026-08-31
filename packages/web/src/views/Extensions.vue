@@ -64,6 +64,12 @@
                             }}；可切换后重启。
                         </UiAlert>
 
+                        <UiAlert
+                            v-if="extension.loaded && extension.configurationError"
+                            variant="warning">
+                            配置入口不可用：{{ extension.configurationError }}
+                        </UiAlert>
+
                         <ExtensionCapabilities
                             v-if="extension.capability"
                             :capability="extension.capability" />
@@ -102,7 +108,7 @@
 
                         <div class="flex justify-end gap-2">
                             <RouterLink
-                                v-if="extension.loaded"
+                                v-if="extension.loaded && configurationAction(extension).available"
                                 v-slot="{ navigate }"
                                 custom
                                 :to="configurationAction(extension).to">
