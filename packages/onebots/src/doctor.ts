@@ -378,7 +378,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     };
 }
 
-/** 验证数据库、审计日志与适配器状态使用的数据目录，而不以路径存在代替可用性。 */
+/** 验证数据库、审计与管理日志、适配器状态使用的数据目录，不以路径存在代替可用性。 */
 export function inspectDataDirectory(dataDirectory: string, fix = false): DoctorCheck {
     const inspection = inspectRuntimeDataDirectory(dataDirectory);
     if (inspection.status === "ready") {

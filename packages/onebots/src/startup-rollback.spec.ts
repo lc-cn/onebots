@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,11 +6,13 @@ import { BaseApp } from "@onebots/core";
 import { App } from "./app.js";
 
 const originalConfigDir = BaseApp.configDir;
+const originalWorkingDirectory = process.cwd();
 const originalStdoutWrite = process.stdout.write;
 const originalStderrWrite = process.stderr.write;
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {
+    process.chdir(originalWorkingDirectory);
     BaseApp.configDir = originalConfigDir;
     process.stdout.write = originalStdoutWrite;
     process.stderr.write = originalStderrWrite;
@@ -22,7 +24,9 @@ afterEach(() => {
 describe("App startup rollback", () => {
     it("启动前配置校验失败时释放进程级资源", async () => {
         const directory = mkdtempSync(join(tmpdir(), "onebots-app-startup-rollback-"));
-        temporaryDirectories.push(directory);
+        const workingDirectory = mkdtempSync(join(tmpdir(), "onebots-app-working-directory-"));
+        temporaryDirectories.push(directory, workingDirectory);
+        process.chdir(workingDirectory);
         BaseApp.configDir = directory;
         const exitListenerCount = process.listenerCount("exit");
         const app = new App({
@@ -32,6 +36,8 @@ describe("App startup rollback", () => {
         });
 
         expect(process.listenerCount("exit")).toBe(exitListenerCount + 1);
+        expect(app.logCacheFile).toBe(join(directory, "data", "terminal-logs.txt"));
+        expect(existsSync(join(workingDirectory, "data", "terminal-logs.txt"))).toBe(false);
         expect(process.stdout.write).not.toBe(originalStdoutWrite);
         expect(process.stderr.write).not.toBe(originalStderrWrite);
 

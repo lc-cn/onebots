@@ -137,7 +137,7 @@ export class App extends BaseApp {
         if (client) this.logger.info(`使用 Web 前端目录: ${client}`);
         else this.logger.warn("未找到 @onebots/web/dist，管理端页面将不可用");
 
-        this._logCache = new LogCacheManager(path.join(process.cwd(), "data", "terminal-logs.txt"));
+        this._logCache = new LogCacheManager(path.join(BaseApp.dataDir, "terminal-logs.txt"));
         this._logCache.interceptStdio();
         this._verification = new VerificationManager();
         this._hfBackup = new HfBackupService(this.logger);
