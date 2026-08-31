@@ -48,7 +48,7 @@ import {
     type RuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
 import { ExtensionManager } from "./extension-manager.js";
-import { preflightServiceRuntime } from "./service-preflight.js";
+import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -197,7 +197,7 @@ export class App extends BaseApp {
         const config = parseRuntimeConfig(fs.readFileSync(BaseApp.configPath, "utf8"));
         const selection = getRuntimePluginSelection(config);
         const loadedPlugins = this.pluginInfos;
-        await preflightServiceRuntime({
+        await preflightServiceRuntimeIsolated({
             configPath: BaseApp.configPath,
             adapters:
                 selection?.adapters ??

@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
+import { promisify } from "node:util";
 import type { ServiceSpec } from "./service-manager.js";
 import { pluginCandidates, tryLoadRegisteredPlugin, type PluginType } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
@@ -9,6 +11,66 @@ export type ServicePreflightSpec = Pick<
     ServiceSpec,
     "configPath" | "adapters" | "protocols" | "workingDirectory"
 >;
+
+const execFileAsync = promisify(execFile);
+
+interface IsolatedPreflightExecutionOptions {
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    timeout: number;
+    maxBuffer: number;
+}
+
+type IsolatedPreflightExecutor = (
+    file: string,
+    args: string[],
+    options: IsolatedPreflightExecutionOptions,
+) => Promise<unknown>;
+
+interface IsolatedPreflightProcessOptions {
+    nodePath?: string;
+    binPath?: string;
+    timeoutMs?: number;
+    execute?: IsolatedPreflightExecutor;
+}
+
+const executeIsolatedPreflight: IsolatedPreflightExecutor = async (file, args, options) => {
+    await execFileAsync(file, args, options);
+};
+
+/**
+ * 在一次性 CLI 进程中执行与守护服务相同的预检。
+ * 插件导入和 Registry 写入不会污染仍在提供管理端的在线进程。
+ */
+export async function preflightServiceRuntimeIsolated(
+    spec: ServicePreflightSpec,
+    options: IsolatedPreflightProcessOptions = {},
+): Promise<void> {
+    const nodePath = options.nodePath ?? process.execPath;
+    const binPath = options.binPath ?? process.argv[1];
+    if (!binPath) throw new Error("无法确定 OneBots CLI 入口，不能执行隔离重启预检");
+    const args = [
+        path.resolve(binPath),
+        "--service-runtime",
+        "preflight",
+        "-c",
+        spec.configPath,
+        ...spec.adapters.flatMap(adapter => ["-r", adapter]),
+        ...spec.protocols.flatMap(protocol => ["-p", protocol]),
+    ];
+    try {
+        await (options.execute ?? executeIsolatedPreflight)(nodePath, args, {
+            cwd: spec.workingDirectory,
+            env: { ...process.env, ONEBOTS_HEADLESS_CHILD: "1" },
+            timeout: options.timeoutMs ?? 60_000,
+            maxBuffer: 4 * 1024 * 1024,
+        });
+    } catch (error) {
+        throw new Error(isolatedPreflightErrorMessage(error), {
+            cause: error instanceof Error ? error : undefined,
+        });
+    }
+}
 
 /** 按守护进程实际工作目录加载插件并校验配置，但不连接平台或写入服务定义。 */
 export async function preflightServiceRuntime(spec: ServicePreflightSpec): Promise<void> {
@@ -41,4 +103,19 @@ export async function preflightServiceRuntime(spec: ServicePreflightSpec): Promi
 
     const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
     validateRuntimeConfig(config);
+}
+
+function isolatedPreflightErrorMessage(error: unknown): string {
+    const stderr =
+        error && typeof error === "object" && "stderr" in error && typeof error.stderr === "string"
+            ? error.stderr
+            : "";
+    const diagnostic = stderr
+        .split(/\r?\n/u)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .at(-1)
+        ?.replace(/^\[onebots\]\s*/u, "");
+    if (diagnostic) return diagnostic;
+    return error instanceof Error ? error.message : String(error);
 }
