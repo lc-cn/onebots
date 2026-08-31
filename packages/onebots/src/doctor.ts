@@ -7,6 +7,11 @@ import { pluginCandidates, tryLoadRegisteredPlugin } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { writeCliOutput } from "./cli-output.js";
 import { probeDoctorManagement } from "./doctor-management.js";
+import {
+    inspectNodeRuntime,
+    MINIMUM_NODE_MAJOR,
+    unsupportedNodeRuntimeMessage,
+} from "./runtime-version.js";
 
 export type CheckLevel = "ok" | "warning" | "error";
 export interface DoctorCheck {
@@ -30,11 +35,13 @@ export interface DoctorOptions {
 /** 诊断配置、插件、权限、端口、系统服务与健康端点。 */
 export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     const checks: DoctorCheck[] = [];
-    const major = Number(process.versions.node.split(".")[0]);
+    const runtime = inspectNodeRuntime();
     checks.push({
         name: "node",
-        level: major >= 24 ? "ok" : "error",
-        message: `Node.js ${process.version}${major >= 24 ? "" : "，需要 >=24"}`,
+        level: runtime.supported ? "ok" : "error",
+        message: runtime.supported
+            ? `Node.js ${process.version}（要求 >=${MINIMUM_NODE_MAJOR}）`
+            : unsupportedNodeRuntimeMessage(runtime),
     });
 
     let config: Record<string, unknown> | null = null;

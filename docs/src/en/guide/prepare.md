@@ -1,63 +1,41 @@
 # Preparation
 
-Before starting with onebots, make sure you have the following prerequisites ready.
+## System requirements
 
-## System Requirements
+- **Node.js**: >= 24
+- **pnpm**: >= 9.12.0; the repository pins and recommends 9.15.9
+- **Operating system**: Windows, macOS, or Linux
 
-- **Node.js**: >= 22.0.0
-- **Package Manager**: pnpm (recommended), npm, or yarn
-- **Operating System**: Windows, macOS, or Linux
+OneBots uses runtime features provided by Node.js 24. The CLI checks the version before loading plugins or platform SDKs. An older runtime exits with the required version instead of failing later with a low-level module error.
 
-## Installation
+## Install Node.js
 
-### Install Node.js
+Install Node.js 24 or newer from [nodejs.org](https://nodejs.org/) or through your version manager. The repository includes `.node-version` and `.nvmrc`; run `fnm use` or `nvm use` in a source checkout to select the recommended version.
 
-Download and install Node.js from [nodejs.org](https://nodejs.org/).
-
-Verify installation:
+Verify the installation:
 
 ```bash
-node --version  # Should be >= 22.0.0
+node --version # Must be v24 or newer
 npm --version
 ```
 
-### Install pnpm (Recommended)
+## Install pnpm
+
+Use the version pinned by the repository for source development:
 
 ```bash
-npm install -g pnpm
+npm install --global pnpm@9.15.9
+pnpm --version
 ```
 
-Or using other methods:
+pnpm is not required when you only install and run the published OneBots package globally with npm. See the [Quick Start](./start.md). After meeting the runtime requirement, run `onebots doctor` for configuration, plugin, permission, and service diagnostics if deployment checks still fail.
 
-```bash
-# Using Homebrew (macOS)
-brew install pnpm
+## Prepare platform accounts
 
-# Using curl
-curl -fsSL https://get.pnpm.io/install.sh | sh -
-```
+Before connecting a real platform, create an application in its developer console and obtain the required credentials. Use the Mock adapter for the first installation check because it does not connect to an external platform. After the gateway is healthy, follow the [Platform Configuration](/en/config/platform) to add a real account.
 
-## Platform Account Preparation
+## Next steps
 
-Before using onebots, you need to prepare accounts for the platforms you want to use:
-
-### WeChat Official Account
-- Register at [WeChat Official Platform](https://mp.weixin.qq.com/)
-- Get AppID and AppSecret
-- Configure server URL and Token
-
-### QQ Official Bot
-- Register at [QQ Bot Platform](https://bot.q.qq.com/)
-- Get AppID and AppSecret
-- Configure WebSocket or Webhook
-
-### Other Platforms
-- Refer to respective platform documentation for account setup
-- See [Platform Documentation](/en/platform/wechat) for details
-
-## Next Steps
-
-- 📖 Read [Quick Start](/en/guide/start) to deploy your first bot
-- 🔧 Check [Configuration Guide](/en/config/global) for configuration details
-- 💻 Learn about [Client SDK](/en/guide/client-sdk) for client-side development
-
+- [Quick Start](./start.md)
+- [Global Configuration](/en/config/global)
+- [Client SDK](./client-sdk.md)
