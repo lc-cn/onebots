@@ -41,6 +41,8 @@ Invalid-token audits and token creation, refresh, and revocation logs never reta
 
 `/api/*`, the root management WebSocket `/`, and the terminal WebSocket `/api/terminal` use the same dynamic authentication rules. Requests may use the top-level `access_token` or a session token issued after username/password login. WebSocket clients can send either `Authorization: Bearer <token>` or `?access_token=<token>`. Unauthorized WebSocket requests receive HTTP 401 before protocol upgrade, so they cannot establish a connection or receive `system.sync`, which contains the complete configuration.
 
+The Web entry still accepts `?access_token=` for guided login, but the management HTML uses both a `Referrer-Policy: no-referrer` response header and an early referrer meta declaration. Scripts and styles loaded before the client removes the query parameter therefore cannot copy a token-bearing entry URL into the `Referer` request header. Manual integrations should prefer entering the credential on the login page; use a query token for the root management WebSocket only when the client cannot set an `Authorization` header.
+
 After **Save and apply** rotates `username`, `password`, or `access_token`, HTTP login and WebSocket upgrades immediately use the new values. All existing access and refresh tokens are revoked, and connected root-management and terminal WebSockets close with a policy-violation status. Changes limited to accounts, protocols, or logging do not interrupt management sessions.
 
 ### Token Management

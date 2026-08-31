@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+    applyManagementDocumentSecurityHeaders,
     MANAGEMENT_HTTP_PREFIX_META,
+    MANAGEMENT_REFERRER_POLICY,
     isManagementSpaPath,
     renderManagementIndexHtml,
 } from "./management-index.js";
@@ -15,7 +17,11 @@ describe("management index runtime configuration", () => {
         expect(rendered).toContain(
             `<meta name="${MANAGEMENT_HTTP_PREFIX_META}" content="/gateway">`,
         );
+        expect(rendered).toContain(
+            `<meta name="referrer" content="${MANAGEMENT_REFERRER_POLICY}">`,
+        );
         expect(rendered).toContain('<script src="/assets/app.js"></script>');
+        expect(rendered.indexOf('name="referrer"')).toBeLessThan(rendered.indexOf("<title>"));
         expect(rendered.indexOf(MANAGEMENT_HTTP_PREFIX_META)).toBeLessThan(
             rendered.indexOf("</head>"),
         );
@@ -27,8 +33,25 @@ describe("management index runtime configuration", () => {
             "网关 path 不能以 // 开头",
         );
         expect(() => renderManagementIndexHtml("<html></html>", "/gateway")).toThrow(
-            "缺少 </head>",
+            "缺少有效的 <head>...</head>",
         );
+    });
+
+    it("通过 HTTP 响应头禁止管理入口发送 Referer", () => {
+        const set = vi.fn();
+
+        applyManagementDocumentSecurityHeaders({ set });
+
+        expect(set).toHaveBeenCalledWith("Referrer-Policy", "no-referrer");
+    });
+
+    it("保留 Web 产物已有的 no-referrer meta 而不重复注入", () => {
+        const rendered = renderManagementIndexHtml(
+            '<html><head><meta name="referrer" content="no-referrer"><title>OneBots</title></head></html>',
+            "",
+        );
+
+        expect(rendered.match(/name="referrer"/g)).toHaveLength(1);
     });
 
     it.each(["/", "/index.html", "/login", "/system", "/message-debug", "/bots/primary"])(

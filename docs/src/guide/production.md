@@ -41,6 +41,8 @@ OneBots 提供了完整的生产级功能，包括安全性、稳定性和可观
 
 `/api/*`、根管理 WebSocket `/` 与终端 WebSocket `/api/terminal` 使用同一组动态认证规则。请求可以携带顶层 `access_token`，也可以使用用户名密码登录后签发的会话 token；WebSocket 可通过 `Authorization: Bearer <token>` 或 `?access_token=<token>` 传递。未授权 WebSocket 会在协议升级前返回 HTTP 401，不会先建立连接再关闭，因此无法收到包含完整配置的 `system.sync`。
 
+Web 首屏仍兼容用 `?access_token=` 引导登录，但管理 HTML 会同时通过 `Referrer-Policy: no-referrer` 响应头和前置的 referrer meta 禁止发送来源地址。脚本与样式在前端移除查询参数之前加载时，也不会把含 token 的入口 URL 复制到 `Referer` 请求头。建议人工集成优先在登录页输入鉴权码；根管理 WebSocket 的查询参数只用于无法设置 `Authorization` 请求头的客户端。
+
 通过“保存并应用”轮换 `username`、`password` 或 `access_token` 后，HTTP 登录和 WebSocket upgrade 会立即使用新值。已有访问与刷新令牌会全部撤销，已连接的根管理与终端 WebSocket 会以策略违规状态关闭；只修改账号、协议或日志级别不会中断管理会话。
 
 ### 令牌管理

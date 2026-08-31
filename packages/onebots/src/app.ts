@@ -56,7 +56,11 @@ import {
 import { ExtensionManager } from "./extension-manager.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 import packageMetadata from "../package.json" with { type: "json" };
-import { isManagementSpaPath, renderManagementIndexHtml } from "./management-index.js";
+import {
+    applyManagementDocumentSecurityHeaders,
+    isManagementSpaPath,
+    renderManagementIndexHtml,
+} from "./management-index.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -390,6 +394,7 @@ export class App extends BaseApp {
                 if (ctx.method !== "HEAD" && ctx.method !== "GET") return next();
                 if (!isManagementSpaPath(ctx.path)) return next();
                 ctx.type = "html";
+                applyManagementDocumentSecurityHeaders(ctx);
                 ctx.set("Cache-Control", "no-store");
                 ctx.body = managementIndex;
             });
