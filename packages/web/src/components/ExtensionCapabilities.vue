@@ -70,11 +70,17 @@
                             {{ entry.descriptor.note }}
                         </p>
                         <div class="mt-1.5 flex flex-wrap gap-1.5">
+                            <UiBadge
+                                v-for="scene in entry.descriptor.scenes"
+                                :key="scene"
+                                variant="neutral">
+                                场景 {{ capabilitySceneLabel(scene) }} · {{ scene }}
+                            </UiBadge>
                             <UiBadge v-if="entry.descriptor.availability" variant="neutral">
-                                {{ availabilityLabel(entry.descriptor.availability) }}
+                                {{ capabilityAvailabilityLabel(entry.descriptor.availability) }}
                             </UiBadge>
                             <UiBadge v-if="'direction' in entry.descriptor" variant="neutral">
-                                {{ directionLabel(entry.descriptor.direction) }}
+                                {{ capabilityDirectionLabel(entry.descriptor.direction) }}
                             </UiBadge>
                             <UiBadge v-if="'mode' in entry.descriptor" variant="neutral">
                                 {{ entry.descriptor.mode }}
@@ -103,11 +109,15 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { CapabilityAvailability, CapabilityDirection, CapabilitySupport } from "@onebots/core";
+import type { CapabilitySupport } from "@onebots/core";
 import type { ExtensionCapabilityInfo } from "../types";
 import UiBadge from "../ui/UiBadge.vue";
 import {
     CAPABILITY_CATEGORIES,
+    capabilityAvailabilityLabel,
+    capabilityDirectionLabel,
+    capabilitySceneLabel,
+    capabilitySupportLabel,
     getCapabilityEntries,
     type CapabilityCategory,
 } from "./capability-presentation.js";
@@ -158,19 +168,11 @@ function entries(category: CapabilityCategory) {
 function supportMeta(support: CapabilitySupport) {
     switch (support) {
         case "native":
-            return { label: "原生", variant: "success" as const };
+            return { label: capabilitySupportLabel(support), variant: "success" as const };
         case "emulated":
-            return { label: "模拟", variant: "warning" as const };
+            return { label: capabilitySupportLabel(support), variant: "warning" as const };
         case "unsupported":
-            return { label: "不支持", variant: "neutral" as const };
+            return { label: capabilitySupportLabel(support), variant: "neutral" as const };
     }
-}
-
-function availabilityLabel(availability: CapabilityAvailability): string {
-    return { always: "始终可用", permission: "需要权限", context: "依赖上下文" }[availability];
-}
-
-function directionLabel(direction: CapabilityDirection): string {
-    return { send: "发送", receive: "接收", both: "双向" }[direction];
 }
 </script>

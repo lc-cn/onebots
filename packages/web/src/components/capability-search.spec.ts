@@ -36,6 +36,9 @@ describe("capability search", () => {
         expect(getCapabilitySearchMatches(manifest, "permission files:write")).toEqual([
             expect.objectContaining({ name: "send_group_file" }),
         ]);
+        expect(getCapabilitySearchMatches(manifest, "群聊 file")).toEqual([
+            expect.objectContaining({ name: "send_group_file" }),
+        ]);
     });
 
     it("does not advertise an explicitly unsupported capability", () => {

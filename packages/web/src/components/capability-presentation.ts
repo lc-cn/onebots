@@ -1,6 +1,10 @@
 import type {
     AdapterCapabilityManifest,
+    CapabilityAvailability,
     CapabilityDescriptor,
+    CapabilityDirection,
+    CapabilitySupport,
+    CommonTypes,
     SegmentCapabilityDescriptor,
     TransportCapabilityDescriptor,
 } from "@onebots/core";
@@ -22,6 +26,27 @@ export type CapabilityEntryDescriptor =
 export interface CapabilityEntry {
     name: string;
     descriptor: CapabilityEntryDescriptor;
+}
+
+export function capabilitySupportLabel(support: CapabilitySupport): string {
+    return { native: "原生", emulated: "模拟", unsupported: "不支持" }[support];
+}
+
+export function capabilityAvailabilityLabel(availability: CapabilityAvailability): string {
+    return { always: "始终可用", permission: "需要权限", context: "依赖上下文" }[availability];
+}
+
+export function capabilityDirectionLabel(direction: CapabilityDirection): string {
+    return { send: "发送", receive: "接收", both: "双向" }[direction];
+}
+
+export function capabilitySceneLabel(scene: CommonTypes.Scene): string {
+    return {
+        private: "私聊",
+        group: "群聊",
+        channel: "频道",
+        direct: "直接会话",
+    }[scene];
 }
 
 export function mergeCapabilityAdapters(

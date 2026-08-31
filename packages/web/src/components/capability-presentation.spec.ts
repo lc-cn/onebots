@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterCapabilityManifest } from "@onebots/core";
 import {
+    capabilityAvailabilityLabel,
+    capabilityDirectionLabel,
+    capabilitySceneLabel,
+    capabilitySupportLabel,
     countSupportedCapabilities,
     getCapabilityEntries,
     hasAccountCapabilityOverride,
@@ -23,6 +27,23 @@ const manifest: AdapterCapabilityManifest = {
 };
 
 describe("capability presentation", () => {
+    it("publishes exhaustive human labels for manifest evidence", () => {
+        expect(
+            (["native", "emulated", "unsupported"] as const).map(capabilitySupportLabel),
+        ).toEqual(["原生", "模拟", "不支持"]);
+        expect(
+            (["always", "permission", "context"] as const).map(capabilityAvailabilityLabel),
+        ).toEqual(["始终可用", "需要权限", "依赖上下文"]);
+        expect((["send", "receive", "both"] as const).map(capabilityDirectionLabel)).toEqual([
+            "发送",
+            "接收",
+            "双向",
+        ]);
+        expect(
+            (["private", "group", "channel", "direct"] as const).map(capabilitySceneLabel),
+        ).toEqual(["私聊", "群聊", "频道", "直接会话"]);
+    });
+
     it("keeps unsupported declarations visible but excludes them from the supported count", () => {
         expect(getCapabilityEntries(manifest, "actions").map(entry => entry.name)).toEqual([
             "native_action",

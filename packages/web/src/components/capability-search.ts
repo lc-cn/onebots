@@ -2,6 +2,10 @@ import type { AdapterCapabilityManifest } from "@onebots/core";
 import type { ExtensionInfo } from "../types.js";
 import {
     CAPABILITY_CATEGORIES,
+    capabilityAvailabilityLabel,
+    capabilityDirectionLabel,
+    capabilitySceneLabel,
+    capabilitySupportLabel,
     getCapabilityEntries,
     type CapabilityCategory,
     type CapabilityEntry,
@@ -25,11 +29,19 @@ export function getCapabilitySearchMatches(
                 label,
                 entry.name,
                 entry.descriptor.support,
+                capabilitySupportLabel(entry.descriptor.support),
                 entry.descriptor.availability,
+                ...(entry.descriptor.availability
+                    ? [capabilityAvailabilityLabel(entry.descriptor.availability)]
+                    : []),
                 entry.descriptor.note,
                 ...(entry.descriptor.scenes ?? []),
+                ...(entry.descriptor.scenes?.map(capabilitySceneLabel) ?? []),
                 ...(entry.descriptor.permissions ?? []),
                 ...("direction" in entry.descriptor ? [entry.descriptor.direction] : []),
+                ...("direction" in entry.descriptor
+                    ? [capabilityDirectionLabel(entry.descriptor.direction)]
+                    : []),
                 ...("mode" in entry.descriptor ? [entry.descriptor.mode] : []),
             ])
                 ? [{ category: key, ...entry }]
