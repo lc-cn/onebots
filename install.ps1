@@ -9,6 +9,13 @@ function Write-Step([string]$Message) {
     Write-Host "[OneBots] $Message"
 }
 
+function Invoke-Checked([string]$FilePath, [string[]]$Arguments) {
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "命令执行失败（退出码 $LASTEXITCODE）：$FilePath $($Arguments -join ' ')"
+    }
+}
+
 $NodeCommand = Get-Command node -ErrorAction SilentlyContinue
 $NodeUsable = $false
 if ($NodeCommand) {
@@ -51,6 +58,7 @@ if (-not (Test-Path $NpmPath)) { $NpmPath = (Get-Command npm.cmd).Source }
 
 New-Item $RuntimeDir -ItemType Directory -Force | Out-Null
 $Manifest = Join-Path $RuntimeDir "package.json"
+$ConfigExists = Test-Path $ConfigFile
 if (-not (Test-Path $Manifest)) {
     '{"name":"onebots-managed-runtime","private":true,"version":"1.0.0"}' | Set-Content $Manifest -Encoding utf8
 }
@@ -58,12 +66,19 @@ if (-not (Test-Path $Manifest)) {
 Write-Step "正在安装 OneBots、Web 管理端和默认 OneBot v11 协议…"
 Push-Location $RuntimeDir
 try {
-    & $NpmPath install --omit=dev onebots@latest '@onebots/web@latest' '@onebots/protocol-onebot-v11@latest'
+    Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "onebots@latest", "@onebots/web@latest", "@onebots/protocol-onebot-v11@latest")
     $OneBots = Join-Path $RuntimeDir "node_modules/.bin/onebots.cmd"
     $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
-    & $OneBots setup --force -c $ConfigFile -p onebot-v11
-    & $OneBots install -c $ConfigFile
-    & $OneBots start
+    if (-not $ConfigExists) {
+        Invoke-Checked -FilePath $OneBots -Arguments @("setup", "-c", $ConfigFile, "-p", "onebot-v11")
+    } else {
+        Write-Step "检测到已有配置，保留账号、凭据和插件选择：$ConfigFile"
+    }
+    Invoke-Checked -FilePath $OneBots -Arguments @("install", "-c", $ConfigFile)
+    & $OneBots restart
+    if ($LASTEXITCODE -ne 0) {
+        Invoke-Checked -FilePath $OneBots -Arguments @("start")
+    }
 } finally {
     Pop-Location
 }

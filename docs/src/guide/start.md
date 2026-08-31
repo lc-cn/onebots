@@ -12,6 +12,8 @@ curl -fsSL https://raw.githubusercontent.com/lc-cn/onebots/master/install.sh | s
 
 默认文件保存在 `~/.onebots`。可在运行脚本前设置 `ONEBOTS_HOME` 更改位置。
 
+安装脚本可以安全重复执行。首次运行会创建配置和服务；后续运行会更新运行包，原样保留已有账号、凭据与插件选择，通过预检后更新服务定义，并重启正在使用的服务。任一 npm 或 OneBots 命令失败时脚本会立即停止，不会继续报告安装成功。
+
 Windows PowerShell：
 
 ```powershell

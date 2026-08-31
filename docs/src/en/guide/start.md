@@ -10,6 +10,8 @@ curl -fsSL https://raw.githubusercontent.com/lc-cn/onebots/master/install.sh | s
 
 After the first login, use **Extensions** in the Web console to install platform adapters such as Slack or Telegram, follow the credential setup guide, and apply the account configuration without returning to the command line. The extension manager validates the current configuration before downloading dependencies. After npm completes, it checks the candidate configuration, plugin entry point, and registration contract in an isolated child process, then enables the extension only after that preflight succeeds. A broken or incompatible plugin therefore cannot poison the next service start. Changes made by other management actions during installation or preflight are merged and checked again. Before restarting, OneBots repeats the isolated check from the service's real working directory without changing the live process's plugin state. A failed preflight keeps the current service online and reports the reason in the Web console. Files are stored in `~/.onebots` by default; set `ONEBOTS_HOME` before running the script to change the location.
 
+The installer is safe to run again. Its first run creates the configuration and service. Later runs update the runtime packages while preserving existing accounts, credentials, and plugin selections, validate the resulting service definition, and restart the active service. Any failed npm or OneBots command stops the installer instead of reporting a false success.
+
 Windows PowerShell:
 
 ```powershell

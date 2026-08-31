@@ -71,6 +71,10 @@ NPM_BIN=$(dirname "$NODE_BIN")/npm
 [ -n "$NPM_BIN" ] && [ -x "$NPM_BIN" ] || fail "Node.js 环境中未找到 npm"
 
 mkdir -p "$RUNTIME_DIR"
+config_exists=false
+if [ -f "$CONFIG_FILE" ]; then
+    config_exists=true
+fi
 if [ ! -f "$RUNTIME_DIR/package.json" ]; then
     cat >"$RUNTIME_DIR/package.json" <<'EOF'
 {
@@ -93,9 +97,15 @@ ONEBOTS_BIN="$RUNTIME_DIR/node_modules/.bin/onebots"
 say "正在创建安全配置并安装用户级常驻服务…"
 (
     cd "$RUNTIME_DIR"
-    ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" setup --force -c "$CONFIG_FILE" -p onebot-v11
+    if [ "$config_exists" = false ]; then
+        ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" setup -c "$CONFIG_FILE" -p onebot-v11
+    else
+        say "检测到已有配置，保留账号、凭据和插件选择：$CONFIG_FILE"
+    fi
     ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" install -c "$CONFIG_FILE"
-    ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" start
+    if ! ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" restart; then
+        ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" start
+    fi
 )
 
 token=$(awk '$1 == "access_token:" { print $2; exit }' "$CONFIG_FILE" | tr -d "'\"")
