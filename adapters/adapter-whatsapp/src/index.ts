@@ -30,7 +30,6 @@ export {
 export {
     isWhatsAppBusinessProfileAction,
     WhatsAppBusinessProfiles,
-    WHATSAPP_BUSINESS_PROFILE_ACTIONS,
     WHATSAPP_BUSINESS_PROFILE_FIELDS,
     WHATSAPP_BUSINESS_VERTICALS,
     type WhatsAppBusinessProfile,

@@ -84,6 +84,27 @@ describe("WhatsAppBusinessProfiles", () => {
         ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
     });
 
+    it("平台动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "get_business_profile", {
+                fields: ["about"],
+                field: "email",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "get_business_profile", parameter: "field" },
+        });
+    });
+
+    it("直接更新方法拒绝运行时附加字段", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        const profile = { about: "OneBots", arbitrary: true };
+        await expect(client.businessProfile.update(profile)).rejects.toMatchObject({
+            code: "WHATSAPP_INVALID_PARAMETER",
+        });
+    });
+
     it.each([
         { label: "空 about", profile: { about: "" } },
         { label: "非法邮箱", profile: { email: "not-an-email" } },

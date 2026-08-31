@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 
@@ -70,18 +71,15 @@ export interface WhatsAppBusinessProfileUpdateResponse {
     success: true;
 }
 
-export const WHATSAPP_BUSINESS_PROFILE_ACTIONS = Object.freeze([
-    "get_business_profile",
-    "update_business_profile",
+const BUSINESS_PROFILE_UPDATE_FIELDS = Object.freeze([
+    "about",
+    "address",
+    "description",
+    "email",
+    "profile_picture_handle",
+    "websites",
+    "vertical",
 ] as const);
-
-export type WhatsAppBusinessProfileAction = (typeof WHATSAPP_BUSINESS_PROFILE_ACTIONS)[number];
-
-export function isWhatsAppBusinessProfileAction(
-    action: string,
-): action is WhatsAppBusinessProfileAction {
-    return (WHATSAPP_BUSINESS_PROFILE_ACTIONS as readonly string[]).includes(action);
-}
 
 /** WhatsApp Business Profile 强类型读取与受控更新边界。 */
 export class WhatsAppBusinessProfiles {
@@ -111,27 +109,33 @@ export class WhatsAppBusinessProfiles {
         if (!isRecord(response) || response.success !== true) invalidResponse(response);
         return { success: true };
     }
-
-    execute(
-        action: WhatsAppBusinessProfileAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_business_profile":
-                return this.get(actionFields(params));
-            case "update_business_profile":
-                return this.update(actionUpdate(params));
-        }
-    }
 }
 
-export const WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_BUSINESS_PROFILE_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.businessProfile.execute(action, params),
-    ]),
-) as Record<WhatsAppBusinessProfileAction, PlatformActionHandler<WhatsAppClient>>;
+type BusinessProfileActionParams = Readonly<Record<string, unknown>>;
+
+const BUSINESS_PROFILE_ACTION_HANDLERS = {
+    get_business_profile: (client: WhatsAppClient, params: BusinessProfileActionParams) =>
+        client.businessProfile.get(actionFields(params)),
+    update_business_profile: (client: WhatsAppClient, params: BusinessProfileActionParams) =>
+        client.businessProfile.update(actionUpdate(params)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Business Profile 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    BUSINESS_PROFILE_ACTION_HANDLERS,
+    {
+        get_business_profile: ["fields"],
+        update_business_profile: ["profile"],
+    },
+);
+
+export type WhatsAppBusinessProfileAction = keyof typeof WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS;
+
+export function isWhatsAppBusinessProfileAction(
+    action: string,
+): action is WhatsAppBusinessProfileAction {
+    return Object.hasOwn(WHATSAPP_BUSINESS_PROFILE_ACTION_HANDLERS, action);
+}
 
 function profileResponse(value: unknown): WhatsAppBusinessProfileResponse {
     if (!isRecord(value) || !Array.isArray(value.data)) invalidResponse(value);
@@ -158,6 +162,7 @@ function profileValue(value: unknown): WhatsAppBusinessProfile {
 }
 
 function profileUpdate(profile: WhatsAppBusinessProfileUpdate): Record<string, unknown> {
+    rejectUnknownProfileFields(profile);
     const result: Record<string, unknown> = {};
     addOptionalText(result, "about", profile.about, 139, false);
     addOptionalText(result, "address", profile.address, 256, true);
@@ -188,17 +193,7 @@ function actionFields(
 function actionUpdate(params: Readonly<Record<string, unknown>>): WhatsAppBusinessProfileUpdate {
     const value = params.profile;
     if (!isRecord(value)) invalidParameter("profile 必须是对象");
-    const allowed = new Set([
-        "about",
-        "address",
-        "description",
-        "email",
-        "profile_picture_handle",
-        "websites",
-        "vertical",
-    ]);
-    const unknown = Object.keys(value).find(name => !allowed.has(name));
-    if (unknown) invalidParameter(`未知 Business Profile 更新字段: ${unknown}`);
+    rejectUnknownProfileFields(value);
     return {
         ...actionOptionalText(value, "about"),
         ...actionOptionalText(value, "address"),
@@ -208,6 +203,13 @@ function actionUpdate(params: Readonly<Record<string, unknown>>): WhatsAppBusine
         ...actionWebsites(value),
         ...actionVertical(value),
     };
+}
+
+function rejectUnknownProfileFields(value: object): void {
+    const unknown = Object.keys(value).find(
+        name => !(BUSINESS_PROFILE_UPDATE_FIELDS as readonly string[]).includes(name),
+    );
+    if (unknown) invalidParameter(`未知 Business Profile 更新字段: ${unknown}`);
 }
 
 function profileFields(
