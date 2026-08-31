@@ -60,7 +60,7 @@ pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
 pnpm exec onebots setup -c config.yaml -r mock -p onebot-v11
 ```
 
-setup 不会写入占位平台账号；它只为本次 `-p` 实际加载的协议生成默认值，并输出一条可直接执行的前台启动命令。若配置尚无管理凭据，setup 会生成 256 位随机 `access_token`，只写入权限为 `0600` 的配置文件，不把鉴权码输出到服务日志。无法读取配置文件的托管环境应预先通过 Secret 设置 `ONEBOTS_ACCESS_TOKEN`；它优先于文件配置，且不会被持久化。随后打开 `http://localhost:6727` 登录，在「配置管理」添加账号，并为该账号至少选择一个已加载协议。缺少协议出口的账号会在保存或启动前被拒绝。已有配置在非交互环境默认不会覆盖，显式传入 `--force` 时会先生成 `.bak`。
+setup 不会写入占位平台账号；它只为本次 `-p` 实际加载的协议生成默认值，并把验证通过的适配器与协议写入 `plugins`。后续前台启动、doctor、install、update 和 MCP 模式只需指定配置文件，无需重复 `-r` / `-p`。若配置尚无管理凭据，setup 会生成 256 位随机 `access_token`，只写入权限为 `0600` 的配置文件，不把鉴权码输出到服务日志。无法读取配置文件的托管环境应预先通过 Secret 设置 `ONEBOTS_ACCESS_TOKEN`；它优先于文件配置，且不会被持久化。随后打开 `http://localhost:6727` 登录，在「配置管理」添加账号，并为该账号至少选择一个已加载协议。缺少协议出口的账号会在保存或启动前被拒绝。已有配置在非交互环境默认不会覆盖，显式传入 `--force` 时会先生成 `.bak`。
 
 ## 工作原理
 
@@ -80,6 +80,11 @@ port: 6727              # HTTP 服务器端口
 log_level: info         # 日志级别: trace, debug, info, warn, error
 timeout: 30             # 登录超时时间(秒)
 access_token: "replace-with-a-long-random-token" # Web 管理端与管理 API 鉴权码
+
+# setup 会持久化默认加载的插件
+plugins:
+  adapters: [mock]
+  protocols: [onebot-v11]
 
 # 起步配置不引用尚未加载的协议，也不使用空凭据连接平台
 general: {}
@@ -106,10 +111,10 @@ docker run -d -p 6727:6727 -v $(pwd)/data:/data ghcr.io/lc-cn/onebots:master
 ### 方式一：命令行（推荐）
 
 ```bash
-# 基础用法：指定适配器和协议
-onebots -r wechat -p onebot-v11
+# setup 后直接复用配置中的插件选择
+onebots -c config.yaml
 
-# 自定义配置文件
+# 显式参数按类别覆盖配置默认值
 onebots -r wechat -p onebot-v11 -c config.yaml
 
 # 同时启用多个协议（一个账号对外提供多个协议接口）
@@ -192,7 +197,7 @@ npm install @onebots/protocol-milky-v1
 不要只依赖启动日志。使用 doctor 和健康端点验证服务、账号与协议出口：
 
 ```bash
-onebots doctor -c config.yaml -r wechat -p onebot-v11
+onebots doctor -c config.yaml
 curl --fail http://localhost:6727/health
 curl --fail http://localhost:6727/ready
 ```

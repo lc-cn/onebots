@@ -19,6 +19,11 @@ log_level: info         # 日志级别
 timeout: 30             # 登录超时时间(秒)
 access_token: "replace-with-a-long-random-token" # 管理端鉴权码（敏感）
 
+# 未传入 -r / -p 时加载的插件
+plugins:
+  adapters: [qq]
+  protocols: [onebot-v11]
+
 # 通用配置（协议默认配置）
 general:
   {protocol}.{version}:
@@ -68,7 +73,12 @@ general:
 ```
 账号协议配置 > general 默认配置
 ONEBOTS_ACCESS_TOKEN > config.yaml 的 access_token
+每类显式 -r / -p 参数 > plugins 中对应类别的默认值
 ```
+
+`plugins.adapters` 与 `plugins.protocols` 是 setup 持久化的运行时插件默认值。两项都是插件短名数组；缺少 `plugins` 的旧配置仍然有效。显式传入某一类参数时，只覆盖该类别，例如 `-r qq` 会覆盖 `plugins.adapters`，但仍复用 `plugins.protocols`。
+
+Web 管理端可以保存插件选择，但运行中的进程无法安全地卸载或替换插件，因此该变更会明确提示需要重启。已通过 `onebots install` 安装的服务以服务定义中保存的插件列表为准；修改 `plugins` 后应重新执行 `onebots install -c config.yaml` 更新服务定义，再启动或重启服务。
 
 ## 启动前校验
 
@@ -83,7 +93,7 @@ Web 管理端的“保存并应用”会先原子保存，再热重载账号与�
 部署前可使用与服务相同的插件参数执行：
 
 ```bash
-onebots doctor -c config.yaml -r qq -p onebot-v11 --json
+onebots doctor -c config.yaml --json
 ```
 
-如果已经通过 `onebots install` 安装服务，doctor 会读取服务定义中保存的插件列表，无需重复传入。
+配置未包含 `plugins` 时仍可传入 `-r` / `-p`。如果已经通过 `onebots install` 安装服务，doctor 会优先读取服务定义中保存的插件列表，无需重复传入。

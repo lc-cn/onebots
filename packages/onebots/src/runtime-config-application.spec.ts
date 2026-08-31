@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { HostConfigRestartRequiredError } from "@onebots/core";
+import { ConfigRestartRequiredError, HostConfigRestartRequiredError } from "@onebots/core";
 import {
     applyRuntimeConfigFile,
     RuntimeConfigApplicationConflictError,
@@ -63,6 +63,26 @@ describe("runtime config application", () => {
             changedHostFields: ["port"],
         });
         expect(fs.readFileSync(file, "utf8")).toBe("port: 7000\n");
+        expect(host.markRuntimeConfigApplied).not.toHaveBeenCalled();
+    });
+
+    it("应用层扩展字段也复用结构化重启边界", async () => {
+        const file = configFile("plugins:\n  adapters: [mock]\n");
+        const host = {
+            isReloading: false,
+            reload: vi.fn(async () => {
+                throw new ConfigRestartRequiredError(["plugins"]);
+            }),
+            markRuntimeConfigApplied: vi.fn(),
+        };
+
+        await expect(
+            saveAndApplyRuntimeConfig(host, "plugins:\n  adapters: [qq]\n", file),
+        ).resolves.toEqual({
+            applied: false,
+            restartRequired: true,
+            changedHostFields: ["plugins"],
+        });
         expect(host.markRuntimeConfigApplied).not.toHaveBeenCalled();
     });
 

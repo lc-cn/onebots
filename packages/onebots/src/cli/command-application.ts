@@ -6,6 +6,8 @@ import type { Account, Protocol } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
 import { preflightServiceRuntime, type ServicePreflightSpec } from "../service-preflight.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
+import { getRuntimePluginSelection } from "../runtime-plugin-selection.js";
+import { parseRuntimeConfig } from "../runtime-config-validator.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -33,6 +35,21 @@ export function normalizeRuntimeOptions(options: RuntimeOptions) {
     };
 }
 
+/** 显式 CLI 参数按类别优先；缺省类别复用配置中由 setup 持久化的选择。 */
+export function resolveConfiguredRuntimeOptions(options: RuntimeOptions) {
+    const runtime = normalizeRuntimeOptions(options);
+    if (!fs.existsSync(runtime.configPath)) return runtime;
+    const configured = getRuntimePluginSelection(
+        parseRuntimeConfig(fs.readFileSync(runtime.configPath, "utf8")),
+    );
+    if (!configured) return runtime;
+    return {
+        ...runtime,
+        adapters: runtime.adapters.length ? runtime.adapters : configured.adapters,
+        protocols: runtime.protocols.length ? runtime.protocols : configured.protocols,
+    };
+}
+
 /** 将 `--system` 标志转换为服务 scope。 */
 export function scopeFrom(options: ScopeOptions): ServiceScope {
     return options.system ? "system" : "user";
@@ -40,7 +57,7 @@ export function scopeFrom(options: ScopeOptions): ServiceScope {
 
 /** 使用与裸 `onebots` 相同的 runtime module 前台运行桥接服务。 */
 export async function runForeground(options: RuntimeOptions): Promise<CommandResult> {
-    const runtime = normalizeRuntimeOptions(options);
+    const runtime = resolveConfiguredRuntimeOptions(options);
     const { runBridge } = await import("../runtime.js");
     await runBridge(runtime);
     return {};
@@ -50,7 +67,15 @@ export async function runForeground(options: RuntimeOptions): Promise<CommandRes
 export async function installService(
     options: RuntimeOptions & ScopeOptions,
 ): Promise<CommandResult> {
-    const runtime = normalizeRuntimeOptions(options);
+    let runtime: ReturnType<typeof normalizeRuntimeOptions>;
+    try {
+        runtime = resolveConfiguredRuntimeOptions(options);
+    } catch (error) {
+        throw new CliError(
+            `服务安装预检失败：${error instanceof Error ? error.message : String(error)}`,
+            2,
+        );
+    }
     const scope = scopeFrom(options);
     const spec: ServiceSpec = {
         scope,
@@ -180,13 +205,17 @@ export function serviceConfigPath(options: RuntimeOptions & ScopeOptions): strin
 export async function diagnose(
     options: RuntimeOptions & ScopeOptions & { fix: boolean; json: boolean },
 ): Promise<CommandResult> {
-    const runtime = normalizeRuntimeOptions(options);
+    const scope = scopeFrom(options);
+    const explicit = normalizeRuntimeOptions(options);
+    const runtime = new ServiceController(scope).readSpec()
+        ? explicit
+        : resolveConfiguredRuntimeOptions(options);
     const { runDoctor, formatDoctorReport } = await import("../doctor.js");
     const report = await runDoctor({
         configPath: serviceConfigPath(options),
         adapters: runtime.adapters,
         protocols: runtime.protocols,
-        scope: scopeFrom(options),
+        scope,
         fix: options.fix,
     });
     return {
@@ -200,12 +229,15 @@ export async function diagnose(
 export async function updatePackages(
     options: RuntimeOptions & ScopeOptions & { check: boolean; yes: boolean },
 ): Promise<CommandResult> {
-    const runtime = normalizeRuntimeOptions(options);
+    const scope = scopeFrom(options);
+    const runtime = new ServiceController(scope).readSpec()
+        ? normalizeRuntimeOptions(options)
+        : resolveConfiguredRuntimeOptions(options);
     const { runUpdate } = await import("../updater.js");
     await runUpdate({
         adapters: runtime.adapters,
         protocols: runtime.protocols,
-        scope: scopeFrom(options),
+        scope,
         check: options.check,
         yes: options.yes,
     });
@@ -282,7 +314,7 @@ export async function sendMessage(
 export async function runMcpStdio(
     options: RuntimeOptions & { account?: string },
 ): Promise<CommandResult> {
-    const runtime = normalizeRuntimeOptions(options);
+    const runtime = resolveConfiguredRuntimeOptions(options);
     const { loadPlugins } = await import("../runtime.js");
     const failures = await loadPlugins(runtime.adapters, runtime.protocols);
     if (failures.length) throw new CliError(`无法加载插件: ${failures.join(", ")}`, 2);

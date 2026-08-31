@@ -3,6 +3,7 @@ import type { Schema } from "@onebots/core";
 import {
     createBaseSetupConfig,
     createProtocolDefaults,
+    formatConfiguredCommand,
     formatSetupCommand,
     normalizePluginNames,
 } from "./setup-config.js";
@@ -46,5 +47,8 @@ describe("setup configuration", () => {
         expect(
             formatSetupCommand("/tmp/one bots/config.yaml", ["mock"], ["custom; echo unsafe"]),
         ).toBe("onebots -c '/tmp/one bots/config.yaml' -r mock -p 'custom; echo unsafe'");
+        expect(formatConfiguredCommand("/tmp/one bots/config.yaml", "doctor")).toBe(
+            "onebots doctor -c '/tmp/one bots/config.yaml'",
+        );
     });
 });

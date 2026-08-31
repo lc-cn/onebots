@@ -39,6 +39,15 @@ export function formatSetupCommand(
     return args.map(shellArgument).join(" ");
 }
 
+/** 插件选择已写入配置后，生成无需重复 -r/-p 的后续命令。 */
+export function formatConfiguredCommand(
+    configPath: string,
+    command?: "doctor" | "install",
+): string {
+    const args = ["onebots", ...(command ? [command] : []), "-c", configPath];
+    return args.map(shellArgument).join(" ");
+}
+
 function shellArgument(value: string): string {
     if (/^[A-Za-z0-9_./:@%+=,-]+$/u.test(value)) return value;
     return `'${value.replace(/'/gu, `'\\''`)}'`;

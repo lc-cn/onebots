@@ -84,6 +84,23 @@ describe("service install preflight", () => {
         );
     });
 
+    it("installs the plugin selection persisted by setup without repeated flags", async () => {
+        const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+        const config = createConfig(
+            "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+        );
+
+        await installService(options(config));
+
+        expect(install).toHaveBeenCalledWith(
+            expect.objectContaining({
+                configPath: config,
+                adapters: ["mock"],
+                protocols: ["onebot-v11"],
+            }),
+        );
+    });
+
     it("does not start an installed service after its configuration becomes invalid", async () => {
         const config = createConfig("- invalid-root\n");
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(serviceSpec(config));

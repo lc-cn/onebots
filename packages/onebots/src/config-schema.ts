@@ -58,6 +58,20 @@ const baseWithLabels: Schema = {
         "站点根静态目录",
         "相对配置文件目录或绝对路径，用于企业微信等可信域名校验文件（站点根路径 GET）；留空不启用。Docker：配置 static 并将校验文件放入挂载卷内 /data/static",
     ),
+    plugins: {
+        adapters: {
+            type: "array",
+            label: "默认适配器插件",
+            description: "未传入 -r 时加载的适配器短名或包名；修改后需要重启",
+            ui: { section: "advanced" },
+        },
+        protocols: {
+            type: "array",
+            label: "默认协议插件",
+            description: "未传入 -p 时加载的协议短名或包名；修改后需要重启",
+            ui: { section: "advanced" },
+        },
+    },
 };
 
 export type ConfigSchemaBundle = {

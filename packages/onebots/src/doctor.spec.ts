@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { inspectSensitiveFilePermissions, probeDoctorEndpoint } from "./doctor.js";
+import { inspectSensitiveFilePermissions, probeDoctorEndpoint, runDoctor } from "./doctor.js";
+import { ServiceController } from "./service-manager.js";
 
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {
+    vi.restoreAllMocks();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -242,6 +244,38 @@ describe("doctor health probes", () => {
             level: "error",
             message: "health: HTTP 200；响应 OK；响应不是有效 JSON",
         });
+    });
+});
+
+describe("doctor persisted plugin selection", () => {
+    it("uses config defaults when no service or explicit plugin flags exist", async () => {
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: false,
+            running: false,
+            scope: "user",
+            detail: "服务未安装",
+        });
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-plugins-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(
+            configPath,
+            "port: 61999\nplugins:\n  adapters: [missing-first-run]\n  protocols: []\n",
+            { mode: 0o600 },
+        );
+        fs.mkdirSync(path.join(directory, "data"));
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+        });
+
+        expect(
+            report.checks.find(check => check.name === "adapter:missing-first-run"),
+        ).toMatchObject({ level: "error" });
     });
 });
 

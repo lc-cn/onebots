@@ -2,9 +2,8 @@ import fs from "node:fs";
 import {
     BaseApp,
     ConfigError,
-    HostConfigRestartRequiredError,
+    ConfigRestartRequiredError,
     writeConfigFileAtomic,
-    type HostConfigKey,
 } from "@onebots/core";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 
@@ -17,7 +16,7 @@ export interface RuntimeConfigApplicationHost {
 export interface RuntimeConfigApplicationResult {
     applied: boolean;
     restartRequired: boolean;
-    changedHostFields: readonly HostConfigKey[];
+    changedHostFields: readonly string[];
 }
 
 export class RuntimeConfigApplicationConflictError extends ConfigError {
@@ -106,7 +105,7 @@ async function reloadRuntimeConfig(
         host.markRuntimeConfigApplied?.(configPath, source);
         return { applied: true, restartRequired: false, changedHostFields: [] };
     } catch (error) {
-        if (error instanceof HostConfigRestartRequiredError) {
+        if (error instanceof ConfigRestartRequiredError) {
             return {
                 applied: false,
                 restartRequired: true,

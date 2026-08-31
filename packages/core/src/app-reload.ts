@@ -16,12 +16,25 @@ const HOST_CONFIG_KEYS = [
 
 export type HostConfigKey = (typeof HOST_CONFIG_KEYS)[number];
 
-/** 表示配置已验证且可保存，但必须重启进程才能完整应用。 */
-export class HostConfigRestartRequiredError extends ConfigError {
-    constructor(public readonly changed: readonly HostConfigKey[]) {
-        super(`以下宿主配置需要重启进程后生效: ${changed.join(", ")}`, {
+/** 应用层可复用的“配置已保存但需要重启”结构化错误。 */
+export class ConfigRestartRequiredError extends ConfigError {
+    constructor(
+        public readonly changed: readonly string[],
+        message = `以下配置需要重启进程后生效: ${changed.join(", ")}`,
+    ) {
+        super(message, {
             context: { changed },
         });
+        this.name = "ConfigRestartRequiredError";
+    }
+}
+
+/** 表示配置已验证且可保存，但必须重启进程才能完整应用。 */
+export class HostConfigRestartRequiredError extends ConfigRestartRequiredError {
+    declare public readonly changed: readonly HostConfigKey[];
+
+    constructor(changed: readonly HostConfigKey[]) {
+        super(changed, `以下宿主配置需要重启进程后生效: ${changed.join(", ")}`);
         this.name = "HostConfigRestartRequiredError";
     }
 }

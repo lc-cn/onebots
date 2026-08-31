@@ -78,4 +78,27 @@ describe("setup workflow", () => {
         expect(renderedOutput).toContain("ONEBOTS_ACCESS_TOKEN");
         expect(renderedOutput).not.toContain("space-secret");
     });
+
+    it("persists verified plugin choices so every next command can reuse them", async () => {
+        const configPath = temporaryConfigPath();
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+        await runSetup(configPath, {
+            adapters: ["mock", "mock"],
+            protocols: ["onebot-v11"],
+        });
+
+        const config = yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+        expect(config.plugins).toEqual({
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+        });
+        const renderedOutput = output.mock.calls.map(call => String(call[0])).join("");
+        expect(renderedOutput).toContain("插件选择已写入配置");
+        expect(renderedOutput).toContain(`onebots doctor -c ${configPath}`);
+        expect(renderedOutput).toContain(`onebots -c ${configPath}`);
+        expect(renderedOutput).toContain(`onebots install -c ${configPath}`);
+        expect(renderedOutput).not.toContain("-r mock");
+        expect(renderedOutput).not.toContain("-p onebot-v11");
+    });
 });

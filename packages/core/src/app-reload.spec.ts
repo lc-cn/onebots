@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
     assertHostConfigReloadable,
+    ConfigRestartRequiredError,
     HostConfigRestartRequiredError,
     resolveListenPort,
 } from "./app-reload.js";
@@ -58,6 +59,7 @@ describe("BaseApp reload boundary", () => {
             throw new Error("预期宿主配置检查失败");
         } catch (error) {
             expect(error).toBeInstanceOf(HostConfigRestartRequiredError);
+            expect(error).toBeInstanceOf(ConfigRestartRequiredError);
             expect((error as HostConfigRestartRequiredError).changed).toEqual(["port", "path"]);
         }
     });

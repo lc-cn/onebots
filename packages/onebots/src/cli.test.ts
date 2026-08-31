@@ -1,16 +1,51 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { prepareCliInvocation } from "./cli-invocation.js";
-import { normalizeRuntimeOptions } from "./cli/command-application.js";
+import {
+    normalizeRuntimeOptions,
+    resolveConfiguredRuntimeOptions,
+} from "./cli/command-application.js";
+
+const temporaryDirectories: string[] = [];
+
+afterEach(() => {
+    for (const directory of temporaryDirectories.splice(0)) {
+        fs.rmSync(directory, { recursive: true, force: true });
+    }
+});
 
 describe("OneBots CLI v2", () => {
     it("accepts runtime options before a flat Pastel route", () => {
-        expect(prepareCliInvocation([
-            "node", "onebots", "-r", "qq", "-c", "配置 文件.yaml", "install", "--system", "-p", "onebot-v11",
-        ])).toEqual({
+        expect(
+            prepareCliInvocation([
+                "node",
+                "onebots",
+                "-r",
+                "qq",
+                "-c",
+                "配置 文件.yaml",
+                "install",
+                "--system",
+                "-p",
+                "onebot-v11",
+            ]),
+        ).toEqual({
             kind: "cli",
-            argv: ["node", "onebots", "install", "--system", "-r", "qq", "-c", "配置 文件.yaml", "-p", "onebot-v11"],
+            argv: [
+                "node",
+                "onebots",
+                "install",
+                "--system",
+                "-r",
+                "qq",
+                "-c",
+                "配置 文件.yaml",
+                "-p",
+                "onebot-v11",
+            ],
         });
     });
 
@@ -23,9 +58,16 @@ describe("OneBots CLI v2", () => {
     });
 
     it("separates the non-interactive system-service runtime", () => {
-        expect(prepareCliInvocation([
-            "node", "onebots", "--service-runtime", "run", "-c", "config.yaml",
-        ])).toEqual({
+        expect(
+            prepareCliInvocation([
+                "node",
+                "onebots",
+                "--service-runtime",
+                "run",
+                "-c",
+                "config.yaml",
+            ]),
+        ).toEqual({
             kind: "service-runtime",
             argv: ["node", "onebots", "run", "-c", "config.yaml"],
         });
@@ -39,26 +81,50 @@ describe("OneBots CLI v2", () => {
     });
 
     it("moves shared options to the concrete config subroute", () => {
-        expect(prepareCliInvocation([
-            "node", "onebots", "-c", "config.yaml", "config", "get", "port",
-        ])).toEqual({
+        expect(
+            prepareCliInvocation(["node", "onebots", "-c", "config.yaml", "config", "get", "port"]),
+        ).toEqual({
             kind: "cli",
             argv: ["node", "onebots", "config", "get", "port", "-c", "config.yaml"],
         });
-        expect(prepareCliInvocation([
-            "node", "onebots", "config", "get", "-r", "qq", "port",
-        ])).toEqual({
+        expect(
+            prepareCliInvocation(["node", "onebots", "config", "get", "-r", "qq", "port"]),
+        ).toEqual({
             kind: "cli",
             argv: ["node", "onebots", "config", "get", "port", "-r", "qq"],
         });
     });
 
     it("keeps repeatable runtime options from consuming send arguments", () => {
-        expect(prepareCliInvocation([
-            "node", "onebots", "send", "-r", "qq", "user-1", "hello", "--target_type", "private", "--channel", "qq.bot",
-        ])).toEqual({
+        expect(
+            prepareCliInvocation([
+                "node",
+                "onebots",
+                "send",
+                "-r",
+                "qq",
+                "user-1",
+                "hello",
+                "--target_type",
+                "private",
+                "--channel",
+                "qq.bot",
+            ]),
+        ).toEqual({
             kind: "cli",
-            argv: ["node", "onebots", "send", "user-1", "hello", "--target_type", "private", "--channel", "qq.bot", "-r", "qq"],
+            argv: [
+                "node",
+                "onebots",
+                "send",
+                "user-1",
+                "hello",
+                "--target_type",
+                "private",
+                "--channel",
+                "qq.bot",
+                "-r",
+                "qq",
+            ],
         });
     });
 
@@ -70,24 +136,42 @@ describe("OneBots CLI v2", () => {
     });
 
     it("can load the built core package in a plain Node process", () => {
-        expect(() => execFileSync(process.execPath, [
-            "--input-type=module",
-            "-e",
-            "await import('@onebots/core'); process.exit(0)",
-        ], {
-            cwd: path.resolve("packages/onebots"),
-            stdio: "pipe",
-        })).not.toThrow();
+        expect(() =>
+            execFileSync(
+                process.execPath,
+                ["--input-type=module", "-e", "await import('@onebots/core'); process.exit(0)"],
+                {
+                    cwd: path.resolve("packages/onebots"),
+                    stdio: "pipe",
+                },
+            ),
+        ).not.toThrow();
     });
 
     it("loads repeated adapters and protocols only once", () => {
-        expect(normalizeRuntimeOptions({
-            config: "config.yaml",
-            register: ["kook", "qq", "kook"],
-            protocol: ["onebot-v11", "onebot-v11"],
-        })).toMatchObject({
+        expect(
+            normalizeRuntimeOptions({
+                config: "config.yaml",
+                register: ["kook", "qq", "kook"],
+                protocol: ["onebot-v11", "onebot-v11"],
+            }),
+        ).toMatchObject({
             adapters: ["kook", "qq"],
             protocols: ["onebot-v11"],
         });
+    });
+
+    it("uses persisted plugin defaults while keeping explicit category overrides", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-cli-plugins-"));
+        temporaryDirectories.push(directory);
+        const config = path.join(directory, "config.yaml");
+        fs.writeFileSync(config, "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n");
+
+        expect(
+            resolveConfiguredRuntimeOptions({ config, register: [], protocol: [] }),
+        ).toMatchObject({ adapters: ["mock"], protocols: ["onebot-v11"] });
+        expect(
+            resolveConfiguredRuntimeOptions({ config, register: ["qq"], protocol: [] }),
+        ).toMatchObject({ adapters: ["qq"], protocols: ["onebot-v11"] });
     });
 });

@@ -31,7 +31,14 @@ describe("application config schema", () => {
     });
 
     test("基础配置遵守统一表单契约", () => {
-        expect(() => assertSchemaFormContract(getAppConfigSchema().base)).not.toThrow();
+        const schema = getAppConfigSchema().base;
+        expect(() => assertSchemaFormContract(schema)).not.toThrow();
+        expect(schema).toMatchObject({
+            plugins: {
+                adapters: { type: "array" },
+                protocols: { type: "array" },
+            },
+        });
     });
 
     test("只发布已加载插件注册的 Schema", () => {

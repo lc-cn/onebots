@@ -12,6 +12,8 @@ import {
     MINIMUM_NODE_MAJOR,
     unsupportedNodeRuntimeMessage,
 } from "./runtime-version.js";
+import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
+import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 
 export type CheckLevel = "ok" | "warning" | "error";
 export interface DoctorCheck {
@@ -45,6 +47,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     });
 
     let config: Record<string, unknown> | null = null;
+    let configuredPlugins: RuntimePluginSelection | undefined;
     if (!fs.existsSync(options.configPath)) {
         checks.push({
             name: "config",
@@ -54,12 +57,15 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     } else {
         try {
             config = parseRuntimeConfig(fs.readFileSync(options.configPath, "utf8"));
+            configuredPlugins = getRuntimePluginSelection(config);
             checks.push({
                 name: "config",
                 level: "ok",
                 message: `配置语法有效: ${options.configPath}`,
             });
         } catch (error) {
+            config = null;
+            configuredPlugins = undefined;
             checks.push({
                 name: "config",
                 level: "error",
@@ -127,8 +133,12 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     }
 
     const spec = new ServiceController(options.scope).readSpec();
-    const adapters = options.adapters.length ? options.adapters : (spec?.adapters ?? []);
-    const protocols = options.protocols.length ? options.protocols : (spec?.protocols ?? []);
+    const adapters = options.adapters.length
+        ? options.adapters
+        : (spec?.adapters ?? configuredPlugins?.adapters ?? []);
+    const protocols = options.protocols.length
+        ? options.protocols
+        : (spec?.protocols ?? configuredPlugins?.protocols ?? []);
     const pluginWorkingDirectory = spec?.workingDirectory ?? process.cwd();
     const runtimeRequire = createRequire(path.join(pluginWorkingDirectory, "package.json"));
     let pluginsReady = true;

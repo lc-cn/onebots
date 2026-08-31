@@ -9,6 +9,7 @@ import {
 } from "@onebots/core";
 import yaml from "js-yaml";
 import { getAppConfigSchema } from "./config-schema.js";
+import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 
 export interface RuntimeConfigIssue {
     path: string;
@@ -34,6 +35,7 @@ export function parseRuntimeConfig(source: string): Record<string, unknown> {
 
 /** 启动前校验当前已加载插件实际会消费的完整配置。 */
 export function validateRuntimeConfig(config: Record<string, unknown>): void {
+    getRuntimePluginSelection(config);
     const schemas = getAppConfigSchema();
     const issues: RuntimeConfigIssue[] = [];
     captureSchemaIssues(config, schemas.base, "", issues);

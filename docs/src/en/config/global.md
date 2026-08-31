@@ -11,6 +11,11 @@ log_level: info         # Log level: trace, debug, info, warn, error
 timeout: 30             # Login timeout (seconds)
 access_token: "replace-with-a-long-random-token" # Management token (sensitive)
 
+# Plugins loaded when -r / -p are omitted
+plugins:
+  adapters: [qq]
+  protocols: [onebot-v11]
+
 # General configuration (protocol default configuration)
 general:
   onebot.v11:
@@ -59,7 +64,11 @@ See [Platform Configuration](/en/config/platform) for platform-specific configur
 
 ## Preflight validation
 
-Before connecting to a platform or starting protocol transports, OneBots validates the complete configuration against the schemas registered by plugins loaded with `-r` and `-p`. This covers required platform credentials, field types and choices, adapter and protocol references, at least one loaded protocol outlet per account, and the effective protocol configuration after account values inherit from `general`.
+`plugins.adapters` and `plugins.protocols` contain the runtime plugin defaults persisted by setup. Both are arrays of plugin short names, and legacy configurations without `plugins` remain valid. Explicit options override one category at a time: `-r qq` replaces `plugins.adapters` while still reusing `plugins.protocols`.
+
+The Web console can save a plugin selection, but a running process cannot safely unload or replace plugins, so the change is reported as requiring a restart. An installed service uses the plugin list saved in its service definition. After editing `plugins`, run `onebots install -c config.yaml` again to update that definition before starting or restarting the service.
+
+Before connecting to a platform or starting protocol transports, OneBots validates the complete configuration against the schemas registered by the selected plugins. This covers required platform credentials, field types and choices, adapter and protocol references, at least one loaded protocol outlet per account, and the effective protocol configuration after account values inherit from `general`.
 
 Errors identify the complete path, such as `qq.my_bot.appid` or `qq.my_bot.onebot.v11.use_http`; a missing outlet identifies the account path itself, such as `qq.my_bot`. Referencing an unloaded adapter or protocol also stops startup instead of silently omitting the account. The Web console, setup, doctor, and hot reload use the same validator, so invalid content is not written to the configuration file.
 
@@ -70,7 +79,7 @@ Integrations that still use the root management WebSocket must authenticate the 
 Run the same check before deployment with the service's plugin selection:
 
 ```bash
-onebots doctor -c config.yaml -r qq -p onebot-v11 --json
+onebots doctor -c config.yaml --json
 ```
 
-When the service was installed with `onebots install`, doctor reads the saved plugin list from the service definition.
+For a legacy configuration without `plugins`, pass `-r` and `-p` as before. When the service was installed with `onebots install`, doctor prefers the saved plugin list from the service definition.

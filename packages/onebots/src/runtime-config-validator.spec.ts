@@ -55,6 +55,14 @@ describe("runtime config validation", () => {
         expect(() => parseRuntimeConfig("- port\n- 6727")).toThrow(/根节点必须是对象/);
     });
 
+    it("validates persisted plugin selections before startup", () => {
+        expect(() =>
+            validateRuntimeConfig({
+                plugins: { adapters: ["mock"], protocols: "onebot-v11" },
+            }),
+        ).toThrow(/plugins\.protocols 必须是字符串数组/);
+    });
+
     it("reports precise paths for missing adapter fields and invalid protocol values", () => {
         registerTestPlugins();
 

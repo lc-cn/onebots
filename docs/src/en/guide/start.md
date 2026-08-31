@@ -60,7 +60,7 @@ pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
 pnpm exec onebots setup -c config.yaml -r mock -p onebot-v11
 ```
 
-Setup does not create placeholder platform accounts. It generates defaults only for protocols selected with `-p` and prints a shell-safe foreground command. If the configuration has no management credentials, setup creates a random 256-bit `access_token`, writes it only to the mode-`0600` configuration file, and never prints the token to service logs. On a hosted platform where the file cannot be read, set `ONEBOTS_ACCESS_TOKEN` as a Secret before startup; it overrides the file token and is never persisted. Open `http://localhost:6727`, sign in, then add an account in **Configuration** and select at least one loaded protocol for it. An account without a protocol outlet is rejected before saving or startup. In non-interactive environments an existing file is preserved unless `--force` is explicit; forced updates create a `.bak` backup.
+Setup does not create placeholder platform accounts. It generates defaults only for protocols selected with `-p` and persists the verified adapter and protocol choices under `plugins`. Foreground runs, doctor, install, update, and MCP mode can then reuse the configuration without repeated `-r` or `-p` flags. If the configuration has no management credentials, setup creates a random 256-bit `access_token`, writes it only to the mode-`0600` configuration file, and never prints the token to service logs. On a hosted platform where the file cannot be read, set `ONEBOTS_ACCESS_TOKEN` as a Secret before startup; it overrides the file token and is never persisted. Open `http://localhost:6727`, sign in, then add an account in **Configuration** and select at least one loaded protocol for it. An account without a protocol outlet is rejected before saving or startup. In non-interactive environments an existing file is preserved unless `--force` is explicit; forced updates create a `.bak` backup.
 
 ## How It Works
 
@@ -80,6 +80,11 @@ port: 6727              # HTTP server port
 log_level: info         # Log level: trace, debug, info, warn, error
 timeout: 30             # Login timeout (seconds)
 access_token: "replace-with-a-long-random-token" # Web console and management API token
+
+# setup persists the default plugins to load
+plugins:
+  adapters: [mock]
+  protocols: [onebot-v11]
 
 # The starting file references no unloaded protocol and contacts no platform
 general: {}
@@ -106,10 +111,10 @@ docker run -d -p 6727:6727 -v $(pwd)/data:/data ghcr.io/lc-cn/onebots:master
 ### Method 1: Command Line (Recommended)
 
 ```bash
-# Load the plugins selected during setup
-onebots -c config.yaml -r mock -p onebot-v11
+# Reuse the plugins selected during setup
+onebots -c config.yaml
 
-# The explicit run subcommand is equivalent
+# Explicit flags override the configured default for that category
 onebots run -c config.yaml -r mock -p onebot-v11
 ```
 
@@ -144,7 +149,7 @@ For more adapter installation instructions, see [Adapter Guide](/en/guide/adapte
 ## Verify the Deployment
 
 ```bash
-onebots doctor -c config.yaml -r mock -p onebot-v11
+onebots doctor -c config.yaml
 curl --fail http://localhost:6727/health
 curl --fail http://localhost:6727/ready
 ```

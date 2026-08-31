@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BaseApp, TokenManager } from "@onebots/core";
+import { BaseApp, ConfigRestartRequiredError, TokenManager } from "@onebots/core";
 import { App } from "./app.js";
 
 afterEach(() => {
@@ -8,6 +8,23 @@ afterEach(() => {
 });
 
 describe("App management credential reload", () => {
+    it("插件默认选择变化时要求重启而不伪装成热重载成功", async () => {
+        const reload = vi.spyOn(BaseApp.prototype, "reload");
+        const app = {
+            config: { plugins: { adapters: ["mock"], protocols: ["onebot-v11"] } },
+        } as unknown as App;
+
+        await expect(
+            App.prototype.reload.call(app, {
+                plugins: { adapters: ["qq"], protocols: ["onebot-v11"] },
+            }),
+        ).rejects.toMatchObject({
+            name: "ConfigRestartRequiredError",
+            changed: ["plugins"],
+        } satisfies Partial<ConfigRestartRequiredError>);
+        expect(reload).not.toHaveBeenCalled();
+    });
+
     it("凭据轮换后撤销会话并关闭现有管理连接", async () => {
         mockBaseReload();
         const tokenManager = new TokenManager();

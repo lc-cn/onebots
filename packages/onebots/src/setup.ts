@@ -9,9 +9,14 @@ import { ensureManagementCredentials } from "./management-credentials.js";
 import {
     createBaseSetupConfig,
     createProtocolDefaults,
+    formatConfiguredCommand,
     formatSetupCommand,
     normalizePluginNames,
 } from "./setup-config.js";
+import {
+    getRuntimePluginSelection,
+    setRuntimePluginSelection,
+} from "./runtime-plugin-selection.js";
 
 export interface SetupOptions {
     force?: boolean;
@@ -39,8 +44,13 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
         ? (yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {}
         : createBaseSetupConfig();
 
-    let adapters = options.adapters ?? [];
-    let protocols = options.protocols ?? [];
+    const configuredPlugins = getRuntimePluginSelection(config);
+    let adapters = options.adapters?.length
+        ? options.adapters
+        : (configuredPlugins?.adapters ?? []);
+    let protocols = options.protocols?.length
+        ? options.protocols
+        : (configuredPlugins?.protocols ?? []);
     if (process.stdin.isTTY && process.stdout.isTTY) {
         const { getAppConfigSchema } = await import("./config-schema.js");
         const baseSchema = getAppConfigSchema().base;
@@ -97,6 +107,9 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     if (failures.length > 0) {
         throw new Error(`无法加载插件: ${failures.join(", ")}`);
     }
+    if (adapters.length > 0 || protocols.length > 0 || configuredPlugins) {
+        setRuntimePluginSelection(config, { adapters, protocols });
+    }
     if (!exists) {
         config.general = createProtocolDefaults(ProtocolRegistry.getAllSchemas());
     }
@@ -116,7 +129,14 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     } else if (managementCredentials.source === "environment") {
         writeCliOutput("管理端将使用 ONEBOTS_ACCESS_TOKEN 环境变量，不会生成新的配置鉴权码。");
     }
-    writeCliOutput(`前台启动: ${formatSetupCommand(configPath, adapters, protocols)}`);
+    if (config.plugins) {
+        writeCliOutput("插件选择已写入配置，后续命令无需重复 -r/-p。");
+        writeCliOutput(`验证配置: ${formatConfiguredCommand(configPath, "doctor")}`);
+        writeCliOutput(`前台启动: ${formatConfiguredCommand(configPath)}`);
+        writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
+    } else {
+        writeCliOutput(`前台启动: ${formatSetupCommand(configPath, adapters, protocols)}`);
+    }
 }
 
 function parsePromptValue(value: string, type: PromptRule["type"]): string | number | boolean {

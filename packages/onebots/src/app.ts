@@ -1,5 +1,6 @@
 import {
     BaseApp,
+    ConfigRestartRequiredError,
     yaml,
     ProtocolRegistry,
     configure,
@@ -41,6 +42,10 @@ import {
 import type { WebSocket } from "ws";
 import { ensureManagementCredentials } from "./management-credentials.js";
 import { RuntimeConfigStateTracker } from "./runtime-config-state.js";
+import {
+    getRuntimePluginSelection,
+    type RuntimePluginSelection,
+} from "./runtime-plugin-selection.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -319,6 +324,13 @@ export class App extends BaseApp {
 
     async reload(config: BaseApp.Config) {
         validateRuntimeConfig(config as Record<string, unknown>);
+        const currentPlugins = getRuntimePluginSelection(
+            this.config as unknown as Record<string, unknown>,
+        );
+        const nextPlugins = getRuntimePluginSelection(config as Record<string, unknown>);
+        if (JSON.stringify(currentPlugins) !== JSON.stringify(nextPlugins)) {
+            throw new ConfigRestartRequiredError(["plugins"]);
+        }
         const previous = this.config;
         await super.reload(config);
         if (managementCredentialsChanged(previous, this.config)) {
@@ -334,7 +346,9 @@ export class App extends BaseApp {
 }
 
 export namespace App {
-    export interface Config extends BaseApp.Config {}
+    export interface Config extends BaseApp.Config {
+        plugins?: RuntimePluginSelection;
+    }
     export const defaultConfig: Config = {
         ...BaseApp.defaultConfig,
     };
