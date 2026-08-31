@@ -7,6 +7,7 @@ import {
     type Schema,
 } from "@onebots/core";
 import {
+    formatRuntimeConfigDiagnostic,
     parseRuntimeConfig,
     validateAccountConfigCandidate,
     validateRuntimeConfig,
@@ -57,6 +58,22 @@ describe("runtime config validation", () => {
     it("rejects malformed YAML and non-object roots before validation", () => {
         expect(() => parseRuntimeConfig("port: [")).toThrow(/YAML 解析失败/);
         expect(() => parseRuntimeConfig("- port\n- 6727")).toThrow(/根节点必须是对象/);
+    });
+
+    it("将多行 YAML 诊断收敛为不含源码片段的有限首行", () => {
+        let error: unknown;
+        try {
+            parseRuntimeConfig("access_token: secret-never-return\nplugins: [\n");
+        } catch (caught) {
+            error = caught;
+        }
+
+        const diagnostic = formatRuntimeConfigDiagnostic(error);
+        expect(diagnostic).toContain("YAML 解析失败");
+        expect(diagnostic).not.toContain("secret-never-return");
+        expect(diagnostic).not.toContain("plugins: [");
+        expect(diagnostic).not.toContain("\n");
+        expect(formatRuntimeConfigDiagnostic(new Error("x".repeat(1_100)))).toHaveLength(1_000);
     });
 
     it("validates persisted plugin selections before startup", () => {

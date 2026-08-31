@@ -7,7 +7,7 @@ import { ServiceController, type ServiceScope, type ServiceSpec } from "../servi
 import { preflightServiceRuntime, type ServicePreflightSpec } from "../service-preflight.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
 import { getRuntimePluginSelection } from "../runtime-plugin-selection.js";
-import { parseRuntimeConfig } from "../runtime-config-validator.js";
+import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "../runtime-config-validator.js";
 import { getLoadedPlugins, type LoadedPluginInfo } from "../plugin-loader.js";
 import {
     buildAdapterCapabilityReport,
@@ -86,7 +86,14 @@ export async function showCapabilities(
     options: RuntimeOptions & { json: boolean },
     dependencies?: CapabilityCommandDependencies,
 ): Promise<CommandResult> {
-    const runtime = resolveConfiguredRuntimeOptions(options);
+    let runtime: ReturnType<typeof normalizeRuntimeOptions>;
+    let runtimeConfigError: string | null = null;
+    try {
+        runtime = resolveConfiguredRuntimeOptions(options);
+    } catch (error) {
+        runtime = normalizeRuntimeOptions(options);
+        runtimeConfigError = formatRuntimeConfigDiagnostic(error);
+    }
     const resolved =
         dependencies ??
         ({
@@ -99,6 +106,7 @@ export async function showCapabilities(
     const failures = await resolved.loadPlugins(runtime.adapters, []);
     const catalogIssues = (resolved.catalogIssues ?? validateExtensionCatalogIntegrity)();
     const reportErrors = [
+        ...(runtimeConfigError ? [`runtime-config: ${runtimeConfigError}`] : []),
         ...failures,
         ...catalogIssues.map(issue => `extension-catalog: ${issue}`),
     ];

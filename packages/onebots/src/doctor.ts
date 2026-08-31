@@ -4,7 +4,11 @@ import * as net from "node:net";
 import { createRequire } from "node:module";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
 import { pluginCandidates, tryLoadRegisteredPlugin } from "./plugin-loader.js";
-import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
+import {
+    formatRuntimeConfigDiagnostic,
+    parseRuntimeConfig,
+    validateRuntimeConfig,
+} from "./runtime-config-validator.js";
 import { writeCliOutput } from "./cli-output.js";
 import { probeDoctorManagement } from "./doctor-management.js";
 import { inspectExtensionCatalog } from "./doctor-extension-catalog.js";
@@ -94,7 +98,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             checks.push({
                 name: "config",
                 level: "error",
-                message: `配置无效: ${(error as Error).message}`,
+                message: `配置无效: ${formatRuntimeConfigDiagnostic(error)}`,
             });
         }
     }

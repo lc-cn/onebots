@@ -14,7 +14,7 @@ import {
     getRuntimePluginSelection,
     setRuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
-import { parseRuntimeConfig } from "./runtime-config-validator.js";
+import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "./runtime-config-validator.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
@@ -478,10 +478,7 @@ export class ExtensionManager {
 
 /** 只公开解析原因首行，避免 YAML 代码片段把相邻凭据带到扩展目录。 */
 export function formatExtensionRuntimeConfigError(error: unknown): string {
-    const message = (error instanceof Error ? error.message : String(error))
-        .split(/\r?\n/, 1)[0]
-        ?.trim();
-    return `扩展启动配置无法读取：${message || "未知错误"}`;
+    return `扩展启动配置无法读取：${formatRuntimeConfigDiagnostic(error)}`;
 }
 
 /** @internal 使用正式重启的隔离预检，并确保含凭据的临时文件被清理。 */

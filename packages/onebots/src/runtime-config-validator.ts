@@ -16,6 +16,19 @@ export interface RuntimeConfigIssue {
     message: string;
 }
 
+const MAX_RUNTIME_CONFIG_DIAGNOSTIC_LENGTH = 1_000;
+
+/** 只发布错误首行并限制长度，避免 YAML 代码片段或相邻凭据进入 CLI、JSON 与管理 API。 */
+export function formatRuntimeConfigDiagnostic(error: unknown): string {
+    const firstLine = (error instanceof Error ? error.message : String(error))
+        .split(/\r?\n/, 1)[0]
+        ?.trim();
+    const message = firstLine || "未知错误";
+    return message.length <= MAX_RUNTIME_CONFIG_DIAGNOSTIC_LENGTH
+        ? message
+        : `${message.slice(0, MAX_RUNTIME_CONFIG_DIAGNOSTIC_LENGTH - 1)}…`;
+}
+
 /** 解析 YAML 并拒绝数组、标量等不可能作为 OneBots 根配置的值。 */
 export function parseRuntimeConfig(source: string): Record<string, unknown> {
     try {

@@ -542,6 +542,34 @@ describe("doctor persisted plugin selection", () => {
         });
     });
 
+    it("配置语法损坏时不把相邻凭据带入诊断报告", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-config-error-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "access_token: secret-never-return\nplugins: [\n", {
+            mode: 0o600,
+        });
+        fs.mkdirSync(path.join(directory, "data"));
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            useInstalledService: false,
+            extensionRoot: createExtensionRuntimeRoot(),
+        });
+        const configCheck = report.checks.find(check => check.name === "config");
+
+        expect(report.ok).toBe(false);
+        expect(configCheck).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("配置无效: YAML 解析失败"),
+        });
+        expect(configCheck?.message).not.toContain("secret-never-return");
+        expect(configCheck?.message).not.toContain("plugins: [");
+    });
+
     it("only fails a first-run warning when strict mode is enabled", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-strict-"));
         temporaryDirectories.push(directory);

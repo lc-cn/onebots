@@ -92,6 +92,53 @@ describe("capabilities command", () => {
         });
     });
 
+    it("配置损坏时保留静态能力目录并发布脱敏 JSON 证据", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-capabilities-invalid-"));
+        directories.push(directory);
+        const config = path.join(directory, "config.yaml");
+        fs.writeFileSync(config, "access_token: secret-never-return\nplugins: [\n", "utf8");
+        const calls: Array<{ adapters: string[]; protocols: string[] }> = [];
+        const dependencies = {
+            loadPlugins: async (adapters: string[], protocols: string[]) => {
+                calls.push({ adapters, protocols });
+                return [];
+            },
+            getLoadedPlugins: () => [],
+        };
+
+        const result = await showCapabilities(
+            { config, register: [], protocol: [], json: true },
+            dependencies,
+        );
+        const report = JSON.parse(result.output || "{}") as {
+            complete: boolean;
+            errors: string[];
+            adapters: Array<{ name: string; source: string }>;
+        };
+
+        const textResult = await showCapabilities(
+            { config, register: [], protocol: [], json: false },
+            dependencies,
+        );
+
+        expect(calls).toEqual([
+            { adapters: [], protocols: [] },
+            { adapters: [], protocols: [] },
+        ]);
+        expect(result).toMatchObject({ raw: true, exitCode: 1 });
+        expect(report.complete).toBe(false);
+        expect(report.errors).toHaveLength(1);
+        expect(report.errors[0]).toContain("runtime-config: YAML 解析失败");
+        expect(report.errors[0]).not.toContain("secret-never-return");
+        expect(report.adapters.find(adapter => adapter.name === "slack")).toMatchObject({
+            source: "catalog",
+        });
+        expect(textResult).toMatchObject({ exitCode: 1 });
+        expect(textResult.output).toContain("runtime-config: YAML 解析失败");
+        expect(textResult.output).toContain("目录快照");
+        expect(textResult.output).not.toContain("secret-never-return");
+    });
+
     it("returns a preflight exit code when an adapter has no declared manifest", async () => {
         AdapterRegistry.register("third-party", (() => undefined) as unknown as Adapter.Factory);
 
