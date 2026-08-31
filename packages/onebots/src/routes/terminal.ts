@@ -117,8 +117,6 @@ export function registerTerminalRoutes(app: App, router: Router): void {
         ctx.status = 200;
         ctx.respond = false;
 
-        app.logClients.add(ctx.res);
-
         // 发送缓存日志到客户端
         try {
             if (existsSync(app.logCacheFile)) {
@@ -138,15 +136,14 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             try {
                 ctx.res.write(": heartbeat\n\n");
             } catch {
-                clearInterval(heartbeat);
-                app.logClients.delete(ctx.res);
+                app.removeLogClient(ctx.res);
             }
         }, SSE_HEARTBEAT_INTERVAL_MS);
+        app.registerLogClient(ctx.res, () => clearInterval(heartbeat));
 
         // 监听连接关闭
         ctx.req.on("close", () => {
-            clearInterval(heartbeat);
-            app.logClients.delete(ctx.res);
+            app.removeLogClient(ctx.res);
         });
     });
 }

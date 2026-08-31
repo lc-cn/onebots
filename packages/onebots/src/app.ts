@@ -41,6 +41,7 @@ import {
     validateManagementToken,
 } from "./management-auth.js";
 import type { WebSocket } from "ws";
+import type { ServerResponse } from "node:http";
 import { ensureManagementCredentials } from "./management-credentials.js";
 import { RuntimeConfigStateTracker } from "./runtime-config-state.js";
 import {
@@ -94,6 +95,12 @@ export class App extends BaseApp {
     get logCacheFile() {
         return this._logCache.cacheFile;
     }
+    registerLogClient(client: ServerResponse, dispose: () => void): void {
+        this._logCache.registerClient(client, dispose);
+    }
+    removeLogClient(client: ServerResponse): void {
+        this._logCache.removeClient(client);
+    }
     get verificationClients() {
         return this._verification.clients;
     }
@@ -121,11 +128,11 @@ export class App extends BaseApp {
             authorize: request => authorizeManagementUpgrade(this, request),
         });
 
-        const cleanupLogCache = () => this._logCache.cleanup();
-        process.once("exit", cleanupLogCache);
-        this.once("close", () => {
-            process.off("exit", cleanupLogCache);
-            cleanupLogCache();
+        const cleanupLogCacheOnExit = () => this._logCache.cleanupSync();
+        process.once("exit", cleanupLogCacheOnExit);
+        this.once("close", async () => {
+            process.off("exit", cleanupLogCacheOnExit);
+            await this._logCache.cleanup();
         });
     }
 
