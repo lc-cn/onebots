@@ -5,13 +5,46 @@ import { spawn } from "node:child_process";
 import yaml from "js-yaml";
 import { ServiceController, type ServiceScope, type ServiceStatus } from "./service-manager.js";
 import { runDoctor, type DoctorReport } from "./doctor.js";
+import {
+    restartService,
+    startService,
+    stopService,
+    type CommandResult,
+} from "./cli/command-application.js";
 
-export interface UiOptions { configPath: string; scope: ServiceScope; webOnly?: boolean }
+export interface UiOptions {
+    configPath: string;
+    scope: ServiceScope;
+    webOnly?: boolean;
+}
+
+export type DashboardServiceAction = "start" | "stop" | "restart";
+
+export interface DashboardServiceActionDependencies {
+    start(options: { system: boolean }): Promise<CommandResult>;
+    stop(options: { system: boolean }): Promise<CommandResult>;
+    restart(options: { system: boolean }): Promise<CommandResult>;
+}
+
+const dashboardServiceActionDependencies: DashboardServiceActionDependencies = {
+    start: startService,
+    stop: stopService,
+    restart: restartService,
+};
+
+/** 终端面板复用公开 CLI 的服务生命周期边界，包括预检与上线验证。 */
+export function executeDashboardServiceAction(
+    action: DashboardServiceAction,
+    scope: ServiceScope,
+    dependencies: DashboardServiceActionDependencies = dashboardServiceActionDependencies,
+): Promise<CommandResult> {
+    return dependencies[action]({ system: scope === "system" });
+}
 
 /** 根据桥接配置计算 Web 管理端地址。 */
 export function getWebUrl(configPath: string): string {
     const config = fs.existsSync(configPath)
-        ? ((yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {})
+        ? (yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {}
         : {};
     const configuredPath = String(config.path ?? "").trim();
     const suffix = configuredPath ? `/${configuredPath.replace(/^\/+/, "")}` : "";
@@ -20,12 +53,20 @@ export function getWebUrl(configPath: string): string {
 
 /** 使用当前操作系统的默认浏览器打开地址。 */
 export async function openWeb(url: string): Promise<void> {
-    const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd.exe" : "xdg-open";
+    const command =
+        process.platform === "darwin"
+            ? "open"
+            : process.platform === "win32"
+              ? "cmd.exe"
+              : "xdg-open";
     const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
     await new Promise<void>((resolve, reject) => {
         const child = spawn(command, args, { detached: true, stdio: "ignore" });
         child.once("error", reject);
-        child.once("spawn", () => { child.unref(); resolve(); });
+        child.once("spawn", () => {
+            child.unref();
+            resolve();
+        });
     });
 }
 
@@ -33,11 +74,16 @@ export async function openWeb(url: string): Promise<void> {
 export async function runUi(options: UiOptions): Promise<void> {
     const url = getWebUrl(options.configPath);
     if (options.webOnly) {
-        try { await openWeb(url); console.log(`已打开 ${url}`); }
-        catch { console.log(`无法打开浏览器，请访问: ${url}`); }
+        try {
+            await openWeb(url);
+            console.log(`已打开 ${url}`);
+        } catch {
+            console.log(`无法打开浏览器，请访问: ${url}`);
+        }
         return;
     }
-    if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("onebots ui 需要交互式终端；可使用 onebots ui --web");
+    if (!process.stdin.isTTY || !process.stdout.isTTY)
+        throw new Error("onebots ui 需要交互式终端；可使用 onebots ui --web");
     const instance = render(<OneBotsDashboard {...options} url={url} />);
     await instance.waitUntilExit();
 }
@@ -54,12 +100,17 @@ export function OneBotsDashboard({ configPath, scope, url }: UiOptions & { url: 
 
     const refresh = useCallback(async () => {
         setStatus(controller.status());
-        try { setLogs(await controller.logs({ lines: 12 })); }
-        catch (error) { setLogs((error as Error).message); }
+        try {
+            setLogs(await controller.logs({ lines: 12 }));
+        } catch (error) {
+            setLogs((error as Error).message);
+        }
         try {
             const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(1500) });
             setHealth(response.ok ? "健康" : `HTTP ${response.status}`);
-        } catch { setHealth("不可达"); }
+        } catch {
+            setHealth("不可达");
+        }
     }, [controller, url]);
 
     useEffect(() => {
@@ -68,36 +119,65 @@ export function OneBotsDashboard({ configPath, scope, url }: UiOptions & { url: 
         return () => clearInterval(timer);
     }, [refresh]);
 
-    const act = useCallback(async (name: string, action: () => Promise<void>) => {
-        setMessage(`${name}中…`);
-        try { await action(); setMessage(`${name}完成`); }
-        catch (error) { setMessage(`${name}失败: ${(error as Error).message}`); }
-        await refresh();
-    }, [refresh]);
+    const act = useCallback(
+        async (name: string, action: DashboardServiceAction) => {
+            setMessage(`${name}中…`);
+            try {
+                const result = await executeDashboardServiceAction(action, scope);
+                setMessage(result.output ?? `${name}完成`);
+            } catch (error) {
+                setMessage(`${name}失败: ${(error as Error).message}`);
+            }
+            await refresh();
+        },
+        [refresh, scope],
+    );
 
     useInput((input, key) => {
         if (input === "q" || key.escape) return exit();
-        if (input === "s") void act("启动", () => controller.start());
-        if (input === "x") void act("停止", () => controller.stop());
-        if (input === "r") void act("重启", () => controller.restart());
-        if (input === "o") void openWeb(url).then(() => setMessage(`已打开 ${url}`)).catch(() => setMessage(`请访问 ${url}`));
-        if (input === "d") void runDoctor({ configPath, adapters: [], protocols: [], scope }).then(setDoctor);
+        if (input === "s") void act("启动", "start");
+        if (input === "x") void act("停止", "stop");
+        if (input === "r") void act("重启", "restart");
+        if (input === "o")
+            void openWeb(url)
+                .then(() => setMessage(`已打开 ${url}`))
+                .catch(() => setMessage(`请访问 ${url}`));
+        if (input === "d")
+            void runDoctor({ configPath, adapters: [], protocols: [], scope }).then(setDoctor);
         if (input === "l") void refresh();
     });
 
-    return <Box flexDirection="column" paddingX={1}>
-        <Box borderStyle="round" paddingX={1} flexDirection="column">
-            <Text bold color="cyan">OneBots 桥接服务</Text>
-            <Text>Scope: {scope}  状态: <Text color={status.running ? "green" : status.installed ? "yellow" : "red"}>{status.running ? "运行中" : status.installed ? "已停止" : "未安装"}</Text></Text>
-            <Text>Health: {health}</Text>
-            <Text>Web: {url}</Text>
+    return (
+        <Box flexDirection="column" paddingX={1}>
+            <Box borderStyle="round" paddingX={1} flexDirection="column">
+                <Text bold color="cyan">
+                    OneBots 桥接服务
+                </Text>
+                <Text>
+                    Scope: {scope} 状态:{" "}
+                    <Text color={status.running ? "green" : status.installed ? "yellow" : "red"}>
+                        {status.running ? "运行中" : status.installed ? "已停止" : "未安装"}
+                    </Text>
+                </Text>
+                <Text>Health: {health}</Text>
+                <Text>Web: {url}</Text>
+            </Box>
+            <Box borderStyle="round" paddingX={1} flexDirection="column" marginTop={1}>
+                <Text bold>最近日志</Text>
+                <Text>{logs || "暂无日志"}</Text>
+            </Box>
+            {doctor && (
+                <Box marginTop={1}>
+                    <Text color={doctor.ok ? "green" : "red"}>
+                        Doctor:{" "}
+                        {doctor.ok
+                            ? "通过"
+                            : `${doctor.checks.filter(item => item.level === "error").length} 个错误`}
+                    </Text>
+                </Box>
+            )}
+            {message && <Text color="yellow">{message}</Text>}
+            <Text dimColor>[s] 启动 [x] 停止 [r] 重启 [l] 刷新 [d] 诊断 [o] Web [q] 退出</Text>
         </Box>
-        <Box borderStyle="round" paddingX={1} flexDirection="column" marginTop={1}>
-            <Text bold>最近日志</Text>
-            <Text>{logs || "暂无日志"}</Text>
-        </Box>
-        {doctor && <Box marginTop={1}><Text color={doctor.ok ? "green" : "red"}>Doctor: {doctor.ok ? "通过" : `${doctor.checks.filter(item => item.level === "error").length} 个错误`}</Text></Box>}
-        {message && <Text color="yellow">{message}</Text>}
-        <Text dimColor>[s] 启动  [x] 停止  [r] 重启  [l] 刷新  [d] 诊断  [o] Web  [q] 退出</Text>
-    </Box>;
+    );
 }
