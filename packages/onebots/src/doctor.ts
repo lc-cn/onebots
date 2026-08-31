@@ -20,6 +20,7 @@ import {
     compareDoctorEndpointIdentities,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
+    resolveGatewayPort,
     type DoctorCheck,
 } from "./doctor-endpoint.js";
 
@@ -40,6 +41,8 @@ export interface DoctorOptions {
     strict?: boolean;
     /** false 表示独立诊断显式配置，不读取或修复已安装服务定义。 */
     useInstalledService?: boolean;
+    /** 测试或嵌入场景可显式提供当前进程的端口覆盖。 */
+    environmentPort?: string;
 }
 
 export type DoctorPluginSource = "cli" | "config" | "service" | "none";
@@ -269,10 +272,14 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     }
 
     if (config) {
-        const port = Number(config.port ?? 6727);
         let base: string | undefined;
+        let port: number | undefined;
         try {
-            base = resolveGatewayBaseUrl(config);
+            const environmentPort = spec
+                ? undefined
+                : (options.environmentPort ?? process.env.PORT);
+            base = resolveGatewayBaseUrl(config, environmentPort);
+            port = resolveGatewayPort(config, environmentPort);
         } catch (error) {
             checks.push({
                 name: "gateway-address",
@@ -280,7 +287,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 message: `网关地址配置无效: ${error instanceof Error ? error.message : String(error)}`,
             });
         }
-        if (base) {
+        if (base && port !== undefined) {
             const portOpen = status?.running || (await isPortOpen(port));
             if (portOpen) {
                 const endpointChecks = await Promise.all([

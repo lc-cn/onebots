@@ -18,13 +18,28 @@ export interface DoctorCheck {
 }
 
 /** 根据运行时配置生成本机管理与可观测端点的根 URL。 */
-export function resolveGatewayBaseUrl(config: Record<string, unknown>): string {
-    const port = Number(config.port ?? 6727);
-    if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-        throw new TypeError("网关 port 必须是 1 到 65535 之间的整数");
-    }
+export function resolveGatewayBaseUrl(
+    config: Record<string, unknown>,
+    environmentPort?: string,
+): string {
+    const port = resolveGatewayPort(config, environmentPort);
     const prefix = normalizeGatewayPathPrefix(config.path ?? "");
     return `http://127.0.0.1:${port}${prefix}`;
+}
+
+/** 使用与监听器一致的 PORT 优先级解析可探测的 TCP 端口。 */
+export function resolveGatewayPort(
+    config: Record<string, unknown>,
+    environmentPort?: string,
+): number {
+    const hasEnvironmentPort = environmentPort !== undefined && environmentPort.trim() !== "";
+    const port = Number(hasEnvironmentPort ? environmentPort : (config.port ?? 6727));
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+        throw new TypeError(
+            `${hasEnvironmentPort ? "PORT" : "网关 port"} 必须是 1 到 65535 之间的整数`,
+        );
+    }
+    return port;
 }
 
 type DoctorEndpoint = "health" | "ready";

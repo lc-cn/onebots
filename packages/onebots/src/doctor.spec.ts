@@ -81,6 +81,16 @@ describe("doctor health probes", () => {
         expect(resolveGatewayBaseUrl(config)).toBe(expected);
     });
 
+    it("使用 PORT 覆盖独立进程的配置端口", () => {
+        expect(resolveGatewayBaseUrl({ port: 7788, path: "gateway" }, "7860")).toBe(
+            "http://127.0.0.1:7860/gateway",
+        );
+        expect(resolveGatewayBaseUrl({ port: 7788 }, " ")).toBe("http://127.0.0.1:7788");
+        expect(() => resolveGatewayBaseUrl({ port: 7788 }, "invalid")).toThrow(
+            "PORT 必须是 1 到 65535 之间的整数",
+        );
+    });
+
     it.each([{ port: 0 }, { port: 65_536 }, { port: "invalid" }])(
         "拒绝无效的网关端口 $port",
         config => {
@@ -479,6 +489,29 @@ describe("doctor health probes", () => {
 });
 
 describe("doctor persisted plugin selection", () => {
+    it("独立诊断使用当前进程的 PORT 覆盖", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-port-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "port: 61998\ngeneral: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            useInstalledService: false,
+            environmentPort: "invalid",
+        });
+
+        expect(report.checks.find(check => check.name === "gateway-address")).toEqual({
+            name: "gateway-address",
+            level: "error",
+            message: "网关地址配置无效: PORT 必须是 1 到 65535 之间的整数",
+        });
+    });
+
     it("将不安全的宿主 path 保留为诊断结果而不是让 doctor 崩溃", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-path-"));
         temporaryDirectories.push(directory);

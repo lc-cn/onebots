@@ -16,6 +16,7 @@ afterEach(() => {
 describe("CLI send management boundary", () => {
     it("使用规范化的网关前缀和环境优先的 Bearer token", async () => {
         vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "environment-token");
+        vi.stubEnv("PORT", "7860");
         const config = writeConfig(`
 port: 7788
 path: gateway
@@ -34,7 +35,7 @@ timeout: 5
         });
         expect(fetcher).toHaveBeenCalledOnce();
         expect(fetcher).toHaveBeenCalledWith(
-            "http://127.0.0.1:7788/gateway/api/send",
+            "http://127.0.0.1:7860/gateway/api/send",
             expect.objectContaining({
                 method: "POST",
                 headers: {

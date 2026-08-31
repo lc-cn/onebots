@@ -9,6 +9,7 @@ const temporaryDirectories: string[] = [];
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -96,6 +97,7 @@ describe("doctor configuration scope", () => {
     });
 
     it("keeps the service definition authoritative when explicit -c resolves to its config", async () => {
+        vi.stubEnv("PORT", "invalid");
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-service-"));
         temporaryDirectories.push(directory);
         const configPath = path.join(directory, "config.yaml");
@@ -145,5 +147,6 @@ describe("doctor configuration scope", () => {
         );
         expect(report.checks.some(check => check.name === "adapter:service-missing")).toBe(true);
         expect(report.checks.some(check => check.name === "adapter:config-missing")).toBe(false);
+        expect(report.checks.some(check => check.name === "gateway-address")).toBe(false);
     });
 });

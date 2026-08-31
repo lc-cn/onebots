@@ -459,7 +459,7 @@ export async function sendMessage(
     const fetcher = dependencies.fetcher ?? fetch;
     const baseUrl = options.url
         ? normalizeExplicitManagementBase(options.url)
-        : resolveGatewayBaseUrl(config);
+        : resolveGatewayBaseUrl(config, process.env.PORT);
     const credential = await acquireManagementCredential(baseUrl, config, fetcher);
     if (!credential.token) {
         throw new CliError(
