@@ -197,7 +197,32 @@ export {
     type WhatsAppWebhookSubscriptionRequest,
     type WhatsAppWebhookSubscriptionsResponse,
 } from "./webhook-subscriptions.js";
-export { isWhatsAppBusinessAccountAction, WhatsAppBusinessAccounts } from "./business-account.js";
+export {
+    isWhatsAppBusinessAccountAction,
+    WhatsAppBusinessAccounts,
+    WHATSAPP_BUSINESS_ACCOUNT_ACTIVITY_FIELDS,
+    WHATSAPP_BUSINESS_ACCOUNT_ACTIVITY_TYPES,
+    WHATSAPP_BUSINESS_ACCOUNT_ACTOR_TYPES,
+    WHATSAPP_BUSINESS_ACCOUNT_FIELDS,
+    WHATSAPP_BUSINESS_ACCOUNT_OWNERSHIP_TYPES,
+    WHATSAPP_BUSINESS_ACCOUNT_REVIEW_STATUSES,
+    WHATSAPP_BUSINESS_VERIFICATION_STATUSES,
+    type WhatsAppBusinessAccount,
+    type WhatsAppBusinessAccountAction,
+    type WhatsAppBusinessAccountActivitiesQuery,
+    type WhatsAppBusinessAccountActivitiesResponse,
+    type WhatsAppBusinessAccountActivity,
+    type WhatsAppBusinessAccountActivityField,
+    type WhatsAppBusinessAccountActivityType,
+    type WhatsAppBusinessAccountActorType,
+    type WhatsAppBusinessAccountField,
+    type WhatsAppBusinessAccountOwnershipType,
+    type WhatsAppBusinessAccountReviewStatus,
+    type WhatsAppBusinessAccountUpdate,
+    type WhatsAppBusinessAccountUpdateResponse,
+    type WhatsAppBusinessVerificationStatus,
+    type WhatsAppJsonValue,
+} from "./business-account.js";
 export * from "./business-account-types.js";
 export {
     isWhatsAppBusinessPhoneNumberAction,

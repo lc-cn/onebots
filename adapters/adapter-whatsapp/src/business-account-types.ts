@@ -1,12 +1,5 @@
 import type { WhatsAppPaging } from "./types.js";
 
-export const WHATSAPP_BUSINESS_ACCOUNT_ACTIONS = Object.freeze([
-    "get_business_account",
-    "update_business_account",
-    "list_business_account_activities",
-] as const);
-export type WhatsAppBusinessAccountAction = (typeof WHATSAPP_BUSINESS_ACCOUNT_ACTIONS)[number];
-
 export const WHATSAPP_BUSINESS_ACCOUNT_FIELDS = Object.freeze([
     "id",
     "name",

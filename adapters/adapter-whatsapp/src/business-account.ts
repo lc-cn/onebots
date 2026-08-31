@@ -1,9 +1,9 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import { parseWhatsAppPaging } from "./graph-paging.js";
 import {
-    WHATSAPP_BUSINESS_ACCOUNT_ACTIONS,
     WHATSAPP_BUSINESS_ACCOUNT_ACTIVITY_FIELDS,
     WHATSAPP_BUSINESS_ACCOUNT_ACTIVITY_TYPES,
     WHATSAPP_BUSINESS_ACCOUNT_ACTOR_TYPES,
@@ -12,7 +12,6 @@ import {
     WHATSAPP_BUSINESS_ACCOUNT_REVIEW_STATUSES,
     WHATSAPP_BUSINESS_VERIFICATION_STATUSES,
     type WhatsAppBusinessAccount,
-    type WhatsAppBusinessAccountAction,
     type WhatsAppBusinessAccountActivitiesQuery,
     type WhatsAppBusinessAccountActivitiesResponse,
     type WhatsAppBusinessAccountActivity,
@@ -25,12 +24,6 @@ import {
 } from "./business-account-types.js";
 
 export * from "./business-account-types.js";
-
-export function isWhatsAppBusinessAccountAction(
-    action: string,
-): action is WhatsAppBusinessAccountAction {
-    return (WHATSAPP_BUSINESS_ACCOUNT_ACTIONS as readonly string[]).includes(action);
-}
 
 /** WABA 身份、受控配置与活动审计；所有写字段和审计过滤器都在边界闭合。 */
 export class WhatsAppBusinessAccounts {
@@ -81,38 +74,45 @@ export class WhatsAppBusinessAccounts {
             normalized.fields,
         );
     }
-
-    execute(
-        action: WhatsAppBusinessAccountAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_business_account":
-                rejectUnknown(params, ["fields"]);
-                return this.get(
-                    params.fields === undefined
-                        ? WHATSAPP_BUSINESS_ACCOUNT_FIELDS
-                        : accountFields(params.fields),
-                );
-            case "update_business_account":
-                rejectUnknown(params, ["account"]);
-                return this.update(updateRequest(params.account));
-            case "list_business_account_activities":
-                rejectUnknown(params, ["query"]);
-                return this.listActivities(
-                    params.query === undefined ? {} : activityQueryInput(params.query),
-                );
-        }
-    }
 }
 
-export const WHATSAPP_BUSINESS_ACCOUNT_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_BUSINESS_ACCOUNT_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.businessAccount.execute(action, params),
-    ]),
-) as Record<WhatsAppBusinessAccountAction, PlatformActionHandler<WhatsAppClient>>;
+type BusinessAccountActionParams = Readonly<Record<string, unknown>>;
+
+const BUSINESS_ACCOUNT_ACTION_HANDLERS = {
+    get_business_account: (client: WhatsAppClient, params: BusinessAccountActionParams) =>
+        client.businessAccount.get(
+            params.fields === undefined
+                ? WHATSAPP_BUSINESS_ACCOUNT_FIELDS
+                : accountFields(params.fields),
+        ),
+    update_business_account: (client: WhatsAppClient, params: BusinessAccountActionParams) =>
+        client.businessAccount.update(updateRequest(params.account)),
+    list_business_account_activities: (
+        client: WhatsAppClient,
+        params: BusinessAccountActionParams,
+    ) =>
+        client.businessAccount.listActivities(
+            params.query === undefined ? {} : activityQueryInput(params.query),
+        ),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Business Account 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_BUSINESS_ACCOUNT_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    BUSINESS_ACCOUNT_ACTION_HANDLERS,
+    {
+        get_business_account: ["fields"],
+        update_business_account: ["account"],
+        list_business_account_activities: ["query"],
+    },
+);
+
+export type WhatsAppBusinessAccountAction = keyof typeof WHATSAPP_BUSINESS_ACCOUNT_ACTION_HANDLERS;
+
+export function isWhatsAppBusinessAccountAction(
+    action: string,
+): action is WhatsAppBusinessAccountAction {
+    return Object.hasOwn(WHATSAPP_BUSINESS_ACCOUNT_ACTION_HANDLERS, action);
+}
 
 function updateRequest(value: unknown): WhatsAppBusinessAccountUpdate {
     const source = inputRecord(value, "account");

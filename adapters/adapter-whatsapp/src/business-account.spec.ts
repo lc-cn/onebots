@@ -124,6 +124,18 @@ describe("WhatsAppBusinessAccounts", () => {
         expect(url.searchParams.get("activity_type")).toBe("SECURITY_EVENT");
     });
 
+    it("WABA 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "list_business_account_activities", {
+                limit: 10,
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "list_business_account_activities", parameter: "limit" },
+        });
+    });
+
     it.each([
         ["空账户字段", "get_business_account", { fields: [] }],
         ["未知账户字段", "get_business_account", { fields: ["access_token"] }],
@@ -147,7 +159,6 @@ describe("WhatsAppBusinessAccounts", () => {
             "list_business_account_activities",
             { query: { activity_types: ["LOGIN"] } },
         ],
-        ["未知动作参数", "list_business_account_activities", { limit: 10 }],
     ])("拒绝%s", async (_label, action, params) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(executeWhatsAppPlatformAction(client, action, params)).rejects.toMatchObject({
