@@ -242,11 +242,21 @@ export function probeWebSocketUpgrade(
         if (token) headers.authorization = `Bearer ${token}`;
         const request = http.request(url, { headers });
         let settled = false;
+        const timeout = setTimeout(() => {
+            request.destroy(new Error("WebSocket 握手超时"));
+        }, 2_000);
         const finish = (result: DoctorWebSocketUpgradeResult) => {
             if (settled) return;
             settled = true;
+            clearTimeout(timeout);
             request.destroy();
             resolve(result);
+        };
+        const fail = (error: Error) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            reject(error);
         };
         request.once("upgrade", (response, socket) => {
             socket.destroy();
@@ -256,11 +266,9 @@ export function probeWebSocketUpgrade(
             response.resume();
             finish({ upgraded: false, status: response.statusCode ?? 0 });
         });
-        request.once("error", error => {
-            if (!settled) reject(error);
-        });
-        request.setTimeout(2_000, () => {
-            request.destroy(new Error("WebSocket 握手超时"));
+        request.once("error", fail);
+        request.once("close", () => {
+            if (!settled) fail(new Error("WebSocket 握手在收到响应前关闭"));
         });
         request.end();
     });
