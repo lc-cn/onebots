@@ -136,6 +136,8 @@ export interface ExtensionInfo {
     catalogError: string | null;
     targetVersion: string | null;
     installedVersion: string | null;
+    /** 磁盘包清单无法证明目录中的包身份时提供具体原因。 */
+    installedError?: string | null;
     versionAligned: boolean;
     setup: ExtensionSetupStep[];
     installed: boolean;

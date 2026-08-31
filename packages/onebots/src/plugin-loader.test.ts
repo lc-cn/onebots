@@ -83,6 +83,46 @@ describe("plugin loader", () => {
         });
     });
 
+    it("rejects a package directory whose manifest claims another package identity", async () => {
+        const directory = createImportOnlyPlugin(
+            "declared-adapter",
+            "globalThis.__onebotsMismatchedPackageExecuted = true;\n",
+        );
+        const packageDirectory = path.join(directory, "node_modules", "declared-adapter");
+        fs.writeFileSync(
+            path.join(packageDirectory, "package.json"),
+            JSON.stringify({
+                name: "substituted-adapter",
+                version: "1.0.0",
+                type: "module",
+                exports: "./index.js",
+            }),
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsMismatchedPackageExecuted?: boolean;
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "declared",
+                ["declared-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({
+                loaded: false,
+                message: expect.stringContaining(
+                    "package.json 包名错配，期望 declared-adapter，实际 substituted-adapter",
+                ),
+            });
+            expect(globals.__onebotsMismatchedPackageExecuted).toBeUndefined();
+            expect(getLoadedPlugins()).toEqual([]);
+        } finally {
+            delete globals.__onebotsMismatchedPackageExecuted;
+        }
+    });
+
     it("rolls back every registration made before plugin initialization fails", async () => {
         const directory = createImportOnlyPlugin(
             "partial-adapter",

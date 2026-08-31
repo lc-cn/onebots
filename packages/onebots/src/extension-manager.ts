@@ -77,6 +77,11 @@ export interface ExtensionManagerOptions {
     catalogIssues?: () => string[];
 }
 
+interface InstalledPackageInspection {
+    version: string | null;
+    error: string | null;
+}
+
 export interface ExtensionConfigPreflightRequest {
     content: string;
     selection: RuntimePluginSelection;
@@ -169,7 +174,8 @@ export class ExtensionManager {
         );
         return EXTENSION_CATALOG.map(entry => {
             const packageCatalog = getExtensionPackageCatalogEntry(entry.packageName);
-            const installedVersion = this.installedVersion(entry.packageName);
+            const installedPackage = this.inspectInstalledPackage(entry.packageName);
+            const installedVersion = installedPackage.version;
             const loaded = loadedPlugins.some(
                 plugin => plugin.type === entry.type && plugin.name === entry.name,
             );
@@ -191,6 +197,7 @@ export class ExtensionManager {
                 configurationError: validateExtensionConfigurationTarget(entry),
                 targetVersion: packageCatalog?.packageVersion ?? null,
                 installedVersion,
+                installedError: installedPackage.error,
                 versionAligned:
                     packageCatalog !== undefined &&
                     installedVersion === packageCatalog.packageVersion,
@@ -246,7 +253,7 @@ export class ExtensionManager {
         this.assertRuntimeRoot();
         const preparedConfig = this.prepareConfig(entry.type, entry.name);
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
-        const previousVersion = this.installedVersion(entry.packageName);
+        const previousVersion = this.inspectInstalledPackage(entry.packageName).version;
         const packageNeedsInstall = previousVersion !== packageCatalog.packageVersion;
         let startInstallation: (() => void) | undefined;
         const startGate = new Promise<void>(resolve => {
@@ -264,10 +271,15 @@ export class ExtensionManager {
                         this.runtimeRoot,
                     );
                     packageInstallCompleted = true;
-                    const installedVersion = this.installedVersion(entry.packageName);
-                    if (installedVersion !== packageCatalog.packageVersion) {
+                    const installedPackage = this.inspectInstalledPackage(entry.packageName);
+                    if (
+                        installedPackage.error ||
+                        installedPackage.version !== packageCatalog.packageVersion
+                    ) {
                         throw new Error(
-                            `扩展安装版本校验失败：${entry.packageName} 期望 ${packageCatalog.packageVersion}，实际 ${installedVersion ?? "未安装"}`,
+                            installedPackage.error
+                                ? `扩展安装包身份校验失败：${installedPackage.error}`
+                                : `扩展安装版本校验失败：${entry.packageName} 期望 ${packageCatalog.packageVersion}，实际 ${installedPackage.version ?? "未安装"}`,
                         );
                     }
                 }
@@ -347,10 +359,11 @@ export class ExtensionManager {
     ): Promise<void> {
         try {
             await this.installer.restore!(packageName, previousVersion, this.runtimeRoot);
-            const restoredVersion = this.installedVersion(packageName);
-            if (restoredVersion !== previousVersion) {
+            const restoredPackage = this.inspectInstalledPackage(packageName);
+            if (restoredPackage.error || restoredPackage.version !== previousVersion) {
                 throw new Error(
-                    `${packageName} 期望恢复为 ${previousVersion ?? "未安装"}，实际 ${restoredVersion ?? "未安装"}`,
+                    restoredPackage.error ??
+                        `${packageName} 期望恢复为 ${previousVersion ?? "未安装"}，实际 ${restoredPackage.version ?? "未安装"}`,
                 );
             }
         } catch (restoreError) {
@@ -391,20 +404,36 @@ export class ExtensionManager {
         return getRuntimePluginSelection(config) ?? { adapters: [], protocols: [] };
     }
 
-    private installedVersion(packageName: string): string | null {
+    private inspectInstalledPackage(packageName: string): InstalledPackageInspection {
         const parts = packageName.split("/");
         const manifestPath = path.join(this.runtimeRoot, "node_modules", ...parts, "package.json");
-        if (!fs.existsSync(manifestPath)) return null;
+        if (!fs.existsSync(manifestPath)) return { version: null, error: null };
         try {
             const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+                name?: unknown;
                 version?: unknown;
             };
-            return typeof manifest.version === "string" && manifest.version.trim()
-                ? manifest.version.trim()
-                : null;
+            const actualName = typeof manifest.name === "string" ? manifest.name.trim() : "";
+            if (actualName !== packageName) {
+                return {
+                    version: null,
+                    error: `${packageName} 的 package.json 包名错配，实际为 ${actualName || "未声明"}`,
+                };
+            }
+            const version =
+                typeof manifest.version === "string" && manifest.version.trim()
+                    ? manifest.version.trim()
+                    : null;
+            return {
+                version,
+                error: version ? null : `${packageName} 的 package.json 未声明有效版本`,
+            };
         } catch {
-            // 损坏或尚未完整写入的清单不应被当作已安装的验证版本。
-            return null;
+            // 不回显解析器片段，避免损坏清单把不受信任的文件内容带到管理端。
+            return {
+                version: null,
+                error: `${packageName} 的 package.json 不是有效 JSON`,
+            };
         }
     }
 

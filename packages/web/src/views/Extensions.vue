@@ -93,6 +93,11 @@
                             </div>
                         </div>
 
+                        <UiAlert v-if="extension.installedError" variant="danger">
+                            已安装依赖无法验证：{{ extension.installedError }}。重新安装会使用当前
+                            OneBots 固定的包名和版本修复该目录。
+                        </UiAlert>
+
                         <UiAlert
                             v-if="
                                 extension.targetVersion &&

@@ -58,12 +58,17 @@ function catalogVersion(packageName: string): string {
     return entry.packageVersion;
 }
 
-function installFixturePackage(packageName: string, version: string, runtimeRoot: string): void {
+function installFixturePackage(
+    packageName: string,
+    version: string,
+    runtimeRoot: string,
+    manifestName = packageName,
+): void {
     const packageDirectory = path.join(runtimeRoot, "node_modules", ...packageName.split("/"));
     fs.mkdirSync(packageDirectory, { recursive: true });
     fs.writeFileSync(
         path.join(packageDirectory, "package.json"),
-        `${JSON.stringify({ name: packageName, version })}\n`,
+        `${JSON.stringify({ name: manifestName, version })}\n`,
     );
 }
 
@@ -302,10 +307,65 @@ describe("ExtensionManager", () => {
         expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
             installed: true,
             installedVersion: catalogVersion("@onebots/adapter-slack"),
+            installedError: null,
             versionAligned: true,
             enabled: true,
             loaded: false,
         });
+    });
+
+    it("不把目录中自报为另一包名的依赖视为已安装", () => {
+        const { root, configPath } = fixture();
+        const packageName = "@onebots/adapter-slack";
+        installFixturePackage(
+            packageName,
+            catalogVersion(packageName),
+            root,
+            "substituted-adapter",
+        );
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            preflight: successfulPreflight,
+        });
+
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            installed: false,
+            installedVersion: null,
+            installedError:
+                "@onebots/adapter-slack 的 package.json 包名错配，实际为 substituted-adapter",
+            versionAligned: false,
+        });
+    });
+
+    it("安装器落盘错误包身份时回滚并保留明确诊断", async () => {
+        const { root, configPath } = fixture();
+        const packageName = "@onebots/adapter-slack";
+        const install = vi.fn(async (_name: string, version: string, runtimeRoot: string) => {
+            installFixturePackage(packageName, version, runtimeRoot, "substituted-adapter");
+        });
+        const restore = vi.fn(async (_name: string, previousVersion: string | null) => {
+            expect(previousVersion).toBeNull();
+            removeFixturePackage(packageName, root);
+        });
+        const preflight = vi.fn(successfulPreflight);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install, restore },
+            preflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            "扩展安装包身份校验失败：@onebots/adapter-slack 的 package.json 包名错配，实际为 substituted-adapter",
+        );
+        expect(restore).toHaveBeenCalledOnce();
+        expect(preflight).not.toHaveBeenCalled();
+        expect(
+            fs.existsSync(
+                path.join(root, "node_modules", "@onebots", "adapter-slack", "package.json"),
+            ),
+        ).toBe(false);
     });
 
     it("拒绝任意 npm 包名", async () => {

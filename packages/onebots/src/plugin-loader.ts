@@ -77,6 +77,19 @@ export function inspectPlugin(
 
         const packageJsonPath = resolvePackageJson(candidate, runtimeRequire, requireEntry);
         if (packageJsonPath) {
+            const manifest = readPackageJson(packageJsonPath);
+            const expectedPackageName = parsePackageName(candidate);
+            if (expectedPackageName && manifest.name !== expectedPackageName) {
+                const actualPackageName =
+                    typeof manifest.name === "string" && manifest.name.trim()
+                        ? manifest.name.trim()
+                        : "未声明";
+                return {
+                    status: "broken",
+                    candidate,
+                    reason: `package.json 包名错配，期望 ${expectedPackageName}，实际 ${actualPackageName}`,
+                };
+            }
             const entryPath = resolvePackageEntry(candidate, packageJsonPath);
             if (!entryPath) {
                 return {
@@ -89,7 +102,7 @@ export function inspectPlugin(
                 };
             }
             if (fs.existsSync(entryPath)) {
-                return readyInspection(candidate, entryPath, readPackageJson(packageJsonPath));
+                return readyInspection(candidate, entryPath, manifest);
             }
             return {
                 status: "broken",
