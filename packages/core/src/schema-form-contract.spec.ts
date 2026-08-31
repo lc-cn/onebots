@@ -47,6 +47,20 @@ describe("schema form contract", () => {
                 },
             }),
         ).not.toThrow();
+        expect(() =>
+            assertSchemaFormContract({
+                plugins: {
+                    type: "array",
+                    label: "插件",
+                    choices: [{ label: "Mock", value: "mock" }],
+                    allowCustomValues: true,
+                    ui: {
+                        section: "advanced",
+                        widget: "choice-list",
+                    },
+                },
+            }),
+        ).not.toThrow();
     });
 
     it("拒绝缺少分区、悬空依赖和未保护的敏感字段", () => {
@@ -109,5 +123,15 @@ describe("schema form contract", () => {
                 },
             }),
         ).toThrow("必须使用 array");
+        expect(() =>
+            assertSchemaFormContract({
+                plugin: {
+                    type: "string",
+                    label: "插件",
+                    allowCustomValues: true,
+                    ui: { section: "advanced" },
+                },
+            }),
+        ).toThrow("仅可在 choice-list");
     });
 });

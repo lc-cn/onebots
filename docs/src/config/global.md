@@ -78,6 +78,8 @@ ONEBOTS_ACCESS_TOKEN > config.yaml 的 access_token
 
 `plugins.adapters` 与 `plugins.protocols` 是 setup 持久化的运行时插件默认值。两项都是插件短名数组；缺少 `plugins` 的旧配置仍然有效。显式传入某一类参数时，只覆盖该类别，例如 `-r qq` 会覆盖 `plugins.adapters`，但仍复用 `plugins.protocols`。
 
+Web 管理端会把当前进程已完成入口加载和注册契约校验的插件显示为可添加建议，并同时保留自定义输入，用于第三方插件短名或完整包名。建议清单只代表当前运行时证据，不会被当作封闭白名单；自定义值仍会在下次启动或 doctor 中经过正常的包解析与注册校验。
+
 Web 管理端可以保存插件选择，但运行中的进程无法安全地卸载或替换插件，因此该变更会明确提示需要重启。已通过 `onebots install` 安装的服务以服务定义中保存的插件列表为准；修改 `plugins` 后应重新执行 `onebots install -c config.yaml` 更新服务定义，再启动或重启服务。
 
 ## 启动前校验

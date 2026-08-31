@@ -144,10 +144,12 @@ export const parseStructuredFieldValue = (
             if (typeof item !== "string" && typeof item !== "number" && typeof item !== "boolean") {
                 return { ok: false, message: `字段 ${label} 中存在无效选项` };
             }
-            if (allowed.size && !allowed.has(item)) {
+            const normalized = typeof item === "string" ? item.trim() : item;
+            if (normalized === "" && rule.allowCustomValues) continue;
+            if (allowed.size && !allowed.has(normalized) && !rule.allowCustomValues) {
                 return { ok: false, message: `字段 ${label} 中存在未声明的选项：${String(item)}` };
             }
-            if (!values.includes(item)) values.push(item);
+            if (!values.includes(normalized)) values.push(normalized);
         }
         return { ok: true, value: values };
     }

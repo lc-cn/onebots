@@ -35,8 +35,54 @@ describe("application config schema", () => {
         expect(() => assertSchemaFormContract(schema)).not.toThrow();
         expect(schema).toMatchObject({
             plugins: {
-                adapters: { type: "array" },
-                protocols: { type: "array" },
+                adapters: {
+                    type: "array",
+                    allowCustomValues: true,
+                    ui: { widget: "choice-list" },
+                },
+                protocols: {
+                    type: "array",
+                    allowCustomValues: true,
+                    ui: { widget: "choice-list" },
+                },
+            },
+        });
+    });
+
+    test("将已验证运行时插件作为开放列表建议而不是封闭白名单", () => {
+        const schema = getAppConfigSchema([
+            {
+                type: "adapter",
+                name: "mock",
+                packageName: "@onebots/adapter-mock",
+                version: "1.0.17",
+                entryPath: "/runtime/mock.js",
+            },
+            {
+                type: "protocol",
+                name: "onebot-v11",
+                packageName: "@onebots/protocol-onebot-v11",
+                version: null,
+                entryPath: "/runtime/onebot-v11.js",
+            },
+        ]).base;
+
+        expect(schema.plugins).toMatchObject({
+            adapters: {
+                choices: [
+                    {
+                        value: "mock",
+                        label: "mock · @onebots/adapter-mock@1.0.17",
+                    },
+                ],
+            },
+            protocols: {
+                choices: [
+                    {
+                        value: "onebot-v11",
+                        label: "onebot-v11 · @onebots/protocol-onebot-v11",
+                    },
+                ],
             },
         });
     });

@@ -1,5 +1,6 @@
 import type { Schema, ValidationRule } from "@onebots/core";
 import { BaseAppConfigSchema, AdapterRegistry, ProtocolRegistry } from "@onebots/core";
+import { getLoadedPlugins, type LoadedPluginInfo, type PluginType } from "./plugin-loader.js";
 
 /**
  * App 层配置 Schema（可在此扩展）
@@ -23,7 +24,7 @@ const withLabel = (
     };
 };
 
-const baseWithLabels: Schema = {
+const createBaseWithLabels = (plugins: LoadedPluginInfo[]): Schema => ({
     port: withLabel("port", "监听端口", "服务监听端口，范围 1-65535"),
     path: withLabel("path", "服务路径前缀", "HTTP 服务前缀路径，可为空"),
     database: withLabel("database", "数据库文件", "数据库文件名或路径"),
@@ -59,20 +60,36 @@ const baseWithLabels: Schema = {
         "相对配置文件目录或绝对路径，用于企业微信等可信域名校验文件（站点根路径 GET）；留空不启用。Docker：配置 static 并将校验文件放入挂载卷内 /data/static",
     ),
     plugins: {
-        adapters: {
-            type: "array",
-            label: "默认适配器插件",
-            description: "未传入 -r 时加载的适配器短名或包名；修改后需要重启",
-            ui: { section: "advanced" },
-        },
-        protocols: {
-            type: "array",
-            label: "默认协议插件",
-            description: "未传入 -p 时加载的协议短名或包名；修改后需要重启",
-            ui: { section: "advanced" },
-        },
+        adapters: pluginSelectionRule("adapter", plugins),
+        protocols: pluginSelectionRule("protocol", plugins),
     },
-};
+});
+
+function pluginSelectionRule(type: PluginType, plugins: LoadedPluginInfo[]): ValidationRule {
+    const adapter = type === "adapter";
+    const choices = plugins
+        .filter(plugin => plugin.type === type)
+        .map(plugin => ({
+            value: plugin.name,
+            label: pluginChoiceLabel(plugin),
+        }));
+    return {
+        type: "array",
+        label: adapter ? "默认适配器插件" : "默认协议插件",
+        description: `${adapter ? "未传入 -r" : "未传入 -p"} 时加载；可从当前运行时选择，也可输入第三方插件短名或包名；修改后需要重启`,
+        choices,
+        allowCustomValues: true,
+        ui: {
+            section: "advanced",
+            widget: "choice-list",
+        },
+    };
+}
+
+function pluginChoiceLabel(plugin: LoadedPluginInfo): string {
+    const version = plugin.version ? `@${plugin.version}` : "";
+    return `${plugin.name} · ${plugin.packageName}${version}`;
+}
 
 export type ConfigSchemaBundle = {
     base: Schema;
@@ -81,14 +98,16 @@ export type ConfigSchemaBundle = {
     adapters: Record<string, Schema>;
 };
 
-export const getAppConfigSchema = (): ConfigSchemaBundle => {
+export const getAppConfigSchema = (
+    loadedPlugins: LoadedPluginInfo[] = getLoadedPlugins(),
+): ConfigSchemaBundle => {
     // 插件在应用启动前完成注册。Registry 是配置、校验与 Web 表单的唯一真相源，
     // 未加载的插件不应出现在管理端，也不应由主程序维护一份易漂移的影子 Schema。
     const protocols = ProtocolRegistry.getAllSchemas();
     const adapters = AdapterRegistry.getAllSchemas();
 
     return {
-        base: baseWithLabels,
+        base: createBaseWithLabels(loadedPlugins),
         general: protocols,
         protocols,
         adapters,

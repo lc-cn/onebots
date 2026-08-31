@@ -125,6 +125,23 @@ describe("Config Validator", () => {
             }).toThrow(ValidationError);
         });
 
+        it("should allow extension values only when the schema opts in", () => {
+            const schema = {
+                plugins: {
+                    type: "array" as const,
+                    choices: [{ value: "mock", label: "Mock" }],
+                    allowCustomValues: true,
+                    ui: {
+                        widget: "choice-list" as const,
+                    },
+                },
+            };
+
+            expect(() => {
+                ConfigValidator.validate({ plugins: ["mock", "third-party"] }, schema);
+            }).not.toThrow();
+        });
+
         it("should validate with pattern", () => {
             const schema = {
                 email: { type: "string" as const, pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },

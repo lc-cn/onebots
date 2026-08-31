@@ -60,6 +60,8 @@ async function callQQ(client: QQClient, action: string, params: Record<string, u
 
 The Web console only lists adapters and protocols actually loaded with `-r` / `-p`. A plugin's registered schema is the single source for runtime validation, form sections, sensitive fields, and dynamic lists; the application does not maintain a second field catalog.
 
+Keep using `choices` for closed enumerations. When an array should provide common suggestions while accepting ecosystem extension values, use `ui.widget: 'choice-list'` and explicitly set `allowCustomValues: true`. In that mode `choices` drives suggestions without rejecting custom strings. The flag is valid only on an array `choice-list`; invalid combinations fail during plugin registration.
+
 Adapter names, protocol name-version pairs, and their configuration schema keys are unique within a process. The same factory or schema object may register repeatedly so plugin loading remains idempotent. A different implementation or schema cannot claim an occupied identifier: the registry throws a `ValidationError` instead of silently changing the implementation, metadata, or validation contract. Unregistering an implementation also removes its schema.
 
 Plugin entries are resolved from the startup working directory with support for `exports.import` conditions, `module`, and `main`, then loaded through native ESM dynamic imports. Module initialization is awaited, so plugins may use top-level `await`. An initialization rejection is preserved in startup and doctor diagnostics instead of being misreported as a missing module.

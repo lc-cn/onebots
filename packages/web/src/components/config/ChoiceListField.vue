@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { IconListCheck, IconPlus, IconTrash } from "@tabler/icons-vue";
 import UiButton from "../../ui/UiButton.vue";
+import UiInput from "../../ui/UiInput.vue";
 import UiSelect from "../../ui/UiSelect.vue";
 import type { ValidationRule } from "./types.js";
 
@@ -10,6 +11,7 @@ const props = withDefaults(defineProps<{ rule: ValidationRule; disabled?: boolea
 });
 const model = defineModel<unknown>();
 const pending = ref<string | number | boolean>();
+const customValue = ref("");
 
 const entries = computed<Array<string | number | boolean>>(() =>
     Array.isArray(model.value)
@@ -51,6 +53,13 @@ const addEntry = () => {
 const removeEntry = (index: number) => {
     model.value = entries.value.filter((_, itemIndex) => itemIndex !== index);
 };
+
+const addCustomEntry = () => {
+    const value = customValue.value.trim();
+    if (!value || entries.value.includes(value)) return;
+    model.value = [...entries.value, value];
+    customValue.value = "";
+};
 </script>
 
 <template>
@@ -64,7 +73,13 @@ const removeEntry = (index: number) => {
             </span>
             <div class="min-w-0">
                 <p class="text-sm font-medium text-fg">尚未选择任何项目</p>
-                <p class="text-xs text-fg-tertiary">从下方列表逐项添加，可随时删除和调整</p>
+                <p class="text-xs text-fg-tertiary">
+                    {{
+                        rule.allowCustomValues
+                            ? "从运行时建议添加，或输入第三方扩展名称"
+                            : "从下方列表逐项添加，可随时删除和调整"
+                    }}
+                </p>
             </div>
         </div>
 
@@ -98,5 +113,17 @@ const removeEntry = (index: number) => {
             </UiButton>
         </div>
         <p v-else-if="entries.length" class="text-xs text-fg-tertiary">所有可选项目均已添加</p>
+
+        <div v-if="rule.allowCustomValues" class="flex items-center gap-2">
+            <UiInput
+                v-model="customValue"
+                class="min-w-0 flex-1"
+                placeholder="输入插件短名或完整包名"
+                :disabled="disabled" />
+            <UiButton size="sm" :disabled="disabled || !customValue.trim()" @click="addCustomEntry">
+                <IconPlus :size="14" aria-hidden="true" />
+                添加自定义
+            </UiButton>
+        </div>
     </div>
 </template>

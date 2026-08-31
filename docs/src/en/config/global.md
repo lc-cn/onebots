@@ -66,6 +66,8 @@ See [Platform Configuration](/en/config/platform) for platform-specific configur
 
 `plugins.adapters` and `plugins.protocols` contain the runtime plugin defaults persisted by setup. Both are arrays of plugin short names, and legacy configurations without `plugins` remain valid. Explicit options override one category at a time: `-r qq` replaces `plugins.adapters` while still reusing `plugins.protocols`.
 
+The Web console presents plugins that completed entry loading and registration contract validation in the current process as addable suggestions. A free-form input remains available for third-party short names or full package names. Suggestions are runtime evidence rather than a closed allowlist; custom entries still go through normal package resolution and registration checks on the next startup or doctor run.
+
 The Web console can save a plugin selection, but a running process cannot safely unload or replace plugins, so the change is reported as requiring a restart. An installed service uses the plugin list saved in its service definition. After editing `plugins`, run `onebots install -c config.yaml` again to update that definition before starting or restarting the service.
 
 Before connecting to a platform or starting protocol transports, OneBots validates the complete configuration against the schemas registered by the selected plugins. This covers required platform credentials, field types and choices, adapter and protocol references, at least one loaded protocol outlet per account, and the effective protocol configuration after account values inherit from `general`.

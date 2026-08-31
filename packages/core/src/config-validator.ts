@@ -18,6 +18,8 @@ export interface ValidationRule<T = unknown> {
     pattern?: RegExp;
     /** 带展示文案的枚举选项（Web 下拉据此渲染） */
     choices?: Array<Choice<T>>;
+    /** choices 只作为建议，允许列表中出现额外的自定义字符串。 */
+    allowCustomValues?: boolean;
     /**
      * 自定义校验：返回 true / null / undefined 表示通过；
      * 返回 false 或错误文案表示失败
@@ -128,6 +130,9 @@ export function assertSchemaFormContract(schema: Schema): void {
         }
         if (rule.ui.widget === "event-filter" && rule.type !== "object") {
             throw new ValidationError(`配置字段 ${path} 的事件过滤组件必须使用 object 类型`);
+        }
+        if (rule.allowCustomValues && rule.ui.widget !== "choice-list") {
+            throw new ValidationError(`配置字段 ${path} 仅可在 choice-list 中允许自定义值`);
         }
         if (/(?:password|token|secret|private_key|encrypt_key|aes_key)$/i.test(path)) {
             if (rule.sensitive !== true) {
@@ -274,7 +279,7 @@ export class ConfigValidator {
 
             // choices 取值校验
             const allowed = validationRule.choices?.map(c => c.value);
-            if (allowed && allowed.length > 0) {
+            if (allowed && allowed.length > 0 && !validationRule.allowCustomValues) {
                 if (Array.isArray(finalValue) && finalValue.some(item => !allowed.includes(item))) {
                     errors.push(`${currentPath} must contain only: ${allowed.join(", ")}`);
                 } else if (!Array.isArray(finalValue) && !allowed.includes(finalValue)) {

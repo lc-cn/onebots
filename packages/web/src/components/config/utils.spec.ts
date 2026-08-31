@@ -119,6 +119,21 @@ describe("config form generation", () => {
         });
     });
 
+    test("accepts normalized extension names when a choice list explicitly stays open", () => {
+        const rule: ValidationRule = {
+            ...choiceListRule,
+            allowCustomValues: true,
+        };
+
+        expect(
+            parseStructuredFieldValue(
+                ["message", " third-party-plugin ", "third-party-plugin", ""],
+                rule,
+                "插件",
+            ),
+        ).toEqual({ ok: true, value: ["message", "third-party-plugin"] });
+    });
+
     test("keeps generic record lists structured and preserves extension fields", () => {
         const value = reactive([{ id: "group-1", limit: 10, members: [1, 2] }]);
 

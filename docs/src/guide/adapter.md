@@ -69,6 +69,8 @@ async function callQQ(client: QQClient, action: string, params: Record<string, u
 
 Web 管理端只展示启动时通过 `-r` / `-p` 实际加载的适配器和协议。插件自己的注册 Schema 是运行时校验、表单分区、敏感字段与动态列表的唯一来源；主程序不维护第二份配置字段清单。
 
+Schema 中的封闭枚举继续使用 `choices`。若数组字段只想提供常用建议、同时允许生态扩展值，应使用 `ui.widget: 'choice-list'` 并显式设置 `allowCustomValues: true`；此时 `choices` 只驱动建议，不会拒绝自定义字符串。该开关只允许用于数组型 `choice-list`，错误组合会在插件注册时失败。
+
 适配器名称、“协议名称 + 版本”以及对应的配置 Schema 键都是进程内唯一标识。同一工厂或同一个 Schema 对象可以重复注册，以兼容插件加载器的幂等调用；不同实现或不同 Schema 不能占用已有标识，注册表会立即抛出 `ValidationError`，避免后加载插件静默改变实现、元数据或配置校验规则。插件卸载实现时，注册表也会一并移除对应 Schema。
 
 插件入口从启动工作目录解析，支持 `exports.import` 条件导出、`module` 与 `main`，随后按纯 ESM 动态导入并等待模块初始化完成，因此可以使用顶层 `await`；初始化 rejection 会原样进入启动与 doctor 诊断，不会被误报为“模块不存在”。
