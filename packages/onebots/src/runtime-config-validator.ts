@@ -131,6 +131,17 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
     }
 }
 
+/** 使用完整运行时契约校验单账号变更，不改写当前已应用配置。 */
+export function validateAccountConfigCandidate(
+    currentConfig: Record<string, unknown>,
+    configKey: string,
+    accountConfig: Record<string, unknown>,
+): void {
+    const candidate = deepClone(currentConfig);
+    candidate[configKey] = deepClone(accountConfig);
+    validateRuntimeConfig(candidate);
+}
+
 function captureSchemaIssues(
     config: Record<string, unknown>,
     schema: Schema,

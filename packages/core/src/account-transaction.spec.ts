@@ -208,6 +208,7 @@ describe("account transaction", () => {
             isReloading: false,
             adapters: new Map([["mock", fixture.adapter]]),
             findOrCreateAdapter,
+            validateAccountConfigCandidate: vi.fn(),
         };
 
         await expect(BaseApp.prototype.addAccount.call(app, config)).rejects.toThrow(
@@ -244,6 +245,7 @@ describe("account transaction", () => {
                 adapters.set("mock", fixture.adapter);
                 return fixture.adapter;
             }),
+            validateAccountConfigCandidate: vi.fn(),
             onConfigPersisted: vi.fn(),
         };
 
@@ -251,5 +253,48 @@ describe("account transaction", () => {
 
         expect(adapters.has("mock")).toBe(false);
         expect(fixture.adapter.accounts.size).toBe(0);
+    });
+
+    it.each([null, [], {}, { platform: "", account_id: "10001" }, { platform: "mock" }])(
+        "BaseApp 在接触适配器前拒绝畸形账号身份 %#",
+        async config => {
+            const findOrCreateAdapter = vi.fn();
+            const app = { isReloading: false, adapters: new Map(), findOrCreateAdapter };
+
+            await expect(BaseApp.prototype.addAccount.call(app, config as never)).rejects.toThrow(
+                /账号配置|platform|account_id/,
+            );
+
+            expect(findOrCreateAdapter).not.toHaveBeenCalled();
+        },
+    );
+
+    it("BaseApp 候选配置校验失败时不创建适配器或账号", async () => {
+        const fixture = createFixture();
+        const config = { platform: "mock", account_id: "10001", token: "next" };
+        const adapters = new Map<string, Adapter>();
+        const validateAccountConfigCandidate = vi.fn(() => {
+            throw new Error("Schema 校验失败");
+        });
+        const app = {
+            isReloading: false,
+            isStarted: true,
+            config: fixture.host.config,
+            adapters,
+            findOrCreateAdapter: vi.fn(() => {
+                adapters.set("mock", fixture.adapter);
+                return fixture.adapter;
+            }),
+            validateAccountConfigCandidate,
+        };
+
+        await expect(BaseApp.prototype.addAccount.call(app, config)).rejects.toThrow(
+            "Schema 校验失败",
+        );
+
+        expect(validateAccountConfigCandidate).toHaveBeenCalledWith("mock.10001", config);
+        expect(app.findOrCreateAdapter).not.toHaveBeenCalled();
+        expect(fixture.adapter.createAccount).not.toHaveBeenCalled();
+        expect(adapters.has("mock")).toBe(false);
     });
 });

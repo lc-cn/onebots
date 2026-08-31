@@ -6,7 +6,11 @@ import {
     type Protocol,
     type Schema,
 } from "@onebots/core";
-import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
+import {
+    parseRuntimeConfig,
+    validateAccountConfigCandidate,
+    validateRuntimeConfig,
+} from "./runtime-config-validator.js";
 
 const adapterSchema: Schema = {
     account_id: {
@@ -81,6 +85,33 @@ describe("runtime config validation", () => {
                 "mock.demo": { token: "secret" },
             }),
         ).toThrow(/mock\.demo.*至少需要配置一个已加载的协议出口/);
+    });
+
+    it("使用完整运行时 Schema 校验单账号候选且不改写当前配置", () => {
+        registerTestPlugins();
+        const current = {
+            general: { "test.v1": { use_http: true } },
+            "mock.old": { token: "old", "test.v1": {} },
+        };
+
+        expect(() =>
+            validateAccountConfigCandidate(current, "mock.next", {
+                account_id: "next",
+                "test.v1": {},
+            }),
+        ).toThrow(/mock\.next\.token.*required/);
+        expect(current).toEqual({
+            general: { "test.v1": { use_http: true } },
+            "mock.old": { token: "old", "test.v1": {} },
+        });
+
+        expect(() =>
+            validateAccountConfigCandidate(current, "mock.next", {
+                account_id: "next",
+                token: "secret",
+                "test.v1": {},
+            }),
+        ).not.toThrow();
     });
 
     it("rejects configured accounts whose adapter or protocol was not loaded", () => {

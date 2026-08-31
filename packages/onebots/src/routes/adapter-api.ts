@@ -1,4 +1,4 @@
-import { AccountMutationConflictError, RouterContext } from "@onebots/core";
+import { AccountMutationConflictError, RouterContext, ValidationError } from "@onebots/core";
 import type { Router, Adapter } from "@onebots/core";
 import type { App } from "../app.js";
 
@@ -30,7 +30,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
             await app.addAccount(config);
             ctx.body = { success: true, message: "添加成功" };
         } catch (error) {
-            ctx.status = error instanceof AccountMutationConflictError ? 409 : 500;
+            ctx.status = accountMutationStatus(error);
             ctx.body = { success: false, message: (error as Error).message };
         }
     });
@@ -41,18 +41,22 @@ export function registerAdapterRoutes(app: App, router: Router): void {
             await app.updateAccount(config);
             ctx.body = { success: true, message: "修改成功" };
         } catch (error) {
-            ctx.status = error instanceof AccountMutationConflictError ? 409 : 500;
+            ctx.status = accountMutationStatus(error);
             ctx.body = { success: false, message: (error as Error).message };
         }
     });
 
     router.get("/api/remove", async (ctx: RouterContext) => {
-        const { uin, platform, force } = ctx.request.query;
         try {
-            await app.removeAccount(String(platform), String(uin), parseBooleanQuery(force));
+            const { uin, platform, force } = ctx.request.query;
+            await app.removeAccount(
+                requiredQueryString("platform", platform),
+                requiredQueryString("uin", uin),
+                parseBooleanQuery(force),
+            );
             ctx.body = { success: true, message: "移除成功" };
         } catch (error) {
-            ctx.status = error instanceof AccountMutationConflictError ? 409 : 500;
+            ctx.status = accountMutationStatus(error);
             ctx.body = { success: false, message: (error as Error).message };
         }
     });
@@ -143,4 +147,18 @@ function parseBooleanQuery(value: unknown): boolean {
     if (Array.isArray(value)) return value.some(item => parseBooleanQuery(item));
     if (typeof value !== "string") return value === true;
     return value === "1" || value.toLowerCase() === "true";
+}
+
+function requiredQueryString(field: string, value: unknown): string {
+    if (Array.isArray(value)) value = value[0];
+    if (typeof value !== "string" || value.trim().length === 0) {
+        throw new ValidationError(`查询参数 ${field} 必须是非空字符串`);
+    }
+    return value;
+}
+
+function accountMutationStatus(error: unknown): number {
+    if (error instanceof AccountMutationConflictError) return 409;
+    if (error instanceof ValidationError) return 400;
+    return 500;
 }

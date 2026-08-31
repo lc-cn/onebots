@@ -1,4 +1,4 @@
-import { AccountMutationConflictError, type RouterContext } from "@onebots/core";
+import { AccountMutationConflictError, ValidationError, type RouterContext } from "@onebots/core";
 import { describe, expect, it, vi } from "vitest";
 import type { App } from "../app.js";
 import { registerAdapterRoutes } from "./adapter-api.js";
@@ -41,6 +41,38 @@ describe("adapter account routes", () => {
             success: false,
             message: "OneBots 配置正在变更，请稍后重试账号操作",
         });
+    });
+
+    it("账号候选配置校验失败返回 400", async () => {
+        const addAccount = vi.fn(async () => {
+            throw new ValidationError("运行时配置无效：mock.demo.token: is required");
+        });
+        const { posts } = setup({ addAccount } as Partial<App>);
+        const ctx = {
+            request: { body: { platform: "mock", account_id: "demo" } },
+        } as RouterContext;
+
+        await posts.get("/api/add")!(ctx);
+
+        expect(ctx.status).toBe(400);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "运行时配置无效：mock.demo.token: is required",
+        });
+    });
+
+    it("删除账号缺少身份参数时返回 400 且不调用 Core", async () => {
+        const { app, gets } = setup();
+        const ctx = { request: { query: { platform: "mock" } } } as unknown as RouterContext;
+
+        await gets.get("/api/remove")!(ctx);
+
+        expect(ctx.status).toBe(400);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "查询参数 uin 必须是非空字符串",
+        });
+        expect(app.removeAccount).not.toHaveBeenCalled();
     });
 
     it.each([

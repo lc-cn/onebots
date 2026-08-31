@@ -8,6 +8,7 @@ import {
     readLine,
     initTokenManager,
     writeConfigFileAtomic,
+    type Account,
 } from "@onebots/core";
 import { getAppConfigSchema } from "./config-schema.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -31,7 +32,11 @@ import { existsSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import type { WsServer, Dict } from "@onebots/core";
 import { getLoadedPlugins, loadPlugin, pluginCandidates } from "./plugin-loader.js";
 import { writeCliError, writeCliOutput } from "./cli-output.js";
-import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
+import {
+    parseRuntimeConfig,
+    validateAccountConfigCandidate,
+    validateRuntimeConfig,
+} from "./runtime-config-validator.js";
 import { getAdapterInfo } from "./adapter-info.js";
 import { handleManagementConfigSocketAction } from "./management-config-socket.js";
 import {
@@ -228,6 +233,17 @@ export class App extends BaseApp {
 
     protected override onConfigPersisted(configPath: string, content: string): void {
         this.markRuntimeConfigApplied(configPath, content);
+    }
+
+    protected override validateAccountConfigCandidate(
+        configKey: string,
+        config: Account.Config,
+    ): void {
+        validateAccountConfigCandidate(
+            this.config as unknown as Record<string, unknown>,
+            configKey,
+            config as unknown as Record<string, unknown>,
+        );
     }
 
     async start() {

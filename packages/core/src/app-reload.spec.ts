@@ -241,6 +241,7 @@ describe("BaseApp reload boundary", () => {
             isReloading: false,
             adapters: new Map(),
             findOrCreateAdapter: vi.fn(() => adapter),
+            validateAccountConfigCandidate: vi.fn(),
             onConfigPersisted,
         } as unknown as BaseApp;
 

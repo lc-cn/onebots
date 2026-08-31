@@ -42,6 +42,7 @@ import { emitAllAwaited, FailureCollector } from "./async-utils.js";
 import { rollbackFailedStart as rollbackStartup } from "./startup-rollback.js";
 import { normalizeGatewayPathPrefix } from "./gateway-path.js";
 import { AccountMutationConflictError, mutateAccountAtomically } from "./account-transaction.js";
+import { assertAccountIdentifier, assertAccountIdentity } from "./account-config.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -274,22 +275,26 @@ export class BaseApp extends Koa {
     }
 
     public async addAccount<P extends keyof Adapter.Configs>(config: Account.Config<P>) {
+        assertAccountIdentity(config);
         if (this.isReloading) throw new AccountMutationConflictError();
+        const nextConfig = deepClone(config);
+        const configKey = `${config.platform}.${config.account_id}`;
+        this.validateAccountConfigCandidate(configKey, nextConfig);
         const adapterExisted = this.adapters.has(config.platform);
         const adapter = this.findOrCreateAdapter<P>(config.platform);
         if (!adapter) return;
-        if (adapter.accounts.has(config.account_id)) {
-            throw new ValidationError(
-                `账号 ${config.platform}.${config.account_id} 已存在，请使用编辑操作`,
-            );
-        }
         try {
+            if (adapter.accounts.has(config.account_id)) {
+                throw new ValidationError(
+                    `账号 ${config.platform}.${config.account_id} 已存在，请使用编辑操作`,
+                );
+            }
             await mutateAccountAtomically({
                 host: this,
                 adapter,
                 accountId: config.account_id,
-                nextConfig: deepClone(config),
-                configKey: `${config.platform}.${config.account_id}`,
+                nextConfig,
+                configKey,
                 configPath: BaseApp.configPath,
                 runtimeStarted: this.isStarted,
                 onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
@@ -303,6 +308,7 @@ export class BaseApp extends Koa {
     }
 
     public async updateAccount<P extends keyof Adapter.Configs>(config: Adapter.Configs[P]) {
+        assertAccountIdentity(config);
         if (this.isReloading) throw new AccountMutationConflictError();
         const adapter = this.adapters.get(config.platform);
         if (!adapter) return this.addAccount(config);
@@ -310,6 +316,7 @@ export class BaseApp extends Koa {
         if (!account) return this.addAccount(config);
         const key = `${config.platform}.${config.account_id}`;
         const newConfig = deepMerge(this.config[key], config) as Account.Config<P>;
+        this.validateAccountConfigCandidate(key, newConfig);
         await mutateAccountAtomically({
             host: this,
             adapter,
@@ -323,6 +330,8 @@ export class BaseApp extends Koa {
     }
 
     public async removeAccount(p: string, uin: string, force?: boolean) {
+        assertAccountIdentifier("platform", p);
+        assertAccountIdentifier("account_id", uin);
         if (this.isReloading) throw new AccountMutationConflictError();
         const adapter = this.adapters.get(p);
         if (!adapter) return this.logger.warn(`未找到适配器${p}`);
@@ -342,6 +351,9 @@ export class BaseApp extends Koa {
 
     /** 配置由核心账号操作成功落盘后的扩展钩子。 */
     protected onConfigPersisted(_configPath: string, _content: string): void {}
+
+    /** 主程序可覆写此钩子，以当前已加载插件的 Schema 校验单账号候选配置。 */
+    protected validateAccountConfigCandidate(_configKey: string, _config: Account.Config): void {}
 
     get accounts() {
         return [...this.adapters.values()]
