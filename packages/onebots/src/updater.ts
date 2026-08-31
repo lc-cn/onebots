@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
 import {
     buildServiceArgs,
     ServiceController,
@@ -21,6 +20,11 @@ export interface UpdateOptions {
     scope: ServiceScope;
     check?: boolean;
     yes?: boolean;
+}
+
+interface PackageUpdateEvidence {
+    name: string;
+    latest: string | null;
 }
 
 /** 将 adapter/protocol 短名转换为可更新的 npm 包名列表。 */
@@ -65,7 +69,7 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
     const manager = detectRuntimePackageManager(runtimeRoot);
     const updates = packages.map(name => ({
         name,
-        current: installedVersion(name, runtimeRoot),
+        current: resolveInstalledPackageVersion(name, runtimeRoot),
         latest: latestVersion(manager, name),
     }));
     for (const item of updates) {
@@ -119,6 +123,7 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
             stdio: "inherit",
         });
     }
+    assertUpdatedPackageVersions(updates, runtimeRoot);
     if (spec) {
         const result = await refreshServiceAfterUpdate(
             controller,
@@ -138,6 +143,24 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
         }
     }
     writeCliOutput("OneBots 及插件更新完成");
+}
+
+/** 包管理器成功退出后，逐包确认实际清单版本，再允许服务预检与切换。 */
+export function assertUpdatedPackageVersions(
+    updates: readonly PackageUpdateEvidence[],
+    runtimeRoot: string,
+    resolveVersion: (name: string, root: string) => string | null = resolveInstalledPackageVersion,
+): void {
+    const mismatches = updates.flatMap(item => {
+        if (!item.latest) return [];
+        const actual = resolveVersion(item.name, runtimeRoot);
+        return actual === item.latest ? [] : [{ ...item, actual }];
+    });
+    if (!mismatches.length) return;
+    const evidence = mismatches
+        .map(item => `${item.name} 期望 ${item.latest}，实际 ${item.actual ?? "未安装"}`)
+        .join("；");
+    throw new Error(`包更新版本校验失败：${evidence}。服务预检、定义改写与重启均未执行`);
 }
 
 interface UpdateServiceController {
@@ -257,22 +280,56 @@ export function runUpdatedServicePreflight(spec: ServiceSpec): void {
     }
 }
 
-function installedVersion(name: string, runtimeRoot: string): string | null {
-    try {
-        const require = createRequire(path.join(runtimeRoot, "package.json"));
-        let current = path.dirname(require.resolve(name));
-        while (current !== path.dirname(current)) {
-            const manifest = path.join(current, "package.json");
-            if (fs.existsSync(manifest)) {
-                const parsed = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
-                    name?: string;
-                    version?: string;
-                };
-                if (parsed.name === name && parsed.version) return parsed.version;
-            }
-            current = path.dirname(current);
+export function resolveInstalledPackageVersion(
+    name: string,
+    runtimeRoot: string,
+    cliEntry = process.argv[1],
+): string | null {
+    const packageParts = name.split("/");
+    const origins = [runtimeRoot];
+    if (cliEntry) {
+        try {
+            origins.push(fs.realpathSync(cliEntry));
+        } catch {
+            origins.push(path.resolve(cliEntry));
         }
-        return null;
+    }
+    const visited = new Set<string>();
+    for (const origin of origins) {
+        let current =
+            fs.existsSync(origin) && fs.statSync(origin).isDirectory()
+                ? path.resolve(origin)
+                : path.dirname(path.resolve(origin));
+        while (!visited.has(current)) {
+            visited.add(current);
+            for (const manifest of [
+                path.join(current, "node_modules", ...packageParts, "package.json"),
+                path.join(current, ...packageParts, "package.json"),
+                path.join(current, "package.json"),
+            ]) {
+                const version = readPackageVersion(manifest, name);
+                if (version) return version;
+            }
+            const parent = path.dirname(current);
+            if (parent === current) break;
+            current = parent;
+        }
+    }
+    return null;
+}
+
+function readPackageVersion(manifest: string, expectedName: string): string | null {
+    if (!fs.existsSync(manifest)) return null;
+    try {
+        const parsed = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
+            name?: unknown;
+            version?: unknown;
+        };
+        return parsed.name === expectedName &&
+            typeof parsed.version === "string" &&
+            parsed.version.trim()
+            ? parsed.version.trim()
+            : null;
     } catch {
         return null;
     }

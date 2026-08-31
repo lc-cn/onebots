@@ -4,8 +4,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ServiceSpec } from "./service-manager.js";
 import {
+    assertUpdatedPackageVersions,
     packageNamesFor,
     refreshServiceAfterUpdate,
+    resolveInstalledPackageVersion,
     resolveUpdatePluginSelection,
     runUpdatedServicePreflight,
     verifyUpdatedServiceOnline,
@@ -42,6 +44,12 @@ function fakeController(running: boolean) {
         install: vi.fn(async (_spec: ServiceSpec) => undefined),
         restart: vi.fn(async () => undefined),
     };
+}
+
+function writePackageManifest(root: string, name: string, version: string): void {
+    const manifest = path.join(root, "node_modules", ...name.split("/"), "package.json");
+    fs.mkdirSync(path.dirname(manifest), { recursive: true });
+    fs.writeFileSync(manifest, JSON.stringify({ name, version }), "utf8");
 }
 
 function refreshDependencies(
@@ -107,6 +115,59 @@ describe("post-update service safety", () => {
 
         expect(() => resolveUpdatePluginSelection({ adapters: [], protocols: [] }, spec)).toThrow(
             "plugins.adapters 必须是字符串数组",
+        );
+    });
+
+    it("verifies every selected package from the runtime installation before service preflight", () => {
+        const spec = temporaryServiceSpec();
+        writePackageManifest(spec.workingDirectory, "onebots", "1.3.0");
+        writePackageManifest(spec.workingDirectory, "@onebots/adapter-mock", "2.4.0");
+
+        expect(() =>
+            assertUpdatedPackageVersions(
+                [
+                    { name: "onebots", latest: "1.3.0" },
+                    { name: "@onebots/adapter-mock", latest: "2.4.0" },
+                ],
+                spec.workingDirectory,
+            ),
+        ).not.toThrow();
+    });
+
+    it("falls back to packages beside the current OneBots installation for a global CLI", () => {
+        const spec = temporaryServiceSpec();
+        const globalRoot = path.join(spec.workingDirectory, "global");
+        const cliEntry = path.join(globalRoot, "node_modules", "onebots", "lib", "bin.js");
+        fs.mkdirSync(path.dirname(cliEntry), { recursive: true });
+        fs.writeFileSync(cliEntry, "", "utf8");
+        writePackageManifest(globalRoot, "@onebots/core", "1.2.5");
+
+        expect(
+            resolveInstalledPackageVersion(
+                "@onebots/core",
+                path.join(spec.workingDirectory, "unrelated-cwd"),
+                cliEntry,
+            ),
+        ).toBe("1.2.5");
+    });
+
+    it("reports every missing or mismatched package before the service can switch", () => {
+        const versions = new Map([
+            ["onebots", "1.2.9"],
+            ["@onebots/adapter-mock", null],
+        ]);
+
+        expect(() =>
+            assertUpdatedPackageVersions(
+                [
+                    { name: "onebots", latest: "1.3.0" },
+                    { name: "@onebots/adapter-mock", latest: "2.4.0" },
+                ],
+                "/runtime",
+                name => versions.get(name) ?? null,
+            ),
+        ).toThrow(
+            "包更新版本校验失败：onebots 期望 1.3.0，实际 1.2.9；@onebots/adapter-mock 期望 2.4.0，实际 未安装。服务预检、定义改写与重启均未执行",
         );
     });
 
