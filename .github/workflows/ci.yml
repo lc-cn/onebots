@@ -1,0 +1,57 @@
+# PR 门禁：构建 / lint / 测试必须全部通过才能合并到 master。
+# release.yml 只在 push 到 master（即合并之后）才跑 `pnpm test`，无法在合并前拦截问题；
+# 这个 workflow 补上合并前的检查。
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+
+jobs:
+  ci:
+    name: Build, lint & test
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    # 安装依赖时拉取 GitHub Packages（如 @icqqjs/*）需要 token；
+    # 来自 fork 的 PR 默认拿不到仓库 secrets，这类 PR 的安装步骤会失败，
+    # 需要维护者从同仓库分支重新发起或手动验证。
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test

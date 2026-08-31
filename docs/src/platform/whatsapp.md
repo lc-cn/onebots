@@ -1,0 +1,76 @@
+# WhatsApp 平台
+
+WhatsApp 适配器使用 Meta 官方 Cloud API。事件通过安全 Webhook 进入 OneBots；出站消息直接调用版本化 Graph API。
+
+## 平台能力
+
+- 私聊消息：文本、回复、图片、视频、音频、文档、Sticker、位置、联系人和 Reaction
+- 原生消息：Template、Interactive、Flow 以及 Cloud API 后续新增类型
+- 消息状态：`sent`、`delivered`、`read`、`failed`、`deleted`
+- 媒体：上传、查询临时 URL、鉴权下载和删除
+- 管理：Business Profile、号码注册/注销、两步验证、用户屏蔽、消息模板
+- 原始事件：所有 Webhook change 均保留在 `raw_event`
+- 嵌入式接入：`WhatsAppClient.ingest(rawEvent)` 可把已有可信连接交给同一 Client
+
+Cloud API 不提供普通 WhatsApp 群组、好友列表或任意历史消息查询，因此适配器不会伪造这些能力。
+
+## 安装与配置
+
+```bash
+pnpm add @onebots/adapter-whatsapp
+```
+
+```yaml
+whatsapp.my_bot:
+  phone_number_id: "your_phone_number_id"
+  business_account_id: "your_business_account_id"
+  access_token: "your_long_lived_access_token"
+  app_secret: "your_meta_app_secret"
+  webhook_verify_token: "your_random_verify_token"
+  api_version: "v23.0"
+```
+
+完整字段见 [配置页](/config/adapter/whatsapp)。
+
+## 原生消息
+
+标准消息段无法表达的 Template、Interactive 或 Flow，可以使用 `whatsapp_message`：
+
+```ts
+const message = [{
+  type: "whatsapp_message",
+  data: {
+    message: {
+      type: "template",
+      template: {
+        name: "hello_world",
+        language: { code: "en_US" },
+      },
+    },
+  },
+}];
+```
+
+## 平台动作
+
+常用动作包括 `send_native_message`、`mark_message_read`、`upload_media`、`download_media`、`get_business_profile`、`update_business_profile`、`block_user` 和消息模板管理。`get_supported_actions` 会返回当前完整清单。
+
+新 Graph API 可通过 `whatsapp_call` 调用：
+
+```ts
+await adapter.callAction("my_bot", "whatsapp_call", {
+  method: "GET",
+  resource: "your-waba-id/message_templates",
+  query: { limit: 50 },
+});
+```
+
+`resource` 必须是相对路径，避免 Access Token 越权发送。需要管理权限的动作会在能力清单中标明 `whatsapp_business_management` 或 `whatsapp_business_messaging`。
+
+## 使用限制
+
+- 电话号码使用带国家代码的纯数字格式。
+- 业务主动发起且超出客户服务窗口的消息通常需要已审核模板。
+- API 版本由 Meta 生命周期管理，`api_version` 必须按应用实际启用版本明确配置。
+
+参考：[WhatsApp Cloud API](https://developers.facebook.com/docs/whatsapp/cloud-api/)、[Meta 官方 Postman 集合](https://www.postman.com/meta/whatsapp-business-platform/overview/)。

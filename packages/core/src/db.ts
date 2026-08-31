@@ -1,0 +1,267 @@
+import { DatabaseSync } from "node:sqlite";
+import * as fs from "fs";
+import * as path from "path";
+
+/**
+ * SQLite-based database implementation to replace JsonDB
+ * Uses Node.js built-in SQLite support (node:sqlite)
+ */
+export class SqliteDB {
+    private db: DatabaseSync;
+    static getType(data: unknown): string {
+        if (data === null) return "null";
+        if (Array.isArray(data)) return "array";
+        return typeof data;
+    }
+    constructor(private filePath: string) {
+        const dir = path.dirname(this.filePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        
+        // Ensure file has .db extension
+        if (!this.filePath.endsWith(".db")) this.filePath = this.filePath + ".db";
+        
+        // Open or create database
+        this.db = new DatabaseSync(this.filePath);
+    }
+    create(tableName: string, schema: SqliteDB.Schema): void {
+        const indexColumns: string[] = [];
+        const columns = Object.entries(schema)
+            .map(([columnName, columnDef]) => {
+                let colDef = `${columnName} ${columnDef.type}`;
+                if (columnDef.index) indexColumns.push(columnName);
+                if (columnDef.primaryKey) colDef += " PRIMARY KEY";
+                if (columnDef.autoIncrement) colDef += " AUTOINCREMENT";
+                if (columnDef.notNull) colDef += " NOT NULL";
+                if (columnDef.unique) colDef += " UNIQUE";
+                if (columnDef.default !== undefined)
+                    colDef += ` DEFAULT (${columnDef.default()})`;
+                return colDef;
+            })
+            .join(", ");
+        
+        const createTableSQL = `CREATE TABLE IF NOT EXISTS ${tableName} (${columns})`;
+        this.db.exec(createTableSQL);
+        if(indexColumns.length>0){
+            for(const col of indexColumns){
+                const indexName=`idx_${tableName}_${col}`;
+                const createIndexSQL=`CREATE INDEX IF NOT EXISTS ${indexName} ON ${tableName}(${col})`;
+                this.db.exec(createIndexSQL);
+            }
+        }
+    }
+    select(...fieds:string[]){
+        return new Selection(this.db,fieds);
+    }
+    insert(table:string){
+        return new Insertion(this.db,table);
+    }
+    update(table:string){
+        return new Updation(this.db,table);
+    }
+    delete(table:string){
+        return new Deletion(this.db,table);
+    }
+
+    /**
+     * 执行原始 SQL（如复合主键建表），调用方需保证语句幂等（常用 IF NOT EXISTS）
+     */
+    execSQL(sql: string): void {
+        this.db.exec(sql);
+    }
+
+    /**
+     * Close database connection
+     */
+    close(): void {
+        this.db.close();
+    }
+}
+export namespace SqliteDB {
+    export type ColumnType="TEXT" | "INTEGER" | "REAL" | "BLOB";
+    export type Column = {
+        type: ColumnType;
+        primaryKey?: boolean;
+        autoIncrement?: boolean;
+        index?: boolean;
+        notNull?: boolean;
+        unique?: boolean;
+        default?:()=> string | number | boolean;
+    }
+    export type Schema={
+        [columnName: string]: Column;
+    }
+    export function Column(type: ColumnType,options?:Omit<Column,"type">):Column
+    export function Column(column:Column):Column
+    export function Column(input:ColumnType|Column,options?:Omit<Column,"type">):Column{
+        if(typeof input==="string"){
+            return {
+                type:input,
+                ...options
+            }
+        }else{
+            return input;
+        }
+    }
+    /** 将值格式化为 SQL 字面量（字符串加单引号并转义，数字等直接返回，null/undefined 返回 NULL） */
+    export function formatValue(value: unknown): string {
+        if (value === undefined || value === null) return 'NULL';
+        if (typeof value === 'number') return String(value);
+        const s = typeof value === 'string' ? value : JSON.stringify(value);
+        if (typeof s !== 'string') return 'NULL';
+        // 字符串必须用单引号包裹，否则 SQL 会将其解析为列名（如 "no such column: zhin"）
+        return "'" + s.replace(/'/g, "''") + "'";
+    }
+    export type QueryCondition<T extends {}={}>= T & {
+        $and?: QueryCondition<T>;
+        $or?: QueryCondition<T>;
+        $like?: string;
+        $not?: QueryCondition<T>;
+        $regexp?: string;
+        $gt?: number;
+        $gte?: number;
+        $lt?: number;
+        $lte?: number;
+        $between?: [number, number];
+    };
+    export function generateWhereClause(conditions: QueryCondition[],logic="AND"):string{
+        const clauses:string[] = [];
+        for(const condition of conditions){
+            const subClauses:string[] = [];
+            const conditionRecord = condition as Record<string, unknown>;
+            for(const key in conditionRecord){
+                const value=conditionRecord[key];
+                if(key==="$and" && typeof value==="object"){
+                    subClauses.push(`(${generateWhereClause([value as QueryCondition],"AND")})`);
+                }else if(key==="$or" && typeof value==="object"){
+                    subClauses.push(`(${generateWhereClause([value as QueryCondition],"OR")})`);
+                }else if(key==="$not" && typeof value==="object"){
+                    subClauses.push(`NOT (${generateWhereClause([value as QueryCondition],"AND")})`);
+                }else if(key==="$like" && typeof value==="string"){
+                    subClauses.push(`LIKE ${formatValue(value)}`);
+                }else if(key==="$regexp" && typeof value==="string"){
+                    subClauses.push(`REGEXP ${formatValue(value)}`);
+                }else if(key==="$gt" && typeof value==="number"){
+                    subClauses.push(`> ${value}`);
+                }else if(key==="$gte" && typeof value==="number"){
+                    subClauses.push(`>= ${value}`);
+                }else if(key==="$lt" && typeof value==="number"){
+                    subClauses.push(`< ${value}`);
+                }else if(key==="$lte" && typeof value==="number"){
+                    subClauses.push(`<= ${value}`);
+                }else if(key==="$between" && Array.isArray(value) && value.length===2){
+                    subClauses.push(`BETWEEN ${value[0]} AND ${value[1]}`);
+                }else if (value === undefined || value === null){
+                    subClauses.push(`${key} IS NULL`);
+                }else{
+                    subClauses.push(`${key} = ${formatValue(value)}`);
+                }
+            }
+            if(subClauses.length>0){
+                clauses.push(`(${subClauses.join(" AND ")})`);
+            }
+        }
+        return clauses.join(` ${logic} `);
+    }
+                    
+}
+export class Selection{
+    private tableName:string;
+    private whereClauses: SqliteDB.QueryCondition[] = [];
+    private groupByClauses: string[] = [];
+    private orderByClauses: string[] = [];
+    constructor(private db:DatabaseSync,private fields:string[]){
+    }
+    from(tableName:string){
+        this.tableName=tableName;
+        return this;
+    }
+    where<T extends {}=Record<string, unknown>>(condition:SqliteDB.QueryCondition<T>){
+        this.whereClauses.push(condition);
+        return this;
+    }
+    groupBy(field:string){
+        this.groupByClauses.push(field);
+        return this;
+    }
+    orderBy(field:string,order:"ASC"|"DESC"="ASC"){
+        this.orderByClauses.push(`${field} ${order}`);
+        return this;
+    }
+    get sql(){
+        return `SELECT ${this.fields.join(", ")} FROM ${this.tableName}
+        ${this.whereClauses.length>0?`WHERE ${SqliteDB.generateWhereClause(this.whereClauses)}`:""}
+        ${this.groupByClauses.length>0?`GROUP BY ${this.groupByClauses.join(", ")}`:""}
+        ${this.orderByClauses.length>0?`ORDER BY ${this.orderByClauses.join(", ")}`:""}
+        `;
+    }
+    run(){
+        const stmt= this.db.prepare(this.sql);
+        return stmt.all();
+    }
+}
+export class Insertion{
+    private columns: string[] = [];
+    #values: (unknown[])[] = [];
+    constructor(private db:DatabaseSync,private tableName:string){
+    }
+    values<T extends Record<string, unknown>>(first:T,...rest:T[]){
+        const columns=Object.keys(first);
+        this.columns=columns;
+        this.#values.push(columns.map(col=>first[col]));
+        for(const item of rest){
+            this.#values.push(columns.map(col=>item[col]||null));
+        }
+        return this;
+    }
+    get sql(){
+        const placeholders=this.#values.map((item)=>item.map(v=>SqliteDB.formatValue(v)).join(", ")).join("), (");
+        return `INSERT INTO ${this.tableName} (${this.columns.join(", ")}) VALUES (${placeholders})`;
+    }
+    run(){
+        const stmt= this.db.prepare(this.sql);
+        return stmt.run();
+    }
+}
+export class Updation{
+    private setClauses: string[] = [];
+    private whereClauses: SqliteDB.QueryCondition[] = [];
+    constructor(private db:DatabaseSync,private tableName:string){
+    }
+    set<T extends Record<string, unknown>>(value:T){
+        for(const key in value){
+            this.setClauses.push(`${key} = ${SqliteDB.formatValue(value[key])}`);
+        }
+        return this;
+    }
+    where<T extends {}=Record<string, unknown>>(condition:SqliteDB.QueryCondition<T>){
+        this.whereClauses.push(condition);
+        return this;
+    }
+    get sql(){
+        return `UPDATE ${this.tableName} SET ${this.setClauses.join(", ")}
+        ${this.whereClauses.length>0?`WHERE ${SqliteDB.generateWhereClause(this.whereClauses)}`:""}
+        `;
+    }
+    run(){
+        const stmt= this.db.prepare(this.sql);
+        return stmt.run();
+    }
+}
+export class Deletion{
+    private whereClauses: SqliteDB.QueryCondition[] = [];
+    constructor(private db:DatabaseSync,private tableName:string){
+    }
+    where<T extends {}=Record<string, unknown>>(condition:SqliteDB.QueryCondition<T>){
+        this.whereClauses.push(condition);
+        return this;
+    }
+    get sql(){
+        return `DELETE FROM ${this.tableName}
+        ${this.whereClauses.length>0?`WHERE ${SqliteDB.generateWhereClause(this.whereClauses)}`:""}
+        `;
+    }
+    run(){
+        const stmt= this.db.prepare(this.sql);
+        return stmt.run();
+    }   
+}

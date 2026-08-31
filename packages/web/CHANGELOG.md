@@ -1,0 +1,194 @@
+# @onebots/web
+
+## 1.0.13
+
+### Patch Changes
+
+- 844a041: 将事件过滤 AST、编辑器转换与执行器收口为共享模块；由 imhelper 统一管理 SDK 接收传输生命周期，并从 Milky 协议类抽离纯事件投影模块。
+- f1493f6: 删除 Web 包中不可达的旧版 imhelper 副本与无效兼容类型；由协议 Schema 声明表单语义分区，并通过统一布局模块生成协议配置界面。
+- 78c1e50: 统一 SDK 地址语义并移除隐式 OneBots 路由兼容逻辑；为协议 Schema 增加事件过滤器元数据，在 Web 配置页提供可增删的可视化规则编辑器与高级 JSON 模式。
+- Updated dependencies [9cc0622]
+- Updated dependencies [c9e876c]
+- Updated dependencies [844a041]
+- Updated dependencies [f1493f6]
+- Updated dependencies [78c1e50]
+- Updated dependencies [03cc74d]
+  - @onebots/core@1.2.5
+
+## 1.0.12
+
+### Patch Changes
+
+- 25ac8a4: 修复加载协议端点配置时对 Vue 响应式对象使用 `structuredClone` 导致配置页无法打开的问题。
+
+## 1.0.11
+
+### Patch Changes
+
+- 7891a2e: 丰富协议配置 Schema 的表单元数据，在 Web 管理端为 Webhook 与反向 WebSocket 提供动态增删和单项高级设置，并移除全局表单中的账号重复配置。
+
+## 1.0.10
+
+### Patch Changes
+
+- 41f4bcc: 改进 Web 配置、日志与验证管理，补充 MCP 和协议格式测试，并收紧核心、适配器及协议实现的公开类型。四个客户端 SDK 的事件扩展字段和默认响应数据由 `any` 收紧为 `unknown`，调用方需先进行类型收窄。
+
+## 1.0.9
+
+### Patch Changes
+
+- 4fd55a6: 登录验证与配置 Schema 体验修复：
+  - 微信 ClawBot 二维码过期自动换码后推送到 Web 并更新 UI；登录成功清理待处理验证
+  - ICQQ 将 `login_error` / `offline` 的 message 推送到验证面板，提供「重新登录」等快捷操作；扫码 / 身份验证 / 设备锁统一「已完成，继续登录」
+  - `VerificationRequest` 新增 `actions`、`confirmLabel`，网关支持 `verification:clear`
+  - 配置 Schema 彻底用 `choices` 替代 `enum`（含中文选项）；object 字段（如 `log_config`）留空不再默认写成 `{}`
+  - 拦截 ICQQ SSO 心跳等未处理 Promise rejection，避免拖垮进程；网络闪断依赖自动重连、不误推重登；微信轮询瞬态网络错误降级为 warn
+
+## 1.0.8
+
+### Patch Changes
+
+- 15b2540: 适配新版 ICQQ 登录流程：`Adapter.VerificationRequest` 新增 `confirmable` 字段（无需输入、仅需用户确认的验证）。adapter-icqq 补监听 `system.login.auth` 身份验证事件并推送到 Web；扫码确认与身份验证完成后，用户可在 Web 管理端点击「继续登录」按钮，提交后显式调用 `client.login()` 继续登录流程（此前这两步缺少继续通路，登录会卡住）。
+- 15b2540: 重构 Web 管理端：弃用 Element Plus，改为 Tailwind CSS v4 + 自研轻量组件库（`src/ui/`），图标迁移到 @tabler/icons-vue，字体自托管 Geist。恢复正常语义色（在线/连接中/离线状态可读），重做侧边栏布局、登录页、机器人卡片、配置页（表单/原始配置/站点静态/账号四页签）、系统信息、日志与终端页，统一明暗双主题设计令牌，删除未使用的 Accounts.vue。
+- 15b2540: 修复微信 ClawBot（iLink）登录二维码在 Web 管理端无法显示的问题：iLink 的 `qrcode_img_content` 是二维码页面 URL 而非图片，直接 `<img>` 展示会裂图。`Adapter.VerificationBlock` 新增 `qrcode` 内容块类型，适配器改发该类型（并附链接兜底），Web 管理端用 `qrcode` 库在本地渲染二维码图片。
+
+## 1.0.7
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+
+## 1.0.6
+
+### Patch Changes
+
+- ee4e625: ## 新增 `@onebots/adapter-wechat-ilink`
+
+  微信扩展 / **iLink Bot HTTP** 适配器（平台名 `wechat-ilink`），自实现扫码、`getupdates` 长轮询、CDN 媒体收发与 JSON API。
+
+  ### 功能摘要
+  - **约定大于配置**：API/CDN 根地址、`bot_type=3`、无会话时自动扫码等由适配器固定，YAML 仅需账号段 + 可选超时（`qr_login_timeout_ms` / `polling_*`）。
+  - **会话持久化**：登录态 JSON（`data/wechat-ilink/<account_id>.json`）仅存 token/sync 等；**`context_token` 写入主库 SQLite 表 `wechat_ilink_context_token`**（按 OneBots `account_id` + 对端 peer，写入时带会话 `ilink_bot_id`）；旧 JSON 内 `contextTokens` 首次启动自动迁库。
+  - **Web 管理端**：扫码登录时 `emit('verification:request')`，与 icqq 一致推送到控制台「登录验证」SSE；HTTPS 二维码 URL 使用 `image_url` 块**直接内嵌展示**，无需再点链接打开。
+  - **账号状态**：长轮询改为后台运行，启动完成后正确 `ready`，Web 端显示在线。
+  - **API**：`getFriendList` 返回单条好友信息，字段来自会话 `CredentialBlob.userId`（微信用户），`accountId` 为机器人不在好友条目中误用。
+
+  ### 依赖与配套
+  - **`@onebots/core`（patch）**：`Adapter` 的 `id_map` 表名对平台名做安全化；`VerificationBlock` 增加 `image_url`；`SqliteDB` 增加 `execSQL` 供复合主键建表等 DDL。
+  - **`@onebots/web`（patch）**：验证面板支持渲染 `image_url` 块（`referrerpolicy="no-referrer"`，兼容微信 CDN）。
+
+  ***
+
+  ## English summary
+  - **New package** `@onebots/adapter-wechat-ilink`: WeChat extension via iLink Bot HTTP (`wechat-ilink`), with QR login, long polling, CDN media, and JSON APIs.
+  - **Convention-first config**; session file under `data/wechat-ilink/<account_id>.json` by default.
+  - **Web verification** push for QR login; **online status** after polling starts; **`getFriendList`** uses session `userId` for the single stub friend row.
+  - **`@onebots/core`**: sanitize `id_map_*`; `VerificationBlock` `image_url`; `SqliteDB.execSQL`.
+  - **`@onebots/web`**: render `image_url` in verification drawer.
+
+## 1.0.5
+
+### Patch Changes
+
+- 4465ece: Web 管理端 `/api/config/schema` 合并适配器配置预设：在未使用 `-r` 加载 `wecom-kf`、`icqq` 等包时仍可提供表单项；并补充 line、email、whatsapp、zulip、mock 的预设。账号管理页平台字段改为可搜索下拉并支持手动输入。
+
+  Docker / HF 镜像与 `development` 的 `pnpm dev` 默认增加 `-r wecom-kf`、`-r icqq`（镜像需在构建阶段用 `NODE_AUTH_TOKEN` 装好 `@icqqjs/icqq`，启动后无需 token）。`development` 增加对 `@onebots/adapter-icqq` 的 workspace 依赖以便解析。
+
+## 1.0.4
+
+### Patch Changes
+
+- 2645ccf: 新增全局配置 `public_static_dir`：托管站点根静态文件（如企业微信可信域名校验 txt）；Docker / HF 入口脚本创建 `/data/static` 便于与配置一并持久化；Web 管理端「配置 → 站点静态」支持列表、上传与删除；`koa-body` 启用 multipart（单文件 ≤2MB）。在 Hugging Face Space 等已配置 `HF_TOKEN`、`HF_REPO_ID` 时，上传/删除站点静态文件后会自动调用 HF commit 接口，重新打包提交 `config_backup.yaml` 与 `data_backup.tar.gz`（含 static）。
+
+## 1.0.3
+
+### Patch Changes
+
+- 5d3787b: fix: v1.0.1
+
+## 1.0.2
+
+### Patch Changes
+
+- 78d4de2: fix: bump version
+
+## 1.0.1
+
+### Patch Changes
+
+- 4f7255b: chore: 切换到 npm OIDC 可信发布
+  - 移除 NPM_TOKEN 依赖
+  - 使用 GitHub OIDC + Provenance 发布
+  - 所有 25 个包已配置 Trusted Publishers
+
+## 1.0.0
+
+### Major Changes
+
+- 57cf3ba: 🎉 OneBots v1.0.0 首次发布
+
+  ## 核心包
+  - **@onebots/core** - 核心抽象层，定义适配器、账号、事件等基础接口
+  - **onebots** - 主应用包，提供机器人运行时和 HTTP 服务
+  - **@onebots/web** - Web 管理界面
+  - **imhelper** - 客户端 SDK 核心
+
+  ## 平台适配器 (12+)
+
+  | 适配器                    | 平台            | 描述                           |
+  | ------------------------- | --------------- | ------------------------------ |
+  | @onebots/adapter-qq       | QQ              | QQ 官方机器人 API              |
+  | @onebots/adapter-icqq     | ICQQ            | 基于 @icqqjs/icqq 协议         |
+  | @onebots/adapter-kook     | Kook            | Kook (开黑啦) 机器人           |
+  | @onebots/adapter-wechat   | 微信            | 微信公众号                     |
+  | @onebots/adapter-discord  | Discord         | 轻量级 Discord API 实现        |
+  | @onebots/adapter-telegram | Telegram        | 基于 grammy 的 Telegram Bot    |
+  | @onebots/adapter-feishu   | 飞书/Lark       | 飞书/Lark 机器人（可配置端点） |
+  | @onebots/adapter-dingtalk | 钉钉            | 钉钉机器人                     |
+  | @onebots/adapter-slack    | Slack           | Slack 机器人                   |
+  | @onebots/adapter-wecom    | 企业微信        | 企业微信机器人                 |
+  | @onebots/adapter-teams    | Microsoft Teams | MS Teams 机器人                |
+  | @onebots/adapter-line     | Line            | Line Messaging API             |
+  | @onebots/adapter-mock     | Mock            | 测试/开发用模拟适配器          |
+
+  ## 协议实现 (服务端)
+
+  | 协议包                       | 协议       | 描述                      |
+  | ---------------------------- | ---------- | ------------------------- |
+  | @onebots/protocol-satori-v1  | Satori v1  | Satori 协议服务端实现     |
+  | @onebots/protocol-onebot-v11 | OneBot v11 | OneBot v11 协议服务端实现 |
+  | @onebots/protocol-onebot-v12 | OneBot v12 | OneBot v12 协议服务端实现 |
+  | @onebots/protocol-milky-v1   | Milky v1   | Milky 协议服务端实现      |
+
+  ## 客户端 SDK
+
+  | SDK 包               | 协议       | 描述                      |
+  | -------------------- | ---------- | ------------------------- |
+  | @imhelper/satori-v1  | Satori v1  | Satori 协议客户端 SDK     |
+  | @imhelper/onebot-v11 | OneBot v11 | OneBot v11 协议客户端 SDK |
+  | @imhelper/onebot-v12 | OneBot v12 | OneBot v12 协议客户端 SDK |
+  | @imhelper/milky-v1   | Milky v1   | Milky 协议客户端 SDK      |
+
+  ## 主要特性
+  - 🎯 多平台支持 - 统一的 API 接口
+  - 🔌 插件系统 - 灵活的中间件架构
+  - 📡 多协议支持 - Satori、OneBot v11/v12、Milky
+  - 🌐 Web 管理界面 - 可视化管理和监控
+  - 🔒 代理支持 - Discord/Telegram 支持 HTTP/HTTPS 代理
+  - ☁️ 部分 Serverless 支持 - 飞书、钉钉、QQ 等 Webhook 模式
+
+## 0.5.1
+
+### Patch Changes
+
+- 74fb4fd: fix: change to dev dep
+
+## 0.5.0
+
+### Minor Changes
+
+- f3372b5: fix: refactory
+
+### Patch Changes
+
+- f3372b5: fix: 初始化管理

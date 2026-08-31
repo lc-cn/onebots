@@ -1,0 +1,133 @@
+import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { TELEGRAM_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+const platformActions = Object.fromEntries(
+    [...TELEGRAM_PLATFORM_ACTIONS].map(action => [
+        action,
+        { support: "native" as const, availability: "context" as const },
+    ]),
+);
+
+/** Telegram Bot API 当前可用的能力。 */
+export const telegramCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
+    actions: {
+        ...platformActions,
+        send_message: { support: "native", scenes: ["private", "group", "channel"] },
+        delete_message: { support: "native", availability: "context" },
+        update_message: {
+            support: "native",
+            availability: "context",
+            note: "统一更新路径支持文本与 @；媒体/Caption 使用 call_telegram_api",
+        },
+        get_login_info: { support: "native" },
+        get_group_info: { support: "native" },
+        set_group_name: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_change_info"],
+        },
+        leave_group: { support: "native" },
+        get_group_member_info: { support: "native" },
+        kick_group_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_restrict_members"],
+        },
+        mute_group_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_restrict_members"],
+        },
+        set_group_admin: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_promote_members"],
+        },
+        set_group_special_title: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_promote_members"],
+        },
+        handle_group_request: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_invite_users"],
+        },
+        get_file: { support: "native" },
+        call_telegram_api: {
+            support: "native",
+            availability: "context",
+            note: "受当前 Bot token 权限约束的完整 grammY raw Bot API 入口",
+        },
+        send_poll: { support: "native", scenes: ["private", "group", "channel"] },
+        forward_message: { support: "native" },
+        copy_message: { support: "native" },
+        set_message_reaction: { support: "native" },
+        pin_message: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_pin_messages"],
+        },
+        unpin_message: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_pin_messages"],
+        },
+        create_chat_invite_link: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_invite_users"],
+        },
+        set_chat_description: {
+            support: "native",
+            availability: "permission",
+            permissions: ["can_change_info"],
+        },
+        get_chat_administrators: { support: "native" },
+        get_chat_member_count: { support: "native" },
+        get_version: { support: "native" },
+        get_status: { support: "native" },
+        get_supported_actions: { support: "native" },
+    },
+    events: {
+        message: { support: "native", scenes: ["private", "group", "channel"] },
+        message_updated: { support: "native" },
+        interaction: { support: "native" },
+        member_joined: { support: "native" },
+        member_left: { support: "native" },
+        group_increase: { support: "native" },
+        group_decrease: { support: "native" },
+        group_request: { support: "native" },
+        message_reaction: { support: "native" },
+        message_deleted: { support: "native", note: "商业消息批量删除会拆分为独立事件" },
+        native_update: {
+            support: "native",
+            note: "未标准化的 Telegram Update 以 custom notice 和 raw_event 无损交付",
+        },
+    },
+    segments: {
+        text: { support: "native", direction: "both" },
+        at: {
+            support: "native",
+            direction: "both",
+            note: "发送使用 tg://user text_link；接收投影 text_mention；@all 为文本模拟",
+        },
+        image: { support: "native", direction: "both" },
+        video: { support: "native", direction: "both" },
+        audio: { support: "native", direction: "both" },
+        file: { support: "native", direction: "both" },
+        sticker: { support: "native", direction: "both" },
+        location: { support: "native", direction: "both" },
+        contact: { support: "native", direction: "both" },
+        reply: { support: "native", direction: "both" },
+    },
+    transports: {
+        webhook: { support: "native", mode: "webhook" },
+        polling: { support: "native", mode: "polling" },
+        manual: {
+            support: "native",
+            mode: "native",
+            note: "通过 ingest() 或 acceptHttp(Request) 接入既有 Host",
+        },
+    },
+});

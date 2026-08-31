@@ -1,0 +1,110 @@
+# @onebots/adapter-wecom-kf
+
+## 2.0.8
+
+### Patch Changes
+
+- c9e876c: 建立统一的 Adapter 能力清单与结构化能力错误，修复 Teams、Mock 和企业微信事件投递，并复用微信生态回调验签、解密与 XML 解析实现。
+- Updated dependencies [9cc0622]
+- Updated dependencies [c9e876c]
+- Updated dependencies [a87f07a]
+- Updated dependencies [f1493f6]
+- Updated dependencies [78c1e50]
+- Updated dependencies [03cc74d]
+  - onebots@1.2.8
+
+## 2.0.7
+
+### Patch Changes
+
+- onebots@1.2.7
+
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies [7891a2e]
+  - onebots@1.2.6
+
+## 2.0.5
+
+### Patch Changes
+
+- Updated dependencies [41f4bcc]
+  - onebots@1.2.5
+
+## 2.0.4
+
+### Patch Changes
+
+- Updated dependencies [f472ebf]
+  - onebots@1.2.4
+
+## 2.0.3
+
+### Patch Changes
+
+- Updated dependencies [1f79a8a]
+  - onebots@1.2.3
+
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies [4fd55a6]
+  - onebots@1.2.2
+
+## 2.0.1
+
+### Patch Changes
+
+- Updated dependencies [0519d6d]
+- Updated dependencies [d9e67a0]
+- Updated dependencies [fa90690]
+  - onebots@1.2.1
+
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [4564d68]
+  - onebots@1.2.0
+
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [d9fdbd5]
+  - onebots@1.1.0
+
+## 0.2.3
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+- Updated dependencies [b00497a]
+  - onebots@1.0.7
+
+## 0.2.2
+
+### Patch Changes
+
+- onebots@1.0.6
+
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [4465ece]
+  - onebots@1.0.5
+
+## 0.2.0
+
+### Minor Changes
+
+- 2645ccf: 新增 `@onebots/adapter-wecom-kf`：企业微信「微信客服」适配器（回调 `kf_msg_or_event` + `sync_msg` 拉取消息、`send_msg` 发送，可选游标持久化与会话状态 API）。
+
+### Patch Changes
+
+- Updated dependencies [2645ccf]
+  - onebots@1.0.4

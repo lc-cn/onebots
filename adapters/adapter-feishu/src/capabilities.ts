@@ -1,0 +1,123 @@
+import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { FEISHU_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+const platformActions = Object.fromEntries(
+    [...FEISHU_PLATFORM_ACTIONS].map(action => [
+        action,
+        { support: "native" as const, availability: "context" as const },
+    ]),
+);
+
+/** 飞书开放平台实现当前可用的能力。 */
+export const feishuCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
+    actions: {
+        ...platformActions,
+        send_message: { support: "native", scenes: ["private", "group"] },
+        delete_message: { support: "native" },
+        get_message: { support: "native" },
+        update_message: {
+            support: "native",
+            availability: "context",
+            note: "飞书开放平台仅允许更新应用发送的 interactive 消息卡片",
+        },
+        get_login_info: { support: "native" },
+        get_user_info: { support: "native" },
+        get_friend_list: {
+            support: "native",
+            availability: "permission",
+            permissions: ["contact:user.base:readonly"],
+            note: "按应用可见的通讯录用户投影",
+        },
+        get_friend_info: { support: "emulated", note: "按通讯录用户投影" },
+        get_group_list: { support: "native" },
+        get_group_info: { support: "native" },
+        set_group_name: { support: "native", availability: "permission" },
+        leave_group: { support: "native" },
+        get_group_member_list: { support: "native" },
+        get_group_member_info: { support: "native" },
+        kick_group_member: {
+            support: "native",
+            availability: "permission",
+            permissions: ["im:chat.members:write_only"],
+        },
+        call_feishu_api: {
+            support: "native",
+            availability: "context",
+            note: "受 tenant token 权限约束的飞书/Lark 开放平台原生入口",
+        },
+        reply_message: { support: "native", permissions: ["im:message"] },
+        forward_message: { support: "native", permissions: ["im:message"] },
+        merge_forward_messages: { support: "native", permissions: ["im:message"] },
+        get_message_read_users: {
+            support: "native",
+            availability: "permission",
+            note: "仅可查询当前机器人七日内发送消息的已读用户",
+        },
+        add_reaction: { support: "native", availability: "permission" },
+        delete_reaction: { support: "native", availability: "permission" },
+        get_reactions: { support: "native", availability: "permission" },
+        create_chat: { support: "native", availability: "permission" },
+        update_chat: { support: "native", availability: "permission" },
+        delete_chat: { support: "native", availability: "permission" },
+        add_chat_members: { support: "native", availability: "permission" },
+        remove_chat_members: { support: "native", availability: "permission" },
+        send_app_urgent: { support: "native", availability: "permission" },
+        send_sms_urgent: { support: "native", availability: "permission" },
+        send_phone_urgent: { support: "native", availability: "permission" },
+        create_pin: { support: "native", availability: "permission" },
+        delete_pin: { support: "native", availability: "permission" },
+        get_pin_list: { support: "native", availability: "permission" },
+        get_version: { support: "native" },
+        get_status: { support: "native" },
+        get_supported_actions: { support: "native" },
+    },
+    events: {
+        message: { support: "native", scenes: ["private", "group"] },
+        message_deleted: { support: "native" },
+        member_joined: { support: "native" },
+        member_left: { support: "native" },
+        group_increase: { support: "native", scenes: ["group"] },
+        group_decrease: { support: "native", scenes: ["group"] },
+        message_status: { support: "native", scenes: ["private"] },
+        interaction: { support: "native", scenes: ["private"] },
+        reaction_added: { support: "native" },
+        reaction_removed: { support: "native" },
+        native_event: {
+            support: "native",
+            note: "未标准化事件以 custom notice 和 raw_event 无损交付",
+        },
+    },
+    segments: {
+        text: { support: "native", direction: "both" },
+        at: { support: "native", direction: "both" },
+        image: {
+            support: "native",
+            direction: "both",
+            note: "image_key 直发，URL、本地路径与 Base64 自动上传",
+        },
+        file: {
+            support: "native",
+            direction: "both",
+            note: "file_key 直发，URL、本地路径与 Base64 自动上传",
+        },
+        audio: {
+            support: "native",
+            direction: "both",
+            note: "file_key 直发；上传内容需符合飞书 opus 格式要求",
+        },
+        video: {
+            support: "native",
+            direction: "both",
+            note: "file_key 直发；上传内容需符合飞书 mp4 格式要求",
+        },
+        post: { support: "native", direction: "both" },
+        interactive: { support: "native", direction: "both" },
+        reply: { support: "native", direction: "both" },
+        sticker: { support: "native", direction: "both" },
+    },
+    transports: {
+        webhook: { support: "native", mode: "webhook" },
+        long_connection: { support: "native", mode: "websocket" },
+        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
+    },
+});

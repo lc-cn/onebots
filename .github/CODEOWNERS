@@ -1,0 +1,29 @@
+# OneBots 代码所有者
+# 参考: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# 全局默认
+* @lc-cn
+
+# 核心包
+/packages/core/ @lc-cn
+/packages/onebots/ @lc-cn
+/packages/web/ @lc-cn
+/packages/imhelper/ @lc-cn
+
+# 适配器
+/adapters/ @lc-cn
+
+# 协议
+/protocols/ @lc-cn
+
+# 文档
+/docs/ @lc-cn
+
+# CI/CD
+/.github/ @lc-cn
+
+# 配置文件
+/package.json @lc-cn
+/pnpm-workspace.yaml @lc-cn
+/tsconfig.json @lc-cn
+

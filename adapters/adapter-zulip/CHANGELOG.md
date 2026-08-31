@@ -1,0 +1,140 @@
+# Changelog
+
+## 3.0.8
+
+### Patch Changes
+
+- Updated dependencies [9cc0622]
+- Updated dependencies [c9e876c]
+- Updated dependencies [a87f07a]
+- Updated dependencies [f1493f6]
+- Updated dependencies [78c1e50]
+- Updated dependencies [03cc74d]
+  - onebots@1.2.8
+
+## 3.0.7
+
+### Patch Changes
+
+- onebots@1.2.7
+
+## 3.0.6
+
+### Patch Changes
+
+- Updated dependencies [7891a2e]
+  - onebots@1.2.6
+
+## 3.0.5
+
+### Patch Changes
+
+- 41f4bcc: 改进 Web 配置、日志与验证管理，补充 MCP 和协议格式测试，并收紧核心、适配器及协议实现的公开类型。四个客户端 SDK 的事件扩展字段和默认响应数据由 `any` 收紧为 `unknown`，调用方需先进行类型收窄。
+- Updated dependencies [41f4bcc]
+  - onebots@1.2.5
+
+## 3.0.4
+
+### Patch Changes
+
+- Updated dependencies [f472ebf]
+  - onebots@1.2.4
+
+## 3.0.3
+
+### Patch Changes
+
+- Updated dependencies [1f79a8a]
+  - onebots@1.2.3
+
+## 3.0.2
+
+### Patch Changes
+
+- Updated dependencies [4fd55a6]
+  - onebots@1.2.2
+
+## 3.0.1
+
+### Patch Changes
+
+- Updated dependencies [0519d6d]
+- Updated dependencies [d9e67a0]
+- Updated dependencies [fa90690]
+  - onebots@1.2.1
+
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [4564d68]
+  - onebots@1.2.0
+
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [d9fdbd5]
+  - onebots@1.1.0
+
+## 1.0.6
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+- Updated dependencies [b00497a]
+  - onebots@1.0.7
+
+## 1.0.5
+
+### Patch Changes
+
+- onebots@1.0.6
+
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [4465ece]
+  - onebots@1.0.5
+
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [2645ccf]
+  - onebots@1.0.4
+
+## 1.0.2
+
+### Patch Changes
+
+- 5d3787b: fix: v1.0.1
+- Updated dependencies [5d3787b]
+  - onebots@1.0.3
+
+## 1.0.1
+
+### Patch Changes
+
+- 78d4de2: fix: bump version
+- Updated dependencies [78d4de2]
+  - onebots@1.0.2
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2024-01-XX
+
+### Added
+
+- 初始版本发布
+- 支持 Zulip REST API
+- 支持 Zulip WebSocket API
+- 支持流消息和私聊消息
+- 支持消息编辑和删除
+- 支持流管理
+- 支持用户信息获取
+- 支持自动重连
+- 支持代理配置

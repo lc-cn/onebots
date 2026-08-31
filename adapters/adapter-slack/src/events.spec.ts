@@ -1,0 +1,157 @@
+import { describe, expect, it } from "vitest";
+import { projectSlackEvent } from "./events.js";
+import type { SlackEvent, SlackWebhookBody } from "./types.js";
+
+const context = {
+    botId: { string: "B1" } as never,
+    createId: (value: string | number) => ({ string: String(value) }) as never,
+};
+
+describe("projectSlackEvent", () => {
+    it("投影线程、文件并保留完整 Events API envelope", () => {
+        const event = {
+            type: "message",
+            event_ts: "1710000000.000001",
+            ts: "1710000000.000001",
+            thread_ts: "1709999999.000001",
+            channel: "C1",
+            user: "U1",
+            text: "hello",
+            files: [
+                {
+                    id: "F1",
+                    name: "voice.ogg",
+                    url_private: "https://files/1",
+                    mimetype: "audio/ogg",
+                },
+            ],
+        } satisfies SlackEvent;
+        const envelope: SlackWebhookBody = {
+            type: "event_callback",
+            event_id: "Ev1",
+            team_id: "T1",
+            event,
+        };
+
+        const projected = projectSlackEvent(event, envelope, context);
+
+        expect(projected).toMatchObject({
+            type: "message",
+            message_type: "channel",
+            group: {
+                guild_id: { string: "T1" },
+                channel_id: { string: "C1" },
+            },
+            raw_event: envelope,
+            message: [
+                { type: "reply", data: { message_id: "1709999999.000001" } },
+                { type: "text", data: { text: "hello" } },
+                { type: "audio", data: { file: "F1", url: "https://files/1" } },
+            ],
+        });
+    });
+
+    it("投影消息删除与未知原生事件", () => {
+        const deleted: SlackEvent = {
+            type: "message",
+            subtype: "message_deleted",
+            event_ts: "1710000001.000001",
+            deleted_ts: "1710000000.000001",
+            channel: "C1",
+        };
+        expect(projectSlackEvent(deleted, { event: deleted }, context)).toMatchObject({
+            type: "notice",
+            notice_type: "message_deleted",
+            message_id: { string: "1710000000.000001" },
+        });
+
+        const unknown: SlackEvent = { type: "canvas_updated", event_ts: "1710000002" };
+        expect(projectSlackEvent(unknown, { event: unknown }, context)).toMatchObject({
+            type: "notice",
+            notice_type: "custom",
+            extensions: { slack: { event_type: "canvas_updated" } },
+        });
+    });
+
+    it("消息编辑保留操作者、频道和旧消息上下文", () => {
+        const event: SlackEvent = {
+            type: "message",
+            subtype: "message_changed",
+            event_ts: "1710000002.000001",
+            channel: "C1",
+            message: { type: "message", ts: "1710000001.000001", user: "U1", text: "new" },
+            previous_message: { ts: "1710000001.000001", text: "old" },
+        };
+
+        expect(projectSlackEvent(event, { team_id: "T1", event }, context)).toMatchObject({
+            notice_type: "message_updated",
+            user: { id: { string: "U1" } },
+            group: {
+                guild_id: { string: "T1" },
+                channel_id: { string: "C1" },
+            },
+            extensions: {
+                slack: { previous_message: { text: "old" } },
+            },
+        });
+    });
+
+    it("缺少发送者的消息降级为无损 custom notice", () => {
+        const event: SlackEvent = {
+            type: "message",
+            event_ts: "1710000003",
+            channel: "C1",
+            text: "sender missing",
+        };
+        const envelope: SlackWebhookBody = { event_id: "Ev2", event };
+
+        expect(projectSlackEvent(event, envelope, context)).toMatchObject({
+            type: "notice",
+            notice_type: "custom",
+            raw_event: envelope,
+            extensions: { slack: { event_type: "message" } },
+        });
+    });
+
+    it("投影 Bot 消息、工作区用户与原生交互", () => {
+        const botMessage: SlackEvent = {
+            type: "message",
+            subtype: "bot_message",
+            event_ts: "1710000004",
+            ts: "1710000004",
+            channel: "C1",
+            bot_id: "B2",
+            text: "automation",
+        };
+        expect(projectSlackEvent(botMessage, { event: botMessage }, context)).toMatchObject({
+            type: "message",
+            sender: { id: { string: "B2" } },
+        });
+
+        const teamJoin: SlackEvent = {
+            type: "team_join",
+            event_ts: "1710000005",
+            user: { id: "U2", name: "Ada" },
+        };
+        expect(projectSlackEvent(teamJoin, { event: teamJoin }, context)).toMatchObject({
+            type: "notice",
+            notice_type: "user_added",
+            user: { id: { string: "U2" }, name: "Ada" },
+        });
+
+        const interaction: SlackEvent = {
+            type: "block_actions",
+            event_ts: "1710000006",
+            user: { id: "U3", name: "Lin" },
+            channel: { id: "C2" },
+            trigger_id: "trigger",
+        };
+        expect(projectSlackEvent(interaction, interaction, context)).toMatchObject({
+            type: "notice",
+            notice_type: "interaction",
+            user: { id: { string: "U3" } },
+            group: { channel_id: { string: "C2" } },
+            extensions: { slack: { trigger_id: "trigger" } },
+        });
+    });
+});

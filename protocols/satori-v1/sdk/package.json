@@ -1,0 +1,43 @@
+{
+  "name": "@imhelper/satori-v1",
+  "version": "1.0.8",
+  "description": "Satori 协议客户端 SDK",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo"
+  },
+  "keywords": [
+    "onebots",
+    "satori",
+    "client",
+    "sdk"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "peerDependencies": {
+    "imhelper": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "tsc-alias": "latest",
+    "typescript": "catalog:"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/onebots.git"
+  }
+}

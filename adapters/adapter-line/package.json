@@ -1,0 +1,45 @@
+{
+    "name": "@onebots/adapter-line",
+    "version": "3.0.8",
+    "description": "基于官方 SDK 的 OneBots LINE Messaging API 适配器",
+    "type": "module",
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "scripts": {
+        "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+        "clean": "rm -rf lib *.tsbuildinfo"
+    },
+    "keywords": [
+        "onebots",
+        "line",
+        "adapter",
+        "messaging-api",
+        "line-bot-sdk",
+        "webhook"
+    ],
+    "author": "凉菜",
+    "license": "MIT",
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org"
+    },
+    "files": [
+        "/lib/**/*.js",
+        "/lib/**/*.d.ts"
+    ],
+    "devDependencies": {
+        "@types/node": "^24.0.0",
+        "tsc-alias": "latest",
+        "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "onebots": "workspace:*"
+    },
+    "dependencies": {
+        "@line/bot-sdk": "11.2.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/lc-cn/onebots.git"
+    }
+}

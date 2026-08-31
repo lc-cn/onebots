@@ -1,0 +1,196 @@
+# OneBots 项目 Cursor 规则
+
+你是一个专业的 TypeScript 开发者，正在协助开发 OneBots - 一个多平台多协议机器人应用框架。
+
+## 项目概述
+
+OneBots 支持 12+ 平台（QQ、Discord、Telegram、飞书等）和 4 种协议（OneBot v11/v12、Satori、Milky）。
+
+## 技术栈
+
+- TypeScript 5.x (ESM 模块)
+- Node.js ≥24（仓库 `.node-version` 推荐 `24`）
+- pnpm (monorepo)
+- Vitest (测试)
+- VitePress (文档)
+
+## 代码规范
+
+### ESM 导入
+
+```typescript
+// ✅ 正确 - 必须包含 .js 后缀
+import { Adapter } from './adapter.js';
+import type { CommonTypes } from './types.js';
+
+// ❌ 错误 - 缺少后缀
+import { Adapter } from './adapter';
+```
+
+### 类型导入
+
+```typescript
+// ✅ 使用 type 关键字导入纯类型
+import type { MockConfig } from './types.js';
+
+// ✅ 混合导入
+import { MockBot, type MockConfig } from './bot.js';
+```
+
+### 异步/错误处理
+
+```typescript
+// ✅ 正确
+async someMethod(): Promise<Result> {
+    try {
+        const result = await this.doSomething();
+        return result;
+    } catch (error) {
+        this.logger.error('操作失败:', error);
+        throw error;
+    }
+}
+
+// ❌ 避免裸 Promise
+someMethod() {
+    return this.doSomething(); // 没有错误处理
+}
+```
+
+### ID 处理
+
+```typescript
+// ✅ 使用 createId 创建统一 ID
+const userId = this.createId(rawUserId);
+
+// ✅ 使用 .string 获取字符串形式
+await bot.sendMessage(params.user_id.string, content);
+```
+
+## 目录结构
+
+```
+packages/core/      - 核心抽象层 (@onebots/core)
+packages/onebots/   - 主应用包 (onebots)
+adapters/           - 平台适配器 (@onebots/adapter-*)
+protocols/          - 协议实现 (@onebots/protocol-*)
+__tests__/          - 测试文件
+docs/               - VitePress 文档
+```
+
+## 适配器开发模式
+
+```typescript
+// 1. 继承 Adapter 基类
+export class XxxAdapter extends Adapter<XxxBot, 'xxx'> {
+    constructor(app: BaseApp) {
+        super(app, 'xxx');
+        this.icon = 'https://xxx/icon.png';
+    }
+
+    // 2. 实现 createAccount
+    createAccount(config: Account.Config<'xxx'>): Account<'xxx', XxxBot> {
+        const bot = new XxxBot(config);
+        const account = new Account(this, bot, config);
+        
+        bot.on('ready', () => {
+            account.status = AccountStatus.Online;
+        });
+        
+        return account;
+    }
+
+    // 3. 重写需要的 API 方法
+    async sendMessage(uin: string, params: Adapter.SendMessageParams) {
+        const account = this.getAccount(uin);
+        // ...
+    }
+}
+
+// 4. 注册适配器
+AdapterRegistry.register('xxx', XxxAdapter, { ... });
+
+// 5. 扩展类型
+declare module 'onebots' {
+    export namespace Adapter {
+        export interface Configs {
+            xxx: XxxConfig;
+        }
+    }
+}
+```
+
+## 测试规范
+
+```typescript
+// 单元测试使用 MockBot
+import { MockBot } from '@onebots/adapter-mock';
+
+const bot = new MockBot({ account_id: 'test', latency: 0 });
+await bot.start();
+
+// 手动触发事件
+bot.triggerEvent('message', { ... });
+
+// 集成测试需要检查服务器可用性
+if (!serverAvailable) {
+    console.log('⏭️  跳过：服务器不可用');
+    return;
+}
+```
+
+## 禁止事项
+
+1. ❌ 不要使用 CommonJS (`require`, `module.exports`)
+2. ❌ 不要使用 `any` 类型（除非必要）
+3. ❌ 不要忽略 Promise 错误
+4. ❌ 不要在导入路径中省略 `.js` 后缀
+5. ❌ 不要使用 `axios`（使用原生 `fetch` 或 `http/https`）
+6. ❌ 不要硬编码配置值
+
+## 推荐做法
+
+1. ✅ 使用 `this.logger` 记录日志
+2. ✅ 使用 `this.createId()` 处理 ID
+3. ✅ 代理配置使用 `https-proxy-agent` / `socks-proxy-agent`
+4. ✅ 新功能添加到 changeset
+5. ✅ 保持向后兼容
+6. ✅ 编写测试用例
+
+## 常用命令
+
+```bash
+pnpm install          # 安装依赖
+pnpm build            # 构建所有包
+pnpm test             # 运行测试
+pnpm dev              # 开发模式
+pnpm changeset        # 创建变更集
+pnpm docs:dev         # 文档开发
+```
+
+## 文件命名
+
+- 适配器: `adapter-{platform}/`
+- 类型: `types.ts`
+- 平台客户端: 有状态 SDK 包装使用 `bot.ts`；可独立嵌入的 API/传输客户端使用 `client.ts`，按职责择一
+- 适配器: `adapter.ts`
+- 入口: `index.ts`
+
+## Git 提交规范
+
+```
+feat: 新功能
+fix: Bug 修复
+docs: 文档更新
+refactor: 重构
+test: 测试相关
+chore: 构建/工具
+```
+
+## 响应风格
+
+1. 代码注释使用中文
+2. 日志消息使用中文
+3. 错误消息使用中文
+4. 文档使用中文（中文文档）或英文（英文文档）
+5. 代码变量/函数名使用英文

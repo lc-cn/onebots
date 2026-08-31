@@ -1,88 +1,118 @@
 {
-  "name": "onebots",
-  "version": "0.4.51",
-  "description": "基于icqq的多例oneBot实现",
-  "engines": {
-    "node": ">=16"
-  },
-  "main": "lib/index.js",
-  "bin": {
-    "onebots": "./lib/bin.js"
-  },
+  "name": "onebots-monorepo",
+  "version": "0.5.0",
+  "description": "IMHelper - 统一的消息助手，支持多种IM平台和协议",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "start": "node .",
-    "build": "vite build && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
-    "dev": "ts-node -r tsconfig-paths/register ./src/bin.ts -c config.yaml -r qq -r icqq -r dingtalk -r wechat",
-    "pub": "npm publish --access public",
-    "lint": "prettier --check ./**/*.{ts,js}",
-    "lint:fix": "prettier --write ./**/*.{ts,js,md}",
-    "test": "ts-node -r tsconfig-paths/register ./src/test.ts",
+    "build": "pnpm build:packages && pnpm build:rest",
+    "build:packages": "pnpm --filter='./packages/*' --workspace-concurrency=1 build",
+    "build:rest": "pnpm --filter='./protocols/*/*' --filter='./adapters/*' --filter=@onebots/docs --filter=onebots-dev build",
+    "clean": "pnpm -r clean",
+    "dev": "pnpm --filter=onebots-dev dev",
+    "test:ws": "pnpm --filter=onebots-dev test:ws",
+    "web:dev": "pnpm -r --filter=@onebots/web dev",
+    "sdk:dev": "pnpm --filter=onebots-dev sdk:dev",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --check ./**/*.{ts,js}",
+    "format:fix": "prettier --write ./**/*.{ts,js,md}",
     "docs:dev": "vitepress dev docs --port 8989",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "create:adapter": "node scripts/create-adapter.mjs",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish",
+    "bump": "changeset version",
+    "pub": "changeset publish"
   },
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=9.12.0"
+  },
+  "packageManager": "pnpm@9.15.9",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/liucl-cn/onebots.git"
+    "url": "git+https://github.com/lc-cn/onebots.git"
   },
   "keywords": [
     "onebot",
-    "icqq",
-    "cq-http"
+    "qq",
+    "wechat",
+    "dingtalk",
+    "cq-http",
+    "multi-protocol"
   ],
   "author": "凉菜",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/liucl-cn/onebots/issues"
+    "url": "https://github.com/lc-cn/onebots/issues"
   },
-  "homepage": "https://github.com/liucl-cn/onebots#readme",
-  "devDependencies": {
-    "@types/koa": "^2.13.4",
-    "@types/koa__router": "^8.0.11",
-    "@types/koa-basic-auth": "^2.0.6",
-    "@types/koa-bodyparser": "^4.3.7",
-    "@types/koa-static": "^4.0.4",
-    "@types/node": "latest",
-    "@types/ws": "^8.5.3",
-    "@vitejs/plugin-vue": "^5.0.0",
-    "dayjs": "^1.11.10",
-    "element-plus": "^2.4.4",
-    "prettier": "^3.0.0",
-    "sass": "^1.69.6",
-    "ts-node-dev": "latest",
-    "tsc-alias": "latest",
-    "tsconfig-paths": "latest",
-    "typescript": "latest",
-    "unplugin-auto-import": "^0.17.3",
-    "unplugin-vue-components": "^0.26.0",
-    "vite": "^5.0.10",
-    "vitepress": "^1.0.0-rc.33",
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.5"
-  },
-  "files": [
-    "/lib/**/*.js",
-    "/lib/**/*.d.ts",
-    "/dist/**/*",
-    "/lib/*.yaml",
-    "/**/LICENSE"
+  "workspaces": [
+    "packages/*",
+    "adapters/*",
+    "protocols/*/*",
+    "docs",
+    "development"
   ],
-  "peerDependencies": {
-    "icqq": "latest",
-    "lib-wechat": "latest",
-    "node-dd-bot": "latest",
-    "qq-group-bot": "latest"
-  },
-  "dependencies": {
-    "@koa/router": "^10.1.1",
-    "@zhinjs/shared": "^0.0.9",
-    "js-yaml": "^4.1.0",
-    "koa": "^2.13.4",
-    "koa-basic-auth": "^4.0.0",
-    "koa-bodyparser": "^4.3.0",
+  "homepage": "https://github.com/lc-cn/onebots#readme",
+  "devDependencies": {
+    "@changesets/cli": "^2.30.0",
+    "@types/koa-static": "^4.0.4",
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.59.4",
+    "@typescript-eslint/parser": "^8.59.4",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/ui": "^4.1.11",
+    "d3-sankey": "^0.12.3",
+    "eslint": "^10.5.0",
     "koa-static": "^5.0.0",
-    "log4js": "^6.5.2",
-    "reflect-metadata": "^0.1.13",
-    "ws": "^8.8.0"
+    "prettier": "^3.8.1",
+    "socks-proxy-agent": "^8.0.5",
+    "typescript": "catalog:",
+    "vitepress": "^1.6.4",
+    "vitest": "^4.1.11",
+    "ws": "^8.20.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "glob": "^10.0.0",
+      "sourcemap-codec": "npm:@jridgewell/sourcemap-codec@^1.5.0",
+      "axios": "^1.19.0",
+      "ws": "^8.21.3",
+      "nodemailer": "^9.0.5",
+      "form-data": "^4.0.6",
+      "lodash": "^4.18.1",
+      "lodash-es": "^4.18.1",
+      "semver": "^7.8.5",
+      "path-to-regexp": "^8.4.2",
+      "linkify-it": "^5.0.1",
+      "js-yaml": "^4.3.1",
+      "qs": "^6.15.2",
+      "uuid": "^11.1.1",
+      "ip-address": "^10.3.1",
+      "brace-expansion": "^5.0.9",
+      "immutable": "^5.1.9",
+      "nanoid": "^3.3.18",
+      "@protobufjs/utf8": "^1.1.2",
+      "protobufjs": "^7.6.3",
+      "dompurify": "^3.4.14",
+      "esbuild": "^0.25.0",
+      "mermaid": "^11.17.0",
+      "postcss": "^8.5.26",
+      "vitepress>vite": "^7.3.6",
+      "vitepress>@vitejs/plugin-vue": "^6.0.8"
+    },
+    "onlyBuiltDependencies": [
+      "@karinjs/node-pty",
+      "esbuild",
+      "protobufjs"
+    ]
   }
 }

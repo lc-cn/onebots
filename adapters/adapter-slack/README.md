@@ -1,0 +1,89 @@
+# @onebots/adapter-slack
+
+onebots Slack 适配器
+
+## 安装
+
+```bash
+pnpm add @onebots/adapter-slack
+```
+
+## 配置
+
+在 `config.yaml` 中配置：
+
+```yaml
+slack.your_bot_id:
+  token: "xoxb-YOUR-BOT-TOKEN"
+  receive_mode: socket
+  app_token: "xapp-YOUR-APP-TOKEN" # 需 connections:write
+```
+
+使用 HTTP Events API 时改为 `receive_mode: webhook` 并配置必需的 `signing_secret`。请求地址为账号路径下的 `/webhook`；适配器会校验原始请求体签名和五分钟时间窗。Web 管理端会按接收模式只显示相关凭据。
+
+`receive_mode` 是接收方式的唯一来源；旧的 `socket_mode` 布尔字段已移除，不再保留双配置语义。
+
+## 使用
+
+```bash
+onebots -r slack
+```
+
+## 功能
+
+- HTTP Events API 与自动重连的 Socket Mode
+- Socket Mode 连接、重连与断开状态会同步到账号状态，普通 Web API 失败不会误判整号离线
+- 频道、私聊、线程消息以及文本、@、回复、附件收发
+- 用户目录按官方 `profile.display_name` / `profile.real_name` 投影真实显示名
+- 消息查询、编辑、删除、定时消息、回复列表
+- Reaction、Pin、频道生命周期、成员邀请与移除、Bookmark
+- 消息编辑/删除、Reaction、成员变化等 canonical 事件投影
+- Slash Command、交互载荷及其他未知事件的 `raw_event` 无损交付
+- Events API、交互组件、Slash Command 与 Socket Mode 共用公开的 `SlackBot.ingest(rawEvent)` 入站管线；`ingestHttp(rawBody, headers)` 与 `acceptHttp(Request)` 可复用完整验签和 JSON / 表单解析
+- Socket Mode 只在 canonical 投影与同步监听器成功后确认 envelope；失败事件不会进入去重窗口，可由 Slack 重投
+- Slack 重试事件保留每次 `raw_event`，仅在业务监听器成功后按 `event_id` / `envelope_id` 提交 canonical 去重状态
+- Web API 失败统一抛出带 `code`、`category`、`operation` 与平台错误码的 `SlackError`
+
+## 平台扩展 API
+
+能力清单中的扩展动作可以从 OneBot 11/12、Milky、Satori 的统一动作入口调用：
+
+`add_reaction`、`remove_reaction`、Pin、线程回复、频道生命周期与成员、定时消息及 Bookmark 动作；另提供临时消息、消息永久链接与 unfurl、频道历史与已读标记、Modal/App Home View、Reaction/Pin 查询、文件列表、用户组及成员管理动作。文件详情与删除直接实现 canonical `get_file` / `delete_file`，无需使用平台扩展名。能力发现直接由同一份动作注册表生成，不会与实际调用入口漂移。
+
+创建频道与移除频道成员使用 canonical `create_channel`、`kick_channel_member`，参数分别为 `channel_name`，以及 `channel_id` + `user_id`。Slack 工作区由当前 Bot Token 隐式确定，因此 `create_channel` 的 `guild_id` 不参与平台请求。
+
+未封装的 Slack Web API 可使用 `call_slack_api`：
+
+```json
+{
+  "method": "conversations.history",
+  "params": { "channel": "C123", "limit": 20 }
+}
+```
+
+动作能否执行仍由当前 token scopes 和 Slack 会话上下文决定；`get_supported_actions` 只声明适配器已实现的调用路径。
+
+已有 HTTP Host 可直接把标准 `Request` 交给 `bot.acceptHttp(request)`；其他 Node Host 可调用 `bot.ingestHttp(rawBody, { timestamp, signature, contentType })` 并把结构化的 `{ status, body }` 写回。manual 模式只关闭 OneBots 自建路由或 Socket 连接，不会削弱这些公开入口。
+
+## 消息与文件
+
+`image`、`file`、`audio`、`video` 会使用 Slack 当前推荐的 `filesUploadV2` 原生上传，不再退化成附件 URL 或 `[文件: …]` 文本。媒体 `file` / `url` 支持 HTTP(S)、Node.js 本地路径、`file://`、Base64 data URL 与 `base64://`；上传文件需要 `files:write` scope。
+
+Block Kit、传统 attachments 及其他 `chat.postMessage` 选项可通过 `slack_message` 段的 `data.body` 传入。未知消息段会明确失败。查询、编辑、删除消息时应提供 `scene_id`；当前进程已收发的消息会保存有界的频道/线程上下文，可省略该字段。
+
+## 获取 Bot Token
+
+1. 访问 [Slack API](https://api.slack.com/)
+2. 创建应用（Create New App）
+3. 在 "OAuth & Permissions" 中配置权限
+4. 安装应用到工作区
+5. 获取 Bot User OAuth Token（xoxb-...）
+6. 在 "Event Subscriptions" 中配置 Webhook URL
+7. HTTP Events 获取 Signing Secret；Socket Mode 创建包含 `connections:write` 的 App Token
+
+## 相关链接
+
+- [Slack Events API](https://docs.slack.dev/apis/events-api/)
+- [Slack Web API 方法](https://docs.slack.dev/reference/methods/)
+- [Socket Mode](https://docs.slack.dev/apis/events-api/using-socket-mode/)
+- [OneBots 文档](https://onebots.pages.dev/)

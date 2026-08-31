@@ -1,0 +1,36 @@
+{
+  "name": "@onebots/docs",
+  "version": "0.5.3",
+  "description": "onebots documentation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "clean": "rm -rf dist .vitepress/cache",
+    "sync-versions": "node scripts/sync-versions.js"
+  },
+  "keywords": [
+    "onebots",
+    "documentation",
+    "vitepress"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "devDependencies": {
+    "dayjs": "^1.11.19",
+    "element-plus": "^2.13.0",
+    "medium-zoom": "^1.1.0",
+    "mermaid": "^11.12.2",
+    "svg-pan-zoom": "^3.6.2",
+    "vite": "^7.3.6",
+    "vite-plugin-style-import": "^2.0.0",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-mermaid": "^2.0.17",
+    "vue": "^3.5.26"
+  },
+  "dependencies": {
+    "d3-sankey": "^0.12.3"
+  }
+}

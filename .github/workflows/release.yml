@@ -1,37 +1,121 @@
-name: Release and Publish
+# 使用 Changesets：有待处理的 .changeset 时打开「版本」PR；合并后再次 push 到 master 时执行发布。
+# 参考 changesets/action 推荐用法，结合 npm OIDC 可信发布（无需 NPM_TOKEN）。
+name: Build and Publish
+
 on:
   push:
     branches:
       - master
+  workflow_dispatch:
+
 permissions:
   contents: write
+  packages: write
   pull-requests: write
+  id-token: write # npm 可信发布 / provenance 需要
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+env:
+  CI: true
+  # changeset 调起 npm/pnpm publish 时继承，生成 provenance
+  NPM_CONFIG_PROVENANCE: "true"
+
 jobs:
-  release-please:
+  release:
+    name: Version or Publish
+    timeout-minutes: 30
     runs-on: ubuntu-latest
+    # 安装依赖时拉取 GitHub Packages（如 @icqqjs/*）需要 token
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
     steps:
-      - uses: google-github-actions/release-please-action@v3
-        id: release
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          release-type: node
-          package-name: onebots
-      # Checkout
-      - uses: actions/checkout@v3
-        if: ${{ steps.release.outputs.release_created }}
-      # Setup node
-      - uses: actions/setup-node@v3
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          node-version: 16
-          registry-url: 'https://registry.npmjs.org'
-        if: ${{ steps.release.outputs.release_created }}
-      # Install dependencies
-      - run: npm install
-        if: ${{ steps.release.outputs.release_created }}
-      # Build output
-      - run: npm run build
-        if: ${{ steps.release.outputs.release_created }}
-      # Publish to npm
-      - run: npm run pub
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Bump versions or publish to npm
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm bump
+          commit: "chore: version packages"
+          title: "chore: version packages"
+          publish: pnpm pub
+          # 由下方步骤基于 publishedPackages 统一创建标签和主程序 Release，避免重复发布。
+          createGithubReleases: false
         env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
-        if: ${{ steps.release.outputs.release_created }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve published packages
+        id: pkg_version
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          MAIN_VERSION=$(jq -r '.[] | select(.name == "onebots") | .version' <<< "$PUBLISHED_PACKAGES")
+          echo "main_version=$MAIN_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create git tags
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          MAIN_VERSION: ${{ steps.pkg_version.outputs.main_version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          while IFS=$'\t' read -r PACKAGE_NAME PACKAGE_VERSION; do
+            git tag -a "${PACKAGE_NAME}@${PACKAGE_VERSION}" -m "Release ${PACKAGE_NAME}@${PACKAGE_VERSION}" 2>/dev/null || true
+          done < <(jq -r '.[] | [.name, .version] | @tsv' <<< "$PUBLISHED_PACKAGES")
+
+          if [ -n "$MAIN_VERSION" ]; then
+            git tag -a "v${MAIN_VERSION}" -m "Release v${MAIN_VERSION}" 2>/dev/null || echo "Main tag exists or skip"
+          fi
+
+          git push --tags
+
+      - name: Generate changelog excerpt
+        if: steps.changesets.outputs.published == 'true' && steps.pkg_version.outputs.main_version != ''
+        run: |
+          if [ -f "packages/onebots/CHANGELOG.md" ]; then
+            awk '/^## /{p++} p==1' packages/onebots/CHANGELOG.md > RELEASE_NOTES.md
+          else
+            echo "# Release Notes" > RELEASE_NOTES.md
+            echo "See package changelogs for details." >> RELEASE_NOTES.md
+          fi
+
+      - name: GitHub Release
+        if: steps.changesets.outputs.published == 'true' && steps.pkg_version.outputs.main_version != ''
+        uses: ncipollo/release-action@v1
+        with:
+          bodyFile: "RELEASE_NOTES.md"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: "v${{ steps.pkg_version.outputs.main_version }}"
+          name: "🚀 OneBots v${{ steps.pkg_version.outputs.main_version }}"
+          generateReleaseNotes: true
+          makeLatest: true
+          allowUpdates: true

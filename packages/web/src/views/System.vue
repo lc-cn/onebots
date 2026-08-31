@@ -1,0 +1,328 @@
+<template>
+    <div class="h-full overflow-y-auto">
+        <div class="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
+            <!-- 页头 -->
+            <header class="mb-6 flex items-center justify-between gap-4 border-b border-border pb-4">
+                <h2 class="flex items-center gap-2 text-xl font-semibold text-fg">
+                    <IconDashboard :size="22" class="text-fg-secondary" />
+                    系统信息
+                </h2>
+                <div class="flex items-center gap-2">
+                    <label
+                        class="flex cursor-pointer items-center gap-1.5 text-sm text-fg-secondary"
+                        title="每 10 秒自动刷新系统信息">
+                        <UiSwitch v-model="autoRefresh" />
+                        <span class="hidden sm:inline">自动刷新</span>
+                    </label>
+                    <UiButton variant="primary" :loading="backupLoading" @click="handleBackup">
+                        <IconUpload v-if="!backupLoading" :size="16" />
+                        备份到仓库
+                    </UiButton>
+                    <UiButton variant="danger" :loading="restartLoading" @click="handleRestart">
+                        <IconRefresh v-if="!restartLoading" :size="16" />
+                        重启服务
+                    </UiButton>
+                </div>
+            </header>
+
+            <!-- 统计卡片 -->
+            <div v-if="systemInfo" class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div class="rounded-card border border-border bg-surface p-4">
+                    <div class="flex items-center gap-3">
+                        <span
+                            class="flex size-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+                            <IconClock :size="20" />
+                        </span>
+                        <div class="min-w-0">
+                            <p class="text-sm text-fg-secondary">运行时长</p>
+                            <p class="truncate font-mono text-2xl font-semibold text-fg">
+                                {{ formatTime(systemInfo.uptime) }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="rounded-card border border-border bg-surface p-4">
+                    <div class="flex items-center gap-3">
+                        <span
+                            class="flex size-10 shrink-0 items-center justify-center rounded-control bg-success-soft text-success">
+                            <IconCpu :size="20" />
+                        </span>
+                        <div class="min-w-0">
+                            <p class="text-sm text-fg-secondary">进程内存</p>
+                            <p class="truncate font-mono text-2xl font-semibold text-fg">
+                                {{ formatSize(systemInfo.process_use_memory) }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="rounded-card border border-border bg-surface p-4">
+                    <div class="flex items-center gap-3">
+                        <span
+                            class="flex size-10 shrink-0 items-center justify-center rounded-control bg-warning-soft text-warning">
+                            <IconDatabase :size="20" />
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm text-fg-secondary">系统内存</p>
+                            <p class="truncate font-mono text-2xl font-semibold text-fg">
+                                {{ formatSize(systemInfo.free_memory) }} /
+                                {{ formatSize(systemInfo.total_memory) }}
+                            </p>
+                            <p class="mt-1 text-xs text-fg-tertiary">
+                                使用率: {{ memoryUsagePercent }}%
+                            </p>
+                            <div
+                                class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-surface-raised">
+                                <div
+                                    class="h-full rounded-full bg-accent"
+                                    :style="{ width: memoryUsagePercent + '%' }" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 详细信息 -->
+            <UiCard v-if="systemInfo" class="mb-6">
+                <template #header>详细信息</template>
+                <dl class="grid grid-cols-1 gap-x-6 gap-y-3 md:grid-cols-2">
+                    <div class="flex items-baseline gap-3">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">用户名</dt>
+                        <dd class="min-w-0 text-fg">{{ systemInfo.username }}</dd>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">内核</dt>
+                        <dd class="min-w-0 text-fg">{{ systemInfo.system_platform }}</dd>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">架构</dt>
+                        <dd class="min-w-0 text-fg">{{ systemInfo.system_arch }}</dd>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">系统版本</dt>
+                        <dd class="min-w-0 text-fg">{{ systemInfo.system_version }}</dd>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">系统运行时长</dt>
+                        <dd class="min-w-0 text-fg">{{ formatTime(systemInfo.system_uptime) }}</dd>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">Node.js 版本</dt>
+                        <dd class="min-w-0 text-fg">{{ systemInfo.node_version }}</dd>
+                    </div>
+                    <div class="flex items-baseline gap-3 md:col-span-2">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">SDK 版本</dt>
+                        <dd class="min-w-0 text-fg">onebots v{{ systemInfo.sdk_version }}</dd>
+                    </div>
+                    <div class="flex items-baseline gap-3 md:col-span-2">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">运行目录</dt>
+                        <dd class="min-w-0 truncate font-mono text-xs text-fg">
+                            {{ systemInfo.process_cwd }}
+                        </dd>
+                    </div>
+                    <div v-if="systemInfo.configDir" class="flex items-baseline gap-3 md:col-span-2">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">配置目录</dt>
+                        <dd class="flex min-w-0 items-center gap-1.5">
+                            <span class="min-w-0 truncate font-mono text-xs text-fg">
+                                {{ systemInfo.configDir }}
+                            </span>
+                            <UiTooltip
+                                text="Docker 下请挂载此目录以持久化配置与数据"
+                                placement="top">
+                                <IconInfoCircle
+                                    :size="14"
+                                    class="shrink-0 cursor-help text-fg-tertiary" />
+                            </UiTooltip>
+                        </dd>
+                    </div>
+                    <div v-if="systemInfo.configPath" class="flex items-baseline gap-3 md:col-span-2">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">配置文件</dt>
+                        <dd class="min-w-0 truncate font-mono text-xs text-fg">
+                            {{ systemInfo.configPath }}
+                        </dd>
+                    </div>
+                    <div v-if="systemInfo.dataDir" class="flex items-baseline gap-3 md:col-span-2">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">数据目录</dt>
+                        <dd class="min-w-0 truncate font-mono text-xs text-fg">
+                            {{ systemInfo.dataDir }}
+                        </dd>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">进程 ID</dt>
+                        <dd class="min-w-0 font-mono text-fg">{{ systemInfo.process_id }}</dd>
+                    </div>
+                    <div class="flex items-baseline gap-3">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">父进程 ID</dt>
+                        <dd class="min-w-0 font-mono text-fg">
+                            {{ systemInfo.process_parent_id }}
+                        </dd>
+                    </div>
+                </dl>
+            </UiCard>
+
+            <!-- 服务状态 -->
+            <UiCard>
+                <template #header>
+                    <span class="flex-1">服务状态</span>
+                    <UiButton variant="ghost" size="sm" :loading="healthLoading" @click="checkHealth">
+                        <IconRefresh v-if="!healthLoading" :size="14" />
+                        刷新
+                    </UiButton>
+                </template>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div class="flex items-center gap-2.5">
+                        <IconCircleCheckFilled v-if="healthStatus.ok" :size="20" class="text-success" />
+                        <IconCircleXFilled v-else :size="20" class="text-danger" />
+                        <span class="flex-1 text-sm text-fg-secondary">/health（存活）</span>
+                        <UiBadge :variant="healthStatus.ok ? 'success' : 'danger'" dot>
+                            {{ healthStatus.ok ? '正常' : healthStatus.error || '异常' }}
+                        </UiBadge>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                        <IconCircleCheckFilled v-if="readyStatus.ok" :size="20" class="text-success" />
+                        <IconCircleXFilled v-else :size="20" class="text-danger" />
+                        <span class="flex-1 text-sm text-fg-secondary">/ready（就绪）</span>
+                        <UiBadge :variant="readyStatus.ok ? 'success' : 'danger'" dot>
+                            {{ readyStatus.ok ? '正常' : readyStatus.error || '异常' }}
+                        </UiBadge>
+                    </div>
+                </div>
+            </UiCard>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import {
+    IconDashboard,
+    IconClock,
+    IconCpu,
+    IconDatabase,
+    IconInfoCircle,
+    IconCircleCheckFilled,
+    IconCircleXFilled,
+    IconRefresh,
+    IconUpload,
+} from '@tabler/icons-vue';
+import { UiButton, UiCard, UiBadge } from '../ui/index';
+import UiSwitch from '../ui/UiSwitch.vue';
+import UiTooltip from '../ui/UiTooltip.vue';
+import { useToast } from '../ui/toast';
+import { useConfirm } from '../ui/confirm';
+import { useApi } from '../composables/useApi';
+import { authFetch } from '../composables/useAuth';
+import { formatSize, formatTime } from '../utils';
+import { buildApiUrl } from '../config';
+
+const { systemInfo, fetchSystemInfo } = useApi();
+const toast = useToast();
+const { confirm } = useConfirm();
+
+const healthStatus = ref<{ ok: boolean; error?: string }>({ ok: false });
+const readyStatus = ref<{ ok: boolean; error?: string }>({ ok: false });
+const healthLoading = ref(false);
+const restartLoading = ref(false);
+const backupLoading = ref(false);
+
+const AUTO_REFRESH_INTERVAL = 10_000;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+const autoRefresh = ref(true);
+
+const memoryUsagePercent = computed(() => {
+    const info = systemInfo.value;
+    if (!info || !info.total_memory) return '0.0';
+    return (((info.total_memory - info.free_memory) / info.total_memory) * 100).toFixed(1);
+});
+
+const startAutoRefresh = () => {
+    stopAutoRefresh();
+    refreshTimer = setInterval(() => {
+        fetchSystemInfo();
+    }, AUTO_REFRESH_INTERVAL);
+};
+
+const stopAutoRefresh = () => {
+    if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+    }
+};
+
+watch(autoRefresh, (val) => {
+    if (val) startAutoRefresh();
+    else stopAutoRefresh();
+});
+
+async function handleBackup() {
+    backupLoading.value = true;
+    try {
+        const res = await authFetch(buildApiUrl('/api/system/backup-to-hf'), { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.success) {
+            toast.success(data?.message ?? '已备份到仓库');
+        } else {
+            toast.error(data?.message ?? '备份失败');
+        }
+    } catch (error) {
+        toast.error((error as Error).message ?? '请求失败');
+    } finally {
+        backupLoading.value = false;
+    }
+}
+
+async function checkHealth() {
+    healthLoading.value = true;
+    healthStatus.value = { ok: false };
+    readyStatus.value = { ok: false };
+    try {
+        const healthRes = await fetch(buildApiUrl('/health') || '/health');
+        healthStatus.value = healthRes.ok
+            ? { ok: true }
+            : { ok: false, error: `HTTP ${healthRes.status}` };
+        const readyRes = await fetch(buildApiUrl('/ready') || '/ready');
+        readyStatus.value = readyRes.ok
+            ? { ok: true }
+            : { ok: false, error: `HTTP ${readyRes.status}` };
+    } catch (error) {
+        healthStatus.value = { ok: false, error: (error as Error).message };
+        readyStatus.value = { ok: false, error: (error as Error).message };
+    } finally {
+        healthLoading.value = false;
+    }
+}
+
+async function handleRestart() {
+    const confirmed = await confirm({
+        title: '重启服务',
+        message:
+            '重启后当前进程将退出。若在 Docker 中运行且已设置 restart 策略，容器将自动重新拉起；否则需手动重新启动服务。确认重启？',
+        confirmText: '确认重启',
+        cancelText: '取消',
+        danger: true,
+    });
+    if (!confirmed) return;
+    restartLoading.value = true;
+    try {
+        const res = await authFetch(buildApiUrl('/api/system/restart'), { method: 'POST' });
+        if (res.ok) {
+            toast.success('服务即将重启，请稍后刷新页面（Docker 下约 10 秒内可恢复）');
+        } else {
+            const data = await res.json().catch(() => ({}));
+            toast.error(data?.message || '重启请求失败');
+        }
+    } catch (error) {
+        toast.error((error as Error).message || '请求失败');
+    } finally {
+        restartLoading.value = false;
+    }
+}
+
+onMounted(() => {
+    checkHealth();
+    if (autoRefresh.value) startAutoRefresh();
+});
+
+onUnmounted(() => {
+    stopAutoRefresh();
+});
+</script>

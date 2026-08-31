@@ -1,0 +1,76 @@
+{
+  "name": "@onebots/core",
+  "version": "1.2.5",
+  "description": "IMHelper 核心抽象层，提供适配器、协议、账号等基础接口和类型",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "start": "node .",
+    "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "rm -rf lib *.tsbuildinfo"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./types": {
+      "types": "./lib/types.d.ts",
+      "import": "./lib/types.js"
+    },
+    "./event-filter": {
+      "types": "./lib/event-filter.d.ts",
+      "import": "./lib/event-filter.js"
+    }
+  },
+  "keywords": [
+    "onebot",
+    "qq",
+    "wechat",
+    "dingtalk",
+    "cq-http",
+    "multi-protocol"
+  ],
+  "author": "凉菜",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/koa": "^3.0.1",
+    "@types/koa__router": "^12.0.5",
+    "@types/koa-basic-auth": "^2.0.6",
+    "@types/koa-static": "^4.0.4",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.5.3",
+    "tsc-alias": "latest",
+    "tsconfig-paths": "latest",
+    "tsx": "latest",
+    "typescript": "catalog:"
+  },
+  "files": [
+    "/lib/**/*.js",
+    "/lib/**/*.d.ts"
+  ],
+  "dependencies": {
+    "@koa/router": "^15.1.0",
+    "js-yaml": "^4.3.1",
+    "koa": "^3.1.1",
+    "koa-basic-auth": "^4.0.0",
+    "koa-body": "^7.0.0",
+    "koa-static": "^5.0.0",
+    "log4js": "^6.5.2",
+    "reflect-metadata": "^0.1.13",
+    "ws": "^8.16.0"
+  },
+  "optionalDependencies": {
+    "https-proxy-agent": "^7.0.6",
+    "socks-proxy-agent": "^8.0.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lc-cn/onebots.git"
+  }
+}

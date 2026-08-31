@@ -1,0 +1,522 @@
+# onebots-dev
+
+## 1.1.24
+
+### Patch Changes
+
+- Updated dependencies [9cc0622]
+- Updated dependencies [c9e876c]
+- Updated dependencies [a87f07a]
+- Updated dependencies [844a041]
+- Updated dependencies [f1493f6]
+- Updated dependencies [78c1e50]
+- Updated dependencies [03cc74d]
+- Updated dependencies [02ab25b]
+- Updated dependencies [5cc976c]
+  - onebots@1.2.8
+  - @onebots/adapter-icqq@3.0.8
+  - @onebots/protocol-milky-v1@3.0.8
+  - @onebots/protocol-onebot-v11@3.0.8
+  - @imhelper/onebot-v11@1.0.8
+  - @onebots/protocol-onebot-v12@3.0.8
+  - @imhelper/onebot-v12@1.0.8
+  - @onebots/adapter-kook@3.0.8
+  - @onebots/adapter-qq@3.0.10
+  - @onebots/adapter-teams@3.0.8
+  - @onebots/adapter-wecom@3.0.8
+  - @onebots/adapter-wecom-kf@2.0.8
+  - @onebots/protocol-satori-v1@3.0.8
+  - imhelper@1.0.8
+  - @onebots/adapter-dingtalk@3.0.8
+  - @onebots/adapter-discord@3.0.8
+  - @onebots/adapter-feishu@3.0.8
+  - @onebots/adapter-heychat@4.0.7
+  - @onebots/adapter-slack@3.0.8
+  - @onebots/adapter-telegram@3.0.8
+  - @onebots/adapter-wechat@3.0.8
+  - @onebots/adapter-wechat-clawbot@3.0.8
+
+## 1.1.23
+
+### Patch Changes
+
+- onebots@1.2.7
+- @onebots/adapter-dingtalk@3.0.7
+- @onebots/adapter-discord@3.0.7
+- @onebots/adapter-feishu@3.0.7
+- @onebots/adapter-heychat@4.0.6
+- @onebots/adapter-icqq@3.0.7
+- @onebots/adapter-kook@3.0.7
+- @onebots/adapter-qq@3.0.9
+- @onebots/adapter-slack@3.0.7
+- @onebots/adapter-teams@3.0.7
+- @onebots/adapter-telegram@3.0.7
+- @onebots/adapter-wechat@3.0.7
+- @onebots/adapter-wechat-clawbot@3.0.7
+- @onebots/adapter-wecom@3.0.7
+- @onebots/adapter-wecom-kf@2.0.7
+- @onebots/protocol-milky-v1@3.0.7
+- @onebots/protocol-onebot-v11@3.0.7
+- @onebots/protocol-onebot-v12@3.0.7
+- @onebots/protocol-satori-v1@3.0.7
+
+## 1.1.22
+
+### Patch Changes
+
+- Updated dependencies [7891a2e]
+  - onebots@1.2.6
+  - @onebots/protocol-onebot-v11@3.0.6
+  - @onebots/protocol-onebot-v12@3.0.6
+  - @onebots/protocol-milky-v1@3.0.6
+  - @onebots/protocol-satori-v1@3.0.6
+  - @onebots/adapter-dingtalk@3.0.6
+  - @onebots/adapter-discord@3.0.6
+  - @onebots/adapter-feishu@3.0.6
+  - @onebots/adapter-heychat@4.0.5
+  - @onebots/adapter-icqq@3.0.6
+  - @onebots/adapter-kook@3.0.6
+  - @onebots/adapter-qq@3.0.8
+  - @onebots/adapter-slack@3.0.6
+  - @onebots/adapter-teams@3.0.6
+  - @onebots/adapter-telegram@3.0.6
+  - @onebots/adapter-wechat@3.0.6
+  - @onebots/adapter-wechat-clawbot@3.0.6
+  - @onebots/adapter-wecom@3.0.6
+  - @onebots/adapter-wecom-kf@2.0.6
+
+## 1.1.21
+
+### Patch Changes
+
+- Updated dependencies [4d94852]
+  - imhelper@1.0.7
+  - @imhelper/onebot-v11@1.0.7
+  - @imhelper/onebot-v12@1.0.7
+
+## 1.1.20
+
+### Patch Changes
+
+- Updated dependencies [4ab9623]
+  - imhelper@1.0.6
+  - @imhelper/onebot-v11@1.0.6
+  - @imhelper/onebot-v12@1.0.6
+
+## 1.1.19
+
+### Patch Changes
+
+- Updated dependencies [41f4bcc]
+- Updated dependencies [41f4bcc]
+  - onebots@1.2.5
+  - @onebots/adapter-discord@3.0.5
+  - @onebots/adapter-telegram@3.0.5
+  - @onebots/protocol-milky-v1@3.0.5
+  - @onebots/protocol-onebot-v11@3.0.5
+  - @onebots/protocol-onebot-v12@3.0.5
+  - @onebots/protocol-satori-v1@3.0.5
+  - @imhelper/onebot-v11@1.0.5
+  - @imhelper/onebot-v12@1.0.5
+  - imhelper@1.0.5
+  - @onebots/adapter-dingtalk@3.0.5
+  - @onebots/adapter-feishu@3.0.5
+  - @onebots/adapter-heychat@4.0.4
+  - @onebots/adapter-icqq@3.0.5
+  - @onebots/adapter-kook@3.0.5
+  - @onebots/adapter-qq@3.0.7
+  - @onebots/adapter-slack@3.0.5
+  - @onebots/adapter-teams@3.0.5
+  - @onebots/adapter-wechat@3.0.5
+  - @onebots/adapter-wechat-clawbot@3.0.5
+  - @onebots/adapter-wecom@3.0.5
+  - @onebots/adapter-wecom-kf@2.0.5
+
+## 1.1.18
+
+### Patch Changes
+
+- Updated dependencies [f472ebf]
+  - onebots@1.2.4
+  - @onebots/adapter-dingtalk@3.0.4
+  - @onebots/adapter-discord@3.0.4
+  - @onebots/adapter-feishu@3.0.4
+  - @onebots/adapter-heychat@4.0.3
+  - @onebots/adapter-icqq@3.0.4
+  - @onebots/adapter-kook@3.0.4
+  - @onebots/adapter-qq@3.0.6
+  - @onebots/adapter-slack@3.0.4
+  - @onebots/adapter-teams@3.0.4
+  - @onebots/adapter-telegram@3.0.4
+  - @onebots/adapter-wechat@3.0.4
+  - @onebots/adapter-wechat-clawbot@3.0.4
+  - @onebots/adapter-wecom@3.0.4
+  - @onebots/adapter-wecom-kf@2.0.4
+  - @onebots/protocol-milky-v1@3.0.4
+  - @onebots/protocol-onebot-v11@3.0.4
+  - @onebots/protocol-onebot-v12@3.0.4
+  - @onebots/protocol-satori-v1@3.0.4
+
+## 1.1.17
+
+### Patch Changes
+
+- Updated dependencies [16822ca]
+  - @onebots/adapter-qq@3.0.5
+
+## 1.1.16
+
+### Patch Changes
+
+- Updated dependencies [5a1e800]
+  - @onebots/adapter-qq@3.0.4
+
+## 1.1.15
+
+### Patch Changes
+
+- Updated dependencies [1f79a8a]
+  - onebots@1.2.3
+  - @onebots/adapter-dingtalk@3.0.3
+  - @onebots/adapter-discord@3.0.3
+  - @onebots/adapter-feishu@3.0.3
+  - @onebots/adapter-heychat@4.0.2
+  - @onebots/adapter-icqq@3.0.3
+  - @onebots/adapter-kook@3.0.3
+  - @onebots/adapter-qq@3.0.3
+  - @onebots/adapter-slack@3.0.3
+  - @onebots/adapter-teams@3.0.3
+  - @onebots/adapter-telegram@3.0.3
+  - @onebots/adapter-wechat@3.0.3
+  - @onebots/adapter-wechat-clawbot@3.0.3
+  - @onebots/adapter-wecom@3.0.3
+  - @onebots/adapter-wecom-kf@2.0.3
+  - @onebots/protocol-milky-v1@3.0.3
+  - @onebots/protocol-onebot-v11@3.0.3
+  - @onebots/protocol-onebot-v12@3.0.3
+  - @onebots/protocol-satori-v1@3.0.3
+
+## 1.1.14
+
+### Patch Changes
+
+- Updated dependencies [4fd55a6]
+  - onebots@1.2.2
+  - @onebots/adapter-icqq@3.0.2
+  - @onebots/adapter-wechat-clawbot@3.0.2
+  - @onebots/adapter-wechat@3.0.2
+  - @onebots/adapter-qq@3.0.2
+  - @onebots/adapter-kook@3.0.2
+  - @onebots/adapter-discord@3.0.2
+  - @onebots/protocol-onebot-v11@3.0.2
+  - @onebots/protocol-milky-v1@3.0.2
+  - @onebots/adapter-dingtalk@3.0.2
+  - @onebots/adapter-feishu@3.0.2
+  - @onebots/adapter-heychat@4.0.1
+  - @onebots/adapter-slack@3.0.2
+  - @onebots/adapter-teams@3.0.2
+  - @onebots/adapter-telegram@3.0.2
+  - @onebots/adapter-wecom@3.0.2
+  - @onebots/adapter-wecom-kf@2.0.2
+  - @onebots/protocol-onebot-v12@3.0.2
+  - @onebots/protocol-satori-v1@3.0.2
+
+## 1.1.13
+
+### Patch Changes
+
+- Updated dependencies [0519d6d]
+- Updated dependencies [d9e67a0]
+- Updated dependencies [fa90690]
+- Updated dependencies [0ef9ed5]
+- Updated dependencies [15b2540]
+  - onebots@1.2.1
+  - @onebots/adapter-heychat@4.0.0
+  - @onebots/protocol-onebot-v12@3.0.1
+  - @onebots/protocol-onebot-v11@3.0.1
+  - @onebots/protocol-milky-v1@3.0.1
+  - @onebots/adapter-wechat-clawbot@3.0.1
+  - @onebots/adapter-dingtalk@3.0.1
+  - @onebots/adapter-discord@3.0.1
+  - @onebots/adapter-feishu@3.0.1
+  - @onebots/adapter-kook@3.0.1
+  - @onebots/adapter-qq@3.0.1
+  - @onebots/adapter-slack@3.0.1
+  - @onebots/adapter-teams@3.0.1
+  - @onebots/adapter-telegram@3.0.1
+  - @onebots/adapter-wechat@3.0.1
+  - @onebots/adapter-wecom@3.0.1
+  - @onebots/adapter-wecom-kf@2.0.1
+  - @onebots/protocol-satori-v1@3.0.1
+
+## 1.1.12
+
+### Patch Changes
+
+- Updated dependencies [4564d68]
+  - onebots@1.2.0
+  - @onebots/adapter-dingtalk@3.0.0
+  - @onebots/adapter-discord@3.0.0
+  - @onebots/adapter-feishu@3.0.0
+  - @onebots/adapter-kook@3.0.0
+  - @onebots/adapter-qq@3.0.0
+  - @onebots/adapter-slack@3.0.0
+  - @onebots/adapter-teams@3.0.0
+  - @onebots/adapter-telegram@3.0.0
+  - @onebots/adapter-wechat@3.0.0
+  - @onebots/adapter-wechat-clawbot@3.0.0
+  - @onebots/adapter-wecom@3.0.0
+  - @onebots/adapter-wecom-kf@2.0.0
+  - @onebots/protocol-milky-v1@3.0.0
+  - @onebots/protocol-onebot-v11@3.0.0
+  - @onebots/protocol-onebot-v12@3.0.0
+  - @onebots/protocol-satori-v1@3.0.0
+
+## 1.1.11
+
+### Patch Changes
+
+- Updated dependencies [d9fdbd5]
+  - onebots@1.1.0
+  - @onebots/adapter-dingtalk@2.0.0
+  - @onebots/adapter-discord@2.0.0
+  - @onebots/adapter-feishu@2.0.0
+  - @onebots/adapter-kook@2.0.0
+  - @onebots/adapter-qq@2.0.0
+  - @onebots/adapter-slack@2.0.0
+  - @onebots/adapter-teams@2.0.0
+  - @onebots/adapter-telegram@2.0.0
+  - @onebots/adapter-wechat@2.0.0
+  - @onebots/adapter-wechat-clawbot@2.0.0
+  - @onebots/adapter-wecom@2.0.0
+  - @onebots/adapter-wecom-kf@1.0.0
+  - @onebots/protocol-milky-v1@2.0.0
+  - @onebots/protocol-onebot-v11@2.0.0
+  - @onebots/protocol-onebot-v12@2.0.0
+  - @onebots/protocol-satori-v1@2.0.0
+
+## 1.1.10
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+- Updated dependencies [b00497a]
+  - @onebots/adapter-dingtalk@1.0.7
+  - @onebots/adapter-discord@1.0.7
+  - @onebots/adapter-feishu@1.0.7
+  - @onebots/adapter-kook@1.0.7
+  - @onebots/adapter-qq@1.0.7
+  - @onebots/adapter-slack@1.0.7
+  - @onebots/adapter-teams@1.0.7
+  - @onebots/adapter-telegram@1.0.7
+  - @onebots/adapter-wechat@1.0.7
+  - @onebots/adapter-wechat-clawbot@1.1.1
+  - @onebots/adapter-wecom@1.0.7
+  - @onebots/adapter-wecom-kf@0.2.3
+  - imhelper@1.0.4
+  - onebots@1.0.7
+  - @onebots/protocol-milky-v1@1.0.7
+  - @onebots/protocol-onebot-v11@1.0.7
+  - @imhelper/onebot-v11@1.0.4
+  - @onebots/protocol-onebot-v12@1.0.7
+  - @imhelper/onebot-v12@1.0.4
+  - @onebots/protocol-satori-v1@1.0.7
+
+## 1.1.9
+
+### Patch Changes
+
+- Updated dependencies [5415d7b]
+  - @onebots/adapter-wechat-clawbot@1.1.0
+
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [ee4e625]
+  - @onebots/adapter-wechat-ilink@1.1.0
+  - onebots@1.0.6
+  - @onebots/adapter-dingtalk@1.0.6
+  - @onebots/adapter-discord@1.0.6
+  - @onebots/adapter-feishu@1.0.6
+  - @onebots/adapter-kook@1.0.6
+  - @onebots/adapter-qq@1.0.6
+  - @onebots/adapter-slack@1.0.6
+  - @onebots/adapter-teams@1.0.6
+  - @onebots/adapter-telegram@1.0.6
+  - @onebots/adapter-wechat@1.0.6
+  - @onebots/adapter-wecom@1.0.6
+  - @onebots/adapter-wecom-kf@0.2.2
+  - @onebots/protocol-milky-v1@1.0.6
+  - @onebots/protocol-onebot-v11@1.0.6
+  - @onebots/protocol-onebot-v12@1.0.6
+  - @onebots/protocol-satori-v1@1.0.6
+
+## 1.1.7
+
+### Patch Changes
+
+- Updated dependencies [4465ece]
+  - onebots@1.0.5
+  - @onebots/adapter-dingtalk@1.0.5
+  - @onebots/adapter-discord@1.0.5
+  - @onebots/adapter-feishu@1.0.5
+  - @onebots/adapter-icqq@1.0.5
+  - @onebots/adapter-kook@1.0.5
+  - @onebots/adapter-qq@1.0.5
+  - @onebots/adapter-slack@1.0.5
+  - @onebots/adapter-teams@1.0.5
+  - @onebots/adapter-telegram@1.0.5
+  - @onebots/adapter-wechat@1.0.5
+  - @onebots/adapter-wecom@1.0.5
+  - @onebots/adapter-wecom-kf@0.2.1
+  - @onebots/protocol-milky-v1@1.0.5
+  - @onebots/protocol-onebot-v11@1.0.5
+  - @onebots/protocol-onebot-v12@1.0.5
+  - @onebots/protocol-satori-v1@1.0.5
+
+## 1.1.6
+
+### Patch Changes
+
+- Updated dependencies [2645ccf]
+- Updated dependencies [2645ccf]
+  - onebots@1.0.4
+  - @onebots/adapter-wecom-kf@0.2.0
+  - @onebots/adapter-dingtalk@1.0.4
+  - @onebots/adapter-discord@1.0.4
+  - @onebots/adapter-feishu@1.0.4
+  - @onebots/adapter-kook@1.0.4
+  - @onebots/adapter-qq@1.0.4
+  - @onebots/adapter-slack@1.0.4
+  - @onebots/adapter-teams@1.0.4
+  - @onebots/adapter-telegram@1.0.4
+  - @onebots/adapter-wechat@1.0.4
+  - @onebots/adapter-wecom@1.0.4
+  - @onebots/protocol-milky-v1@1.0.4
+  - @onebots/protocol-onebot-v11@1.0.4
+  - @onebots/protocol-onebot-v12@1.0.4
+  - @onebots/protocol-satori-v1@1.0.4
+
+## 1.1.5
+
+### Patch Changes
+
+- 5d3787b: fix: v1.0.1
+- Updated dependencies [5d3787b]
+  - @onebots/adapter-dingtalk@1.0.3
+  - @onebots/adapter-discord@1.0.3
+  - @onebots/adapter-feishu@1.0.3
+  - @onebots/adapter-kook@1.0.3
+  - @onebots/adapter-qq@1.0.3
+  - @onebots/adapter-slack@1.0.3
+  - @onebots/adapter-teams@1.0.3
+  - @onebots/adapter-telegram@1.0.3
+  - @onebots/adapter-wechat@1.0.3
+  - @onebots/adapter-wecom@1.0.3
+  - imhelper@1.0.3
+  - onebots@1.0.3
+  - @onebots/protocol-milky-v1@1.0.3
+  - @onebots/protocol-onebot-v11@1.0.3
+  - @imhelper/onebot-v11@1.0.3
+  - @onebots/protocol-onebot-v12@1.0.3
+  - @imhelper/onebot-v12@1.0.3
+  - @onebots/protocol-satori-v1@1.0.3
+
+## 1.1.4
+
+### Patch Changes
+
+- 78d4de2: fix: bump version
+- Updated dependencies [78d4de2]
+  - @onebots/adapter-dingtalk@1.0.2
+  - @onebots/adapter-discord@1.0.2
+  - @onebots/adapter-feishu@1.0.2
+  - @onebots/adapter-kook@1.0.2
+  - @onebots/adapter-qq@1.0.2
+  - @onebots/adapter-slack@1.0.2
+  - @onebots/adapter-teams@1.0.2
+  - @onebots/adapter-telegram@1.0.2
+  - @onebots/adapter-wechat@1.0.2
+  - @onebots/adapter-wecom@1.0.2
+  - imhelper@1.0.2
+  - onebots@1.0.2
+  - @onebots/protocol-milky-v1@1.0.2
+  - @onebots/protocol-onebot-v11@1.0.2
+  - @imhelper/onebot-v11@1.0.2
+  - @onebots/protocol-onebot-v12@1.0.2
+  - @imhelper/onebot-v12@1.0.2
+  - @onebots/protocol-satori-v1@1.0.2
+
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [4f7255b]
+  - onebots@1.0.1
+  - imhelper@1.0.1
+  - @onebots/adapter-teams@1.0.1
+  - @onebots/adapter-discord@1.0.1
+  - @onebots/adapter-slack@1.0.1
+  - @onebots/adapter-dingtalk@1.0.1
+  - @onebots/adapter-feishu@1.0.1
+  - @onebots/adapter-wechat@1.0.1
+  - @onebots/adapter-wecom@1.0.1
+  - @onebots/adapter-kook@1.0.1
+  - @onebots/adapter-telegram@1.0.1
+  - @onebots/adapter-qq@1.0.1
+  - @onebots/protocol-onebot-v12@1.0.1
+  - @imhelper/onebot-v12@1.0.1
+  - @onebots/protocol-milky-v1@1.0.1
+  - @onebots/protocol-onebot-v11@1.0.1
+  - @imhelper/onebot-v11@1.0.1
+  - @onebots/protocol-satori-v1@1.0.1
+
+## 1.1.2
+
+### Patch Changes
+
+- Updated dependencies [57cf3ba]
+  - onebots@1.0.0
+  - imhelper@1.0.0
+  - @onebots/adapter-qq@1.0.0
+  - @onebots/adapter-kook@1.0.0
+  - @onebots/adapter-wechat@1.0.0
+  - @onebots/adapter-discord@1.0.0
+  - @onebots/adapter-telegram@1.0.0
+  - @onebots/adapter-feishu@1.0.0
+  - @onebots/adapter-dingtalk@1.0.0
+  - @onebots/adapter-slack@1.0.0
+  - @onebots/adapter-wecom@1.0.0
+  - @onebots/adapter-teams@1.0.0
+  - @onebots/protocol-milky-v1@1.0.0
+  - @onebots/protocol-onebot-v11@1.0.0
+  - @onebots/protocol-onebot-v12@1.0.0
+  - @onebots/protocol-satori-v1@1.0.0
+  - @imhelper/onebot-v11@1.0.0
+  - @imhelper/onebot-v12@1.0.0
+
+## 1.1.1
+
+### Patch Changes
+
+- onebots@0.5.1
+- @onebots/adapter-wechat@1.0.1
+- @onebots/protocol-milky-v1@1.0.1
+- @onebots/protocol-satori-v1@1.0.1
+
+## 1.1.0
+
+### Minor Changes
+
+- f3372b5: fix: refactory
+
+### Patch Changes
+
+- f3372b5: fix: 初始化管理
+- Updated dependencies [f3372b5]
+- Updated dependencies [f3372b5]
+  - @onebots/adapter-wechat@1.0.0
+  - onebots@0.5.0
+  - @onebots/protocol-milky-v1@1.0.0
+  - @onebots/protocol-satori-v1@1.0.0

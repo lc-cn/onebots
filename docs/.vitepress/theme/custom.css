@@ -1,0 +1,144 @@
+:root {
+    --vp-home-hero-name-color: transparent;
+    --vp-home-hero-name-background: linear-gradient(120deg, #34fe77, #41d1ff);
+    --vp-button-brand-bg: #409eff;
+    --vp-c-gray-1: #9f9e9e;
+    --vp-c-gray-2: #e4e7ed;
+    --vp-c-gray-3: #f2f6fc;
+    --vp-c-indigo-1: #409eff;
+    --vp-c-indigo-2: #4d9ff8;
+    --vp-c-indigo-3: #6897fd;
+    --vp-c-green-1: #05b062;
+    --vp-c-green-2: #06c46e;
+    --vp-c-green-3: #07d97a;
+    --vp-c-yellow-1: #f1c02d;
+    --vp-c-yellow-2: #f0d03d;
+    --vp-c-yellow-3: #efe04d;
+    --vp-c-red-1: #f5222d;
+    --vp-c-red-2: #f6323d;
+    --vp-c-red-3: #f7424d;
+}
+
+.dark {
+    --vp-c-text-1: rgba(155, 155, 147, 0.86);
+}
+
+/* Mermaid 图表样式 */
+.mermaid {
+    width: 100%;
+    margin: 1.5rem 0;
+    background: var(--vp-c-bg-soft);
+    border: 1px solid var(--vp-c-divider);
+    border-radius: 8px;
+    overflow: hidden;
+    /* 默认高度，JS 会动态调整 */
+    min-height: 400px;
+    display: block; /* 确保占满宽度 */
+    position: relative; /* 为全屏按钮定位 */
+}
+
+.mermaid svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* 全屏按钮 */
+.mermaid-fullscreen-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    background: var(--vp-c-bg);
+    border: 1px solid var(--vp-c-divider);
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 1;
+    background: var(--vp-c-bg-mute);
+}
+
+.mermaid-fullscreen-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: var(--vp-c-text-1);
+}
+
+/* 灯箱样式 */
+.mermaid-lightbox {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.mermaid-lightbox.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mermaid-lightbox-content {
+    width: 95%;
+    height: 95%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--vp-c-bg);
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    overflow: hidden;
+}
+
+.mermaid-lightbox-content svg {
+    width: 100%;
+    height: 100%;
+}
+
+.mermaid-lightbox-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2001;
+    color: white;
+    font-size: 24px;
+    transition: background 0.2s;
+}
+
+.mermaid-lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* svg-pan-zoom 控制按钮样式 */
+.svg-pan-zoom-control {
+    fill: var(--vp-c-text-2);
+    cursor: pointer;
+}
+
+.svg-pan-zoom-control:hover {
+    fill: var(--vp-c-brand-1);
+}

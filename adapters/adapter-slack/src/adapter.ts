@@ -1,0 +1,498 @@
+/**
+ * Slack 适配器
+ * 继承 Adapter 基类，实现 Slack 平台功能
+ */
+import { Account, AdapterRegistry, AccountStatus, readPackageVersion } from "onebots";
+import { Adapter } from "onebots";
+import { BaseApp } from "onebots";
+import { SlackBot } from "./bot.js";
+import { type CommonTypes } from "onebots";
+import type { SlackConfig, SlackMessage } from "./types.js";
+import { slackCapabilities } from "./capabilities.js";
+import { createSlackAccount } from "./account.js";
+import { executeSlackPlatformAction, SLACK_PLATFORM_ACTIONS } from "./platform-actions.js";
+import { compileSlackMessage } from "./messages.js";
+import { projectSlackMessageSegments } from "./events.js";
+import { SlackError } from "./errors.js";
+import { deleteSlackFile, getSlackFile } from "./files.js";
+import { slackUserDisplayName } from "./users.js";
+
+export class SlackAdapter extends Adapter<SlackBot, "slack"> {
+    constructor(app: BaseApp) {
+        super(app, "slack", slackCapabilities);
+        this.icon = "https://slack.com/favicon.ico";
+    }
+
+    executePlatformAction(
+        uin: string,
+        action: string,
+        params: Readonly<Record<string, unknown>>,
+    ): Promise<unknown> {
+        if (!SLACK_PLATFORM_ACTIONS.has(action)) {
+            return super.executePlatformAction(uin, action, params);
+        }
+        const account = this.requireAccount(uin);
+        return executeSlackPlatformAction(account.client, action, params);
+    }
+
+    isPlatformActionImplemented(action: string): boolean {
+        return SLACK_PLATFORM_ACTIONS.has(action);
+    }
+
+    // ============================================
+    // 消息相关方法
+    // ============================================
+
+    /**
+     * 发送消息
+     */
+    async sendMessage(
+        uin: string,
+        params: Adapter.SendMessageParams,
+    ): Promise<Adapter.SendMessageResult> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const sceneId = this.coerceId(params.scene_id as CommonTypes.Id | string | number);
+        const { text, options, files } = compileSlackMessage(params.message);
+        const channelId = sceneId.string;
+        const result = files.length
+            ? await bot.sendFiles(channelId, files, text, options)
+            : await bot.sendMessage(channelId, text, options);
+        if (!result.ts) {
+            throw SlackError.protocol(
+                "Slack 发送响应缺少消息时间戳",
+                "SLACK_MESSAGE_TIMESTAMP_MISSING",
+                result,
+            );
+        }
+        bot.rememberMessage(result.ts, channelId, options.thread_ts);
+
+        return {
+            message_id: this.createId(result.ts),
+        };
+    }
+
+    /**
+     * 删除/撤回消息
+     */
+    async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const context = bot.getMessageContext(msgId);
+        const channelId =
+            params.scene_id != null
+                ? this.coerceId(params.scene_id as CommonTypes.Id | string | number).string
+                : context?.channel || "";
+
+        if (!channelId) {
+            throw SlackError.invalid(
+                "Slack 删除消息需要 scene_id（频道 ID）",
+                "SLACK_SCENE_ID_REQUIRED",
+            );
+        }
+        await bot.deleteMessage(channelId, msgId);
+    }
+
+    /**
+     * 获取消息
+     */
+    async getMessage(uin: string, params: Adapter.GetMessageParams): Promise<Adapter.MessageInfo> {
+        const account = this.requireAccount(uin);
+        const timestamp = params.message_id.string;
+        const context = account.client.getMessageContext(timestamp);
+        const channel = params.scene_id?.string || context?.channel;
+        if (!channel) {
+            throw SlackError.invalid(
+                "Slack 获取消息需要 scene_id（频道 ID）或已知消息上下文",
+                "SLACK_SCENE_ID_REQUIRED",
+            );
+        }
+        const result = await account.client.call("conversations.replies", {
+            channel,
+            ts: context?.threadTs || timestamp,
+            oldest: timestamp,
+            latest: timestamp,
+            inclusive: true,
+            limit: 1,
+        });
+        const response = result as { messages?: SlackMessage[] };
+        const message = response.messages?.find(item => item.ts === timestamp);
+        if (!message?.ts) {
+            throw SlackError.resource(
+                `Slack 消息 ${timestamp} 不存在或当前 token 无权读取`,
+                "SLACK_MESSAGE_NOT_FOUND",
+                { message_id: timestamp, channel },
+            );
+        }
+        const privateScene = channel.startsWith("D");
+        return {
+            message_id: this.createId(message.ts),
+            time: Math.floor(Number(message.ts)),
+            sender: {
+                scene_type: privateScene ? "private" : "channel",
+                sender_id: this.createId(message.user || ""),
+                scene_id: this.createId(channel),
+                sender_name: message.user || "",
+                scene_name: "",
+            },
+            message: projectSlackMessageSegments(message),
+        };
+    }
+
+    /**
+     * 更新消息
+     */
+    async updateMessage(uin: string, params: Adapter.UpdateMessageParams): Promise<void> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const msgId = this.coerceId(params.message_id as CommonTypes.Id | string | number).string;
+        const rawScene = (
+            params as Adapter.UpdateMessageParams & { scene_id?: CommonTypes.Id | string | number }
+        ).scene_id;
+        const context = bot.getMessageContext(msgId);
+        const channelId =
+            rawScene != null
+                ? this.coerceId(rawScene as CommonTypes.Id | string | number).string
+                : context?.channel || "";
+
+        if (!channelId) {
+            throw SlackError.invalid(
+                "Slack 更新消息需要 scene_id（频道 ID）",
+                "SLACK_SCENE_ID_REQUIRED",
+            );
+        }
+        const { text, options, files } = compileSlackMessage(params.message);
+        if (files.length) {
+            throw SlackError.invalid(
+                "Slack 更新消息不支持新增文件，请使用 call_slack_api",
+                "SLACK_UPDATE_FILE_UNSUPPORTED",
+            );
+        }
+        if (options.thread_ts) {
+            throw SlackError.invalid(
+                "Slack 更新消息不能改变所属线程",
+                "SLACK_UPDATE_THREAD_UNSUPPORTED",
+            );
+        }
+        await bot.updateMessage(channelId, msgId, text, options);
+    }
+
+    // ============================================
+    // 用户相关方法
+    // ============================================
+
+    /**
+     * 获取机器人自身信息
+     */
+    async getLoginInfo(uin: string): Promise<Adapter.UserInfo> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const me = bot.getCachedMe();
+
+        return {
+            user_id: this.createId(me?.id || ""),
+            user_name: me?.name || "",
+            user_displayname: slackUserDisplayName(me),
+            avatar: me?.profile?.image_512 || me?.profile?.image_192,
+        };
+    }
+
+    /**
+     * 获取用户信息
+     */
+    async getUserInfo(uin: string, params: Adapter.GetUserInfoParams): Promise<Adapter.UserInfo> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const userId = params.user_id.string;
+        const user = await bot.getUserInfo(userId);
+
+        return {
+            user_id: this.createId(user.id),
+            user_name: user.name || "",
+            user_displayname: slackUserDisplayName(user),
+            avatar: user.profile?.image_512 || user.profile?.image_192,
+        };
+    }
+
+    // ============================================
+    // 好友（私聊会话）相关方法
+    // ============================================
+
+    /**
+     * 获取好友列表（Slack 不支持）
+     */
+    async getFriendList(
+        uin: string,
+        _params?: Adapter.GetFriendListParams,
+    ): Promise<Adapter.FriendInfo[]> {
+        const account = this.requireAccount(uin);
+        const users = await account.client.getUserList();
+        return users
+            .filter(user => !user.is_bot && !user.is_app_user && !user.deleted)
+            .map(user => ({
+                user_id: this.createId(user.id),
+                user_name: user.name || "",
+                remark: slackUserDisplayName(user),
+            }));
+    }
+
+    /**
+     * 获取好友信息
+     */
+    async getFriendInfo(
+        uin: string,
+        params: Adapter.GetFriendInfoParams,
+    ): Promise<Adapter.FriendInfo> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const userId = params.user_id.string;
+        const user = await bot.getUserInfo(userId);
+
+        return {
+            user_id: this.createId(user.id),
+            user_name: user.name || "",
+            remark: slackUserDisplayName(user),
+        };
+    }
+
+    // ============================================
+    // 频道相关方法
+    // ============================================
+
+    /**
+     * 获取频道列表
+     */
+    async getChannelList(
+        uin: string,
+        _params?: Adapter.GetChannelListParams,
+    ): Promise<Adapter.ChannelInfo[]> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const channels = await bot.getChannelList();
+
+        return channels.map(channel => ({
+            channel_id: this.createId(channel.id),
+            channel_name: channel.name || "",
+        }));
+    }
+
+    /**
+     * 获取频道信息
+     */
+    async getChannelInfo(
+        uin: string,
+        params: Adapter.GetChannelInfoParams,
+    ): Promise<Adapter.ChannelInfo> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const channelId = params.channel_id.string;
+        const channel = await bot.getChannelInfo(channelId);
+
+        return {
+            channel_id: this.createId(channel.id),
+            channel_name: channel.name || "",
+        };
+    }
+
+    async createChannel(
+        uin: string,
+        params: Adapter.CreateChannelParams,
+    ): Promise<Adapter.ChannelInfo> {
+        const account = this.requireAccount(uin);
+
+        const channel = await account.client.createChannel(params.channel_name);
+        return {
+            channel_id: this.createId(channel.id),
+            channel_name: channel.name,
+        };
+    }
+
+    async updateChannel(uin: string, params: Adapter.UpdateChannelParams): Promise<void> {
+        if (params.parent_id) {
+            throw SlackError.invalid(
+                "Slack 不支持移动频道层级",
+                "SLACK_CHANNEL_PARENT_UNSUPPORTED",
+            );
+        }
+        if (!params.channel_name) {
+            throw SlackError.invalid(
+                "Slack 更新频道需要 channel_name",
+                "SLACK_CHANNEL_NAME_REQUIRED",
+            );
+        }
+        const account = this.requireAccount(uin);
+        await account.client.call("conversations.rename", {
+            channel: params.channel_id.string,
+            name: params.channel_name,
+        });
+    }
+
+    async deleteChannel(uin: string, params: Adapter.DeleteChannelParams): Promise<void> {
+        const account = this.requireAccount(uin);
+        await account.client.call("conversations.archive", { channel: params.channel_id.string });
+    }
+
+    async inviteChannelMember(
+        uin: string,
+        params: Adapter.InviteChannelMemberParams,
+    ): Promise<void> {
+        const account = this.requireAccount(uin);
+        await account.client.call("conversations.invite", {
+            channel: params.channel_id.string,
+            users: params.user_id.string,
+        });
+    }
+
+    async kickChannelMember(uin: string, params: Adapter.KickChannelMemberParams): Promise<void> {
+        const account = this.requireAccount(uin);
+        await account.client.kickChannelMember(params.channel_id.string, params.user_id.string);
+    }
+
+    /**
+     * 获取频道成员列表
+     */
+    async getChannelMemberList(
+        uin: string,
+        params: Adapter.GetChannelMemberListParams,
+    ): Promise<Adapter.ChannelMemberInfo[]> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const channelId = params.channel_id.string;
+        const memberIds = await bot.getChannelMembers(channelId);
+
+        return mapWithConcurrency(memberIds, 8, async memberId => {
+            const user = await bot.getUserInfo(memberId);
+            return {
+                channel_id: params.channel_id,
+                user_id: this.createId(user.id),
+                user_name: slackUserDisplayName(user),
+                role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
+            } satisfies Adapter.ChannelMemberInfo;
+        });
+    }
+
+    /**
+     * 获取频道成员信息
+     */
+    async getChannelMemberInfo(
+        uin: string,
+        params: Adapter.GetChannelMemberInfoParams,
+    ): Promise<Adapter.ChannelMemberInfo> {
+        const account = this.requireAccount(uin);
+
+        const bot = account.client;
+        const userId = params.user_id.string;
+        const user = await bot.getUserInfo(userId);
+
+        return {
+            channel_id: params.channel_id,
+            user_id: this.createId(user.id),
+            user_name: slackUserDisplayName(user),
+            role: user.is_admin ? "admin" : user.is_owner ? "owner" : "member",
+        };
+    }
+
+    async getFile(uin: string, params: Adapter.GetFileParams): Promise<Adapter.FileInfo> {
+        return getSlackFile(this.requireAccount(uin).client, params.file_id.string, value =>
+            this.createId(value),
+        );
+    }
+
+    async deleteFile(uin: string, params: Adapter.DeleteFileParams): Promise<void> {
+        await deleteSlackFile(this.requireAccount(uin).client, params.file_id.string);
+    }
+
+    // ============================================
+    // 系统相关方法
+    // ============================================
+
+    /**
+     * 获取版本信息
+     */
+    async getVersion(_uin: string): Promise<Adapter.VersionInfo> {
+        const [appVersion, sdkVersion] = await Promise.all([
+            readPackageVersion(import.meta.url),
+            readPackageVersion(import.meta.resolve("@slack/web-api")),
+        ]);
+        return {
+            app_name: "onebots Slack Adapter",
+            app_version: appVersion,
+            impl: "@slack/web-api",
+            version: sdkVersion,
+        };
+    }
+
+    /**
+     * 获取运行状态
+     */
+    async getStatus(uin: string): Promise<Adapter.StatusInfo> {
+        const account = this.getAccount(uin);
+        const online = account?.status === AccountStatus.Online;
+        return {
+            online,
+            good: online,
+            bots: account
+                ? [{ self: this.createId(account.client.getCachedMe()?.id || uin), online }]
+                : [],
+        };
+    }
+
+    private requireAccount(uin: string): Account<"slack", SlackBot> {
+        const account = this.getAccount(uin);
+        if (!account) {
+            throw SlackError.resource(`Slack 账号 ${uin} 不存在`, "SLACK_ACCOUNT_NOT_FOUND", {
+                account_id: uin,
+            });
+        }
+        return account;
+    }
+
+    createAccount(config: Account.Config<"slack">): Account<"slack", SlackBot> {
+        return createSlackAccount(this, config);
+    }
+}
+
+async function mapWithConcurrency<T, R>(
+    values: readonly T[],
+    concurrency: number,
+    task: (value: T) => Promise<R>,
+): Promise<R[]> {
+    const result = new Array<R>(values.length);
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+        while (cursor < values.length) {
+            const index = cursor++;
+            result[index] = await task(values[index]);
+        }
+    });
+    await Promise.all(workers);
+    return result;
+}
+
+declare module "onebots" {
+    export namespace Adapter {
+        export interface Configs {
+            slack: SlackConfig;
+        }
+    }
+}
+
+AdapterRegistry.register("slack", SlackAdapter, {
+    name: "slack",
+    displayName: "Slack官方机器人",
+    description: "Slack官方机器人适配器，支持频道消息、私聊、应用命令",
+    icon: "https://slack.com/favicon.ico",
+    homepage: "https://slack.com/",
+    author: "凉菜",
+    capabilities: slackCapabilities,
+});

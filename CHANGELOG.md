@@ -1,5 +1,347 @@
 # Changelog
 
+## [0.4.96](https://github.com/lc-cn/onebots/compare/v0.4.95...v0.4.96) (2024-10-10)
+
+
+### Bug Fixes
+
+* 修复获取版本信息API和转发异常 ([4006445](https://github.com/lc-cn/onebots/commit/4006445246f85cfee2a7eba46a0d53cb6a688a43))
+
+## [0.4.95](https://github.com/lc-cn/onebots/compare/v0.4.94...v0.4.95) (2024-09-27)
+
+
+### Bug Fixes
+
+* 更新依赖 ([c07bf5f](https://github.com/lc-cn/onebots/commit/c07bf5ff5580e7804d9295e86ebfb69789d1bb7f))
+
+## [0.4.94](https://github.com/lc-cn/onebots/compare/v0.4.93...v0.4.94) (2024-09-27)
+
+
+### Bug Fixes
+
+* 更新依赖,添加错误日志 ([1a5cd0c](https://github.com/lc-cn/onebots/commit/1a5cd0c9042d5ac477c00d5d798a625d6bdbd4a9))
+
+## [0.4.93](https://github.com/lc-cn/onebots/compare/v0.4.92...v0.4.93) (2024-08-03)
+
+
+### Bug Fixes
+
+* 更新依赖 ([0b26c46](https://github.com/lc-cn/onebots/commit/0b26c4680d42dfa7e847fb3f41c9091de286b3ef))
+
+## [0.4.92](https://github.com/lc-cn/onebots/compare/v0.4.91...v0.4.92) (2024-06-24)
+
+
+### Bug Fixes
+
+* cq码解析错误 ([364f39e](https://github.com/lc-cn/onebots/commit/364f39ebe998c0bb1c7552f00547907d91353fc3))
+
+## [0.4.91](https://github.com/lc-cn/onebots/compare/v0.4.90...v0.4.91) (2024-06-24)
+
+
+### Bug Fixes
+
+* 字段名兼容 ([5a20125](https://github.com/lc-cn/onebots/commit/5a201256a5da93a51b370a36588335fb773955e0))
+
+## [0.4.90](https://github.com/lc-cn/onebots/compare/v0.4.89...v0.4.90) (2024-06-24)
+
+
+### Bug Fixes
+
+* node嵌套 ([ea815f2](https://github.com/lc-cn/onebots/commit/ea815f212e04832e51f6fe02748f0fd2bd360418))
+
+## [0.4.89](https://github.com/lc-cn/onebots/compare/v0.4.88...v0.4.89) (2024-06-24)
+
+
+### Bug Fixes
+
+* node嵌套 ([a03c948](https://github.com/lc-cn/onebots/commit/a03c94860bd2896eec2619551c157d990d40fb28))
+* node嵌套 ([e5d65b5](https://github.com/lc-cn/onebots/commit/e5d65b56a480f8434bea893d623d481fd35ac052))
+
+## [0.4.88](https://github.com/lc-cn/onebots/compare/v0.4.87...v0.4.88) (2024-06-24)
+
+
+### Bug Fixes
+
+* 返回格式错误，转发 ([03636e7](https://github.com/lc-cn/onebots/commit/03636e723315c730992909319efcd4df84b3db6d))
+
+## [0.4.87](https://github.com/lc-cn/onebots/compare/v0.4.86...v0.4.87) (2024-06-23)
+
+
+### Bug Fixes
+
+* 图片发送错误 ([7ed4fbc](https://github.com/lc-cn/onebots/commit/7ed4fbc58a3eb0d590812546e02731a0276bacaf))
+
+## [0.4.86](https://github.com/lc-cn/onebots/compare/v0.4.85...v0.4.86) (2024-06-22)
+
+
+### Bug Fixes
+
+* 图片发送错误 ([21fae31](https://github.com/lc-cn/onebots/commit/21fae31eef349ea34978610c73787f6e5f08e22c))
+
+## [0.4.85](https://github.com/lc-cn/onebots/compare/v0.4.84...v0.4.85) (2024-06-22)
+
+
+### Bug Fixes
+
+* build type error ([8a70fe7](https://github.com/lc-cn/onebots/commit/8a70fe72121f0fe3ea747de9538fd3861a20595b))
+
+## [0.4.84](https://github.com/lc-cn/onebots/compare/v0.4.83...v0.4.84) (2024-06-22)
+
+
+### Bug Fixes
+
+* 支持send_private_forward_msg和send_group_forward_msg ([2edf3b4](https://github.com/lc-cn/onebots/commit/2edf3b43e2f8ddf8f96291f25854c791ff9b7e96))
+
+## [0.4.83](https://github.com/lc-cn/onebots/compare/v0.4.82...v0.4.83) (2024-05-28)
+
+
+### Bug Fixes
+
+* V11模式的错误码使用错误 ([0dbb76a](https://github.com/lc-cn/onebots/commit/0dbb76afdf7fb03caef491f53f860309e6437dbd))
+* 修复 webConsole 无法选中复制及模拟的输入事件未触发 ([0dbb76a](https://github.com/lc-cn/onebots/commit/0dbb76afdf7fb03caef491f53f860309e6437dbd))
+* 修复callApi错误调用 ([0dbb76a](https://github.com/lc-cn/onebots/commit/0dbb76afdf7fb03caef491f53f860309e6437dbd))
+* 修复V11的get_msg获取图片等消息时结构出现多一层data的问题 ([2dbe6c3](https://github.com/lc-cn/onebots/commit/2dbe6c32b6f9eb520fe67fedaa82965c690189e0))
+* 修复合并转发bug ([0dbb76a](https://github.com/lc-cn/onebots/commit/0dbb76afdf7fb03caef491f53f860309e6437dbd))
+
+## [0.4.82](https://github.com/lc-cn/onebots/compare/v0.4.81...v0.4.82) (2024-04-29)
+
+
+### Bug Fixes
+
+* this 错误 ([ed1816e](https://github.com/lc-cn/onebots/commit/ed1816e43d6bb459033f539f7bc87b38894d4d83))
+
+## [0.4.81](https://github.com/lc-cn/onebots/compare/v0.4.80...v0.4.81) (2024-04-28)
+
+
+### Bug Fixes
+
+* point error ([fb6a7fa](https://github.com/lc-cn/onebots/commit/fb6a7fa0f2590dd37e09862864b8bc057908ffda))
+* point error ([088aad1](https://github.com/lc-cn/onebots/commit/088aad1d2b3e893f2231a32e2892408768f82091))
+* point error ([90aef14](https://github.com/lc-cn/onebots/commit/90aef14b9462eed77445cdd87c5d3edc2d31f337))
+
+## [0.4.80](https://github.com/lc-cn/onebots/compare/v0.4.79...v0.4.80) (2024-04-28)
+
+
+### Bug Fixes
+
+* 修正文档错误 ([d253786](https://github.com/lc-cn/onebots/commit/d2537869a767fa6b0e6ace468807c26fdc23ba70))
+
+## [0.4.79](https://github.com/lc-cn/onebots/compare/v0.4.78...v0.4.79) (2024-04-15)
+
+
+### Bug Fixes
+
+* JSON.stringify调整 ([aa542f5](https://github.com/lc-cn/onebots/commit/aa542f5cc0832e40291019ef04e0942fa084d46c))
+
+## [0.4.78](https://github.com/lc-cn/onebots/compare/v0.4.77...v0.4.78) (2024-04-12)
+
+
+### Bug Fixes
+
+* 多次调用登录 ([855845b](https://github.com/lc-cn/onebots/commit/855845b5c4021c1c527de9bcae96be46a2bcb9d6))
+
+## [0.4.77](https://github.com/lc-cn/onebots/compare/v0.4.76...v0.4.77) (2024-03-25)
+
+
+### Bug Fixes
+
+* 编译类型错误 ([de478f8](https://github.com/lc-cn/onebots/commit/de478f8ec39793e83cda7648d210bd2e7d31ed01))
+
+## [0.4.76](https://github.com/lc-cn/onebots/compare/v0.4.75...v0.4.76) (2024-03-25)
+
+
+### Bug Fixes
+
+* 富媒体添加类型 ([30d4891](https://github.com/lc-cn/onebots/commit/30d489155d2a9f2ce46a67733b883d11426b7f90))
+
+## [0.4.75](https://github.com/lc-cn/onebots/compare/v0.4.74...v0.4.75) (2024-03-25)
+
+
+### Bug Fixes
+
+* qq 官方适配器支持上传富媒体 ([1c3092e](https://github.com/lc-cn/onebots/commit/1c3092e7f8fcaa35257b2512dc99326e9a6acbb1))
+* 尝试修复转发Bug ([59b00d9](https://github.com/lc-cn/onebots/commit/59b00d9e9056fa19da750440197276c69e01a9e5))
+
+## [0.4.74](https://github.com/lc-cn/onebots/compare/v0.4.73...v0.4.74) (2024-03-23)
+
+
+### Bug Fixes
+
+* 同步支持QQ官方机器人撤回群/私聊消息能力 ([b948c0d](https://github.com/lc-cn/onebots/commit/b948c0dacf96b2a801880660c3243ddf6380f369))
+
+## [0.4.73](https://github.com/lc-cn/onebots/compare/v0.4.72...v0.4.73) (2024-03-11)
+
+
+### Bug Fixes
+
+* OneBotV11 支持 qq官方机器人 ([743b3ba](https://github.com/lc-cn/onebots/commit/743b3ba13382b04c3f761ebd4c22c0e79e24e401))
+* 配置文件保存错误 ([a916108](https://github.com/lc-cn/onebots/commit/a916108c5cbdbc417ffaa2f7b0cb87a79f78304d))
+
+## [0.4.72](https://github.com/lc-cn/onebots/compare/v0.4.71...v0.4.72) (2024-03-09)
+
+
+### Bug Fixes
+
+* 配置文件保存错误 ([93e9360](https://github.com/lc-cn/onebots/commit/93e9360695dd039637f4f2eb12491877950a7c61))
+
+## [0.4.71](https://github.com/lc-cn/onebots/compare/v0.4.70...v0.4.71) (2024-03-09)
+
+
+### Bug Fixes
+
+* 启动错误 ([8d32aa6](https://github.com/lc-cn/onebots/commit/8d32aa6418397e1de96e59948ade50538beb6f20))
+* 启动错误 ([3cdeb01](https://github.com/lc-cn/onebots/commit/3cdeb0115d0645c01de95ea46d9a1ef562602a2b))
+* 状态码错误 ([effd50f](https://github.com/lc-cn/onebots/commit/effd50f756d37f3dc9f2d3c3480ff7dba26827cb))
+
+## [0.4.70](https://github.com/lc-cn/onebots/compare/v0.4.69...v0.4.70) (2024-03-09)
+
+
+### Bug Fixes
+
+* 配置文件提示错误 ([4c3ad54](https://github.com/lc-cn/onebots/commit/4c3ad540790a5eff8c04ebf9781ccc02c2a960c6))
+
+## [0.4.69](https://github.com/lc-cn/onebots/compare/v0.4.68...v0.4.69) (2024-03-09)
+
+
+### Bug Fixes
+
+* 允许通过index启动，并增加相关文档 ([4d9f499](https://github.com/lc-cn/onebots/commit/4d9f499c62862cfd5aba59ab0b0a5a5c2c20ddd9))
+* 即使通过index.js启动，也为其创建配置文件，避免后续Bug ([dd6f88a](https://github.com/lc-cn/onebots/commit/dd6f88ac4534c696de7e1a84d75d8150fffaaafc))
+
+## [0.4.68](https://github.com/lc-cn/onebots/compare/v0.4.67...v0.4.68) (2024-03-09)
+
+
+### Bug Fixes
+
+* 移除非icqq平台的icqq依赖 ([8f0d0da](https://github.com/lc-cn/onebots/commit/8f0d0da4c1b60ce534ef6f7fe84729d101ec7c2f))
+
+## [0.4.67](https://github.com/lc-cn/onebots/compare/v0.4.66...v0.4.67) (2024-03-07)
+
+
+### Bug Fixes
+
+* 适配器有多个Bot时消息重复上报问题 ([8e4fcd7](https://github.com/lc-cn/onebots/commit/8e4fcd731c20aa78b55f7d3800583d6ca24cf1a1))
+
+## [0.4.66](https://github.com/lc-cn/onebots/compare/v0.4.65...v0.4.66) (2024-03-06)
+
+
+### Bug Fixes
+
+* V12 delete_message报错 ([cf08388](https://github.com/lc-cn/onebots/commit/cf08388e4c7bdf4e13b0c90189f0183b3a9c1023))
+* 文档顺序调整 ([b773e66](https://github.com/lc-cn/onebots/commit/b773e66991be1e1e1b7d413bf02027383360d023))
+
+## [0.4.65](https://github.com/lc-cn/onebots/compare/v0.4.64...v0.4.65) (2024-03-06)
+
+
+### Bug Fixes
+
+* 授权错误、CQ码解析错误，image/video/record文件解析错误 ([d98d69a](https://github.com/lc-cn/onebots/commit/d98d69ac7566ae333618555c41d91e327b5f7f2d))
+
+## [0.4.64](https://github.com/lc-cn/onebots/compare/v0.4.63...v0.4.64) (2024-03-04)
+
+
+### Bug Fixes
+
+* 补充部分文档，修复file_id问题 ([dae831b](https://github.com/lc-cn/onebots/commit/dae831b08f019978003ca37e99210a62c1c9805e))
+
+## [0.4.63](https://github.com/lc-cn/onebots/compare/v0.4.62...v0.4.63) (2024-03-03)
+
+
+### Bug Fixes
+
+* 消息格式处理 ([a5cb49b](https://github.com/lc-cn/onebots/commit/a5cb49b8cfea56fec08c6686cf620e0601948901))
+
+## [0.4.62](https://github.com/lc-cn/onebots/compare/v0.4.61...v0.4.62) (2024-03-02)
+
+
+### Bug Fixes
+
+* 修复dingtalk、qq、icqq发送消息失败问题 ([5dbea25](https://github.com/lc-cn/onebots/commit/5dbea25ebf4a4729b42c75061fa9c28513be619f))
+
+## [0.4.61](https://github.com/lc-cn/onebots/compare/v0.4.60...v0.4.61) (2024-03-01)
+
+
+### Bug Fixes
+
+* add some expand method ([257c8bc](https://github.com/lc-cn/onebots/commit/257c8bc84bf2418164cc2b920fbd4101c0208ff7))
+* git ignore ([854c156](https://github.com/lc-cn/onebots/commit/854c156565f16b529f09c689f7d294a528988453))
+* handle operation ([f593603](https://github.com/lc-cn/onebots/commit/f59360357166a60b28eb1535c9be24d63cf6fbc5))
+
+## [0.4.60](https://github.com/lc-cn/onebots/compare/v0.4.59...v0.4.60) (2024-02-24)
+
+
+### Bug Fixes
+
+* 消息格式化 ([258b443](https://github.com/lc-cn/onebots/commit/258b4432e32ab9d10da798a2e12e3f8a3b6f3663))
+
+## [0.4.59](https://github.com/lc-cn/onebots/compare/v0.4.58...v0.4.59) (2024-02-23)
+
+
+### Bug Fixes
+
+* v12 add alt_message when message event ([a8ec809](https://github.com/lc-cn/onebots/commit/a8ec809065b5f2eb31999005f851d3058a4886bc))
+
+## [0.4.58](https://github.com/lc-cn/onebots/compare/v0.4.57...v0.4.58) (2024-02-23)
+
+
+### Bug Fixes
+
+* post message format ([4aa9980](https://github.com/lc-cn/onebots/commit/4aa998083defd67e044c7081327bf575ed07909d))
+
+## [0.4.57](https://github.com/lc-cn/onebots/compare/v0.4.56...v0.4.57) (2024-02-22)
+
+
+### Bug Fixes
+
+* OneBotV12 reverse link error ([b483bdd](https://github.com/lc-cn/onebots/commit/b483bddf38f63ca2df4e7293981a3e4175ab8339))
+
+## [0.4.56](https://github.com/lc-cn/onebots/compare/v0.4.55...v0.4.56) (2024-02-22)
+
+
+### Bug Fixes
+
+* add NODE_AUTH_TOKEN ([6b3ea8d](https://github.com/lc-cn/onebots/commit/6b3ea8db1e48de8377626131fd541a9a60a0d886))
+* add NODE_AUTH_TOKEN ([4402d3d](https://github.com/lc-cn/onebots/commit/4402d3ddffa72498c1230dfd3f56bd1248d695f2))
+* add NODE_AUTH_TOKEN ([b80c790](https://github.com/lc-cn/onebots/commit/b80c790df8f9f1ecb1f3b19ac4af2fab06e17e1b))
+* docs build and deploy ([bacf2c5](https://github.com/lc-cn/onebots/commit/bacf2c572265bbcafd2cf48343a4432515143a14))
+* docs build and deploy ([f59f676](https://github.com/lc-cn/onebots/commit/f59f676ab2b59b288f15d4f1b8f824d8d2858fcc))
+* docs build and deploy ([611df60](https://github.com/lc-cn/onebots/commit/611df6043c365ba2b9e028628009a7fd7c124b11))
+
+## [0.4.55](https://github.com/lc-cn/onebots/compare/v0.4.54...v0.4.55) (2024-02-21)
+
+
+### Bug Fixes
+
+* CQ code ([eff1c0d](https://github.com/lc-cn/onebots/commit/eff1c0d66968a613d5b10a2ebee12de7542a8f3c))
+* CQCode ([d129f31](https://github.com/lc-cn/onebots/commit/d129f318f0cd3dec9c70ba30def04edb8a7d466d))
+* icqq =&gt; @icqqjs/icqq ([0d4e455](https://github.com/lc-cn/onebots/commit/0d4e455c969429d728cd0dd7f9250a29f1182122))
+
+## [0.4.54](https://github.com/lc-cn/onebots/compare/v0.4.53...v0.4.54) (2024-01-31)
+
+
+### Bug Fixes
+
+* handle_quick_operation ([5dfa28e](https://github.com/lc-cn/onebots/commit/5dfa28e11925dc7357edc6ccb15d8cd09fd89aa7))
+
+## [0.4.53](https://github.com/lc-cn/onebots/compare/v0.4.52...v0.4.53) (2024-01-27)
+
+
+### Bug Fixes
+
+* build err ([7bb9d67](https://github.com/lc-cn/onebots/commit/7bb9d67a437b6a1192bc1127d4957aab31efd89a))
+
+## [0.4.52](https://github.com/lc-cn/onebots/compare/v0.4.51...v0.4.52) (2024-01-27)
+
+
+### Bug Fixes
+
+* call v11 filter ([17883b7](https://github.com/lc-cn/onebots/commit/17883b76e034927e8395ed02a84e2af80bb29a61))
+* data目录创建隐患 ([275d226](https://github.com/lc-cn/onebots/commit/275d226bf74fe1b6d46a5998e2fee75c088e4828))
+* icqq-json消息的cq码格式异常 ([0962c0f](https://github.com/lc-cn/onebots/commit/0962c0f4b39224c7b565bec50e8fc898cbd676bf))
+* icqq发送的消息中丢失了at等消息段 ([4822a3f](https://github.com/lc-cn/onebots/commit/4822a3f6ba4c86b3998154222b17c156706462b0))
+* icqq私聊回复消息中第一个消息段丢失 ([5706e55](https://github.com/lc-cn/onebots/commit/5706e5554abf674679c5ebbd869efb9bae56a2ea))
+* 增强代码健壮性 ([3d871cf](https://github.com/lc-cn/onebots/commit/3d871cf3f13bae59f72493b3a6f0f2464d7549e7))
+
 ## [0.4.51](https://github.com/lc-cn/onebots/compare/v0.4.50...v0.4.51) (2024-01-17)
 
 

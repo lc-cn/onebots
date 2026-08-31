@@ -1,0 +1,282 @@
+# onebots
+
+## 1.2.8
+
+### Patch Changes
+
+- 9cc0622: 闭合好友申请事件与处理能力链路，并为 Milky V1、OneBot 11 和 OneBot 12 提供保留原始申请凭据的同意好友申请 API。
+- c9e876c: 建立统一的 Adapter 能力清单与结构化能力错误，修复 Teams、Mock 和企业微信事件投递，并复用微信生态回调验签、解密与 XML 解析实现。
+- a87f07a: 闭合 Milky 与 Satori 的原生协议契约，修复各 SDK 在 OneBots 兼容模式下的 WebSocket 地址，并让 Web 配置表单优先使用协议包注册的完整 Schema。
+- f1493f6: 删除 Web 包中不可达的旧版 imhelper 副本与无效兼容类型；由协议 Schema 声明表单语义分区，并通过统一布局模块生成协议配置界面。
+- 78c1e50: 统一 SDK 地址语义并移除隐式 OneBots 路由兼容逻辑；为协议 Schema 增加事件过滤器元数据，在 Web 配置页提供可增删的可视化规则编辑器与高级 JSON 模式。
+- 03cc74d: 为 Milky、OneBot 11 和 OneBot 12 增加统一的 `invite_friend_to_group` 扩展 API，并通过通用 Adapter 能力调用 ICQQ 的原生好友入群邀请。
+- Updated dependencies [9cc0622]
+- Updated dependencies [c9e876c]
+- Updated dependencies [844a041]
+- Updated dependencies [f1493f6]
+- Updated dependencies [78c1e50]
+- Updated dependencies [03cc74d]
+  - @onebots/core@1.2.5
+  - @onebots/web@1.0.13
+
+## 1.2.7
+
+### Patch Changes
+
+- Updated dependencies [25ac8a4]
+  - @onebots/web@1.0.12
+
+## 1.2.6
+
+### Patch Changes
+
+- 7891a2e: 丰富协议配置 Schema 的表单元数据，在 Web 管理端为 Webhook 与反向 WebSocket 提供动态增删和单项高级设置，并移除全局表单中的账号重复配置。
+- Updated dependencies [7891a2e]
+  - @onebots/core@1.2.4
+  - @onebots/web@1.0.11
+
+## 1.2.5
+
+### Patch Changes
+
+- 41f4bcc: 改进 Web 配置、日志与验证管理，补充 MCP 和协议格式测试，并收紧核心、适配器及协议实现的公开类型。四个客户端 SDK 的事件扩展字段和默认响应数据由 `any` 收紧为 `unknown`，调用方需先进行类型收窄。
+- Updated dependencies [41f4bcc]
+  - @onebots/web@1.0.10
+  - @onebots/core@1.2.3
+
+## 1.2.4
+
+### Patch Changes
+
+- f472ebf: 实现 MCP (Model Context Protocol) v1 协议（#217, #218）：
+
+  **协议插件 `@onebots/protocol-mcp-v1`：**
+  - JSON-RPC 2.0 协议核心，协议版本 2025-03-26
+  - 双传输：HTTP/SSE + stdio
+  - 32 个 MCP Tools 覆盖消息、好友、群组、频道、文件、系统全部 API
+  - 工具白名单/黑名单过滤、Bearer Token 鉴权
+  - 实时事件推送（消息 + 通知）
+
+  **客户端 SDK `@onebots/mcp-client`：**
+  - McpStdioClient — stdio 传输客户端（Cursor / Claude Code）
+  - McpSseClient — SSE 传输客户端（Web / 远程）
+
+  **CLI 命令：**
+  - `onebots mcp --account platform/account_id` 以 stdio 模式启动 MCP 服务
+
+## 1.2.3
+
+### Patch Changes
+
+- 1f79a8a: 修复 pnpm 全局安装后 CLI 因 `@inkjs/ui` 未声明 `react` 依赖而报 `Cannot find package 'react'`（`onebots -h` 等命令无法启动）。
+
+## 1.2.2
+
+### Patch Changes
+
+- 4fd55a6: 登录验证与配置 Schema 体验修复：
+  - 微信 ClawBot 二维码过期自动换码后推送到 Web 并更新 UI；登录成功清理待处理验证
+  - ICQQ 将 `login_error` / `offline` 的 message 推送到验证面板，提供「重新登录」等快捷操作；扫码 / 身份验证 / 设备锁统一「已完成，继续登录」
+  - `VerificationRequest` 新增 `actions`、`confirmLabel`，网关支持 `verification:clear`
+  - 配置 Schema 彻底用 `choices` 替代 `enum`（含中文选项）；object 字段（如 `log_config`）留空不再默认写成 `{}`
+  - 拦截 ICQQ SSO 心跳等未处理 Promise rejection，避免拖垮进程；网络闪断依赖自动重连、不误推重登；微信轮询瞬态网络错误降级为 warn
+
+- Updated dependencies [4fd55a6]
+  - @onebots/core@1.2.2
+  - @onebots/web@1.0.9
+
+## 1.2.1
+
+### Patch Changes
+
+- 0519d6d: Replace the nested gateway/service CLI with a Pastel-powered flat single-service interface, add setup, UI, doctor, and update commands, and delegate process supervision to native operating-system service managers.
+- d9e67a0: feat(adapter-heychat): 新增黑盒语音官方机器人适配器
+  - WebSocket 长连接、心跳与自动重连
+  - 斜杠命令 (type=50) 与普通频道消息 (type=5，实验性)
+  - 频道消息发送/删除与房间信息查询
+
+- fa90690: Build development workspace dependencies before startup, deduplicate repeated plugin flags, and report missing plugin build output as one actionable diagnostic.
+- Updated dependencies [922a341]
+- Updated dependencies [15b2540]
+- Updated dependencies [15b2540]
+- Updated dependencies [15b2540]
+  - @onebots/core@1.2.1
+  - @onebots/web@1.0.8
+
+## 1.2.0
+
+### Minor Changes
+
+- 4564d68: refactor: Phase 3-5 架构优化补完
+
+  Phase 3: 大文件拆分
+  - refactor(core): adapter.ts 1562→382 行, ID 管理提取到 adapter-id-manager.ts
+  - refactor(onebots): app.ts 1209→~400 行, 7 个路由模块 (auth/adapter-api/config/terminal/verification/public-static)
+
+  Phase 4: 测试覆盖提升
+  - test(core): proxy/id-manager/retry 单元测试 (21 用例)
+  - test(adapter-mock): 完整生命周期集成测试 (86 用例)
+  - test(protocol): CQ 码解析 + 格式转换测试 (40+ 用例)
+
+  Phase 5: 工程规范
+  - ci: ESLint flat config, no-explicit-any/no-console 门禁
+  - refactor: 18 适配器 barrel export 清理
+  - chore: 硬编码超时提取为命名常量
+  - docs: CONTRIBUTING.md 中文贡献指南
+
+### Patch Changes
+
+- Updated dependencies [4564d68]
+  - @onebots/core@1.2.0
+
+## 1.1.0
+
+### Minor Changes
+
+- d9fdbd5: refactor: Phase 0+1 架构优化
+
+  Phase 0: 安全与稳定基线
+  - fix(service-manager): execSync → execFileSync, getHomeDir() 安全兜底
+  - fix(app.ts): 空 catch 块加注释或日志输出
+  - chore(vitest): 测试范围扩展到 adapters/ 和 protocols/
+
+  Phase 1: 统一基础设施
+  - feat(core): 新增 proxy.ts 统一代理 Agent 工厂（createProxyAgent, buildProxyUrl, maskProxyUrl）
+  - feat(core): 改进 ConnectionManager（logger 注入, onConnected/onMaxRetriesReached 回调）
+  - refactor: 6 个适配器迁移到共享代理工具, 3 个适配器迁移到 ConnectionManager
+  - fix(onebots/index.ts): 消除 export \* from '@onebots/core'，改为显式导出
+
+### Patch Changes
+
+- Updated dependencies [d9fdbd5]
+  - @onebots/core@1.1.0
+
+## 1.0.7
+
+### Patch Changes
+
+- b00497a: fix: 调整发布流程,做首次release
+- Updated dependencies [b00497a]
+  - @onebots/core@1.0.6
+  - @onebots/web@1.0.7
+
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [ee4e625]
+  - @onebots/core@1.0.5
+  - @onebots/web@1.0.6
+
+## 1.0.5
+
+### Patch Changes
+
+- 4465ece: Web 管理端 `/api/config/schema` 合并适配器配置预设：在未使用 `-r` 加载 `wecom-kf`、`icqq` 等包时仍可提供表单项；并补充 line、email、whatsapp、zulip、mock 的预设。账号管理页平台字段改为可搜索下拉并支持手动输入。
+
+  Docker / HF 镜像与 `development` 的 `pnpm dev` 默认增加 `-r wecom-kf`、`-r icqq`（镜像需在构建阶段用 `NODE_AUTH_TOKEN` 装好 `@icqqjs/icqq`，启动后无需 token）。`development` 增加对 `@onebots/adapter-icqq` 的 workspace 依赖以便解析。
+
+- Updated dependencies [4465ece]
+  - @onebots/web@1.0.5
+
+## 1.0.4
+
+### Patch Changes
+
+- 2645ccf: 新增全局配置 `public_static_dir`：托管站点根静态文件（如企业微信可信域名校验 txt）；Docker / HF 入口脚本创建 `/data/static` 便于与配置一并持久化；Web 管理端「配置 → 站点静态」支持列表、上传与删除；`koa-body` 启用 multipart（单文件 ≤2MB）。在 Hugging Face Space 等已配置 `HF_TOKEN`、`HF_REPO_ID` 时，上传/删除站点静态文件后会自动调用 HF commit 接口，重新打包提交 `config_backup.yaml` 与 `data_backup.tar.gz`（含 static）。
+- Updated dependencies [2645ccf]
+  - @onebots/core@1.0.4
+  - @onebots/web@1.0.4
+
+## 1.0.3
+
+### Patch Changes
+
+- 5d3787b: fix: v1.0.1
+- Updated dependencies [5d3787b]
+  - @onebots/core@1.0.3
+  - @onebots/web@1.0.3
+
+## 1.0.2
+
+### Patch Changes
+
+- 78d4de2: fix: bump version
+- Updated dependencies [78d4de2]
+  - @onebots/core@1.0.2
+  - @onebots/web@1.0.2
+
+## 1.0.1
+
+### Patch Changes
+
+- 4f7255b: chore: 切换到 npm OIDC 可信发布
+  - 移除 NPM_TOKEN 依赖
+  - 使用 GitHub OIDC + Provenance 发布
+  - 所有 25 个包已配置 Trusted Publishers
+
+- Updated dependencies [4f7255b]
+  - @onebots/core@1.0.1
+  - @onebots/web@1.0.1
+
+## 1.0.0
+
+### Major Changes
+
+- 57cf3ba: 🎉 OneBots v1.0.0 首次发布
+
+  ## 核心包
+  - **@onebots/core** - 核心抽象层，定义适配器、账号、事件等基础接口
+  - **onebots** - 主应用包，提供机器人运行时和 HTTP 服务
+  - **@onebots/web** - Web 管理界面
+  - **imhelper** - 客户端 SDK 核心
+
+  ## 平台适配器 (12+)
+
+  | 适配器                    | 平台            | 描述                           |
+  | ------------------------- | --------------- | ------------------------------ |
+  | @onebots/adapter-qq       | QQ              | QQ 官方机器人 API              |
+  | @onebots/adapter-icqq     | ICQQ            | 基于 @icqqjs/icqq 协议         |
+  | @onebots/adapter-kook     | Kook            | Kook (开黑啦) 机器人           |
+  | @onebots/adapter-wechat   | 微信            | 微信公众号                     |
+  | @onebots/adapter-discord  | Discord         | 轻量级 Discord API 实现        |
+  | @onebots/adapter-telegram | Telegram        | 基于 grammy 的 Telegram Bot    |
+  | @onebots/adapter-feishu   | 飞书/Lark       | 飞书/Lark 机器人（可配置端点） |
+  | @onebots/adapter-dingtalk | 钉钉            | 钉钉机器人                     |
+  | @onebots/adapter-slack    | Slack           | Slack 机器人                   |
+  | @onebots/adapter-wecom    | 企业微信        | 企业微信机器人                 |
+  | @onebots/adapter-teams    | Microsoft Teams | MS Teams 机器人                |
+  | @onebots/adapter-line     | Line            | Line Messaging API             |
+  | @onebots/adapter-mock     | Mock            | 测试/开发用模拟适配器          |
+
+  ## 协议实现 (服务端)
+
+  | 协议包                       | 协议       | 描述                      |
+  | ---------------------------- | ---------- | ------------------------- |
+  | @onebots/protocol-satori-v1  | Satori v1  | Satori 协议服务端实现     |
+  | @onebots/protocol-onebot-v11 | OneBot v11 | OneBot v11 协议服务端实现 |
+  | @onebots/protocol-onebot-v12 | OneBot v12 | OneBot v12 协议服务端实现 |
+  | @onebots/protocol-milky-v1   | Milky v1   | Milky 协议服务端实现      |
+
+  ## 客户端 SDK
+
+  | SDK 包               | 协议       | 描述                      |
+  | -------------------- | ---------- | ------------------------- |
+  | @imhelper/satori-v1  | Satori v1  | Satori 协议客户端 SDK     |
+  | @imhelper/onebot-v11 | OneBot v11 | OneBot v11 协议客户端 SDK |
+  | @imhelper/onebot-v12 | OneBot v12 | OneBot v12 协议客户端 SDK |
+  | @imhelper/milky-v1   | Milky v1   | Milky 协议客户端 SDK      |
+
+  ## 主要特性
+  - 🎯 多平台支持 - 统一的 API 接口
+  - 🔌 插件系统 - 灵活的中间件架构
+  - 📡 多协议支持 - Satori、OneBot v11/v12、Milky
+  - 🌐 Web 管理界面 - 可视化管理和监控
+  - 🔒 代理支持 - Discord/Telegram 支持 HTTP/HTTPS 代理
+  - ☁️ 部分 Serverless 支持 - 飞书、钉钉、QQ 等 Webhook 模式
+
+### Patch Changes
+
+- Updated dependencies [57cf3ba]
+  - @onebots/core@1.0.0
+  - @onebots/web@1.0.0

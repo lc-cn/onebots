@@ -1,0 +1,333 @@
+import { describe, expect, it, vi } from "vitest";
+import { ZulipClient } from "./client.js";
+import { ZulipError } from "./errors.js";
+import type { ZulipHttpRequest, ZulipTransport } from "./http.js";
+import type { ZulipConfig } from "./types.js";
+
+const config: ZulipConfig = {
+    account_id: "bot",
+    server_url: "https://example.zulipchat.com",
+    email: "bot@example.com",
+    api_key: "secret",
+};
+
+describe("ZulipClient", () => {
+    it("使用官方 register/events 长轮询并在 stop 时删除队列", async () => {
+        const requests: ZulipHttpRequest[] = [];
+        const transport: ZulipTransport = request => {
+            requests.push(request);
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: "queue-1",
+                    last_event_id: -1,
+                    event_queue_longpoll_timeout_seconds: 30,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                return new Promise((_, reject) => {
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        { once: true },
+                    );
+                });
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(config, { transport });
+
+        await client.start();
+        await vi.waitFor(() => expect(requests.some(item => item.path === "events")).toBe(true));
+        await client.stop();
+
+        expect(requests.map(item => `${item.method} ${item.path}`)).toContain("POST register");
+        expect(requests.map(item => `${item.method} ${item.path}`)).toContain("DELETE events");
+        expect(
+            requests.find(item => item.path === "events" && item.method === "GET")?.timeoutMs,
+        ).toBe(40_000);
+    });
+
+    it("队列被回收后无限恢复并创建新 generation", async () => {
+        let registrations = 0;
+        let eventCalls = 0;
+        const transport: ZulipTransport = request => {
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                registrations += 1;
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: `queue-${registrations}`,
+                    last_event_id: -1,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                eventCalls += 1;
+                if (eventCalls === 1) {
+                    return Promise.reject(
+                        new ZulipError("queue expired", { code: "BAD_EVENT_QUEUE_ID" }),
+                    );
+                }
+                return new Promise((_, reject) => {
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        {
+                            once: true,
+                        },
+                    );
+                });
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(config, {
+            transport,
+            sleep: () => Promise.resolve(),
+        });
+        const errors: ZulipError[] = [];
+        client.on("client_error", error => errors.push(error));
+
+        await client.start();
+        await vi.waitFor(() => expect(registrations).toBe(2));
+        expect(errors[0]?.code).toBe("BAD_EVENT_QUEUE_ID");
+        await client.stop();
+    });
+
+    it("监听器异常时不提交事件，重投成功后才去重", () => {
+        const client = new ZulipClient(
+            { ...config, receive_mode: "manual" },
+            { transport: async () => ({}) },
+        );
+        let attempts = 0;
+        const messageSeen = vi.fn(() => {
+            attempts += 1;
+            if (attempts === 1) throw new Error("listener failed");
+        });
+        const eventSeen = vi.fn();
+        client.on("message", messageSeen);
+        client.on("event", eventSeen);
+
+        const event = { id: 1, type: "message", message: message() } as const;
+        expect(() => client.ingest(event)).toThrow("listener failed");
+        expect(client.ingest(event)).toBe(true);
+        expect(client.ingest(event)).toBe(false);
+
+        expect(messageSeen).toHaveBeenCalledTimes(2);
+        expect(eventSeen).toHaveBeenCalledOnce();
+    });
+
+    it("队列仅在事件投递成功后推进游标", async () => {
+        const eventRequests: ZulipHttpRequest[] = [];
+        let eventCalls = 0;
+        const transport: ZulipTransport = request => {
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: "queue-1",
+                    last_event_id: -1,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                eventRequests.push(request);
+                eventCalls += 1;
+                if (eventCalls === 1) {
+                    return Promise.resolve({
+                        result: "success",
+                        msg: "",
+                        events: [
+                            { id: 1, type: "heartbeat" },
+                            { id: 2, type: "message", message: message() },
+                        ],
+                    });
+                }
+                if (eventCalls === 2) {
+                    return Promise.resolve({
+                        result: "success",
+                        msg: "",
+                        events: [{ id: 2, type: "message", message: message() }],
+                    });
+                }
+                return new Promise((_, reject) =>
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        {
+                            once: true,
+                        },
+                    ),
+                );
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(config, {
+            transport,
+            sleep: () => Promise.resolve(),
+        });
+        let messageAttempts = 0;
+        client.on("message", () => {
+            messageAttempts += 1;
+            if (messageAttempts === 1) throw new Error("temporary failure");
+        });
+
+        await client.start();
+        await vi.waitFor(() => expect(eventRequests).toHaveLength(3));
+
+        expect(eventRequests[1]?.params?.last_event_id).toBe(1);
+        expect(eventRequests[2]?.params?.last_event_id).toBe(2);
+        expect(messageAttempts).toBe(2);
+        await client.stop();
+    });
+
+    it("manual 模式只认证身份，不注册队列并缓存认证结果", async () => {
+        const requests: ZulipHttpRequest[] = [];
+        const client = new ZulipClient(
+            { ...config, receive_mode: "manual" },
+            {
+                transport: async request => {
+                    requests.push(request);
+                    return user();
+                },
+            },
+        );
+
+        await client.start();
+
+        expect(requests.map(request => request.path)).toEqual(["users/me"]);
+        expect(client.getCachedMe()).toEqual(user());
+        await client.stop();
+        expect(client.getCachedMe()).toBeUndefined();
+    });
+
+    it("快速重启时旧 stop 不会清除新 generation 的轮询引用", async () => {
+        const client = new ZulipClient(
+            { ...config, receive_mode: "manual" },
+            { transport: async () => user() },
+        );
+        let resolveOldPoll: (() => void) | undefined;
+        const oldPoll = new Promise<void>(resolve => {
+            resolveOldPoll = resolve;
+        });
+        const newPoll = Promise.resolve();
+        const lifecycle = client as unknown as {
+            started: boolean;
+            pollRequest?: Promise<void>;
+        };
+        lifecycle.started = true;
+        lifecycle.pollRequest = oldPoll;
+
+        const stopping = client.stop();
+        lifecycle.pollRequest = newPoll;
+        resolveOldPoll?.();
+        await stopping;
+
+        expect(lifecycle.pollRequest).toBe(newPoll);
+    });
+
+    it("空事件选择回落到默认订阅，并投递官方命名事件", async () => {
+        const requests: ZulipHttpRequest[] = [];
+        const transport: ZulipTransport = request => {
+            requests.push(request);
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                return Promise.resolve({
+                    result: "success",
+                    msg: "",
+                    queue_id: "queue-1",
+                    last_event_id: -1,
+                });
+            }
+            if (request.path === "events" && request.method === "GET") {
+                return new Promise((_, reject) =>
+                    request.signal?.addEventListener(
+                        "abort",
+                        () => reject(request.signal?.reason),
+                        {
+                            once: true,
+                        },
+                    ),
+                );
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(
+            { ...config, event_queue: { event_types: [] } },
+            { transport },
+        );
+        const subscription = vi.fn();
+        client.on("subscription", subscription);
+
+        await client.start();
+        const registration = requests.find(request => request.path === "register");
+        expect(registration?.params?.event_types).toContain("message");
+        expect(registration?.params?.event_types).toContain("heartbeat");
+        expect(registration?.params?.event_types).toContain("restart");
+        client.ingest({ id: 2, type: "subscription", op: "add" });
+        expect(subscription).toHaveBeenCalledOnce();
+        await client.stop();
+    });
+
+    it("上传文件使用受控 multipart 请求", async () => {
+        const transport = vi.fn<ZulipTransport>().mockResolvedValue({
+            result: "success",
+            msg: "",
+            url: "/user_uploads/a.txt",
+        });
+        const client = new ZulipClient(config, { transport });
+
+        const result = await client.upload(Buffer.from("hello"), "a.txt", "text/plain");
+
+        expect(result.url).toBe("/user_uploads/a.txt");
+        expect(transport).toHaveBeenCalledWith(
+            expect.objectContaining({
+                method: "POST",
+                path: "user_uploads",
+                body: expect.any(Buffer),
+                contentType: expect.stringContaining("multipart/form-data"),
+            }),
+        );
+    });
+
+    it("在创建传输前拒绝不安全或不完整配置", () => {
+        expect(
+            () =>
+                new ZulipClient({
+                    ...config,
+                    server_url: "http://zulip.example.com",
+                }),
+        ).toThrowError(expect.objectContaining({ code: "ZULIP_INVALID_CONFIG" }));
+        expect(
+            () =>
+                new ZulipClient({
+                    ...config,
+                    server_url: "https://zulip.example.com/api/v1",
+                }),
+        ).toThrowError(expect.objectContaining({ code: "ZULIP_INVALID_CONFIG" }));
+    });
+});
+
+function user() {
+    return {
+        result: "success",
+        msg: "",
+        user_id: 1,
+        email: "bot@example.com",
+        full_name: "Bot",
+    };
+}
+
+function message() {
+    return {
+        id: 10,
+        type: "private" as const,
+        sender_id: 2,
+        sender_email: "user@example.com",
+        sender_full_name: "User",
+        content: "hello",
+        timestamp: 100,
+    };
+}

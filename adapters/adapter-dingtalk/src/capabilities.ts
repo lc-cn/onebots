@@ -1,0 +1,110 @@
+import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+import { DINGTALK_PLATFORM_ACTIONS } from "./platform-actions.js";
+
+const platformActions = Object.fromEntries(
+    [...DINGTALK_PLATFORM_ACTIONS].map(action => [
+        action,
+        { support: "native" as const, availability: "permission" as const },
+    ]),
+);
+
+/** 钉钉开放平台当前由运行时真实实现的能力。 */
+export const dingTalkCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
+    actions: {
+        ...platformActions,
+        send_message: {
+            support: "native",
+            scenes: ["private", "group"],
+            availability: "context",
+            note: "主动消息需要企业机器人权限；收到消息后优先使用有效 sessionWebhook",
+        },
+        delete_message: {
+            support: "native",
+            scenes: ["private", "group"],
+            availability: "context",
+            note: "仅企业机器人 OpenAPI 返回的 processQueryKey 可撤回；群消息还需会话 ID",
+        },
+        get_login_info: { support: "native" },
+        get_user_info: {
+            support: "native",
+            availability: "permission",
+            permissions: ["Contact.User.Read"],
+        },
+        get_friend_list: {
+            support: "emulated",
+            availability: "permission",
+            permissions: ["Contact.User.Read"],
+            note: "钉钉没有好友模型，按应用可见的完整组织通讯录投影",
+        },
+        get_friend_info: {
+            support: "emulated",
+            availability: "permission",
+            permissions: ["Contact.User.Read"],
+        },
+        get_group_info: {
+            support: "native",
+            availability: "context",
+            note: "适用于应用有权访问的场景群",
+        },
+        set_group_name: { support: "native", availability: "permission" },
+        get_group_member_list: { support: "native", availability: "permission" },
+        get_group_member_info: {
+            support: "emulated",
+            availability: "permission",
+            note: "先校验场景群成员身份，再由通讯录用户信息补全资料",
+        },
+        invite_group_member: { support: "native", availability: "permission" },
+        kick_group_member: { support: "native", availability: "permission" },
+        call_dingtalk_api: { support: "native", availability: "permission" },
+        send_robot_private_message: { support: "native", availability: "permission" },
+        send_robot_group_message: { support: "native", availability: "permission" },
+        recall_robot_private_messages: { support: "native", availability: "permission" },
+        recall_robot_group_messages: { support: "native", availability: "permission" },
+        get_robot_private_message_status: { support: "native", availability: "permission" },
+        get_robot_group_message_status: { support: "native", availability: "permission" },
+        send_work_notification: { support: "native", availability: "permission" },
+        get_work_notification_result: { support: "native", availability: "permission" },
+        recall_work_notification: { support: "native", availability: "permission" },
+        get_department_users: { support: "native", availability: "permission" },
+        get_sub_departments: { support: "native", availability: "permission" },
+        create_department: { support: "native", availability: "permission" },
+        update_department: { support: "native", availability: "permission" },
+        delete_department: { support: "native", availability: "permission" },
+        get_role_list: { support: "native", availability: "permission" },
+        get_role_users: { support: "native", availability: "permission" },
+        add_user_roles: { support: "native", availability: "permission" },
+        remove_user_roles: { support: "native", availability: "permission" },
+        get_version: { support: "native" },
+        get_status: { support: "native" },
+        get_supported_actions: { support: "native" },
+    },
+    events: {
+        message: { support: "native", scenes: ["private", "group"] },
+        user_added: { support: "native" },
+        user_updated: { support: "native" },
+        user_removed: { support: "native" },
+        member_joined: { support: "native" },
+        member_left: { support: "native" },
+        native_event: {
+            support: "native",
+            note: "未标准化 Stream、卡片和 HTTP 事件以 custom notice 与 raw_event 无损交付",
+        },
+    },
+    segments: {
+        text: { support: "native", direction: "both" },
+        at: { support: "native", direction: "both" },
+        image: { support: "native", direction: "both" },
+        audio: { support: "native", direction: "receive" },
+        video: { support: "native", direction: "receive" },
+        file: { support: "native", direction: "receive" },
+        rich_text: { support: "native", direction: "receive" },
+        markdown: { support: "native", direction: "send" },
+        link: { support: "native", direction: "send" },
+        action_card: { support: "native", direction: "send" },
+    },
+    transports: {
+        stream: { support: "native", mode: "websocket" },
+        webhook: { support: "native", mode: "webhook" },
+        manual: { support: "native", mode: "native", note: "通过 ingest() 接入既有 Host" },
+    },
+});

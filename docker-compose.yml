@@ -1,0 +1,17 @@
+# OneBots 网关 - Docker Compose（使用官方镜像，无需本地构建）
+# 使用：docker compose up -d
+#
+# 必须挂载 ./data 到 /data，以持久化用户配置（config.yaml）与数据库，否则重启后配置会丢失
+
+services:
+  onebots:
+    image: ghcr.io/lc-cn/onebots:master
+    container_name: onebots
+    restart: unless-stopped
+    ports:
+      - "6727:6727"
+    volumes:
+      # 持久化用户配置 config.yaml 与数据（SQLite、日志等）
+      - ./data:/data
+    environment:
+      - NODE_ENV=production
