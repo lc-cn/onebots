@@ -50,6 +50,14 @@ export interface SystemInfo {
     dataDir?: string;
     /** 当前进程已通过加载与注册校验的插件包。 */
     plugins: LoadedPluginInfo[];
+    /** 当前磁盘配置与进程最近成功应用版本的关系。 */
+    configState: RuntimeConfigState;
+}
+
+export interface RuntimeConfigState {
+    status: "in_sync" | "drifted" | "unavailable";
+    appliedAt: string;
+    message: string;
 }
 
 export interface LoadedPluginInfo {

@@ -35,6 +35,7 @@ export async function probeDoctorManagement(
     const credential = await acquireDoctorManagementCredential(base, config, fetcher);
     if (credential.token) {
         checks.push(await probeAuthenticatedManagementHttp(base, credential.token, fetcher));
+        checks.push(await probeAuthenticatedConfigState(base, credential.token, fetcher));
         checks.push(await probeAuthenticatedRuntime(base, credential.token, fetcher));
     } else {
         checks.push({
@@ -42,6 +43,11 @@ export async function probeDoctorManagement(
             level: credential.error ? "error" : "warning",
             message:
                 credential.error ?? "配置未提供 access_token 或用户名/密码，无法验证合法管理凭据",
+        });
+        checks.push({
+            name: "management-config",
+            level: "warning",
+            message: "未获得管理令牌，无法验证在线进程是否已应用当前磁盘配置",
         });
         checks.push({
             name: "management-runtime",
@@ -84,6 +90,58 @@ interface RuntimeAccountSummary {
 interface RuntimeAdapterSummary {
     platform?: unknown;
     accounts?: unknown;
+}
+
+/** 对比在线进程保留的应用快照与它当前看到的磁盘配置。 */
+async function probeAuthenticatedConfigState(
+    base: string,
+    token: string,
+    fetcher: DoctorFetch,
+): Promise<DoctorCheck> {
+    try {
+        const response = await fetcher(`${base}/api/system`, {
+            headers: { authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(2_000),
+        });
+        const payload: unknown = await response.json();
+        if (!response.ok || !isRecord(payload) || !isRecord(payload.configState)) {
+            return {
+                name: "management-config",
+                level: "error",
+                message: `在线配置状态响应无效: HTTP ${response.status}`,
+            };
+        }
+        const status = payload.configState.status;
+        const appliedAt = runtimeLabel(payload.configState.appliedAt, "未知时间");
+        if (status === "in_sync") {
+            return {
+                name: "management-config",
+                level: "ok",
+                message: `在线进程已应用当前磁盘配置（应用时间 ${appliedAt}）`,
+            };
+        }
+        if (status === "drifted") {
+            return {
+                name: "management-config",
+                level: "error",
+                message: `磁盘配置与在线进程已应用的版本不一致（应用时间 ${appliedAt}）；请重新加载或重启`,
+            };
+        }
+        if (status === "unavailable") {
+            return {
+                name: "management-config",
+                level: "error",
+                message: "在线进程无法读取配置快照或当前磁盘配置",
+            };
+        }
+        return {
+            name: "management-config",
+            level: "error",
+            message: "在线配置状态契约无效: status 未知",
+        };
+    } catch (error) {
+        return failedManagementCheck("management-config", "在线配置状态", error);
+    }
 }
 
 /** 通过受保护的管理 API 定位公开 readiness 聚合背后的具体故障出口。 */
@@ -163,6 +221,10 @@ function invalidRuntimeContract(detail: string): DoctorCheck {
 
 function runtimeLabel(value: unknown, fallback: string): string {
     return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function probeAnonymousManagementHttp(

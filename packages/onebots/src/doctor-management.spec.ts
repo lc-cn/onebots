@@ -32,6 +32,7 @@ describe("doctor management probes", () => {
                     { status: 200 },
                 );
             }
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
             expect(input).toBe("http://127.0.0.1:6727/gateway/api/auth/me");
             return authorization
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -50,6 +51,7 @@ describe("doctor management probes", () => {
         expect(checks.map(check => [check.name, check.level])).toEqual([
             ["management-http-anonymous", "ok"],
             ["management-http-authenticated", "ok"],
+            ["management-config", "ok"],
             ["management-runtime", "ok"],
             ["management-ws-anonymous", "ok"],
             ["management-ws-authenticated", "ok"],
@@ -72,6 +74,7 @@ describe("doctor management probes", () => {
             }
             if (input.endsWith("/api/auth/logout")) return new Response(null, { status: 200 });
             if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
             return new Headers(init?.headers).has("authorization")
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -105,7 +108,9 @@ describe("doctor management probes", () => {
         const fetcher = vi.fn(async (input: string) =>
             input.endsWith("/api/adapters")
                 ? new Response("[]", { status: 200 })
-                : new Response(JSON.stringify({ success: true }), { status: 200 }),
+                : input.endsWith("/api/system")
+                  ? inSyncSystemResponse()
+                  : new Response(JSON.stringify({ success: true }), { status: 200 }),
         );
         const upgrade = vi.fn(async () => ({ upgraded: true, status: 101 }));
 
@@ -138,6 +143,7 @@ describe("doctor management probes", () => {
         expect(checks.map(check => [check.name, check.level])).toEqual([
             ["management-http-anonymous", "ok"],
             ["management-http-authenticated", "warning"],
+            ["management-config", "warning"],
             ["management-runtime", "warning"],
             ["management-ws-anonymous", "ok"],
             ["management-ws-authenticated", "warning"],
@@ -171,6 +177,7 @@ describe("doctor management probes", () => {
                     { status: 200 },
                 );
             }
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
             return new Headers(init?.headers).has("authorization")
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -200,6 +207,7 @@ describe("doctor management probes", () => {
         vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "deployment-token");
         const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
             if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
             return new Headers(init?.headers).get("authorization") === "Bearer deployment-token"
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -223,4 +231,55 @@ describe("doctor management probes", () => {
             expect.objectContaining({ headers: { authorization: "Bearer file-token" } }),
         );
     });
+
+    it("fails when the online process has not applied the current disk config", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/system")) {
+                return new Response(
+                    JSON.stringify({
+                        configState: {
+                            status: "drifted",
+                            appliedAt: "2026-08-31T10:00:00.000Z",
+                        },
+                    }),
+                    { status: 200 },
+                );
+            }
+            if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
+            return new Headers(init?.headers).has("authorization")
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: Boolean(token),
+                    status: token ? 101 : 401,
+                }),
+            },
+        );
+
+        expect(checks.find(check => check.name === "management-config")).toEqual({
+            name: "management-config",
+            level: "error",
+            message:
+                "磁盘配置与在线进程已应用的版本不一致（应用时间 2026-08-31T10:00:00.000Z）；请重新加载或重启",
+        });
+    });
 });
+
+function inSyncSystemResponse(): Response {
+    return new Response(
+        JSON.stringify({
+            configState: {
+                status: "in_sync",
+                appliedAt: "2026-08-31T09:00:00.000Z",
+            },
+        }),
+        { status: 200 },
+    );
+}

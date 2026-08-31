@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -121,6 +121,41 @@ describe("BaseApp reload boundary", () => {
             BaseApp.configDir = originalConfigDir;
             if (originalPort === undefined) delete process.env.PORT;
             else process.env.PORT = originalPort;
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    it("账号配置成功落盘后通知宿主更新已应用快照", async () => {
+        const originalConfigDir = BaseApp.configDir;
+        const directory = mkdtempSync(join(tmpdir(), "onebots-persist-hook-"));
+        BaseApp.configDir = directory;
+        const account = { start: vi.fn(async () => undefined) };
+        const adapter = {
+            createAccount: vi.fn(() => account),
+            accounts: new Map(),
+        };
+        const onConfigPersisted = vi.fn();
+        const app = {
+            config: { ...config },
+            isStarted: false,
+            findOrCreateAdapter: vi.fn(() => adapter),
+            onConfigPersisted,
+        } as unknown as BaseApp;
+
+        try {
+            await BaseApp.prototype.addAccount.call(app, {
+                platform: "mock",
+                account_id: "primary",
+            });
+
+            expect(existsSync(BaseApp.configPath)).toBe(true);
+            expect(onConfigPersisted).toHaveBeenCalledOnce();
+            expect(onConfigPersisted).toHaveBeenCalledWith(
+                BaseApp.configPath,
+                expect.stringContaining("mock.primary:"),
+            );
+        } finally {
+            BaseApp.configDir = originalConfigDir;
             rmSync(directory, { recursive: true, force: true });
         }
     });

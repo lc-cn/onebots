@@ -8,6 +8,7 @@ import {
     RuntimeConfigApplicationConflictError,
     saveAndApplyRuntimeConfig,
 } from "./runtime-config-application.js";
+import { RuntimeConfigStateTracker } from "./runtime-config-state.js";
 
 const directories: string[] = [];
 
@@ -28,7 +29,11 @@ afterEach(() => {
 describe("runtime config application", () => {
     it("保存后立即热重载并保留上一版本备份", async () => {
         const file = configFile();
-        const host = { isReloading: false, reload: vi.fn(async () => undefined) };
+        const host = {
+            isReloading: false,
+            reload: vi.fn(async () => undefined),
+            markRuntimeConfigApplied: vi.fn(),
+        };
 
         await expect(
             saveAndApplyRuntimeConfig(host, "access_token: next-token\n", file),
@@ -36,12 +41,17 @@ describe("runtime config application", () => {
         expect(host.reload).toHaveBeenCalledWith({ access_token: "next-token" });
         expect(fs.readFileSync(file, "utf8")).toBe("access_token: next-token\n");
         expect(fs.readFileSync(`${file}.bak`, "utf8")).toBe("access_token: old-token\n");
+        expect(host.markRuntimeConfigApplied).toHaveBeenCalledWith(
+            file,
+            "access_token: next-token\n",
+        );
     });
 
     it("宿主字段变更保留文件并明确要求重启", async () => {
         const file = configFile();
         const host = {
             isReloading: false,
+            markRuntimeConfigApplied: vi.fn(),
             reload: vi.fn(async () => {
                 throw new HostConfigRestartRequiredError(["port"]);
             }),
@@ -53,12 +63,14 @@ describe("runtime config application", () => {
             changedHostFields: ["port"],
         });
         expect(fs.readFileSync(file, "utf8")).toBe("port: 7000\n");
+        expect(host.markRuntimeConfigApplied).not.toHaveBeenCalled();
     });
 
     it("运行态应用失败时恢复旧文件与可用备份", async () => {
         const file = configFile();
         const host = {
             isReloading: false,
+            markRuntimeConfigApplied: vi.fn(),
             reload: vi.fn(async () => {
                 throw new Error("适配器初始化失败");
             }),
@@ -69,6 +81,7 @@ describe("runtime config application", () => {
         ).rejects.toThrow("适配器初始化失败");
         expect(fs.readFileSync(file, "utf8")).toBe("access_token: old-token\n");
         expect(fs.readFileSync(`${file}.bak`, "utf8")).toBe("access_token: old-token\n");
+        expect(host.markRuntimeConfigApplied).not.toHaveBeenCalled();
     });
 
     it("重载进行中拒绝写盘", async () => {
@@ -103,7 +116,11 @@ describe("runtime config application", () => {
 
     it("从磁盘重新读取配置且不产生新的备份", async () => {
         const file = configFile("access_token: disk-token\n");
-        const host = { isReloading: false, reload: vi.fn(async () => undefined) };
+        const host = {
+            isReloading: false,
+            reload: vi.fn(async () => undefined),
+            markRuntimeConfigApplied: vi.fn(),
+        };
 
         await expect(applyRuntimeConfigFile(host, file)).resolves.toEqual({
             applied: true,
@@ -111,7 +128,28 @@ describe("runtime config application", () => {
             changedHostFields: [],
         });
         expect(host.reload).toHaveBeenCalledWith({ access_token: "disk-token" });
+        expect(host.markRuntimeConfigApplied).toHaveBeenCalledWith(
+            file,
+            "access_token: disk-token\n",
+        );
         expect(fs.existsSync(`${file}.bak`)).toBe(false);
+    });
+
+    it("重载期间文件再次变化时不会把未应用的新内容记为同步", async () => {
+        const file = configFile("access_token: applied-token\n");
+        const tracker = new RuntimeConfigStateTracker(file);
+        const host = {
+            isReloading: false,
+            reload: vi.fn(async () => {
+                fs.writeFileSync(file, "access_token: external-token\n");
+            }),
+            markRuntimeConfigApplied: (_path: string, source: string) =>
+                tracker.markApplied(source),
+        };
+
+        await applyRuntimeConfigFile(host, file);
+
+        expect(tracker.inspect()).toMatchObject({ status: "drifted" });
     });
 
     it("保存与磁盘重载共享同一个并发锁", async () => {

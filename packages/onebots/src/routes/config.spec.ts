@@ -38,6 +38,11 @@ function setup(reload: App["reload"], isReloading = false) {
                 entryPath: "/runtime/adapter-mock/lib/index.js",
             },
         ],
+        runtimeConfigState: {
+            status: "in_sync",
+            appliedAt: "2026-08-31T09:00:00.000Z",
+            message: "磁盘配置与当前进程最近应用的版本一致",
+        },
     } as unknown as App;
     registerConfigRoutes(app, router as never);
     return {
@@ -62,6 +67,10 @@ describe("configuration route", () => {
         systemHandler(ctx);
 
         expect(ctx.body).toMatchObject({
+            configState: {
+                status: "in_sync",
+                appliedAt: "2026-08-31T09:00:00.000Z",
+            },
             plugins: [
                 {
                     type: "adapter",

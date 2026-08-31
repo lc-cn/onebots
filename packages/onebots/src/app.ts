@@ -40,6 +40,7 @@ import {
 } from "./management-auth.js";
 import type { WebSocket } from "ws";
 import { ensureManagementCredentials } from "./management-credentials.js";
+import { RuntimeConfigStateTracker } from "./runtime-config-state.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -66,6 +67,7 @@ export class App extends BaseApp {
     private _messageDebug: MessageDebugManager;
     public ptyTerminal: ReturnType<typeof import("@karinjs/node-pty").spawn> | null = null;
     public terminalClients: Set<WebSocket> = new Set();
+    private readonly runtimeConfigStateTracker: RuntimeConfigStateTracker;
 
     private static readonly DEFAULT_TOKEN_EXPIRATION_MS = 12 * 60 * 60 * 1000;
     private static readonly REFRESH_TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -94,6 +96,7 @@ export class App extends BaseApp {
 
     constructor(config: App.Config) {
         super(config);
+        this.runtimeConfigStateTracker = new RuntimeConfigStateTracker(BaseApp.configPath);
 
         if (client) this.logger.info(`使用 Web 前端目录: ${client}`);
         else this.logger.warn("未找到 @onebots/web/dist，管理端页面将不可用");
@@ -170,6 +173,19 @@ export class App extends BaseApp {
         return getLoadedPlugins();
     }
 
+    /** 当前磁盘配置是否仍与最近一次成功应用的来源一致。 */
+    get runtimeConfigState() {
+        return this.runtimeConfigStateTracker.inspect();
+    }
+
+    markRuntimeConfigApplied(configPath: string, source: string): void {
+        if (configPath === BaseApp.configPath) this.runtimeConfigStateTracker.markApplied(source);
+    }
+
+    protected override onConfigPersisted(configPath: string, content: string): void {
+        this.markRuntimeConfigApplied(configPath, content);
+    }
+
     async start() {
         this.assertCanStart();
         if (this.isStarted) return;
@@ -212,6 +228,7 @@ export class App extends BaseApp {
                         adapters: this.adapterInfos,
                         protocol: ProtocolRegistry.getAllMetadata(),
                         plugins: this.pluginInfos,
+                        configState: this.runtimeConfigState,
                         app: this.info,
                         schema: getAppConfigSchema(),
                         logs: fs.existsSync(BaseApp.logFile)

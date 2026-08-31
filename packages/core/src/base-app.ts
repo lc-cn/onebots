@@ -244,9 +244,11 @@ export class BaseApp extends Koa {
         const account = adapter.createAccount(config);
         adapter.accounts.set(config.account_id, account);
         if (this.isStarted) await account.start();
-        writeConfigFileAtomic(BaseApp.configPath, yaml.dump(deepClone(this.config)), {
+        const content = yaml.dump(deepClone(this.config));
+        writeConfigFileAtomic(BaseApp.configPath, content, {
             backup: true,
         });
+        this.onConfigPersisted(BaseApp.configPath, content);
     }
 
     public async updateAccount<P extends keyof Adapter.Configs>(config: Adapter.Configs[P]) {
@@ -267,8 +269,13 @@ export class BaseApp extends Koa {
         await account.stop(force);
         delete this.config[`${p}.${uin}`];
         adapter.accounts.delete(uin);
-        writeConfigFileAtomic(BaseApp.configPath, yaml.dump(this.config), { backup: true });
+        const content = yaml.dump(this.config);
+        writeConfigFileAtomic(BaseApp.configPath, content, { backup: true });
+        this.onConfigPersisted(BaseApp.configPath, content);
     }
+
+    /** 配置由核心账号操作成功落盘后的扩展钩子。 */
+    protected onConfigPersisted(_configPath: string, _content: string): void {}
 
     get accounts() {
         return [...this.adapters.values()]

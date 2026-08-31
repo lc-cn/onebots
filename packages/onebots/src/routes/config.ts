@@ -11,7 +11,7 @@ import { RuntimeConfigApplicationConflictError } from "../runtime-config-applica
  *
  * - GET/POST /api/config — read / write the config YAML file
  * - GET  /api/config/schema — JSON schema for the config
- * - GET  /api/system — app info and verified runtime plugin inventory
+ * - GET  /api/system — app info, runtime plugin inventory and config sync state
  * - POST /api/system/restart — graceful shutdown
  * - POST /api/system/backup-to-hf — push config + data dir to Hugging Face
  */
@@ -47,6 +47,7 @@ export function registerConfigRoutes(app: App, router: Router): void {
             configPath: BaseApp.configPath,
             dataDir: BaseApp.dataDir,
             plugins: app.pluginInfos,
+            configState: app.runtimeConfigState,
         };
     });
 

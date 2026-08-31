@@ -2,7 +2,8 @@
     <div class="h-full overflow-y-auto">
         <div class="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-6">
             <!-- 页头 -->
-            <header class="mb-6 flex items-center justify-between gap-4 border-b border-border pb-4">
+            <header
+                class="mb-6 flex items-center justify-between gap-4 border-b border-border pb-4">
                 <h2 class="flex items-center gap-2 text-xl font-semibold text-fg">
                     <IconDashboard :size="22" class="text-fg-secondary" />
                     系统信息
@@ -119,7 +120,9 @@
                             {{ systemInfo.process_cwd }}
                         </dd>
                     </div>
-                    <div v-if="systemInfo.configDir" class="flex items-baseline gap-3 md:col-span-2">
+                    <div
+                        v-if="systemInfo.configDir"
+                        class="flex items-baseline gap-3 md:col-span-2">
                         <dt class="w-24 shrink-0 text-sm text-fg-secondary">配置目录</dt>
                         <dd class="flex min-w-0 items-center gap-1.5">
                             <span class="min-w-0 truncate font-mono text-xs text-fg">
@@ -134,10 +137,31 @@
                             </UiTooltip>
                         </dd>
                     </div>
-                    <div v-if="systemInfo.configPath" class="flex items-baseline gap-3 md:col-span-2">
+                    <div
+                        v-if="systemInfo.configPath"
+                        class="flex items-baseline gap-3 md:col-span-2">
                         <dt class="w-24 shrink-0 text-sm text-fg-secondary">配置文件</dt>
                         <dd class="min-w-0 truncate font-mono text-xs text-fg">
                             {{ systemInfo.configPath }}
+                        </dd>
+                    </div>
+                    <div class="flex items-center gap-3 md:col-span-2">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">配置状态</dt>
+                        <dd class="flex min-w-0 items-center gap-2">
+                            <UiBadge
+                                :variant="
+                                    systemInfo.configState.status === 'in_sync'
+                                        ? 'success'
+                                        : 'danger'
+                                "
+                                dot>
+                                {{ configStateLabel }}
+                            </UiBadge>
+                            <span
+                                class="truncate text-xs text-fg-tertiary"
+                                :title="systemInfo.configState.message">
+                                最近应用 {{ formatAppliedAt(systemInfo.configState.appliedAt) }}
+                            </span>
                         </dd>
                     </div>
                     <div v-if="systemInfo.dataDir" class="flex items-baseline gap-3 md:col-span-2">
@@ -171,11 +195,11 @@
                         class="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-3">
                         <div class="flex min-w-0 flex-1 items-center gap-2">
                             <UiBadge :variant="plugin.type === 'adapter' ? 'success' : 'neutral'">
-                                {{ plugin.type === 'adapter' ? '适配器' : '协议' }}
+                                {{ plugin.type === "adapter" ? "适配器" : "协议" }}
                             </UiBadge>
                             <span class="font-medium text-fg">{{ plugin.name }}</span>
                             <span class="truncate font-mono text-xs text-fg-secondary">
-                                {{ plugin.packageName }}@{{ plugin.version ?? '未知版本' }}
+                                {{ plugin.packageName }}@{{ plugin.version ?? "未知版本" }}
                             </span>
                         </div>
                         <span
@@ -192,26 +216,36 @@
             <UiCard>
                 <template #header>
                     <span class="flex-1">服务状态</span>
-                    <UiButton variant="ghost" size="sm" :loading="healthLoading" @click="checkHealth">
+                    <UiButton
+                        variant="ghost"
+                        size="sm"
+                        :loading="healthLoading"
+                        @click="checkHealth">
                         <IconRefresh v-if="!healthLoading" :size="14" />
                         刷新
                     </UiButton>
                 </template>
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div class="flex items-center gap-2.5">
-                        <IconCircleCheckFilled v-if="healthStatus.ok" :size="20" class="text-success" />
+                        <IconCircleCheckFilled
+                            v-if="healthStatus.ok"
+                            :size="20"
+                            class="text-success" />
                         <IconCircleXFilled v-else :size="20" class="text-danger" />
                         <span class="flex-1 text-sm text-fg-secondary">/health（存活）</span>
                         <UiBadge :variant="healthStatus.ok ? 'success' : 'danger'" dot>
-                            {{ healthStatus.ok ? '正常' : healthStatus.error || '异常' }}
+                            {{ healthStatus.ok ? "正常" : healthStatus.error || "异常" }}
                         </UiBadge>
                     </div>
                     <div class="flex items-center gap-2.5">
-                        <IconCircleCheckFilled v-if="readyStatus.ok" :size="20" class="text-success" />
+                        <IconCircleCheckFilled
+                            v-if="readyStatus.ok"
+                            :size="20"
+                            class="text-success" />
                         <IconCircleXFilled v-else :size="20" class="text-danger" />
                         <span class="flex-1 text-sm text-fg-secondary">/ready（就绪）</span>
                         <UiBadge :variant="readyStatus.ok ? 'success' : 'danger'" dot>
-                            {{ readyStatus.ok ? '正常' : readyStatus.error || '异常' }}
+                            {{ readyStatus.ok ? "正常" : readyStatus.error || "异常" }}
                         </UiBadge>
                     </div>
                 </div>
@@ -221,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import {
     IconDashboard,
     IconClock,
@@ -232,16 +266,16 @@ import {
     IconCircleXFilled,
     IconRefresh,
     IconUpload,
-} from '@tabler/icons-vue';
-import { UiButton, UiCard, UiBadge } from '../ui/index';
-import UiSwitch from '../ui/UiSwitch.vue';
-import UiTooltip from '../ui/UiTooltip.vue';
-import { useToast } from '../ui/toast';
-import { useConfirm } from '../ui/confirm';
-import { useApi } from '../composables/useApi';
-import { authFetch } from '../composables/useAuth';
-import { formatSize, formatTime } from '../utils';
-import { buildApiUrl } from '../config';
+} from "@tabler/icons-vue";
+import { UiButton, UiCard, UiBadge } from "../ui/index";
+import UiSwitch from "../ui/UiSwitch.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
+import { useToast } from "../ui/toast";
+import { useConfirm } from "../ui/confirm";
+import { useApi } from "../composables/useApi";
+import { authFetch } from "../composables/useAuth";
+import { formatSize, formatTime } from "../utils";
+import { buildApiUrl } from "../config";
 
 const { systemInfo, fetchSystemInfo } = useApi();
 const toast = useToast();
@@ -259,9 +293,21 @@ const autoRefresh = ref(true);
 
 const memoryUsagePercent = computed(() => {
     const info = systemInfo.value;
-    if (!info || !info.total_memory) return '0.0';
+    if (!info || !info.total_memory) return "0.0";
     return (((info.total_memory - info.free_memory) / info.total_memory) * 100).toFixed(1);
 });
+
+const configStateLabel = computed(() => {
+    const status = systemInfo.value?.configState.status;
+    if (status === "in_sync") return "已应用";
+    if (status === "drifted") return "磁盘配置待应用";
+    return "无法校验";
+});
+
+const formatAppliedAt = (value: string) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN");
+};
 
 const startAutoRefresh = () => {
     stopAutoRefresh();
@@ -277,7 +323,7 @@ const stopAutoRefresh = () => {
     }
 };
 
-watch(autoRefresh, (val) => {
+watch(autoRefresh, val => {
     if (val) startAutoRefresh();
     else stopAutoRefresh();
 });
@@ -285,15 +331,15 @@ watch(autoRefresh, (val) => {
 async function handleBackup() {
     backupLoading.value = true;
     try {
-        const res = await authFetch(buildApiUrl('/api/system/backup-to-hf'), { method: 'POST' });
+        const res = await authFetch(buildApiUrl("/api/system/backup-to-hf"), { method: "POST" });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data?.success) {
-            toast.success(data?.message ?? '已备份到仓库');
+            toast.success(data?.message ?? "已备份到仓库");
         } else {
-            toast.error(data?.message ?? '备份失败');
+            toast.error(data?.message ?? "备份失败");
         }
     } catch (error) {
-        toast.error((error as Error).message ?? '请求失败');
+        toast.error((error as Error).message ?? "请求失败");
     } finally {
         backupLoading.value = false;
     }
@@ -304,11 +350,11 @@ async function checkHealth() {
     healthStatus.value = { ok: false };
     readyStatus.value = { ok: false };
     try {
-        const healthRes = await fetch(buildApiUrl('/health') || '/health');
+        const healthRes = await fetch(buildApiUrl("/health") || "/health");
         healthStatus.value = healthRes.ok
             ? { ok: true }
             : { ok: false, error: `HTTP ${healthRes.status}` };
-        const readyRes = await fetch(buildApiUrl('/ready') || '/ready');
+        const readyRes = await fetch(buildApiUrl("/ready") || "/ready");
         readyStatus.value = readyRes.ok
             ? { ok: true }
             : { ok: false, error: `HTTP ${readyRes.status}` };
@@ -322,25 +368,25 @@ async function checkHealth() {
 
 async function handleRestart() {
     const confirmed = await confirm({
-        title: '重启服务',
+        title: "重启服务",
         message:
-            '重启后当前进程将退出。若在 Docker 中运行且已设置 restart 策略，容器将自动重新拉起；否则需手动重新启动服务。确认重启？',
-        confirmText: '确认重启',
-        cancelText: '取消',
+            "重启后当前进程将退出。若在 Docker 中运行且已设置 restart 策略，容器将自动重新拉起；否则需手动重新启动服务。确认重启？",
+        confirmText: "确认重启",
+        cancelText: "取消",
         danger: true,
     });
     if (!confirmed) return;
     restartLoading.value = true;
     try {
-        const res = await authFetch(buildApiUrl('/api/system/restart'), { method: 'POST' });
+        const res = await authFetch(buildApiUrl("/api/system/restart"), { method: "POST" });
         if (res.ok) {
-            toast.success('服务即将重启，请稍后刷新页面（Docker 下约 10 秒内可恢复）');
+            toast.success("服务即将重启，请稍后刷新页面（Docker 下约 10 秒内可恢复）");
         } else {
             const data = await res.json().catch(() => ({}));
-            toast.error(data?.message || '重启请求失败');
+            toast.error(data?.message || "重启请求失败");
         }
     } catch (error) {
-        toast.error((error as Error).message || '请求失败');
+        toast.error((error as Error).message || "请求失败");
     } finally {
         restartLoading.value = false;
     }

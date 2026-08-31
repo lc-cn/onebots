@@ -11,6 +11,7 @@ import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-vali
 export interface RuntimeConfigApplicationHost {
     readonly isReloading: boolean;
     reload(config: BaseApp.Config): Promise<void>;
+    markRuntimeConfigApplied?(configPath: string, source: string): void;
 }
 
 export interface RuntimeConfigApplicationResult {
@@ -45,9 +46,10 @@ export async function applyRuntimeConfigFile(
     configPath = BaseApp.configPath,
 ): Promise<RuntimeConfigApplicationResult> {
     return runExclusiveRuntimeConfigApplication(host, async () => {
-        const config = parseRuntimeConfig(fs.readFileSync(configPath, "utf8"));
+        const source = fs.readFileSync(configPath, "utf8");
+        const config = parseRuntimeConfig(source);
         validateRuntimeConfig(config);
-        return reloadRuntimeConfig(host, config as BaseApp.Config);
+        return reloadRuntimeConfig(host, config as BaseApp.Config, configPath, source);
     });
 }
 
@@ -78,7 +80,7 @@ async function saveAndApplyRuntimeConfigUnlocked(
     writeConfigFileAtomic(configPath, content, { backup: true });
 
     try {
-        return await reloadRuntimeConfig(host, config as BaseApp.Config);
+        return await reloadRuntimeConfig(host, config as BaseApp.Config, configPath, content);
     } catch (error) {
         try {
             if (previousContent === undefined) fs.rmSync(configPath, { force: true });
@@ -96,9 +98,12 @@ async function saveAndApplyRuntimeConfigUnlocked(
 async function reloadRuntimeConfig(
     host: RuntimeConfigApplicationHost,
     config: BaseApp.Config,
+    configPath: string,
+    source: string,
 ): Promise<RuntimeConfigApplicationResult> {
     try {
         await host.reload(config);
+        host.markRuntimeConfigApplied?.(configPath, source);
         return { applied: true, restartRequired: false, changedHostFields: [] };
     } catch (error) {
         if (error instanceof HostConfigRestartRequiredError) {
