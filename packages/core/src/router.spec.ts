@@ -56,4 +56,54 @@ describe("Router WebSocket lifecycle", () => {
         expect(server.listenerCount("upgrade")).toBe(0);
         expect(client.readyState).toBe(WebSocket.CLOSED);
     });
+
+    it("在握手前拒绝未授权 WebSocket，并允许通过授权的请求", async () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+        const wsServer = router.ws("/protected", {
+            authorize: request => request.headers.authorization === "Bearer secret",
+        });
+        let connections = 0;
+        wsServer.on("connection", () => connections++);
+
+        server.listen(0, "127.0.0.1");
+        await once(server, "listening");
+        const address = server.address();
+        if (!address || typeof address === "string") throw new Error("测试服务器未监听 TCP");
+        const url = `ws://127.0.0.1:${address.port}/protected`;
+
+        await expect(rejectedUpgradeStatus(url)).resolves.toEqual({
+            status: 401,
+            authenticate: "Bearer",
+        });
+        expect(connections).toBe(0);
+
+        const authorized = new WebSocket(url, {
+            headers: { Authorization: "Bearer secret" },
+        });
+        await once(authorized, "open");
+        expect(connections).toBe(1);
+        authorized.close();
+        await once(authorized, "close");
+        await router.cleanupAsync();
+    });
 });
+
+function rejectedUpgradeStatus(
+    url: string,
+): Promise<{ status: number | undefined; authenticate: string | undefined }> {
+    return new Promise((resolve, reject) => {
+        const client = new WebSocket(url);
+        client.once("unexpected-response", (_request, response) => {
+            const result = {
+                status: response.statusCode,
+                authenticate: response.headers["www-authenticate"],
+            };
+            response.resume();
+            resolve(result);
+        });
+        client.once("open", () => reject(new Error("未授权 WebSocket 意外完成握手")));
+        client.once("error", () => undefined);
+    });
+}

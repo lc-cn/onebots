@@ -12,6 +12,13 @@ export type RouterContext = KoaRouterContext & {
 };
 export type { Next } from "koa";
 
+export type WebSocketUpgradeAuthorizer = (request: IncomingMessage) => boolean;
+
+export interface WebSocketRouteOptions {
+    /** 在协议升级前授权请求；返回 false 或抛错时以 HTTP 401 拒绝。 */
+    authorize?: WebSocketUpgradeAuthorizer;
+}
+
 export class WsServer<
     T extends typeof WebSocket = typeof WebSocket,
     U extends typeof IncomingMessage = typeof IncomingMessage,
@@ -41,6 +48,7 @@ export namespace WsServer {
  */
 export class Router extends KoaRouter {
     private readonly wsMap = new Map<string, WsServer>();
+    private readonly wsAuthorizers = new Map<string, WebSocketUpgradeAuthorizer>();
     private upgradeHandler?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 
     constructor(
@@ -67,6 +75,22 @@ export class Router extends KoaRouter {
                 return;
             }
 
+            const authorize = this.wsAuthorizers.get(pathname);
+            if (authorize) {
+                let authorized = false;
+                try {
+                    authorized = authorize(request);
+                } catch {
+                    // 授权器异常时安全地拒绝升级，避免把内部错误暴露给客户端。
+                }
+                if (!authorized) {
+                    this.rejectUpgrade(socket, 401, "Unauthorized", {
+                        "WWW-Authenticate": "Bearer",
+                    });
+                    return;
+                }
+            }
+
             wsServer.handleUpgrade(request, socket, head, ws => {
                 wsServer.emit("connection", ws, request);
             });
@@ -74,8 +98,18 @@ export class Router extends KoaRouter {
         this.server.on("upgrade", this.upgradeHandler);
     }
 
-    private rejectUpgrade(socket: Duplex, status: number, reason: string): void {
-        socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\n\r\n`);
+    private rejectUpgrade(
+        socket: Duplex,
+        status: number,
+        reason: string,
+        headers: Readonly<Record<string, string>> = {},
+    ): void {
+        const serializedHeaders = Object.entries(headers)
+            .map(([name, value]) => `${name}: ${value}\r\n`)
+            .join("");
+        socket.end(
+            `HTTP/1.1 ${status} ${reason}\r\n${serializedHeaders}Connection: close\r\n\r\n`,
+        );
     }
 
     private detachUpgradeHandler(): void {
@@ -93,7 +127,7 @@ export class Router extends KoaRouter {
     }
 
     /** 注册不受 Koa prefix 影响的 WebSocket pathname。 */
-    ws(path: string): WsServer {
+    ws(path: string, options: WebSocketRouteOptions = {}): WsServer {
         const normalized = this.normalizeWsPath(path);
         if (this.wsMap.has(normalized)) {
             throw new Error(`WebSocket server already exists at path: ${normalized}`);
@@ -101,6 +135,7 @@ export class Router extends KoaRouter {
 
         const wsServer = new WsServer({ noServer: true, path: normalized });
         this.wsMap.set(normalized, wsServer);
+        if (options.authorize) this.wsAuthorizers.set(normalized, options.authorize);
         return wsServer;
     }
 
@@ -131,6 +166,7 @@ export class Router extends KoaRouter {
         if (!wsServer) return false;
 
         this.wsMap.delete(normalized);
+        this.wsAuthorizers.delete(normalized);
         this.terminateClients(wsServer);
         wsServer.close();
         return true;
@@ -141,6 +177,7 @@ export class Router extends KoaRouter {
         this.detachUpgradeHandler();
         const servers = [...this.wsMap.values()];
         this.wsMap.clear();
+        this.wsAuthorizers.clear();
         for (const wsServer of servers) {
             this.terminateClients(wsServer);
             wsServer.close();
@@ -152,6 +189,7 @@ export class Router extends KoaRouter {
         this.detachUpgradeHandler();
         const servers = [...this.wsMap.values()];
         this.wsMap.clear();
+        this.wsAuthorizers.clear();
         await Promise.all(servers.map(wsServer => this.closeWsServer(wsServer)));
     }
 

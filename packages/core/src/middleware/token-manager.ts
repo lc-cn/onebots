@@ -165,6 +165,14 @@ export class TokenManager {
         return true;
     }
 
+    /** 撤销全部访问令牌与刷新令牌，用于管理凭据轮换。 */
+    revokeAll(): number {
+        const revoked = [...this.tokens.keys()].filter(key => !key.startsWith("refresh:")).length;
+        this.tokens.clear();
+        if (revoked > 0) logger.info(`All tokens revoked: ${revoked}`);
+        return revoked;
+    }
+
     /**
      * 获取令牌信息
      */

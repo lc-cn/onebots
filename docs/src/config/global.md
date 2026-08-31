@@ -69,7 +69,7 @@ OneBots 在连接平台或启动协议传输之前，会使用当前通过 `-r` 
 
 Web 管理端的“保存并应用”会先原子保存，再热重载账号与协议。运行态应用失败时，磁盘配置和运行态都会恢复上一版本；端口、路径、数据库等宿主参数会保留到文件，并明确列出需要重启后生效的字段。另一项保存或重载进行中时返回 HTTP 409，不会覆盖正在应用的配置。
 
-仍使用根管理 WebSocket 的集成可以发送 `{ "action": "system.saveConfig", "data": "...", "echo": "request-id" }` 或 `system.reload`。两者使用同一事务与并发锁，并返回 `{ "event": "system.config.result", "echo": "request-id", "data": ... }`；失败回执的 `code` 为 `CONFIG_INVALID`、`CONFIG_CONFLICT` 或 `CONFIG_APPLY_FAILED`。`system.reload` 只重新读取磁盘配置，不重写文件或创建备份。
+仍使用根管理 WebSocket 的集成必须在握手时通过 `Authorization: Bearer <token>` 或 `?access_token=<token>` 鉴权，未授权请求会在升级前返回 HTTP 401。连接后可以发送 `{ "action": "system.saveConfig", "data": "...", "echo": "request-id" }` 或 `system.reload`。两者使用同一事务与并发锁，并返回 `{ "event": "system.config.result", "echo": "request-id", "data": ... }`；失败回执的 `code` 为 `CONFIG_INVALID`、`CONFIG_CONFLICT` 或 `CONFIG_APPLY_FAILED`。`system.reload` 只重新读取磁盘配置，不重写文件或创建备份。
 
 部署前可使用与服务相同的插件参数执行：
 

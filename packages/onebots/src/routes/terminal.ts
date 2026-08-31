@@ -3,6 +3,11 @@ import type { Router } from "@onebots/core";
 import * as pty from "@karinjs/node-pty";
 import { existsSync, readFileSync } from "fs";
 import type { App } from "../app.js";
+import {
+    authorizeManagementUpgrade,
+    extractManagementToken,
+    validateManagementToken,
+} from "../management-auth.js";
 
 /** SSE 心跳间隔（毫秒） */
 const SSE_HEARTBEAT_INTERVAL_MS = 30000;
@@ -17,41 +22,13 @@ const TERMINAL_RESTART_DELAY_MS = 500;
  *  SSE /api/logs      — real-time log stream (stdout / stderr interception)
  */
 export function registerTerminalRoutes(app: App, router: Router): void {
-    const expectedAccessToken: string | undefined =
-        (app.config as { access_token?: string }).access_token?.trim() ||
-        process.env.ONEBOTS_ACCESS_TOKEN?.trim() ||
-        undefined;
-
-    /** Extract a Bearer token or ?access_token from an http.IncomingMessage. */
-    const getTokenFromRequest = (request: import("http").IncomingMessage): string | undefined => {
-        const authHeader = request.headers.authorization;
-        if (authHeader && typeof authHeader === "string") {
-            const match = authHeader.match(/^Bearer\s+(.+)$/i);
-            return match ? match[1] : authHeader;
-        }
-        try {
-            const url = new URL(request.url || "/", "http://localhost");
-            return url.searchParams.get("access_token") || undefined;
-        } catch {
-            return undefined;
-        }
-    };
-
     /* ── PTY 终端 WebSocket ────────────────────────────────────── */
 
-    const terminalWs = router.ws("/api/terminal");
+    const terminalWs = router.ws("/api/terminal", {
+        authorize: request => authorizeManagementUpgrade(app, request),
+    });
     terminalWs.on("connection", (client, request) => {
-        const token = getTokenFromRequest(request);
-        const valid =
-            !!token &&
-            (expectedAccessToken
-                ? token === expectedAccessToken
-                : app.tokenManager.validateToken(token).valid);
-        if (!valid) {
-            client.close(1008, "Unauthorized");
-            return;
-        }
-
+        const managementToken = extractManagementToken(request);
         // 创建 PTY 终端实例（如果不存在）
         if (!app.ptyTerminal) {
             const shell = process.platform === "win32" ? "powershell.exe" : "bash";
@@ -94,6 +71,10 @@ export function registerTerminalRoutes(app: App, router: Router): void {
 
         // 监听客户端消息（用户输入）
         client.on("message", (msg: Buffer) => {
+            if (!validateManagementToken(app, managementToken).valid) {
+                client.close(1008, "Unauthorized");
+                return;
+            }
             try {
                 const payload = JSON.parse(msg.toString());
                 if (payload.type === "input" && app.ptyTerminal) {

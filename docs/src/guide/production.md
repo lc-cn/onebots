@@ -35,6 +35,12 @@ OneBots 提供了完整的生产级功能，包括安全性、稳定性和可观
 
 **自动启用**: 已在 `BaseApp` 中自动集成
 
+### 管理面鉴权边界
+
+`/api/*`、根管理 WebSocket `/` 与终端 WebSocket `/api/terminal` 使用同一组动态认证规则。请求可以携带顶层 `access_token`，也可以使用用户名密码登录后签发的会话 token；WebSocket 可通过 `Authorization: Bearer <token>` 或 `?access_token=<token>` 传递。未授权 WebSocket 会在协议升级前返回 HTTP 401，不会先建立连接再关闭，因此无法收到包含完整配置的 `system.sync`。
+
+通过“保存并应用”轮换 `username`、`password` 或 `access_token` 后，HTTP 登录和 WebSocket upgrade 会立即使用新值。已有访问与刷新令牌会全部撤销，已连接的根管理与终端 WebSocket 会以策略违规状态关闭；只修改账号、协议或日志级别不会中断管理会话。
+
 ### 令牌管理
 
 完整的令牌生命周期管理。
