@@ -15,6 +15,7 @@ import {
 } from "./adapter-capability.js";
 import { UnsupportedCapabilityError, type UnsupportedCapabilityReason } from "./errors.js";
 import { AdapterActionDefaults } from "./adapter-actions.js";
+import { FailureCollector } from "./async-utils.js";
 import "./adapter-types.js";
 import "./adapter-types-extended.js";
 
@@ -202,9 +203,11 @@ export abstract class Adapter<
         const stopAccounts = [...this.accounts.values()].filter(account => {
             return account_id ? account.account_id === account_id : true;
         });
+        const failures = new FailureCollector();
         for (const account of stopAccounts) {
-            await account.stop();
+            await failures.capture(() => account.stop());
         }
+        failures.throwIfAny(`${failures.size} 个适配器账号停止失败`);
     }
 }
 

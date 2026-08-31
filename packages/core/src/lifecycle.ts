@@ -6,6 +6,7 @@
 import { EventEmitter } from 'node:events';
 import { ResourceError } from './errors.js';
 import type { Dispose } from './types.js';
+import { FailureCollector } from './async-utils.js';
 
 export interface LifecycleHook {
     /** 初始化钩子 */
@@ -91,13 +92,19 @@ export class LifecycleManager extends EventEmitter {
      * 停止所有钩子
      */
     async stop(): Promise<void> {
-        this.emit('beforeStop');
+        const failures = new FailureCollector();
+        await failures.capture(() => {
+            this.emit('beforeStop');
+        });
         for (const hook of this.hooks) {
             if (hook.onStop) {
-                await hook.onStop();
+                await failures.capture(() => hook.onStop!());
             }
         }
-        this.emit('afterStop');
+        await failures.capture(() => {
+            this.emit('afterStop');
+        });
+        failures.throwIfAny(`${failures.size} 个生命周期停止操作失败`);
     }
 
     /**
@@ -169,17 +176,16 @@ export class LifecycleManager extends EventEmitter {
             }, this.shutdownTimeout);
         }
 
+        const failures = new FailureCollector();
+        await failures.capture(() => this.stop());
+        await failures.capture(() => this.cleanup());
+        if (timeout) {
+            clearTimeout(timeout);
+        }
         try {
-            await this.stop();
-            await this.cleanup();
-            if (timeout) {
-                clearTimeout(timeout);
-            }
+            failures.throwIfAny(`${failures.size} 个优雅关闭操作失败`);
             this.emit('shutdownComplete');
         } catch (error) {
-            if (timeout) {
-                clearTimeout(timeout);
-            }
             this.emit('shutdownError', error);
             throw error;
         }

@@ -35,6 +35,7 @@ export type { ApplicationIdentity } from "./app-observability.js";
 import { resolvePublicStaticRoot } from "./public-static-root.js";
 import { assertHostConfigReloadable, resolveListenPort } from "./app-reload.js";
 import { writeConfigFileAtomic } from "./config-file.js";
+import { emitAllAwaited, FailureCollector } from "./async-utils.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -338,17 +339,20 @@ export class BaseApp extends Koa {
         }
     }
 
-    private async stopAdapters(): Promise<void> {
+    private async stopAdapters(throwOnFailure = false): Promise<void> {
+        const failures = new FailureCollector();
         await Promise.all(
             [...this.adapters].map(async ([platform, adapter]) => {
-                try {
-                    await adapter.stop();
-                } catch (error) {
-                    const wrappedError = ErrorHandler.wrap(error, { platform });
-                    this.enhancedLogger.error(wrappedError, { platform });
-                }
+                await failures.capture(
+                    () => adapter.stop(),
+                    error => {
+                        const wrappedError = ErrorHandler.wrap(error, { platform });
+                        this.enhancedLogger.error(wrappedError, { platform });
+                    },
+                );
             }),
         );
+        if (throwOnFailure) failures.throwIfAny(`${failures.size} 个适配器停止失败`);
     }
 
     async start() {
@@ -431,25 +435,24 @@ export class BaseApp extends Koa {
     async stop() {
         if (this.isDisposed) return;
         const stopTimer = this.enhancedLogger.start("Application stop");
+        const failures = new FailureCollector();
+
+        // 每个阶段都必须获得清理机会；完成后再统一传播扩展或资源失败。
+        await failures.capture(() => this.lifecycle.stop());
+        await failures.capture(() => this.stopAdapters(true));
+        this.adapters.clear();
+        await failures.capture(() => this.lifecycle.cleanup());
+        await failures.capture(() => {
+            closeSecurityAudit();
+        });
+        await failures.capture(() => emitAllAwaited(this, "close"));
+
+        this.isStarted = false;
+        this.isDisposed = true;
+        stopTimer();
 
         try {
-            // 执行停止钩子
-            await this.lifecycle.stop();
-
-            await this.stopAdapters();
-            this.adapters.clear();
-
-            // 清理资源
-            await this.lifecycle.cleanup();
-
-            // 关闭安全审计日志
-            closeSecurityAudit();
-
-            this.emit("close");
-            this.isStarted = false;
-            this.isDisposed = true;
-            stopTimer();
-
+            failures.throwIfAny(`${failures.size} 个应用停止操作失败`);
             this.enhancedLogger.info("Application stopped");
         } catch (error) {
             const wrappedError = ErrorHandler.wrap(error);

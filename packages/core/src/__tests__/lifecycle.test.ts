@@ -121,6 +121,22 @@ describe("Lifecycle Manager", () => {
 
             expect(order).toEqual(["init", "start", "stop", "cleanup"]);
         });
+
+        it("should attempt every stop hook and afterStop listener before reporting failures", async () => {
+            const secondStop = vi.fn();
+            const afterStop = vi.fn();
+            lifecycle.addHook({
+                onStop: () => {
+                    throw new Error("first hook failed");
+                },
+            });
+            lifecycle.addHook({ onStop: secondStop });
+            lifecycle.on("afterStop", afterStop);
+
+            await expect(lifecycle.stop()).rejects.toThrow("first hook failed");
+            expect(secondStop).toHaveBeenCalledOnce();
+            expect(afterStop).toHaveBeenCalledOnce();
+        });
     });
 
     describe("Graceful Shutdown", () => {
@@ -146,6 +162,26 @@ describe("Lifecycle Manager", () => {
             await lifecycle.gracefulShutdown("SIGTERM");
             expect(shutdownHandler).toHaveBeenCalledWith("SIGTERM");
             expect(shutdownCompleteHandler).toHaveBeenCalled();
+        });
+
+        it("should run cleanup after stop hook failures and then emit shutdownError", async () => {
+            const cleanupHook = vi.fn();
+            const shutdownError = vi.fn();
+            lifecycle.addHook({
+                onStop: () => {
+                    throw new Error("stop failed");
+                },
+                onCleanup: cleanupHook,
+            });
+            lifecycle.on("shutdownError", shutdownError);
+
+            await expect(
+                lifecycle.gracefulShutdown("SIGTERM", { exitOnTimeout: false }),
+            ).rejects.toThrow("stop failed");
+            expect(cleanupHook).toHaveBeenCalledOnce();
+            expect(shutdownError).toHaveBeenCalledWith(expect.objectContaining({
+                message: "stop failed",
+            }));
         });
 
         it("should handle shutdown timeout", async () => {
