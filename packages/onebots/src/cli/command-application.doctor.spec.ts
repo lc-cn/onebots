@@ -45,6 +45,7 @@ describe("doctor configuration scope", () => {
             application: { name: string; version: string };
             target: {
                 configPath: string;
+                dataDirectory: string;
                 extensionRoot: string;
                 workingDirectory: string;
                 service: { scope: string; mode: string };
@@ -64,6 +65,7 @@ describe("doctor configuration scope", () => {
             application: { name: "onebots", version: packageMetadata.version },
             target: {
                 configPath,
+                dataDirectory: path.join(directory, "data"),
                 extensionRoot: directory,
                 workingDirectory: process.cwd(),
                 service: { scope: "user", mode: "standalone" },

@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
     compareDoctorEndpointIdentities,
+    inspectDataDirectory,
     inspectSensitiveFilePermissions,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
@@ -71,6 +72,65 @@ describe.runIf(process.platform !== "win32")("doctor config permissions", () => 
             fixed: true,
         });
         expect(fs.statSync(backupPath).mode & 0o777).toBe(0o600);
+    });
+});
+
+describe("doctor data directory", () => {
+    it("distinguishes a writable directory from a colliding file", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-data-"));
+        temporaryDirectories.push(directory);
+        const usablePath = path.join(directory, "usable");
+        const filePath = path.join(directory, "file");
+        fs.mkdirSync(usablePath);
+        fs.writeFileSync(filePath, "not a directory");
+
+        expect(inspectDataDirectory(usablePath)).toEqual({
+            name: "data-dir",
+            level: "ok",
+            message: `数据目录可读写: ${usablePath}`,
+        });
+        expect(inspectDataDirectory(filePath, true)).toEqual({
+            name: "data-dir",
+            level: "error",
+            message: `数据存储路径不是目录: ${filePath}`,
+        });
+    });
+
+    it.runIf(process.platform !== "win32" && process.getuid?.() !== 0)(
+        "rejects a data directory that the runtime user cannot write",
+        () => {
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-data-mode-"));
+            temporaryDirectories.push(directory);
+            const dataDirectory = path.join(directory, "data");
+            fs.mkdirSync(dataDirectory, { mode: 0o500 });
+            fs.chmodSync(dataDirectory, 0o500);
+
+            expect(inspectDataDirectory(dataDirectory)).toMatchObject({
+                name: "data-dir",
+                level: "error",
+                message: expect.stringContaining("数据目录不可用"),
+            });
+        },
+    );
+
+    it("creates and verifies only a missing data directory when --fix is enabled", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-data-fix-"));
+        temporaryDirectories.push(directory);
+        const dataDirectory = path.join(directory, "data");
+
+        expect(inspectDataDirectory(dataDirectory)).toEqual({
+            name: "data-dir",
+            level: "warning",
+            message: `数据目录尚未创建: ${dataDirectory}（--fix 可修复）`,
+        });
+        expect(fs.existsSync(dataDirectory)).toBe(false);
+        expect(inspectDataDirectory(dataDirectory, true)).toEqual({
+            name: "data-dir",
+            level: "ok",
+            message: `已创建并验证数据目录: ${dataDirectory}`,
+            fixed: true,
+        });
+        expect(fs.statSync(dataDirectory).isDirectory()).toBe(true);
     });
 });
 
@@ -491,6 +551,34 @@ describe("doctor health probes", () => {
 });
 
 describe("doctor persisted plugin selection", () => {
+    it("fails the deployment report when the runtime data path is a file", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-data-report-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        const dataDirectory = path.join(directory, "data");
+        fs.writeFileSync(configPath, "port: 61996\ngeneral: {}\n", { mode: 0o600 });
+        fs.writeFileSync(dataDirectory, "invalid mount target");
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            useInstalledService: false,
+            extensionRoot: createExtensionRuntimeRoot(),
+            fix: true,
+        });
+
+        expect(report.ok).toBe(false);
+        expect(report.target.dataDirectory).toBe(dataDirectory);
+        expect(report.checks.find(check => check.name === "data-dir")).toEqual({
+            name: "data-dir",
+            level: "error",
+            message: `数据存储路径不是目录: ${dataDirectory}`,
+        });
+        expect(fs.statSync(dataDirectory).isFile()).toBe(true);
+    });
+
     it("独立诊断使用当前进程的 PORT 覆盖", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-port-"));
         temporaryDirectories.push(directory);
@@ -772,6 +860,7 @@ describe("doctor persisted plugin selection", () => {
         });
         expect(report.target).toMatchObject({
             configPath,
+            dataDirectory: path.join(directory, "data"),
             service: { scope: "user", mode: "uninstalled" },
             plugins: {
                 adapters: { source: "config", names: ["missing-first-run"] },

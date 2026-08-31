@@ -38,6 +38,7 @@ export interface DoctorPluginTarget {
 }
 export interface DoctorTarget {
     configPath: string;
+    dataDirectory: string;
     extensionRoot: string;
     workingDirectory: string;
     service: {
@@ -167,24 +168,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         }
     }
 
-    const dataDir = path.join(path.dirname(options.configPath), "data");
-    if (!fs.existsSync(dataDir) && options.fix) {
-        fs.mkdirSync(dataDir, { recursive: true });
-        checks.push({
-            name: "data-dir",
-            level: "ok",
-            message: `已创建数据目录: ${dataDir}`,
-            fixed: true,
-        });
-    } else {
-        checks.push({
-            name: "data-dir",
-            level: fs.existsSync(dataDir) ? "ok" : "warning",
-            message: fs.existsSync(dataDir)
-                ? `数据目录可用: ${dataDir}`
-                : "数据目录尚未创建（--fix 可修复）",
-        });
-    }
+    const dataDir = path.resolve(path.dirname(options.configPath), "data");
+    checks.push(inspectDataDirectory(dataDir, options.fix));
 
     const useInstalledService = options.useInstalledService !== false;
     const controller = new ServiceController(options.scope);
@@ -365,6 +350,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         },
         target: {
             configPath: path.resolve(options.configPath),
+            dataDirectory: dataDir,
             extensionRoot: extensionRuntime.root,
             workingDirectory: path.resolve(selection.workingDirectory),
             service: {
@@ -386,6 +372,68 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         strict,
         checks,
     };
+}
+
+/** 验证数据库、审计日志与适配器状态使用的数据目录，而不以路径存在代替可用性。 */
+export function inspectDataDirectory(dataDirectory: string, fix = false): DoctorCheck {
+    try {
+        const stat = fs.statSync(dataDirectory);
+        if (!stat.isDirectory()) {
+            return {
+                name: "data-dir",
+                level: "error",
+                message: `数据存储路径不是目录: ${dataDirectory}`,
+            };
+        }
+        fs.accessSync(dataDirectory, fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK);
+        return {
+            name: "data-dir",
+            level: "ok",
+            message: `数据目录可读写: ${dataDirectory}`,
+        };
+    } catch (error) {
+        if (isFileSystemError(error, "ENOENT")) {
+            if (!fix) {
+                return {
+                    name: "data-dir",
+                    level: "warning",
+                    message: `数据目录尚未创建: ${dataDirectory}（--fix 可修复）`,
+                };
+            }
+            try {
+                fs.mkdirSync(dataDirectory, { recursive: true });
+                fs.accessSync(
+                    dataDirectory,
+                    fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK,
+                );
+                return {
+                    name: "data-dir",
+                    level: "ok",
+                    message: `已创建并验证数据目录: ${dataDirectory}`,
+                    fixed: true,
+                };
+            } catch (createError) {
+                return {
+                    name: "data-dir",
+                    level: "error",
+                    message: `无法创建可用的数据目录: ${formatFileSystemError(createError)}`,
+                };
+            }
+        }
+        return {
+            name: "data-dir",
+            level: "error",
+            message: `数据目录不可用: ${formatFileSystemError(error)}`,
+        };
+    }
+}
+
+function isFileSystemError(error: unknown, code: string): error is NodeJS.ErrnoException {
+    return error instanceof Error && "code" in error && error.code === code;
+}
+
+function formatFileSystemError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 /** 逐类别公开 doctor 最终采用的插件来源，避免服务定义与候选配置互相污染。 */
