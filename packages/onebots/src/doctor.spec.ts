@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+    compareDoctorEndpointIdentities,
     inspectSensitiveFilePermissions,
     probeDoctorEndpoint,
     resolveDoctorPluginSelection,
@@ -71,6 +72,41 @@ describe.runIf(process.platform !== "win32")("doctor config permissions", () => 
 });
 
 describe("doctor health probes", () => {
+    it("accepts only a health and readiness pair from the same runtime instance", () => {
+        const health = {
+            name: "health",
+            level: "ok" as const,
+            message: "health ok",
+            identity: { application: "onebots", version: "1.2.8", instanceId: "instance-a" },
+        };
+        const sameInstance = {
+            name: "ready",
+            level: "ok" as const,
+            message: "ready ok",
+            identity: { application: "onebots", version: "1.2.8", instanceId: "instance-a" },
+        };
+        const staleInstance = {
+            ...sameInstance,
+            identity: { ...sameInstance.identity, instanceId: "instance-b" },
+        };
+
+        expect(compareDoctorEndpointIdentities(health, sameInstance)).toMatchObject({
+            level: "ok",
+            identity: health.identity,
+        });
+        expect(compareDoctorEndpointIdentities(health, staleInstance)).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("拒绝拼接不一致的探针证据"),
+        });
+        expect(
+            compareDoctorEndpointIdentities(health, {
+                name: "ready",
+                level: "error",
+                message: "legacy ready",
+            }),
+        ).toMatchObject({ level: "error", message: expect.stringContaining("ready 缺少") });
+    });
+
     it.each([
         ["drifted", "磁盘配置未应用"],
         ["unavailable", "配置文件不可读"],
@@ -349,6 +385,11 @@ describe("doctor health probes", () => {
             level: "warning",
             message:
                 "ready: HTTP 200；onebots@1.2.8；实例 doctor-instance；未配置账号；账号 0/0 在线",
+            identity: {
+                application: "onebots",
+                version: "1.2.8",
+                instanceId: "doctor-instance",
+            },
         });
     });
 

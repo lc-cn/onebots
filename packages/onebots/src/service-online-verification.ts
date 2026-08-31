@@ -1,7 +1,11 @@
 import * as fs from "node:fs";
 import type { ServiceSpec } from "./service-manager.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
-import { probeDoctorEndpoint, resolveGatewayBaseUrl } from "./doctor.js";
+import {
+    compareDoctorEndpointIdentities,
+    probeDoctorEndpoint,
+    resolveGatewayBaseUrl,
+} from "./doctor-endpoint.js";
 
 export interface ServiceOnlineVerificationOptions {
     fetcher?: typeof fetch;
@@ -55,10 +59,15 @@ export async function verifyServiceOnline(
             probeDoctorEndpoint(base, "health", fetcher, expectedVersion),
             probeDoctorEndpoint(base, "ready", fetcher),
         ]);
-        if (checks[0].level === "ok" && checks[1].level !== "error") {
-            const currentInstanceId = await readServiceInstanceId(spec, fetcher);
+        const identityCheck = compareDoctorEndpointIdentities(...checks);
+        if (
+            checks[0].level === "ok" &&
+            checks[1].level !== "error" &&
+            identityCheck.level === "ok"
+        ) {
+            const currentInstanceId = identityCheck.identity?.instanceId;
             if (!currentInstanceId) {
-                lastEvidence = "在线健康端点未声明 instance_id，无法证明目标进程已接管端口";
+                lastEvidence = "成对探针检查未保留 instance_id，无法证明目标进程已接管端口";
             } else if (
                 options.previousInstanceId &&
                 currentInstanceId === options.previousInstanceId
@@ -68,7 +77,7 @@ export async function verifyServiceOnline(
                 return;
             }
         } else {
-            lastEvidence = checks.map(check => check.message).join("；");
+            lastEvidence = [...checks, identityCheck].map(check => check.message).join("；");
         }
         if (attempt < attempts - 1) await sleep(intervalMs);
     }

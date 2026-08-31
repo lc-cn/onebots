@@ -2,11 +2,18 @@ import packageMetadata from "../package.json" with { type: "json" };
 
 export type CheckLevel = "ok" | "warning" | "error";
 
+export interface DoctorEndpointIdentity {
+    application: string;
+    version: string;
+    instanceId: string;
+}
+
 export interface DoctorCheck {
     name: string;
     level: CheckLevel;
     message: string;
     fixed?: boolean;
+    identity?: DoctorEndpointIdentity;
 }
 
 /** 根据运行时配置生成本机管理与可观测端点的根 URL。 */
@@ -40,6 +47,7 @@ export async function probeDoctorEndpoint(
                 : undefined;
         const configurationPending =
             endpoint === "ready" && response.ok && !semanticError && isConfigurationPending(body);
+        const identity = readEndpointIdentity(body);
         return {
             name: endpoint,
             level:
@@ -49,6 +57,7 @@ export async function probeDoctorEndpoint(
                         : "ok"
                     : "error",
             message: `${endpoint}: HTTP ${response.status}${detail}${semanticError ? `；${semanticError}` : ""}${versionWarning ? `；${versionWarning}` : ""}`,
+            ...(identity ? { identity } : {}),
         };
     } catch (error) {
         return {
@@ -57,6 +66,43 @@ export async function probeDoctorEndpoint(
             message: `${endpoint} 不可达: ${error instanceof Error ? error.message : String(error)}`,
         };
     }
+}
+
+/** 证明两份独立 HTTP 探针来自同一个应用版本和进程实例。 */
+export function compareDoctorEndpointIdentities(
+    health: DoctorCheck,
+    readiness: DoctorCheck,
+): DoctorCheck {
+    if (!health.identity || !readiness.identity) {
+        const missing = [
+            ...(!health.identity ? ["health"] : []),
+            ...(!readiness.identity ? ["ready"] : []),
+        ];
+        return {
+            name: "probe-instance",
+            level: "error",
+            message: `${missing.join(" 与 ")} 缺少完整应用、版本或 instance_id，无法证明探针来自同一实例`,
+        };
+    }
+    const healthLabel = formatEndpointIdentity(health.identity);
+    const readinessLabel = formatEndpointIdentity(readiness.identity);
+    if (
+        health.identity.application !== readiness.identity.application ||
+        health.identity.version !== readiness.identity.version ||
+        health.identity.instanceId !== readiness.identity.instanceId
+    ) {
+        return {
+            name: "probe-instance",
+            level: "error",
+            message: `health 来自 ${healthLabel}，ready 来自 ${readinessLabel}，拒绝拼接不一致的探针证据`,
+        };
+    }
+    return {
+        name: "probe-instance",
+        level: "ok",
+        message: `health 与 ready 均来自 ${healthLabel}`,
+        identity: health.identity,
+    };
 }
 
 function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
@@ -159,6 +205,26 @@ function isConfigurationPending(body: string): boolean {
     } catch {
         return false;
     }
+}
+
+function readEndpointIdentity(body: string): DoctorEndpointIdentity | undefined {
+    try {
+        const payload = JSON.parse(body) as Record<string, unknown>;
+        const application =
+            typeof payload.application === "string" ? payload.application.trim() : "";
+        const version = typeof payload.version === "string" ? payload.version.trim() : "";
+        const instanceId =
+            typeof payload.instance_id === "string" ? payload.instance_id.trim() : "";
+        return application && version && instanceId
+            ? { application, version, instanceId }
+            : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function formatEndpointIdentity(identity: DoctorEndpointIdentity): string {
+    return `${identity.application}@${identity.version} 实例 ${identity.instanceId}`;
 }
 
 function validateEndpointBody(endpoint: DoctorEndpoint, body: string): string | undefined {

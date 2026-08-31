@@ -393,7 +393,36 @@ describe("post-update service safety", () => {
         );
 
         await expect(verifyServiceOnline(spec, "1.3.0", { fetcher, attempts: 1 })).rejects.toThrow(
-            /未声明 instance_id.*无法证明目标进程已接管端口/,
+            /health 缺少完整应用、版本或 instance_id.*无法证明探针来自同一实例/,
+        );
+    });
+
+    it("rejects health and readiness evidence split across different instances", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(async input =>
+            String(input).endsWith("/ready")
+                ? new Response(
+                      JSON.stringify({
+                          ready: true,
+                          application: "onebots",
+                          version: "1.3.0",
+                          instance_id: "stale-instance",
+                      }),
+                      { status: 200 },
+                  )
+                : new Response(
+                      JSON.stringify({
+                          status: "ok",
+                          application: "onebots",
+                          version: "1.3.0",
+                          instance_id: "new-instance",
+                      }),
+                      { status: 200 },
+                  ),
+        );
+
+        await expect(verifyServiceOnline(spec, "1.3.0", { fetcher, attempts: 1 })).rejects.toThrow(
+            /health 来自 onebots@1\.3\.0 实例 new-instance.*ready 来自 onebots@1\.3\.0 实例 stale-instance.*拒绝拼接不一致的探针证据/,
         );
     });
 

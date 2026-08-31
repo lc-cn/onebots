@@ -303,6 +303,7 @@ import {
     pendingReadinessProbe,
     probeHealth,
     probeReadiness,
+    reconcileServiceProbeInstances,
     type ServiceProbeResult,
 } from "../utils/service-probes.js";
 
@@ -380,7 +381,9 @@ async function handleBackup() {
 
 async function checkHealth() {
     healthLoading.value = true;
-    [healthStatus.value, readyStatus.value] = await Promise.all([probeHealth(), probeReadiness()]);
+    const [health, readiness] = await Promise.all([probeHealth(), probeReadiness()]);
+    healthStatus.value = health;
+    readyStatus.value = reconcileServiceProbeInstances(health, readiness);
     healthLoading.value = false;
 }
 

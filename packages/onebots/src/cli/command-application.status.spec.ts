@@ -79,6 +79,7 @@ describe("service status", () => {
                               application: "onebots",
                               version: packageMetadata.version,
                               core_version: "1.2.5",
+                              instance_id: "status-instance",
                           }
                         : {
                               ready: true,
@@ -94,7 +95,7 @@ describe("service status", () => {
         const result = await serviceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: `运行中，已就绪\n进程管理器: active\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance`,
+            output: `运行中，已就绪\n进程管理器: active\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
@@ -112,6 +113,7 @@ describe("service status", () => {
                           status: "ok",
                           application: "onebots",
                           version: packageMetadata.version,
+                          instance_id: "status-instance",
                       }),
                       { status: 200 },
                   )
@@ -146,6 +148,7 @@ describe("service status", () => {
                           status: "ok",
                           application: "onebots",
                           version: "0.0.0",
+                          instance_id: "status-instance",
                       }),
                       { status: 200 },
                   )
@@ -163,9 +166,43 @@ describe("service status", () => {
         const result = await serviceStatus({ system: false }, fetcher);
 
         expect(result.exitCode).toBe(1);
-        expect(result.output).toContain("运行中，版本未验证");
+        expect(result.output).toContain("运行中，不可用");
         expect(result.output).toContain(
             `在线 OneBots 0.0.0 与当前 CLI ${packageMetadata.version} 不一致`,
+        );
+        expect(result.output).toContain("拒绝拼接不一致的探针证据");
+    });
+
+    it("rejects health and readiness routed to different service instances", async () => {
+        mockInstalledService(true);
+        const fetcher = vi.fn<typeof fetch>(async input =>
+            String(input).endsWith("/health")
+                ? new Response(
+                      JSON.stringify({
+                          status: "ok",
+                          application: "onebots",
+                          version: packageMetadata.version,
+                          instance_id: "instance-new",
+                      }),
+                      { status: 200 },
+                  )
+                : new Response(
+                      JSON.stringify({
+                          ready: true,
+                          application: "onebots",
+                          version: packageMetadata.version,
+                          instance_id: "instance-old",
+                      }),
+                      { status: 200 },
+                  ),
+        );
+
+        const result = await serviceStatus({ system: false }, fetcher);
+
+        expect(result.exitCode).toBe(1);
+        expect(result.output).toContain("运行中，不可用");
+        expect(result.output).toContain(
+            `health 来自 onebots@${packageMetadata.version} 实例 instance-new，ready 来自 onebots@${packageMetadata.version} 实例 instance-old`,
         );
     });
 
@@ -178,6 +215,7 @@ describe("service status", () => {
                           status: "ok",
                           application: "onebots",
                           version: packageMetadata.version,
+                          instance_id: "status-instance",
                       }),
                       { status: 200 },
                   )

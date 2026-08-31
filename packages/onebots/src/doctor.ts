@@ -17,14 +17,15 @@ import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
+    compareDoctorEndpointIdentities,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
     type CheckLevel,
     type DoctorCheck,
 } from "./doctor-endpoint.js";
 
-export { probeDoctorEndpoint, resolveGatewayBaseUrl };
-export type { CheckLevel, DoctorCheck };
+export { compareDoctorEndpointIdentities, probeDoctorEndpoint, resolveGatewayBaseUrl };
+export type { CheckLevel, DoctorCheck, DoctorEndpointIdentity } from "./doctor-endpoint.js";
 export interface DoctorReport {
     ok: boolean;
     strict: boolean;
@@ -273,16 +274,11 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         const base = resolveGatewayBaseUrl(config);
         const portOpen = status?.running || (await isPortOpen(port));
         if (portOpen) {
-            for (const endpoint of ["health", "ready"] as const) {
-                checks.push(
-                    await probeDoctorEndpoint(
-                        base,
-                        endpoint,
-                        fetch,
-                        endpoint === "health" ? packageMetadata.version : undefined,
-                    ),
-                );
-            }
+            const endpointChecks = await Promise.all([
+                probeDoctorEndpoint(base, "health", fetch, packageMetadata.version),
+                probeDoctorEndpoint(base, "ready", fetch),
+            ]);
+            checks.push(...endpointChecks, compareDoctorEndpointIdentities(...endpointChecks));
             checks.push(...(await probeDoctorManagement(base, config)));
         } else {
             checks.push({ name: "port", level: "ok", message: `端口 ${port} 可用` });

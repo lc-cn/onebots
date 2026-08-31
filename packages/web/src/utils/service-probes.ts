@@ -7,10 +7,17 @@ import {
 
 export type ServiceProbeState = "success" | "warning" | "danger";
 
+export interface ServiceProbeIdentity {
+    application: string;
+    version: string;
+    instanceId: string;
+}
+
 export interface ServiceProbeResult {
     state: ServiceProbeState;
     label: string;
     detail: string;
+    identity?: ServiceProbeIdentity;
 }
 
 interface ReadinessSummary {
@@ -76,6 +83,11 @@ export async function probeHealth(
             state: "success",
             label: "正常",
             detail: `OneBots ${payload.version.trim()}，实例 ${payload.instance_id.trim()}`,
+            identity: {
+                application: "onebots",
+                version: payload.version.trim(),
+                instanceId: payload.instance_id.trim(),
+            },
         };
     } catch (error) {
         if (error instanceof ServiceProbeTimeoutError) {
@@ -106,18 +118,21 @@ export async function probeReadiness(
             return danger("证据无效", `ready=${payload.ready} 与 HTTP ${response.status} 不一致`);
         }
         const detail = formatReadinessDetail(payload);
-        if (!payload.ready) return danger("未就绪", detail);
+        const identity = readinessIdentity(payload);
+        if (!payload.ready) return { ...danger("未就绪", detail), identity };
         if (!payload.configured) {
             return {
                 state: "warning",
                 label: "待配置",
                 detail: `服务可管理，尚未配置机器人账号；${formatReadinessIdentity(payload)}`,
+                identity,
             };
         }
         return {
             state: "success",
             label: "生产就绪",
             detail,
+            identity,
         };
     } catch (error) {
         if (error instanceof ServiceProbeTimeoutError) {
@@ -125,6 +140,25 @@ export async function probeReadiness(
         }
         return danger("就绪未知", `ready 不可达：${errorMessage(error)}`);
     }
+}
+
+/** 保留 readiness 结论，但拒绝将两个不同实例的探针拼成同一服务状态。 */
+export function reconcileServiceProbeInstances(
+    health: ServiceProbeResult,
+    readiness: ServiceProbeResult,
+): ServiceProbeResult {
+    if (!health.identity || !readiness.identity) return readiness;
+    if (
+        health.identity.application === readiness.identity.application &&
+        health.identity.version === readiness.identity.version &&
+        health.identity.instanceId === readiness.identity.instanceId
+    ) {
+        return readiness;
+    }
+    return danger(
+        "证据冲突",
+        `health 来自 ${formatProbeIdentity(health.identity)}，ready 来自 ${formatProbeIdentity(readiness.identity)}，拒绝拼接不一致的探针证据`,
+    );
 }
 
 function formatReadinessDetail(payload: ReadinessPayload): string {
@@ -145,6 +179,18 @@ function formatReadinessDetail(payload: ReadinessPayload): string {
 
 function formatReadinessIdentity(payload: ReadinessPayload): string {
     return `OneBots ${payload.version}，实例 ${payload.instance_id}`;
+}
+
+function readinessIdentity(payload: ReadinessPayload): ServiceProbeIdentity {
+    return {
+        application: payload.application,
+        version: payload.version.trim(),
+        instanceId: payload.instance_id.trim(),
+    };
+}
+
+function formatProbeIdentity(identity: ServiceProbeIdentity): string {
+    return `${identity.application}@${identity.version} 实例 ${identity.instanceId}`;
 }
 
 function isReadinessPayload(value: unknown): value is ReadinessPayload {

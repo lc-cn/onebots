@@ -258,10 +258,11 @@ export async function serviceStatus(
     if (!spec) return { output: "服务元数据缺失", exitCode: 1 };
     try {
         const { parseRuntimeConfig } = await import("../runtime-config-validator.js");
-        const { probeDoctorEndpoint, resolveGatewayBaseUrl } = await import("../doctor.js");
+        const { compareDoctorEndpointIdentities, probeDoctorEndpoint, resolveGatewayBaseUrl } =
+            await import("../doctor.js");
         const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
         const base = resolveGatewayBaseUrl(config);
-        const checks = await Promise.all(
+        const endpointChecks = await Promise.all(
             (["health", "ready"] as const).map(endpoint =>
                 probeDoctorEndpoint(
                     base,
@@ -271,6 +272,10 @@ export async function serviceStatus(
                 ),
             ),
         );
+        const checks = [
+            ...endpointChecks,
+            compareDoctorEndpointIdentities(endpointChecks[0]!, endpointChecks[1]!),
+        ];
         const hasError = checks.some(check => check.level === "error");
         const hasWarning = checks.some(check => check.level === "warning");
         const runtimeVersionUnverified = checks[0]?.level === "warning";

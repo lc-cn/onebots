@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { probeHealth, probeReadiness } from "./service-probes.js";
+import { probeHealth, probeReadiness, reconcileServiceProbeInstances } from "./service-probes.js";
 
 function readiness(
     ready: boolean,
@@ -11,6 +11,7 @@ function readiness(
         readyProtocols?: number;
         accountsWithoutProtocols?: number;
         configInSync?: boolean;
+        instanceId?: string;
     } = {},
 ) {
     return new Response(
@@ -19,7 +20,7 @@ function readiness(
             application: "onebots",
             version: "1.2.3",
             core_version: "1.2.1",
-            instance_id: "instance-ready",
+            instance_id: options.instanceId ?? "instance-ready",
             started_at: "2026-08-31T00:00:00.000Z",
             configured: options.configured ?? true,
             server: true,
@@ -97,6 +98,11 @@ describe("Web semantic service probes", () => {
             state: "warning",
             label: "待配置",
             detail: "服务可管理，尚未配置机器人账号；OneBots 1.2.3，实例 instance-ready",
+            identity: {
+                application: "onebots",
+                version: "1.2.3",
+                instanceId: "instance-ready",
+            },
         });
     });
 
@@ -105,6 +111,36 @@ describe("Web semantic service probes", () => {
             state: "success",
             label: "生产就绪",
             detail: "OneBots 1.2.3，实例 instance-ready，账号 1/1 在线，协议出口 1/1 就绪",
+            identity: {
+                application: "onebots",
+                version: "1.2.3",
+                instanceId: "instance-ready",
+            },
+        });
+    });
+
+    it("rejects health and readiness evidence from different runtime instances", async () => {
+        const health = await probeHealth(
+            vi.fn(
+                async () =>
+                    new Response(
+                        JSON.stringify({
+                            status: "ok",
+                            application: "onebots",
+                            version: "1.2.3",
+                            instance_id: "instance-new",
+                        }),
+                    ),
+            ),
+        );
+        const readinessResult = await probeReadiness(
+            vi.fn(async () => readiness(true, { instanceId: "instance-old" })),
+        );
+
+        expect(reconcileServiceProbeInstances(health, readinessResult)).toEqual({
+            state: "danger",
+            label: "证据冲突",
+            detail: "health 来自 onebots@1.2.3 实例 instance-new，ready 来自 onebots@1.2.3 实例 instance-old，拒绝拼接不一致的探针证据",
         });
     });
 
