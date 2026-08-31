@@ -55,10 +55,32 @@
                     <UiBadge :variant="accountStatusVariant(selectedAccount.status)" dot>
                         {{ accountStatusLabel(selectedAccount.status) }}
                     </UiBadge>
-                    <UiBadge :variant="selectedAccountHasOverride ? 'accent' : 'neutral'">
-                        {{ selectedAccountHasOverride ? "账号专属清单" : "沿用适配器默认清单" }}
+                    <UiBadge
+                        :variant="
+                            selectedAccountCapabilityError
+                                ? 'warning'
+                                : selectedAccountHasOverride
+                                  ? 'accent'
+                                  : 'neutral'
+                        ">
+                        {{
+                            selectedAccountCapabilityError
+                                ? "账号清单不可用"
+                                : selectedAccountHasOverride
+                                  ? "账号专属清单"
+                                  : "沿用适配器默认清单"
+                        }}
                     </UiBadge>
                 </div>
+
+                <UiAlert
+                    v-if="selectedAccountCapabilityError"
+                    variant="warning"
+                    title="账号能力证据不可用">
+                    {{
+                        selectedAccountCapabilityError.message
+                    }}。当前仅展示适配器默认清单，不能据此判断该账号实际可用能力。
+                </UiAlert>
 
                 <p v-if="selectedAdapter.description" class="text-xs leading-5 text-fg-secondary">
                     {{ selectedAdapter.description }}
@@ -130,7 +152,11 @@
                 <p class="text-xs leading-5 text-fg-tertiary">
                     数字仅统计原生和模拟能力；明确不支持的项目仍会显示，便于确认平台边界。
                     当前视图{{
-                        selectedAccount ? "已按账号查询" : "展示适配器默认值"
+                        selectedAccountCapabilityError
+                            ? "因账号清单不可用而展示适配器默认值"
+                            : selectedAccount
+                              ? "已按账号查询"
+                              : "展示适配器默认值"
                     }}；权限和会话上下文仍可能进一步限制实际可用范围。
                 </p>
             </template>
@@ -141,6 +167,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import UiAvatar from "../ui/UiAvatar.vue";
+import UiAlert from "../ui/UiAlert.vue";
 import UiBadge from "../ui/UiBadge.vue";
 import UiDrawer from "../ui/UiDrawer.vue";
 import UiEmpty from "../ui/UiEmpty.vue";
@@ -152,6 +179,7 @@ import {
     countSupportedCapabilities,
     getCapabilityEntries,
     hasAccountCapabilityOverride,
+    resolveAccountCapabilityError,
     resolveAccountCapabilities,
     type CapabilityCategory,
 } from "./capability-presentation.js";
@@ -190,6 +218,14 @@ const selectedAccountHasOverride = computed(() =>
     selectedAdapter.value
         ? hasAccountCapabilityOverride(selectedAdapter.value, String(selectedAccountId.value || ""))
         : false,
+);
+const selectedAccountCapabilityError = computed(() =>
+    selectedAdapter.value
+        ? resolveAccountCapabilityError(
+              selectedAdapter.value,
+              String(selectedAccountId.value || ""),
+          )
+        : undefined,
 );
 const categorySummary = computed(() => {
     if (!selectedCapabilities.value) return [];

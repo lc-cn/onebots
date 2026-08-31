@@ -5,6 +5,7 @@ import {
     getCapabilityEntries,
     hasAccountCapabilityOverride,
     mergeCapabilityAdapters,
+    resolveAccountCapabilityError,
     resolveAccountCapabilities,
 } from "./capability-presentation.js";
 import type { AdapterInfo, ExtensionInfo } from "../types";
@@ -45,6 +46,20 @@ describe("capability presentation", () => {
         expect(resolveAccountCapabilities(adapter, "default")).toBe(manifest);
         expect(hasAccountCapabilityOverride(adapter, "limited")).toBe(true);
         expect(hasAccountCapabilityOverride(adapter, "default")).toBe(false);
+    });
+
+    it("keeps an unavailable account manifest distinct from a real override", () => {
+        const error = { code: "capability_unavailable" as const, message: "清单无效" };
+        const adapter = {
+            capabilities: manifest,
+            accountCapabilities: {},
+            accountCapabilityErrors: { broken: error },
+        };
+
+        expect(resolveAccountCapabilities(adapter, "broken")).toBe(manifest);
+        expect(hasAccountCapabilityOverride(adapter, "broken")).toBe(false);
+        expect(resolveAccountCapabilityError(adapter, "broken")).toBe(error);
+        expect(resolveAccountCapabilityError(adapter, "default")).toBeUndefined();
     });
 
     it("adds catalog manifests without an account and keeps runtime evidence authoritative", () => {

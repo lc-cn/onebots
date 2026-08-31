@@ -104,3 +104,10 @@ export function hasAccountCapabilityOverride(
 ): boolean {
     return Boolean(accountId && adapter.accountCapabilities?.[accountId]);
 }
+
+export function resolveAccountCapabilityError(
+    adapter: Pick<AdapterInfo, "accountCapabilityErrors">,
+    accountId?: string,
+) {
+    return accountId ? adapter.accountCapabilityErrors?.[accountId] : undefined;
+}

@@ -80,6 +80,8 @@ export interface AdapterInfo {
     capabilities: AdapterCapabilityManifest;
     /** 仅包含与适配器默认清单不同的账号级能力覆写。 */
     accountCapabilities?: Record<string, AdapterCapabilityManifest>;
+    /** 动态账号能力无法形成可信清单时的隔离诊断。 */
+    accountCapabilityErrors?: Record<string, { code: "capability_unavailable"; message: string }>;
     /** 能力证据来自当前进程，或尚未加载插件的版本化目录快照。 */
     capabilitySource?: "runtime" | "catalog";
     capabilityPackageVersion?: string | null;

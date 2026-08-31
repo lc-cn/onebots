@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     AdapterRegistry,
     defineAdapterCapabilities,
@@ -26,7 +26,7 @@ describe("adapter management info", () => {
                 accounts: [],
             },
             describeCapabilities: () => EMPTY_ADAPTER_CAPABILITIES,
-        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+        } as unknown as Adapter;
 
         expect(getAdapterInfo(adapter)).toMatchObject({
             platform: "mock",
@@ -45,7 +45,7 @@ describe("adapter management info", () => {
                 accounts: [],
             },
             describeCapabilities: () => EMPTY_ADAPTER_CAPABILITIES,
-        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+        } as unknown as Adapter;
 
         expect(getAdapterInfo(adapter)).toMatchObject({
             displayName: "custom",
@@ -70,7 +70,7 @@ describe("adapter management info", () => {
             },
             describeCapabilities: (accountId?: string) =>
                 accountId === "limited" ? accountCapabilities : EMPTY_ADAPTER_CAPABILITIES,
-        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+        } as unknown as Adapter;
 
         expect(getAdapterInfo(adapter).accountCapabilities).toEqual({
             limited: accountCapabilities,
@@ -99,7 +99,7 @@ describe("adapter management info", () => {
                 accounts: [{ uin: "equivalent" }],
             },
             describeCapabilities: () => equivalentCapabilities,
-        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+        } as unknown as Adapter;
 
         expect(getAdapterInfo(adapter).accountCapabilities).toEqual({});
     });
@@ -121,7 +121,7 @@ describe("adapter management info", () => {
                 accounts: [{ uin: "mutable" }],
             },
             describeCapabilities: () => mutableCapabilities,
-        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+        } as unknown as Adapter;
 
         const published = getAdapterInfo(adapter).accountCapabilities.mutable;
         mutableCapabilities.actions.send_message.support = "unsupported";
@@ -131,24 +131,47 @@ describe("adapter management info", () => {
         expect(Object.isFrozen(published.actions.send_message)).toBe(true);
     });
 
-    it("rejects a malformed account-specific manifest instead of publishing it", () => {
+    it("isolates a malformed account manifest while publishing other account overrides", () => {
+        const logger = { error: vi.fn() };
+        const limitedCapabilities = defineAdapterCapabilities({
+            actions: { send_message: { support: "unsupported" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
         const adapter = {
             platform: "mock",
+            logger,
             info: {
                 platform: "mock",
                 icon: "",
                 capabilities: EMPTY_ADAPTER_CAPABILITIES,
-                accounts: [{ uin: "malformed" }],
+                accounts: [{ uin: "malformed" }, { uin: "limited" }],
             },
-            describeCapabilities: () => ({
-                version: 1,
-                actions: {},
-                events: {},
-                segments: {},
-                transports: { webhook: { support: "native", mode: "http" } },
-            }),
-        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+            describeCapabilities: (accountId?: string) =>
+                accountId === "limited"
+                    ? limitedCapabilities
+                    : ({
+                          version: 1,
+                          actions: {},
+                          events: {},
+                          segments: {},
+                          transports: { webhook: { support: "native", mode: "http" } },
+                      } as never),
+        } as unknown as Adapter;
 
-        expect(() => getAdapterInfo(adapter)).toThrow("mode 无效");
+        const info = getAdapterInfo(adapter);
+
+        expect(info.accountCapabilities).toEqual({ limited: limitedCapabilities });
+        expect(info.accountCapabilityErrors).toEqual({
+            malformed: {
+                code: "capability_unavailable",
+                message: expect.stringContaining("mode 无效"),
+            },
+        });
+        expect(logger.error).toHaveBeenCalledWith(
+            "账号 malformed 的能力清单不可用",
+            expect.any(Error),
+        );
     });
 });
