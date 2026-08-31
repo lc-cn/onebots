@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { AdapterRegistry, ProtocolRegistry } from "@onebots/core";
 import { writeCliError } from "./cli-output.js";
 
 export type PluginInspection =
@@ -99,19 +100,65 @@ export async function tryLoadPlugin(
     }
 }
 
+/** 加载插件后确认它提供了 CLI 名称所承诺的工厂与配置 Schema。 */
+export async function tryLoadRegisteredPlugin(
+    type: PluginType,
+    name: string,
+    candidates: string[],
+    runtimeRequire: NodeJS.Require,
+): Promise<PluginLoadResult> {
+    const kind = type === "adapter" ? "适配器" : "协议";
+    const result = await tryLoadPlugin(kind, name, candidates, runtimeRequire);
+    if (result.loaded === false) return result;
+
+    const contractError = getRegistrationContractError(type, name);
+    if (!contractError) return result;
+    return {
+        loaded: false,
+        inspection: result.inspection,
+        message: `加载${kind} ${name} 失败：${result.inspection.candidate} 已初始化，但${contractError}`,
+    };
+}
+
 /** 兼容布尔返回值的加载入口；失败时输出结构化结果中的唯一诊断。 */
 export async function loadPlugin(
-    kind: "适配器" | "协议",
+    type: PluginType,
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,
     warn: (message: string) => void = writeCliError,
 ): Promise<boolean> {
-    const result = await tryLoadPlugin(kind, name, candidates, runtimeRequire);
+    const result = await tryLoadRegisteredPlugin(type, name, candidates, runtimeRequire);
     if (result.loaded === false) {
         warn(`[onebots] ${result.message}`);
     }
     return result.loaded;
+}
+
+function getRegistrationContractError(type: PluginType, name: string): string | undefined {
+    if (type === "adapter") {
+        if (!AdapterRegistry.has(name)) return `没有注册适配器 ${name}`;
+        if (!AdapterRegistry.getSchema(name)) return `没有注册适配器配置 Schema ${name}`;
+        return undefined;
+    }
+
+    const identity = parseProtocolIdentity(name);
+    if (!identity) return `协议插件名必须使用 <name>-<version> 格式（例如 onebot-v11）`;
+    const { protocol, version } = identity;
+    if (!ProtocolRegistry.has(protocol, version)) {
+        return `没有注册协议 ${protocol}/${version}`;
+    }
+    const schemaKey = `${protocol}.${version}`;
+    if (!ProtocolRegistry.getSchema(schemaKey)) {
+        return `没有注册协议配置 Schema ${schemaKey}`;
+    }
+    return undefined;
+}
+
+function parseProtocolIdentity(name: string): { protocol: string; version: string } | undefined {
+    const match = /^(.+)-(v\d+)$/.exec(name);
+    if (!match) return undefined;
+    return { protocol: match[1], version: match[2] };
 }
 
 interface PackageManifest {

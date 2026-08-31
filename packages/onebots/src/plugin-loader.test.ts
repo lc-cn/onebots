@@ -3,12 +3,15 @@ import { createRequire } from "node:module";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { loadPlugin, tryLoadPlugin } from "./plugin-loader.js";
+import { AdapterRegistry, ProtocolRegistry } from "@onebots/core";
+import { loadPlugin, tryLoadPlugin, tryLoadRegisteredPlugin } from "./plugin-loader.js";
 
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {
     vi.restoreAllMocks();
+    AdapterRegistry.clear();
+    ProtocolRegistry.clear();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -31,7 +34,7 @@ describe("plugin loader", () => {
         const warnings: string[] = [];
 
         const loaded = await loadPlugin(
-            "适配器",
+            "adapter",
             "kook",
             ["@onebots/adapter-kook", "onebots-adapter-kook", "kook"],
             createRequire(path.join(directory, "package.json")),
@@ -136,4 +139,66 @@ describe("plugin loader", () => {
             inspection: { entryPath: path.join(packageDirectory, "index.js") },
         });
     });
+
+    it("rejects an importable adapter that does not register its promised factory", async () => {
+        const directory = createImportOnlyPlugin("empty-adapter");
+
+        const result = await tryLoadRegisteredPlugin(
+            "adapter",
+            "empty",
+            ["empty-adapter"],
+            createRequire(path.join(directory, "package.json")),
+        );
+
+        expect(result).toMatchObject({
+            loaded: false,
+            message: expect.stringContaining("已初始化，但没有注册适配器 empty"),
+        });
+    });
+
+    it("rejects an adapter factory without its configuration schema", async () => {
+        const directory = createImportOnlyPlugin("factory-only-adapter");
+        AdapterRegistry.register("factory-only", (() => undefined) as never);
+
+        const result = await tryLoadRegisteredPlugin(
+            "adapter",
+            "factory-only",
+            ["factory-only-adapter"],
+            createRequire(path.join(directory, "package.json")),
+        );
+
+        expect(result).toMatchObject({
+            loaded: false,
+            message: expect.stringContaining("没有注册适配器配置 Schema factory-only"),
+        });
+    });
+
+    it("accepts a protocol only when its name-version factory and schema are registered", async () => {
+        const directory = createImportOnlyPlugin("complete-protocol");
+        ProtocolRegistry.register("complete", "v1", (() => undefined) as never);
+        ProtocolRegistry.registerSchema("complete.v1", {});
+
+        const result = await tryLoadRegisteredPlugin(
+            "protocol",
+            "complete-v1",
+            ["complete-protocol"],
+            createRequire(path.join(directory, "package.json")),
+        );
+
+        expect(result).toMatchObject({ loaded: true });
+    });
 });
+
+function createImportOnlyPlugin(packageName: string): string {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
+    temporaryDirectories.push(directory);
+    fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({ type: "module" }));
+    const packageDirectory = path.join(directory, "node_modules", packageName);
+    fs.mkdirSync(packageDirectory, { recursive: true });
+    fs.writeFileSync(
+        path.join(packageDirectory, "package.json"),
+        JSON.stringify({ name: packageName, type: "module", exports: "./index.js" }),
+    );
+    fs.writeFileSync(path.join(packageDirectory, "index.js"), "export const loaded = true;\n");
+    return directory;
+}

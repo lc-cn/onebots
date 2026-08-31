@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { createRequire } from "node:module";
 import type { ServiceSpec } from "./service-manager.js";
-import { pluginCandidates, tryLoadPlugin, type PluginType } from "./plugin-loader.js";
+import { pluginCandidates, tryLoadRegisteredPlugin, type PluginType } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 
 export type ServicePreflightSpec = Pick<
@@ -26,8 +26,8 @@ export async function preflightServiceRuntime(spec: ServicePreflightSpec): Promi
         ["protocol", spec.protocols],
     ] as const satisfies ReadonlyArray<readonly [PluginType, readonly string[]]>) {
         for (const name of names) {
-            const result = await tryLoadPlugin(
-                type === "adapter" ? "适配器" : "协议",
+            const result = await tryLoadRegisteredPlugin(
+                type,
                 name,
                 pluginCandidates(type, name),
                 runtimeRequire,

@@ -58,6 +58,8 @@ Adapter names, protocol name-version pairs, and their configuration schema keys 
 
 Plugin entries are resolved from the startup working directory with support for `exports.import` conditions, `module`, and `main`, then loaded through native ESM dynamic imports. Module initialization is awaited, so plugins may use top-level `await`. An initialization rejection is preserved in startup and doctor diagnostics instead of being misreported as a missing module.
 
+After initialization, the loader also verifies the plugin contract. `-r <name>` must register an adapter factory and schema under that exact name. `-p <name>-<version>` must register the matching protocol factory and `<name>.<version>` schema. A package that merely exports code, skips registration, or registers the wrong identity now fails immediately with the missing registration in setup, doctor, and service preflight diagnostics.
+
 ### Quick Links
 
 - [QQ Adapter Documentation](/en/platform/qq)

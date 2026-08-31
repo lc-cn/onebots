@@ -305,13 +305,13 @@ export namespace App {
         platform: string,
         maybeNames = pluginCandidates("adapter", platform),
     ): Promise<boolean> {
-        return loadPlugin("适配器", platform, maybeNames, require);
+        return loadPlugin("adapter", platform, maybeNames, require);
     }
     export async function loadProtocolFactory(
         name: string,
         maybeNames = pluginCandidates("protocol", name),
     ): Promise<boolean> {
-        return loadPlugin("协议", name, maybeNames, require);
+        return loadPlugin("protocol", name, maybeNames, require);
     }
 }
 
