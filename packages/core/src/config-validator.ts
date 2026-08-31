@@ -4,6 +4,7 @@
  */
 
 import { ValidationError } from "./errors.js";
+import { normalizeGatewayPathPrefix } from "./gateway-path.js";
 
 export { ValidationError };
 export interface Choice<T = unknown> {
@@ -389,6 +390,7 @@ export const BaseAppConfigSchema: Schema = {
     path: {
         type: "string",
         default: "",
+        transform: normalizeGatewayPathPrefix,
     },
     database: {
         type: "string",

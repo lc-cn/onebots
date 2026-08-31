@@ -185,6 +185,8 @@ scrape_configs:
 - `/health`: 基础健康检查
 - `/ready`: 检查服务、账号和每个协议出口是否就绪
 
+宿主配置 `path: gateway` 时，所有 Router HTTP 路由统一挂载到规范前缀 `/gateway`，因此探针地址是 `/gateway/health` 与 `/gateway/ready`，管理 API 也位于 `/gateway/api/*`；根路径不再暴露这些 HTTP 路由。前缀可写成 `gateway` 或 `/gateway/`，启动时都会规范化为 `/gateway`。包含 authority、路径穿越、编码分隔符、查询串或 fragment 的值会被配置校验拒绝。WebSocket 使用独立的绝对 pathname，不继承 HTTP 前缀；管理 WebSocket 仍位于 `/`。`onebots status`、`doctor` 与服务上线验证会读取同一配置并自动使用规范后的 HTTP 地址。
+
 `/health` 的 `application` 与 `version` 表示实际运行的 `onebots` 主程序包，`core_version` 单独表示 `@onebots/core`。`instance_id` 在每次进程启动时生成，`started_at` 保留该进程的启动时间，可用于证明端口已经由新实例接管。Prometheus 的 `onebots_info` 使用主程序版本，`onebots_core_info` 使用 Core 版本；Web「系统信息」也会分别展示两者，避免升级后把依赖版本误认作在线应用版本。
 
 `/ready` 同时携带与 `/health` 一致的 `application`、`version`、`core_version`、`instance_id` 和 `started_at`，因此单独保存一份就绪响应也能证明它属于哪个 OneBots 进程，而不是代理或其他应用返回的同名布尔值。其 `summary` 给出账号与协议实例总数、在线/就绪数量以及 `accounts_without_protocols`；每个平台也会列出缺少协议出口的账号数，以及协议的 `ready`、`unavailable` 与 `total`。即使平台账号已经 online，只要任一协议 `start()` 失败或任一账号没有协议出口，端点仍会返回 HTTP 503。响应中的 `config.status` 与 `config.in_sync` 还会证明磁盘配置是否就是当前运行版本；外部修改、不可读文件或等待重启的宿主配置会撤销 readiness。首次启动尚未配置账号时，管理面保持 HTTP 200 以便继续配置，但响应包含 `configured: false`，doctor 会把它明确标为警告。

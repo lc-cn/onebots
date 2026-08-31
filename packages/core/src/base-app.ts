@@ -41,6 +41,7 @@ import { assertHostConfigReloadable, resolveListenPort } from "./app-reload.js";
 import { writeConfigFileAtomic } from "./config-file.js";
 import { emitAllAwaited, FailureCollector } from "./async-utils.js";
 import { rollbackFailedStart as rollbackStartup } from "./startup-rollback.js";
+import { normalizeGatewayPathPrefix } from "./gateway-path.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -153,7 +154,11 @@ export class BaseApp extends Koa {
 
         // 创建 HTTP 服务器
         this.httpServer = createServer(this.callback());
-        this.router = new Router(this.httpServer);
+        const gatewayPath = normalizeGatewayPathPrefix(this.config.path);
+        this.router = new Router(
+            this.httpServer,
+            gatewayPath ? { prefix: gatewayPath } : undefined,
+        );
 
         // 注册路由清理
         this.lifecycle.register("router", () => {
@@ -394,9 +399,7 @@ export class BaseApp extends Koa {
             const listeningPort =
                 address && typeof address === "object" ? address.port : this.config.port;
             this.enhancedLogger.mark(
-                `Server listening at http://0.0.0.0:${listeningPort}/${
-                    this.config.path ? this.config.path : ""
-                }`,
+                `Server listening at http://0.0.0.0:${listeningPort}${this.config.path || "/"}`,
                 { port: listeningPort, path: this.config.path },
             );
 

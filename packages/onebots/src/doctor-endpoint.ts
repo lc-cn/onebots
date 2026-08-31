@@ -1,4 +1,5 @@
 import packageMetadata from "../package.json" with { type: "json" };
+import { normalizeGatewayPathPrefix } from "@onebots/core";
 
 export type CheckLevel = "ok" | "warning" | "error";
 
@@ -19,9 +20,11 @@ export interface DoctorCheck {
 /** 根据运行时配置生成本机管理与可观测端点的根 URL。 */
 export function resolveGatewayBaseUrl(config: Record<string, unknown>): string {
     const port = Number(config.port ?? 6727);
-    const configuredPath = String(config.path ?? "").trim();
-    const suffix = configuredPath ? `/${configuredPath.replace(/^\/+/, "")}` : "";
-    return `http://127.0.0.1:${port}${suffix}`.replace(/\/$/, "");
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+        throw new TypeError("网关 port 必须是 1 到 65535 之间的整数");
+    }
+    const prefix = normalizeGatewayPathPrefix(config.path ?? "");
+    return `http://127.0.0.1:${port}${prefix}`;
 }
 
 type DoctorEndpoint = "health" | "ready";

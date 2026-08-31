@@ -82,6 +82,44 @@ describe("BaseApp reload boundary", () => {
         );
     });
 
+    it("将规范化的宿主 path 应用于真实 HTTP 路由而不暴露根路径", async () => {
+        const originalConfigDir = BaseApp.configDir;
+        const originalPort = process.env.PORT;
+        const directory = mkdtempSync(join(tmpdir(), "onebots-prefix-"));
+        BaseApp.configDir = directory;
+        process.env.PORT = "0";
+        const app = new BaseApp(
+            { database: "prefix.db", path: " gateway/ " },
+            { name: "embedded-gateway", version: "9.8.7" },
+        );
+
+        try {
+            await app.start();
+            const address = app.httpServer.address();
+            const port = address && typeof address === "object" ? address.port : 0;
+            const [prefixed, root] = await Promise.all([
+                fetch(`http://127.0.0.1:${port}/gateway/health`),
+                fetch(`http://127.0.0.1:${port}/health`),
+            ]);
+
+            expect(app.config.path).toBe("/gateway");
+            expect(app.router.opts.prefix).toBe("/gateway");
+            expect(prefixed.status).toBe(200);
+            await expect(prefixed.json()).resolves.toMatchObject({
+                application: "embedded-gateway",
+                version: "9.8.7",
+            });
+            expect(root.status).toBe(404);
+            await root.body?.cancel();
+        } finally {
+            await app.stop();
+            BaseApp.configDir = originalConfigDir;
+            if (originalPort === undefined) delete process.env.PORT;
+            else process.env.PORT = originalPort;
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
     it("运行态热重载保留 HTTP、Router 与生命周期资源", async () => {
         const originalConfigDir = BaseApp.configDir;
         const originalPort = process.env.PORT;

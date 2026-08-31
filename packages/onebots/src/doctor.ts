@@ -20,7 +20,6 @@ import {
     compareDoctorEndpointIdentities,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
-    type CheckLevel,
     type DoctorCheck,
 } from "./doctor-endpoint.js";
 
@@ -271,17 +270,28 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
 
     if (config) {
         const port = Number(config.port ?? 6727);
-        const base = resolveGatewayBaseUrl(config);
-        const portOpen = status?.running || (await isPortOpen(port));
-        if (portOpen) {
-            const endpointChecks = await Promise.all([
-                probeDoctorEndpoint(base, "health", fetch, packageMetadata.version),
-                probeDoctorEndpoint(base, "ready", fetch),
-            ]);
-            checks.push(...endpointChecks, compareDoctorEndpointIdentities(...endpointChecks));
-            checks.push(...(await probeDoctorManagement(base, config)));
-        } else {
-            checks.push({ name: "port", level: "ok", message: `端口 ${port} 可用` });
+        let base: string | undefined;
+        try {
+            base = resolveGatewayBaseUrl(config);
+        } catch (error) {
+            checks.push({
+                name: "gateway-address",
+                level: "error",
+                message: `网关地址配置无效: ${error instanceof Error ? error.message : String(error)}`,
+            });
+        }
+        if (base) {
+            const portOpen = status?.running || (await isPortOpen(port));
+            if (portOpen) {
+                const endpointChecks = await Promise.all([
+                    probeDoctorEndpoint(base, "health", fetch, packageMetadata.version),
+                    probeDoctorEndpoint(base, "ready", fetch),
+                ]);
+                checks.push(...endpointChecks, compareDoctorEndpointIdentities(...endpointChecks));
+                checks.push(...(await probeDoctorManagement(base, config)));
+            } else {
+                checks.push({ name: "port", level: "ok", message: `端口 ${port} 可用` });
+            }
         }
     }
     const strict = options.strict === true;
