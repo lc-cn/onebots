@@ -19,6 +19,11 @@ export interface RestartWaitOptions {
     sleep?: (milliseconds: number) => Promise<void>;
 }
 
+export interface RestartAcknowledgement {
+    scheduled: boolean;
+    message: string;
+}
+
 async function probeHealthInstance(
     fetcher: typeof fetch,
     timeoutMs: number,
@@ -67,6 +72,59 @@ export async function readCurrentServiceInstanceId(
     return probe.instanceId;
 }
 
+/** 请求已探测实例重启，并验证机器回执确实来自该 OneBots 进程。 */
+export async function requestServiceRestart(
+    previousInstanceId: string,
+    fetcher: typeof fetch = fetch,
+): Promise<RestartAcknowledgement> {
+    if (!previousInstanceId.trim()) {
+        throw new Error("无法请求服务重启：缺少可信的当前实例身份");
+    }
+    const response = await fetcher(buildApiUrl("/api/system/restart"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ instance_id: previousInstanceId.trim() }),
+    });
+    let payload: unknown;
+    try {
+        payload = await response.json();
+    } catch {
+        throw new Error(
+            response.ok
+                ? "重启端点未返回有效 JSON 回执"
+                : `重启请求失败（HTTP ${response.status}）`,
+        );
+    }
+    if (!response.ok) {
+        throw new Error(readRestartMessage(payload) || `重启请求失败（HTTP ${response.status}）`);
+    }
+    if (!payload || typeof payload !== "object") {
+        throw new Error("重启端点未返回对象回执");
+    }
+    if (!("success" in payload) || payload.success !== true) {
+        throw new Error(readRestartMessage(payload) || "重启端点未确认已接受请求");
+    }
+    if (!("application" in payload) || payload.application !== "onebots") {
+        throw new Error("重启回执未声明 onebots 应用身份");
+    }
+    if (!("instance_id" in payload) || payload.instance_id !== previousInstanceId.trim()) {
+        throw new Error(
+            `重启回执实例不匹配：期望 ${previousInstanceId.trim()}，实际 ${
+                "instance_id" in payload && typeof payload.instance_id === "string"
+                    ? payload.instance_id
+                    : "缺失"
+            }`,
+        );
+    }
+    if (!("scheduled" in payload) || typeof payload.scheduled !== "boolean") {
+        throw new Error("重启回执未声明调度状态");
+    }
+    return {
+        scheduled: payload.scheduled,
+        message: readRestartMessage(payload) || "服务已接受重启请求",
+    };
+}
+
 /** 等待管理端恢复，并证明响应来自不同的新 OneBots 进程。 */
 export async function waitForServiceRestart(
     previousInstanceId: string,
@@ -92,4 +150,9 @@ export async function waitForServiceRestart(
         if (attempt < attempts - 1) await sleep(intervalMs);
     }
     throw new Error(`服务重启超时，未观察到新实例（最后证据：${lastEvidence}）`);
+}
+
+function readRestartMessage(value: unknown): string {
+    if (!value || typeof value !== "object" || !("message" in value)) return "";
+    return typeof value.message === "string" ? value.message.trim() : "";
 }

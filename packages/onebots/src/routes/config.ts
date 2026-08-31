@@ -71,11 +71,38 @@ export function registerConfigRoutes(app: App, router: Router): void {
 
     /** 预检通过后以临时失败码退出，让服务管理器或容器策略重新拉起。 */
     router.post("/api/system/restart", async (ctx: RouterContext) => {
+        const application = app.info.application_name;
+        const instanceId = app.info.instance_id;
+        const requestBody: unknown = ctx.request?.body;
+        const expectedInstanceId = readExpectedRestartInstanceId(requestBody);
+        if (expectedInstanceId instanceof Error) {
+            ctx.status = 400;
+            ctx.body = {
+                success: false,
+                application,
+                instance_id: instanceId,
+                message: expectedInstanceId.message,
+            };
+            return;
+        }
+        if (expectedInstanceId && expectedInstanceId !== instanceId) {
+            ctx.status = 409;
+            ctx.body = {
+                success: false,
+                application,
+                instance_id: instanceId,
+                message: `重启请求期望实例 ${expectedInstanceId}，当前已由实例 ${instanceId} 接管`,
+            };
+            return;
+        }
         try {
             await app.preflightRestart();
             const scheduled = scheduleProcessRestart(app, { exitCode: 75 });
             ctx.body = {
                 success: true,
+                application,
+                instance_id: instanceId,
+                scheduled,
                 message: scheduled ? "重启预检通过，服务即将重启" : "服务重启已在进行中",
             };
         } catch (error) {
@@ -85,4 +112,17 @@ export function registerConfigRoutes(app: App, router: Router): void {
             app.logger.error("管理端重启预检失败，当前服务继续运行", { error });
         }
     });
+}
+
+function readExpectedRestartInstanceId(value: unknown): string | null | Error {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== "object" || Array.isArray(value)) {
+        return new Error("重启请求体必须是对象");
+    }
+    if (!("instance_id" in value)) return null;
+    const instanceId = value.instance_id;
+    if (typeof instanceId !== "string" || !instanceId.trim()) {
+        return new Error("重启请求的 instance_id 必须是非空字符串");
+    }
+    return instanceId.trim();
 }

@@ -30,7 +30,11 @@ import {
 } from "./middleware/security-audit.js";
 import { defaultRateLimit } from "./middleware/rate-limit.js";
 import { metricsCollector } from "./middleware/metrics-collector.js";
-import { registerObservabilityEndpoints, type ApplicationIdentity } from "./app-observability.js";
+import {
+    getRuntimeProcessIdentity,
+    registerObservabilityEndpoints,
+    type ApplicationIdentity,
+} from "./app-observability.js";
 export type { ApplicationIdentity } from "./app-observability.js";
 import { resolvePublicStaticRoot } from "./public-static-root.js";
 import { assertHostConfigReloadable, resolveListenPort } from "./app-reload.js";
@@ -82,6 +86,7 @@ export class BaseApp extends Koa {
     public router: Router;
     public readonly applicationIdentity: Readonly<ApplicationIdentity>;
     get info() {
+        const runtimeIdentity = getRuntimeProcessIdentity();
         const free_memory = os.freemem();
         const total_memory = os.totalmem();
         return {
@@ -100,6 +105,8 @@ export class BaseApp extends Koa {
             node_version: process.version,
             application_name: this.applicationIdentity.name,
             application_version: this.applicationIdentity.version,
+            instance_id: runtimeIdentity.instanceId,
+            started_at: runtimeIdentity.startedAt,
             core_version: pkg.version,
             /** @deprecated 使用 core_version。 */
             sdk_version: pkg.version,

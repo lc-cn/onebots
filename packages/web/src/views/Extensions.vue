@@ -156,7 +156,11 @@ import { useRoute } from "vue-router";
 import type { ExtensionInfo } from "../types";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
-import { readCurrentServiceInstanceId, waitForServiceRestart } from "../utils/service-restart";
+import {
+    readCurrentServiceInstanceId,
+    requestServiceRestart,
+    waitForServiceRestart,
+} from "../utils/service-restart";
 import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
@@ -229,13 +233,7 @@ async function install(extension: ExtensionInfo): Promise<void> {
 
         restarting.value = true;
         const previousInstanceId = await readCurrentServiceInstanceId();
-        const restart = await authFetch(buildApiUrl("/api/system/restart"), { method: "POST" });
-        const restartResult = (await restart.json()) as { success: boolean; message?: string };
-        if (!restart.ok || !restartResult.success) {
-            throw new Error(
-                restartResult.message || "扩展已安装，但服务重启失败，请在系统信息页手动重启",
-            );
-        }
+        await requestServiceRestart(previousInstanceId, authFetch);
         await waitForServiceRestart(previousInstanceId);
         window.location.reload();
     } catch (error) {

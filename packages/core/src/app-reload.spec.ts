@@ -109,7 +109,8 @@ describe("BaseApp reload boundary", () => {
                 fetch(`http://127.0.0.1:${port}/metrics`),
             ]);
             expect(health.status).toBe(200);
-            await expect(health.json()).resolves.toMatchObject({
+            const healthPayload = (await health.json()) as Record<string, unknown>;
+            expect(healthPayload).toMatchObject({
                 application: "embedded-gateway",
                 version: "9.8.7",
                 core_version: expect.any(String),
@@ -118,6 +119,8 @@ describe("BaseApp reload boundary", () => {
                 application_name: "embedded-gateway",
                 application_version: "9.8.7",
                 core_version: expect.any(String),
+                instance_id: healthPayload.instance_id,
+                started_at: healthPayload.started_at,
             });
             expect(readiness.status).toBe(503);
             await expect(readiness.json()).resolves.toMatchObject({

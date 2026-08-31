@@ -6,6 +6,19 @@ import type { Router } from "./router.js";
 const runtimeInstanceId = randomUUID();
 const runtimeStartedAt = new Date(Date.now() - process.uptime() * 1_000).toISOString();
 
+export interface RuntimeProcessIdentity {
+    instanceId: string;
+    startedAt: string;
+}
+
+/** 返回当前进程内所有 BaseApp 共享的稳定运行时身份。 */
+export function getRuntimeProcessIdentity(): Readonly<RuntimeProcessIdentity> {
+    return {
+        instanceId: runtimeInstanceId,
+        startedAt: runtimeStartedAt,
+    };
+}
+
 interface ObservableApp {
     readonly router: Router;
     readonly adapters: ReadonlyMap<keyof Adapter.Configs, Adapter>;
@@ -179,12 +192,13 @@ export function registerObservabilityEndpoints(
     identity: RuntimeIdentity,
 ): void {
     app.router.get("/health", ctx => {
+        const processIdentity = getRuntimeProcessIdentity();
         ctx.body = {
             status: "ok",
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
-            instance_id: runtimeInstanceId,
-            started_at: runtimeStartedAt,
+            instance_id: processIdentity.instanceId,
+            started_at: processIdentity.startedAt,
             application: identity.name,
             version: identity.version,
             core_version: identity.coreVersion,

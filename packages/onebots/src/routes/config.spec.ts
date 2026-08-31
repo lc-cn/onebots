@@ -33,6 +33,8 @@ function setup(reload: App["reload"], isReloading = false) {
         info: {
             application_name: "onebots",
             application_version: "1.2.8",
+            instance_id: "instance-current",
+            started_at: "2026-08-31T08:00:00.000Z",
             core_version: "1.2.5",
             sdk_version: "1.2.5",
         },
@@ -74,16 +76,75 @@ describe("configuration route", () => {
         vi.useFakeTimers();
         const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
         const { app, restartHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
-        const ctx = {} as RouterContext;
+        const ctx = {
+            request: { body: { instance_id: "instance-current" } },
+        } as RouterContext;
 
         await restartHandler(ctx);
         await vi.runAllTimersAsync();
 
-        expect(ctx.body).toMatchObject({ success: true });
+        expect(ctx.body).toMatchObject({
+            success: true,
+            application: "onebots",
+            instance_id: "instance-current",
+            scheduled: true,
+        });
         expect(app.preflightRestart).toHaveBeenCalledOnce();
         expect(app.stop).toHaveBeenCalledOnce();
         expect(exit).toHaveBeenCalledWith(75);
         vi.useRealTimers();
+    });
+
+    it("实例已切换时在预检和调度前拒绝过期的重启请求", async () => {
+        vi.useFakeTimers();
+        const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+        const { app, restartHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
+        const ctx = {
+            request: { body: { instance_id: "instance-old" } },
+        } as RouterContext;
+
+        await restartHandler(ctx);
+        await vi.runAllTimersAsync();
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-current",
+            message: "重启请求期望实例 instance-old，当前已由实例 instance-current 接管",
+        });
+        expect(app.preflightRestart).not.toHaveBeenCalled();
+        expect(exit).not.toHaveBeenCalled();
+    });
+
+    it("拒绝畸形实例身份，同时保留无身份旧客户端兼容", async () => {
+        vi.useFakeTimers();
+        const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+        const { app, restartHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
+        const malformed = { request: { body: "instance-current" } } as RouterContext;
+        await restartHandler(malformed);
+        expect(malformed.status).toBe(400);
+        expect(malformed.body).toMatchObject({
+            success: false,
+            message: "重启请求体必须是对象",
+        });
+
+        const invalid = { request: { body: { instance_id: " " } } } as RouterContext;
+
+        await restartHandler(invalid);
+        expect(invalid.status).toBe(400);
+        expect(invalid.body).toMatchObject({
+            success: false,
+            instance_id: "instance-current",
+            message: "重启请求的 instance_id 必须是非空字符串",
+        });
+        expect(app.preflightRestart).not.toHaveBeenCalled();
+
+        const legacy = { request: { body: undefined } } as RouterContext;
+        await restartHandler(legacy);
+        await vi.runAllTimersAsync();
+        expect(legacy.body).toMatchObject({ success: true, instance_id: "instance-current" });
+        expect(exit).toHaveBeenCalledWith(75);
     });
 
     it("重启预检失败时保持当前服务在线并返回诊断", async () => {

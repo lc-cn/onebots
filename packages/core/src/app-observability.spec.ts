@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     formatProtocolReadinessMetrics,
     getReadinessSnapshot,
+    getRuntimeProcessIdentity,
     registerObservabilityEndpoints,
 } from "./app-observability.js";
 
@@ -195,6 +196,10 @@ describe("application readiness", () => {
             core_version: "1.1.0",
             instance_id: expect.any(String),
             started_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        });
+        expect(healthContext.body).toMatchObject({
+            instance_id: getRuntimeProcessIdentity().instanceId,
+            started_at: getRuntimeProcessIdentity().startedAt,
         });
         const secondHealthContext: Record<string, unknown> = {};
         handlers.get("/health")?.(secondHealthContext);
