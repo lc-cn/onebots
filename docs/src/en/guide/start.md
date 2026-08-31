@@ -60,7 +60,7 @@ pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
 pnpm exec onebots setup -c config.yaml -r mock -p onebot-v11
 ```
 
-Setup does not create placeholder platform accounts. It generates defaults only for protocols selected with `-p` and prints a shell-safe foreground command. Open `http://localhost:6727`, sign in with the initial credentials from the startup log, then add an account in **Configuration**. In non-interactive environments an existing file is preserved unless `--force` is explicit; forced updates create a `.bak` backup.
+Setup does not create placeholder platform accounts. It generates defaults only for protocols selected with `-p` and prints a shell-safe foreground command. Open `http://localhost:6727`, sign in with the initial credentials from the startup log, then add an account in **Configuration** and select at least one loaded protocol for it. An account without a protocol outlet is rejected before saving or startup. In non-interactive environments an existing file is preserved unless `--force` is explicit; forced updates create a `.bak` backup.
 
 ## How It Works
 

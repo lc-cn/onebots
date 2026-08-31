@@ -65,6 +65,16 @@ describe("runtime config validation", () => {
         ).toThrow(/mock\.demo\.token.*required.*mock\.demo\.test\.v1\.use_http.*boolean/);
     });
 
+    it("rejects an account before startup when it has no loaded protocol outlet", () => {
+        registerTestPlugins();
+
+        expect(() =>
+            validateRuntimeConfig({
+                "mock.demo": { token: "secret" },
+            }),
+        ).toThrow(/mock\.demo.*至少需要配置一个已加载的协议出口/);
+    });
+
     it("rejects configured accounts whose adapter or protocol was not loaded", () => {
         expect(() =>
             validateRuntimeConfig({ general: { "ghost.v1": { use_http: true } } }),
@@ -82,7 +92,7 @@ describe("runtime config validation", () => {
             validateRuntimeConfig({
                 "mock.demo": { token: "secret", "ghost.v1": {} },
             }),
-        ).toThrow(/协议 ghost\.v1 未加载/);
+        ).toThrow(/协议 ghost\.v1 未加载.*至少需要配置一个已加载的协议出口/);
     });
 });
 

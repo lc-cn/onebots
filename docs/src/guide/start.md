@@ -60,7 +60,7 @@ pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
 pnpm exec onebots setup -c config.yaml -r mock -p onebot-v11
 ```
 
-setup 不会写入占位平台账号；它只为本次 `-p` 实际加载的协议生成默认值，并输出一条可直接执行的前台启动命令。随后打开 `http://localhost:6727`，使用启动日志中的初始凭据登录，在「配置管理」添加账号。已有配置在非交互环境默认不会覆盖，显式传入 `--force` 时会先生成 `.bak`。
+setup 不会写入占位平台账号；它只为本次 `-p` 实际加载的协议生成默认值，并输出一条可直接执行的前台启动命令。随后打开 `http://localhost:6727`，使用启动日志中的初始凭据登录，在「配置管理」添加账号，并为该账号至少选择一个已加载协议。缺少协议出口的账号会在保存或启动前被拒绝。已有配置在非交互环境默认不会覆盖，显式传入 `--force` 时会先生成 `.bak`。
 
 ## 工作原理
 

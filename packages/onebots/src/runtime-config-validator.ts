@@ -85,6 +85,7 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
             );
         }
 
+        let loadedProtocolCount = 0;
         for (const [key, protocolValue] of Object.entries(accountConfig)) {
             const [protocol, version, ...extra] = key.split(".");
             if (!version || extra.length > 0) continue;
@@ -94,6 +95,7 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
                 }
                 continue;
             }
+            loadedProtocolCount++;
             const protocolSchema = schemas.protocols[key];
             if (!protocolSchema) {
                 issues.push({
@@ -110,6 +112,12 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
             const inherited = asConfigObject(general?.[key]) ?? {};
             const merged = deepMerge(deepClone(inherited), localConfig) as Record<string, unknown>;
             captureSchemaIssues(merged, protocolSchema, `${rootKey}.${key}`, issues);
+        }
+        if (loadedProtocolCount === 0) {
+            issues.push({
+                path: rootKey,
+                message: "账号至少需要配置一个已加载的协议出口",
+            });
         }
     }
 

@@ -54,9 +54,9 @@ See [Platform Configuration](/en/config/platform) for platform-specific configur
 
 ## Preflight validation
 
-Before connecting to a platform or starting protocol transports, OneBots validates the complete configuration against the schemas registered by plugins loaded with `-r` and `-p`. This covers required platform credentials, field types and choices, adapter and protocol references, and the effective protocol configuration after account values inherit from `general`.
+Before connecting to a platform or starting protocol transports, OneBots validates the complete configuration against the schemas registered by plugins loaded with `-r` and `-p`. This covers required platform credentials, field types and choices, adapter and protocol references, at least one loaded protocol outlet per account, and the effective protocol configuration after account values inherit from `general`.
 
-Errors include a complete path such as `qq.my_bot.appid` or `qq.my_bot.onebot.v11.use_http`. Referencing an unloaded adapter or protocol also stops startup instead of silently omitting the account. The Web console save and hot-reload paths use the same validator, so invalid content is not written to the configuration file.
+Errors identify the complete path, such as `qq.my_bot.appid` or `qq.my_bot.onebot.v11.use_http`; a missing outlet identifies the account path itself, such as `qq.my_bot`. Referencing an unloaded adapter or protocol also stops startup instead of silently omitting the account. Web console saves, setup, doctor, and hot reload use the same validator, so invalid content is not written to the configuration file.
 
 Run the same check before deployment with the service's plugin selection:
 
