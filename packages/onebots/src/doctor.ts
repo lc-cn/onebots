@@ -30,6 +30,10 @@ import {
     inspectDoctorServiceMetadata,
     type DoctorServiceMetadataInspection,
 } from "./doctor-service-metadata.js";
+import {
+    inspectServiceNodeRuntime,
+    type DoctorServiceRuntimeInspection,
+} from "./doctor-service-runtime.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
     compareDoctorEndpointIdentities,
@@ -88,6 +92,8 @@ export interface DoctorOptions {
     extensionRoot?: string;
     /** CLI 已读取的服务元数据，避免诊断入口重复解析并保留同一份证据。 */
     serviceMetadata?: DoctorServiceMetadataInspection;
+    /** 测试或嵌入场景可替换服务 Node 版本探测。 */
+    serviceRuntimeInspector?: (nodePath: string) => DoctorServiceRuntimeInspection;
 }
 
 export type DoctorPluginSource = "cli" | "config" | "service" | "none";
@@ -290,6 +296,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 },
     );
     if (spec) {
+        const inspectServiceRuntime = options.serviceRuntimeInspector ?? inspectServiceNodeRuntime;
+        const serviceRuntime = inspectServiceRuntime(spec.nodePath);
         const stateDirectory = controller.paths().stateDir;
         try {
             fs.accessSync(stateDirectory, fs.constants.R_OK | fs.constants.W_OK);
@@ -311,7 +319,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             (options.protocols.length > 0 &&
                 options.protocols.join("\0") !== spec.protocols.join("\0"));
         const stale =
-            !fs.existsSync(spec.nodePath) ||
+            !serviceRuntime.supported ||
             !fs.existsSync(spec.binPath) ||
             !fs.existsSync(spec.configPath) ||
             !fs.existsSync(spec.workingDirectory) ||
@@ -326,6 +334,13 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 nodePath: process.execPath,
                 binPath: path.resolve(process.argv[1]),
             });
+            const repairedRuntime = inspectServiceRuntime(process.execPath);
+            checks.push({
+                ...repairedRuntime.check,
+                ...(!serviceRuntime.supported || spec.nodePath !== process.execPath
+                    ? { fixed: true }
+                    : {}),
+            });
             checks.push({
                 name: "service-definition",
                 level: "ok",
@@ -333,6 +348,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 fixed: true,
             });
         } else {
+            checks.push(serviceRuntime.check);
             checks.push({
                 name: "service-definition",
                 level: stale ? "error" : "ok",

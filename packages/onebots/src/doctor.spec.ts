@@ -757,6 +757,93 @@ describe("doctor persisted plugin selection", () => {
         });
     });
 
+    it("拒绝服务定义中的旧 Node，并用 --fix 切换到当前运行时", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-service-node-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "port: 61996\ngeneral: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+        const extensionRoot = createExtensionRuntimeRoot();
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath,
+            adapters: [],
+            protocols: [],
+            nodePath: "/legacy/node",
+            binPath: process.argv[1],
+            workingDirectory: process.cwd(),
+        };
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "inactive",
+        });
+        vi.spyOn(ServiceController.prototype, "paths").mockReturnValue({
+            stateDir: directory,
+            definition: path.join(directory, "service.plist"),
+            metadata: path.join(directory, "service.json"),
+        });
+        vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
+        const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+        const serviceRuntimeInspector = vi.fn((nodePath: string) =>
+            nodePath === spec.nodePath
+                ? {
+                      supported: false,
+                      check: {
+                          name: "service-node" as const,
+                          level: "error" as const,
+                          message: "服务定义使用 Node.js v22.14.0",
+                      },
+                  }
+                : {
+                      supported: true,
+                      check: {
+                          name: "service-node" as const,
+                          level: "ok" as const,
+                          message: `服务 Node.js ${process.version}`,
+                      },
+                  },
+        );
+        const options = {
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user" as const,
+            extensionRoot,
+            serviceRuntimeInspector,
+        };
+
+        const invalid = await runDoctor(options);
+        expect(invalid.ok).toBe(false);
+        expect(invalid.checks.find(check => check.name === "service-node")).toMatchObject({
+            level: "error",
+        });
+        expect(invalid.checks.find(check => check.name === "service-definition")).toMatchObject({
+            level: "error",
+        });
+        expect(install).not.toHaveBeenCalled();
+
+        const repaired = await runDoctor({ ...options, fix: true });
+        expect(repaired.checks.find(check => check.name === "service-node")).toEqual({
+            name: "service-node",
+            level: "ok",
+            message: `服务 Node.js ${process.version}`,
+            fixed: true,
+        });
+        expect(repaired.checks.find(check => check.name === "service-definition")).toMatchObject({
+            level: "ok",
+            fixed: true,
+        });
+        expect(install).toHaveBeenCalledWith({
+            ...spec,
+            configPath,
+            nodePath: process.execPath,
+            binPath: path.resolve(process.argv[1]),
+        });
+    });
+
     it("exposes category-level precedence and ignores service defaults in standalone mode", () => {
         const service: ServiceSpec = {
             scope: "user",

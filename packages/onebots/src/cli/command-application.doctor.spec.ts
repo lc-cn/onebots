@@ -259,6 +259,9 @@ describe("doctor configuration scope", () => {
         });
         expect(readSpec).toHaveBeenCalledTimes(1);
         expect(status).toHaveBeenCalledWith(installed);
+        expect(report.checks.find(check => check.name === "service-node")?.message).toContain(
+            process.version,
+        );
         expect(report.checks.some(check => check.name === "adapter:service-missing")).toBe(true);
         expect(report.checks.some(check => check.name === "adapter:config-missing")).toBe(false);
         expect(report.checks.some(check => check.name === "gateway-address")).toBe(false);
