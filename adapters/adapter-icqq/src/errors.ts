@@ -50,6 +50,15 @@ export function invalidICQQParam(message: string, details?: unknown): ICQQError 
     });
 }
 
+export function unexpectedICQQActionParameter(action: string, parameter: string): ICQQError {
+    return new ICQQError(`ICQQ 动作 ${action} 不接受参数 ${parameter}`, {
+        code: "ICQQ_UNEXPECTED_ACTION_PARAMETER",
+        operation: action,
+        category: ErrorCategory.VALIDATION,
+        details: { action, parameter },
+    });
+}
+
 export function icqqResourceNotFound(resource: string, id: unknown): ICQQError {
     return new ICQQError(`ICQQ ${resource} 不存在`, {
         code: "ICQQ_RESOURCE_NOT_FOUND",

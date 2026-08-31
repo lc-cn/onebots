@@ -13,6 +13,17 @@ describe("ICQQ 平台扩展动作", () => {
         expect(setDescription).toHaveBeenCalledWith("OneBots");
     });
 
+    it("拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = {} as Client;
+        await expect(
+            executeICQQPlatformAction(client, "get_client_key", { force: true }),
+        ).rejects.toMatchObject({
+            code: "ICQQ_UNEXPECTED_ACTION_PARAMETER",
+            operation: "get_client_key",
+            details: { action: "get_client_key", parameter: "force" },
+        });
+    });
+
     it("在进入 ICQQ 前严格拒绝错误参数", async () => {
         const client = {} as Client;
         await expect(
