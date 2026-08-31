@@ -228,10 +228,26 @@ function statusSymbol(status) {
     return "—";
 }
 
+function escapeHtml(value) {
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+}
+
+function verticalHeader(label) {
+    const characters = Array.from(label.replace(/\s+/g, "")).map(escapeHtml);
+    return `<span title="${escapeHtml(label)}">${characters.join("<br>")}</span>`;
+}
+
 function renderMatrix(catalog) {
     const platforms = Object.keys(catalog.adapters);
     const sections = PROTOCOL_API_CAPABILITY_MAP.map((protocol, index) => {
-        const header = ["API", ...platforms.map(platform => platformLabels[platform] ?? platform)];
+        const header = [
+            "API",
+            ...platforms.map(platform => verticalHeader(platformLabels[platform] ?? platform)),
+        ];
         const separator = [":---", ...platforms.map(() => ":---:")];
         const rows = protocol.apis.map(entry => [
             `\`${entry.api}\``,
