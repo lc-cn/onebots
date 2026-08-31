@@ -20,6 +20,12 @@ import {
 import packageMetadata from "../../package.json" with { type: "json" };
 import { readServiceInstanceId, verifyServiceOnline } from "../service-online-verification.js";
 import { verifyServiceStopped } from "../service-offline-verification.js";
+import { resolveGatewayBaseUrl } from "../doctor-endpoint.js";
+import {
+    acquireManagementCredential,
+    revokeManagementSession,
+    type ManagementFetch,
+} from "../management-credential.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -429,30 +435,104 @@ export function listConfig(options: RuntimeOptions): CommandResult {
 }
 
 /** 通过运行中网关的 HTTP API 发送消息。 */
+export interface SendMessageDependencies {
+    fetcher?: ManagementFetch;
+}
+
 export async function sendMessage(
     options: RuntimeOptions & { target_type: string; channel: string; url?: string },
     targetId: string,
     message: string,
+    dependencies: SendMessageDependencies = {},
 ): Promise<CommandResult> {
     const config = readConfig(normalizeRuntimeOptions(options).configPath);
-    const baseUrl = options.url || `http://127.0.0.1:${config.port ?? 6727}${config.path ?? ""}`;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (config.access_token) headers.Authorization = `Bearer ${config.access_token}`;
-    else if (config.username && config.password)
-        headers.Authorization = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`;
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/send`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-            channel: options.channel,
-            target_id: targetId,
-            target_type: options.target_type,
-            message,
-        }),
-    });
-    const text = await response.text();
-    if (!response.ok) throw new CliError(`发送失败 (${response.status}): ${text}`, 2);
-    return { output: text || "发送成功" };
+    const fetcher = dependencies.fetcher ?? fetch;
+    const baseUrl = options.url
+        ? normalizeExplicitManagementBase(options.url)
+        : resolveGatewayBaseUrl(config);
+    const credential = await acquireManagementCredential(baseUrl, config, fetcher);
+    if (!credential.token) {
+        throw new CliError(
+            credential.error ?? "配置未提供 access_token 或完整用户名密码，无法调用管理 API",
+            2,
+        );
+    }
+
+    let result: CommandResult | undefined;
+    let operationError: unknown;
+    try {
+        const response = await fetcher(`${baseUrl}/api/send`, {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                authorization: `Bearer ${credential.token}`,
+            },
+            body: JSON.stringify({
+                channel: options.channel,
+                target_id: targetId,
+                target_type: options.target_type,
+                message,
+            }),
+            signal: AbortSignal.timeout(sendTimeoutMs(config.timeout)),
+        });
+        const text = await response.text();
+        if (!response.ok) throw new CliError(`发送失败 (${response.status}): ${text}`, 2);
+        result = { output: text || "发送成功" };
+    } catch (error) {
+        operationError = error;
+    }
+
+    let cleanupError: CliError | undefined;
+    if (credential.session) {
+        const cleanup = await revokeManagementSession(baseUrl, credential.token, fetcher);
+        if (!cleanup.ok) {
+            cleanupError = new CliError(
+                cleanup.error
+                    ? `管理会话撤销失败: ${cleanup.error}`
+                    : `管理会话撤销失败: HTTP ${cleanup.status ?? 0}`,
+                2,
+            );
+        }
+    }
+    if (operationError) {
+        if (cleanupError) {
+            const operationMessage =
+                operationError instanceof Error ? operationError.message : String(operationError);
+            throw new CliError(`${operationMessage}；${cleanupError.message}`, 2);
+        }
+        throw operationError;
+    }
+    if (cleanupError) throw cleanupError;
+    return result!;
+}
+
+function normalizeExplicitManagementBase(value: string): string {
+    try {
+        const url = new URL(value);
+        if (
+            !["http:", "https:"].includes(url.protocol) ||
+            url.username ||
+            url.password ||
+            url.search ||
+            url.hash
+        ) {
+            throw new Error("只允许不含凭据、查询串或片段的 HTTP(S) 地址");
+        }
+        url.pathname = url.pathname.replace(/\/+$/u, "");
+        return url.toString().replace(/\/$/u, "");
+    } catch (error) {
+        throw new CliError(
+            `管理 API 地址无效: ${error instanceof Error ? error.message : String(error)}`,
+            2,
+        );
+    }
+}
+
+function sendTimeoutMs(value: unknown): number {
+    const seconds = Number(value ?? 30);
+    return Number.isFinite(seconds) && seconds > 0
+        ? Math.min(Math.round(seconds * 1_000), 300_000)
+        : 30_000;
 }
 
 /** 以 stdio 模式运行 MCP 服务，通过 stdin/stdout 进行 JSON-RPC 通信。 */

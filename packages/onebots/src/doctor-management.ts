@@ -1,8 +1,13 @@
 import * as http from "node:http";
 import { randomBytes } from "node:crypto";
 import type { DoctorCheck } from "./doctor.js";
+import {
+    acquireManagementCredential,
+    revokeManagementSession,
+    type ManagementFetch,
+} from "./management-credential.js";
 
-type DoctorFetch = (input: string, init?: RequestInit) => Promise<Response>;
+type DoctorFetch = ManagementFetch;
 
 export interface DoctorWebSocketUpgradeResult {
     upgraded: boolean;
@@ -12,12 +17,6 @@ export interface DoctorWebSocketUpgradeResult {
 export interface DoctorManagementProbeDependencies {
     fetcher?: DoctorFetch;
     upgrade?: (url: string, token?: string) => Promise<DoctorWebSocketUpgradeResult>;
-}
-
-interface DoctorManagementCredential {
-    token?: string;
-    session: boolean;
-    error?: string;
 }
 
 /** 验证运行中网关的管理面同时满足匿名拒绝与合法凭据可用。 */
@@ -33,7 +32,7 @@ export async function probeDoctorManagement(
 
     const anonymousHttpPromise = probeAnonymousManagementHttp(base, fetcher);
     const anonymousWebSocketPromise = probeAnonymousManagementWebSocket(websocketUrl, upgrade);
-    const credential = await acquireDoctorManagementCredential(base, config, fetcher);
+    const credential = await acquireManagementCredential(base, config, fetcher);
     const authenticatedPromise = credential.token
         ? Promise.all([
               probeAuthenticatedManagementHttp(base, credential.token, fetcher),
@@ -336,39 +335,6 @@ async function probeAnonymousManagementHttp(
     }
 }
 
-async function acquireDoctorManagementCredential(
-    base: string,
-    config: Record<string, unknown>,
-    fetcher: DoctorFetch,
-): Promise<DoctorManagementCredential> {
-    const accessToken =
-        stringConfigValue(process.env.ONEBOTS_ACCESS_TOKEN) ??
-        stringConfigValue(config.access_token);
-    if (accessToken) return { token: accessToken, session: false };
-
-    const username = stringConfigValue(config.username);
-    const password = stringConfigValue(config.password);
-    if (!username || !password) return { session: false };
-    try {
-        const response = await fetcher(`${base}/api/auth/login`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ username, password }),
-            signal: AbortSignal.timeout(2_000),
-        });
-        const payload = (await response.json()) as { token?: unknown };
-        if (!response.ok || typeof payload.token !== "string" || !payload.token) {
-            return { session: false, error: `管理登录失败: HTTP ${response.status}` };
-        }
-        return { token: payload.token, session: true };
-    } catch (error) {
-        return {
-            session: false,
-            error: `管理登录不可达: ${error instanceof Error ? error.message : String(error)}`,
-        };
-    }
-}
-
 async function probeAuthenticatedManagementHttp(
     base: string,
     token: string,
@@ -439,23 +405,16 @@ async function revokeDoctorManagementSession(
     token: string,
     fetcher: DoctorFetch,
 ): Promise<DoctorCheck> {
-    try {
-        const response = await fetcher(`${base}/api/auth/logout`, {
-            method: "POST",
-            headers: { authorization: `Bearer ${token}` },
-            signal: AbortSignal.timeout(2_000),
-        });
-        await response.body?.cancel();
-        return {
-            name: "management-session-cleanup",
-            level: response.ok ? "ok" : "error",
-            message: response.ok
-                ? "诊断会话令牌已撤销"
-                : `诊断会话令牌撤销失败: HTTP ${response.status}`,
-        };
-    } catch (error) {
-        return failedManagementCheck("management-session-cleanup", "诊断会话清理", error);
-    }
+    const result = await revokeManagementSession(base, token, fetcher);
+    return {
+        name: "management-session-cleanup",
+        level: result.ok ? "ok" : "error",
+        message: result.ok
+            ? "诊断会话令牌已撤销"
+            : result.error
+              ? `诊断会话清理探测失败: ${result.error}`
+              : `诊断会话令牌撤销失败: HTTP ${result.status ?? 0}`,
+    };
 }
 
 function failedManagementCheck(name: string, label: string, error: unknown): DoctorCheck {
@@ -464,10 +423,6 @@ function failedManagementCheck(name: string, label: string, error: unknown): Doc
         level: "error",
         message: `${label}探测失败: ${error instanceof Error ? error.message : String(error)}`,
     };
-}
-
-function stringConfigValue(value: unknown): string | undefined {
-    return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function managementWebSocketUrl(base: string): string {

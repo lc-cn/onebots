@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import { spawn } from "node:child_process";
 import yaml from "js-yaml";
 import { ServiceController, type ServiceScope, type ServiceStatus } from "./service-manager.js";
-import { runDoctor, type DoctorReport } from "./doctor.js";
+import { resolveGatewayBaseUrl, runDoctor, type DoctorReport } from "./doctor.js";
 import {
     restartService,
     startService,
@@ -46,9 +46,7 @@ export function getWebUrl(configPath: string): string {
     const config = fs.existsSync(configPath)
         ? (yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {}
         : {};
-    const configuredPath = String(config.path ?? "").trim();
-    const suffix = configuredPath ? `/${configuredPath.replace(/^\/+/, "")}` : "";
-    return `http://127.0.0.1:${Number(config.port ?? 6727)}${suffix}`.replace(/\/$/, "");
+    return new URL(resolveGatewayBaseUrl(config)).origin;
 }
 
 /** 使用当前操作系统的默认浏览器打开地址。 */
