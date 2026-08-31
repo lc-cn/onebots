@@ -68,6 +68,19 @@ describe("WhatsAppConversationalAutomation", () => {
         });
     });
 
+    it("自动化动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "configure_conversational_automation", {
+                settings: { prompts: [] },
+                locale: "en_US",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "configure_conversational_automation", parameter: "locale" },
+        });
+    });
+
     it.each([
         ["空设置", { settings: {} }],
         ["过多引导", { settings: { prompts: ["1", "2", "3", "4"] } }],

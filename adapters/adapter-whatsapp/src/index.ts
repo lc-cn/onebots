@@ -178,7 +178,6 @@ export {
     isWhatsAppConversationalAutomationAction,
     WhatsAppConversationalAutomation,
     WHATSAPP_BUSINESS_BOT_FIELDS,
-    WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTIONS,
     type WhatsAppBusinessBot,
     type WhatsAppBusinessBotCommand,
     type WhatsAppBusinessBotField,

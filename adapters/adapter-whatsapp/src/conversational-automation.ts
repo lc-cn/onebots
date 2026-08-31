@@ -1,13 +1,7 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
-
-export const WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTIONS = Object.freeze([
-    "configure_conversational_automation",
-    "get_business_bot",
-] as const);
-export type WhatsAppConversationalAutomationAction =
-    (typeof WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTIONS)[number];
 
 export const WHATSAPP_BUSINESS_BOT_FIELDS = Object.freeze([
     "id",
@@ -39,12 +33,6 @@ export interface WhatsAppBusinessBot {
     enable_welcome_message?: boolean;
 }
 
-export function isWhatsAppConversationalAutomationAction(
-    action: string,
-): action is WhatsAppConversationalAutomationAction {
-    return (WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTIONS as readonly string[]).includes(action);
-}
-
 /** Phone Number 的欢迎消息、引导问题和命令配置，以及独立 WABA Bot 读取入口。 */
 export class WhatsAppConversationalAutomation {
     constructor(private readonly client: WhatsAppClient) {}
@@ -74,34 +62,41 @@ export class WhatsAppConversationalAutomation {
             selection,
         );
     }
-
-    execute(
-        action: WhatsAppConversationalAutomationAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "configure_conversational_automation":
-                rejectUnknown(params, ["settings"]);
-                return this.configure(settingsRequest(params.settings));
-            case "get_business_bot":
-                rejectUnknown(params, ["bot_id", "fields"]);
-                return this.getBot(
-                    inputString(params.bot_id, "bot_id"),
-                    params.fields === undefined
-                        ? WHATSAPP_BUSINESS_BOT_FIELDS
-                        : fieldSelection(params.fields),
-                );
-        }
-    }
 }
 
-export const WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.automation.execute(action, params),
-    ]),
-) as Record<WhatsAppConversationalAutomationAction, PlatformActionHandler<WhatsAppClient>>;
+type ConversationalAutomationActionParams = Readonly<Record<string, unknown>>;
+
+const CONVERSATIONAL_AUTOMATION_ACTION_HANDLERS = {
+    configure_conversational_automation: (
+        client: WhatsAppClient,
+        params: ConversationalAutomationActionParams,
+    ) => client.automation.configure(settingsRequest(params.settings)),
+    get_business_bot: (client: WhatsAppClient, params: ConversationalAutomationActionParams) =>
+        client.automation.getBot(
+            inputString(params.bot_id, "bot_id"),
+            params.fields === undefined
+                ? WHATSAPP_BUSINESS_BOT_FIELDS
+                : fieldSelection(params.fields),
+        ),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Conversational Automation 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    CONVERSATIONAL_AUTOMATION_ACTION_HANDLERS,
+    {
+        configure_conversational_automation: ["settings"],
+        get_business_bot: ["bot_id", "fields"],
+    },
+);
+
+export type WhatsAppConversationalAutomationAction =
+    keyof typeof WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTION_HANDLERS;
+
+export function isWhatsAppConversationalAutomationAction(
+    action: string,
+): action is WhatsAppConversationalAutomationAction {
+    return Object.hasOwn(WHATSAPP_CONVERSATIONAL_AUTOMATION_ACTION_HANDLERS, action);
+}
 
 function settingsRequest(value: unknown): WhatsAppConversationalAutomationSettings {
     const source = inputRecord(value, "settings");
