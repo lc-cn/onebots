@@ -12,7 +12,7 @@ describe("executeHeychatPlatformAction", () => {
             room_id: "r1",
             origin_channel_id: "c1",
             channel_id: "c2",
-            to_user_ids: [42],
+            to_user_ids: ["42"],
         });
 
         expect(callApi).toHaveBeenCalledWith("/chatroom/v2/channel/move_member", {
@@ -21,9 +21,68 @@ describe("executeHeychatPlatformAction", () => {
                 room_id: "r1",
                 origin_channel_id: "c1",
                 channel_id: "c2",
-                to_user_ids: [42],
+                to_user_ids: ["42"],
             },
         });
+    });
+
+    it("按官方 schema 拒绝缺失、类型错误与影子字段", async () => {
+        const bot = { callApi: vi.fn() } as unknown as HeychatBot;
+
+        await expect(
+            executeHeychatPlatformAction(bot, "move_voice_member", {
+                room_id: "r1",
+                origin_channel_id: "c1",
+                channel_id: "c2",
+                to_user_ids: [42],
+            }),
+        ).rejects.toMatchObject({ code: "HEYCHAT_ACTION_PARAM_INVALID" });
+        await expect(
+            executeHeychatPlatformAction(bot, "get_room", { room_id: "r1", typo: true }),
+        ).rejects.toMatchObject({
+            code: "HEYCHAT_ACTION_PARAM_UNKNOWN",
+            details: { action: "get_room", parameter: "typo" },
+        });
+        await expect(
+            executeHeychatPlatformAction(bot, "set_message_reaction", {
+                msg_id: "m1",
+                emoji: "[cube_doge]",
+                is_add: 1,
+                channel_id: "c1",
+            }),
+        ).rejects.toMatchObject({ code: "HEYCHAT_ACTION_PARAM_REQUIRED" });
+    });
+
+    it("分离官方 POST query 与 JSON body 并闭合嵌套权限项", async () => {
+        const callApi = vi.fn().mockResolvedValue({ ok: true });
+        const bot = { callApi } as unknown as HeychatBot;
+
+        await executeHeychatPlatformAction(bot, "set_channel_permission", {
+            heybox_id: "42",
+            room_id: "r1",
+            channel_id: "c1",
+            roles: [{ role_id: "admin", allow: "1", channel_type: 1 }],
+            users: [{ to_user_id: 42, deny: "2" }],
+        });
+        expect(callApi).toHaveBeenCalledWith("/chatroom/v2/role/role_user_perm", {
+            method: "POST",
+            query: { heybox_id: "42" },
+            body: {
+                room_id: "r1",
+                channel_id: "c1",
+                roles: [{ role_id: "admin", allow: "1", channel_type: 1 }],
+                users: [{ to_user_id: 42, deny: "2" }],
+            },
+        });
+        await expect(
+            executeHeychatPlatformAction(bot, "set_channel_permission", {
+                heybox_id: "42",
+                room_id: "r1",
+                channel_id: "c1",
+                roles: [{ role_id: "admin", shadow: true }],
+                users: [],
+            }),
+        ).rejects.toMatchObject({ code: "HEYCHAT_ACTION_PARAM_INVALID" });
     });
 
     it("底层入口只允许官方 chatroom 路径与 GET/POST", async () => {

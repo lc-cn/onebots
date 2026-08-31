@@ -18,6 +18,7 @@ export * from "./message-utils.js";
 export * from "./media-source.js";
 export * from "./package-metadata.js";
 export * from "./platform-action-registry.js";
+export * from "./platform-http-action-contract.js";
 export * from "./reverse-websocket.js";
 export * from "./recent-event-deduplicator.js";
 export * from "./reliable-event-ingress.js";
