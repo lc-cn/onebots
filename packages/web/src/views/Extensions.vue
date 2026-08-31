@@ -16,6 +16,9 @@
             <UiAlert v-if="catalogErrorMessage" variant="danger">
                 {{ catalogErrorMessage }}。扩展安装已禁用；现有运行时插件仍可继续配置和使用。
             </UiAlert>
+            <UiAlert v-if="runtimeErrorMessage" variant="danger">
+                {{ runtimeErrorMessage }} 扩展安装已禁用；请修正运行目录后重启 OneBots。
+            </UiAlert>
             <UiAlert v-if="activeInstallation" variant="warning">
                 <p>
                     {{ activeInstallation.displayName }}：{{
@@ -270,6 +273,9 @@ const runtimeStatus = (extension: ExtensionInfo) => getExtensionRuntimeStatus(ex
 
 const catalogErrorMessage = computed(
     () => extensions.value.find(extension => extension.catalogError)?.catalogError ?? "",
+);
+const runtimeErrorMessage = computed(
+    () => extensions.value.find(extension => extension.runtimeError)?.runtimeError ?? "",
 );
 const activeInstallation = computed(
     () => extensions.value.find(extension => extension.installing) ?? null,

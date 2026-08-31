@@ -31,6 +31,7 @@ describe("extension install completion", () => {
 
 const base = {
     catalogError: null,
+    runtimeError: null,
     enabled: false,
     installed: false,
     loaded: false,
@@ -54,6 +55,15 @@ describe("extension installation action", () => {
             available: false,
             label: "验证版本不可用",
         });
+    });
+
+    it("blocks installation when the runtime directory identity cannot be proven", () => {
+        expect(
+            getExtensionInstallationAction({
+                ...base,
+                runtimeError: "扩展运行目录未声明 onebots 依赖",
+            }),
+        ).toEqual({ visible: true, available: false, label: "运行目录不可用" });
     });
 
     it("keeps the normal install and version-alignment actions", () => {

@@ -189,6 +189,7 @@ describe("ExtensionManager", () => {
         expect(slack?.loaded).toBe(false);
         expect(slack).toMatchObject({
             catalogError: null,
+            runtimeError: null,
             configurationError: null,
             targetVersion: catalogVersion("@onebots/adapter-slack"),
             installedVersion: null,
@@ -334,6 +335,8 @@ describe("ExtensionManager", () => {
             preflight: successfulPreflight,
         });
 
+        expect(manager.list([]).every(extension => extension.runtimeError)).toBe(true);
+        expect(manager.list([])[0]?.runtimeError).toContain("扩展运行目录未声明 onebots 依赖");
         await expect(manager.install("adapter:slack")).rejects.toThrow(
             "扩展运行目录未声明 onebots 依赖",
         );

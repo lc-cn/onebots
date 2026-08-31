@@ -100,6 +100,7 @@ export function getExtensionInstallationAction(
     extension: Pick<
         ExtensionInfo,
         | "catalogError"
+        | "runtimeError"
         | "enabled"
         | "installed"
         | "loaded"
@@ -111,6 +112,9 @@ export function getExtensionInstallationAction(
     const restartLabel = extension.restartSupported === false ? "并在完成后手动重启" : "并重启";
     if (extension.catalogError) {
         return { visible: true, available: false, label: "目录校验失败" };
+    }
+    if (extension.runtimeError) {
+        return { visible: true, available: false, label: "运行目录不可用" };
     }
     if (!extension.targetVersion) {
         return { visible: true, available: false, label: "验证版本不可用" };
