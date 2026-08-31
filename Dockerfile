@@ -8,8 +8,8 @@ FROM node:24-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
 
-# 复制依赖声明与工作空间配置
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# 复制依赖声明、工作空间配置与所有子包继承的 TypeScript 根配置
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 
 # 复制各工作空间（.dockerignore 已排除 node_modules/lib 等）
 COPY packages ./packages
