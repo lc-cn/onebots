@@ -3,7 +3,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { ServiceSpec } from "./service-manager.js";
-import { refreshServiceAfterUpdate, runUpdatedServicePreflight } from "./updater.js";
+import {
+    packageNamesFor,
+    refreshServiceAfterUpdate,
+    resolveUpdatePluginSelection,
+    runUpdatedServicePreflight,
+} from "./updater.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -39,6 +44,57 @@ function fakeController(running: boolean) {
 }
 
 describe("post-update service safety", () => {
+    it("使用当前配置中的 Web 后装插件覆盖过期服务快照", () => {
+        const spec = temporaryServiceSpec();
+        fs.writeFileSync(
+            spec.configPath,
+            "plugins:\n  adapters: [slack, telegram]\n  protocols: [milky-v1]\ngeneral: {}\n",
+        );
+
+        const selection = resolveUpdatePluginSelection({ adapters: [], protocols: [] }, spec);
+
+        expect(selection).toEqual({
+            adapters: ["slack", "telegram"],
+            protocols: ["milky-v1"],
+        });
+        expect(packageNamesFor(selection.adapters, selection.protocols)).toEqual([
+            "onebots",
+            "@onebots/adapter-slack",
+            "@onebots/adapter-telegram",
+            "@onebots/protocol-milky-v1",
+        ]);
+    });
+
+    it("按类别保留显式参数，并让另一类别使用当前配置", () => {
+        const spec = temporaryServiceSpec();
+        fs.writeFileSync(
+            spec.configPath,
+            "plugins:\n  adapters: [slack]\n  protocols: [milky-v1]\ngeneral: {}\n",
+        );
+
+        expect(
+            resolveUpdatePluginSelection({ adapters: ["telegram"], protocols: [] }, spec),
+        ).toEqual({ adapters: ["telegram"], protocols: ["milky-v1"] });
+    });
+
+    it("旧配置缺少 plugins 时回退服务快照", () => {
+        const spec = temporaryServiceSpec();
+
+        expect(resolveUpdatePluginSelection({ adapters: [], protocols: [] }, spec)).toEqual({
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+        });
+    });
+
+    it("当前配置的插件选择损坏时拒绝使用过期快照", () => {
+        const spec = temporaryServiceSpec();
+        fs.writeFileSync(spec.configPath, "plugins:\n  adapters: invalid\n", "utf8");
+
+        expect(() => resolveUpdatePluginSelection({ adapters: [], protocols: [] }, spec)).toThrow(
+            "plugins.adapters 必须是字符串数组",
+        );
+    });
+
     it("does not rewrite or restart the service when the updated runtime fails preflight", async () => {
         const controller = fakeController(true);
         const spec = temporaryServiceSpec();

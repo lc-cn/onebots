@@ -10,6 +10,8 @@ import {
     type ServiceSpec,
 } from "./service-manager.js";
 import { writeCliOutput } from "./cli-output.js";
+import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
+import { parseRuntimeConfig } from "./runtime-config-validator.js";
 
 export interface UpdateOptions {
     adapters: string[];
@@ -22,18 +24,40 @@ export interface UpdateOptions {
 /** 将 adapter/protocol 短名转换为可更新的 npm 包名列表。 */
 export function packageNamesFor(adapters: string[], protocols: string[]): string[] {
     return [
-        "onebots",
-        ...adapters.map(name => `@onebots/adapter-${name}`),
-        ...protocols.map(name => `@onebots/protocol-${name}`),
+        ...new Set([
+            "onebots",
+            ...adapters.map(name => `@onebots/adapter-${name}`),
+            ...protocols.map(name => `@onebots/protocol-${name}`),
+        ]),
     ];
+}
+
+/** 显式更新参数优先，其次使用当前配置，最后兼容旧服务保存的启动快照。 */
+export function resolveUpdatePluginSelection(
+    options: Pick<UpdateOptions, "adapters" | "protocols">,
+    spec: ServiceSpec | null,
+): { adapters: string[]; protocols: string[] } {
+    const configured =
+        spec && fs.existsSync(spec.configPath)
+            ? getRuntimePluginSelection(
+                  parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8")),
+              )
+            : undefined;
+    return {
+        adapters: options.adapters.length
+            ? options.adapters
+            : (configured?.adapters ?? spec?.adapters ?? []),
+        protocols: options.protocols.length
+            ? options.protocols
+            : (configured?.protocols ?? spec?.protocols ?? []),
+    };
 }
 
 /** 检查并更新 OneBots 与当前服务使用的插件。 */
 export async function runUpdate(options: UpdateOptions): Promise<void> {
     const controller = new ServiceController(options.scope);
     const spec = controller.readSpec();
-    const adapters = options.adapters.length ? options.adapters : (spec?.adapters ?? []);
-    const protocols = options.protocols.length ? options.protocols : (spec?.protocols ?? []);
+    const { adapters, protocols } = resolveUpdatePluginSelection(options, spec);
     const packages = packageNamesFor(adapters, protocols);
     const runtimeRoot = spec?.workingDirectory ?? process.cwd();
     const manager = detectPackageManager(runtimeRoot);
