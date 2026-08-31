@@ -230,7 +230,11 @@ export {
     type WhatsAppBusinessPhoneNumberAction,
 } from "./business-phone-numbers.js";
 export * from "./business-phone-number-types.js";
-export { isWhatsAppScheduleAction, WhatsAppSchedules } from "./schedules.js";
+export {
+    isWhatsAppScheduleAction,
+    WhatsAppSchedules,
+    type WhatsAppScheduleAction,
+} from "./schedules.js";
 export * from "./schedule-types.js";
 export {
     isWhatsAppOfficialBusinessAccountAction,

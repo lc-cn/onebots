@@ -129,6 +129,16 @@ describe("WhatsAppSchedules", () => {
         await expect(client.schedules.list()).resolves.toEqual({ data: [sparse] });
     });
 
+    it("Schedule 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "list_business_schedules", { limit: 10 }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "list_business_schedules", parameter: "limit" },
+        });
+    });
+
     it.each([
         ["空字段", "list_business_schedules", { query: { fields: [] } }],
         ["未知字段", "list_business_schedules", { query: { fields: ["token"] } }],
@@ -209,7 +219,6 @@ describe("WhatsAppSchedules", () => {
                 },
             },
         ],
-        ["未知动作参数", "list_business_schedules", { limit: 10 }],
     ])("拒绝%s", async (_label, action, params) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(executeWhatsAppPlatformAction(client, action, params)).rejects.toMatchObject({

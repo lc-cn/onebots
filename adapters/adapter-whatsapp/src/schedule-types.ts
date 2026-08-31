@@ -1,11 +1,5 @@
 import type { WhatsAppPaging } from "./types.js";
 
-export const WHATSAPP_SCHEDULE_ACTIONS = Object.freeze([
-    "list_business_schedules",
-    "create_business_schedule",
-] as const);
-export type WhatsAppScheduleAction = (typeof WHATSAPP_SCHEDULE_ACTIONS)[number];
-
 export const WHATSAPP_SCHEDULE_FIELDS = Object.freeze([
     "id",
     "name",

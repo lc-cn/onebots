@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import { parseWhatsAppPaging } from "./graph-paging.js";
@@ -10,13 +11,11 @@ import {
     scheduleTimeZone,
 } from "./schedule-validation.js";
 import {
-    WHATSAPP_SCHEDULE_ACTIONS,
     WHATSAPP_SCHEDULE_FIELDS,
     WHATSAPP_SCHEDULE_SORTS,
     WHATSAPP_SCHEDULE_STATUSES,
     WHATSAPP_SCHEDULE_TYPES,
     type WhatsAppSchedule,
-    type WhatsAppScheduleAction,
     type WhatsAppScheduleCreateRequest,
     type WhatsAppScheduleCreateResponse,
     type WhatsAppScheduleField,
@@ -24,10 +23,6 @@ import {
     type WhatsAppSchedulesQuery,
     type WhatsAppSchedulesResponse,
 } from "./schedule-types.js";
-
-export function isWhatsAppScheduleAction(action: string): action is WhatsAppScheduleAction {
-    return (WHATSAPP_SCHEDULE_ACTIONS as readonly string[]).includes(action);
-}
 
 /** WABA 业务时段、自动响应、Campaign 与维护窗口 Schedule 控制面。 */
 export class WhatsAppSchedules {
@@ -60,29 +55,31 @@ export class WhatsAppSchedules {
             }),
         );
     }
-
-    execute(
-        action: WhatsAppScheduleAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "list_business_schedules":
-                rejectUnknown(params, ["query"]);
-                return this.list(params.query === undefined ? {} : queryInput(params.query));
-            case "create_business_schedule":
-                rejectUnknown(params, ["request"]);
-                return this.create(createRequest(params.request));
-        }
-    }
 }
 
-export const WHATSAPP_SCHEDULE_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_SCHEDULE_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.schedules.execute(action, params),
-    ]),
-) as Record<WhatsAppScheduleAction, PlatformActionHandler<WhatsAppClient>>;
+type ScheduleActionParams = Readonly<Record<string, unknown>>;
+
+const SCHEDULE_ACTION_HANDLERS = {
+    list_business_schedules: (client: WhatsAppClient, params: ScheduleActionParams) =>
+        client.schedules.list(params.query === undefined ? {} : queryInput(params.query)),
+    create_business_schedule: (client: WhatsAppClient, params: ScheduleActionParams) =>
+        client.schedules.create(createRequest(params.request)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Business Schedule 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_SCHEDULE_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    SCHEDULE_ACTION_HANDLERS,
+    {
+        list_business_schedules: ["query"],
+        create_business_schedule: ["request"],
+    },
+);
+
+export type WhatsAppScheduleAction = keyof typeof WHATSAPP_SCHEDULE_ACTION_HANDLERS;
+
+export function isWhatsAppScheduleAction(action: string): action is WhatsAppScheduleAction {
+    return Object.hasOwn(WHATSAPP_SCHEDULE_ACTION_HANDLERS, action);
+}
 
 function queryInput(value: unknown): WhatsAppSchedulesQuery {
     const source = inputRecord(value, "query");
